@@ -40,7 +40,8 @@ object Serialize {
             Attempt.fromEither(
               value
                 .traverse[Either[Throwable, ?], A]((vec: ByteVector) => instance.decode(vec))
-                .leftMap((thw: Throwable) => Err(thw.getMessage)))
+                .leftMap((thw: Throwable) => Err(thw.getMessage))
+            )
           }
     }
   }

@@ -109,7 +109,9 @@ object tuple {
                   case None        => Fixnum(Int.MaxValue)
                 }
               } else
-                Fixnum(Int.MaxValue)))
+                Fixnum(Int.MaxValue)
+          )
+      )
     }
   }
 
@@ -132,17 +134,20 @@ object tuple {
       // Check and get arguments: Tuple, Fixnum, Fixnum
       checkTuple(0, value).flatMap(
         t => // Ensure arg0 is a Tuple
-          checkFixnum(1, value).flatMap(n => // Ensure arg1 is a Fixnum
-            checkFixnum(2, value).flatMap { m => // Ensure arg2 is a Fixnum
+          checkFixnum(1, value).flatMap(
+            n => // Ensure arg1 is a Fixnum
+              checkFixnum(2, value).flatMap { m => // Ensure arg2 is a Fixnum
 
-              val f = wrapper(_: Int => Option[Ob], _: Int, t.value.length)
-              for {
-                nv  <- f(t.nthLift, n.value)
-                mv  <- f(t.nthLift, m.value)
-                t1  <- f(t.setNthLift(_, mv), n.value)
-                res <- f(t1.asInstanceOf[Tuple].setNthLift(_, nv), m.value)
-              } yield res.asInstanceOf[Tuple]
-          }))
+                val f = wrapper(_: Int => Option[Ob], _: Int, t.value.length)
+                for {
+                  nv  <- f(t.nthLift, n.value)
+                  mv  <- f(t.nthLift, m.value)
+                  t1  <- f(t.setNthLift(_, mv), n.value)
+                  res <- f(t1.asInstanceOf[Tuple].setNthLift(_, nv), m.value)
+                } yield res.asInstanceOf[Tuple]
+              }
+          )
+      )
 
     }
   }

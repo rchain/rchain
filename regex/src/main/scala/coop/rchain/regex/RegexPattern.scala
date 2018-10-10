@@ -271,7 +271,8 @@ object CharClassPattern extends ParsedPattern {
       }
 
     def parseInternalEscapedSequence(
-        startIndex: Int): Option[(Either[Char, CharClassPattern], Int)] =
+        startIndex: Int
+    ): Option[(Either[Char, CharClassPattern], Int)] =
       if (startIndex < str.length) {
         str.charAt(startIndex) match {
           //escape hex ascii sequence
@@ -297,25 +298,31 @@ object CharClassPattern extends ParsedPattern {
         None
       }
 
-    case class ParseState(collectedChars: List[Char],
-                          collectedUnionClasses: List[CharClassPattern],
-                          rangeState: RangeState.Value) {
+    case class ParseState(
+        collectedChars: List[Char],
+        collectedUnionClasses: List[CharClassPattern],
+        rangeState: RangeState.Value
+    ) {
       def changeState(nextState: RangeState.Value) =
         ParseState(collectedChars, collectedUnionClasses, nextState)
 
       //def add(value: Either[Char, CharClassPattern]) : ParseState = addOverrideState(value, rangeState)
 
-      def add(value: Either[Char, CharClassPattern],
-              overrideRangeState: Option[RangeState.Value] = None): ParseState = {
+      def add(
+          value: Either[Char, CharClassPattern],
+          overrideRangeState: Option[RangeState.Value] = None
+      ): ParseState = {
         val actualRangeState = overrideRangeState.getOrElse(rangeState)
 
         value match {
           case Left(addChar) => {
             if (actualRangeState == RangeState.inside) {
               //we're in range, like a-z, add range and switch to justFinished state
-              ParseState((collectedChars.head to addChar).toList ++ collectedChars,
-                         collectedUnionClasses,
-                         RangeState.justFinished)
+              ParseState(
+                (collectedChars.head to addChar).toList ++ collectedChars,
+                collectedUnionClasses,
+                RangeState.justFinished
+              )
             } else {
               //states justFinished or notStarted - just add single char
               ParseState(addChar :: collectedChars, collectedUnionClasses, RangeState.notStarted)
@@ -325,13 +332,17 @@ object CharClassPattern extends ParsedPattern {
             if (actualRangeState == RangeState.inside) {
               //this is 'bad' case, like [0-\w], we can fail like most regex engines do,
               //but let's better handle it like javascript regex engine
-              ParseState('-' :: collectedChars,
-                         addCharClass :: collectedUnionClasses,
-                         RangeState.justFinished)
+              ParseState(
+                '-' :: collectedChars,
+                addCharClass :: collectedUnionClasses,
+                RangeState.justFinished
+              )
             } else {
-              ParseState(collectedChars,
-                         addCharClass :: collectedUnionClasses,
-                         RangeState.justFinished)
+              ParseState(
+                collectedChars,
+                addCharClass :: collectedUnionClasses,
+                RangeState.justFinished
+              )
             }
           }
         }
@@ -341,8 +352,10 @@ object CharClassPattern extends ParsedPattern {
     //this function parses interior of a char set [abc-xyz], assuming that
     //entry '[^' is handled outside, and finished parsing if ']' found
     //in case of any error, including absent of ']' returns None
-    def parseCharSetSequence(startIndex: Int,
-                             negateCharSet: Boolean): Option[(RegexPattern, Int)] = {
+    def parseCharSetSequence(
+        startIndex: Int,
+        negateCharSet: Boolean
+    ): Option[(RegexPattern, Int)] = {
 
       @tailrec
       def processNextChar(currentIndex: Int, parseState: ParseState): Option[(ParseState, Int)] =
@@ -685,7 +698,8 @@ final case class ConcPattern(mults: List[MultPattern]) extends RegexPattern {
   override def equivalent(that: RegexPattern): Boolean = that match {
     case concPattern: ConcPattern =>
       (mults.size == concPattern.mults.size) && mults.corresponds(concPattern.mults)(
-        _.equivalent(_))
+        _.equivalent(_)
+      )
     case _ => false
   }
 
@@ -868,8 +882,10 @@ object MultPattern extends ParsedPattern {
       case (multiplicandPattern, multiplicandEndIndex) => {
         val (multiplier, multiplierEndIndex) =
           Multiplier.tryParse(str.subSequence(multiplicandEndIndex, str.length))
-        Some(MultPattern(multiplicandPattern, multiplier),
-             multiplicandEndIndex + multiplierEndIndex)
+        Some(
+          MultPattern(multiplicandPattern, multiplier),
+          multiplicandEndIndex + multiplierEndIndex
+        )
       }
     }
   }
@@ -914,7 +930,8 @@ final case class MultPattern(multiplicand: RegexPattern, multiplier: Multiplier)
     }
 
     if ((thatMult.multiplicand == this.multiplicand) && this.multiplier.canIntersect(
-          thatMult.multiplier)) {
+          thatMult.multiplier
+        )) {
       MultPattern(this.multiplicand, this.multiplier & thatMult.multiplier)
     } else {
       ConcPattern(this) & that

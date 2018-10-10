@@ -1,50 +1,64 @@
 package coop.rchain.node.api
 
-import cats._
 import cats.effect.Sync
-import com.google.protobuf.empty.Empty
+
+import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.api.BlockAPI
-import coop.rchain.casper.protocol.{DeployData, DeployServiceGrpc, DeployServiceResponse, _}
 import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.catscontrib._
-import coop.rchain.models.Channel
+import coop.rchain.casper.protocol.{DeployData, DeployServiceResponse, _}
+import coop.rchain.catscontrib.Taskable
+import coop.rchain.models.Par
 import coop.rchain.shared._
-import io.grpc.stub.StreamObserver
 
-import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Success}
+import com.google.protobuf.empty.Empty
+import monix.eval.Task
+import monix.execution.Scheduler
+import monix.reactive.Observable
 
-private[api] class DeployGrpcService[
-    F[_]: Sync: Capture: MultiParentCasperRef: Log: Futurable: SafetyOracle: BlockStore](
-    implicit ev: ExecutionContext)
-    extends DeployServiceGrpc.DeployService {
-  override def doDeploy(d: DeployData): Future[DeployServiceResponse] =
-    BlockAPI.deploy[F](d).toFuture
+private[api] object DeployGrpcService {
+  def instance[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
+      worker: Scheduler
+  ): CasperMessageGrpcMonix.DeployService =
+    new CasperMessageGrpcMonix.DeployService {
 
-  override def createBlock(e: Empty): Future[DeployServiceResponse] =
-    BlockAPI.createBlock[F].toFuture
+      private def defer[A](task: F[A]): Task[A] =
+        Task.defer(task.toTask).executeOn(worker).attempt.flatMap {
+          case Left(ex)      => Task.delay(ex.printStackTrace()) *> Task.raiseError[A](ex)
+          case Right(result) => Task.pure(result)
+        }
 
-  override def addBlock(b: BlockMessage): Future[DeployServiceResponse] =
-    BlockAPI.addBlock[F](b).toFuture
+      override def doDeploy(d: DeployData): Task[DeployServiceResponse] =
+        defer(BlockAPI.deploy[F](d))
 
-  override def showBlock(q: BlockQuery): Future[BlockQueryResponse] =
-    BlockAPI.getBlockQueryResponse[F](q).toFuture
+      override def createBlock(e: Empty): Task[DeployServiceResponse] =
+        defer(BlockAPI.createBlock[F])
 
-  override def showBlocks(request: Empty, observer: StreamObserver[BlockInfo]): Unit =
-    BlockAPI.getBlocksResponse[F].toFuture.onComplete {
-      case Success(blockResponse) =>
-        blockResponse.blocks.foreach(bi => observer.onNext(bi))
-        observer.onCompleted()
-      case Failure(ex) => observer.onError(ex)
+      override def addBlock(b: BlockMessage): Task[DeployServiceResponse] =
+        defer(BlockAPI.addBlock[F](b))
+
+      override def showBlock(q: BlockQuery): Task[BlockQueryResponse] =
+        defer(BlockAPI.showBlock[F](q))
+
+      override def showBlocks(request: BlocksQuery): Observable[BlockInfoWithoutTuplespace] =
+        Observable
+          .fromTask(defer(BlockAPI.showBlocks[F](request.depth)))
+          .flatMap(Observable.fromIterable)
+
+      // TODO: Handle error case
+      override def listenForDataAtName(request: DataAtNameQuery): Task[ListeningNameDataResponse] =
+        defer(BlockAPI.getListeningNameDataResponse[F](request.depth, request.name.get))
+
+      override def listenForContinuationAtName(
+          request: ContinuationAtNameQuery
+      ): Task[ListeningNameContinuationResponse] =
+        defer(BlockAPI.getListeningNameContinuationResponse[F](request.depth, request.names))
+
+      override def showMainChain(request: BlocksQuery): Observable[BlockInfoWithoutTuplespace] =
+        Observable
+          .fromTask(defer(BlockAPI.showMainChain[F](request.depth)))
+          .flatMap(Observable.fromIterable)
     }
-
-  override def listenForDataAtName(listeningName: Channel): Future[ListeningNameDataResponse] =
-    BlockAPI.getListeningNameDataResponse[F](listeningName).toFuture
-
-  override def listenForContinuationAtName(
-      listeningNames: Channels): Future[ListeningNameContinuationResponse] =
-    BlockAPI.getListeningNameContinuationResponse[F](listeningNames).toFuture
 }

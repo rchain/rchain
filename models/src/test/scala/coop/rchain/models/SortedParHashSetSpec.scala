@@ -9,7 +9,7 @@ import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance.BoundVar
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.rholang.sort.ordering._
+import coop.rchain.models.rholang.sorter.ordering._
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
@@ -35,7 +35,8 @@ class SortedParHashSetSpec extends FlatSpec with Matchers {
           EMethod("nth", EVar(BoundVar(2)), List(GInt(1)), locallyFree = BitSet(2)),
           EMethod("nth", EVar(BoundVar(2)), List(GInt(2), GInt(3)), locallyFree = BitSet(2)),
           EMethod("nth", EVar(BoundVar(2)), List(GInt(2)), locallyFree = BitSet(2))
-        ))
+        )
+      )
     Seq(parGround, parExpr, parMethods)
   }
 

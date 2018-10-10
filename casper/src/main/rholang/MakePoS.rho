@@ -1,0 +1,163 @@
+//scalapackage coop.rchain.rholang.proofofstake
+
+contract @"MakePoS"(@purse, @minimumBond, @maximumBond, @initBonds, return) = {
+  new this, bondsCh, joiningFeeCh, clonePurse, depositPurse, updateBonds, feeDistribution in {
+    bondsCh!(initBonds) |
+    joiningFeeCh!!(minimumBond) | //joining fee equal to minimum bond amount
+  
+    //The purpose of this contract is to move the contents
+    //of an existing purse into a new purse. This prevents
+    //the owner of the given purse from modifying the balance
+    //during processing.
+    contract clonePurse(@givenPurse, return) = {
+      new balanceCh, resultCh in {
+        @(givenPurse, "getBalance")!(*balanceCh) |
+        for(@balance <- balanceCh) {
+          @(givenPurse, "split")!(balance, *resultCh) |
+          for(@result <- resultCh) {
+            match result {
+              [] => { return!(("Left", "Could not extract funds from given purse")) }
+              [newPurse] => { return!(("Right", (newPurse, balance))) }
+            }
+          }
+        }
+      }
+    } |
+  
+    contract @(*this, "validateBondAmount")(@bondPurse, return) = {
+      new balanceCh in {
+        @(bondPurse, "getBalance")!(*balanceCh) |
+        for(@balance <- balanceCh; @joiningFee <- joiningFeeCh) {
+          if      (balance - joiningFee < minimumBond) { return!(("Left", "Bond less than minimum!")) }
+          else if (balance - joiningFee > maximumBond) { return!(("Left", "Bond greater than maximum!")) }
+          else                                         { return!(("Right", bondPurse)) }
+        }
+      }
+    } |
+
+    contract @(*this, "validateBondingRate")(@bondPurse, return) = {
+      //TODO: figure out rate-limiting of bonding
+      return!(("Right", bondPurse))
+    } |
+    
+    contract depositPurse(@bondPurse, @amount, return) = {
+      new successCh in {
+        @(purse, "deposit")!(amount, bondPurse, *successCh) |
+        for(@success <- successCh) {
+          if (success) { return!(("Right", bondPurse)) }
+          else         { return!(("Left", "Deposit failed.")) }
+        }
+      }
+    } |
+    
+    contract @(*this, "isBonded")(@publicKey, return) = {
+      for(@bonds <- bondsCh) {
+        bondsCh!(bonds) | return!(bonds.contains(publicKey))
+      }
+    } |
+    
+    contract @(*this, "getBonds")(return) = {
+      for(@bonds <- bondsCh) {
+        bondsCh!(bonds) | return!(bonds)
+      }
+    } |
+    
+    contract feeDistribution(@n, @joiningFee, return) = {
+      new rangeCh, feeDistFunc, feeDistCh, sum, nCh, totalCh in {
+        contract sum(@x, @y, return) = { return!(x + y) } |
+        contract feeDistFunc(@k, return) = { return!((2 * joiningFee * (n + 1 - k)) / (n * (n + 1))) } |
+        @("ListOps", "range")!(1, n + 1, *rangeCh) |
+        for(@range <- rangeCh) {
+          @("ListOps", "map")!(range, *feeDistFunc, *feeDistCh) |
+          for(@feeDist <- feeDistCh) {
+            @("ListOps", "fold")!(feeDist, 0, *sum, *totalCh) |
+            for(@total <- totalCh) {
+              return!(
+                //give remainder (non-zero from rounding) to first validator
+                [feeDist.nth(0) + joiningFee - total] ++
+                  feeDist.slice(1, n)
+              )
+            }
+          }
+        }
+      }
+    } |
+
+    contract updateBonds(@publicKey, @sigVerify, @bondAmount, @rewardsForwarder, return) = {
+      new feeDistCh, bondUpdateLoop, bondsWithFeeCh in {
+        //update the stakes of existing validators with their share of the joining fee
+        contract bondUpdateLoop(@bondsMap, @feeDist, @updatedMap, return) = {
+          match bondsMap {
+            {key:(stake, sigVerify, rewardsForwarder, index) ...rest} => { 
+              bondUpdateLoop!(
+                rest, 
+                feeDist, 
+                updatedMap.set(key, (stake + feeDist.nth(index - 1), sigVerify, rewardsForwarder, index)),
+                *return
+              )
+            }
+            
+            _ => { return!(updatedMap) }
+          }
+        } |
+        for(@bonds <- bondsCh; @joiningFee <- joiningFeeCh) {
+          feeDistribution!(bonds.size(), joiningFee, *feeDistCh) |
+          for(@feeDist <- feeDistCh) {
+            bondUpdateLoop!(bonds, feeDist, {}, *bondsWithFeeCh) |
+            for(@bondsWithFee <- bondsWithFeeCh) {
+              bondsCh!(bondsWithFee.set(publicKey, (bondAmount - joiningFee, sigVerify, rewardsForwarder, bonds.size() + 1))) |
+              return!((true, "Bond successful!"))
+            }
+          }
+        }
+      }
+    } |
+
+    contract @(*this, "bond")(@publicKey, @sigVerify, @givenBondPurse, @rewardsForwarder, return) = {
+      //TODO: Validate that givenBondPurse comes from the same mint as purse
+
+      new resultCh, bondPurseCh, validatePublicKey, depositClonePurse in {
+        //lambda-expression-like construction to insert key validation into the composition
+        for(@x, ret <- validatePublicKey){
+          new isBondedCh in {
+            @(*this, "isBonded")!(publicKey, *isBondedCh) |
+            for(@isBonded <- isBondedCh) {
+              if (isBonded) { ret!(("Left", "Public key ${pk} already bonded." %% {"pk" : publicKey})) }
+              else          { ret!(("Right", x)) }
+            }
+          }
+        } |
+        clonePurse!(givenBondPurse, *bondPurseCh) |
+        for(@cloneResult <- bondPurseCh) {
+          match cloneResult {
+            ("Right", (bondPurse, bondAmount)) => {
+              for(_, ret <- depositClonePurse) {
+                depositPurse!(bondPurse, bondAmount, *ret)
+              } |
+              @("Either", "compose")!(bondPurse, [
+                                    (*this, "validateBondAmount"), 
+                                    (*this, "validateBondingRate"),
+                                    *validatePublicKey,
+                                    *depositClonePurse
+                                    ], *resultCh) |
+              for(@result <- resultCh) {
+                match result {
+                  ("Right", _) => { updateBonds!(publicKey, sigVerify, bondAmount, rewardsForwarder, *return) }
+
+                  ("Left", message) => {
+                    //return funds to original purse since an error occurred
+                    @(givenBondPurse, "deposit")!(bondAmount, bondPurse, *resultCh) |
+                    for(_ <- resultCh) { return!((false, message)) }
+                  }
+                }
+              }
+            }
+            ("Left", message) => { return!((false, message)) }
+          }
+        }
+      }
+    } |
+  
+    return!(*this)
+  }
+}

@@ -4,34 +4,6 @@ imports JOINS
 // *******************************************************************
 //                          FREE
 // *******************************************************************
-// Some syntax specifically for the "free" module
-// First we construct the syntax for our nodes
-syntax Ints ::= List{ Int, ","}
-
-syntax Set ::= "List2Set(" List ")"
-syntax List ::= "Set2List(" Set ")"
-
-syntax HigherProcsOrHigherNames ::= List{HigherProcOrHigherName, ","}
-              | HigherProcs
-              | HigherNames
-
-// Sets and Lists
-syntax SetOrList ::= Set
-              | List
-
-syntax NodeSyntax ::=
-            // For normal nodes, the syntax is
-            //[ Id ][ Proc/Name ][ Parent ][ Children ]{ Set of free vars }[ Node constructed ]
-      "[" Int "][" HigherPat "][" Exp "][" List "]{" SetOrList "}[" Bool "]"
-            // Nodes corresponding to binders (bnodes) are given the syntax
-            // [ Id ][ Parent ][ Plus ID ; Plus Process/Name ][ Minus ID ; Minus Process/Name
-            //                                        ]{ Set of free vars }[ Node constructed (T/F)]
-    | "[" Int "][" Exp "][" Int ";" HigherPats "][" List ";" HigherPats "]{" SetOrList "}[" Bool "]"
-            // We need to make sure that a binder doesn't try to bind two variables twice. To do
-            // this, we put a special marker on those elements corresponding to a binder
-          //| "[" Int "][" HigherPat "][" Exp "][" List "]{" SetOrList "}{" List "}{""}[" Bool "]"
-
-
 
 // ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
 /// The "fv( )" function: collects free variables of any statement
@@ -328,17 +300,18 @@ rule <thread> ...
     ... </FreeVars> ... </thread>
 
 
-// Constructing with terminal nodes, which are expressions (including #(Int)'s), as well as Nil
+// Constructing with terminal nodes, which are expressions (including unforgeable(Int)'s), as well
+// as Nil
 rule <thread> ...
           <FreeVars> ...
               <node> [ID:Int][ E:Exp ][ PARENT:Exp ][ .List ]{ .Set }[ (false => true) ] </node>
       ... </FreeVars>
  ... </thread>
 
-// #(Int)'s
+// unforgeable(Int)'s
 rule <thread> ...
           <FreeVars> ...
-              <node> [ID:Int][ #(I:Int) ][ PARENT:Exp ][ .List ]{ .Set }[ (false => true) ] </node>
+              <node> [ID:Int][ unforgeable(I:Int) ][ PARENT:Exp ][ .List ]{ .Set }[ (false => true) ] </node>
       ... </FreeVars>
  ... </thread>
 

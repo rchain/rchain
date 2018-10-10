@@ -1,37 +1,20 @@
 package coop.rchain.casper
 
-import java.nio.file.Files
-
 import cats.Id
 import cats.implicits._
-import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.genesis.contracts.{ProofOfStake, ProofOfStakeValidator}
 import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.protocol.{Deploy, DeployData}
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.collection.ListOps
-import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.accounting
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
 class RholangBuildTest extends FlatSpec with Matchers {
 
   val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-  val bonds                       = validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
-  val initial                     = Genesis.withoutContracts(bonds, 0L, 0L, "rchain")
-  val storageDirectory            = Files.createTempDirectory(s"rholang-build-test-genesis")
-  val storageSize: Long           = 1024L * 1024
-  val activeRuntime               = Runtime.create(storageDirectory, storageSize)
-  val runtimeManager              = RuntimeManager.fromRuntime(activeRuntime)
-  val emptyStateHash              = runtimeManager.emptyStateHash
-  val proofOfStakeValidators      = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
-  val proofOfStakeDeploy =
-    ProtoUtil.termDeploy(ProofOfStake(proofOfStakeValidators).term, System.currentTimeMillis())
-  val genesis =
-    Genesis.withContracts(List[Deploy](proofOfStakeDeploy), initial, emptyStateHash, runtimeManager)
-  activeRuntime.close()
+  val bonds                       = HashSetCasperTest.createBonds(validators)
+  val genesis                     = HashSetCasperTest.createGenesis(bonds)
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -39,16 +22,19 @@ class RholangBuildTest extends FlatSpec with Matchers {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.last)
     import node._
 
-    val llDeploy = ProtoUtil.sourceDeploy(ListOps.code, System.currentTimeMillis())
+    val llDeploy =
+      ProtoUtil.sourceDeploy(ListOps.code, System.currentTimeMillis(), accounting.MAX_VALUE)
     val deploys = Vector(
       "contract @\"double\"(@x, ret) = { ret!(2 * x) }",
       "@(\"ListOps\", \"map\")!([2, 3, 5, 7], \"double\", \"dprimes\")"
-    ).zipWithIndex.map(d => ProtoUtil.sourceDeploy(d._1, d._2))
+    ).zipWithIndex.map {
+      case (d, i) => ProtoUtil.sourceDeploy(d, i.toLong + 1L, accounting.MAX_VALUE)
+    }
 
-    val Created(signedBlock) = MultiParentCasper[Id].deploy(llDeploy) *>
-      deploys.traverse(MultiParentCasper[Id].deploy) *>
-      MultiParentCasper[Id].createBlock
-    MultiParentCasper[Id].addBlock(signedBlock)
+    val Created(signedBlock) = deploys.traverse(MultiParentCasper[Id].deploy) *> MultiParentCasper[
+      Id
+    ].createBlock
+    val _ = MultiParentCasper[Id].addBlock(signedBlock)
 
     val storage = HashSetCasperTest.blockTuplespaceContents(signedBlock)
 

@@ -9,19 +9,20 @@ import coop.rchain.roscala.Vm.State
 import Ctxt.logger
 
 //TODO make access to various fields thread safe
-class Ctxt(var tag: Location,
-           var nargs: Int,
-           val outstanding: AtomicInteger = new AtomicInteger(0),
-           var pc: Int,
-           var argvec: Tuple,
-           var env: Ob,
-           var code: Code,
-           var ctxt: Option[Ctxt],
-           var self2: Ob,
-           var selfEnv: Ob,
-           var rcvr: Ob,
-           var monitor: Monitor)
-    extends Ob {
+class Ctxt(
+    var tag: Location,
+    var nargs: Int,
+    val outstanding: AtomicInteger = new AtomicInteger(0),
+    var pc: Int,
+    var argvec: Tuple,
+    var env: Ob,
+    var code: Code,
+    var ctxt: Option[Ctxt],
+    var self2: Ob,
+    var selfEnv: Ob,
+    var rcvr: Ob,
+    var monitor: Monitor
+) extends Ob {
 
   private val _rslt = new AtomicReference[Ob](Niv)
   private val _trgt = new AtomicReference[Ob](Niv)
@@ -137,7 +138,7 @@ object Ctxt {
       self2 = Niv,
       selfEnv = Niv,
       rcvr = Niv,
-      monitor = null,
+      monitor = null
     )
 
   def apply(tuple: Tuple, continuation: Ctxt): Ctxt =
@@ -152,7 +153,7 @@ object Ctxt {
       self2 = continuation.self2,
       selfEnv = continuation.selfEnv,
       rcvr = continuation.rcvr,
-      monitor = continuation.monitor,
+      monitor = continuation.monitor
     )
 
   def apply(continuation: Ctxt): Ctxt =
@@ -167,7 +168,7 @@ object Ctxt {
       self2 = continuation.self2,
       selfEnv = continuation.selfEnv,
       rcvr = continuation.rcvr,
-      monitor = continuation.monitor,
+      monitor = continuation.monitor
     )
 
   /**
@@ -184,7 +185,7 @@ object Ctxt {
     self2 = Niv,
     selfEnv = Niv,
     rcvr = Niv,
-    monitor = null,
+    monitor = null
   )
 
   /**
@@ -201,7 +202,7 @@ object Ctxt {
     self2 = Niv,
     selfEnv = Niv,
     rcvr = Niv,
-    monitor = null,
+    monitor = null
   )
 
   /**
@@ -219,6 +220,6 @@ object Ctxt {
     self2 = Niv,
     selfEnv = Niv,
     rcvr = Niv,
-    monitor = null,
+    monitor = null
   )
 }

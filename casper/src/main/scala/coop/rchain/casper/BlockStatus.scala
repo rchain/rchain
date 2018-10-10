@@ -1,12 +1,22 @@
 package coop.rchain.casper
 
-sealed trait BlockStatus
+sealed trait BlockStatus {
+  val inDag: Boolean
+}
 
-case object Processing                   extends BlockStatus
-case class BlockException(ex: Throwable) extends BlockStatus
+case object Processing extends BlockStatus {
+  override val inDag: Boolean = false
+}
+case class BlockException(ex: Throwable) extends BlockStatus {
+  override val inDag: Boolean = false
+}
 
-sealed trait ValidBlock   extends BlockStatus
-sealed trait InvalidBlock extends BlockStatus
+sealed trait ValidBlock extends BlockStatus {
+  override val inDag: Boolean = true
+}
+sealed trait InvalidBlock extends BlockStatus {
+  override val inDag: Boolean = true
+}
 sealed trait Slashable
 
 case object Valid extends ValidBlock
@@ -25,6 +35,7 @@ case object MissingBlocks           extends InvalidBlock
 case object InvalidBlockNumber      extends InvalidBlock with Slashable
 case object InvalidRepeatDeploy     extends InvalidBlock with Slashable
 case object InvalidParents          extends InvalidBlock with Slashable
+case object InvalidFollows          extends InvalidBlock with Slashable
 case object InvalidSequenceNumber   extends InvalidBlock with Slashable
 case object InvalidShardId          extends InvalidBlock with Slashable
 case object JustificationRegression extends InvalidBlock with Slashable

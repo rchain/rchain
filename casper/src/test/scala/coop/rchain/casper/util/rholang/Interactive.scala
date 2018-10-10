@@ -5,14 +5,13 @@ import coop.rchain.casper.genesis.contracts.TestSetUtil
 import monix.execution.Scheduler
 import monix.eval.Task
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
+import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccounting}
 import coop.rchain.shared.PathOps.RichPath
 import java.nio.file.{Files, Path, Paths}
 import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
 import coop.rchain.rspace.Checkpoint
 import coop.rchain.shared.StoreType.InMem
 import coop.rchain.models._
-import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import scala.collection.mutable
 
@@ -39,9 +38,10 @@ import scala.collection.mutable
   * }}}
   */
 class Interactive private (runtime: Runtime) {
-  private implicit val rand              = Blake2b512Random(128)
-  private implicit val costAccountingAlg = CostAccountingAlg.unsafe[Task](CostAccount.zero)
-  private implicit val scheduler         = Scheduler.io("rhoang-interpreter")
+  private implicit val rand = Blake2b512Random(128)
+  private implicit val costAccountingAlg =
+    CostAccounting.unsafe[Task](CostAccount(Integer.MAX_VALUE))
+  private implicit val scheduler = Scheduler.io("rhoang-interpreter")
 
   private val prettyPrinter = PrettyPrinter()
 
@@ -52,22 +52,25 @@ class Interactive private (runtime: Runtime) {
 
   def tuplespace: String = StoragePrinter.prettyPrint(runtime.space.store)
 
-  def eval(code: String): Unit     = TestSetUtil.eval(code, runtime)
+  def eval(code: String): Unit = {
+    TestSetUtil.eval(code, runtime)
+    val errors = runtime.errorLog.readAndClearErrorVector()
+    if (errors.nonEmpty) {
+      println("Errors during execution:")
+      errors.foreach(println)
+    }
+  }
   def evalFile(path: String): Unit = eval(scala.io.Source.fromFile(path).mkString)
   def query(code: String, name: String = "__out__"): Seq[Par] = {
     checkpoint("preQuery")
     eval(code)
     val result = runtime.space.getData(
-      Channel(Quote(Par().copy(exprs = Seq(Expr(GString(name))))))
+      Par().copy(exprs = Seq(Expr(GString(name))))
     )
     restore("preQuery")
     checkpoints.remove("preQuery")
 
-    for {
-      datum   <- result
-      channel <- datum.a.channels
-      par     <- channel.channelInstance.quote
-    } yield par
+    result.flatMap(_.a.pars)
   }
   def pp(term: Par): String = prettyPrinter.buildString(term)
 

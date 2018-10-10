@@ -30,7 +30,7 @@ object EffectsTestInstances {
       clock
     }
 
-    def sleep(millis: Int): F[Unit] = Capture[F].capture(())
+    def sleep(duration: FiniteDuration): F[Unit] = Capture[F].capture(())
 
     def reset(): Unit = this.clock = 0
   }
@@ -50,7 +50,8 @@ object EffectsTestInstances {
   def createRPConfAsk[F[_]: Applicative](
       local: PeerNode,
       defaultTimeout: FiniteDuration = FiniteDuration(1, MILLISECONDS),
-      clearConnections: ClearConnetionsConf = ClearConnetionsConf(1, 1)) =
+      clearConnections: ClearConnetionsConf = ClearConnetionsConf(1, 1)
+  ) =
     new ConstApplicativeAsk[F, RPConf](RPConf(local, defaultTimeout, clearConnections))
 
   class TransportLayerStub[F[_]: Capture: Applicative] extends TransportLayer[F] {
@@ -74,13 +75,13 @@ object EffectsTestInstances {
         reqresp.get.apply(peer).apply(msg)
       }
 
-    def send(peer: PeerNode, msg: Protocol): F[Unit] =
+    def send(peer: PeerNode, msg: Protocol): F[CommErr[Unit]] =
       Capture[F].capture {
         requests = requests :+ Request(peer, msg)
         Right(())
       }
 
-    def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Unit] = Capture[F].capture {
+    def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]] = Capture[F].capture {
       val m = peers.map(_ -> msg).toMap
       //I couldn't find implicit Monoid for Map
       val newMap = m.foldLeft(broadcasted) {
@@ -89,9 +90,15 @@ object EffectsTestInstances {
           map.updated(peer, msgs)
       }
       broadcasted = newMap
+      Seq()
     }
 
-    def receive(dispatch: Protocol => F[CommunicationResponse]): F[Unit] = ???
+    def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] = ???
+
+    def receive(
+        dispatch: Protocol => F[CommunicationResponse],
+        handleStreamed: Blob => F[Unit]
+    ): F[Unit] = ???
 
     def disconnect(peer: PeerNode): F[Unit] = ???
 

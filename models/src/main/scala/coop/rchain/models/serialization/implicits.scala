@@ -9,7 +9,8 @@ import scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
 
 object implicits {
   def mkProtobufInstance[T <: GeneratedMessage with Message[T]](
-      comp: GeneratedMessageCompanion[T]) = new Serialize[T] {
+      comp: GeneratedMessageCompanion[T]
+  ) = new Serialize[T] {
 
     override def encode(a: T): ByteVector =
       ByteVector.view(comp.toByteArray(a))
@@ -19,7 +20,6 @@ object implicits {
   }
 
   implicit val serializePar: Serialize[Par]         = mkProtobufInstance(Par)
-  implicit val serializeChannel: Serialize[Channel] = mkProtobufInstance(Channel)
   implicit val serializeVar: Serialize[Var]         = mkProtobufInstance(Var)
   implicit val serializeSend: Serialize[Send]       = mkProtobufInstance(Send)
   implicit val serializeReceive: Serialize[Receive] = mkProtobufInstance(Receive)

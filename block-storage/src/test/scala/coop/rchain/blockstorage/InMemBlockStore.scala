@@ -10,11 +10,12 @@ import coop.rchain.metrics.Metrics
 
 import scala.language.higherKinds
 
-class InMemBlockStore[F[_]] private ()(implicit
-                                       monadF: Monad[F],
-                                       refF: Ref[F, Map[BlockHash, BlockMessage]],
-                                       metricsF: Metrics[F])
-    extends BlockStore[F] {
+class InMemBlockStore[F[_]] private ()(
+    implicit
+    monadF: Monad[F],
+    refF: Ref[F, Map[BlockHash, BlockMessage]],
+    metricsF: Metrics[F]
+) extends BlockStore[F] {
 
   def get(blockHash: BlockHash): F[Option[BlockMessage]] =
     for {
@@ -22,8 +23,10 @@ class InMemBlockStore[F[_]] private ()(implicit
       state <- refF.get
     } yield state.get(blockHash)
 
-  @deprecated(message = "to be removed when casper code no longer needs the whole DB in memmory",
-              since = "0.5")
+  @deprecated(
+    message = "to be removed when casper code no longer needs the whole DB in memmory",
+    since = "0.5"
+  )
   def asMap(): F[Map[BlockHash, BlockMessage]] =
     for {
       _     <- metricsF.incrementCounter("block-store-as-map")
@@ -54,10 +57,12 @@ class InMemBlockStore[F[_]] private ()(implicit
 }
 
 object InMemBlockStore {
-  def create[F[_]](implicit
-                   monadF: Monad[F],
-                   refF: Ref[F, Map[BlockHash, BlockMessage]],
-                   metricsF: Metrics[F]): BlockStore[F] =
+  def create[F[_]](
+      implicit
+      monadF: Monad[F],
+      refF: Ref[F, Map[BlockHash, BlockMessage]],
+      metricsF: Metrics[F]
+  ): BlockStore[F] =
     new InMemBlockStore()
 
   def createWithId: BlockStore[Id] = {

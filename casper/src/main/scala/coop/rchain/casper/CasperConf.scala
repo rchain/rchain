@@ -23,6 +23,9 @@ case class CasperConf(
     numValidators: Int,
     genesisPath: Path,
     walletsFile: Option[String],
+    minimumBond: Long,
+    maximumBond: Long,
+    hasFaucet: Boolean,
     requiredSigs: Int,
     shardId: String,
     createGenesis: Boolean,
@@ -39,7 +42,8 @@ object CasperConf {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def parseValidatorsFile[F[_]: Monad: Capture: Log](
-      knownValidatorsFile: Option[String]): F[Set[ByteString]] =
+      knownValidatorsFile: Option[String]
+  ): F[Set[ByteString]] =
     knownValidatorsFile match {
       //TODO: Add default set? Throw error?
       case None => Set.empty[ByteString].pure[F]
@@ -52,7 +56,8 @@ object CasperConf {
                 .fromFile(file)
                 .getLines()
                 .map(line => ByteString.copyFrom(Base16.decode(line)))
-                .toSet)
+                .toSet
+            )
           }
           .flatMap {
             case Success(validators) => validators.pure[F]
@@ -64,9 +69,11 @@ object CasperConf {
           }
     }
 
-  def publicKey(givenPublicKey: Option[Array[Byte]],
-                sigAlgorithm: String,
-                privateKey: Array[Byte]): Array[Byte] = {
+  def publicKey(
+      givenPublicKey: Option[Array[Byte]],
+      sigAlgorithm: String,
+      privateKey: Array[Byte]
+  ): Array[Byte] = {
 
     val maybeInferred = sigAlgorithm match {
       case "ed25519" =>

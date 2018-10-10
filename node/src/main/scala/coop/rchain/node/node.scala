@@ -1,11 +1,10 @@
 package coop.rchain.node
 
-import java.util.concurrent.TimeUnit
-
 import cats._
 import cats.data._
 import cats.effect._
 import cats.implicits._
+
 import coop.rchain.blockstorage.{BlockStore, LMDBBlockStore}
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.util.comm.CasperPacketHandler
@@ -17,7 +16,6 @@ import coop.rchain.catscontrib._
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm._
 import coop.rchain.comm.discovery._
-import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.rp._
 import coop.rchain.comm.transport._
@@ -26,21 +24,26 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.node.api._
 import coop.rchain.node.configuration.Configuration
 import coop.rchain.node.diagnostics._
-import coop.rchain.shared.StoreType
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.shared.ThrowableOps._
 import coop.rchain.shared._
+
 import kamon._
+import kamon.zipkin.ZipkinReporter
 import io.grpc.Server
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.{Server => Http4sServer}
 import org.http4s.server.blaze._
-import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
+import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 
-class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Scheduler) {
+import monix.execution.schedulers.SchedulerService
+
+class NodeRuntime(conf: Configuration, host: String, scheduler: Scheduler) {
+
+  private val loopScheduler = Scheduler.fixedPool("loop", 4)
+  private val grpcScheduler = Scheduler.cached("grpc-io", 4, 64)
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
@@ -52,7 +55,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
   if (!dataDirFile.exists()) {
     if (!dataDirFile.mkdir()) {
       println(
-        s"The data dir must be a directory and have read and write permissions:\n${dataDirFile.getAbsolutePath}")
+        s"The data dir must be a directory and have read and write permissions:\n${dataDirFile.getAbsolutePath}"
+      )
       System.exit(-1)
     }
   }
@@ -60,7 +64,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
   // Check if data_dir has read/write access
   if (!dataDirFile.isDirectory || !dataDirFile.canRead || !dataDirFile.canWrite) {
     println(
-      s"The data dir must be a directory and have read and write permissions:\n${dataDirFile.getAbsolutePath}")
+      s"The data dir must be a directory and have read and write permissions:\n${dataDirFile.getAbsolutePath}"
+    )
     System.exit(-1)
   }
 
@@ -132,7 +137,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
 
   /** Configuration */
   private val port              = conf.server.port
-  private val address           = s"rnode://$name@$host:$port"
+  private val kademliaPort      = conf.server.kademliaPort
+  private val address           = s"rnode://$name@$host?protocol=$port&discovery=$kademliaPort"
   private val storagePath       = conf.server.dataDir.resolve("rspace")
   private val casperStoragePath = storagePath.resolve("casper")
   private val storageSize       = conf.server.mapSize
@@ -166,14 +172,23 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       nodeCoreMetrics: NodeMetrics[Task],
       jvmMetrics: JvmMetrics[Task],
       connectionsCell: ConnectionsCell[Task]
-  ): Effect[Servers] =
+  ): Effect[Servers] = {
+    implicit val s: Scheduler = scheduler
     for {
-      grpcServerExternal <- GrpcServer.acquireExternalServer[Effect](conf.grpcServer.portExternal,
-                                                                     conf.server.maxMessageSize)
+      grpcServerExternal <- GrpcServer
+                             .acquireExternalServer[Effect](
+                               conf.grpcServer.portExternal,
+                               conf.server.maxMessageSize,
+                               grpcScheduler
+                             )
       grpcServerInternal <- GrpcServer
-                             .acquireInternalServer[Effect](conf.grpcServer.portInternal,
-                                                            conf.server.maxMessageSize,
-                                                            runtime)
+                             .acquireInternalServer(
+                               conf.grpcServer.portInternal,
+                               conf.server.maxMessageSize,
+                               runtime,
+                               grpcScheduler
+                             )
+                             .toEffect
       prometheusReporter = new NewPrometheusReporter()
 
       httpServer <- LiftIO[Task].liftIO {
@@ -182,18 +197,22 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
                      BlazeBuilder[IO]
                        .bindHttp(conf.server.httpPort, "0.0.0.0")
                        .mountService(prometheusService, "/metrics")
+                       .mountService(VersionInfo.service, "/version")
                        .start
                    }.toEffect
       _ <- Task.delay {
             Kamon.addReporter(prometheusReporter)
             Kamon.addReporter(new JmxReporter())
+            Kamon.addReporter(new ZipkinReporter())
           }.toEffect
     } yield Servers(grpcServerExternal, grpcServerInternal, httpServer)
+  }
 
   def startServers(servers: Servers)(
       implicit
-      log: Log[Task],
-  ): Effect[Unit] = GrpcServer.start[Effect](servers.grpcServerExternal, servers.grpcServerInternal)
+      log: Log[Task]
+  ): Effect[Unit] =
+    GrpcServer.start(servers.grpcServerExternal, servers.grpcServerInternal).toEffect
 
   def clearResources(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
       implicit
@@ -208,11 +227,11 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       _   <- Task.delay(servers.grpcServerInternal.shutdown())
       _   <- log.info("Shutting down transport layer, broadcasting DISCONNECT")
       loc <- rpConfAsk.reader(_.local)
-      msg = CommMessages.disconnect(loc)
+      msg = ProtocolHelper.disconnect(loc)
       _   <- transport.shutdown(msg)
       _   <- log.info("Shutting down HTTP server....")
       _   <- Task.delay(Kamon.stopAllReporters())
-      _   <- LiftIO[Task].liftIO(servers.httpServer.shutdown)
+      _   <- LiftIO[Task].liftIO(servers.httpServer.shutdown).attempt
       _   <- log.info("Shutting down interpreter runtime ...")
       _   <- Task.delay(runtime.close)
       _   <- log.info("Shutting down Casper runtime ...")
@@ -220,13 +239,17 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       _   <- log.info("Bringing BlockStore down ...")
       _   <- blockStore.close().value
       _   <- log.info("Goodbye.")
-    } yield ()).unsafeRunSync
+    } yield ()).unsafeRunSync(scheduler)
 
-  def startReportJvmMetrics(implicit metrics: Metrics[Task],
-                            jvmMetrics: JvmMetrics[Task]): Task[Unit] =
+  def startReportJvmMetrics(
+      implicit metrics: Metrics[Task],
+      jvmMetrics: JvmMetrics[Task]
+  ): Task[Unit] =
     Task.delay {
       import scala.concurrent.duration._
-      scheduler.scheduleAtFixedRate(3.seconds, 3.second)(JvmMetrics.report[Task].unsafeRunSync)
+      loopScheduler.scheduleAtFixedRate(3.seconds, 3.second)(
+        JvmMetrics.report[Task].unsafeRunSync(scheduler)
+      )
     }
 
   def addShutdownHook(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
@@ -256,23 +279,16 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       jvmMetrics: JvmMetrics[Task]
   ): Effect[Unit] = {
 
-    val handleCommunication = (pm: Protocol) =>
-      NodeDiscovery[Effect].handleCommunications(pm) >>= {
-        case NotHandled(_) => HandleMessages.handle[Effect](pm, defaultTimeout)
-        case handled       => handled.pure[Effect]
-    }
-
     val info: Effect[Unit] = for {
-      _ <- Log[Effect].info(
-            s"RChain Node ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})")
+      _ <- Log[Effect].info(VersionInfo.get)
       _ <- if (conf.server.standalone) Log[Effect].info(s"Starting stand-alone node.")
           else Log[Effect].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
     } yield ()
 
     val loop: Effect[Unit] = for {
       _ <- Connect.clearConnections[Effect]
-      _ <- Connect.findAndConnect[Effect](Connect.connect[Effect] _)
-      _ <- time.sleep(5000).toEffect
+      _ <- Connect.findAndConnect[Effect](Connect.connect[Effect])
+      _ <- time.sleep(5.seconds).toEffect
     } yield ()
 
     for {
@@ -281,10 +297,13 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       _       <- addShutdownHook(servers, runtime, casperRuntime).toEffect
       _       <- startServers(servers)
       _       <- startReportJvmMetrics.toEffect
-      _       <- TransportLayer[Effect].receive(handleCommunication)
-      ndFiber <- NodeDiscovery[Task].discover.forever.fork.toEffect
-      _       <- Log[Effect].info(s"Listening for traffic on $address.")
-      _       <- loop.forever
+      _ <- TransportLayer[Effect].receive(
+            pm => HandleMessages.handle[Effect](pm, defaultTimeout),
+            blob => packetHandler.handlePacket(blob.sender, blob.packet).as(())
+          )
+      _ <- NodeDiscovery[Task].discover.executeOn(loopScheduler).start.toEffect
+      _ <- Log[Effect].info(s"Listening for traffic on $address.")
+      _ <- EitherT(Task.defer(loop.forever.value).executeOn(loopScheduler))
     } yield ()
   }
 
@@ -296,18 +315,12 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     EitherT[Task, CommError, Unit](
       prog.value
         .onErrorHandleWith {
-          case th if th.containsMessageWith("Error loading shared library libsodium.so") =>
-            Log[Task]
-              .error(
-                "Libsodium is NOT installed on your system. Please install libsodium (https://github.com/jedisct1/libsodium) and try again.")
           case th =>
             log.error("Caught unhandable error. Exiting. Stacktrace below.") *> Task.delay {
               th.printStackTrace();
             }
-        } *> exit0.as(Right(())))
-
-  private def timerEff(implicit timerTask: Timer[Task]): Timer[Effect] =
-    Timer.deriveEitherT(Functor[Task], timerTask)
+        } *> exit0.as(Right(()))
+    )
 
   private val syncEffect = SyncInstances.syncEffect[CommError](commError => {
     new Exception(s"CommError: $commError")
@@ -319,19 +332,21 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     * 2. create instances of typeclasses
     * 3. run the node program.
     */
+  // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
   val main: Effect[Unit] = for {
     // 1. set up configurations
-    local          <- EitherT.fromEither[Task](PeerNode.parse(address))
-    defaultTimeout = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS)
-    rpClearConnConf = ClearConnetionsConf(conf.server.maxNumOfConnections,
-                                          numOfConnectionsPinged = 10) // TODO read from conf
+    local          <- EitherT.fromEither[Task](PeerNode.fromAddress(address))
+    defaultTimeout = conf.server.defaultTimeout.millis
+    rpClearConnConf = ClearConnetionsConf(
+      conf.server.maxNumOfConnections,
+      numOfConnectionsPinged = 10
+    ) // TODO read from conf
     // 2. create instances of typeclasses
     rpConfAsk            = effects.rpConfAsk(RPConf(local, defaultTimeout, rpClearConnConf))
     tcpConnections       <- effects.tcpConnections.toEffect
     rpConnections        <- effects.rpConnections.toEffect
     log                  = effects.log
     time                 = effects.time
-    timerTask            = Task.timer
     metrics              = diagnostics.metrics[Task]
     multiParentCasperRef <- MultiParentCasperRef.of[Effect]
     lab                  <- LastApprovedBlock.of[Task].toEffect
@@ -341,29 +356,37 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       port,
       conf.tls.certificate,
       conf.tls.key,
-      conf.server.maxMessageSize)(scheduler, tcpConnections, log)
-    kademliaRPC = effects.kademliaRPC(local, defaultTimeout)(metrics, transport)
-    initPeer    = if (conf.server.standalone) None else Some(conf.server.bootstrap)
+      conf.server.maxMessageSize
+    )(grpcScheduler, tcpConnections, log)
+    kademliaRPC = effects.kademliaRPC(local, kademliaPort, defaultTimeout)(
+      grpcScheduler,
+      metrics,
+      log
+    )
+    initPeer = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     nodeDiscovery <- effects
-                      .nodeDiscovery(local, defaultTimeout)(initPeer)(log,
-                                                                      time,
-                                                                      metrics,
-                                                                      kademliaRPC)
+                      .nodeDiscovery(local, defaultTimeout)(initPeer)(
+                        log,
+                        time,
+                        metrics,
+                        kademliaRPC
+                      )
                       .toEffect
     blockStore = LMDBBlockStore.create[Effect](conf.blockstorage)(
       syncEffect,
-      Metrics.eitherT(Monad[Task], metrics))
+      Metrics.eitherT(Monad[Task], metrics)
+    )
 
     _              <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
-    oracle         = SafetyOracle.turanOracle[Effect](Monad[Effect], blockStore)
+    oracle         = SafetyOracle.turanOracle[Effect](Monad[Effect])
     runtime        = Runtime.create(storagePath, storageSize, storeType)
+    _              <- runtime.injectEmptyRegistryRoot[Effect]
     casperRuntime  = Runtime.create(casperStoragePath, storageSize, storeType)
-    runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
+    runtimeManager = RuntimeManager.fromRuntime(casperRuntime)(scheduler)
     casperPacketHandler <- CasperPacketHandler
                             .of[Effect](conf.casper, defaultTimeout, runtimeManager, _.value)(
                               labEff,
                               Metrics.eitherT(Monad[Task], metrics),
-                              timerEff(timerTask),
                               blockStore,
                               Cell.eitherTCell(Monad[Task], rpConnections),
                               NodeDiscovery.eitherTNodeDiscovery(Monad[Task], nodeDiscovery),
@@ -381,7 +404,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     packetHandler = PacketHandler.pf[Effect](casperPacketHandler.handle)(
       Applicative[Effect],
       Log.eitherTLog(Monad[Task], log),
-      ErrorHandler[Effect])
+      ErrorHandler[Effect]
+    )
     nodeCoreMetrics = diagnostics.nodeCoreMetrics[Task]
     jvmMetrics      = diagnostics.jvmMetrics[Task]
     // 3. run the node program.

@@ -1,5 +1,5 @@
 module PROGRAM-RESTRICTIONS
-imports FREE
+imports ALPHA-EQUIVALENCE
 
 // *******************************************************************
 //                          PROGRAM-RESTRICTIONS

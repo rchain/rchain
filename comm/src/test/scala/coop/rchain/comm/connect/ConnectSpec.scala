@@ -3,14 +3,14 @@ package coop.rchain.comm.rp
 import Connect._
 import org.scalatest._
 import coop.rchain.comm.protocol.routing._
-import coop.rchain.comm.protocol.rchain.{Protocol => _, _}
 import com.google.common.io.BaseEncoding
 import coop.rchain.comm._, CommError._
 import coop.rchain.p2p.effects._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 import coop.rchain.metrics.Metrics
-import coop.rchain.comm.transport._, CommMessages._
+import coop.rchain.comm.transport._
+import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared._
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
@@ -46,8 +46,7 @@ class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with App
         Connect.connect[Effect](remote, defaultTimeout)
         // then
         transportLayerEff.requests.size should be(1)
-        val Protocol(_, Protocol.Message.Upstream(upstream)) = transportLayerEff.requests(0).msg
-        upstream.unpack(ProtocolHandshake)
+        val Protocol(_, Protocol.Message.ProtocolHandshake(_)) = transportLayerEff.requests(0).msg
       }
     }
 

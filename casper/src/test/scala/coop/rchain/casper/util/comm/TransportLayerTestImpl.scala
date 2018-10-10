@@ -15,25 +15,34 @@ import coop.rchain.comm.transport._
 
 class TransportLayerTestImpl[F[_]: Monad](
     identity: PeerNode,
-    val msgQueues: Map[PeerNode, Ref[F, mutable.Queue[Protocol]]])
-    extends TransportLayer[F] {
+    val msgQueues: Map[PeerNode, Ref[F, mutable.Queue[Protocol]]]
+) extends TransportLayer[F] {
 
   def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): F[CommErr[Protocol]] = ???
 
-  def send(peer: PeerNode, msg: Protocol): F[Unit] =
+  def send(peer: PeerNode, msg: Protocol): F[CommErr[Unit]] =
     msgQueues.get(peer) match {
       case Some(qRef) =>
-        qRef.update { q =>
-          q.enqueue(msg); q
-        }
-      case None => ().pure[F]
+        qRef
+          .update { q =>
+            q.enqueue(msg); q
+          }
+          .map(Right(_))
+      case None => ().pure[F].map(Right(_))
     }
 
-  def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Unit] =
-    peers.toList.traverse(send(_, msg)).void
+  def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]] =
+    peers.toList.traverse(send(_, msg)).map(_.toSeq)
 
-  def receive(dispatch: Protocol => F[CommunicationResponse]): F[Unit] =
+  // FIX-ME handleStreamed not handled (pun)
+  def receive(
+      dispatch: Protocol => F[CommunicationResponse],
+      handleStreamed: Blob => F[Unit]
+  ): F[Unit] =
     TransportLayerTestImpl.handleQueue(dispatch, msgQueues(identity))
+
+  // FIX-ME
+  def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] = ???
 
   def disconnect(peer: PeerNode): F[Unit] = ???
 
@@ -50,8 +59,10 @@ class TransportLayerTestImpl[F[_]: Monad](
 }
 
 object TransportLayerTestImpl {
-  def handleQueue[F[_]: Monad](dispatch: Protocol => F[CommunicationResponse],
-                               qRef: Ref[F, mutable.Queue[Protocol]]): F[Unit] =
+  def handleQueue[F[_]: Monad](
+      dispatch: Protocol => F[CommunicationResponse],
+      qRef: Ref[F, mutable.Queue[Protocol]]
+  ): F[Unit] =
     for {
       maybeProto <- qRef.modify { q =>
                      if (q.nonEmpty) {

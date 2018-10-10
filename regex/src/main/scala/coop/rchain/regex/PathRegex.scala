@@ -37,15 +37,17 @@ object PathRegexOptions {
   val nonEnd        = PathRegexOptions(end = false)
 }
 
-private[regex] case class PathToken(name: Option[String],
-                                    key: Int,
-                                    prefix: Option[Char],
-                                    delimiter: Option[Char],
-                                    optional: Boolean,
-                                    repeat: Boolean,
-                                    partial: Boolean,
-                                    pattern: Option[String],
-                                    rawPathPart: Option[String]) {
+private[regex] case class PathToken(
+    name: Option[String],
+    key: Int,
+    prefix: Option[Char],
+    delimiter: Option[Char],
+    optional: Boolean,
+    repeat: Boolean,
+    partial: Boolean,
+    pattern: Option[String],
+    rawPathPart: Option[String]
+) {
   def isRawPathPart: Boolean = rawPathPart.isDefined
 
   def isToken: Boolean = rawPathPart.isEmpty
@@ -62,8 +64,10 @@ private[regex] case class PathToken(name: Option[String],
     *
     * @throws IllegalArgumentException if token couldn't be formatted
     */
-  private[regex] def formatSegment(args: Map[String, Iterable[String]],
-                                   encode: String => String): String =
+  private[regex] def formatSegment(
+      args: Map[String, Iterable[String]],
+      encode: String => String
+  ): String =
     rawPathPart.getOrElse {
       val argName = name.getOrElse(key.toString)
       val sumSegments = args.get(argName) match {
@@ -79,7 +83,8 @@ private[regex] case class PathToken(name: Option[String],
             prefix.getOrElse("") + encValue
           } else {
             throw new IllegalArgumentException(
-              s"Expected $argName to match pattern ${matchRegex.get.pattern}, but got value $encValue")
+              s"Expected $argName to match pattern ${matchRegex.get.pattern}, but got value $encValue"
+            )
           }
         case Some(lstValue: Iterable[String]) =>
           val allValues =
@@ -93,7 +98,8 @@ private[regex] case class PathToken(name: Option[String],
                   }
                 } else {
                   throw new IllegalArgumentException(
-                    s"Expected $argName[$idx] to match pattern ${matchRegex.get.pattern}, but got value $encValue")
+                    s"Expected $argName[$idx] to match pattern ${matchRegex.get.pattern}, but got value $encValue"
+                  )
                 }
           allValues.mkString
       }
@@ -102,14 +108,16 @@ private[regex] case class PathToken(name: Option[String],
 }
 
 private[regex] object PathToken {
-  def apply(name: Option[String],
-            key: Int,
-            prefix: Option[Char],
-            delimiter: Option[Char],
-            optional: Boolean,
-            repeat: Boolean,
-            partial: Boolean,
-            pattern: String) =
+  def apply(
+      name: Option[String],
+      key: Int,
+      prefix: Option[Char],
+      delimiter: Option[Char],
+      optional: Boolean,
+      repeat: Boolean,
+      partial: Boolean,
+      pattern: String
+  ) =
     new PathToken(name, key, prefix, delimiter, optional, repeat, partial, Some(pattern), None)
   def apply(substring: String) =
     new PathToken(None, -1, None, None, false, false, false, None, Some(substring))
@@ -122,8 +130,10 @@ case class PathRegex(tokens: List[PathToken], options: RegexOptions) {
     * Takes some arguments (argument can be a value or a sequence of values),
     * and builds an Uri-path
     */
-  def toPath(args: Map[String, Iterable[String]],
-             encode: String => String = PathRegex.encodeUriComponent): Either[Throwable, String] =
+  def toPath(
+      args: Map[String, Iterable[String]],
+      encode: String => String = PathRegex.encodeUriComponent
+  ): Either[Throwable, String] =
     Try(tokens.map(_.formatSegment(args, encode)).mkString).toEither
 
   val keys: List[PathToken] = tokens.filter(_.isToken)
@@ -217,15 +227,17 @@ object PathRegex {
     } else {
       //we need to transform our string to UTF-8 (internally, Java/Scala uses UTF-16)
       str
-        .map(c =>
-          if (uriAllowedChars.contains(c)) {
-            c.toString
-          } else {
-            c.toString
-              .getBytes(StandardCharsets.UTF_8)
-              .map(b => "%%%02X".format(b))
-              .mkString("")
-        })
+        .map(
+          c =>
+            if (uriAllowedChars.contains(c)) {
+              c.toString
+            } else {
+              c.toString
+                .getBytes(StandardCharsets.UTF_8)
+                .map(b => "%%%02X".format(b))
+                .mkString("")
+            }
+        )
         .mkString("")
     }
 
@@ -240,10 +252,12 @@ object PathRegex {
   private[this] val rxPath =
     """(\\.)|(?:\:(\w+)(?:\(((?:\\.|[^\\()])+)\))?|\(((?:\\.|[^\\()])+)\))([+*?])?""".r
 
-  private[this] case class ParseState(subStr: String,
-                                      rawPathPart: String,
-                                      tokens: List[PathToken],
-                                      pathEscaped: Boolean)
+  private[this] case class ParseState(
+      subStr: String,
+      rawPathPart: String,
+      tokens: List[PathToken],
+      pathEscaped: Boolean
+  )
 
   /**
     * Parse a string for the raw tokens.
@@ -263,10 +277,13 @@ object PathRegex {
             case Some(escapeStr) =>
               //we found escape sequence, add it to our collectedPath
               toTokens(
-                ParseState(parseState.subStr.substring(mc.end),
-                           rawPathPart + escapeStr.charAt(1),
-                           parseState.tokens,
-                           true))
+                ParseState(
+                  parseState.subStr.substring(mc.end),
+                  rawPathPart + escapeStr.charAt(1),
+                  parseState.tokens,
+                  true
+                )
+              )
             case None =>
               val (prev, actualPath) =
                 if (!parseState.pathEscaped && rawPathPart.nonEmpty) {
@@ -313,7 +330,8 @@ object PathRegex {
               )
 
               toTokens(
-                ParseState(parseState.subStr.substring(mc.end), "", userToken :: tokens, false))
+                ParseState(parseState.subStr.substring(mc.end), "", userToken :: tokens, false)
+              )
           }
         case None =>
           val finalCollectedPath = parseState.rawPathPart + parseState.subStr

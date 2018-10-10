@@ -53,8 +53,8 @@ for(@mintA <- @"mintA"; @mintB <- @"mintB") {
       @"TestSet"!( //cannot deposit tokens across different mints
         "Cross-currency deposits should fail.",
         [
-          ["ccDep1", false],
-          ["ccDep2", false],
+          ["ccDep1", "hanging return"],
+          ["ccDep2", "hanging return"],
         ]
       )
     }) |
@@ -97,7 +97,6 @@ for(@mintA <- @"mintA"; @mintB <- @"mintB") {
             "Split should work as expected.",
             [
               ["splitFail", false], //cannot split with more than you have
-              
               ["aliceAPurse5Balance", 5], //0 + 5 = 5
               ["aliceAPurseBalance", 45] // 50 - 5 = 45
             ]

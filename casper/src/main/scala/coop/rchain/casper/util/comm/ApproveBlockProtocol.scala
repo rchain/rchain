@@ -2,7 +2,7 @@ package coop.rchain.casper.util.comm
 
 import cats.data.EitherT
 import cats.effect.concurrent.Ref
-import cats.effect.{Sync, Timer}
+import cats.effect.Sync
 import cats.implicits._
 import cats.{FlatMap, Monad}
 import com.google.protobuf.ByteString
@@ -37,7 +37,8 @@ abstract class ApproveBlockProtocolInstances {
 
 object ApproveBlockProtocol {
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
-      implicit C: ApproveBlockProtocol[F]): ApproveBlockProtocol[T[F, ?]] =
+      implicit C: ApproveBlockProtocol[F]
+  ): ApproveBlockProtocol[T[F, ?]] =
     new ApproveBlockProtocol[T[F, ?]] {
       override def addApproval(a: BlockApproval): T[F, Unit] = C.addApproval(a).liftM[T]
       override def run(): T[F, Unit]                         = C.run().liftM[T]
@@ -46,51 +47,55 @@ object ApproveBlockProtocol {
   def apply[F[_]](implicit instance: ApproveBlockProtocol[F]): ApproveBlockProtocol[F] = instance
 
   //For usage in tests only
-  def unsafe[
-      F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: Timer: Metrics: RPConfAsk: LastApprovedBlock](
+  def unsafe[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
       block: BlockMessage,
       trustedValidators: Set[ByteString],
       requiredSigs: Int,
       duration: FiniteDuration,
       interval: FiniteDuration,
       sigsF: Ref[F, Set[Signature]],
-      start: Long): ApproveBlockProtocol[F] =
-    new ApproveBlockProtocolImpl[F](block,
-                                    requiredSigs,
-                                    trustedValidators,
-                                    start,
-                                    duration,
-                                    interval,
-                                    sigsF)
+      start: Long
+  ): ApproveBlockProtocol[F] =
+    new ApproveBlockProtocolImpl[F](
+      block,
+      requiredSigs,
+      trustedValidators,
+      start,
+      duration,
+      interval,
+      sigsF
+    )
 
-  def of[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: Timer: Metrics: RPConfAsk: LastApprovedBlock](
+  def of[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
       block: BlockMessage,
       trustedValidators: Set[ByteString],
       requiredSigs: Int,
       duration: FiniteDuration,
-      interval: FiniteDuration): F[ApproveBlockProtocol[F]] =
+      interval: FiniteDuration
+  ): F[ApproveBlockProtocol[F]] =
     for {
-      now   <- implicitly[Timer[F]].clock.realTime(MILLISECONDS)
+      now   <- Time[F].currentMillis
       sigsF <- Ref.of[F, Set[Signature]](Set.empty)
     } yield
-      new ApproveBlockProtocolImpl[F](block,
-                                      requiredSigs,
-                                      trustedValidators,
-                                      now,
-                                      duration,
-                                      interval,
-                                      sigsF)
+      new ApproveBlockProtocolImpl[F](
+        block,
+        requiredSigs,
+        trustedValidators,
+        now,
+        duration,
+        interval,
+        sigsF
+      )
 
-  private class ApproveBlockProtocolImpl[
-      F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: Timer: Metrics: RPConfAsk: LastApprovedBlock](
+  private class ApproveBlockProtocolImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
       val block: BlockMessage,
       val requiredSigs: Int,
       val trustedValidators: Set[ByteString],
       val start: Long,
       val duration: FiniteDuration,
       val interval: FiniteDuration,
-      private val sigsF: Ref[F, Set[Signature]])
-      extends ApproveBlockProtocol[F] {
+      private val sigsF: Ref[F, Set[Signature]]
+  ) extends ApproveBlockProtocol[F] {
     private implicit val logSource: LogSource = LogSource(this.getClass)
 
     private val candidate                 = ApprovedBlockCandidate(Some(block), requiredSigs)
@@ -143,12 +148,12 @@ object ApproveBlockProtocol {
           _ <- LastApprovedBlock[F].set(ApprovedBlock(Some(candidate), signatures.toSeq))
           _ <- sendApprovedBlock
         } yield ()
-      } else implicitly[Timer[F]].sleep(interval) >> internalRun()
+      } else Time[F].sleep(interval) >> internalRun()
 
     private def internalRun(): F[Unit] =
       for {
         _    <- sendUnapprovedBlock
-        t    <- implicitly[Timer[F]].clock.realTime(MILLISECONDS)
+        t    <- Time[F].currentMillis
         sigs <- sigsF.get
         _    <- completeIf(t, sigs)
       } yield ()
@@ -170,11 +175,12 @@ object ApproveBlockProtocol {
         _ <- apbO match {
               case None =>
                 Log[F].warn(s"APPROVAL: Expected ApprovedBlock but was None.")
-              case Some(block) =>
-                val serializedApprovedBlock = block.toByteString
+              case Some(b) =>
+                val serializedApprovedBlock = b.toByteString
                 for {
                   _ <- Log[F].info(
-                        s"APPROVAL: Beginning send of ApprovedBlock $candidateHash to peers...")
+                        s"APPROVAL: Beginning send of ApprovedBlock $candidateHash to peers..."
+                      )
                   _ <- CommUtil.sendToPeers[F](transport.ApprovedBlock, serializedApprovedBlock)
                   _ <- Log[F].info(s"APPROVAL: Sent ApprovedBlock $candidateHash to peers.")
                 } yield ()

@@ -28,13 +28,17 @@ object RholangCLI {
     val binary = opt[Boolean](descr = "outputs binary protobuf serialization")
     val text   = opt[Boolean](descr = "outputs textual protobuf serialization")
 
-    val data_dir = opt[Path](required = false,
-                             descr = "Path to data directory",
-                             default = Some(Files.createTempDirectory("rspace-store-")))
+    val data_dir = opt[Path](
+      required = false,
+      descr = "Path to data directory",
+      default = Some(Files.createTempDirectory("rspace-store-"))
+    )
 
-    val map_size = opt[Long](required = false,
-                             descr = "Map size (in bytes)",
-                             default = Some(1024L * 1024L * 1024L))
+    val map_size = opt[Long](
+      required = false,
+      descr = "Map size (in bytes)",
+      default = Some(1024L * 1024L * 1024L)
+    )
 
     val files =
       trailArg[List[String]](required = false, descr = "Rholang source file")(stringListConverter)
@@ -48,6 +52,7 @@ object RholangCLI {
     val conf = new Conf(args)
 
     val runtime = Runtime.create(conf.data_dir(), conf.map_size())
+    Await.result(runtime.injectEmptyRegistryRoot[Task].runAsync, 5.seconds)
 
     try {
       if (conf.files.supplied) {
@@ -108,7 +113,8 @@ object RholangCLI {
   }
 
   def processFile(conf: Conf, runtime: Runtime, fileName: String)(
-      implicit scheduler: Scheduler): Unit = {
+      implicit scheduler: Scheduler
+  ): Unit = {
     val processTerm: Par => Unit =
       if (conf.binary()) writeBinary(fileName)
       else if (conf.text()) writeHumanReadable(fileName)

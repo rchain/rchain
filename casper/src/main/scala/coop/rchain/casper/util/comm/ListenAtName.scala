@@ -1,17 +1,21 @@
 package coop.rchain.casper.util.comm
-import cats.effect.{Sync, Timer}
-import cats.instances.list._
-import cats.syntax.flatMap._
-import cats.syntax.applicative._
-import cats.syntax.functor._
-import cats.syntax.traverse._
-import cats.{Id, MonadError}
-import com.google.protobuf.ByteString
-import coop.rchain.casper.util.rholang.InterpreterUtil
-import coop.rchain.models.{GPrivate, Par}
 
 import scala.language.higherKinds
 import scala.util.{Either, Right}
+
+import cats.{Id, MonadError}
+import cats.effect.Sync
+import cats.instances.list._
+import cats.syntax.applicative._
+import cats.syntax.flatMap._
+import cats.syntax.functor._
+import cats.syntax.traverse._
+
+import coop.rchain.casper.util.rholang.InterpreterUtil
+import coop.rchain.models.{GPrivate, Par}
+import coop.rchain.shared.Time
+
+import com.google.protobuf.ByteString
 
 object ListenAtName {
   sealed trait Name
@@ -52,12 +56,12 @@ object ListenAtName {
     MonadError[F, Throwable].fromEither(par)
   }
 
-  private def applyUntil[A, F[_]: Sync: Timer](retrieve: F[A])(breakCond: A => Boolean): F[A] = {
+  private def applyUntil[A, F[_]: Sync: Time](retrieve: F[A])(breakCond: A => Boolean): F[A] = {
     import scala.concurrent.duration._
 
     def loop: F[A] =
       for {
-        _    <- implicitly[Timer[F]].sleep(1.second)
+        _    <- Time[F].sleep(1.second)
         data <- retrieve
         res <- if (breakCond(data)) data.pure[F]
               else loop
@@ -66,8 +70,9 @@ object ListenAtName {
     loop
   }
 
-  def listenAtNameUntilChanges[A, G[_], F[_]: Sync: Timer](name: G[Name])(
-      request: G[Par] => F[Seq[A]])(implicit par: BuildPar[λ[A => F[G[A]]]]) = {
+  def listenAtNameUntilChanges[A, G[_], F[_]: Sync: Time](
+      name: G[Name]
+  )(request: G[Par] => F[Seq[A]])(implicit par: BuildPar[λ[A => F[G[A]]]]) = {
     val nameF = name.pure[F]
 
     val retrieve =

@@ -1,26 +1,28 @@
 package coop.rchain.casper.api
 
-import cats.effect.{Sync, Timer}
-import cats.{Functor, Id, Monad}
+import scala.concurrent.duration._
+
+import cats.Monad
 import cats.data.EitherT
 import cats.implicits._
-import cats.mtl.implicits._
-import com.google.protobuf.ByteString
+
 import coop.rchain.casper._
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang._
-import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.casper.Estimator.Validator
-import monix.eval.Task
-import monix.execution.Scheduler
-import coop.rchain.shared.AttemptOps._
+import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
+import coop.rchain.rholang.interpreter.accounting
+import coop.rchain.shared.Time
 
-import scala.concurrent.duration._
+import com.google.protobuf.ByteString
+import monix.eval.Task
+import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
 
 class CreateBlockAPITest extends FlatSpec with Matchers {
@@ -31,23 +33,28 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
   private val bonds                       = createBonds(validators)
   private val genesis                     = createGenesis(bonds)
 
-  implicit val timerEff: Timer[Effect] = Timer.deriveEitherT(Functor[Task], Task.timer)
-
   "createBlock" should "not allow simultaneous calls" in {
     implicit val scheduler = Scheduler.fixedPool("three-threads", 3)
-    val node               = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
-    val casper             = new SleepingMultiParentCasperImpl[Effect](node.casperEff)
+    implicit val time = new Time[Task] {
+      private val timer                               = Task.timer
+      def currentMillis: Task[Long]                   = timer.clock.realTime(MILLISECONDS)
+      def nanoTime: Task[Long]                        = timer.clock.monotonic(NANOSECONDS)
+      def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
+    }
+    val node   = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val casper = new SleepingMultiParentCasperImpl[Effect](node.casperEff)
     val deploys = List(
       "@0!(0) | for(_ <- @0){ @1!(1) }",
       "for(_ <- @1){ @2!(2) }"
-    ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis()))
+    ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
 
     implicit val logEff = new LogStub[Effect]
-    def testProgram(implicit casperRef: MultiParentCasperRef[Effect])
-      : Effect[(DeployServiceResponse, DeployServiceResponse)] = EitherT.liftF(
+    def testProgram(
+        implicit casperRef: MultiParentCasperRef[Effect]
+    ): Effect[(DeployServiceResponse, DeployServiceResponse)] = EitherT.liftF(
       for {
         t1 <- (BlockAPI.deploy[Effect](deploys.head) *> BlockAPI.createBlock[Effect]).value.fork
-        _  <- implicitly[Timer[Task]].sleep(2.second)
+        _  <- Time[Task].sleep(2.second)
         t2 <- (BlockAPI.deploy[Effect](deploys.last) *> BlockAPI
                .createBlock[Effect]).value.fork //should fail because other not done
         r1 <- t1.join
@@ -69,7 +76,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
   }
 }
 
-private class SleepingMultiParentCasperImpl[F[_]: Monad: Timer](underlying: MultiParentCasper[F])
+private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: MultiParentCasper[F])
     extends MultiParentCasper[F] {
 
   def addBlock(b: BlockMessage): F[BlockStatus]             = underlying.addBlock(b)
@@ -77,7 +84,7 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Timer](underlying: Mult
   def deploy(d: DeployData): F[Either[Throwable, Unit]]     = underlying.deploy(d)
   def estimator(dag: BlockDag): F[IndexedSeq[BlockMessage]] = underlying.estimator(dag)
   def blockDag: F[BlockDag]                                 = underlying.blockDag
-  def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] =
+  def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     underlying.normalizedInitialFault(weights)
   def lastFinalizedBlock: F[BlockMessage]          = underlying.lastFinalizedBlock
   def storageContents(hash: ByteString): F[String] = underlying.storageContents(hash)
@@ -86,7 +93,7 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Timer](underlying: Mult
   override def createBlock: F[CreateBlockStatus] =
     for {
       result <- underlying.createBlock
-      _      <- implicitly[Timer[F]].sleep(5.seconds)
+      _      <- implicitly[Time[F]].sleep(5.seconds)
     } yield result
 
 }

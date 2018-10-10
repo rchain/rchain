@@ -16,16 +16,18 @@ import scodec.bits.{BitVector, ByteVector}
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
 
-class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
-                                   protected[this] val databasePath: Path,
-                                   _dbTrie: Dbi[ByteBuffer],
-                                   _dbRoot: Dbi[ByteBuffer],
-                                   _dbPastRoots: Dbi[ByteBuffer],
-                                   _dbEmptyRoots: Dbi[ByteBuffer],
-)(implicit
-  codecK: Codec[K],
-  codecV: Codec[V])
-    extends ITrieStore[Txn[ByteBuffer], K, V]
+class LMDBTrieStore[K, V] private (
+    val env: Env[ByteBuffer],
+    protected[this] val databasePath: Path,
+    _dbTrie: Dbi[ByteBuffer],
+    _dbRoot: Dbi[ByteBuffer],
+    _dbPastRoots: Dbi[ByteBuffer],
+    _dbEmptyRoots: Dbi[ByteBuffer]
+)(
+    implicit
+    codecK: Codec[K],
+    codecV: Codec[V]
+) extends ITrieStore[Txn[ByteBuffer], K, V]
     with LMDBOps {
 
   private[rspace] def put(txn: Txn[ByteBuffer], key: Blake2b256Hash, value: Trie[K, V]): Unit =
@@ -65,8 +67,10 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
   private[rspace] def getRoot(txn: Txn[ByteBuffer], branch: Branch): Option[Blake2b256Hash] =
     _dbRoot.get(txn, branch)(Codec[Branch], Codec[Blake2b256Hash])
 
-  private[rspace] def persistAndGetRoot(txn: Txn[ByteBuffer],
-                                        branch: Branch): Option[Blake2b256Hash] =
+  private[rspace] def persistAndGetRoot(
+      txn: Txn[ByteBuffer],
+      branch: Branch
+  ): Option[Blake2b256Hash] =
     getRoot(txn, branch)
       .map { currentRoot =>
         val pastRoots = getPastRootsInBranch(txn, branch).filter(_ != currentRoot)
@@ -88,13 +92,17 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
       }
     }
 
-  private[this] def getPastRootsInBranch(txn: Txn[ByteBuffer],
-                                         branch: Branch): Seq[Blake2b256Hash] =
+  private[this] def getPastRootsInBranch(
+      txn: Txn[ByteBuffer],
+      branch: Branch
+  ): Seq[Blake2b256Hash] =
     _dbPastRoots.get(txn, branch)(Codec[Branch], Codec[Seq[Blake2b256Hash]]).getOrElse(Seq.empty)
 
-  private[rspace] def validateAndPutRoot(txn: Txn[ByteBuffer],
-                                         branch: Branch,
-                                         hash: Blake2b256Hash): Unit =
+  private[rspace] def validateAndPutRoot(
+      txn: Txn[ByteBuffer],
+      branch: Branch,
+      hash: Blake2b256Hash
+  ): Unit =
     getRoot(txn, branch)
       .find(_ == hash)
       .orElse {
@@ -122,16 +130,20 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
 
   override private[rspace] def putEmptyRoot(txn: Txn[ByteBuffer], hash: Blake2b256Hash): Unit =
     _dbEmptyRoots
-      .put(txn,
-           LMDBTrieStore.emptyRootKey,
-           Codec[Blake2b256Hash].encode(hash).map(_.bytes.toDirectByteBuffer).get)
+      .put(
+        txn,
+        LMDBTrieStore.emptyRootKey,
+        Codec[Blake2b256Hash].encode(hash).map(_.bytes.toDirectByteBuffer).get
+      )
 }
 
 object LMDBTrieStore {
 
-  def create[K, V](env: Env[ByteBuffer], path: Path)(implicit
-                                                     codecK: Codec[K],
-                                                     codecV: Codec[V]): LMDBTrieStore[K, V] = {
+  def create[K, V](env: Env[ByteBuffer], path: Path)(
+      implicit
+      codecK: Codec[K],
+      codecV: Codec[V]
+  ): LMDBTrieStore[K, V] = {
     val dbTrie: Dbi[ByteBuffer]      = env.openDbi("Trie", MDB_CREATE)
     val dbRoots: Dbi[ByteBuffer]     = env.openDbi("Roots", MDB_CREATE)
     val dbEmptyRoot: Dbi[ByteBuffer] = env.openDbi("EmptyRoot", MDB_CREATE)
