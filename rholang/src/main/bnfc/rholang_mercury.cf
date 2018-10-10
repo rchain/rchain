@@ -1,7 +1,8 @@
 -- Custom integer token according to https://github.com/BNFC/bnfc/issues/153#issuecomment-152612231
 -- notice this shadows the built-in Integer token, which might be a problem if we need integers
 -- in the grammar for other purposes than the integer literal.
-position token Long digit+;
+
+position token LongLiteral digit+;
 
 -- A program is just a process. We put the coercions first, because that's what
 -- bnfc uses to determine the starting production.
@@ -122,18 +123,20 @@ separator nonempty Case "" ;
 -- Name Declarations.
 -- Eventually will have IOPairs.
 NameDeclSimpl. NameDecl ::= Var ;
-NameDeclUrn. NameDecl ::= Var "(" Uri ")" ;
+NameDeclUrn. NameDecl ::= Var "(" UriLiteral ")" ;
 separator nonempty NameDecl "," ;
 
 -- Booleans:
-BoolTrue.   Bool ::= "true" ;
-BoolFalse.  Bool ::= "false" ;
+BoolTrue.   BoolLiteral ::= "true" ;
+BoolFalse.  BoolLiteral ::= "false" ;
 -- Ground types:
-GroundBool.    Ground ::= Bool ;
-GroundInt.     Ground ::= Long ;
-GroundString.  Ground ::= String ;
-GroundUri.     Ground ::= Uri ;
-token Uri ('`' ((char - ["\\`"]) | ('\\' ["`\\"]))* '`') ;
+-- The "Literal" suffix avoids collisions with Simple Types
+GroundBool.    Ground ::= BoolLiteral ;
+GroundInt.     Ground ::= LongLiteral ;
+GroundString.  Ground ::= StringLiteral ;
+GroundUri.     Ground ::= UriLiteral ;
+token StringLiteral ( '"' ((char - ["\"\\"]) | ('\\' ["\"\\nt"]))* '"' );
+token UriLiteral ('`' ((char - ["\\`"]) | ('\\' ["`\\"]))* '`') ;
 -- Collections:
 CollectList.   Collection ::= "[" [Proc] ProcRemainder "]" ;
 CollectTuple.  Collection ::= Tuple;
@@ -161,7 +164,6 @@ SimpleTypeInt. SimpleType ::= "Int" ;
 SimpleTypeString. SimpleType ::= "String" ;
 SimpleTypeUri. SimpleType ::= "Uri" ;
 SimpleTypeByteArray. SimpleType ::= "ByteArray" ;
-
 
 token Var (((letter | '\'') (letter | digit | '_' | '\'')*)|(('_') (letter | digit | '_' | '\'')+)) ;
 

@@ -42,7 +42,7 @@ class GroundMatcherSpec extends FlatSpec with Matchers {
     GroundNormalizeMatcher.normalizeMatch(gi) should be(expectedResult)
   }
   "GroundString" should "Compile as GString" in {
-    val gs                   = new GroundString("String")
+    val gs                   = new GroundString("\"String\"")
     val expectedResult: Expr = GString("String")
     GroundNormalizeMatcher.normalizeMatch(gs) should be(expectedResult)
   }
@@ -149,7 +149,10 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
   "Map" should "delegate" in {
     val mapData = new ListKeyValuePair()
     mapData.add(
-      new KeyValuePairImpl(new PGround(new GroundInt("7")), new PGround(new GroundString("Seven")))
+      new KeyValuePairImpl(
+        new PGround(new GroundInt("7")),
+        new PGround(new GroundString("\"Seven\""))
+      )
     )
     mapData.add(new KeyValuePairImpl(new PVar(new ProcVarVar("P")), new PEval(new NameVar("Q"))))
     val map = new PCollect(new CollectMap(mapData, new ProcRemainderVar(new ProcVarVar("Z"))))
@@ -276,13 +279,13 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     val mapData = new ListKeyValuePair()
     mapData.add(
       new KeyValuePairImpl(
-        new PGround(new GroundString("name")),
-        new PGround(new GroundString("Alice"))
+        new PGround(new GroundString("\"name\"")),
+        new PGround(new GroundString("\"Alice\""))
       )
     )
     val pPercentPercent =
       new PPercentPercent(
-        new PGround(new GroundString("Hi ${name}")),
+        new PGround(new GroundString("\"Hi ${name}\"")),
         new PCollect(new CollectMap(mapData, new ProcRemainderEmpty()))
       )
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pPercentPercent, inputs).value
@@ -327,8 +330,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
   "PPlusPlus" should "Delegate" in {
     val pPlusPlus = new PPlusPlus(
-      new PGround(new GroundString("abc")),
-      new PGround(new GroundString("def"))
+      new PGround(new GroundString("\"abc\"")),
+      new PGround(new GroundString("\"def\""))
     )
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pPlusPlus, inputs).value
     result.par should be(inputs.par.prepend(EPlusPlus(GString("abc"), GString("def")), 0))
@@ -337,8 +340,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
   "PMinusMinus" should "Delegate" in {
     val pMinusMinus = new PMinusMinus(
-      new PGround(new GroundString("abc")),
-      new PGround(new GroundString("def"))
+      new PGround(new GroundString("\"abc\"")),
+      new PGround(new GroundString("\"def\""))
     )
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pMinusMinus, inputs).value
     result.par should be(inputs.par.prepend(EMinusMinus(GString("abc"), GString("def")), 0))
@@ -384,32 +387,20 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   }
 
   "PSend" should "Not compile if data contains negation" in {
-    val sentData = new ListProc()
-    sentData.add(new PNegation(new PNil()))
-    val pSend = new PSend(new NameQuote(new PVar(new ProcVarVar("x"))), new SendSingle(), sentData)
-
-    an[SendDataConnectivesNotAllowedError] should be thrownBy {
-      ProcNormalizeMatcher.normalizeMatch[Coeval](pSend, inputs).value
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
+      Interpreter.buildNormalizedTerm(new StringReader("""new x in { x!(~1) }""")).value()
     }
   }
 
   "PSend" should "Not compile if data contains conjunction" in {
-    val sentData = new ListProc()
-    sentData.add(new PConjunction(new PNil(), new PNil()))
-    val pSend = new PSend(new NameQuote(new PVar(new ProcVarVar("x"))), new SendSingle(), sentData)
-
-    an[SendDataConnectivesNotAllowedError] should be thrownBy {
-      ProcNormalizeMatcher.normalizeMatch[Coeval](pSend, inputs).value
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
+      Interpreter.buildNormalizedTerm(new StringReader("""new x in { x!(1 /\ 2) }""")).value()
     }
   }
 
   "PSend" should "Not compile if data contains disjunction" in {
-    val sentData = new ListProc()
-    sentData.add(new PDisjunction(new PNil(), new PNil()))
-    val pSend = new PSend(new NameQuote(new PVar(new ProcVarVar("x"))), new SendSingle(), sentData)
-
-    an[SendDataConnectivesNotAllowedError] should be thrownBy {
-      ProcNormalizeMatcher.normalizeMatch[Coeval](pSend, inputs).value
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
+      Interpreter.buildNormalizedTerm(new StringReader("""new x in { x!(1 \/ 2) }""")).value()
     }
   }
 
@@ -422,6 +413,20 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   "PSend" should "Not compile if data contains free variable" in {
     an[TopLevelFreeVariablesNotAllowedError] should be thrownBy {
       Interpreter.buildNormalizedTerm(new StringReader("""@"x"!(y)""")).value()
+    }
+  }
+
+  "PSend" should "not compile if name contains connectives" in {
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
+      Interpreter.buildNormalizedTerm(new StringReader("""@{Nil /\ Nil}!(1)""")).value()
+    }
+
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
+      Interpreter.buildNormalizedTerm(new StringReader("""@{Nil \/ Nil}!(1)""")).value()
+    }
+
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
+      Interpreter.buildNormalizedTerm(new StringReader("""@{~Nil}!(1)""")).value()
     }
   }
 
@@ -736,6 +741,60 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
     an[UnexpectedReuseOfNameContextFree] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch[Coeval](pInput, inputs).value
+    }
+  }
+
+  "PInput" should "not compile when connectives are used in the channel" in {
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
+      Interpreter
+        .buildNormalizedTerm(new StringReader("""for(x <- @{Nil \/ Nil}){ Nil }"""))
+        .value()
+    }
+
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
+      Interpreter
+        .buildNormalizedTerm(new StringReader("""for(x <- @{Nil /\ Nil}){ Nil }"""))
+        .value()
+    }
+
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
+      Interpreter.buildNormalizedTerm(new StringReader("""for(x <- @{~Nil}){ Nil }""")).value()
+    }
+  }
+
+  "PInput" should "not compile when connectives are the top level expression in the body" in {
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
+      Interpreter.buildNormalizedTerm(new StringReader("""for(x <- @Nil){ 1 /\ 2 }""")).value()
+    }
+
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
+      Interpreter.buildNormalizedTerm(new StringReader("""for(x <- @Nil){ 1 \/ 2 }""")).value()
+    }
+
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
+      Interpreter.buildNormalizedTerm(new StringReader("""for(x <- @Nil){ ~1 }""")).value()
+    }
+  }
+
+  "PInput" should "not compile when logical OR or NOT is used in the pattern of the receive" in {
+    an[PatternReceiveError] should be thrownBy {
+      Interpreter
+        .buildNormalizedTerm(new StringReader("""new x in { for(@{Nil \/ Nil} <- x) { Nil } }"""))
+        .value()
+    }
+
+    an[PatternReceiveError] should be thrownBy {
+      Interpreter
+        .buildNormalizedTerm(new StringReader("""new x in { for(@{~Nil} <- x) { Nil } }"""))
+        .value()
+    }
+  }
+
+  "PInput" should "compile when logical AND is used in the pattern of the receive" in {
+    noException should be thrownBy {
+      Interpreter
+        .buildNormalizedTerm(new StringReader("""new x in { for(@{Nil /\ Nil} <- x) { Nil } }"""))
+        .value()
     }
   }
 
@@ -1350,6 +1409,45 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.par shouldBe expectedPar
     result.par.connectiveUsed should be(true)
   }
+
+  "Patterns" should "compile when used not in the top level" in {
+    def check(typ: String, position: String, pattern: String): Assertion =
+      try {
+        val rho = s"""
+         new x in {
+           for(@y <- x) {
+             match y {
+              $pattern => Nil
+             }
+           }
+         }
+       """
+        Interpreter.buildNormalizedTerm(new StringReader(rho)).value()
+        assert(true)
+      } catch {
+        case e: Throwable =>
+          fail(s"$typ in the $position $pattern should not throw errors: ${e.getMessage}")
+      }
+
+    check("wildcard", "send channel", "{_!(1)}")
+    check("wildcard", "send data", "{@=*x!(_)}")
+    check("wildcard", "send data", "{@Nil!(_)}")
+    check("logical AND", "send data", "{@Nil!(1 /\\ 2)}")
+    check("logical OR", "send data", "{@Nil!(1 \\/ 2)}")
+    check("logical NOT", "send data", "{@Nil!(~1)}")
+    check("logical AND", "send channel", "{@{Nil /\\ Nil}!(Nil)}")
+    check("logical OR", "send channel", "{@{Nil \\/ Nil}!(Nil)}")
+    check("logical NOT", "send channel", "{@{~Nil}!(Nil)}")
+    check("wildcard", "receive pattern of the consume", "{for (_ <- x) { 1 }} ")
+    check("wildcard", "body of the continuation", "{for (@1 <- x) { _ }} ")
+    check("logical OR", "body of the continuation", "{for (@1 <- x) { 10 \\/ 20 }} ")
+    check("logical AND", "body of the continuation", "{for(@1 <- x) { 10 /\\ 20 }} ")
+    check("logical NOT", "body of the continuation", "{for(@1 <- x) { ~10 }} ")
+    check("logical OR", "channel of the consume", "{for (@1 <- @{Nil /\\ Nil}) { Nil }} ")
+    check("logical AND", "channel of the consume", "{for(@1 <- @{Nil \\/ Nil}) { Nil }} ")
+    check("logical NOT", "channel of the consume", "{for(@1 <- @{~Nil}) { Nil }} ")
+    check("wildcard", "channel of the consume", "{for(@1 <- _) { Nil }} ")
+  }
 }
 
 class NameMatcherSpec extends FlatSpec with Matchers {
@@ -1439,4 +1537,5 @@ class NameMatcherSpec extends FlatSpec with Matchers {
     result.chan should be(expectedResult)
     result.knownFree should be(inputs.knownFree)
   }
+
 }
