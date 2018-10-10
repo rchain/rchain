@@ -86,6 +86,11 @@ object errors {
 
   final case class SubstituteError(message: String) extends InterpreterError(message)
 
+  final case class PatternReceiveError(connectives: String)
+      extends InterpreterError(
+        s"Invalid pattern in the receive: $connectives. Only logical AND is allowed."
+      )
+
   final case class SetupError(message: String) extends InterpreterError(message)
 
   final case class UnrecognizedInterpreterError(throwable: Throwable)
