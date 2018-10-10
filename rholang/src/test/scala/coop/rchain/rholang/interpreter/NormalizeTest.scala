@@ -384,37 +384,25 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   }
 
   "PSend" should "Not compile if data contains negation" in {
-    val sentData = new ListProc()
-    sentData.add(new PNegation(new PNil()))
-    val pSend = new PSend(new NameQuote(new PVar(new ProcVarVar("x"))), new SendSingle(), sentData)
-
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ProcNormalizeMatcher.normalizeMatch[Coeval](pSend, inputs).value
+      Interpreter.buildNormalizedTerm(new StringReader("""new x in { x!(~1) }""")).value()
     }
   }
 
   "PSend" should "Not compile if data contains conjunction" in {
-    val sentData = new ListProc()
-    sentData.add(new PConjunction(new PNil(), new PNil()))
-    val pSend = new PSend(new NameQuote(new PVar(new ProcVarVar("x"))), new SendSingle(), sentData)
-
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ProcNormalizeMatcher.normalizeMatch[Coeval](pSend, inputs).value
+      Interpreter.buildNormalizedTerm(new StringReader("""new x in { x!(1 /\ 2) }""")).value()
     }
   }
 
   "PSend" should "Not compile if data contains disjunction" in {
-    val sentData = new ListProc()
-    sentData.add(new PDisjunction(new PNil(), new PNil()))
-    val pSend = new PSend(new NameQuote(new PVar(new ProcVarVar("x"))), new SendSingle(), sentData)
-
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ProcNormalizeMatcher.normalizeMatch[Coeval](pSend, inputs).value
+      Interpreter.buildNormalizedTerm(new StringReader("""new x in { x!(1 \/ 2) }""")).value()
     }
   }
 
   "PSend" should "Not compile if data contains wildcard" in {
-    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
+    an[TopLevelWildcardsNotAllowedError] should be thrownBy {
       Interpreter.buildNormalizedTerm(new StringReader("""@"x"!(_)""")).value()
     }
   }
@@ -426,23 +414,16 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   }
 
   "PSend" should "not compile if name contains connectives" in {
-    val data = new ListProc(); data.add(new PNil())
-    def send(name: NameQuote): PSend =
-      new PSend(name, new SendSingle(), data)
-
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      val name = new NameQuote(new PDisjunction(new PNil(), new PNil()))
-      ProcNormalizeMatcher.normalizeMatch[Coeval](send(name), inputs).value()
+      Interpreter.buildNormalizedTerm(new StringReader("""@{Nil /\ Nil}!(1)""")).value()
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      val name = new NameQuote(new PConjunction(new PNil(), new PNil()))
-      ProcNormalizeMatcher.normalizeMatch[Coeval](send(name), inputs).value()
+      Interpreter.buildNormalizedTerm(new StringReader("""@{Nil \/ Nil}!(1)""")).value()
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      val name = new NameQuote(new PNegation(new PNil()))
-      ProcNormalizeMatcher.normalizeMatch[Coeval](send(name), inputs).value()
+      Interpreter.buildNormalizedTerm(new StringReader("""@{~Nil}!(1)""")).value()
     }
   }
 
@@ -810,52 +791,34 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   }
 
   "PInput" should "not compile when connectives are used in the channel" in {
-    val disjunctionLinear =
-      linearInput(new NameQuote(new PNil()), new PDisjunction(new PNil(), new PNil()))
-    val conjunctionLinear =
-      linearInput(new NameQuote(new PNil()), new PConjunction(new PNil(), new PNil()))
-    val negationLinear = linearInput(new NameQuote(new PNil()), new PNegation(new PNil()))
-
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ProcNormalizeMatcher.normalizeMatch[Coeval](disjunctionLinear, inputs).value
+      Interpreter
+        .buildNormalizedTerm(new StringReader("""for(x <- @{Nil \/ Nil}){ Nil }"""))
+        .value()
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ProcNormalizeMatcher.normalizeMatch[Coeval](conjunctionLinear, inputs).value
+      Interpreter
+        .buildNormalizedTerm(new StringReader("""for(x <- @{Nil /\ Nil}){ Nil }"""))
+        .value()
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ProcNormalizeMatcher.normalizeMatch[Coeval](negationLinear, inputs).value
+      Interpreter.buildNormalizedTerm(new StringReader("""for(x <- @{~Nil}){ Nil }""")).value()
     }
   }
 
   "PInput" should "not compile when connectives are the top level expression in the body" in {
-    def pInput(body: Proc): PInput = {
-      val listBindings1 = new ListName()
-      listBindings1.add(new NameQuote(new PNil()))
-      val listLinearBind1 = new ListLinearBind()
-      listLinearBind1.add(
-        new LinearBindImpl(listBindings1, new NameRemainderEmpty, new NameQuote(new PNil()))
-      )
-      val linearSimple = new LinearSimple(listLinearBind1)
-      val receipt      = new ReceiptLinear(linearSimple)
-      new PInput(receipt, body)
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
+      Interpreter.buildNormalizedTerm(new StringReader("""for(x <- @Nil){ 1 /\ 2 }""")).value()
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ProcNormalizeMatcher
-        .normalizeMatch[Coeval](pInput(new PDisjunction(new PNil(), new PNil())), inputs)
-        .value
+      Interpreter.buildNormalizedTerm(new StringReader("""for(x <- @Nil){ 1 \/ 2 }""")).value()
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ProcNormalizeMatcher
-        .normalizeMatch[Coeval](pInput(new PConjunction(new PNil(), new PNil())), inputs)
-        .value
-    }
-
-    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ProcNormalizeMatcher.normalizeMatch[Coeval](pInput(new PNegation(new PNil())), inputs).value
+      Interpreter.buildNormalizedTerm(new StringReader("""for(x <- @Nil){ ~1 }""")).value()
     }
   }
 
