@@ -284,7 +284,7 @@ object ProcNormalizeMatcher {
         case nq: NameQuote =>
           val listProc = new ListProc()
           listProc.add(nq.proc_)
-          failOnConnectivesUsed(listProc, ChannelConnectivesNotAllowedError(_))
+          failOnConnectivesUsed(listProc, TopLevelLogicalConnectivesNotAllowedError(_))
         case _ => Sync[F].unit
       }
     } else Sync[F].unit

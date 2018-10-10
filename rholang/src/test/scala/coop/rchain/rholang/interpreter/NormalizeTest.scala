@@ -388,7 +388,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     sentData.add(new PNegation(new PNil()))
     val pSend = new PSend(new NameQuote(new PVar(new ProcVarVar("x"))), new SendSingle(), sentData)
 
-    an[SendDataConnectivesNotAllowedError] should be thrownBy {
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch[Coeval](pSend, inputs).value
     }
   }
@@ -398,7 +398,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     sentData.add(new PConjunction(new PNil(), new PNil()))
     val pSend = new PSend(new NameQuote(new PVar(new ProcVarVar("x"))), new SendSingle(), sentData)
 
-    an[SendDataConnectivesNotAllowedError] should be thrownBy {
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch[Coeval](pSend, inputs).value
     }
   }
@@ -408,13 +408,13 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     sentData.add(new PDisjunction(new PNil(), new PNil()))
     val pSend = new PSend(new NameQuote(new PVar(new ProcVarVar("x"))), new SendSingle(), sentData)
 
-    an[SendDataConnectivesNotAllowedError] should be thrownBy {
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch[Coeval](pSend, inputs).value
     }
   }
 
   "PSend" should "Not compile if data contains wildcard" in {
-    an[TopLevelWildcardsNotAllowedError] should be thrownBy {
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
       Interpreter.buildNormalizedTerm(new StringReader("""@"x"!(_)""")).value()
     }
   }
@@ -430,17 +430,17 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     def send(name: NameQuote): PSend =
       new PSend(name, new SendSingle(), data)
 
-    an[ChannelConnectivesNotAllowedError] should be thrownBy {
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
       val name = new NameQuote(new PDisjunction(new PNil(), new PNil()))
       ProcNormalizeMatcher.normalizeMatch[Coeval](send(name), inputs).value()
     }
 
-    an[ChannelConnectivesNotAllowedError] should be thrownBy {
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
       val name = new NameQuote(new PConjunction(new PNil(), new PNil()))
       ProcNormalizeMatcher.normalizeMatch[Coeval](send(name), inputs).value()
     }
 
-    an[ChannelConnectivesNotAllowedError] should be thrownBy {
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
       val name = new NameQuote(new PNegation(new PNil()))
       ProcNormalizeMatcher.normalizeMatch[Coeval](send(name), inputs).value()
     }
@@ -816,15 +816,15 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       linearInput(new NameQuote(new PNil()), new PConjunction(new PNil(), new PNil()))
     val negationLinear = linearInput(new NameQuote(new PNil()), new PNegation(new PNil()))
 
-    an[ChannelConnectivesNotAllowedError] should be thrownBy {
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch[Coeval](disjunctionLinear, inputs).value
     }
 
-    an[ChannelConnectivesNotAllowedError] should be thrownBy {
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch[Coeval](conjunctionLinear, inputs).value
     }
 
-    an[ChannelConnectivesNotAllowedError] should be thrownBy {
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch[Coeval](negationLinear, inputs).value
     }
   }
@@ -842,19 +842,19 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       new PInput(receipt, body)
     }
 
-    an[TopLevelConnectivesNotAllowedError] should be thrownBy {
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
       ProcNormalizeMatcher
         .normalizeMatch[Coeval](pInput(new PDisjunction(new PNil(), new PNil())), inputs)
         .value
     }
 
-    an[TopLevelConnectivesNotAllowedError] should be thrownBy {
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
       ProcNormalizeMatcher
         .normalizeMatch[Coeval](pInput(new PConjunction(new PNil(), new PNil())), inputs)
         .value
     }
 
-    an[TopLevelConnectivesNotAllowedError] should be thrownBy {
+    an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch[Coeval](pInput(new PNegation(new PNil())), inputs).value
     }
   }
