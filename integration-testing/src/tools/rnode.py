@@ -23,6 +23,13 @@ class InterruptedException(Exception):
     pass
 
 
+class NonZeroExitCode(Exception):
+    def __init__(self, command, exit_code, output):
+        self.command = command
+        self.exit_code = exit_code
+        self.output = output
+
+
 class Node:
     def __init__(self, container, deploy_dir, docker_client, timeout, network):
         self.container = container
@@ -92,6 +99,15 @@ class Node:
             process.terminate()
             process.join()
             raise Exception(f"The command '{cmd}' hasn't finished execution after {self.timeout}s")
+
+    def shell_out(self, *cmd):
+        exit_code, output = self.exec_run(cmd)
+        if exit_code != 0:
+            raise NonZeroExitCode(command=cmd, exit_code=exit_code, output=output)
+        return output
+
+    def eval(self, file_path):
+        return self.shell_out(rnode_binary, 'eval', file_path)
 
     __timestamp_rx = "\\d\\d:\\d\\d:\\d\\d\\.\\d\\d\\d"
     __log_message_rx = re.compile(f"^{__timestamp_rx} (.*?)(?={__timestamp_rx})", re.MULTILINE | re.DOTALL)
