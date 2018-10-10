@@ -7,20 +7,41 @@
 //
 // string ethAddr: the address of the funds on Ethereum (pre-issuance)
 // Purse purse: the funds to put in the wallet
+// ch(URN) return: the URN of the new wallet
 // TODO(pyrocto): when crypto functions are moved to the rho:crypto namespace, update this.  It's insecure until then.
-new create, publicToAddr, sgset(`rho:stopgap:set`), sgget(`rho:stopgap:get`),
-    ack1, ack2, bwret in {
-  sgset!("WalletCheck.create", *create, *ack1) |
-  sgset!("WalletCheck.publicToAddr", *publicToAddr, *ack2) |
-  sgget!("BasicWallet", *bwret) |
-  
-  for (_ <- ack1; _ <- ack2; BasicWallet <- bwret) {
-    contract create(@ethAddr, @purse) = {
-      new doneStore, ethWallet, ack in {
-        doneStore!(false) |
-    
-        sgset(ethAddr, ethWallet, ack) |
-        for (_ <- ack) {
+
+new mapStore, active in {
+  mapStore!({}) |
+  activeStore!(true) |
+  contract EthWalletMap("get", @ethAddr, urnout) = {
+    for (@map <- mapStore) {
+      mapStore!(map) |
+      urnOut!(map.get(ethAddr))
+    }
+  } |
+  contract EthWalletMap("set", @ethAddr, @urn, ack) = {
+    for (@map <- mapStore; @active <- activeStore) {
+      activeStore!(active) |
+      if (active) { mapStore!(map.set(ethAddr, urn)) } |
+      ack!()
+    }
+  } |
+  contract EthWalletMap("done", ack) = {
+    for (_ <- activeStore) {
+      activeStore!(false)
+    }
+  }
+} |
+contract WalletCheck("create", @ethAddr, @purse) = {
+  new doneStore, ethWallet, ack, r(`rho:registry:insertArbitrary`) in {
+    doneStore!(false) |
+
+    new return, ack in {
+      r!(bundle+{ethWallet}, return) |
+      for (@urn <- return) {
+        EthWalletMap("set", ethAddr, urn, *ack)
+        for (<- ack) {
+
           // claims the wallet by presenting the preimage of the hash
           //
           // string pubkey: Base16 encoded public key. It should be true that
@@ -84,18 +105,18 @@ new create, publicToAddr, sgset(`rho:stopgap:set`), sgget(`rho:stopgap:get`),
           }
         }
       }
-    } |
+    }
+  }
+} |
 
-    //computes the ethereum address from a public key
-    //string pubKey
-    //returns bytearray
-    contract publicToAddr(@pubKey, ret) = {
-      new hashOut in {
-        @"keccak256Hash"!(pubKey.hexToBytes(), *hashOut) |
-        for(@pkHash <- hashOut) {
-          ret!(pkHash.slice(12, 32))
-        }
-      }
+//computes the ethereum address from a public key
+//string pubKey
+//returns bytearray
+contract WalletCheck("publicToAddr", @pubKey, ret) = {
+  new hashOut in {
+    @"keccak256Hash"!(pubKey.hexToBytes(), *hashOut) |
+    for(@pkHash <- hashOut) {
+      ret!(pkHash.slice(12, 32))
     }
   }
 }

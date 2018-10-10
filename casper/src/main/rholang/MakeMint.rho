@@ -3,67 +3,58 @@
 //based on http://erights.org/elib/capability/ode/ode-capabilities.html#simple-money
 //requires NonNegativeNumber
 
-new int2NN, MakeMint, NonNegativeNumber, sgset(`rho:stopgap:set`),
-    sgget(`rho:stopgap:get`), ack1, ack2, nnnret in {
-  sgset!("MakeMint.int2NN", int2NN, *ack1) |
-  sgset!("MakeMint", MakeMint, *ack2) |
-  sgget!("NonNegativeNumber", *nnnret) |
-  
-  for(_ <- ack1; _ <- ack2; NonNegativeNumber <- nnnret) {
-    contract int2NN(@x, return) = {
-      new nnCh in {
-        NonNegativeNumber!(x, *nnCh) | for(@nn <- nnCh) {
-          return!(nn)
+contract MakeMint_int2NN(@x, return) = {
+  new nnCh in {
+    NonNegativeNumber!(x, *nnCh) | for(@nn <- nnCh) {
+      return!(nn)
+    }
+  }
+} |
+contract MakeMint(return) = {
+  new thisMint, internalMakePurse, decr in {
+    contract thisMint("makePurse", @init, return) = {
+      new balanceCh in {
+        MakeMint_int2NN!(init, *balanceCh) | for(@balance <- balanceCh) {
+          internalMakePurse!(balance, *return)
         }
       }
     } |
-    contract MakeMint(return) = {
-      new thisMint, internalMakePurse, decr in {
-        contract thisMint("makePurse", @init, return) = {
-          new balanceCh in {
-            int2NN!(init, *balanceCh) | for(@balance <- balanceCh) {
-              internalMakePurse!(balance, *return)
+    contract internalMakePurse(@balance, return) = {
+      //balance must be a name that NonNegativeNumber contract is listening on
+      new thisPurse in {
+        contract thisPurse(@=*decr, @amount, success) = { @(balance, "sub")!(amount, *success) } |
+        contract thisPurse("getBalance", return) = { @(balance, "value")!(*return) } |
+        contract thisPurse("sprout", return) = { @(*thisMint, "makePurse")!(0, *return) } |
+        contract thisPurse("split", @amount, return) = {
+          new destPurseCh, successCh in {
+            thisPurse!("sprout", *destPurseCh) | for(@destPurse <- destPurseCh) {
+              destPurse!("deposit", amount, *thisPurse, *successCh) |
+              for(@success <- successCh) {
+                if (success) {
+                  return!([destPurse])
+                } else {
+                  return!([])
+                }
+              }
             }
           }
         } |
-        contract internalMakePurse(@balance, return) = {
-          //balance must be a name that NonNegativeNumber contract is listening on
-          new thisPurse in {
-            contract thisPurse(@=*decr, @amount, success) = { @(balance, "sub")!(amount, *success) } |
-            contract thisPurse("getBalance", return) = { @(balance, "value")!(*return) } |
-            contract thisPurse("sprout", return) = { @(*thisMint, "makePurse")!(0, *return) } |
-            contract thisPurse("split", @amount, return) = {
-              new destPurseCh, successCh in {
-                thisPurse!("sprout", *destPurseCh) | for(@destPurse <- destPurseCh) {
-                  destPurse!("deposit", amount, *thisPurse, *successCh) |
-                  for(@success <- successCh) {
-                    if (success) {
-                      return!([destPurse])
-                    } else {
-                      return!([])
-                    }
-                  }
-                }
+        contract thisPurse("deposit", @amount, @src, success) = {
+          new result in {
+            src!(*decr, amount, *result) | //call src decr function.
+            for(@decrSuccess <- result) {
+              if (decrSuccess) {
+                balance!("add", amount, *success) // add transferred amount to this purse
+              } else {
+                success!(false) 
               }
-            } |
-            contract thisPurse("deposit", @amount, @src, success) = {
-              new result in {
-                src!(*decr, amount, *result) | //call src decr function.
-                for(@decrSuccess <- result) {
-                  if (decrSuccess) {
-                    balance!("add", amount, *success) // add transferred amount to this purse
-                  } else {
-                    success!(false) 
-                  }
-                }
-              }
-            } |
-            return!(bundle+{*thisPurse})
+            }
           }
         } |
-        return!(bundle+{*thisMint})
+        return!(bundle+{*thisPurse})
       }
-    }
+    } |
+    return!(bundle+{*thisMint})
   }
 }
 

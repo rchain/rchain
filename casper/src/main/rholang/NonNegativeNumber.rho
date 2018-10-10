@@ -1,49 +1,44 @@
 //scalapackage coop.rchain.rholang.math
 
 //This is a contract to explicitly implement the int >= 0 behavioural type
-new NonNegativeNumber, sgset(`rho:stopgap:set`), ack in {
-  sgset!("NonNegativeNumber", *NonNegativeNumber, *ack) |
-  for (_ <- ack) {
-    contract NonNegativeNumber(@init, return) = {
-      new this, valueStore in {
-        contract this("add", @x, success) = {
-          if (x >= 0) {
-            for(@v <- valueStore){
-              if (v + x > v) {
-                valueStore!(v + x) | success!(true)
-              } else {
-                //overflow
-                valueStore!(v) | success!(false)
-              }
-            }
+contract NonNegativeNumber(@init, return) = {
+  new this, valueStore in {
+    contract this("add", @x, success) = {
+      if (x >= 0) {
+        for(@v <- valueStore){
+          if (v + x > v) {
+            valueStore!(v + x) | success!(true)
           } else {
-            success!(false)
+            //overflow
+            valueStore!(v) | success!(false)
           }
-        } |
-        contract this("sub", @x, success) = {
-          if (x >= 0) {
-            for(@v <- valueStore) {
-              if (x <= v) {
-                valueStore!(v - x) | success!(true)
-              } else {
-                valueStore!(v) | success!(false)
-              }
-            }
-          } else {
-            success!(false)
-          }
-        } |
-        contract this("value", return) = {
-          for(@v <- valueStore) {
-            valueStore!(v) | return!(v)
-          }
-        } |
-        return!(bundle+{*this}) |
-        match init >= 0 {
-          true => { valueStore!(init) }
-          _ => { valueStore!(0) } //Initial balance is zero if given is negative
         }
+      } else {
+        success!(false)
       }
+    } |
+    contract this("sub", @x, success) = {
+      if (x >= 0) {
+        for(@v <- valueStore) {
+          if (x <= v) {
+            valueStore!(v - x) | success!(true)
+          } else {
+            valueStore!(v) | success!(false)
+          }
+        }
+      } else {
+        success!(false)
+      }
+    } |
+    contract this("value", return) = {
+      for(@v <- valueStore) {
+        valueStore!(v) | return!(v)
+      }
+    } |
+    return!(bundle+{*this}) |
+    match init >= 0 {
+      true => { valueStore!(init) }
+      _ => { valueStore!(0) } //Initial balance is zero if given is negative
     }
   }
 }
