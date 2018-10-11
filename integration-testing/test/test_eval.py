@@ -1,15 +1,5 @@
 import os
 import pytest
-from tools.rnode import start_bootstrap
-
-
-@pytest.fixture(scope="module")
-def bootstrap_node(system):
-    with start_bootstrap(system.docker,
-                         system.config.node_startup_timeout,
-                         system.config.rnode_timeout,
-                         system.validators_data) as node:
-        yield node
 
 
 def test_eval(bootstrap_node):

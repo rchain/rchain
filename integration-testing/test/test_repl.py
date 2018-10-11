@@ -1,6 +1,5 @@
 import os
 import pytest
-from tools.rnode import start_bootstrap
 import logging
 
 
@@ -11,15 +10,6 @@ def without_banner_and_prompt(input, output):
     colored_input = f'\x1b[0m{input}\n'
     assert without_banner_and_prompt.startswith(colored_input)
     return without_banner_and_prompt[len(colored_input):]
-
-
-@pytest.fixture(scope="module")
-def bootstrap_node(system):
-    with start_bootstrap(system.docker,
-                         system.config.node_startup_timeout,
-                         system.config.rnode_timeout,
-                         system.validators_data) as node:
-        yield node
 
 
 def test_repl(bootstrap_node):
