@@ -409,7 +409,11 @@ lazy val rspace = (project in file("rspace"))
 lazy val rspaceBench = (project in file("rspace-bench"))
   .settings(
     commonSettings,
-    libraryDependencies ++= commonDependencies
+    libraryDependencies ++= commonDependencies,
+    libraryDependencies += "com.esotericsoftware" % "kryo" % "4.0.2",
+    dependencyOverrides ++= Seq(
+      "org.ow2.asm" % "asm" % "5.0.4"
+    )
   )
   .enablePlugins(JmhPlugin)
   .dependsOn(rspace, rholang)
