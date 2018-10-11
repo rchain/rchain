@@ -35,7 +35,7 @@ class Runtime private (
     val replayReducer: ChargingReducer[Task],
     val space: RhoISpace,
     val replaySpace: RhoReplayISpace,
-    var errorLog: ErrorLog,
+    val errorLog: ErrorLog,
     val context: RhoContext
 ) {
   def readAndClearErrorVector(): Vector[Throwable] = errorLog.readAndClearErrorVector()
