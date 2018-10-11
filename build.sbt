@@ -256,9 +256,9 @@ lazy val rholang = (project in file("rholang"))
       "-Xfatal-warnings",
       "-Xlint:_,-missing-interpolator" // disable "possible missing interpolator" warning
     ),
-     publishArtifact in (Compile, packageDoc) := false,
-        publishArtifact in packageDoc := false,
-        sources in (Compile,doc) := Seq.empty,
+    publishArtifact in (Compile, packageDoc) := false,
+    publishArtifact in packageDoc := false,
+    sources in (Compile,doc) := Seq.empty,
     libraryDependencies ++= commonDependencies ++ Seq(
       catsMtl,
       catsEffect,
