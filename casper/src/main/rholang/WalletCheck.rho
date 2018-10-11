@@ -13,26 +13,29 @@
 new mapStore, active in {
   mapStore!({}) |
   activeStore!(true) |
-  contract EthWalletMap("get", @ethAddr, urnout) = {
+  contract EthWalletMap(@"get", @ethAddr, urnout) = {
     for (@map <- mapStore) {
       mapStore!(map) |
       urnOut!(map.get(ethAddr))
     }
   } |
-  contract EthWalletMap("set", @ethAddr, @urn, ack) = {
+  contract EthWalletMap(@"set", @ethAddr, @urn, ack) = {
     for (@map <- mapStore; @active <- activeStore) {
       activeStore!(active) |
-      if (active) { mapStore!(map.set(ethAddr, urn)) } |
+      // Scales quadratically with the number of initial validators, but we only do it once.
+      if (active) { mapStore!(map.set(ethAddr, urn)) }
+      else {mapStore!(map) } |
       ack!()
     }
   } |
-  contract EthWalletMap("done", ack) = {
+  // Need to call this at the end of the genesis deployment
+  contract EthWalletMap(@"done", ack) = {
     for (_ <- activeStore) {
       activeStore!(false)
     }
   }
 } |
-contract WalletCheck("create", @ethAddr, @purse) = {
+contract WalletCheck(@"create", @ethAddr, @purse) = {
   new doneStore, ethWallet, ack, r(`rho:registry:insertArbitrary`) in {
     doneStore!(false) |
 
@@ -112,7 +115,7 @@ contract WalletCheck("create", @ethAddr, @purse) = {
 //computes the ethereum address from a public key
 //string pubKey
 //returns bytearray
-contract WalletCheck("publicToAddr", @pubKey, ret) = {
+contract WalletCheck(@"publicToAddr", @pubKey, ret) = {
   new hashOut in {
     @"keccak256Hash"!(pubKey.hexToBytes(), *hashOut) |
     for(@pkHash <- hashOut) {

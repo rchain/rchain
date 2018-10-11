@@ -28,7 +28,7 @@ contract MakePoS(@purse, @minimumBond, @maximumBond, @initBonds, return) = {
     contract validateBondAmount(@bondPurse, return) = {
       this!("validateBondAmount", bondPurse, *return)
     } |
-    contract this("validateBondAmount", @bondPurse, return) = {
+    contract this(@"validateBondAmount", @bondPurse, return) = {
       new balanceCh in {
         bondPurse!("getBalance", *balanceCh) |
         for(@balance <- balanceCh; @joiningFee <- joiningFeeCh) {
@@ -42,7 +42,7 @@ contract MakePoS(@purse, @minimumBond, @maximumBond, @initBonds, return) = {
     contract validateBondingRate(@bondPurse, return) = {
       this!("validateBondingRate", bondPurse, *return)
     } |
-    contract this("validateBondingRate", @bondPurse, return) = {
+    contract this(@"validateBondingRate", @bondPurse, return) = {
       //TODO: figure out rate-limiting of bonding
       return!(("Right", bondPurse))
     } |
@@ -57,13 +57,13 @@ contract MakePoS(@purse, @minimumBond, @maximumBond, @initBonds, return) = {
       }
     } |
 
-    contract this("isBonded", @publicKey, return) = {
+    contract this(@"isBonded", @publicKey, return) = {
       for(@bonds <- bondsCh) {
         bondsCh!(bonds) | return!(bonds.contains(publicKey))
       }
     } |
 
-    contract this("getBonds", return) = {
+    contract this(@"getBonds", return) = {
       for(@bonds <- bondsCh) {
         bondsCh!(bonds) | return!(bonds)
       }

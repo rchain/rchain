@@ -4,14 +4,14 @@
 //Represents Either[A, B] as ("Left", A) or ("Right", B)
 
 //Right-biased flatMap; f must also return an Either
-contract Either("flatMap", @either, f, return) = {
+contract Either(@"flatMap", @either, f, return) = {
   match either {
     ("Right", value) => { f!(value, *return) }
     ("Left", _)      => { return!(either) }
   }
 } |
 //Right-biased map to transform an Either
-contract Either("map", @either, f, return) = {
+contract Either(@"map", @either, f, return) = {
   match either {
     ("Right", value) => {
       new mappedResultCh in {
@@ -33,7 +33,7 @@ contract Either("map", @either, f, return) = {
 //  r2 <- f2(r1)
 //  ...
 //} yield fn
-contract Either("compose", @input, @functions, return) = {
+contract Either(@"compose", @input, @functions, return) = {
   new combinator, foldret in {
     contract combinator(@head, @accumulatedValue, return) = {
       flatMap!(accumulatedValue, head, *return)

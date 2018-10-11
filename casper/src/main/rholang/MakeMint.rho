@@ -12,7 +12,7 @@ contract MakeMint_int2NN(@x, return) = {
 } |
 contract MakeMint(return) = {
   new thisMint, internalMakePurse, decr in {
-    contract thisMint("makePurse", @init, return) = {
+    contract thisMint(@"makePurse", @init, return) = {
       new balanceCh in {
         MakeMint_int2NN!(init, *balanceCh) | for(@balance <- balanceCh) {
           internalMakePurse!(balance, *return)
@@ -23,9 +23,9 @@ contract MakeMint(return) = {
       //balance must be a name that NonNegativeNumber contract is listening on
       new thisPurse in {
         contract thisPurse(@=*decr, @amount, success) = { @(balance, "sub")!(amount, *success) } |
-        contract thisPurse("getBalance", return) = { @(balance, "value")!(*return) } |
-        contract thisPurse("sprout", return) = { @(*thisMint, "makePurse")!(0, *return) } |
-        contract thisPurse("split", @amount, return) = {
+        contract thisPurse(@"getBalance", return) = { @(balance, "value")!(*return) } |
+        contract thisPurse(@"sprout", return) = { @(*thisMint, "makePurse")!(0, *return) } |
+        contract thisPurse(@"split", @amount, return) = {
           new destPurseCh, successCh in {
             thisPurse!("sprout", *destPurseCh) | for(@destPurse <- destPurseCh) {
               destPurse!("deposit", amount, *thisPurse, *successCh) |
@@ -39,7 +39,7 @@ contract MakeMint(return) = {
             }
           }
         } |
-        contract thisPurse("deposit", @amount, @src, success) = {
+        contract thisPurse(@"deposit", @amount, @src, success) = {
           new result in {
             src!(*decr, amount, *result) | //call src decr function.
             for(@decrSuccess <- result) {

@@ -38,18 +38,18 @@ contract BasicWallet(@purse, @algorithm, @pk, return) = {
                 }
               }
             } |
-            contract basicWallet("getNonce", return) = {
+            contract basicWallet(@"getNonce", return) = {
               for(@nonce <- nonceCh) {
                 nonceCh!(nonce) | return!(nonce)
               }
             } |
-            contract basicWallet("getBalance", return) = {
+            contract basicWallet(@"getBalance", return) = {
               purse!("getBalance", *return)
             } |
-            contract basicWallet("deposit", @amount, @src, success) = {
+            contract basicWallet(@"deposit", @amount, @src, success) = {
               purse!("deposit", amount, src, *success)
             } |
-            contract basicWallet("transfer", @amount, @nonce, @sig, destination, status) = {
+            contract basicWallet(@"transfer", @amount, @nonce, @sig, destination, status) = {
               new verifyResult in {
                 verify!(nonce, amount, *destination, sig, *verifyResult) | for(@verified <- verifyResult) {
                   if (verified) { 

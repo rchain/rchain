@@ -1,8 +1,8 @@
 //scalapackage coop.rchain.rholang.collection
-contract ListOps("prepend", @head, @tail, return) = {
+contract ListOps(@"prepend", @head, @tail, return) = {
   return!([head] ++ tail)
 } |
-contract ListOps("append", @list, @element, return) = {
+contract ListOps(@"append", @list, @element, return) = {
   return!(list ++ [element])
 } |
 
@@ -10,7 +10,7 @@ contract ListOps("append", @list, @element, return) = {
 //Both the condition and combinator are are combined into a single
 //function which returns a [boolean, value] pair.
 //Use cases: see get and indexOf
-contract ListOps("partialFold", @list, @start, combinatorAndCondition, return) = {
+contract ListOps(@"partialFold", @list, @start, combinatorAndCondition, return) = {
   new loop in {
     contract loop(@accumulatedValue, @lst) = {
       match lst {
@@ -28,7 +28,7 @@ contract ListOps("partialFold", @list, @start, combinatorAndCondition, return) =
     } | loop!(start, list)
   }
 } |
-contract ListOps("fold", @list, @start, combinator, return) = {
+contract ListOps(@"fold", @list, @start, combinator, return) = {
   new combinatorAndCondition in {
     contract combinatorAndCondition(@head, @accumulatedValue, return) = {
       new result in {
@@ -44,10 +44,10 @@ contract ListOps("fold", @list, @start, combinator, return) = {
     }
   }
 } |
-contract ListOps("reverse", @list, return) = {
+contract ListOps(@"reverse", @list, return) = {
   fold!(list, [], *prepend, *return)
 } |
-contract ListOps("map", @list, function, return) = {
+contract ListOps(@"map", @list, function, return) = {
   new combinator in {
     contract combinator(@head, @accumulatedValue, return) = {
       new mappedHead in {
@@ -60,7 +60,7 @@ contract ListOps("map", @list, function, return) = {
     fold!(list, [], *combinator, *return)
   }
 } |
-contract ListOps("parMap", @list, function, return) = {
+contract ListOps(@"parMap", @list, function, return) = {
   new namesListCh, startProcess, getOutput in {
     contract startProcess(@x, ret) = { new outCh in { function!(x, *outCh) | ret!(*outCh) } } |
     contract getOutput(name, ret)  = { for(@result <- name){ ret!(result) } } |    
@@ -73,7 +73,7 @@ contract ListOps("parMap", @list, function, return) = {
     }
   }
 } |
-contract ListOps("unorderedParMap", @list, function, return) = {
+contract ListOps(@"unorderedParMap", @list, function, return) = {
   new mapLoop, collect, startCount, completeCount, accCh in {
     //Spawn processes, each computing one element
     //also processes listening for the result
@@ -104,7 +104,7 @@ contract ListOps("unorderedParMap", @list, function, return) = {
     }
   }
 } |
-contract ListOps("foreach", @list, proc, isDone) = {
+contract ListOps(@"foreach", @list, proc, isDone) = {
   new combinator, nilReturn in {
     contract combinator(@head, @accumulatedValue, return) = {
       //Need return flag from `proc` in order to guarantee execution order
@@ -113,7 +113,7 @@ contract ListOps("foreach", @list, proc, isDone) = {
     ListOps!("fold", list, Nil, *combinator, *nilReturn) | for(_ <- nilReturn){ isDone!(true) }
   }
 } |
-contract ListOps("indexOf", @list, @value, return) = {
+contract ListOps(@"indexOf", @list, @value, return) = {
   new combinatorAndCondition in {
     contract combinatorAndCondition(@head, @accumulatedValue, return) = {
       return!(head == value, accumulatedValue + 1)
@@ -127,7 +127,7 @@ contract ListOps("indexOf", @list, @value, return) = {
     }
   }
 } |
-contract ListOps("zip", @list1, @list2, return) = {
+contract ListOps(@"zip", @list1, @list2, return) = {
   new loop in {
     contract loop(@pair, @acc, return) = {
       match pair {
@@ -142,7 +142,7 @@ contract ListOps("zip", @list1, @list2, return) = {
     loop!((list1, list2), [], *return)
   }
 } |
-contract ListOps("range", @start, @end, return) = {
+contract ListOps(@"range", @start, @end, return) = {
   new loop in {
     contract loop(@i, @list) = {
       if(i < start) {
