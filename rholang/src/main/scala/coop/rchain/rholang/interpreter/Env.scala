@@ -6,16 +6,6 @@ case class Env[A](envMap: Map[Int, A], level: Int, shift: Int) {
   def put(a: A): Env[A] =
     Env(envMap + (level -> a), level + 1, shift)
 
-  def put(a: A, b: A, k: A*): Env[A] =
-    k.foldLeft(put(a).put(b))(
-      (acc, newVal) => acc.put(newVal)
-    )
-
-  def put(as: Seq[A]): Env[A] =
-    as.foldLeft(this)(
-      (acc, newVal) => acc.put(newVal)
-    )
-
   def get(k: Int): Option[A] =
     envMap.get((level + shift) - k - 1)
 

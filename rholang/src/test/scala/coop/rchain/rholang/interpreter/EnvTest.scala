@@ -15,7 +15,7 @@ class EnvSpec extends FlatSpec with Matchers {
   val source4: Par = GPrivateBuilder()
 
   "Data" should "always be inserted at the next available level index" in {
-    val result: Env[Par] = Env().put(source0, source1, source2)
+    val result: Env[Par] = Env().put(source0).put(source1).put(source2)
     result should be(Env[Par](Map(0 -> source0, 1 -> source1, 2 -> source2), 3, 0))
   }
 }
