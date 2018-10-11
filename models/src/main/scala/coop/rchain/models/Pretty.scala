@@ -77,10 +77,7 @@ trait PrettyInstances extends PrettyDerivation {
 
   implicit def prettyCoeval[A: Pretty]: Pretty[Coeval[A]] =
     (value: Coeval[A], indentLevel: Int) =>
-      value match {
-        case Now(a: A)    => s"Coeval.Now(${Pretty[A].pretty(a, indentLevel)})"
-        case _: Coeval[_] => s"Coeval(???)"
-      }
+      s"Coeval.now(${Pretty[A].pretty(value.value, indentLevel)}) /* was Coeval.${value.getClass.getSimpleName} */"
 
   implicit val PrettyPar: Pretty[Par] = gen[Par]
 
