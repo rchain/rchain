@@ -1,25 +1,24 @@
 package coop.rchain.node
 
-import java.security.Security
-import java.util.concurrent.{SynchronousQueue, ThreadPoolExecutor, TimeUnit}
-
 import scala.collection.JavaConverters._
 import scala.tools.jline.console._
 import completer.StringsCompleter
+
 import cats.implicits._
+
 import coop.rchain.casper.util.comm._
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.casper.util.BondingUtil
 import coop.rchain.comm._
 import coop.rchain.node.configuration._
 import coop.rchain.node.diagnostics.client.GrpcDiagnosticsService
 import coop.rchain.node.effects._
-import coop.rchain.shared.{Log, LogSource}
+import coop.rchain.shared._
 import coop.rchain.shared.StringOps._
+
 import monix.eval.Task
-import monix.execution.{Scheduler, UncaughtExceptionReporter}
-import monix.execution.UncaughtExceptionReporter.LogExceptionsToStandardErr
-import monix.execution.schedulers.{ExecutorScheduler, SchedulerService, ThreadFactoryBuilder, _}
+import monix.execution.Scheduler
 
 object Main {
 
@@ -28,17 +27,18 @@ object Main {
 
   def main(args: Array[String]): Unit = {
 
+    implicit val scheduler: Scheduler = Scheduler.computation(
+      Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
+      "node-runner"
+    )
+
     val exec: Task[Unit] =
       for {
-        conf     <- Configuration(args)
-        poolSize = conf.server.threadPoolSize
-        //TODO create separate scheduler for casper
-        scheduler = Scheduler.fixedPool("node-io", poolSize)
-        _         <- Task.unit.asyncBoundary(scheduler)
-        _         <- mainProgram(conf)(scheduler)
+        conf <- Configuration(args)
+        _    <- Task.defer(mainProgram(conf))
       } yield ()
 
-    exec.unsafeRunSync(Scheduler.fixedPool("main-io", 1))
+    exec.unsafeRunSync
   }
 
   private def mainProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
@@ -61,6 +61,8 @@ object Main {
         conf.server.maxMessageSize
       )
 
+    implicit val time: Time[Task] = effects.time
+
     val program = conf.command match {
       case Eval(files) => new ReplRuntime().evalProgram[Task](files)
       case Repl        => new ReplRuntime().replProgram[Task].as(())
@@ -70,11 +72,15 @@ object Main {
       case DeployDemo        => DeployRuntime.deployDemoProgram[Task]
       case Propose           => DeployRuntime.propose[Task]()
       case ShowBlock(hash)   => DeployRuntime.showBlock[Task](hash)
-      case ShowBlocks        => DeployRuntime.showBlocks[Task]()
+      case ShowBlocks(depth) => DeployRuntime.showBlocks[Task](depth)
       case DataAtName(name)  => DeployRuntime.listenForDataAtName[Task](name)
       case ContAtName(names) => DeployRuntime.listenForContinuationAtName[Task](names)
       case Run               => nodeProgram(conf)
-      case _                 => conf.printHelp()
+      case BondingDeployGen(bondKey, ethAddress, amount, secKey, pubKey) =>
+        BondingUtil.writeIssuanceBasedRhoFiles[Task](bondKey, ethAddress, amount, secKey, pubKey)
+      case FaucetBondingDeployGen(amount, sigAlgorithm, secKey, pubKey) =>
+        BondingUtil.writeFaucetBasedRhoFiles[Task](amount, sigAlgorithm, secKey, pubKey)
+      case _ => conf.printHelp()
     }
 
     program.doOnFinish(
@@ -90,7 +96,7 @@ object Main {
   private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] =
     for {
       host   <- conf.fetchHost
-      result <- new NodeRuntime(conf, host).main.value
+      result <- new NodeRuntime(conf, host, scheduler).main.value
       _ <- result match {
             case Right(_) =>
               Task.unit

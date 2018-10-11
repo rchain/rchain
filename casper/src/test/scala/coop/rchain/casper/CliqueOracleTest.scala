@@ -90,17 +90,16 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator with B
 
     implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
 
-    def runSafetyOracle[F[_]: Monad: SafetyOracle]: F[Unit] =
-      for {
-        genesisFaultTolerance <- SafetyOracle[F].normalizedFaultTolerance(chain, genesis)
-        _                     = assert(genesisFaultTolerance == 1)
-        b2FaultTolerance      <- SafetyOracle[F].normalizedFaultTolerance(chain, b2)
-        _                     = assert(b2FaultTolerance == 1)
-        b3FaultTolerance      <- SafetyOracle[F].normalizedFaultTolerance(chain, b3)
-        _                     = assert(b3FaultTolerance == -1)
-        b4FaultTolerance      <- SafetyOracle[F].normalizedFaultTolerance(chain, b4)
-        _                     = assert(b4FaultTolerance == -0.2f) // Clique oracle would be 0.2f
-      } yield ()
+    def runSafetyOracle[F[_]: Monad: SafetyOracle]: Unit = {
+      val genesisFaultTolerance = SafetyOracle[F].normalizedFaultTolerance(chain, genesis.blockHash)
+      assert(genesisFaultTolerance == 1)
+      val b2FaultTolerance = SafetyOracle[F].normalizedFaultTolerance(chain, b2.blockHash)
+      assert(b2FaultTolerance == 1)
+      val b3FaultTolerance = SafetyOracle[F].normalizedFaultTolerance(chain, b3.blockHash)
+      assert(b3FaultTolerance == -1)
+      val b4FaultTolerance = SafetyOracle[F].normalizedFaultTolerance(chain, b4.blockHash)
+      assert(b4FaultTolerance == -0.2f) // Clique oracle would be 0.2f
+    }
     runSafetyOracle[Id]
   }
 
@@ -164,24 +163,24 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator with B
 
       val chain: IndexedBlockDag = createChain[StateWithChain].runS(initState)
 
-      val genesis = chain.idToBlocks(1)
-      val b2      = chain.idToBlocks(2)
-      val b3      = chain.idToBlocks(3)
-      val b4      = chain.idToBlocks(4)
+      val genesisBlockHash = chain.idToBlocks(1).blockHash
+      val b2BlockHash      = chain.idToBlocks(2).blockHash
+      val b3BlockHash      = chain.idToBlocks(3).blockHash
+      val b4BlockHash      = chain.idToBlocks(4).blockHash
 
       implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
 
-      def runSafetyOracle[F[_]: Monad: SafetyOracle]: F[Unit] =
-        for {
-          genesisFaultTolerance <- SafetyOracle[F].normalizedFaultTolerance(chain, genesis)
-          _                     = assert(genesisFaultTolerance == 1)
-          b2FaultTolerance      <- SafetyOracle[F].normalizedFaultTolerance(chain, b2)
-          _                     = assert(b2FaultTolerance == -0.5f)
-          b3FaultTolerance      <- SafetyOracle[F].normalizedFaultTolerance(chain, b3)
-          _                     = assert(b3FaultTolerance == -1f)
-          b4FaultTolerance      <- SafetyOracle[F].normalizedFaultTolerance(chain, b4)
-          _                     = assert(b4FaultTolerance == -0.5f)
-        } yield ()
+      def runSafetyOracle[F[_]: Monad: SafetyOracle]: Unit = {
+        val genesisFaultTolerance =
+          SafetyOracle[F].normalizedFaultTolerance(chain, genesisBlockHash)
+        assert(genesisFaultTolerance == 1)
+        val b2FaultTolerance = SafetyOracle[F].normalizedFaultTolerance(chain, b2BlockHash)
+        assert(b2FaultTolerance == -0.5f)
+        val b3FaultTolerance = SafetyOracle[F].normalizedFaultTolerance(chain, b3BlockHash)
+        assert(b3FaultTolerance == -1f)
+        val b4FaultTolerance = SafetyOracle[F].normalizedFaultTolerance(chain, b4BlockHash)
+        assert(b4FaultTolerance == -0.5f)
+      }
       runSafetyOracle[Id]
   }
 }

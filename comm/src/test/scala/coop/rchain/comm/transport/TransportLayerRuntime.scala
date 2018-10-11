@@ -5,12 +5,12 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.mutable
 import scala.concurrent.duration._
-
+import coop.rchain.catscontrib.ski._
 import cats._
 import cats.implicits._
 
 import coop.rchain.comm._
-import coop.rchain.comm.protocol.routing.Protocol
+import coop.rchain.comm.protocol.routing.{Packet, Protocol}
 import coop.rchain.comm.CommError.CommErr
 import coop.rchain.comm.rp.ProtocolHelper
 
@@ -40,19 +40,20 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
     } yield r
 
   trait Runtime[A] {
-    protected def dispatcher: Dispatcher[F]
+    protected def protocolDispatcher: Dispatcher[F, Protocol, CommunicationResponse]
+    protected def streamDispatcher: Dispatcher[F, Blob, Unit]
     def run(): Result
-    def await(): Unit = dispatcher.await()
-
     trait Result {
       def localNode: PeerNode
       def apply(): A
-      def receivedMessages: Seq[(PeerNode, Protocol)] = dispatcher.received
-      def lastProcessedMessageTimestamp: Long         = dispatcher.lastProcessedTimestamp
     }
   }
 
-  abstract class TwoNodesRuntime[A](val dispatcher: Dispatcher[F]) extends Runtime[A] {
+  abstract class TwoNodesRuntime[A](
+      val protocolDispatcher: Dispatcher[F, Protocol, CommunicationResponse] =
+        Dispatcher.withoutMessageDispatcher[F],
+      val streamDispatcher: Dispatcher[F, Blob, Unit] = Dispatcher.devNullPacketDispatcher[F]
+  ) extends Runtime[A] {
     def execute(transportLayer: TransportLayer[F], local: PeerNode, remote: PeerNode): F[A]
 
     def run(): TwoNodesResult =
@@ -63,10 +64,13 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
             remoteTl <- createTransportLayer(e2)
             local    = e1.peer
             remote   = e2.peer
-            _        <- remoteTl.receive(dispatcher.dispatch(remote))
-            r        <- execute(localTl, local, remote)
-            _        <- remoteTl.shutdown(ProtocolHelper.disconnect(remote))
-            _        <- localTl.shutdown(ProtocolHelper.disconnect(local))
+            _ <- remoteTl.receive(
+                  protocolDispatcher.dispatch(remote),
+                  streamDispatcher.dispatch(remote)
+                )
+            r <- execute(localTl, local, remote)
+            _ <- remoteTl.shutdown(ProtocolHelper.disconnect(remote))
+            _ <- localTl.shutdown(ProtocolHelper.disconnect(local))
           } yield
             new TwoNodesResult {
               def localNode: PeerNode        = local
@@ -82,7 +86,11 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
     }
   }
 
-  abstract class TwoNodesRemoteDeadRuntime[A](val dispatcher: Dispatcher[F]) extends Runtime[A] {
+  abstract class TwoNodesRemoteDeadRuntime[A](
+      val protocolDispatcher: Dispatcher[F, Protocol, CommunicationResponse] =
+        Dispatcher.withoutMessageDispatcher[F],
+      val streamDispatcher: Dispatcher[F, Blob, Unit] = Dispatcher.devNullPacketDispatcher[F]
+  ) extends Runtime[A] {
     def execute(transportLayer: TransportLayer[F], local: PeerNode, remote: PeerNode): F[A]
 
     def run(): TwoNodesResult =
@@ -108,7 +116,11 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
     }
   }
 
-  abstract class ThreeNodesRuntime[A](val dispatcher: Dispatcher[F]) extends Runtime[A] {
+  abstract class ThreeNodesRuntime[A](
+      val protocolDispatcher: Dispatcher[F, Protocol, CommunicationResponse] =
+        Dispatcher.withoutMessageDispatcher[F],
+      val streamDispatcher: Dispatcher[F, Blob, Unit] = Dispatcher.devNullPacketDispatcher[F]
+  ) extends Runtime[A] {
     def execute(
         transportLayer: TransportLayer[F],
         local: PeerNode,
@@ -126,12 +138,14 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
             local     = e1.peer
             remote1   = e2.peer
             remote2   = e3.peer
-            _         <- remoteTl1.receive(dispatcher.dispatch(remote1))
-            _         <- remoteTl2.receive(dispatcher.dispatch(remote2))
-            r         <- execute(localTl, local, remote1, remote2)
-            _         <- remoteTl1.shutdown(ProtocolHelper.disconnect(remote1))
-            _         <- remoteTl2.shutdown(ProtocolHelper.disconnect(remote2))
-            _         <- localTl.shutdown(ProtocolHelper.disconnect(local))
+            _ <- remoteTl1
+                  .receive(protocolDispatcher.dispatch(remote1), streamDispatcher.dispatch(remote1))
+            _ <- remoteTl2
+                  .receive(protocolDispatcher.dispatch(remote2), streamDispatcher.dispatch(remote2))
+            r <- execute(localTl, local, remote1, remote2)
+            _ <- remoteTl1.shutdown(ProtocolHelper.disconnect(remote1))
+            _ <- remoteTl2.shutdown(ProtocolHelper.disconnect(remote2))
+            _ <- localTl.shutdown(ProtocolHelper.disconnect(local))
           } yield
             new ThreeNodesResult {
               def localNode: PeerNode   = local
@@ -184,50 +198,54 @@ trait Environment {
   def port: Int
 }
 
-final class Dispatcher[F[_]: Applicative](
-    response: PeerNode => CommunicationResponse,
-    latch: Option[java.util.concurrent.CountDownLatch] = None,
-    delay: Option[Long] = None
+final class Dispatcher[F[_]: Applicative, R, S](
+    response: PeerNode => S,
+    delay: Option[Long] = None,
+    ignore: R => Boolean = kp(false)
 ) {
-  def dispatch(peer: PeerNode): Protocol => F[CommunicationResponse] =
+  def dispatch(peer: PeerNode): R => F[S] =
     p => {
-      processed = System.currentTimeMillis()
-      latch.foreach(_.countDown())
       delay.foreach(Thread.sleep)
-      // Ignore Disconnect messages to not skew the tests
-      if (!p.message.isDisconnect)
+      if (!ignore(p))
         receivedMessages.synchronized(receivedMessages += ((peer, p)))
       response(peer).pure[F]
     }
-  def received: Seq[(PeerNode, Protocol)] = receivedMessages
-  def lastProcessedTimestamp: Long        = processed
-  def await(): Unit                       = latch.foreach(_.await(2, TimeUnit.SECONDS))
-  private val receivedMessages            = mutable.MutableList.empty[(PeerNode, Protocol)]
-  private var processed                   = 0L
+  def received: Seq[(PeerNode, R)] = receivedMessages
+  private val receivedMessages     = mutable.MutableList.empty[(PeerNode, R)]
 }
 
 object Dispatcher {
-  def heartbeatResponseDispatcher[F[_]: Applicative]: Dispatcher[F] =
-    new Dispatcher(
-      peer => CommunicationResponse.handledWithMessage(ProtocolHelper.heartbeatResponse(peer))
-    )
-
-  def heartbeatResponseDispatcherWithDelay[F[_]: Applicative](delay: Long): Dispatcher[F] =
-    new Dispatcher(
+  def heartbeatResponseDispatcher[F[_]: Applicative]
+    : Dispatcher[F, Protocol, CommunicationResponse] =
+    new Dispatcher[F, Protocol, CommunicationResponse](
       peer => CommunicationResponse.handledWithMessage(ProtocolHelper.heartbeatResponse(peer)),
-      delay = Some(delay)
+      ignore = _.message.isDisconnect
     )
 
-  def dispatcherWithLatch[F[_]: Applicative](countDown: Int = 1): Dispatcher[F] =
-    new Dispatcher(
+  def heartbeatResponseDispatcherWithDelay[F[_]: Applicative](
+      delay: Long
+  ): Dispatcher[F, Protocol, CommunicationResponse] =
+    new Dispatcher[F, Protocol, CommunicationResponse](
+      peer => CommunicationResponse.handledWithMessage(ProtocolHelper.heartbeatResponse(peer)),
+      delay = Some(delay),
+      ignore = _.message.isDisconnect
+    )
+
+  def withoutMessageDispatcher[F[_]: Applicative]: Dispatcher[F, Protocol, CommunicationResponse] =
+    new Dispatcher[F, Protocol, CommunicationResponse](
       _ => CommunicationResponse.handledWithoutMessage,
-      latch = Some(new java.util.concurrent.CountDownLatch(countDown))
+      ignore = _.message.isDisconnect
     )
 
-  def withoutMessageDispatcher[F[_]: Applicative]: Dispatcher[F] =
-    new Dispatcher(_ => CommunicationResponse.handledWithoutMessage)
+  def internalCommunicationErrorDispatcher[F[_]: Applicative]
+    : Dispatcher[F, Protocol, CommunicationResponse] =
+    new Dispatcher[F, Protocol, CommunicationResponse](
+      _ => CommunicationResponse.notHandled(InternalCommunicationError("Test")),
+      ignore = _.message.isDisconnect
+    )
 
-  def internalCommunicationErrorDispatcher[F[_]: Applicative]: Dispatcher[F] =
-    new Dispatcher(_ => CommunicationResponse.notHandled(InternalCommunicationError("Test")))
-
+  def devNullPacketDispatcher[F[_]: Applicative]: Dispatcher[F, Blob, Unit] =
+    new Dispatcher[F, Blob, Unit](
+      kp(())
+    )
 }

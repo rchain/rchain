@@ -423,7 +423,7 @@ object Validate {
     for {
       latestMessages        <- ProtoUtil.toLatestMessage[F](b.justifications, dag)
       dagViewOfBlockCreator = dag.copy(latestMessages = latestMessages)
-      estimate              <- Estimator.tips[F](dagViewOfBlockCreator, genesis)
+      estimate              <- Estimator.tips[F](dagViewOfBlockCreator, genesis.blockHash)
       computedParents       <- ProtoUtil.chooseNonConflicting[F](estimate, genesis, dag)
       computedParentHashes  = computedParents.map(_.blockHash)
       status <- if (parentHashes == computedParentHashes)
@@ -444,28 +444,28 @@ object Validate {
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDag
-  ): F[Either[InvalidBlock, ValidBlock]] =
+  ): F[Either[InvalidBlock, ValidBlock]] = {
+    val justifiedValidators = b.justifications.map(_.validator).toSet
+    val mainParentHash      = ProtoUtil.parentHashes(b).head
     for {
-      latestMessages     <- ProtoUtil.toLatestMessage[F](b.justifications, dag)
-      validators         = latestMessages.keySet
-      creatorLatestBlock = latestMessages.getOrElse(b.sender, genesis)
-      creatorBonds       = ProtoUtil.bonds(creatorLatestBlock).map(_.validator).toSet
-      result             = creatorBonds == validators
-      status <- if (result) {
+      mainParent       <- ProtoUtil.unsafeGetBlock[F](mainParentHash)
+      bondedValidators = ProtoUtil.bonds(mainParent).map(_.validator).toSet
+      status <- if (bondedValidators == justifiedValidators) {
                  Applicative[F].pure(Right(Valid))
                } else {
-                 val justifications =
-                   b.justifications.map(it => PrettyPrinter.buildString(it.validator)).mkString(",")
+                 val justifiedValidatorsPP = justifiedValidators.map(PrettyPrinter.buildString(_))
+                 val bondedValidatorsPP    = bondedValidators.map(PrettyPrinter.buildString(_))
                  for {
                    _ <- Log[F].warn(
                          ignore(
                            b,
-                           s"the justifications of block are ${justifications}, do not follow from bonds of creator justification block"
+                           s"the justified validators, ${justifiedValidatorsPP}, do not match the bonded validators, ${bondedValidatorsPP}."
                          )
                        )
                  } yield Left(InvalidFollows)
                }
     } yield status
+  }
 
   /*
    * When we switch between equivocation forks for a slashed validator, we will potentially get a

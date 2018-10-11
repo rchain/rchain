@@ -5,14 +5,17 @@ stages:
 test:integration-test-for-p2p-network:
   stage: test 
   tags:
-    - preloaded-ubuntu1804 
+    - preloaded-ubuntu1804
+  before_script:
+    - export PRETTY_PRINTER_OUTPUT_TRIM_AFTER=150
   script:
     - ./scripts/install_bnfc.sh
     - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate casper/test:compile node/docker:publishLocal
     - sudo python3.6 -m pip install argparse docker pexpect requests
     - sudo ./scripts/p2p-test-tool.py -b -t -p 2 -m 2048m
-  except:
-    - testing
+  only:
+    - master
+    - dev
 
 test:integration-test-for-artifact-creation:
   stage: test 
@@ -21,8 +24,9 @@ test:integration-test-for-artifact-creation:
   script:
     - ./scripts/install_bnfc.sh
     - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate casper/test:compile node/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball 
-  except:
-    - testing
+  only:
+    - master
+    - dev
 
 deploy:deploy-rnode-to-dockerhub:
   stage: deploy 

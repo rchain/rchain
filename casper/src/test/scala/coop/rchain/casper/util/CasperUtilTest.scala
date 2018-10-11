@@ -35,13 +35,13 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
       } yield b3
     val chain = createChain[StateWithChain].runS(initState)
 
-    val genesis = chain.idToBlocks(1)
-    val b2      = chain.idToBlocks(2)
-    val b3      = chain.idToBlocks(3)
-    isInMainChain[Id](genesis, b3) should be(true)
-    isInMainChain[Id](b2, b3) should be(true)
-    isInMainChain[Id](b3, b2) should be(false)
-    isInMainChain[Id](b3, genesis) should be(false)
+    val genesisBlockHash = chain.idToBlocks(1).blockHash
+    val b2BlockHash      = chain.idToBlocks(2).blockHash
+    val b3BlockHash      = chain.idToBlocks(3).blockHash
+    isInMainChain(chain, genesisBlockHash, b3BlockHash) should be(true)
+    isInMainChain(chain, b2BlockHash, b3BlockHash) should be(true)
+    isInMainChain(chain, b3BlockHash, b2BlockHash) should be(false)
+    isInMainChain(chain, b3BlockHash, genesisBlockHash) should be(false)
   }
 
   "isInMainChain" should "classify diamond DAGs appropriately" in withStore { implicit blockStore =>
@@ -56,15 +56,15 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
 
     val chain = createChain[StateWithChain].runS(initState)
 
-    val genesis = chain.idToBlocks(1)
-    val b2      = chain.idToBlocks(2)
-    val b3      = chain.idToBlocks(3)
-    val b4      = chain.idToBlocks(4)
-    isInMainChain[Id](genesis, b2) should be(true)
-    isInMainChain[Id](genesis, b3) should be(true)
-    isInMainChain[Id](genesis, b4) should be(true)
-    isInMainChain[Id](b2, b4) should be(true)
-    isInMainChain[Id](b3, b4) should be(false)
+    val genesisBlockHash = chain.idToBlocks(1).blockHash
+    val b2BlockHash      = chain.idToBlocks(2).blockHash
+    val b3BlockHash      = chain.idToBlocks(3).blockHash
+    val b4BlockHash      = chain.idToBlocks(4).blockHash
+    isInMainChain(chain, genesisBlockHash, b2BlockHash) should be(true)
+    isInMainChain(chain, genesisBlockHash, b3BlockHash) should be(true)
+    isInMainChain(chain, genesisBlockHash, b4BlockHash) should be(true)
+    isInMainChain(chain, b2BlockHash, b4BlockHash) should be(true)
+    isInMainChain(chain, b3BlockHash, b4BlockHash) should be(false)
   }
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
@@ -87,24 +87,24 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
 
       val chain = createChain[StateWithChain].runS(initState)
 
-      val genesis = chain.idToBlocks(1)
-      val b2      = chain.idToBlocks(2)
-      val b3      = chain.idToBlocks(3)
-      val b4      = chain.idToBlocks(4)
-      val b5      = chain.idToBlocks(5)
-      val b6      = chain.idToBlocks(6)
-      val b7      = chain.idToBlocks(7)
-      val b8      = chain.idToBlocks(8)
-      isInMainChain[Id](genesis, b2) should be(true)
-      isInMainChain[Id](b2, b3) should be(false)
-      isInMainChain[Id](b3, b4) should be(false)
-      isInMainChain[Id](b4, b5) should be(false)
-      isInMainChain[Id](b5, b6) should be(false)
-      isInMainChain[Id](b6, b7) should be(false)
-      isInMainChain[Id](b7, b8) should be(true)
-      isInMainChain[Id](b2, b6) should be(true)
-      isInMainChain[Id](b2, b8) should be(true)
-      isInMainChain[Id](b4, b2) should be(false)
+      val genesisBlockHash = chain.idToBlocks(1).blockHash
+      val b2BlockHash      = chain.idToBlocks(2).blockHash
+      val b3BlockHash      = chain.idToBlocks(3).blockHash
+      val b4BlockHash      = chain.idToBlocks(4).blockHash
+      val b5BlockHash      = chain.idToBlocks(5).blockHash
+      val b6BlockHash      = chain.idToBlocks(6).blockHash
+      val b7BlockHash      = chain.idToBlocks(7).blockHash
+      val b8BlockHash      = chain.idToBlocks(8).blockHash
+      isInMainChain(chain, genesisBlockHash, b2BlockHash) should be(true)
+      isInMainChain(chain, b2BlockHash, b3BlockHash) should be(false)
+      isInMainChain(chain, b3BlockHash, b4BlockHash) should be(false)
+      isInMainChain(chain, b4BlockHash, b5BlockHash) should be(false)
+      isInMainChain(chain, b5BlockHash, b6BlockHash) should be(false)
+      isInMainChain(chain, b6BlockHash, b7BlockHash) should be(false)
+      isInMainChain(chain, b7BlockHash, b8BlockHash) should be(true)
+      isInMainChain(chain, b2BlockHash, b6BlockHash) should be(true)
+      isInMainChain(chain, b2BlockHash, b8BlockHash) should be(true)
+      isInMainChain(chain, b4BlockHash, b2BlockHash) should be(false)
   }
 
   /*

@@ -7,7 +7,7 @@ import cats.data.EitherT
 import cats.effect.concurrent.Ref
 import cats.effect.Sync
 import cats.implicits._
-
+import coop.rchain.catscontrib.ski._
 import coop.rchain.blockstorage.LMDBBlockStore
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
@@ -117,7 +117,8 @@ class HashSetCasperTestNode[F[_]](
         )
         .void
 
-  def receive(): F[Unit] = tle.receive(p => handle[F](p, defaultTimeout))
+  // FIX-ME
+  def receive(): F[Unit] = tle.receive(p => handle[F](p, defaultTimeout), kp(().pure[F]))
 
   def tearDown(): Unit = {
     tearDownNode()
@@ -133,7 +134,11 @@ class HashSetCasperTestNode[F[_]](
 object HashSetCasperTestNode {
   type Effect[A] = EitherT[Task, CommError, A]
 
-  def standaloneF[F[_]](genesis: BlockMessage, sk: Array[Byte], storageSize: Long = 1024L * 1024)(
+  def standaloneF[F[_]](
+      genesis: BlockMessage,
+      sk: Array[Byte],
+      storageSize: Long = 1024L * 1024 * 10
+  )(
       implicit scheduler: Scheduler,
       errorHandler: ErrorHandler[F],
       syncF: Sync[F],
@@ -157,13 +162,13 @@ object HashSetCasperTestNode {
     )
     result.initialize.map(_ => result)
   }
-  def standalone(genesis: BlockMessage, sk: Array[Byte], storageSize: Long = 1024L * 1024)(
+  def standalone(genesis: BlockMessage, sk: Array[Byte], storageSize: Long = 1024L * 1024 * 10)(
       implicit scheduler: Scheduler
   ): HashSetCasperTestNode[Id] = {
     implicit val errorHandlerEff = errorHandler
     standaloneF[Id](genesis, sk, storageSize)
   }
-  def standaloneEff(genesis: BlockMessage, sk: Array[Byte], storageSize: Long = 1024L * 1024)(
+  def standaloneEff(genesis: BlockMessage, sk: Array[Byte], storageSize: Long = 1024L * 1024 * 10)(
       implicit scheduler: Scheduler
   ): HashSetCasperTestNode[Effect] =
     standaloneF[Effect](genesis, sk, storageSize)(
@@ -176,7 +181,7 @@ object HashSetCasperTestNode {
   def networkF[F[_]](
       sks: IndexedSeq[Array[Byte]],
       genesis: BlockMessage,
-      storageSize: Long = 1024L * 1024
+      storageSize: Long = 1024L * 1024 * 10
   )(
       implicit scheduler: Scheduler,
       errorHandler: ErrorHandler[F],
@@ -234,7 +239,7 @@ object HashSetCasperTestNode {
   def network(
       sks: IndexedSeq[Array[Byte]],
       genesis: BlockMessage,
-      storageSize: Long = 1024L * 1024
+      storageSize: Long = 1024L * 1024 * 10
   )(implicit scheduler: Scheduler): IndexedSeq[HashSetCasperTestNode[Id]] = {
     implicit val errorHandlerEff = errorHandler
     networkF[Id](sks, genesis, storageSize)
@@ -242,7 +247,7 @@ object HashSetCasperTestNode {
   def networkEff(
       sks: IndexedSeq[Array[Byte]],
       genesis: BlockMessage,
-      storageSize: Long = 1024L * 1024
+      storageSize: Long = 1024L * 1024 * 10
   )(implicit scheduler: Scheduler): Effect[IndexedSeq[HashSetCasperTestNode[Effect]]] =
     networkF[Effect](sks, genesis, storageSize)(
       scheduler,

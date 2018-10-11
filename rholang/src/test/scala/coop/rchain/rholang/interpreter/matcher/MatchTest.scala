@@ -2,13 +2,12 @@ package coop.rchain.rholang.interpreter.matcher
 
 import cats.{Eval => _}
 import com.google.protobuf.ByteString
-import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
-import coop.rchain.models.rholang.sort.Sortable
+import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rholang.interpreter.PrettyPrinter
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
@@ -38,8 +37,8 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
     expectedCaptures.foreach(
       _.values.foreach((v: Par) => assertSorted(v, "expected captured term"))
     )
-    val intermediate: Either[OutOfPhlogistonsError.type, (CostAccount, Option[(FreeMap, Unit)])] =
-      spatialMatch(target, pattern).runWithCost(CostAccount(Integer.MAX_VALUE))
+    val intermediate: Either[OutOfPhlogistonsError.type, (Cost, Option[(FreeMap, Unit)])] =
+      spatialMatch(target, pattern).runWithCost(Cost(Integer.MAX_VALUE))
     assert(intermediate.isRight)
     val result = intermediate.right.get._2.map(_._1)
     assert(prettyCaptures(result) == prettyCaptures(expectedCaptures))
@@ -131,9 +130,9 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
 
   "Matching a send's channel" should "work" in {
     val target: Send =
-      Send(Quote(GPrivateBuilder("unforgeable")), List(GInt(7), GInt(8)), false, BitSet())
+      Send(GPrivateBuilder("unforgeable"), List(GInt(7), GInt(8)), false, BitSet())
     val pattern: Send =
-      Send(ChanVar(FreeVar(0)), List(EVar(wc), GInt(8)), false, BitSet(), true)
+      Send(EVar(FreeVar(0)), List(EVar(wc), GInt(8)), false, BitSet(), true)
     val expectedResult = Some(Map[Int, Par](0 -> GPrivateBuilder("unforgeable")))
     assertSpatialMatch(target, pattern, expectedResult)
     val targetPar: Par  = target
@@ -143,8 +142,8 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
 
   "Matching a send's body" should "work" in {
     val target: Send =
-      Send(Quote(GPrivateBuilder("unforgeable")), List(GInt(7), GInt(8)), false, BitSet())
-    val pattern: Send  = Send(ChanVar(wc), List(EVar(FreeVar(0)), GInt(8)), false, BitSet(), true)
+      Send(GPrivateBuilder("unforgeable"), List(GInt(7), GInt(8)), false, BitSet())
+    val pattern: Send  = Send(EVar(wc), List(EVar(FreeVar(0)), GInt(8)), false, BitSet(), true)
     val expectedResult = Some(Map[Int, Par](0 -> GInt(7)))
     assertSpatialMatch(target, pattern, expectedResult)
     val targetPar: Par  = target
@@ -153,8 +152,8 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
   }
   "Matching a send" should "require arity matching in" in {
     val target: Send =
-      Send(Quote(GPrivateBuilder("unforgeable")), List(GInt(7), GInt(8), GInt(9)), false, BitSet())
-    val pattern: Send = Send(ChanVar(wc), List(EVar(FreeVar(0)), EVar(wc)), false, BitSet(), true)
+      Send(GPrivateBuilder("unforgeable"), List(GInt(7), GInt(8), GInt(9)), false, BitSet())
+    val pattern: Send = Send(EVar(wc), List(EVar(FreeVar(0)), EVar(wc)), false, BitSet(), true)
     assertSpatialMatch(target, pattern, None)
   }
 
@@ -296,9 +295,9 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
   }
   "Matching send with free variable in channel and variable position" should "capture both values" in {
     val sendTarget: Par =
-      Send(Quote(GPrivateBuilder("zero")), List(GInt(7), GPrivateBuilder("one")), false, BitSet())
+      Send(GPrivateBuilder("zero"), List(GInt(7), GPrivateBuilder("one")), false, BitSet())
     val pattern: Par =
-      Send(ChanVar(FreeVar(0)), List(GInt(7), EVar(FreeVar(1))), false, BitSet(), true)
+      Send(EVar(FreeVar(0)), List(GInt(7), EVar(FreeVar(1))), false, BitSet(), true)
         .withConnectiveUsed(true)
     val expectedResult =
       Some(Map[Int, Par](0 -> GPrivateBuilder("zero"), 1 -> GPrivateBuilder("one")))
@@ -311,17 +310,17 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
   "Matching a receive with a free variable in the channel and a free variable in the body" should "capture for both variables." in {
     val target: Receive = Receive(
       List(
-        ReceiveBind(List(Quote(EVar(FreeVar(0))), Quote(EVar(FreeVar(1)))), Quote(GInt(7))),
-        ReceiveBind(List(Quote(EVar(FreeVar(0))), Quote(EVar(FreeVar(1)))), Quote(GInt(8)))
+        ReceiveBind(List(EVar(FreeVar(0)), EVar(FreeVar(1))), GInt(7)),
+        ReceiveBind(List(EVar(FreeVar(0)), EVar(FreeVar(1))), GInt(8))
       ),
-      Send(Quote(GPrivateBuilder("unforgeable")), List(GInt(9), GInt(10)), false, BitSet()),
+      Send(GPrivateBuilder("unforgeable"), List(GInt(9), GInt(10)), false, BitSet()),
       false,
       4
     )
     val pattern: Receive = Receive(
       List(
-        ReceiveBind(List(Quote(EVar(FreeVar(0))), Quote(EVar(FreeVar(1)))), Quote(GInt(7))),
-        ReceiveBind(List(Quote(EVar(FreeVar(0))), Quote(EVar(FreeVar(1)))), ChanVar(FreeVar(0)))
+        ReceiveBind(List(EVar(FreeVar(0)), EVar(FreeVar(1))), GInt(7)),
+        ReceiveBind(List(EVar(FreeVar(0)), EVar(FreeVar(1))), EVar(FreeVar(0)))
       ),
       EVar(FreeVar(1)),
       false,
@@ -332,7 +331,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
       Some(
         Map[Int, Par](
           0 -> GInt(8),
-          1 -> Send(Quote(GPrivateBuilder("unforgeable")), List(GInt(9), GInt(10)), false, BitSet())
+          1 -> Send(GPrivateBuilder("unforgeable"), List(GInt(9), GInt(10)), false, BitSet())
         )
       )
     assertSpatialMatch(target, pattern, expectedResult)
@@ -342,8 +341,8 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
   }
 
   "Matching an eval with no free variables" should "Succeed, but not capture anything." in {
-    val target: Expr   = EEvalBody(ChanVar(BoundVar(0)))
-    val pattern: Expr  = EEvalBody(ChanVar(BoundVar(0)))
+    val target: Expr   = EVar(BoundVar(0))
+    val pattern: Expr  = EVar(BoundVar(0))
     val expectedResult = Some(Map.empty[Int, Par])
     assertSpatialMatch(target, pattern, expectedResult)
     val targetPar: Par  = target
@@ -356,14 +355,14 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
       New(
         2,
         Par()
-          .prepend(Send(ChanVar(BoundVar(0)), Seq(GInt(43)), false, locallyFree = BitSet(0)))
-          .prepend(Send(Quote(GInt(7)), Seq(GInt(42)), false))
+          .prepend(Send(EVar(BoundVar(0)), Seq(GInt(43)), false, locallyFree = BitSet(0)))
+          .prepend(Send(GInt(7), Seq(GInt(42)), false))
       )
     val pattern: New =
       New(
         2,
         Par()
-          .prepend(Send(Quote(GInt(7)), Seq(EVar(FreeVar(0))), false).withConnectiveUsed(true))
+          .prepend(Send(GInt(7), Seq(EVar(FreeVar(0))), false).withConnectiveUsed(true))
           .prepend(EVar(Wildcard(WildcardMsg())), 1)
       )
 
@@ -382,7 +381,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
           MatchCase(
             EList(Seq(EVar(FreeVar(0)), EVar(FreeVar(1)))),
             Send(
-              Quote(EVar(BoundVar(1))),
+              EVar(BoundVar(1)),
               Seq[Par](EVar(BoundVar(0))),
               false,
               locallyFree = BitSet(0, 1)
@@ -436,8 +435,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
     val target: Expr = ParSet(Seq(GInt(1), GInt(2), GInt(3), GInt(4), GInt(5)))
     val pattern: Expr =
       ParSet(
-        Seq(GInt(2), GInt(5), EVar(FreeVar(0)), EVar(FreeVar(1)), EVar(Wildcard(WildcardMsg()))),
-        connectiveUsed = true
+        Seq(GInt(2), GInt(5), EVar(FreeVar(0)), EVar(FreeVar(1)), EVar(Wildcard(WildcardMsg())))
       )
     //the captures and their order are somewhat arbitrary and could potentially by changed
     val expectedResult = Some(Map[Int, Par](0 -> GInt(4), 1 -> GInt(3)))
@@ -448,10 +446,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
     assertSpatialMatch(targetPar, patternPar, expectedResult)
 
     val nonMatchingPattern: Expr =
-      ParSet(
-        Seq(GInt(2), GInt(5), EVar(FreeVar(0)), EVar(Wildcard(WildcardMsg()))),
-        connectiveUsed = true
-      )
+      ParSet(Seq(GInt(2), GInt(5), EVar(FreeVar(0)), EVar(Wildcard(WildcardMsg()))))
     assertSpatialMatch(target, nonMatchingPattern, None)
   }
 
@@ -459,7 +454,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
     val targetElements = Seq[Par](GInt(1), GInt(2), GInt(3), GInt(4), GInt(5))
     val target: Expr   = ParSet(targetElements)
     val pattern: Expr =
-      ParSet(Seq(GInt(1), GInt(4)), connectiveUsed = true, remainder = Wildcard(WildcardMsg()))
+      ParSet(Seq(GInt(1), GInt(4)), remainder = Wildcard(WildcardMsg()))
     val expectedResult = Some(Map[Int, Par]())
     assertSpatialMatch(target, pattern, expectedResult)
 
@@ -480,7 +475,6 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
     val pattern: Expr =
       ParSet(
         Seq(GInt(1), GInt(4), EVar(FreeVar(0))),
-        connectiveUsed = true,
         remainder = Var(FreeVar(1))
       )
     //the captures and their order are somewhat arbitrary and could potentially by changed
@@ -624,12 +618,12 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
   "Matching inside bundles" should "not be possible" in {
     val target: Bundle = Bundle(
       Par()
-        .prepend(Send(Quote(GPrivateBuilder("0")), Seq(GInt(43)), persistent = false))
-        .prepend(Send(Quote(GInt(7)), Seq(GInt(42)), persistent = false))
+        .prepend(Send(GPrivateBuilder("0"), Seq(GInt(43)), persistent = false))
+        .prepend(Send(GInt(7), Seq(GInt(42)), persistent = false))
     )
     val pattern: Bundle = Bundle(
       Par()
-        .prepend(Send(Quote(GInt(7)), Seq(EVar(FreeVar(0))), persistent = false))
+        .prepend(Send(GInt(7), Seq(EVar(FreeVar(0))), persistent = false))
         .prepend(EVar(Wildcard(WildcardMsg())), 1)
     )
 
@@ -647,8 +641,8 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
   it should "be possible to match on entire bundle" in {
     val target: Bundle = Bundle(
       Par()
-        .prepend(Send(Quote(GPrivateBuilder("0")), Seq(GInt(43)), persistent = false))
-        .prepend(Send(Quote(GInt(7)), Seq(GInt(42)), persistent = false))
+        .prepend(Send(GPrivateBuilder("0"), Seq(GInt(43)), persistent = false))
+        .prepend(Send(GInt(7), Seq(GInt(42)), persistent = false))
     )
 
     val pattern: Par = EVar(FreeVar(0))
@@ -662,15 +656,15 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
 
   "Matching a single and" should "match both sides" in {
     // @7!(8)
-    val target: Par     = Send(Quote(GInt(7)), Seq(GInt(8)), persistent = false)
-    val failTarget: Par = Send(Quote(GInt(7)), Seq(GInt(9)), persistent = false)
+    val target: Par     = Send(GInt(7), Seq(GInt(8)), persistent = false)
+    val failTarget: Par = Send(GInt(7), Seq(GInt(9)), persistent = false)
     // @7!(x) /\ @y!(8)
     val pattern: Connective = Connective(
       ConnAndBody(
         ConnectiveBody(
           Seq(
-            Send(Quote(GInt(7)), Seq(EVar(FreeVar(0))), persistent = false, connectiveUsed = true),
-            Send(ChanVar(FreeVar(1)), Seq(GInt(8)), persistent = false, connectiveUsed = true)
+            Send(GInt(7), Seq(EVar(FreeVar(0))), persistent = false, connectiveUsed = true),
+            Send(EVar(FreeVar(1)), Seq(GInt(8)), persistent = false, connectiveUsed = true)
           )
         )
       )
@@ -687,15 +681,15 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
 
   "Matching a single or" should "match some side" in {
     // @7!(8)
-    val target: Par     = Send(Quote(GInt(7)), Seq(GInt(8)), persistent = false)
-    val failTarget: Par = Send(Quote(GInt(7)), Seq(GInt(9)), persistent = false)
+    val target: Par     = Send(GInt(7), Seq(GInt(8)), persistent = false)
+    val failTarget: Par = Send(GInt(7), Seq(GInt(9)), persistent = false)
     // @9!(x) \/ @x!(8)
     val pattern: Connective = Connective(
       ConnOrBody(
         ConnectiveBody(
           Seq(
-            Send(Quote(GInt(9)), Seq(EVar(FreeVar(0))), persistent = false, connectiveUsed = true),
-            Send(ChanVar(FreeVar(0)), Seq(GInt(8)), persistent = false, connectiveUsed = true)
+            Send(GInt(9), Seq(EVar(FreeVar(0))), persistent = false, connectiveUsed = true),
+            Send(EVar(FreeVar(0)), Seq(GInt(8)), persistent = false, connectiveUsed = true)
           )
         )
       )
@@ -713,9 +707,9 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
   "Matching negation" should "work" in {
     // @1!(2) | @2!(3) | @3!(4)
     val target: Par = Par().addSends(
-      Send(Quote(GInt(1)), Seq(GInt(2)), persistent = false),
-      Send(Quote(GInt(2)), Seq(GInt(3)), persistent = false),
-      Send(Quote(GInt(3)), Seq(GInt(4)), persistent = false)
+      Send(GInt(1), Seq(GInt(2)), persistent = false),
+      Send(GInt(2), Seq(GInt(3)), persistent = false),
+      Send(GInt(3), Seq(GInt(4)), persistent = false)
     )
     // ~Nil
     val pattern: Connective = Connective(ConnNotBody(Par()))
@@ -743,15 +737,15 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
   "Matching a complicated connective" should "work" in {
     // @1!(6) | @2!(7) | @3!(8)
     val target: Par = Par().addSends(
-      Send(Quote(GInt(1)), Seq(GInt(6)), persistent = false),
-      Send(Quote(GInt(2)), Seq(GInt(7)), persistent = false),
-      Send(Quote(GInt(3)), Seq(GInt(8)), persistent = false)
+      Send(GInt(1), Seq(GInt(6)), persistent = false),
+      Send(GInt(2), Seq(GInt(7)), persistent = false),
+      Send(GInt(3), Seq(GInt(8)), persistent = false)
     )
 
     val failTarget: Par = Par().addSends(
-      Send(Quote(GInt(1)), Seq(GInt(6)), persistent = false),
-      Send(Quote(GInt(2)), Seq(GInt(9)), persistent = false),
-      Send(Quote(GInt(3)), Seq(GInt(8)), persistent = false)
+      Send(GInt(1), Seq(GInt(6)), persistent = false),
+      Send(GInt(2), Seq(GInt(9)), persistent = false),
+      Send(GInt(3), Seq(GInt(8)), persistent = false)
     )
 
     // ~Nil
@@ -771,7 +765,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
       Connective(
         ConnAndBody(
           ConnectiveBody(
-            Seq(EVar(FreeVar(0)), Send(ChanVar(FreeVar(1)), Seq(GInt(7))).withConnectiveUsed(true))
+            Seq(EVar(FreeVar(0)), Send(EVar(FreeVar(1)), Seq(GInt(7))).withConnectiveUsed(true))
           )
         )
       )
@@ -786,15 +780,15 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
       ConnOrBody(
         ConnectiveBody(
           Seq(
-            Send(ChanVar(FreeVar(0)), Seq(GInt(7))).withConnectiveUsed(true),
-            Send(ChanVar(FreeVar(0)), Seq(GInt(8))).withConnectiveUsed(true)
+            Send(EVar(FreeVar(0)), Seq(GInt(7))).withConnectiveUsed(true),
+            Send(EVar(FreeVar(0)), Seq(GInt(8))).withConnectiveUsed(true)
           )
         )
       )
     )
     // x /\ y!(7) | ~{ ~Nil | ~Nil } & ~Nil | x!(7) \/ x!(8)
     val pattern: Par   = Par().addConnectives(capture, prime, alternative).withConnectiveUsed(true)
-    val expectedResult = Some(Map[Int, Par](0 -> Send(Quote(GInt(2)), Seq(GInt(7))), 1 -> GInt(2)))
+    val expectedResult = Some(Map[Int, Par](0 -> Send(GInt(2), Seq(GInt(7))), 1 -> GInt(2)))
     assertSpatialMatch(target, pattern, expectedResult)
 
     assertSpatialMatch(failTarget, pattern, None)
@@ -808,9 +802,10 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
           Receive(
             binds = List(
               ReceiveBind(
-                patterns =
-                  List(Quote(Connective(VarRefBody(VarRef(0, 1))).withLocallyFree(BitSet(0)))),
-                source = Quote(Par())
+                patterns = List(
+                  Par().prepend(Connective(VarRefBody(VarRef(0, 1))), 1)
+                ),
+                source = Par()
               )
             ),
             body = Par(),
@@ -829,8 +824,8 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
           Receive(
             binds = List(
               ReceiveBind(
-                patterns = List(Quote(Connective(VarRefBody(VarRef(0, 1))))),
-                source = Quote(Par())
+                patterns = List(Connective(VarRefBody(VarRef(0, 1)))),
+                source = Par()
               )
             ),
             body = Par(),
@@ -923,7 +918,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
     val target: Par = EList(Seq(GInt(1), GInt(2), GInt(3)))
     val pattern: Par =
       EList(Seq(GInt(1), EVar(FreeVar(0)), EVar(FreeVar(1))), connectiveUsed = true)
-    val res = spatialMatch(target, pattern).runWithCost(CostAccount(0, Cost(0)))
+    val res = spatialMatch(target, pattern).runWithCost(Cost(0))
     res should be(Left(OutOfPhlogistonsError))
   }
 }

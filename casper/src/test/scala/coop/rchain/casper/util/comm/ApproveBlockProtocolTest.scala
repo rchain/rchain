@@ -26,6 +26,7 @@ import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.util.comm.ApproveBlockProtocolTest.TestFixture
 import coop.rchain.casper.{HashSetCasperTest, LastApprovedBlock}
 import org.scalatest.{Assertion, FlatSpec, Matchers}
+import coop.rchain.casper.util.TestTime
 
 import scala.util.Success
 
@@ -332,7 +333,7 @@ object ApproveBlockProtocolTest {
       interval: FiniteDuration,
       validatorsPk: Set[Array[Byte]]
   )(implicit logStub: LogStub[Task], metrics: MetricsTestImpl[Task]): TestFixture = {
-    implicit val time            = new LogicalTime[Task]()
+    implicit val time            = TestTime.instance
     implicit val transportLayer  = new TransportLayerStub[Task]
     val src: PeerNode            = peerNode("src", 40400)
     implicit val rpConfAsk       = createRPConfAsk[Task](src)

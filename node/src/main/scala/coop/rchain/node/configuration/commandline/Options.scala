@@ -189,6 +189,15 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "<pk> is the public key (in base-16 encoding) identifying the wallet and <revBalance>" +
         "is the amount of Rev in the wallet."
     )
+    val minimumBond = opt[Long](
+      descr = "Minimum bond accepted by the PoS contract in the genesis block."
+    )
+    val maximumBond = opt[Long](
+      descr = "Maximum bond accepted by the PoS contract in the genesis block."
+    )
+    val hasFaucet = opt[Boolean](
+      descr = "True if there should be a public access Rev faucet in the genesis block."
+    )
 
     val bootstrap =
       opt[PeerNode](
@@ -242,7 +251,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       opt[Int](descr = "Maximum size of message that can be sent via transport layer")
 
     val threadPoolSize =
-      opt[Int](descr = "Maximum number of threads used by rnode")
+      opt[Int](descr = "Maximum number of threads used by rnode", hidden = true)
 
     val casperBlockStoreSize =
       opt[Long](required = false, descr = "Casper BlockStore map size (in bytes)")
@@ -288,6 +297,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(deployDemo)
 
+  val hexCheck: String => Boolean     = _.matches("[0-9a-fA-F]+")
+  val addressCheck: String => Boolean = addr => addr.startsWith("0x") && hexCheck(addr.drop(2))
+
   val deploy = new Subcommand("deploy") {
     descr(
       "Deploy a Rholang source file to Casper on an existing running node. " +
@@ -295,18 +307,23 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "on the configuration of the Casper instance."
     )
 
-    val addressCheck: String => Boolean = addr =>
-      addr.startsWith("0x") && addr.drop(2).matches("[0-9a-fA-F]+")
     val from = opt[String](
       descr = "Purse address that will be used to pay for the deployment.",
       validate = addressCheck
     )
 
     val phloLimit =
-      opt[Int](descr = "The amount of phlo to use for the transaction (unused phlo is refunded).")
+      opt[Long](
+        descr =
+          "The amount of phlo to use for the transaction (unused phlo is refunded). Must be positive integer.",
+        validate = _ > 0,
+        required = true
+      )
 
-    val phloPrice = opt[Int](
-      descr = "The price of phlo for this transaction in units dust/phlo."
+    val phloPrice = opt[Long](
+      descr = "The price of phlo for this transaction in units dust/phlo. Must be positive integer.",
+      validate = _ > 0,
+      required = true
     )
 
     val nonce = opt[Int](
@@ -329,8 +346,15 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
   val showBlocks = new Subcommand("show-blocks") {
     descr(
-      "View list of blocks on the main chain in the current Casper view on an existing running node."
+      "View list of blocks in the current Casper view on an existing running node."
     )
+    val depth =
+      opt[Int](
+        name = "depth",
+        validate = _ > 0,
+        descr = "lists blocks to the given depth in terms of block height"
+      )
+
   }
   addSubcommand(showBlocks)
 
@@ -372,6 +396,88 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     )
   }
   addSubcommand(propose)
+
+  val bondingDeployGen = new Subcommand("generateBondingDeploys") {
+    descr(
+      "Creates the rholang source files needed for bonding assuming you have a " +
+        "pre-wallet from the REV issuance. These files must be" +
+        "deployed to a node operated by a presently bonded validator. The rho files" +
+        "are created in the working directory where the command is executed. Note: " +
+        "for security reasons it is best to deploy `unlock*.rho` and `forward*.rho` first" +
+        "and `bond*.rho` in a separate block after those (i.e. only deploy `bond*.rho` " +
+        "after `unlock*.rho` and `forward*.rho` have safely been included in a propsed block)."
+    )
+
+    val ethAddr = opt[String](
+      descr = "Ethereum address associated with the \"pre-wallet\" to bond.",
+      validate = addressCheck,
+      required = true
+    )
+
+    val bondKey = opt[String](
+      descr = "Hex-encoded public key which will be used as the validator idenity after bonding. " +
+        "Note: as of this version of node this must be an ED25519 key.",
+      validate = hexCheck,
+      required = true
+    )
+
+    val amount = opt[Long](
+      descr = "The amount of REV to bond. Must be less than or equal to the wallet balance.",
+      validate = _ > 0,
+      required = true
+    )
+
+    val publicKey = opt[String](
+      descr = "Hex-encoded public key associated with the Ethereum address of the pre-wallet.",
+      validate = hexCheck,
+      required = true
+    )
+
+    val privateKey = opt[String](
+      descr = "Hex-encoded private key associated with the Ethereum address of the pre-wallet.",
+      validate = hexCheck,
+      required = true
+    )
+  }
+  addSubcommand(bondingDeployGen)
+
+  val faucetBondingDeployGen = new Subcommand("generateFaucetBondingDeploys") {
+    descr(
+      "Creates the rholang source files needed for bonding by making use of " +
+        "test net faucet. These files must be" +
+        "deployed to a node operated by a presently bonded validator. The rho files" +
+        "are created in the working directory where the command is executed. Note: " +
+        "for security reasons it is best to deploy `forward*.rho` first" +
+        "and then `bond*.rho` in a separate block afterwards (i.e. only deploy `bond*.rho` " +
+        "after `forward*.rho` has safely been included in a propsed block)."
+    )
+
+    val amount = opt[Long](
+      descr = "The amount of REV to bond. Must be less than or equal to the wallet balance.",
+      validate = _ > 0,
+      required = true
+    )
+
+    val sigAlgorithm = opt[String](
+      descr =
+        "Signature algorithm to be used with the provided keys. Must be one of ed25519 or secp256k1.",
+      validate = (s: String) => { s == "ed25519" || s == "secp256k1" },
+      required = true
+    )
+
+    val publicKey = opt[String](
+      descr = "Hex-encoded public key to be used as the validator id when bonding.",
+      validate = hexCheck,
+      required = true
+    )
+
+    val privateKey = opt[String](
+      descr = "Hex-encoded private key associated with the supplied public key.",
+      validate = hexCheck,
+      required = true
+    )
+  }
+  addSubcommand(faucetBondingDeployGen)
 
   verify()
 }

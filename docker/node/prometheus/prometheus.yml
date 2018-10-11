@@ -1,7 +1,7 @@
 global:
   scrape_interval:     30s
   scrape_timeout:      10s
-  evaluation_interval: 1m 
+  evaluation_interval: 1m
 
   # Attach labels to time series or alerts when communicating with
   # external systems like alert manager or remote storage.
@@ -23,8 +23,8 @@ scrape_configs:
       - targets: ['localhost:9091']
 
   - job_name: 'rchain-node'
-    scrape_interval:     1m 
+    scrape_interval:     1m
 
-    metrics_path: "/"
+    metrics_path: "/metrics"
     static_configs:
       - targets: ['localhost:40403']

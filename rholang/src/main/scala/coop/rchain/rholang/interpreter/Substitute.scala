@@ -3,15 +3,14 @@ package coop.rchain.rholang.interpreter
 import cats.effect.Sync
 import cats.implicits._
 import cats.{Applicative, Monad}
-import coop.rchain.models.Channel.ChannelInstance
-import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.rholang.sort._
+import coop.rchain.models.rholang.sorter._
+import coop.rchain.rholang.interpreter.accounting.{Chargeable, Cost, CostAccounting}
 import coop.rchain.rholang.interpreter.errors.SubstituteError
 
 trait Substitute[M[_], A] {
@@ -20,6 +19,35 @@ trait Substitute[M[_], A] {
 }
 
 object Substitute {
+  def charge[A: Chargeable, M[_]: Sync: CostAccounting](
+      substitutionResult: M[A],
+      failureCost: Cost
+  ): M[A] =
+    substitutionResult.attempt
+      .map(
+        _.fold(
+          th => (Left(th), failureCost),
+          substTerm => (Right(substTerm), Cost(substTerm))
+        )
+      )
+      .flatMap({ case (result, cost) => CostAccounting[M].charge(cost) *> Sync[M].pure(result) })
+      .rethrow
+
+  def substituteAndCharge[A: Chargeable, M[_]: CostAccounting: Substitute[?[_], A]: Sync](
+      term: A,
+      depth: Int,
+      env: Env[Par]
+  ): M[A] =
+    charge(Substitute[M, A].substitute(term)(depth, env), Cost(term))
+
+  def substituteNoSortAndCharge[A: Chargeable, M[_]: CostAccounting: Substitute[?[_], A]: Sync](
+      term: A,
+      depth: Int,
+      env: Env[Par],
+      costAccountingAlg: CostAccounting[M]
+  ): M[A] =
+    charge(Substitute[M, A].substituteNoSort(term)(depth, env), Cost(term))
+
   def substitute2[M[_]: Monad, A, B, C](termA: A, termB: B)(
       f: (A, B) => C
   )(implicit evA: Substitute[M, A], evB: Substitute[M, B], depth: Int, env: Env[Par]): M[C] =
@@ -58,19 +86,6 @@ object Substitute {
     }
 
   def maybeSubstitute[M[_]: Sync](
-      term: EEvalBody
-  )(implicit depth: Int, env: Env[Par]): M[Either[Expr, Par]] =
-    term.value.channelInstance match {
-      case Quote(p) => substitutePar[M].substituteNoSort(p).map(Right(_))
-      case ChanVar(v) =>
-        maybeSubstitute[M](v).map {
-          case Left(v)    => Left(Expr(EEvalBody(ChanVar(v))))
-          case Right(par) => Right(par)
-        }
-      case ChannelInstance.Empty => Either.left[Expr, Par](Expr(term)).pure[M]
-    }
-
-  def maybeSubstitute[M[_]: Sync](
       term: VarRef
   )(implicit depth: Int, env: Env[Par]): M[Either[VarRef, Par]] =
     if (term.depth != depth)
@@ -81,14 +96,6 @@ object Substitute {
         case None =>
           Applicative[M].pure(Left(term))
       }
-
-  implicit def substituteQuote[M[_]: Sync]: Substitute[M, Quote] =
-    new Substitute[M, Quote] {
-      override def substitute(term: Quote)(implicit depth: Int, env: Env[Par]): M[Quote] =
-        substitutePar[M].substitute(term.value).map(Quote(_))
-      override def substituteNoSort(term: Quote)(implicit depth: Int, env: Env[Par]): M[Quote] =
-        substitutePar[M].substituteNoSort(term.value).map(Quote(_))
-    }
 
   implicit def substituteBundle[M[_]: Sync]: Substitute[M, Bundle] =
     new Substitute[M, Bundle] {
@@ -110,24 +117,6 @@ object Substitute {
         }
     }
 
-  implicit def substituteChannel[M[_]: Sync]: Substitute[M, Channel] =
-    new Substitute[M, Channel] {
-      override def substituteNoSort(term: Channel)(implicit depth: Int, env: Env[Par]): M[Channel] =
-        for {
-          channelSubst <- term.channelInstance match {
-                           case Quote(p) => substitutePar[M].substitute(p).map(Quote(_))
-                           case ChanVar(v) =>
-                             maybeSubstitute[M](v).map {
-                               case Left(_v) => ChanVar(_v)
-                               case Right(p) => Quote(p)
-                             }
-                           case ChannelInstance.Empty => term.channelInstance.pure[M]
-                         }
-        } yield channelSubst
-      override def substitute(term: Channel)(implicit depth: Int, env: Env[Par]): M[Channel] =
-        substituteNoSort(term).flatMap(channelSubst => Sortable.sortMatch(channelSubst)).map(_.term)
-    }
-
   implicit def substitutePar[M[_]: Sync]: Substitute[M, Par] =
     new Substitute[M, Par] {
       def subExp(exprs: Seq[Expr])(implicit depth: Int, env: Env[Par]): M[Par] =
@@ -136,11 +125,6 @@ object Substitute {
             case EVarBody(e) =>
               maybeSubstitute[M](e).map {
                 case Left(_e)    => par.prepend(_e, depth)
-                case Right(_par) => _par ++ par
-              }
-            case e: EEvalBody =>
-              maybeSubstitute[M](e).map {
-                case Left(expr)  => par.prepend(expr, depth)
                 case Right(_par) => _par ++ par
               }
             case _ => substituteExpr[M].substituteNoSort(expr).map(par.prepend(_, depth))
@@ -206,7 +190,7 @@ object Substitute {
     new Substitute[M, Send] {
       override def substituteNoSort(term: Send)(implicit depth: Int, env: Env[Par]): M[Send] =
         for {
-          channelsSub <- substituteChannel[M].substituteNoSort(term.chan.get)
+          channelsSub <- substitutePar[M].substituteNoSort(term.chan.get)
           parsSub     <- term.data.toVector.traverse(substitutePar[M].substituteNoSort(_))
           send = Send(
             chan = channelsSub,
@@ -227,10 +211,10 @@ object Substitute {
           bindsSub <- term.binds.toVector.traverse {
                        case ReceiveBind(patterns, chan, rem, freeCount) =>
                          for {
-                           subChannel <- substituteChannel[M].substituteNoSort(chan)
+                           subChannel <- substitutePar[M].substituteNoSort(chan)
                            subPatterns <- patterns.toVector.traverse(
                                            pattern =>
-                                             substituteChannel[M]
+                                             substitutePar[M]
                                                .substituteNoSort(pattern)(depth + 1, env)
                                          )
                          } yield ReceiveBind(subPatterns, subChannel, rem, freeCount)

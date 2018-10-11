@@ -5,6 +5,7 @@ from tools.util import log_box
 
 PROF_DATA = {}
 
+
 def profile(fn):
     @wraps(fn)
     def with_profiling(*args, **kwargs):
@@ -23,10 +24,10 @@ def profile(fn):
 
     return with_profiling
 
+
 def log_prof_data():
     with log_box(logging.info, "Profiling information:"):
         for fname, (count, calls) in PROF_DATA.items():
             max_time = max(calls)
             avg_time = sum(calls) / len(calls)
             logging.info("Function %s called %d times. Execution time max: %.3fs, average: %.3fs", fname, count, max_time, avg_time)
-

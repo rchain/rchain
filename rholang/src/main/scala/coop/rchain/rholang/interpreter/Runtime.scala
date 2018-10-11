@@ -2,19 +2,24 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.{Files, Path}
 
+import cats.Id
 import cats.mtl.FunctorTell
+import cats.effect.Sync
+import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime._
+import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.errors.SetupError
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.IReplaySpace.IdIReplaySpace
-import coop.rchain.rspace.ISpace.IdISpace
+import coop.rchain.rspace.IReplaySpace
+import coop.rchain.rspace.ISpace
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.pure.PureRSpace
@@ -39,42 +44,82 @@ class Runtime private (
     replaySpace.close()
     context.close()
   }
+  def injectEmptyRegistryRoot[F[_]](implicit F: Sync[F]): F[Unit] = {
+    // This random value stays dead in the tuplespace, so we can have some fun.
+    // This is from Jeremy Bentham's "Defence of Usury"
+    val rand = Blake2b512Random(
+      ("there can be no such thing as usury: " +
+        "for what rate of interest is there that can naturally be more proper than another?")
+        .getBytes()
+    )
+    implicit val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
+    for {
+      spaceResult <- F.delay(
+                      space.produce(
+                        Registry.registryRoot,
+                        ListParWithRandom(Seq(Registry.emptyMap), rand),
+                        false
+                      )
+                    )
+      replayResult <- F.delay(
+                       replaySpace.produce(
+                         Registry.registryRoot,
+                         ListParWithRandom(Seq(Registry.emptyMap), rand),
+                         false
+                       )
+                     )
+      _ <- spaceResult match {
+            case Right(None) =>
+              replayResult match {
+                case Right(None) => F.unit
+                case Right(Some(_)) =>
+                  F.raiseError(
+                    new SetupError("Registry insertion in replay fired continuation.")
+                  )
+                case Left(err) => F.raiseError(err)
+              }
+            case Right(Some(_)) =>
+              F.raiseError(new SetupError("Registry insertion fired continuation."))
+            case Left(err) => F.raiseError(err)
+          }
+    } yield ()
+  }
 }
 
 object Runtime {
 
-  type RhoISpace          = CPARK[IdISpace]
+  type RhoISpace          = TCPARK[Id, ISpace]
   type RhoPureSpace[F[_]] = TCPARK[F, PureRSpace]
-  type RhoReplayISpace    = CPARK[IdIReplaySpace]
+  type RhoReplayISpace    = TCPARK[Id, IReplaySpace]
 
   type RhoIStore  = CPAK[IStore]
   type RhoContext = CPAK[Context]
 
-  type RhoDispatch[F[_]] = Dispatch[F, ListChannelWithRandom, TaggedContinuation]
-  type RhoSysFunction    = Function1[Seq[ListChannelWithRandom], Task[Unit]]
+  type RhoDispatch[F[_]] = Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
+  type RhoSysFunction    = Function1[Seq[ListParWithRandomAndPhlos], Task[Unit]]
   type RhoDispatchMap    = Map[Long, RhoSysFunction]
 
-  private type CPAK[F[_, _, _, _]] =
-    F[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]
+  type CPAK[F[_, _, _, _]] =
+    F[Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
-  private type CPARK[F[_, _, _, _, _, _]] =
+  type CPARK[F[_, _, _, _, _, _]] =
     F[
-      Channel,
+      Par,
       BindPattern,
       OutOfPhlogistonsError.type,
-      ListChannelWithRandom,
-      ListChannelWithRandom,
+      ListParWithRandom,
+      ListParWithRandomAndPhlos,
       TaggedContinuation
     ]
 
-  private type TCPARK[M[_], F[_[_], _, _, _, _, _, _]] =
+  type TCPARK[M[_], F[_[_], _, _, _, _, _, _]] =
     F[
       M,
-      Channel,
+      Par,
       BindPattern,
       OutOfPhlogistonsError.type,
-      ListChannelWithRandom,
-      ListChannelWithRandom,
+      ListParWithRandom,
+      ListParWithRandomAndPhlos,
       TaggedContinuation
     ]
 
@@ -84,25 +129,27 @@ object Runtime {
   type Ref       = Long
 
   object BodyRefs {
-    val STDOUT: Long                              = 0L
-    val STDOUT_ACK: Long                          = 1L
-    val STDERR: Long                              = 2L
-    val STDERR_ACK: Long                          = 3L
-    val ED25519_VERIFY: Long                      = 4L
-    val SHA256_HASH: Long                         = 5L
-    val KECCAK256_HASH: Long                      = 6L
-    val BLAKE2B256_HASH: Long                     = 7L
-    val SECP256K1_VERIFY: Long                    = 9L
-    val REG_LOOKUP: Long                          = 10L
-    val REG_LOOKUP_CALLBACK: Long                 = 11L
-    val REG_INSERT: Long                          = 12L
-    val REG_INSERT_CALLBACK: Long                 = 13L
-    val REG_DELETE: Long                          = 14L
-    val REG_DELETE_ROOT_CALLBACK: Long            = 15L
-    val REG_DELETE_CALLBACK: Long                 = 16L
-    val REG_PUBLIC_LOOKUP: Long                   = 17L
-    val REG_PUBLIC_REGISTER_RANDOM: Long          = 18L
-    val REG_PUBLIC_REGISTER_INSERT_CALLBACK: Long = 19L
+    val STDOUT: Long                       = 0L
+    val STDOUT_ACK: Long                   = 1L
+    val STDERR: Long                       = 2L
+    val STDERR_ACK: Long                   = 3L
+    val ED25519_VERIFY: Long               = 4L
+    val SHA256_HASH: Long                  = 5L
+    val KECCAK256_HASH: Long               = 6L
+    val BLAKE2B256_HASH: Long              = 7L
+    val SECP256K1_VERIFY: Long             = 9L
+    val REG_LOOKUP: Long                   = 10L
+    val REG_LOOKUP_CALLBACK: Long          = 11L
+    val REG_INSERT: Long                   = 12L
+    val REG_INSERT_CALLBACK: Long          = 13L
+    val REG_DELETE: Long                   = 14L
+    val REG_DELETE_ROOT_CALLBACK: Long     = 15L
+    val REG_DELETE_CALLBACK: Long          = 16L
+    val REG_PUBLIC_LOOKUP: Long            = 17L
+    val REG_PUBLIC_REGISTER_RANDOM: Long   = 18L
+    val REG_REGISTER_INSERT_CALLBACK: Long = 19L
+    val REG_PUBLIC_REGISTER_SIGNED: Long   = 20L
+    val REG_NONCE_INSERT_CALLBACK: Long    = 21L
   }
 
   def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
@@ -119,70 +166,79 @@ object Runtime {
     val SECP256K1_VERIFY: Par  = GString("secp256k1Verify")
     val REG_LOOKUP: Par        = byteName(9)
     val REG_INSERT_RANDOM: Par = byteName(10)
+    val REG_INSERT_SIGNED: Par = byteName(11)
   }
+
+  // because only we do installs
+  private val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
 
   private def introduceSystemProcesses(
       space: RhoISpace,
       replaySpace: RhoISpace,
       processes: immutable.Seq[(Name, Arity, Remainder, Ref)]
-  ): Seq[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]] =
+  ): Seq[Option[(TaggedContinuation, Seq[ListParWithRandomAndPhlos])]] =
     processes.flatMap {
       case (name, arity, remainder, ref) =>
-        val channels = List(Channel(Quote(name)))
+        val channels = List(name)
         val patterns = List(
           BindPattern(
-            (0 until arity).map[Channel, Seq[Channel]](i => ChanVar(FreeVar(i))),
+            (0 until arity).map[Par, Seq[Par]](i => EVar(FreeVar(i))),
             remainder,
             freeCount = arity
           )
         )
         val continuation = TaggedContinuation(ScalaBodyRef(ref))
         Seq(
-          space.install(channels, patterns, continuation),
-          replaySpace.install(channels, patterns, continuation)
+          space.install(channels, patterns, continuation)(MATCH_UNLIMITED_PHLOS),
+          replaySpace.install(channels, patterns, continuation)(MATCH_UNLIMITED_PHLOS)
         )
     }
 
-  /**
-    * TODO this needs to go away when double locking is good enough
-    */
   def setupRSpace(
       dataDir: Path,
       mapSize: Long,
       storeType: StoreType
   ): (RhoContext, RhoISpace, RhoReplayISpace) = {
-    def createCoarseRSpace(context: RhoContext): (RhoContext, RhoISpace, RhoReplayISpace) = {
-      val space: RhoISpace             = RSpace.create(context, Branch.MASTER)
-      val replaySpace: RhoReplayISpace = ReplayRSpace.create(context, Branch.REPLAY)
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+    def createSpace(context: RhoContext): (RhoContext, RhoISpace, RhoReplayISpace) = {
+      val space: RhoISpace = RSpace.create[
+        Id,
+        Par,
+        BindPattern,
+        OutOfPhlogistonsError.type,
+        ListParWithRandom,
+        ListParWithRandomAndPhlos,
+        TaggedContinuation
+      ](context, Branch.MASTER)
+      val replaySpace: RhoReplayISpace = ReplayRSpace.create[
+        Id,
+        Par,
+        BindPattern,
+        OutOfPhlogistonsError.type,
+        ListParWithRandom,
+        ListParWithRandomAndPhlos,
+        TaggedContinuation
+      ](context, Branch.REPLAY)
       (context, space, replaySpace)
     }
     storeType match {
       case InMem =>
-        createCoarseRSpace(Context.createInMemory())
+        createSpace(Context.createInMemory())
       case LMDB =>
         if (Files.notExists(dataDir)) {
           Files.createDirectories(dataDir)
         }
-        createCoarseRSpace(Context.create(dataDir, mapSize, true))
-      case FineGrainedLMDB =>
-        if (Files.notExists(dataDir)) {
-          Files.createDirectories(dataDir)
-        }
-        val context: RhoContext          = Context.createFineGrained(dataDir, mapSize)
-        val store                        = context.createStore(Branch.MASTER)
-        val space: RhoISpace             = RSpace.createFineGrained(store, Branch.MASTER)
-        val replaySpace: RhoReplayISpace = FineGrainedReplayRSpace.create(context, Branch.REPLAY)
-        (context, space, replaySpace)
+        createSpace(Context.create(dataDir, mapSize, true))
       case Mixed =>
         if (Files.notExists(dataDir)) {
           Files.createDirectories(dataDir)
         }
-        createCoarseRSpace(Context.createMixed(dataDir, mapSize))
+        createSpace(Context.createMixed(dataDir, mapSize))
     }
   }
 
   // TODO: remove default store type
-  def create(dataDir: Path, mapSize: Long, storeType: StoreType = FineGrainedLMDB): Runtime = {
+  def create(dataDir: Path, mapSize: Long, storeType: StoreType = LMDB): Runtime = {
     val (context, space, replaySpace) = setupRSpace(dataDir, mapSize, storeType)
 
     val errorLog                                  = new ErrorLog()
@@ -195,34 +251,40 @@ object Runtime {
     ): RhoDispatchMap = {
       import BodyRefs._
       Map(
-        STDOUT                     -> SystemProcesses.stdout,
-        STDOUT_ACK                 -> SystemProcesses.stdoutAck(space, dispatcher),
-        STDERR                     -> SystemProcesses.stderr,
-        STDERR_ACK                 -> SystemProcesses.stderrAck(space, dispatcher),
-        ED25519_VERIFY             -> SystemProcesses.ed25519Verify(space, dispatcher),
-        SHA256_HASH                -> SystemProcesses.sha256Hash(space, dispatcher),
-        KECCAK256_HASH             -> SystemProcesses.keccak256Hash(space, dispatcher),
-        BLAKE2B256_HASH            -> SystemProcesses.blake2b256Hash(space, dispatcher),
-        SECP256K1_VERIFY           -> SystemProcesses.secp256k1Verify(space, dispatcher),
-        REG_LOOKUP                 -> (registry.lookup(_)),
-        REG_LOOKUP_CALLBACK        -> (registry.lookupCallback(_)),
-        REG_INSERT                 -> (registry.insert(_)),
-        REG_INSERT_CALLBACK        -> (registry.insertCallback(_)),
-        REG_DELETE                 -> (registry.delete(_)),
-        REG_DELETE_ROOT_CALLBACK   -> (registry.deleteRootCallback(_)),
-        REG_DELETE_CALLBACK        -> (registry.deleteCallback(_)),
-        REG_PUBLIC_LOOKUP          -> (registry.publicLookup(_)),
-        REG_PUBLIC_REGISTER_RANDOM -> (registry.publicRegisterRandom(_))
+        STDOUT                       -> SystemProcesses.stdout,
+        STDOUT_ACK                   -> SystemProcesses.stdoutAck(space, dispatcher),
+        STDERR                       -> SystemProcesses.stderr,
+        STDERR_ACK                   -> SystemProcesses.stderrAck(space, dispatcher),
+        ED25519_VERIFY               -> SystemProcesses.ed25519Verify(space, dispatcher),
+        SHA256_HASH                  -> SystemProcesses.sha256Hash(space, dispatcher),
+        KECCAK256_HASH               -> SystemProcesses.keccak256Hash(space, dispatcher),
+        BLAKE2B256_HASH              -> SystemProcesses.blake2b256Hash(space, dispatcher),
+        SECP256K1_VERIFY             -> SystemProcesses.secp256k1Verify(space, dispatcher),
+        REG_LOOKUP                   -> (registry.lookup(_)),
+        REG_LOOKUP_CALLBACK          -> (registry.lookupCallback(_)),
+        REG_INSERT                   -> (registry.insert(_)),
+        REG_INSERT_CALLBACK          -> (registry.insertCallback(_)),
+        REG_REGISTER_INSERT_CALLBACK -> (registry.registerInsertCallback(_)),
+        REG_DELETE                   -> (registry.delete(_)),
+        REG_DELETE_ROOT_CALLBACK     -> (registry.deleteRootCallback(_)),
+        REG_DELETE_CALLBACK          -> (registry.deleteCallback(_)),
+        REG_PUBLIC_LOOKUP            -> (registry.publicLookup(_)),
+        REG_PUBLIC_REGISTER_RANDOM   -> (registry.publicRegisterRandom(_)),
+        REG_PUBLIC_REGISTER_SIGNED   -> (registry.publicRegisterSigned(_))
       )
     }
 
     val urnMap: Map[String, Par] = Map(
-      "rho:io:stdout"                -> FixedChannels.STDOUT,
-      "rho:io:stdoutAck"             -> FixedChannels.STDOUT_ACK,
-      "rho:io:stderr"                -> FixedChannels.STDERR,
-      "rho:io:stderrAck"             -> FixedChannels.STDERR_ACK,
-      "rho:registry:lookup"          -> FixedChannels.REG_LOOKUP,
-      "rho:registry:insertArbitrary" -> FixedChannels.REG_INSERT_RANDOM
+      "rho:io:stdout"                -> Bundle(FixedChannels.STDOUT, writeFlag = true),
+      "rho:io:stdoutAck"             -> Bundle(FixedChannels.STDOUT_ACK, writeFlag = true),
+      "rho:io:stderr"                -> Bundle(FixedChannels.STDERR, writeFlag = true),
+      "rho:io:stderrAck"             -> Bundle(FixedChannels.STDERR_ACK, writeFlag = true),
+      "rho:registry:lookup"          -> Bundle(FixedChannels.REG_LOOKUP, writeFlag = true),
+      "rho:registry:insertArbitrary" -> Bundle(FixedChannels.REG_INSERT_RANDOM, writeFlag = true),
+      "rho:registry:insertSigned:ed25519" -> Bundle(
+        FixedChannels.REG_INSERT_SIGNED,
+        writeFlag = true
+      )
     )
 
     lazy val dispatchTable: RhoDispatchMap =
@@ -250,11 +312,12 @@ object Runtime {
         (FixedChannels.BLAKE2B256_HASH, 2, None, BLAKE2B256_HASH),
         (FixedChannels.SECP256K1_VERIFY, 4, None, SECP256K1_VERIFY),
         (FixedChannels.REG_LOOKUP, 2, None, REG_PUBLIC_LOOKUP),
-        (FixedChannels.REG_INSERT_RANDOM, 2, None, REG_PUBLIC_REGISTER_RANDOM)
+        (FixedChannels.REG_INSERT_RANDOM, 2, None, REG_PUBLIC_REGISTER_RANDOM),
+        (FixedChannels.REG_INSERT_SIGNED, 4, None, REG_PUBLIC_REGISTER_SIGNED)
       )
     }
 
-    val res: Seq[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]] =
+    val res: Seq[Option[(TaggedContinuation, Seq[ListParWithRandomAndPhlos])]] =
       introduceSystemProcesses(space, replaySpace, procDefs)
 
     assert(res.forall(_.isEmpty))

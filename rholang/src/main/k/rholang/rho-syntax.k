@@ -162,7 +162,7 @@ syntax HigherProcNoVars ::=
               | "match" HigherProc "{" HigherMatchCases "}"
               | ProcPatNoVars
               // Syntax for new names--the whole reason for "Higher" anything
-              | "#(" Int ")"
+              | "unforgeable(" Int ")"
               | HigherProc "|" HigherProc [left]
               | "{" HigherProc "}" [bracket]
 
@@ -238,7 +238,7 @@ syntax HigherProcPatNoVars ::=
             // Match
             | "match" HigherProcPat "{" HigherMatchCasesPat "}"
             // Syntax for new names--the whole reason for "Higher" anything
-            | "#(" Int ")"
+            | "unforgeable(" Int ")"
             // Parallel
             | HigherProcPat "|" HigherProcPat [left,ndbParallelProcesses]
             // Bracket
@@ -260,6 +260,10 @@ syntax KResult ::= Int
               | HigherNameNoVars
               | Id
               | Bool
+
+// For exact text matching
+syntax String ::= "toString(" HigherPat ")"
+
 
 // In Rholang we distinguish between variables and wildcards
 syntax Var ::=
@@ -300,6 +304,10 @@ syntax Fun  ::=
               | "fv(" String "," HigherPat "," Id ")"
               // For determining if the entire program has free variables in it
               | "fvInitial(" HigherPat ")"
+              // A function to determine if two names are equivalent
+              | "areNameEquivalent(" HigherNamePat "," HigherNamePat ")"
+              // A function to determine alpha equivalence
+              | "areAlphaEquivalent(" HigherPat "," HigherPat ")"
 
 // Some syntax specifically for the "match" process
 syntax MatchCase  ::= ProcPat "=>" "{" Proc "}" [binder]
@@ -320,5 +328,109 @@ syntax HigherMatchCasePat  ::= HigherProcPat "=>" "{" HigherProcPat "}" [binder]
             | HigherMatchCase
 syntax HigherMatchCasesPat ::= List{HigherMatchCasePat, " "}
             | HigherMatchCases
+
+// *******************************************************************
+//       Syntax specifically for the SENDING-RECEIVING module
+// *******************************************************************
+
+// Some syntax for the data we need to keep on our in and out cells
+syntax InOutData ::= Int ";" Set
+
+// *******************************************************************
+//       Syntax specifically for the MATCHING-FUNCTION module
+// *******************************************************************
+
+// Some needed syntax for matching
+// This distinguishes between Processes and Names with and without variables
+syntax ProcOrName ::= Id
+              | ProcOrNameNoVars
+              | Name
+              | Proc
+
+syntax HigherProcOrHigherName ::= Id
+              | HigherProcOrHigherNameNoVars
+              | HigherName
+              | HigherProc
+
+// For matching, we need to make a distinction between variables and no variables
+syntax ProcOrNameNoVars ::= NameNoVars
+              | ProcNoVars
+
+syntax HigherProcOrHigherNameNoVars ::= HigherNameNoVars
+              | HigherProcNoVars
+
+syntax StringlessMatchFormSyntax ::=
+              // Quote, Eval and Var
+                "[" HigherPat "]"
+              // Listen and Persistent Listen, as well as Contracts
+              | "[" HigherNamePat "][" HigherNamePat "][" HigherProcPat "]"
+              // New
+              | "[" Ids "][" HigherProcPat "]"
+              // Send
+              | "[" HigherNamePat "][" HigherProcPat "]"
+              // Match
+              | "[" HigherProcPat "][" HigherMatchCasesPat "]"
+              | "[" HigherProcPat "][" HigherProcPat "]"
+              // Logical And's and Or's
+              | "[" String "][" HigherPat "][" HigherPat "]"
+              // Nil
+              | "[" "]"
+              // Hashed new HigherNames
+              | "[" Int "]"
+              | "[" HigherProcPat "][" HigherProcPat "]"
+
+// Syntax which is needed for various matching operations
+syntax CanBeStdMatched ::= Id
+              | "intostdmatchform(" HigherPat ")"
+              | "intostdtfmatchform(" HigherPat ")"
+              | String StringlessMatchFormSyntax
+              | Ground
+              | HigherNameNoVars
+              | KResult
+
+// *******************************************************************
+//        Syntax specifically for the MATCHING-WITH-PAR module
+// *******************************************************************
+
+// Some syntax specifically for matching with "|"
+
+// When matching against the pattern "par" the matching process becomes a little more complicated
+syntax PatternMatchingCells ::=
+   "[" String "][" HigherProcPat "][" HigherProcPat "][" HigherProcPat "][" Int "]["
+                                                                           HigherProcPat "]{"Set"}"
+ | "[" HigherProcPat "][" HigherProcPat "][" HigherProcPat "][" HigherProcPat "][" HigherProcPat "]"
+     // For variable matching at the end
+ | "[" HigherProcPat "][" HigherProcPat "][" HigherProcPat "][" HigherProcPat "]["
+                                                                  HigherProcPat "]{"HigherProcPat"}"
+
+// *******************************************************************
+//           Syntax specifically for the FREE module
+// *******************************************************************
+
+// First we construct the syntax for our nodes
+syntax Ints ::= List{ Int, ","}
+
+syntax Set ::= "List2Set(" List ")"
+syntax List ::= "Set2List(" Set ")"
+
+syntax HigherProcsOrHigherNames ::= List{HigherProcOrHigherName, ","}
+              | HigherProcs
+              | HigherNames
+
+// Sets and Lists
+syntax SetOrList ::= Set
+              | List
+
+syntax NodeSyntax ::=
+            // For normal nodes, the syntax is
+            //[ Id ][ Proc/Name ][ Parent ][ Children ]{ Set of free vars }[ Node constructed ]
+             "[" Int "][" HigherPat "][" Exp "][" List "]{" SetOrList "}[" Bool "]"
+            // Nodes corresponding to binders (bnodes) are given the syntax
+            // [ Id ][ Parent ][ Plus ID ; Plus Process/Name ][ Minus ID ; Minus Process/Name
+            //                                        ]{ Set of free vars }[ Node constructed (T/F)]
+          | "[" Int "][" Exp "][" Int ";" HigherPats "][" List ";" HigherPats "]{" SetOrList "}[" Bool "]"
+            // We need to make sure that a binder doesn't try to bind two variables twice. To do
+            // this, we put a special marker on those elements corresponding to a binder
+          //| "[" Int "][" HigherPat "][" Exp "][" List "]{" SetOrList "}{" List "}{""}[" Bool "]"
 
 endmodule

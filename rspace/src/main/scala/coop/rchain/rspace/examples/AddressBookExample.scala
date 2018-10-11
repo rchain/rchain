@@ -3,12 +3,14 @@ package coop.rchain.rspace.examples
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
 import java.nio.file.{Files, Path}
 
+import cats.Id
+import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Language.ignore
-import coop.rchain.rspace.util.runKs
+import coop.rchain.rspace.util._
 import scodec.bits.ByteVector
 
 import scala.collection.immutable.Seq
@@ -77,6 +79,8 @@ object AddressBookExample {
   }
 
   object implicits {
+
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
 
     /* Now I will troll Greg... */
 
@@ -191,7 +195,7 @@ object AddressBookExample {
     val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
     val space =
-      RSpace.create[Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
+      RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
 
     Console.printf("\nExample One: Let's consume and then produce...\n")
 
@@ -230,7 +234,7 @@ object AddressBookExample {
     val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
     val space =
-      RSpace.create[Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
+      RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
 
     Console.printf("\nExample Two: Let's produce and then consume...\n")
 
@@ -321,7 +325,7 @@ object AddressBookExample {
     // Let's define our store
     val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
     val space =
-      RSpace.create[Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
+      RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
     try {
       f(space)
     } finally {

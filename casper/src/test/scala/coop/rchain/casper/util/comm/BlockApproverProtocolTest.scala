@@ -2,7 +2,7 @@ package coop.rchain.casper.util.comm
 
 import cats.Id
 import coop.rchain.casper.HashSetCasperTest
-import coop.rchain.casper.genesis.contracts.{PreWallet, ProofOfStakeValidator}
+import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.{BlockStoreTestFixture, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -73,8 +73,15 @@ object BlockApproverProtocolTest {
     val deployTimestamp = 1L
     val validators      = bonds.map(b => ProofOfStakeValidator(b._1, b._2)).toSeq
 
-    val genesis = HashSetCasperTest.buildGenesis(wallets, bonds, deployTimestamp)
-    val node    = HashSetCasperTestNode.network(Vector(sk), genesis).head
+    val genesis = HashSetCasperTest.buildGenesis(
+      wallets,
+      bonds,
+      1L,
+      Long.MaxValue,
+      Faucet.noopFaucet,
+      deployTimestamp
+    )
+    val node = HashSetCasperTestNode.network(Vector(sk), genesis).head
 
     new BlockApproverProtocol(
       node.validatorId,
@@ -82,6 +89,9 @@ object BlockApproverProtocolTest {
       runtimeManager,
       bonds,
       wallets,
+      1L,
+      Long.MaxValue,
+      false,
       requiredSigs
     ) -> node
   }

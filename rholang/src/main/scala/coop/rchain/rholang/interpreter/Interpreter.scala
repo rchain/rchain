@@ -5,15 +5,17 @@ import java.io.Reader
 import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits.VectorPar
-import coop.rchain.models.rholang.sort.Sortable
+import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
 import coop.rchain.rholang.interpreter.errors.{
   InterpreterError,
   LexerError,
   SyntaxError,
   TopLevelFreeVariablesNotAllowedError,
+  TopLevelLogicalConnectivesNotAllowedError,
   TopLevelWildcardsNotAllowedError,
   UnrecognizedInterpreterError
 }
@@ -73,13 +75,26 @@ object Interpreter {
   ): M[ProcVisitOutputs] =
     ProcNormalizeMatcher.normalizeMatch[M](term, inputs).flatMap { normalizedTerm =>
       if (normalizedTerm.knownFree.count > 0) {
-        if (normalizedTerm.knownFree.wildcards.isEmpty) {
+        if (normalizedTerm.knownFree.wildcards.isEmpty && normalizedTerm.knownFree.logicalConnectives.isEmpty) {
           val topLevelFreeList = normalizedTerm.knownFree.env.map {
             case (name, (_, _, line, col)) => s"$name at $line:$col"
           }
           sync.raiseError(
             TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString("", ", ", ""))
           )
+        } else if (normalizedTerm.knownFree.logicalConnectives.nonEmpty) {
+          def connectiveInstanceToString(conn: ConnectiveInstance): String =
+            if (conn.isConnAndBody) "/\\ (conjunction)"
+            else if (conn.isConnOrBody) "\\/ (disjunction)"
+            else if (conn.isConnNotBody) "~ (negation)"
+            else conn.toString
+
+          val connectives = normalizedTerm.knownFree.logicalConnectives
+            .map {
+              case (connType, line, col) => s"${connectiveInstanceToString(connType)} at $line:$col"
+            }
+            .mkString("", ", ", "")
+          sync.raiseError(TopLevelLogicalConnectivesNotAllowedError(connectives))
         } else {
           val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map {
             case (line, col) => s"_ (wildcard) at $line:$col"
@@ -103,7 +118,7 @@ object Interpreter {
 
   def evaluate(runtime: Runtime, normalizedTerm: Par): Task[EvaluateResult] = {
     implicit val rand      = Blake2b512Random(128)
-    val evaluatePhlosLimit = Cost(Integer.MAX_VALUE)
+    val evaluatePhlosLimit = Cost(Integer.MAX_VALUE) //This is OK because evaluate is not called on deploy
     for {
       checkpoint <- Task.now(runtime.space.createCheckpoint())
       _          <- runtime.reducer.setAvailablePhlos(evaluatePhlosLimit)

@@ -2,6 +2,7 @@
 
 //based on http://erights.org/elib/capability/ode/ode-capabilities.html#simple-money
 //requires NonNegativeNumber
+
 contract @("MakeMint", "int2NN")(@x, return) = {
   new nnCh in {
     @"NonNegativeNumber"!(x, *nnCh) | for(@nn <- nnCh) {
@@ -10,7 +11,7 @@ contract @("MakeMint", "int2NN")(@x, return) = {
   }
 } |
 contract @"MakeMint"(return) = {
-  new thisMint, internalMakePurse in {
+  new thisMint, internalMakePurse, decr in {
     contract @(*thisMint, "makePurse")(@init, return) = {
       new balanceCh in {
         @("MakeMint", "int2NN")!(init, *balanceCh) | for(@balance <- balanceCh) {
@@ -20,7 +21,7 @@ contract @"MakeMint"(return) = {
     } |
     contract internalMakePurse(@balance, return) = {
       //balance must be a name that NonNegativeNumber contract is listening on
-      new thisPurse, decr in {
+      new thisPurse in {
         contract @(*thisPurse, *decr)(@amount, success) = { @(balance, "sub")!(amount, *success) } |
         contract @(*thisPurse, "getBalance")(return) = { @(balance, "value")!(*return) } |
         contract @(*thisPurse, "sprout")(return) = { @(*thisMint, "makePurse")!(0, *return) } |
@@ -38,38 +39,14 @@ contract @"MakeMint"(return) = {
             }
           }
         } |
-        contract @(*thisPurse, "getDecr")(return) = { 
-          new challenge, responseCh, correctAnswerCh in {
-            correctAnswerCh!(bundle0{*thisMint | *challenge}) |
-            for(@[response, answerCh] <- responseCh; @correctAnswer <- correctAnswerCh) {
-              if (response == correctAnswer) {
-                @answerCh!([(*thisPurse, *decr)])
-              } else {
-                @answerCh!([])
-              }
-            } |
-            return!([*challenge, *responseCh])
-          }
-        } |
         contract @(*thisPurse, "deposit")(@amount, @src, success) = {
           new result in {
-            @(src, "getDecr")!(*result) | //call getDecr function in src
-            for(@[challenge, response] <- result) { 
-              @response!([bundle0{*thisMint | challenge}, *result]) | //respond to challenge
-              for(@answer <- result) {
-                match answer {
-                  []        => { success!(false) } //did not meet challenge
-                  [srcDecr] => {
-                    @srcDecr!(amount, *result) | //call src decr function
-                    for(@decrSuccess <- result) {
-                      if (decrSuccess) {
-                        @(balance, "add")!(amount, *success)
-                      } else {
-                        success!(false)  //add transferred amount to this purse
-                      }
-                    }
-                  }
-                }
+            @(src, *decr)!(amount, *result) | //call src decr function.
+            for(@decrSuccess <- result) {
+              if (decrSuccess) {
+                @(balance, "add")!(amount, *success) // add transferred amount to this purse
+              } else {
+                success!(false) 
               }
             }
           }
@@ -80,3 +57,4 @@ contract @"MakeMint"(return) = {
     return!(*thisMint)
   }
 }
+

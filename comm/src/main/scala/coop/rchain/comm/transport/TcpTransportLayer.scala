@@ -16,6 +16,11 @@ import io.grpc.netty._
 import io.netty.handler.ssl.{ClientAuth, SslContext, SslContextBuilder}
 import monix.eval._
 import monix.execution._
+import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
+import coop.rchain.comm.rp.ProtocolHelper
+import monix.eval._
+import monix.execution._
+import monix.reactive._
 
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
@@ -74,6 +79,7 @@ class TcpTransportLayer(
       c <- Task.delay {
             NettyChannelBuilder
               .forAddress(peer.endpoint.host, peer.endpoint.tcpPort)
+              .executor(scheduler)
               .maxInboundMessageSize(maxMessageSize)
               .negotiationType(NegotiationType.TLS)
               .sslContext(clientSslContext)
@@ -113,12 +119,43 @@ class TcpTransportLayer(
                  case Some(PeerUnavailable()) => disconnect(peer)
                  case _                       => Task.unit
                }
+      _ <- Task.unit.asyncBoundary // return control to caller thread
     } yield result
 
   private def transport(peer: PeerNode, enforce: Boolean)(
       f: TransportLayerStub => Task[TLResponse]
   ): Task[CommErr[Option[Protocol]]] =
     withClient(peer, enforce)(f).attempt.map(processResponse(peer, _))
+
+  def chunkIt(blob: Blob): List[Chunk] = {
+
+    def header: Chunk =
+      Chunk().withHeader(
+        ChunkHeader().withSender(ProtocolHelper.node(blob.sender)).withTypeId(blob.packet.typeId)
+      )
+
+    // FIX-ME actually chunk the data
+    def data: List[Chunk] = List(Chunk().withData(ChunkData().withContentData(blob.packet.content)))
+
+    header +: data
+  }
+
+  /**
+    * This implmementation is temporary, it sequentially sends blob to each peers.
+    * TODO Provide solution that stacks blob on a queue that is later consumed
+    */
+  def stream(peers: Seq[PeerNode], blob: Blob): Task[Unit] =
+    peers.toList
+      .traverse(
+        peer =>
+          withClient(peer, enforce = false) { stub =>
+            stub.stream(Observable(chunkIt(blob): _*))
+          }.attempt.flatMap {
+            case Left(error) => log.debug(s"Error while streaming packet, error: $error")
+            case Right(_)    => Task.unit
+          }
+      )
+      .as(())
 
   private def processResponse(
       peer: PeerNode,
@@ -175,26 +212,34 @@ class TcpTransportLayer(
 
   private def receiveInternal(
       parallelism: Int
-  )(dispatch: Protocol => Task[CommunicationResponse]): Task[Cancelable] = {
+  )(
+      dispatch: Protocol => Task[CommunicationResponse],
+      handleStreamed: Blob => Task[Unit]
+  ): Task[Cancelable] = {
 
     def dispatchInternal: ServerMessage => Task[Unit] = {
       // TODO: consider logging on failure (Left)
       case Tell(protocol) => dispatch(protocol).attempt.void
-      case Ask(protocol, sender) =>
+      case Ask(protocol, handle) if !handle.complete =>
         dispatch(protocol).attempt.map {
-          case Left(e)         => sender.failWith(e)
-          case Right(response) => sender.reply(response)
+          case Left(e)         => handle.failWith(e)
+          case Right(response) => handle.reply(response)
         }.void
+      case StreamMessage(blob) => handleStreamed(blob)
+      case _                   => Task.unit // sender timeout
     }
 
     Task.delay {
       new TcpServerObservable(port, serverSslContext, maxMessageSize)
         .mapParallelUnordered(parallelism)(dispatchInternal)
-        .subscribe()
+        .subscribe()(Scheduler.fixedPool("tl-dispatcher", parallelism))
     }
   }
 
-  def receive(dispatch: Protocol => Task[CommunicationResponse]): Task[Unit] =
+  def receive(
+      dispatch: Protocol => Task[CommunicationResponse],
+      handleStreamed: Blob => Task[Unit]
+  ): Task[Unit] =
     cell.modify { s =>
       for {
         server <- s.server match {
@@ -203,8 +248,8 @@ class TcpTransportLayer(
                        new RuntimeException("TransportLayer server is already started")
                      )
                    case _ =>
-                     val parallelism = Runtime.getRuntime.availableProcessors()
-                     receiveInternal(parallelism)(dispatch)
+                     val parallelism = Math.max(Runtime.getRuntime.availableProcessors(), 2)
+                     receiveInternal(parallelism)(dispatch, handleStreamed)
                  }
       } yield s.copy(server = Some(server))
 

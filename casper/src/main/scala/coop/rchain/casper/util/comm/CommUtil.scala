@@ -3,7 +3,6 @@ package coop.rchain.casper.util.comm
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import com.google.protobuf.ByteString
 import cats.Monad
-import cats.effect.Timer
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
@@ -60,7 +59,7 @@ object CommUtil {
       _     <- TransportLayer[F].broadcast(peers, msg)
     } yield ()
 
-  def requestApprovedBlock[F[_]: Monad: Capture: LastApprovedBlock: Log: Time: Timer: Metrics: TransportLayer: ConnectionsCell: ErrorHandler: PacketHandler: RPConfAsk](
+  def requestApprovedBlock[F[_]: Monad: Capture: LastApprovedBlock: Log: Time: Metrics: TransportLayer: ConnectionsCell: ErrorHandler: PacketHandler: RPConfAsk](
       delay: FiniteDuration
   ): F[Unit] = {
     val request = ApprovedBlockRequest("PleaseSendMeAnApprovedBlock").toByteString
@@ -90,7 +89,7 @@ object CommUtil {
                       (maybeSender, maybePacket) match {
                         case (Some(sender), Some(packet)) =>
                           for {
-                            _ <- HandleMessages.handlePacket[F](sender, packet)
+                            _ <- PacketHandler[F].handlePacket(sender, packet)
                             l <- LastApprovedBlock[F].get
                             _ <- l.fold(askPeers(rest, local))(_ => ().pure[F])
                           } yield ()
@@ -108,7 +107,7 @@ object CommUtil {
               }
         } yield ()
 
-      case Nil => implicitly[Timer[F]].sleep(delay) >> requestApprovedBlock[F](delay)
+      case Nil => Time[F].sleep(delay) >> requestApprovedBlock[F](delay)
     }
 
     for {

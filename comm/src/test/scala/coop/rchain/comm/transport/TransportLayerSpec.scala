@@ -6,7 +6,8 @@ import cats._
 import cats.implicits._
 
 import coop.rchain.comm._, rp.ProtocolHelper
-import coop.rchain.comm.protocol.routing.Protocol
+import coop.rchain.comm.protocol.routing.{Packet, Protocol}
+import coop.rchain.casper.protocol.{BlockApproval => CasperBlockApproval}
 import coop.rchain.comm.CommError.CommErr
 
 import org.scalatest._
@@ -20,6 +21,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
   val transportLayerName: String = this.getClass.getSimpleName.replace("Spec", "")
 
   transportLayerName when {
+
     "doing a round trip to remote peer" when {
       "everything is fine" should {
         "send and receive the message" in
@@ -41,8 +43,8 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
                 protocol1.message shouldBe 'heartbeatResponse
             }
 
-            result.receivedMessages should have length 1
-            val (_, protocol2)           = result.receivedMessages.head
+            protocolDispatcher.received should have length 1
+            val (_, protocol2)           = protocolDispatcher.received.head
             val sender: Option[PeerNode] = ProtocolHelper.sender(protocol2)
             sender shouldBe 'defined
             sender.get shouldEqual result.localNode
@@ -70,7 +72,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
       "there is no response body" should {
         "fail with a communication error" in
-          new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.withoutMessageDispatcher) {
+          new TwoNodesRuntime[CommErr[Protocol]]() {
             def execute(
                 transportLayer: TransportLayer[F],
                 local: PeerNode,
@@ -125,70 +127,38 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
     "sending a message" should {
       "deliver the message" in
-        new TwoNodesRuntime[CommErr[Unit]](Dispatcher.dispatcherWithLatch[F]()) {
+        new TwoNodesRuntime[CommErr[Unit]]() {
           def execute(
               transportLayer: TransportLayer[F],
               local: PeerNode,
               remote: PeerNode
-          ): F[CommErr[Unit]] =
-            for {
-              r <- sendHeartbeat(transportLayer, local, remote)
-              _ = await()
-            } yield r
+          ): F[CommErr[Unit]] = sendHeartbeat(transportLayer, local, remote)
 
           val result: TwoNodesResult = run()
 
-          result.receivedMessages should have length 1
-          val (_, protocol2)           = result.receivedMessages.head
+          protocolDispatcher.received should have length 1
+          val (_, protocol2)           = protocolDispatcher.received.head
           val sender: Option[PeerNode] = ProtocolHelper.sender(protocol2)
           sender shouldBe 'defined
           sender.get shouldEqual result.localNode
           protocol2.message shouldBe 'heartbeat
         }
-
-      "wait for a response" in
-        new TwoNodesRuntime[Long](Dispatcher.dispatcherWithLatch[F]()) {
-          def execute(
-              transportLayer: TransportLayer[F],
-              local: PeerNode,
-              remote: PeerNode
-          ): F[Long] =
-            for {
-              _ <- sendHeartbeat(transportLayer, local, remote)
-              t = System.currentTimeMillis()
-              _ = await()
-            } yield t
-
-          val result: TwoNodesResult = run()
-
-          val sent = result()
-          sent should be > result.lastProcessedMessageTimestamp
-        }
-
-      "wait for message being delivered" in {
-        // future feature, not yet implemented
-        pending
-      }
     }
 
     "broadcasting a message" should {
       "send the message to all peers" in
-        new ThreeNodesRuntime[Seq[CommErr[Unit]]](Dispatcher.dispatcherWithLatch[F](2)) {
+        new ThreeNodesRuntime[Seq[CommErr[Unit]]]() {
           def execute(
               transportLayer: TransportLayer[F],
               local: PeerNode,
               remote1: PeerNode,
               remote2: PeerNode
-          ): F[Seq[CommErr[Unit]]] =
-            for {
-              r <- broadcastHeartbeat(transportLayer, local, remote1, remote2)
-              _ = await()
-            } yield r
+          ): F[Seq[CommErr[Unit]]] = broadcastHeartbeat(transportLayer, local, remote1, remote2)
 
           val result: ThreeNodesResult = run()
 
-          result.receivedMessages should have length 2
-          val Seq((r1, p1), (r2, p2))   = result.receivedMessages
+          protocolDispatcher.received should have length 2
+          val Seq((r1, p1), (r2, p2))   = protocolDispatcher.received
           val sender1: Option[PeerNode] = ProtocolHelper.sender(p1)
           val sender2: Option[PeerNode] = ProtocolHelper.sender(p2)
           sender1 shouldBe 'defined
@@ -205,7 +175,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
     "shutting down" when {
       "doing a round trip" should {
         "not send the message" in
-          new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.heartbeatResponseDispatcher[F]) {
+          new TwoNodesRuntime[CommErr[Protocol]]() {
             def execute(
                 transportLayer: TransportLayer[F],
                 local: PeerNode,
@@ -223,13 +193,13 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
                 e.getMessage shouldEqual "The transport layer has been shut down"
             }
 
-            result.receivedMessages shouldBe 'empty
+            protocolDispatcher.received shouldBe 'empty
           }
       }
 
       "sending a message" should {
         "not send the message" in
-          new TwoNodesRuntime[CommErr[Unit]](Dispatcher.dispatcherWithLatch[F]()) {
+          new TwoNodesRuntime[CommErr[Unit]]() {
             def execute(
                 transportLayer: TransportLayer[F],
                 local: PeerNode,
@@ -238,18 +208,16 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
               for {
                 _ <- transportLayer.shutdown(ProtocolHelper.disconnect(local))
                 r <- sendHeartbeat(transportLayer, local, remote)
-                _ = await()
               } yield r
 
-            val result: TwoNodesResult = run()
-
-            result.receivedMessages shouldBe 'empty
+            run()
+            protocolDispatcher.received shouldBe 'empty
           }
       }
 
       "broadcasting a message" should {
         "not send any messages" in
-          new ThreeNodesRuntime[Seq[CommErr[Unit]]](Dispatcher.dispatcherWithLatch[F](2)) {
+          new ThreeNodesRuntime[Seq[CommErr[Unit]]]() {
             def execute(
                 transportLayer: TransportLayer[F],
                 local: PeerNode,
@@ -259,13 +227,61 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
               for {
                 _ <- transportLayer.shutdown(ProtocolHelper.disconnect(local))
                 r <- broadcastHeartbeat(transportLayer, local, remote1, remote2)
-                _ = await()
               } yield r
 
-            val result: ThreeNodesResult = run()
+            run()
 
-            result.receivedMessages shouldBe 'empty
+            protocolDispatcher.received shouldBe 'empty
           }
+      }
+
+    }
+
+    "streamBlob" should {
+      "send a blob and receive by (single) remote side" in {
+        new TwoNodesRuntime[Unit](Dispatcher.heartbeatResponseDispatcher[F]) {
+          def execute(
+              transportLayer: TransportLayer[F],
+              local: PeerNode,
+              remote: PeerNode
+          ): F[Unit] =
+            transportLayer.stream(
+              List(remote),
+              Blob(local, Packet("N/A", ProtocolHelper.toProtocolBytes("points don't matter")))
+            )
+
+          run()
+
+          streamDispatcher.received should have length 1
+          val (_, blob) = streamDispatcher.received.head
+          blob.packet.typeId shouldBe ("N/A")
+          blob.packet.content shouldBe (ProtocolHelper.toProtocolBytes("points don't matter"))
+        }
+      }
+
+      "send a blob and receive by (multiple) remote side" in {
+        new ThreeNodesRuntime[Unit](Dispatcher.heartbeatResponseDispatcher[F]) {
+          def execute(
+              transportLayer: TransportLayer[F],
+              local: PeerNode,
+              remote1: PeerNode,
+              remote2: PeerNode
+          ): F[Unit] =
+            transportLayer.stream(
+              List(remote1, remote2),
+              Blob(local, Packet("N/A", ProtocolHelper.toProtocolBytes("points don't matter")))
+            )
+
+          run()
+
+          streamDispatcher.received should have length 2
+          val (_, blob1) = streamDispatcher.received(0)
+          val (_, blob2) = streamDispatcher.received(1)
+          blob1.packet.typeId shouldBe ("N/A")
+          blob1.packet.content shouldBe (ProtocolHelper.toProtocolBytes("points don't matter"))
+          blob2.packet.typeId shouldBe ("N/A")
+          blob2.packet.content shouldBe (ProtocolHelper.toProtocolBytes("points don't matter"))
+        }
       }
     }
   }

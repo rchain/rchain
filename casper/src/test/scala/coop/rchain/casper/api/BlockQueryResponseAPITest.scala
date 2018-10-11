@@ -64,70 +64,78 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
 
   // TODO: Test tsCheckpoint:
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
-  "getBlockQueryResponse" should "return successful block info response" in withStore {
-    implicit blockStore =>
-      implicit val casperEffect = NoOpsCasperEffect(
-        HashMap[BlockHash, BlockMessage](
-          (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
-          (ProtoUtil.stringToByteString(secondHashString), secondBlock)
+  "showBlock" should "return successful block info response" in withStore { implicit blockStore =>
+    val dag = BlockDag.empty
+      .copy(
+        dataLookup = Map(
+          ProtoUtil.stringToByteString(genesisHashString) -> BlockMetadata
+            .fromBlock(genesisBlock),
+          ProtoUtil.stringToByteString(secondHashString) -> BlockMetadata.fromBlock(secondBlock)
         )
-      )(syncId, blockStore)
-      implicit val logEff = new LogStub[Id]()(syncId)
-      implicit val casperRef = {
-        val tmp = MultiParentCasperRef.of[Id]
-        tmp.set(casperEffect)
-        tmp
-      }
-      implicit val turanOracleEffect: SafetyOracle[Id] =
-        SafetyOracle.turanOracle[Id](syncId, blockStore)
-      val q = BlockQuery(hash = secondBlockQuery)
-      val blockQueryResponse = BlockAPI.getBlockQueryResponse[Id](q)(
-        syncId,
-        casperRef,
-        logEff,
-        turanOracleEffect,
-        blockStore
       )
-      val blockInfo = blockQueryResponse.blockInfo.get
-      blockQueryResponse.status should be("Success")
-      blockInfo.blockHash should be(secondHashString)
-      blockInfo.blockSize should be(secondBlock.serializedSize.toString)
-      blockInfo.blockNumber should be(blockNumber)
-      blockInfo.version should be(version)
-      blockInfo.deployCount should be(deployCount)
-      blockInfo.faultTolerance should be(faultTolerance)
-      blockInfo.mainParentHash should be(genesisHashString)
-      blockInfo.parentsHashList should be(parentsString)
-      blockInfo.sender should be(secondBlockSenderString)
-      blockInfo.shardId should be(shardId)
+    implicit val casperEffect = NoOpsCasperEffect(
+      HashMap[BlockHash, BlockMessage](
+        (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
+        (ProtoUtil.stringToByteString(secondHashString), secondBlock)
+      ),
+      Vector(BlockMessage()),
+      dag
+    )(syncId, blockStore)
+    implicit val logEff = new LogStub[Id]()(syncId)
+    implicit val casperRef = {
+      val tmp = MultiParentCasperRef.of[Id]
+      tmp.set(casperEffect)
+      tmp
+    }
+    implicit val turanOracleEffect: SafetyOracle[Id] =
+      SafetyOracle.turanOracle[Id](syncId)
+    val q = BlockQuery(hash = secondBlockQuery)
+    val blockQueryResponse = BlockAPI.showBlock[Id](q)(
+      syncId,
+      casperRef,
+      logEff,
+      turanOracleEffect,
+      blockStore
+    )
+    val blockInfo = blockQueryResponse.blockInfo.get
+    blockQueryResponse.status should be("Success")
+    blockInfo.blockHash should be(secondHashString)
+    blockInfo.blockSize should be(secondBlock.serializedSize.toString)
+    blockInfo.blockNumber should be(blockNumber)
+    blockInfo.version should be(version)
+    blockInfo.deployCount should be(deployCount)
+    blockInfo.faultTolerance should be(faultTolerance)
+    blockInfo.mainParentHash should be(genesisHashString)
+    blockInfo.parentsHashList should be(parentsString)
+    blockInfo.sender should be(secondBlockSenderString)
+    blockInfo.shardId should be(shardId)
   }
 
-  "getBlockQueryResponse" should "return error when no block exists" in withStore {
-    implicit blockStore =>
-      implicit val casperEffect = NoOpsCasperEffect(
-        HashMap[BlockHash, BlockMessage](
-          (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
-          (ProtoUtil.stringToByteString(secondHashString), secondBlock)
-        )
-      )(syncId, blockStore)
-      implicit val logEff = new LogStub[Id]()(syncId)
-      implicit val casperRef = {
-        val tmp = MultiParentCasperRef.of[Id]
-        tmp.set(casperEffect)
-        tmp
-      }
-      implicit val turanOracleEffect: SafetyOracle[Id] =
-        SafetyOracle.turanOracle[Id](syncId, blockStore)
-      val q = BlockQuery(hash = badTestHashQuery)
-      val blockQueryResponse = BlockAPI.getBlockQueryResponse[Id](q)(
-        syncId,
-        casperRef,
-        logEff,
-        turanOracleEffect,
-        blockStore
+  "showBlock" should "return error when no block exists" in withStore { implicit blockStore =>
+    implicit val casperEffect = NoOpsCasperEffect(
+      HashMap[BlockHash, BlockMessage](
+        (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
+        (ProtoUtil.stringToByteString(secondHashString), secondBlock)
       )
-      blockQueryResponse.status should be(
-        s"Error: Failure to find block with hash ${badTestHashQuery}"
-      )
+    )(syncId, blockStore)
+    implicit val logEff = new LogStub[Id]()(syncId)
+    implicit val casperRef = {
+      val tmp = MultiParentCasperRef.of[Id]
+      tmp.set(casperEffect)
+      tmp
+    }
+    implicit val turanOracleEffect: SafetyOracle[Id] =
+      SafetyOracle.turanOracle[Id](syncId)
+    val q = BlockQuery(hash = badTestHashQuery)
+    val blockQueryResponse = BlockAPI.showBlock[Id](q)(
+      syncId,
+      casperRef,
+      logEff,
+      turanOracleEffect,
+      blockStore
+    )
+    blockQueryResponse.status should be(
+      s"Error: Failure to find block with hash ${badTestHashQuery}"
+    )
   }
 }

@@ -14,7 +14,7 @@ class StackSafetySpec extends FlatSpec with Matchers {
 
   val mapSize     = 10L * 1024L * 1024L
   val tmpPrefix   = "rspace-store-"
-  val maxDuration = 5.seconds
+  val maxDuration = 10.seconds
 
   val runtime = Runtime.create(Files.createTempDirectory(tmpPrefix), mapSize)
 
@@ -25,7 +25,7 @@ class StackSafetySpec extends FlatSpec with Matchers {
       try {
         count(i + 1) //apparently, the try-catch is enough for tailrec to not work. Lucky!
       } catch {
-        case e: StackOverflowError => i
+        case _: StackOverflowError => i
       }
     println("About to find max recursion depth for this test run")
     val maxDepth = count(0)

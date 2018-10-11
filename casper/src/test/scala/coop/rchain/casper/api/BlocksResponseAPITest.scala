@@ -93,7 +93,7 @@ class BlocksResponseAPITest
   implicit val casperEffect: MultiParentCasper[Id] =
     NoOpsCasperEffect[Id](
       HashMap.empty[BlockHash, BlockMessage],
-      Estimator.tips[Id](chain, genesis),
+      Estimator.tips[Id](chain, genesis.blockHash),
       chain
     )(syncId, blockStoreEffect)
   implicit val logEff = new LogStub[Id]
@@ -104,11 +104,39 @@ class BlocksResponseAPITest
   }
   implicit val turanOracleEffect: SafetyOracle[Id] = SafetyOracle.turanOracle[Id]
 
-  "getBlocksResponse" should "return only blocks in the main chain" in {
+  "showMainChain" should "return only blocks in the main chain" in {
     val blocksResponse =
-      BlockAPI.getBlocksResponse[Id](syncId, casperRef, logEff, turanOracleEffect, blockStore)
-    val blocks = blocksResponse.blocks
+      BlockAPI.showMainChain[Id](Int.MaxValue)(
+        syncId,
+        casperRef,
+        logEff,
+        turanOracleEffect,
+        blockStore
+      )
     blocksResponse.length should be(5)
-    blocks.length should be(5)
+  }
+
+  "showBlocks" should "return all blocks" in {
+    val blocksResponse =
+      BlockAPI.showBlocks[Id](Int.MaxValue)(
+        syncId,
+        casperRef,
+        logEff,
+        turanOracleEffect,
+        blockStore
+      )
+    blocksResponse.length should be(8) // TODO: Switch to 4 when we implement block height correctly
+  }
+
+  it should "return until depth" in {
+    val blocksResponse =
+      BlockAPI.showBlocks[Id](2)(
+        syncId,
+        casperRef,
+        logEff,
+        turanOracleEffect,
+        blockStore
+      )
+    blocksResponse.length should be(2) // TODO: Switch to 3 when we implement block height correctly
   }
 }

@@ -9,7 +9,7 @@ __Note__ Successfully building from source requires attending to all of the prer
 * [sbt](https://www.scala-sbt.org/download.html)
 * For Rholang
      - [jflex](http://jflex.de/)
-     - Build [BNFC](http://bnfc.digitalgrammars.com/) from the following commit or later: [BNFC/bnfc@7c9e859](https://github.com/BNFC/bnfc/commit/7c9e859). Use the installation command `cabal install bnfc --global`.
+     - Build [BNFC](http://bnfc.digitalgrammars.com/) from the following commit or later: [BNFC/bnfc@7c9e859](https://github.com/BNFC/bnfc/commit/7c9e859). Official RChain builds use BNFC build from commit `ce7fe1fd08d9d808c14ff626c321218c5b73e38b`. Use the installation command `cabal install bnfc --global` or [stack](#build-bnfc-with-stack).
 
 #### Development environment on macOS
 
@@ -48,13 +48,14 @@ sudo pacman -S jdk8-openjdk sbt
 trizen -S jflex
 ```
 
-#### Building BNFC with [`stack`](https://docs.haskellstack.org)
+#### <a name="build-bnfc-with-stack"></a> Building BNFC with [`stack`](https://docs.haskellstack.org)
 ```
 git clone https://github.com/BNFC/bnfc
 cd bnfc
+git checkout ce7fe1fd08d9d808c14ff626c321218c5b73e38b
 stack init
+stack setup
 stack install
-cd -
 export PATH="$HOME/.local/bin:$HOME"
 ```
 

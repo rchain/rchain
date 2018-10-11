@@ -4,7 +4,7 @@ import cats.Monad
 import cats.implicits._
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.{BlockDag, PrettyPrinter}
+import coop.rchain.casper.{BlockDag, BlockMetadata, PrettyPrinter}
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
@@ -14,6 +14,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.models.{PCost, Par}
 import coop.rchain.rholang.build.CompiledRholangSource
+import coop.rchain.rholang.interpreter.accounting
 
 import scala.collection.immutable
 
@@ -22,30 +23,28 @@ object ProtoUtil {
    * c is in the blockchain of b iff c == b or c is in the blockchain of the main parent of b
    */
   // TODO: Move into BlockDAG and remove corresponding param once that is moved over from simulator
-  def isInMainChain[F[_]: Monad: BlockStore](
-      candidate: BlockMessage,
-      target: BlockMessage
-  ): F[Boolean] =
-    if (candidate == target) {
-      true.pure[F]
+  def isInMainChain(
+      dag: BlockDag,
+      candidateBlockHash: BlockHash,
+      targetBlockHash: BlockHash
+  ): Boolean =
+    if (candidateBlockHash == targetBlockHash) {
+      true
     } else {
-      val maybeMainParentHash = ProtoUtil.parentHashes(target).headOption
-      maybeMainParentHash match {
-        case Some(mainParentHash) =>
-          for {
-            mainParent <- BlockStore[F].get(mainParentHash)
-            isInMainChain <- mainParent match {
-                              case Some(parent) => isInMainChain[F](candidate, parent)
-                              case None         => false.pure[F]
-                            }
-          } yield isInMainChain
-        case None => false.pure[F]
+      dag.dataLookup.get(targetBlockHash) match {
+        case Some(targetBlockMeta) =>
+          targetBlockMeta.parents.headOption match {
+            case Some(mainParentHash) => isInMainChain(dag, candidateBlockHash, mainParentHash)
+            case None                 => false
+          }
+        case None => false
       }
     }
 
-  def getMainChain[F[_]: Monad: BlockStore](
+  def getMainChainUntilDepth[F[_]: Monad: BlockStore](
       estimate: BlockMessage,
-      acc: IndexedSeq[BlockMessage]
+      acc: IndexedSeq[BlockMessage],
+      depth: Int
   ): F[IndexedSeq[BlockMessage]] = {
     val parentsHashes       = ProtoUtil.parentHashes(estimate)
     val maybeMainParentHash = parentsHashes.headOption
@@ -54,7 +53,17 @@ object ProtoUtil {
                     case Some(mainParentHash) =>
                       for {
                         updatedEstimate <- unsafeGetBlock[F](mainParentHash)
-                        mainChain       <- getMainChain[F](updatedEstimate, acc :+ estimate)
+                        depthDelta      = blockNumber(updatedEstimate) - blockNumber(estimate)
+                        newDepth        = depth + depthDelta.toInt
+                        mainChain <- if (newDepth <= 0) {
+                                      (acc :+ estimate).pure[F]
+                                    } else {
+                                      getMainChainUntilDepth[F](
+                                        updatedEstimate,
+                                        acc :+ estimate,
+                                        newDepth
+                                      )
+                                    }
                       } yield mainChain
                     case None => (acc :+ estimate).pure[F]
                   }
@@ -118,6 +127,30 @@ object ProtoUtil {
     }
   }
 
+  def getCreatorJustificationAsListByInMemory(
+      blockDag: BlockDag,
+      blockHash: BlockHash,
+      validator: Validator,
+      goalFunc: BlockHash => Boolean = _ => false
+  ): List[BlockHash] = {
+    val maybeCreatorJustificationHash =
+      blockDag.dataLookup(blockHash).justifications.find(_.validator == validator)
+    maybeCreatorJustificationHash match {
+      case Some(creatorJustificationHash) =>
+        blockDag.dataLookup.get(creatorJustificationHash.latestBlockHash) match {
+          case Some(creatorJustification) =>
+            if (goalFunc(creatorJustification.blockHash)) {
+              List.empty[BlockHash]
+            } else {
+              List(creatorJustification.blockHash)
+            }
+          case None =>
+            List.empty[BlockHash]
+        }
+      case None => List.empty[BlockHash]
+    }
+  }
+
   def weightMap(blockMessage: BlockMessage): Map[ByteString, Long] =
     blockMessage.body match {
       case Some(block) =>
@@ -136,8 +169,8 @@ object ProtoUtil {
   def weightMapTotal(weights: Map[ByteString, Long]): Long =
     weights.values.sum
 
-  def minTotalValidatorWeight(blockMessage: BlockMessage, maxCliqueMinSize: Int): Long = {
-    val sortedWeights = weightMap(blockMessage).values.toVector.sorted
+  def minTotalValidatorWeight(dag: BlockDag, blockHash: BlockHash, maxCliqueMinSize: Int): Long = {
+    val sortedWeights = dag.dataLookup(blockHash).weightMap.values.toVector.sorted
     sortedWeights.take(maxCliqueMinSize).sum
   }
 
@@ -151,6 +184,14 @@ object ProtoUtil {
       case None             => none[BlockMessage].pure[F]
     }
   }
+
+  def weightFromValidatorByDag(dag: BlockDag, blockHash: BlockHash, validator: Validator): Long =
+    dag
+      .dataLookup(blockHash)
+      .parents
+      .headOption
+      .map(bh => dag.dataLookup(bh).weightMap.getOrElse(validator, 0L))
+      .getOrElse(dag.dataLookup(blockHash).weightMap.getOrElse(validator, 0L))
 
   def weightFromValidator[F[_]: Monad: BlockStore](
       b: BlockMessage,
@@ -351,14 +392,14 @@ object ProtoUtil {
   ): BlockMessage = {
 
     val header = {
-      //TODO refactor casper code to avoid the usage of Option fields in the block datastructures
+      //TODO refactor casper code to avoid the usage of Option fields in the block data structures
       // https://rchain.atlassian.net/browse/RHOL-572
       assert(block.header.isDefined, "A block without a header doesn't make sense")
       block.header.get
     }
 
     val sender = ByteString.copyFrom(pk)
-    val seqNum = dag.currentSeqNum.getOrElse(sender, 0) + 1
+    val seqNum = dag.latestMessages.get(sender).fold(0)(_.seqNum) + 1
 
     val blockHash = hashSignedBlock(header, sender, sigAlgorithm, seqNum, shardId, block.extraBytes)
 
@@ -391,6 +432,7 @@ object ProtoUtil {
       .withUser(ByteString.EMPTY)
       .withTimestamp(timestamp)
       .withTerm(term)
+      .withPhloLimit(accounting.MAX_VALUE)
   }
 
   def basicDeploy(id: Int): Deploy = {
@@ -410,23 +452,39 @@ object ProtoUtil {
     )
   }
 
-  def sourceDeploy(source: String, timestamp: Long): DeployData =
-    DeployData(user = ByteString.EMPTY, timestamp = timestamp, term = source)
+  def sourceDeploy(source: String, timestamp: Long, phlos: PhloLimit): DeployData =
+    DeployData(
+      user = ByteString.EMPTY,
+      timestamp = timestamp,
+      term = source,
+      phloLimit = Some(phlos)
+    )
 
-  def compiledSourceDeploy(source: CompiledRholangSource, timestamp: Long): Deploy =
+  def compiledSourceDeploy(
+      source: CompiledRholangSource,
+      timestamp: Long,
+      phloLimit: PhloLimit
+  ): Deploy =
     Deploy(
       term = Some(source.term),
-      raw = Some(sourceDeploy(source.code, timestamp))
+      raw = Some(sourceDeploy(source.code, timestamp, phloLimit))
     )
 
-  def termDeploy(term: Par, timestamp: Long): Deploy =
+  def termDeploy(term: Par, timestamp: Long, phloLimit: PhloLimit): Deploy =
     Deploy(
       term = Some(term),
-      raw =
-        Some(DeployData(user = ByteString.EMPTY, timestamp = timestamp, term = term.toProtoString))
+      raw = Some(
+        DeployData(
+          user = ByteString.EMPTY,
+          timestamp = timestamp,
+          term = term.toProtoString,
+          phloLimit = Some(phloLimit)
+        )
+      )
     )
 
-  def termDeployNow(term: Par): Deploy = termDeploy(term, System.currentTimeMillis())
+  def termDeployNow(term: Par): Deploy =
+    termDeploy(term, System.currentTimeMillis(), accounting.MAX_VALUE)
 
   def deployDataToDeploy(dd: DeployData): Deploy = Deploy(
     term = InterpreterUtil.mkTerm(dd.term).toOption,
@@ -435,8 +493,9 @@ object ProtoUtil {
 
   /**
     * Strip a deploy down to the fields we are using to seed the Deterministic name generator.
-    * The fields stripped are the term and anything that depends on the term (Currently only the sig)
+    * Because we enforce that a deployment must be unique on the user, timestamp pair, we leave
+    * only those fields. This allows users to more readily pre-generate names for signing.
     */
   def stripDeployData(d: DeployData): DeployData =
-    d.withTerm("").withSig(ByteString.EMPTY)
+    DeployData().withUser(d.user).withTimestamp(d.timestamp)
 }

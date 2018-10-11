@@ -4,14 +4,12 @@ import java.io.StringReader
 
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.Channel.ChannelInstance.Quote
+import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random}
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Registry.FixedRefs._
 import coop.rchain.rholang.interpreter.Runtime.RhoDispatchMap
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccountingAlg}
+import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccounting}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.ISpace.IdISpace
@@ -27,41 +25,44 @@ import scala.concurrent.duration._
 trait RegistryTester extends PersistentStoreTester {
   implicit val errorLog = new ErrorLog()
   implicit val costAccounting =
-    CostAccountingAlg.unsafe[Task](CostAccount(Integer.MAX_VALUE))
+    CostAccounting.unsafe[Task](CostAccount(Integer.MAX_VALUE))
 
-  def dispatchTableCreator(registry: Registry[Task]): RhoDispatchMap =
+  private[this] def dispatchTableCreator(registry: Registry[Task]): RhoDispatchMap = {
+    import coop.rchain.rholang.interpreter.Runtime.BodyRefs._
     Map(
-      lookupRef                       -> registry.lookup,
-      lookupCallbackRef               -> registry.lookupCallback,
-      insertRef                       -> registry.insert,
-      insertCallbackRef               -> registry.insertCallback,
-      deleteRef                       -> registry.delete,
-      deleteRootCallbackRef           -> registry.deleteRootCallback,
-      deleteCallbackRef               -> registry.deleteCallback,
-      publicLookupRef                 -> registry.publicLookup,
-      publicRegisterRandomRef         -> registry.publicRegisterRandom,
-      publicRegisterInsertCallbackRef -> registry.publicRegisterInsertCallback
+      REG_LOOKUP                   -> registry.lookup,
+      REG_LOOKUP_CALLBACK          -> registry.lookupCallback,
+      REG_INSERT                   -> registry.insert,
+      REG_INSERT_CALLBACK          -> registry.insertCallback,
+      REG_NONCE_INSERT_CALLBACK    -> registry.nonceInsertCallback,
+      REG_DELETE                   -> registry.delete,
+      REG_DELETE_ROOT_CALLBACK     -> registry.deleteRootCallback,
+      REG_DELETE_CALLBACK          -> registry.deleteCallback,
+      REG_REGISTER_INSERT_CALLBACK -> registry.registerInsertCallback,
+      REG_PUBLIC_LOOKUP            -> registry.publicLookup,
+      REG_PUBLIC_REGISTER_RANDOM   -> registry.publicRegisterRandom,
+      REG_PUBLIC_REGISTER_SIGNED   -> registry.publicRegisterSigned
     )
+  }
 
   def withRegistryAndTestSpace[R](
       f: (
           ChargingReducer[Task],
           IdISpace[
-            Channel,
+            Par,
             BindPattern,
             OutOfPhlogistonsError.type,
-            ListChannelWithRandom,
-            ListChannelWithRandom,
+            ListParWithRandom,
+            ListParWithRandomAndPhlos,
             TaggedContinuation
           ]
       ) => R
   ): R =
     withTestSpace(errorLog) {
       case TestFixture(space, _) =>
-        val _                                     = errorLog.readAndClearErrorVector()
-        val pureSpace: Runtime.RhoPureSpace[Task] = PureRSpace[Task].of(space)
-        lazy val dispatchTable: RhoDispatchMap    = dispatchTableCreator(registry)
-        lazy val (dispatcher, reducer, registry) =
+        val _                                  = errorLog.readAndClearErrorVector()
+        lazy val dispatchTable: RhoDispatchMap = dispatchTableCreator(registry)
+        lazy val (dispatcher @ _, reducer, registry) =
           RholangAndScalaDispatcher
             .create(space, dispatchTable, Registry.testingUrnMap)
         reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
@@ -85,7 +86,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
   )
   // format: off
   val rootSend: Send = Send(
-    chan = Quote(Registry.registryRoot),
+    chan = Registry.registryRoot,
     data = Seq(
       Expr(EMapBody(
         ParMap(Seq(eightByteArray -> Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(1), ninetySevenByteArray, branchName))))))))))),
@@ -110,7 +111,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     ByteString.copyFrom(Base16.decode("7e047d2fc591185812e4a9526ded5509544e6586092c25a17abf366ea3"))
   )
   val branchSend: Send = Send(
-    chan = Quote(branchName),
+    chan = branchName,
     data = Seq(
       Expr(
         EMapBody(
@@ -134,7 +135,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
   )
 
   val fullBranchSend: Send = Send(
-    chan = Quote(branchName),
+    chan = branchName,
     data = Seq(
       Expr(
         EMapBody(
@@ -161,6 +162,31 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
   )
 
   val baseRand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
+
+  def checkResult(
+      result: Map[
+        scala.collection.immutable.Seq[Par],
+        Row[BindPattern, ListParWithRandom, TaggedContinuation]
+      ],
+      s: String,
+      expected: Par,
+      rand: Blake2b512Random
+  ): Unit =
+    result.get(List[Par](GString(s))) should be(
+      Some(
+        Row(
+          List(
+            Datum.create[Par, ListParWithRandom](
+              GString(s),
+              ListParWithRandom(Seq(expected), rand),
+              false
+            )
+          ),
+          List()
+        )
+      )
+    )
+
   "lookup" should "recurse" in {
     val lookupString: String =
       """
@@ -190,51 +216,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Await.result(resultTask.runAsync, 3.seconds)
     }
 
-    def resultChanList(s: String) =
-      List(Channel(Quote(GString(s))))
-
-    result.get(resultChanList("result0")) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(GString("result0"))),
-              ListChannelWithRandom(Seq(Quote(GInt(7))), randResult0),
-              false
-            )
-          ),
-          List()
-        )
-      )
-    )
-    result.get(resultChanList("result1")) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(GString("result1"))),
-              ListChannelWithRandom(Seq(Quote(GInt(9))), randResult1),
-              false
-            )
-          ),
-          List()
-        )
-      )
-    )
-    result.get(resultChanList("result2")) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(GString("result2"))),
-              ListChannelWithRandom(Seq(Quote(GInt(8))), randResult2),
-              false
-            )
-          ),
-          List()
-        )
-      )
-    )
+    checkResult(result, "result0", GInt(7), randResult0)
+    checkResult(result, "result1", GInt(9), randResult1)
+    checkResult(result, "result2", GInt(8), randResult2)
   }
 
   "insert" should "successfully split" in {
@@ -345,163 +329,17 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Await.result(resultTask.runAsync, 3.seconds)
     }
 
-    def resultChanList(s: String) =
-      List(Channel(Quote(GString(s))))
-
-    result.get(resultChanList("result0")) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(GString("result0"))),
-              ListChannelWithRandom(Seq(Quote(GInt(8))), result0Rand),
-              false
-            )
-          ),
-          List()
-        )
-      )
-    )
-    result.get(resultChanList("result1")) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(GString("result1"))),
-              ListChannelWithRandom(Seq(Quote(GInt(10))), result1Rand),
-              false
-            )
-          ),
-          List()
-        )
-      )
-    )
-    result.get(resultChanList("result2")) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(GString("result2"))),
-              ListChannelWithRandom(Seq(Quote(GInt(8))), result2Rand),
-              false
-            )
-          ),
-          List()
-        )
-      )
-    )
-    result.get(resultChanList("result3")) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(GString("result3"))),
-              ListChannelWithRandom(Seq(Quote(GInt(10))), result3Rand),
-              false
-            )
-          ),
-          List()
-        )
-      )
-    )
-    result.get(resultChanList("result4")) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(GString("result4"))),
-              ListChannelWithRandom(Seq(Quote(GInt(11))), result4Rand),
-              false
-            )
-          ),
-          List()
-        )
-      )
-    )
-    result.get(resultChanList("result5")) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(GString("result5"))),
-              ListChannelWithRandom(Seq(Quote(GInt(7))), result5Rand),
-              false
-            )
-          ),
-          List()
-        )
-      )
-    )
-    result.get(resultChanList("result6")) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(GString("result6"))),
-              ListChannelWithRandom(Seq(Quote(GInt(9))), result6Rand),
-              false
-            )
-          ),
-          List()
-        )
-      )
-    )
-    result.get(resultChanList("result7")) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(GString("result7"))),
-              ListChannelWithRandom(Seq(Quote(GInt(11))), result7Rand),
-              false
-            )
-          ),
-          List()
-        )
-      )
-    )
-    result.get(resultChanList("result8")) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(GString("result8"))),
-              ListChannelWithRandom(Seq(Quote(GInt(10))), result8Rand),
-              false
-            )
-          ),
-          List()
-        )
-      )
-    )
-    result.get(resultChanList("result9")) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(GString("result9"))),
-              ListChannelWithRandom(Seq(Quote(GInt(8))), result9Rand),
-              false
-            )
-          ),
-          List()
-        )
-      )
-    )
-    result.get(resultChanList("result10")) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(GString("result10"))),
-              ListChannelWithRandom(Seq(Quote(GInt(12))), result10Rand),
-              false
-            )
-          ),
-          List()
-        )
-      )
-    )
+    checkResult(result, "result0", GInt(8), result0Rand)
+    checkResult(result, "result1", GInt(10), result1Rand)
+    checkResult(result, "result2", GInt(8), result2Rand)
+    checkResult(result, "result3", GInt(10), result3Rand)
+    checkResult(result, "result4", GInt(11), result4Rand)
+    checkResult(result, "result5", GInt(7), result5Rand)
+    checkResult(result, "result6", GInt(9), result6Rand)
+    checkResult(result, "result7", GInt(11), result7Rand)
+    checkResult(result, "result8", GInt(10), result8Rand)
+    checkResult(result, "result9", GInt(8), result9Rand)
+    checkResult(result, "result10", GInt(12), result10Rand)
   }
 
   "delete" should "successfully merge" in {
@@ -607,114 +445,21 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     // previous merge to root.
     result6Rand.next()
 
-    def resultChanList(s: String) =
-      List(Channel(Quote(GString(s))))
-
-    result.get(resultChanList("result0")) should be(
+    checkResult(result, "result0", GInt(8), result0Rand)
+    checkResult(result, "result1", GInt(9), result1Rand)
+    checkResult(result, "result2", GInt(10), result2Rand)
+    checkResult(result, "result3", GInt(8), result3Rand)
+    checkResult(result, "result4", GInt(9), result4Rand)
+    checkResult(result, "result5", GInt(8), result5Rand)
+    checkResult(result, "result6", GInt(8), result6Rand)
+    checkResult(result, "result6", GInt(8), result6Rand)
+    result.get(List[Par](Registry.registryRoot)) should be(
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result0"))),
-              ListChannelWithRandom(Seq(Quote(GInt(8))), result0Rand),
-              false
-            )
-          ),
-          List()
-        )
-      )
-    )
-    result.get(resultChanList("result1")) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(GString("result1"))),
-              ListChannelWithRandom(Seq(Quote(GInt(9))), result1Rand),
-              false
-            )
-          ),
-          List()
-        )
-      )
-    )
-    result.get(resultChanList("result2")) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(GString("result2"))),
-              ListChannelWithRandom(Seq(Quote(GInt(10))), result2Rand),
-              false
-            )
-          ),
-          List()
-        )
-      )
-    )
-    result.get(resultChanList("result3")) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(GString("result3"))),
-              ListChannelWithRandom(Seq(Quote(GInt(8))), result3Rand),
-              false
-            )
-          ),
-          List()
-        )
-      )
-    )
-    result.get(resultChanList("result4")) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(GString("result4"))),
-              ListChannelWithRandom(Seq(Quote(GInt(9))), result4Rand),
-              false
-            )
-          ),
-          List()
-        )
-      )
-    )
-    result.get(resultChanList("result5")) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(GString("result5"))),
-              ListChannelWithRandom(Seq(Quote(GInt(8))), result5Rand),
-              false
-            )
-          ),
-          List()
-        )
-      )
-    )
-    result.get(resultChanList("result6")) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(GString("result6"))),
-              ListChannelWithRandom(Seq(Quote(GInt(8))), result6Rand),
-              false
-            )
-          ),
-          List()
-        )
-      )
-    )
-    result.get(List[Channel](Quote(Registry.registryRoot))) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(Registry.registryRoot)),
-              ListChannelWithRandom(Seq(Quote(EMapBody(ParMap(SortedParMap.empty)))), rootRand),
+            Datum.create[Par, ListParWithRandom](
+              Registry.registryRoot,
+              ListParWithRandom(Seq(EMapBody(ParMap(SortedParMap.empty))), rootRand),
               false
             )
           ),
@@ -748,37 +493,8 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Await.result(resultTask.runAsync, 3.seconds)
     }
 
-    def resultChanList(s: String) =
-      List(Channel(Quote(GString(s))))
-
-    result.get(resultChanList("result0")) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(GString("result0"))),
-              ListChannelWithRandom(Seq(Quote(GInt(8))), randResult0),
-              false
-            )
-          ),
-          List()
-        )
-      )
-    )
-    result.get(resultChanList("result1")) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(GString("result1"))),
-              ListChannelWithRandom(Seq(Quote(GInt(9))), randResult1),
-              false
-            )
-          ),
-          List()
-        )
-      )
-    )
+    checkResult(result, "result0", GInt(8), randResult0)
+    checkResult(result, "result1", GInt(9), randResult1)
   }
 
   "Random Registry" should "use the random generator and insert" in {
@@ -818,41 +534,150 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Await.result(resultTask.runAsync, 3.seconds)
     }
 
-    def resultChanList(s: String) =
-      List(Channel(Quote(GString(s))))
-
     val expectedBundle: Par =
       Bundle(GPrivate(ByteString.copyFrom(registeredName)), writeFlag = true, readFlag = false)
 
     val expectedUri = Registry.buildURI(uriBytes)
 
-    result.get(resultChanList("result0")) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(GString("result0"))),
-              ListChannelWithRandom(Seq(Quote(GUri(expectedUri))), randResult0),
-              false
-            )
-          ),
-          List()
-        )
-      )
+    checkResult(result, "result0", GUri(expectedUri), randResult0)
+    checkResult(result, "result1", expectedBundle, randResult1)
+  }
+
+  "Signed Insert" should "work like plain insert if the signatures match" in {
+    // Secret key:
+    // d039d5c634ad95d968fc18368d81b97aaecd32fc7cf6eec07a97c5ac9f9fcb5b11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d
+    // Public key:
+    // 11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d
+    // The signatures here are over the serialized representation of the nonce, value tuple.
+    // To recreate the signatures, you can do something like the following:
+    // val key = Base16.decode("<secret key goes here>")
+    // val toSign: Par = ETuple(Seq(GInt(789), GString("entry")))
+    // val sig = Ed25519.sign(toSign.toByteArray, key)
+    val registerString =
+      """
+      new rr(`rho:registry:insertSigned:ed25519`), rl(`rho:registry:lookup`), ack in {
+        rr!("11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d".hexToBytes(),
+            (789, "entry"),
+            "20c3b7da06565933400cb61301ffa14df82ef09b046c8152e02e8047d6f69ee2c2a2e4114db7ceb01eb828dfc98c15e40a502f9d85c58ca03734cab549e85e0d".hexToBytes(),
+            *ack) |
+        for(@{uri /\ Uri} <- ack) { // merge0
+          rl!(uri, *ack) |
+          for(@result <- ack) { // merge1
+            @"result0"!(result) |
+            rr!("11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d".hexToBytes(),
+              (788, "entryFail"),
+              "dfe3caf2888f16734da0ffe555a6f67240147d6663d6a036b607398383eea0b362678e98e42a0de6b559780c34ab6e3b4dff0f3a57061ce8936659762ca98700".hexToBytes(),
+              *ack) |
+            for(@Nil <- ack) { // merge2
+              rl!(uri, *ack) |
+              for(@result <- ack) { // merge3
+                @"result1"!(result) |
+                rr!("11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d".hexToBytes(),
+                  (790, "entryReplace"),
+                  "3eb0a5de797833970e7ce23def0c0e1f7c0a21c25f178f143800119d95f033624ecc3924d73e052d62e5f74e97e5528382428ffa0796ead322636916b46cb60a".hexToBytes(),
+                  *ack) |
+                for(@{uri2 /\ Uri} <- ack) { // merge4
+                  @"result2"!(uri == uri2) |
+                  rl!(uri2, *ack) |
+                  for(@result <- ack) { // merge5
+                    @"result3"!(result) |
+                    rr!("11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d".hexToBytes(),
+                      (791, "entrySigShort"),
+                      "".hexToBytes(),
+                      *ack) |
+                    for(@Nil <- ack) { // merge6
+                      rl!(uri, *ack) |
+                      for(@result <- ack) { // merge7
+                        @"result4"!(result) |
+                        rr!("11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d".hexToBytes(),
+                          (792, "entrySigFail"),
+                          "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000".hexToBytes(),
+                          *ack) |
+                        for(@Nil <- ack) { // merge8
+                          @"result6"!(uri) |
+                          rl!(uri, "result5")
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }"""
+    val registerPar: Par                = Interpreter.buildNormalizedTerm(new StringReader(registerString)).value
+    val completePar                     = registerPar.addSends(rootSend, branchSend)
+    implicit val rand: Blake2b512Random = baseRand.splitByte(6)
+    val newRand                         = rand.splitByte(2)
+    newRand.next() //ack
+    val registerRand = newRand.splitByte(0)
+    // Twice for temporary channels to handle the insert.
+    registerRand.next(); registerRand.next()
+    val insertRand = registerRand
+    // Goes directly into root, so a single temp channel is allocated
+    insertRand.next()
+    val merge0Rand  = Blake2b512Random.merge(Seq(newRand.splitByte(1), insertRand))
+    val lookup0Rand = merge0Rand.splitByte(0)
+    lookup0Rand.next()
+    val merge1Rand       = Blake2b512Random.merge(Seq(merge0Rand.splitByte(1), lookup0Rand))
+    val result0Rand      = merge1Rand.splitByte(0)
+    val registerFailRand = merge1Rand.splitByte(1)
+    // Twice for temporary channels to handle the insert.
+    registerFailRand.next(); registerFailRand.next()
+    val insertFailRand = registerFailRand
+    // Would go directly into root, so a single temp channel is allocated
+    insertFailRand.next()
+    val merge2Rand  = Blake2b512Random.merge(Seq(merge1Rand.splitByte(2), insertFailRand))
+    val lookup1Rand = merge2Rand.splitByte(0)
+    lookup1Rand.next()
+    val merge3Rand          = Blake2b512Random.merge(Seq(merge2Rand.splitByte(1), lookup1Rand))
+    val result1Rand         = merge3Rand.splitByte(0)
+    val registerReplaceRand = merge3Rand.splitByte(1)
+    // Twice for temporary channels to handle the insert.
+    registerReplaceRand.next(); registerReplaceRand.next()
+    val insertReplaceRand = registerReplaceRand
+    // Goes directly into root, so a single temp channel is allocated
+    insertReplaceRand.next()
+    val merge4Rand  = Blake2b512Random.merge(Seq(merge3Rand.splitByte(2), insertReplaceRand))
+    val result2Rand = merge4Rand.splitByte(0)
+    val lookup3Rand = merge4Rand.splitByte(1)
+    lookup3Rand.next()
+    val merge5Rand           = Blake2b512Random.merge(Seq(merge4Rand.splitByte(2), lookup3Rand))
+    val result3Rand          = merge5Rand.splitByte(0)
+    val registerSigShortRand = merge5Rand.splitByte(1)
+    // We don't allocate any temporary channels if the signature fails.
+    val merge6Rand  = Blake2b512Random.merge(Seq(merge5Rand.splitByte(2), registerSigShortRand))
+    val lookup4Rand = merge6Rand.splitByte(0)
+    lookup4Rand.next()
+    val merge7Rand          = Blake2b512Random.merge(Seq(merge6Rand.splitByte(1), lookup4Rand))
+    val result4Rand         = merge7Rand.splitByte(0)
+    val registerSigFailRand = merge7Rand.splitByte(1)
+    val merge8Rand          = Blake2b512Random.merge(Seq(merge7Rand.splitByte(2), registerSigFailRand))
+    val result6Rand         = merge8Rand.splitByte(0)
+    val lookup5Rand         = merge8Rand.splitByte(1)
+    lookup5Rand.next()
+    val result5Rand = lookup5Rand
+
+    val expectedUri = Registry.buildURI(
+      Blake2b256
+        .hash(Base16.decode("11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d"))
     )
-    result.get(resultChanList("result1")) should be(
-      Some(
-        Row(
-          List(
-            Datum.create(
-              Channel(Quote(GString("result1"))),
-              ListChannelWithRandom(Seq(Quote(expectedBundle)), randResult1),
-              false
-            )
-          ),
-          List()
-        )
-      )
-    )
+
+    val result = withRegistryAndTestSpace { (reducer, space) =>
+      implicit val env = Env[Par]()
+      val resultTask = for {
+        _ <- reducer.eval(completePar)
+      } yield space.store.toMap
+      Await.result(resultTask.runAsync, 3.seconds)
+    }
+
+    checkResult(result, "result0", ETuple(List(GInt(789), GString("entry"))), result0Rand)
+    checkResult(result, "result1", ETuple(List(GInt(789), GString("entry"))), result1Rand)
+    checkResult(result, "result2", GBool(true), result2Rand)
+    checkResult(result, "result3", ETuple(List(GInt(790), GString("entryReplace"))), result3Rand)
+    checkResult(result, "result4", ETuple(List(GInt(790), GString("entryReplace"))), result4Rand)
+    checkResult(result, "result5", ETuple(List(GInt(790), GString("entryReplace"))), result5Rand)
+    checkResult(result, "result6", GUri(expectedUri), result6Rand)
   }
 }

@@ -7,7 +7,7 @@ import coop.rchain.casper.protocol.BlockMessage
 import scala.collection.immutable.{HashMap, HashSet}
 
 /*
- * toposort - Topological sort of the DAG. The index in the outer Vector
+ * topoSort - Topological sort of the DAG. The index in the outer Vector
  *            is the block number (length of the longest path back to
  *            genesis) and the index of the inner Vector breaks ties for
  *            blocks with the same number based when the node observed the block.
@@ -23,7 +23,6 @@ final case class BlockDag(
     childMap: Map[BlockHash, Set[BlockHash]],
     latestMessages: Map[Validator, BlockMessage],
     latestMessagesOfLatestMessages: Map[Validator, LatestMessages],
-    currentSeqNum: Map[Validator, Int],
     dataLookup: BlockMetadata.Lookup,
     topoSort: Vector[Vector[BlockHash]],
     sortOffset: Long
@@ -40,7 +39,6 @@ object BlockDag {
       HashMap.empty[BlockHash, HashSet[BlockHash]],
       HashMap.empty[BlockHash, BlockMessage],
       HashMap.empty[Validator, LatestMessages],
-      HashMap.empty[Validator, Int],
       HashMap.empty[BlockHash, BlockMetadata],
       Vector.empty[Vector[BlockHash]],
       0L

@@ -1,8 +1,6 @@
 package coop.rchain.rholang.interpreter
 
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.models.Channel.ChannelInstance
-import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance
@@ -13,6 +11,7 @@ import coop.rchain.models._
 import scalapb.GeneratedMessage
 import coop.rchain.shared.StringOps._
 import cats.implicits._
+import coop.rchain.shared.Printer
 import monix.eval.Coeval
 
 object PrettyPrinter {
@@ -20,8 +19,11 @@ object PrettyPrinter {
 
   def apply(freeShift: Int, boundShift: Int): PrettyPrinter =
     PrettyPrinter(freeShift, boundShift, "free", "a", 23, 128)
-}
 
+  implicit class CappedOps(val str: String) extends AnyVal {
+    def cap() = Printer.OUTPUT_CAPPED.map(n => s"${str.take(n)}...").getOrElse(str)
+  }
+}
 case class PrettyPrinter(
     freeShift: Int,
     boundShift: Int,
@@ -37,11 +39,11 @@ case class PrettyPrinter(
   def setBaseId(): String = increment(baseId)
 
   import Coeval.pure
+  import PrettyPrinter._
 
-  def buildString(e: Expr): String             = buildStringM(e).value
-  def buildString(v: Var): String              = buildStringM(v).value
-  def buildString(c: Channel): String          = buildStringM(c).value
-  def buildString(m: GeneratedMessage): String = buildStringM(m).value
+  def buildString(e: Expr): String             = buildStringM(e).value.cap()
+  def buildString(v: Var): String              = buildStringM(v).value.cap()
+  def buildString(m: GeneratedMessage): String = buildStringM(m).value.cap()
 
   private def buildStringM(e: Expr): Coeval[String] = Coeval.defer {
     e.exprInstance match {
@@ -97,7 +99,6 @@ case class PrettyPrinter(
         } |+| buildRemainderString(remainder) |+| pure("}")
 
       case EVarBody(EVar(v)) => buildStringM(v)
-      case EEvalBody(chan)   => pure("*") |+| buildStringM(chan)
       case GBool(b)          => pure(b.toString)
       case GInt(i)           => pure(i.toString)
       case GString(s)        => pure("\"" + s + "\"")
@@ -117,7 +118,7 @@ case class PrettyPrinter(
   private def buildRemainderString(remainder: Option[Var]): Coeval[String] =
     remainder.fold(pure(""))(v => pure("...") |+| buildStringM(v))
 
-  def buildStringM(v: Var): Coeval[String] =
+  private def buildStringM(v: Var): Coeval[String] =
     v.varInstance match {
       case FreeVar(level)    => pure(s"$freeId${freeShift + level}")
       case BoundVar(level)   => pure(s"$boundId${boundShift - level - 1}")
@@ -125,28 +126,24 @@ case class PrettyPrinter(
       case VarInstance.Empty => pure("@Nil")
     }
 
-  def buildStringM(c: Channel): Coeval[String] =
-    c.channelInstance match {
-      case Quote(p) =>
-        buildStringM(p).map { b =>
-          if (b.size > 60) {
-            "@{" + b + "}"
-          } else {
-            "@{" + b.replaceAll("[\n](\\s\\s)*", (" ")) + "}"
-          }
-        }
-      case ChanVar(cv)           => buildStringM(cv)
-      case ChannelInstance.Empty => pure("@Nil")
+  private def buildChannelStringM(p: Par): Coeval[String] = buildChannelStringM(p, 0)
+
+  private def buildChannelStringM(p: Par, indent: Int): Coeval[String] =
+    buildStringM(p, indent).map { b =>
+      if (b.size > 60) {
+        "@{" + b + "}"
+      } else {
+        "@{" + b.replaceAll("[\n](\\s\\s)*", (" ")) + "}"
+      }
     }
 
-  def buildStringM(t: GeneratedMessage): Coeval[String] = buildStringM(t, 0)
+  private def buildStringM(t: GeneratedMessage): Coeval[String] = buildStringM(t, 0)
 
-  def buildStringM(t: GeneratedMessage, indent: Int): Coeval[String] = Coeval.defer {
+  private def buildStringM(t: GeneratedMessage, indent: Int): Coeval[String] = Coeval.defer {
     val content = t match {
-      case v: Var     => buildStringM(v)
-      case c: Channel => buildStringM(c)
+      case v: Var => buildStringM(v)
       case s: Send =>
-        buildStringM(s.chan) |+| pure {
+        buildChannelStringM(s.chan) |+| pure {
           if (s.persistent) "!!("
           else "!("
         } |+| buildSeq(s.data) |+| pure(")")
@@ -165,7 +162,7 @@ case class PrettyPrinter(
                 .buildPattern(bind.patterns)
             (bind.freeCount + previousFree, string |+| bindString |+| pure {
               if (r.persistent) " <= " else " <- "
-            } |+| buildStringM(bind.source, indent) |+| pure {
+            } |+| buildChannelStringM(bind.source, indent) |+| pure {
               if (i != r.binds.length - 1) " ; "
               else ""
             })
@@ -289,11 +286,11 @@ case class PrettyPrinter(
         }
     }
 
-  private def buildPattern(patterns: Seq[Channel]): Coeval[String] =
+  private def buildPattern(patterns: Seq[Par]): Coeval[String] =
     (pure("") /: patterns.zipWithIndex) {
 
       case (string, (pattern, i)) =>
-        string |+| buildStringM(pattern) |+| pure {
+        string |+| buildChannelStringM(pattern) |+| pure {
           if (i != patterns.length - 1) ", "
           else ""
         }

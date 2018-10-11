@@ -3,7 +3,7 @@ package coop.rchain.models
 import scala.collection.generic.CanBuildFrom
 import scala.collection.immutable.HashSet
 import scala.collection.{mutable, SetLike}
-import coop.rchain.models.rholang.sort.ordering._
+import coop.rchain.models.rholang.sorter.ordering._
 
 //Enforce ordering and uniqueness.
 // - uniqueness is handled by using HashSet.

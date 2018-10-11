@@ -30,7 +30,7 @@ object EffectsTestInstances {
       clock
     }
 
-    def sleep(millis: Int): F[Unit] = Capture[F].capture(())
+    def sleep(duration: FiniteDuration): F[Unit] = Capture[F].capture(())
 
     def reset(): Unit = this.clock = 0
   }
@@ -93,7 +93,12 @@ object EffectsTestInstances {
       Seq()
     }
 
-    def receive(dispatch: Protocol => F[CommunicationResponse]): F[Unit] = ???
+    def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] = ???
+
+    def receive(
+        dispatch: Protocol => F[CommunicationResponse],
+        handleStreamed: Blob => F[Unit]
+    ): F[Unit] = ???
 
     def disconnect(peer: PeerNode): F[Unit] = ???
 
