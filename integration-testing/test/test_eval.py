@@ -1,7 +1,6 @@
 import os
 import pytest
 from tools.rnode import start_bootstrap
-import logging
 
 
 @pytest.fixture(scope="module")
