@@ -12,9 +12,8 @@ import io.grpc.ManagedChannel
 
 import scala.language.higherKinds
 
-class CachedConnections[F[_]](
-    clientChannel: PeerNode => F[ManagedChannel],
-    val cell: TcpTransportLayer.TransportCell[F]
+class CachedConnections[F[_], T](val cell: TcpTransportLayer.TransportCell[F])(
+    clientChannel: PeerNode => F[ManagedChannel]
 )(implicit E: MonadError[F, Throwable]) {
 
   def connection(peer: PeerNode, enforce: Boolean): F[ManagedChannel] =
@@ -29,10 +28,10 @@ class CachedConnections[F[_]](
 }
 
 object CachedConnections {
-  type ConnectionsCache[F[_]] = (PeerNode => F[ManagedChannel]) => CachedConnections[F]
+  type ConnectionsCache[F[_], T] = (PeerNode => F[ManagedChannel]) => CachedConnections[F, T]
 
-  def apply[F[_]: Concurrent]: F[ConnectionsCache[F]] =
+  def apply[F[_]: Concurrent, T]: F[ConnectionsCache[F, T]] =
     for {
       connections <- Cell.mvarCell[F, TransportState](TransportState.empty)
-    } yield new CachedConnections[F](_, connections)
+    } yield new CachedConnections[F, T](connections)(_)
 }

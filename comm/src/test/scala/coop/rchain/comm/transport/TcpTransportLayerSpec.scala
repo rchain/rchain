@@ -2,7 +2,7 @@ package coop.rchain.comm.transport
 
 import scala.concurrent.duration.Duration
 import coop.rchain.shared
-import coop.rchain.comm.{CachedConnections, PeerNode}
+import coop.rchain.comm.{CachedConnections, PeerNode, TcpConnTag}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.shared.Log
 import monix.eval.Task
@@ -26,11 +26,8 @@ class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] 
     }
 
   def createTransportLayer(env: TcpTlsEnvironment): Task[TransportLayer[Task]] =
-    CachedConnections[Task].map { cache =>
-      new TcpTransportLayer(env.host, env.port, env.cert, env.key, 4 * 1024 * 1024, cache)(
-        scheduler,
-        log
-      )
+    CachedConnections[Task, TcpConnTag].map { implicit cache =>
+      new TcpTransportLayer(env.host, env.port, env.cert, env.key, 4 * 1024 * 1024)
     }
 
   def extract[A](fa: Task[A]): A = fa.runSyncUnsafe(Duration.Inf)

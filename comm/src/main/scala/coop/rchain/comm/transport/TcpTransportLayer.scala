@@ -4,7 +4,6 @@ import java.io.ByteArrayInputStream
 
 import cats.implicits._
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.CachedConnections.ConnectionsCache
 import coop.rchain.comm.CommError._
@@ -27,11 +26,11 @@ class TcpTransportLayer(
     port: Int,
     cert: String,
     key: String,
-    maxMessageSize: Int,
-    connectionsCache: ConnectionsCache[Task]
+    maxMessageSize: Int
 )(
     implicit scheduler: Scheduler,
-    log: Log[Task]
+    log: Log[Task],
+    connectionsCache: ConnectionsCache[Task, TcpConnTag]
 ) extends TransportLayer[Task] {
 
   private val DefaultSendTimeout = 5.seconds

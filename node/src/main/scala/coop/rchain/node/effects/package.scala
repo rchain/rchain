@@ -1,34 +1,24 @@
 package coop.rchain.node
 
-import coop.rchain.comm._
-import coop.rchain.metrics.Metrics
-
-import scala.tools.jline.console._
-import cats._
-import cats.data._
-import cats.implicits._
-import cats.mtl._
-import cats.effect.Timer
-import coop.rchain.catscontrib._
-import Catscontrib._
-import ski._
-import TaskContrib._
-import monix.eval._
-import monix.execution._
-import coop.rchain.comm.transport._
-import coop.rchain.comm.discovery._
-import coop.rchain.shared._
-
-import scala.concurrent.duration.FiniteDuration
 import java.nio.file.Path
 
-import scala.io.Source
-import coop.rchain.comm.protocol.routing._
-import coop.rchain.comm.rp._
-import Connect._
+import cats.effect.Timer
+import cats.mtl._
+import coop.rchain.catscontrib._
 import coop.rchain.comm.CachedConnections.ConnectionsCache
+import coop.rchain.comm._
+import coop.rchain.comm.discovery._
+import coop.rchain.comm.rp.Connect._
+import coop.rchain.comm.rp._
+import coop.rchain.comm.transport._
+import coop.rchain.metrics.Metrics
+import coop.rchain.shared._
+import monix.eval._
+import monix.execution._
 
-import scala.concurrent.duration._
+import scala.concurrent.duration.FiniteDuration
+import scala.io.Source
+import scala.tools.jline.console._
 
 package object effects {
 
@@ -56,27 +46,28 @@ package object effects {
     }
   }
 
-  def kademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration, cache: ConnectionsCache[Task])(
+  def kademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(
       implicit
       scheduler: Scheduler,
       metrics: Metrics[Task],
-      log: Log[Task]
-  ): KademliaRPC[Task] = new GrpcKademliaRPC(src, port, timeout, cache)
+      log: Log[Task],
+      cache: ConnectionsCache[Task, KademliaConnTag]
+  ): KademliaRPC[Task] = new GrpcKademliaRPC(src, port, timeout)
 
   def tcpTransportLayer(
       host: String,
       port: Int,
       certPath: Path,
       keyPath: Path,
-      maxMessageSize: Int,
-      cache: ConnectionsCache[Task]
+      maxMessageSize: Int
   )(
       implicit scheduler: Scheduler,
-      log: Log[Task]
+      log: Log[Task],
+      cache: ConnectionsCache[Task, TcpConnTag]
   ): TcpTransportLayer = {
     val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
     val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
-    new TcpTransportLayer(host, port, cert, key, maxMessageSize, cache)
+    new TcpTransportLayer(host, port, cert, key, maxMessageSize)
   }
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)

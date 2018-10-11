@@ -22,13 +22,13 @@ import scala.concurrent.duration._
 class GrpcKademliaRPC(
     src: PeerNode,
     port: Int,
-    timeout: FiniteDuration,
-    connectionsCache: ConnectionsCache[Task]
+    timeout: FiniteDuration
 )(
     implicit
     scheduler: Scheduler,
     metrics: Metrics[Task],
-    log: Log[Task]
+    log: Log[Task],
+    connectionsCache: ConnectionsCache[Task, KademliaConnTag]
 ) extends KademliaRPC[Task] {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)

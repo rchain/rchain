@@ -334,8 +334,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     // 2. create instances of typeclasses
     rpConfAsk            = effects.rpConfAsk(RPConf(local, defaultTimeout, rpClearConnConf))
     rpConnections        <- effects.rpConnections.toEffect
-    kademliaConnections  <- CachedConnections[Task].toEffect
-    tcpConnections       <- CachedConnections[Task].toEffect
+    kademliaConnections  <- CachedConnections[Task, KademliaConnTag].toEffect
+    tcpConnections       <- CachedConnections[Task, TcpConnTag].toEffect
     log                  = effects.log
     time                 = effects.time
     timerTask            = Task.timer
@@ -348,13 +348,13 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       port,
       conf.tls.certificate,
       conf.tls.key,
-      conf.server.maxMessageSize,
-      tcpConnections
-    )(scheduler, log)
-    kademliaRPC = effects.kademliaRPC(local, kademliaPort, defaultTimeout, kademliaConnections)(
+      conf.server.maxMessageSize
+    )(scheduler, log, tcpConnections)
+    kademliaRPC = effects.kademliaRPC(local, kademliaPort, defaultTimeout)(
       scheduler,
       metrics,
-      log
+      log,
+      kademliaConnections
     )
     initPeer = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     nodeDiscovery <- effects
