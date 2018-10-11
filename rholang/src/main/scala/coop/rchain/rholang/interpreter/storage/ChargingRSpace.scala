@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter.storage
 
-import cats.effect.Sync
+import cats.effect._
 import cats.implicits._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
@@ -11,8 +11,10 @@ import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.{Blake2b256Hash, Checkpoint, ContResult, Result}
+import monix.execution.Scheduler
 
 import scala.collection.immutable.Seq
+import scala.concurrent._
 
 object ChargingRSpace {
   def storageCostConsume(
@@ -29,7 +31,13 @@ object ChargingRSpace {
   def storageCostProduce(channel: Par, data: ListParWithRandom): Cost =
     channel.storageCost + data.pars.storageCost
 
-  def pureRSpace[F[_]: Sync](implicit costAlg: CostAccounting[F], space: RhoISpace) =
+  private val cachedthreadPool = Scheduler.cached("rspace", 2, 10)
+
+  def pureRSpace[F[_]: Sync](
+      implicit costAlg: CostAccounting[F],
+      space: RhoISpace,
+      shift: ContextShift[F]
+  ) =
     new RhoPureSpace[F] {
 
       override def consume(
@@ -42,10 +50,13 @@ object ChargingRSpace {
       ]]] = {
         val storageCost = storageCostConsume(channels, patterns, continuation)
         for {
-          _       <- costAlg.charge(storageCost)
-          matchF  <- costAlg.get().map(ca => matchListPar(ca.cost))
-          consRes <- Sync[F].delay(space.consume(channels, patterns, continuation, persist)(matchF))
-          _       <- handleResult(consRes)
+          _      <- costAlg.charge(storageCost)
+          matchF <- costAlg.get().map(ca => matchListPar(ca.cost))
+          consRes <- shift.evalOn(cachedthreadPool)(
+                      Sync[F]
+                        .delay(space.consume(channels, patterns, continuation, persist)(matchF))
+                    )
+          _ <- handleResult(consRes)
         } yield consRes
       }
 
@@ -69,10 +80,12 @@ object ChargingRSpace {
       ]]] = {
         val storageCost = storageCostProduce(channel, data)
         for {
-          _       <- costAlg.charge(storageCost)
-          matchF  <- costAlg.get().map(ca => matchListPar(ca.cost))
-          prodRes <- Sync[F].delay(space.produce(channel, data, persist)(matchF))
-          _       <- handleResult(prodRes)
+          _      <- costAlg.charge(storageCost)
+          matchF <- costAlg.get().map(ca => matchListPar(ca.cost))
+          prodRes <- shift.evalOn(cachedthreadPool)(
+                      Sync[F].delay(space.produce(channel, data, persist)(matchF))
+                    )
+          _ <- handleResult(prodRes)
         } yield prodRes
       }
 

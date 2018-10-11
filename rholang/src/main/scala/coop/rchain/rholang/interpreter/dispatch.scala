@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import cats.Parallel
-import cats.effect.Sync
+import cats.effect.{ContextShift, Sync}
 import cats.mtl.FunctorTell
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
@@ -61,10 +61,11 @@ object RholangAndScalaDispatcher {
   )(
       implicit
       parallel: Parallel[M, F],
+      shift: ContextShift[M],
       s: Sync[M],
       ft: FunctorTell[M, Throwable]
   ): (Dispatch[M, ListParWithRandomAndPhlos, TaggedContinuation], ChargingReducer[M], Registry[M]) = {
-    lazy val chargingRSpace = ChargingRSpace.pureRSpace(s, costAlg, tuplespace)
+    lazy val chargingRSpace = ChargingRSpace.pureRSpace(s, costAlg, tuplespace, shift)
     lazy val tuplespaceAlg  = Tuplespace.rspaceTuplespace(chargingRSpace, dispatcher)
     lazy val dispatcher: Dispatch[M, ListParWithRandomAndPhlos, TaggedContinuation] =
       new RholangAndScalaDispatcher(chargingReducer, dispatchTable)

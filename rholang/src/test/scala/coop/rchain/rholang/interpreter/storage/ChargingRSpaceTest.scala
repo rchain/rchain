@@ -337,7 +337,8 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     implicit val costAlg    = CostAccounting.unsafe[Task](CostAccount(0))
     implicit val pureRSpace = ChargingRSpaceTest.createTestISpace()
     implicit val s          = implicitly[Sync[Task]]
-    val chargingRSpace      = ChargingRSpace.pureRSpace(s, costAlg, pureRSpace)
+    val shift               = Task.contextShift
+    val chargingRSpace      = ChargingRSpace.pureRSpace(s, costAlg, pureRSpace, shift)
     try {
       test(TestFixture(chargingRSpace, costAlg))
     } finally {
