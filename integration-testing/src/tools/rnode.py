@@ -5,6 +5,7 @@ from tools.docker import docker_network
 import tools.resources as resources
 from tools.util import log_box, make_tempfile, make_tempdir
 from tools.wait import wait_for, node_started
+import shlex
 
 from multiprocessing import Queue, Process
 from queue import Empty
@@ -21,6 +22,19 @@ rnode_key = f'{rnode_directory}/node.key.pem'
 
 class InterruptedException(Exception):
     pass
+
+
+class NonZeroExitCodeError(Exception):
+    def __init__(self, command, exit_code, output):
+        self.command = command
+        self.exit_code = exit_code
+        self.output = output
+
+
+class TimeoutError(Exception):
+    def __init__(self, command, timeout):
+        self.command = command
+        self.timeout = timeout
 
 
 class Node:
@@ -59,11 +73,11 @@ class Node:
 
         self.container.remove(force=True, v=True)
 
-    def deploy(self, contract):
+    def deploy_contract(self, contract):
         cmd = f'{rnode_binary} deploy --from "0x1" --phlo-limit 0 --phlo-price 0 --nonce 0 {rnode_deploy_dir}/{contract}'
         return self.exec_run(cmd)
 
-    def propose(self):
+    def propose_contract(self):
         return self.exec_run(f'{rnode_binary} propose')
 
     def show_blocks(self):
@@ -86,12 +100,34 @@ class Node:
             exit_code, output = queue.get(self.timeout)
             printed_output = output if len(output) < 150 else (output[0:150] + "...")
             single_line_output = printed_output.replace("\n", "\\n")
-            logging.info(f"Returning: {exit_code},'{single_line_output}'")
+            logging.info(f"Returning: {exit_code}, '{single_line_output}'")
             return exit_code, output
         except Empty:
             process.terminate()
             process.join()
-            raise Exception(f"The command '{cmd}' hasn't finished execution after {self.timeout}s")
+            raise TimeoutError(cmd, self.timeout)
+
+    def shell_out(self, *cmd):
+        exit_code, output = self.exec_run(cmd)
+        if exit_code != 0:
+            raise NonZeroExitCodeError(command=cmd, exit_code=exit_code, output=output)
+        return output
+
+    def call_rnode(self, *node_args):
+        return self.shell_out(rnode_binary, *node_args)
+
+    def eval(self, rho_file_path):
+        return self.call_rnode('eval', rho_file_path)
+
+    def deploy(self, rho_file_path):
+        return self.call_rnode('deploy', '--from=0x1', '--phlo-limit=0', '--phlo-price=0', '--nonce=0', rho_file_path)
+
+    def propose(self):
+        return self.call_rnode('propose')
+
+    def repl(self, rholang_code):
+        quoted_rholang_code = shlex.quote(rholang_code)
+        return self.shell_out('sh', '-c', f'echo {quoted_rholang_code} | {rnode_binary} repl')
 
     __timestamp_rx = "\\d\\d:\\d\\d:\\d\\d\\.\\d\\d\\d"
     __log_message_rx = re.compile(f"^{__timestamp_rx} (.*?)(?={__timestamp_rx})", re.MULTILINE | re.DOTALL)
@@ -101,7 +137,7 @@ class Node:
         return Node.__log_message_rx.split(log_content)
 
 
-def __create_node_container(docker_client, image, name, network, bonds_file, command, rnode_timeout, extra_volumes, allowed_peers, memory, cpuset_cpus):
+def create_node_container(docker_client, image, name, network, bonds_file, command, rnode_timeout, extra_volumes, allowed_peers, memory, cpuset_cpus):
     deploy_dir = make_tempdir("rchain-integration-test")
 
     hosts_allow_file_content = \
@@ -140,9 +176,6 @@ def create_bootstrap_node(docker_client,
                           image=default_image,
                           memory="1024m",
                           cpuset_cpus="0"):
-    """
-    Create bootstrap node.
-    """
 
     key_file = resources.file_path("bootstrap_certificate/node.key.pem")
     cert_file = resources.file_path("bootstrap_certificate/node.certificate.pem")
@@ -164,7 +197,7 @@ def create_bootstrap_node(docker_client,
 
     logging.info(f"Starting bootstrap node {name}\ncommand:`{command}`")
 
-    return __create_node_container(docker_client, image, name, network, bonds_file, command, rnode_timeout, volumes, allowed_peers, memory, cpuset_cpus)
+    return create_node_container(docker_client, image, name, network, bonds_file, command, rnode_timeout, volumes, allowed_peers, memory, cpuset_cpus)
 
 
 def create_peer_nodes(docker_client,
@@ -202,16 +235,14 @@ def create_peer_nodes(docker_client,
 
         logging.info(f"Starting peer node {name} with command: `{command}`")
 
-        return __create_node_container(docker_client, image, name, network, bonds_file, command, rnode_timeout, [], allowed_peers, memory, cpuset_cpus)
+        return create_node_container(docker_client, image, name, network, bonds_file, command, rnode_timeout, [], allowed_peers, memory, cpuset_cpus)
 
-    return [create_peer(i, key_pair)
-            for i, key_pair in enumerate(key_pairs)]
+    return [create_peer(i, key_pair) for i, key_pair in enumerate(key_pairs)]
 
 
 @contextmanager
 def create_bootstrap(docker, docker_network, timeout, validators_data):
     node = create_bootstrap_node(docker, docker_network, validators_data.bonds_file, validators_data.bootstrap_keys, timeout)
-
     try:
         yield node
     finally:
@@ -222,9 +253,5 @@ def create_bootstrap(docker, docker_network, timeout, validators_data):
 def start_bootstrap(docker_client, node_start_timeout, node_cmd_timeout, validators_data):
     with docker_network(docker_client) as network:
         with create_bootstrap(docker_client, network, node_cmd_timeout, validators_data) as node:
-
-            wait_for(node_started(node),
-                     node_start_timeout,
-                     "Bootstrap node didn't start correctly")
-
+            wait_for(node_started(node), node_start_timeout, "Bootstrap node didn't start correctly")
             yield node
