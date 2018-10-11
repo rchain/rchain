@@ -1,18 +1,20 @@
-new test1ID, test3ID, ri(`rho:registry:insertArbitrary`), 
-                      //rs(`rho:registry:insertSigned:ed25519`), 
-                      rl(`rho:registry:lookup`), 
-                      stdout(`rho:io:stdout`), 
-                      stdoutAck(`rho:io:stdoutAck`), ack in { 
+new simpleInsertTest, simpleInsertTestReturnID, simpleLookupTest,
+    signedInsertTest, signedInserTestID, signedLookupTest, 
+    ri(`rho:registry:insertArbitrary`), 
+    //rs(`rho:registry:insertSigned:ed25519`), 
+    rl(`rho:registry:lookup`), 
+    stdout(`rho:io:stdout`), 
+    stdoutAck(`rho:io:stdoutAck`), ack in { 
     
-    @"REGISTRY_SIMPLE_INSERT_TEST"!(*test1ID)
+    simpleInsertTest!(*simpleInsertTestReturnID)
     |
-    for(@idFromTest1 <- test1ID){
-        @"REGISTRY_SIMPLE_LOOKUP_TEST"!(idFromTest1, *ack)
+    for(@idFromTest1 <- simpleInsertTestReturnID){
+        simpleLookupTest!(idFromTest1, *ack)
         |
         for(_ <- ack){
-            //@"REGISTRY_SIGNED_INSERT_TEST"!(*test3ID)
+            //signedInsertTest!(*signedInserTestID)
             //|
-            //for(@idFromTest3 <- test3ID){
+            //for(@idFromTest3 <- signedInserTestID){
                 stdout!("NEED TO ADD INSERT_SIGNED & LOOKUP_SIGNED TESTS")
             //}
         }
@@ -20,7 +22,7 @@ new test1ID, test3ID, ri(`rho:registry:insertArbitrary`),
     
     |
     
-    contract @"REGISTRY_SIMPLE_INSERT_TEST"(registryIdentifier) = {
+    contract simpleInsertTest(registryIdentifier) = {
         stdout!("REGISTRY_SIMPLE_INSERT_TEST: create arbitrary process X to store in the registry")
         |
         new X, Y, innerAck in {
@@ -44,7 +46,7 @@ new test1ID, test3ID, ri(`rho:registry:insertArbitrary`),
     
     |
     
-    contract @"REGISTRY_SIMPLE_LOOKUP_TEST"(@uri, result) = {
+    contract simpleLookupTest(@uri, result) = {
         stdout!("REGISTRY_SIMPLE_LOOKUP_TEST: looking up X in the registry using identifier")
         |
         new lookupResponse in {
@@ -61,7 +63,7 @@ new test1ID, test3ID, ri(`rho:registry:insertArbitrary`),
 /*
     |
     
-    contract @"REGISTRY_SIGNED_INSERT_TEST"(registryIdentifier) = {
+    contract signedInsertTest(registryIdentifier) = {
         // Secret key:  d039d5c634ad95d968fc18368d81b97aaecd32fc7cf6eec07a97c5ac9f9fcb5b11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d
         // Public key:  11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d
         // Nonce:       789
