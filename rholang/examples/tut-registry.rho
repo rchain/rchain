@@ -1,5 +1,5 @@
 new simpleInsertTest, simpleInsertTestReturnID, simpleLookupTest,
-    signedInsertTest, signedInserTestID, signedLookupTest, 
+    signedInsertTest, signedInsertTestReturnID, signedLookupTest, 
     ri(`rho:registry:insertArbitrary`), 
     //rs(`rho:registry:insertSigned:ed25519`), 
     rl(`rho:registry:lookup`), 
@@ -12,9 +12,9 @@ new simpleInsertTest, simpleInsertTestReturnID, simpleLookupTest,
         simpleLookupTest!(idFromTest1, *ack)
         |
         for(_ <- ack){
-            //signedInsertTest!(*signedInserTestID)
+            //signedInsertTest!(*signedInsertTestReturnID)
             //|
-            //for(@idFromTest3 <- signedInserTestID){
+            //for(@idFromTest3 <- signedInsertTestReturnID){
                 stdout!("NEED TO ADD INSERT_SIGNED & LOOKUP_SIGNED TESTS")
             //}
         }
