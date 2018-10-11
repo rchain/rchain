@@ -94,7 +94,7 @@ def bonds_file(validator_keys):
     (fd, file) = tempfile.mkstemp(prefix="rchain-bonds-file-", suffix=".txt", dir="/tmp")
 
     try:
-        logging.info(f"Using bonds file: `{bonds_file}`")
+        logging.info(f"Using bonds file: `{file}`")
 
         with os.fdopen(fd, "w") as f:
             for pair in validator_keys:
@@ -103,7 +103,7 @@ def bonds_file(validator_keys):
         yield file
     finally:
         os.unlink(file)
-        logging.info(f"Bonds file `{bonds_file}` deleted")
+        logging.info(f"Bonds file `{file}` deleted")
 
 
 @contextmanager

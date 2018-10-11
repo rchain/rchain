@@ -73,15 +73,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     result
   }
 
-  def computeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] =
-    Try(unsafeComputeBonds(hash)) match {
-      case Success(value) => value
-      case Failure(ex) =>
-        ex.printStackTrace()
-        throw ex
-    }
-
-  private def unsafeComputeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] = {
+  def computeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] = {
     // TODO: Switch to a read only name
     val bondsQuery =
       """for(@pos <- @"proofOfStake"){ @(pos, "getBonds")!("__SCALA__") }"""

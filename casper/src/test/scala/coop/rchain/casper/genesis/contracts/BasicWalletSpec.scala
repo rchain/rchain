@@ -54,7 +54,7 @@ object Signer extends App {
   private def signWithdrawal(nonce: Int, amount: Int, sigKey: String): String = {
     def parse(rho: String): Par =
       Interpreter
-        .buildNormalizedTerm(new StringReader(rho))
+        .buildNormalizedTerm(rho)
         .value
 
     def bytes(par: Par): Array[Byte] = {

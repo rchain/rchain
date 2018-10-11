@@ -2,6 +2,7 @@ import pytest
 import collections
 from tools.profiling import log_prof_data
 from tools.util import parse_config, docker, validators_data
+from tools.rnode import start_bootstrap
 
 System = collections.namedtuple("System", ["config", "docker", "validators_data"])
 
@@ -36,3 +37,12 @@ def system(request):
             yield System(cfg, docker_client, vd)
         finally:
             log_prof_data()
+
+
+@pytest.fixture(scope="module")
+def bootstrap_node(system):
+    with start_bootstrap(system.docker,
+                         system.config.node_startup_timeout,
+                         system.config.rnode_timeout,
+                         system.validators_data) as node:
+        yield node

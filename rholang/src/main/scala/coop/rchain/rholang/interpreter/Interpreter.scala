@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter
 
-import java.io.Reader
+import java.io.{Reader, StringReader}
 
 import cats.effect.Sync
 import cats.implicits._
@@ -38,6 +38,8 @@ object Interpreter {
   private def parser(lexer: Yylex): parser     = new parser(lexer, lexer.getSymbolFactory())
 
   implicit lazy val sync = implicitly[Sync[Coeval]]
+
+  def buildNormalizedTerm(rho: String): Coeval[Par] = buildNormalizedTerm(new StringReader(rho))
 
   def buildNormalizedTerm(source: Reader): Coeval[Par] =
     try {
