@@ -1,6 +1,7 @@
 package coop.rchain.models
 
 import com.google.protobuf.ByteString
+import coop.rchain.models.Assertions.assertEqual
 import coop.rchain.models.BitSetBytesMapper._
 import coop.rchain.models.Connective.ConnectiveInstance.{Empty => _}
 import coop.rchain.models.Expr.ExprInstance._
@@ -57,23 +58,7 @@ class RhoTypesTest extends FlatSpec with PropertyChecks with Matchers {
     val bytes    = Serialize[A].encode(a)
     val result   = Serialize[A].decode(bytes)
     val expected = Right(a)
-
-    assert(
-      result == expected,
-      LazyClue(
-        s"""
-         |
-         |Actual value:
-         |
-         |${Pretty.pretty(result)}
-         |
-         |was not equal to expected:
-         |
-         |${Pretty.pretty(expected)}
-         |
-         |""".stripMargin
-      )
-    )
+    assertEqual(result, expected)
   }
 }
 
