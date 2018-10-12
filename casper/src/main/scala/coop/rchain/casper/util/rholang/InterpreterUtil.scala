@@ -24,8 +24,8 @@ object InterpreterUtil {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def mkTerm(s: String): Either[Throwable, Par] =
-    Interpreter.buildNormalizedTerm(new StringReader(s)).runAttempt
+  def mkTerm(rho: String): Either[Throwable, Par] =
+    Interpreter.buildNormalizedTerm(rho).runAttempt
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
