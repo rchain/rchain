@@ -5,7 +5,7 @@
 contract BasicWalletFaucet(@mint, return) = {
   new this in {
     contract this(@amount, @algorithm, @publicKey, return) = {
-      new walletPurseCh, ret in {
+      new walletPurseCh in {
         mint!("makePurse", amount, *walletPurseCh) |
         for(@walletPurse <- walletPurseCh) {
           BasicWallet!(walletPurse, algorithm, publicKey, *return)

@@ -34,9 +34,9 @@ contract Either(@"map", @either, f, return) = {
 //  ...
 //} yield fn
 contract Either(@"compose", @input, @functions, return) = {
-  new combinator, foldret in {
+  new combinator in {
     contract combinator(@head, @accumulatedValue, return) = {
-      flatMap!(accumulatedValue, head, *return)
+      Either(@"flatMap", accumulatedValue, head, *return)
     } |
     ListOps!("fold", functions, ("Right", input), *combinator, *return)
   }

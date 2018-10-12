@@ -73,11 +73,11 @@ contract MakePoS(@purse, @minimumBond, @maximumBond, @initBonds, return) = {
       new rangeCh, feeDistFunc, feeDistCh, sum, nCh, totalCh in {
         contract sum(@x, @y, return) = { return!(x + y) } |
         contract feeDistFunc(@k, return) = { return!((2 * joiningFee * (n + 1 - k)) / (n * (n + 1))) } |
-        range!(1, n + 1, *rangeCh) |
+        ListOps!("range", 1, n + 1, *rangeCh) |
         for(@range <- rangeCh) {
-          map!(range, *feeDistFunc, *feeDistCh) |
+          ListOps!("map", range, *feeDistFunc, *feeDistCh) |
           for(@feeDist <- feeDistCh) {
-            fold!(feeDist, 0, *sum, *totalCh) |
+            ListOps!("fold", feeDist, 0, *sum, *totalCh) |
             for(@total <- totalCh) {
               return!(
                 //give remainder (non-zero from rounding) to first validator
