@@ -1,9 +1,9 @@
 
 import logging
-from tools.wait import wait_for, string_contains, show_blocks
-from tools.util import log_box
-from tools.random import random_string
-import tools.resources as resources
+from rnode_testing.wait import wait_for, string_contains, show_blocks
+from rnode_testing.util import log_box
+from rnode_testing.random import random_string
+import rnode_testing.resources as resources
 from shutil import copyfile
 
 

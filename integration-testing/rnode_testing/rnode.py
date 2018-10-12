@@ -2,10 +2,10 @@ import os
 import logging
 import re
 from contextlib import contextmanager
-from tools.docker import docker_network
-import tools.resources as resources
-from tools.util import log_box, make_tempfile, make_tempdir
-from tools.wait import wait_for, node_started
+from rnode_testing.docker import docker_network
+import rnode_testing.resources as resources
+from rnode_testing.util import log_box, make_tempfile, make_tempdir
+from rnode_testing.wait import wait_for, node_started
 import shlex
 
 from multiprocessing import Queue, Process
