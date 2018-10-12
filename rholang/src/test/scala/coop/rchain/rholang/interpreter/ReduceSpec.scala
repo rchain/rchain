@@ -1370,6 +1370,62 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
+  "interpolate" should "interpolate Boolean values" in {
+    implicit val errorLog = new ErrorLog()
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env = Env.makeEnv[Par]()
+        val task = reducer.evalExpr(
+        EPercentPercentBody(
+          EPercentPercent(
+            GString("${a} ${b}"),
+            EMapBody(
+              ParMap(
+                Seq[(Par, Par)](
+                  (GString("a"), GBool(false)),
+                  (GString("b"), GBool(true))
+                )
+              )
+            )
+          )
+        )
+      )
+      Await.result(task.runAsync, 3.seconds)
+    }
+
+    result.exprs should be(Seq(Expr(GString("false true"))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "interpolate" should "interpolate URIs" in {
+    implicit val errorLog = new ErrorLog()
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env = Env.makeEnv[Par]()
+        val task = reducer.evalExpr(
+          EPercentPercentBody(
+            EPercentPercent(
+              GString("${a} ${b}"),
+              EMapBody(
+                ParMap(
+                  Seq[(Par, Par)](
+                    (GString("a"), GUri("testUriA")),
+                    (GString("b"), GUri("testUriB"))
+                  )
+                )
+              )
+            )
+          )
+        )
+        Await.result(task.runAsync, 3.seconds)
+    }
+
+    result.exprs should be(Seq(Expr(GString("testUriA testUriB"))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
   "[0, 1, 2, 3].length()" should "return the length of the list" in {
     implicit val errorLog = new ErrorLog()
 
