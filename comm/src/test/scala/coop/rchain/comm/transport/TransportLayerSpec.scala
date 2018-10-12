@@ -4,7 +4,7 @@ import scala.concurrent.duration._
 
 import cats._
 import cats.implicits._
-
+import coop.rchain.shared._
 import coop.rchain.comm._, rp.ProtocolHelper
 import coop.rchain.comm.protocol.routing.{Packet, Protocol}
 import coop.rchain.casper.protocol.{BlockApproval => CasperBlockApproval}
