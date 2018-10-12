@@ -1,20 +1,28 @@
 package coop.rchain.comm.transport
 
 import scala.concurrent.duration.Duration
-
-import coop.rchain.shared
+import cats._, cats.data._, cats.implicits._, cats.mtl._, cats.effect.Timer
+import coop.rchain.shared._
 import coop.rchain.comm.PeerNode
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.shared.{Cell, Log}
-
+import scala.concurrent.duration._
 import monix.eval.Task
 import monix.execution.Scheduler
 
-// FIXME:
-class TcpTransportLayerSpec { //extends TransportLayerSpec[Task, TcpTlsEnvironment] {
+class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] {
 
-  implicit val log: Log[Task]       = new shared.Log.NOPLog[Task]
+  implicit val log: Log[Task]       = new Log.NOPLog[Task]
   implicit val scheduler: Scheduler = Scheduler.Implicits.global
+
+  def timer: Timer[Task] = implicitly[Timer[Task]]
+
+  def time: Time[Task] =
+    new Time[Task] {
+      def currentMillis: Task[Long]                   = timer.clock.realTime(MILLISECONDS)
+      def nanoTime: Task[Long]                        = timer.clock.monotonic(NANOSECONDS)
+      def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
+    }
 
   def createEnvironment(port: Int): Task[TcpTlsEnvironment] =
     Task.delay {

@@ -179,7 +179,7 @@ logs the profiling information for all the fucntions decorated with @profile
 
 
 #### Package fixtures
-The logic for setting up rnode networks are defined in `tools/network.py` as context managers. These are 
+The logic for setting up rnode networks are defined in `rnode_testing/network.py` as context managers. These are 
 used in`conftest.py` and wrapped in a `@pytest.fixture` in order to build a network with the given shape.
 
 This way the setup/teardown logic reused in several places.
@@ -187,7 +187,7 @@ This way the setup/teardown logic reused in several places.
 ### Waiting for conditions
 Because simple `sleep`s are unreliable *all* waiting for various conditions is done via calls to wait-for.
 
-The wait utilities are defined in `src/tools/wait.py`.
+The wait utilities are defined in `rnode_testing/wait.py`.
 
 The key function is `wait_for` which waits for a given condition a certain number of seconds. This function checks 
 periodically the condition to see if it is fullfilled.
@@ -200,17 +200,17 @@ They `__doc__` is important for debugging the tests because it's printed in the 
 
 ### File resources
 The resources like contracts to be deployed, certificates etc. are stored in the `resources` directory. The code that 
-needs access to these resources can access them using the utilities found in  `src/tools/resources.py`
+needs access to these resources can access them using the utilities found in  `rnode_testing/resources.py`
 
 ### RNode interface
-The file `src/tools/rnode.py` contains utilities for working with node.
+The file `rnode_testing/rnode.py` contains utilities for working with node.
 
 ### Profiling tests
-The file `src/tools/profiling.py` contains the `profile` decorator which can be used to collect profiling information.
+The file `rnode_testing/profiling.py` contains the `profile` decorator which can be used to collect profiling information.
 The profiling information is printed in the log file at the end of the test execution.
 
 ### Mixing fixtures
-The file `src/tools/fixture.py` contains tools for parameterizing tests with different fixtures.
+The file `rnode_testing/fixture.py` contains tools for parameterizing tests with different fixtures.
 
 ```python
 @parametrize.cartesian(x=[a, b, c], y=[q,w,e])

@@ -2,7 +2,7 @@ import logging
 import re
 import pytest
 import time
-from tools.util import log_box
+from rnode_testing.util import log_box
 
 
 def wait_for(condition, timeout, error_message):
