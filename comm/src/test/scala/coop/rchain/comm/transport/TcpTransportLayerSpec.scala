@@ -1,12 +1,11 @@
 package coop.rchain.comm.transport
 
 import scala.concurrent.duration.Duration
-
 import coop.rchain.shared
 import coop.rchain.comm.PeerNode
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.util.{CertificateHelper, CertificatePrinter}
 import coop.rchain.shared.{Cell, Log}
-
 import monix.eval.Task
 import monix.execution.Scheduler
 

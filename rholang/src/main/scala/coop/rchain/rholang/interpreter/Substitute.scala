@@ -149,7 +149,9 @@ object Substitute {
                 .traverse(substitutePar[M].substituteNoSort(_))
                 .map(ps => par.prepend(Connective(ConnOrBody(ConnectiveBody(ps))), depth))
             case ConnNotBody(p) =>
-              substitutePar[M].substituteNoSort(p).map(p => Connective(ConnNotBody(p)))
+              substitutePar[M]
+                .substituteNoSort(p)
+                .map(p => Connective(ConnNotBody(p)))
                 .map(par.prepend(_, depth))
             case c: ConnBool      => par.prepend(Connective(c), depth).pure[M]
             case c: ConnInt       => par.prepend(Connective(c), depth).pure[M]

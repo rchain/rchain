@@ -4,7 +4,6 @@ import cats._
 import cats.data._
 import cats.effect._
 import cats.implicits._
-
 import coop.rchain.blockstorage.{BlockStore, LMDBBlockStore}
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.util.comm.CasperPacketHandler
@@ -20,6 +19,7 @@ import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.rp._
 import coop.rchain.comm.transport._
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.util.CertificateHelper
 import coop.rchain.metrics.Metrics
 import coop.rchain.node.api._
 import coop.rchain.node.configuration.Configuration
@@ -27,7 +27,6 @@ import coop.rchain.node.diagnostics._
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
-
 import kamon._
 import kamon.zipkin.ZipkinReporter
 import io.grpc.Server
@@ -35,9 +34,9 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.{Server => Http4sServer}
 import org.http4s.server.blaze._
+
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
-
 import monix.execution.schedulers.SchedulerService
 
 class NodeRuntime(conf: Configuration, host: String, scheduler: Scheduler) {
@@ -70,36 +69,7 @@ class NodeRuntime(conf: Configuration, host: String, scheduler: Scheduler) {
   }
 
   println(s"Using data_dir: ${dataDirFile.getAbsolutePath}")
-
-  // Generate certificate if not provided as option or in the data dir
-  if (!conf.tls.customCertificateLocation
-      && !conf.tls.certificate.toFile.exists()) {
-    println(s"No certificate found at path ${conf.tls.certificate}")
-    println("Generating a X.509 certificate for the node")
-
-    import coop.rchain.shared.Resources._
-    // If there is a private key, use it for the certificate
-    if (conf.tls.key.toFile.exists()) {
-      println(s"Using secret key ${conf.tls.key}")
-      Try(CertificateHelper.readKeyPair(conf.tls.key.toFile)) match {
-        case Success(keyPair) =>
-          withResource(new java.io.PrintWriter(conf.tls.certificate.toFile)) {
-            _.write(CertificatePrinter.print(CertificateHelper.generate(keyPair)))
-          }
-        case Failure(e) =>
-          println(s"Invalid secret key: ${e.getMessage}")
-      }
-    } else {
-      println("Generating a PEM secret key for the node")
-      val keyPair = CertificateHelper.generateKeyPair(conf.tls.secureRandomNonBlocking)
-      withResource(new java.io.PrintWriter(conf.tls.certificate.toFile)) { pw =>
-        pw.write(CertificatePrinter.print(CertificateHelper.generate(keyPair)))
-      }
-      withResource(new java.io.PrintWriter(conf.tls.key.toFile)) { pw =>
-        pw.write(CertificatePrinter.printPrivateKey(keyPair.getPrivate))
-      }
-    }
-  }
+  transport.generateSertificateIfAbsent(conf.tls)
 
   if (!conf.tls.certificate.toFile.exists()) {
     println(s"Certificate file ${conf.tls.certificate} not found")
