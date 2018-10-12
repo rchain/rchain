@@ -128,7 +128,7 @@ class StackSafetySpec extends FlatSpec with Matchers {
 
   private def checkAll(rho: String): Unit = {
     isolateStackOverflow {
-      val ast = Interpreter.buildNormalizedTerm(new StringReader(rho)).value()
+      val ast = Interpreter.buildNormalizedTerm(rho).value()
       PrettyPrinter().buildString(ast)
     }
     checkReduce(rho)
@@ -148,7 +148,7 @@ class StackSafetySpec extends FlatSpec with Matchers {
       checkSuccess(rho) { rho =>
         Task.coeval(
           Interpreter
-            .buildNormalizedTerm(new StringReader(rho))
+            .buildNormalizedTerm(rho)
         )
       }
     }

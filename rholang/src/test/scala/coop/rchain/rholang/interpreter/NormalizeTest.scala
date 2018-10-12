@@ -388,45 +388,45 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
   "PSend" should "Not compile if data contains negation" in {
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      Interpreter.buildNormalizedTerm(new StringReader("""new x in { x!(~1) }""")).value()
+      Interpreter.buildNormalizedTerm("""new x in { x!(~1) }""").value()
     }
   }
 
   "PSend" should "Not compile if data contains conjunction" in {
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      Interpreter.buildNormalizedTerm(new StringReader("""new x in { x!(1 /\ 2) }""")).value()
+      Interpreter.buildNormalizedTerm("""new x in { x!(1 /\ 2) }""").value()
     }
   }
 
   "PSend" should "Not compile if data contains disjunction" in {
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      Interpreter.buildNormalizedTerm(new StringReader("""new x in { x!(1 \/ 2) }""")).value()
+      Interpreter.buildNormalizedTerm("""new x in { x!(1 \/ 2) }""").value()
     }
   }
 
   "PSend" should "Not compile if data contains wildcard" in {
     an[TopLevelWildcardsNotAllowedError] should be thrownBy {
-      Interpreter.buildNormalizedTerm(new StringReader("""@"x"!(_)""")).value()
+      Interpreter.buildNormalizedTerm("""@"x"!(_)""").value()
     }
   }
 
   "PSend" should "Not compile if data contains free variable" in {
     an[TopLevelFreeVariablesNotAllowedError] should be thrownBy {
-      Interpreter.buildNormalizedTerm(new StringReader("""@"x"!(y)""")).value()
+      Interpreter.buildNormalizedTerm("""@"x"!(y)""").value()
     }
   }
 
   "PSend" should "not compile if name contains connectives" in {
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      Interpreter.buildNormalizedTerm(new StringReader("""@{Nil /\ Nil}!(1)""")).value()
+      Interpreter.buildNormalizedTerm("""@{Nil /\ Nil}!(1)""").value()
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      Interpreter.buildNormalizedTerm(new StringReader("""@{Nil \/ Nil}!(1)""")).value()
+      Interpreter.buildNormalizedTerm("""@{Nil \/ Nil}!(1)""").value()
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      Interpreter.buildNormalizedTerm(new StringReader("""@{~Nil}!(1)""")).value()
+      Interpreter.buildNormalizedTerm("""@{~Nil}!(1)""").value()
     }
   }
 
@@ -747,45 +747,45 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   "PInput" should "not compile when connectives are used in the channel" in {
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
       Interpreter
-        .buildNormalizedTerm(new StringReader("""for(x <- @{Nil \/ Nil}){ Nil }"""))
+        .buildNormalizedTerm("""for(x <- @{Nil \/ Nil}){ Nil }""")
         .value()
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
       Interpreter
-        .buildNormalizedTerm(new StringReader("""for(x <- @{Nil /\ Nil}){ Nil }"""))
+        .buildNormalizedTerm("""for(x <- @{Nil /\ Nil}){ Nil }""")
         .value()
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      Interpreter.buildNormalizedTerm(new StringReader("""for(x <- @{~Nil}){ Nil }""")).value()
+      Interpreter.buildNormalizedTerm("""for(x <- @{~Nil}){ Nil }""").value()
     }
   }
 
   "PInput" should "not compile when connectives are the top level expression in the body" in {
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      Interpreter.buildNormalizedTerm(new StringReader("""for(x <- @Nil){ 1 /\ 2 }""")).value()
+      Interpreter.buildNormalizedTerm("""for(x <- @Nil){ 1 /\ 2 }""").value()
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      Interpreter.buildNormalizedTerm(new StringReader("""for(x <- @Nil){ 1 \/ 2 }""")).value()
+      Interpreter.buildNormalizedTerm("""for(x <- @Nil){ 1 \/ 2 }""").value()
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      Interpreter.buildNormalizedTerm(new StringReader("""for(x <- @Nil){ ~1 }""")).value()
+      Interpreter.buildNormalizedTerm("""for(x <- @Nil){ ~1 }""").value()
     }
   }
 
   "PInput" should "not compile when logical OR or NOT is used in the pattern of the receive" in {
     an[PatternReceiveError] should be thrownBy {
       Interpreter
-        .buildNormalizedTerm(new StringReader("""new x in { for(@{Nil \/ Nil} <- x) { Nil } }"""))
+        .buildNormalizedTerm("""new x in { for(@{Nil \/ Nil} <- x) { Nil } }""")
         .value()
     }
 
     an[PatternReceiveError] should be thrownBy {
       Interpreter
-        .buildNormalizedTerm(new StringReader("""new x in { for(@{~Nil} <- x) { Nil } }"""))
+        .buildNormalizedTerm("""new x in { for(@{~Nil} <- x) { Nil } }""")
         .value()
     }
   }
@@ -793,7 +793,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   "PInput" should "compile when logical AND is used in the pattern of the receive" in {
     noException should be thrownBy {
       Interpreter
-        .buildNormalizedTerm(new StringReader("""new x in { for(@{Nil /\ Nil} <- x) { Nil } }"""))
+        .buildNormalizedTerm("""new x in { for(@{Nil /\ Nil} <- x) { Nil } }""")
         .value()
     }
   }
@@ -1450,7 +1450,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
            }
          }
        """
-        Interpreter.buildNormalizedTerm(new StringReader(rho)).value()
+        Interpreter.buildNormalizedTerm(rho).value()
         assert(true)
       } catch {
         case e: Throwable =>
