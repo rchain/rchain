@@ -1,17 +1,35 @@
 sudo: required
 dist: trusty
-jdk:
-  - openjdk8
 
 matrix:
   include:
   - language: nix
     env: SUBPROJECT=rosette
   - language: scala
+    jdk: openjdk8
     env:
       - SUBPROJECT=core
-    scala: 2.12.4
+    scala: 2.12.7
     sbt_args: -no-colors
+    install:
+      - ./scripts/install_sbt.sh
+      - ./scripts/install.sh
+    addons:
+      apt:
+        packages:
+          - jflex
+          - haskell-platform
+          - rpm
+          - fakeroot
+  - language: scala
+    jdk: openjdk10
+    env:
+      - SUBPROJECT=core-java10
+    scala: 2.12.7
+    sbt_args: -no-colors
+    before_install:
+      - rm "${JAVA_HOME}/lib/security/cacerts"
+      - ln -s /etc/ssl/certs/java/cacerts "${JAVA_HOME}/lib/security/cacerts"
     install:
       - ./scripts/install_sbt.sh
       - ./scripts/install.sh
