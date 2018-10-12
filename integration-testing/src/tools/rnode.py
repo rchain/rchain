@@ -1,3 +1,4 @@
+import os
 import logging
 import re
 from contextlib import contextmanager
@@ -64,7 +65,7 @@ class Node:
         return self.exec_run(cmd=cmd)
 
     def cleanup(self):
-        log_file = f"{self.container.name}.log"
+        log_file = os.path.join('logs', f"{self.container.name}.log")
 
         with open(log_file, "w") as f:
             f.write(self.logs())
