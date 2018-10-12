@@ -45,7 +45,7 @@ contract ListOps(@"fold", @list, @start, combinator, return) = {
   }
 } |
 contract ListOps(@"reverse", @list, return) = {
-  ListOps!(@"fold", list, [], *prepend, *return)
+  ListOps!("fold", list, [], *prepend, *return)
 } |
 contract ListOps(@"map", @list, function, return) = {
   new combinator in {
@@ -57,7 +57,7 @@ contract ListOps(@"map", @list, function, return) = {
         }
       }
     } | 
-    ListOps!(@"fold", list, [], *combinator, *return)
+    ListOps!("fold", list, [], *combinator, *return)
   }
 } |
 contract ListOps(@"parMap", @list, function, return) = {
