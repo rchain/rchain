@@ -24,7 +24,6 @@ def docker_network(docker_client):
 
     try:
         yield network_name
-
     finally:
         for network in docker_client.networks.list():
             if network_name == network.name:
