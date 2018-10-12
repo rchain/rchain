@@ -171,7 +171,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     (SafetyOracle[F].normalizedFaultTolerance(dag, blockHash) > faultToleranceThreshold).pure[F]
 
   def contains(b: BlockMessage): F[Boolean] =
-    BlockStore[F].contains(b.blockHash).map(_ || blockBuffer.contains(b))
+    BlockStore[F].contains(b.blockHash)
 
   def deploy(d: DeployData): F[Either[Throwable, Unit]] =
     InterpreterUtil.mkTerm(d.term) match {
