@@ -109,12 +109,12 @@ object Configuration {
   ): Task[Configuration] =
     if (command == Run) {
       for {
-        dataDir    <- Task.pure(options.run.data_dir.getOrElse(profile.dataDir._1()))
+        dataDir    <- Task.pure(options.run.dataDir.getOrElse(profile.dataDir._1()))
         _          = System.setProperty("rnode.data.dir", dataDir.toString)
         configFile <- Task.delay(options.configFile.getOrElse(dataDir.resolve("rnode.toml")).toFile)
         config     <- loadConfigurationFile(configFile)
         effectiveDataDir <- Task.pure(
-                             if (options.run.data_dir.isDefined) dataDir
+                             if (options.run.dataDir.isDefined) dataDir
                              else config.flatMap(_.server.flatMap(_.dataDir)).getOrElse(dataDir)
                            )
         _      = System.setProperty("rnode.data.dir", effectiveDataDir.toString)
@@ -241,7 +241,7 @@ object Configuration {
     val deployTimestamp = getOpt(_.run.deployTimestamp, _.validators.flatMap(_.deployTimestamp))
 
     val host: Option[String] = getOpt(_.run.host, _.server.flatMap(_.host))
-    val mapSize: Long        = get(_.run.map_size, _.server.flatMap(_.mapSize), DefaultMapSize)
+    val mapSize: Long        = get(_.run.mapSize, _.server.flatMap(_.mapSize), DefaultMapSize)
     val storeType: StoreType =
       get(_.run.storeType, _.server.flatMap(_.storeType.flatMap(StoreType.from)), DefaultStoreType)
     val casperBlockStoreSize: Long = get(
