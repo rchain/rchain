@@ -1,7 +1,7 @@
 import logging
 import random
 import tempfile
-import tools.resources as resources
+import rnode_testing.resources as resources
 import os
 import pprint
 from contextlib import contextmanager
