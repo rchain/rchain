@@ -23,7 +23,7 @@ import monix.eval.Coeval
 import SpatialMatcher.spatialMatchAndCharge
 
 import scala.collection.immutable.BitSet
-import scala.util.Try
+import scala.util.{Random, Try}
 
 // Notes: Caution, a type annotation is often needed for Env.
 
@@ -236,7 +236,9 @@ object Reduce {
 
       val starts = jobs.map(_.size).scanLeft(0)(_ + _).toVector
 
-      jobs.zipWithIndex
+      Random
+        .shuffle(jobs)
+        .zipWithIndex
         .map {
           case (job, jobIdx) => {
             def mkRand(termIdx: Int) = split(starts.last, starts(jobIdx), rand)(termIdx)
