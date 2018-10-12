@@ -7,7 +7,7 @@ import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.ProtocolHelper
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
-import coop.rchain.shared.{Cell, Log, LogSource}
+import coop.rchain.shared.{ByteStringOps, Cell, Log, LogSource}, ByteStringOps._
 
 import scala.concurrent.duration._
 import scala.util._

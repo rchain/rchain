@@ -4,11 +4,12 @@ import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
 import coop.rchain.comm.PeerNode
 import cats.implicits._
-import coop.rchain.shared.{Log, LogSource}
+import coop.rchain.shared.{ByteStringOps, Log, LogSource}, ByteStringOps._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.CommError
 import coop.rchain.comm.rp.ProtocolHelper
-
+import coop.rchain.catscontrib.ski._
+import com.google.protobuf.ByteString
 import io.grpc.netty.NettyServerBuilder
 import io.netty.handler.ssl.SslContext
 import monix.eval.Task
@@ -100,13 +101,18 @@ class TcpServerObservable(
                 StreamMessage(
                   Blob(
                     peerNode,
-                    Packet().withTypeId(typeId).withContent(ProtocolHelper.toProtocolBytes(content))
+                    Packet().withTypeId(typeId).withContent(toContent(content))
                   )
                 )
               )
             )
           case incorrect => logger.error(s"Streamed incorrect blob of data. Received $incorrect")
         }).as(ChunkResponse())
+      }
+
+      private def toContent(content: Array[Byte]): ByteString = {
+        val raw = ProtocolHelper.toProtocolBytes(content)
+        raw.decompress.fold(raw)(id)
       }
 
       private def returnProtocol(protocol: Protocol): TLResponse =
