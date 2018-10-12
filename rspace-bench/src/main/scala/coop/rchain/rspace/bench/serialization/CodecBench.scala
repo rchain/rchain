@@ -29,8 +29,31 @@ class CodecBench {
   @Fork(value = 1)
   @Warmup(iterations = 5)
   @Measurement(iterations = 10)
+  def scodecHeavyRoundTrip(bh: Blackhole, state: ScodecBenchState) = {
+    val res = state.roundTripMany(state.heavyGnats)(state.serializer)
+    bh.consume(res)
+  }
+
+  @Benchmark
+  @BenchmarkMode(Array(Mode.AverageTime))
+  @OutputTimeUnit(TimeUnit.MILLISECONDS)
+  @Fork(value = 1)
+  @Warmup(iterations = 5)
+  @Measurement(iterations = 10)
   def kryoRoundTrip(bh: Blackhole, state: KryoBenchState) = {
-    val res = state.roundTrip(state.gnat)(state.serializer)
+    val gnat = state.gnat
+    val res  = state.roundTrip(gnat)(state.serializer)
+    bh.consume(res)
+  }
+
+  @Benchmark
+  @BenchmarkMode(Array(Mode.AverageTime))
+  @OutputTimeUnit(TimeUnit.MILLISECONDS)
+  @Fork(value = 1)
+  @Warmup(iterations = 5)
+  @Measurement(iterations = 10)
+  def kryoHeavyRoundTrip(bh: Blackhole, state: KryoBenchState) = {
+    val res = state.roundTripMany(state.heavyGnats)(state.serializer)
     bh.consume(res)
   }
 }
@@ -46,9 +69,14 @@ abstract class CodecBenchState {
   implicit def serializer: Serialize2ByteBuffer[TestGNAT]
 
   def roundTrip[A](e: A)(implicit s: Serialize2ByteBuffer[A]): A = {
-    val d = s.encode(e)
-    s.decode(d)
+    val d   = s.encode(e)
+    val res = s.decode(d)
+    assert(e == res)
+    res
   }
+
+  def roundTripMany[A](seq: Seq[A])(implicit s: Serialize2ByteBuffer[A]): Seq[A] =
+    seq.map(roundTrip(_))
 
   val data = Entry(
     name = Name("Ben", "Serializerovsky"),
@@ -70,6 +98,22 @@ abstract class CodecBenchState {
     Seq(datum),
     Seq(continuation)
   )
+
+  def heavyGnat(weight: Int) = {
+    val range                  = (1 to weight)
+    val channels: Seq[Channel] = range.map(i => Channel(i.toString))
+    val patterns: Seq[Pattern] = range.map(i => CityMatch(city = i.toString))
+
+    GNAT[Channel, Pattern, Entry, EntriesCaptor](
+      channels,
+      range.map(i => Datum.create(channels(i - 1), data, false)),
+      range.map(
+        i => WaitingContinuation.create(channels.take(i), patterns, new EntriesCaptor(), false)
+      )
+    )
+  }
+
+  val heavyGnats = (1 to 100).map(i => heavyGnat(i))
 }
 
 @BenchState(Scope.Benchmark)
