@@ -95,7 +95,6 @@ object testImplicits {
   implicit val ParSetShrink             = implicitly[Shrink[ParSet]]
   implicit val ParMapShrink             = implicitly[Shrink[ParMap]]
 
-
   implicit def alwaysEqualArbitrary[A: Arbitrary]: Arbitrary[AlwaysEqual[A]] =
     Arbitrary(Arbitrary.arbitrary[A].map(AlwaysEqual(_)))
 

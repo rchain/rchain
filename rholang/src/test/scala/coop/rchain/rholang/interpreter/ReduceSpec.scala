@@ -1377,21 +1377,21 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val task = reducer.evalExpr(
-        EPercentPercentBody(
-          EPercentPercent(
-            GString("${a} ${b}"),
-            EMapBody(
-              ParMap(
-                Seq[(Par, Par)](
-                  (GString("a"), GBool(false)),
-                  (GString("b"), GBool(true))
+          EPercentPercentBody(
+            EPercentPercent(
+              GString("${a} ${b}"),
+              EMapBody(
+                ParMap(
+                  Seq[(Par, Par)](
+                    (GString("a"), GBool(false)),
+                    (GString("b"), GBool(true))
+                  )
                 )
               )
             )
           )
         )
-      )
-      Await.result(task.runAsync, 3.seconds)
+        Await.result(task.runAsync, 3.seconds)
     }
 
     result.exprs should be(Seq(Expr(GString("false true"))))
