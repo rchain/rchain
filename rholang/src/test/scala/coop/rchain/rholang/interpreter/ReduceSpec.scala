@@ -1343,6 +1343,14 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
+  def interpolate(base: String, substitutes: Seq[(Par, Par)]): Expr =
+    EPercentPercentBody(
+      EPercentPercent(
+        GString(base),
+        EMapBody(ParMap(substitutes))
+      )
+    )
+
   "'${a} ${b}' % {'a': '1 ${b}', 'b': '2 ${a}'" should "return '1 ${b} 2 ${a}" in {
     implicit val errorLog = new ErrorLog()
 
@@ -1350,17 +1358,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val inspectTask = reducer.evalExpr(
-          EPercentPercentBody(
-            EPercentPercent(
-              GString("${a} ${b}"),
-              EMapBody(
-                ParMap(
-                  List[(Par, Par)](
-                    (GString("a"), GString("1 ${b}")),
-                    (GString("b"), GString("2 ${a}"))
-                  )
-                )
-              )
+          interpolate(
+            "${a} ${b}",
+            List[(Par, Par)](
+              (GString("a"), GString("1 ${b}")),
+              (GString("b"), GString("2 ${a}"))
             )
           )
         )
@@ -1377,17 +1379,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val task = reducer.evalExpr(
-          EPercentPercentBody(
-            EPercentPercent(
-              GString("${a} ${b}"),
-              EMapBody(
-                ParMap(
-                  Seq[(Par, Par)](
-                    (GString("a"), GBool(false)),
-                    (GString("b"), GBool(true))
-                  )
-                )
-              )
+          interpolate(
+            "${a} ${b}",
+            Seq[(Par, Par)](
+              (GString("a"), GBool(false)),
+              (GString("b"), GBool(true))
             )
           )
         )
@@ -1405,17 +1401,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val task = reducer.evalExpr(
-          EPercentPercentBody(
-            EPercentPercent(
-              GString("${a} ${b}"),
-              EMapBody(
-                ParMap(
-                  Seq[(Par, Par)](
-                    (GString("a"), GUri("testUriA")),
-                    (GString("b"), GUri("testUriB"))
-                  )
-                )
-              )
+          interpolate(
+            "${a} ${b}",
+            Seq[(Par, Par)](
+              (GString("a"), GUri("testUriA")),
+              (GString("b"), GUri("testUriB"))
             )
           )
         )
