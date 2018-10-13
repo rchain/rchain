@@ -2,14 +2,19 @@ package coop.rchain.comm
 
 import java.net.InetAddress
 
+import com.typesafe.scalalogging.Logger
+
 import scala.collection.JavaConverters._
 import scala.util.Try
 import scala.util.control.NonFatal
 import scala.util.matching.Regex
-
 import org.bitlet.weupnp._
 
 object UPnP {
+
+  val logger = Logger(this.getClass)
+
+  import logger._
 
   lazy val IPv4: Regex =
     ("^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\." +
@@ -36,72 +41,72 @@ object UPnP {
   }
 
   def assurePortForwarding(ports: Seq[Int]): Option[String] = {
-    println("INFO - trying to open ports using UPnP....")
+    info("trying to open ports using UPnP....")
     val devices = discover
     if (devices.gateways.isEmpty) {
-      println("INFO - No gateway devices found")
+      info("No gateway devices found")
       if (devices.all.isEmpty) {
-        println("INFO - No need to open any port")
+        info("No need to open any port")
       } else {
-        println("INFO - Other devices:")
+        info("Other devices:")
         devices.all.foreach {
           case (ip, d) =>
-            println(UPnP.showDevice(ip, d))
+            info(UPnP.showDevice(ip, d))
         }
-        println()
       }
       None
     } else {
-      print("INFO - Available gateway devices: ")
-      println(devices.gateways.map(d => d.getFriendlyName).mkString(", "))
+      val gatewayDevices = devices.gateways.map(d => d.getFriendlyName)
+      info(s"Available gateway devices: ${gatewayDevices.mkString("\n", ", ", "\n")}")
 
       val gateway = devices.validGateway.getOrElse(devices.gateways.head)
-      println(s"INFO - Picking ${gateway.getFriendlyName} as gateway")
+      info(s"Picking ${gateway.getFriendlyName} as gateway")
       isPrivateIpAddress(gateway.getExternalIPAddress) match {
         case Some(true) =>
-          println(
-            s"WARNING - Gateway's external IP address ${gateway.getExternalIPAddress} is from a private address block. " +
+          warn(
+            s"Gateway's external IP address ${gateway.getExternalIPAddress} is from a private address block. " +
               "This machine is behind more than one NAT."
           )
         case Some(_) =>
-          println("INFO - Gateway's external IP address is from a public address block.")
-        case _ => println("WARNING - Can't parse gateway's external IP address. It's maybe IPv6.")
+          info("Gateway's external IP address is from a public address block.")
+        case _ => warn("Can't parse gateway's external IP address. It's maybe IPv6.")
       }
 
       val mappings = getPortMappings(gateway).filter(m => ports.contains(m.getExternalPort))
       mappings.foreach { m =>
-        print(
-          s"INFO - Removing an existing port mapping for port ${m.getProtocol}/${m.getExternalPort}"
+        info(
+          s"Removing an existing port mapping for port ${m.getProtocol}/${m.getExternalPort}"
         )
         removePort(gateway, m) match {
-          case Right(_) => println(" [success]")
-          case _        => println(" [failed]")
+          case Right(_) => info(" [success]")
+          case _        => info(" [failed]")
         }
       }
 
       val result = ports.map { p =>
-        print(s"INFO - Adding a port mapping for port TCP/$p")
+        info(s"Adding a port mapping for port TCP/$p")
         addPort(gateway, p, "TCP", "RChain") match {
           case Right(_) =>
-            println(" [success]")
+            info(" [success]")
             true
           case _ =>
-            println(" [failed]")
+            info(" [failed]")
             false
         }
       }
 
       if (result.exists(r => !r)) {
-        println(
-          "ERROR - Could not open the ports via UPnP. Please open it manually on your router!"
+        error(
+          "Could not open the ports via UPnP. Please open it manually on your router!"
         )
       } else {
-        println("INFO - UPnP port forwarding was most likely successful!")
+        info("UPnP port forwarding was most likely successful!")
       }
-      println()
-      println(showPortMappingHeader)
-      getPortMappings(gateway).foreach(m => println(showPortMapping(m)))
-      println()
+
+      val portMappings = getPortMappings(gateway).map(m => showPortMapping(m))
+
+      info(s"\n$showPortMappingHeader\n${portMappings.mkString("\n", "\n", "\n")}")
+
       Some(gateway.getExternalIPAddress)
     }
   }
