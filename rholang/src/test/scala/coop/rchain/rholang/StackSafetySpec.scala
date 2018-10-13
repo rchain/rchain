@@ -3,11 +3,16 @@ package coop.rchain.rholang
 import java.io.StringReader
 import java.nio.file.Files
 
+import coop.rchain.models.Connective.ConnectiveInstance.ConnNotBody
+import coop.rchain.models.Expr.ExprInstance.GInt
+import coop.rchain.models.{Connective, Par, ProtoM}
+import coop.rchain.rholang.StackSafetySpec.findMaxRecursionDepth
 import coop.rchain.rholang.interpreter.{Interpreter, PrettyPrinter, Runtime}
-import monix.eval.Task
+import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertions, FlatSpec, Matchers}
 
+import scala.annotation.tailrec
 import scala.concurrent.duration._
 
 object StackSafetySpec extends Assertions {
@@ -173,5 +178,29 @@ class StackSafetySpec extends FlatSpec with Matchers {
       .foreach(error => fail(s"""Execution failed for: $rho
                                                |Cause:
                                                |$error""".stripMargin))
+
+}
+
+class SerializationStackSafetySpec extends FlatSpec with Matchers {
+
+  behavior of "Serialize"
+
+  import coop.rchain.models.rholang.implicits._
+
+  val maxRecursionDepth: Int = findMaxRecursionDepth()
+
+  it should "do a round trip of a huge structure" in {
+
+    @tailrec
+    def hugePar(n: Int, par: Par = Par(exprs = Seq(GInt(0)))): Par =
+      if (n == 0) par
+      else hugePar(n - 1, Par(connectives = Seq(Connective(ConnNotBody(par)))))
+
+    val par = hugePar(maxRecursionDepth)
+
+    noException shouldBe thrownBy {
+      ProtoM.serializedSize[Coeval](par).value
+    }
+  }
 
 }
