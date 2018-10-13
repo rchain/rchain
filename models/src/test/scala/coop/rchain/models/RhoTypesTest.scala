@@ -7,11 +7,9 @@ import coop.rchain.models.Connective.ConnectiveInstance.{Empty => _}
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.testImplicits._
 import coop.rchain.rspace.Serialize
-import monix.eval.Coeval
 import org.scalacheck.{Arbitrary, Shrink}
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{Assertion, FlatSpec, Matchers}
-import scalapb.GeneratedMessage
 
 import scala.collection.immutable.BitSet
 import scala.reflect.ClassTag
@@ -34,7 +32,7 @@ class RhoTypesTest extends FlatSpec with PropertyChecks with Matchers {
   roundTripSerialization[ESet]
   roundTripSerialization[EMap]
 
-  def roundTripSerialization[A <: GeneratedMessage: Serialize: Arbitrary: Shrink: Pretty](
+  def roundTripSerialization[A <: StacksafeMessage: Serialize: Arbitrary: Shrink: Pretty](
       implicit tag: ClassTag[A]
   ): Unit =
     it must s"work for ${tag.runtimeClass.getSimpleName}" in {
@@ -52,11 +50,11 @@ class RhoTypesTest extends FlatSpec with PropertyChecks with Matchers {
     assertEqual(result, expected)
   }
 
-  def stacksafeSizeSameAsReference[A <: GeneratedMessage](a: A): Assertion =
-    assert(ProtoM.serializedSize[Coeval](a).value() == a.serializedSize)
+  def stacksafeSizeSameAsReference[A <: StacksafeMessage](a: A): Assertion =
+    assert(ProtoM.serializedSize(a).value() == a.serializedSize)
 
-  def stacksafeWriteToSameAsReference[A <: GeneratedMessage](a: A): Assertion =
-    assert(ProtoM.toByteArray[Coeval](a).value sameElements a.toByteArray)
+  def stacksafeWriteToSameAsReference[A <: StacksafeMessage](a: A): Assertion =
+    assert(ProtoM.toByteArray(a).value sameElements a.toByteArray)
 
 }
 

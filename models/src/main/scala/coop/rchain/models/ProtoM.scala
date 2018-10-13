@@ -4,84 +4,87 @@ import cats.implicits._
 import cats.{Applicative, Monad}
 import com.google.protobuf.Descriptors.FieldDescriptor
 import com.google.protobuf.{ByteString, CodedOutputStream, Descriptors, MessageLite}
-import scalapb.GeneratedMessage
+import monix.eval.Coeval
 import scalapb.compiler.{DescriptorPimps, GeneratorParams, Types}
-import scalapb.{GeneratedMessage, WireType}
+import scalapb.WireType
 
 object ProtoM extends DescriptorPimps {
 
   def params: GeneratorParams = ??? //required by DescriptorPimps, but we don't use it transitively
 
-  def toByteArray[M[_]: Sync](message: GeneratedMessage): M[Array[Byte]] =
+  def toByteArray(message: StacksafeMessage): Coeval[Array[Byte]] =
     for {
-      size  <- ProtoM.serializedSize[M](message)
+      size  <- message.serializedSizeM.get
       array = new Array[Byte](size)
       out   = CodedOutputStream.newInstance(array)
-      _     <- ProtoM.writeTo[M](out, message)
-      _     <- Sync[M].catchNonFatal { out.checkNoSpaceLeft() }
+      _     <- ProtoM.writeTo(out, message)
+      _     <- Sync[Coeval].catchNonFatal { out.checkNoSpaceLeft() }
     } yield array
 
-  def writeTo[M[_]: Sync](
+  def writeTo(
       out: CodedOutputStream,
-      message: GeneratedMessage
-  ): M[Unit] = {
+      message: StacksafeMessage
+  ): Coeval[Unit] = {
     val companion       = message.companion
     val descriptor      = companion.javaDescriptor
-    val defaultInstance = companion.defaultInstance.asInstanceOf[GeneratedMessage]
+    val defaultInstance = companion.defaultInstance.asInstanceOf[StacksafeMessage]
     for {
-      _ <- raiseUnsupportedIf(descriptor.preservesUnknownFields, "Unknown fields are not supported")
+      _ <- raiseUnsupportedIf[Coeval](
+            descriptor.preservesUnknownFields,
+            "Unknown fields are not supported"
+          )
       _ <- descriptor.fields
             .sortBy(_.getNumber)
             .toList
-            .traverse[M, Unit](f => {
+            .traverse[Coeval, Unit](f => {
               val fieldValue = message.getField(f)
               val default    = defaultInstance.getField(f)
               if (fieldValue != default)
                 writeField(out, fieldValue, f)
-              else Monad[M].pure(())
+              else Monad[Coeval].pure(())
             })
     } yield ()
   }
 
-  private def writeField[M[_]: Sync](
+  private def writeField(
       out: CodedOutputStream,
       value: Any,
       field: FieldDescriptor
-  ): M[Unit] =
+  ): Coeval[Unit] =
     if (field.isRepeated) {
       writeRepeatedField(out, value, field)
     } else if (field.isRequired || field.isSingular || field.isOptional) {
       writeSingleField(out, value, field)
     } else {
-      Sync[M].raiseError(new RuntimeException("This cannot be!"))
+      Sync[Coeval].raiseError(new RuntimeException("This cannot be!"))
     }
 
-  private def writeRepeatedField[M[_]: Sync](
+  private def writeRepeatedField(
       out: CodedOutputStream,
       value: Any,
       field: FieldDescriptor
-  ): M[Unit] =
+  ): Coeval[Unit] =
     for {
-      _ <- raiseUnsupportedIf[M](field.isPacked, "Packed fields are unsupported")
+      _ <- raiseUnsupportedIf[Coeval](field.isPacked, "Packed fields are unsupported")
 
       container = value.asInstanceOf[Seq[Any]].toList
       _         <- container.traverse(writeSingleField(out, _, field))
     } yield ()
 
-  private def writeSingleField[M[_]: Sync](
+  private def writeSingleField(
       out: CodedOutputStream,
       value: Any,
       field: Descriptors.FieldDescriptor
-  ): M[Unit] =
+  ): Coeval[Unit] =
     if (field.isMessage) {
       for {
         _         <- writeTag(out, field, WireType.WIRETYPE_LENGTH_DELIMITED)
-        valueSize <- serializedSize(value.asInstanceOf[GeneratedMessage])
+        valueSize <- value.asInstanceOf[StacksafeMessage].serializedSizeM.get
         _         <- writeUInt32NoTag(out, valueSize)
-        _         <- writeTo(out, value.asInstanceOf[GeneratedMessage])
+        _         <- writeTo(out, value.asInstanceOf[StacksafeMessage])
       } yield ()
     } else if (field.isEnum)
-      Sync[M].raiseError(
+      Sync[Coeval].raiseError(
         new UnsupportedOperationException(
           s"Enums are not supported, got $value of type ${value.getClass}"
         )
@@ -90,22 +93,22 @@ object ProtoM extends DescriptorPimps {
       writeScalarValue(value, field, out)
     }
 
-  private def writeTag[M[_]: Sync](
+  private def writeTag(
       out: CodedOutputStream,
       field: FieldDescriptor,
       wireType: Int
-  ): M[Unit] =
-    Sync[M].delay { out.writeTag(field.getNumber, wireType) }
+  ): Coeval[Unit] =
+    Sync[Coeval].delay { out.writeTag(field.getNumber, wireType) }
 
-  private def writeUInt32NoTag[M[_]: Sync](out: CodedOutputStream, valueSize: Int): M[Unit] =
-    Sync[M].delay { out.writeUInt32NoTag(valueSize) }
+  private def writeUInt32NoTag(out: CodedOutputStream, valueSize: Int): Coeval[Unit] =
+    Sync[Coeval].delay { out.writeUInt32NoTag(valueSize) }
 
-  private def writeScalarValue[M[_]: Sync](
+  private def writeScalarValue(
       value: Any,
       field: FieldDescriptor,
       out: CodedOutputStream
-  ): M[Unit] =
-    Sync[M].catchNonFatal {
+  ): Coeval[Unit] =
+    Sync[Coeval].catchNonFatal {
 
       import FieldDescriptor.Type._
 
@@ -135,59 +138,62 @@ object ProtoM extends DescriptorPimps {
       // format: on
     }
 
-  def serializedSize[M[_]: Sync](
-      message: GeneratedMessage
-  ): M[Int] = {
+  def serializedSize(
+      message: StacksafeMessage
+  ): Coeval[Int] = Coeval.defer {
     val companion       = message.companion
     val descriptor      = companion.javaDescriptor
-    val defaultInstance = companion.defaultInstance.asInstanceOf[GeneratedMessage]
+    val defaultInstance = companion.defaultInstance.asInstanceOf[StacksafeMessage]
     for {
-      _ <- raiseUnsupportedIf(descriptor.preservesUnknownFields, "Unknown fields are not supported")
-      fieldSizes <- descriptor.fields.toList.traverse[M, Int](f => {
+      _ <- raiseUnsupportedIf[Coeval](
+            descriptor.preservesUnknownFields,
+            "Unknown fields are not supported"
+          )
+      fieldSizes <- descriptor.fields.toList.traverse[Coeval, Int](f => {
                      val fieldValue = message.getField(f)
                      val default    = defaultInstance.getField(f)
                      if (fieldValue != default)
                        fieldSize(fieldValue, f)
-                     else Monad[M].pure(0)
+                     else Monad[Coeval].pure(0)
                    })
     } yield fieldSizes.sum
   }
 
-  private def fieldSize[M[_]: Sync](value: Any, field: Descriptors.FieldDescriptor): M[Int] =
+  private def fieldSize(value: Any, field: Descriptors.FieldDescriptor): Coeval[Int] =
     if (field.isRepeated) {
       repeatedSize(value, field)
     } else if (field.isRequired || field.isSingular || field.isOptional) {
       singleFieldSize(value, field)
     } else {
-      Sync[M].raiseError(new RuntimeException("This cannot be!"))
+      Sync[Coeval].raiseError(new RuntimeException("This cannot be!"))
     }
 
-  private def repeatedSize[M[_]: Sync](value: Any, field: Descriptors.FieldDescriptor): M[Int] =
+  private def repeatedSize(value: Any, field: Descriptors.FieldDescriptor): Coeval[Int] =
     for {
-      _ <- raiseUnsupportedIf[M](field.isPacked, "Packed fields are unsupported")
+      _ <- raiseUnsupportedIf[Coeval](field.isPacked, "Packed fields are unsupported")
 
       container = value.asInstanceOf[Seq[Any]].toList
       // format: off
       containerSize <- Types.fixedSize(field.getType) match {
         case Some(size) =>
           val tagSize = CodedOutputStream.computeTagSize(field.getNumber)
-          Applicative[M].pure(((size + tagSize) * container.size))
+          Applicative[Coeval].pure(((size + tagSize) * container.size))
         case None =>
-          val elementSizes: M[List[Int]] = container.traverse(singleFieldSize(_, field))
+          val elementSizes: Coeval[List[Int]] = container.traverse(singleFieldSize(_, field))
           elementSizes.map(_.sum)
       }
       // format: on
     } yield containerSize
 
-  private def singleFieldSize[M[_]: Sync](value: Any, field: Descriptors.FieldDescriptor): M[Int] =
+  private def singleFieldSize(value: Any, field: Descriptors.FieldDescriptor): Coeval[Int] =
     if (field.isMessage) {
       for {
-        valueSize     <- serializedSize(value.asInstanceOf[GeneratedMessage])
+        valueSize     <- value.asInstanceOf[StacksafeMessage].serializedSizeM.get
         valueSizeSize = CodedOutputStream.computeUInt32SizeNoTag(valueSize)
         tagSize       = CodedOutputStream.computeTagSize(field.getNumber)
       } yield tagSize + valueSizeSize + valueSize
     } else if (field.isEnum)
-      Sync[M].raiseError(
+      Sync[Coeval].raiseError(
         new UnsupportedOperationException(
           s"Enums are not supported, got $value of type ${value.getClass}"
         )
@@ -196,8 +202,8 @@ object ProtoM extends DescriptorPimps {
       scalarValueSize(value, field)
     }
 
-  private def scalarValueSize[M[_]: Sync](value: Any, field: FieldDescriptor): M[Int] =
-    Sync[M].catchNonFatal {
+  private def scalarValueSize(value: Any, field: FieldDescriptor): Coeval[Int] =
+    Sync[Coeval].catchNonFatal {
 
       import FieldDescriptor.Type._
       import com.google.protobuf.CodedOutputStream._

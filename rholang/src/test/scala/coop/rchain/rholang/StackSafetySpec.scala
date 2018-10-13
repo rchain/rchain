@@ -199,7 +199,7 @@ class SerializationStackSafetySpec extends FlatSpec with Matchers {
     val par = hugePar(maxRecursionDepth)
 
     noException shouldBe thrownBy {
-      ProtoM.serializedSize[Coeval](par).value
+      ProtoM.serializedSize(par).value
     }
   }
 

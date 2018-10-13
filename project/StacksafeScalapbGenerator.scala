@@ -121,4 +121,14 @@ class StacksafeProtobufGenerator(params: GeneratorParams) extends ProtobufGenera
     new FunctionalPrinter(Vector(extended), printer.indentLevel)
   }
 
+  override def generateSerializedSize(
+      message: Descriptor
+  )(fp: FunctionalPrinter): FunctionalPrinter =
+    super
+      .generateSerializedSize(message)(fp)
+      .newline
+      .add(
+        "@transient val serializedSizeM = new coop.rchain.models.Memo(coop.rchain.models.ProtoM.serializedSize(this))"
+      )
+      .newline
 }

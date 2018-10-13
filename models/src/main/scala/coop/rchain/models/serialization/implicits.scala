@@ -8,11 +8,11 @@ import scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
 import scodec.bits.ByteVector
 
 object implicits {
-  def mkProtobufInstance[T <: GeneratedMessage with Message[T]: GeneratedMessageCompanion] =
+  def mkProtobufInstance[T <: StacksafeMessage with Message[T]: GeneratedMessageCompanion] =
     new Serialize[T] {
 
       override def encode(a: T): ByteVector =
-        ByteVector.view(ProtoM.toByteArray[Coeval](a).value())
+        ByteVector.view(ProtoM.toByteArray(a).value())
 
       override def decode(bytes: ByteVector): Either[Throwable, T] = {
         val comp: GeneratedMessageCompanion[T] = implicitly
