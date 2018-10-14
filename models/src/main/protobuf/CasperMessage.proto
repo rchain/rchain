@@ -238,9 +238,21 @@ message RChainState {
   int64         blockNumber  = 3;
 }
 
+message PaymentDeploy {
+  Par    code      = 1; // payment code (short leash)
+  bytes  codeHash  = 2;
+  bytes  userPk    = 3; // user public key
+  int64  timestamp = 4;
+  uint64 amount    = 5;
+  uint64 phloRate  = 6;
+  uint64 nonce     = 7;
+  bytes  sig       = 8; // signature over (codeHash, pk, timestamp, amount, rate, nonce)
+}
+
 message Deploy {
-  Par          term  = 1; //rholang term to deploy
-  DeployData   raw   = 2;
+  Par           term        = 1; //rholang term to deploy
+  DeployData    raw         = 2;
+  PaymentDeploy paymentCode = 3;
 }
 
 message Event {
