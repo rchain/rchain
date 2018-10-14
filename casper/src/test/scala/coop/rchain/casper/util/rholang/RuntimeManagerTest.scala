@@ -2,12 +2,20 @@ package coop.rchain.casper.util.rholang
 
 import java.nio.file.Files
 
+import coop.rchain.casper.protocol.PaymentDeploy
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.rholang.interpreter.{accounting, Runtime}
+import coop.rchain.models.Expr.ExprInstance.GString
+import coop.rchain.models.Var.VarInstance.Wildcard
+import coop.rchain.models.Var.WildcardMsg
+import coop.rchain.models.{EVar, Par, Send}
+import coop.rchain.rholang.interpreter.accounting.Chargeable
+import coop.rchain.rholang.interpreter.{Runtime, accounting}
 import coop.rchain.rholang.math.NonNegativeNumber
 import coop.rchain.shared.StoreType
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
+
+import scala.annotation.tailrec
 
 class RuntimeManagerTest extends FlatSpec with Matchers {
   val storageSize      = 1024L * 1024
@@ -120,5 +128,73 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       )
     )
     assert((firstDeployCost + secondDeployCost) == compoundDeployCost)
+  }
+
+  "deployment" should "fail if payment deploy doesn't have payment code" in {
+    val term = InterpreterUtil.mkTerm("""new x in { x!(10) } """).right.get
+    val deploy =
+      ProtoUtil.termDeployNow(term).withPaymentCode(PaymentDeploy(code = None))
+    val (_, Seq(processedDeploy)) =
+      runtimeManager.computeState(runtimeManager.emptyStateHash, Seq(deploy))
+    assert(processedDeploy.status.isFailed)
+  }
+
+  "deployment" should "fail if short leash deploy exceeds the short-leash phlo limit" in {
+    import coop.rchain.models.rholang.implicits._
+    val shortLeashCeilLimit: Long = RuntimeManager.SHORT_LEASH_COST_LIMIT.value
+    val bigData: Par = {
+      val char = "a"
+      @tailrec
+      def build(s: String): Par = {
+        val par: Par = GString(s)
+        if (Chargeable[Par].cost(par) > shortLeashCeilLimit) {
+          par
+        } else build(s ++ char)
+
+      }
+      build("")
+    }
+    val expensivePar: Par = Send(GPrivateBuilder(), Seq(bigData))
+    val paymentDeploy     = PaymentDeploy().withCode(expensivePar)
+    val deployPar: Par    = Send(GPrivateBuilder(), Seq(Par()))
+    val deploy            = ProtoUtil.termDeployNow(deployPar).withPaymentCode(paymentDeploy)
+    val (_, Seq(processedDeploy)) =
+      runtimeManager.computeState(runtimeManager.emptyStateHash, Seq(deploy))
+    // There's no way to tell what was the failure cause
+    assert(processedDeploy.status.isFailed)
+  }
+
+  "deployment" should "fail if short leash deploy fails" in {
+    import coop.rchain.models.rholang.implicits._
+    // Top level wildcards are forbidden - should trigger the errors
+    val invalidTerm: Par = Send(EVar(Wildcard(WildcardMsg())), Seq(GString("test")))
+    val paymentDeploy    = PaymentDeploy().withCode(invalidTerm)
+    val deploy =
+      ProtoUtil.termDeployNow(Send(GPrivateBuilder(), Seq(Par()))).withPaymentCode(paymentDeploy)
+    val (_, Seq(processedDeploy)) =
+      runtimeManager.computeState(runtimeManager.emptyStateHash, Seq(deploy))
+    // There's no way to tell what was the failure cause
+    assert(processedDeploy.status.isFailed)
+  }
+
+  "deployment" should "charge for the payment deploy" in {
+    import coop.rchain.models.rholang.implicits._
+    import coop.rchain.rholang.interpreter.accounting._
+    def sendWithCost(str: String): (Par, Cost) = {
+      val data: Seq[Par] = Seq(GString(str))
+      val channel: Par   = GPrivateBuilder()
+      val send: Par      = Send(channel, data)
+      val storageCost    = data.storageCost + channel.storageCost
+      (send, storageCost)
+    }
+    val (paymentDeployPar, paymentDeployCost) = sendWithCost("Payment deploy")
+    val paymentDeploy                         = PaymentDeploy().withCode(paymentDeployPar)
+    val (deployTerm, deployCost)              = sendWithCost("Main deploy")
+    val cost                                  = paymentDeployCost + deployCost + (SEND_EVAL_COST * 2)
+    val deploy                                = ProtoUtil.termDeployNow(deployTerm).withPaymentCode(paymentDeploy)
+    val (_, Seq(processedDeploy)) =
+      runtimeManager.computeState(runtimeManager.emptyStateHash, Seq(deploy))
+    assert(!processedDeploy.status.isFailed)
+    assert(processedDeploy.cost.cost == cost.value)
   }
 }
