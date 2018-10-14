@@ -146,7 +146,7 @@ case class PrettyPrinter(
         buildChannelStringM(s.chan) |+| pure {
           if (s.persistent) "!!("
           else "!("
-        } |+| buildSeq(s.data) |+| pure(")")
+        } |+| buildSendSeq(s.data) |+| pure(")")
 
       case r: Receive =>
         val (totalFree, bindsString) = ((0, pure("")) /: r.binds.zipWithIndex) {
@@ -285,6 +285,22 @@ case class PrettyPrinter(
           else ""
         }
     }
+
+  private def buildSendSeq[T <: GeneratedMessage](s: Seq[T]): Coeval[String] = {
+    def isBoundVar(p: GeneratedMessage): Boolean =
+      p match {
+        case Par(_, _, _, List(Expr(EVarBody(EVar(Var(BoundVar(_)))))), _, _, _, _, _, _) => true
+        case _                                                                            => false
+      }
+
+    (pure("") /: s.zipWithIndex) {
+      case (string, (p, i)) =>
+        string |+| pure(if (isBoundVar(p)) "*" else "") |+| buildStringM(p) |+| pure {
+          if (i != s.length - 1) ", "
+          else ""
+        }
+    }
+  }
 
   private def buildPattern(patterns: Seq[Par]): Coeval[String] =
     (pure("") /: patterns.zipWithIndex) {

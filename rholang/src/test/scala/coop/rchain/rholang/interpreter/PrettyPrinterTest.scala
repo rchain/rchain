@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models.Var.VarInstance.FreeVar
+import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar}
 import coop.rchain.models.{Send, _}
 import coop.rchain.models.rholang.implicits.{GPrivateBuilder, _}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn._
@@ -110,6 +110,29 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     val source = Par(news = Seq(New(3, Par())))
     val result = PrettyPrinter().buildString(source)
     val target = "new x0, x1, x2 in {\n  Nil\n}"
+    result shouldBe target
+  }
+
+  it should "not drop asterisk in front of variable that is sent" in {
+    val source = Par(
+      news = Seq(
+        New(
+          1,
+          Par(
+            sends = Seq(
+              Send(
+                data = Seq(Par(exprs = Seq(EVar(BoundVar(0)))))
+              )
+            )
+          )
+        )
+      )
+    )
+    val result = PrettyPrinter().buildString(source)
+    val target =
+      """new x0 in {
+        |  @{Nil}!(*x0)
+        |}""".stripMargin
     result shouldBe target
   }
 
