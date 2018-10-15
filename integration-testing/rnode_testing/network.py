@@ -1,7 +1,7 @@
 from contextlib import contextmanager
-from tools.wait import wait_for, has_peers, node_started
+from rnode_testing.wait import wait_for, has_peers, node_started
 import logging
-from tools.rnode import create_peer_nodes
+from rnode_testing.rnode import create_peer_nodes
 
 
 class RChain:

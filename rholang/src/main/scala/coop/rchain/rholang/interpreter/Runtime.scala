@@ -35,7 +35,7 @@ class Runtime private (
     val replayReducer: ChargingReducer[Task],
     val space: RhoISpace,
     val replaySpace: RhoReplayISpace,
-    var errorLog: ErrorLog,
+    val errorLog: ErrorLog,
     val context: RhoContext
 ) {
   def readAndClearErrorVector(): Vector[Throwable] = errorLog.readAndClearErrorVector()
@@ -99,10 +99,10 @@ object Runtime {
   type RhoSysFunction    = Function1[Seq[ListParWithRandomAndPhlos], Task[Unit]]
   type RhoDispatchMap    = Map[Long, RhoSysFunction]
 
-  private type CPAK[F[_, _, _, _]] =
+  type CPAK[F[_, _, _, _]] =
     F[Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
-  private type CPARK[F[_, _, _, _, _, _]] =
+  type CPARK[F[_, _, _, _, _, _]] =
     F[
       Par,
       BindPattern,
@@ -112,7 +112,7 @@ object Runtime {
       TaggedContinuation
     ]
 
-  private type TCPARK[M[_], F[_[_], _, _, _, _, _, _]] =
+  type TCPARK[M[_], F[_[_], _, _, _, _, _, _]] =
     F[
       M,
       Par,
@@ -270,7 +270,8 @@ object Runtime {
         REG_DELETE_CALLBACK          -> (registry.deleteCallback(_)),
         REG_PUBLIC_LOOKUP            -> (registry.publicLookup(_)),
         REG_PUBLIC_REGISTER_RANDOM   -> (registry.publicRegisterRandom(_)),
-        REG_PUBLIC_REGISTER_SIGNED   -> (registry.publicRegisterSigned(_))
+        REG_PUBLIC_REGISTER_SIGNED   -> (registry.publicRegisterSigned(_)),
+        REG_NONCE_INSERT_CALLBACK    -> (registry.nonceInsertCallback(_))
       )
     }
 
