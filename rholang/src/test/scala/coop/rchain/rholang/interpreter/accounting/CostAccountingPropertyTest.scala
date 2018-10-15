@@ -1,10 +1,15 @@
 package coop.rchain.rholang.interpreter.accounting
-import coop.rchain.rholang.{PrettyProc, ProcGen}
+import coop.rchain.rholang.ProcGen
 import coop.rchain.rholang.interpreter.Interpreter
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
+import coop.rchain.rholang.syntax.rholang_mercury.PrettyPrinter
 import org.scalacheck.Arbitrary
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.prop.PropertyChecks
+
+case class PrettyProc(proc: Proc) {
+  override def toString = PrettyPrinter.print(proc)
+}
 
 class CostAccountingPropertyTest extends FlatSpec with PropertyChecks with Matchers {
 
