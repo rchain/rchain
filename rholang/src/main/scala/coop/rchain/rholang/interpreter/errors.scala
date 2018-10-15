@@ -81,10 +81,15 @@ object errors {
   final case class TopLevelFreeVariablesNotAllowedError(freeVars: String)
       extends InterpreterError(s"Top level free variables are not allowed: $freeVars.")
 
-  final case class SendDataConnectivesNotAllowedError(connectives: String)
-      extends InterpreterError(s"Connectives are not allowed in send data: $connectives")
+  final case class TopLevelLogicalConnectivesNotAllowedError(connectives: String)
+      extends InterpreterError(s"Top level logical connectives are not allowed: $connectives.")
 
   final case class SubstituteError(message: String) extends InterpreterError(message)
+
+  final case class PatternReceiveError(connectives: String)
+      extends InterpreterError(
+        s"Invalid pattern in the receive: $connectives. Only logical AND is allowed."
+      )
 
   final case class SetupError(message: String) extends InterpreterError(message)
 
