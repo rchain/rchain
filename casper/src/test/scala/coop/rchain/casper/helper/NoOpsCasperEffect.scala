@@ -34,7 +34,7 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore] private (
   def lastFinalizedBlock: F[BlockMessage]                             = BlockMessage().pure[F]
   def storageContents(hash: BlockHash): F[String]                     = "".pure[F]
   def getRuntimeManager: F[Option[RuntimeManager]]                    = none[RuntimeManager].pure[F]
-  def refetchDependencies(b: BlockMessage): F[Unit]                   = ().pure[F]
+  def fetchDependencies: F[Unit]                                      = ().pure[F]
 }
 
 object NoOpsCasperEffect {

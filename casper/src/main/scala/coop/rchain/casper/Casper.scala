@@ -43,7 +43,7 @@ trait Casper[F[_], A] {
 
 trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]] {
   def blockDag: F[BlockDag]
-  def refetchDependencies(b: BlockMessage): F[Unit]
+  def fetchDependencies: F[Unit]
   // This is the weight of faults that have been accumulated so far.
   // We want the clique oracle to give us a fault tolerance that is greater than
   // this initial fault weight combined with our fault tolerance threshold t.

@@ -108,29 +108,6 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                }
     } yield result
 
-  def refetchDependencies(b: BlockMessage): F[Unit] =
-    for {
-      dag            <- blockDag
-      missingParents = parentHashes(b).toSet
-      missingJustifications = b.justifications
-        .map(_.latestBlockHash)
-        .toSet
-      allDependencies = (missingParents union missingJustifications).toList
-      missingDependencies = allDependencies.filterNot(
-        blockHash =>
-          dag.dataLookup.contains(blockHash) || blockBuffer.exists(_.blockHash == blockHash)
-      )
-      _ <- missingDependencies.traverse(hash => handleMissingDependency(hash, b))
-      possiblyFailedDependencyFetches = allDependencies.foldLeft(Set.empty[BlockMessage]) {
-        case (acc, blockHash) =>
-          blockBuffer.find(_.blockHash == blockHash) match {
-            case Some(block) => acc + block
-            case None        => acc
-          }
-      }
-      _ <- possiblyFailedDependencyFetches.toList.traverse(refetchDependencies)
-    } yield ()
-
   def internalAddBlock(b: BlockMessage): F[BlockStatus] =
     for {
       validFormat <- Validate.formatOfFields[F](b)
@@ -425,7 +402,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
           s"Added ${PrettyPrinter.buildString(block.blockHash)}"
         )
       case MissingBlocks =>
-        Capture[F].capture { blockBuffer += block } *> refetchDependencies(block)
+        Capture[F].capture { blockBuffer += block } *> fetchMissingDependencies(block)
       case AdmissibleEquivocation =>
         Capture[F].capture {
           val baseEquivocationBlockSeqNum = block.seqNum - 1
@@ -486,6 +463,21 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
         Log[F].error(s"Encountered exception in while processing block ${PrettyPrinter
           .buildString(block.blockHash)}: ${ex.getMessage}")
     }
+
+  private def fetchMissingDependencies(b: BlockMessage): F[Unit] =
+    for {
+      dag            <- blockDag
+      missingParents = parentHashes(b).toSet
+      missingJustifications = b.justifications
+        .map(_.latestBlockHash)
+        .toSet
+      allDependencies = (missingParents union missingJustifications).toList
+      missingDependencies = allDependencies.filterNot(
+        blockHash =>
+          dag.dataLookup.contains(blockHash) || blockBuffer.exists(_.blockHash == blockHash)
+      )
+      _ <- missingDependencies.traverse(hash => handleMissingDependency(hash, b))
+    } yield ()
 
   private def handleMissingDependency(hash: BlockHash, parentBlock: BlockMessage): F[Unit] =
     for {
@@ -618,4 +610,12 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     )
 
   def getRuntimeManager: F[Option[RuntimeManager]] = Applicative[F].pure(Some(runtimeManager))
+
+  def fetchDependencies: F[Unit] =
+    for {
+      blockBufferDependencyDag <- blockBufferDependencyDagState.get
+      _ <- blockBufferDependencyDag.dependencyFree.toList.traverse { hash =>
+            CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash))
+          }
+    } yield ()
 }

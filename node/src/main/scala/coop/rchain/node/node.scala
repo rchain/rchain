@@ -4,12 +4,11 @@ import cats._
 import cats.data._
 import cats.effect._
 import cats.implicits._
-
 import coop.rchain.blockstorage.{BlockStore, LMDBBlockStore}
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.util.comm.CasperPacketHandler
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.{LastApprovedBlock, MultiParentCasperRef, SafetyOracle}
+import coop.rchain.casper.{LastApprovedBlock, MultiParentCasper, MultiParentCasperRef, SafetyOracle}
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib._
@@ -27,7 +26,6 @@ import coop.rchain.node.diagnostics._
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
-
 import kamon._
 import kamon.zipkin.ZipkinReporter
 import io.grpc.Server
@@ -35,9 +33,9 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.{Server => Http4sServer}
 import org.http4s.server.blaze._
+
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
-
 import monix.execution.schedulers.SchedulerService
 
 class NodeRuntime(conf: Configuration, host: String, scheduler: Scheduler) {
@@ -291,6 +289,15 @@ class NodeRuntime(conf: Configuration, host: String, scheduler: Scheduler) {
       _ <- time.sleep(5.seconds).toEffect
     } yield ()
 
+    val casperLoop: Effect[Unit] =
+      for {
+        _ <- casperConstructor.get map {
+              case Some(casper) => casper.fetchDependencies
+              case None         => ().pure[Effect]
+            }
+        _ <- time.sleep(5.seconds).toEffect
+      } yield ()
+
     for {
       _       <- info
       servers <- acquireServers(runtime)
@@ -304,6 +311,7 @@ class NodeRuntime(conf: Configuration, host: String, scheduler: Scheduler) {
       _ <- NodeDiscovery[Task].discover.executeOn(loopScheduler).start.toEffect
       _ <- Log[Effect].info(s"Listening for traffic on $address.")
       _ <- EitherT(Task.defer(loop.forever.value).executeOn(loopScheduler))
+      _ <- EitherT(Task.defer(casperLoop.forever.value).executeOn(loopScheduler))
     } yield ()
   }
 
