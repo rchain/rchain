@@ -89,7 +89,7 @@ object CommUtil {
                       (maybeSender, maybePacket) match {
                         case (Some(sender), Some(packet)) =>
                           for {
-                            _ <- HandleMessages.handlePacket[F](sender, packet)
+                            _ <- PacketHandler[F].handlePacket(sender, packet)
                             l <- LastApprovedBlock[F].get
                             _ <- l.fold(askPeers(rest, local))(_ => ().pure[F])
                           } yield ()

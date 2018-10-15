@@ -1,7 +1,7 @@
 import time
 from functools import wraps
 import logging
-from tools.util import log_box
+from rnode_testing.util import log_box
 
 PROF_DATA = {}
 

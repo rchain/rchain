@@ -4,9 +4,9 @@ import scala.concurrent.duration._
 
 import cats._
 import cats.implicits._
-
+import coop.rchain.shared._
 import coop.rchain.comm._, rp.ProtocolHelper
-import coop.rchain.comm.protocol.routing.{Blob, Protocol}
+import coop.rchain.comm.protocol.routing.{Packet, Protocol}
 import coop.rchain.casper.protocol.{BlockApproval => CasperBlockApproval}
 import coop.rchain.comm.CommError.CommErr
 
@@ -239,45 +239,48 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
     "streamBlob" should {
       "send a blob and receive by (single) remote side" in {
-        new TwoNodesRuntime[Unit](Dispatcher.heartbeatResponseDispatcher[F]) {
+        new TwoNodesRuntime[Unit]() {
           def execute(
               transportLayer: TransportLayer[F],
               local: PeerNode,
               remote: PeerNode
           ): F[Unit] =
-            transportLayer.streamBlob(
+            transportLayer.stream(
               List(remote),
-              Blob().withBlockApproval(CasperBlockApproval(sig = None))
+              Blob(local, Packet("N/A", ProtocolHelper.toProtocolBytes("points don't matter")))
             )
 
           run()
 
-          blobDispatcher.received should have length 1
-          val (_, blob) = blobDispatcher.received.head
-          blob.message.isBlockApproval shouldBe (true)
+          streamDispatcher.received should have length 1
+          val (_, blob) = streamDispatcher.received.head
+          blob.packet.typeId shouldBe ("N/A")
+          blob.packet.content shouldBe (ProtocolHelper.toProtocolBytes("points don't matter"))
         }
       }
 
       "send a blob and receive by (multiple) remote side" in {
-        new ThreeNodesRuntime[Unit](Dispatcher.heartbeatResponseDispatcher[F]) {
+        new ThreeNodesRuntime[Unit]() {
           def execute(
               transportLayer: TransportLayer[F],
               local: PeerNode,
               remote1: PeerNode,
               remote2: PeerNode
           ): F[Unit] =
-            transportLayer.streamBlob(
+            transportLayer.stream(
               List(remote1, remote2),
-              Blob().withBlockApproval(CasperBlockApproval(sig = None))
+              Blob(local, Packet("N/A", ProtocolHelper.toProtocolBytes("points don't matter")))
             )
 
           run()
 
-          blobDispatcher.received should have length 2
-          val (_, blob1) = blobDispatcher.received(0)
-          val (_, blob2) = blobDispatcher.received(1)
-          blob1.message.isBlockApproval shouldBe (true)
-          blob2.message.isBlockApproval shouldBe (true)
+          streamDispatcher.received should have length 2
+          val (_, blob1) = streamDispatcher.received(0)
+          val (_, blob2) = streamDispatcher.received(1)
+          blob1.packet.typeId shouldBe ("N/A")
+          blob1.packet.content shouldBe (ProtocolHelper.toProtocolBytes("points don't matter"))
+          blob2.packet.typeId shouldBe ("N/A")
+          blob2.packet.content shouldBe (ProtocolHelper.toProtocolBytes("points don't matter"))
         }
       }
     }

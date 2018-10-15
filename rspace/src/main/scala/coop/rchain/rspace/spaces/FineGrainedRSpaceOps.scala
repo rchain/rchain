@@ -36,8 +36,8 @@ abstract class FineGrainedRSpaceOps[F[_], C, P, E, A, R, K](
   protected[this] def consumeLock(
       channels: Seq[C]
   )(
-      thunk: => Either[E, Option[(Result[K], Seq[Result[R]])]]
-  ): Either[E, Option[(Result[K], Seq[Result[R]])]] = {
+      thunk: => Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]
+  ): Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]] = {
     val hashes = channels.map(ch => StableHashProvider.hash(ch))
     lock.acquire(hashes)(() => hashes)(thunk)
   }
@@ -45,8 +45,8 @@ abstract class FineGrainedRSpaceOps[F[_], C, P, E, A, R, K](
   protected[this] def produceLock(
       channel: C
   )(
-      thunk: => Either[E, Option[(Result[K], Seq[Result[R]])]]
-  ): Either[E, Option[(Result[K], Seq[Result[R]])]] =
+      thunk: => Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]
+  ): Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]] =
     lock.acquire(Seq(StableHashProvider.hash(channel)))(
       () =>
         store.withTxn(store.createTxnRead()) { txn =>

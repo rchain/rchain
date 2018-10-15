@@ -2,6 +2,7 @@ package coop.rchain.node.api
 
 import cats.effect.Sync
 import com.google.protobuf.ByteString
+import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.SafetyOracle
@@ -23,7 +24,10 @@ private[api] object DeployGrpcService {
     new CasperMessageGrpcMonix.DeployService {
 
       private def defer[A](task: F[A]): Task[A] =
-        Task.defer(task.toTask).executeOn(worker)
+        Task.defer(task.toTask).executeOn(worker).attempt.flatMap {
+          case Left(ex)      => Task.delay(ex.printStackTrace()) *> Task.raiseError[A](ex)
+          case Right(result) => Task.pure(result)
+        }
 
       override def doDeploy(d: DeployData): Task[DeployServiceResponse] =
         defer(BlockAPI.deploy[F](d))

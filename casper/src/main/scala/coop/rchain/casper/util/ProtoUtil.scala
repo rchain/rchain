@@ -494,8 +494,9 @@ object ProtoUtil {
 
   /**
     * Strip a deploy down to the fields we are using to seed the Deterministic name generator.
-    * The fields stripped are the term and anything that depends on the term (Currently only the sig)
+    * Because we enforce that a deployment must be unique on the user, timestamp pair, we leave
+    * only those fields. This allows users to more readily pre-generate names for signing.
     */
   def stripDeployData(d: DeployData): DeployData =
-    d.withTerm("").withSig(ByteString.EMPTY)
+    DeployData().withUser(d.user).withTimestamp(d.timestamp)
 }

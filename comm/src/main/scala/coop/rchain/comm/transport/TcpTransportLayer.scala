@@ -14,7 +14,7 @@ import scala.util._
 import io.grpc._, io.grpc.netty._
 import io.netty.handler.ssl.{ClientAuth, SslContext, SslContextBuilder}
 import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
-import monix.eval._, monix.execution._
+import monix.eval._, monix.execution._, monix.reactive._
 import scala.concurrent.TimeoutException
 
 class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxMessageSize: Int)(
@@ -119,18 +119,32 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
   ): Task[CommErr[Option[Protocol]]] =
     withClient(peer, enforce)(f).attempt.map(processResponse(peer, _))
 
+  def chunkIt(blob: Blob): Iterator[Chunk] = {
+    def header: Chunk =
+      Chunk().withHeader(
+        ChunkHeader().withSender(ProtocolHelper.node(blob.sender)).withTypeId(blob.packet.typeId)
+      )
+    val buffer = 2 * 1024 // 2 kbytes for protobuf related stuff
+    def data: Iterator[Chunk] =
+      blob.packet.content.toByteArray.sliding(maxMessageSize - buffer).map { data =>
+        Chunk().withData(ChunkData().withContentData(ProtocolHelper.toProtocolBytes(data)))
+      }
+
+    Iterator(header) ++ data
+  }
+
   /**
     * This implmementation is temporary, it sequentially sends blob to each peers.
     * TODO Provide solution that stacks blob on a queue that is later consumed
     */
-  def streamBlob(peers: Seq[PeerNode], blob: Blob): Task[Unit] =
+  def stream(peers: Seq[PeerNode], blob: Blob): Task[Unit] =
     peers.toList
       .traverse(
         peer =>
           withClient(peer, enforce = false) { stub =>
-            stub.stream(TLBlob().withBlob(blob))
+            stub.stream(Observable.fromIterator(chunkIt(blob)))
           }.attempt.flatMap {
-            case Left(error) => log.debug(s"Error while streaming blob, error: $error")
+            case Left(error) => log.debug(s"Error while streaming packet, error: $error")
             case Right(_)    => Task.unit
           }
       )
@@ -193,19 +207,19 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
       parallelism: Int
   )(
       dispatch: Protocol => Task[CommunicationResponse],
-      handleBlob: Blob => Task[Unit]
+      handleStreamed: Blob => Task[Unit]
   ): Task[Cancelable] = {
 
     def dispatchInternal: ServerMessage => Task[Unit] = {
       // TODO: consider logging on failure (Left)
       case Tell(protocol) => dispatch(protocol).attempt.void
-      case Ask(protocol, sender) if !sender.complete =>
+      case Ask(protocol, handle) if !handle.complete =>
         dispatch(protocol).attempt.map {
-          case Left(e)         => sender.failWith(e)
-          case Right(response) => sender.reply(response)
+          case Left(e)         => handle.failWith(e)
+          case Right(response) => handle.reply(response)
         }.void
-      case BlobMessage(blob) => handleBlob(blob)
-      case _                 => Task.unit // sender timeout
+      case StreamMessage(blob) => handleStreamed(blob)
+      case _                   => Task.unit // sender timeout
     }
 
     Task.delay {
@@ -217,7 +231,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
 
   def receive(
       dispatch: Protocol => Task[CommunicationResponse],
-      handleBlob: Blob => Task[Unit]
+      handleStreamed: Blob => Task[Unit]
   ): Task[Unit] =
     cell.modify { s =>
       for {
@@ -228,7 +242,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
                      )
                    case _ =>
                      val parallelism = Math.max(Runtime.getRuntime.availableProcessors(), 2)
-                     receiveInternal(parallelism)(dispatch, handleBlob)
+                     receiveInternal(parallelism)(dispatch, handleStreamed)
                  }
       } yield s.copy(server = Some(server))
 
