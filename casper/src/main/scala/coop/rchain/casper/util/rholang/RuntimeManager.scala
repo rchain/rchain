@@ -185,7 +185,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
         deployResult = InternalProcessedDeploy(
           deploy,
           CostAccount.toProto(deployCost),
-          newCheckpoint.log,
+          shortLeashDeployResult.checkpoint.log ++ newCheckpoint.log,
           DeployStatus.fromErrors(errors)
         )
       } yield newCheckpoint.root -> deployResult
