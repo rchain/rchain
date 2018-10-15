@@ -41,5 +41,5 @@ class MetricsTestImpl[F[_]: Sync] extends Metrics[F] {
       val recordsSeq = records.get(name).map(s => record :: s).getOrElse(List(record))
       set(name, recordsSeq)(records)
     }
-  override def startTimer(name: String): F[MetricsTimer] = ???
+  override def startTimer(name: String): F[MetricsTimer[F]] = ???
 }
