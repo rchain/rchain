@@ -108,6 +108,29 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                }
     } yield result
 
+  def refetchDependencies(b: BlockMessage): F[Unit] =
+    for {
+      dag            <- blockDag
+      missingParents = parentHashes(b).toSet
+      missingJustifications = b.justifications
+        .map(_.latestBlockHash)
+        .toSet
+      allDependencies = (missingParents union missingJustifications).toList
+      missingDependencies = allDependencies.filterNot(
+        blockHash =>
+          dag.dataLookup.contains(blockHash) || blockBuffer.exists(_.blockHash == blockHash)
+      )
+      _ <- missingDependencies.traverse(hash => handleMissingDependency(hash, b))
+      possiblyFailedDependencyFetches = allDependencies.foldLeft(Set.empty[BlockMessage]) {
+        case (acc, blockHash) =>
+          blockBuffer.find(_.blockHash == blockHash) match {
+            case Some(block) => acc + block
+            case None        => acc
+          }
+      }
+      _ <- possiblyFailedDependencyFetches.toList.traverse(refetchDependencies)
+    } yield ()
+
   def internalAddBlock(b: BlockMessage): F[BlockStatus] =
     for {
       validFormat <- Validate.formatOfFields[F](b)
@@ -402,18 +425,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
           s"Added ${PrettyPrinter.buildString(block.blockHash)}"
         )
       case MissingBlocks =>
-        for {
-          _              <- Capture[F].capture { blockBuffer += block }
-          dag            <- blockDag
-          missingParents = parentHashes(block).toSet
-          missingJustifications = block.justifications
-            .map(_.latestBlockHash)
-            .toSet
-          missingDependencies = (missingParents union missingJustifications).toList.filterNot(
-            blockHash => dag.dataLookup.contains(blockHash)
-          )
-          _ <- missingDependencies.traverse(hash => handleMissingDependency(hash, block))
-        } yield ()
+        Capture[F].capture { blockBuffer += block } *> refetchDependencies(block)
       case AdmissibleEquivocation =>
         Capture[F].capture {
           val baseEquivocationBlockSeqNum = block.seqNum - 1

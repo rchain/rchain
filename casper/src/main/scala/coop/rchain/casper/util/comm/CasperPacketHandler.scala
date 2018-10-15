@@ -353,6 +353,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         isOldBlock <- MultiParentCasper[F].contains(b)
         _ <- if (isOldBlock) {
               Log[F].info(s"Received block ${PrettyPrinter.buildString(b.blockHash)} again.")
+              MultiParentCasper[F].refetchDependencies(b)
             } else {
               handleNewBlock[F](b)
             }

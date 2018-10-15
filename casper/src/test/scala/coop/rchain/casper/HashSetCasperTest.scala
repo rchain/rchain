@@ -595,10 +595,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(2).casperEff.contains(signedBlock2) should be(true)
 
     nodes(2).logEff.infos
-      .count(_ startsWith "Requested missing block") should be(1)
+      .count(_ startsWith "Requested missing block") should be(2)
     nodes(1).logEff.infos.count(
       s => (s startsWith "Received request for block") && (s endsWith "Response sent.")
-    ) should be(1)
+    ) should be(2)
 
     nodes.foreach(_.tearDownNode())
     nodes.foreach { node =>
