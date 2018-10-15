@@ -271,24 +271,6 @@ object BlockAPI {
     )
   }
 
-  private def findBlockWithDeploy[F[_]: Monad: Log: BlockStore](
-      blockHashes: Vector[BlockHash],
-      user: ByteString,
-      timestamp: Long
-  ): F[Option[BlockMessage]] =
-    blockHashes match {
-      case blockHash +: rem =>
-        for {
-          block <- ProtoUtil.unsafeGetBlock[F](blockHash)
-          result <- if (ProtoUtil.containsDeploy(block, user, timestamp)) {
-                     Option[BlockMessage](block).pure[F]
-                   } else {
-                     findBlockWithDeploy[F](rem, user, timestamp)
-                   }
-        } yield result
-      case _ => none[BlockMessage].pure[F]
-    }
-
   def findBlockWithDeploy[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       user: ByteString,
       timestamp: Long
@@ -320,6 +302,15 @@ object BlockAPI {
       BlockQueryResponse(status = "Error: Casper instance not available")
     )
   }
+
+  private def findBlockWithDeploy[F[_]: Monad: Log: BlockStore](
+      blockHashes: Vector[BlockHash],
+      user: ByteString,
+      timestamp: Long
+  ): F[Option[BlockMessage]] =
+    blockHashes.toStream
+      .traverse(ProtoUtil.unsafeGetBlock[F](_))
+      .map(blocks => blocks.find(ProtoUtil.containsDeploy(_, user, timestamp)))
 
   def showBlock[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       q: BlockQuery
