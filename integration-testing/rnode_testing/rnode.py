@@ -75,7 +75,7 @@ class Node:
         self.container.remove(force=True, v=True)
 
     def deploy_contract(self, contract):
-        cmd = f'{rnode_binary} deploy --from "0x1" --phlo-limit 1000000 --phlo-price 0 --nonce 0 {rnode_deploy_dir}/{contract}'
+        cmd = f'{rnode_binary} deploy --from "0x1" --phlo-limit 1000000 --phlo-price 1 --nonce 0 {rnode_deploy_dir}/{contract}'
         return self.exec_run(cmd)
 
     def propose_contract(self):
@@ -121,7 +121,7 @@ class Node:
         return self.call_rnode('eval', rho_file_path)
 
     def deploy(self, rho_file_path):
-        return self.call_rnode('deploy', '--from=0x1', '--phlo-limit=1000000', '--phlo-price=0', '--nonce=0', rho_file_path)
+        return self.call_rnode('deploy', '--from=0x1', '--phlo-limit=1000000', '--phlo-price=1', '--nonce=0', rho_file_path)
 
     def propose(self):
         return self.call_rnode('propose')
