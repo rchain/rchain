@@ -44,6 +44,10 @@ trait LMDBOps extends CloseOps {
       val ret: R = f(txn)
       txn.commit()
       ret
+    } catch {
+      case NonFatal(ex) =>
+        ex.printStackTrace
+        throw ex
     } finally {
       updateGauges()
       txn.close()
