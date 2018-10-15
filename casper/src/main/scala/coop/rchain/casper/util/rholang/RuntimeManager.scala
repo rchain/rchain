@@ -141,10 +141,15 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
         terms match {
           case deploy +: rem =>
             for {
-              _                   <- Task.delay(runtime.space.reset(hash))
-              availablePhlos      = Cost(deploy.raw.flatMap(_.phloLimit).get.value)
-              _                   <- runtime.reducer.setAvailablePhlos(availablePhlos)
-              injResult           <- injAttempt(deploy, runtime.reducer, runtime.errorLog)
+              _              <- Task.delay(runtime.space.reset(hash))
+              availablePhlos = Cost(deploy.raw.flatMap(_.phloLimit).get.value)
+              _              <- runtime.reducer.setAvailablePhlos(availablePhlos)
+              injResult <- injAttempt(
+                            deploy.getTerm,
+                            runtime.reducer,
+                            runtime.errorLog,
+                            Blake2b512Random(ProtoUtil.stripDeployData(deploy.getRaw).toByteArray)
+                          )
               (phlosLeft, errors) = injResult
               cost                = phlosLeft.copy(cost = availablePhlos.value - phlosLeft.cost)
               newCheckpoint       <- Task.delay(runtime.space.createCheckpoint())
@@ -182,10 +187,16 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
           case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
             val availablePhlos = Cost(deploy.raw.flatMap(_.phloLimit).get.value)
             for {
-              _         <- runtime.replayReducer.setAvailablePhlos(availablePhlos)
-              _         <- Task.delay(runtime.replaySpace.rig(hash, log.toList))
-              injResult <- injAttempt(deploy, runtime.replayReducer, runtime.errorLog)
-              //TODO: compare replay deploy cost to given deploy cost
+              _ <- runtime.replayReducer.setAvailablePhlos(availablePhlos)
+              _ <- Task.delay(runtime.replaySpace.rig(hash, log.toList))
+              // TODO: assert that deploy.term deploy.raw are defined
+              injResult <- injAttempt(
+                            deploy.getTerm,
+                            runtime.replayReducer,
+                            runtime.errorLog,
+                            Blake2b512Random(ProtoUtil.stripDeployData(deploy.getRaw).toByteArray)
+                          )
+              // TODO: compare replay deploy cost to given deploy cost
               (phlosLeft, errors) = injResult
               cost                = phlosLeft.copy(cost = availablePhlos.value - phlosLeft.cost)
               cont <- DeployStatus.fromErrors(errors) match {
@@ -215,15 +226,13 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   }
 
   private def injAttempt(
-      deploy: Deploy,
+      term: Par,
       reducer: ChargingReducer[Task],
-      errorLog: ErrorLog
-  ): Task[(PCost, Vector[Throwable])] = {
-    implicit val rand: Blake2b512Random = Blake2b512Random(
-      DeployData.toByteArray(ProtoUtil.stripDeployData(deploy.raw.get))
-    )
+      errorLog: ErrorLog,
+      rand: Blake2b512Random
+  ): Task[(PCost, Vector[Throwable])] =
     reducer
-      .inj(deploy.term.get)
+      .inj(term)(rand)
       .attempt
       .flatMap(result => {
         val oldErrors = errorLog.readAndClearErrorVector()
@@ -232,7 +241,6 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
 
         reducer.getAvailablePhlos().map(phlos => CostAccount.toProto(phlos) -> allErrors)
       })
-  }
 }
 
 object RuntimeManager {
