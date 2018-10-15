@@ -34,6 +34,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
         .withTimestamp(timestamp)
         .withTerm("@{ 3 | 2 | 1 }!(0)")
         .withPhloLimit(accounting.MAX_VALUE)
+        .withPayment("Nil")
     }
 
     val Created(block) = node.casperEff.deploy(basicDeployData) *> node.casperEff.createBlock
@@ -167,6 +168,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
         .withTimestamp(timestamp)
         .withTerm("for (@0 <- @{ 3 | 2 | 1 }; @1 <- @{ 2 | 1 }) { 0 }")
         .withPhloLimit(accounting.MAX_VALUE)
+        .withPayment("Nil")
     }
 
     val Created(block) = node.casperEff.deploy(basicDeployData) *> node.casperEff.createBlock
