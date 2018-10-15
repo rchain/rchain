@@ -143,7 +143,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       space: RhoISpace
   ): Task[Cost] =
     if (paymentDeploy.code.isEmpty)
-      Task.raiseError(PaymentCodeError("Payment code must be defined."))
+      Task.raiseError(PaymentCodeError("Payment code must not be empty."))
     else {
       for {
         injResult <- injAttempt(
