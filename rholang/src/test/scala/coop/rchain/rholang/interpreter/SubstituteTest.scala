@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter
 
+import coop.rchain.models.Assertions.assertEqual
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
@@ -8,9 +9,42 @@ import coop.rchain.rholang.interpreter.Substitute._
 import coop.rchain.rholang.interpreter.errors.SubstituteError
 import coop.rchain.models.rholang.implicits._
 import monix.eval.Coeval
+import org.scalacheck.Gen
+import org.scalatest.prop.PropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
+
+class SubSpec extends FlatSpec with Matchers with PropertyChecks {
+
+  behavior of "Substitute"
+
+  implicit val depth: Int    = 0
+  implicit val env: Env[Par] = Env()
+
+  it should "retain all non-Empty par-ed connectives" in {
+    val sampleConnectives = Seq(
+      VarRefBody(VarRef(0, 0)),
+      ConnAndBody(ConnectiveBody(Seq())),
+      ConnOrBody(ConnectiveBody(Seq())),
+      ConnNotBody(Par()),
+      ConnBool(false),
+      ConnInt(false),
+      ConnString(true),
+      ConnUri(true),
+      ConnByteArray(true),
+      ConnOrBody(ConnectiveBody(Vector()))
+    ).map(Connective(_))
+
+    val connectiveSeqs: Gen[Seq[Connective]] = Gen.someOf(sampleConnectives ++ sampleConnectives)
+
+    forAll(connectiveSeqs) { connectives: Seq[Connective] =>
+      val par          = connectives.foldLeft(Par())(_.prepend(_, depth))
+      val substitution = Substitute[Coeval, Par].substitute(par).value
+      assertEqual(substitution.connectives.toSet, par.connectives.toSet)
+    }
+  }
+}
 
 class VarSubSpec extends FlatSpec with Matchers {
   implicit val depth: Int = 0

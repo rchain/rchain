@@ -156,7 +156,7 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.6.4",
+    version := "0.7.1",
     name := "rnode",
     maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary := "RChain Node",
@@ -252,8 +252,13 @@ lazy val rholang = (project in file("rholang"))
     scalacOptions ++= Seq(
       "-language:existentials",
       "-language:higherKinds",
-      "-Yno-adapted-args"
+      "-Yno-adapted-args",
+      "-Xfatal-warnings",
+      "-Xlint:_,-missing-interpolator" // disable "possible missing interpolator" warning
     ),
+    publishArtifact in (Compile, packageDoc) := false,
+    publishArtifact in packageDoc := false,
+    sources in (Compile,doc) := Seq.empty,
     libraryDependencies ++= commonDependencies ++ Seq(
       catsMtl,
       catsEffect,
@@ -409,7 +414,11 @@ lazy val rspace = (project in file("rspace"))
 lazy val rspaceBench = (project in file("rspace-bench"))
   .settings(
     commonSettings,
-    libraryDependencies ++= commonDependencies
+    libraryDependencies ++= commonDependencies,
+    libraryDependencies += "com.esotericsoftware" % "kryo" % "4.0.2",
+    dependencyOverrides ++= Seq(
+      "org.ow2.asm" % "asm" % "5.0.4"
+    )
   )
   .enablePlugins(JmhPlugin)
   .dependsOn(rspace, rholang)

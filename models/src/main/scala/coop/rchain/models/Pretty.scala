@@ -77,10 +77,7 @@ trait PrettyInstances extends PrettyDerivation {
 
   implicit def prettyCoeval[A: Pretty]: Pretty[Coeval[A]] =
     (value: Coeval[A], indentLevel: Int) =>
-      value match {
-        case Now(a: A)    => s"Coeval.Now(${Pretty[A].pretty(a, indentLevel)})"
-        case _: Coeval[_] => s"Coeval(???)"
-      }
+      s"Coeval.now(${Pretty[A].pretty(value.value, indentLevel)}) /* was Coeval.${value.getClass.getSimpleName} */"
 
   implicit val PrettyPar: Pretty[Par] = gen[Par]
 
@@ -113,12 +110,17 @@ trait PrettyDerivation {
       val nonDefaultParameters =
         ctx.parameters.filter(p => !p.default.contains(p.dereference(value)))
 
-      val paramStrings = nonDefaultParameters.map(
-        p => s"${p.label} = ${p.typeclass.pretty(p.dereference(value), indentLevel + 1)}"
-      )
+      val paramStrings = if (nonDefaultParameters.size == ctx.parameters.size) {
+        nonDefaultParameters.map(p => printParam(value, p, indentLevel))
+      } else {
+        nonDefaultParameters.map(p => s"${p.label} = ${printParam(value, p, indentLevel)}")
+      }
 
       parenthesisedStrings(paramStrings, indentLevel)
     }
+
+    private def printParam(value: T, p: Param[Typeclass, T], indentLevel: Int) =
+      s"${p.typeclass.pretty(p.dereference(value), indentLevel + 1)}"
   }
 
   def dispatch[T](ctx: SealedTrait[Pretty, T]): Pretty[T] =

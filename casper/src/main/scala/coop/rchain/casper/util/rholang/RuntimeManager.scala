@@ -73,15 +73,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     result
   }
 
-  def computeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] =
-    Try(unsafeComputeBonds(hash)) match {
-      case Success(value) => value
-      case Failure(ex) =>
-        ex.printStackTrace()
-        throw ex
-    }
-
-  private def unsafeComputeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] = {
+  def computeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] = {
     // TODO: Switch to a read only name
     val bondsQuery =
       """for(@pos <- @"proofOfStake"){ @(pos, "getBonds")!("__SCALA__") }"""
@@ -140,33 +132,39 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       implicit scheduler: Scheduler
   ): (StateHash, Seq[InternalProcessedDeploy]) = {
 
-    @tailrec
     def doEval(
         terms: Seq[Deploy],
         hash: Blake2b256Hash,
         acc: Vector[InternalProcessedDeploy]
-    ): (StateHash, Vector[InternalProcessedDeploy]) =
-      terms match {
-        case deploy +: rem =>
-          runtime.space.reset(hash)
-          val availablePhlos = Cost(deploy.raw.flatMap(_.phloLimit).get.value)
-          runtime.reducer.setAvailablePhlos(availablePhlos).runSyncUnsafe(1.second)
-          val (phlosLeft, errors) = injAttempt(deploy, runtime.reducer, runtime.errorLog)
-          val cost                = phlosLeft.copy(cost = availablePhlos.value - phlosLeft.cost)
-          val newCheckpoint       = runtime.space.createCheckpoint()
-          val deployResult = InternalProcessedDeploy(
-            deploy,
-            cost,
-            newCheckpoint.log,
-            DeployStatus.fromErrors(errors)
-          )
-          if (errors.isEmpty) doEval(rem, newCheckpoint.root, acc :+ deployResult)
-          else doEval(rem, hash, acc :+ deployResult)
+    ): Task[(StateHash, Vector[InternalProcessedDeploy])] =
+      Task.defer {
+        terms match {
+          case deploy +: rem =>
+            for {
+              _                   <- Task.delay(runtime.space.reset(hash))
+              availablePhlos      = Cost(deploy.raw.flatMap(_.phloLimit).get.value)
+              _                   <- runtime.reducer.setAvailablePhlos(availablePhlos)
+              injResult           <- injAttempt(deploy, runtime.reducer, runtime.errorLog)
+              (phlosLeft, errors) = injResult
+              cost                = phlosLeft.copy(cost = availablePhlos.value - phlosLeft.cost)
+              newCheckpoint       <- Task.delay(runtime.space.createCheckpoint())
+              deployResult = InternalProcessedDeploy(
+                deploy,
+                cost,
+                newCheckpoint.log,
+                DeployStatus.fromErrors(errors)
+              )
+              cont <- if (errors.isEmpty)
+                       doEval(rem, newCheckpoint.root, acc :+ deployResult)
+                     else doEval(rem, hash, acc :+ deployResult)
+            } yield cont
 
-        case _ => (ByteString.copyFrom(hash.bytes.toArray), acc)
+          case _ => Task.now((ByteString.copyFrom(hash.bytes.toArray), acc))
+        }
       }
 
     doEval(terms, Blake2b256Hash.fromByteArray(initHash.toByteArray), Vector.empty)
+      .unsafeRunSync(scheduler)
   }
 
   private def replayEval(
@@ -178,40 +176,49 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     def doReplayEval(
         terms: Seq[InternalProcessedDeploy],
         hash: Blake2b256Hash
-    ): Either[(Option[Deploy], Failed), StateHash] =
-      terms match {
-        case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
-          val availablePhlos = Cost(deploy.raw.flatMap(_.phloLimit).get.value)
-          runtime.replayReducer.setAvailablePhlos(availablePhlos).runSyncUnsafe(1.second)
-          runtime.replaySpace.rig(hash, log.toList)
-          //TODO: compare replay deploy cost to given deploy cost
-          val (phlosLeft, errors) = injAttempt(deploy, runtime.replayReducer, runtime.errorLog)
-          val cost                = phlosLeft.copy(cost = availablePhlos.value - phlosLeft.cost)
-          DeployStatus.fromErrors(errors) match {
-            case int: InternalErrors => Left(Some(deploy) -> int)
-            case replayStatus =>
-              if (status.isFailed != replayStatus.isFailed)
-                Left(Some(deploy) -> ReplayStatusMismatch(replayStatus, status))
-              else if (errors.nonEmpty) doReplayEval(rem, hash)
-              else {
-                Try(runtime.replaySpace.createCheckpoint()) match {
-                  case Success(newCheckpoint) =>
-                    doReplayEval(rem, newCheckpoint.root)
-                  case Failure(ex: ReplayException) =>
-                    Left(none[Deploy] -> UnusedCommEvent(ex))
-                }
-              }
-          }
+    ): Task[Either[(Option[Deploy], Failed), StateHash]] =
+      Task.defer {
+        terms match {
+          case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
+            val availablePhlos = Cost(deploy.raw.flatMap(_.phloLimit).get.value)
+            for {
+              _         <- runtime.replayReducer.setAvailablePhlos(availablePhlos)
+              _         <- Task.delay(runtime.replaySpace.rig(hash, log.toList))
+              injResult <- injAttempt(deploy, runtime.replayReducer, runtime.errorLog)
+              //TODO: compare replay deploy cost to given deploy cost
+              (phlosLeft, errors) = injResult
+              cost                = phlosLeft.copy(cost = availablePhlos.value - phlosLeft.cost)
+              cont <- DeployStatus.fromErrors(errors) match {
+                       case int: InternalErrors => Task.now(Left(Some(deploy) -> int))
+                       case replayStatus =>
+                         if (status.isFailed != replayStatus.isFailed)
+                           Task.now(
+                             Left(Some(deploy) -> ReplayStatusMismatch(replayStatus, status))
+                           )
+                         else if (errors.nonEmpty) doReplayEval(rem, hash)
+                         else {
+                           Task.delay(runtime.replaySpace.createCheckpoint()).attempt.flatMap {
+                             case Right(newCheckpoint) =>
+                               doReplayEval(rem, newCheckpoint.root)
+                             case Left(ex: ReplayException) =>
+                               Task.now(Left(none[Deploy] -> UnusedCommEvent(ex)))
+                           }
+                         }
+                     }
+            } yield cont
 
-        case _ => Right(ByteString.copyFrom(hash.bytes.toArray))
+          case _ => Task.now(Right(ByteString.copyFrom(hash.bytes.toArray)))
+        }
       }
 
-    doReplayEval(terms, Blake2b256Hash.fromByteArray(initHash.toByteArray))
+    doReplayEval(terms, Blake2b256Hash.fromByteArray(initHash.toByteArray)).unsafeRunSync(scheduler)
   }
 
-  private def injAttempt(deploy: Deploy, reducer: ChargingReducer[Task], errorLog: ErrorLog)(
-      implicit scheduler: Scheduler
-  ): (PCost, Vector[Throwable]) = {
+  private def injAttempt(
+      deploy: Deploy,
+      reducer: ChargingReducer[Task],
+      errorLog: ErrorLog
+  ): Task[(PCost, Vector[Throwable])] = {
     implicit val rand: Blake2b512Random = Blake2b512Random(
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy.raw.get))
     )
@@ -225,7 +232,6 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
 
         reducer.getAvailablePhlos().map(phlos => CostAccount.toProto(phlos) -> allErrors)
       })
-      .unsafeRunSync
   }
 }
 

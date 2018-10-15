@@ -32,7 +32,7 @@ class GroundPrinterSpec extends FlatSpec with Matchers {
   }
 
   "GroundString" should "Print as \"" + "String" + "\"" in {
-    val gs             = new GroundString("String")
+    val gs             = new GroundString("\"String\"")
     val target: String = "\"" + "String" + "\""
     PrettyPrinter().buildString(GroundNormalizeMatcher.normalizeMatch(gs)) shouldBe target
   }
@@ -85,7 +85,10 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
   "Map" should "Print" in {
     val mapData = new ListKeyValuePair()
     mapData.add(
-      new KeyValuePairImpl(new PGround(new GroundInt("7")), new PGround(new GroundString("Seven")))
+      new KeyValuePairImpl(
+        new PGround(new GroundInt("7")),
+        new PGround(new GroundString("\"Seven\""))
+      )
     )
     mapData.add(new KeyValuePairImpl(new PVar(new ProcVarVar("P")), new PEval(new NameVar("x"))))
     val map = new PCollect(new CollectMap(mapData, new ProcRemainderVar(new ProcVarVar("ignored"))))

@@ -35,7 +35,7 @@ class Runtime private (
     val replayReducer: ChargingReducer[Task],
     val space: RhoISpace,
     val replaySpace: RhoReplayISpace,
-    var errorLog: ErrorLog,
+    val errorLog: ErrorLog,
     val context: RhoContext
 ) {
   def readAndClearErrorVector(): Vector[Throwable] = errorLog.readAndClearErrorVector()
@@ -99,10 +99,10 @@ object Runtime {
   type RhoSysFunction    = Function1[Seq[ListParWithRandomAndPhlos], Task[Unit]]
   type RhoDispatchMap    = Map[Long, RhoSysFunction]
 
-  private type CPAK[F[_, _, _, _]] =
+  type CPAK[F[_, _, _, _]] =
     F[Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
-  private type CPARK[F[_, _, _, _, _, _]] =
+  type CPARK[F[_, _, _, _, _, _]] =
     F[
       Par,
       BindPattern,
@@ -112,7 +112,7 @@ object Runtime {
       TaggedContinuation
     ]
 
-  private type TCPARK[M[_], F[_[_], _, _, _, _, _, _]] =
+  type TCPARK[M[_], F[_[_], _, _, _, _, _, _]] =
     F[
       M,
       Par,
@@ -129,25 +129,27 @@ object Runtime {
   type Ref       = Long
 
   object BodyRefs {
-    val STDOUT: Long                              = 0L
-    val STDOUT_ACK: Long                          = 1L
-    val STDERR: Long                              = 2L
-    val STDERR_ACK: Long                          = 3L
-    val ED25519_VERIFY: Long                      = 4L
-    val SHA256_HASH: Long                         = 5L
-    val KECCAK256_HASH: Long                      = 6L
-    val BLAKE2B256_HASH: Long                     = 7L
-    val SECP256K1_VERIFY: Long                    = 9L
-    val REG_LOOKUP: Long                          = 10L
-    val REG_LOOKUP_CALLBACK: Long                 = 11L
-    val REG_INSERT: Long                          = 12L
-    val REG_INSERT_CALLBACK: Long                 = 13L
-    val REG_DELETE: Long                          = 14L
-    val REG_DELETE_ROOT_CALLBACK: Long            = 15L
-    val REG_DELETE_CALLBACK: Long                 = 16L
-    val REG_PUBLIC_LOOKUP: Long                   = 17L
-    val REG_PUBLIC_REGISTER_RANDOM: Long          = 18L
-    val REG_PUBLIC_REGISTER_INSERT_CALLBACK: Long = 19L
+    val STDOUT: Long                       = 0L
+    val STDOUT_ACK: Long                   = 1L
+    val STDERR: Long                       = 2L
+    val STDERR_ACK: Long                   = 3L
+    val ED25519_VERIFY: Long               = 4L
+    val SHA256_HASH: Long                  = 5L
+    val KECCAK256_HASH: Long               = 6L
+    val BLAKE2B256_HASH: Long              = 7L
+    val SECP256K1_VERIFY: Long             = 9L
+    val REG_LOOKUP: Long                   = 10L
+    val REG_LOOKUP_CALLBACK: Long          = 11L
+    val REG_INSERT: Long                   = 12L
+    val REG_INSERT_CALLBACK: Long          = 13L
+    val REG_DELETE: Long                   = 14L
+    val REG_DELETE_ROOT_CALLBACK: Long     = 15L
+    val REG_DELETE_CALLBACK: Long          = 16L
+    val REG_PUBLIC_LOOKUP: Long            = 17L
+    val REG_PUBLIC_REGISTER_RANDOM: Long   = 18L
+    val REG_REGISTER_INSERT_CALLBACK: Long = 19L
+    val REG_PUBLIC_REGISTER_SIGNED: Long   = 20L
+    val REG_NONCE_INSERT_CALLBACK: Long    = 21L
   }
 
   def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
@@ -164,6 +166,7 @@ object Runtime {
     val SECP256K1_VERIFY: Par  = GString("secp256k1Verify")
     val REG_LOOKUP: Par        = byteName(9)
     val REG_INSERT_RANDOM: Par = byteName(10)
+    val REG_INSERT_SIGNED: Par = byteName(11)
   }
 
   // because only we do installs
@@ -248,25 +251,27 @@ object Runtime {
     ): RhoDispatchMap = {
       import BodyRefs._
       Map(
-        STDOUT                              -> SystemProcesses.stdout,
-        STDOUT_ACK                          -> SystemProcesses.stdoutAck(space, dispatcher),
-        STDERR                              -> SystemProcesses.stderr,
-        STDERR_ACK                          -> SystemProcesses.stderrAck(space, dispatcher),
-        ED25519_VERIFY                      -> SystemProcesses.ed25519Verify(space, dispatcher),
-        SHA256_HASH                         -> SystemProcesses.sha256Hash(space, dispatcher),
-        KECCAK256_HASH                      -> SystemProcesses.keccak256Hash(space, dispatcher),
-        BLAKE2B256_HASH                     -> SystemProcesses.blake2b256Hash(space, dispatcher),
-        SECP256K1_VERIFY                    -> SystemProcesses.secp256k1Verify(space, dispatcher),
-        REG_LOOKUP                          -> (registry.lookup(_)),
-        REG_LOOKUP_CALLBACK                 -> (registry.lookupCallback(_)),
-        REG_INSERT                          -> (registry.insert(_)),
-        REG_INSERT_CALLBACK                 -> (registry.insertCallback(_)),
-        REG_PUBLIC_REGISTER_INSERT_CALLBACK -> (registry.publicRegisterInsertCallback(_)),
-        REG_DELETE                          -> (registry.delete(_)),
-        REG_DELETE_ROOT_CALLBACK            -> (registry.deleteRootCallback(_)),
-        REG_DELETE_CALLBACK                 -> (registry.deleteCallback(_)),
-        REG_PUBLIC_LOOKUP                   -> (registry.publicLookup(_)),
-        REG_PUBLIC_REGISTER_RANDOM          -> (registry.publicRegisterRandom(_))
+        STDOUT                       -> SystemProcesses.stdout,
+        STDOUT_ACK                   -> SystemProcesses.stdoutAck(space, dispatcher),
+        STDERR                       -> SystemProcesses.stderr,
+        STDERR_ACK                   -> SystemProcesses.stderrAck(space, dispatcher),
+        ED25519_VERIFY               -> SystemProcesses.ed25519Verify(space, dispatcher),
+        SHA256_HASH                  -> SystemProcesses.sha256Hash(space, dispatcher),
+        KECCAK256_HASH               -> SystemProcesses.keccak256Hash(space, dispatcher),
+        BLAKE2B256_HASH              -> SystemProcesses.blake2b256Hash(space, dispatcher),
+        SECP256K1_VERIFY             -> SystemProcesses.secp256k1Verify(space, dispatcher),
+        REG_LOOKUP                   -> (registry.lookup(_)),
+        REG_LOOKUP_CALLBACK          -> (registry.lookupCallback(_)),
+        REG_INSERT                   -> (registry.insert(_)),
+        REG_INSERT_CALLBACK          -> (registry.insertCallback(_)),
+        REG_REGISTER_INSERT_CALLBACK -> (registry.registerInsertCallback(_)),
+        REG_DELETE                   -> (registry.delete(_)),
+        REG_DELETE_ROOT_CALLBACK     -> (registry.deleteRootCallback(_)),
+        REG_DELETE_CALLBACK          -> (registry.deleteCallback(_)),
+        REG_PUBLIC_LOOKUP            -> (registry.publicLookup(_)),
+        REG_PUBLIC_REGISTER_RANDOM   -> (registry.publicRegisterRandom(_)),
+        REG_PUBLIC_REGISTER_SIGNED   -> (registry.publicRegisterSigned(_)),
+        REG_NONCE_INSERT_CALLBACK    -> (registry.nonceInsertCallback(_))
       )
     }
 
@@ -276,7 +281,11 @@ object Runtime {
       "rho:io:stderr"                -> Bundle(FixedChannels.STDERR, writeFlag = true),
       "rho:io:stderrAck"             -> Bundle(FixedChannels.STDERR_ACK, writeFlag = true),
       "rho:registry:lookup"          -> Bundle(FixedChannels.REG_LOOKUP, writeFlag = true),
-      "rho:registry:insertArbitrary" -> Bundle(FixedChannels.REG_INSERT_RANDOM, writeFlag = true)
+      "rho:registry:insertArbitrary" -> Bundle(FixedChannels.REG_INSERT_RANDOM, writeFlag = true),
+      "rho:registry:insertSigned:ed25519" -> Bundle(
+        FixedChannels.REG_INSERT_SIGNED,
+        writeFlag = true
+      )
     )
 
     lazy val dispatchTable: RhoDispatchMap =
@@ -304,7 +313,8 @@ object Runtime {
         (FixedChannels.BLAKE2B256_HASH, 2, None, BLAKE2B256_HASH),
         (FixedChannels.SECP256K1_VERIFY, 4, None, SECP256K1_VERIFY),
         (FixedChannels.REG_LOOKUP, 2, None, REG_PUBLIC_LOOKUP),
-        (FixedChannels.REG_INSERT_RANDOM, 2, None, REG_PUBLIC_REGISTER_RANDOM)
+        (FixedChannels.REG_INSERT_RANDOM, 2, None, REG_PUBLIC_REGISTER_RANDOM),
+        (FixedChannels.REG_INSERT_SIGNED, 4, None, REG_PUBLIC_REGISTER_SIGNED)
       )
     }
 
