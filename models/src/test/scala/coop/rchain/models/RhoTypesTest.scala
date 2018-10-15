@@ -45,7 +45,9 @@ class RhoTypesTest extends FlatSpec with PropertyChecks with Matchers {
     })
   }
 
-  def roundTripSerialization[A: Serialize: Arbitrary: Shrink: Pretty](implicit tag: ClassTag[A]): Unit =
+  def roundTripSerialization[A: Serialize: Arbitrary: Shrink: Pretty](
+      implicit tag: ClassTag[A]
+  ): Unit =
     it must s"work for ${tag.runtimeClass.getSimpleName}" in {
       forAll { a: A =>
         whenever(!isExcluded(a)) {
