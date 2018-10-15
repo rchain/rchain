@@ -498,4 +498,7 @@ object ProtoUtil {
     */
   def stripDeployData(d: DeployData): DeployData =
     DeployData().withUser(d.user).withTimestamp(d.timestamp)
+
+  def stripPaymentDeploy(p: PaymentDeploy): PaymentDeploy =
+    PaymentDeploy().withUserPk(p.userPk).withTimestamp(p.timestamp)
 }
