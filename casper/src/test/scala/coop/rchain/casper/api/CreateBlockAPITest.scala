@@ -86,9 +86,10 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def blockDag: F[BlockDag]                                 = underlying.blockDag
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     underlying.normalizedInitialFault(weights)
-  def lastFinalizedBlock: F[BlockMessage]          = underlying.lastFinalizedBlock
-  def storageContents(hash: ByteString): F[String] = underlying.storageContents(hash)
-  def getRuntimeManager: F[Option[RuntimeManager]] = underlying.getRuntimeManager
+  def lastFinalizedBlock: F[BlockMessage]           = underlying.lastFinalizedBlock
+  def storageContents(hash: ByteString): F[String]  = underlying.storageContents(hash)
+  def getRuntimeManager: F[Option[RuntimeManager]]  = underlying.getRuntimeManager
+  def refetchDependencies(b: BlockMessage): F[Unit] = ().pure[F]
 
   override def createBlock: F[CreateBlockStatus] =
     for {
