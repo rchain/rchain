@@ -15,7 +15,7 @@ import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{accounting, ChargingReducer, ErrorLog, Runtime}
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.rspace.trace.Produce
-import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
+import coop.rchain.rspace.{Blake2b256Hash, Checkpoint, ReplayException}
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -132,6 +132,38 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       implicit scheduler: Scheduler
   ): (StateHash, Seq[InternalProcessedDeploy]) = {
 
+    final case class ShortLeashDeployResult(cost: Cost, checkpoint: Checkpoint)
+    final case class PaymentCodeError(msg: String) extends Throwable(msg)
+
+    // Runs a short leash deploy and returns phlos used for it
+    def shortLeashDeploy(
+        hash: Blake2b256Hash,
+        paymentDeploy: PaymentDeploy
+    ): Task[ShortLeashDeployResult] =
+      if (paymentDeploy.code.isEmpty)
+        Task.raiseError(PaymentCodeError("Payment code must be defined."))
+      else {
+        for {
+          _ <- Task.delay(runtime.space.reset(hash))
+          _ <- runtime.reducer.setAvailablePhlos(RuntimeManager.SHORT_LEASH_COST_LIMIT)
+          injResult <- injAttempt(
+                        paymentDeploy.getCode,
+                        runtime.reducer,
+                        runtime.errorLog,
+                        Blake2b512Random(ProtoUtil.stripPaymentDeploy(paymentDeploy).toByteArray)
+                      )
+          phlosLeft <- if (injResult._2.nonEmpty)
+                        Task.raiseError(PaymentCodeError("Payment deploy contains errors."))
+                      else Task.now(injResult._1)
+          cost = CostAccount
+            .fromProto(
+              phlosLeft.copy(cost = RuntimeManager.SHORT_LEASH_COST_LIMIT.value - phlosLeft.cost)
+            )
+            .cost
+          newCheckpoint <- Task.delay(runtime.space.createCheckpoint())
+        } yield ShortLeashDeployResult(cost, newCheckpoint)
+      }
+
     def doEval(
         terms: Seq[Deploy],
         hash: Blake2b256Hash,
@@ -245,6 +277,8 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
 
 object RuntimeManager {
   type StateHash = ByteString
+
+  final val SHORT_LEASH_COST_LIMIT: Cost = Cost(17000)
 
   def fromRuntime(active: Runtime)(implicit scheduler: Scheduler): RuntimeManager = {
     active.space.clear()
