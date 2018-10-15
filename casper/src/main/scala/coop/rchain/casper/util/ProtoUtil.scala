@@ -7,7 +7,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.{BlockDag, BlockMetadata, PrettyPrinter}
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
-import coop.rchain.casper.protocol._
+import coop.rchain.casper.protocol.{DeployData, _}
 import coop.rchain.casper.util.ProtoUtil.basicDeployData
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.casper.util.implicits._
@@ -437,15 +437,14 @@ object ProtoUtil {
     ByteString.copyFrom(Base16.decode(string))
 
   def basicDeployData[F[_]: Monad: Time](id: Int): F[DeployData] =
-    for {
-      now  <- Time[F].currentMillis
-      term = s"@${id}!($id)"
-    } yield
-      DeployData()
-        .withUser(ByteString.EMPTY)
-        .withTimestamp(now)
-        .withTerm(term)
-        .withPhloLimit(accounting.MAX_VALUE)
+    Time[F].currentMillis.map(
+      now =>
+        DeployData()
+          .withUser(ByteString.EMPTY)
+          .withTimestamp(now)
+          .withTerm(s"@${id}!($id)")
+          .withPhloLimit(accounting.MAX_VALUE)
+    )
 
   def basicDeploy[F[_]: Monad: Time](id: Int): F[Deploy] =
     for {
@@ -454,9 +453,7 @@ object ProtoUtil {
     } yield Deploy(term = Some(term), raw = Some(d))
 
   def basicProcessedDeploy[F[_]: Monad: Time](id: Int): F[ProcessedDeploy] =
-    for {
-      deploy <- basicDeploy[F](id)
-    } yield ProcessedDeploy(deploy = Some(deploy))
+    basicDeploy[F](id).map(deploy => ProcessedDeploy(deploy = Some(deploy)))
 
   def sourceDeploy(source: String, timestamp: Long, phlos: PhloLimit): DeployData =
     DeployData(
