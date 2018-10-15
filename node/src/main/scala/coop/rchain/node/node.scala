@@ -295,7 +295,7 @@ class NodeRuntime(conf: Configuration, host: String, scheduler: Scheduler) {
               case Some(casper) => casper.fetchDependencies
               case None         => ().pure[Effect]
             }
-        _ <- time.sleep(5.seconds).toEffect
+        _ <- time.sleep(30.seconds).toEffect
       } yield ()
 
     for {
