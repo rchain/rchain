@@ -25,7 +25,7 @@ object Estimator {
     */
   def tips[F[_]: Monad: BlockStore](
       blockDag: BlockDag,
-      lastFinalizedBlock: BlockMessage
+      lastFinalizedBlockHash: BlockHash
   ): F[IndexedSeq[BlockMessage]] = {
     @tailrec
     def sortChildren(
@@ -69,9 +69,9 @@ object Estimator {
       newBlocks == blocks
 
     for {
-      scoresMap <- buildScoresMap(blockDag, lastFinalizedBlock).pure[F]
+      scoresMap <- buildScoresMap(blockDag, lastFinalizedBlockHash).pure[F]
       sortedChildrenHash = sortChildren(
-        IndexedSeq(lastFinalizedBlock.blockHash),
+        IndexedSeq(lastFinalizedBlockHash),
         blockDag.childMap,
         scoresMap
       )
@@ -80,7 +80,10 @@ object Estimator {
     } yield sortedChildren
   }
 
-  def buildScoresMap(blockDag: BlockDag, lastFinalizedBlock: BlockMessage): Map[BlockHash, Long] = {
+  def buildScoresMap(
+      blockDag: BlockDag,
+      lastFinalizedBlockHash: BlockHash
+  ): Map[BlockHash, Long] = {
     def hashParents(hash: BlockHash, lastFinalizedBlockNumber: Long): List[BlockHash] = {
       val currentBlockNumber = blockDag.dataLookup(hash).blockNum
       if (currentBlockNumber < lastFinalizedBlockNumber)
@@ -96,7 +99,7 @@ object Estimator {
     ): Map[BlockHash, Long] =
       DagOperations
         .bfTraverseF[Id, BlockHash](List(latestBlockHash))(
-          hashParents(_, ProtoUtil.blockNumber(lastFinalizedBlock))
+          hashParents(_, blockDag.dataLookup(lastFinalizedBlockHash).blockNum)
         )
         .foldLeft(scoreMap) {
           case (acc, hash) =>

@@ -194,8 +194,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   def estimator(dag: BlockDag): F[IndexedSeq[BlockMessage]] =
     for {
       lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
-      lastFinalizedBlock     <- ProtoUtil.unsafeGetBlock[F](lastFinalizedBlockHash)
-      rankedEstimates        <- Estimator.tips[F](dag, lastFinalizedBlock)
+      rankedEstimates        <- Estimator.tips[F](dag, lastFinalizedBlockHash)
     } yield rankedEstimates
 
   /*
