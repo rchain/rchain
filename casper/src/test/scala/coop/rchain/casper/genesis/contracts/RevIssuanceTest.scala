@@ -47,22 +47,26 @@ class RevIssuanceTest extends FlatSpec with Matchers {
 
     val statusOut = "out"
     val unlockDeployData =
-      RevIssuanceTest.preWalletUnlockDeploy(ethAddress, pubKey, secKey, statusOut)(runtimeManager)
-    val unlockDeploy = ProtoUtil.deployDataToDeploy(unlockDeployData)
+      RevIssuanceTest
+        .preWalletUnlockDeploy(ethAddress, pubKey, secKey, statusOut)(runtimeManager)
+    val unlockDeploy =
+      ProtoUtil.deployDataToDeploy(unlockDeployData)
 
     val nonce             = 0
     val amount            = 15L
     val destination       = "deposit"
     val transferStatusOut = "tOut"
-    val transferDeployData = RevIssuanceTest.walletTransferDeploy(
-      nonce,
-      amount,
-      destination,
-      transferStatusOut,
-      pubKey,
-      secKey
-    )(runtimeManager)
-    val transferDeploy      = ProtoUtil.deployDataToDeploy(transferDeployData)
+    val transferDeployData = RevIssuanceTest
+      .walletTransferDeploy(
+        nonce,
+        amount,
+        destination,
+        transferStatusOut,
+        pubKey,
+        secKey
+      )(runtimeManager)
+    val transferDeploy =
+      ProtoUtil.deployDataToDeploy(transferDeployData)
     val (postGenHash, _)    = runtimeManager.computeState(emptyHash, genesisDeploys)
     val (postUnlockHash, _) = runtimeManager.computeState(postGenHash, unlockDeploy :: Nil)
     val unlockResult =
@@ -100,6 +104,7 @@ object RevIssuanceTest {
     ProtoUtil.sourceDeploy(
       code,
       System.currentTimeMillis(),
+      ProtoUtil.EMPTY_PAYMENT_CODE,
       accounting.MAX_VALUE
     )
   }
@@ -124,6 +129,7 @@ object RevIssuanceTest {
     ProtoUtil.sourceDeploy(
       code,
       System.currentTimeMillis(),
+      ProtoUtil.EMPTY_PAYMENT_CODE,
       accounting.MAX_VALUE
     )
   }
