@@ -10,6 +10,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models._
+import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, TCPARK}
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{accounting, ChargingReducer, ErrorLog, Runtime}
@@ -31,13 +32,11 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   def captureResults(start: StateHash, term: Par, name: String = "__SCALA__")(
       implicit scheduler: Scheduler
   ): Seq[Par] = {
-    val runtime           = runtimeContainer.take()
-    val stubPaymentDeploy = PaymentDeploy().withCode(Par())
+    val runtime = runtimeContainer.take()
     val deploy = ProtoUtil.termDeploy(
       term,
       System.currentTimeMillis(),
-      accounting.MAX_VALUE,
-      Some(stubPaymentDeploy)
+      accounting.MAX_VALUE
     )
     val (_, Seq(processedDeploy)) = newEval(deploy :: Nil, runtime, start)
 
@@ -134,58 +133,55 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     } yield (result.patterns, result.continuation.taggedCont.parBody.get.body)
   }
 
+  final case class PaymentCodeError(msg: String) extends Throwable(msg)
+
+  // Runs a short leash deploy and returns phlos used for it
+  private def evalShortLeashDeploy(
+      paymentDeploy: PaymentDeploy,
+      reducer: ChargingReducer[Task],
+      errorLog: ErrorLog,
+      space: RhoISpace
+  ): Task[Cost] =
+    if (paymentDeploy.code.isEmpty)
+      Task.raiseError(PaymentCodeError("Payment code must be defined."))
+    else {
+      for {
+        injResult <- injAttempt(
+                      paymentDeploy.getCode,
+                      reducer,
+                      errorLog,
+                      Blake2b512Random(ProtoUtil.stripPaymentDeploy(paymentDeploy).toByteArray),
+                      RuntimeManager.SHORT_LEASH_COST_LIMIT
+                    )
+        costAcc <- if (injResult._2.nonEmpty)
+                    Task.raiseError(PaymentCodeError("Payment deploy contains errors."))
+                  else Task.now(injResult._1)
+      } yield costAcc.cost
+    }
+
   private def newEval(terms: Seq[Deploy], runtime: Runtime, initHash: StateHash)(
       implicit scheduler: Scheduler
   ): (StateHash, Seq[InternalProcessedDeploy]) = {
 
-    final case class ShortLeashDeployResult(cost: Cost, checkpoint: Checkpoint)
-    final case class PaymentCodeError(msg: String) extends Throwable(msg)
-
-    // Runs a short leash deploy and returns phlos used for it
-    def evalShortLeashDeploy(
-        hash: Blake2b256Hash,
-        paymentDeploy: PaymentDeploy
-    ): Task[ShortLeashDeployResult] =
-      if (paymentDeploy.code.isEmpty)
-        Task.raiseError(PaymentCodeError("Payment code must be defined."))
-      else {
-        for {
-          _ <- Task.delay(runtime.space.reset(hash))
-          injResult <- injAttempt(
-                        paymentDeploy.getCode,
-                        runtime.reducer,
-                        runtime.errorLog,
-                        Blake2b512Random(ProtoUtil.stripPaymentDeploy(paymentDeploy).toByteArray),
-                        RuntimeManager.SHORT_LEASH_COST_LIMIT
-                      )
-          costAcc <- if (injResult._2.nonEmpty)
-                      Task.raiseError(PaymentCodeError("Payment deploy contains errors."))
-                    else Task.now(injResult._1)
-          newCheckpoint <- Task.delay(runtime.space.createCheckpoint())
-        } yield ShortLeashDeployResult(costAcc.cost, newCheckpoint)
-      }
-
     def evalDeploy(
-        shortLeashDeployResult: ShortLeashDeployResult,
+        shortLeashCost: Cost,
         deploy: Deploy
     ): Task[(Blake2b256Hash, InternalProcessedDeploy)] =
       for {
-        _         <- Task.delay(runtime.space.reset(shortLeashDeployResult.checkpoint.root))
-        phloLimit = Cost(deploy.getRaw.getPhloLimit.value) - shortLeashDeployResult.cost
         injResult <- injAttempt(
                       deploy.getTerm,
                       runtime.reducer,
                       runtime.errorLog,
                       Blake2b512Random(ProtoUtil.stripDeployData(deploy.getRaw).toByteArray),
-                      phloLimit
+                      Cost(deploy.getRaw.getPhloLimit.value) - shortLeashCost
                     )
         (injCost, errors) = injResult
-        deployCost        = injCost + shortLeashDeployResult.cost
+        deployCost        = injCost + shortLeashCost
         newCheckpoint     <- Task.delay(runtime.space.createCheckpoint())
         deployResult = InternalProcessedDeploy(
           deploy,
           CostAccount.toProto(deployCost),
-          shortLeashDeployResult.checkpoint.log ++ newCheckpoint.log,
+          newCheckpoint.log,
           DeployStatus.fromErrors(errors)
         )
       } yield newCheckpoint.root -> deployResult
@@ -198,25 +194,31 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       Task.defer {
         terms match {
           case deploy +: rem =>
-            evalShortLeashDeploy(hash, deploy.getPaymentCode).attempt
-              .flatMap {
-                case Right(shortLeashResult) =>
-                  evalDeploy(shortLeashResult, deploy).map {
-                    case (rootHash, processedDeploy) =>
-                      if (!processedDeploy.status.isFailed)
-                        (rootHash, acc :+ processedDeploy)
-                      else (hash, acc :+ processedDeploy)
-                  }
-                case Left(err) =>
-                  val processedDeploy = InternalProcessedDeploy(
-                    deploy,
-                    PCost(),
-                    Seq.empty,
-                    DeployStatus.fromErrors(Vector(err))
-                  )
-                  Task.now((hash, acc :+ processedDeploy))
-              }
-              .flatMap { case (hash, errors) => doEval(rem, hash, errors) }
+            Task.delay(runtime.space.reset(hash)) *>
+              evalShortLeashDeploy(
+                deploy.getPaymentCode,
+                runtime.reducer,
+                runtime.errorLog,
+                runtime.space
+              ).attempt
+                .flatMap {
+                  case Right(shortLeashCost) =>
+                    evalDeploy(shortLeashCost, deploy).map {
+                      case (postShortLeashHash, processedDeploy) =>
+                        val newHash =
+                          if (!processedDeploy.status.isFailed) postShortLeashHash else hash
+                        (newHash, acc :+ processedDeploy)
+                    }
+                  case Left(err) =>
+                    val processedDeploy = InternalProcessedDeploy(
+                      deploy,
+                      PCost(),
+                      Seq.empty,
+                      ShortLeashError(err)
+                    )
+                    Task.now((hash, acc :+ processedDeploy))
+                }
+                .flatMap { case (hash, errors) => doEval(rem, hash, errors) }
 
           case _ => Task.now((ByteString.copyFrom(hash.bytes.toArray), acc))
         }
@@ -239,16 +241,22 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       Task.defer {
         terms match {
           case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
-            val availablePhlos = Cost(deploy.raw.flatMap(_.phloLimit).get.value)
             for {
               _ <- Task.delay(runtime.replaySpace.rig(hash, log.toList))
+              shortLeashCost <- evalShortLeashDeploy(
+                                 deploy.getPaymentCode,
+                                 runtime.replayReducer,
+                                 runtime.errorLog,
+                                 runtime.replaySpace
+                               )
               // TODO: assert that deploy.term deploy.raw are defined
+              phloLimit = Cost(deploy.raw.flatMap(_.phloLimit).get.value)
               injResult <- injAttempt(
                             deploy.getTerm,
                             runtime.replayReducer,
                             runtime.errorLog,
                             Blake2b512Random(ProtoUtil.stripDeployData(deploy.getRaw).toByteArray),
-                            availablePhlos
+                            phloLimit - shortLeashCost
                           )
               // TODO: compare replay deploy cost to given deploy cost
               (cost, errors) = injResult
