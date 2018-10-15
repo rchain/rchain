@@ -190,11 +190,12 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     import coop.rchain.models.rholang.implicits._
     import coop.rchain.rholang.interpreter.accounting._
     def sendWithCost(str: String): (Par, Cost) = {
-      val data: Seq[Par] = Seq(GString(str))
-      val channel: Par   = GPrivateBuilder()
-      val send: Par      = Send(channel, data)
-      val storageCost    = data.storageCost + channel.storageCost
-      (send, storageCost)
+      val data: Seq[Par]   = Seq(GString(str))
+      val channel: Par     = GPrivateBuilder()
+      val send: Par        = Send(channel, data)
+      val substitutionCost = data.storageCost + channel.storageCost
+      val storageCost      = data.storageCost + channel.storageCost
+      (send, storageCost + substitutionCost)
     }
     val (paymentDeployPar, paymentDeployCost) = sendWithCost("Payment deploy")
     val paymentDeploy                         = PaymentDeploy().withCode(paymentDeployPar)
