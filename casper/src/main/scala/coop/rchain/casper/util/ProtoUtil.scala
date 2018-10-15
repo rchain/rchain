@@ -4,15 +4,15 @@ import cats.Monad
 import cats.implicits._
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.{BlockDag, BlockMetadata, PrettyPrinter}
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.casper.util.implicits._
+import coop.rchain.casper.util.rholang.InterpreterUtil
+import coop.rchain.casper.{BlockDag, PrettyPrinter}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.models.{PCost, Par}
+import coop.rchain.models.Par
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.accounting
 
@@ -433,6 +433,7 @@ object ProtoUtil {
       .withTimestamp(timestamp)
       .withTerm(term)
       .withPhloLimit(accounting.MAX_VALUE)
+      .withPayment(EMPTY_PAYMENT_CODE)
   }
 
   def basicDeploy(id: Int): Deploy = {
@@ -452,12 +453,18 @@ object ProtoUtil {
     )
   }
 
-  def sourceDeploy(source: String, timestamp: Long, phlos: PhloLimit): DeployData =
+  def sourceDeploy(
+      source: String,
+      timestamp: Long,
+      paymentCode: String,
+      phlos: PhloLimit
+  ): DeployData =
     DeployData(
       user = ByteString.EMPTY,
       timestamp = timestamp,
       term = source,
-      phloLimit = Some(phlos)
+      phloLimit = Some(phlos),
+      payment = paymentCode
     )
 
   def compiledSourceDeploy(
@@ -467,10 +474,16 @@ object ProtoUtil {
   ): Deploy =
     Deploy(
       term = Some(source.term),
-      raw = Some(sourceDeploy(source.code, timestamp, phloLimit))
+      raw = Some(sourceDeploy(source.code, timestamp, EMPTY_PAYMENT_CODE, phloLimit)),
+      paymentCode = Some(EMPTY_PAYMENT_DEPLOY)
     )
 
-  def termDeploy(term: Par, timestamp: Long, phloLimit: PhloLimit): Deploy =
+  def termDeploy(
+      term: Par,
+      timestamp: Long,
+      phloLimit: PhloLimit,
+      paymentDeploy: Option[PaymentDeploy] = Some(EMPTY_PAYMENT_DEPLOY)
+  ): Deploy =
     Deploy(
       term = Some(term),
       raw = Some(
@@ -478,18 +491,41 @@ object ProtoUtil {
           user = ByteString.EMPTY,
           timestamp = timestamp,
           term = term.toProtoString,
-          phloLimit = Some(phloLimit)
+          phloLimit = Some(phloLimit),
+          payment = paymentDeploy.flatMap(_.code).map(_.toProtoString).getOrElse(EMPTY_PAYMENT_CODE)
         )
-      )
+      ),
+      paymentDeploy
     )
 
   def termDeployNow(term: Par): Deploy =
     termDeploy(term, System.currentTimeMillis(), accounting.MAX_VALUE)
 
-  def deployDataToDeploy(dd: DeployData): Deploy = Deploy(
+  // For test purposes we want a deploy that won't leave a trace in the tuplespace
+  // but should do _something_ - create a COMM and cost more than nothing.
+  final val EMPTY_PAYMENT_DEPLOY =
+    PaymentDeploy().withCode(InterpreterUtil.mkTerm(EMPTY_PAYMENT_CODE).right.get)
+  final val EMPTY_PAYMENT_CODE = "@Nil!(1) | for(_ <- @Nil) { Nil }"
+
+  def deployDataToDeploy(
+      dd: DeployData
+  ): Deploy = Deploy(
     term = InterpreterUtil.mkTerm(dd.term).toOption,
-    raw = Some(dd)
+    raw = Some(dd),
+    paymentCode = Some(deployDataToPayment(dd))
   )
+
+  def deployDataToPayment(dd: DeployData): PaymentDeploy =
+    PaymentDeploy(
+      InterpreterUtil.mkTerm(dd.payment).toOption,
+      dd.paymentCodeHash,
+      dd.user,
+      dd.timestamp,
+      dd.getPhloLimit.value,
+      dd.getPhloPrice.value,
+      dd.nonce,
+      dd.paymentSig
+    )
 
   /**
     * Strip a deploy down to the fields we are using to seed the Deterministic name generator.
@@ -498,4 +534,7 @@ object ProtoUtil {
     */
   def stripDeployData(d: DeployData): DeployData =
     DeployData().withUser(d.user).withTimestamp(d.timestamp)
+
+  def stripPaymentDeploy(p: PaymentDeploy): PaymentDeploy =
+    PaymentDeploy().withUserPk(p.userPk).withTimestamp(p.timestamp)
 }

@@ -23,18 +23,31 @@ class RholangBuildTest extends FlatSpec with Matchers {
     import node._
 
     val llDeploy =
-      ProtoUtil.sourceDeploy(ListOps.code, System.currentTimeMillis(), accounting.MAX_VALUE)
+      ProtoUtil.sourceDeploy(
+        ListOps.code,
+        System.currentTimeMillis(),
+        ProtoUtil.EMPTY_PAYMENT_CODE,
+        accounting.MAX_VALUE
+      )
     val deploys = Vector(
       "contract @\"double\"(@x, ret) = { ret!(2 * x) }",
       "@(\"ListOps\", \"map\")!([2, 3, 5, 7], \"double\", \"dprimes\")"
-    ).zipWithIndex.map {
-      case (d, i) => ProtoUtil.sourceDeploy(d, i.toLong + 1L, accounting.MAX_VALUE)
-    }
+    ).zipWithIndex
+      .map {
+        case (d, i) =>
+          ProtoUtil.sourceDeploy(
+            d,
+            i.toLong + 1L,
+            ProtoUtil.EMPTY_PAYMENT_CODE,
+            accounting.MAX_VALUE
+          )
+      }
 
     val Created(signedBlock) = deploys.traverse(MultiParentCasper[Id].deploy) *> MultiParentCasper[
       Id
     ].createBlock
-    val _ = MultiParentCasper[Id].addBlock(signedBlock)
+    val status = MultiParentCasper[Id].addBlock(signedBlock)
+    assert(status == Valid)
 
     val storage = HashSetCasperTest.blockTuplespaceContents(signedBlock)
 

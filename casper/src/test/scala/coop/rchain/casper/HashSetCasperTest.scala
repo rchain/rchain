@@ -102,6 +102,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     parents.head should be(genesis.blockHash)
     deploys.size should be(1)
     deploys.head.raw should be(Some(deploy))
+
     storage.contains("@{0}!(0)") should be(true)
     node.tearDown()
   }
@@ -143,6 +144,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         |}
       """.stripMargin,
       now,
+      ProtoUtil.EMPTY_PAYMENT_CODE,
       accounting.MAX_VALUE
     )
 
@@ -163,6 +165,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
          |}
       """.stripMargin,
       now,
+      ProtoUtil.EMPTY_PAYMENT_CODE,
       accounting.MAX_VALUE
     )
     casperEff.deploy(callDeploy)
@@ -187,7 +190,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val deployDatas = Vector(
       "contract @\"add\"(@x, @y, ret) = { ret!(x + y) }",
       "new unforgable in { @\"add\"!(5, 7, *unforgable) }"
-    ).zipWithIndex.map(s => ProtoUtil.sourceDeploy(s._1, start + s._2, accounting.MAX_VALUE))
+    ).zipWithIndex.map(
+      s =>
+        ProtoUtil
+          .sourceDeploy(s._1, start + s._2, ProtoUtil.EMPTY_PAYMENT_CODE, accounting.MAX_VALUE)
+    )
 
     val Created(signedBlock1) = MultiParentCasper[Id].deploy(deployDatas.head) *> MultiParentCasper[
       Id
@@ -215,7 +222,15 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val startTime = System.currentTimeMillis()
     val source    = " for(@x <- @0){ @0!(x) } | @0!(0) "
     val deploys = (source #:: source #:: Stream.empty[String]).zipWithIndex
-      .map(s => ProtoUtil.sourceDeploy(s._1, startTime + s._2, accounting.MAX_VALUE))
+      .map(
+        s =>
+          ProtoUtil.sourceDeploy(
+            s._1,
+            startTime + s._2,
+            ProtoUtil.EMPTY_PAYMENT_CODE,
+            accounting.MAX_VALUE
+          )
+      )
     deploys.foreach(MultiParentCasper[Id].deploy(_))
     val Created(block) = MultiParentCasper[Id].createBlock
     val _              = MultiParentCasper[Id].addBlock(block)
@@ -309,6 +324,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       ProtoUtil.sourceDeploy(
         "@1!(1) | for(@x <- @1){ @1!(x) }",
         System.currentTimeMillis(),
+        ProtoUtil.EMPTY_PAYMENT_CODE,
         accounting.MAX_VALUE
       ),
       ProtoUtil.basicDeployData(2)
@@ -362,6 +378,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val bondingForwarderDeploy = ProtoUtil.sourceDeploy(
       BondingUtil.bondingForwarderDeploy(bondKey, ethAddress),
       System.currentTimeMillis(),
+      ProtoUtil.EMPTY_PAYMENT_CODE,
       accounting.MAX_VALUE
     )
     val transferStatusOut = BondingUtil.transferStatusOut(ethAddress)
@@ -388,6 +405,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val helloWorldDeploy = ProtoUtil.sourceDeploy(
       """new s(`rho:io:stdout`) in { s!("Hello, World!") }""",
       System.currentTimeMillis(),
+      ProtoUtil.EMPTY_PAYMENT_CODE,
       accounting.MAX_VALUE
     )
     //new validator does deploy/propose
@@ -470,7 +488,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val createWalletCode =
       s"""for(faucet <- @"faucet"){ faucet!($amount, "ed25519", "$pkStr", "myWallet") }"""
     val createWalletDeploy =
-      ProtoUtil.sourceDeploy(createWalletCode, System.currentTimeMillis(), accounting.MAX_VALUE)
+      ProtoUtil.sourceDeploy(
+        createWalletCode,
+        System.currentTimeMillis(),
+        ProtoUtil.EMPTY_PAYMENT_CODE,
+        accounting.MAX_VALUE
+      )
 
     val Created(block) = casperEff.deploy(createWalletDeploy) *> casperEff.createBlock
     val blockStatus    = casperEff.addBlock(block)
@@ -499,9 +522,19 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val bondingCode             = BondingUtil.faucetBondDeploy[Id](amount, "ed25519", pkStr, sk)
 
     val forwardDeploy =
-      ProtoUtil.sourceDeploy(forwardCode, System.currentTimeMillis(), accounting.MAX_VALUE)
+      ProtoUtil.sourceDeploy(
+        forwardCode,
+        System.currentTimeMillis(),
+        ProtoUtil.EMPTY_PAYMENT_CODE,
+        accounting.MAX_VALUE
+      )
     val bondingDeploy =
-      ProtoUtil.sourceDeploy(bondingCode, forwardDeploy.timestamp + 1, accounting.MAX_VALUE)
+      ProtoUtil.sourceDeploy(
+        bondingCode,
+        forwardDeploy.timestamp + 1,
+        ProtoUtil.EMPTY_PAYMENT_CODE,
+        accounting.MAX_VALUE
+      )
     val Created(block1) = casperEff.deploy(forwardDeploy) *> casperEff.createBlock
     val block1Status    = casperEff.addBlock(block1)
     val Created(block2) = casperEff.deploy(bondingDeploy) *> casperEff.createBlock
@@ -572,7 +605,13 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       "@2!(2)"
     ).zipWithIndex
       .map(
-        d => ProtoUtil.sourceDeploy(d._1, System.currentTimeMillis() + d._2, accounting.MAX_VALUE)
+        d =>
+          ProtoUtil.sourceDeploy(
+            d._1,
+            System.currentTimeMillis() + d._2,
+            ProtoUtil.EMPTY_PAYMENT_CODE,
+            accounting.MAX_VALUE
+          )
       )
 
     val Created(signedBlock1) = nodes(0).casperEff
