@@ -756,20 +756,30 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       nodes(0).casperEff.addBlock(block)
       nodes(1).transportLayerEff.clear(nodes(1).local) //nodes(1) misses this block
     }
-    val Created(block) = nodes(0).casperEff
+    val Created(block11) = nodes(0).casperEff
       .deploy(ProtoUtil.basicDeployData(10)) *> nodes(0).casperEff.createBlock
-    nodes(0).casperEff.addBlock(block)
+    nodes(0).casperEff.addBlock(block11)
 
-    (0 to 10).foreach { i =>
+    // Cycle of requesting and passing blocks until block #3 from nodes(0) to nodes(1)
+    (0 to 8).foreach { i =>
       nodes(1).receive()
       nodes(0).receive()
     }
 
+    // We simulate a network failure here by not allowing block #2 to get passed to nodes(1)
+
+    val Created(block12) = nodes(0).casperEff
+      .deploy(ProtoUtil.basicDeployData(11)) *> nodes(0).casperEff.createBlock
+    nodes(0).casperEff.addBlock(block12)
+    nodes(1).receive() // adds block #12 and requests for block #2
+    nodes(0).receive() // sends block #2
+    nodes(1).receive() // adds block #2 and block #12
+
     nodes(1).logEff.infos
-      .count(_ startsWith "Requested missing block") should be(10)
+      .count(_ startsWith "Requested missing block") should be(11)
     nodes(0).logEff.infos.count(
       s => (s startsWith "Received request for block") && (s endsWith "Response sent.")
-    ) should be(10)
+    ) should be(11)
 
     nodes.foreach(_.tearDown())
   }
