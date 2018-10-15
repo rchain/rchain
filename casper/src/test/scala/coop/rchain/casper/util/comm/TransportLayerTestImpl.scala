@@ -42,9 +42,7 @@ class TransportLayerTestImpl[F[_]: Monad](
     TransportLayerTestImpl.handleQueue(dispatch, msgQueues(identity))
 
   def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] =
-    peers.toList
-      .traverse(peer => send(peer, protocol(blob.sender).withPacket(blob.packet)))
-      .map(_.toSeq)
+    broadcast(peers, protocol(blob.sender).withPacket(blob.packet)).void
 
   def disconnect(peer: PeerNode): F[Unit] = ???
 

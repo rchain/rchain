@@ -86,7 +86,7 @@ object EffectsTestInstances {
     }
 
     def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] =
-      broadcast(peers, ProtocolHelper.protocol(blob.sender).withPacket(blob.packet)).as(())
+      broadcast(peers, ProtocolHelper.protocol(blob.sender).withPacket(blob.packet)).void
 
     def receive(
         dispatch: Protocol => F[CommunicationResponse],
