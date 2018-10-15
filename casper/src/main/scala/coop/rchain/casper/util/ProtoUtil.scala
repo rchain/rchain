@@ -475,14 +475,13 @@ object ProtoUtil {
     Deploy(
       term = Some(source.term),
       raw = Some(sourceDeploy(source.code, timestamp, EMPTY_PAYMENT_CODE, phloLimit)),
-      paymentCode = Some(EMPTY_PAYMENT_DEPLOY)
+      payment = InterpreterUtil.mkTerm(EMPTY_PAYMENT_CODE).toOption
     )
 
   def termDeploy(
       term: Par,
       timestamp: Long,
-      phloLimit: PhloLimit,
-      paymentDeploy: Option[PaymentDeploy] = Some(EMPTY_PAYMENT_DEPLOY)
+      phloLimit: PhloLimit
   ): Deploy =
     Deploy(
       term = Some(term),
@@ -492,10 +491,10 @@ object ProtoUtil {
           timestamp = timestamp,
           term = term.toProtoString,
           phloLimit = Some(phloLimit),
-          payment = paymentDeploy.flatMap(_.code).map(_.toProtoString).getOrElse(EMPTY_PAYMENT_CODE)
+          payment = EMPTY_PAYMENT_CODE
         )
       ),
-      paymentDeploy
+      payment = InterpreterUtil.mkTerm(EMPTY_PAYMENT_CODE).toOption
     )
 
   def termDeployNow(term: Par): Deploy =
@@ -503,8 +502,6 @@ object ProtoUtil {
 
   // For test purposes we want a deploy that won't leave a trace in the tuplespace
   // but should do _something_ - create a COMM and cost more than nothing.
-  final val EMPTY_PAYMENT_DEPLOY =
-    PaymentDeploy().withCode(InterpreterUtil.mkTerm(EMPTY_PAYMENT_CODE).right.get)
   final val EMPTY_PAYMENT_CODE = "@Nil!(1) | for(_ <- @Nil) { Nil }"
 
   def deployDataToDeploy(
@@ -512,20 +509,8 @@ object ProtoUtil {
   ): Deploy = Deploy(
     term = InterpreterUtil.mkTerm(dd.term).toOption,
     raw = Some(dd),
-    paymentCode = Some(deployDataToPayment(dd))
+    payment = InterpreterUtil.mkTerm(dd.payment).toOption
   )
-
-  def deployDataToPayment(dd: DeployData): PaymentDeploy =
-    PaymentDeploy(
-      InterpreterUtil.mkTerm(dd.payment).toOption,
-      dd.paymentCodeHash,
-      dd.user,
-      dd.timestamp,
-      dd.getPhloLimit.value,
-      dd.getPhloPrice.value,
-      dd.nonce,
-      dd.paymentSig
-    )
 
   /**
     * Strip a deploy down to the fields we are using to seed the Deterministic name generator.
@@ -535,6 +520,4 @@ object ProtoUtil {
   def stripDeployData(d: DeployData): DeployData =
     DeployData().withUser(d.user).withTimestamp(d.timestamp)
 
-  def stripPaymentDeploy(p: PaymentDeploy): PaymentDeploy =
-    PaymentDeploy().withUserPk(p.userPk).withTimestamp(p.timestamp)
 }

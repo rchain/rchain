@@ -6,24 +6,20 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, TCPARK}
+import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{accounting, ChargingReducer, ErrorLog, Runtime}
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
-import coop.rchain.rspace.trace.Produce
-import coop.rchain.rspace.{Blake2b256Hash, Checkpoint, ReplayException}
+import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 import monix.eval.Task
 import monix.execution.Scheduler
 
-import scala.annotation.tailrec
 import scala.collection.immutable
 import scala.concurrent.SyncVar
-import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 
 //runtime is a SyncVar for thread-safety, as all checkpoints share the same "hot store"
@@ -32,12 +28,8 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   def captureResults(start: StateHash, term: Par, name: String = "__SCALA__")(
       implicit scheduler: Scheduler
   ): Seq[Par] = {
-    val runtime = runtimeContainer.take()
-    val deploy = ProtoUtil.termDeploy(
-      term,
-      System.currentTimeMillis(),
-      accounting.MAX_VALUE
-    )
+    val runtime                   = runtimeContainer.take()
+    val deploy                    = ProtoUtil.termDeploy(term, System.currentTimeMillis(), accounting.MAX_VALUE)
     val (_, Seq(processedDeploy)) = newEval(deploy :: Nil, runtime, start)
 
     //TODO: Is better error handling needed here?
@@ -137,20 +129,20 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
 
   // Runs a short leash deploy and returns phlos used for it
   private def evalShortLeashDeploy(
-      paymentDeploy: PaymentDeploy,
+      deploy: Deploy,
       reducer: ChargingReducer[Task],
       errorLog: ErrorLog,
       space: RhoISpace
   ): Task[Cost] =
-    if (paymentDeploy.code.isEmpty)
+    if (deploy.payment.isEmpty)
       Task.raiseError(PaymentCodeError("Payment code must not be empty."))
     else {
       for {
         injResult <- injAttempt(
-                      paymentDeploy.getCode,
+                      deploy.payment.get,
                       reducer,
                       errorLog,
-                      Blake2b512Random(ProtoUtil.stripPaymentDeploy(paymentDeploy).toByteArray),
+                      Blake2b512Random(ProtoUtil.stripDeployData(deploy.getRaw).toByteArray),
                       RuntimeManager.SHORT_LEASH_COST_LIMIT
                     )
         costAcc <- if (injResult._2.nonEmpty)
@@ -196,7 +188,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
           case deploy +: rem =>
             Task.delay(runtime.space.reset(hash)) *>
               evalShortLeashDeploy(
-                deploy.getPaymentCode,
+                deploy,
                 runtime.reducer,
                 runtime.errorLog,
                 runtime.space
@@ -244,7 +236,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
             for {
               _ <- Task.delay(runtime.replaySpace.rig(hash, log.toList))
               shortLeashCost <- evalShortLeashDeploy(
-                                 deploy.getPaymentCode,
+                                 deploy,
                                  runtime.replayReducer,
                                  runtime.errorLog,
                                  runtime.replaySpace

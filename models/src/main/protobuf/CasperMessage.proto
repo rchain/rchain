@@ -46,7 +46,7 @@ message DeployData {
   PhloPrice phloPrice  = 7; //phlo price
   PhloLimit phloLimit  = 8; //phlo limit for the deployment
   int32 nonce         = 9; //nonce for transaction made against `from` wallet
-  string payment = 10; // payment code
+  string payment      = 10; // payment code
   bytes paymentCodeHash = 11;
   bytes paymentSig = 12; // signature over (codeHash, pk, timestamp, amount, rate, nonce)
 }
@@ -241,21 +241,10 @@ message RChainState {
   int64         blockNumber  = 3;
 }
 
-message PaymentDeploy {
-  Par    code      = 1; // payment code (short leash)
-  bytes  codeHash  = 2;
-  bytes  userPk    = 3; // user public key
-  int64  timestamp = 4;
-  uint64 amount    = 5;
-  uint64 phloRate  = 6;
-  uint64 nonce     = 7;
-  bytes  sig       = 8; // signature over (codeHash, pk, timestamp, amount, rate, nonce)
-}
-
 message Deploy {
-  Par           term        = 1; //rholang term to deploy
-  DeployData    raw         = 2;
-  PaymentDeploy paymentCode = 3;
+  Par           term    = 1; //rholang term to deploy
+  DeployData    raw     = 2;
+  Par           payment = 3;
 }
 
 message Event {

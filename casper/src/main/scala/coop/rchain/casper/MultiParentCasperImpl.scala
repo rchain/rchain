@@ -179,17 +179,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
         val deploy = Deploy(
           term = Some(term),
           raw = Some(d),
-          paymentCode = Some(
-            PaymentDeploy(
-              code = InterpreterUtil.mkTerm(d.payment).toOption,
-              userPk = d.user,
-              timestamp = d.timestamp,
-              amount = d.getPhloLimit.value,
-              phloRate = d.getPhloPrice.value,
-              nonce = d.nonce,
-              sig = d.paymentSig
-            )
-          )
+          payment = InterpreterUtil.mkTerm(d.payment).toOption
         )
         for {
           _ <- Capture[F].capture {

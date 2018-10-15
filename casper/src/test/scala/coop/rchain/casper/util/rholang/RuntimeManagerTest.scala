@@ -2,12 +2,10 @@ package coop.rchain.casper.util.rholang
 
 import java.nio.file.Files
 
-import coop.rchain.casper.protocol.PaymentDeploy
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
+import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.Var.VarInstance.Wildcard
 import coop.rchain.models.Var.WildcardMsg
-import coop.rchain.models.rholang.implicits.GPrivateBuilder
 import coop.rchain.models.{EVar, Par, Send}
 import coop.rchain.rholang.interpreter.accounting.Chargeable
 import coop.rchain.rholang.interpreter.{accounting, Runtime}
@@ -15,22 +13,20 @@ import coop.rchain.rholang.math.NonNegativeNumber
 import coop.rchain.shared.StoreType
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
-import coop.rchain.models.rholang.implicits._
+
 import scala.annotation.tailrec
 
 class RuntimeManagerTest extends FlatSpec with Matchers {
-  val storageSize       = 1024L * 1024
-  val storageDirectory  = Files.createTempDirectory("casper-runtime-manager-test")
-  val activeRuntime     = Runtime.create(storageDirectory, storageSize, StoreType.LMDB)
-  val runtimeManager    = RuntimeManager.fromRuntime(activeRuntime)
-  val stubPaymentDeploy = PaymentDeploy().withCode(Send(GPrivateBuilder(), Seq(GInt(1))))
+  val storageSize      = 1024L * 1024
+  val storageDirectory = Files.createTempDirectory("casper-runtime-manager-test")
+  val activeRuntime    = Runtime.create(storageDirectory, storageSize, StoreType.LMDB)
+  val runtimeManager   = RuntimeManager.fromRuntime(activeRuntime)
 
   "computeState" should "capture rholang errors" in {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
     val deploy =
       ProtoUtil
         .termDeployNow(InterpreterUtil.mkTerm(badRholang).right.get)
-        .withPaymentCode(stubPaymentDeploy)
     val (_, Seq(result)) = runtimeManager.computeState(runtimeManager.emptyStateHash, deploy :: Nil)
 
     result.status.isFailed should be(true)
@@ -44,7 +40,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       InterpreterUtil.mkTerm(s""" @"NonNegativeNumber"!($purseValue, "nn") """).right.get
     ).map(
       ProtoUtil
-        .termDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE, Some(stubPaymentDeploy))
+        .termDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE)
     )
 
     val (hash, _) = runtimeManager.computeState(runtimeManager.emptyStateHash, deploys)
@@ -108,8 +104,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         ProtoUtil.termDeploy(
           InterpreterUtil.mkTerm(t).right.get,
           System.currentTimeMillis(),
-          accounting.MAX_VALUE,
-          Some(stubPaymentDeploy)
+          accounting.MAX_VALUE
         )
     )
     val (_, firstDeploy) =
@@ -142,7 +137,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   "deployment" should "fail if payment deploy doesn't have payment code" in {
     val term = InterpreterUtil.mkTerm("""new x in { x!(10) } """).right.get
     val deploy =
-      ProtoUtil.termDeployNow(term).withPaymentCode(PaymentDeploy(code = None))
+      ProtoUtil.termDeployNow(term).copy(payment = None)
     val (_, Seq(processedDeploy)) =
       runtimeManager.computeState(runtimeManager.emptyStateHash, Seq(deploy))
     assert(processedDeploy.status.isFailed)
@@ -164,9 +159,8 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       build("")
     }
     val expensivePar: Par = Send(GPrivateBuilder(), Seq(bigData))
-    val paymentDeploy     = PaymentDeploy().withCode(expensivePar)
     val deployPar: Par    = Send(GPrivateBuilder(), Seq(Par()))
-    val deploy            = ProtoUtil.termDeployNow(deployPar).withPaymentCode(paymentDeploy)
+    val deploy            = ProtoUtil.termDeployNow(deployPar).withPayment(expensivePar)
     val (_, Seq(processedDeploy)) =
       runtimeManager.computeState(runtimeManager.emptyStateHash, Seq(deploy))
     // There's no way to tell what was the failure cause
@@ -177,9 +171,8 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     import coop.rchain.models.rholang.implicits._
     // Top level wildcards are forbidden - should trigger the errors
     val invalidTerm: Par = Send(EVar(Wildcard(WildcardMsg())), Seq(GString("test")))
-    val paymentDeploy    = PaymentDeploy().withCode(invalidTerm)
     val deploy =
-      ProtoUtil.termDeployNow(Send(GPrivateBuilder(), Seq(Par()))).withPaymentCode(paymentDeploy)
+      ProtoUtil.termDeployNow(Send(GPrivateBuilder(), Seq(Par()))).withPayment(invalidTerm)
     val (_, Seq(processedDeploy)) =
       runtimeManager.computeState(runtimeManager.emptyStateHash, Seq(deploy))
     // There's no way to tell what was the failure cause
@@ -198,10 +191,9 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       (send, storageCost + substitutionCost)
     }
     val (paymentDeployPar, paymentDeployCost) = sendWithCost("Payment deploy")
-    val paymentDeploy                         = PaymentDeploy().withCode(paymentDeployPar)
     val (deployTerm, deployCost)              = sendWithCost("Main deploy")
     val cost                                  = paymentDeployCost + deployCost + (SEND_EVAL_COST * 2)
-    val deploy                                = ProtoUtil.termDeployNow(deployTerm).withPaymentCode(paymentDeploy)
+    val deploy                                = ProtoUtil.termDeployNow(deployTerm).withPayment(paymentDeployPar)
     val (_, Seq(processedDeploy)) =
       runtimeManager.computeState(runtimeManager.emptyStateHash, Seq(deploy))
     assert(!processedDeploy.status.isFailed)
