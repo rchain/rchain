@@ -277,25 +277,22 @@ object BlockAPI {
   ): F[BlockQueryResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F]): F[BlockQueryResponse] =
       for {
-        dag        <- MultiParentCasper[F].blockDag
-        maybeBlock <- findBlockWithDeploy[F](dag.topoSort.flatten, user, timestamp)
-        blockQueryResponse <- maybeBlock match {
-                               case Some(block) =>
-                                 for {
-                                   blockInfo <- getFullBlockInfo[F](block)
-                                 } yield
-                                   BlockQueryResponse(
-                                     status = "Success",
-                                     blockInfo = Some(blockInfo)
-                                   )
-                               case None =>
-                                 BlockQueryResponse(
-                                   status =
-                                     s"Error: Failure to find block containing deploy signed by ${PrettyPrinter
-                                       .buildString(user)} with timestamp ${timestamp.toString}"
-                                 ).pure[F]
-                             }
-      } yield blockQueryResponse
+        dag                <- MultiParentCasper[F].blockDag
+        maybeBlock         <- findBlockWithDeploy[F](dag.topoSort.flatten, user, timestamp)
+        blockQueryResponse <- maybeBlock.traverse(getFullBlockInfo[F])
+      } yield
+        blockQueryResponse.fold(
+          BlockQueryResponse(
+            status = s"Error: Failure to find block containing deploy signed by ${PrettyPrinter
+              .buildString(user)} with timestamp ${timestamp.toString}"
+          )
+        )(
+          blockInfo =>
+            BlockQueryResponse(
+              status = "Success",
+              blockInfo = Some(blockInfo)
+            )
+        )
 
     MultiParentCasperRef.withCasper[F, BlockQueryResponse](
       casperResponse(_),
