@@ -131,8 +131,9 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   }
 
   "deployment" should "fail if payment deploy doesn't have payment code" in {
-    val term   = InterpreterUtil.mkTerm("""new x in { x!(10) } """).right.get
-    val deploy = ProtoUtil.termDeployNow(term).copy(paymentCode = None)
+    val term = InterpreterUtil.mkTerm("""new x in { x!(10) } """).right.get
+    val deploy =
+      ProtoUtil.termDeployNow(term).withPaymentCode(PaymentDeploy(code = None))
     val (_, Seq(processedDeploy)) =
       runtimeManager.computeState(runtimeManager.emptyStateHash, Seq(deploy))
     assert(processedDeploy.status.isFailed)
