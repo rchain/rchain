@@ -31,8 +31,14 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   def captureResults(start: StateHash, term: Par, name: String = "__SCALA__")(
       implicit scheduler: Scheduler
   ): Seq[Par] = {
-    val runtime                   = runtimeContainer.take()
-    val deploy                    = ProtoUtil.termDeploy(term, System.currentTimeMillis(), accounting.MAX_VALUE)
+    val runtime           = runtimeContainer.take()
+    val stubPaymentDeploy = PaymentDeploy().withCode(Par())
+    val deploy = ProtoUtil.termDeploy(
+      term,
+      System.currentTimeMillis(),
+      accounting.MAX_VALUE,
+      Some(stubPaymentDeploy)
+    )
     val (_, Seq(processedDeploy)) = newEval(deploy :: Nil, runtime, start)
 
     //TODO: Is better error handling needed here?
@@ -136,7 +142,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     final case class PaymentCodeError(msg: String) extends Throwable(msg)
 
     // Runs a short leash deploy and returns phlos used for it
-    def shortLeashDeploy(
+    def evalShortLeashDeploy(
         hash: Blake2b256Hash,
         paymentDeploy: PaymentDeploy
     ): Task[ShortLeashDeployResult] =
@@ -164,6 +170,31 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
         } yield ShortLeashDeployResult(cost, newCheckpoint)
       }
 
+    def evalDeploy(
+        shortLeashDeployResult: ShortLeashDeployResult,
+        deploy: Deploy
+    ): Task[(Blake2b256Hash, InternalProcessedDeploy)] =
+      for {
+        _         <- Task.delay(runtime.space.reset(shortLeashDeployResult.checkpoint.root))
+        phloLimit = Cost(deploy.getRaw.getPhloLimit.value) - shortLeashDeployResult.cost
+        _         <- runtime.reducer.setAvailablePhlos(phloLimit)
+        injResult <- injAttempt(
+                      deploy.getTerm,
+                      runtime.reducer,
+                      runtime.errorLog,
+                      Blake2b512Random(ProtoUtil.stripDeployData(deploy.getRaw).toByteArray)
+                    )
+        (phlosLeft, errors) = injResult
+        cost                = phlosLeft.copy(cost = phloLimit.value - phlosLeft.cost)
+        newCheckpoint       <- Task.delay(runtime.space.createCheckpoint())
+        deployResult = InternalProcessedDeploy(
+          deploy,
+          cost,
+          newCheckpoint.log,
+          DeployStatus.fromErrors(errors)
+        )
+      } yield newCheckpoint.root -> deployResult
+
     def doEval(
         terms: Seq[Deploy],
         hash: Blake2b256Hash,
@@ -173,27 +204,12 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
         terms match {
           case deploy +: rem =>
             for {
-              _              <- Task.delay(runtime.space.reset(hash))
-              availablePhlos = Cost(deploy.raw.flatMap(_.phloLimit).get.value)
-              _              <- runtime.reducer.setAvailablePhlos(availablePhlos)
-              injResult <- injAttempt(
-                            deploy.getTerm,
-                            runtime.reducer,
-                            runtime.errorLog,
-                            Blake2b512Random(ProtoUtil.stripDeployData(deploy.getRaw).toByteArray)
-                          )
-              (phlosLeft, errors) = injResult
-              cost                = phlosLeft.copy(cost = availablePhlos.value - phlosLeft.cost)
-              newCheckpoint       <- Task.delay(runtime.space.createCheckpoint())
-              deployResult = InternalProcessedDeploy(
-                deploy,
-                cost,
-                newCheckpoint.log,
-                DeployStatus.fromErrors(errors)
-              )
-              cont <- if (errors.isEmpty)
-                       doEval(rem, newCheckpoint.root, acc :+ deployResult)
-                     else doEval(rem, hash, acc :+ deployResult)
+              shortLeashResult            <- evalShortLeashDeploy(hash, deploy.getPaymentCode)
+              deployRes                   <- evalDeploy(shortLeashResult, deploy)
+              (rootHash, processedDeploy) = deployRes
+              cont <- if (!processedDeploy.status.isFailed)
+                       doEval(rem, rootHash, acc :+ processedDeploy)
+                     else doEval(rem, hash, acc :+ processedDeploy)
             } yield cont
 
           case _ => Task.now((ByteString.copyFrom(hash.bytes.toArray), acc))

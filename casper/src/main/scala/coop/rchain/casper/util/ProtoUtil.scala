@@ -470,7 +470,12 @@ object ProtoUtil {
       raw = Some(sourceDeploy(source.code, timestamp, phloLimit))
     )
 
-  def termDeploy(term: Par, timestamp: Long, phloLimit: PhloLimit): Deploy =
+  def termDeploy(
+      term: Par,
+      timestamp: Long,
+      phloLimit: PhloLimit,
+      paymentDeploy: Option[PaymentDeploy] = None
+  ): Deploy =
     Deploy(
       term = Some(term),
       raw = Some(
@@ -480,11 +485,12 @@ object ProtoUtil {
           term = term.toProtoString,
           phloLimit = Some(phloLimit)
         )
-      )
+      ),
+      paymentDeploy
     )
 
   def termDeployNow(term: Par): Deploy =
-    termDeploy(term, System.currentTimeMillis(), accounting.MAX_VALUE)
+    termDeploy(term, System.currentTimeMillis(), accounting.MAX_VALUE, None)
 
   def deployDataToDeploy(dd: DeployData): Deploy = Deploy(
     term = InterpreterUtil.mkTerm(dd.term).toOption,
