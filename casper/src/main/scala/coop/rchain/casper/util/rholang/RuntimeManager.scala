@@ -179,11 +179,12 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
                       Blake2b512Random(ProtoUtil.stripDeployData(deploy.getRaw).toByteArray),
                       phloLimit
                     )
-        (cost, errors) = injResult
-        newCheckpoint  <- Task.delay(runtime.space.createCheckpoint())
+        (injCost, errors) = injResult
+        deployCost        = injCost + shortLeashDeployResult.cost
+        newCheckpoint     <- Task.delay(runtime.space.createCheckpoint())
         deployResult = InternalProcessedDeploy(
           deploy,
-          CostAccount.toProto(cost),
+          CostAccount.toProto(deployCost),
           newCheckpoint.log,
           DeployStatus.fromErrors(errors)
         )
@@ -197,14 +198,25 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       Task.defer {
         terms match {
           case deploy +: rem =>
-            for {
-              shortLeashResult            <- evalShortLeashDeploy(hash, deploy.getPaymentCode)
-              deployRes                   <- evalDeploy(shortLeashResult, deploy)
-              (rootHash, processedDeploy) = deployRes
-              cont <- if (!processedDeploy.status.isFailed)
-                       doEval(rem, rootHash, acc :+ processedDeploy)
-                     else doEval(rem, hash, acc :+ processedDeploy)
-            } yield cont
+            evalShortLeashDeploy(hash, deploy.getPaymentCode).attempt
+              .flatMap {
+                case Right(shortLeashResult) =>
+                  evalDeploy(shortLeashResult, deploy).map {
+                    case (rootHash, processedDeploy) =>
+                      if (!processedDeploy.status.isFailed)
+                        (rootHash, acc :+ processedDeploy)
+                      else (hash, acc :+ processedDeploy)
+                  }
+                case Left(err) =>
+                  val processedDeploy = InternalProcessedDeploy(
+                    deploy,
+                    PCost(),
+                    Seq.empty,
+                    DeployStatus.fromErrors(Vector(err))
+                  )
+                  Task.now((hash, acc :+ processedDeploy))
+              }
+              .flatMap { case (hash, errors) => doEval(rem, hash, errors) }
 
           case _ => Task.now((ByteString.copyFrom(hash.bytes.toArray), acc))
         }
