@@ -13,7 +13,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 
-trait TuplespaceAlg[F[_]] {
+trait Tuplespace[F[_]] {
   def produce(chan: Par, data: ListParWithRandom, persistent: Boolean): F[Unit]
   def consume(
       binds: Seq[(BindPattern, Par)],
@@ -22,7 +22,7 @@ trait TuplespaceAlg[F[_]] {
   ): F[Unit]
 }
 
-object TuplespaceAlg {
+object Tuplespace {
   def rspaceTuplespace[F[_], M[_]](
       pureRSpace: PureRSpace[
         F,
@@ -34,7 +34,7 @@ object TuplespaceAlg {
         TaggedContinuation
       ],
       dispatcher: => Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
-  )(implicit F: Sync[F], P: Parallel[F, M]): TuplespaceAlg[F] = new TuplespaceAlg[F] {
+  )(implicit F: Sync[F], P: Parallel[F, M]): Tuplespace[F] = new Tuplespace[F] {
     override def produce(
         channel: Par,
         data: ListParWithRandom,

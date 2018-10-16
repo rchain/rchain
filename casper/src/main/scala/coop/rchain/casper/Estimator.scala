@@ -1,6 +1,6 @@
 package coop.rchain.casper
 
-import cats.{Foldable, Monad}
+import cats.{Foldable, Id, Monad}
 import cats.implicits._
 import cats.mtl.implicits._
 import com.google.protobuf.ByteString
@@ -25,7 +25,7 @@ object Estimator {
     */
   def tips[F[_]: Monad: BlockStore](
       blockDag: BlockDag,
-      genesisBlockHash: BlockHash
+      lastFinalizedBlockHash: BlockHash
   ): F[IndexedSeq[BlockMessage]] = {
     @tailrec
     def sortChildren(
@@ -69,35 +69,45 @@ object Estimator {
       newBlocks == blocks
 
     for {
-      scoresMap           <- buildScoresMap[F](blockDag)
-      sortedChildrenHash  = sortChildren(IndexedSeq(genesisBlockHash), blockDag.childMap, scoresMap)
+      scoresMap <- buildScoresMap(blockDag, lastFinalizedBlockHash).pure[F]
+      sortedChildrenHash = sortChildren(
+        IndexedSeq(lastFinalizedBlockHash),
+        blockDag.childMap,
+        scoresMap
+      )
       maybeSortedChildren <- sortedChildrenHash.toList.traverse(BlockStore[F].get)
       sortedChildren      = maybeSortedChildren.flatten.toVector
     } yield sortedChildren
   }
 
-  // TODO: Fix to stop at genesis/LFB
-  def buildScoresMap[F[_]: Monad: BlockStore](blockDag: BlockDag): F[Map[BlockHash, Long]] = {
-    def hashParents(hash: BlockHash): F[List[BlockHash]] =
-      blockDag.dataLookup(hash).parents.pure[F]
+  def buildScoresMap(
+      blockDag: BlockDag,
+      lastFinalizedBlockHash: BlockHash
+  ): Map[BlockHash, Long] = {
+    def hashParents(hash: BlockHash, lastFinalizedBlockNumber: Long): List[BlockHash] = {
+      val currentBlockNumber = blockDag.dataLookup(hash).blockNum
+      if (currentBlockNumber < lastFinalizedBlockNumber)
+        List.empty[BlockHash]
+      else
+        blockDag.dataLookup(hash).parents
+    }
 
     def addValidatorWeightDownSupportingChain(
         scoreMap: Map[BlockHash, Long],
         validator: Validator,
         latestBlockHash: BlockHash
-    ): F[Map[BlockHash, Long]] =
-      for {
-        updatedScoreMap <- DagOperations
-                            .bfTraverseF[F, BlockHash](List(latestBlockHash))(hashParents)
-                            .foldLeft(scoreMap) {
-                              case (acc, hash) => {
-                                val currScore = acc.getOrElse(hash, 0L)
-                                val validatorWeight =
-                                  weightFromValidatorByDag(blockDag, hash, validator)
-                                acc.updated(hash, currScore + validatorWeight)
-                              }
-                            }
-      } yield updatedScoreMap
+    ): Map[BlockHash, Long] =
+      DagOperations
+        .bfTraverseF[Id, BlockHash](List(latestBlockHash))(
+          hashParents(_, blockDag.dataLookup(lastFinalizedBlockHash).blockNum)
+        )
+        .foldLeft(scoreMap) {
+          case (acc, hash) =>
+            val currScore = acc.getOrElse(hash, 0L)
+            val validatorWeight =
+              weightFromValidatorByDag(blockDag, hash, validator)
+            acc.updated(hash, currScore + validatorWeight)
+        }
 
     /**
       * Add scores to the blocks implicitly supported through
@@ -110,7 +120,7 @@ object Estimator {
         childMap: Map[BlockHash, Set[BlockHash]],
         validator: Validator,
         latestBlockHash: BlockHash
-    ) =
+    ): Map[BlockHash, Long] =
       childMap
         .get(latestBlockHash)
         .toList
@@ -129,24 +139,20 @@ object Estimator {
             }
         }
 
-    for {
-      scoresMap <- Foldable[List]
-                    .foldM(blockDag.latestMessages.toList, Map.empty[BlockHash, Long]) {
-                      case (acc, (validator: Validator, latestBlock: BlockMessage)) =>
-                        for {
-                          postValidatorWeightScoreMap <- addValidatorWeightDownSupportingChain(
-                                                          acc,
-                                                          validator,
-                                                          latestBlock.blockHash
-                                                        )
-                          postImplicitlySupportedScoreMap = addValidatorWeightToImplicitlySupported(
-                            postValidatorWeightScoreMap,
-                            blockDag.childMap,
-                            validator,
-                            latestBlock.blockHash
-                          )
-                        } yield postImplicitlySupportedScoreMap
-                    }
-    } yield scoresMap
+    blockDag.latestMessages.toList.foldLeft(Map.empty[BlockHash, Long]) {
+      case (acc, (validator: Validator, latestBlock: BlockMessage)) =>
+        val postValidatorWeightScoreMap = addValidatorWeightDownSupportingChain(
+          acc,
+          validator,
+          latestBlock.blockHash
+        )
+        val postImplicitlySupportedScoreMap = addValidatorWeightToImplicitlySupported(
+          postValidatorWeightScoreMap,
+          blockDag.childMap,
+          validator,
+          latestBlock.blockHash
+        )
+        postImplicitlySupportedScoreMap
+    }
   }
 }

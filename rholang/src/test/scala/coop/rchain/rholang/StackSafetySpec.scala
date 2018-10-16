@@ -25,7 +25,7 @@ class StackSafetySpec extends FlatSpec with Matchers {
       try {
         count(i + 1) //apparently, the try-catch is enough for tailrec to not work. Lucky!
       } catch {
-        case e: StackOverflowError => i
+        case _: StackOverflowError => i
       }
     println("About to find max recursion depth for this test run")
     val maxDepth = count(0)
@@ -128,7 +128,7 @@ class StackSafetySpec extends FlatSpec with Matchers {
 
   private def checkAll(rho: String): Unit = {
     isolateStackOverflow {
-      val ast = Interpreter.buildNormalizedTerm(new StringReader(rho)).value()
+      val ast = Interpreter.buildNormalizedTerm(rho).value()
       PrettyPrinter().buildString(ast)
     }
     checkReduce(rho)
@@ -148,7 +148,7 @@ class StackSafetySpec extends FlatSpec with Matchers {
       checkSuccess(rho) { rho =>
         Task.coeval(
           Interpreter
-            .buildNormalizedTerm(new StringReader(rho))
+            .buildNormalizedTerm(rho)
         )
       }
     }
