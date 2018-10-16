@@ -1,18 +1,34 @@
 package coop.rchain.rholang
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn._
 import org.scalacheck.Arbitrary.arbitrary
-import org.scalacheck.{Arbitrary, Gen}
+import org.scalacheck.{Arbitrary, Gen, Shrink}
+import org.scalacheck.Shrink._
 
+import scala.collection.JavaConverters
 import scala.reflect.{classTag, ClassTag}
 
 object tools {
-  def toJavaCollection[L <: java.util.Collection[T]: ClassTag, T](input: Seq[T]): L = {
-    val r = classTag[L].runtimeClass.newInstance().asInstanceOf[L]
+  def seqToJavaCollection[C <: java.util.Collection[T]: ClassTag, T](input: Seq[T]): C = {
+    val r = classTag[C].runtimeClass.newInstance().asInstanceOf[C]
     input.foreach(r.add)
     r
   }
 
-  def nonemptyString(g: Gen[Char]): Gen[String] = Gen.nonEmptyListOf(g).map(_.mkString)
+  def javaCollectionToSeq[C <: java.util.Collection[T], T](col: C): Seq[T] =
+    JavaConverters.asScalaIterator(col.iterator()).toSeq
+  def shrinkSeq[T](initialSeq: Seq[T]): Stream[Seq[T]] = {
+
+    val newLength = initialSeq.length / 2
+    if (newLength > 0)
+      Stream.concat(
+        shrinkSeq(initialSeq.toStream.take(newLength)),
+        shrinkSeq(initialSeq.toStream.drop(newLength))
+      )
+    else Stream.empty
+  }
+  def streamSingleton[T](v: T): Stream[T] = v #:: Stream.empty[T]
+
+  def nonemptyString(g: Gen[Char], size: Int): Gen[String] = Gen.nonEmptyListOf(g).map(_.mkString)
 
   def oneOf[T](gs: Seq[Gen[T]]): Gen[T] =
     if (gs.nonEmpty)
@@ -26,7 +42,13 @@ object tools {
       output <- Gen.pick(count, items)
     } yield output
 
-  lazy val identifierGen: Gen[String] = nonemptyString(Gen.alphaChar)
+  val uriGen: Gen[String] =
+    for {
+      componentCount <- Gen.choose(1, 10)
+      components     <- Gen.listOfN(componentCount, nonemptyString(Gen.alphaChar, 10))
+    } yield components.mkString(":")
+
+  val identifierGen: Gen[String] = nonemptyString(Gen.alphaChar, 256)
 
   def extractNames(listNameDecl: ListNameDecl): List[String] = {
     var names = Set.empty[String]
@@ -69,11 +91,14 @@ object ProcGen {
       Gen.oneOf(new BoolFalse(), new BoolTrue()).map(b => new PGround(new GroundBool(b)))
     lazy val groundStringGen =
       Arbitrary.arbString.arbitrary.map(s => new PGround(new GroundString(s)))
+    lazy val groundUriGen =
+      uriGen.map(s => new PGround(new GroundUri(s)))
 
     Gen.oneOf(
       groundIntGen,
       groundBoolGen,
-      groundStringGen
+      groundStringGen,
+      groundUriGen
     )
   }
 
@@ -92,7 +117,7 @@ object ProcGen {
   private def listProcGen(state: State): Gen[ListProc] =
     Gen
       .listOf(procGen(topLevelProcs, state.decrementHeight))
-      .map(toJavaCollection[ListProc, Proc])
+      .map(seqToJavaCollection[ListProc, Proc])
 
   private def psendGen(state: State): Gen[PSend] =
     for {
@@ -107,8 +132,8 @@ object ProcGen {
 
   lazy val nameDeclUrnGen: Gen[NameDeclUrn] =
     for {
-      name <- nonemptyString(Gen.alphaNumChar)
-      uri  <- nonemptyString(Gen.alphaNumChar)
+      name <- identifierGen
+      uri  <- uriGen
     } yield new NameDeclUrn(name, uri)
 
   lazy val nameDeclGen: Gen[NameDecl] = Gen.oneOf(nameDeclSimplGen, nameDeclUrnGen)
@@ -116,7 +141,7 @@ object ProcGen {
   private def listNameDeclGen(state: State): Gen[ListNameDecl] =
     Gen
       .nonEmptyListOf(nameDeclSimplGen)
-      .map(toJavaCollection[ListNameDecl, NameDecl])
+      .map(seqToJavaCollection[ListNameDecl, NameDecl])
 
   private def pnewGen(state: State): Gen[PNew] = {
     val newState = state.decrementHeight
@@ -138,8 +163,48 @@ object ProcGen {
       pnilGen
 
   private def topLevelProcs: Seq[State => Gen[Proc]] =
-    Seq(pparGen, pgroundGen, psendGen, pnewGen)
+    Seq(pgroundGen, pparGen, psendGen, pnewGen)
 
   def topLevelGen(height: Int): Gen[Proc] =
     procGen(topLevelProcs, State(height, Set.empty))
+
+  implicit def procShrinker: Shrink[Proc] = Shrink {
+    case p: PGround =>
+      (p.ground_ match {
+        case p: GroundInt =>
+          Stream
+            .iterate(p.longliteral_.toLong)(n => n / 2)
+            .takeWhile(n => n > 0)
+            .map(n => new GroundInt(n.toString))
+        case p: GroundBool => streamSingleton(p)
+        case p: GroundString =>
+          Stream
+            .iterate(p.stringliteral_)(s => s.substring(0, s.length / 2))
+            .takeWhile(s => s.length > 0)
+            .map(new GroundString(_))
+        case p: GroundUri => streamSingleton(p)
+      }).map(new PGround(_))
+
+    case p: PPar =>
+      for {
+        sp1 <- shrink(p.proc_1)
+        sp2 <- shrink(p.proc_2)
+      } yield new PPar(sp1, sp2)
+
+    case p: PSend => {
+      val initialProcs = javaCollectionToSeq[ListProc, Proc](p.listproc_)
+
+      shrinkSeq(initialProcs)
+        .map(procs => new PSend(p.name_, p.send_, seqToJavaCollection[ListProc, Proc](procs)))
+    }
+
+    case p: PNew => {
+      val initialNames = javaCollectionToSeq[ListNameDecl, NameDecl](p.listnamedecl_)
+
+      for {
+        names <- shrinkSeq(initialNames)
+        proc  <- shrink(p.proc_)
+      } yield new PNew(seqToJavaCollection[ListNameDecl, NameDecl](names), proc)
+    }
+  }
 }
