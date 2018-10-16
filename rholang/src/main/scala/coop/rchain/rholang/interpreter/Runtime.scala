@@ -310,6 +310,7 @@ object Runtime {
         REG_PUBLIC_LOOKUP            -> (registry.publicLookup(_)),
         REG_PUBLIC_REGISTER_RANDOM   -> (registry.publicRegisterRandom(_)),
         REG_PUBLIC_REGISTER_SIGNED   -> (registry.publicRegisterSigned(_)),
+        REG_NONCE_INSERT_CALLBACK    -> (registry.nonceInsertCallback(_)),
         GET_DEPLOY_PARAMS            -> SystemProcesses.getDeployParams(space, dispatcher, shortLeashParams)
       )
     }
