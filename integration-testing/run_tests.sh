@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash -ue
 
 docker build --tag rchain-integration-testing .
 
