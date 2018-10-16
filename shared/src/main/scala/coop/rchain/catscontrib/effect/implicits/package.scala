@@ -4,6 +4,8 @@ import cats._
 import cats.implicits._
 import cats.effect._
 
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Promise}
 import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
 
@@ -57,9 +59,9 @@ package object implicits {
         Left((fa, idFiber(fb)))
 
       override def async[A](k: (Either[Throwable, A] => Unit) => Unit): Id[A] = {
-        var result: Either[Throwable, A] = null
-        k(either => result = either)
-        result match {
+        val result: Promise[Either[Throwable, A]] = Promise()
+        k(either => result.success(either))
+        Await.result(result.future, Duration.Inf) match {
           case Left(throwable) => throw throwable
           case Right(x)        => x
         }
