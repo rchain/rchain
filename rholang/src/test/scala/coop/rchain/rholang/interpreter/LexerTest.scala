@@ -9,7 +9,7 @@ import org.scalatest.{FlatSpec, Matchers}
 class LexerTest extends FlatSpec with Matchers {
 
   def attemptMkTerm(input: String): Either[Throwable, Par] =
-    Interpreter.buildNormalizedTerm(new StringReader(input)).runAttempt()
+    Interpreter.buildNormalizedTerm(input).runAttempt()
 
   "Lexer" should "return LexerError for unterminated string at EOF" in {
     val attempt = attemptMkTerm("""{{ @"ack!(0) }}""")

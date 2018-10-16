@@ -11,10 +11,11 @@ import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.Capture
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.discovery._
+import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.rp._
 import coop.rchain.comm.rp.ProtocolHelper.{packet, toPacket}
-import coop.rchain.comm.transport.{PacketType, TransportLayer}
+import coop.rchain.comm.transport.{Blob, PacketType, TransportLayer}
 import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.metrics.Metrics
@@ -32,7 +33,7 @@ object CommUtil {
   ): F[Unit] = {
     val serializedBlock = b.toByteString
     for {
-      _ <- sendToPeers[F](transport.BlockMessage, serializedBlock)
+      _ <- streamToPeers[F](transport.BlockMessage, serializedBlock)
       _ <- Log[F].info(s"Sent ${PrettyPrinter.buildString(b)} to peers")
     } yield ()
   }
@@ -57,6 +58,17 @@ object CommUtil {
       local <- RPConfAsk[F].reader(_.local)
       msg   = packet(local, pType, serializedMessage)
       _     <- TransportLayer[F].broadcast(peers, msg)
+    } yield ()
+
+  def streamToPeers[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: RPConfAsk](
+      pType: PacketType,
+      serializedMessage: ByteString
+  ): F[Unit] =
+    for {
+      peers <- ConnectionsCell[F].read
+      local <- RPConfAsk[F].reader(_.local)
+      msg   = Blob(local, Packet(pType.id, serializedMessage))
+      _     <- TransportLayer[F].stream(peers, msg)
     } yield ()
 
   def requestApprovedBlock[F[_]: Monad: Capture: LastApprovedBlock: Log: Time: Metrics: TransportLayer: ConnectionsCell: ErrorHandler: PacketHandler: RPConfAsk](

@@ -1,6 +1,8 @@
 package coop.rchain.rholang.interpreter.accounting
 
+import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.PhloLimit
+import coop.rchain.models.Par
 import scalapb.GeneratedMessage
 
 //TODO(mateusz.gorski): Adjust the costs of operations
@@ -13,6 +15,7 @@ final case class Cost(value: Long) extends AnyVal {
 object Cost {
   def apply[A](term: A)(implicit chargeable: Chargeable[A]): Cost =
     Cost(chargeable.cost(term))
+  def apply(value: Int): Cost = Cost(value.toLong)
 }
 
 trait Costs {
@@ -37,13 +40,21 @@ trait Costs {
   final val ADD_COST    = Cost(3) // map/set add is eC
 
   // decoding to bytes is linear with respect to the length of the string
-  def hexToByteCost(str: String): Cost = Cost(str.size)
+  def hexToBytesCost(str: String): Cost = Cost(str.size)
 
+  // Both Set#remove and Map#remove have complexity of eC
   def diffCost(numElements: Int): Cost = REMOVE_COST * numElements
 
+  // Both Set#add and Map#add have complexity of eC
   def unionCost(numElements: Int): Cost = ADD_COST * numElements
 
-  def appendCost(n: Int, m: Int): Cost = Cost(n + m)
+  // GByteArray uses ByteString internally which in turn are implemented using
+  // data structure called Rope for which append operation is O(logN)
+  def byteArrayAppendCost(left: ByteString): Cost = Cost(math.log10(left.size().toDouble).toInt)
+  // According to scala doc Vector#append is eC so it's n*eC.
+  def listAppendCost(right: Vector[Par]): Cost = Cost(right.size)
+  // String append creates a char[] of size n + m and then copies all elements to it.
+  def stringAppendCost(n: Int, m: Int): Cost = Cost(n + m)
 
   // To interpolate we traverse whole base string and for each placeholder
   // we look for matching key in the interpolation map

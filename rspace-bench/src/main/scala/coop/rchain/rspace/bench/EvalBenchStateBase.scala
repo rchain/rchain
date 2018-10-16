@@ -6,7 +6,7 @@ import java.nio.file.{Files, Path}
 import org.openjdk.jmh.annotations.{Setup, TearDown}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
+import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccounting}
 import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
 import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
@@ -18,8 +18,8 @@ trait EvalBenchStateBase {
   val rhoScriptSource: String
   lazy val runtime: Runtime  = Runtime.create(dbDir, mapSize)
   val rand: Blake2b512Random = Blake2b512Random(128)
-  val costAccountAlg: CostAccountingAlg[Task] =
-    CostAccountingAlg.unsafe[Task](CostAccount(Integer.MAX_VALUE))
+  val costAccountAlg: CostAccounting[Task] =
+    CostAccounting.unsafe[Task](CostAccount(Integer.MAX_VALUE))
   var term: Option[Par] = None
 
   @Setup

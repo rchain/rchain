@@ -1,7 +1,7 @@
 import logging
 import random
 import tempfile
-import tools.resources as resources
+import rnode_testing.resources as resources
 import os
 import pprint
 from contextlib import contextmanager
@@ -94,7 +94,7 @@ def bonds_file(validator_keys):
     (fd, file) = tempfile.mkstemp(prefix="rchain-bonds-file-", suffix=".txt", dir="/tmp")
 
     try:
-        logging.info(f"Using bonds file: `{bonds_file}`")
+        logging.info(f"Using bonds file: `{file}`")
 
         with os.fdopen(fd, "w") as f:
             for pair in validator_keys:
@@ -103,7 +103,7 @@ def bonds_file(validator_keys):
         yield file
     finally:
         os.unlink(file)
-        logging.info(f"Bonds file `{bonds_file}` deleted")
+        logging.info(f"Bonds file `{file}` deleted")
 
 
 @contextmanager
@@ -120,4 +120,4 @@ def validators_data(config):
     logging.info(f"Using validator keys: {validator_keys}")
 
     with bonds_file(validator_keys) as f:
-        yield ValidatorsData(bonds_file=f, boostrap_keys=validator_keys[0], peers_keys=validator_keys[1:])
+        yield ValidatorsData(bonds_file=f, bootstrap_keys=validator_keys[0], peers_keys=validator_keys[1:])
