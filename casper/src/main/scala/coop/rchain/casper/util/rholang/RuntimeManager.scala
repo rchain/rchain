@@ -143,6 +143,11 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
           runtime.space.reset(hash)
           val availablePhlos = Cost(deploy.raw.flatMap(_.phloLimit).get.value)
           runtime.reducer.setAvailablePhlos(availablePhlos).runSyncUnsafe(1.second)
+          val (codeHash, phloPrice, userId, timestamp) =
+            ProtoUtil.getRholangDeployParams(deploy.raw.get)
+          runtime.shortLeashParams
+            .setParams(codeHash, phloPrice, userId, timestamp)
+            .runSyncUnsafe(1.second)
           val (phlosLeft, errors) = injAttempt(deploy, runtime.reducer, runtime.errorLog)
           val cost                = phlosLeft.copy(cost = availablePhlos.value - phlosLeft.cost)
           val newCheckpoint       = runtime.space.createCheckpoint()
