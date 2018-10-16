@@ -1,9 +1,10 @@
 package coop.rchain.rholang.interpreter
 
+import java.io.StringReader
+
 import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models.Var.VarInstance.FreeVar
-import coop.rchain.models.{Send, _}
 import coop.rchain.models.rholang.implicits.{GPrivateBuilder, _}
+import coop.rchain.models.{Send, _}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn._
 import monix.eval.Coeval
 import org.scalatest.{FlatSpec, Matchers}
@@ -103,7 +104,6 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
 }
 
 class ProcPrinterSpec extends FlatSpec with Matchers {
-
   val inputs = ProcVisitInputs(Par(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
 
   "New" should "use 0-based indexing" in {
@@ -417,7 +417,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     result shouldBe "x0"
   }
 
-  "PEval" should "Recognize occurrences of the same variable during collapses" in {
+  it should "Recognize occurrences of the same variable during collapses" in {
     val pEval = new PEval(
       new NameQuote(new PPar(new PVar(new ProcVarVar("x")), new PVar(new ProcVarVar("x"))))
     )
@@ -429,6 +429,38 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     result shouldBe
       """x0 |
         |x0""".stripMargin
+  }
+
+  it should "Print asterisk for sent name introduced by new" in {
+    val result = prettyPrint("new x in { @Nil!(*x) }")
+    val target =
+      """new x0 in {
+        |  @{Nil}!(*x0)
+        |}""".stripMargin
+    result shouldBe target
+  }
+
+  it should "Print asterisk for multiple sent names introduced by new" in {
+    val result = prettyPrint("new x, y in { @Nil!(*x) | @Nil!(*y) }")
+    val target =
+      """new x0, x1 in {
+        |  @{Nil}!(*x1) |
+        |  @{Nil}!(*x0)
+        |}""".stripMargin
+    result shouldBe target
+  }
+
+  it should "Print asterisk for multiple sent names introduced by different news" in {
+    val result =
+      prettyPrint("new x in { new y in { @Nil!(*x) | @Nil!(*y) }}")
+    val target =
+      """new x0 in {
+        |  new x1 in {
+        |    @{Nil}!(*x1) |
+        |    @{Nil}!(*x0)
+        |  }
+        |}""".stripMargin
+    result shouldBe target
   }
 
   "PSend" should "Print" in {
@@ -753,6 +785,10 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
 
     result shouldBe "(1 matches _)"
   }
+
+  private def prettyPrint(source: String): String = PrettyPrinter().buildString(
+    Interpreter.buildNormalizedTerm(new StringReader(source)).runAttempt().right.get
+  )
 }
 
 class IncrementTester extends FlatSpec with Matchers {
