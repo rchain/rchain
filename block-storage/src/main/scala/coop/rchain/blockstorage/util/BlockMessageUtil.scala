@@ -11,6 +11,12 @@ object BlockMessageUtil {
       ps <- bd.postState
     } yield ps.blockNumber).getOrElse(0L)
 
+  def bonds(b: BlockMessage): Seq[Bond] =
+    (for {
+      bd <- b.body
+      ps <- bd.postState
+    } yield ps.bonds).getOrElse(List.empty[Bond])
+
   def parentHashes(b: BlockMessage): Seq[ByteString] =
     b.header.fold(Seq.empty[ByteString])(_.parentsHashList)
 

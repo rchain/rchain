@@ -12,7 +12,7 @@ import cats.effect.concurrent.{Ref, Semaphore}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.blockstorage.util.BlockMessageUtil.parentHashes
+import coop.rchain.blockstorage.util.BlockMessageUtil.{bonds, parentHashes}
 import coop.rchain.blockstorage.util.TopologicalSortUtil
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.shared.{Log, LogSource}
@@ -68,16 +68,18 @@ final class BlockDagFileStorage[F[_]: Monad: Concurrent: Sync: Log] private (
         .map(_.toMap)
   }
 
-  private def updateLatestMessagesFile(validator: Validator, blockHash: BlockHash): F[Unit] =
+  private def updateLatestMessagesFile(validators: Set[Validator], blockHash: BlockHash): F[Unit] =
     for {
       latestMessagesLogOs <- latestMessagesLogOsRef.get
       latestMessagesCrc   <- latestMessagesCrcRef.get
-      toAppend            = validator.concat(blockHash).toByteArray
-      _                   = latestMessagesCrc.update(toAppend)
-      _                   = latestMessagesLogOs.write(toAppend)
-      _                   = latestMessagesLogOs.flush()
-      _                   = updateLatestMessagesCrcFile(latestMessagesCrc)
-      _                   <- latestMessagesLogSizeRef.update(_ + 1)
+      _ = for (validator <- validators) {
+        val toAppend = validator.concat(blockHash).toByteArray
+        latestMessagesCrc.update(toAppend)
+        latestMessagesLogOs.write(toAppend)
+        latestMessagesLogOs.flush()
+        updateLatestMessagesCrcFile(latestMessagesCrc)
+      }
+      _ <- latestMessagesLogSizeRef.update(_ + 1)
     } yield ()
 
   private def crcBytes(crc: CRC32): Array[Byte] = {
@@ -147,11 +149,26 @@ final class BlockDagFileStorage[F[_]: Monad: Concurrent: Sync: Log] private (
                 case (acc, p) =>
                   val currChildren = acc.getOrElse(p, HashSet.empty[BlockHash])
                   acc.updated(p, currChildren + block.blockHash)
-              }
+            }
           )
       _ <- topoSortRef.update(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
-      _ <- latestMessagesRef.update(_.updated(block.sender, block.blockHash))
-      _ <- updateLatestMessagesFile(block.sender, block.blockHash)
+      //Block which contains newly bonded validators will not
+      //have those validators in its justification
+      newValidators = bonds(block)
+        .map(_.validator)
+        .toSet
+        .diff(block.justifications.map(_.validator).toSet)
+      _ <- latestMessagesRef.update { latestMessages =>
+            newValidators.foldLeft(
+              //update creator of the block
+              latestMessages.updated(block.sender, block.blockHash)
+            ) {
+              //Update new validators with block in which
+              //they were bonded (i.e. this block)
+              case (acc, v) => acc.updated(v, block.blockHash)
+            }
+          }
+      _ <- updateLatestMessagesFile(newValidators + block.sender, block.blockHash)
       _ <- lock.release
     } yield ()
 
