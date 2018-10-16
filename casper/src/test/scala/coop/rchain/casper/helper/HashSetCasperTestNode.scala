@@ -117,7 +117,6 @@ class HashSetCasperTestNode[F[_]](
         )
         .void
 
-  // FIX-ME
   def receive(): F[Unit] = tle.receive(p => handle[F](p, defaultTimeout), kp(().pure[F]))
 
   def tearDown(): Unit = {
