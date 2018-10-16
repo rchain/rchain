@@ -245,28 +245,44 @@ object BlockDagFileStorage {
     }
   }
 
+  private def readLatestMessagesCrcUnsafe(crcPath: Path): Long = {
+    crcPath.toFile.createNewFile()
+    val byteBuffer = ByteBuffer.wrap(Files.readAllBytes(crcPath))
+    byteBuffer.getLong()
+  }
+
+  private def validateData(
+      latestMessagesRaf: RandomAccessFile,
+      readCrc: Long,
+      latestMessagesCrcPath: Path,
+      latestMessagesList: List[(Validator, BlockHash)]
+  ): (Map[Validator, BlockHash], CRC32) = {
+    val fullCalculatedCrc = calculateLatestMessagesCrc(latestMessagesList)
+    if (fullCalculatedCrc.getValue == readCrc) {
+      (latestMessagesList.toMap, fullCalculatedCrc)
+    } else {
+      val withoutLastCalculatedCrc = calculateLatestMessagesCrc(latestMessagesList.init)
+      if (withoutLastCalculatedCrc.getValue == readCrc) {
+        latestMessagesRaf.setLength(latestMessagesRaf.length() - 64)
+        (latestMessagesList.init.toMap, withoutLastCalculatedCrc)
+      } else {
+        // TODO: Restore latest messages from the persisted DAG
+        latestMessagesRaf.setLength(0)
+        (Map.empty[Validator, BlockHash], new CRC32())
+      }
+    }
+  }
+
   def create[F[_]: Monad: Concurrent: Sync: Log](config: Config): F[BlockDagFileStorage[F]] =
     for {
       lock                          <- Semaphore[F](1)
       latestMessagesRaf             = new RandomAccessFile(config.latestMessagesDataPath.toFile, "rw")
       readCrc                       <- readLatestMessagesCrc[F](config.latestMessagesCrcPath)
       (latestMessagesList, logSize) = readLatestMessagesData(latestMessagesRaf)
-      (latestMessagesMap, calculatedCrc) = {
-        val fullCalculatedCrc = calculateLatestMessagesCrc(latestMessagesList)
-        if (fullCalculatedCrc.getValue == readCrc) {
-          (latestMessagesList.toMap, fullCalculatedCrc)
-        } else {
-          val withoutLastCalculatedCrc = calculateLatestMessagesCrc(latestMessagesList.init)
-          if (withoutLastCalculatedCrc.getValue == readCrc) {
-            latestMessagesRaf.setLength(latestMessagesRaf.length() - 64)
-            (latestMessagesList.init.toMap, withoutLastCalculatedCrc)
-          } else {
-            // TODO: Restore latest messages from the persisted DAG
-            latestMessagesRaf.setLength(0)
-            (Map.empty[Validator, BlockHash], new CRC32())
-          }
-        }
-      }
+      (latestMessagesMap, calculatedCrc) = validateData(latestMessagesRaf,
+                                                        readCrc,
+                                                        config.latestMessagesCrcPath,
+                                                        latestMessagesList)
       _                        = latestMessagesRaf.close()
       latestMessagesDataOs     = new FileOutputStream(config.latestMessagesDataPath.toFile, true)
       latestMessagesRef        <- Ref.of[F, Map[Validator, BlockHash]](latestMessagesMap)
@@ -291,16 +307,25 @@ object BlockDagFileStorage {
         config.latestMessagesLogMaxSizeFactor
       )
 
-  def emptyUnsafe[F[_]: Sync: Concurrent: Log](
+  def unsafe[F[_]: Sync: Concurrent: Log](
       config: Config,
-      lock: Semaphore[F]
+      lock: Semaphore[F],
+      initialChildMap: Map[BlockHash, Set[BlockHash]],
+      initialDataLookup: Map[BlockHash, BlockMetadata],
+      initialTopoSort: Vector[Vector[BlockHash]]
   ): BlockDagFileStorage[F] = {
-    val latestMessagesRef        = Ref.unsafe[F, Map[Validator, BlockHash]](Map.empty)
-    val latestMessagesLogSizeRef = Ref.unsafe[F, Int](0)
-    val latestMessagesCrcRef     = Ref.unsafe[F, CRC32](new CRC32())
-    val childMapRef              = Ref.unsafe[F, Map[BlockHash, Set[BlockHash]]](Map.empty)
-    val dataLookupRef            = Ref.unsafe[F, Map[BlockHash, BlockMetadata]](Map.empty)
-    val topoSortRef              = Ref.unsafe[F, Vector[Vector[BlockHash]]](Vector.empty)
+    val latestMessagesRaf             = new RandomAccessFile(config.latestMessagesDataPath.toFile, "rw")
+    val (latestMessagesList, logSize) = readLatestMessagesData(latestMessagesRaf)
+    val readCrc                       = readLatestMessagesCrcUnsafe(config.latestMessagesCrcPath)
+    val (latestMessagesMap, calculatedCrc) =
+      validateData(latestMessagesRaf, readCrc, config.latestMessagesCrcPath, latestMessagesList)
+    latestMessagesRaf.close()
+    val latestMessagesRef        = Ref.unsafe[F, Map[Validator, BlockHash]](latestMessagesMap)
+    val latestMessagesLogSizeRef = Ref.unsafe[F, Int](logSize)
+    val latestMessagesCrcRef     = Ref.unsafe[F, CRC32](calculatedCrc)
+    val childMapRef              = Ref.unsafe[F, Map[BlockHash, Set[BlockHash]]](initialChildMap)
+    val dataLookupRef            = Ref.unsafe[F, Map[BlockHash, BlockMetadata]](initialDataLookup)
+    val topoSortRef              = Ref.unsafe[F, Vector[Vector[BlockHash]]](initialTopoSort)
     val latestMessagesDataOs     = new FileOutputStream(config.latestMessagesDataPath.toFile)
     val latestMessagesDataOsRef  = Ref.unsafe[F, OutputStream](latestMessagesDataOs)
     new BlockDagFileStorage[F](
