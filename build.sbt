@@ -421,7 +421,7 @@ lazy val rspaceBench = (project in file("rspace-bench"))
     )
   )
   .enablePlugins(JmhPlugin)
-  .dependsOn(rspace, rholang)
+  .dependsOn(rspace, rholang, models % "compile->test")
 
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)

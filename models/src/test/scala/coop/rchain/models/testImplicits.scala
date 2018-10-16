@@ -52,6 +52,7 @@ object testImplicits {
   implicit val MatchCaseArbitrary          = implicitly[Arbitrary[MatchCase]]
   implicit val NewArbitrary                = implicitly[Arbitrary[New]]
   implicit val ParWithRandomArbitrary      = implicitly[Arbitrary[ParWithRandom]]
+  implicit val ListParWithRandomArbitrary  = implicitly[Arbitrary[ListParWithRandom]]
   implicit val PCostArbitrary              = implicitly[Arbitrary[PCost]]
   implicit val ReceiveArbitrary            = implicitly[Arbitrary[Receive]]
   implicit val ReceiveBindArbitrary        = implicitly[Arbitrary[ReceiveBind]]
