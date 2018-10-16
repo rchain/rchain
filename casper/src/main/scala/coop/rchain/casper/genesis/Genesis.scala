@@ -9,7 +9,7 @@ import cats.{Applicative, Foldable, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil.{blockHeader, compiledSourceDeploy, unsignedBlockProto}
+import coop.rchain.casper.util.ProtoUtil.{blockHeader, stringToByteString, unsignedBlockProto}
 import coop.rchain.casper.util.{EventConverter, Sorting}
 import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -41,16 +41,29 @@ object Genesis {
       faucetCode: String => String
   ): List[Deploy] =
     List(
-      ListOps,
-      Either,
-      NonNegativeNumber,
-      MakeMint,
-      MakePoS,
-      BasicWallet,
-      BasicWalletFaucet,
-      WalletCheck,
-      new PreWalletRev(wallets, faucetCode, posParams)
-    ).map(compiledSourceDeploy(_, timestamp, accounting.MAX_VALUE))
+      (ListOps, "1d325ed35924b606264d4beaee7f78214aaecb23f6f3816055bc8bbe94280b5a", 1539711168714L),
+      (Either, "", 0L),
+      (NonNegativeNumber, "", 0L),
+      (MakeMint, "", 0L),
+      (MakePoS, "", 0L),
+      (BasicWallet, "", 0L),
+      (BasicWalletFaucet, "", 0L),
+      (WalletCheck, "", 0L),
+      (new PreWalletRev(wallets, faucetCode, posParams), "", 0L)
+    ).map {
+      case (compiledSource, user, timestamp) =>
+        val deployData = DeployData(
+          user = stringToByteString(user),
+          timestamp = timestamp,
+          term = compiledSource.code,
+          phloLimit = Some(accounting.MAX_VALUE)
+        )
+
+        Deploy(
+          term = Some(compiledSource.term),
+          raw = Some(deployData)
+        )
+    }
 
   def withContracts(
       initial: BlockMessage,
