@@ -124,7 +124,7 @@ object Connect {
       peerAddr = peer.toAddress
       _        <- Log[F].debug(s"Connecting to $peerAddr")
       _        <- Metrics[F].incrementCounter("connects")
-      _        <- Log[F].info(s"Initialize protocol handshake to $peerAddr")
+      _        <- Log[F].debug(s"Initialize protocol handshake to $peerAddr")
       local    <- RPConfAsk[F].reader(_.local)
       ph       = protocolHandshake(local)
       phsresp  <- TransportLayer[F].roundTrip(peer, ph, timeout * 2) >>= ErrorHandler[F].fromEither
