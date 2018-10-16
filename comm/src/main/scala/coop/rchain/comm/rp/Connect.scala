@@ -125,6 +125,7 @@ object Connect {
       timeout: FiniteDuration
   ): F[Unit] =
     for {
+      timer    <- Metrics[F].startTimer("connect-timer")
       tss      <- Time[F].currentMillis
       peerAddr = peer.toAddress
       _        <- Log[F].debug(s"Connecting to $peerAddr")
@@ -139,6 +140,7 @@ object Connect {
       _   <- ConnectionsCell[F].modify(_.addConn[F](peer))
       tsf <- Time[F].currentMillis
       _   <- Metrics[F].record("connect-time-ms", tsf - tss)
+      _   <- timer.stop
     } yield ()
 
 }

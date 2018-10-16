@@ -32,7 +32,10 @@ trait Metrics[F[_]] {
 object Metrics extends MetricsInstances {
   def apply[F[_]](implicit M: Metrics[F]): Metrics[F] = M
 
-  def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](implicit M: Metrics[F]): Metrics[T[F, ?]] =
+  def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
+      implicit M: Metrics[F],
+      FT: Functor[T[F, ?]]
+  ): Metrics[T[F, ?]] =
     new Metrics[T[F, ?]] {
       def incrementCounter(name: String, delta: Long)    = M.incrementCounter(name, delta).liftM[T]
       def incrementSampler(name: String, delta: Long)    = M.incrementSampler(name, delta).liftM[T]
@@ -41,7 +44,12 @@ object Metrics extends MetricsInstances {
       def incrementGauge(name: String, delta: Long)      = M.incrementGauge(name, delta).liftM[T]
       def decrementGauge(name: String, delta: Long)      = M.decrementGauge(name, delta).liftM[T]
       def record(name: String, value: Long, count: Long) = M.record(name, value, count).liftM[T]
-      def startTimer(name: String)                       = ??? //M.startTimer(name).liftM[T]
+      def startTimer(name: String) =
+        M.startTimer(name).liftM[T] map { ftimer =>
+          new MetricsTimer[T[F, ?]] {
+            def stop: T[F, Unit] = ftimer.stop.liftM[T]
+          }
+        }
     }
 
   class MetricsNOP[F[_]: Applicative] extends Metrics[F] {
