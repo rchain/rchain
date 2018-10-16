@@ -16,16 +16,7 @@ object tools {
 
   def javaCollectionToSeq[C <: java.util.Collection[T], T](col: C): Seq[T] =
     JavaConverters.asScalaIterator(col.iterator()).toSeq
-  def shrinkSeq[T](initialSeq: Seq[T]): Stream[Seq[T]] = {
 
-    val newLength = initialSeq.length / 2
-    if (newLength > 0)
-      Stream.concat(
-        shrinkSeq(initialSeq.toStream.take(newLength)),
-        shrinkSeq(initialSeq.toStream.drop(newLength))
-      )
-    else Stream.empty
-  }
   def streamSingleton[T](v: T): Stream[T] = v #:: Stream.empty[T]
 
   def nonemptyString(g: Gen[Char], size: Int): Gen[String] = Gen.nonEmptyListOf(g).map(_.mkString)
@@ -42,11 +33,13 @@ object tools {
       output <- Gen.pick(count, items)
     } yield output
 
+  def mkGroundUri(components: Seq[String]): String = components.mkString(":")
+
   val uriGen: Gen[String] =
     for {
       componentCount <- Gen.choose(1, 10)
       components     <- Gen.listOfN(componentCount, nonemptyString(Gen.alphaChar, 10))
-    } yield components.mkString(":")
+    } yield mkGroundUri(components)
 
   val identifierGen: Gen[String] = nonemptyString(Gen.alphaChar, 256)
 
@@ -172,17 +165,21 @@ object ProcGen {
     case p: PGround =>
       (p.ground_ match {
         case p: GroundInt =>
-          Stream
-            .iterate(p.longliteral_.toLong)(n => n / 2)
-            .takeWhile(n => n > 0)
+          shrinkIntegral[Long]
+            .shrink(p.longliteral_.toLong)
             .map(n => new GroundInt(n.toString))
         case p: GroundBool => streamSingleton(p)
         case p: GroundString =>
-          Stream
-            .iterate(p.stringliteral_)(s => s.substring(0, s.length / 2))
-            .takeWhile(s => s.length > 0)
+          shrinkString
+            .shrink(p.stringliteral_)
             .map(new GroundString(_))
-        case p: GroundUri => streamSingleton(p)
+        case p: GroundUri =>
+          val components = p.uriliteral_.split(":")
+
+          for {
+            shrinkedComponentSeq <- shrinkContainer[Seq, String].shrink(components)
+            shrinkedComponents   <- shrinkedComponentSeq.map(c => shrinkString.shrink(c))
+          } yield new GroundUri(mkGroundUri(shrinkedComponents))
       }).map(new PGround(_))
 
     case p: PPar =>
@@ -191,20 +188,19 @@ object ProcGen {
         sp2 <- shrink(p.proc_2)
       } yield new PPar(sp1, sp2)
 
-    case p: PSend => {
+    case p: PSend =>
       val initialProcs = javaCollectionToSeq[ListProc, Proc](p.listproc_)
 
-      shrinkSeq(initialProcs)
+      shrinkContainer[Seq, Proc]
+        .shrink(initialProcs)
         .map(procs => new PSend(p.name_, p.send_, seqToJavaCollection[ListProc, Proc](procs)))
-    }
 
-    case p: PNew => {
+    case p: PNew =>
       val initialNames = javaCollectionToSeq[ListNameDecl, NameDecl](p.listnamedecl_)
 
       for {
-        names <- shrinkSeq(initialNames)
+        names <- shrinkContainer[Seq, NameDecl].shrink(initialNames)
         proc  <- shrink(p.proc_)
       } yield new PNew(seqToJavaCollection[ListNameDecl, NameDecl](names), proc)
-    }
   }
 }
