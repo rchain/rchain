@@ -21,6 +21,12 @@ object tools {
 
   def nonemptyString(g: Gen[Char], size: Int): Gen[String] = Gen.nonEmptyListOf(g).map(_.mkString)
 
+  def withQuotes(quote: Char)(s: String): String = quote + s + quote
+  def withoutQuotes(s: String): String = {
+    assert(s.length >= 2)
+    s.substring(1, s.length - 1)
+  }
+
   def oneOf[T](gs: Seq[Gen[T]]): Gen[T] =
     if (gs.nonEmpty)
       Gen.choose(0, gs.size - 1).flatMap(gs(_))
@@ -33,7 +39,7 @@ object tools {
       output <- Gen.pick(count, items)
     } yield output
 
-  def mkGroundUri(components: Seq[String]): String = components.mkString(":")
+  def mkGroundUri(components: Seq[String]): String = withQuotes('`')(components.mkString(":"))
 
   val uriGen: Gen[String] =
     for {
@@ -83,7 +89,7 @@ object ProcGen {
     lazy val groundBoolGen =
       Gen.oneOf(new BoolFalse(), new BoolTrue()).map(b => new PGround(new GroundBool(b)))
     lazy val groundStringGen =
-      Arbitrary.arbString.arbitrary.map(s => new PGround(new GroundString(s)))
+      Arbitrary.arbString.arbitrary.map(s => new PGround(new GroundString(withQuotes('"')(s))))
     lazy val groundUriGen =
       uriGen.map(s => new PGround(new GroundUri(s)))
 
@@ -171,10 +177,10 @@ object ProcGen {
         case p: GroundBool => streamSingleton(p)
         case p: GroundString =>
           shrinkString
-            .shrink(p.stringliteral_)
-            .map(new GroundString(_))
+            .shrink(withoutQuotes(p.stringliteral_))
+            .map(s => new GroundString(withQuotes('"')(s)))
         case p: GroundUri =>
-          val components = p.uriliteral_.split(":")
+          val components = withoutQuotes(p.uriliteral_).split(":")
 
           for {
             shrinkedComponentSeq <- shrinkContainer[Seq, String].shrink(components)
