@@ -24,12 +24,12 @@ class RholangBuildTest extends FlatSpec with Matchers {
 
     val deploys = Vector(
       """new double, dprimes, rl(`rho:registry:lookup`), ListOpsCh in {
-        |  contract @double(@x, ret) = { ret!(2 * x) } |
+        |  contract double(@x, ret) = { ret!(2 * x) } |
         |  rl!(`rho:id:dputnspi15oxxnyymjrpu7rkaok3bjkiwq84z7cqcrx4ktqfpyapn4`, *ListOpsCh) |
         |  for(@(_, ListOps) <- ListOpsCh) {
-        |    @ListOps!("map", [2, 3, 5, 7], double, dprimes)
+        |    @ListOps!("map", [2, 3, 5, 7], *double, *dprimes)
         |  }
-        |""".stripMargin
+        |}""".stripMargin
     ).zipWithIndex.map {
       case (d, i) => ProtoUtil.sourceDeploy(d, i.toLong + 1L, accounting.MAX_VALUE)
     }
