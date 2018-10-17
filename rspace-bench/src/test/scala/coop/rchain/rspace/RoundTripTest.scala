@@ -9,6 +9,8 @@ import org.scalacheck._
 import scala.reflect.ClassTag
 
 class RoundTripTest extends FlatSpec with PropertyChecks with Matchers {
+  implicit override val generatorDrivenConfig =
+    PropertyCheckConfiguration(minSuccessful = 50, sizeRange = 250)
 
   def roundTrip[A](in: A)(implicit s: Serialize2ByteBuffer[A]): A = {
     val meta = s.encode(in)

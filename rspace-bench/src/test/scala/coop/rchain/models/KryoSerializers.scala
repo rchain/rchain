@@ -1,5 +1,6 @@
 package coop.rchain.models
 
+import coop.rchain.models.Var.VarInstance
 import java.nio.ByteBuffer
 
 trait Serialize2ByteBuffer[A] {
@@ -73,10 +74,79 @@ object KryoSerializers {
     }
   }
 
+  object VarSerializer extends Serializer[Var] {
+
+    def defaultSerializer(kryo: Kryo): Serializer[Var] =
+      kryo
+        .getDefaultSerializer(classOf[Var])
+        .asInstanceOf[Serializer[Var]]
+
+    override def write(kryo: Kryo, output: Output, e: Var): Unit =
+      defaultSerializer(kryo).write(kryo, output, e)
+
+    override def read(
+        kryo: Kryo,
+        input: Input,
+        `type`: Class[Var]
+    ): Var = {
+      val read = defaultSerializer(kryo).read(kryo, input, `type`)
+      if (read.varInstance.isEmpty)
+        Var()
+      else read
+    }
+  }
+
+  object ExprSerializer extends Serializer[Expr] {
+
+    def defaultSerializer(kryo: Kryo): Serializer[Expr] =
+      kryo
+        .getDefaultSerializer(classOf[Expr])
+        .asInstanceOf[Serializer[Expr]]
+
+    override def write(kryo: Kryo, output: Output, e: Expr): Unit =
+      defaultSerializer(kryo).write(kryo, output, e)
+
+    override def read(
+        kryo: Kryo,
+        input: Input,
+        `type`: Class[Expr]
+    ): Expr = {
+      val read = defaultSerializer(kryo).read(kryo, input, `type`)
+      if (read.exprInstance.isEmpty)
+        Expr()
+      else read
+    }
+  }
+
+  object ConnectiveSerializer extends Serializer[Connective] {
+
+    def defaultSerializer(kryo: Kryo): Serializer[Connective] =
+      kryo
+        .getDefaultSerializer(classOf[Connective])
+        .asInstanceOf[Serializer[Connective]]
+
+    override def write(kryo: Kryo, output: Output, e: Connective): Unit =
+      defaultSerializer(kryo).write(kryo, output, e)
+
+    override def read(
+        kryo: Kryo,
+        input: Input,
+        `type`: Class[Connective]
+    ): Connective = {
+      val read = defaultSerializer(kryo).read(kryo, input, `type`)
+      if (read.connectiveInstance.isEmpty)
+        Connective()
+      else read
+    }
+  }
+
   val kryo = new Kryo()
   kryo.register(classOf[ParMap], ParMapSerializer)
   kryo.register(classOf[ParSet], ParSetSerializer)
   kryo.register(classOf[TaggedContinuation], TaggedContinuationSerializer)
+  kryo.register(classOf[Var], VarSerializer)
+  kryo.register(classOf[Expr], ExprSerializer)
+  kryo.register(classOf[Connective], ConnectiveSerializer)
 
   kryo.setRegistrationRequired(false)
   // Support deserialization of classes without no-arg constructors

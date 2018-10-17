@@ -137,7 +137,7 @@ abstract class ModelSerializerBenchState {
 
   val seed = Seed(123456789L)
 
-  def gnat(): TestGNAT = gnat(1)
+  def gnat(): TestGNAT = gnat(10)
 
   def gnat(size: Int): TestGNAT =
     arbitraryGnat.arbitrary.apply(Parameters.default.withSize(size), seed).get
@@ -172,4 +172,14 @@ class ProtobufModelBenchState extends ModelSerializerBenchState {
 @BenchState(Scope.Benchmark)
 class KryoModelBenchState extends ModelSerializerBenchState {
   override def serializer = KryoSerializers.serializer(classOf[TestGNAT])
+}
+
+object BenchDupa extends App {
+  new ModelSerializerBench().kryoRoundTrip(
+    new Blackhole(
+      "Today's password is swordfish. I understand instantiating Blackholes directly is dangerous."
+    ),
+    new KryoModelBenchState
+  )
+  //new ModelSerializerBench().protobufRoundTrip(new Blackhole("Today's password is swordfish. I understand instantiating Blackholes directly is dangerous."), new ProtobufModelBenchState)
 }
