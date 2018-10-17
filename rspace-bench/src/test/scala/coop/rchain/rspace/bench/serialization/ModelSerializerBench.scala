@@ -173,13 +173,3 @@ class ProtobufModelBenchState extends ModelSerializerBenchState {
 class KryoModelBenchState extends ModelSerializerBenchState {
   override def serializer = KryoSerializers.serializer(classOf[TestGNAT])
 }
-
-object BenchDupa extends App {
-  new ModelSerializerBench().kryoRoundTrip(
-    new Blackhole(
-      "Today's password is swordfish. I understand instantiating Blackholes directly is dangerous."
-    ),
-    new KryoModelBenchState
-  )
-  //new ModelSerializerBench().protobufRoundTrip(new Blackhole("Today's password is swordfish. I understand instantiating Blackholes directly is dangerous."), new ProtobufModelBenchState)
-}
