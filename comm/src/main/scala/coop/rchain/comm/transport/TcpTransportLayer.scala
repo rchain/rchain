@@ -124,9 +124,10 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
       Chunk().withHeader(
         ChunkHeader().withSender(ProtocolHelper.node(blob.sender)).withTypeId(blob.packet.typeId)
       )
-    val buffer = 2 * 1024 // 2 kbytes for protobuf related stuff
+    val buffer    = 2 * 1024 // 2 kbytes for protobuf related stuff
+    val chunkSize = maxMessageSize - buffer
     def data: Iterator[Chunk] =
-      blob.packet.content.toByteArray.sliding(maxMessageSize - buffer).map { data =>
+      blob.packet.content.toByteArray.sliding(chunkSize, chunkSize).map { data =>
         Chunk().withData(ChunkData().withContentData(ProtocolHelper.toProtocolBytes(data)))
       }
 
@@ -212,13 +213,13 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
 
     def dispatchInternal: ServerMessage => Task[Unit] = {
       // TODO: consider logging on failure (Left)
-      case Tell(protocol) => dispatch(protocol).attempt.void
+      case Tell(protocol) => dispatch(protocol).attemptAndLog.void
       case Ask(protocol, handle) if !handle.complete =>
         dispatch(protocol).attempt.map {
           case Left(e)         => handle.failWith(e)
           case Right(response) => handle.reply(response)
         }.void
-      case StreamMessage(blob) => handleStreamed(blob)
+      case StreamMessage(blob) => handleStreamed(blob).attemptAndLog
       case _                   => Task.unit // sender timeout
     }
 

@@ -5,11 +5,12 @@ import cats.data.StateT
 import cats.implicits._
 import cats.mtl.MonadState
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.{BlockDag, BlockMetadata}
+import coop.rchain.blockstorage.{BlockMetadata, BlockStore}
+import coop.rchain.blockstorage.util.TopologicalSortUtil
+import coop.rchain.casper.BlockDag
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.{ProtoUtil, TopologicalSortUtil}
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
