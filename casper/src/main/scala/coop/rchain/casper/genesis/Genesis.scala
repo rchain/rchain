@@ -17,11 +17,6 @@ import coop.rchain.casper.util.{EventConverter, Sorting}
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.rholang.collection.{Either, ListOps}
-import coop.rchain.rholang.math.NonNegativeNumber
-import coop.rchain.rholang.mint.{BasicWalletFaucet, MakeMint}
-import coop.rchain.rholang.proofofstake.MakePoS
-import coop.rchain.rholang.wallet.{BasicWallet, WalletCheck}
 import coop.rchain.shared.{Log, LogSource, Time}
 import monix.execution.Scheduler
 
@@ -41,29 +36,16 @@ object Genesis {
       faucetCode: String => String
   ): List[Deploy] =
     List(
-      (ListOps, "1d325ed35924b606264d4beaee7f78214aaecb23f6f3816055bc8bbe94280b5a", 1539711168714L),
-      (Either, "", 0L),
-      (NonNegativeNumber, "", 0L),
-      (MakeMint, "", 0L),
-      (MakePoS, "", 0L),
-      (BasicWallet, "", 0L),
-      (BasicWalletFaucet, "", 0L),
-      (WalletCheck, "", 0L),
-      (new PreWalletRev(wallets, faucetCode, posParams), "", 0L)
-    ).map {
-      case (compiledSource, user, timestamp) =>
-        val deployData = DeployData(
-          user = stringToByteString(user),
-          timestamp = timestamp,
-          term = compiledSource.code,
-          phloLimit = Some(accounting.MAX_VALUE)
-        )
-
-        Deploy(
-          term = Some(compiledSource.term),
-          raw = Some(deployData)
-        )
-    }
+      StandardDeploys.listOps,
+      StandardDeploys.either,
+      StandardDeploys.nonNegativeNumber,
+      StandardDeploys.makeMint,
+      StandardDeploys.makePoS,
+      StandardDeploys.basicWallet,
+      StandardDeploys.basicWalletFaucet,
+      StandardDeploys.walletCheck,
+      StandardDeploys.rev(wallets, faucetCode, posParams)
+    )
 
   def withContracts(
       initial: BlockMessage,
