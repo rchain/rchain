@@ -135,13 +135,12 @@ abstract class ModelSerializerBenchState {
 
   import coop.rchain.rholang.interpreter.storage.implicits._
 
-  val seed = Seed(123456780L)
+  val seed = Seed(123456789L)
 
-  def gnat(): TestGNAT =
-    arbitraryGnat.arbitrary.apply(Parameters.default.withSize(10), seed).get
+  def gnat(): TestGNAT = gnat(1)
 
-  def gnat(weight: Int): TestGNAT =
-    arbitraryGnat.arbitrary.apply(Parameters.default.withSize(weight), seed).get
+  def gnat(size: Int): TestGNAT =
+    arbitraryGnat.arbitrary.apply(Parameters.default.withSize(size), seed).get
 
   val heavyGnats = (1 to 10).map(i => gnat(i))
 }
@@ -172,36 +171,5 @@ class ProtobufModelBenchState extends ModelSerializerBenchState {
 
 @BenchState(Scope.Benchmark)
 class KryoModelBenchState extends ModelSerializerBenchState {
-
-  import com.esotericsoftware.kryo.Kryo
-  import com.esotericsoftware.kryo.io._
-
-  import com.esotericsoftware.kryo.util.MapReferenceResolver
-  import org.objenesis.strategy.StdInstantiatorStrategy
-
-  val kryo = new Kryo()
-  kryo.setRegistrationRequired(false)
-  // Support deserialization of classes without no-arg constructors
-  kryo.setInstantiatorStrategy(new StdInstantiatorStrategy())
-
-  implicit def serializer = new Serialize2ByteBuffer[TestGNAT] {
-
-    override def encode(gnat: TestGNAT): ByteBuffer = {
-      val output = new ByteBufferOutput(1024, -1)
-      kryo.writeObject(output, gnat)
-      output.close()
-
-      val buf = output.getByteBuffer
-      buf.flip()
-      buf
-    }
-
-    override def decode(bytes: ByteBuffer): TestGNAT = {
-      val input = new ByteBufferInput(bytes)
-      val res   = kryo.readObject(input, classOf[TestGNAT])
-      input.close()
-      res
-    }
-
-  }
+  override def serializer = KryoSerializers.serializer(classOf[TestGNAT])
 }

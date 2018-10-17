@@ -3,6 +3,7 @@ package coop.rchain.rspace.bench.serialization
 import java.util.concurrent.TimeUnit
 import java.nio.ByteBuffer
 
+import coop.rchain.models.Serialize2ByteBuffer
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
