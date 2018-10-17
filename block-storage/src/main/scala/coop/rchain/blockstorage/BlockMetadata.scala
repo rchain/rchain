@@ -11,6 +11,7 @@ final case class BlockMetadata(
     sender: ByteString,
     justifications: List[Justification],
     weightMap: Map[ByteString, Long],
+    blockNum: Long,
     seqNum: Int
 )
 
@@ -23,6 +24,7 @@ object BlockMetadata {
     b.sender,
     b.justifications.toList,
     BlockMessageUtil.weightMap(b),
+    BlockMessageUtil.blockNumber(b),
     b.seqNum
   )
 }

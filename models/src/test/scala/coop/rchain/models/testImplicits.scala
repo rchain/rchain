@@ -2,7 +2,7 @@ package coop.rchain.models
 
 import com.google.protobuf.ByteString
 import coop.rchain.models.Expr.ExprInstance
-import org.scalacheck.{Arbitrary, Gen}
+import org.scalacheck.{Arbitrary, Gen, Shrink}
 import org.scalacheck.ScalacheckShapeless._
 import org.scalacheck.Gen.{const, frequency, resize, sized}
 import coop.rchain.models.rholang.sorter.ordering._
@@ -61,6 +61,39 @@ object testImplicits {
   implicit val VarRefArbitrary             = implicitly[Arbitrary[VarRef]]
   implicit val ParSetArbitrary             = implicitly[Arbitrary[ParSet]]
   implicit val ParMapArbitrary             = implicitly[Arbitrary[ParMap]]
+
+  implicit val ParShrink                = implicitly[Shrink[Par]]
+  implicit val ExprShrink               = implicitly[Shrink[Expr]]
+  implicit val BindPatternShrink        = implicitly[Shrink[BindPattern]]
+  implicit val BundleShrink             = implicitly[Shrink[Bundle]]
+  implicit val ConnectiveShrink         = implicitly[Shrink[Connective]]
+  implicit val ConnectiveBodyShrink     = implicitly[Shrink[ConnectiveBody]]
+  implicit val EListShrink              = implicitly[Shrink[EList]]
+  implicit val EMapShrink               = implicitly[Shrink[EMap]]
+  implicit val EMatchesShrink           = implicitly[Shrink[EMatches]]
+  implicit val EMethodShrink            = implicitly[Shrink[EMethod]]
+  implicit val ENeqShrink               = implicitly[Shrink[ENeq]]
+  implicit val ENotShrink               = implicitly[Shrink[ENot]]
+  implicit val EOrShrink                = implicitly[Shrink[EOr]]
+  implicit val ESetShrink               = implicitly[Shrink[ESet]]
+  implicit val ETupleShrink             = implicitly[Shrink[ETuple]]
+  implicit val EVarShrink               = implicitly[Shrink[EVar]]
+  implicit val GPrivateShrink           = implicitly[Shrink[GPrivate]]
+  implicit val KeyValuePairShrink       = implicitly[Shrink[KeyValuePair]]
+  implicit val ListBindPatternsShrink   = implicitly[Shrink[ListBindPatterns]]
+  implicit val MatchShrink              = implicitly[Shrink[Match]]
+  implicit val MatchCaseShrink          = implicitly[Shrink[MatchCase]]
+  implicit val NewShrink                = implicitly[Shrink[New]]
+  implicit val ParWithRandomShrink      = implicitly[Shrink[ParWithRandom]]
+  implicit val PCostShrink              = implicitly[Shrink[PCost]]
+  implicit val ReceiveShrink            = implicitly[Shrink[Receive]]
+  implicit val ReceiveBindShrink        = implicitly[Shrink[ReceiveBind]]
+  implicit val SendShrink               = implicitly[Shrink[Send]]
+  implicit val TaggedContinuationShrink = implicitly[Shrink[TaggedContinuation]]
+  implicit val VarShrink                = implicitly[Shrink[Var]]
+  implicit val VarRefShrink             = implicitly[Shrink[VarRef]]
+  implicit val ParSetShrink             = implicitly[Shrink[ParSet]]
+  implicit val ParMapShrink             = implicitly[Shrink[ParMap]]
 
   implicit def alwaysEqualArbitrary[A: Arbitrary]: Arbitrary[AlwaysEqual[A]] =
     Arbitrary(Arbitrary.arbitrary[A].map(AlwaysEqual(_)))

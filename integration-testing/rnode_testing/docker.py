@@ -1,6 +1,6 @@
 import logging
 from contextlib import contextmanager
-import tools.random
+import rnode_testing.random
 
 
 def run_cmd(docker_container, cmd):
@@ -18,7 +18,7 @@ def list_containers(docker_client, network):
 
 @contextmanager
 def docker_network(docker_client):
-    network_name = f"rchain-{tools.random.random_string(5).lower()}"
+    network_name = f"rchain-{rnode_testing.random.random_string(5).lower()}"
 
     docker_client.networks.create(network_name, driver="bridge")
 

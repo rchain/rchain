@@ -119,6 +119,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     val logMessages = List(
       "Received Deploy",
+      "Block",
       "Sent Block #1",
       "Added",
       "New fork-choice tip is block"
@@ -756,14 +757,21 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       nodes(0).casperEff.addBlock(block)
       nodes(1).transportLayerEff.clear(nodes(1).local) //nodes(1) misses this block
     }
-    val Created(block) = nodes(0).casperEff
+    val Created(block11) = nodes(0).casperEff
       .deploy(ProtoUtil.basicDeployData(10)) *> nodes(0).casperEff.createBlock
-    nodes(0).casperEff.addBlock(block)
+    nodes(0).casperEff.addBlock(block11)
 
-    (0 to 10).foreach { i =>
+    // Cycle of requesting and passing blocks until block #3 from nodes(0) to nodes(1)
+    (0 to 8).foreach { i =>
       nodes(1).receive()
       nodes(0).receive()
     }
+
+    // We simulate a network failure here by not allowing block #2 to get passed to nodes(1)
+
+    // And then we assume fetchDependencies eventually gets called
+    nodes(1).casperEff.fetchDependencies
+    nodes(0).receive()
 
     nodes(1).logEff.infos
       .count(_ startsWith "Requested missing block") should be(10)

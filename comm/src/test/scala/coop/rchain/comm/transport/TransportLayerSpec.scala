@@ -4,7 +4,7 @@ import scala.concurrent.duration._
 
 import cats._
 import cats.implicits._
-
+import coop.rchain.shared._
 import coop.rchain.comm._, rp.ProtocolHelper
 import coop.rchain.comm.protocol.routing.{Packet, Protocol}
 import coop.rchain.casper.protocol.{BlockApproval => CasperBlockApproval}
@@ -239,7 +239,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
     "streamBlob" should {
       "send a blob and receive by (single) remote side" in {
-        new TwoNodesRuntime[Unit](Dispatcher.heartbeatResponseDispatcher[F]) {
+        new TwoNodesRuntime[Unit]() {
           def execute(
               transportLayer: TransportLayer[F],
               local: PeerNode,
@@ -260,7 +260,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
       }
 
       "send a blob and receive by (multiple) remote side" in {
-        new ThreeNodesRuntime[Unit](Dispatcher.heartbeatResponseDispatcher[F]) {
+        new ThreeNodesRuntime[Unit]() {
           def execute(
               transportLayer: TransportLayer[F],
               local: PeerNode,

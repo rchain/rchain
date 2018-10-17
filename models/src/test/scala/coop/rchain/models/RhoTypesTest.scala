@@ -1,13 +1,14 @@
 package coop.rchain.models
 
 import com.google.protobuf.ByteString
+import coop.rchain.models.Assertions.assertEqual
 import coop.rchain.models.BitSetBytesMapper._
 import coop.rchain.models.Connective.ConnectiveInstance.{Empty => _}
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.testImplicits._
 import coop.rchain.rspace.Serialize
-import org.scalacheck.Arbitrary
+import org.scalacheck.{Arbitrary, Shrink}
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
@@ -44,7 +45,9 @@ class RhoTypesTest extends FlatSpec with PropertyChecks with Matchers {
     })
   }
 
-  def roundTripSerialization[A: Serialize: Arbitrary: Pretty](implicit tag: ClassTag[A]): Unit =
+  def roundTripSerialization[A: Serialize: Arbitrary: Shrink: Pretty](
+      implicit tag: ClassTag[A]
+  ): Unit =
     it must s"work for ${tag.runtimeClass.getSimpleName}" in {
       forAll { a: A =>
         whenever(!isExcluded(a)) {
@@ -53,27 +56,11 @@ class RhoTypesTest extends FlatSpec with PropertyChecks with Matchers {
       }
     }
 
-  def roundTripSerialization[A: Serialize: Arbitrary: Pretty](a: A): Assertion = {
+  def roundTripSerialization[A: Serialize: Arbitrary: Shrink: Pretty](a: A): Assertion = {
     val bytes    = Serialize[A].encode(a)
     val result   = Serialize[A].decode(bytes)
     val expected = Right(a)
-
-    assert(
-      result == expected,
-      LazyClue(
-        s"""
-         |
-         |Actual value:
-         |
-         |${Pretty.pretty(result)}
-         |
-         |was not equal to expected:
-         |
-         |${Pretty.pretty(expected)}
-         |
-         |""".stripMargin
-      )
-    )
+    assertEqual(result, expected)
   }
 }
 
