@@ -3,7 +3,6 @@ package coop.rchain.blockstorage
 import java.io._
 import java.nio.{BufferUnderflowException, ByteBuffer}
 import java.nio.file.{Files, Path, StandardCopyOption}
-import java.util.zip.CRC32
 
 import cats.{Id, Monad}
 import cats.implicits._
@@ -13,7 +12,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.util.BlockMessageUtil.{bonds, parentHashes}
-import coop.rchain.blockstorage.util.TopologicalSortUtil
+import coop.rchain.blockstorage.util.{Crc32, TopologicalSortUtil}
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.shared.{Log, LogSource}
 
@@ -28,7 +27,7 @@ final class BlockDagFileStorage[F[_]: Monad: Concurrent: Sync: Log] private (
     topoSortRef: Ref[F, Vector[Vector[BlockHash]]],
     latestMessagesLogOsRef: Ref[F, OutputStream],
     latestMessagesLogSizeRef: Ref[F, Int],
-    latestMessagesCrcRef: Ref[F, CRC32],
+    latestMessagesCrcRef: Ref[F, Crc32[F]],
     latestMessagesDataFilePath: Path,
     latestMessagesCrcFilePath: Path,
     latestMessagesLogMaxSizeFactor: Int
@@ -82,17 +81,12 @@ final class BlockDagFileStorage[F[_]: Monad: Concurrent: Sync: Log] private (
       _ <- latestMessagesLogSizeRef.update(_ + 1)
     } yield ()
 
-  private def crcBytes(crc: CRC32): Array[Byte] = {
-    val byteBuffer = ByteBuffer.allocate(8)
-    byteBuffer.putLong(crc.getValue)
-    byteBuffer.array()
-  }
-
-  private def updateLatestMessagesCrcFile(newCrc: CRC32): Unit = {
-    val tmpCrc = Files.createTempFile("rchain-block-dag-file-storage-", "-crc")
-    Files.write(tmpCrc, crcBytes(newCrc))
-    Files.move(tmpCrc, latestMessagesCrcFilePath, StandardCopyOption.REPLACE_EXISTING)
-  }
+  private def updateLatestMessagesCrcFile(newCrc: Crc32[F]): F[Unit] =
+    newCrc.bytes.map { newCrcBytes =>
+      val tmpCrc = Files.createTempFile("rchain-block-dag-file-storage-", "-crc")
+      Files.write(tmpCrc, newCrcBytes)
+      Files.move(tmpCrc, latestMessagesCrcFilePath, StandardCopyOption.REPLACE_EXISTING)
+    }
 
   private def squashLatestMessagesDataFile(): F[Unit] =
     for {
@@ -108,9 +102,10 @@ final class BlockDagFileStorage[F[_]: Monad: Concurrent: Sync: Log] private (
           dataByteBuffer.put(blockHash.toByteArray)
       }
       _           = Files.write(tmpSquashedData, dataByteBuffer.array())
-      squashedCrc = new CRC32()
-      _           = squashedCrc.update(dataByteBuffer.array())
-      _           = Files.write(tmpSquashedCrc, crcBytes(squashedCrc))
+      squashedCrc = Crc32.empty[F]()
+      _           <- squashedCrc.update(dataByteBuffer.array())
+      squashedCrcBytes <- squashedCrc.bytes
+      _           = Files.write(tmpSquashedCrc, squashedCrcBytes)
       _ = Files.move(
         tmpSquashedData,
         latestMessagesDataFilePath,
@@ -181,8 +176,9 @@ final class BlockDagFileStorage[F[_]: Monad: Concurrent: Sync: Log] private (
       latestMessagesLogOs <- latestMessagesLogOsRef.get
       _                   = latestMessagesLogOs.close()
       _                   = Files.write(latestMessagesDataFilePath, Array.emptyByteArray)
-      newCrc              = new CRC32()
-      _                   = Files.write(latestMessagesCrcFilePath, crcBytes(newCrc))
+      newCrc              = Crc32.empty[F]()
+      newCrcBytes         <- newCrc.bytes
+      _                   = Files.write(latestMessagesCrcFilePath, newCrcBytes)
       _                   <- dataLookupRef.set(Map.empty)
       _                   <- childMapRef.set(Map.empty)
       _                   <- topoSortRef.set(Vector.empty)
@@ -211,16 +207,15 @@ object BlockDagFileStorage {
       latestMessagesLogMaxSizeFactor: Int = 10
   )
 
-  private def calculateLatestMessagesCrc(
+  private def calculateLatestMessagesCrc[F[_]: Monad](
       latestMessagesList: List[(Validator, BlockHash)]
-  ): CRC32 = {
-    val crc = new CRC32()
-    latestMessagesList.foreach {
-      case (validator, blockHash) =>
-        crc.update(validator.concat(blockHash).toByteArray)
-    }
-    crc
-  }
+  ): Crc32[F] =
+    Crc32[F](
+      latestMessagesList.foldLeft(ByteString.EMPTY) {
+        case (byteString, (validator, blockHash)) =>
+          byteString.concat(validator.concat(blockHash))
+      }.toByteArray
+    )
 
   private def readLatestMessagesData(
       latestMessagesDataDi: DataInput
@@ -268,24 +263,28 @@ object BlockDagFileStorage {
     byteBuffer.getLong()
   }
 
-  private def validateData(
+  private def validateData[F[_]: Monad](
       latestMessagesRaf: RandomAccessFile,
       readCrc: Long,
       latestMessagesCrcPath: Path,
       latestMessagesList: List[(Validator, BlockHash)]
-  ): (Map[Validator, BlockHash], CRC32) = {
-    val fullCalculatedCrc = calculateLatestMessagesCrc(latestMessagesList)
-    if (fullCalculatedCrc.getValue == readCrc) {
-      (latestMessagesList.toMap, fullCalculatedCrc)
-    } else {
-      val withoutLastCalculatedCrc = calculateLatestMessagesCrc(latestMessagesList.init)
-      if (withoutLastCalculatedCrc.getValue == readCrc) {
-        latestMessagesRaf.setLength(latestMessagesRaf.length() - 64)
-        (latestMessagesList.init.toMap, withoutLastCalculatedCrc)
+  ): F[(Map[Validator, BlockHash], Crc32[F])] = {
+    val fullCalculatedCrc = calculateLatestMessagesCrc[F](latestMessagesList)
+    fullCalculatedCrc.value.flatMap { fullCalculatedCrcValue =>
+      if (fullCalculatedCrcValue == readCrc) {
+        (latestMessagesList.toMap, fullCalculatedCrc).pure[F]
       } else {
-        // TODO: Restore latest messages from the persisted DAG
-        latestMessagesRaf.setLength(0)
-        (Map.empty[Validator, BlockHash], new CRC32())
+        val withoutLastCalculatedCrc = calculateLatestMessagesCrc[F](latestMessagesList.init)
+        withoutLastCalculatedCrc.value.map { withoutLastCalculatedCrcValue =>
+          if (withoutLastCalculatedCrcValue == readCrc) {
+            latestMessagesRaf.setLength(latestMessagesRaf.length() - 64)
+            (latestMessagesList.init.toMap, withoutLastCalculatedCrc)
+          } else {
+            // TODO: Restore latest messages from the persisted DAG
+            latestMessagesRaf.setLength(0)
+            (Map.empty[Validator, BlockHash], Crc32.empty[F]())
+          }
+        }
       }
     }
   }
@@ -296,15 +295,16 @@ object BlockDagFileStorage {
       latestMessagesRaf             = new RandomAccessFile(config.latestMessagesDataPath.toFile, "rw")
       readCrc                       <- readLatestMessagesCrc[F](config.latestMessagesCrcPath)
       (latestMessagesList, logSize) = readLatestMessagesData(latestMessagesRaf)
-      (latestMessagesMap, calculatedCrc) = validateData(latestMessagesRaf,
+      validateDataResult <- validateData[F](latestMessagesRaf,
                                                         readCrc,
                                                         config.latestMessagesCrcPath,
                                                         latestMessagesList)
+      (latestMessagesMap, calculatedCrc) = validateDataResult
       _                        = latestMessagesRaf.close()
       latestMessagesDataOs     = new FileOutputStream(config.latestMessagesDataPath.toFile, true)
       latestMessagesRef        <- Ref.of[F, Map[Validator, BlockHash]](latestMessagesMap)
       latestMessagesLogSizeRef <- Ref.of[F, Int](logSize)
-      latestMessagesCrcRef     <- Ref.of[F, CRC32](calculatedCrc)
+      latestMessagesCrcRef     <- Ref.of[F, Crc32[F]](calculatedCrc)
       childMapRef              <- Ref.of[F, Map[BlockHash, Set[BlockHash]]](Map.empty)
       dataLookupRef            <- Ref.of[F, Map[BlockHash, BlockMetadata]](Map.empty)
       topoSortRef              <- Ref.of[F, Vector[Vector[BlockHash]]](Vector.empty)
@@ -323,42 +323,6 @@ object BlockDagFileStorage {
         config.latestMessagesCrcPath,
         config.latestMessagesLogMaxSizeFactor
       )
-
-  def unsafe[F[_]: Sync: Concurrent: Log](
-      config: Config,
-      lock: Semaphore[F],
-      initialChildMap: Map[BlockHash, Set[BlockHash]],
-      initialDataLookup: Map[BlockHash, BlockMetadata],
-      initialTopoSort: Vector[Vector[BlockHash]]
-  ): BlockDagFileStorage[F] = {
-    val latestMessagesRaf             = new RandomAccessFile(config.latestMessagesDataPath.toFile, "rw")
-    val (latestMessagesList, logSize) = readLatestMessagesData(latestMessagesRaf)
-    val readCrc                       = readLatestMessagesCrcUnsafe(config.latestMessagesCrcPath)
-    val (latestMessagesMap, calculatedCrc) =
-      validateData(latestMessagesRaf, readCrc, config.latestMessagesCrcPath, latestMessagesList)
-    latestMessagesRaf.close()
-    val latestMessagesRef        = Ref.unsafe[F, Map[Validator, BlockHash]](latestMessagesMap)
-    val latestMessagesLogSizeRef = Ref.unsafe[F, Int](logSize)
-    val latestMessagesCrcRef     = Ref.unsafe[F, CRC32](calculatedCrc)
-    val childMapRef              = Ref.unsafe[F, Map[BlockHash, Set[BlockHash]]](initialChildMap)
-    val dataLookupRef            = Ref.unsafe[F, Map[BlockHash, BlockMetadata]](initialDataLookup)
-    val topoSortRef              = Ref.unsafe[F, Vector[Vector[BlockHash]]](initialTopoSort)
-    val latestMessagesDataOs     = new FileOutputStream(config.latestMessagesDataPath.toFile)
-    val latestMessagesDataOsRef  = Ref.unsafe[F, OutputStream](latestMessagesDataOs)
-    new BlockDagFileStorage[F](
-      lock,
-      latestMessagesRef,
-      childMapRef,
-      dataLookupRef,
-      topoSortRef,
-      latestMessagesDataOsRef,
-      latestMessagesLogSizeRef,
-      latestMessagesCrcRef,
-      config.latestMessagesDataPath,
-      config.latestMessagesCrcPath,
-      config.latestMessagesLogMaxSizeFactor
-    )
-  }
 
   def createWithId(config: Config): BlockDagFileStorage[Id] = {
     import coop.rchain.catscontrib.effect.implicits._
