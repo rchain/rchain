@@ -1,27 +1,31 @@
 //scalapackage coop.rchain.rholang.collection
 
-new rl(`rho:registry:lookup`), EitherCh in {
+new 
+  rl(`rho:registry:lookup`), EitherCh,
+  double, divide, divide100by, divide50by, divide10by,
+  divide8by, doubleMap, divide10byFlatMap, composeTest
+in {
   rl!(`rho:id:j6trahbxycumerwpr5qype7j43b7eqh8auebwsa9nn68if47gswh73`, *EitherCh) |
   for(@(_, Either) <- EitherCh) {
-    contract @"double"(@x, ret) = { ret!(2 * x) } |
-    contract @"divide"(@x, @y, ret) = {
+    contract double(@x, ret) = { ret!(2 * x) } |
+    contract divide(@x, @y, ret) = {
       if(y == 0) { ret!(("Left", "Div by zero!")) }
       else { ret!(("Right", x / y)) }
     } |
-    contract @"100over"(@x, ret) = { @"divide"!(100, x, *ret) } |
-    contract @"50over"(@x, ret) = { @"divide"!(50, x, *ret) } |
-    contract @"10over"(@x, ret) = { @"divide"!(10, x, *ret) } |
-    contract @"8over"(@x, ret) = { @"divide"!(8, x, *ret) } |
+    contract divide100by(@x, ret) = { divide!(100, x, *ret) } |
+    contract divide50by(@x, ret) = { divide!(50, x, *ret) } |
+    contract divide10by(@x, ret) = { divide!(10, x, *ret) } |
+    contract divide8by(@x, ret) = { divide!(8, x, *ret) } |
 
     //Requires Either, TestSet
-    contract @"doubleMap"(@either, ret) = {
+    contract doubleMap(@either, ret) = {
       new fn in {
-        contract fn(ret) = { @Either!("map", either, "double", *ret) } |
+        contract fn(ret) = { @Either!("map", either, *double, *ret) } |
         ret!(*fn)
       }
     } |
-    @"doubleMap"!(("Right", 3), "RightMapTest") |
-    @"doubleMap"!(("Left", "message"), "LeftMapTest") |
+    doubleMap!(("Right", 3), "RightMapTest") |
+    doubleMap!(("Left", "message"), "LeftMapTest") |
 
     @"TestSet"!(
       "map should transform Right and preserve Left",
@@ -31,15 +35,15 @@ new rl(`rho:registry:lookup`), EitherCh in {
       ]
     ) |
 
-    contract @"10overFlatMap"(@either, ret) = {
+    contract divide10byFlatMap(@either, ret) = {
       new fn in {
-        contract fn(ret) = { @Either!("flatMap", either, "10over", *ret) } |
+        contract fn(ret) = { @Either!("flatMap", either, *divide10by, *ret) } |
         ret!(*fn)
       }
     } |
-    @"10overFlatMap"!(("Right", 5), "FlatMapTest1") |
-    @"10overFlatMap"!(("Left", "message"), "FlatMapTest2") |
-    @"10overFlatMap"!(("Right", 0), "FlatMapTest3") |
+    divide10byFlatMap!(("Right", 5), "FlatMapTest1") |
+    divide10byFlatMap!(("Left", "message"), "FlatMapTest2") |
+    divide10byFlatMap!(("Right", 0), "FlatMapTest3") |
 
     @"TestSet"!(
       "flatMap should transform Right and preserve Left",
@@ -50,16 +54,16 @@ new rl(`rho:registry:lookup`), EitherCh in {
       ]
     ) |
 
-    contract @"composeTest"(@input, @functions, ret) = {
+    contract composeTest(@input, @functions, ret) = {
       new fn in {
         contract fn(ret) = { @Either!("compose", input, functions, *ret) } |
         ret!(*fn)
       }
     } |
-    @"composeTest"!(5, ["10over", "8over"], "ComposeTest1") |
-    @"composeTest"!(15, ["10over", "8over"], "ComposeTest2") |
-    @"composeTest"!(5, ["100over", "8over", "10over"], "ComposeTest3") |
-    @"composeTest"!(5, ["50over", "10over", "8over"], "ComposeTest4") |
+    composeTest!(5, [*divide10by, *divide8by], "ComposeTest1") |
+    composeTest!(15, [*divide10by, *divide8by], "ComposeTest2") |
+    composeTest!(5, [*divide100by, *divide8by, *divide10by], "ComposeTest3") |
+    composeTest!(5, [*divide50by, *divide10by, *divide8by], "ComposeTest4") |
 
     @"TestSet"!(
       "compose should sequence Either-valued functions together",
