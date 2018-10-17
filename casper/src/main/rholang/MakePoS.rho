@@ -1,8 +1,9 @@
 //scalapackage coop.rchain.rholang.proofofstake
 
-new rl(`rho:registry:lookup`), ListOpsCh in {
+new rl(`rho:registry:lookup`), ListOpsCh, EitherCh in {
   rl!(`rho:id:dputnspi15oxxnyymjrpu7rkaok3bjkiwq84z7cqcrx4ktqfpyapn4`, *ListOpsCh) |
-  for(@(_, ListOps) <- ListOpsCh) {
+  rl!(`rho:id:j6trahbxycumerwpr5qype7j43b7eqh8auebwsa9nn68if47gswh73`, *EitherCh) |
+  for(@(_, ListOps) <- ListOpsCh; @(_, Either) <- EitherCh) {
     contract @"MakePoS"(@purse, @minimumBond, @maximumBond, @initBonds, return) = {
       new this, bondsCh, joiningFeeCh, clonePurse, depositPurse, updateBonds, feeDistribution in {
         bondsCh!(initBonds) |
@@ -137,7 +138,7 @@ new rl(`rho:registry:lookup`), ListOpsCh in {
                   for(_, ret <- depositClonePurse) {
                     depositPurse!(bondPurse, bondAmount, *ret)
                   } |
-                  @("Either", "compose")!(bondPurse, [
+                  @Either!("compose", bondPurse, [
                                         (*this, "validateBondAmount"), 
                                         (*this, "validateBondingRate"),
                                         *validatePublicKey,
