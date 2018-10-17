@@ -265,12 +265,12 @@ class LMDBStore[C, P, A, K] private (
       }
     }
 
-  protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): Unit =
+  protected def processTrieUpdate(cacheStore: TrieStoreType, update: TrieUpdate[C, P, A, K]): Unit =
     update match {
       case TrieUpdate(_, Insert, channelsHash, gnat) =>
-        history.insert(trieStore, trieBranch, channelsHash, canonicalize(gnat))
+        history.insert(cacheStore, trieBranch, channelsHash, canonicalize(gnat))
       case TrieUpdate(_, Delete, channelsHash, gnat) =>
-        history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat))
+        history.delete(cacheStore, trieBranch, channelsHash, canonicalize(gnat))
     }
 
   // TODO: Does using a cursor improve performance for bulk operations?

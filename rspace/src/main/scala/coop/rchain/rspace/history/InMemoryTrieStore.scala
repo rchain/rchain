@@ -22,6 +22,9 @@ case class State[K, V](
 
   def changeEmptyRoot(emptyRoot: Blake2b256Hash): State[K, V] =
     State(_dbTrie, _dbRoot, _dbPastRoots, Some(emptyRoot))
+
+  def deleteEmptyRoot(): State[K, V] =
+    State(_dbTrie, _dbRoot, _dbPastRoots, None)
 }
 
 object State {
@@ -65,7 +68,7 @@ class InMemoryTrieStore[K, V]
           currentRoot
       }
 
-  private[this] def getPastRootsInBranch(
+  override private[rspace] def getPastRootsInBranch(
       txn: InMemTransaction[State[K, V]],
       branch: Branch
   ): Seq[Blake2b256Hash] =
@@ -140,6 +143,48 @@ class InMemoryTrieStore[K, V]
       hash: Blake2b256Hash
   ): Unit =
     txn.writeState(state => (state.changeEmptyRoot(hash), ()))
+
+  override private[rspace] def applyCache(
+                                           txn: InMemTransaction[State[K, V]],
+                                           trieCache: TrieCache[InMemTransaction[State[K, V]], K, V]): Unit = {
+
+    for((branch, hash) <- trieCache._dbRoot) {
+      hash match {
+        case Some(value) =>
+          txn.writeState(state => (state.changeRoot(state._dbRoot + (branch->value)), ()))
+        case None =>
+          txn.writeState(state => (state.changeRoot(state._dbRoot - branch), ()))
+      }
+    }
+
+    for((hash, trie) <- trieCache._dbTrie) {
+      trie match {
+        case Some(value) =>
+          txn.writeState(state => (state.changeTrie(state._dbTrie + (hash -> value)), ()))
+        case None =>
+          txn.writeState(state => (state.changeTrie(state._dbTrie - hash), ()))
+      }
+    }
+
+    for((branch, pastRoots) <- trieCache._dbPastRoots) {
+      pastRoots match {
+        case Some(value) =>
+          txn.writeState(state => (state.changePastRoots(state._dbPastRoots + (branch -> value)), ()))
+        case None =>
+          txn.writeState(state => (state.changePastRoots(state._dbPastRoots - branch), ()))
+      }
+    }
+
+    trieCache._dbEmptyRoot match {
+      case None => {
+        //unchanged/not accessed
+      }
+      case Some(Some(value)) =>
+        putEmptyRoot(txn, value)
+      case Some(None) =>
+        txn.writeState(state => (state.deleteEmptyRoot(), ()))
+    }
+  }
 }
 
 object InMemoryTrieStore {

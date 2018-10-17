@@ -92,7 +92,7 @@ class LMDBTrieStore[K, V] private (
       }
     }
 
-  private[this] def getPastRootsInBranch(
+  override private[rspace] def getPastRootsInBranch(
       txn: Txn[ByteBuffer],
       branch: Branch
   ): Seq[Blake2b256Hash] =
@@ -135,6 +135,46 @@ class LMDBTrieStore[K, V] private (
         LMDBTrieStore.emptyRootKey,
         Codec[Blake2b256Hash].encode(hash).map(_.bytes.toDirectByteBuffer).get
       )
+
+  override private[rspace] def applyCache(txn: Txn[ByteBuffer], trieCache:TrieCache[Txn[ByteBuffer], K, V]): Unit = {
+
+    for((branch, hash) <- trieCache._dbRoot) {
+      hash match {
+        case Some(value) =>
+          _dbRoot.put(txn, branch, value)
+        case None =>
+          _dbRoot.delete(txn, branch)
+      }
+    }
+
+    for((hash, trie) <- trieCache._dbTrie) {
+      trie match {
+        case Some(value) =>
+          _dbTrie.put(txn, hash, value)
+        case None =>
+          _dbTrie.delete(txn, hash)
+      }
+    }
+
+    for((branch, pastRoots) <- trieCache._dbPastRoots) {
+      pastRoots match {
+        case Some(value) =>
+          _dbPastRoots.put(txn, branch, value)
+        case None =>
+          _dbPastRoots.delete(txn, branch)
+      }
+    }
+
+    trieCache._dbEmptyRoot match {
+      case None => {
+        //unchanged/not accessed
+      }
+      case Some(None) =>
+        _dbEmptyRoots.delete(txn, LMDBTrieStore.emptyRootKey)
+      case Some(Some(value)) =>
+        putEmptyRoot(txn, value)
+    }
+  }
 }
 
 object LMDBTrieStore {
