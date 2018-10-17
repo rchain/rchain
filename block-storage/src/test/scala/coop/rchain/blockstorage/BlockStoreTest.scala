@@ -8,13 +8,10 @@ import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.{BlockMessage, Header}
 import coop.rchain.rspace.Context
 import coop.rchain.shared.PathOps._
-import org.scalacheck._
-import org.scalacheck.Arbitrary.arbitrary
-import org.scalacheck.Gen._
+import BlockGen.blockHashElementsGen
 import org.scalactic.anyvals.PosInt
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import scala.util.control.NonFatal
 
 trait BlockStoreTest
     extends FlatSpecLike
@@ -36,64 +33,11 @@ trait BlockStoreTest
   ): (BlockHash, BlockMessage) =
     (ByteString.copyFromUtf8(s._1), s._2)
 
-  private[this] val blockHashGen: Gen[BlockHash] = for {
-    testKey <- arbitrary[String].suchThat(_.nonEmpty)
-  } yield ByteString.copyFromUtf8(testKey)
-
-  private[this] implicit val arbitraryHash: Arbitrary[BlockHash] = Arbitrary(blockHashGen)
-
-  private[this] val blockStoreElementGen: Gen[(String, BlockMessage)] =
-    for {
-      hash      <- arbitrary[BlockHash]
-      version   <- arbitrary[Long]
-      timestamp <- arbitrary[Long]
-    } yield
-      (
-        hash.toStringUtf8,
-        BlockMessage(blockHash = hash)
-          .withHeader(Header().withVersion(version).withTimestamp(timestamp))
-      )
-
-  private[this] val blockStoreElementsGen: Gen[List[(String, BlockMessage)]] =
-    distinctListOfGen(blockStoreElementGen)(_._1 == _._1)
-
   def withStore[R](f: BlockStore[Id] => R): R
-
-  // TODO: move to `shared` along with code in coop.rchain.rspace.test.ArbitraryInstances
-  /**
-   Credit: https://gist.github.com/etorreborre/d0616e704ed85d7276eb12b025df8ab0
-
-   Distinct list of elements from a given arbitrary
-    */
-  def distinctListOf[T: Arbitrary] =
-    distinctListOfGen(arbitrary[T])(_ == _)
-
-  /**
-   Distinct list of elements from a given generator
-   with a maximum number of elements to discard
-    */
-  def distinctListOfGen[T](gen: Gen[T], maxDiscarded: Int = 1000)(
-      comp: (T, T) => Boolean
-  ): Gen[List[T]] = {
-    val seen      = new scala.collection.mutable.ListBuffer[T]
-    var discarded = 0
-
-    Gen.sized { size =>
-      if (size == seen.size) seen.toList
-      else {
-        while (seen.size <= size && discarded < maxDiscarded) gen.sample match {
-          case Some(t) if !seen.exists(comp(t, _)) =>
-            seen.+=:(t)
-          case _ => discarded += 1
-        }
-        seen.toList
-      }
-    }
-  }
 
   "Block Store" should "return Some(message) on get for a published key" in {
     withStore { store =>
-      forAll(blockStoreElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
+      forAll(blockHashElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
         val items = blockStoreElements
         items.foreach(store.put(_))
         items.foreach {
@@ -108,7 +52,7 @@ trait BlockStoreTest
 
   it should "discover keys by predicate" in {
     withStore { store =>
-      forAll(blockStoreElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
+      forAll(blockHashElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
         val items = blockStoreElements
         items.foreach(store.put(_))
         items.foreach {
@@ -125,7 +69,7 @@ trait BlockStoreTest
 
   it should "overwrite existing value" in
     withStore { store =>
-      forAll(blockStoreElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
+      forAll(blockHashElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
         val items = blockStoreElements.map {
           case (hash, elem) =>
             (hash, elem, toBlockMessage(hash, 200L, 20000L))
@@ -144,7 +88,7 @@ trait BlockStoreTest
     withStore { store =>
       store.asMap().size shouldEqual 0
       def elem = {
-        blockStoreElementGen.sample.get
+        blockHashElementsGen.sample.get
         throw new RuntimeException("msg")
       }
 

@@ -119,6 +119,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     val logMessages = List(
       "Received Deploy",
+      "Block",
       "Sent Block #1",
       "Added",
       "New fork-choice tip is block"
@@ -137,12 +138,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     def now = System.currentTimeMillis()
     val registerDeploy = ProtoUtil.sourceDeploy(
-      """new rr(`rho:registry:insertArbitrary`), hello, uriCh in {
+      """new uriCh, rr(`rho:registry:insertArbitrary`), hello in {
         |  contract hello(@name, return) = { return!("Hello, ${name}!" %% {"name" : name}) } |
         |  rr!(bundle+{*hello}, *uriCh)
         |}
       """.stripMargin,
-      now,
+      1539788365118L, //fix the timestamp so that `uriCh` is known
       accounting.MAX_VALUE
     )
 
@@ -153,7 +154,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val id: String = casperEff
       .storageContents(block.getBody.getPostState.tuplespace)
       .split('|')
-      .find(_.contains("rho:id"))
+      .find(
+        _.contains(
+          //based on the timestamp of registerDeploy, this is uriCh
+          "@{Unforgeable(0x744dc7e287a955d8f794054ce07fff6efeecec4473a1ebdf26728d93258e3ad6)}!"
+        )
+      )
       .get
       .split('`')(1)
     val callDeploy = ProtoUtil.sourceDeploy(

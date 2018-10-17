@@ -11,7 +11,7 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
 class MakePoSSpec extends FlatSpec with Matchers {
-  val runtime = TestSetUtil.runtime("rholang-make-pos-test")
+  val runtime = TestSetUtil.runtime
   val tests   = TestSetUtil.getTests("./casper/src/test/rholang/MakePoSTest.rho").toList
 
   TestSetUtil.runTests(MakePoSTest, List(NonNegativeNumber, MakeMint, Either, MakePoS), runtime)

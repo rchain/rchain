@@ -4,6 +4,7 @@ import cats.{Applicative, Foldable, Monad, Now}
 import cats.Id
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import cats.syntax.option._
+import coop.rchain.blockstorage.BlockMetadata
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.{Clique, DagOperations, ProtoUtil}
