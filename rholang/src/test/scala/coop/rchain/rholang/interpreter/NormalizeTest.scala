@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import java.io.StringReader
 
+import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
   Bundle => AbsynBundle,
   Ground => AbsynGround,
@@ -1190,6 +1191,29 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
     result.par should be(expectedResult)
     result.knownFree should be(inputs.knownFree)
+  }
+
+  it should "normalize simple types inside a bundle" in {
+    def test(simpleType: SimpleType, connectiveInstance: ConnectiveInstance): Assertion = {
+      val pbundle = new PBundle(new BundleReadWrite(), new PSimpleType(simpleType))
+
+      val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pbundle, inputs).value
+
+      val expectedResult =
+        inputs.par
+          .withBundles(
+            List(Bundle(Connective(connectiveInstance), writeFlag = true, readFlag = true))
+          )
+
+      assert(result.par === expectedResult)
+      assert(result.knownFree === inputs.knownFree)
+    }
+
+    test(new SimpleTypeBool(), ConnBool(true))
+    test(new SimpleTypeInt(), ConnInt(true))
+    test(new SimpleTypeString(), ConnString(true))
+    test(new SimpleTypeUri(), ConnUri(true))
+    test(new SimpleTypeByteArray(), ConnByteArray(true))
   }
 
   /** Example:

@@ -972,6 +972,13 @@ object ProcNormalizeMatcher {
           )
         }
 
+        def isSimpleType(connectives: Seq[Connective]): Boolean = connectives.exists(
+          _.connectiveInstance match {
+            case _: ConnBool | _: ConnInt | _: ConnString | _: ConnUri | _: ConnByteArray => true
+            case _                                                                        => false
+          }
+        )
+
         import BundleOps._
         for {
           targetResult <- normalizeMatch[M](b.proc_, input.copy(par = VectorPar()))
@@ -981,7 +988,7 @@ object ProcNormalizeMatcher {
             case _: BundleWrite     => Bundle(targetResult.par, writeFlag = true, readFlag = false)
             case _: BundleEquiv     => Bundle(targetResult.par, writeFlag = false, readFlag = false)
           }
-          res <- if (targetResult.par.connectiveUsed) {
+          res <- if (targetResult.par.connectiveUsed && !isSimpleType(targetResult.par.connectives)) {
                   error(targetResult)
                 } else {
                   val newBundle: Bundle = targetResult.par.singleBundle() match {
