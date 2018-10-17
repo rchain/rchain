@@ -22,7 +22,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.last)
     import node._
 
-    val deploys = Vector(
+    val code =
       """new double, dprimes, rl(`rho:registry:lookup`), ListOpsCh in {
         |  contract double(@x, ret) = { ret!(2 * x) } |
         |  rl!(`rho:id:dputnspi15oxxnyymjrpu7rkaok3bjkiwq84z7cqcrx4ktqfpyapn4`, *ListOpsCh) |
@@ -30,19 +30,17 @@ class RholangBuildTest extends FlatSpec with Matchers {
         |    @ListOps!("map", [2, 3, 5, 7], *double, *dprimes)
         |  }
         |}""".stripMargin
-    ).zipWithIndex.map {
-      case (d, i) => ProtoUtil.sourceDeploy(d, i.toLong + 1L, accounting.MAX_VALUE)
-    }
 
-    val Created(signedBlock) = deploys.traverse(MultiParentCasper[Id].deploy) *> MultiParentCasper[
-      Id
-    ].createBlock
-    val _ = MultiParentCasper[Id].addBlock(signedBlock)
+    val deploy               = ProtoUtil.sourceDeploy(code, 1L, accounting.MAX_VALUE)
+    val Created(signedBlock) = MultiParentCasper[Id].deploy(deploy) *> MultiParentCasper[Id].createBlock
+    val _                    = MultiParentCasper[Id].addBlock(signedBlock)
 
     val storage = HashSetCasperTest.blockTuplespaceContents(signedBlock)
 
     logEff.warns should be(Nil)
     storage.contains("!([4, 6, 10, 14])") should be(true)
+
+    node.tearDown()
   }
 
 }
