@@ -124,9 +124,10 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
       Chunk().withHeader(
         ChunkHeader().withSender(ProtocolHelper.node(blob.sender)).withTypeId(blob.packet.typeId)
       )
-    val buffer = 2 * 1024 // 2 kbytes for protobuf related stuff
+    val buffer    = 2 * 1024 // 2 kbytes for protobuf related stuff
+    val chunkSize = maxMessageSize - buffer
     def data: Iterator[Chunk] =
-      blob.packet.content.toByteArray.sliding(maxMessageSize - buffer).map { data =>
+      blob.packet.content.toByteArray.sliding(chunkSize, chunkSize).map { data =>
         Chunk().withData(ChunkData().withContentData(ProtocolHelper.toProtocolBytes(data)))
       }
 
