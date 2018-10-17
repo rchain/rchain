@@ -11,7 +11,7 @@ branches:
 # additional volumes, as in package step, you need to specify all volumes.
 
 __buildenv: &buildenv
-  image: rchain/buildenv:latest-java8
+  image: rchain/buildenv:latest
 
 __sbtenv: &sbtenv
   <<: *buildenv
