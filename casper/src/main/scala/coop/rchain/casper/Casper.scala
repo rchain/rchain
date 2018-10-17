@@ -23,7 +23,7 @@ import scala.annotation.tailrec
 import scala.collection.{immutable, mutable}
 import scala.collection.immutable.{HashMap, HashSet}
 import cats.effect.concurrent.Ref
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.{BlockMetadata, BlockStore}
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
