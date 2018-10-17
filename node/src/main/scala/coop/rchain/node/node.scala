@@ -3,9 +3,12 @@ package coop.rchain.node
 import cats._
 import cats.data._
 import cats.effect._
+import cats.effect.concurrent.Ref
 import cats.implicits._
-import coop.rchain.blockstorage.{BlockStore, LMDBBlockStore}
+import coop.rchain.blockstorage.BlockStore.BlockHash
+import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.comm.CasperPacketHandler
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.{LastApprovedBlock, MultiParentCasper, MultiParentCasperRef, SafetyOracle}
@@ -380,11 +383,12 @@ class NodeRuntime(conf: Configuration, host: String, scheduler: Scheduler) {
                         kademliaRPC
                       )
                       .toEffect
-    blockStore = LMDBBlockStore.create[Effect](conf.blockstorage)(
+    blockMap <- Ref.of[Effect, Map[BlockHash, BlockMessage]](Map.empty[BlockHash, BlockMessage])
+    blockStore = InMemBlockStore.create[Effect](
       syncEffect,
+      blockMap,
       Metrics.eitherT(Monad[Task], metrics)
     )
-
     _              <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
     oracle         = SafetyOracle.turanOracle[Effect](Monad[Effect])
     runtime        = Runtime.create(storagePath, storageSize, storeType)
