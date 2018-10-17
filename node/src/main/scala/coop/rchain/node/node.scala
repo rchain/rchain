@@ -383,6 +383,7 @@ class NodeRuntime(conf: Configuration, host: String, scheduler: Scheduler) {
                         kademliaRPC
                       )
                       .toEffect
+    // TODO: This change is temporary until itegulov's BlockStore implementation is in
     blockMap <- Ref.of[Effect, Map[BlockHash, BlockMessage]](Map.empty[BlockHash, BlockMessage])
     blockStore = InMemBlockStore.create[Effect](
       syncEffect,
