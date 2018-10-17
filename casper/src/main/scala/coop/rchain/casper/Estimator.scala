@@ -20,12 +20,21 @@ object Estimator {
 
   implicit val decreasingOrder = Ordering[Long].reverse
 
+  def tips[F[_]: Monad: BlockStore](
+      blockDag: BlockDag,
+      lastFinalizedBlockHash: BlockHash
+  ): F[IndexedSeq[BlockMessage]] =
+    Estimator.tips[F](blockDag, lastFinalizedBlockHash, blockDag.latestMessages.map {
+      case (validator, block) => (validator, block.blockHash)
+    })
+
   /**
     * When the BlockDag has an empty latestMessages, tips will return IndexedSeq(genesis)
     */
   def tips[F[_]: Monad: BlockStore](
       blockDag: BlockDag,
-      lastFinalizedBlockHash: BlockHash
+      lastFinalizedBlockHash: BlockHash,
+      latestMessagesHashes: Map[Validator, BlockHash]
   ): F[IndexedSeq[BlockMessage]] = {
     @tailrec
     def sortChildren(
@@ -69,7 +78,7 @@ object Estimator {
       newBlocks == blocks
 
     for {
-      scoresMap <- buildScoresMap(blockDag, lastFinalizedBlockHash).pure[F]
+      scoresMap <- buildScoresMap(blockDag, latestMessagesHashes, lastFinalizedBlockHash).pure[F]
       sortedChildrenHash = sortChildren(
         IndexedSeq(lastFinalizedBlockHash),
         blockDag.childMap,
@@ -82,6 +91,7 @@ object Estimator {
 
   def buildScoresMap(
       blockDag: BlockDag,
+      latestMessagesHashes: Map[Validator, BlockHash],
       lastFinalizedBlockHash: BlockHash
   ): Map[BlockHash, Long] = {
     def hashParents(hash: BlockHash, lastFinalizedBlockNumber: Long): List[BlockHash] = {
@@ -139,18 +149,18 @@ object Estimator {
             }
         }
 
-    blockDag.latestMessages.toList.foldLeft(Map.empty[BlockHash, Long]) {
-      case (acc, (validator: Validator, latestBlock: BlockMessage)) =>
+    latestMessagesHashes.toList.foldLeft(Map.empty[BlockHash, Long]) {
+      case (acc, (validator: Validator, latestBlockHash: BlockHash)) =>
         val postValidatorWeightScoreMap = addValidatorWeightDownSupportingChain(
           acc,
           validator,
-          latestBlock.blockHash
+          latestBlockHash
         )
         val postImplicitlySupportedScoreMap = addValidatorWeightToImplicitlySupported(
           postValidatorWeightScoreMap,
           blockDag.childMap,
           validator,
-          latestBlock.blockHash
+          latestBlockHash
         )
         postImplicitlySupportedScoreMap
     }

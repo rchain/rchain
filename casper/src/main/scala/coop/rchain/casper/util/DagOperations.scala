@@ -2,9 +2,9 @@ package coop.rchain.casper.util
 
 import cats.{ApplicativeError, Eval, Monad}
 import cats.implicits._
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.{BlockMetadata, BlockStore}
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.{BlockDag, BlockMetadata}
+import coop.rchain.casper.BlockDag
 import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.casper.util.MapHelper.updatedWith
 import coop.rchain.catscontrib.ListContrib
