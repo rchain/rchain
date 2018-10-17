@@ -135,12 +135,12 @@ abstract class ModelSerializerBenchState {
 
   import coop.rchain.rholang.interpreter.storage.implicits._
 
-  val seed = Seed(123456789L)
+  val initSeed = 123456789L
 
-  def gnat(): TestGNAT = gnat(10)
+  val gnat: TestGNAT = gnat(10)
 
   def gnat(size: Int): TestGNAT =
-    arbitraryGnat.arbitrary.apply(Parameters.default.withSize(size), seed).get
+    arbitraryGnat.arbitrary.apply(Parameters.default.withSize(size), Seed(initSeed + size)).get
 
   val heavyGnats = (1 to 10).map(i => gnat(i))
 }
