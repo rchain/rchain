@@ -1,14 +1,13 @@
-package coop.rchain.casper.util
+package coop.rchain.blockstorage.util
 
-import coop.rchain.casper.Estimator.BlockHash
+import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.util.ProtoUtil.blockNumber
 
 object TopologicalSortUtil {
   type BlockSort = Vector[Vector[BlockHash]]
   def update(sort: BlockSort, offset: Long, block: BlockMessage): BlockSort = {
     val hash             = block.blockHash
-    val offsetDiff: Long = blockNumber(block) - offset
+    val offsetDiff: Long = BlockMessageUtil.blockNumber(block) - offset
 
     assert(offsetDiff <= Int.MaxValue)
     val number = offsetDiff.toInt

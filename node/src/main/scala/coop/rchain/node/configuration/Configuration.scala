@@ -59,11 +59,11 @@ object Configuration {
   private val DefaultApprovalProtocolInterval   = 5.seconds
   private val DefaultMaxMessageSize: Int        = 4 * 1024 * 1024
   // within range HTTP2 RFC 7540
-  private val MaxMessageSizeMinimumValue: Int   = 1 * 1024 * 1024
-  private val MaxMessageSizeMaximumValue: Int   = 10 * 1024 * 1024
-  private val DefaultMinimumBond: Long          = 1L
-  private val DefaultMaximumBond: Long          = Long.MaxValue
-  private val DefaultHasFaucet: Boolean         = false
+  private val MaxMessageSizeMinimumValue: Int = 1 * 1024 * 1024
+  private val MaxMessageSizeMaximumValue: Int = 10 * 1024 * 1024
+  private val DefaultMinimumBond: Long        = 1L
+  private val DefaultMaximumBond: Long        = Long.MaxValue
+  private val DefaultHasFaucet: Boolean       = false
 
   private val DefaultBootstrapServer: PeerNode = PeerNode
     .fromAddress(
