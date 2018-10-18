@@ -92,7 +92,7 @@ object KryoSerializers {
   // Support deserialization of classes without no-arg constructors
   kryo.setInstantiatorStrategy(new StdInstantiatorStrategy())
 
-  implicit def serializer[A](of: Class[A]): Serialize2ByteBuffer[A] = new Serialize2ByteBuffer[A] {
+  def serializer[A](of: Class[A]): Serialize2ByteBuffer[A] = new Serialize2ByteBuffer[A] {
 
     private[this] val noSizeLimit = -1
 
