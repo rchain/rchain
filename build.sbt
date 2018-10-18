@@ -62,6 +62,7 @@ lazy val shared = (project in file("shared"))
       catsCore,
       catsEffect,
       catsMtl,
+      commonsCompress,
       lz4,
       monix,
       scodecCore,

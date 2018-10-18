@@ -7,7 +7,7 @@ import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.ProtocolHelper
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
-import coop.rchain.shared.{ByteStringOps, Cell, Log, LogSource}, ByteStringOps._
+import coop.rchain.shared.{Cell, Compression, Log, LogSource}, Compression._
 
 import scala.concurrent.duration._
 import scala.util._
@@ -120,14 +120,23 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
     withClient(peer, enforce)(f).attempt.map(processResponse(peer, _))
 
   def chunkIt(blob: Blob): Iterator[Chunk] = {
+    val raw      = blob.packet.content.toByteArray
+    val kb500    = 1024 * 500
+    val compress = raw.length > kb500
+    val content  = if (compress) raw.compress else raw
+
     def header: Chunk =
       Chunk().withHeader(
-        ChunkHeader().withSender(ProtocolHelper.node(blob.sender)).withTypeId(blob.packet.typeId)
+        ChunkHeader()
+          .withCompressed(compress)
+          .withDecompressedLength(raw.length)
+          .withSender(ProtocolHelper.node(blob.sender))
+          .withTypeId(blob.packet.typeId)
       )
     val buffer    = 2 * 1024 // 2 kbytes for protobuf related stuff
     val chunkSize = maxMessageSize - buffer
     def data: Iterator[Chunk] =
-      blob.packet.content.toByteArray.sliding(chunkSize, chunkSize).map { data =>
+      content.sliding(chunkSize, chunkSize).map { data =>
         Chunk().withData(ChunkData().withContentData(ProtocolHelper.toProtocolBytes(data)))
       }
 
