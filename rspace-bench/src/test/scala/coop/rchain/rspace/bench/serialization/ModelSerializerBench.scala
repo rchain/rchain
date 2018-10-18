@@ -22,8 +22,7 @@ class ModelSerializerBench {
   @Warmup(iterations = 5)
   @Measurement(iterations = 10)
   def protobufRoundTrip(bh: Blackhole, state: ProtobufModelBenchState) = {
-    val gnat = state.gnat
-    val res  = state.roundTrip(gnat)(state.serializer)
+    val res = state.roundTrip(state.gnat)(state.serializer)
     bh.consume(res)
   }
 
@@ -45,8 +44,7 @@ class ModelSerializerBench {
   @Warmup(iterations = 5)
   @Measurement(iterations = 10)
   def kryoRoundTrip(bh: Blackhole, state: KryoModelBenchState) = {
-    val gnat = state.gnat
-    val res  = state.roundTrip(gnat)(state.serializer)
+    val res = state.roundTrip(state.gnat)(state.serializer)
     bh.consume(res)
   }
 
