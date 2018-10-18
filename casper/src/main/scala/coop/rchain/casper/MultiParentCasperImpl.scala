@@ -5,7 +5,8 @@ import cats.effect.concurrent.Ref
 import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.{BlockMetadata, BlockStore}
+import coop.rchain.blockstorage.util.TopologicalSortUtil
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util._
@@ -95,7 +96,10 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                      )
                      .map(_ => BlockStatus.processing)
                  case Right((_, true)) =>
-                   internalAddBlock(b).flatMap(
+                   Log[F]
+                     .info(
+                       s"Block ${PrettyPrinter.buildString(b.blockHash)} is now processing."
+                     ) *> internalAddBlock(b).flatMap(
                      status =>
                        Capture[F].capture { processingBlocks.update(_ - b.blockHash); status }
                    )
@@ -349,6 +353,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
    */
   private def attemptAdd(b: BlockMessage): F[BlockStatus] =
     for {
+      _                    <- Log[F].info(s"Attempting to add Block ${PrettyPrinter.buildString(b.blockHash)} to DAG.")
       dag                  <- Capture[F].capture { _blockDag.get }
       postValidationStatus <- Validate.blockSummary[F](b, genesis, dag, shardId)
       postTransactionsCheckStatus <- postValidationStatus.traverse(
