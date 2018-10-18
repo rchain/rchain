@@ -93,8 +93,8 @@ object ProcGen {
 
   private def pparGen(state: State): Gen[PPar] =
     for {
-      p1 <- procGen(topLevelProcs, state.decrementHeight)
-      p2 <- procGen(topLevelProcs, state.decrementHeight)
+      p1 <- procGen(processContextProcs, state.decrementHeight)
+      p2 <- procGen(processContextProcs, state.decrementHeight)
     } yield new PPar(p1, p2)
 
   private def pvarGen(state: State): Gen[Proc] =
@@ -129,7 +129,7 @@ object ProcGen {
   }
 
   private def nameQuoteGen(state: State): Gen[NameQuote] =
-    procGen(topLevelProcs, state.decrementHeight).map(new NameQuote(_))
+    procGen(allProcs, state.decrementHeight).map(new NameQuote(_))
   private def nameGen(state: State): Gen[Name] =
     nameQuoteGen(state)
 
@@ -140,17 +140,12 @@ object ProcGen {
     sendMultipleGen
   )
 
-  private def listProcGen(state: State): Gen[ListProc] =
-    Gen
-      .listOf(procGen(topLevelProcs, state.decrementHeight))
-      .map(seqToJavaCollection[ListProc, Proc])
-
   private def psendGen(state: State): Gen[PSend] =
     for {
       name     <- nameGen(state.decrementHeight)
       send     <- sendGen
-      listProc <- listProcGen(state.decrementHeight)
-    } yield new PSend(name, send, listProc)
+      listProc <- Gen.listOf(procGen(allProcs, state.decrementHeight))
+    } yield new PSend(name, send, seqToJavaCollection[ListProc, Proc](listProc))
 
   lazy val pnilGen: Gen[PNil] = Gen.const(new PNil())
 
@@ -170,7 +165,7 @@ object ProcGen {
     for {
       seqNameDecl <- Gen.nonEmptyListOf(nameDeclSimplGen)
       names       = extractNames(seqNameDecl)
-      proc        <- procGen(topLevelProcs, newState.addNames(names))
+      proc        <- procGen(processContextProcs, newState.addNames(names))
     } yield new PNew(seqToJavaCollection[ListNameDecl, NameDecl](seqNameDecl), proc)
   }
 
@@ -183,11 +178,14 @@ object ProcGen {
     } else
       pnilGen
 
-  private def topLevelProcs: Seq[State => Gen[Proc]] =
+  private def allProcs: Seq[State => Gen[Proc]] =
     Seq(pgroundGen, pparGen, psendGen, pnewGen, pvarGen)
 
+  private def processContextProcs: Seq[State => Gen[Proc]] =
+    Seq(pgroundGen, pparGen, psendGen, pnewGen)
+
   def topLevelGen(height: Int): Gen[Proc] =
-    procGen(topLevelProcs, State(height, Set.empty))
+    procGen(processContextProcs, State(height, Set.empty))
 
   implicit def procShrinker: Shrink[Proc] = Shrink {
     case p: PGround =>
