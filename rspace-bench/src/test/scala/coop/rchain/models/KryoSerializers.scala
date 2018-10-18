@@ -54,22 +54,6 @@ object KryoSerializers {
       esetToParSet(kryo.readObject(input, classOf[ESet]))
   }
 
-  object TaggedContEmptySerializer extends Serializer[TaggedContinuation.TaggedCont] {
-
-    override def write(kryo: Kryo, output: Output, tc: TaggedContinuation.TaggedCont): Unit =
-      kryo.writeObject(output, tc)
-
-    override def read(
-        kryo: Kryo,
-        input: Input,
-        `type`: Class[TaggedContinuation.TaggedCont]
-    ): TaggedContinuation.TaggedCont = {
-      val read = kryo.readObject(input, `type`)
-      if (read.isEmpty) TaggedContinuation.TaggedCont.Empty
-      else read
-    }
-  }
-
   object TaggedContinuationSerializer extends Serializer[TaggedContinuation] {
 
     def defaultSerializer(kryo: Kryo): Serializer[TaggedContinuation] =
