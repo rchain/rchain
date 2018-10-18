@@ -54,69 +54,32 @@ object KryoSerializers {
       esetToParSet(kryo.readObject(input, classOf[ESet]))
   }
 
-  object TaggedContinuationSerializer extends Serializer[TaggedContinuation] {
-
-    def defaultSerializer(kryo: Kryo): Serializer[TaggedContinuation] =
-      kryo
-        .getDefaultSerializer(classOf[TaggedContinuation])
-        .asInstanceOf[Serializer[TaggedContinuation]]
-
-    override def write(kryo: Kryo, output: Output, tc: TaggedContinuation): Unit =
-      defaultSerializer(kryo).write(kryo, output, tc)
-
-    override def read(
-        kryo: Kryo,
-        input: Input,
-        `type`: Class[TaggedContinuation]
-    ): TaggedContinuation = {
-      val read = defaultSerializer(kryo).read(kryo, input, `type`)
-      if (read.taggedCont.isEmpty)
-        TaggedContinuation()
-      else read
+  def emptyReplacingSerializer[T](thunk: T => Boolean, replaceWith: T)(implicit tag: ClassTag[T]) =
+    new DefaultSerializer[T] {
+      override def read(
+          kryo: Kryo,
+          input: Input,
+          `type`: Class[T]
+      ): T = {
+        val read = super.read(kryo, input, `type`)
+        if (thunk(read))
+          replaceWith
+        else read
+      }
     }
-  }
 
-  object VarSerializer extends DefaultSerializer[Var] {
+  val TaggedContinuationSerializer =
+    emptyReplacingSerializer[TaggedContinuation](_.taggedCont.isEmpty, TaggedContinuation())
 
-    override def read(
-        kryo: Kryo,
-        input: Input,
-        `type`: Class[Var]
-    ): Var = {
-      val read = defaultSerializer(kryo).read(kryo, input, `type`)
-      if (read.varInstance.isEmpty)
-        Var()
-      else read
-    }
-  }
+  val VarSerializer =
+    emptyReplacingSerializer[Var](_.varInstance.isEmpty, Var())
 
-  object ExprSerializer extends DefaultSerializer[Expr] {
+  val ExprSerializer =
+    emptyReplacingSerializer[Expr](_.exprInstance.isEmpty, Expr())
 
-    override def read(
-        kryo: Kryo,
-        input: Input,
-        `type`: Class[Expr]
-    ): Expr = {
-      val read = defaultSerializer(kryo).read(kryo, input, `type`)
-      if (read.exprInstance.isEmpty)
-        Expr()
-      else read
-    }
-  }
+  val ConnectiveSerializer =
+    emptyReplacingSerializer[Connective](_.connectiveInstance.isEmpty, Connective())
 
-  object ConnectiveSerializer extends DefaultSerializer[Connective] {
-
-    override def read(
-        kryo: Kryo,
-        input: Input,
-        `type`: Class[Connective]
-    ): Connective = {
-      val read = defaultSerializer(kryo).read(kryo, input, `type`)
-      if (read.connectiveInstance.isEmpty)
-        Connective()
-      else read
-    }
-  }
 
   val kryo = new Kryo()
   kryo.register(classOf[ParMap], ParMapSerializer)
