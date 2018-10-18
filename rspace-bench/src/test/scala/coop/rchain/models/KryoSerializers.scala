@@ -14,7 +14,7 @@ trait Serialize2ByteBuffer[A] {
   def decode(bytes: ByteBuffer): A
 }
 
-abstract class KryoSerializer[T](implicit tag: ClassTag[T]) extends Serializer[T] {
+abstract class DefaultSerializer[T](implicit tag: ClassTag[T]) extends Serializer[T] {
 
   def defaultSerializer(kryo: Kryo): Serializer[T] =
     kryo
@@ -86,7 +86,7 @@ object KryoSerializers {
     }
   }
 
-  object VarSerializer extends KryoSerializer[Var] {
+  object VarSerializer extends DefaultSerializer[Var] {
 
     override def read(
         kryo: Kryo,
@@ -100,7 +100,7 @@ object KryoSerializers {
     }
   }
 
-  object ExprSerializer extends KryoSerializer[Expr] {
+  object ExprSerializer extends DefaultSerializer[Expr] {
 
     override def read(
         kryo: Kryo,
@@ -114,7 +114,7 @@ object KryoSerializers {
     }
   }
 
-  object ConnectiveSerializer extends KryoSerializer[Connective] {
+  object ConnectiveSerializer extends DefaultSerializer[Connective] {
 
     override def read(
         kryo: Kryo,
