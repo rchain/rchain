@@ -251,7 +251,7 @@ object ProcGen {
         newNames     <- shrinkContainer[Seq, NameDecl].shrink(initialNames).takeWhile(_.nonEmpty)
         newLocalVars = extractNames(newNames)
         proc <- shrink(p.proc_)
-                 .filter(p => extractFreeVariables(p).forall(newLocalVars.contains(_)))
+                 .filter(extractFreeVariables(_).subsetOf(newLocalVars))
       } yield new PNew(seqToJavaCollection[ListNameDecl, NameDecl](newNames), proc)
 
     case p: PVar =>
