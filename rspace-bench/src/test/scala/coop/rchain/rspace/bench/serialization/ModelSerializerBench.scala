@@ -22,7 +22,7 @@ class ModelSerializerBench {
   @Warmup(iterations = 5)
   @Measurement(iterations = 10)
   def protobufRoundTrip(bh: Blackhole, state: ProtobufModelBenchState) = {
-    val res = state.roundTrip(state.gnat)(state.serializer)
+    val res = state.serializer.roundTrip(state.gnat)
     bh.consume(res)
   }
 
@@ -44,7 +44,7 @@ class ModelSerializerBench {
   @Warmup(iterations = 5)
   @Measurement(iterations = 10)
   def kryoRoundTrip(bh: Blackhole, state: KryoModelBenchState) = {
-    val res = state.roundTrip(state.gnat)(state.serializer)
+    val res = state.serializer.roundTrip(state.gnat)
     bh.consume(res)
   }
 
@@ -66,15 +66,8 @@ abstract class ModelSerializerBenchState {
 
   implicit def serializer: Serialize2ByteBuffer[TestGNAT]
 
-  def roundTrip[A](in: A)(implicit s: Serialize2ByteBuffer[A]): A = {
-    val meta = s.encode(in)
-    val out  = s.decode(meta)
-    assert(out == in)
-    out
-  }
-
   def roundTripMany[A](seq: Seq[A])(implicit s: Serialize2ByteBuffer[A]): Seq[A] =
-    seq.map(roundTrip(_))
+    seq.map(s.roundTrip(_))
 
   import collection.immutable.Seq
 
