@@ -184,8 +184,8 @@ def create_bootstrap_node(docker_client,
                           memory="1024m",
                           cpuset_cpus="0"):
 
-    key_file = resources.file_path("bootstrap_certificate/node.key.pem")
-    cert_file = resources.file_path("bootstrap_certificate/node.certificate.pem")
+    key_file = resources.get_resource_path("bootstrap_certificate/node.key.pem")
+    cert_file = resources.get_resource_path("bootstrap_certificate/node.certificate.pem")
 
     logging.info(f"Using key_file={key_file} and cert_file={cert_file}")
 
