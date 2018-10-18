@@ -113,17 +113,17 @@ object ProcGen {
     identifierGen.map(new ProcVarVar(_))
 
   private def pgroundGen(state: State): Gen[Proc] = {
-    lazy val groundIntGen = arbitrary[Long]
+    val groundIntGen = arbitrary[Long]
       .map((n: Long) => {
         if (n > 0)
           new PGround(new GroundInt(n.toString))
         else new PNeg(new PGround(new GroundInt((-n).toString)))
       })
-    lazy val groundBoolGen =
+    val groundBoolGen =
       Gen.oneOf(new BoolFalse(), new BoolTrue()).map(b => new PGround(new GroundBool(b)))
-    lazy val groundStringGen =
+    val groundStringGen =
       Arbitrary.arbString.arbitrary.map(s => new PGround(new GroundString(stringQuotes(s))))
-    lazy val groundUriGen =
+    val groundUriGen =
       uriGen.map(s => new PGround(new GroundUri(s)))
 
     Gen.oneOf(
@@ -135,16 +135,15 @@ object ProcGen {
   }
 
   private def nameQuoteGen(state: State): Gen[NameQuote] =
-    procGen(allProcs, state.decrementHeight).map(new NameQuote(_))
+    procGen(processContextProcs, state.decrementHeight).map(new NameQuote(_))
   private def nameGen(state: State): Gen[Name] =
     nameQuoteGen(state)
 
-  lazy val sendSingleGen: Gen[SendSingle]     = Gen.const(new SendSingle())
-  lazy val sendMultipleGen: Gen[SendMultiple] = Gen.const(new SendMultiple())
-  lazy val sendGen: Gen[Send] = Gen.oneOf(
-    sendSingleGen,
-    sendMultipleGen
-  )
+  private lazy val sendGen: Gen[Send] =
+    Gen.oneOf(
+      Gen.const(new SendSingle()),
+      Gen.const(new SendMultiple())
+    )
 
   private def psendGen(state: State): Gen[PSend] = {
     val newState = state.decrementHeight
@@ -155,23 +154,23 @@ object ProcGen {
     } yield new PSend(name, send, seqToJavaCollection[ListProc, Proc](listProc))
   }
 
-  lazy val pnilGen: Gen[PNil] = Gen.const(new PNil())
+  private lazy val pnilGen: Gen[PNil] = Gen.const(new PNil())
 
   private def nameDeclSimplGen: Gen[NameDeclSimpl] = identifierGen.map(new NameDeclSimpl(_))
 
-  lazy val nameDeclUrnGen: Gen[NameDeclUrn] =
+  private lazy val nameDeclUrnGen: Gen[NameDeclUrn] =
     for {
       name <- identifierGen
       uri  <- uriGen
     } yield new NameDeclUrn(name, uri)
 
-  lazy val nameDeclGen: Gen[NameDecl] = Gen.oneOf(nameDeclSimplGen, nameDeclUrnGen)
+  private lazy val nameDeclGen: Gen[NameDecl] = Gen.oneOf(nameDeclSimplGen, nameDeclUrnGen)
 
   private def pnewGen(state: State): Gen[PNew] = {
     val newState = state.decrementHeight
 
     for {
-      seqNameDecl <- Gen.nonEmptyListOf(nameDeclSimplGen)
+      seqNameDecl <- Gen.nonEmptyListOf(nameDeclGen)
       names       = extractNames(seqNameDecl)
       proc        <- procGen(processContextProcs, newState.addNames(names))
     } yield new PNew(seqToJavaCollection[ListNameDecl, NameDecl](seqNameDecl), proc)
@@ -192,7 +191,7 @@ object ProcGen {
   def topLevelGen(height: Int): Gen[Proc] =
     procGen(processContextProcs, State(height, Set.empty))
 
-  val uriShrinker: Shrink[String] = Shrink { (x: String) =>
+  private val uriShrinker: Shrink[String] = Shrink { (x: String) =>
     {
       val components = x.split(":")
 
@@ -205,20 +204,20 @@ object ProcGen {
     }
   }
 
-  val invariantFunctorShrink = new Invariant[Shrink] {
+  private val invariantFunctorShrink = new Invariant[Shrink] {
     override def imap[A, B](fa: Shrink[A])(f: A => B)(g: B => A): Shrink[B] =
       Shrink(b => fa.shrink(g(b)).map(f))
   }
 
-  val groundIntShrinker = invariantFunctorShrink.imap(shrinkIntegral[Long])(
+  private val groundIntShrinker = invariantFunctorShrink.imap(shrinkIntegral[Long])(
     i => new GroundInt(i.toString)
   )(gi => gi.longliteral_.toLong)
 
-  val groundStringShrinker = invariantFunctorShrink.imap(shrinkString)(
+  private val groundStringShrinker = invariantFunctorShrink.imap(shrinkString)(
     s => new GroundString(stringQuotes(s))
   )(gs => withoutQuotes(gs.stringliteral_))
 
-  val groundUriShrinker = invariantFunctorShrink.imap(uriShrinker)(
+  private val groundUriShrinker = invariantFunctorShrink.imap(uriShrinker)(
     s => new GroundUri(uriQuotes(s))
   )(gu => withoutQuotes(gu.uriliteral_))
 
