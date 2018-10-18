@@ -169,17 +169,13 @@ object ProcGen {
     } yield new PNew(seqToJavaCollection[ListNameDecl, NameDecl](seqNameDecl), proc)
   }
 
-  lazy val bundleGen: Gen[Bundle] =
-    Gen.oneOf(new BundleWrite(), new BundleRead(), new BundleReadWrite(), new BundleEquiv())
-
   private def procGen(procGens: Seq[State => Gen[Proc]], state: State): Gen[Proc] =
     if (state.height > 0) {
       oneOf(procGens.map(_.apply(state.decrementHeight)))
     } else
       pnilGen
 
-  private def allProcs: Seq[State => Gen[Proc]] =
-    Seq(pgroundGen, pparGen, psendGen, pnewGen, pvarGen)
+  private def allProcs: Seq[State => Gen[Proc]] = pvarGen _ +: processContextProcs
 
   private def processContextProcs: Seq[State => Gen[Proc]] =
     Seq(pgroundGen, pparGen, psendGen, pnewGen)
