@@ -7,10 +7,11 @@ import scala.util.Random
 
 class CompressionSpec extends FunSpec with Matchers with GeneratorDrivenPropertyChecks {
   val byteArrays =
-    for (n <- Gen.choose(1, 500000))
+    for (n <- Gen.choose(10, 500000))
       yield Array.fill(n)((Random.nextInt(256) - 128).toByte)
 
   describe("Compression") {
+
     it("should compress without exceptions") {
       forAll(byteArrays) { ar: Array[Byte] =>
         noException should be thrownBy Compression.compress(ar)
@@ -25,5 +26,15 @@ class CompressionSpec extends FunSpec with Matchers with GeneratorDrivenProperty
         backAgain shouldBe ar
       }
     }
+
+    it("should compress effectivly when data is compressable (repeatable patterns)") {
+      val word       = Array.fill(1024)((Random.nextInt(24) + 33).toByte)
+      val ar         = Array.concat(List.fill(1024)(word): _*)
+      val compressed = Compression.compress(ar)
+      val ratio      = compressed.length.toDouble / ar.length.toDouble
+      ar.length should be > compressed.length
+      ratio shouldBe (0.005 +- 0.0001)
+    }
   }
+
 }

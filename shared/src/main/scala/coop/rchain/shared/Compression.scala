@@ -5,14 +5,14 @@ import net.jpountz.lz4._
 object Compression {
 
   val factory: LZ4Factory               = LZ4Factory.fastestInstance()
-  val compressor: LZ4Compressor         = factory.fastCompressor()
+  val compressor: LZ4Compressor         = factory.highCompressor(17)
   val decompressor: LZ4FastDecompressor = factory.fastDecompressor()
 
   def compress(content: Array[Byte]): Array[Byte] = {
     val maxCompressedLength = compressor.maxCompressedLength(content.length)
     val compressed          = new Array[Byte](maxCompressedLength)
-    compressor.compress(content, 0, content.length, compressed, 0, maxCompressedLength)
-    compressed
+    val length              = compressor.compress(content, 0, content.length, compressed, 0, maxCompressedLength)
+    compressed.take(length)
   }
   def decompress(compressed: Array[Byte], decompressedLength: Int): Array[Byte] = {
     val restored = new Array[Byte](decompressedLength)
