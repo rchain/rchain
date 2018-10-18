@@ -1,4 +1,5 @@
 package coop.rchain.rholang
+import cats.Invariant
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn._
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.{Arbitrary, Gen, Shrink}
@@ -22,6 +23,9 @@ object tools {
   def nonemptyString(g: Gen[Char], size: Int): Gen[String] = Gen.nonEmptyListOf(g).map(_.mkString)
 
   def withQuotes(quote: Char)(s: String): String = quote + s + quote
+  val stringQuotes: String => String             = withQuotes('"')
+  val uriQuotes: String => String                = withQuotes('`')
+
   def withoutQuotes(s: String): String = {
     assert(s.length >= 2)
     s.substring(1, s.length - 1)
@@ -39,13 +43,13 @@ object tools {
       output <- Gen.pick(count, items)
     } yield output
 
-  def mkGroundUri(components: Seq[String]): String = withQuotes('`')(components.mkString(":"))
+  def mkUri(components: Seq[String]): String = components.mkString(":")
 
   val uriGen: Gen[String] =
     for {
       componentCount <- Gen.choose(1, 10)
       components     <- Gen.listOfN(componentCount, nonemptyString(Gen.alphaChar, 10))
-    } yield mkGroundUri(components)
+    } yield uriQuotes(mkUri(components))
 
   val identifierGen: Gen[String] = nonemptyString(Gen.alphaChar, 256)
 
@@ -118,7 +122,7 @@ object ProcGen {
     lazy val groundBoolGen =
       Gen.oneOf(new BoolFalse(), new BoolTrue()).map(b => new PGround(new GroundBool(b)))
     lazy val groundStringGen =
-      Arbitrary.arbString.arbitrary.map(s => new PGround(new GroundString(withQuotes('"')(s))))
+      Arbitrary.arbString.arbitrary.map(s => new PGround(new GroundString(stringQuotes(s))))
     lazy val groundUriGen =
       uriGen.map(s => new PGround(new GroundUri(s)))
 
@@ -188,27 +192,43 @@ object ProcGen {
   def topLevelGen(height: Int): Gen[Proc] =
     procGen(processContextProcs, State(height, Set.empty))
 
+  val uriShrinker: Shrink[String] = Shrink { (x: String) =>
+    {
+      val components = x.split(":")
+
+      for {
+        shrinkedComponentSeq <- shrinkContainer[Seq, String]
+                                 .shrink(components)
+                                 .takeWhile(_.nonEmpty)
+        shrinkedComponents <- shrinkedComponentSeq.map(c => shrinkString.shrink(c))
+      } yield mkUri(shrinkedComponents)
+    }
+  }
+
+  val invariantFunctorShrink = new Invariant[Shrink] {
+    override def imap[A, B](fa: Shrink[A])(f: A => B)(g: B => A): Shrink[B] =
+      Shrink(b => fa.shrink(g(b)).map(f))
+  }
+
+  val groundIntShrinker = invariantFunctorShrink.imap(shrinkIntegral[Long])(
+    i => new GroundInt(i.toString)
+  )(gi => gi.longliteral_.toLong)
+
+  val groundStringShrinker = invariantFunctorShrink.imap(shrinkString)(
+    s => new GroundString(stringQuotes(s))
+  )(gs => withoutQuotes(gs.stringliteral_))
+
+  val groundUriShrinker = invariantFunctorShrink.imap(uriShrinker)(
+    s => new GroundUri(uriQuotes(s))
+  )(gu => withoutQuotes(gu.uriliteral_))
+
   implicit def procShrinker: Shrink[Proc] = Shrink {
     case p: PGround =>
       (p.ground_ match {
-        case p: GroundInt =>
-          shrinkIntegral[Long]
-            .shrink(p.longliteral_.toLong)
-            .map(n => new GroundInt(n.toString))
-        case p: GroundBool => streamSingleton(p)
-        case p: GroundString =>
-          shrinkString
-            .shrink(withoutQuotes(p.stringliteral_))
-            .map(s => new GroundString(withQuotes('"')(s)))
-        case p: GroundUri =>
-          val components = withoutQuotes(p.uriliteral_).split(":")
-
-          for {
-            shrinkedComponentSeq <- shrinkContainer[Seq, String]
-                                     .shrink(components)
-                                     .takeWhile(_.nonEmpty)
-            shrinkedComponents <- shrinkedComponentSeq.map(c => shrinkString.shrink(c))
-          } yield new GroundUri(mkGroundUri(shrinkedComponents))
+        case p: GroundInt    => groundIntShrinker.shrink(p)
+        case p: GroundBool   => streamSingleton(p)
+        case p: GroundString => groundStringShrinker.shrink(p)
+        case p: GroundUri    => groundUriShrinker.shrink(p)
       }).map(new PGround(_))
 
     case p: PPar =>
