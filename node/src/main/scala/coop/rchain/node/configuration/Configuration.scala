@@ -7,6 +7,7 @@ import java.nio.file.{Path, Paths}
 import cats.implicits._
 import coop.rchain.blockstorage.LMDBBlockStore
 import coop.rchain.casper.CasperConf
+import coop.rchain.casper.protocol.{PhloLimit, PhloPrice}
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.{PeerNode, UPnP}
 import coop.rchain.node.IpChecker
@@ -15,7 +16,6 @@ import coop.rchain.node.configuration.toml.{Configuration => TomlConfiguration}
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.shared.StoreType
 import coop.rchain.shared.StoreType._
-
 import monix.eval.Task
 
 import scala.concurrent.duration._
@@ -27,9 +27,10 @@ object Configuration {
     Profile("docker", dataDir = (() => Paths.get("/var/lib/rnode"), "Defaults to /var/lib/rnode"))
 
   private val defaultProfile =
-    Profile("default",
-            dataDir =
-              (() => Paths.get(sys.props("user.home"), ".rnode"), "Defaults to $HOME/.rnode"))
+    Profile(
+      "default",
+      dataDir = (() => Paths.get(sys.props("user.home"), ".rnode"), "Defaults to $HOME/.rnode")
+    )
 
   private val profiles: Map[String, Profile] =
     Map(defaultProfile.name -> defaultProfile, dockerProfile.name -> dockerProfile)
@@ -38,6 +39,7 @@ object Configuration {
   private val DefaultGrpcPortExternal           = 40401
   private val DefaultGrpcPortInternal           = 40402
   private val DefaultHttPort                    = 40403
+  private val DefaultKademliaPort               = 40404
   private val DefaultGrpcHost                   = "localhost"
   private val DefaultNoUpNP                     = false
   private val DefaultStandalone                 = false
@@ -55,17 +57,25 @@ object Configuration {
   private val DefaultRequiredSigns              = 0
   private val DefaultApprovalProtocolDuration   = 5.minutes
   private val DefaultApprovalProtocolInterval   = 5.seconds
-  private val DefaultMaxMessageSize: Int        = 100 * 1024 * 1024
-  private val DefaultThreadPoolSize: Int        = 4000
+  private val DefaultMaxMessageSize: Int        = 4 * 1024 * 1024
+  // within range HTTP2 RFC 7540
+  private val MaxMessageSizeMinimumValue: Int = 1 * 1024 * 1024
+  private val MaxMessageSizeMaximumValue: Int = 10 * 1024 * 1024
+  private val DefaultMinimumBond: Long        = 1L
+  private val DefaultMaximumBond: Long        = Long.MaxValue
+  private val DefaultHasFaucet: Boolean       = false
 
   private val DefaultBootstrapServer: PeerNode = PeerNode
-    .parse("rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400")
+    .fromAddress(
+      "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"
+    )
     .right
     .get
   private val DefaultShardId = "rchain"
 
-  private def loadConfigurationFile(configFile: File)(
-      implicit log: Log[Task]): Task[Option[TomlConfiguration]] =
+  private def loadConfigurationFile(
+      configFile: File
+  )(implicit log: Log[Task]): Task[Option[TomlConfiguration]] =
     for {
       _       <- log.info(s"Using configuration file: $configFile")
       configE <- Task.delay(toml.TomlConfiguration.from(configFile))
@@ -98,7 +108,8 @@ object Configuration {
     } yield result
 
   private def apply(options: commandline.Options, command: Command, profile: Profile)(
-      implicit log: Log[Task]): Task[Configuration] =
+      implicit log: Log[Task]
+  ): Task[Configuration] =
     if (command == Run) {
       for {
         dataDir    <- Task.pure(options.run.data_dir.getOrElse(profile.dataDir._1()))
@@ -107,9 +118,10 @@ object Configuration {
         config     <- loadConfigurationFile(configFile)
         effectiveDataDir <- Task.pure(
                              if (options.run.data_dir.isDefined) dataDir
-                             else config.flatMap(_.server.flatMap(_.dataDir)).getOrElse(dataDir))
+                             else config.flatMap(_.server.flatMap(_.dataDir)).getOrElse(dataDir)
+                           )
         _      = System.setProperty("rnode.data.dir", effectiveDataDir.toString)
-        result <- Task.pure(apply(effectiveDataDir, options, config))
+        result <- Task.pure(apply(effectiveDataDir, command, options, config))
         _      <- log.info(s"Starting with profile ${profile.name}")
       } yield result
     } else {
@@ -122,6 +134,7 @@ object Configuration {
             None,
             DefaultPort,
             DefaultHttPort,
+            DefaultKademliaPort,
             DefaultNoUpNP,
             DefaultTimeout,
             DefaultBootstrapServer,
@@ -131,8 +144,7 @@ object Configuration {
             DefaultMapSize,
             DefaultStoreType,
             DefaultMaxNumOfConnections,
-            DefaultMaxMessageSize,
-            DefaultThreadPoolSize
+            DefaultMaxMessageSize
           ),
           GrpcServer(
             options.grpcHost.getOrElse(DefaultGrpcHost),
@@ -161,7 +173,10 @@ object Configuration {
             requiredSigs = -1,
             approveGenesisDuration = 100.days,
             approveGenesisInterval = 1.day,
-            deployTimestamp = None
+            deployTimestamp = None,
+            minimumBond = DefaultMinimumBond,
+            maximumBond = DefaultMaximumBond,
+            hasFaucet = DefaultHasFaucet
           ),
           LMDBBlockStore.Config(dataDir.resolve("casper-block-store"), DefaultCasperBlockStoreSize),
           options
@@ -169,38 +184,25 @@ object Configuration {
       )
     }
 
-  private def apply(dataDir: Path,
-                    options: commandline.Options,
-                    config: Option[TomlConfiguration]): Configuration = {
-    val command: Command = options.subcommand match {
-      case Some(options.eval)        => Eval(options.eval.fileNames())
-      case Some(options.repl)        => Repl
-      case Some(options.diagnostics) => Diagnostics
-      case Some(options.deploy)      =>
-        //TODO: change the defaults before main net
-        import options.deploy._
-        Deploy(from.getOrElse("0x"),
-               phloLimit.getOrElse(0),
-               phloPrice.getOrElse(0),
-               nonce.getOrElse(0),
-               location())
-      case Some(options.deployDemo) => DeployDemo
-      case Some(options.propose)    => Propose
-      case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
-      case Some(options.showBlocks) => ShowBlocks
-      case Some(options.run)        => Run
-      case _                        => Help
-    }
-
+  private def apply(
+      dataDir: Path,
+      command: Command,
+      options: commandline.Options,
+      config: Option[TomlConfiguration]
+  ): Configuration = {
     import commandline.Options._
 
-    def getOpt[A](fo: commandline.Options => Option[A],
-                  fc: TomlConfiguration => Option[A]): Option[A] =
+    def getOpt[A](
+        fo: commandline.Options => Option[A],
+        fc: TomlConfiguration => Option[A]
+    ): Option[A] =
       fo(options).orElse(config.flatMap(fc))
 
-    def get[A](fo: commandline.Options => Option[A],
-               fc: TomlConfiguration => Option[A],
-               default: => A): A =
+    def get[A](
+        fo: commandline.Options => Option[A],
+        fc: TomlConfiguration => Option[A],
+        default: => A
+    ): A =
       getOpt(fo, fc).getOrElse(default)
 
     // gRPC
@@ -211,8 +213,10 @@ object Configuration {
       get(_.grpcPortInternal, _.grpcServer.flatMap(_.portInternal), DefaultGrpcPortInternal)
 
     // Server
-    val port: Int       = get(_.run.port, _.server.flatMap(_.port), DefaultPort)
-    val httpPort: Int   = get(_.run.httpPort, _.server.flatMap(_.httpPort), DefaultHttPort)
+    val port: Int     = get(_.run.port, _.server.flatMap(_.port), DefaultPort)
+    val httpPort: Int = get(_.run.httpPort, _.server.flatMap(_.httpPort), DefaultHttPort)
+    val kademliaPort: Int =
+      get(_.run.kademliaPort, _.server.flatMap(_.kademliaPort), DefaultKademliaPort)
     val noUpnp: Boolean = get(_.run.noUpnp, _.server.flatMap(_.noUpnp), DefaultNoUpNP)
     val defaultTimeout: Int =
       get(_.run.defaultTimeout, _.server.flatMap(_.defaultTimeout), DefaultTimeout)
@@ -225,13 +229,17 @@ object Configuration {
     val requiredSigs =
       get(_.run.requiredSigs, _.validators.flatMap(_.requiredSigs), DefaultRequiredSigns)
     val genesisApproveInterval =
-      get(_.run.interval,
-          _.validators.flatMap(_.approveGenesisInterval),
-          DefaultApprovalProtocolInterval)
+      get(
+        _.run.interval,
+        _.validators.flatMap(_.approveGenesisInterval),
+        DefaultApprovalProtocolInterval
+      )
     val genesisAppriveDuration =
-      get(_.run.duration,
-          _.validators.flatMap(_.approveGenesisDuration),
-          DefaultApprovalProtocolDuration)
+      get(
+        _.run.duration,
+        _.validators.flatMap(_.approveGenesisDuration),
+        DefaultApprovalProtocolDuration
+      )
 
     val deployTimestamp = getOpt(_.run.deployTimestamp, _.validators.flatMap(_.deployTimestamp))
 
@@ -239,9 +247,11 @@ object Configuration {
     val mapSize: Long        = get(_.run.map_size, _.server.flatMap(_.mapSize), DefaultMapSize)
     val storeType: StoreType =
       get(_.run.storeType, _.server.flatMap(_.storeType.flatMap(StoreType.from)), DefaultStoreType)
-    val casperBlockStoreSize: Long = get(_.run.casperBlockStoreSize,
-                                         _.server.flatMap(_.casperBlockStoreSize),
-                                         DefaultCasperBlockStoreSize)
+    val casperBlockStoreSize: Long = get(
+      _.run.casperBlockStoreSize,
+      _.server.flatMap(_.casperBlockStoreSize),
+      DefaultCasperBlockStoreSize
+    )
 
     // TLS
     val certificate: Option[Path] = getOpt(_.run.certificate, _.tls.flatMap(_.certificate))
@@ -261,19 +271,31 @@ object Configuration {
     val knownValidators     = getOpt(_.run.knownValidators, _.validators.flatMap(_.known))
     val validatorPublicKey  = getOpt(_.run.validatorPublicKey, _.validators.flatMap(_.publicKey))
     val validatorPrivateKey = getOpt(_.run.validatorPrivateKey, _.validators.flatMap(_.privateKey))
-    val validatorSigAlgorithm = get(_.run.validatorSigAlgorithm,
-                                    _.validators.flatMap(_.sigAlgorithm),
-                                    DefaultValidatorSigAlgorithm)
+    val validatorSigAlgorithm = get(
+      _.run.validatorSigAlgorithm,
+      _.validators.flatMap(_.sigAlgorithm),
+      DefaultValidatorSigAlgorithm
+    )
     val walletsFile: Option[String] = getOpt(_.run.walletsFile, _.validators.flatMap(_.walletsFile))
-    val maxNumOfConnections = get(_.run.maxNumOfConnections,
-                                  _.server.flatMap(_.maxNumOfConnections),
-                                  DefaultMaxNumOfConnections)
+    val minimumBond =
+      get(_.run.minimumBond, _.validators.flatMap(_.minimumBond), DefaultMinimumBond)
+    val maximumBond =
+      get(_.run.maximumBond, _.validators.flatMap(_.maximumBond), DefaultMaximumBond)
+    val hasFaucet = get(_.run.hasFaucet, _.validators.flatMap(_.hasFaucet), DefaultHasFaucet)
+    val maxNumOfConnections = get(
+      _.run.maxNumOfConnections,
+      _.server.flatMap(_.maxNumOfConnections),
+      DefaultMaxNumOfConnections
+    )
 
     val maxMessageSize: Int =
-      get(_.run.maxMessageSize, _.server.flatMap(_.maxMessageSize), DefaultMaxMessageSize)
-
-    val threadPoolSize =
-      get(_.run.threadPoolSize, _.server.flatMap(_.threadPoolSize), DefaultThreadPoolSize)
+      Math.max(
+        MaxMessageSizeMinimumValue,
+        Math.min(
+          MaxMessageSizeMaximumValue,
+          get(_.run.maxMessageSize, _.server.flatMap(_.maxMessageSize), DefaultMaxMessageSize)
+        )
+      )
 
     val shardId = get(_.run.shardId, _.validators.flatMap(_.shardId), DefaultShardId)
 
@@ -281,6 +303,7 @@ object Configuration {
       host,
       port,
       httpPort,
+      kademliaPort,
       noUpnp,
       defaultTimeout,
       bootstrap,
@@ -290,8 +313,7 @@ object Configuration {
       mapSize,
       storeType,
       maxNumOfConnections,
-      maxMessageSize,
-      threadPoolSize
+      maxMessageSize
     )
     val grpcServer = GrpcServer(
       grpcHost,
@@ -316,6 +338,9 @@ object Configuration {
         numValidators,
         dataDir.resolve("genesis"),
         walletsFile,
+        minimumBond,
+        maximumBond,
+        hasFaucet,
         requiredSigs,
         shardId,
         standalone,
@@ -348,19 +373,29 @@ object Configuration {
       case Some(options.deploy)      =>
         //TODO: change the defaults before main net
         import options.deploy._
-        Deploy(from.getOrElse("0x"),
-               phloLimit.getOrElse(0),
-               phloPrice.getOrElse(0),
-               nonce.getOrElse(0),
-               location())
+        Deploy(
+          from.getOrElse("0x"),
+          PhloLimit(phloLimit()),
+          PhloPrice(phloPrice()),
+          nonce.getOrElse(0),
+          location()
+        )
       case Some(options.deployDemo) => DeployDemo
       case Some(options.propose)    => Propose
       case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
-      case Some(options.showBlocks) => ShowBlocks
+      case Some(options.showBlocks) =>
+        import options.showBlocks._
+        ShowBlocks(depth.getOrElse(1))
       case Some(options.run)        => Run
       case Some(options.dataAtName) => DataAtName(options.dataAtName.name())
       case Some(options.contAtName) => ContAtName(options.contAtName.name())
-      case _                        => Help
+      case Some(options.bondingDeployGen) =>
+        import options.bondingDeployGen._
+        BondingDeployGen(bondKey(), ethAddr(), amount(), privateKey(), publicKey())
+      case Some(options.faucetBondingDeployGen) =>
+        import options.faucetBondingDeployGen._
+        FaucetBondingDeployGen(amount(), sigAlgorithm(), privateKey(), publicKey())
+      case _ => Help
     }
 }
 
@@ -399,8 +434,10 @@ final class Configuration(
   private def check(source: String, from: String): Task[(String, Option[String])] =
     IpChecker.checkFrom[Task](from).map((source, _))
 
-  private def checkNext(prev: (String, Option[String]),
-                        next: Task[(String, Option[String])]): Task[(String, Option[String])] =
+  private def checkNext(
+      prev: (String, Option[String]),
+      next: Task[(String, Option[String])]
+  ): Task[(String, Option[String])] =
     prev._2.fold(next)(_ => Task.pure(prev))
 
   private def upnpIpCheck(externalAddress: Option[String]): Task[(String, Option[String])] =
@@ -418,7 +455,8 @@ final class Configuration(
     }
 
   private def whoAmI(port: Int, externalAddress: Option[String])(
-      implicit log: Log[Task]): Task[String] =
+      implicit log: Log[Task]
+  ): Task[String] =
     for {
       _      <- log.info("flag --host was not provided, guessing your external IP address")
       r      <- checkAll(externalAddress)

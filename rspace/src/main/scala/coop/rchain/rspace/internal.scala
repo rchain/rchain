@@ -15,35 +15,44 @@ object internal {
   final case class Datum[A](a: A, persist: Boolean, source: Produce)
 
   object Datum {
-    def create[C, A](channel: C, a: A, persist: Boolean)(implicit
-                                                         serializeC: Serialize[C],
-                                                         serializeA: Serialize[A]): Datum[A] =
+    def create[C, A](channel: C, a: A, persist: Boolean)(
+        implicit
+        serializeC: Serialize[C],
+        serializeA: Serialize[A]
+    ): Datum[A] =
       Datum(a, persist, Produce.create(channel, a, persist))
   }
 
   final case class DataCandidate[C, A](channel: C, datum: Datum[A], datumIndex: Int)
 
-  final case class WaitingContinuation[P, K](patterns: Seq[P],
-                                             continuation: K,
-                                             persist: Boolean,
-                                             source: Consume)
+  final case class WaitingContinuation[P, K](
+      patterns: Seq[P],
+      continuation: K,
+      persist: Boolean,
+      source: Consume
+  )
 
   object WaitingContinuation {
     def create[C, P, K](channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
         implicit
         serializeC: Serialize[C],
         serializeP: Serialize[P],
-        serializeK: Serialize[K]): WaitingContinuation[P, K] =
-      WaitingContinuation(patterns,
-                          continuation,
-                          persist,
-                          Consume.create(channels, patterns, continuation, persist))
+        serializeK: Serialize[K]
+    ): WaitingContinuation[P, K] =
+      WaitingContinuation(
+        patterns,
+        continuation,
+        persist,
+        Consume.create(channels, patterns, continuation, persist)
+      )
   }
 
-  final case class ProduceCandidate[C, P, A, K](channels: Seq[C],
-                                                continuation: WaitingContinuation[P, K],
-                                                continuationIndex: Int,
-                                                dataCandidates: Seq[DataCandidate[C, A]])
+  final case class ProduceCandidate[C, P, A, K](
+      channels: Seq[C],
+      continuation: WaitingContinuation[P, K],
+      continuationIndex: Int,
+      dataCandidates: Seq[DataCandidate[C, A]]
+  )
 
   final case class Row[P, A, K](data: Seq[Datum[A]], wks: Seq[WaitingContinuation[P, K]])
 
@@ -59,10 +68,12 @@ object internal {
   case object Insert     extends Operation
   case object Delete     extends Operation
 
-  final case class TrieUpdate[C, P, A, K](count: Long,
-                                          operation: Operation,
-                                          channelsHash: Blake2b256Hash,
-                                          gnat: GNAT[C, P, A, K])
+  final case class TrieUpdate[C, P, A, K](
+      count: Long,
+      operation: Operation,
+      channelsHash: Blake2b256Hash,
+      gnat: GNAT[C, P, A, K]
+  )
 
   implicit val codecByteVector: Codec[ByteVector] =
     variableSizeBytesLong(int64, bytes)
@@ -73,24 +84,29 @@ object internal {
   implicit def codecDatum[A](implicit codecA: Codec[A]): Codec[Datum[A]] =
     (codecA :: bool :: Codec[Produce]).as[Datum[A]]
 
-  implicit def codecWaitingContinuation[P, K](implicit
-                                              codecP: Codec[P],
-                                              codecK: Codec[K]): Codec[WaitingContinuation[P, K]] =
+  implicit def codecWaitingContinuation[P, K](
+      implicit
+      codecP: Codec[P],
+      codecK: Codec[K]
+  ): Codec[WaitingContinuation[P, K]] =
     (codecSeq(codecP) :: codecK :: bool :: Codec[Consume]).as[WaitingContinuation[P, K]]
 
-  implicit def codecGNAT[C, P, A, K](implicit
-                                     codecC: Codec[C],
-                                     codecP: Codec[P],
-                                     codecA: Codec[A],
-                                     codecK: Codec[K]): Codec[GNAT[C, P, A, K]] =
+  implicit def codecGNAT[C, P, A, K](
+      implicit
+      codecC: Codec[C],
+      codecP: Codec[P],
+      codecA: Codec[A],
+      codecK: Codec[K]
+  ): Codec[GNAT[C, P, A, K]] =
     (codecSeq(codecC) ::
       codecSeq(codecDatum(codecA)) ::
       codecSeq(codecWaitingContinuation(codecP, codecK))).as[GNAT[C, P, A, K]]
 
-  type MultisetMultiMap[K, V] = mutable.HashMap[K, Multiset[V]]
+  import scala.collection.concurrent.TrieMap
+  type MultisetMultiMap[K, V] = TrieMap[K, Multiset[V]]
 
   object MultisetMultiMap {
-    def empty[K, V]: MultisetMultiMap[K, V] = new mutable.HashMap[K, Multiset[V]]()
+    def empty[K, V]: MultisetMultiMap[K, V] = new TrieMap[K, Multiset[V]]()
   }
 
   implicit class RichMultisetMultiMap[K, V](val value: MultisetMultiMap[K, V]) extends AnyVal {
@@ -103,7 +119,7 @@ object internal {
         case None =>
           val ms = HashMultiset.create[V]()
           ms.add(v)
-          value.put(k, ms)
+          value.putIfAbsent(k, ms)
           value
       }
 
@@ -112,7 +128,7 @@ object internal {
         case Some(current) =>
           current.remove(v)
           if (current.isEmpty) {
-            value.remove(k)
+            value.remove(k, current)
           }
           value
         case None =>

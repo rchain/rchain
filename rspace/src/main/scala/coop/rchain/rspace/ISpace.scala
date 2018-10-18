@@ -1,8 +1,17 @@
 package coop.rchain.rspace
 
+import cats.Id
 import coop.rchain.rspace.internal._
 
 import scala.collection.immutable.Seq
+
+final case class Result[R](value: R, persistent: Boolean)
+final case class ContResult[C, P, R](
+    value: R,
+    persistent: Boolean,
+    channels: Seq[C],
+    patterns: Seq[P]
+)
 
 /** The interface for RSpace
   *
@@ -39,10 +48,12 @@ trait ISpace[F[_], C, P, E, A, R, K] {
     * @param persist Whether or not to attempt to persist the data
     */
   def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
-      implicit m: Match[P, E, A, R]): F[Either[E, Option[(K, Seq[R])]]]
+      implicit m: Match[P, E, A, R]
+  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
 
   def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
-      implicit m: Match[P, E, A, R]): F[Option[(K, Seq[R])]]
+      implicit m: Match[P, E, A, R]
+  ): F[Option[(K, Seq[R])]]
 
   /** Searches the store for a continuation that has patterns that match the given data at the
     * given channel.
@@ -68,7 +79,8 @@ trait ISpace[F[_], C, P, E, A, R, K] {
     * @param persist Whether or not to attempt to persist the data
     */
   def produce(channel: C, data: A, persist: Boolean)(
-      implicit m: Match[P, E, A, R]): F[Either[E, Option[(K, Seq[R])]]]
+      implicit m: Match[P, E, A, R]
+  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
 
   /** Creates a checkpoint.
     *
@@ -87,6 +99,10 @@ trait ISpace[F[_], C, P, E, A, R, K] {
     */
   def retrieve(root: Blake2b256Hash, channelsHash: Blake2b256Hash): F[Option[GNAT[C, P, A, K]]]
 
+  def getData(channel: C): F[Seq[Datum[A]]]
+
+  def getWaitingContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]]
+
   /** Clears the store.  Does not affect the history trie.
     */
   def clear(): F[Unit]
@@ -94,4 +110,10 @@ trait ISpace[F[_], C, P, E, A, R, K] {
   /** Closes
     */
   def close(): F[Unit]
+
+  val store: IStore[C, P, A, K]
+}
+
+object ISpace {
+  type IdISpace[C, P, E, A, R, K] = ISpace[Id, C, P, E, A, R, K]
 }

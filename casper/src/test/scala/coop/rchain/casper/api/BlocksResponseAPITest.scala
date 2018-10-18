@@ -27,7 +27,7 @@ class BlocksResponseAPITest
 
   implicit val syncId: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
 
-  val initState = IndexedBlockDag.empty
+  val initState = IndexedBlockDag.empty.withOffset(1L)
   val v1        = ByteString.copyFromUtf8("Validator One")
   val v2        = ByteString.copyFromUtf8("Validator Two")
   val v3        = ByteString.copyFromUtf8("Validator Three")
@@ -46,37 +46,44 @@ class BlocksResponseAPITest
              Seq(genesis.blockHash),
              v2,
              bonds,
-             HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash))
+             HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
+           )
       b3 <- createBlock[StateWithChain](
              Seq(genesis.blockHash),
              v1,
              bonds,
-             HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash))
+             HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
+           )
       b4 <- createBlock[StateWithChain](
              Seq(b2.blockHash),
              v3,
              bonds,
-             HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash))
+             HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
+           )
       b5 <- createBlock[StateWithChain](
              Seq(b3.blockHash),
              v2,
              bonds,
-             HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash))
+             HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
+           )
       b6 <- createBlock[StateWithChain](
              Seq(b4.blockHash),
              v1,
              bonds,
-             HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash))
+             HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
+           )
       b7 <- createBlock[StateWithChain](
              Seq(b5.blockHash),
              v3,
              bonds,
-             HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash))
+             HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
+           )
       b8 <- createBlock[StateWithChain](
              Seq(b6.blockHash),
              v2,
              bonds,
-             HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash))
+             HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
+           )
     } yield b8
 
   val chain: IndexedBlockDag = createChain.runS(initState)
@@ -84,9 +91,11 @@ class BlocksResponseAPITest
 
   implicit val blockStoreEffect = BlockStore[Id]
   implicit val casperEffect: MultiParentCasper[Id] =
-    NoOpsCasperEffect[Id](HashMap.empty[BlockHash, BlockMessage],
-                          Estimator.tips[Id](chain, genesis),
-                          chain)(syncId, blockStoreEffect)
+    NoOpsCasperEffect[Id](
+      HashMap.empty[BlockHash, BlockMessage],
+      Estimator.tips[Id](chain, genesis.blockHash),
+      chain
+    )(syncId, blockStoreEffect)
   implicit val logEff = new LogStub[Id]
   implicit val casperRef = {
     val tmp = MultiParentCasperRef.of[Id]
@@ -95,11 +104,39 @@ class BlocksResponseAPITest
   }
   implicit val turanOracleEffect: SafetyOracle[Id] = SafetyOracle.turanOracle[Id]
 
-  "getBlocksResponse" should "return only blocks in the main chain" in {
+  "showMainChain" should "return only blocks in the main chain" in {
     val blocksResponse =
-      BlockAPI.getBlocksResponse[Id](syncId, casperRef, logEff, turanOracleEffect, blockStore)
-    val blocks = blocksResponse.blocks
+      BlockAPI.showMainChain[Id](Int.MaxValue)(
+        syncId,
+        casperRef,
+        logEff,
+        turanOracleEffect,
+        blockStore
+      )
     blocksResponse.length should be(5)
-    blocks.length should be(5)
+  }
+
+  "showBlocks" should "return all blocks" in {
+    val blocksResponse =
+      BlockAPI.showBlocks[Id](Int.MaxValue)(
+        syncId,
+        casperRef,
+        logEff,
+        turanOracleEffect,
+        blockStore
+      )
+    blocksResponse.length should be(8) // TODO: Switch to 4 when we implement block height correctly
+  }
+
+  it should "return until depth" in {
+    val blocksResponse =
+      BlockAPI.showBlocks[Id](2)(
+        syncId,
+        casperRef,
+        logEff,
+        turanOracleEffect,
+        blockStore
+      )
+    blocksResponse.length should be(2) // TODO: Switch to 3 when we implement block height correctly
   }
 }

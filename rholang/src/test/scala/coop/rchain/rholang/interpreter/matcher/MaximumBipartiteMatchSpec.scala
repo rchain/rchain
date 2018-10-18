@@ -14,7 +14,7 @@ class MaximumBipartiteMatchSpec extends FlatSpec with Matchers {
     // Full bipartite graph K(3,3)
     "D" -> Seq(4, 5),
     "E" -> Seq(4, 6),
-    "F" -> Seq(5, 6),
+    "F" -> Seq(5, 6)
   )
 
   type Edge = (String, Int)
@@ -56,7 +56,7 @@ class MaximumBipartiteMatchSpec extends FlatSpec with Matchers {
     assertMatch(mf, Seq("A", "A"), Seq(1), None)
     // format: off
     assertMatch(mf, Seq("A"), Seq(1, 1), Some(Seq(
-      edge("A", 1),
+      edge("A", 1)
     )))
     assertMatch(mf, Seq("A", "A"), Seq(1, 1), Some(Seq(
       edge("A", 1),
@@ -94,10 +94,12 @@ class MaximumBipartiteMatchSpec extends FlatSpec with Matchers {
     assert(edgesTested == Seq(("D", 4), ("E", 4), ("D", 5), ("F", 4), ("F", 5), ("D", 6), ("F", 6)))
   }
 
-  def assertMatch[P, T, R, F[_]: Monad](matchFunction: (P, T) => F[Option[R]],
-                                        left: Seq[P],
-                                        right: Seq[T],
-                                        expectedMatch: Option[Seq[(T, P, R)]]): Assertion = {
+  def assertMatch[P, T, R, F[_]: Monad](
+      matchFunction: (P, T) => F[Option[R]],
+      left: Seq[P],
+      right: Seq[T],
+      expectedMatch: Option[Seq[(T, P, R)]]
+  ): Assertion = {
     val mbm = MaximumBipartiteMatch(matchFunction)
     assert(mbm.findMatches(left, right) === expectedMatch)
   }

@@ -3,10 +3,11 @@ package coop.rchain.node
 import java.lang.management.{ManagementFactory, MemoryType}
 
 import scala.collection.JavaConverters._
-import scala.concurrent.Future
+
 import cats._
 import cats.implicits._
-import coop.rchain.catscontrib.{Capture, Futurable}
+
+import coop.rchain.catscontrib.Capture
 import coop.rchain.metrics.Metrics
 import coop.rchain.node.model.diagnostics._
 import coop.rchain.catscontrib._
@@ -17,6 +18,7 @@ import coop.rchain.comm.rp.Connect.ConnectionsCell
 import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
 import javax.management.ObjectName
+import monix.eval.Task
 
 package object diagnostics {
 
@@ -216,38 +218,48 @@ package object diagnostics {
         }
     }
 
-  def grpc[F[_]: Functor: NodeDiscovery: JvmMetrics: NodeMetrics: ConnectionsCell: Futurable]
-    : DiagnosticsGrpc.Diagnostics =
-    new DiagnosticsGrpc.Diagnostics {
-      def listPeers(request: Empty): Future[Peers] =
-        ConnectionsCell[F].read.map { ps =>
-          Peers(ps.map(p =>
-            Peer(p.endpoint.host, p.endpoint.udpPort, ByteString.copyFrom(p.id.key.toArray))))
-        }.toFuture
+  def grpc(
+      implicit nodeDiscovery: NodeDiscovery[Task],
+      jvmMetrics: JvmMetrics[Task],
+      nodeMetrics: NodeMetrics[Task],
+      connectionsCell: ConnectionsCell[Task]
+  ): DiagnosticsGrpcMonix.Diagnostics =
+    new DiagnosticsGrpcMonix.Diagnostics {
+      def listPeers(request: Empty): Task[Peers] =
+        connectionsCell.read.map { ps =>
+          Peers(
+            ps.map(
+              p => Peer(p.endpoint.host, p.endpoint.tcpPort, ByteString.copyFrom(p.id.key.toArray))
+            )
+          )
+        }
 
-      def listDiscoveredPeers(request: Empty): Future[Peers] =
-        NodeDiscovery[F].peers.map { ps =>
-          Peers(ps.map(p =>
-            Peer(p.endpoint.host, p.endpoint.udpPort, ByteString.copyFrom(p.id.key.toArray))))
-        }.toFuture
+      def listDiscoveredPeers(request: Empty): Task[Peers] =
+        nodeDiscovery.peers.map { ps =>
+          Peers(
+            ps.map(
+              p => Peer(p.endpoint.host, p.endpoint.tcpPort, ByteString.copyFrom(p.id.key.toArray))
+            )
+          )
+        }
 
-      def getProcessCpu(request: Empty): Future[ProcessCpu] =
-        JvmMetrics[F].processCpu.toFuture
+      def getProcessCpu(request: Empty): Task[ProcessCpu] =
+        jvmMetrics.processCpu
 
-      def getMemoryUsage(request: Empty): Future[MemoryUsage] =
-        JvmMetrics[F].memoryUsage.toFuture
+      def getMemoryUsage(request: Empty): Task[MemoryUsage] =
+        jvmMetrics.memoryUsage
 
-      def getGarbageCollectors(request: Empty): Future[GarbageCollectors] =
-        JvmMetrics[F].garbageCollectors.map(GarbageCollectors.apply).toFuture
+      def getGarbageCollectors(request: Empty): Task[GarbageCollectors] =
+        jvmMetrics.garbageCollectors.map(GarbageCollectors.apply)
 
-      def getMemoryPools(request: Empty): Future[MemoryPools] =
-        JvmMetrics[F].memoryPools.map(MemoryPools.apply).toFuture
+      def getMemoryPools(request: Empty): Task[MemoryPools] =
+        jvmMetrics.memoryPools.map(MemoryPools.apply)
 
-      def getThreads(request: Empty): Future[Threads] =
-        JvmMetrics[F].threads.toFuture
+      def getThreads(request: Empty): Task[Threads] =
+        jvmMetrics.threads
 
-      def getNodeCoreMetrics(request: Empty): Future[NodeCoreMetrics] =
-        NodeMetrics[F].metrics.toFuture
+      def getNodeCoreMetrics(request: Empty): Task[NodeCoreMetrics] =
+        nodeMetrics.metrics
     }
 
 }

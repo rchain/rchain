@@ -1,6 +1,14 @@
-from fixtures.common import *
+import sys
+sys.path.insert(0, '.')
 
 
+import pytest
+import collections
+from rnode_testing.profiling import log_prof_data
+from rnode_testing.util import parse_config, docker, validators_data
+from rnode_testing.rnode import start_bootstrap
+
+System = collections.namedtuple("System", ["config", "docker", "validators_data"])
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -18,3 +26,27 @@ def pytest_addoption(parser):
     parser.addoption(
         "--rnode-timeout", action="store", default="10", help="timeout in seconds for executing an rnode call (Examples: propose, show-logs etc.). Defaults to 10s"
     )
+    parser.addoption(
+        "--blocks", action="store", default="1", help="The number of deploys per test deploy"
+    )
+
+
+
+@pytest.fixture(scope="session")
+def system(request):
+    cfg = parse_config(request)
+
+    with docker() as docker_client, validators_data(cfg) as vd:
+        try:
+            yield System(cfg, docker_client, vd)
+        finally:
+            log_prof_data()
+
+
+@pytest.fixture(scope="module")
+def bootstrap_node(system):
+    with start_bootstrap(system.docker,
+                         system.config.node_startup_timeout,
+                         system.config.rnode_timeout,
+                         system.validators_data) as node:
+        yield node

@@ -82,7 +82,8 @@ trait StorageActionsTests
       store.getPatterns(txn, key) shouldBe Nil
       store.getData(txn, key) should contain theSameElementsAs List(
         Datum.create(key.head, "datum1", false),
-        Datum.create(key.head, "datum2", false))
+        Datum.create(key.head, "datum2", false)
+      )
       store.getWaitingContinuation(txn, key) shouldBe Nil
     }
 
@@ -115,7 +116,8 @@ trait StorageActionsTests
   "consuming with a list of patterns that is a different length than the list of channels" should
     "throw" in withTestSpace { space =>
     an[IllegalArgumentException] shouldBe thrownBy(
-      space.consume(List("ch1", "ch2"), List(Wildcard), new StringsCaptor, persist = false))
+      space.consume(List("ch1", "ch2"), List(Wildcard), new StringsCaptor, persist = false)
+    )
 
     val store = space.store
 
@@ -223,7 +225,8 @@ trait StorageActionsTests
       store.getChannels(txn, produceKey1Hash) shouldBe produceKey1
       store.getPatterns(txn, produceKey1) shouldBe Nil
       store.getData(txn, produceKey1) shouldBe List(
-        Datum.create(produceKey1.head, "datum1", persist = false))
+        Datum.create(produceKey1.head, "datum1", persist = false)
+      )
       store.getWaitingContinuation(txn, produceKey1) shouldBe Nil
     }
 
@@ -239,7 +242,8 @@ trait StorageActionsTests
       store.getChannels(txn, produceKey1Hash) shouldBe produceKey1
       store.getPatterns(txn, produceKey1) shouldBe Nil
       store.getData(txn, produceKey1) shouldBe List(
-        Datum.create(produceKey1.head, "datum1", persist = false))
+        Datum.create(produceKey1.head, "datum1", persist = false)
+      )
       store.getWaitingContinuation(txn, produceKey1) shouldBe Nil
       store.getChannels(txn, consumeKeyHash) shouldBe consumeKey
       store.getPatterns(txn, consumeKey) shouldBe List(consumePattern)
@@ -372,11 +376,15 @@ trait StorageActionsTests
 
     continuations.forall(_.right.get.isDefined) shouldBe true
 
-    continuations.foreach(runK)
+    continuations
+      .map(unpackEither[Id, String, Pattern, Nothing, StringsCaptor, String])
+      .foreach(runK)
 
-    captor.results should contain theSameElementsAs List(List("datum3"),
-                                                         List("datum2"),
-                                                         List("datum1"))
+    captor.results should contain theSameElementsAs List(
+      List("datum3"),
+      List("datum2"),
+      List("datum1")
+    )
 
     store.isEmpty shouldBe true
   }
@@ -398,7 +406,9 @@ trait StorageActionsTests
       r2 shouldBe defined
       r3 shouldBe defined
 
-      List(r1, r2, r3).foreach(runK)
+      List(r1, r2, r3)
+        .map(unpackEither[Id, String, Pattern, Nothing, StringsCaptor, String])
+        .foreach(runK)
 
       getK(r1).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
       getK(r2).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
@@ -427,7 +437,9 @@ trait StorageActionsTests
     r2 shouldBe defined
     r3 shouldBe defined
 
-    List(r1, r2, r3).foreach(runK)
+    List(r1, r2, r3)
+      .map(unpackEither[Id, String, Pattern, Nothing, StringsCaptor, String])
+      .foreach(runK)
 
     getK(r1).results shouldBe List(List("datum1"))
     getK(r2).results shouldBe List(List("datum2"))
@@ -441,10 +453,12 @@ trait StorageActionsTests
     "return a continuation with both pieces of data" in withTestSpace { space =>
     val store = space.store
 
-    val r1 = space.consume(List("ch1", "ch2"),
-                           List(Wildcard, Wildcard),
-                           new StringsCaptor,
-                           persist = false)
+    val r1 = space.consume(
+      List("ch1", "ch2"),
+      List(Wildcard, Wildcard),
+      new StringsCaptor,
+      persist = false
+    )
     val r2 = space.produce("ch1", "datum1", persist = false)
     val r3 = space.produce("ch2", "datum2", persist = false)
 
@@ -466,10 +480,12 @@ trait StorageActionsTests
 
     val channels = List("ch1", "ch1")
 
-    val r1 = space.consume(channels,
-                           List(StringMatch("datum1"), StringMatch("datum1")),
-                           new StringsCaptor,
-                           persist = false)
+    val r1 = space.consume(
+      channels,
+      List(StringMatch("datum1"), StringMatch("datum1")),
+      new StringsCaptor,
+      persist = false
+    )
 
     val r2 = space.produce("ch1", "datum1", persist = false)
     val r3 = space.produce("ch1", "datum1", persist = false)
@@ -491,14 +507,18 @@ trait StorageActionsTests
 
     val channels = List("ch1", "ch2")
 
-    val r1 = space.consume(channels,
-                           List(StringMatch("datum1"), StringMatch("datum2")),
-                           new StringsCaptor,
-                           persist = false)
-    val r2 = space.consume(channels,
-                           List(StringMatch("datum3"), StringMatch("datum4")),
-                           new StringsCaptor,
-                           persist = false)
+    val r1 = space.consume(
+      channels,
+      List(StringMatch("datum1"), StringMatch("datum2")),
+      new StringsCaptor,
+      persist = false
+    )
+    val r2 = space.consume(
+      channels,
+      List(StringMatch("datum3"), StringMatch("datum4")),
+      new StringsCaptor,
+      persist = false
+    )
 
     val r3 = space.produce("ch1", "datum3", persist = false)
     val r4 = space.produce("ch2", "datum4", persist = false)
@@ -512,7 +532,9 @@ trait StorageActionsTests
     r5 shouldBe Right(None)
     r6 shouldBe defined
 
-    List(r4, r6).foreach(runK)
+    List(r4, r6)
+      .map(unpackEither[Id, String, Pattern, Nothing, StringsCaptor, String])
+      .foreach(runK)
 
     getK(r4).results should contain theSameElementsAs List(List("datum3", "datum4"))
     getK(r6).results should contain theSameElementsAs List(List("datum1", "datum2"))
@@ -562,7 +584,9 @@ trait StorageActionsTests
     val r3 = space.produce("ch1", "datum1", persist = false)
     val r4 = space.produce("ch2", "datum2", persist = false)
 
-    List(r1, r2, r3, r4).foreach(runK)
+    List(r1, r2, r3, r4)
+      .map(unpackEither[Id, String, Pattern, Nothing, StringsCaptor, String])
+      .foreach(runK)
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getData(txn, List("ch1")) shouldBe Nil
@@ -581,10 +605,12 @@ trait StorageActionsTests
     withTestSpace { space =>
       val store = space.store
 
-      space.consume(List("ch1", "ch2"),
-                    List(Wildcard, Wildcard),
-                    new StringsCaptor,
-                    persist = false)
+      space.consume(
+        List("ch1", "ch2"),
+        List(Wildcard, Wildcard),
+        new StringsCaptor,
+        persist = false
+      )
       space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
       val r3 = space.produce("ch1", "datum1", persist = false)
@@ -1037,9 +1063,11 @@ trait StorageActionsTests
     checkpoint2.log shouldBe empty
     checkpoint2.root shouldBe emptyCheckpoint.root
   }
+
   "createCheckpoint on an empty store" should "return the expected hash" in withTestSpace { space =>
     space.createCheckpoint().root shouldBe Blake2b256Hash.fromHex(
-      "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3")
+      "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3"
+    )
   }
 
   "consume then createCheckpoint" should "return the expected hash and the TrieStore should contain the expected value" in
@@ -1049,7 +1077,9 @@ trait StorageActionsTests
         channels,
         List.empty[Datum[String]],
         List(
-          WaitingContinuation.create(channels, List[Pattern](Wildcard), new StringsCaptor, false)))
+          WaitingContinuation.create(channels, List[Pattern](Wildcard), new StringsCaptor, false)
+        )
+      )
 
       val channelsHash: Blake2b256Hash = space.store.hashChannels(gnat.channels)
 
@@ -1061,12 +1091,16 @@ trait StorageActionsTests
         Node(
           PointerBlock
             .create()
-            .updated(List((JByte.toUnsignedInt(channelsHash.bytes.head), NodePointer(skipHash))))))
+            .updated(List((JByte.toUnsignedInt(channelsHash.bytes.head), NodePointer(skipHash))))
+        )
+      )
 
-      space.consume(gnat.channels,
-                    gnat.wks.head.patterns,
-                    gnat.wks.head.continuation,
-                    gnat.wks.head.persist)
+      space.consume(
+        gnat.channels,
+        gnat.wks.head.patterns,
+        gnat.wks.head.continuation,
+        gnat.wks.head.persist
+      )
 
       history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None
 
@@ -1081,35 +1115,45 @@ trait StorageActionsTests
     withTestSpace { space =>
       val gnat1 = {
         val channels = List("ch1")
-        GNAT(channels,
-             List.empty[Datum[String]],
-             List(
-               WaitingContinuation
-                 .create(channels, List[Pattern](Wildcard), new StringsCaptor, false)))
+        GNAT(
+          channels,
+          List.empty[Datum[String]],
+          List(
+            WaitingContinuation
+              .create(channels, List[Pattern](Wildcard), new StringsCaptor, false)
+          )
+        )
       }
 
       val channelsHash1: Blake2b256Hash = space.store.hashChannels(gnat1.channels)
 
-      space.consume(gnat1.channels,
-                    gnat1.wks.head.patterns,
-                    gnat1.wks.head.continuation,
-                    gnat1.wks.head.persist)
+      space.consume(
+        gnat1.channels,
+        gnat1.wks.head.patterns,
+        gnat1.wks.head.continuation,
+        gnat1.wks.head.persist
+      )
 
       val gnat2 = {
         val channels = List("ch2")
-        GNAT(channels,
-             List.empty[Datum[String]],
-             List(
-               WaitingContinuation
-                 .create(channels, List[Pattern](Wildcard), new StringsCaptor, false)))
+        GNAT(
+          channels,
+          List.empty[Datum[String]],
+          List(
+            WaitingContinuation
+              .create(channels, List[Pattern](Wildcard), new StringsCaptor, false)
+          )
+        )
       }
 
       val channelsHash2: Blake2b256Hash = space.store.hashChannels(gnat2.channels)
 
-      space.consume(gnat2.channels,
-                    gnat2.wks.head.patterns,
-                    gnat2.wks.head.continuation,
-                    gnat2.wks.head.persist)
+      space.consume(
+        gnat2.channels,
+        gnat2.wks.head.patterns,
+        gnat2.wks.head.continuation,
+        gnat2.wks.head.persist
+      )
 
       history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash1) shouldBe None
 
@@ -1133,9 +1177,11 @@ trait StorageActionsTests
           val gnats: Seq[TestGNAT] =
             data.map {
               case (channel, datum) =>
-                GNAT(List(channel),
-                     List(datum),
-                     List.empty[WaitingContinuation[Pattern, StringsCaptor]])
+                GNAT(
+                  List(channel),
+                  List(datum),
+                  List.empty[WaitingContinuation[Pattern, StringsCaptor]]
+                )
             }.toList
 
           gnats.foreach {
@@ -1203,7 +1249,8 @@ trait StorageActionsTests
       history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None
 
       space.createCheckpoint().root shouldBe Blake2b256Hash.fromHex(
-        "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3")
+        "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3"
+      )
 
       history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None
     }
@@ -1214,17 +1261,22 @@ trait StorageActionsTests
 
       val gnat1 = {
         val channels = List("ch1")
-        GNAT(channels,
-             List.empty[Datum[String]],
-             List(
-               WaitingContinuation
-                 .create(channels, List[Pattern](Wildcard), new StringsCaptor, false)))
+        GNAT(
+          channels,
+          List.empty[Datum[String]],
+          List(
+            WaitingContinuation
+              .create(channels, List[Pattern](Wildcard), new StringsCaptor, false)
+          )
+        )
       }
 
-      space.consume(gnat1.channels,
-                    gnat1.wks.head.patterns,
-                    gnat1.wks.head.continuation,
-                    gnat1.wks.head.persist)
+      space.consume(
+        gnat1.channels,
+        gnat1.wks.head.patterns,
+        gnat1.wks.head.continuation,
+        gnat1.wks.head.persist
+      )
 
       space.store.isEmpty shouldBe false
 
@@ -1249,17 +1301,22 @@ trait StorageActionsTests
 
       val gnat1 = {
         val channels = List("ch1", "ch2")
-        GNAT(channels,
-             List.empty[Datum[String]],
-             List(
-               WaitingContinuation
-                 .create(channels, List[Pattern](Wildcard, Wildcard), new StringsCaptor, false)))
+        GNAT(
+          channels,
+          List.empty[Datum[String]],
+          List(
+            WaitingContinuation
+              .create(channels, List[Pattern](Wildcard, Wildcard), new StringsCaptor, false)
+          )
+        )
       }
 
-      space.consume(gnat1.channels,
-                    gnat1.wks.head.patterns,
-                    gnat1.wks.head.continuation,
-                    gnat1.wks.head.persist)
+      space.consume(
+        gnat1.channels,
+        gnat1.wks.head.patterns,
+        gnat1.wks.head.continuation,
+        gnat1.wks.head.persist
+      )
 
       val root1 = space.createCheckpoint().root
 
@@ -1402,14 +1459,18 @@ trait StorageActionsTests
 
     val Checkpoint(_, log) = space.createCheckpoint()
 
-    log should contain theSameElementsInOrderAs Seq(commEvent,
-                                                    expectedProduce2,
-                                                    expectedProduce1,
-                                                    expectedConsume)
+    log should contain theSameElementsInOrderAs Seq(
+      commEvent,
+      expectedProduce2,
+      expectedProduce1,
+      expectedConsume
+    )
 
     log match {
-      case COMM(chkCommConsume1: Consume,
-                (chkCommProduce1: Produce) :: (chkCommProduce2: Produce) :: Nil)
+      case COMM(
+            chkCommConsume1: Consume,
+            (chkCommProduce1: Produce) :: (chkCommProduce2: Produce) :: Nil
+          )
             :: (chkProduce2: Produce) :: (chkProduce1: Produce) :: (chkConsume: Consume) :: Nil =>
         chkCommConsume1.channelsHash shouldBe expectedConsume.channelsHash
         chkCommProduce1.channelsHash shouldBe expectedProduce1.channelsHash
@@ -1445,10 +1506,12 @@ trait StorageActionsTests
 
     val Checkpoint(_, log) = space.createCheckpoint()
 
-    log should contain theSameElementsInOrderAs Seq(commEvent,
-                                                    expectedProduce2,
-                                                    expectedProduce1,
-                                                    expectedConsume)
+    log should contain theSameElementsInOrderAs Seq(
+      commEvent,
+      expectedProduce2,
+      expectedProduce1,
+      expectedConsume
+    )
   }
 
   "an install" should "not allow installing after a produce operation" in withTestSpace { space =>

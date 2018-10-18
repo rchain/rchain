@@ -230,11 +230,15 @@ val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
 
 Next we create an instance of `Context` using `storePath`.  We will create our store with a maximum map size of 100MB.
 ```tut
+import cats.Id
+import cats.effect.Sync
+implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+
 val context: Context[Channel, Pattern, Entry, Printer] = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L * 100L)
 ```
 Now we can create an RSpace using the created context
 ```tut
-val space = RSpace.create[Channel, Pattern, Nothing, Entry, Entry, Printer](context, coop.rchain.rspace.history.Branch.MASTER)
+val space = RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, Printer](context, coop.rchain.rspace.history.Branch.MASTER)
 ```
 
 ### Producing and Consuming
@@ -428,7 +432,7 @@ Let's see how this works in practice. We'll start by creating a new, untouched R
 ```tut
 val rollbackExampleStorePath: Path = Files.createTempDirectory("rspace-address-book-example-")
 val rollbackExampleContext: Context[Channel, Pattern, Entry, Printer] = Context.create[Channel, Pattern, Entry, Printer](rollbackExampleStorePath,  1024L * 1024L * 100L)
-val rollbackExampleSpace = RSpace.create[Channel, Pattern, Nothing, Entry, Entry, Printer](rollbackExampleContext, coop.rchain.rspace.history.Branch.MASTER)
+val rollbackExampleSpace = RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, Printer](rollbackExampleContext, coop.rchain.rspace.history.Branch.MASTER)
 val cres =
   rollbackExampleSpace.consume(List(Channel("friends")),
                 List(CityMatch(city = "Crystal Lake")),

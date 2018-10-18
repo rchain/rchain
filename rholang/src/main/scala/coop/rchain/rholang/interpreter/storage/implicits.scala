@@ -1,16 +1,13 @@
 package coop.rchain.rholang.interpreter.storage
 
-import cats.implicits._
-import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
-import coop.rchain.models.serialization.implicits.mkProtobufInstance
-import coop.rchain.rholang.interpreter.matcher._
-import OptionalFreeMapWithCost._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.accounting.CostAccount
+import coop.rchain.models.serialization.implicits.mkProtobufInstance
+import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.matcher.OptionalFreeMapWithCost._
+import coop.rchain.rholang.interpreter.matcher._
 import coop.rchain.rspace.{Serialize, Match => StorageMatch}
 
 //noinspection ConvertExpressionToSAM
@@ -18,50 +15,54 @@ object implicits {
 
   /* Match instance */
 
-  private def toChannels(fm: FreeMap, max: Int): Seq[Channel] =
+  private def toSeq(fm: FreeMap, max: Int): Seq[Par] =
     (0 until max).map { (i: Int) =>
       fm.get(i) match {
-        case Some(par) => Channel(Quote(par))
-        case None      => Channel(Quote(Par.defaultInstance))
+        case Some(par) => par
+        case None      => Par.defaultInstance
       }
     }
 
-  implicit val matchListQuote: StorageMatch[BindPattern,
-                                            OutOfPhlogistonsError.type,
-                                            ListChannelWithRandom,
-                                            ListChannelWithRandom] =
-    new StorageMatch[BindPattern,
-                     OutOfPhlogistonsError.type,
-                     ListChannelWithRandom,
-                     ListChannelWithRandom] {
+  def matchListPar(init: Cost): StorageMatch[
+    BindPattern,
+    OutOfPhlogistonsError.type,
+    ListParWithRandom,
+    ListParWithRandomAndPhlos
+  ] =
+    new StorageMatch[
+      BindPattern,
+      OutOfPhlogistonsError.type,
+      ListParWithRandom,
+      ListParWithRandomAndPhlos
+    ] {
 
-      def get(pattern: BindPattern, data: ListChannelWithRandom)
-        : Either[OutOfPhlogistonsError.type, Option[ListChannelWithRandom]] = {
-        val (cost, resultMatch) = SpatialMatcher
-          .foldMatch(data.channels, pattern.patterns, pattern.remainder)
-          .runWithCost
+      private def calcUsed(init: Cost, left: Cost): Cost = init - left
 
-        val result = resultMatch
+      def get(
+          pattern: BindPattern,
+          data: ListParWithRandom
+      ): Either[OutOfPhlogistonsError.type, Option[ListParWithRandomAndPhlos]] =
+        SpatialMatcher
+          .foldMatch(data.pars, pattern.patterns, pattern.remainder)
+          .runWithCost(init)
           .map {
-            case (freeMap: FreeMap, caughtRem: Seq[Channel]) =>
-              val remainderMap = pattern.remainder match {
-                case Some(Var(FreeVar(level))) =>
-                  val flatRem: Seq[Par] = caughtRem.flatMap(
-                    chan =>
-                      chan match {
-                        case Channel(Quote(p)) => Some(p)
-                        case _                 => None
+            case (left, resultMatch) =>
+              val cost = calcUsed(init, left)
+              resultMatch
+                .map {
+                  case (freeMap: FreeMap, caughtRem: Seq[Par]) =>
+                    val remainderMap = pattern.remainder match {
+                      case Some(Var(FreeVar(level))) =>
+                        freeMap + (level -> VectorPar().addExprs(EList(caughtRem.toVector)))
+                      case _ => freeMap
                     }
-                  )
-                  freeMap + (level -> VectorPar().addExprs(EList(flatRem.toVector)))
-                case _ => freeMap
-              }
-              ListChannelWithRandom(toChannels(remainderMap, pattern.freeCount),
-                                    data.randomState,
-                                    Some(CostAccount.toProto(cost)))
+                    ListParWithRandomAndPhlos(
+                      toSeq(remainderMap, pattern.freeCount),
+                      data.randomState,
+                      cost.value
+                    )
+                }
           }
-        Right(result)
-      }
     }
 
   /* Serialize instances */
@@ -69,11 +70,11 @@ object implicits {
   implicit val serializeBindPattern: Serialize[BindPattern] =
     mkProtobufInstance(BindPattern)
 
-  implicit val serializeChannel: Serialize[Channel] =
-    mkProtobufInstance(Channel)
+  implicit val serializePar: Serialize[Par] =
+    mkProtobufInstance(Par)
 
-  implicit val serializeChannels: Serialize[ListChannelWithRandom] =
-    mkProtobufInstance(ListChannelWithRandom)
+  implicit val serializePars: Serialize[ListParWithRandom] =
+    mkProtobufInstance(ListParWithRandom)
 
   implicit val serializeTaggedContinuation: Serialize[TaggedContinuation] =
     mkProtobufInstance(TaggedContinuation)

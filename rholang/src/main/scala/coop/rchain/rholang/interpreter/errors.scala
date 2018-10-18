@@ -21,17 +21,20 @@ object errors {
 
   final case class NormalizerError(message: String) extends InterpreterError(message)
   final case class SyntaxError(message: String)     extends InterpreterError(message)
+  final case class LexerError(message: String)      extends InterpreterError(message)
 
   final case class UnboundVariableRef(varName: String, line: Int, col: Int)
       extends InterpreterError(s"Variable reference: =$varName at $line:$col is unbound.")
 
-  final case class UnexpectedNameContext(varName: String,
-                                         procVarLine: Int,
-                                         procVarCol: Int,
-                                         nameContextLine: Int,
-                                         nameContextCol: Int)
-      extends InterpreterError(
-        s"Proc variable: $varName at $procVarLine:$procVarCol used in Name context at $nameContextLine:$nameContextCol")
+  final case class UnexpectedNameContext(
+      varName: String,
+      procVarLine: Int,
+      procVarCol: Int,
+      nameContextLine: Int,
+      nameContextCol: Int
+  ) extends InterpreterError(
+        s"Proc variable: $varName at $procVarLine:$procVarCol used in Name context at $nameContextLine:$nameContextCol"
+      )
 
   final case class UnexpectedReuseOfNameContextFree(
       varName: String,
@@ -41,7 +44,8 @@ object errors {
       secondUseCol: Int
   ) extends InterpreterError(
         s"Free variable $varName is used twice as a binder " +
-          s"(at $firstUseLine:$firstUseCol and $secondUseLine:$secondUseCol) in name context.")
+          s"(at $firstUseLine:$firstUseCol and $secondUseLine:$secondUseCol) in name context."
+      )
 
   final case class UnexpectedProcContext(
       varName: String,
@@ -51,7 +55,8 @@ object errors {
       processContextCol: Int
   ) extends InterpreterError(
         s"Name variable: $varName at $nameVarLine:$nameVarCol " +
-          s"used in process context at $processContextLine:$processContextCol")
+          s"used in process context at $processContextLine:$processContextCol"
+      )
 
   final case class UnexpectedReuseOfProcContextFree(
       varName: String,
@@ -61,7 +66,8 @@ object errors {
       secondUseCol: Int
   ) extends InterpreterError(
         s"Free variable $varName is used twice as a binder " +
-          s"(at $firstUseLine:$firstUseCol and $secondUseLine:$secondUseCol) in process context.")
+          s"(at $firstUseLine:$firstUseCol and $secondUseLine:$secondUseCol) in process context."
+      )
 
   final case class UnexpectedBundleContent(message: String)     extends InterpreterError(message)
   final case class UnrecognizedNormalizerError(message: String) extends InterpreterError(message)
@@ -75,7 +81,17 @@ object errors {
   final case class TopLevelFreeVariablesNotAllowedError(freeVars: String)
       extends InterpreterError(s"Top level free variables are not allowed: $freeVars.")
 
+  final case class TopLevelLogicalConnectivesNotAllowedError(connectives: String)
+      extends InterpreterError(s"Top level logical connectives are not allowed: $connectives.")
+
   final case class SubstituteError(message: String) extends InterpreterError(message)
+
+  final case class PatternReceiveError(connectives: String)
+      extends InterpreterError(
+        s"Invalid pattern in the receive: $connectives. Only logical AND is allowed."
+      )
+
+  final case class SetupError(message: String) extends InterpreterError(message)
 
   final case class UnrecognizedInterpreterError(throwable: Throwable)
       extends InterpreterError("Unrecognized interpreter error", throwable)
@@ -88,7 +104,8 @@ object errors {
 
   final case class MethodArgumentNumberMismatch(method: String, expected: Int, actual: Int)
       extends InterpreterError(
-        s"Error: Method `$method` expects $expected Par argument(s), but got $actual argument(s).")
+        s"Error: Method `$method` expects $expected Par argument(s), but got $actual argument(s)."
+      )
 
   final case class OperatorNotDefined(op: String, otherType: String)
       extends InterpreterError(s"Error: Operator `$op` is not defined on $otherType.")

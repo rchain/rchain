@@ -1,0 +1,109 @@
+branches:
+  - dev
+  - master
+  - release-*
+  - testing*
+
+# Common parts
+
+# FYI: There's no merging of arrays in YAML. At least not in the Go library
+# Drone uses to parse YAML. So if you mix in &sbtenv and want to add
+# additional volumes, as in package step, you need to specify all volumes.
+
+__buildenv: &buildenv
+  image: rchain/buildenv:latest-java8
+
+__sbtenv: &sbtenv
+  <<: *buildenv
+  environment:
+    - _JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G
+  volumes:
+    - /var/cache/rchain-build/.sbt:/root/.sbt
+    - /var/cache/rchain-build/.ivy2:/root/.ivy2
+
+# Build definition
+
+clone:
+  git-clone:
+    image: rchain/buildenv:latest
+    commands: |
+      set -ex
+      git clone -b ${DRONE_TAG:-$DRONE_BRANCH} $DRONE_REMOTE_URL .
+      if [ x$DRONE_PULL_REQUEST != x ]; then
+          git fetch origin refs/pull/$DRONE_PULL_REQUEST/head
+          EMAIL=ci git merge --no-edit FETCH_HEAD
+      fi
+
+pipeline:
+
+  # pr
+
+  sbt-update:
+    <<: *sbtenv
+    commands:
+      - sbt update
+
+  compile:
+    <<: *sbtenv
+    commands:
+      - sbt rholang/bnfc:generate compile test:compile it:compile doc
+
+  run-unit-tests:
+    <<: *sbtenv
+    commands:
+      - sbt test it:test
+
+  run-code-analysis:
+    <<: *sbtenv
+    commands:
+      - sbt scalafmtCheck coverage
+      - ./scripts/ci/codecov-upload
+
+  # push
+
+  package:
+    <<: *sbtenv
+    commands:
+      - sbt node/docker:publishLocal node/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball
+    volumes:
+      - /var/cache/rchain-build/.sbt:/root/.sbt
+      - /var/cache/rchain-build/.ivy2:/root/.ivy2
+      - /var/run/docker.sock:/var/run/docker.sock
+    when:
+      event: push
+
+  run-integration-tests:
+    <<: *buildenv
+    commands:
+      - ./scripts/ci/run-p2p-test
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp:/tmp
+    when:
+      event: push
+
+  publish:
+    <<: *buildenv
+    commands:
+      - ./scripts/ci/publish-artifacts
+    secrets:
+      - docker_username
+      - docker_password
+      - ssh_private_key
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    when:
+      event: push
+
+  notify:
+    <<: *buildenv
+    commands:
+      - ./scripts/ci/send-email
+    secrets:
+      - email_host
+      - email_username
+      - email_password
+      - email_recipients
+    when:
+      event: push
+      status: [ changed, failure ]

@@ -30,7 +30,7 @@ object EffectsTestInstances {
       clock
     }
 
-    def sleep(millis: Int): F[Unit] = Capture[F].capture(())
+    def sleep(duration: FiniteDuration): F[Unit] = Capture[F].capture(())
 
     def reset(): Unit = this.clock = 0
   }
@@ -50,15 +50,15 @@ object EffectsTestInstances {
   def createRPConfAsk[F[_]: Applicative](
       local: PeerNode,
       defaultTimeout: FiniteDuration = FiniteDuration(1, MILLISECONDS),
-      clearConnections: ClearConnetionsConf = ClearConnetionsConf(1, 1)) =
+      clearConnections: ClearConnetionsConf = ClearConnetionsConf(1, 1)
+  ) =
     new ConstApplicativeAsk[F, RPConf](RPConf(local, defaultTimeout, clearConnections))
 
   class TransportLayerStub[F[_]: Capture: Applicative] extends TransportLayer[F] {
     case class Request(peer: PeerNode, msg: Protocol)
     type Responses = PeerNode => Protocol => CommErr[Protocol]
-    var broadcasted: Map[PeerNode, Seq[Protocol]] = Map.empty
-    var reqresp: Option[Responses]                = None
-    var requests: List[Request]                   = List.empty[Request]
+    var reqresp: Option[Responses] = None
+    var requests: List[Request]    = List.empty[Request]
 
     def setResponses(responses: Responses): Unit =
       reqresp = Some(responses)
@@ -74,24 +74,24 @@ object EffectsTestInstances {
         reqresp.get.apply(peer).apply(msg)
       }
 
-    def send(peer: PeerNode, msg: Protocol): F[Unit] =
+    def send(peer: PeerNode, msg: Protocol): F[CommErr[Unit]] =
       Capture[F].capture {
         requests = requests :+ Request(peer, msg)
         Right(())
       }
 
-    def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Unit] = Capture[F].capture {
-      val m = peers.map(_ -> msg).toMap
-      //I couldn't find implicit Monoid for Map
-      val newMap = m.foldLeft(broadcasted) {
-        case (map, (peer, msg)) =>
-          val msgs = map.get(peer).map(msgs => msgs :+ msg).getOrElse(Seq(msg))
-          map.updated(peer, msgs)
-      }
-      broadcasted = newMap
+    def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]] = Capture[F].capture {
+      requests = requests ++ peers.map(peer => Request(peer, msg))
+      Seq()
     }
 
-    def receive(dispatch: Protocol => F[CommunicationResponse]): F[Unit] = ???
+    def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] =
+      broadcast(peers, ProtocolHelper.protocol(blob.sender).withPacket(blob.packet)).void
+
+    def receive(
+        dispatch: Protocol => F[CommunicationResponse],
+        handleStreamed: Blob => F[Unit]
+    ): F[Unit] = ???
 
     def disconnect(peer: PeerNode): F[Unit] = ???
 
