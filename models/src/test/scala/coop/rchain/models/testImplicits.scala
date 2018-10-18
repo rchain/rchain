@@ -86,6 +86,7 @@ object testImplicits {
   implicit val MatchCaseShrink          = implicitly[Shrink[MatchCase]]
   implicit val NewShrink                = implicitly[Shrink[New]]
   implicit val ParWithRandomShrink      = implicitly[Shrink[ParWithRandom]]
+  implicit val ListParWithRandomShrink  = implicitly[Shrink[ListParWithRandom]]
   implicit val PCostShrink              = implicitly[Shrink[PCost]]
   implicit val ReceiveShrink            = implicitly[Shrink[Receive]]
   implicit val ReceiveBindShrink        = implicitly[Shrink[ReceiveBind]]
