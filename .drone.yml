@@ -75,7 +75,7 @@ pipeline:
   run-integration-tests:
     <<: *buildenv
     commands:
-      - ./scripts/ci/run-p2p-test
+      - ./scripts/ci/run-integration-tests.sh
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp:/tmp
