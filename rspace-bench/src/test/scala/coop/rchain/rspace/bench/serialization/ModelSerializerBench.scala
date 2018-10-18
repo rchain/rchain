@@ -14,193 +14,120 @@ import coop.rchain.rspace.bench.serialization._
 import org.openjdk.jmh.annotations.{State => BenchState, _}
 import org.openjdk.jmh.infra.Blackhole
 
+@OutputTimeUnit(TimeUnit.MILLISECONDS)
+@Fork(value = 1)
+@Warmup(iterations = 10)
+@Measurement(iterations = 10)
+@OperationsPerInvocation(value = 100)
 class ParSerializerBench {
 
   import coop.rchain.rholang.interpreter.storage.implicits._
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  @Fork(value = 1)
-  @Warmup(iterations = 10)
-  @Measurement(iterations = 10)
-  @OperationsPerInvocation(value = 100)
   def protoLight(bh: Blackhole, state: ProtobufModelBenchState) =
     state.lightPars.foreach(e => bh.consume(state.roundTrip(e)))
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  @Fork(value = 1)
-  @Warmup(iterations = 10)
-  @Measurement(iterations = 10)
-  @OperationsPerInvocation(value = 100)
   def protoMid(bh: Blackhole, state: ProtobufModelBenchState) =
     state.midPars.foreach(e => bh.consume(state.roundTrip(e)))
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  @Fork(value = 1)
-  @Warmup(iterations = 10)
-  @Measurement(iterations = 10)
-  @OperationsPerInvocation(value = 100)
   def protoHeavy(bh: Blackhole, state: ProtobufModelBenchState) =
     state.heavyPars.foreach(e => bh.consume(state.roundTrip(e)))
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  @Fork(value = 1)
-  @Warmup(iterations = 10)
-  @Measurement(iterations = 10)
   def kryoLight(bh: Blackhole, state: KryoModelBenchState) =
     state.lightPars.foreach(e => bh.consume(state.roundTrip(e)(state.parSerializer)))
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  @Fork(value = 1)
-  @Warmup(iterations = 10)
-  @Measurement(iterations = 10)
-  @OperationsPerInvocation(value = 100)
   def kryoMid(bh: Blackhole, state: KryoModelBenchState) =
     state.midPars.foreach(e => bh.consume(state.roundTrip(e)(state.parSerializer)))
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  @Fork(value = 1)
-  @Warmup(iterations = 10)
-  @Measurement(iterations = 10)
-  @OperationsPerInvocation(value = 100)
   def kryoHeavy(bh: Blackhole, state: KryoModelBenchState) =
     state.heavyPars.foreach(e => bh.consume(state.roundTrip(e)(state.parSerializer)))
 
 }
 
+@OutputTimeUnit(TimeUnit.MILLISECONDS)
+@Fork(value = 1)
+@Warmup(iterations = 10)
+@Measurement(iterations = 10)
+@OperationsPerInvocation(value = 100)
 class ExprSerializerBench {
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  @Fork(value = 1)
-  @Warmup(iterations = 10)
-  @Measurement(iterations = 10)
-  @OperationsPerInvocation(value = 100)
   def protoLight(bh: Blackhole, state: ProtobufModelBenchState) =
     state.lightExprs.foreach(e => bh.consume(state.roundTrip(e)(state.serializeExpr)))
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  @Fork(value = 1)
-  @Warmup(iterations = 10)
-  @Measurement(iterations = 10)
-  @OperationsPerInvocation(value = 100)
   def protoMid(bh: Blackhole, state: ProtobufModelBenchState) =
     state.midExprs.foreach(e => bh.consume(state.roundTrip(e)(state.serializeExpr)))
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  @Fork(value = 1)
-  @Warmup(iterations = 10)
-  @Measurement(iterations = 10)
-  @OperationsPerInvocation(value = 100)
   def protoHeavy(bh: Blackhole, state: ProtobufModelBenchState) =
     state.heavyExprs.foreach(e => bh.consume(state.roundTrip(e)(state.serializeExpr)))
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  @Fork(value = 1)
-  @Warmup(iterations = 10)
-  @Measurement(iterations = 10)
-  @OperationsPerInvocation(value = 100)
   def kryoLight(bh: Blackhole, state: KryoModelBenchState) =
     state.lightExprs.foreach(e => bh.consume(state.roundTrip(e)(state.exprSerializer)))
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  @Fork(value = 1)
-  @Warmup(iterations = 10)
-  @Measurement(iterations = 10)
-  @OperationsPerInvocation(value = 100)
   def kryoMid(bh: Blackhole, state: KryoModelBenchState) =
     state.midExprs.foreach(e => bh.consume(state.roundTrip(e)(state.exprSerializer)))
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  @Fork(value = 1)
-  @Warmup(iterations = 10)
-  @Measurement(iterations = 10)
-  @OperationsPerInvocation(value = 100)
   def kryoHeavy(bh: Blackhole, state: KryoModelBenchState) =
     state.heavyExprs.foreach(e => bh.consume(state.roundTrip(e)(state.exprSerializer)))
 
 }
 
+@OutputTimeUnit(TimeUnit.MILLISECONDS)
+@Fork(value = 1)
+@Warmup(iterations = 10)
+@Measurement(iterations = 10)
+@OperationsPerInvocation(value = 100)
 class GnatSerializerBench {
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  @Fork(value = 1)
-  @Warmup(iterations = 10)
-  @Measurement(iterations = 10)
-  @OperationsPerInvocation(value = 100)
   def protoLight(bh: Blackhole, state: RspaceProtobufModelBenchState) =
     state.lightGnats.foreach(gnat => bh.consume(state.roundTrip(gnat)(state.gnatSerializer)))
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  @Fork(value = 1)
-  @Warmup(iterations = 10)
-  @Measurement(iterations = 10)
-  @OperationsPerInvocation(value = 100)
   def protobufMid(bh: Blackhole, state: RspaceProtobufModelBenchState) =
     state.midGnats.foreach(gnat => bh.consume(state.roundTrip(gnat)(state.gnatSerializer)))
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  @Fork(value = 1)
-  @Warmup(iterations = 10)
-  @Measurement(iterations = 10)
-  @OperationsPerInvocation(value = 100)
   def protobufHeavy(bh: Blackhole, state: RspaceProtobufModelBenchState) =
     state.heavyGnats.foreach(gnat => bh.consume(state.roundTrip(gnat)(state.gnatSerializer)))
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  @Fork(value = 1)
-  @Warmup(iterations = 10)
-  @Measurement(iterations = 10)
   def kryoLight(bh: Blackhole, state: KryoModelBenchState) =
     state.lightGnats.foreach(gnat => bh.consume(state.roundTrip(gnat)(state.gnatSerializer)))
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  @Fork(value = 1)
-  @Warmup(iterations = 10)
-  @Measurement(iterations = 10)
-  @OperationsPerInvocation(value = 100)
   def kryoMid(bh: Blackhole, state: KryoModelBenchState) =
     state.midGnats.foreach(gnat => bh.consume(state.roundTrip(gnat)(state.gnatSerializer)))
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
-  @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  @Fork(value = 1)
-  @Warmup(iterations = 10)
-  @Measurement(iterations = 10)
-  @OperationsPerInvocation(value = 100)
   def kryoHeavy(bh: Blackhole, state: KryoModelBenchState) =
     state.heavyGnats.foreach(gnat => bh.consume(state.roundTrip(gnat)(state.gnatSerializer)))
 
