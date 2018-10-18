@@ -453,25 +453,25 @@ object ProtoUtil {
     )
   }
 
-  def sourceDeploy(source: String, timestamp: Long, phlos: PhloLimit): DeployData =
+  def sourceDeploy(source: String, timestamp: Long, phlos: Long): DeployData =
     DeployData(
       user = ByteString.EMPTY,
       timestamp = timestamp,
       term = source,
-      phloLimit = Some(phlos)
+      phloLimit = phlos
     )
 
   def compiledSourceDeploy(
       source: CompiledRholangSource,
       timestamp: Long,
-      phloLimit: PhloLimit
+      phloLimit: Long
   ): Deploy =
     Deploy(
       term = Some(source.term),
       raw = Some(sourceDeploy(source.code, timestamp, phloLimit))
     )
 
-  def termDeploy(term: Par, timestamp: Long, phloLimit: PhloLimit): Deploy =
+  def termDeploy(term: Par, timestamp: Long, phloLimit: Long): Deploy =
     Deploy(
       term = Some(term),
       raw = Some(
@@ -479,7 +479,7 @@ object ProtoUtil {
           user = ByteString.EMPTY,
           timestamp = timestamp,
           term = term.toProtoString,
-          phloLimit = Some(phloLimit)
+          phloLimit = phloLimit
         )
       )
     )
@@ -507,7 +507,7 @@ object ProtoUtil {
   }
 
   def getRholangDeployParams(dd: DeployData): (Par, Par, Par, Par) = {
-    val phloPrice: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(dd.phloPrice.get.value))))
+    val phloPrice: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(dd.phloPrice))))
     val userId: Par    = Par(exprs = Seq(Expr(Expr.ExprInstance.GByteArray(dd.user))))
     val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(dd.timestamp))))
     (computeCodeHash(dd), phloPrice, userId, timestamp)
