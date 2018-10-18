@@ -31,7 +31,7 @@ class ModelSerializerBench {
   @BenchmarkMode(Array(Mode.AverageTime))
   @OutputTimeUnit(TimeUnit.MILLISECONDS)
   @Fork(value = 1)
-  @Warmup(iterations = 5)
+  @Warmup(iterations = 20)
   @Measurement(iterations = 10)
   def protobufHeavyRoundTrip(bh: Blackhole, state: ProtobufModelBenchState) = {
     val res = state.roundTripMany(state.heavyGnats)(state.serializer)
@@ -54,7 +54,7 @@ class ModelSerializerBench {
   @BenchmarkMode(Array(Mode.AverageTime))
   @OutputTimeUnit(TimeUnit.MILLISECONDS)
   @Fork(value = 1)
-  @Warmup(iterations = 5)
+  @Warmup(iterations = 20)
   @Measurement(iterations = 10)
   def kryoHeavyRoundTrip(bh: Blackhole, state: KryoModelBenchState) = {
     val res = state.roundTripMany(state.heavyGnats)(state.serializer)
