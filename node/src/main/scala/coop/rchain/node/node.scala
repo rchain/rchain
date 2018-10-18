@@ -1,9 +1,17 @@
 package coop.rchain.node
 
+import java.security.cert.X509Certificate
+
 import cats._
+import cats.data.EitherT.{leftT, rightT}
 import cats.data._
 import cats.effect._
-import cats.implicits._
+import cats.syntax.apply._
+import cats.syntax.either._
+import cats.syntax.flatMap._
+import cats.syntax.functor._
+import cats.syntax.applicative._
+import cats.syntax.applicativeError._
 import coop.rchain.blockstorage.{BlockStore, LMDBBlockStore}
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.util.comm.CasperPacketHandler
@@ -36,10 +44,85 @@ import org.http4s.server.{Server => Http4sServer}
 import org.http4s.server.blaze._
 
 import scala.concurrent.duration._
-import scala.util.{Failure, Success, Try}
-import monix.execution.schedulers.SchedulerService
 
-class NodeRuntime(conf: Configuration, host: String, scheduler: Scheduler) {
+class InitNodeRuntime(conf: Configuration, host: String, scheduler: Scheduler) {
+  private implicit val log = effects.log
+
+  private val dataDirFile = conf.server.dataDir.toFile
+
+  def init: Effect[NodeRuntime] =
+    for {
+      _ <- canCreateDataDir
+      _ <- Log[Effect].info(s"Using data_dir: ${dataDirFile.getAbsolutePath}")
+      _ <- transport.generateCertificateIfAbsent[Effect].apply(conf.tls)
+      _ <- hasCertificate
+      _ <- hasKey
+      n <- name
+    } yield new NodeRuntime(conf, host, scheduler, n)
+
+  private def isValid(pred: Boolean, msg: String): Effect[Unit] =
+    if (pred) Left[CommError, Unit](InitializationError(msg)).toEitherT
+    else Right(()).toEitherT
+
+  private def name: Effect[String] = {
+    val certificate: Effect[X509Certificate] =
+      Task
+        .delay(CertificateHelper.fromFile(conf.tls.certificate.toFile))
+        .attemptT
+        .leftMap(e => InitializationError(s"Failed to read the X.509 certificate: ${e.getMessage}"))
+
+    for {
+      cert <- certificate
+      pk   = cert.getPublicKey
+      name <- certBase16(CertificateHelper.publicAddress(pk))
+    } yield name
+  }
+
+  def certBase16(maybePubAddr: Option[Array[Byte]]): Effect[String] =
+    maybePubAddr match {
+      case Some(bytes) =>
+        rightT(
+          Base16.encode(
+            CertificateHelper.publicAddress(bytes)
+          )
+        )
+      case None =>
+        leftT(
+          InitializationError(
+            "Certificate must contain a secp256r1 EC Public Key"
+          )
+        )
+    }
+
+  def canCreateDataDir: Effect[Unit] = isValid(
+    !dataDirFile.exists() && !dataDirFile.mkdir(),
+    s"The data dir must be a directory and have read and write permissions:\\n${dataDirFile.getAbsolutePath}"
+  )
+
+  def haveAccessToDataDir: Effect[Unit] = isValid(
+    !dataDirFile.isDirectory || !dataDirFile.canRead || !dataDirFile.canWrite,
+    s"The data dir must be a directory and have read and write permissions:\n${dataDirFile.getAbsolutePath}"
+  )
+
+  def hasCertificate: Effect[Unit] = isValid(
+    !conf.tls.certificate.toFile.exists(),
+    s"Certificate file ${conf.tls.certificate} not found"
+  )
+
+  def hasKey: Effect[Unit] = isValid(
+    !conf.tls.key.toFile.exists(),
+    s"Secret key file ${conf.tls.certificate} not found"
+  )
+}
+
+class NodeRuntime(
+    conf: Configuration,
+    host: String,
+    scheduler: Scheduler,
+    name: String
+)(
+    implicit log: Log[Task]
+) {
 
   private val loopScheduler = Scheduler.fixedPool("loop", 4)
   private val grpcScheduler = Scheduler.cached("grpc-io", 4, 64)
@@ -48,60 +131,6 @@ class NodeRuntime(conf: Configuration, host: String, scheduler: Scheduler) {
 
   implicit def eiterTrpConfAsk(implicit ev: RPConfAsk[Task]): RPConfAsk[Effect] =
     new EitherTApplicativeAsk[Task, RPConf, CommError]
-
-  private val dataDirFile = conf.server.dataDir.toFile
-
-  if (!dataDirFile.exists()) {
-    if (!dataDirFile.mkdir()) {
-      println(
-        s"The data dir must be a directory and have read and write permissions:\n${dataDirFile.getAbsolutePath}"
-      )
-      System.exit(-1)
-    }
-  }
-
-  // Check if data_dir has read/write access
-  if (!dataDirFile.isDirectory || !dataDirFile.canRead || !dataDirFile.canWrite) {
-    println(
-      s"The data dir must be a directory and have read and write permissions:\n${dataDirFile.getAbsolutePath}"
-    )
-    System.exit(-1)
-  }
-
-  println(s"Using data_dir: ${dataDirFile.getAbsolutePath}")
-  transport.generateSertificateIfAbsent(conf.tls)
-
-  if (!conf.tls.certificate.toFile.exists()) {
-    println(s"Certificate file ${conf.tls.certificate} not found")
-    System.exit(-1)
-  }
-
-  if (!conf.tls.key.toFile.exists()) {
-    println(s"Secret key file ${conf.tls.certificate} not found")
-    System.exit(-1)
-  }
-
-  private val name: String = {
-    val publicKey = Try(CertificateHelper.fromFile(conf.tls.certificate.toFile)) match {
-      case Success(c) => Some(c.getPublicKey)
-      case Failure(e) =>
-        println(s"Failed to read the X.509 certificate: ${e.getMessage}")
-        System.exit(1)
-        None
-      case _ => None
-    }
-
-    val publicKeyHash = publicKey
-      .flatMap(CertificateHelper.publicAddress)
-      .map(Base16.encode)
-
-    if (publicKeyHash.isEmpty) {
-      println("Certificate must contain a secp256r1 EC Public Key")
-      System.exit(1)
-    }
-
-    publicKeyHash.get
-  }
 
   import ApplicativeError_._
 
@@ -114,17 +143,6 @@ class NodeRuntime(conf: Configuration, host: String, scheduler: Scheduler) {
   private val storageSize       = conf.server.mapSize
   private val storeType         = conf.server.storeType
   private val defaultTimeout    = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS) // TODO remove
-
-  /** Final Effect + helper methods */
-  type CommErrT[F[_], A] = EitherT[F, CommError, A]
-  type Effect[A]         = CommErrT[Task, A]
-
-  implicit class EitherEffectOps[A](e: Either[CommError, A]) {
-    def toEffect: Effect[A] = EitherT[Task, CommError, A](e.pure[Task])
-  }
-  implicit class TaskEffectOps[A](t: Task[A]) {
-    def toEffect: Effect[A] = t.liftM[CommErrT]
-  }
 
   case class Servers(
       grpcServerExternal: Server,
@@ -397,4 +415,9 @@ class NodeRuntime(conf: Configuration, host: String, scheduler: Scheduler) {
     _ <- handleUnrecoverableErrors(program)(log)
   } yield ()
 
+}
+
+object NodeRuntime {
+  def apply(conf: Configuration, host: String, scheduler: Scheduler): Effect[NodeRuntime] =
+    new InitNodeRuntime(conf, host, scheduler).init
 }
