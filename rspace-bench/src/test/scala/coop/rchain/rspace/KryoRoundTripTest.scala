@@ -8,7 +8,7 @@ import org.scalatest.prop._
 import org.scalacheck._
 import scala.reflect.ClassTag
 
-class RoundTripTest extends FlatSpec with PropertyChecks with Matchers {
+class KryoRoundTripTest extends FlatSpec with PropertyChecks with Matchers {
   implicit override val generatorDrivenConfig =
     PropertyCheckConfiguration(minSuccessful = 50, sizeRange = 250)
 
