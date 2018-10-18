@@ -3,14 +3,16 @@ package coop.rchain.rspace.bench.serialization
 import java.util.concurrent.TimeUnit
 import java.nio.ByteBuffer
 
+import coop.rchain.models.Serialize2ByteBuffer
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
+import coop.rchain.rspace.bench.serialization._
 
 import org.openjdk.jmh.annotations.{State => BenchState, _}
 import org.openjdk.jmh.infra.Blackhole
 
-class CodecBench {
+class ExamplesSerializerBench {
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
@@ -18,7 +20,7 @@ class CodecBench {
   @Fork(value = 1)
   @Warmup(iterations = 5)
   @Measurement(iterations = 10)
-  def scodecRoundTrip(bh: Blackhole, state: ScodecBenchState) = {
+  def defaultRoundTrip(bh: Blackhole, state: DefaultExamplesBenchState) = {
     val res = state.roundTrip(state.gnat)(state.serializer)
     bh.consume(res)
   }
@@ -29,7 +31,7 @@ class CodecBench {
   @Fork(value = 1)
   @Warmup(iterations = 5)
   @Measurement(iterations = 10)
-  def scodecHeavyRoundTrip(bh: Blackhole, state: ScodecBenchState) = {
+  def defaultHeavyRoundTrip(bh: Blackhole, state: DefaultExamplesBenchState) = {
     val res = state.roundTripMany(state.heavyGnats)(state.serializer)
     bh.consume(res)
   }
@@ -40,7 +42,7 @@ class CodecBench {
   @Fork(value = 1)
   @Warmup(iterations = 5)
   @Measurement(iterations = 10)
-  def kryoRoundTrip(bh: Blackhole, state: KryoBenchState) = {
+  def kryoRoundTrip(bh: Blackhole, state: KryoExamplesBenchState) = {
     val gnat = state.gnat
     val res  = state.roundTrip(gnat)(state.serializer)
     bh.consume(res)
@@ -52,18 +54,13 @@ class CodecBench {
   @Fork(value = 1)
   @Warmup(iterations = 5)
   @Measurement(iterations = 10)
-  def kryoHeavyRoundTrip(bh: Blackhole, state: KryoBenchState) = {
+  def kryoHeavyRoundTrip(bh: Blackhole, state: KryoExamplesBenchState) = {
     val res = state.roundTripMany(state.heavyGnats)(state.serializer)
     bh.consume(res)
   }
 }
 
-trait Serialize2ByteBuffer[A] {
-  def encode(a: A): ByteBuffer
-  def decode(bytes: ByteBuffer): A
-}
-
-abstract class CodecBenchState {
+abstract class ExamplesSerializerBenchState {
   type TestGNAT = GNAT[Channel, Pattern, Entry, EntriesCaptor]
 
   implicit def serializer: Serialize2ByteBuffer[TestGNAT]
@@ -117,7 +114,7 @@ abstract class CodecBenchState {
 }
 
 @BenchState(Scope.Benchmark)
-class ScodecBenchState extends CodecBenchState {
+class DefaultExamplesBenchState extends ExamplesSerializerBenchState {
 
   import scodec.Codec
   import scodec.bits.BitVector
@@ -140,7 +137,7 @@ class ScodecBenchState extends CodecBenchState {
 }
 
 @BenchState(Scope.Benchmark)
-class KryoBenchState extends CodecBenchState {
+class KryoExamplesBenchState extends ExamplesSerializerBenchState {
 
   import com.esotericsoftware.kryo.Kryo
   import com.esotericsoftware.kryo.io._
