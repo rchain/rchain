@@ -222,5 +222,10 @@ object ProcGen {
       (p.procvar_ match {
         case v: ProcVarVar => shrinkString.shrink(v.var_).map(new ProcVarVar(_))
       }).map(new PVar(_))
+
+    case p: PNeg =>
+      shrink(p.proc_).map(new PNeg(_))
+
+    case p: PNil => streamSingleton(p)
   }
 }
