@@ -33,7 +33,7 @@ object tools {
     else
       throw new IllegalArgumentException("oneOf called on empty generator collection")
 
-  def subsetOf[T](items: Seq[T]): Gen[Seq[T]] =
+  def nonemptySubSeq[T](items: Seq[T]): Gen[Seq[T]] =
     for {
       count  <- Gen.choose(1, items.length)
       output <- Gen.pick(count, items)
@@ -86,22 +86,24 @@ object tools {
 object ProcGen {
   import tools._
 
-  case class State(height: Int, usedNames: Set[String]) {
+  case class State(height: Int, boundNames: Set[String]) {
     def decrementHeight: State                   = this.copy(height = height - 1)
-    def addNames(names: Iterable[String]): State = this.copy(usedNames = usedNames ++ names)
+    def addNames(names: Iterable[String]): State = this.copy(boundNames = boundNames ++ names)
   }
 
-  private def pparGen(state: State): Gen[PPar] =
+  private def pparGen(state: State): Gen[PPar] = {
+    val newState = state.decrementHeight
     for {
-      p1 <- procGen(processContextProcs, state.decrementHeight)
-      p2 <- procGen(processContextProcs, state.decrementHeight)
+      p1 <- procGen(processContextProcs, newState)
+      p2 <- procGen(processContextProcs, newState)
     } yield new PPar(p1, p2)
+  }
 
   private def pvarGen(state: State): Gen[Proc] =
-    if (state.usedNames.isEmpty)
+    if (state.boundNames.isEmpty)
       pnilGen
     else
-      procVarVarGen(Gen.oneOf(state.usedNames.toSeq)).map(new PVar(_))
+      procVarVarGen(Gen.oneOf(state.boundNames.toSeq)).map(new PVar(_))
 
   private def procVarVarGen(identifierGen: Gen[String]): Gen[ProcVarVar] =
     identifierGen.map(new ProcVarVar(_))
@@ -140,12 +142,14 @@ object ProcGen {
     sendMultipleGen
   )
 
-  private def psendGen(state: State): Gen[PSend] =
+  private def psendGen(state: State): Gen[PSend] = {
+    val newState = state.decrementHeight
     for {
-      name     <- nameGen(state.decrementHeight)
+      name     <- nameGen(newState)
       send     <- sendGen
-      listProc <- Gen.listOf(procGen(allProcs, state.decrementHeight))
+      listProc <- Gen.listOf(procGen(allProcs, newState))
     } yield new PSend(name, send, seqToJavaCollection[ListProc, Proc](listProc))
+  }
 
   lazy val pnilGen: Gen[PNil] = Gen.const(new PNil())
 
@@ -171,7 +175,8 @@ object ProcGen {
 
   private def procGen(procGens: Seq[State => Gen[Proc]], state: State): Gen[Proc] =
     if (state.height > 0) {
-      oneOf(procGens.map(_.apply(state.decrementHeight)))
+      val newState = state.decrementHeight
+      oneOf(procGens.map(_.apply(newState)))
     } else
       pnilGen
 
@@ -227,7 +232,7 @@ object ProcGen {
         newNames     <- shrinkContainer[Seq, NameDecl].shrink(initialNames).takeWhile(_.nonEmpty)
         newLocalVars = extractNames(newNames)
         proc <- shrink(p.proc_)
-                 .filter(p => extractFreeVariables(p).forall(newLocalVars.toSet.contains(_)))
+                 .filter(p => extractFreeVariables(p).forall(newLocalVars.contains(_)))
       } yield new PNew(seqToJavaCollection[ListNameDecl, NameDecl](newNames), proc)
 
     case p: PVar =>
