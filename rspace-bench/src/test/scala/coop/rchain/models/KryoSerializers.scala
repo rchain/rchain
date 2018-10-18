@@ -15,7 +15,6 @@ trait Serialize2ByteBuffer[A] {
   def roundTrip(in: A): A = {
     val meta = encode(in)
     val out  = decode(meta)
-    assert(out == in)
     out
   }
 }
