@@ -20,7 +20,7 @@ import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import coop.rchain.comm.rp.ProtocolHelper.packet
+import coop.rchain.comm.rp.ProtocolHelper.{packet, toPacket}
 import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.metrics.Metrics
@@ -381,7 +381,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     ): F[Option[Packet]] =
       for {
         _ <- Log[F].info(s"Received ApprovedBlockRequest from $peer")
-      } yield Some(toPacket(transport.ApprovedBlock.id, approvedBlock.toByteString))
+      } yield Some(Packet(transport.ApprovedBlock.id, approvedBlock.toByteString))
 
     override def handleNoApprovedBlockAvailable(na: NoApprovedBlockAvailable): F[Option[Packet]] =
       for {
@@ -542,8 +542,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         }
     }
 
-  private def noApprovedBlockAvailable(peer: PeerNode): Packet = toPacket(
-    transport.NoApprovedBlockAvailable,
+  private def noApprovedBlockAvailable(peer: PeerNode): Packet = Packet(
+    transport.NoApprovedBlockAvailable.id,
     NoApprovedBlockAvailable("NoApprovedBlockAvailable", peer.toString).toByteString
   )
 
