@@ -80,7 +80,6 @@ object KryoSerializers {
   val ConnectiveSerializer =
     emptyReplacingSerializer[Connective](_.connectiveInstance.isEmpty, Connective())
 
-
   val kryo = new Kryo()
   kryo.register(classOf[ParMap], ParMapSerializer)
   kryo.register(classOf[ParSet], ParSetSerializer)
@@ -95,8 +94,10 @@ object KryoSerializers {
 
   implicit def serializer[A](of: Class[A]): Serialize2ByteBuffer[A] = new Serialize2ByteBuffer[A] {
 
+    private[this] val noSizeLimit = -1
+
     override def encode(gnat: A): ByteBuffer = {
-      val output = new ByteBufferOutput(1024, -1)
+      val output = new ByteBufferOutput(1024, noSizeLimit)
       kryo.writeObject(output, gnat)
       output.close()
 
