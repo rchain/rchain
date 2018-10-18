@@ -19,7 +19,10 @@ class RoundTripTest extends FlatSpec with PropertyChecks with Matchers {
     out
   }
 
-  implicit val serialize = KryoSerializers.serializer(classOf[TaggedContinuation])
+  implicit val parSerialize                = KryoSerializers.serializer(classOf[Par])
+  implicit val bindPatternSerialize        = KryoSerializers.serializer(classOf[BindPattern])
+  implicit val listParWithRandomSerialize  = KryoSerializers.serializer(classOf[ListParWithRandom])
+  implicit val taggedContinuationSerialize = KryoSerializers.serializer(classOf[TaggedContinuation])
 
   def roundTripSerialization[A: Serialize2ByteBuffer: Arbitrary](
       implicit tag: ClassTag[A]
@@ -31,5 +34,8 @@ class RoundTripTest extends FlatSpec with PropertyChecks with Matchers {
     }
 
   import coop.rchain.models.testImplicits._
+  roundTripSerialization[Par]
+  roundTripSerialization[BindPattern]
+  roundTripSerialization[ListParWithRandom]
   roundTripSerialization[TaggedContinuation]
 }
