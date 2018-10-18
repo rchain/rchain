@@ -111,7 +111,7 @@ abstract class ModelSerializerBenchState {
       serializeK: Serialize[TaggedContinuation]
   ): Arbitrary[TestGNAT] =
     Arbitrary(Gen.sized { size =>
-      val constrainedSize = if (size > 1) size else 1
+      val constrainedSize = Math.max(1, size)
       for {
         chans <- Gen.containerOfN[List, Par](constrainedSize, Arbitrary.arbitrary[Par])
         data <- Gen.nonEmptyContainerOf[List, Datum[ListParWithRandom]](
