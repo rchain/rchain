@@ -12,6 +12,7 @@ class KryoRoundTripTest extends FlatSpec with PropertyChecks with Matchers {
   implicit override val generatorDrivenConfig =
     PropertyCheckConfiguration(minSuccessful = 50, sizeRange = 250)
 
+  implicit val exprSerialize               = KryoSerializers.serializer(classOf[Expr])
   implicit val parSerialize                = KryoSerializers.serializer(classOf[Par])
   implicit val bindPatternSerialize        = KryoSerializers.serializer(classOf[BindPattern])
   implicit val listParWithRandomSerialize  = KryoSerializers.serializer(classOf[ListParWithRandom])
@@ -28,6 +29,7 @@ class KryoRoundTripTest extends FlatSpec with PropertyChecks with Matchers {
     }
 
   import coop.rchain.models.testImplicits._
+  roundTripSerialization[Expr]
   roundTripSerialization[Par]
   roundTripSerialization[BindPattern]
   roundTripSerialization[ListParWithRandom]
