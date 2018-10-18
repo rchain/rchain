@@ -183,10 +183,10 @@ object ProcGen {
     } else
       pnilGen
 
-  private val allProcs: Seq[State => Gen[Proc]] = pvarGen _ +: processContextProcs
-
   private val processContextProcs: Seq[State => Gen[Proc]] =
     Seq(pgroundGen, pparGen, psendGen, pnewGen)
+
+  private val allProcs: Seq[State => Gen[Proc]] = pvarGen _ +: processContextProcs
 
   def topLevelGen(height: Int): Gen[Proc] =
     procGen(processContextProcs, State(height, Set.empty))
