@@ -1,20 +1,32 @@
 package coop.rchain.models
 
-import coop.rchain.models.Var.VarInstance
 import java.nio.ByteBuffer
+
+import scala.reflect.ClassTag
+
+import com.esotericsoftware.kryo.{Kryo, Serializer}
+import com.esotericsoftware.kryo.io._
+import coop.rchain.models.Var.VarInstance
+import org.objenesis.strategy.StdInstantiatorStrategy
 
 trait Serialize2ByteBuffer[A] {
   def encode(a: A): ByteBuffer
   def decode(bytes: ByteBuffer): A
 }
 
+abstract class KryoSerializer[T](implicit tag: ClassTag[T]) extends Serializer[T] {
+
+  def defaultSerializer(kryo: Kryo): Serializer[T] =
+    kryo
+      .getDefaultSerializer(tag.runtimeClass)
+      .asInstanceOf[Serializer[T]]
+
+  override def write(kryo: Kryo, output: Output, e: T): Unit =
+    defaultSerializer(kryo).write(kryo, output, e)
+
+}
+
 object KryoSerializers {
-
-  import com.esotericsoftware.kryo.{Kryo, Serializer}
-  import com.esotericsoftware.kryo.io._
-
-  import com.esotericsoftware.kryo.util.MapReferenceResolver
-  import org.objenesis.strategy.StdInstantiatorStrategy
 
   object ParMapSerializer extends Serializer[ParMap] {
     import ParMapTypeMapper._
@@ -74,15 +86,7 @@ object KryoSerializers {
     }
   }
 
-  object VarSerializer extends Serializer[Var] {
-
-    def defaultSerializer(kryo: Kryo): Serializer[Var] =
-      kryo
-        .getDefaultSerializer(classOf[Var])
-        .asInstanceOf[Serializer[Var]]
-
-    override def write(kryo: Kryo, output: Output, e: Var): Unit =
-      defaultSerializer(kryo).write(kryo, output, e)
+  object VarSerializer extends KryoSerializer[Var] {
 
     override def read(
         kryo: Kryo,
@@ -96,15 +100,7 @@ object KryoSerializers {
     }
   }
 
-  object ExprSerializer extends Serializer[Expr] {
-
-    def defaultSerializer(kryo: Kryo): Serializer[Expr] =
-      kryo
-        .getDefaultSerializer(classOf[Expr])
-        .asInstanceOf[Serializer[Expr]]
-
-    override def write(kryo: Kryo, output: Output, e: Expr): Unit =
-      defaultSerializer(kryo).write(kryo, output, e)
+  object ExprSerializer extends KryoSerializer[Expr] {
 
     override def read(
         kryo: Kryo,
@@ -118,15 +114,7 @@ object KryoSerializers {
     }
   }
 
-  object ConnectiveSerializer extends Serializer[Connective] {
-
-    def defaultSerializer(kryo: Kryo): Serializer[Connective] =
-      kryo
-        .getDefaultSerializer(classOf[Connective])
-        .asInstanceOf[Serializer[Connective]]
-
-    override def write(kryo: Kryo, output: Output, e: Connective): Unit =
-      defaultSerializer(kryo).write(kryo, output, e)
+  object ConnectiveSerializer extends KryoSerializer[Connective] {
 
     override def read(
         kryo: Kryo,
