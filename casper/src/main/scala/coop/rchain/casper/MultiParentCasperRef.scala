@@ -25,8 +25,10 @@ object MultiParentCasperRef {
   def unsafe[F[_]: Sync](casperRef: Option[MultiParentCasper[F]] = None): MultiParentCasperRef[F] =
     MaybeCell.unsafe[F, MultiParentCasper[F]](casperRef)
 
-  def withCasper[F[_]: Monad: Log: MultiParentCasperRef, A](f: MultiParentCasper[F] => F[A],
-                                                            default: A): F[A] =
+  def withCasper[F[_]: Monad: Log: MultiParentCasperRef, A](
+      f: MultiParentCasper[F] => F[A],
+      default: A
+  ): F[A] =
     MultiParentCasperRef[F].get flatMap {
       case Some(casper) => f(casper)
       case None =>

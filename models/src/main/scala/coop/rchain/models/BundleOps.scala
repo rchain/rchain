@@ -5,8 +5,10 @@ import cats.Show
 object BundleOps {
   implicit class BundleEnhance(b: Bundle) {
     def merge(other: Bundle): Bundle =
-      other.copy(readFlag = b.readFlag && other.readFlag,
-                 writeFlag = b.writeFlag && other.writeFlag)
+      other.copy(
+        readFlag = b.readFlag && other.readFlag,
+        writeFlag = b.writeFlag && other.writeFlag
+      )
   }
 
   implicit val showInstance: Show[Bundle] = Show.show[Bundle] { bundle =>

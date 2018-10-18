@@ -4,16 +4,16 @@ object Dependencies {
 
   val osClassifier: String = Detector.detect(Seq("fedora")).osClassifier
 
-  val circeVersion  = "0.9.1"
-  val http4sVersion = "0.19.0-M1"
+  val circeVersion  = "0.10.0-M2"
+  val http4sVersion = "0.19.0-M2"
   val kamonVersion  = "1.1.0"
 
   // format: off
   val bitcoinjCore        = "org.bitcoinj"                % "bitcoinj-core"             % "0.14.6"
   val bouncyCastle        = "org.bouncycastle"            % "bcprov-jdk15on"            % "1.59"
-  val catsCore            = "org.typelevel"              %% "cats-core"                 % "1.1.0"
-  val catsEffect          = "org.typelevel"              %% "cats-effect"               % "1.0.0-RC2"
-  val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % "0.2.3"
+  val catsCore            = "org.typelevel"              %% "cats-core"                 % "1.4.0"
+  val catsEffect          = "org.typelevel"              %% "cats-effect"               % "1.0.0"
+  val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % "0.3.0"
   val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion
   val circeGeneric        = "io.circe"                   %% "circe-generic"             % circeVersion
   val circeGenericExtras  = "io.circe"                   %% "circe-generic-extras"      % circeVersion
@@ -32,15 +32,18 @@ object Dependencies {
   val kalium              = "com.github.rchain"           % "kalium"                    % "0.8.1"
   val kamonCore           = "io.kamon"                   %% "kamon-core"                % kamonVersion
   val kamonPrometheus     = "io.kamon"                   %% "kamon-prometheus"          % kamonVersion
+  val kamonZipkin         = "io.kamon"                   %% "kamon-zipkin"              % "1.0.0"
+  val lightningj          = ("org.lightningj"             % "lightningj"                % "0.4.2-Beta-2")
+    .intransitive() //we only use the lib for one util class (org.lightningj.util.ZBase32) that has no dependencies
   val lmdbjava            = "org.lmdbjava"                % "lmdbjava"                  % "0.6.1"
   val logbackClassic      = "ch.qos.logback"              % "logback-classic"           % "1.2.3"
-  val monix               = "io.monix"                   %% "monix"                     % "3.0.0-RC1"
+  val monix               = "io.monix"                   %% "monix"                     % "3.0.0-RC2-d0feeba"
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.7.2"
   val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "1.1.4"
-  val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.13.4" % "test"
-  val scalacheckNoTest    = "org.scalacheck"             %% "scalacheck"                % "1.13.4"
+  val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.13.5" % "test"
+  val scalacheckNoTest    = "org.scalacheck"             %% "scalacheck"                % "1.13.5"
   val scalacheckShapeless = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.8" % "test"
-  val scalactic           = "org.scalactic"              %% "scalactic"                 % "3.0.1" % "test"
+  val scalactic           = "org.scalactic"              %% "scalactic"                 % "3.0.5" % "test"
   val scalapbRuntime      = "com.thesamet.scalapb"       %% "scalapb-runtime"           % scalapb.compiler.Version.scalapbVersion % "protobuf"
   val scalapbRuntimeLib   = "com.thesamet.scalapb"       %% "scalapb-runtime"           % scalapb.compiler.Version.scalapbVersion
   val scalapbRuntimegGrpc = "com.thesamet.scalapb"       %% "scalapb-runtime-grpc"      % scalapb.compiler.Version.scalapbVersion
@@ -52,15 +55,30 @@ object Dependencies {
   val scalatest           = "org.scalatest"              %% "scalatest"                 % "3.0.5" % "test"
   val scallop             = "org.rogach"                 %% "scallop"                   % "3.0.3"
   val scodecCore          = "org.scodec"                 %% "scodec-core"               % "1.10.3"
-  val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "0.7.0"
-  val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.5"
-  val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.2"
+  val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "0.8.0"
+  val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.6"
+  val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.3"
+  val magnolia            = "com.propensive"             %% "magnolia"                  % "0.9.1"
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.+"
   // see https://jitpack.io/#rchain/secp256k1-java
   val secp256k1Java       = "com.github.rchain"           % "secp256k1-java"            % "0.1"
   val tomlScala           = "tech.sparse"                %% "toml-scala"                % "0.1.1"
-
   // format: on
+
+  val overrides = Seq(
+    catsCore,
+    catsEffect,
+    shapeless,
+    guava,
+    scodecBits,
+    //overrides for transitive dependencies (we don't use them directly, hence no val-s)
+    "org.typelevel"            %% "machinist"              % "0.6.5",
+    "com.lihaoyi"              %% "sourcecode"             % "0.1.4",
+    "org.scala-lang.modules"   %% "scala-xml"              % "1.1.0",
+    "com.google.code.findbugs" % "jsr305"                  % "3.0.2",
+    "com.google.errorprone"    % "error_prone_annotations" % "2.1.2",
+    "com.github.jnr"           % "jnr-ffi"                 % "2.1.7"
+  )
 
   private val kindProjector = compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4")
 
@@ -81,7 +99,7 @@ object Dependencies {
     Seq(scalapbRuntimeLib)
 
   val kamonDependencies: Seq[ModuleID] =
-    Seq(kamonCore, kamonPrometheus)
+    Seq(kamonCore, kamonPrometheus, kamonZipkin)
 
   val apiServerDependencies: Seq[ModuleID] =
     http4sDependencies ++ circeDependencies

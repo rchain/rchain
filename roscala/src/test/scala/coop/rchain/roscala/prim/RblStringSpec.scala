@@ -16,7 +16,7 @@ class RblStringSpec extends FlatSpec with Matchers {
     self2 = null,
     selfEnv = null,
     rcvr = null,
-    monitor = null,
+    monitor = null
   )
 
   ctxt.trgt = null
@@ -688,14 +688,16 @@ class RblStringSpec extends FlatSpec with Matchers {
   "string-split" should "correctly tokenize a full string" in {
     val sep = ".,-=/*"
     val str = "aZ,bY.cX-dW=eV/fU*gT"
-    val res = Tuple(RblString("aZ"),
-                    RblString("bY"),
-                    RblString("cX"),
-                    RblString("dW"),
-                    RblString("eV"),
-                    RblString("fU"),
-                    RblString("gT"),
-                    Niv)
+    val res = Tuple(
+      RblString("aZ"),
+      RblString("bY"),
+      RblString("cX"),
+      RblString("dW"),
+      RblString("eV"),
+      RblString("fU"),
+      RblString("gT"),
+      Niv
+    )
 
     val parms   = Tuple(RblString(str), RblString(sep), Fixnum(33))
     val newCtxt = reAssignCtxtArgs(ctxt, 2, parms)

@@ -7,9 +7,11 @@ import coop.rchain.casper.protocol.Signature
 import coop.rchain.casper.util.SignatureAlgorithms
 import coop.rchain.shared.{Log, LogSource}
 
-case class ValidatorIdentity(publicKey: Array[Byte],
-                             privateKey: Array[Byte],
-                             sigAlgorithm: String) {
+case class ValidatorIdentity(
+    publicKey: Array[Byte],
+    privateKey: Array[Byte],
+    sigAlgorithm: String
+) {
   def signature(data: Array[Byte]): Signature = {
     val sig = SignatureAlgorithms.lookup(sigAlgorithm)(data, privateKey)
     Signature(ByteString.copyFrom(publicKey), sigAlgorithm, ByteString.copyFrom(sig))

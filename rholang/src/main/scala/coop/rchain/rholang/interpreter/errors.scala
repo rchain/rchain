@@ -11,25 +11,30 @@ object errors {
   type InterpreterErrorsM[M[_]] = MonadError[M, InterpreterError]
   def interpreterErrorM[M[_]: Monad: InterpreterErrorsM] = MonadError[M, InterpreterError]
 
-  trait InterpreterError extends Throwable {
-    override def getMessage = toString
+  sealed abstract class InterpreterError(message: String) extends Throwable(message) {
+
+    def this(message: String, cause: Throwable) {
+      this(message)
+      initCause(cause)
+    }
   }
-  final case class NormalizerError(override val toString: String) extends InterpreterError
-  final case class SyntaxError(override val toString: String)     extends InterpreterError
+
+  final case class NormalizerError(message: String) extends InterpreterError(message)
+  final case class SyntaxError(message: String)     extends InterpreterError(message)
+  final case class LexerError(message: String)      extends InterpreterError(message)
+
   final case class UnboundVariableRef(varName: String, line: Int, col: Int)
-      extends InterpreterError {
-    override def toString: String =
-      s"Variable reference: =$varName at $line:$col is unbound."
-  }
-  final case class UnexpectedNameContext(varName: String,
-                                         procVarLine: Int,
-                                         procVarCol: Int,
-                                         nameContextLine: Int,
-                                         nameContextCol: Int)
-      extends InterpreterError {
-    override def toString: String =
-      s"Proc variable: $varName at $procVarLine:$procVarCol used in Name context at $nameContextLine:$nameContextCol"
-  }
+      extends InterpreterError(s"Variable reference: =$varName at $line:$col is unbound.")
+
+  final case class UnexpectedNameContext(
+      varName: String,
+      procVarLine: Int,
+      procVarCol: Int,
+      nameContextLine: Int,
+      nameContextCol: Int
+  ) extends InterpreterError(
+        s"Proc variable: $varName at $procVarLine:$procVarCol used in Name context at $nameContextLine:$nameContextCol"
+      )
 
   final case class UnexpectedReuseOfNameContextFree(
       varName: String,
@@ -37,10 +42,10 @@ object errors {
       firstUseCol: Int,
       secondUseLine: Int,
       secondUseCol: Int
-  ) extends InterpreterError {
-    override def toString: String =
-      s"Free variable $varName is used twice as a binder (at $firstUseLine:$firstUseCol and $secondUseLine:$secondUseCol) in name context."
-  }
+  ) extends InterpreterError(
+        s"Free variable $varName is used twice as a binder " +
+          s"(at $firstUseLine:$firstUseCol and $secondUseLine:$secondUseCol) in name context."
+      )
 
   final case class UnexpectedProcContext(
       varName: String,
@@ -48,10 +53,10 @@ object errors {
       nameVarCol: Int,
       processContextLine: Int,
       processContextCol: Int
-  ) extends InterpreterError {
-    override def toString: String =
-      s"Name variable: $varName at $nameVarLine:$nameVarCol used in process context at $processContextLine:$processContextCol"
-  }
+  ) extends InterpreterError(
+        s"Name variable: $varName at $nameVarLine:$nameVarCol " +
+          s"used in process context at $processContextLine:$processContextCol"
+      )
 
   final case class UnexpectedReuseOfProcContextFree(
       varName: String,
@@ -59,52 +64,54 @@ object errors {
       firstUseCol: Int,
       secondUseLine: Int,
       secondUseCol: Int
-  ) extends InterpreterError {
-    override def toString: String =
-      s"Free variable $varName is used twice as a binder (at $firstUseLine:$firstUseCol and $secondUseLine:$secondUseCol) in process context."
-  }
+  ) extends InterpreterError(
+        s"Free variable $varName is used twice as a binder " +
+          s"(at $firstUseLine:$firstUseCol and $secondUseLine:$secondUseCol) in process context."
+      )
 
-  final case class UnexpectedBundleContent(override val toString: String) extends InterpreterError
-  final case class UnrecognizedNormalizerError(override val toString: String)
-      extends InterpreterError
-  final case class TopLevelWildcardsNotAllowedError(wildcards: String) extends InterpreterError {
-    override def toString: String =
-      s"Top level wildcards are not allowed: $wildcards."
-  }
-  final case class TopLevelFreeVariablesNotAllowedError(freeVars: String) extends InterpreterError {
-    override def toString: String =
-      s"Top level free variables are not allowed: $freeVars."
-  }
-  final case class SubstituteError(override val toString: String) extends InterpreterError
+  final case class UnexpectedBundleContent(message: String)     extends InterpreterError(message)
+  final case class UnrecognizedNormalizerError(message: String) extends InterpreterError(message)
+
+  final case object OutOfPhlogistonsError
+      extends InterpreterError("Computation ran out of phlogistons.")
+
+  final case class TopLevelWildcardsNotAllowedError(wildcards: String)
+      extends InterpreterError(s"Top level wildcards are not allowed: $wildcards.")
+
+  final case class TopLevelFreeVariablesNotAllowedError(freeVars: String)
+      extends InterpreterError(s"Top level free variables are not allowed: $freeVars.")
+
+  final case class TopLevelLogicalConnectivesNotAllowedError(connectives: String)
+      extends InterpreterError(s"Top level logical connectives are not allowed: $connectives.")
+
+  final case class SubstituteError(message: String) extends InterpreterError(message)
+
+  final case class PatternReceiveError(connectives: String)
+      extends InterpreterError(
+        s"Invalid pattern in the receive: $connectives. Only logical AND is allowed."
+      )
+
+  final case class SetupError(message: String) extends InterpreterError(message)
+
   final case class UnrecognizedInterpreterError(throwable: Throwable)
-      extends RuntimeException(throwable)
-      with InterpreterError
-  final case class SortMatchError(override val toString: String) extends InterpreterError
-  final case class ReduceError(override val toString: String)    extends InterpreterError
-  final case class MethodNotDefined(method: String, otherType: String) extends InterpreterError {
-    override def toString: String =
-      s"Error: Method `$method` is not defined on $otherType."
-  }
-  final case class MethodArgumentNumberMismatch(
-      method: String,
-      expected: Int,
-      actual: Int
-  ) extends InterpreterError {
-    override def toString: String =
-      s"Error: Method `$method` expects $expected Par argument(s), but got $actual argument(s)."
-  }
-  final case class OperatorNotDefined(op: String, otherType: String) extends InterpreterError {
-    override def toString: String =
-      s"Error: Operator `$op` is not defined on $otherType."
-  }
-  final case class OperatorExpectedError(
-      op: String,
-      expected: String,
-      otherType: String
-  ) extends InterpreterError {
-    override def toString: String =
-      s"Error: Operator `$op` expected $expected but got $otherType."
-  }
+      extends InterpreterError("Unrecognized interpreter error", throwable)
+
+  final case class SortMatchError(message: String) extends InterpreterError(message)
+  final case class ReduceError(message: String)    extends InterpreterError(message)
+
+  final case class MethodNotDefined(method: String, otherType: String)
+      extends InterpreterError(s"Error: Method `$method` is not defined on $otherType.")
+
+  final case class MethodArgumentNumberMismatch(method: String, expected: Int, actual: Int)
+      extends InterpreterError(
+        s"Error: Method `$method` expects $expected Par argument(s), but got $actual argument(s)."
+      )
+
+  final case class OperatorNotDefined(op: String, otherType: String)
+      extends InterpreterError(s"Error: Operator `$op` is not defined on $otherType.")
+
+  final case class OperatorExpectedError(op: String, expected: String, otherType: String)
+      extends InterpreterError(s"Error: Operator `$op` is not defined on $otherType.")
 
   implicit val monadErrorTask: MonadError[Task, InterpreterError] =
     new MonadError[Task, InterpreterError] {

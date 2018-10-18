@@ -2,44 +2,61 @@ package coop.rchain.rspace
 
 import java.nio.file.Files
 
+import cats.Id
+import cats.effect.Sync
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
+import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history.{Branch, InMemoryTrieStore}
 import coop.rchain.rspace.internal.GNAT
+import coop.rchain.rspace.spaces._
 import coop.rchain.rspace.trace.{COMM, Consume, IOEvent, Produce}
 import coop.rchain.shared.PathOps._
 import org.scalatest._
+import org.scalatest.concurrent.ScalaFutures
 
 import scala.Function.const
 import scala.collection.{immutable, mutable}
-import scala.util.Random
+import scala.concurrent.Future
+import scala.util.{Random, Right}
+
+import scala.concurrent.ExecutionContext.Implicits.global
 
 //noinspection ZeroIndexToHead,NameBooleanParameters
-trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, String] {
+trait ReplayRSpaceTests
+    extends ReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
+    with TestImplicitHelpers
+    with ScalaFutures {
 
   def consumeMany[C, P, A, R, K](
-      space: ISpace[C, P, A, R, K],
+      space: IdISpace[C, P, Nothing, A, R, K],
       range: Range,
       shuffle: Boolean,
       channelsCreator: Int => List[C],
       patterns: List[P],
       continuationCreator: Int => K,
-      persist: Boolean)(implicit matcher: Match[P, A, R]): List[Option[(K, Seq[R])]] =
+      persist: Boolean
+  )(
+      implicit matcher: Match[P, Nothing, A, R]
+  ): List[Option[(ContResult[C, P, K], Seq[Result[R]])]] =
     (if (shuffle) Random.shuffle(range.toList) else range.toList).map { i: Int =>
-      space.consume(channelsCreator(i), patterns, continuationCreator(i), persist)
+      space.consume(channelsCreator(i), patterns, continuationCreator(i), persist).right.get
     }
 
   def produceMany[C, P, A, R, K](
-      space: ISpace[C, P, A, R, K],
+      space: IdISpace[C, P, Nothing, A, R, K],
       range: Range,
       shuffle: Boolean,
       channelCreator: Int => C,
       datumCreator: Int => A,
-      persist: Boolean)(implicit matcher: Match[P, A, R]): List[Option[(K, immutable.Seq[R])]] =
+      persist: Boolean
+  )(
+      implicit matcher: Match[P, Nothing, A, R]
+  ): List[Option[(ContResult[C, P, K], immutable.Seq[Result[R]])]] =
     (if (shuffle) Random.shuffle(range.toList) else range.toList).map { i: Int =>
-      space.produce(channelCreator(i), datumCreator(i), persist)
+      space.produce(channelCreator(i), datumCreator(i), persist).right.get
     }
 
   "reset to a checkpoint from a different branch" should "work" in withTestSpaces {
@@ -70,7 +87,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       val resultProduce = space.produce(channels(0), datum, false)
       val rigPont       = space.createCheckpoint()
 
-      resultConsume shouldBe None
+      resultConsume shouldBe Right(None)
       resultProduce shouldBe defined
 
       replaySpace.rig(emptyPoint.root, rigPont.log)
@@ -79,10 +96,10 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       val replayResultProduce = replaySpace.produce(channels(0), datum, false)
       val finalPoint          = space.createCheckpoint()
 
-      replayResultConsume shouldBe None
+      replayResultConsume shouldBe Right(None)
       replayResultProduce shouldBe resultProduce
       finalPoint.root shouldBe rigPont.root
-      replaySpace.getReplayData shouldBe empty
+      replaySpace.replayData shouldBe empty
     }
 
   "Picking a datum from 100 waiting datums" should "replay correctly" in
@@ -127,7 +144,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
       replayResult shouldBe result
       finalPoint.root shouldBe rigPoint.root
-      replaySpace.getReplayData shouldBe empty
+      replaySpace.replayData shouldBe empty
     }
 
   "Picking 100 datums from 100 waiting datums" should "replay correctly" in
@@ -178,7 +195,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
       replayResults should contain theSameElementsAs results
       finalPoint.root shouldBe rigPoint.root
-      replaySpace.getReplayData shouldBe empty
+      replaySpace.replayData shouldBe empty
     }
 
   "Picking 100 datums from 100 persistent waiting datums" should "replay correctly" in
@@ -229,7 +246,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
       replayResults should contain theSameElementsAs results
       finalPoint.root shouldBe rigPoint.root
-      replaySpace.getReplayData shouldBe empty
+      replaySpace.replayData shouldBe empty
     }
 
   "Picking a continuation from 100 waiting continuations" should "replay correctly" in
@@ -274,7 +291,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
       replayResult shouldBe result
       finalPoint.root shouldBe rigPoint.root
-      replaySpace.getReplayData shouldBe empty
+      replaySpace.replayData shouldBe empty
     }
 
   "Picking 100 continuations from 100 waiting continuations" should "replay correctly" in
@@ -325,7 +342,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
       replayResults should contain theSameElementsAs results
       finalPoint.root shouldBe rigPoint.root
-      replaySpace.getReplayData shouldBe empty
+      replaySpace.replayData shouldBe empty
     }
 
   "Picking 100 continuations from 100 persistent waiting continuations" should "replay correctly" in
@@ -376,7 +393,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
       replayResults should contain theSameElementsAs results
       finalPoint.root shouldBe rigPoint.root
-      replaySpace.getReplayData shouldBe empty
+      replaySpace.replayData shouldBe empty
     }
 
   "Pick 100 continuations from 100 waiting continuations stored at two channels" should "replay correctly" in
@@ -443,7 +460,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
       replayResults should contain theSameElementsAs results
       finalPoint.root shouldBe rigPoint.root
-      replaySpace.getReplayData shouldBe empty
+      replaySpace.replayData shouldBe empty
     }
 
   "Picking 100 datums from 100 waiting datums while doing a bunch of other junk" should "replay correctly" in
@@ -526,7 +543,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
       replayResults should contain theSameElementsAs results
       finalPoint.root shouldBe rigPoint.root
-      replaySpace.getReplayData shouldBe empty
+      replaySpace.replayData shouldBe empty
     }
 
   "Picking 100 continuations from 100 persistent waiting continuations while doing a bunch of other junk" should "replay correctly" in
@@ -609,7 +626,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
       replayResults should contain theSameElementsAs results
       finalPoint.root shouldBe rigPoint.root
-      replaySpace.getReplayData shouldBe empty
+      replaySpace.replayData shouldBe empty
     }
 
   "Replay rspace" should "correctly remove things from replay data" in withTestSpaces {
@@ -644,7 +661,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
       replaySpace.rig(emptyPoint.root, rigPoint.log)
 
-      val mm: mutable.Map[IOEvent, Multiset[COMM]] = replaySpace.getReplayData
+      val mm: mutable.Map[IOEvent, Multiset[COMM]] = replaySpace.replayData
 
       mm.get(cr).map(_.size).value shouldBe 2
 
@@ -702,13 +719,13 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
       val emptyPoint = space.createCheckpoint()
 
-      space.consume(channels, patterns, continuation, false) shouldBe None
+      space.consume(channels, patterns, continuation, false) shouldBe Right(None)
 
       val rigPoint = space.createCheckpoint()
 
       replaySpace.rig(emptyPoint.root, rigPoint.log)
 
-      replaySpace.consume(channels, patterns, continuation, false) shouldBe None
+      replaySpace.consume(channels, patterns, continuation, false) shouldBe Right(None)
 
       val replayStore = replaySpace.store
 
@@ -720,7 +737,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       replayStore.isEmpty shouldBe true
       replayStore.getTrieUpdates.length shouldBe 0
       replayStore.getTrieUpdateCount shouldBe 0
-      replaySpace.replayData.get shouldBe empty
+      replaySpace.replayData shouldBe empty
 
       val checkpoint1 = replaySpace.createCheckpoint()
       checkpoint1.log shouldBe empty
@@ -738,13 +755,13 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
       val emptyPoint = space.createCheckpoint()
 
-      space.consume(channels, patterns, continuation, false) shouldBe None
+      space.consume(channels, patterns, continuation, false) shouldBe Right(None)
 
       val rigPoint = space.createCheckpoint()
 
       replaySpace.rig(emptyPoint.root, rigPoint.log)
 
-      replaySpace.consume(channels, patterns, continuation, false) shouldBe None
+      replaySpace.consume(channels, patterns, continuation, false) shouldBe Right(None)
 
       val replayStore = replaySpace.store
 
@@ -759,7 +776,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       replayStore.isEmpty shouldBe true
       replayStore.getTrieUpdates.length shouldBe 0
       replayStore.getTrieUpdateCount shouldBe 0
-      replaySpace.replayData.get shouldBe empty
+      replaySpace.replayData shouldBe empty
 
       val checkpoint1 = replaySpace.createCheckpoint()
       checkpoint1.log shouldBe empty
@@ -767,27 +784,29 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
   "after close rspace" should "throw RSpaceClosedException on all store operations" in
     withTestSpaces { (space, replaySpace) =>
-      val channel  = "ch1"
-      val key      = List(channel)
-      val patterns = List(Wildcard)
+      val channel      = "ch1"
+      val key          = List(channel)
+      val patterns     = List(Wildcard)
+      val continuation = "continuation"
+      val data         = "datum1"
 
       replaySpace.close()
-      //using some nulls here to ensure that exception is thrown even before args check
+
       an[RSpaceClosedException] shouldBe thrownBy(
-        replaySpace.install(key, patterns, null)
+        replaySpace.install(key, patterns, continuation)
       )
 
       an[RSpaceClosedException] shouldBe thrownBy(
-        replaySpace.consume(key, patterns, null, false)
+        replaySpace.consume(key, patterns, continuation, false)
       )
 
       an[RSpaceClosedException] shouldBe thrownBy(
-        replaySpace.produce(channel, null, false)
+        replaySpace.produce(channel, data, false)
       )
     }
 }
 
-trait ReplayRSpaceTestsBase[C, P, A, K] extends FlatSpec with Matchers with OptionValues {
+trait ReplayRSpaceTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with OptionValues {
   val logger = Logger(this.getClass.getName.stripSuffix("$"))
 
   override def withFixture(test: NoArgTest): Outcome = {
@@ -795,26 +814,34 @@ trait ReplayRSpaceTestsBase[C, P, A, K] extends FlatSpec with Matchers with Opti
     super.withFixture(test)
   }
 
-  def withTestSpaces[S](f: (RSpace[C, P, A, A, K], ReplayRSpace[C, P, A, A, K]) => S)(
+  def withTestSpaces[S](f: (IdISpace[C, P, E, A, A, K], IReplaySpace[Id, C, P, E, A, A, K]) => S)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]): S
+      sk: Serialize[K],
+      oC: Ordering[C]
+  ): S
 }
 
-trait LMDBReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C, P, A, K] {
-  override def withTestSpaces[S](f: (RSpace[C, P, A, A, K], ReplayRSpace[C, P, A, A, K]) => S)(
+trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
+  override def withTestSpaces[S](
+      f: (IdISpace[C, P, E, A, A, K], IReplaySpace[Id, C, P, E, A, A, K]) => S
+  )(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]): S = {
+      sk: Serialize[K],
+      oC: Ordering[C]
+  ): S = {
+
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
 
     val dbDir       = Files.createTempDirectory("rchain-storage-test-")
     val context     = Context.create[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
-    val space       = RSpace.create[C, P, A, A, K](context, Branch.MASTER)
-    val replaySpace = ReplayRSpace.create[C, P, A, A, K](context, Branch.REPLAY)
+    val space       = RSpace.create[Id, C, P, E, A, A, K](context, Branch.MASTER)
+    val replaySpace = ReplayRSpace.create[Id, C, P, E, A, A, K](context, Branch.REPLAY)
 
     try {
       f(space, replaySpace)
@@ -827,18 +854,24 @@ trait LMDBReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C, P, 
   }
 }
 
-trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C, P, A, K] {
-  override def withTestSpaces[S](f: (RSpace[C, P, A, A, K], ReplayRSpace[C, P, A, A, K]) => S)(
+trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
+  override def withTestSpaces[S](
+      f: (IdISpace[C, P, E, A, A, K], IReplaySpace[Id, C, P, E, A, A, K]) => S
+  )(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]): S = {
+      sk: Serialize[K],
+      oC: Ordering[C]
+  ): S = {
+
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
 
     val trieStore = InMemoryTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]]()
-    val space     = RSpace.createInMemory[C, P, A, A, K](trieStore, Branch.REPLAY)
+    val space     = RSpace.createInMemory[Id, C, P, E, A, A, K](trieStore, Branch.REPLAY)
     val replaySpace =
-      ReplayRSpace.createInMemory[C, P, A, A, K](trieStore, Branch.REPLAY)
+      ReplayRSpace.createInMemory[Id, C, P, E, A, A, K](trieStore, Branch.REPLAY)
 
     try {
       f(space, replaySpace)
@@ -849,10 +882,81 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
   }
 }
 
+trait FaultyStoreReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
+  override def withTestSpaces[S](
+      f: (IdISpace[C, P, E, A, A, K], IReplaySpace[Id, C, P, E, A, A, K]) => S
+  )(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      oC: Ordering[C]
+  ): S = {
+
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+
+    val trieStore = InMemoryTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]]()
+    val space     = RSpace.createInMemory[Id, C, P, E, A, A, K](trieStore, Branch.REPLAY)
+    val store =
+      new InMemoryStore[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
+        trieStore,
+        Branch.REPLAY
+      ) {
+        override private[rspace] def createTxnWrite()
+          : InMemTransaction[coop.rchain.rspace.State[C, P, A, K]] =
+          throw new RuntimeException("Couldn't write to underlying store")
+      }
+
+    val replaySpace = new FineGrainedReplayRSpace[Id, C, P, E, A, A, K](store, Branch.REPLAY)
+
+    try {
+      f(space, replaySpace)
+    } finally {
+      space.close()
+      replaySpace.close()
+    }
+  }
+
+}
+
 class LMDBReplayRSpaceTests
-    extends LMDBReplayRSpaceTestsBase[String, Pattern, String, String]
+    extends LMDBReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
     with ReplayRSpaceTests {}
 
 class InMemoryRSpaceTests
-    extends InMemoryReplayRSpaceTestsBase[String, Pattern, String, String]
+    extends InMemoryReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
     with ReplayRSpaceTests {}
+
+class FaultyReplayRSpaceTests
+    extends FaultyStoreReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
+    with ScalaFutures {
+
+  "an exception thrown inside a consume" should "not make replay rspace unresponsive" in
+    withTestSpaces { (space, replaySpace) =>
+      val channel      = "ch1"
+      val key          = List(channel)
+      val patterns     = List(Wildcard)
+      val continuation = "continuation"
+
+      an[RuntimeException] shouldBe thrownBy(
+        replaySpace.consume(key, patterns, continuation, false)
+      )
+
+      val res = Future { replaySpace.consume(key, patterns, continuation, false) }.failed.futureValue
+      res.getMessage shouldBe "Couldn't write to underlying store"
+    }
+
+  "an exception thrown inside a produce" should "not make replay rspace unresponsive" in
+    withTestSpaces { (space, replaySpace) =>
+      val channel = "ch1"
+      val data    = "datum1"
+
+      an[RuntimeException] shouldBe thrownBy(
+        replaySpace.produce(channel, data, false)
+      )
+
+      val res = Future { replaySpace.produce(channel, data, false) }.failed.futureValue
+      res.getMessage shouldBe "Couldn't write to underlying store"
+    }
+}

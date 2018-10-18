@@ -9,10 +9,10 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
 class MakeMintSpec extends FlatSpec with Matchers {
-  val runtime = TestSetUtil.runtime("rholang-make-mint-test")
+  val runtime = TestSetUtil.runtime
   val tests   = TestSetUtil.getTests("./casper/src/test/rholang/MakeMintTest.rho").toList
 
-  TestSetUtil.runTests(MakeMintTest.term, List(NonNegativeNumber.term, MakeMint.term), runtime)
+  TestSetUtil.runTests(MakeMintTest, List(NonNegativeNumber, MakeMint), runtime)
   val tuplespace = StoragePrinter.prettyPrint(runtime.space.store)
 
   "MakeMint rholang contract" should tests.head in {

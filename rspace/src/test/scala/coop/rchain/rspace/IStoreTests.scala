@@ -10,7 +10,7 @@ import org.scalatest.AppendedClues
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
 trait IStoreTests
-    extends StorageTestsBase[String, Pattern, String, StringsCaptor]
+    extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor]
     with GeneratorDrivenPropertyChecks
     with AppendedClues {
 
@@ -73,7 +73,8 @@ trait IStoreTests
           }
           store.removeDatum(txn, key, index - 1)
           store.getData(txn, key) should contain theSameElementsAs (data.filterNot(
-            _.a == datumValue + (size - index)))
+            _.a == datumValue + (size - index)
+          ))
           store.clear(txn)
         }
     }
@@ -222,11 +223,15 @@ trait IStoreTests
   it should "remove all operations from history with the same hash when last operation is delete" in withTestSpace {
     space =>
       forAll("gnat1", "gnat2") {
-        (gnat1: GNAT[String, Pattern, String, StringsCaptor],
-         gnat2: GNAT[String, Pattern, String, StringsCaptor]) =>
+        (
+            gnat1: GNAT[String, Pattern, String, StringsCaptor],
+            gnat2: GNAT[String, Pattern, String, StringsCaptor]
+        ) =>
           val store = space.store
-          val gnat1Ops = List(TrieUpdate(0, Insert, store.hashChannels(gnat1.channels), gnat1),
-                              TrieUpdate(1, Delete, store.hashChannels(gnat1.channels), gnat1))
+          val gnat1Ops = List(
+            TrieUpdate(0, Insert, store.hashChannels(gnat1.channels), gnat1),
+            TrieUpdate(1, Delete, store.hashChannels(gnat1.channels), gnat1)
+          )
           val gnat2Ops = List(TrieUpdate(2, Insert, store.hashChannels(gnat2.channels), gnat2))
           val history  = gnat1Ops ++ gnat2Ops
           store.collapse(history) shouldBe gnat2Ops
@@ -241,7 +246,7 @@ trait IStoreTests
           TrieUpdate(0, Insert, store.hashChannels(gnat1.channels), gnat1),
           TrieUpdate(1, Insert, store.hashChannels(gnat1.channels), gnat1),
           TrieUpdate(2, Insert, store.hashChannels(gnat1.channels), gnat1),
-          TrieUpdate(3, Delete, store.hashChannels(gnat1.channels), gnat1),
+          TrieUpdate(3, Delete, store.hashChannels(gnat1.channels), gnat1)
         )
         store.collapse(gnatOps) shouldBe empty
       }
@@ -265,9 +270,11 @@ trait IStoreTests
         val store      = space.store
         val lastInsert = TrieUpdate(2, Insert, store.hashChannels(gnat.channels), gnat)
 
-        val history = List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat),
-                           lastInsert,
-                           TrieUpdate(1, Delete, store.hashChannels(gnat.channels), gnat))
+        val history = List(
+          TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat),
+          lastInsert,
+          TrieUpdate(1, Delete, store.hashChannels(gnat.channels), gnat)
+        )
         store.collapse(history) shouldBe List(lastInsert)
       }
   }

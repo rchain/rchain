@@ -8,17 +8,18 @@ import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
-import scala.concurrent.Await
 import scala.concurrent.duration._
 
 class InterpreterSpec extends FlatSpec with Matchers {
-  val mapSize     = 1024L * 1024L * 1024L
+  val mapSize     = 10L * 1024L * 1024L
   val tmpPrefix   = "rspace-store-"
   val maxDuration = 5.seconds
 
   val runtime = Runtime.create(Files.createTempDirectory(tmpPrefix), mapSize)
 
-  "Interpreter" should "restore RSpace to its prior state after evaluation error" in {
+  behavior of "Interpreter"
+
+  it should "restore RSpace to its prior state after evaluation error" in {
     val initStorage = storageContents()
     val send        = "@{0}!(0)"
     success(send)
@@ -32,7 +33,49 @@ class InterpreterSpec extends FlatSpec with Matchers {
     assert(storageContents() == initStorage)
   }
 
-  private def storageContents() =
+  it should "yield correct results for the PrimeCheck contract" in {
+    success("""
+        |new loop, primeCheck, stdoutAck(`rho:io:stdoutAck`) in {
+        |            contract loop(@x) = {
+        |              match x {
+        |                [] => Nil
+        |                [head ...tail] => {
+        |                  new ret in {
+        |                    for (_ <- ret) {
+        |                      loop!(tail)
+        |                    } | primeCheck!(head, *ret)
+        |                  }
+        |                }
+        |              }
+        |            } |
+        |            contract primeCheck(@x, ret) = {
+        |              match x {
+        |                Nil => { stdoutAck!("Nil", *ret) | @0!("Nil") }
+        |                ~{~Nil | ~Nil} => { stdoutAck!("Prime", *ret) | @0!("Pr") }
+        |                _ => { stdoutAck!("Composite", *ret) |  @0!("Co") }
+        |              }
+        |            } |
+        |            loop!([Nil, 7, 7 | 8, 9 | Nil, 9 | 10, Nil, 9])
+        |  }
+      """.stripMargin)
+    // TODO: this is not the way we should be testing execution results,
+    // yet strangely it works - and we don't have a better way for now
+    assert(
+      storageContents().startsWith(
+        Seq(
+          """@{0}!("Nil") |""",
+          """@{0}!("Pr") |""",
+          """@{0}!("Co") |""",
+          """@{0}!("Pr") |""",
+          """@{0}!("Co") |""",
+          """@{0}!("Nil") |""",
+          """@{0}!("Pr") |"""
+        ).mkString("\n")
+      )
+    )
+  }
+
+  private def storageContents(): String =
     StoragePrinter.prettyPrint(runtime.space.store)
 
   private def success(rho: String): Unit =
@@ -43,9 +86,10 @@ class InterpreterSpec extends FlatSpec with Matchers {
   private def failure(rho: String): Throwable =
     execute(rho).swap.getOrElse(fail(s"Expected $rho to fail - it didn't."))
 
-  private def execute(source: String) = {
-    val future = Interpreter.execute(runtime, new StringReader(source)).attempt.runAsync
-    Await.result(future, maxDuration)
-  }
+  private def execute(source: String): Either[Throwable, Runtime] =
+    Interpreter
+      .execute(runtime, new StringReader(source))
+      .attempt
+      .runSyncUnsafe(maxDuration)
 
 }

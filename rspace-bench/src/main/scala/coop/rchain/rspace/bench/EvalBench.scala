@@ -1,10 +1,9 @@
 package coop.rchain.rspace.bench
 
-import cats.implicits._
-import org.openjdk.jmh.annotations._
 import monix.eval.Task
-import monix.execution.{ExecutionModel, Scheduler}
 import monix.execution.schedulers.{CanBlock, TrampolineScheduler}
+import monix.execution.{ExecutionModel, Scheduler}
+import org.openjdk.jmh.annotations._
 
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
@@ -22,13 +21,14 @@ class EvalBench {
     throw new RuntimeException(
       errors
         .map(_.toString())
-        .mkString("Errors received during evaluation:\n", "\n", "\n"))
+        .mkString("Errors received during evaluation:\n", "\n", "\n")
+    )
   }
 
-  def createTest(state: MVCEPPBenchState): Task[Vector[Throwable]] = {
-    val par = state.term.getOrElse(throw new Error("Failed to prepare executable rholand term"))
+  def createTest(state: EvalBenchStateBase): Task[Vector[Throwable]] = {
+    val par = state.term.getOrElse(throw new Error("Failed to prepare executable rholang term"))
     state.runtime.reducer
-      .inj(par)(state.rand, state.costAccountAlg)
+      .inj(par)(state.rand)
       .map(_ => state.runtime.readAndClearErrorVector())
   }
 
@@ -40,7 +40,8 @@ class EvalBench {
   def reduceMVCEPPST(state: MVCEPPBenchState): Unit = {
     val runTask = createTest(state).executeOn(state.singleThreadedScheduler, forceAsync = false)
     processErrors(
-      runTask.runSyncUnsafe(Duration.Inf)(state.singleThreadedScheduler, CanBlock.permit))
+      runTask.runSyncUnsafe(Duration.Inf)(state.singleThreadedScheduler, CanBlock.permit)
+    )
   }
 
   @Benchmark
@@ -57,7 +58,8 @@ object EvalBench {
   class MVCEPPBenchState extends EvalBenchStateBase {
     val singleThreadedScheduler: Scheduler = TrampolineScheduler.apply(
       Scheduler.singleThread(name = "mvcepp-1"),
-      ExecutionModel.SynchronousExecution)
+      ExecutionModel.SynchronousExecution
+    )
 
     override val rhoScriptSource: String = "/rholang/mvcepp.rho"
   }

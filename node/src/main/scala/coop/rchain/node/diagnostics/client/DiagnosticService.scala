@@ -35,57 +35,60 @@ class GrpcDiagnosticsService(host: String, port: Int, maxMessageSize: Int)
       .maxInboundMessageSize(maxMessageSize)
       .usePlaintext(true)
       .build
-  private val blockingStub = DiagnosticsGrpc.blockingStub(channel)
+
+  private val stub = DiagnosticsGrpcMonix.stub(channel)
 
   def listPeers: Task[Seq[PeerNode]] =
-    Task.delay(
-      blockingStub
-        .listPeers(Empty())
-        .peers
-        .map(
+    stub
+      .listPeers(Empty())
+      .map(
+        _.peers.map(
           p =>
             PeerNode(
               NodeIdentifier(p.key.toByteArray.toSeq),
               Endpoint(p.host, p.port, p.port)
-          ))
-    )
+            )
+        )
+      )
 
   def listDiscoveredPeers: Task[Seq[PeerNode]] =
-    Task.delay(
-      blockingStub
-        .listDiscoveredPeers(Empty())
-        .peers
-        .map(
-          p =>
-            PeerNode(
-              NodeIdentifier(p.key.toByteArray.toSeq),
-              Endpoint(p.host, p.port, p.port)
-          ))
-    )
+    stub
+      .listDiscoveredPeers(Empty())
+      .map(
+        _.peers
+          .map(
+            p =>
+              PeerNode(
+                NodeIdentifier(p.key.toByteArray.toSeq),
+                Endpoint(p.host, p.port, p.port)
+              )
+          )
+      )
 
   def nodeCoreMetrics: Task[NodeCoreMetrics] =
-    Task.delay(blockingStub.getNodeCoreMetrics(Empty()))
+    stub.getNodeCoreMetrics(Empty())
 
   def processCpu: Task[ProcessCpu] =
-    Task.delay(blockingStub.getProcessCpu(Empty()))
+    stub.getProcessCpu(Empty())
 
   def memoryUsage: Task[MemoryUsage] =
-    Task.delay(blockingStub.getMemoryUsage(Empty()))
+    stub.getMemoryUsage(Empty())
 
   def garbageCollectors: Task[Seq[GarbageCollector]] =
-    Task.delay(blockingStub.getGarbageCollectors(Empty()).garbageCollectors)
+    stub.getGarbageCollectors(Empty()) map (_.garbageCollectors)
 
   def memoryPools: Task[Seq[MemoryPool]] =
-    Task.delay(blockingStub.getMemoryPools(Empty()).memoryPools)
+    stub.getMemoryPools(Empty()).map(_.memoryPools)
 
   def threads: Task[Threads] =
-    Task.delay(blockingStub.getThreads(Empty()))
+    stub.getThreads(Empty())
 
   override def close(): Unit = {
     val terminated = channel.shutdown().awaitTermination(10, TimeUnit.SECONDS)
     if (!terminated) {
       println(
-        "warn: did not shutdown after 10 seconds, retrying with additional 10 seconds timeout")
+        "warn: did not shutdown after 10 seconds, retrying with additional 10 seconds timeout"
+      )
       channel.awaitTermination(10, TimeUnit.SECONDS)
     }
   }

@@ -2,8 +2,6 @@ package coop.rchain.rspace
 
 import java.lang.{Byte => JByte}
 
-import cats.implicits._
-import com.google.common.collect.HashMultiset
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.examples.StringExamples.{Pattern, StringMatch, StringsCaptor, Wildcard}
 import coop.rchain.rspace.history._
@@ -13,13 +11,12 @@ import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import org.scalacheck.Prop
 import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
-
-import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
 
 //noinspection ZeroIndexToHead
 trait HistoryActionsTests
-    extends StorageTestsBase[String, Pattern, String, StringsCaptor]
+    extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor]
+    with TestImplicitHelpers
     with GeneratorDrivenPropertyChecks
     with Checkers {
 
@@ -39,60 +36,19 @@ trait HistoryActionsTests
   /**
     * Helper for testing purposes only.
     */
-  private[this] def getRootHash(store: IStore[String, Pattern, String, StringsCaptor],
-                                branch: Branch): Blake2b256Hash =
+  private[this] def getRootHash(
+      store: IStore[String, Pattern, String, StringsCaptor],
+      branch: Branch
+  ): Blake2b256Hash =
     store.withTxn(store.createTxnRead()) { txn =>
       store.withTrieTxn(txn) { trieTxn =>
         store.trieStore.getRoot(trieTxn, branch).get
       }
     }
-
-  case class State(
-      checkpoint: Blake2b256Hash,
-      contents: Map[Seq[String], Row[Pattern, String, StringsCaptor]],
-      joins: Map[Blake2b256Hash, Seq[Seq[String]]]
-  )
-
-  def validateIndexedStates(space: ISpace[String, Pattern, String, String, StringsCaptor],
-                            indexedStates: Seq[(State, Int)]): Boolean = {
-    val tests: Seq[Any] = indexedStates
-      .map {
-        case (State(checkpoint, expectedContents, expectedJoins), chunkNo) =>
-          space.reset(checkpoint)
-          val num = "%02d".format(chunkNo)
-
-          val contentsTest = space.store.toMap == expectedContents
-
-          if (contentsTest) {
-            logger.debug(s"$num: store had expected contents")
-          } else {
-            logger.error(s"$num: store had unexpected contents")
-          }
-
-          val actualJoins = space.store.joinMap
-
-          val joinsTest =
-            expectedJoins.forall {
-              case (hash: Blake2b256Hash, expecteds: Seq[Seq[String]]) =>
-                val expected = HashMultiset.create[Seq[String]](expecteds.asJava)
-                val actual   = HashMultiset.create[Seq[String]](actualJoins(hash).asJava)
-                expected.equals(actual)
-            }
-
-          if (joinsTest) {
-            logger.debug(s"$num: store had expected joins")
-          } else {
-            logger.error(s"$num: store had unexpected joins")
-          }
-
-          contentsTest && joinsTest
-      }
-    !tests.contains(false)
-  }
-
   "createCheckpoint on an empty store" should "return the expected hash" in withTestSpace { space =>
     space.createCheckpoint().root shouldBe Blake2b256Hash.fromHex(
-      "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3")
+      "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3"
+    )
   }
 
   "consume then createCheckpoint" should "return the expected hash and the TrieStore should contain the expected value" in
@@ -102,7 +58,9 @@ trait HistoryActionsTests
         channels,
         List.empty[Datum[String]],
         List(
-          WaitingContinuation.create(channels, List[Pattern](Wildcard), new StringsCaptor, false)))
+          WaitingContinuation.create(channels, List[Pattern](Wildcard), new StringsCaptor, false)
+        )
+      )
 
       val channelsHash: Blake2b256Hash = space.store.hashChannels(gnat.channels)
 
@@ -114,12 +72,16 @@ trait HistoryActionsTests
         Node(
           PointerBlock
             .create()
-            .updated(List((JByte.toUnsignedInt(channelsHash.bytes.head), NodePointer(skipHash))))))
+            .updated(List((JByte.toUnsignedInt(channelsHash.bytes.head), NodePointer(skipHash))))
+        )
+      )
 
-      space.consume(gnat.channels,
-                    gnat.wks.head.patterns,
-                    gnat.wks.head.continuation,
-                    gnat.wks.head.persist)
+      space.consume(
+        gnat.channels,
+        gnat.wks.head.patterns,
+        gnat.wks.head.continuation,
+        gnat.wks.head.persist
+      )
 
       history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None
 
@@ -138,35 +100,45 @@ trait HistoryActionsTests
     withTestSpace { space =>
       val gnat1 = {
         val channels = List("ch1")
-        GNAT(channels,
-             List.empty[Datum[String]],
-             List(
-               WaitingContinuation
-                 .create(channels, List[Pattern](Wildcard), new StringsCaptor, false)))
+        GNAT(
+          channels,
+          List.empty[Datum[String]],
+          List(
+            WaitingContinuation
+              .create(channels, List[Pattern](Wildcard), new StringsCaptor, false)
+          )
+        )
       }
 
       val channelsHash1: Blake2b256Hash = space.store.hashChannels(gnat1.channels)
 
-      space.consume(gnat1.channels,
-                    gnat1.wks.head.patterns,
-                    gnat1.wks.head.continuation,
-                    gnat1.wks.head.persist)
+      space.consume(
+        gnat1.channels,
+        gnat1.wks.head.patterns,
+        gnat1.wks.head.continuation,
+        gnat1.wks.head.persist
+      )
 
       val gnat2 = {
         val channels = List("ch2")
-        GNAT(channels,
-             List.empty[Datum[String]],
-             List(
-               WaitingContinuation
-                 .create(channels, List[Pattern](Wildcard), new StringsCaptor, false)))
+        GNAT(
+          channels,
+          List.empty[Datum[String]],
+          List(
+            WaitingContinuation
+              .create(channels, List[Pattern](Wildcard), new StringsCaptor, false)
+          )
+        )
       }
 
       val channelsHash2: Blake2b256Hash = space.store.hashChannels(gnat2.channels)
 
-      space.consume(gnat2.channels,
-                    gnat2.wks.head.patterns,
-                    gnat2.wks.head.continuation,
-                    gnat2.wks.head.persist)
+      space.consume(
+        gnat2.channels,
+        gnat2.wks.head.patterns,
+        gnat2.wks.head.continuation,
+        gnat2.wks.head.persist
+      )
 
       history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash1) shouldBe None
 
@@ -197,9 +169,11 @@ trait HistoryActionsTests
         val gnats: Seq[TestGNAT] =
           data.map {
             case (channel, datum) =>
-              GNAT(List(channel),
-                   List(datum),
-                   List.empty[WaitingContinuation[Pattern, StringsCaptor]])
+              GNAT(
+                List(channel),
+                List(datum),
+                List.empty[WaitingContinuation[Pattern, StringsCaptor]]
+              )
           }.toList
 
         gnats.foreach {
@@ -222,31 +196,35 @@ trait HistoryActionsTests
   "consume a bunch and then createCheckpoint" should "persist the expected values in the TrieStore" in
     withTestSpace { space =>
       forAll { (data: TestConsumeMap) =>
-        val gnats: Seq[TestGNAT] =
-          data.map {
-            case (channels, wk) =>
-              GNAT(channels, List.empty[Datum[String]], List(wk))
-          }.toList
+        try {
+          val gnats: Seq[TestGNAT] =
+            data.map {
+              case (channels, wk) =>
+                GNAT(channels, List.empty[Datum[String]], List(wk))
+            }.toList
 
-        gnats.foreach {
-          case GNAT(channels, _, List(wk)) =>
-            space.consume(channels, wk.patterns, wk.continuation, wk.persist)
-        }
+          gnats.foreach {
+            case GNAT(channels, _, List(wk)) =>
+              space.consume(channels, wk.patterns, wk.continuation, wk.persist)
+          }
 
-        val channelHashMap =
-          gnats.map(gnat => space.store.hashChannels(gnat.channels) -> gnat).toMap
-        val channelHashes = channelHashMap.keys.toList
+          val channelHashMap =
+            gnats.map(gnat => space.store.hashChannels(gnat.channels) -> gnat).toMap
+          val channelHashes = channelHashMap.keys.toList
 
-        history.lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
+          history.lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
 
-        val checkpoint = space.createCheckpoint()
+          val checkpoint = space.createCheckpoint()
 
-        history
-          .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
-          .value should contain theSameElementsAs gnats
+          history
+            .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
+            .value should contain theSameElementsAs gnats
 
-        for ((channelHash, gnat) <- channelHashMap) {
-          space.retrieve(checkpoint.root, channelHash).value shouldBe gnat
+          for ((channelHash, gnat) <- channelHashMap) {
+            space.retrieve(checkpoint.root, channelHash).value shouldBe gnat
+          }
+        } catch {
+          case ex: Throwable => ex.printStackTrace()
         }
       }
     }
@@ -258,7 +236,7 @@ trait HistoryActionsTests
 
       val r1 = space.consume(channels, List(Wildcard), new StringsCaptor, persist = false)
 
-      r1 shouldBe None
+      r1 shouldBe Right(None)
 
       val r2 = space.produce(channels.head, "datum", persist = false)
 
@@ -267,7 +245,8 @@ trait HistoryActionsTests
       history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None
 
       space.createCheckpoint().root shouldBe Blake2b256Hash.fromHex(
-        "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3")
+        "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3"
+      )
 
       history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None
     }
@@ -278,17 +257,22 @@ trait HistoryActionsTests
 
       val gnat1 = {
         val channels = List("ch1")
-        GNAT(channels,
-             List.empty[Datum[String]],
-             List(
-               WaitingContinuation
-                 .create(channels, List[Pattern](Wildcard), new StringsCaptor, false)))
+        GNAT(
+          channels,
+          List.empty[Datum[String]],
+          List(
+            WaitingContinuation
+              .create(channels, List[Pattern](Wildcard), new StringsCaptor, false)
+          )
+        )
       }
 
-      space.consume(gnat1.channels,
-                    gnat1.wks.head.patterns,
-                    gnat1.wks.head.continuation,
-                    gnat1.wks.head.persist)
+      space.consume(
+        gnat1.channels,
+        gnat1.wks.head.patterns,
+        gnat1.wks.head.continuation,
+        gnat1.wks.head.persist
+      )
 
       space.store.isEmpty shouldBe false
 
@@ -313,17 +297,22 @@ trait HistoryActionsTests
 
       val gnat1 = {
         val channels = List("ch1", "ch2")
-        GNAT(channels,
-             List.empty[Datum[String]],
-             List(
-               WaitingContinuation
-                 .create(channels, List[Pattern](Wildcard, Wildcard), new StringsCaptor, false)))
+        GNAT(
+          channels,
+          List.empty[Datum[String]],
+          List(
+            WaitingContinuation
+              .create(channels, List[Pattern](Wildcard, Wildcard), new StringsCaptor, false)
+          )
+        )
       }
 
-      space.consume(gnat1.channels,
-                    gnat1.wks.head.patterns,
-                    gnat1.wks.head.continuation,
-                    gnat1.wks.head.persist)
+      space.consume(
+        gnat1.channels,
+        gnat1.wks.head.patterns,
+        gnat1.wks.head.continuation,
+        gnat1.wks.head.persist
+      )
 
       val root1 = space.createCheckpoint().root
 
@@ -379,7 +368,7 @@ trait HistoryActionsTests
             (State(space.createCheckpoint().root, space.store.toMap, space.store.joinMap), chunkNo)
         }
 
-        validateIndexedStates(space, states)
+        validateIndexedStates(space, states, "produces_reset")
       }
     }
     check(prop)
@@ -403,7 +392,7 @@ trait HistoryActionsTests
             (State(space.createCheckpoint().root, space.store.toMap, space.store.joinMap), chunkNo)
         }
 
-        validateIndexedStates(space, states)
+        validateIndexedStates(space, states, "consumes_reset")
       }
     }
     check(prop)
@@ -432,7 +421,7 @@ trait HistoryActionsTests
             (State(space.createCheckpoint().root, space.store.toMap, space.store.joinMap), chunkNo)
         }
 
-        validateIndexedStates(space, states)
+        validateIndexedStates(space, states, "produces_consumes_reset")
       }
     }
     check(prop)
@@ -460,10 +449,12 @@ trait HistoryActionsTests
 
     val Checkpoint(_, log) = space.createCheckpoint()
 
-    log should contain theSameElementsInOrderAs Seq(commEvent,
-                                                    expectedProduce2,
-                                                    expectedProduce1,
-                                                    expectedConsume)
+    log should contain theSameElementsInOrderAs Seq(
+      commEvent,
+      expectedProduce2,
+      expectedProduce1,
+      expectedConsume
+    )
   }
 
   "an install" should "not be persisted to the history trie" in withTestSpace { space =>
@@ -517,9 +508,12 @@ trait HistoryActionsTests
     val afterProduce = space.createCheckpoint()
     val produceEvent = Produce.create(channel, datum, false)
     afterProduce.log should contain theSameElementsAs (Seq(
-      COMM(Consume.create[String, Pattern, StringsCaptor](key, patterns, continuation, true),
-           List(produceEvent)),
-      produceEvent))
+      COMM(
+        Consume.create[String, Pattern, StringsCaptor](key, patterns, continuation, true),
+        List(produceEvent)
+      ),
+      produceEvent
+    ))
   }
 }
 

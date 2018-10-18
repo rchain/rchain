@@ -2,6 +2,8 @@ package coop.rchain.rspace
 
 import java.nio.file.{Files, Path}
 
+import cats.Id
+import cats.effect.Sync
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
 import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, InMemoryTrieStore, LMDBTrieStore}
@@ -11,24 +13,27 @@ import coop.rchain.shared.PathOps._
 import org.scalatest.BeforeAndAfterAll
 import scodec.Codec
 
-trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, EntriesCaptor] {
+trait StorageExamplesTests
+    extends StorageTestsBase[Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    with TestImplicitHelpers {
 
   "CORE-365: A joined consume on duplicate channels followed by two produces on that channel" should
     "return a continuation and the produced data" in withTestSpace { space =>
     val store = space.store
 
-    val r1 = space.consume(
-      List(Channel("friends"), Channel("friends")),
-      List(CityMatch(city = "Crystal Lake"), CityMatch(city = "Crystal Lake")),
-      new EntriesCaptor,
-      persist = false
-    )
+    val r1 = space
+      .consume(
+        List(Channel("friends"), Channel("friends")),
+        List(CityMatch(city = "Crystal Lake"), CityMatch(city = "Crystal Lake")),
+        new EntriesCaptor,
+        persist = false
+      )
 
-    r1 shouldBe None
+    r1 shouldBe Right(None)
 
     val r2 = space.produce(Channel("friends"), bob, persist = false)
 
-    r2 shouldBe None
+    r2 shouldBe Right(None)
 
     val r3 = space.produce(Channel("friends"), bob, persist = false)
 
@@ -46,18 +51,19 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
 
     val r1 = space.produce(Channel("friends"), bob, persist = false)
 
-    r1 shouldBe None
+    r1 shouldBe Right(None)
 
     val r2 = space.produce(Channel("friends"), bob, persist = false)
 
-    r2 shouldBe None
+    r2 shouldBe Right(None)
 
-    val r3 = space.consume(
-      List(Channel("friends"), Channel("friends")),
-      List(CityMatch(city = "Crystal Lake"), CityMatch(city = "Crystal Lake")),
-      new EntriesCaptor,
-      persist = false
-    )
+    val r3 = space
+      .consume(
+        List(Channel("friends"), Channel("friends")),
+        List(CityMatch(city = "Crystal Lake"), CityMatch(city = "Crystal Lake")),
+        new EntriesCaptor,
+        persist = false
+      )
 
     r3 shouldBe defined
 
@@ -71,24 +77,27 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
     "return a continuation and the produced data" in withTestSpace { space =>
     val store = space.store
 
-    val r1 = space.consume(
-      List(Channel("colleagues"), Channel("friends"), Channel("friends")),
-      List(CityMatch(city = "Crystal Lake"),
-           CityMatch(city = "Crystal Lake"),
-           CityMatch(city = "Crystal Lake")),
-      new EntriesCaptor,
-      persist = false
-    )
+    val r1 = space
+      .consume(
+        List(Channel("colleagues"), Channel("friends"), Channel("friends")),
+        List(
+          CityMatch(city = "Crystal Lake"),
+          CityMatch(city = "Crystal Lake"),
+          CityMatch(city = "Crystal Lake")
+        ),
+        new EntriesCaptor,
+        persist = false
+      )
 
-    r1 shouldBe None
+    r1 shouldBe Right(None)
 
     val r2 = space.produce(Channel("friends"), bob, persist = false)
 
-    r2 shouldBe None
+    r2 shouldBe Right(None)
 
     val r3 = space.produce(Channel("friends"), bob, persist = false)
 
-    r3 shouldBe None
+    r3 shouldBe Right(None)
 
     val r4 = space.produce(Channel("colleagues"), alice, persist = false)
 
@@ -104,34 +113,35 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
     "return a continuation and the produced data" in withTestSpace { space =>
     val store = space.store
 
-    val r1 = space.consume(
-      List(
-        Channel("family"),
-        Channel("family"),
-        Channel("family"),
-        Channel("family"),
-        Channel("colleagues"),
-        Channel("colleagues"),
-        Channel("colleagues"),
-        Channel("friends"),
-        Channel("friends")
-      ),
-      List(
-        CityMatch(city = "Herbert"),
-        CityMatch(city = "Herbert"),
-        CityMatch(city = "Herbert"),
-        CityMatch(city = "Herbert"),
-        CityMatch(city = "Crystal Lake"),
-        CityMatch(city = "Crystal Lake"),
-        CityMatch(city = "Crystal Lake"),
-        CityMatch(city = "Crystal Lake"),
-        CityMatch(city = "Crystal Lake")
-      ),
-      new EntriesCaptor,
-      persist = false
-    )
+    val r1 = space
+      .consume(
+        List(
+          Channel("family"),
+          Channel("family"),
+          Channel("family"),
+          Channel("family"),
+          Channel("colleagues"),
+          Channel("colleagues"),
+          Channel("colleagues"),
+          Channel("friends"),
+          Channel("friends")
+        ),
+        List(
+          CityMatch(city = "Herbert"),
+          CityMatch(city = "Herbert"),
+          CityMatch(city = "Herbert"),
+          CityMatch(city = "Herbert"),
+          CityMatch(city = "Crystal Lake"),
+          CityMatch(city = "Crystal Lake"),
+          CityMatch(city = "Crystal Lake"),
+          CityMatch(city = "Crystal Lake"),
+          CityMatch(city = "Crystal Lake")
+        ),
+        new EntriesCaptor,
+        persist = false
+      )
 
-    r1 shouldBe None
+    r1 shouldBe Right(None)
 
     val r2  = space.produce(Channel("friends"), bob, persist = false)
     val r3  = space.produce(Channel("family"), carol, persist = false)
@@ -143,14 +153,14 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
     val r9  = space.produce(Channel("family"), carol, persist = false)
     val r10 = space.produce(Channel("family"), carol, persist = false)
 
-    r2 shouldBe None
-    r3 shouldBe None
-    r4 shouldBe None
-    r5 shouldBe None
-    r6 shouldBe None
-    r7 shouldBe None
-    r8 shouldBe None
-    r9 shouldBe None
+    r2 shouldBe Right(None)
+    r3 shouldBe Right(None)
+    r4 shouldBe Right(None)
+    r5 shouldBe Right(None)
+    r6 shouldBe Right(None)
+    r7 shouldBe Right(None)
+    r8 shouldBe Right(None)
+    r9 shouldBe Right(None)
     r10 shouldBe defined
 
     runK(r10)
@@ -173,42 +183,43 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
     val r8 = space.produce(Channel("family"), carol, persist = false)
     val r9 = space.produce(Channel("family"), carol, persist = false)
 
-    r1 shouldBe None
-    r2 shouldBe None
-    r3 shouldBe None
-    r4 shouldBe None
-    r5 shouldBe None
-    r6 shouldBe None
-    r7 shouldBe None
-    r8 shouldBe None
-    r9 shouldBe None
+    r1 shouldBe Right(None)
+    r2 shouldBe Right(None)
+    r3 shouldBe Right(None)
+    r4 shouldBe Right(None)
+    r5 shouldBe Right(None)
+    r6 shouldBe Right(None)
+    r7 shouldBe Right(None)
+    r8 shouldBe Right(None)
+    r9 shouldBe Right(None)
 
-    val r10 = space.consume(
-      List(
-        Channel("family"),
-        Channel("family"),
-        Channel("family"),
-        Channel("family"),
-        Channel("colleagues"),
-        Channel("colleagues"),
-        Channel("colleagues"),
-        Channel("friends"),
-        Channel("friends")
-      ),
-      List(
-        CityMatch(city = "Herbert"),
-        CityMatch(city = "Herbert"),
-        CityMatch(city = "Herbert"),
-        CityMatch(city = "Herbert"),
-        CityMatch(city = "Crystal Lake"),
-        CityMatch(city = "Crystal Lake"),
-        CityMatch(city = "Crystal Lake"),
-        CityMatch(city = "Crystal Lake"),
-        CityMatch(city = "Crystal Lake")
-      ),
-      new EntriesCaptor,
-      persist = false
-    )
+    val r10 = space
+      .consume(
+        List(
+          Channel("family"),
+          Channel("family"),
+          Channel("family"),
+          Channel("family"),
+          Channel("colleagues"),
+          Channel("colleagues"),
+          Channel("colleagues"),
+          Channel("friends"),
+          Channel("friends")
+        ),
+        List(
+          CityMatch(city = "Herbert"),
+          CityMatch(city = "Herbert"),
+          CityMatch(city = "Herbert"),
+          CityMatch(city = "Herbert"),
+          CityMatch(city = "Crystal Lake"),
+          CityMatch(city = "Crystal Lake"),
+          CityMatch(city = "Crystal Lake"),
+          CityMatch(city = "Crystal Lake"),
+          CityMatch(city = "Crystal Lake")
+        ),
+        new EntriesCaptor,
+        persist = false
+      )
 
     r10 shouldBe defined
     runK(r10)
@@ -221,34 +232,35 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
     "return a continuation and the produced data" in withTestSpace { space =>
     val store = space.store
 
-    val r1 = space.consume(
-      List(
-        Channel("family"),
-        Channel("colleagues"),
-        Channel("family"),
-        Channel("friends"),
-        Channel("friends"),
-        Channel("family"),
-        Channel("colleagues"),
-        Channel("colleagues"),
-        Channel("family")
-      ),
-      List(
-        CityMatch(city = "Herbert"),
-        CityMatch(city = "Crystal Lake"),
-        CityMatch(city = "Herbert"),
-        CityMatch(city = "Crystal Lake"),
-        CityMatch(city = "Crystal Lake"),
-        CityMatch(city = "Herbert"),
-        CityMatch(city = "Crystal Lake"),
-        CityMatch(city = "Crystal Lake"),
-        CityMatch(city = "Herbert")
-      ),
-      new EntriesCaptor,
-      persist = false
-    )
+    val r1 = space
+      .consume(
+        List(
+          Channel("family"),
+          Channel("colleagues"),
+          Channel("family"),
+          Channel("friends"),
+          Channel("friends"),
+          Channel("family"),
+          Channel("colleagues"),
+          Channel("colleagues"),
+          Channel("family")
+        ),
+        List(
+          CityMatch(city = "Herbert"),
+          CityMatch(city = "Crystal Lake"),
+          CityMatch(city = "Herbert"),
+          CityMatch(city = "Crystal Lake"),
+          CityMatch(city = "Crystal Lake"),
+          CityMatch(city = "Herbert"),
+          CityMatch(city = "Crystal Lake"),
+          CityMatch(city = "Crystal Lake"),
+          CityMatch(city = "Herbert")
+        ),
+        new EntriesCaptor,
+        persist = false
+      )
 
-    r1 shouldBe None
+    r1 shouldBe Right(None)
 
     val r2  = space.produce(Channel("friends"), bob, persist = false)
     val r3  = space.produce(Channel("family"), carol, persist = false)
@@ -260,14 +272,14 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
     val r9  = space.produce(Channel("family"), carol, persist = false)
     val r10 = space.produce(Channel("family"), carol, persist = false)
 
-    r2 shouldBe None
-    r3 shouldBe None
-    r4 shouldBe None
-    r5 shouldBe None
-    r6 shouldBe None
-    r7 shouldBe None
-    r8 shouldBe None
-    r9 shouldBe None
+    r2 shouldBe Right(None)
+    r3 shouldBe Right(None)
+    r4 shouldBe Right(None)
+    r5 shouldBe Right(None)
+    r6 shouldBe Right(None)
+    r7 shouldBe Right(None)
+    r8 shouldBe Right(None)
+    r9 shouldBe Right(None)
     r10 shouldBe defined
 
     runK(r10)
@@ -278,28 +290,31 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
 }
 
 class InMemoryStoreStorageExamplesTestsBase
-    extends StorageTestsBase[Channel, Pattern, Entry, EntriesCaptor] {
+    extends StorageTestsBase[Channel, Pattern, Nothing, Entry, EntriesCaptor] {
 
   override def withTestSpace[R](f: T => R): R = {
+
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+
     implicit val cg: Codec[GNAT[Channel, Pattern, Entry, EntriesCaptor]] = codecGNAT(
       implicits.serializeChannel.toCodec,
       implicits.serializePattern.toCodec,
       implicits.serializeInfo.toCodec,
-      implicits.serializeEntriesCaptor.toCodec)
+      implicits.serializeEntriesCaptor.toCodec
+    )
 
     val branch = Branch("inmem")
 
     val trieStore =
       InMemoryTrieStore.create[Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]]()
 
-    val testStore = InMemoryStore.create[
-      InMemTransaction[history.State[Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]]],
-      Channel,
-      Pattern,
-      Entry,
-      EntriesCaptor](trieStore, branch)
+    val testStore = InMemoryStore
+      .create[InMemTransaction[
+        history.State[Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]]
+      ], Channel, Pattern, Entry, EntriesCaptor](trieStore, branch)
 
-    val testSpace = RSpace.create[Channel, Pattern, Entry, Entry, EntriesCaptor](testStore, branch)
+    val testSpace =
+      RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](testStore, branch)
     testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
     trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear)
     initialize(trieStore, branch)
@@ -317,7 +332,7 @@ class InMemoryStoreStorageExamplesTests
     with StorageExamplesTests
 
 class LMDBStoreStorageExamplesTestBase
-    extends StorageTestsBase[Channel, Pattern, Entry, EntriesCaptor]
+    extends StorageTestsBase[Channel, Pattern, Nothing, Entry, EntriesCaptor]
     with BeforeAndAfterAll {
 
   val dbDir: Path    = Files.createTempDirectory("rchain-storage-test-")
@@ -325,10 +340,15 @@ class LMDBStoreStorageExamplesTestBase
   val noTls: Boolean = false
 
   override def withTestSpace[R](f: T => R): R = {
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+
     val context   = Context.create[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
     val testStore = LMDBStore.create[Channel, Pattern, Entry, EntriesCaptor](context)
     val testSpace =
-      RSpace.create[Channel, Pattern, Entry, Entry, EntriesCaptor](testStore, Branch.MASTER)
+      RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+        testStore,
+        Branch.MASTER
+      )
     try {
       testStore.withTxn(testStore.createTxnWrite())(txn => testStore.clear(txn))
       f(testSpace)

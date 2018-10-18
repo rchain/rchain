@@ -28,13 +28,17 @@ object RholangCLI {
     val binary = opt[Boolean](descr = "outputs binary protobuf serialization")
     val text   = opt[Boolean](descr = "outputs textual protobuf serialization")
 
-    val data_dir = opt[Path](required = false,
-                             descr = "Path to data directory",
-                             default = Some(Files.createTempDirectory("rspace-store-")))
+    val data_dir = opt[Path](
+      required = false,
+      descr = "Path to data directory",
+      default = Some(Files.createTempDirectory("rspace-store-"))
+    )
 
-    val map_size = opt[Long](required = false,
-                             descr = "Map size (in bytes)",
-                             default = Some(1024L * 1024L * 1024L))
+    val map_size = opt[Long](
+      required = false,
+      descr = "Map size (in bytes)",
+      default = Some(1024L * 1024L * 1024L)
+    )
 
     val files =
       trailArg[List[String]](required = false, descr = "Rholang source file")(stringListConverter)
@@ -48,6 +52,7 @@ object RholangCLI {
     val conf = new Conf(args)
 
     val runtime = Runtime.create(conf.data_dir(), conf.map_size())
+    Await.result(runtime.injectEmptyRegistryRoot[Task].runAsync, 5.seconds)
 
     try {
       if (conf.files.supplied) {
@@ -84,7 +89,7 @@ object RholangCLI {
       Console.println("Errors received during evaluation:")
       for {
         error <- errors
-      } Console.println(error.toString())
+      } Console.println(error.getMessage)
     }
 
   @tailrec
@@ -92,11 +97,11 @@ object RholangCLI {
     printPrompt()
     Option(scala.io.StdIn.readLine()) match {
       case Some(line) =>
-        Interpreter.buildNormalizedTerm(new StringReader(line)).runAttempt match {
+        Interpreter.buildNormalizedTerm(line).runAttempt match {
           case Right(par)                 => evaluatePar(runtime)(par)
           case Left(ie: InterpreterError) =>
             // we don't want to print stack trace for user errors
-            Console.err.print(ie.toString)
+            Console.err.print(ie.getMessage)
           case Left(th) =>
             th.printStackTrace(Console.err)
         }
@@ -108,7 +113,8 @@ object RholangCLI {
   }
 
   def processFile(conf: Conf, runtime: Runtime, fileName: String)(
-      implicit scheduler: Scheduler): Unit = {
+      implicit scheduler: Scheduler
+  ): Unit = {
     val processTerm: Par => Unit =
       if (conf.binary()) writeBinary(fileName)
       else if (conf.text()) writeHumanReadable(fileName)
@@ -119,7 +125,7 @@ object RholangCLI {
     Interpreter
       .buildNormalizedTerm(source)
       .runAttempt
-      .fold(_.printStackTrace(System.err), processTerm)
+      .fold(_.printStackTrace(Console.err), processTerm)
   }
 
   @tailrec

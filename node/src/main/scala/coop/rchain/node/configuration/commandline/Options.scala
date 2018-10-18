@@ -18,7 +18,7 @@ object Converter {
       s match {
         case (_, uri :: Nil) :: Nil =>
           PeerNode
-            .parse(uri)
+            .fromAddress(uri)
             .map(u => Right(Some(u)))
             .getOrElse(Left("can't parse the rnode bootstrap address"))
         case Nil => Right(None)
@@ -35,9 +35,11 @@ object Converter {
     val argType: ArgType.V = ArgType.FLAG
   }
 
-  private def nameConverter[A](onPub: List[String] => A,
-                               onPriv: List[String] => A,
-                               argType0: ArgType.V) = new ValueConverter[List[String] => A] {
+  private def nameConverter[A](
+      onPub: List[String] => A,
+      onPriv: List[String] => A,
+      argType0: ArgType.V
+  ) = new ValueConverter[List[String] => A] {
     import cats.instances.either._
     import cats.instances.option._
     import cats.syntax.traverse._
@@ -70,7 +72,8 @@ object Converter {
           case (_, duration :: Nil) :: Nil =>
             val finiteDuration = Some(Duration(duration)).collect { case f: FiniteDuration => f }
             finiteDuration.fold[Either[String, Option[FiniteDuration]]](
-              Left("Expected finite duration."))(fd => Right(Some(fd)))
+              Left("Expected finite duration.")
+            )(fd => Right(Some(fd)))
           case Nil => Right(None)
           case _   => Left("Provide a duration.")
         }
@@ -115,8 +118,10 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   version(s"RChain Node ${BuildInfo.version}")
   printedName = "rchain"
 
-  val profile = opt[String](name = "profile",
-                            descr = "Which predefined set of defaults to use: default or docker.")
+  val profile = opt[String](
+    name = "profile",
+    descr = "Which predefined set of defaults to use: default or docker."
+  )
 
   val configFile = opt[Path](descr = "Path to the configuration file.")
 
@@ -142,14 +147,16 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       opt[Int](descr = "Default timeout for roundtrip connections. Default 1 second.")
 
     val certificate =
-      opt[Path](short = 'c',
-                descr =
-                  "Path to node's X.509 certificate file, that is being used for identification")
+      opt[Path](
+        short = 'c',
+        descr = "Path to node's X.509 certificate file, that is being used for identification"
+      )
 
     val key =
-      opt[Path](short = 'k',
-                descr =
-                  "Path to node's private key PEM file, that is being used for TLS communication")
+      opt[Path](
+        short = 'k',
+        descr = "Path to node's private key PEM file, that is being used for TLS communication"
+      )
 
     val secureRandomNonBlocking =
       opt[Flag](descr = "Use a non blocking secure random instance")
@@ -160,8 +167,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val httpPort =
       opt[Int](descr = "HTTP port (deprecated - all API features will be ported to gRPC API).")
 
-    val metricsPort =
-      opt[Int](descr = "Port used by metrics API.")
+    val kademliaPort =
+      opt[Int](descr = "Kademlia port used for node discovery based on Kademlia algorithm")
 
     val numValidators = opt[Int](descr = "Number of validators at genesis.")
     val bondsFile = opt[String](
@@ -182,6 +189,15 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "<pk> is the public key (in base-16 encoding) identifying the wallet and <revBalance>" +
         "is the amount of Rev in the wallet."
     )
+    val minimumBond = opt[Long](
+      descr = "Minimum bond accepted by the PoS contract in the genesis block."
+    )
+    val maximumBond = opt[Long](
+      descr = "Maximum bond accepted by the PoS contract in the genesis block."
+    )
+    val hasFaucet = opt[Boolean](
+      descr = "True if there should be a public access Rev faucet in the genesis block."
+    )
 
     val bootstrap =
       opt[PeerNode](
@@ -195,7 +211,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val requiredSigs =
       opt[Int](
         descr =
-          "Number of signatures from trusted validators required to creating an approved genesis block.")
+          "Number of signatures from trusted validators required to creating an approved genesis block."
+      )
 
     val deployTimestamp =
       opt[Long](
@@ -212,7 +229,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val interval =
       opt[FiniteDuration](
         short = 'i',
-        descr = "Interval at which condition for creating ApprovedBlock will be checked.")
+        descr = "Interval at which condition for creating ApprovedBlock will be checked."
+      )
 
     val genesisValidator =
       opt[Flag](descr = "Start a node as a genesis validator.")
@@ -233,7 +251,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       opt[Int](descr = "Maximum size of message that can be sent via transport layer")
 
     val threadPoolSize =
-      opt[Int](descr = "Maximum number of threads used by rnode")
+      opt[Int](descr = "Maximum number of threads used by rnode", hidden = true)
 
     val casperBlockStoreSize =
       opt[Long](required = false, descr = "Casper BlockStore map size (in bytes)")
@@ -244,11 +262,13 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     )
 
     val validatorPrivateKey = opt[String](
-      descr = "Base16 encoding of the private key to use for signing a proposed blocks.")
+      descr = "Base16 encoding of the private key to use for signing a proposed blocks."
+    )
 
     val validatorSigAlgorithm = opt[String](
       descr = "Name of the algorithm to use for signing proposed blocks. " +
-        "Currently supported values: ed25519")
+        "Currently supported values: ed25519"
+    )
 
     val shardId = opt[String](
       descr = "Identifier of the shard this node is connected to."
@@ -263,7 +283,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
   val eval = new Subcommand("eval") {
     descr(
-      "Starts a thin client that will evaluate rholang in file on a existing running node. See grpcHost and grpcPort.")
+      "Starts a thin client that will evaluate rholang in file on a existing running node. See grpcHost and grpcPort."
+    )
 
     val fileNames = trailArg[List[String]](required = true)(stringListConverter)
   }
@@ -271,32 +292,43 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
   val deployDemo = new Subcommand("deploy-demo") {
     descr(
-      "Demo sending some placeholder Deploy operations to Casper on an existing running node at regular intervals")
+      "Demo sending some placeholder Deploy operations to Casper on an existing running node at regular intervals"
+    )
   }
   addSubcommand(deployDemo)
+
+  val hexCheck: String => Boolean     = _.matches("[0-9a-fA-F]+")
+  val addressCheck: String => Boolean = addr => addr.startsWith("0x") && hexCheck(addr.drop(2))
 
   val deploy = new Subcommand("deploy") {
     descr(
       "Deploy a Rholang source file to Casper on an existing running node. " +
         "The deploy will be packaged and sent as a block to the network depending " +
-        "on the configuration of the Casper instance.")
+        "on the configuration of the Casper instance."
+    )
 
-    val addressCheck: String => Boolean = addr =>
-      addr.startsWith("0x") && addr.drop(2).matches("[0-9a-fA-F]+")
     val from = opt[String](
       descr = "Purse address that will be used to pay for the deployment.",
       validate = addressCheck
     )
 
     val phloLimit =
-      opt[Int](descr = "The amount of phlo to use for the transaction (unused phlo is refunded).")
+      opt[Long](
+        descr =
+          "The amount of phlo to use for the transaction (unused phlo is refunded). Must be positive integer.",
+        validate = _ > 0,
+        required = true
+      )
 
-    val phloPrice = opt[Int](
-      descr = "The price of phlo for this transaction in units dust/phlo."
+    val phloPrice = opt[Long](
+      descr = "The price of phlo for this transaction in units dust/phlo. Must be positive integer.",
+      validate = _ > 0,
+      required = true
     )
 
     val nonce = opt[Int](
-      descr = "This allows you to overwrite your own pending transactions that use the same nonce.")
+      descr = "This allows you to overwrite your own pending transactions that use the same nonce."
+    )
 
     val location = trailArg[String](required = true)
   }
@@ -305,7 +337,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val showBlock = new Subcommand("show-block") {
     descr(
       "View properties of a block known by Casper on an existing running node." +
-        "Output includes: parent hashes, storage contents of the tuplespace.")
+        "Output includes: parent hashes, storage contents of the tuplespace."
+    )
     val hash =
       trailArg[String](name = "hash", required = true, descr = "the hash value of the block")
   }
@@ -313,19 +346,30 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
   val showBlocks = new Subcommand("show-blocks") {
     descr(
-      "View list of blocks on the main chain in the current Casper view on an existing running node.")
+      "View list of blocks in the current Casper view on an existing running node."
+    )
+    val depth =
+      opt[Int](
+        name = "depth",
+        validate = _ > 0,
+        descr = "lists blocks to the given depth in terms of block height"
+      )
+
   }
   addSubcommand(showBlocks)
 
   def listenAtName[R](name: String, desc: String)(
-      implicit conv: ValueConverter[List[String] => R]) = new Subcommand(name) {
+      implicit conv: ValueConverter[List[String] => R]
+  ) = new Subcommand(name) {
     descr(desc)
 
     val typeOfName =
-      opt[List[String] => R](required = true,
-                             descr = "Type of the specified name",
-                             name = "type",
-                             short = 't')
+      opt[List[String] => R](
+        required = true,
+        descr = "Type of the specified name",
+        name = "type",
+        short = 't'
+      )
 
     val content =
       opt[List[String]](required = true, descr = "Rholang name", name = "content", short = 'c')
@@ -348,9 +392,92 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
   val propose = new Subcommand("propose") {
     descr(
-      "Force Casper (on an existing running node) to propose a block based on its accumulated deploys.")
+      "Force Casper (on an existing running node) to propose a block based on its accumulated deploys."
+    )
   }
   addSubcommand(propose)
+
+  val bondingDeployGen = new Subcommand("generateBondingDeploys") {
+    descr(
+      "Creates the rholang source files needed for bonding assuming you have a " +
+        "pre-wallet from the REV issuance. These files must be" +
+        "deployed to a node operated by a presently bonded validator. The rho files" +
+        "are created in the working directory where the command is executed. Note: " +
+        "for security reasons it is best to deploy `unlock*.rho` and `forward*.rho` first" +
+        "and `bond*.rho` in a separate block after those (i.e. only deploy `bond*.rho` " +
+        "after `unlock*.rho` and `forward*.rho` have safely been included in a propsed block)."
+    )
+
+    val ethAddr = opt[String](
+      descr = "Ethereum address associated with the \"pre-wallet\" to bond.",
+      validate = addressCheck,
+      required = true
+    )
+
+    val bondKey = opt[String](
+      descr = "Hex-encoded public key which will be used as the validator idenity after bonding. " +
+        "Note: as of this version of node this must be an ED25519 key.",
+      validate = hexCheck,
+      required = true
+    )
+
+    val amount = opt[Long](
+      descr = "The amount of REV to bond. Must be less than or equal to the wallet balance.",
+      validate = _ > 0,
+      required = true
+    )
+
+    val publicKey = opt[String](
+      descr = "Hex-encoded public key associated with the Ethereum address of the pre-wallet.",
+      validate = hexCheck,
+      required = true
+    )
+
+    val privateKey = opt[String](
+      descr = "Hex-encoded private key associated with the Ethereum address of the pre-wallet.",
+      validate = hexCheck,
+      required = true
+    )
+  }
+  addSubcommand(bondingDeployGen)
+
+  val faucetBondingDeployGen = new Subcommand("generateFaucetBondingDeploys") {
+    descr(
+      "Creates the rholang source files needed for bonding by making use of " +
+        "test net faucet. These files must be" +
+        "deployed to a node operated by a presently bonded validator. The rho files" +
+        "are created in the working directory where the command is executed. Note: " +
+        "for security reasons it is best to deploy `forward*.rho` first" +
+        "and then `bond*.rho` in a separate block afterwards (i.e. only deploy `bond*.rho` " +
+        "after `forward*.rho` has safely been included in a propsed block)."
+    )
+
+    val amount = opt[Long](
+      descr = "The amount of REV to bond. Must be less than or equal to the wallet balance.",
+      validate = _ > 0,
+      required = true
+    )
+
+    val sigAlgorithm = opt[String](
+      descr =
+        "Signature algorithm to be used with the provided keys. Must be one of ed25519 or secp256k1.",
+      validate = (s: String) => { s == "ed25519" || s == "secp256k1" },
+      required = true
+    )
+
+    val publicKey = opt[String](
+      descr = "Hex-encoded public key to be used as the validator id when bonding.",
+      validate = hexCheck,
+      required = true
+    )
+
+    val privateKey = opt[String](
+      descr = "Hex-encoded private key associated with the supplied public key.",
+      validate = hexCheck,
+      required = true
+    )
+  }
+  addSubcommand(faucetBondingDeployGen)
 
   verify()
 }

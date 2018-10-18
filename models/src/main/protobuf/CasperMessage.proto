@@ -22,9 +22,18 @@ service DeployService {
   rpc addBlock(BlockMessage) returns (DeployServiceResponse) {}
   rpc createBlock(google.protobuf.Empty) returns (DeployServiceResponse) {}
   rpc showBlock(BlockQuery) returns (BlockQueryResponse) {}
-  rpc showBlocks(google.protobuf.Empty) returns (stream BlockInfo) {}
-  rpc listenForDataAtName(Channel) returns (ListeningNameDataResponse) {}
-  rpc listenForContinuationAtName(Channels) returns (ListeningNameContinuationResponse) {}
+  rpc showMainChain(BlocksQuery) returns (stream BlockInfoWithoutTuplespace) {}
+  rpc showBlocks(BlocksQuery) returns (stream BlockInfoWithoutTuplespace) {}
+  rpc listenForDataAtName(DataAtNameQuery) returns (ListeningNameDataResponse) {}
+  rpc listenForContinuationAtName(ContinuationAtNameQuery) returns (ListeningNameContinuationResponse) {}
+}
+
+message PhloLimit {
+  int64 value = 1;
+}
+
+message PhloPrice {
+  int64 value = 1;
 }
 
 message DeployData {
@@ -34,8 +43,8 @@ message DeployData {
   bytes  sig          = 4; //signature of (hash(term) + timestamp) using private key
   string sigAlgorithm = 5; // name of the algorithm used to sign
   string from         = 6; //wallet address which will be used to pay for the deployment
-  int32 phloPrice     = 7; //phlo price
-  int32 phloLimit     = 8; //phlo limit for the deployment
+  PhloPrice phloPrice  = 7; //phlo price
+  PhloLimit phloLimit  = 8; //phlo limit for the deployment
   int32 nonce         = 9; //nonce for transaction made against `from` wallet
 }
 
@@ -51,8 +60,18 @@ message BlockQuery {
   string hash = 1;
 }
 
-message Channels {
-  repeated Channel channels = 1;
+message BlocksQuery {
+  int32 depth = 1;
+}
+
+message DataAtNameQuery {
+  int32 depth = 1;
+  Par name = 2;
+}
+
+message ContinuationAtNameQuery {
+  int32 depth = 1;
+  repeated Par names = 2;
 }
 
 message DeployServiceResponse {
@@ -94,12 +113,6 @@ message ContinuationsWithBlockInfo {
 message WaitingContinuationInfo {
   repeated BindPattern postBlockPatterns = 1;
   Par postBlockContinuation = 2;
-}
-
-message BlocksResponse {
-  string status = 1;
-  repeated BlockInfo blocks = 2;
-  int64 length = 3;
 }
 
 message BlockInfoWithoutTuplespace {
@@ -255,7 +268,7 @@ message CommEvent {
 
 message Bond {
   bytes validator = 1;
-  int32 stake     = 2;
+  int64 stake     = 2;
 }
 // --------- End Core Protocol  --------
 

@@ -1,23 +1,21 @@
 ## Building and running
 
-Pre-release versions of the RChain software are now available. We plan to launch the full platform in Q4 of 2018.
+Pre-release versions of the RChain software are now available. We plan to launch the full platform in Q1 of 2019.
 
 __Note__ Successfully building from source requires attending to all of the prerequisites shown below. When users experience errors, it is typically related to failure to assure all prerequisites are met. Work is in progress to improve this experience.
 
 ### Prerequisites
 * Java Development Kit (JDK), version 8. We recommend using the OpenJDK
 * [sbt](https://www.scala-sbt.org/download.html)
-* [Sodium crypto library](https://github.com/jedisct1/libsodium)
 * For Rholang
      - [jflex](http://jflex.de/)
-     - Build [BNFC](http://bnfc.digitalgrammars.com/) from the following commit or later: [BNFC/bnfc@7c9e859](https://github.com/BNFC/bnfc/commit/7c9e859). Use the installation command `cabal install bnfc --global`.
+     - Build [BNFC](http://bnfc.digitalgrammars.com/) from the following commit or later: [BNFC/bnfc@7c9e859](https://github.com/BNFC/bnfc/commit/7c9e859). Official RChain builds use BNFC build from commit `ce7fe1fd08d9d808c14ff626c321218c5b73e38b`. Use the installation command `cabal install bnfc --global` or [stack](#build-bnfc-with-stack).
 
 #### Development environment on macOS
 
 ```
 brew install git
 brew install sbt
-brew install libsodium
 brew install jflex
 ```
 
@@ -30,7 +28,6 @@ sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89
 sudo apt-get update
 sudo apt-get install sbt
 
-sudo apt-get install libsodium23
 sudo apt-get install jflex
 sudo apt-get install haskell-platform
 ```
@@ -39,7 +36,6 @@ sudo apt-get install haskell-platform
 ```
 sudo dnf remove sbt # uninstalling sbt if sbt 0.13 was installed (may not be necessary)
 sudo dnf --enablerepo=bintray--sbt-rpm install sbt
-sudo dnf install libsodium
 sudo dnf install jflex
 sudo dnf install haskell-platform
 ```
@@ -48,17 +44,18 @@ sudo dnf install haskell-platform
 You can use `pacaur` or other AUR installer instead of [`trizen`](https://github.com/trizen/trizen).
 ```
 sudo pacman -S stack ghc # for building BNFC
-sudo pacman -S jdk8-openjdk sbt libsodium
+sudo pacman -S jdk8-openjdk sbt
 trizen -S jflex
 ```
 
-#### Building BNFC with [`stack`](https://docs.haskellstack.org)
+#### <a name="build-bnfc-with-stack"></a> Building BNFC with [`stack`](https://docs.haskellstack.org)
 ```
 git clone https://github.com/BNFC/bnfc
 cd bnfc
+git checkout ce7fe1fd08d9d808c14ff626c321218c5b73e38b
 stack init
+stack setup
 stack install
-cd -
 export PATH="$HOME/.local/bin:$HOME"
 ```
 
@@ -167,6 +164,15 @@ To run rnode locally from within sbt use the revolver plugin. It will start the 
 > sbt:node> reStart run -s
 ```
 Now after you've done some local changes and want to test them, simply run the last command `reStart run -s` again. It will kill the running app and start a new instance containing latest changes in a completely new forked JVM.
+
+#### Running tests in IntelliJ
+
+For tests of the Rholang module, make sure you've got the following JVM options set in your Run Configuration:
+`-Xss240k -XX:MaxJavaStackTraceDepth=10000 -Xmx128m`
+
+Otherwise the StackSafetySpec is going to be veeery slow and will most likely fail due to timeouts.
+
+You can make the above options default by editing the ScalaTest Template in `Run > Edit configurations > Templates`.  
 
 ### Cross-developing for Linux (e.g. Ubuntu) on a Mac
 You will need a virtual machine running the appropriate version of Linux.

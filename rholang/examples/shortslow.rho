@@ -1,0 +1,9 @@
+new loop in {
+  contract loop(@n) = {
+    match n {
+      0 => Nil
+      _ => loop!(n-1)
+    }
+  } |
+  loop!(32768)
+}

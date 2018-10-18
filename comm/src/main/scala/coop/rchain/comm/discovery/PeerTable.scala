@@ -37,9 +37,11 @@ final case class PeerTableEntry[A](entry: A, gkey: A => Seq[Byte]) extends Keyed
 
 object PeerTable {
 
-  def apply[A <: PeerNode](home: A,
-                           k: Int = PeerTable.Redundancy,
-                           alpha: Int = PeerTable.Alpha): PeerTable[A] =
+  def apply[A <: PeerNode](
+      home: A,
+      k: Int = PeerTable.Redundancy,
+      alpha: Int = PeerTable.Alpha
+  ): PeerTable[A] =
     new PeerTable[A](home, k, alpha)
 
   // Number of bits considered in the distance function. Taken from the

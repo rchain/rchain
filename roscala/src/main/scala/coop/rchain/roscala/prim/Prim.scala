@@ -423,12 +423,14 @@ object Prim {
     Deadthread
 
   def mismatch(ctxt: Ctxt, argNum: Int, typeName: String): Ob =
-    runtimeError(ctxt,
-                 "%d%s argument is not %s %s",
-                 argNum + 1,
-                 numberSuffix(argNum + 1),
-                 properPrep(typeName),
-                 typeName)
+    runtimeError(
+      ctxt,
+      "%d%s argument is not %s %s",
+      argNum + 1,
+      numberSuffix(argNum + 1),
+      properPrep(typeName),
+      typeName
+    )
 
   def nthPrim(n: Int): Prim = map(n)
 

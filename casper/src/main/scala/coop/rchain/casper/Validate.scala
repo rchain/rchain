@@ -40,8 +40,10 @@ object Validate {
   def ignore(b: BlockMessage, reason: String): String =
     s"Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
 
-  def approvedBlock[F[_]: Applicative: Log](a: ApprovedBlock,
-                                            requiredValidators: Set[ByteString]): F[Boolean] = {
+  def approvedBlock[F[_]: Applicative: Log](
+      a: ApprovedBlock,
+      requiredValidators: Set[ByteString]
+  ): F[Boolean] = {
     val maybeSigData = for {
       c     <- a.candidate
       bytes = c.toByteArray
@@ -87,9 +89,11 @@ object Validate {
       } yield false
     }
 
-  def blockSender[F[_]: Monad: Log: BlockStore](b: BlockMessage,
-                                                genesis: BlockMessage,
-                                                dag: BlockDag): F[Boolean] =
+  def blockSender[F[_]: Monad: Log: BlockStore](
+      b: BlockMessage,
+      genesis: BlockMessage,
+      dag: BlockDag
+  ): F[Boolean] =
     if (b == genesis) {
       true.pure[F] //genesis block has a valid sender
     } else {
@@ -101,7 +105,9 @@ object Validate {
                      _ <- Log[F].warn(
                            ignore(
                              b,
-                             s"block creator ${PrettyPrinter.buildString(b.sender)} has 0 weight."))
+                             s"block creator ${PrettyPrinter.buildString(b.sender)} has 0 weight."
+                           )
+                         )
                    } yield false
       } yield result
     }
@@ -160,26 +166,39 @@ object Validate {
       block: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDag,
-      shardId: String): F[Either[BlockStatus, ValidBlock]] =
+      shardId: String
+  ): F[Either[BlockStatus, ValidBlock]] =
     for {
       blockHashStatus   <- Validate.blockHash[F](block)
       deployCountStatus <- blockHashStatus.traverse(_ => Validate.deployCount[F](block))
-      missingBlockStatus <- deployCountStatus.joinRight.traverse(_ =>
-                             Validate.missingBlocks[F](block, dag))
-      timestampStatus <- missingBlockStatus.joinRight.traverse(_ =>
-                          Validate.timestamp[F](block, dag))
-      repeatedDeployStatus <- timestampStatus.joinRight.traverse(_ =>
-                               Validate.repeatDeploy[F](block, dag))
-      blockNumberStatus <- repeatedDeployStatus.joinRight.traverse(_ =>
-                            Validate.blockNumber[F](block, dag))
-      parentsStatus <- blockNumberStatus.joinRight.traverse(_ =>
-                        Validate.parents[F](block, genesis, dag))
-      sequenceNumberStatus <- parentsStatus.joinRight.traverse(_ =>
-                               Validate.sequenceNumber[F](block, dag))
-      justificationRegressionsStatus <- sequenceNumberStatus.joinRight.traverse(_ =>
-                                         Validate.justificationRegressions[F](block, genesis, dag))
-      shardIdentifierStatus <- justificationRegressionsStatus.joinRight.traverse(_ =>
-                                Validate.shardIdentifier[F](block, shardId))
+      missingBlockStatus <- deployCountStatus.joinRight.traverse(
+                             _ => Validate.missingBlocks[F](block, dag)
+                           )
+      timestampStatus <- missingBlockStatus.joinRight.traverse(
+                          _ => Validate.timestamp[F](block, dag)
+                        )
+      repeatedDeployStatus <- timestampStatus.joinRight.traverse(
+                               _ => Validate.repeatDeploy[F](block, dag)
+                             )
+      blockNumberStatus <- repeatedDeployStatus.joinRight.traverse(
+                            _ => Validate.blockNumber[F](block)
+                          )
+      followsStatus <- blockNumberStatus.joinRight.traverse(
+                        _ => Validate.justificationFollows[F](block, genesis, dag)
+                      )
+      parentsStatus <- followsStatus.joinRight.traverse(
+                        _ => Validate.parents[F](block, genesis, dag)
+                      )
+      sequenceNumberStatus <- parentsStatus.joinRight.traverse(
+                               _ => Validate.sequenceNumber[F](block, dag)
+                             )
+      justificationRegressionsStatus <- sequenceNumberStatus.joinRight.traverse(
+                                         _ =>
+                                           Validate.justificationRegressions[F](block, genesis, dag)
+                                       )
+      shardIdentifierStatus <- justificationRegressionsStatus.joinRight.traverse(
+                                _ => Validate.shardIdentifier[F](block, shardId)
+                              )
     } yield shardIdentifierStatus.joinRight
 
   /**
@@ -187,17 +206,19 @@ object Validate {
     */
   def missingBlocks[F[_]: Monad: Log: BlockStore](
       block: BlockMessage,
-      dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
+      dag: BlockDag
+  ): F[Either[InvalidBlock, ValidBlock]] =
     for {
       parentsPresent <- ProtoUtil.parentHashes(block).toList.forallM(p => BlockStore[F].contains(p))
-      justificationsPresent <- block.justifications.toList.forallM(j =>
-                                BlockStore[F].contains(j.latestBlockHash))
+      justificationsPresent <- block.justifications.toList
+                                .forallM(j => BlockStore[F].contains(j.latestBlockHash))
       result <- if (parentsPresent && justificationsPresent) {
                  Applicative[F].pure(Right(Valid))
                } else {
                  for {
                    _ <- Log[F].debug(
-                         s"Fetching missing dependencies for ${PrettyPrinter.buildString(block.blockHash)}.")
+                         s"Fetching missing dependencies for ${PrettyPrinter.buildString(block.blockHash)}."
+                       )
                  } yield Left(MissingBlocks)
                }
     } yield result
@@ -210,7 +231,8 @@ object Validate {
     */
   def repeatDeploy[F[_]: Monad: Log: BlockStore](
       block: BlockMessage,
-      dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
+      dag: BlockDag
+  ): F[Either[InvalidBlock, ValidBlock]] = {
     val deployKeySet = (for {
       bd <- block.body.toList
       d  <- bd.deploys.flatMap(_.deploy)
@@ -225,14 +247,20 @@ object Validate {
                             _.body.exists(
                               _.deploys
                                 .flatMap(_.deploy)
-                                .exists(_.raw.exists(p =>
-                                  deployKeySet.contains((p.user, p.timestamp))))))
+                                .exists(
+                                  _.raw.exists(p => deployKeySet.contains((p.user, p.timestamp)))
+                                )
+                            )
+                          )
       result <- duplicatedBlock match {
                  case Some(b) =>
                    for {
-                     _ <- Log[F].warn(ignore(
-                           block,
-                           s"found deploy by the same (user, millisecond timestamp) produced in the block(${b.blockHash})"))
+                     _ <- Log[F].warn(
+                           ignore(
+                             block,
+                             s"found deploy by the same (user, millisecond timestamp) produced in the block(${b.blockHash})"
+                           )
+                         )
                    } yield Left(InvalidRepeatDeploy)
                  case None => Applicative[F].pure(Right(Valid))
                }
@@ -242,7 +270,8 @@ object Validate {
   // This is not a slashable offence
   def timestamp[F[_]: Monad: Log: Time: BlockStore](
       b: BlockMessage,
-      dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
+      dag: BlockDag
+  ): F[Either[InvalidBlock, ValidBlock]] =
     for {
       currentTime  <- Time[F].currentMillis
       timestamp    = b.header.get.timestamp
@@ -265,7 +294,8 @@ object Validate {
                    _ <- Log[F].warn(
                          ignore(
                            b,
-                           s"block timestamp $timestamp is not between latest parent block time and current time.")
+                           s"block timestamp $timestamp is not between latest parent block time and current time."
+                         )
                        )
                  } yield Left(InvalidUnslashableBlock)
                }
@@ -273,27 +303,25 @@ object Validate {
 
   // Agnostic of non-parent justifications
   def blockNumber[F[_]: Monad: Log: BlockStore](
-      b: BlockMessage,
-      dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
+      b: BlockMessage
+  ): F[Either[InvalidBlock, ValidBlock]] =
     for {
-      maybeMainParent       <- ProtoUtil.parentHashes(b).headOption.traverse(ProtoUtil.unsafeGetBlock[F])
-      maybeMainParentNumber = maybeMainParent.map(ProtoUtil.blockNumber)
-      number                = ProtoUtil.blockNumber(b)
-      result                = maybeMainParentNumber.fold(number == 0)(_ + 1 == number)
+      parents <- ProtoUtil.unsafeGetParents[F](b)
+      maxBlockNumber = parents.foldLeft(-1L) {
+        case (acc, p) => math.max(acc, ProtoUtil.blockNumber(p))
+      }
+      number = ProtoUtil.blockNumber(b)
+      result = maxBlockNumber + 1 == number
       status <- if (result) {
                  Applicative[F].pure(Right(Valid))
                } else {
-                 val log = maybeMainParentNumber.fold(
-                   Log[F].warn(
-                     ignore(b, s"block number $number is not zero, but block has no parents.")
-                   )
-                 )(n => {
-                   Log[F].warn(
-                     ignore(b, s"block number $number is not one more than parent number $n.")
-                   )
-                 })
+                 val logMessage =
+                   if (parents.isEmpty)
+                     s"block number $number is not zero, but block has no parents."
+                   else
+                     s"block number $number is not one more than maximum parent number $maxBlockNumber."
                  for {
-                   _ <- log
+                   _ <- Log[F].warn(ignore(b, logMessage))
                  } yield Left(InvalidBlockNumber)
                }
     } yield status
@@ -306,13 +334,14 @@ object Validate {
     */
   def sequenceNumber[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
-      dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
+      dag: BlockDag
+  ): F[Either[InvalidBlock, ValidBlock]] =
     for {
       creatorJustificationSeqNumber <- ProtoUtil.creatorJustification(b).foldM(-1) {
                                         case (_, Justification(_, latestBlockHash)) =>
                                           for {
-                                            latestBlock <- ProtoUtil.unsafeGetBlock[F](
-                                                            latestBlockHash)
+                                            latestBlock <- ProtoUtil
+                                                            .unsafeGetBlock[F](latestBlockHash)
                                           } yield latestBlock.seqNum
                                       }
       number = b.seqNum
@@ -321,9 +350,12 @@ object Validate {
                  Applicative[F].pure(Right(Valid))
                } else {
                  for {
-                   _ <- Log[F].warn(ignore(
-                         b,
-                         s"seq number $number is not one more than creator justification number $creatorJustificationSeqNumber."))
+                   _ <- Log[F].warn(
+                         ignore(
+                           b,
+                           s"seq number $number is not one more than creator justification number $creatorJustificationSeqNumber."
+                         )
+                       )
                  } yield Left(InvalidSequenceNumber)
                }
     } yield status
@@ -331,13 +363,15 @@ object Validate {
   // Agnostic of justifications
   def shardIdentifier[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
-      shardId: String): F[Either[InvalidBlock, ValidBlock]] =
+      shardId: String
+  ): F[Either[InvalidBlock, ValidBlock]] =
     if (b.shardId == shardId) {
       Applicative[F].pure(Right(Valid))
     } else {
       for {
         _ <- Log[F].warn(
-              ignore(b, s"got shard identifier ${b.shardId} while $shardId was expected."))
+              ignore(b, s"got shard identifier ${b.shardId} while $shardId was expected.")
+            )
       } yield Left(InvalidShardId)
     }
 
@@ -375,9 +409,11 @@ object Validate {
   /**
     * Works only with fully explicit justifications.
     */
-  def parents[F[_]: Monad: Log: BlockStore](b: BlockMessage,
-                                            genesis: BlockMessage,
-                                            dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
+  def parents[F[_]: Monad: Log: BlockStore](
+      b: BlockMessage,
+      genesis: BlockMessage,
+      dag: BlockDag
+  ): F[Either[InvalidBlock, ValidBlock]] = {
     val maybeParentHashes = ProtoUtil.parentHashes(b)
     val parentHashes = maybeParentHashes match {
       case hashes if hashes.isEmpty => Seq(genesis.blockHash)
@@ -385,18 +421,48 @@ object Validate {
     }
 
     for {
-      latestMessages        <- ProtoUtil.toLatestMessage[F](b.justifications, dag)
-      dagViewOfBlockCreator = dag.copy(latestMessages = latestMessages)
-      estimate              <- Estimator.tips[F](dagViewOfBlockCreator, genesis)
-      computedParents       <- ProtoUtil.chooseNonConflicting[F](estimate, genesis, dag)
-      computedParentHashes  = computedParents.map(_.blockHash)
+      latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure[F]
+      estimate             <- Estimator.tips[F](dag, genesis.blockHash, latestMessagesHashes)
+      computedParents      <- ProtoUtil.chooseNonConflicting[F](estimate, genesis, dag)
+      computedParentHashes = computedParents.map(_.blockHash)
       status <- if (parentHashes == computedParentHashes)
                  Applicative[F].pure(Right(Valid))
                else
                  for {
                    _ <- Log[F].warn(
-                         ignore(b, "block parents did not match estimate based on justification."))
+                         ignore(b, "block parents did not match estimate based on justification.")
+                       )
                  } yield Left(InvalidParents)
+    } yield status
+  }
+
+  /*
+   * This check must come before Validate.parents
+   */
+  def justificationFollows[F[_]: Monad: Log: BlockStore](
+      b: BlockMessage,
+      genesis: BlockMessage,
+      dag: BlockDag
+  ): F[Either[InvalidBlock, ValidBlock]] = {
+    val justifiedValidators = b.justifications.map(_.validator).toSet
+    val mainParentHash      = ProtoUtil.parentHashes(b).head
+    for {
+      mainParent       <- ProtoUtil.unsafeGetBlock[F](mainParentHash)
+      bondedValidators = ProtoUtil.bonds(mainParent).map(_.validator).toSet
+      status <- if (bondedValidators == justifiedValidators) {
+                 Applicative[F].pure(Right(Valid))
+               } else {
+                 val justifiedValidatorsPP = justifiedValidators.map(PrettyPrinter.buildString(_))
+                 val bondedValidatorsPP    = bondedValidators.map(PrettyPrinter.buildString(_))
+                 for {
+                   _ <- Log[F].warn(
+                         ignore(
+                           b,
+                           s"the justified validators, ${justifiedValidatorsPP}, do not match the bonded validators, ${bondedValidatorsPP}."
+                         )
+                       )
+                 } yield Left(InvalidFollows)
+               }
     } yield status
   }
 
@@ -410,15 +476,18 @@ object Validate {
   def justificationRegressions[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
       genesis: BlockMessage,
-      dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
+      dag: BlockDag
+  ): F[Either[InvalidBlock, ValidBlock]] = {
     val latestMessagesOfBlock             = ProtoUtil.toLatestMessageHashes(b.justifications)
     val maybeLatestMessagesFromSenderView = dag.latestMessagesOfLatestMessages.get(b.sender)
     maybeLatestMessagesFromSenderView match {
       case Some(latestMessagesFromSenderView) =>
-        justificationRegressionsAux[F](b,
-                                       latestMessagesOfBlock,
-                                       latestMessagesFromSenderView,
-                                       genesis)
+        justificationRegressionsAux[F](
+          b,
+          latestMessagesOfBlock,
+          latestMessagesFromSenderView,
+          genesis
+        )
       case None =>
         // We cannot have a justification regression if we don't have a previous latest message from sender
         Applicative[F].pure(Right(Valid))
@@ -429,7 +498,8 @@ object Validate {
       b: BlockMessage,
       latestMessagesOfBlock: Map[Validator, BlockHash],
       latestMessagesFromSenderView: Map[Validator, BlockHash],
-      genesis: BlockMessage): F[Either[InvalidBlock, ValidBlock]] =
+      genesis: BlockMessage
+  ): F[Either[InvalidBlock, ValidBlock]] =
     for {
       containsJustificationRegression <- latestMessagesOfBlock.toList.existsM {
                                           case (validator, currentBlockJustificationHash) =>
@@ -440,10 +510,12 @@ object Validate {
                                               val previousBlockJustificationHash =
                                                 latestMessagesFromSenderView.getOrElse(
                                                   validator,
-                                                  genesis.blockHash)
+                                                  genesis.blockHash
+                                                )
                                               isJustificationRegression[F](
                                                 currentBlockJustificationHash,
-                                                previousBlockJustificationHash)
+                                                previousBlockJustificationHash
+                                              )
                                             }
                                         }
       status <- if (containsJustificationRegression) {
@@ -457,7 +529,8 @@ object Validate {
 
   private def isJustificationRegression[F[_]: Monad: Log: BlockStore](
       currentBlockJustificationHash: BlockHash,
-      previousBlockJustificationHash: BlockHash): F[Boolean] =
+      previousBlockJustificationHash: BlockHash
+  ): F[Boolean] =
     for {
       currentBlockJustification <- ProtoUtil
                                     .unsafeGetBlock[F](currentBlockJustificationHash)
@@ -472,12 +545,11 @@ object Validate {
 
   def transactions[F[_]: Sync: Log: BlockStore](
       block: BlockMessage,
-      genesis: BlockMessage,
       dag: BlockDag,
       emptyStateHash: StateHash,
       runtimeManager: RuntimeManager,
-      knownStateHashesContainer: AtomicSyncVarF[F, Set[StateHash]])(
-      implicit scheduler: Scheduler): F[Either[BlockStatus, ValidBlock]] =
+      knownStateHashesContainer: AtomicSyncVarF[F, Set[StateHash]]
+  )(implicit scheduler: Scheduler): F[Either[BlockStatus, ValidBlock]] =
     for {
       maybeStateHash <- knownStateHashesContainer
                          .modify[Either[BlockException, Option[StateHash]]] { knownStateHashes =>
@@ -486,10 +558,10 @@ object Validate {
                              validateBlockCheckpointResult <- InterpreterUtil
                                                                .validateBlockCheckpoint[F](
                                                                  block,
-                                                                 genesis,
                                                                  dag,
                                                                  knownStateHashes,
-                                                                 runtimeManager)
+                                                                 runtimeManager
+                                                               )
                              (maybeStateHash, updatedknownStateHashes) = validateBlockCheckpointResult
                            } yield (updatedknownStateHashes, maybeStateHash)
                          }
@@ -506,9 +578,11 @@ object Validate {
     */
   def neglectedInvalidBlock[F[_]: Applicative](
       block: BlockMessage,
-      invalidBlockTracker: Set[BlockHash]): F[Either[InvalidBlock, ValidBlock]] = {
-    val invalidJustifications = block.justifications.filter(justification =>
-      invalidBlockTracker.contains(justification.latestBlockHash))
+      invalidBlockTracker: Set[BlockHash]
+  ): F[Either[InvalidBlock, ValidBlock]] = {
+    val invalidJustifications = block.justifications.filter(
+      justification => invalidBlockTracker.contains(justification.latestBlockHash)
+    )
     val neglectedInvalidJustification = invalidJustifications.exists { justification =>
       val slashedValidatorBond = bonds(block).find(_.validator == justification.validator)
       slashedValidatorBond match {
@@ -523,20 +597,21 @@ object Validate {
     }
   }
 
-  def bondsCache[F[_]: Applicative: Log](
-      b: BlockMessage,
-      runtimeManager: RuntimeManager): F[Either[InvalidBlock, ValidBlock]] = {
+  def bondsCache[F[_]: Applicative: Log](b: BlockMessage, runtimeManager: RuntimeManager)(
+      implicit scheduler: Scheduler
+  ): F[Either[InvalidBlock, ValidBlock]] = {
     val bonds = ProtoUtil.bonds(b)
     ProtoUtil.tuplespace(b) match {
       case Some(tuplespaceHash) =>
         Try(runtimeManager.computeBonds(tuplespaceHash)) match {
           case Success(computedBonds) =>
-            if (bonds == computedBonds) {
+            if (bonds.toSet == computedBonds.toSet) {
               Applicative[F].pure(Right(Valid))
             } else {
               for {
                 _ <- Log[F].warn(
-                      "Bonds in proof of stake contract do not match block's bond cache.")
+                      "Bonds in proof of stake contract do not match block's bond cache."
+                    )
               } yield Left(InvalidBondsCache)
             }
           case Failure(ex: Throwable) =>

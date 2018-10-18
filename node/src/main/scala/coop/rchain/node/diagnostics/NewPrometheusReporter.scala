@@ -48,14 +48,16 @@ class NewPrometheusReporter extends MetricReporter {
   */
 object NewPrometheusReporter {
 
-  case class Configuration(startEmbeddedServer: Boolean,
-                           embeddedServerHostname: String,
-                           embeddedServerPort: Int,
-                           defaultBuckets: Seq[java.lang.Double],
-                           timeBuckets: Seq[java.lang.Double],
-                           informationBuckets: Seq[java.lang.Double],
-                           customBuckets: Map[String, Seq[java.lang.Double]],
-                           includeEnvironmentTags: Boolean)
+  case class Configuration(
+      startEmbeddedServer: Boolean,
+      embeddedServerHostname: String,
+      embeddedServerPort: Int,
+      defaultBuckets: Seq[java.lang.Double],
+      timeBuckets: Seq[java.lang.Double],
+      informationBuckets: Seq[java.lang.Double],
+      customBuckets: Map[String, Seq[java.lang.Double]],
+      includeEnvironmentTags: Boolean
+  )
 
   object Configuration {
 

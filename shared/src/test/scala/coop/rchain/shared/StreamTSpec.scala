@@ -58,6 +58,17 @@ class StreamTSpec extends FunSpec with Matchers with GeneratorDrivenPropertyChec
 
     }
 
+    it(
+      "should allow taking the longest prefix of this StreamT whose elements satisfy the predicate"
+    ) {
+      forAll { list: List[Int] =>
+        val stream: StreamT[Id, Int] = StreamT.fromList[Id, Int](list)
+
+        stream.takeWhile(_ < 100).toList[Int] shouldBe list.takeWhile(_ < 100)
+      }
+
+    }
+
     it("should allow dropping a finite number of terms") {
       forAll { (list: List[Int], n: Int) =>
         val stream: StreamT[Id, Int] = StreamT.fromList[Id, Int](list)
@@ -65,6 +76,14 @@ class StreamTSpec extends FunSpec with Matchers with GeneratorDrivenPropertyChec
         stream.drop(n).toList[Int] shouldBe list.drop(n)
       }
 
+    }
+
+    it("should allow dropping a finite number of terms until a term doesn't satisfy the predicate") {
+      forAll { list: List[Int] =>
+        val stream: StreamT[Id, Int] = StreamT.fromList[Id, Int](list)
+
+        stream.dropWhile(_ < 100).toList[Int] shouldBe list.dropWhile(_ < 100)
+      }
     }
 
     it("should find elements properly in") {
@@ -106,7 +125,8 @@ class StreamTSpec extends FunSpec with Matchers with GeneratorDrivenPropertyChec
           0L,
           Eval.now(pure(StreamT.cons(1L, Eval.later(pure(fibs.zip(fibs.tail(mErrId)).map {
             case (a, b) => a + b
-          }))))))
+          })))))
+        )
 
       fibs.take(8).toList[Long] shouldBe List(0L, 1L, 1L, 2L, 3L, 5L, 8L, 13L)
     }

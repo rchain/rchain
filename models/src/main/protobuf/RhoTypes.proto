@@ -36,23 +36,21 @@ message ParWithRandom {
     bytes randomState = 2 [(scalapb.field).type = "coop.rchain.crypto.hash.Blake2b512Random"];
 }
 
-message Channel {
-    oneof channel_instance {
-        Par quote = 1;
-        Var chanVar = 2;
-    }
-}
-
 message PCost {
-    uint64 cost = 1;
-    int32 iterations = 2;
+    int32 iterations = 1;
+    uint64 cost = 2;
 }
 
-message ListChannelWithRandom {
-    repeated Channel channels = 1;
+message ListParWithRandom {
+    repeated Par pars = 1;
+    bytes randomState = 2 [(scalapb.field).type = "coop.rchain.crypto.hash.Blake2b512Random"];
+}
+
+message ListParWithRandomAndPhlos {
+    repeated Par pars = 1;
     bytes randomState = 2 [(scalapb.field).type = "coop.rchain.crypto.hash.Blake2b512Random"];
     // cost of performing the spatial match
-    PCost cost = 3;
+    uint64 cost = 3;
 }
 
 // While we use vars in both positions, when producing the normalized
@@ -78,7 +76,7 @@ message Bundle {
 // Upon send, all free variables in data are substituted with their values.
 // also if a process is sent, it is auto-quoted.
 message Send {
-    Channel chan = 1 [(scalapb.field).no_box = true];
+    Par chan = 1 [(scalapb.field).no_box = true];
     repeated Par data = 2;
     bool persistent = 3;
     bytes locallyFree = 5 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
@@ -86,14 +84,14 @@ message Send {
 }
 
 message ReceiveBind {
-    repeated Channel patterns = 1;
-    Channel source = 2 [(scalapb.field).no_box = true];
+    repeated Par patterns = 1;
+    Par source = 2 [(scalapb.field).no_box = true];
     Var remainder = 3;
     int32 freeCount = 4;
 }
 
 message BindPattern {
-    repeated Channel patterns = 1;
+    repeated Par patterns = 1;
     Var remainder = 2;
     int32 freeCount = 3;
 }
@@ -171,7 +169,6 @@ message Expr {
         ESet e_set_body = 22 [(scalapb.field).type = "coop.rchain.models.ParSet"];
         EMap e_map_body = 23 [(scalapb.field).type = "coop.rchain.models.ParMap"];
         EMethod e_method_body = 24;
-        Channel e_eval_body = 26;
 
         EMatches e_matches_body = 27;
         EPercentPercent e_percent_percent_body = 28;

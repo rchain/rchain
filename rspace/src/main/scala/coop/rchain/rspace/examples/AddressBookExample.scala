@@ -3,11 +3,14 @@ package coop.rchain.rspace.examples
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
 import java.nio.file.{Files, Path}
 
+import cats.Id
+import cats.effect.Sync
 import cats.implicits._
+import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Language.ignore
-import coop.rchain.rspace.util.runKs
+import coop.rchain.rspace.util._
 import scodec.bits.ByteVector
 
 import scala.collection.immutable.Seq
@@ -19,6 +22,11 @@ object AddressBookExample {
   /* Here we define a type for channels */
 
   case class Channel(name: String)
+
+  /* Ordering for Channel */
+
+  implicit val channelOrdering: Ordering[Channel] =
+    (x: Channel, y: Channel) => x.name.compare(y.name)
 
   /* Here we define a type for data */
 
@@ -72,6 +80,8 @@ object AddressBookExample {
 
   object implicits {
 
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+
     /* Now I will troll Greg... */
 
     /* Serialize instances */
@@ -85,7 +95,11 @@ object AddressBookExample {
         val baos = new ByteArrayOutputStream()
         try {
           val oos = new ObjectOutputStream(baos)
-          try { oos.writeObject(channel) } finally { oos.close() }
+          try {
+            oos.writeObject(channel)
+          } finally {
+            oos.close()
+          }
           ByteVector.view(baos.toByteArray)
         } finally {
           baos.close()
@@ -97,7 +111,11 @@ object AddressBookExample {
           val bais = new ByteArrayInputStream(bytes.toArray)
           try {
             val ois = new ObjectInputStream(bais)
-            try { Right(ois.readObject.asInstanceOf[Channel]) } finally { ois.close() }
+            try {
+              Right(ois.readObject.asInstanceOf[Channel])
+            } finally {
+              ois.close()
+            }
           } finally {
             bais.close()
           }
@@ -132,13 +150,13 @@ object AddressBookExample {
     /**
       * An instance of [[Match]] for [[Pattern]] and [[Entry]]
       */
-    implicit object matchPatternEntry extends Match[Pattern, Entry, Entry] {
-      def get(p: Pattern, a: Entry): Option[Entry] =
+    implicit object matchPatternEntry extends Match[Pattern, Nothing, Entry, Entry] {
+      def get(p: Pattern, a: Entry): Either[Nothing, Option[Entry]] =
         p match {
-          case NameMatch(last) if a.name.last == last        => Some(a)
-          case CityMatch(city) if a.address.city == city     => Some(a)
-          case StateMatch(state) if a.address.state == state => Some(a)
-          case _                                             => None
+          case NameMatch(last) if a.name.last == last        => Right(Some(a))
+          case CityMatch(city) if a.address.city == city     => Right(Some(a))
+          case StateMatch(state) if a.address.state == state => Right(Some(a))
+          case _                                             => Right(None)
         }
 
     }
@@ -147,20 +165,26 @@ object AddressBookExample {
   import implicits._
 
   // Let's define some Entries
-  val alice = Entry(name = Name("Alice", "Lincoln"),
-                    address = Address("777 Ford St.", "Crystal Lake", "Idaho", "223322"),
-                    email = "alicel@ringworld.net",
-                    phone = "787-555-1212")
+  val alice = Entry(
+    name = Name("Alice", "Lincoln"),
+    address = Address("777 Ford St.", "Crystal Lake", "Idaho", "223322"),
+    email = "alicel@ringworld.net",
+    phone = "787-555-1212"
+  )
 
-  val bob = Entry(name = Name("Bob", "Lahblah"),
-                  address = Address("1000 Main St", "Crystal Lake", "Idaho", "223322"),
-                  email = "blablah@tenex.net",
-                  phone = "698-555-1212")
+  val bob = Entry(
+    name = Name("Bob", "Lahblah"),
+    address = Address("1000 Main St", "Crystal Lake", "Idaho", "223322"),
+    email = "blablah@tenex.net",
+    phone = "698-555-1212"
+  )
 
-  val carol = Entry(name = Name("Carol", "Lahblah"),
-                    address = Address("22 Goldwater Way", "Herbert", "Nevada", "334433"),
-                    email = "carol@blablah.org",
-                    phone = "232-555-1212")
+  val carol = Entry(
+    name = Name("Carol", "Lahblah"),
+    address = Address("22 Goldwater Way", "Herbert", "Nevada", "334433"),
+    email = "carol@blablah.org",
+    phone = "232-555-1212"
+  )
 
   def exampleOne(): Unit = {
 
@@ -170,21 +194,27 @@ object AddressBookExample {
     // Let's define our store
     val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
-    val space = RSpace.create[Channel, Pattern, Entry, Entry, Printer](context, Branch.MASTER)
+    val space =
+      RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
 
     Console.printf("\nExample One: Let's consume and then produce...\n")
 
     val cres =
-      space.consume(Seq(Channel("friends")),
-                    Seq(CityMatch(city = "Crystal Lake")),
-                    new Printer,
-                    persist = true)
+      space
+        .consume(
+          Seq(Channel("friends")),
+          Seq(CityMatch(city = "Crystal Lake")),
+          new Printer,
+          persist = true
+        )
+        .right
+        .get // it should be fine to do that -- type of left side is Nothing (no invalid states)
 
     assert(cres.isEmpty)
 
-    val pres1 = space.produce(Channel("friends"), alice, persist = false)
-    val pres2 = space.produce(Channel("friends"), bob, persist = false)
-    val pres3 = space.produce(Channel("friends"), carol, persist = false)
+    val pres1 = space.produce(Channel("friends"), alice, persist = false).right.get
+    val pres2 = space.produce(Channel("friends"), bob, persist = false).right.get
+    val pres3 = space.produce(Channel("friends"), carol, persist = false).right.get
 
     assert(pres1.nonEmpty)
     assert(pres2.nonEmpty)
@@ -203,23 +233,29 @@ object AddressBookExample {
     // Let's define our store
     val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
-    val space = RSpace.create[Channel, Pattern, Entry, Entry, Printer](context, Branch.MASTER)
+    val space =
+      RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
 
     Console.printf("\nExample Two: Let's produce and then consume...\n")
 
-    val pres1 = space.produce(Channel("friends"), alice, persist = false)
-    val pres2 = space.produce(Channel("friends"), bob, persist = false)
-    val pres3 = space.produce(Channel("friends"), carol, persist = false)
+    val pres1 = space.produce(Channel("friends"), alice, persist = false).right.get
+    val pres2 = space.produce(Channel("friends"), bob, persist = false).right.get
+    val pres3 = space.produce(Channel("friends"), carol, persist = false).right.get
 
     assert(pres1.isEmpty)
     assert(pres2.isEmpty)
     assert(pres3.isEmpty)
 
     val consumer = () =>
-      space.consume(Seq(Channel("friends")),
-                    Seq(NameMatch(last = "Lahblah")),
-                    new Printer,
-                    persist = false)
+      space
+        .consume(
+          Seq(Channel("friends")),
+          Seq(NameMatch(last = "Lahblah")),
+          new Printer,
+          persist = false
+        )
+        .right
+        .get
 
     val cres1 = consumer()
     val cres2 = consumer()
@@ -240,10 +276,15 @@ object AddressBookExample {
     println("Rollback example: Let's consume...")
 
     val cres =
-      space.consume(Seq(Channel("friends")),
-                    Seq(CityMatch(city = "Crystal Lake")),
-                    new Printer,
-                    persist = false)
+      space
+        .consume(
+          Seq(Channel("friends")),
+          Seq(CityMatch(city = "Crystal Lake")),
+          new Printer,
+          persist = false
+        )
+        .right
+        .get
 
     assert(cres.isEmpty)
 
@@ -251,7 +292,7 @@ object AddressBookExample {
     val checkpointHash = space.createCheckpoint().root
 
     def produceAlice(): Option[(Printer, Seq[Entry])] =
-      space.produce(Channel("friends"), alice, persist = false)
+      space.produce(Channel("friends"), alice, persist = false).right.get
 
     println("Rollback example: First produce result should return some data")
     assert(produceAlice.isDefined)
@@ -263,7 +304,8 @@ object AddressBookExample {
     assert(produceAlice.isEmpty)
 
     println(
-      "Rollback example: Let's reset RSpace to the state from before running the produce operations")
+      "Rollback example: Let's reset RSpace to the state from before running the produce operations"
+    )
     space.reset(checkpointHash)
 
     println("Rollback example: Again, first produce result should return some data")
@@ -272,15 +314,18 @@ object AddressBookExample {
     println("Rollback example: And again second produce result should be empty")
     assert(produceAlice.isEmpty)
 
-    space.store.close()
+    space.close()
   }
 
-  private[this] def withSpace(f: RSpace[Channel, Pattern, Entry, Entry, Printer] => Unit) = {
+  private[this] def withSpace(
+      f: IdISpace[Channel, Pattern, Nothing, Entry, Entry, Printer] => Unit
+  ) = {
     // Here we define a temporary place to put the store's files
     val storePath = Files.createTempDirectory("rspace-address-book-example-")
     // Let's define our store
     val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
-    val space   = RSpace.create[Channel, Pattern, Entry, Entry, Printer](context, Branch.MASTER)
+    val space =
+      RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
     try {
       f(space)
     } finally {

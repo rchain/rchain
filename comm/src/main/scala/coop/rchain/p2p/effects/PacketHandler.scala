@@ -1,7 +1,7 @@
 package coop.rchain.p2p.effects
 
 import coop.rchain.comm.{CommError, PeerNode}
-import coop.rchain.comm.protocol.rchain.Packet
+import coop.rchain.comm.protocol.routing.Packet
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._
 import coop.rchain.shared._
@@ -16,7 +16,8 @@ object PacketHandler extends PacketHandlerInstances {
   def apply[F[_]: PacketHandler]: PacketHandler[F] = implicitly[PacketHandler[F]]
 
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
-      implicit C: PacketHandler[F]): PacketHandler[T[F, ?]] =
+      implicit C: PacketHandler[F]
+  ): PacketHandler[T[F, ?]] =
     new PacketHandler[T[F, ?]] {
       def handlePacket(peer: PeerNode, packet: Packet): T[F, Option[Packet]] =
         C.handlePacket(peer, packet).liftM[T]
@@ -25,7 +26,8 @@ object PacketHandler extends PacketHandlerInstances {
   def pf[F[_]](pfForPeer: (PeerNode) => PartialFunction[Packet, F[Option[Packet]]])(
       implicit ev1: Applicative[F],
       ev2: Log[F],
-      errorHandler: ApplicativeError_[F, CommError]): PacketHandler[F] =
+      errorHandler: ApplicativeError_[F, CommError]
+  ): PacketHandler[F] =
     new PacketHandler[F] {
       def handlePacket(peer: PeerNode, packet: Packet): F[Option[Packet]] = {
         val errorMsg = s"Unable to handle packet $packet"

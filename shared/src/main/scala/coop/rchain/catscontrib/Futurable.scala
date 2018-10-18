@@ -20,20 +20,19 @@ trait FuturableInstances extends FuturableInstances0 {
 }
 
 sealed trait FuturableInstances0 {
-  import eitherT._
-
   implicit def eitherTFuturable[F[_]: Monad: Futurable, E](
-      implicit ec: ExecutionContext): Futurable[EitherT[F, E, ?]] =
+      implicit ec: ExecutionContext
+  ): Futurable[EitherT[F, E, ?]] =
     new Futurable[EitherT[F, E, ?]] {
       case class ToFutureException(e: E) extends RuntimeException
 
-      def toFuture[A](fa: EitherT[F, E, ?][A]): Future[A] =
+      def toFuture[A](fa: EitherT[F, E, A]): Future[A] =
         Futurable[F]
           .toFuture(fa.value)
-          .flatMap(_ match {
+          .flatMap {
             case Right(a) => Future.successful[A](a)
             case Left(e)  => Future.failed[A](ToFutureException(e))
-          })
+          }
 
     }
 }

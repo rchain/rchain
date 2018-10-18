@@ -1,5 +1,6 @@
 package coop.rchain.rspace
 
+import cats.Functor
 import coop.rchain.rspace.internal.GNAT
 import scodec.bits.ByteVector
 
@@ -7,16 +8,47 @@ import scala.collection.immutable.Seq
 
 package object util {
 
+  implicit def unpackSeq[C, P, K, R](
+      v: Seq[Option[(ContResult[C, P, K], Seq[Result[R]])]]
+  ): Seq[Option[(K, Seq[R])]] =
+    v.map(unpackOption)
+
+  implicit def unpackEither[C, P, E, K, R](
+      v: Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]
+  ): Either[E, Option[(K, Seq[R])]] =
+    v.map(unpackOption)
+
+  implicit def unpackEither[F[_], C, P, E, K, R](
+      v: F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
+  )(implicit ev: Functor[F]): F[Either[E, Option[(K, Seq[R])]]] =
+    ev.map(v)(_.map(unpackOption))
+
+  implicit def unpackOption[C, P, K, R](
+      v: Option[(ContResult[C, P, K], Seq[Result[R]])]
+  ): Option[(K, Seq[R])] =
+    v.map(unpackTuple)
+
+  implicit def unpackTuple[C, P, K, R](v: (ContResult[C, P, K], Seq[Result[R]])): (K, Seq[R]) =
+    v match {
+      case (ContResult(continuation, _, _, _), data) => (continuation, data.map(_.value))
+    }
+
+  implicit def unpack[T](v: Result[T]): T                     = v.value
+  implicit def unpackCont[C, P, T](v: ContResult[C, P, T]): T = v.value
+
   /**
     * Extracts a continuation from a produce result
     */
   def getK[A, K](t: Option[(K, A)]): K =
     t.map(_._1).get
 
+  def getK[A, K](e: Either[_, Option[(K, A)]]): K =
+    e.map(_.map(_._1).get).right.get
+
   /** Runs a continuation with the accompanying data
     */
-  def runK[T](t: Option[((T) => Unit, T)]): Unit =
-    t.foreach { case (k, data) => k(data) }
+  def runK[T](e: Either[Nothing, Option[((T) => Unit, T)]]): Unit =
+    e.right.get.foreach { case (k, data) => k(data) }
 
   /** Runs a list of continuations with the accompanying data
     */
@@ -78,5 +110,5 @@ package object util {
       veccmp(a._1, b._1) match {
         case 0 => veccmp(a._2, b._2)
         case c => c
-    }
+      }
 }

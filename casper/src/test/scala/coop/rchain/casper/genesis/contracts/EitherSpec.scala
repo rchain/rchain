@@ -8,10 +8,10 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
 class EitherSpec extends FlatSpec with Matchers {
-  val runtime = TestSetUtil.runtime("rholang-either-test")
+  val runtime = TestSetUtil.runtime
   val tests   = TestSetUtil.getTests("./casper/src/test/rholang/EitherTest.rho").toList
 
-  TestSetUtil.runTests(EitherTest.term, List(Either.term), runtime)
+  TestSetUtil.runTests(EitherTest, List(Either), runtime)
   val tuplespace = StoragePrinter.prettyPrint(runtime.space.store)
 
   "Either rholang contract" should tests.head in {

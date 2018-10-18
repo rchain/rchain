@@ -36,6 +36,7 @@ object RholangProtoBuild {
   def createScalaArtifact(pkg: Option[String], name: String, proto: Path, source: Path): String = {
     val pkgDeclaration = pkg.map(p => s"package $p").getOrElse("")
     val imports = List(
+      "coop.rchain.casper.util.rholang.InterpreterUtil",
       "coop.rchain.rholang.build.CompiledRholangSource",
       "coop.rchain.models.Par"
     ).map(i => s"import $i")
@@ -44,7 +45,7 @@ object RholangProtoBuild {
 
     val body =
       s"""val resource = getClass.getResourceAsStream(${escape(protoName)})
-         |  override val term: Par = Par.parseFrom(resource)
+         |  override val term: Par = InterpreterUtil.mkTerm(${escapeSourceCode(source)}).right.get
          |  override val code: String = ${escapeSourceCode(source)}""".stripMargin
 
     s"""$pkgDeclaration

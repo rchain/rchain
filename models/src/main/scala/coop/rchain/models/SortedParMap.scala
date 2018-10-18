@@ -1,7 +1,7 @@
 package coop.rchain.models
 
 import scala.collection.MapLike
-import coop.rchain.models.rholang.sort.ordering._
+import coop.rchain.models.rholang.sorter.ordering._
 
 case class SortedParMap(private val ps: Map[Par, Par])
     extends Map[Par, Par]
