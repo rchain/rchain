@@ -14,7 +14,7 @@ trait Serialize2ByteBuffer[A] {
   def decode(bytes: ByteBuffer): A
 }
 
-abstract class DefaultSerializer[T](implicit tag: ClassTag[T]) extends Serializer[T] {
+class DefaultSerializer[T](implicit tag: ClassTag[T]) extends Serializer[T] {
 
   def defaultSerializer(kryo: Kryo): Serializer[T] =
     kryo
@@ -23,6 +23,12 @@ abstract class DefaultSerializer[T](implicit tag: ClassTag[T]) extends Serialize
 
   override def write(kryo: Kryo, output: Output, e: T): Unit =
     defaultSerializer(kryo).write(kryo, output, e)
+
+  override def read(
+      kryo: Kryo,
+      input: Input,
+      `type`: Class[T]
+  ): T = defaultSerializer(kryo).read(kryo, input, `type`)
 
 }
 
