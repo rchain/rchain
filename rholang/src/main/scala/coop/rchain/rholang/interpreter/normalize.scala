@@ -48,13 +48,13 @@ object GroundNormalizeMatcher {
   // This is necessary to remove the backticks. We don't use a regular
   // expression because they're always there.
   def stripUri(raw: String): String = {
-    assert(raw.length >= 2)
+    require(raw.length >= 2)
     raw.substring(1, raw.length - 1)
   }
   // Similarly, we need to remove quotes from strings, since we are using
   // a custom string token
   def stripString(raw: String): String = {
-    assert(raw.length >= 2)
+    require(raw.length >= 2)
     raw.substring(1, raw.length - 1)
   }
 }
