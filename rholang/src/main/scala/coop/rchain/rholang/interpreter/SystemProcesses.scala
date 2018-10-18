@@ -213,7 +213,6 @@ object SystemProcesses {
       shortLeashParams: Runtime.ShortLeashParams[Task]
   ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
     case Seq(ListParWithRandomAndPhlos(Seq(ack), rand, _)) =>
-      println("Correctly got single return channel.")
       for {
         codeHash  <- shortLeashParams.codeHash.get
         phloRate  <- shortLeashParams.phloRate.get
