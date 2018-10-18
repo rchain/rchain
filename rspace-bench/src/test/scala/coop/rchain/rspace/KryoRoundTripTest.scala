@@ -18,13 +18,19 @@ class KryoRoundTripTest extends FlatSpec with PropertyChecks with Matchers {
   implicit val listParWithRandomSerialize  = KryoSerializers.serializer(classOf[ListParWithRandom])
   implicit val taggedContinuationSerialize = KryoSerializers.serializer(classOf[TaggedContinuation])
 
+  def roundTrip[A](in: A)(implicit s: Serialize2ByteBuffer[A]): A = {
+    val meta = s.encode(in)
+    val out  = s.decode(meta)
+    out
+  }
+
   def roundTripSerialization[A: Arbitrary](
       implicit s: Serialize2ByteBuffer[A],
       tag: ClassTag[A]
   ): Unit =
     it must s"work for ${tag.runtimeClass.getSimpleName}" in {
       forAll { a: A =>
-        s.roundTrip(a)
+        roundTrip(a)
       }
     }
 

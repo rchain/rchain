@@ -12,11 +12,7 @@ import org.objenesis.strategy.StdInstantiatorStrategy
 trait Serialize2ByteBuffer[A] {
   def encode(a: A): ByteBuffer
   def decode(bytes: ByteBuffer): A
-  def roundTrip(in: A): A = {
-    val meta = encode(in)
-    val out  = decode(meta)
-    out
-  }
+
 }
 
 class DefaultSerializer[T](implicit tag: ClassTag[T]) extends Serializer[T] {
