@@ -79,6 +79,15 @@ object ProcGen {
       p2 <- procGen(topLevelProcs, state.decrementHeight)
     } yield new PPar(p1, p2)
 
+  private def pvarGen(state: State): Gen[Proc] =
+    if (state.usedNames.isEmpty)
+      pnilGen
+    else
+      procVarVarGen(Gen.oneOf(state.usedNames.toSeq)).map(new PVar(_))
+
+  private def procVarVarGen(identifierGen: Gen[String]): Gen[ProcVarVar] =
+    identifierGen.map(new ProcVarVar(_))
+
   private def pgroundGen(state: State): Gen[Proc] = {
     lazy val groundIntGen = arbitrary[Long]
       .map((n: Long) => {
@@ -162,7 +171,7 @@ object ProcGen {
       pnilGen
 
   private def topLevelProcs: Seq[State => Gen[Proc]] =
-    Seq(pgroundGen, pparGen, psendGen, pnewGen)
+    Seq(pgroundGen, pparGen, psendGen, pnewGen, pvarGen)
 
   def topLevelGen(height: Int): Gen[Proc] =
     procGen(topLevelProcs, State(height, Set.empty))
@@ -208,5 +217,10 @@ object ProcGen {
         names <- shrinkContainer[Seq, NameDecl].shrink(initialNames)
         proc  <- shrink(p.proc_)
       } yield new PNew(seqToJavaCollection[ListNameDecl, NameDecl](names), proc)
+
+    case p: PVar =>
+      (p.procvar_ match {
+        case v: ProcVarVar => shrinkString.shrink(v.var_).map(new ProcVarVar(_))
+      }).map(new PVar(_))
   }
 }
