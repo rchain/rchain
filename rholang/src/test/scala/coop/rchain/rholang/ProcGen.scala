@@ -67,8 +67,7 @@ object tools {
   def extractFreeVariables(p: Proc): Set[String] = {
     def go(localNames: Set[String], p: Proc): Set[String] =
       p match {
-        case _: PGround => Set.empty[String]
-        case par: PPar  => go(localNames, par.proc_1) ++ go(localNames, par.proc_2)
+        case par: PPar => go(localNames, par.proc_1) ++ go(localNames, par.proc_2)
         case v: PVar =>
           v.procvar_ match {
             case vv: ProcVarVar if (!localNames.contains(vv.var_)) => Set(vv.var_)
@@ -78,6 +77,7 @@ object tools {
           val newNames = extractNames(javaCollectionToSeq[ListNameDecl, NameDecl](n.listnamedecl_))
           go(localNames ++ newNames, n.proc_)
 
+        case _ => Set.empty[String]
       }
     go(Set.empty[String], p)
   }
