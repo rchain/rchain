@@ -12,11 +12,15 @@ import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.applicative._
 import cats.syntax.applicativeError._
+import cats.effect.concurrent.Ref
+import coop.rchain.blockstorage.BlockStore.BlockHash
+import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
 import coop.rchain.blockstorage.{BlockStore, LMDBBlockStore}
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.comm.CasperPacketHandler
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.{LastApprovedBlock, MultiParentCasperRef, SafetyOracle}
+import coop.rchain.casper.{LastApprovedBlock, MultiParentCasper, MultiParentCasperRef, SafetyOracle}
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib._
@@ -35,6 +39,7 @@ import coop.rchain.node.diagnostics._
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
+
 import kamon._
 import kamon.zipkin.ZipkinReporter
 import io.grpc.Server
@@ -279,6 +284,15 @@ class NodeRuntime(
       _ <- time.sleep(5.seconds).toEffect
     } yield ()
 
+    val casperLoop: Effect[Unit] =
+      for {
+        _ <- casperConstructor.get map {
+              case Some(casper) => casper.fetchDependencies
+              case None         => ().pure[Effect]
+            }
+        _ <- time.sleep(30.seconds).toEffect
+      } yield ()
+
     for {
       _       <- info
       servers <- acquireServers(runtime)
@@ -292,6 +306,7 @@ class NodeRuntime(
       _ <- NodeDiscovery[Task].discover.executeOn(loopScheduler).start.toEffect
       _ <- Log[Effect].info(s"Listening for traffic on $address.")
       _ <- EitherT(Task.defer(loop.forever.value).executeOn(loopScheduler))
+      _ <- EitherT(Task.defer(casperLoop.forever.value).executeOn(loopScheduler))
     } yield ()
   }
 
@@ -360,11 +375,13 @@ class NodeRuntime(
                         kademliaRPC
                       )
                       .toEffect
-    blockStore = LMDBBlockStore.create[Effect](conf.blockstorage)(
+    // TODO: This change is temporary until itegulov's BlockStore implementation is in
+    blockMap <- Ref.of[Effect, Map[BlockHash, BlockMessage]](Map.empty[BlockHash, BlockMessage])
+    blockStore = InMemBlockStore.create[Effect](
       syncEffect,
+      blockMap,
       Metrics.eitherT(Monad[Task], metrics)
     )
-
     _              <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
     oracle         = SafetyOracle.turanOracle[Effect](Monad[Effect])
     runtime        = Runtime.create(storagePath, storageSize, storeType)

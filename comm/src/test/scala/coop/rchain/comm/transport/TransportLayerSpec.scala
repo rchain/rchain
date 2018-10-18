@@ -4,12 +4,13 @@ import scala.concurrent.duration._
 
 import cats._
 import cats.implicits._
-
+import coop.rchain.shared._
 import coop.rchain.comm._, rp.ProtocolHelper
 import coop.rchain.comm.protocol.routing.{Packet, Protocol}
 import coop.rchain.casper.protocol.{BlockApproval => CasperBlockApproval}
 import coop.rchain.comm.CommError.CommErr
-
+import com.google.protobuf.ByteString
+import scala.util.Random
 import org.scalatest._
 
 abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
@@ -18,11 +19,14 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
     with Matchers
     with Inside {
 
+  def maxMessageSize: Int
+
   val transportLayerName: String = this.getClass.getSimpleName.replace("Spec", "")
 
   transportLayerName when {
 
     "doing a round trip to remote peer" when {
+
       "everything is fine" should {
         "send and receive the message" in
           new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.heartbeatResponseDispatcher[F]) {
@@ -237,9 +241,16 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
     }
 
+    val bigContent: ByteString = {
+      val b = 128.toByte
+      ProtocolHelper.toProtocolBytes(
+        Array.fill((4 * maxMessageSize) + (maxMessageSize / 2))(b)
+      )
+    }
+
     "streamBlob" should {
       "send a blob and receive by (single) remote side" in {
-        new TwoNodesRuntime[Unit](Dispatcher.heartbeatResponseDispatcher[F]) {
+        new TwoNodesRuntime[Unit]() {
           def execute(
               transportLayer: TransportLayer[F],
               local: PeerNode,
@@ -247,7 +258,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
           ): F[Unit] =
             transportLayer.stream(
               List(remote),
-              Blob(local, Packet("N/A", ProtocolHelper.toProtocolBytes("points don't matter")))
+              Blob(local, Packet("N/A", bigContent))
             )
 
           run()
@@ -255,12 +266,12 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
           streamDispatcher.received should have length 1
           val (_, blob) = streamDispatcher.received.head
           blob.packet.typeId shouldBe ("N/A")
-          blob.packet.content shouldBe (ProtocolHelper.toProtocolBytes("points don't matter"))
+          blob.packet.content shouldBe (bigContent)
         }
       }
 
       "send a blob and receive by (multiple) remote side" in {
-        new ThreeNodesRuntime[Unit](Dispatcher.heartbeatResponseDispatcher[F]) {
+        new ThreeNodesRuntime[Unit]() {
           def execute(
               transportLayer: TransportLayer[F],
               local: PeerNode,
@@ -269,7 +280,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
           ): F[Unit] =
             transportLayer.stream(
               List(remote1, remote2),
-              Blob(local, Packet("N/A", ProtocolHelper.toProtocolBytes("points don't matter")))
+              Blob(local, Packet("N/A", bigContent))
             )
 
           run()
@@ -278,11 +289,13 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
           val (_, blob1) = streamDispatcher.received(0)
           val (_, blob2) = streamDispatcher.received(1)
           blob1.packet.typeId shouldBe ("N/A")
-          blob1.packet.content shouldBe (ProtocolHelper.toProtocolBytes("points don't matter"))
+          blob1.packet.content shouldBe (bigContent)
           blob2.packet.typeId shouldBe ("N/A")
-          blob2.packet.content shouldBe (ProtocolHelper.toProtocolBytes("points don't matter"))
+          blob2.packet.content shouldBe (bigContent)
         }
       }
+
     }
+
   }
 }

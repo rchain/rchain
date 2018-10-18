@@ -2,82 +2,87 @@
 
 //requires ListOps
 
-contract @"runWithTimeout"(function, @t, return) = {
-  new result, ticksCh in {
-    ticksCh!(t) |
-    for(@ticks <= ticksCh) {
-      if (ticks == 0) { return!([]) }
-      else { ticksCh!(ticks - 1) }
-    } |
-    function!(*result) |
-    for(@r <- result){
-      return!([r]) |
-      for(_ <- ticksCh){ Nil } //stop the clock
-    }
-  }
-} |
-contract @"TestSet"(desc, @tests) = {
-  new addTests, execTests, testsCh in {
-    contract execTests(return) = {
-      new combinator in {
-        contract combinator(head, @accumulatedValue, return) = {
-          new result in {
-            head!(*result) |
-            for(@r <- result) {
-              match [r, accumulatedValue] {
-                [true, true] => return!(true)
-                _            => return!(false)
-              }
-            }
-          }
+new rl(`rho:registry:lookup`), ListOpsCh in {
+  rl!(`rho:id:dputnspi15oxxnyymjrpu7rkaok3bjkiwq84z7cqcrx4ktqfpyapn4`, *ListOpsCh) |
+  for(@(_, ListOps) <- ListOpsCh) {
+    contract @"runWithTimeout"(function, @t, return) = {
+      new result, ticksCh in {
+        ticksCh!(t) |
+        for(@ticks <= ticksCh) {
+          if (ticks == 0) { return!([]) }
+          else { ticksCh!(ticks - 1) }
         } |
-        for(@tests <- testsCh) {
-          @("ListOps", "fold")!(tests, true, *combinator, *return)
+        function!(*result) |
+        for(@r <- result){
+          return!([r]) |
+          for(_ <- ticksCh){ Nil } //stop the clock
         }
       }
     } |
-    contract addTests(@tests) = {
-      new toContract in {
-        contract toContract(@test, return) = {
-          match test {
-            [functionCh, answer] => {
-              new tContract in {
-                contract tContract(return) = {
-                  for (function <- @functionCh) {
-                    @functionCh!(*function) | //put back for possible re-use
-                    new result in {
-                      @"runWithTimeout"!(*function, 1000, *result) |
-                      for(@r <- result) {
-                        match r {
-                          [result] => {
-                            return!(result==answer)
-                          }
-                          [] => {
-                            return!(answer == "hanging return")
-                          }
-                        }
-                      }
-                    }
+    contract @"TestSet"(desc, @tests) = {
+      new addTests, execTests, testsCh in {
+        contract execTests(return) = {
+          new combinator in {
+            contract combinator(head, @accumulatedValue, return) = {
+              new result in {
+                head!(*result) |
+                for(@r <- result) {
+                  match [r, accumulatedValue] {
+                    [true, true] => return!(true)
+                    _            => return!(false)
                   }
-                } |
-                return!(*tContract)
+                }
               }
+            } |
+            for(@tests <- testsCh) {
+              @ListOps!("fold", tests, true, *combinator, *return)
             }
           }
         } |
-        @("ListOps", "map")!(tests, *toContract, *testsCh)
+        contract addTests(@tests) = {
+          new toContract in {
+            contract toContract(@test, return) = {
+              match test {
+                [functionCh, answer] => {
+                  new tContract in {
+                    contract tContract(return) = {
+                      for (function <- @functionCh) {
+                        @functionCh!(*function) | //put back for possible re-use
+                        new result in {
+                          @"runWithTimeout"!(*function, 1000, *result) |
+                          for(@r <- result) {
+                            match r {
+                              [result] => {
+                                return!(result==answer)
+                              }
+                              [] => {
+                                return!(answer == "hanging return")
+                              }
+                            }
+                          }
+                        }
+                      }
+                    } |
+                    return!(*tContract)
+                  }
+                }
+              }
+            } |
+            @ListOps!("map", tests, *toContract, *testsCh)
+          }
+        } |
+        addTests!(tests) |
+        execTests!(*desc)
       }
     } |
-    addTests!(tests) |
-    execTests!(*desc)
-  }
-} |
-contract @("TestSet", "after")(desc, continuation) = {
-  for(@result <- desc) {
-    if (result) {
-      desc!(result) | { *continuation }
-    } else {
-      desc!(result)
+    contract @("TestSet", "after")(desc, continuation) = {
+      for(@result <- desc) {
+        if (result) {
+          desc!(result) | { *continuation }
+        } else {
+          desc!(result)
+        }
+      }
     }
   }
 }

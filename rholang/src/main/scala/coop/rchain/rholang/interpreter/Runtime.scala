@@ -270,7 +270,8 @@ object Runtime {
         REG_DELETE_CALLBACK          -> (registry.deleteCallback(_)),
         REG_PUBLIC_LOOKUP            -> (registry.publicLookup(_)),
         REG_PUBLIC_REGISTER_RANDOM   -> (registry.publicRegisterRandom(_)),
-        REG_PUBLIC_REGISTER_SIGNED   -> (registry.publicRegisterSigned(_))
+        REG_PUBLIC_REGISTER_SIGNED   -> (registry.publicRegisterSigned(_)),
+        REG_NONCE_INSERT_CALLBACK    -> (registry.nonceInsertCallback(_))
       )
     }
 

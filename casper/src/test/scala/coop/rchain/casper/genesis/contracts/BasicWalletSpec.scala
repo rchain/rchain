@@ -18,7 +18,7 @@ import org.abstractj.kalium.NaCl
 import org.scalatest.{FlatSpec, Matchers}
 
 class BasicWalletSpec extends FlatSpec with Matchers {
-  val runtime = TestSetUtil.runtime("rholang-basic-wallet-test")
+  val runtime = TestSetUtil.runtime
   val tests   = TestSetUtil.getTests("./casper/src/test/rholang/BasicWalletTest.rho").toList
 
   TestSetUtil.runTests(BasicWalletTest, List(NonNegativeNumber, MakeMint, BasicWallet), runtime)

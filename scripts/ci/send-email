@@ -21,7 +21,7 @@ builds again, that'd be terrific. OK? Thanks!
 ''')
 msg['From'] = 'Pyrofex Drone <noreply-ci@pyr8.io>'
 msg['To'] = os.environ['EMAIL_RECIPIENTS']
-msg['Subject'] = f'''Build {bn} of {repo}:{ref} FAILED'''
+msg['Subject'] = f'''Build {bn} of {repo}:{ref} has FAILED'''
 
 with SMTP(os.environ['EMAIL_HOST'], 587) as smtp:
     smtp.starttls()

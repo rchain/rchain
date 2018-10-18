@@ -1,10 +1,11 @@
+import os
 import logging
 import re
 from contextlib import contextmanager
-from tools.docker import docker_network
-import tools.resources as resources
-from tools.util import log_box, make_tempfile, make_tempdir
-from tools.wait import wait_for, node_started
+from rnode_testing.docker import docker_network
+import rnode_testing.resources as resources
+from rnode_testing.util import log_box, make_tempfile, make_tempdir
+from rnode_testing.wait import wait_for, node_started
 import shlex
 
 from multiprocessing import Queue, Process
@@ -64,7 +65,7 @@ class Node:
         return self.exec_run(cmd=cmd)
 
     def cleanup(self):
-        log_file = f"{self.container.name}.log"
+        log_file = os.path.join('logs', f"{self.container.name}.log")
 
         with open(log_file, "w") as f:
             f.write(self.logs())
@@ -74,7 +75,7 @@ class Node:
         self.container.remove(force=True, v=True)
 
     def deploy_contract(self, contract):
-        cmd = f'{rnode_binary} deploy --from "0x1" --phlo-limit 0 --phlo-price 0 --nonce 0 {rnode_deploy_dir}/{contract}'
+        cmd = f'{rnode_binary} deploy --from "0x1" --phlo-limit 1000000 --phlo-price 1 --nonce 0 {rnode_deploy_dir}/{contract}'
         return self.exec_run(cmd)
 
     def propose_contract(self):
@@ -120,7 +121,7 @@ class Node:
         return self.call_rnode('eval', rho_file_path)
 
     def deploy(self, rho_file_path):
-        return self.call_rnode('deploy', '--from=0x1', '--phlo-limit=0', '--phlo-price=0', '--nonce=0', rho_file_path)
+        return self.call_rnode('deploy', '--from=0x1', '--phlo-limit=1000000', '--phlo-price=1', '--nonce=0', rho_file_path)
 
     def propose(self):
         return self.call_rnode('propose')
