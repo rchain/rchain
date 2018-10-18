@@ -53,6 +53,16 @@ object TestSetUtil {
       case Left(ex)    => throw ex
     }
 
+  def runTestsWithDeploys(tests: CompiledRholangSource, otherLibs: Seq[Deploy], runtime: Runtime)(
+      implicit scheduler: Scheduler
+  ): Unit = {
+    val rand = Blake2b512Random(128)
+    evalDeploy(StandardDeploys.listOps, runtime)(implicitly)
+    eval(TestSet.code, runtime)(implicitly, rand.splitShort(0))
+    otherLibs.foreach(evalDeploy(_, runtime))
+    eval(tests.code, runtime)(implicitly, rand.splitShort(1))
+  }
+
   def runTests(
       tests: CompiledRholangSource,
       otherLibs: Seq[CompiledRholangSource],

@@ -34,7 +34,12 @@ object StandardDeploys {
     "1d325ed35924b606264d4beaee7f78214aaecb23f6f3816055bc8bbe94280b5a",
     1539711168714L
   )
-  def either: Deploy            = toDeploy(Either, "", 0L)
+  def either: Deploy =
+    toDeploy(
+      Either,
+      "89a6d9c47f360e8ce145f8fe3c773786dc86bd0e70d19643d02b0eb126473c55",
+      1539794228064L
+    )
   def nonNegativeNumber: Deploy = toDeploy(NonNegativeNumber, "", 0L)
   def makeMint: Deploy          = toDeploy(MakeMint, "", 0L)
   def makePoS: Deploy           = toDeploy(MakePoS, "", 0L)
