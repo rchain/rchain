@@ -3,7 +3,8 @@
 //requires NonNegativeNumber, TestSet
 new
   rl(`rho:registry:lookup`), TestSetCh,
-  value, add, sub
+  value, add, sub, test1, test2, test3,
+  test4, test5, test6, test7
 in {
   rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *TestSetCh) |
   for(@(_, TestSet) <- TestSetCh) {
@@ -46,67 +47,74 @@ in {
       @overflowTest <- @"overflowTest"
     ) {
       value!(negBal, "negBalValue") |
-      @TestSet!(
+      @TestSet!("define",
         "Initially negative balances are be converted to 0.",
         [
           ["negBalValue", 0]
-        ]
+        ],
+        *test1
       ) |
 
       value!(properBal, "properBalValue") |
-      @TestSet!(
+      @TestSet!("define",
         "Positive initial balances are preserved.",
         [
           ["properBalValue", 15]
-        ]
+        ],
+        *test2
       ) | 
 
       add!(properBal, -1, "properBalAddNeg") |
       sub!(properBal, -1, "properBalSubNeg") |
-      @TestSet!(
+      @TestSet!("define",
         "Adding or subtracting a negative number fails.",
         [
           ["properBalAddNeg", false],
           ["properBalSubNeg", false]
-        ]
+        ],
+        *test3
       ) |
 
       sub!(properBal, 27, "properBalSubBig") |
-      @TestSet!(
+      @TestSet!("define",
         "Subtracting an amount larger than the balance fails.",
         [
           ["properBalSubBig", false]
-        ]
+        ],
+        *test4
       ) |
 
       add!(addTest, 50, "addTest50") |
       value!(addTest, "addTestValue") |
-      @TestSet!(
+      @TestSet!("define",
         "Adding a positive number works.",
         [
           ["addTestValue", 100],
           ["addTest50", true],
           ["addTestValue", 150]
-        ]
+        ],
+        *test5
       ) |
 
       sub!(subTest, 30, "subTest30") |
       value!(subTest, "subTestValue") |
-      @TestSet!(
+      @TestSet!("define",
         "Subtracting a positive number less than or equal to the balance works",
         [
           ["subTestValue", 100],
           ["subTest30", true],
           ["subTestValue", 70]
-        ]
+        ],
+        *test6
       ) |
       
       add!(overflowTest, 100, "overflowTestAdd") |
-      @TestSet!(
+      @TestSet!("define",
         "Addition overflow is prevented",
         [
           ["overflowTestAdd", false]
-        ]
+        ],
+        *test7
       )
     }
   }

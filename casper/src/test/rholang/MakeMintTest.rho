@@ -1,7 +1,10 @@
 //scalapackage coop.rchain.rholang.mint
 
 //requires MakeMint, TestSet
-new rl(`rho:registry:lookup`), TestSetCh in {
+new
+  rl(`rho:registry:lookup`), TestSetCh,
+  test1, test2, test3, test4
+in {
   rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *TestSetCh) |
   for(@(_, TestSet) <- TestSetCh) {
     contract @"getBalance"(@purse, return) = {
@@ -41,29 +44,31 @@ new rl(`rho:registry:lookup`), TestSetCh in {
       for(@aliceAPurse <- @"aliceAPurse"; @bobBPurse <- @"bobBPurse") {
         @"getBalance"!(aliceAPurse, "aliceAPurseBalance") |
         @"getBalance"!(bobBPurse, "bobBPurseBalance") |
-        @TestSet!(
+        @TestSet!("define",
           "Purses should be created with the given balance.",
           [
             ["aliceAPurseBalance", 100],
             ["bobBPurseBalance", 50]
-          ]
+          ],
+          *test1
         ) |
         
         
-        @TestSet!("after", "Purses should be created with the given balance.", {
+        @TestSet!("after", *test1, {
           @"deposit"!(aliceAPurse, 10, bobBPurse, "ccDep1") |
           @"deposit"!(bobBPurse, 10, aliceAPurse, "ccDep2") |
-          @TestSet!( //cannot deposit tokens across different mints
+          @TestSet!("define", //cannot deposit tokens across different mints
             "Cross-currency deposits should fail.",
             [
               ["ccDep1", "hanging return"],
               ["ccDep2", "hanging return"],
-            ]
+            ],
+            *test2
           )
         }) |
         
         
-        @TestSet!("after", "Cross-currency deposits should fail.", {
+        @TestSet!("after", *test2, {
           @(aliceAPurse, "sprout")!("bobAPurse") |
           @(bobBPurse, "sprout")!("aliceBPurse") |
           for(@aliceBPurse <- @"aliceBPurse"; @bobAPurse <- @"bobAPurse") {
@@ -72,7 +77,7 @@ new rl(`rho:registry:lookup`), TestSetCh in {
             @"deposit"!(aliceBPurse, 10, bobBPurse, "bDep") |
             @"deposit"!(bobAPurse, 20, aliceAPurse, "aDep1") |
             @"deposit"!(bobAPurse, 30, aliceAPurse, "aDep2") |
-            @TestSet!(
+            @TestSet!("define",
               "Deposit should work as expected.",
               [
                 ["bDep", true], //10 from Bob to Alice
@@ -86,23 +91,25 @@ new rl(`rho:registry:lookup`), TestSetCh in {
                 ["aDep2", true], //30 from Alice to Bob again
                 ["bobAPurseBalance", 50], //20 + 30 = 50
                 ["aliceAPurseBalance", 50], // 80 - 30 = 50
-              ]
+              ],
+              *test3
             )
           } |
           
-          @TestSet!("after", "Deposit should work as expected.", {
+          @TestSet!("after", *test3, {
             @"split"!(aliceAPurse, 500, "failPurse", "splitFail") |
             @(aliceAPurse, "split")!(5, "aliceAPurse5") |
             for(@[aliceAPurse5] <- @"aliceAPurse5"){
               @"aliceAPurse5"!([aliceAPurse5]) |
               @"getBalance"!(aliceAPurse5, "aliceAPurse5Balance") |
-              @TestSet!(
+              @TestSet!("define",
                 "Split should work as expected.",
                 [
                   ["splitFail", false], //cannot split with more than you have
                   ["aliceAPurse5Balance", 5], //0 + 5 = 5
                   ["aliceAPurseBalance", 45] // 50 - 5 = 45
-                ]
+                ],
+                *test4
               )
             }
           })

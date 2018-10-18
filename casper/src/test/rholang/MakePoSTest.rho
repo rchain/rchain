@@ -2,7 +2,10 @@
 
 //requires MakePoS, MakeMint, TestSet, ListOps, Either
 
-new rl(`rho:registry:lookup`), TestSetCh in {
+new 
+  rl(`rho:registry:lookup`), TestSetCh,
+  test1, test2
+in {
   rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *TestSetCh) |
   for(@(_, TestSet) <- TestSetCh) {
     @"pk"!!("79d16233dedf8e8e4cc25272b2b98ac096dac9239ade20dcee5987a1c1d101c7") |
@@ -55,20 +58,21 @@ new rl(`rho:registry:lookup`), TestSetCh in {
           @"balance"!(tooBigBondPurse, "tooBigBalance") |
           @"bond"!(pos, pk, "ed25519Verify", tooSmallBondPurse, Nil, "tooSmallBond") |
           @"bond"!(pos, pk, "ed25519Verify", tooBigBondPurse, Nil, "tooBigBond") |
-          @TestSet!(
+          @TestSet!("define",
             "PoS bond should not accept bounds outside the min/max",
             [
               ["tooSmallBond", (false, "Bond less than minimum!")],
               ["tooBigBond", (false, "Bond greater than maximum!")],
               ["tooSmallBalance", 1],
               ["tooBigBalance", 500]
-            ]
+            ],
+            *test1
           ) |
 
           @"balance"!(bondPurse, "bondPurseBalance") |
           @"bond"!(pos, pk, "ed25519Verify", bondPurse, Nil, "justRightBond") |
           @"getBonds"!(pos, "posBonds") |
-          @TestSet!(
+          @TestSet!("define",
             "PoS bond should work for correct purses",
             [
               ["bondPurseBalance", 50],
@@ -78,7 +82,8 @@ new rl(`rho:registry:lookup`), TestSetCh in {
                 "someKey" : (37 + minimumBond, "verify", "reward", 1), 
                 pk        : (50 - minimumBond, "ed25519Verify", Nil, initBonds.size() + 1)
               }]
-            ]
+            ],
+            *test2
           )
         }
       }

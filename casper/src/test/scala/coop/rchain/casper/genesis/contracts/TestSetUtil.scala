@@ -105,10 +105,10 @@ object TestSetUtil {
     */
   def getTests(src: String): Iterator[String] =
     Source.fromFile(src).getLines().sliding(2).collect {
-      case Seq(line1, line2) if line1.contains("@TestSet!") && !line1.contains("\"after\",") =>
-        line2.trim.dropRight(1)
+      case Seq(line1, line2) if line1.contains("@TestSet!(\"define\",") =>
+        line2.split('"')(1)
     }
 
   def testPassed(test: String, tuplespace: String): Boolean =
-    tuplespace.contains(s"@{$test}!(true)")
+    tuplespace.contains(s"$test == true")
 }

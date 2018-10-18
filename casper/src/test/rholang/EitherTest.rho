@@ -3,7 +3,8 @@
 new 
   rl(`rho:registry:lookup`), EitherCh, TestSetCh,
   double, divide, divide100by, divide50by, divide10by,
-  divide8by, doubleMap, divide10byFlatMap, composeTest
+  divide8by, doubleMap, divide10byFlatMap, composeTest,
+  test1, test2, test3
 in {
   rl!(`rho:id:j6trahbxycumerwpr5qype7j43b7eqh8auebwsa9nn68if47gswh73`, *EitherCh) |
   rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *TestSetCh) |
@@ -27,12 +28,13 @@ in {
     doubleMap!(("Right", 3), "RightMapTest") |
     doubleMap!(("Left", "message"), "LeftMapTest") |
 
-    @TestSet!(
+    @TestSet!("define",
       "map should transform Right and preserve Left",
       [
         ["RightMapTest", ("Right", 6)],
         ["LeftMapTest", ("Left", "message")]
-      ]
+      ],
+      *test1
     ) |
 
     contract divide10byFlatMap(@either, ret) = {
@@ -45,13 +47,14 @@ in {
     divide10byFlatMap!(("Left", "message"), "FlatMapTest2") |
     divide10byFlatMap!(("Right", 0), "FlatMapTest3") |
 
-    @TestSet!(
+    @TestSet!("define",
       "flatMap should transform Right and preserve Left",
       [
         ["FlatMapTest1", ("Right", 2)],
         ["FlatMapTest2", ("Left", "message")],
         ["FlatMapTest3", ("Left", "Div by zero!")]
-      ]
+      ],
+      *test2
     ) |
 
     contract composeTest(@input, @functions, ret) = {
@@ -65,14 +68,15 @@ in {
     composeTest!(5, [*divide100by, *divide8by, *divide10by], "ComposeTest3") |
     composeTest!(5, [*divide50by, *divide10by, *divide8by], "ComposeTest4") |
 
-    @TestSet!(
+    @TestSet!("define",
       "compose should sequence Either-valued functions together",
       [
         ["ComposeTest1", ("Right", 4)],
         ["ComposeTest2", ("Left", "Div by zero!")],
         ["ComposeTest3", ("Left", "Div by zero!")],
         ["ComposeTest4", ("Right", 8)],
-      ]
+      ],
+      *test3
     )
   }
 }

@@ -30,7 +30,7 @@ in {
         }
       }
     } |
-    contract TestSet(desc, @tests) = {
+    contract TestSet(@"define", @desc, @tests, return) = {
       new addTests, execTests, testsCh in {
         contract execTests(return) = {
           new combinator in {
@@ -83,15 +83,25 @@ in {
           }
         } |
         addTests!(tests) |
-        execTests!(*desc)
+        new testsResult in {
+          execTests!(*testsResult) |
+          for(@result <- testsResult) {
+            return!(("${desc} == ${result}" %% {"desc" : desc, "result" : result}, result))
+          }
+        }
       }
     } |
-    contract TestSet(@"after", desc, continuation) = {
-      for(@result <- desc) {
-        if (result) {
-          desc!(result) | { *continuation }
-        } else {
-          desc!(result)
+    contract TestSet(@"after", testReturn, continuation) = {
+      for(@value <- testReturn) {
+        match value {
+          (_, result) => {
+            if (result) {
+              testReturn!(value) | { *continuation }
+            } else {
+              testReturn!(value)
+            }
+          }
+          _ => { testReturn!(value) }
         }
       }
     }

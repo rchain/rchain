@@ -1,7 +1,10 @@
 //scalapackage coop.rchain.rholang.wallet
 
 //requires BasicWallet, MakeMint, TestSet, ListOps
-new rl(`rho:registry:lookup`), TestSetCh in {
+new
+  rl(`rho:registry:lookup`), TestSetCh,
+  test1, test2, test3, test4, test5
+in {
   rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *TestSetCh) |
   for(@(_, TestSet) <- TestSetCh) {
     @"sk"!("1388803416a5869f3d4682fb3fae738278287b80d1a5a52ddf89be8eb9dac59d") |
@@ -78,22 +81,24 @@ new rl(`rho:registry:lookup`), TestSetCh in {
       
       
         @"newWallet"!("fake21564", "badAlgorithm") |
-        @TestSet!(
+        @TestSet!("define",
           "A wallet should not be created if the signature algorithm is unknown.",
           [
             ["badAlgorithm", []]
-          ]
+          ],
+          *test1
         ) |
       
         @"BasicWallet"!(ethereumPurse, "secp256k1", "04C591A8FF19AC9C4E4E5793673B83123437E975285E7B442F4EE2654DFFCA5E2D2103ED494718C697AC9AEBCFD19612E224DB46661011863ED2FC54E71861E2A6", "ethWallet") |  
         for(@[ethWallet] <- @"ethWallet") {
           @"ethWallet"!([ethWallet]) |
           @"getBalance"!(ethWallet, "ethWalletBalance") |
-          @TestSet!(
+          @TestSet!("define",
             "Wallets should accept Secp256k1 keys.",
             [
               ["ethWalletBalance", 74]
-            ]
+            ],
+            *test2
           )      
         } |
 
@@ -106,38 +111,41 @@ new rl(`rho:registry:lookup`), TestSetCh in {
             @"transfer"!(wallet, 60, 0, invalidSig, Nil, "failTransfer") |
             @"transfer"!(wallet, 60, 0, sig0, "wPurse", "transfer0Nonce") |
             @"transfer"!(wallet, 10, 1, sig1, Nil, "transfer1Nonce") |
-          @TestSet!(
+          @TestSet!("define",
             "Wallet deposit should work as expected.",
             [
               ["walletBalance", 100],
               ["overdrawDep", false],
               ["depWallet", true],
               ["walletBalance", 130]
-            ]
+            ],
+            *test3
           ) |
           
-          @TestSet!("after", "Wallet deposit should work as expected.", {
-            @TestSet!(
+          @TestSet!("after", *test3, {
+            @TestSet!("define",
               "Wallet transfer should not accept invalid signatures or nonces.",
               [
                 ["failTransfer", "Invalid signature or nonce"], //bad signature
                 ["transfer1Nonce", "Invalid signature or nonce"] //nonce out of order
-              ]
+              ],
+              *test4
             ) |
             
-            @TestSet!("after", "Wallet transfer should not accept invalid signatures or nonces.", {
+            @TestSet!("after", *test4, {
               for(doTransfer <- @"transfer0Nonce") {
                 @"transfer0Nonce"!(*doTransfer) |
                 doTransfer!("status") | for(@wPurse <- @"wPurse"; @"Success" <- @"status") {
                   @"getBalance"!(wPurse, "purseBalance") |
                   @"getNonce"!(wallet, "walletNonce") |
-                  @TestSet!(
+                  @TestSet!("define",
                     "Wallet transfer should work as expected.",
                     [
                       ["purseBalance", 60],
                       ["walletBalance", 70],
                       ["walletNonce", 0]
-                    ]
+                    ],
+                    *test5
                   )
                 }
               }
