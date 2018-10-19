@@ -32,11 +32,11 @@ sealed abstract class StreamT[F[_], +A] { self =>
   def filterF[AA >: A](p: A => F[Boolean])(implicit monad: Monad[F]): F[StreamT[F, AA]] =
     self match {
       case SCons(curr, lazyTail) =>
-        p(curr).flatMap { cond =>
+        p(curr).map { cond =>
           if (cond)
-            monad.pure[StreamT[F, AA]](StreamT.cons(curr, lazyTail.map(_.flatMap(_.filterF(p)))))
+            StreamT.cons(curr, lazyTail.map(_.flatMap(_.filterF(p))))
           else
-            monad.pure[StreamT[F, AA]](SLazy(lazyTail.map(_.flatMap(_.filterF(p)))))
+            SLazy(lazyTail.map(_.flatMap(_.filterF(p))))
         }
       case SLazy(lazyTail) =>
         monad.pure[StreamT[F, AA]](SLazy(lazyTail.map(_.flatMap(_.filterF(p)))))
