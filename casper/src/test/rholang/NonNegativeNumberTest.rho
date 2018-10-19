@@ -2,117 +2,122 @@
 
 //requires NonNegativeNumber, TestSet
 new
-  rl(`rho:registry:lookup`), TestSetCh,
+  rl(`rho:registry:lookup`), TestSetCh, NonNegativeNumberCh,
   value, add, sub, test1, test2, test3,
-  test4, test5, test6, test7
+  test4, test5, test6, test7,
+  negBalCh, properBalCh, addTestCh, subTestCh, overflowTestCh,
+  negBalValue, properBalValue, properBalAddNeg, properBalSubNeg,
+  properBalSubBig, addTest50, addTestValue, subTest30, subTestValue,
+  overflowTestAdd
 in {
   rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *TestSetCh) |
-  for(@(_, TestSet) <- TestSetCh) {
-    contract value(@nn, return) = {
+  rl!(`rho:id:nd74ztexkao5awjhj95e3octkza7tydwiy7euthnyrt5ihgi9rj495`, *NonNegativeNumberCh) |
+  for(@(_, TestSet) <- TestSetCh; @(_, NonNegativeNumber) <- NonNegativeNumberCh) {
+    contract value(nn, return) = {
       new nnValue in {
         contract nnValue(return) = {
-          @(nn, "value")!(*return)
+          nn!("value", *return)
         } |
         return!(*nnValue)
       }
     } |
-    contract add(@nn, @x, return) = {
+    contract add(nn, @x, return) = {
       new nnAdd in {
         contract nnAdd(return) = {
-          @(nn, "add")!(x, *return)
+          nn!("add", x, *return)
         } |
         return!(*nnAdd)
       }
     } |
-    contract sub(@nn, @x, return) = {
+    contract sub(nn, @x, return) = {
       new nnSub in {
         contract nnSub(return) = {
-          @(nn, "sub")!(x, *return)
+          nn!("sub", x, *return)
         } |
         return!(*nnSub)
       }
     } |
 
-    @"NonNegativeNumber"!(-5, "negBal") |
-    @"NonNegativeNumber"!(15, "properBal") |
-    @"NonNegativeNumber"!(100, "addTest") |
-    @"NonNegativeNumber"!(100, "subTest") |
-    @"NonNegativeNumber"!(9223372036854775757, "overflowTest") |
+    @NonNegativeNumber!(-5, *negBalCh) |
+    @NonNegativeNumber!(15, *properBalCh) |
+    @NonNegativeNumber!(100, *addTestCh) |
+    @NonNegativeNumber!(100, *subTestCh) |
+    @NonNegativeNumber!(9223372036854775757, *overflowTestCh) |
 
     for(
-      @negBal <- @"negBal"; 
-      @properBal <- @"properBal"; 
-      @addTest <- @"addTest"; 
-      @subTest <- @"subTest";
-      @overflowTest <- @"overflowTest"
+      @negBal <- negBalCh; 
+      @properBal <- properBalCh; 
+      @addTest <- addTestCh; 
+      @subTest <- subTestCh;
+      @overflowTest <- overflowTestCh
     ) {
-      value!(negBal, "negBalValue") |
+      value!(negBal, *negBalValue) |
       @TestSet!("define",
         "Initially negative balances are be converted to 0.",
         [
-          ["negBalValue", 0]
+          [*negBalValue, 0]
         ],
         *test1
       ) |
 
-      value!(properBal, "properBalValue") |
+      value!(properBal, *properBalValue) |
       @TestSet!("define",
         "Positive initial balances are preserved.",
         [
-          ["properBalValue", 15]
+          [*properBalValue, 15]
         ],
         *test2
       ) | 
 
-      add!(properBal, -1, "properBalAddNeg") |
-      sub!(properBal, -1, "properBalSubNeg") |
+      add!(properBal, -1, *properBalAddNeg) |
+      sub!(properBal, -1, *properBalSubNeg) |
       @TestSet!("define",
         "Adding or subtracting a negative number fails.",
         [
-          ["properBalAddNeg", false],
-          ["properBalSubNeg", false]
+          [*properBalAddNeg, false],
+          [*properBalSubNeg, false]
         ],
         *test3
       ) |
 
-      sub!(properBal, 27, "properBalSubBig") |
+      sub!(properBal, 27, *properBalSubBig) |
       @TestSet!("define",
         "Subtracting an amount larger than the balance fails.",
         [
-          ["properBalSubBig", false]
+          [*properBalSubBig, false]
         ],
         *test4
       ) |
 
-      add!(addTest, 50, "addTest50") |
-      value!(addTest, "addTestValue") |
+      add!(addTest, 50, *addTest50) |
+      value!(addTest, *addTestValue) |
       @TestSet!("define",
         "Adding a positive number works.",
         [
-          ["addTestValue", 100],
-          ["addTest50", true],
-          ["addTestValue", 150]
+          [*addTestValue, 100],
+          [*addTest50, true],
+          [*addTestValue, 150]
         ],
         *test5
       ) |
 
-      sub!(subTest, 30, "subTest30") |
-      value!(subTest, "subTestValue") |
+      sub!(subTest, 30, *subTest30) |
+      value!(subTest, *subTestValue) |
       @TestSet!("define",
         "Subtracting a positive number less than or equal to the balance works",
         [
-          ["subTestValue", 100],
-          ["subTest30", true],
-          ["subTestValue", 70]
+          [*subTestValue, 100],
+          [*subTest30, true],
+          [*subTestValue, 70]
         ],
         *test6
       ) |
       
-      add!(overflowTest, 100, "overflowTestAdd") |
+      add!(overflowTest, 100, *overflowTestAdd) |
       @TestSet!("define",
         "Addition overflow is prevented",
         [
-          ["overflowTestAdd", false]
+          [*overflowTestAdd, false]
         ],
         *test7
       )

@@ -2,6 +2,8 @@ package coop.rchain.casper.genesis.contracts
 
 import java.io.StringReader
 
+import coop.rchain.casper.util.ProtoUtil.compiledSourceDeploy
+import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
@@ -21,7 +23,13 @@ class BasicWalletSpec extends FlatSpec with Matchers {
   val runtime = TestSetUtil.runtime
   val tests   = TestSetUtil.getTests("./casper/src/test/rholang/BasicWalletTest.rho").toList
 
-  TestSetUtil.runTests(BasicWalletTest, List(NonNegativeNumber, MakeMint, BasicWallet), runtime)
+  val deploys = List(
+    //TODO: Replace all compiledSourceDeploy with StandardDeploys when they are ready
+    StandardDeploys.nonNegativeNumber,
+    compiledSourceDeploy(MakeMint, 1L, accounting.MAX_VALUE),
+    compiledSourceDeploy(BasicWallet, 2L, accounting.MAX_VALUE)
+  )
+  TestSetUtil.runTestsWithDeploys(BasicWalletTest, deploys, runtime)
   val tuplespace = StoragePrinter.prettyPrint(runtime.space.store)
 
   "Kalium" should "work" in {

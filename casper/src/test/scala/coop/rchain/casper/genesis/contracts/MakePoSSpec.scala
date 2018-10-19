@@ -18,7 +18,7 @@ class MakePoSSpec extends FlatSpec with Matchers {
 
   val deploys = List(
     //TODO: Replace all compiledSourceDeploy with StandardDeploys when they are ready
-    compiledSourceDeploy(NonNegativeNumber, 1L, accounting.MAX_VALUE),
+    StandardDeploys.nonNegativeNumber,
     compiledSourceDeploy(MakeMint, 2L, accounting.MAX_VALUE),
     StandardDeploys.either,
     compiledSourceDeploy(MakePoS, 3L, accounting.MAX_VALUE)

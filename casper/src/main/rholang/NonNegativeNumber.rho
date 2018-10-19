@@ -1,44 +1,61 @@
 //scalapackage coop.rchain.rholang.math
 
 //This is a contract to explicitly implement the int >= 0 behavioural type
-contract @"NonNegativeNumber"(@init, return) = {
-  new this, valueStore in {
-    contract @(*this, "add")(@x, success) = {
-      if (x >= 0) {
-        for(@v <- valueStore){
-          if (v + x > v) {
-            valueStore!(v + x) | success!(true)
-          } else {
-            //overflow
-            valueStore!(v) | success!(false)
+
+//Registry info:
+//  sk: 32cc47a15b4fe26f94042bb12914440a2d83f5f097f652a73ca4c6302a700ab0
+//  pk: d89a1e6d2b8f53595b3d0d47effd48f0e537d19d847ad5811cf5216157a3a63c
+//  user == pk
+//  timestamp: 1539963224985
+//Resulting unforgable name: Unforgeable(0x289e512cb46e7491c54d8e42c5f997c2a85be7e1222dcf9810ac24bf960748e0)
+//  ==> signature data == 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a20289e512cb46e7491c54d8e42c5f997c2a85be7e1222dcf9810ac24bf960748e01001
+//  ==> signature == 992a8bbeaed194951667e38ec9b4bc0e1d50c4fdaf564a67ae4d90bfbe2439b5e85b53afb81b33075446ef5c5729bbfbb5b95b73aaeb17b05e2ead12ce226c07
+//URI derived from pk == `rho:id:nd74ztexkao5awjhj95e3octkza7tydwiy7euthnyrt5ihgi9rj495`
+new NonNegativeNumber, rs(`rho:registry:insertSigned:ed25519`), uriOut in {
+  contract NonNegativeNumber(@init, return) = {
+    new this, valueStore in {
+      contract this(@"add", @x, success) = {
+        if (x >= 0) {
+          for(@v <- valueStore){
+            if (v + x > v) {
+              valueStore!(v + x) | success!(true)
+            } else {
+              //overflow
+              valueStore!(v) | success!(false)
+            }
           }
+        } else {
+          success!(false)
         }
-      } else {
-        success!(false)
-      }
-    } |
-    contract @(*this, "sub")(@x, success) = {
-      if (x >= 0) {
+      } |
+      contract this(@"sub", @x, success) = {
+        if (x >= 0) {
+          for(@v <- valueStore) {
+            if (x <= v) {
+              valueStore!(v - x) | success!(true)
+            } else {
+              valueStore!(v) | success!(false)
+            }
+          }
+        } else {
+          success!(false)
+        }
+      } |
+      contract this(@"value", return) = {
         for(@v <- valueStore) {
-          if (x <= v) {
-            valueStore!(v - x) | success!(true)
-          } else {
-            valueStore!(v) | success!(false)
-          }
+          valueStore!(v) | return!(v)
         }
-      } else {
-        success!(false)
-      }
-    } |
-    contract @(*this, "value")(return) = {
-      for(@v <- valueStore) {
-        valueStore!(v) | return!(v)
-      }
-    } |
-    return!(*this) |
-    match init >= 0 {
-      true => { valueStore!(init) }
-      _ => { valueStore!(0) } //Initial balance is zero if given is negative
+      } |
+      return!(*this) |
+      if (init >= 0) { valueStore!(init) }
+      else           { valueStore!(0)    } //Initial balance is zero if given is negative}
     }
-  }
+  } |
+  
+  rs!(
+    "d89a1e6d2b8f53595b3d0d47effd48f0e537d19d847ad5811cf5216157a3a63c".hexToBytes(), 
+    (9223372036854775807, bundle+{*NonNegativeNumber}), 
+    "992a8bbeaed194951667e38ec9b4bc0e1d50c4fdaf564a67ae4d90bfbe2439b5e85b53afb81b33075446ef5c5729bbfbb5b95b73aaeb17b05e2ead12ce226c07".hexToBytes(), 
+    *uriOut
+  )
 }

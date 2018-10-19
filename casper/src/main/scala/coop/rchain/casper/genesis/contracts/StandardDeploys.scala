@@ -40,7 +40,12 @@ object StandardDeploys {
       "89a6d9c47f360e8ce145f8fe3c773786dc86bd0e70d19643d02b0eb126473c55",
       1539794228064L
     )
-  def nonNegativeNumber: Deploy = toDeploy(NonNegativeNumber, "", 0L)
+  def nonNegativeNumber: Deploy =
+    toDeploy(
+      NonNegativeNumber,
+      "d89a1e6d2b8f53595b3d0d47effd48f0e537d19d847ad5811cf5216157a3a63c",
+      1539963224985L
+    )
   def makeMint: Deploy          = toDeploy(MakeMint, "", 0L)
   def makePoS: Deploy           = toDeploy(MakePoS, "", 0L)
   def basicWallet: Deploy       = toDeploy(BasicWallet, "", 0L)
