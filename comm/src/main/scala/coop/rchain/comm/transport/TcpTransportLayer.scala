@@ -17,7 +17,7 @@ import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
 import monix.eval._, monix.execution._, monix.reactive._
 import scala.concurrent.TimeoutException
 
-class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxMessageSize: Int)(
+class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: Int)(
     implicit scheduler: Scheduler,
     cell: TcpTransportLayer.TransportCell[Task],
     log: Log[Task]

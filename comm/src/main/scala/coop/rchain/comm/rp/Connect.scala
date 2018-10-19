@@ -73,7 +73,7 @@ object Connect {
 
     def sendHeartbeat(peer: PeerNode): F[(PeerNode, CommErr[Protocol])] =
       for {
-        local   <- RPConfAsk[F].reader(_.local)
+        local   <- RPConfAsk[F].reader(_.local())
         timeout <- RPConfAsk[F].reader(_.defaultTimeout)
         hb      = heartbeat(local)
         res     <- TransportLayer[F].roundTrip(peer, hb, timeout)
@@ -83,7 +83,7 @@ object Connect {
       for {
         numOfConnectionsPinged <- RPConfAsk[F].reader(_.clearConnections.numOfConnectionsPinged)
         toPing                 = connections.take(numOfConnectionsPinged)
-        results                <- toPing.traverse(sendHeartbeat(_))
+        results                <- toPing.traverse(sendHeartbeat)
         successfulPeers        = results.collect { case (peer, Right(_)) => peer }
         failedPeers            = results.collect { case (peer, Left(_)) => peer }
         _ <- ConnectionsCell[F].modify { connections =>
@@ -125,7 +125,7 @@ object Connect {
       _        <- Log[F].debug(s"Connecting to $peerAddr")
       _        <- Metrics[F].incrementCounter("connects")
       _        <- Log[F].debug(s"Initialize protocol handshake to $peerAddr")
-      local    <- RPConfAsk[F].reader(_.local)
+      local    <- RPConfAsk[F].reader(_.local())
       ph       = protocolHandshake(local)
       phsresp  <- TransportLayer[F].roundTrip(peer, ph, timeout * 2) >>= ErrorHandler[F].fromEither
       _ <- Log[F].debug(

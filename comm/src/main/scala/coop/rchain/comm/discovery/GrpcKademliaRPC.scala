@@ -14,7 +14,7 @@ import com.google.protobuf.ByteString
 import scala.concurrent.duration._
 import com.google.protobuf.ByteString
 
-class GrpcKademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(
+class GrpcKademliaRPC(localPeerNode: LocalPeerNode, port: Int, timeout: FiniteDuration)(
     implicit
     scheduler: Scheduler,
     metrics: Metrics[Task],
@@ -29,7 +29,7 @@ class GrpcKademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(
       channel <- clientChannel(peer)
       pongErr <- KademliaGrpcMonix
                   .stub(channel)
-                  .sendPing(Ping().withSender(node(src)))
+                  .sendPing(Ping().withSender(node(localPeerNode())))
                   .nonCancelingTimeout(timeout)
                   .attempt
       _ <- Task.delay(channel.shutdown())
@@ -41,7 +41,7 @@ class GrpcKademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(
       _ <- Metrics[Task].incrementCounter("protocol-lookup-send")
       lookup = Lookup()
         .withId(ByteString.copyFrom(key.toArray))
-        .withSender(node(src))
+        .withSender(node(localPeerNode()))
       channel <- clientChannel(peer)
       responseErr <- KademliaGrpcMonix
                       .stub(channel)

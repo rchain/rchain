@@ -5,20 +5,23 @@ import java.net.InetAddress
 import java.nio.file.{Path, Paths}
 
 import cats.implicits._
+
 import coop.rchain.blockstorage.LMDBBlockStore
 import coop.rchain.casper.CasperConf
 import coop.rchain.casper.protocol.{PhloLimit, PhloPrice}
 import coop.rchain.catscontrib.ski._
-import coop.rchain.comm.{PeerNode, UPnP}
+import coop.rchain.comm._
 import coop.rchain.node.IpChecker
 import coop.rchain.node.configuration.toml.error._
 import coop.rchain.node.configuration.toml.{Configuration => TomlConfiguration}
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.shared.StoreType
 import coop.rchain.shared.StoreType._
-import monix.eval.Task
 
+import monix.eval.Task
 import scala.concurrent.duration._
+
+import monix.execution.Scheduler
 
 object Configuration {
   private implicit val logSource: LogSource = LogSource(this.getClass)
@@ -413,16 +416,19 @@ final class Configuration(
 
   def printHelp(): Task[Unit] = Task.delay(options.printHelp())
 
-  def fetchHost(implicit log: Log[Task]): Task[String] =
+  def fetchLocalPeerNode(
+      id: NodeIdentifier
+  )(implicit scheduler: Scheduler, log: Log[Task]): Task[LocalPeerNode] =
     for {
       externalAddress <- retriveExternalAddress
       host            <- fetchHost(externalAddress)
-    } yield host
+      peerNode        = PeerNode.from(id, host, server.port, server.kademliaPort)
+    } yield () => peerNode
 
   private def fetchHost(externalAddress: Option[String])(implicit log: Log[Task]): Task[String] =
     server.host match {
       case Some(h) => Task.pure(h)
-      case None    => whoAmI(server.port, externalAddress)
+      case None    => whoAmI(externalAddress)
     }
 
   private def retriveExternalAddress: Task[Option[String]] =
@@ -454,7 +460,7 @@ final class Configuration(
       (s, a)
     }
 
-  private def whoAmI(port: Int, externalAddress: Option[String])(
+  private def whoAmI(externalAddress: Option[String])(
       implicit log: Log[Task]
   ): Task[String] =
     for {
@@ -463,6 +469,7 @@ final class Configuration(
       (s, a) = r
       _      <- log.info(s"guessed $a from source: $s")
     } yield a
+
 }
 
 case class Profile(name: String, dataDir: (() => Path, String))

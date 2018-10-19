@@ -38,7 +38,7 @@ import org.http4s.server.blaze._
 
 import scala.concurrent.duration._
 
-class NodeRuntime(conf: Configuration, host: String, id: NodeIdentifier, scheduler: Scheduler) {
+class NodeRuntime(conf: Configuration, localPeerNode: LocalPeerNode, scheduler: Scheduler) {
 
   private val loopScheduler = Scheduler.fixedPool("loop", 4)
   private val grpcScheduler = Scheduler.cached("grpc-io", 4, 64)
@@ -51,9 +51,11 @@ class NodeRuntime(conf: Configuration, host: String, id: NodeIdentifier, schedul
   import ApplicativeError_._
 
   /** Configuration */
+  private val id                = localPeerNode().id
+  private val host              = localPeerNode().endpoint.host
   private val port              = conf.server.port
   private val kademliaPort      = conf.server.kademliaPort
-  private val address           = s"rnode://${id.toString}@$host?protocol=$port&discovery=$kademliaPort"
+  private val address           = s"rnode://$id@$host?protocol=$port&discovery=$kademliaPort"
   private val storagePath       = conf.server.dataDir.resolve("rspace")
   private val casperStoragePath = storagePath.resolve("casper")
   private val storageSize       = conf.server.mapSize
@@ -133,24 +135,23 @@ class NodeRuntime(conf: Configuration, host: String, id: NodeIdentifier, schedul
       implicit
       transport: TransportLayer[Task],
       log: Log[Task],
-      blockStore: BlockStore[Effect],
-      rpConfAsk: RPConfAsk[Task]
+      blockStore: BlockStore[Effect]
   ): Unit =
     (for {
       _   <- log.info("Shutting down gRPC servers...")
       _   <- Task.delay(servers.grpcServerExternal.shutdown())
       _   <- Task.delay(servers.grpcServerInternal.shutdown())
       _   <- log.info("Shutting down transport layer, broadcasting DISCONNECT")
-      loc <- rpConfAsk.reader(_.local)
+      loc = localPeerNode()
       msg = ProtocolHelper.disconnect(loc)
       _   <- transport.shutdown(msg)
       _   <- log.info("Shutting down HTTP server....")
       _   <- Task.delay(Kamon.stopAllReporters())
       _   <- LiftIO[Task].liftIO(servers.httpServer.shutdown).attempt
       _   <- log.info("Shutting down interpreter runtime ...")
-      _   <- Task.delay(runtime.close)
+      _   <- Task.delay(runtime.close())
       _   <- log.info("Shutting down Casper runtime ...")
-      _   <- Task.delay(casperRuntime.close)
+      _   <- Task.delay(casperRuntime.close())
       _   <- log.info("Bringing BlockStore down ...")
       _   <- blockStore.close().value
       _   <- log.info("Goodbye.")
@@ -170,8 +171,7 @@ class NodeRuntime(conf: Configuration, host: String, id: NodeIdentifier, schedul
   def addShutdownHook(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
       implicit transport: TransportLayer[Task],
       log: Log[Task],
-      blockStore: BlockStore[Effect],
-      rpConfAsk: RPConfAsk[Task]
+      blockStore: BlockStore[Effect]
   ): Task[Unit] =
     Task.delay(sys.addShutdownHook(clearResources(servers, runtime, casperRuntime)))
 
@@ -260,16 +260,15 @@ class NodeRuntime(conf: Configuration, host: String, id: NodeIdentifier, schedul
   // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
   val main: Effect[Unit] = for {
     // 1. set up configurations
-    local          <- EitherT.fromEither[Task](PeerNode.fromAddress(address))
+    tcpConnections <- effects.tcpConnections.toEffect
+    rpConnections  <- effects.rpConnections.toEffect
     defaultTimeout = conf.server.defaultTimeout.millis
     rpClearConnConf = ClearConnetionsConf(
       conf.server.maxNumOfConnections,
       numOfConnectionsPinged = 10
     ) // TODO read from conf
     // 2. create instances of typeclasses
-    rpConfAsk            = effects.rpConfAsk(RPConf(local, defaultTimeout, rpClearConnConf))
-    tcpConnections       <- effects.tcpConnections.toEffect
-    rpConnections        <- effects.rpConnections.toEffect
+    rpConfAsk            = effects.rpConfAsk(RPConf(localPeerNode, defaultTimeout, rpClearConnConf))
     log                  = effects.log
     time                 = effects.time
     metrics              = diagnostics.metrics[Task]
@@ -277,20 +276,19 @@ class NodeRuntime(conf: Configuration, host: String, id: NodeIdentifier, schedul
     lab                  <- LastApprovedBlock.of[Task].toEffect
     labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
     transport = effects.tcpTransportLayer(
-      host,
       port,
       conf.tls.certificate,
       conf.tls.key,
       conf.server.maxMessageSize
     )(grpcScheduler, tcpConnections, log)
-    kademliaRPC = effects.kademliaRPC(local, kademliaPort, defaultTimeout)(
+    kademliaRPC = effects.kademliaRPC(localPeerNode, kademliaPort, defaultTimeout)(
       grpcScheduler,
       metrics,
       log
     )
     initPeer = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     nodeDiscovery <- effects
-                      .nodeDiscovery(local, defaultTimeout)(initPeer)(
+                      .nodeDiscovery(id, defaultTimeout)(initPeer)(
                         log,
                         time,
                         metrics,

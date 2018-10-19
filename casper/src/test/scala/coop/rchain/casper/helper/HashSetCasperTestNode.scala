@@ -67,7 +67,7 @@ class HashSetCasperTestNode[F[_]](
   implicit val blockStore =
     LMDBBlockStore.create[F](LMDBBlockStore.Config(path = dir, mapSize = storageSize))
   implicit val turanOracleEffect = SafetyOracle.turanOracle[F]
-  implicit val rpConfAsk         = createRPConfAsk[F](local)
+  implicit val rpConfAsk         = createRPConfAsk[F](() => local)
 
   val activeRuntime                  = Runtime.create(storageDirectory, storageSize)
   val runtimeManager                 = RuntimeManager.fromRuntime(activeRuntime)

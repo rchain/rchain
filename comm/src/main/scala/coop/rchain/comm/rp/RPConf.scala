@@ -1,10 +1,11 @@
 package coop.rchain.comm.rp
 
-import coop.rchain.comm.PeerNode
 import scala.concurrent.duration._
 
+import coop.rchain.comm.LocalPeerNode
+
 case class RPConf(
-    local: PeerNode,
+    local: LocalPeerNode,
     defaultTimeout: FiniteDuration,
     clearConnections: ClearConnetionsConf
 )

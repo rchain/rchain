@@ -40,7 +40,7 @@ class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] 
 
   def createTransportLayer(env: TcpTlsEnvironment): Task[TransportLayer[Task]] =
     Cell.mvarCell(TransportState.empty).map { cell =>
-      new TcpTransportLayer(env.host, env.port, env.cert, env.key, maxMessageSize)(
+      new TcpTransportLayer(env.port, env.cert, env.key, maxMessageSize)(
         scheduler,
         cell,
         log

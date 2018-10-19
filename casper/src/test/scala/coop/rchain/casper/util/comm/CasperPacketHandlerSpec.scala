@@ -74,7 +74,7 @@ class CasperPacketHandlerSpec extends WordSpec {
     implicit val connectionsCell: ConnectionsCell[Task] =
       Cell.unsafe[Task, Connections](List(local))
     implicit val transportLayer = new TransportLayerStub[Task]
-    implicit val rpConf         = createRPConfAsk[Task](local)
+    implicit val rpConf         = createRPConfAsk[Task](() => local)
     implicit val time           = TestTime.instance
     implicit val log            = new LogStub[Task]
     implicit val errHandler = new ApplicativeError_[Task, CommError] {

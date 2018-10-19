@@ -336,7 +336,7 @@ object ApproveBlockProtocolTest {
     implicit val time            = TestTime.instance
     implicit val transportLayer  = new TransportLayerStub[Task]
     val src: PeerNode            = peerNode("src", 40400)
-    implicit val rpConfAsk       = createRPConfAsk[Task](src)
+    implicit val rpConfAsk       = createRPConfAsk[Task](() => src)
     implicit val ctx             = monix.execution.Scheduler.Implicits.global
     implicit val connectionsCell = Cell.mvarCell[Connections](List(src)).unsafeRunSync
     implicit val lab             = LastApprovedBlock.unsafe[Task](None)

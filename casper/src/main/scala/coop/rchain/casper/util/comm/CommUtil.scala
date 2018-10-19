@@ -55,7 +55,7 @@ object CommUtil {
   ): F[Unit] =
     for {
       peers <- ConnectionsCell[F].read
-      local <- RPConfAsk[F].reader(_.local)
+      local <- RPConfAsk[F].reader(_.local())
       msg   = packet(local, pType, serializedMessage)
       _     <- TransportLayer[F].broadcast(peers, msg)
     } yield ()
@@ -66,7 +66,7 @@ object CommUtil {
   ): F[Unit] =
     for {
       peers <- ConnectionsCell[F].read
-      local <- RPConfAsk[F].reader(_.local)
+      local <- RPConfAsk[F].reader(_.local())
       msg   = Blob(local, Packet(pType.id, serializedMessage))
       _     <- TransportLayer[F].stream(peers, msg)
     } yield ()
@@ -125,7 +125,7 @@ object CommUtil {
     for {
       a     <- LastApprovedBlock[F].get
       peers <- ConnectionsCell[F].read
-      local <- RPConfAsk[F].reader(_.local)
+      local <- RPConfAsk[F].reader(_.local())
       _     <- a.fold(askPeers(peers, local))(_ => ().pure[F])
     } yield ()
   }
