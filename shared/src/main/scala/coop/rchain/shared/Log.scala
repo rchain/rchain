@@ -24,8 +24,6 @@ object LogSource {
 class LogSourceMacros(val c: blackbox.Context) {
   import c.universe._
 
-  def getClassSymbol(s: Symbol): Symbol = if (s.isClass) s else getClassSymbol(s.owner)
-
   def mkLogSource: c.Expr[LogSource] = {
     val tree =
       q"""
