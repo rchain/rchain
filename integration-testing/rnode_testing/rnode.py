@@ -38,6 +38,12 @@ class TimeoutError(Exception):
         self.timeout = timeout
 
 
+def make_container_logs_path(container_name):
+    ci_logs_dir = os.environ.get('CI_LOGS_DIR')
+    dir = 'logs' if ci_logs_dir is None else ci_logs_dir
+    return os.path.join(dir, "{}.log".format(container_name))
+
+
 class Node:
     def __init__(self, container, deploy_dir, docker_client, timeout, network):
         self.container = container
@@ -65,12 +71,12 @@ class Node:
         return self.exec_run(cmd=cmd)
 
     def cleanup(self):
-        log_file = os.path.join('logs', f"{self.container.name}.log")
+        log_file_path = make_container_logs_path(self.container.name)
 
-        with open(log_file, "w") as f:
+        with open(log_file_path, "w") as f:
             f.write(self.logs())
 
-        logging.info(f"Remove container {self.container.name}. Logs have been written to {log_file}")
+        logging.info(f"Remove container {self.container.name}. Logs have been written to {log_file_path}")
 
         self.container.remove(force=True, v=True)
 
@@ -178,8 +184,8 @@ def create_bootstrap_node(docker_client,
                           memory="1024m",
                           cpuset_cpus="0"):
 
-    key_file = resources.file_path("bootstrap_certificate/node.key.pem")
-    cert_file = resources.file_path("bootstrap_certificate/node.certificate.pem")
+    key_file = resources.get_resource_path("bootstrap_certificate/node.key.pem")
+    cert_file = resources.get_resource_path("bootstrap_certificate/node.certificate.pem")
 
     logging.info(f"Using key_file={key_file} and cert_file={cert_file}")
 
