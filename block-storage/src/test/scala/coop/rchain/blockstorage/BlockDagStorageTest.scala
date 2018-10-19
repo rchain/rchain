@@ -47,8 +47,10 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
     val dataDir = mkTmpDir()
     val store = BlockDagFileStorage.createWithId(
       BlockDagFileStorage.Config(
-        dataDir.resolve("data"),
-        dataDir.resolve("checksum")
+        dataDir.resolve("latest-messsages-data"),
+        dataDir.resolve("latest-messsages-checksum"),
+        dataDir.resolve("data-lookup-data"),
+        dataDir.resolve("data-lookup-checksum")
       )
     )
     try {
@@ -64,13 +66,15 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   ): BlockDagFileStorage[Id] =
     BlockDagFileStorage.createWithId(
       BlockDagFileStorage.Config(
-        dataDir.resolve("data"),
-        dataDir.resolve("checksum"),
+        dataDir.resolve("latest-messsages-data"),
+        dataDir.resolve("latest-messsages-checksum"),
+        dataDir.resolve("data-lookup-data"),
+        dataDir.resolve("data-lookup-checksum"),
         maxSizeFactor
       )
     )
 
-  it should "be able to restore latest messages on startup" in {
+  it should "be able to restore state on startup" in {
     forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockElements =>
       val dataDir    = mkTmpDir()
       val firstStore = createAtDefaultLocation(dataDir)
@@ -80,13 +84,14 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
       blockElements.foreach { b =>
         val dag = secondStore.getRepresentation
         dag.latestMessageHash(b.sender) shouldBe Some(b.blockHash)
+        dag.lookup(b.blockHash) shouldBe Some(BlockMetadata.fromBlock(b))
       }
       secondStore.close()
       dataDir.recursivelyDelete()
     }
   }
 
-  it should "be able to restore latest messages from the previous two instances" in {
+  it should "be able to restore state from the previous two instances" in {
     forAll(blockElementsGen, minSize(0), sizeRange(10)) { firstBlockElements =>
       forAll(blockElementsGen, minSize(0), sizeRange(10)) { secondBlockElements =>
         val dataDir    = mkTmpDir()
@@ -100,6 +105,8 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
         (firstBlockElements ++ secondBlockElements).foreach { b =>
           val dag = thirdStore.getRepresentation
           dag.latestMessageHash(b.sender) shouldBe Some(b.blockHash)
+          dag.lookup(b.blockHash) shouldBe Some(BlockMetadata.fromBlock(b))
+          dag.latestMessage(b.sender) shouldBe Some(BlockMetadata.fromBlock(b))
         }
         thirdStore.close()
         dataDir.recursivelyDelete()
@@ -115,7 +122,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
       firstStore.close()
       val garbageBytes = Array.fill[Byte](64)(0)
       Random.nextBytes(garbageBytes)
-      Files.write(dataDir.resolve("data"), garbageBytes, StandardOpenOption.APPEND)
+      Files.write(dataDir.resolve("latest-messsages-data"), garbageBytes, StandardOpenOption.APPEND)
       val secondStore = createAtDefaultLocation(dataDir)
       blockElements.foreach { b =>
         val dag = secondStore.getRepresentation
@@ -126,11 +133,11 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
     }
   }
 
-  it should "be able to handle fully corrupted data file" in {
+  it should "be able to handle fully corrupted latest messages data file" in {
     val dataDir      = mkTmpDir()
     val garbageBytes = Array.fill[Byte](789)(0)
     Random.nextBytes(garbageBytes)
-    Files.write(dataDir.resolve("data"), garbageBytes)
+    Files.write(dataDir.resolve("latest-messsages-data"), garbageBytes)
     val store = createAtDefaultLocation(dataDir)
     val dag   = store.getRepresentation
     dag.latestMessageHashes.size shouldBe 0
@@ -138,7 +145,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
     dataDir.recursivelyDelete()
   }
 
-  it should "be able to restore after squashing" in {
+  it should "be able to restore after squashing latest messages" in {
     forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockElements =>
       val dataDir    = mkTmpDir()
       val firstStore = createAtDefaultLocation(dataDir, 2)
