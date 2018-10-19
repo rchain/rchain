@@ -96,7 +96,8 @@ object Main {
   private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] =
     for {
       host   <- conf.fetchHost
-      result <- new NodeRuntime(conf, host, scheduler).main.value
+      id     <- NodeEnvironment.create(conf)
+      result <- new NodeRuntime(conf, host, id, scheduler).main.value
       _ <- result match {
             case Right(_) =>
               Task.unit
