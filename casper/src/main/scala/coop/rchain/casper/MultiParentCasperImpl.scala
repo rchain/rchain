@@ -212,7 +212,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                    } else {
                      CreateBlockStatus.noNewDeploys.pure[F]
                    }
-        signedBlock <- proposal.flatMap(
+        signedBlock <- proposal.mapF(
                         signBlock(_, dag, publicKey, privateKey, sigAlgorithm, shardId)
                       )
       } yield signedBlock

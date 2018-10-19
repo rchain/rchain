@@ -6,13 +6,13 @@ import coop.rchain.casper.protocol.BlockMessage
 
 sealed trait CreateBlockStatus {
   def map(f: BlockMessage => BlockMessage): CreateBlockStatus = this
-  def flatMap[F[_]: Monad](f: BlockMessage => F[BlockMessage]): F[CreateBlockStatus] =
+  def mapF[F[_]: Monad](f: BlockMessage => F[BlockMessage]): F[CreateBlockStatus] =
     Monad[F].pure[CreateBlockStatus](this)
 }
 sealed trait NoBlock extends CreateBlockStatus
 case class Created(block: BlockMessage) extends CreateBlockStatus {
   override def map(f: BlockMessage => BlockMessage): CreateBlockStatus = Created(f(block))
-  override def flatMap[F[_]: Monad](f: BlockMessage => F[BlockMessage]): F[CreateBlockStatus] =
+  override def mapF[F[_]: Monad](f: BlockMessage => F[BlockMessage]): F[CreateBlockStatus] =
     f(block).map(Created.apply)
 }
 case class InternalDeployError(ex: Throwable) extends NoBlock
