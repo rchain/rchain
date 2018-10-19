@@ -21,7 +21,7 @@ trait Costs {
   final val SUM_COST: Cost         = Cost(3)
   final val SUBTRACTION_COST: Cost = Cost(3)
 
-  def equalityCheckCost[T <: StacksafeMessage, P <: StacksafeMessage](x: T, y: P): Cost =
+  def equalityCheckCost[T <: StacksafeMessage[_], P <: StacksafeMessage[_]](x: T, y: P): Cost =
     Cost(
       scala.math.min(ProtoM.serializedSize(x).value, ProtoM.serializedSize(y).value)
     )
@@ -63,7 +63,7 @@ trait Costs {
   // serializing any Par into a Array[Byte]:
   // + allocates byte array of the same size as `serializedSize`
   // + then it copies all elements of the Par
-  def toByteArrayCost[T <: StacksafeMessage](a: T): Cost =
+  def toByteArrayCost[T <: StacksafeMessage[_]](a: T): Cost =
     Cost(ProtoM.serializedSize(a).value)
   //TODO: adjust the cost of size method
   def sizeMethodCost(size: Int): Cost = Cost(size)
@@ -92,11 +92,11 @@ trait Costs {
 
   final val MATCH_EVAL_COST = Cost(12)
 
-  implicit def toStorageCostOps[A <: StacksafeMessage](a: Seq[A]) = new StorageCostOps(a: _*)
+  implicit def toStorageCostOps[A <: StacksafeMessage[_]](a: Seq[A]) = new StorageCostOps(a: _*)
 
-  implicit def toStorageCostOps[A <: StacksafeMessage](a: A) = new StorageCostOps(a)
+  implicit def toStorageCostOps[A <: StacksafeMessage[_]](a: A) = new StorageCostOps(a)
 
-  class StorageCostOps[A <: StacksafeMessage](a: A*) {
+  class StorageCostOps[A <: StacksafeMessage[_]](a: A*) {
     def storageCost: Cost = Cost(a.map(a => ProtoM.serializedSize(a).value).sum)
   }
 

@@ -12,7 +12,7 @@ object ProtoM extends DescriptorPimps {
 
   def params: GeneratorParams = ??? //required by DescriptorPimps, but we don't use it transitively
 
-  def toByteArray(message: StacksafeMessage): Coeval[Array[Byte]] =
+  def toByteArray(message: StacksafeMessage[_]): Coeval[Array[Byte]] =
     for {
       size  <- message.serializedSizeM.get
       array = new Array[Byte](size)
@@ -23,11 +23,11 @@ object ProtoM extends DescriptorPimps {
 
   def writeTo(
       out: CodedOutputStream,
-      message: StacksafeMessage
+      message: StacksafeMessage[_]
   ): Coeval[Unit] = {
     val companion       = message.companion
     val descriptor      = companion.javaDescriptor
-    val defaultInstance = companion.defaultInstance.asInstanceOf[StacksafeMessage]
+    val defaultInstance = companion.defaultInstance.asInstanceOf[StacksafeMessage[_]]
     for {
       _ <- raiseUnsupportedIf[Coeval](
             descriptor.preservesUnknownFields,
@@ -79,9 +79,9 @@ object ProtoM extends DescriptorPimps {
     if (field.isMessage) {
       for {
         _         <- writeTag(out, field, WireType.WIRETYPE_LENGTH_DELIMITED)
-        valueSize <- value.asInstanceOf[StacksafeMessage].serializedSizeM.get
+        valueSize <- value.asInstanceOf[StacksafeMessage[_]].serializedSizeM.get
         _         <- writeUInt32NoTag(out, valueSize)
-        _         <- writeTo(out, value.asInstanceOf[StacksafeMessage])
+        _         <- writeTo(out, value.asInstanceOf[StacksafeMessage[_]])
       } yield ()
     } else if (field.isEnum)
       Sync[Coeval].raiseError(
@@ -139,11 +139,11 @@ object ProtoM extends DescriptorPimps {
     }
 
   def serializedSize(
-      message: StacksafeMessage
+      message: StacksafeMessage[_]
   ): Coeval[Int] = Coeval.defer {
     val companion       = message.companion
     val descriptor      = companion.javaDescriptor
-    val defaultInstance = companion.defaultInstance.asInstanceOf[StacksafeMessage]
+    val defaultInstance = companion.defaultInstance.asInstanceOf[StacksafeMessage[_]]
     for {
       _ <- raiseUnsupportedIf[Coeval](
             descriptor.preservesUnknownFields,
@@ -188,7 +188,7 @@ object ProtoM extends DescriptorPimps {
   private def singleFieldSize(value: Any, field: Descriptors.FieldDescriptor): Coeval[Int] =
     if (field.isMessage) {
       for {
-        valueSize     <- value.asInstanceOf[StacksafeMessage].serializedSizeM.get
+        valueSize     <- value.asInstanceOf[StacksafeMessage[_]].serializedSizeM.get
         valueSizeSize = CodedOutputStream.computeUInt32SizeNoTag(valueSize)
         tagSize       = CodedOutputStream.computeTagSize(field.getNumber)
       } yield tagSize + valueSizeSize + valueSize

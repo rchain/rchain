@@ -32,7 +32,7 @@ class RhoTypesTest extends FlatSpec with PropertyChecks with Matchers {
   roundTripSerialization[ESet]
   roundTripSerialization[EMap]
 
-  def roundTripSerialization[A <: StacksafeMessage: Serialize: Arbitrary: Shrink: Pretty](
+  def roundTripSerialization[A <: StacksafeMessage[A]: Serialize: Arbitrary: Shrink: Pretty](
       implicit tag: ClassTag[A]
   ): Unit =
     it must s"work for ${tag.runtimeClass.getSimpleName}" in {
@@ -50,10 +50,10 @@ class RhoTypesTest extends FlatSpec with PropertyChecks with Matchers {
     assertEqual(result, expected)
   }
 
-  def stacksafeSizeSameAsReference[A <: StacksafeMessage](a: A): Assertion =
+  def stacksafeSizeSameAsReference[A <: StacksafeMessage[A]](a: A): Assertion =
     assert(ProtoM.serializedSize(a).value() == a.serializedSize)
 
-  def stacksafeWriteToSameAsReference[A <: StacksafeMessage](a: A): Assertion =
+  def stacksafeWriteToSameAsReference[A <: StacksafeMessage[A]](a: A): Assertion =
     assert(ProtoM.toByteArray(a).value sameElements a.toByteArray)
 
 }

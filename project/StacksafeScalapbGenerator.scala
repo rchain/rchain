@@ -115,8 +115,8 @@ class StacksafeProtobufGenerator(params: GeneratorParams) extends ProtobufGenera
   override def printMessage(printer: FunctionalPrinter, message: Descriptor): FunctionalPrinter = {
     val value = super.printMessage(printer, message).result()
     val extended = value.replace(
-      " extends scalapb.GeneratedMessage ",
-      " extends coop.rchain.models.StacksafeMessage with scalapb.GeneratedMessage "
+      " extends scalapb.GeneratedMessage with scalapb.Message[",
+      " extends coop.rchain.models.StacksafeMessage["
     )
     new FunctionalPrinter(Vector(extended), printer.indentLevel)
   }
