@@ -1,21 +1,16 @@
-package coop.rchain.rspace.bench.lmdb
+package coop.rchain.lmdb
+
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
 
-import coop.rchain.rspace.bench.lmdb.LMDBOpsBench._
-import coop.rchain.rspace.examples.AddressBookExample.implicits._
-import coop.rchain.rspace.examples.AddressBookExample.{Channel, EntriesCaptor, Entry, Pattern}
-import coop.rchain.rspace.history.{Branch, LMDBTrieStore}
-import coop.rchain.rspace.internal.GNAT
-import coop.rchain.rspace.{Blake2b256Hash, Context, LMDBStore}
+import coop.rchain.lmdb.LMDBOpsBench._
+import coop.rchain.rspace.Context
 import coop.rchain.shared.PathOps._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra.Blackhole
-import scodec.Codec
-import scala.collection.JavaConverters._
 
 import scala.util.Random
 
@@ -156,13 +151,6 @@ object LMDBOpsBench {
       super.setup()
       small = generate(10000, 10)
     }
-
-    @TearDown
-    def tearDown() = {
-      store.close()
-      dbDir.recursivelyDelete()
-      ()
-    }
   }
 
   @State(Scope.Benchmark)
@@ -175,14 +163,8 @@ object LMDBOpsBench {
       super.setup()
       small.foreach(x => dbGnats.put(x._1, x._2))
     }
-
-    @TearDown
-    def tearDown() = {
-      store.close()
-      dbDir.recursivelyDelete()
-      ()
-    }
   }
+
   @State(Scope.Benchmark)
   class MediumLMDBOpsBenchState extends BaseLMDBOpsBenchState {
 
@@ -191,13 +173,6 @@ object LMDBOpsBench {
     @Setup(value = Level.Iteration)
     override def setup() =
       super.setup()
-
-    @TearDown
-    def tearDown() = {
-      store.close()
-      dbDir.recursivelyDelete()
-      ()
-    }
   }
 
   @State(Scope.Benchmark)
@@ -210,13 +185,6 @@ object LMDBOpsBench {
       super.setup()
       medium.foreach(x => dbGnats.put(x._1, x._2))
     }
-
-    @TearDown
-    def tearDown() = {
-      store.close()
-      dbDir.recursivelyDelete()
-      ()
-    }
   }
 
   @State(Scope.Benchmark)
@@ -228,12 +196,6 @@ object LMDBOpsBench {
     override def setup() =
       super.setup()
 
-    @TearDown
-    def tearDown() = {
-      store.close()
-      dbDir.recursivelyDelete()
-      ()
-    }
   }
 
   @State(Scope.Benchmark)
@@ -246,13 +208,6 @@ object LMDBOpsBench {
       super.setup()
       large.foreach(x => dbGnats.put(x._1, x._2))
     }
-
-    @TearDown
-    def tearDown() = {
-      store.close()
-      dbDir.recursivelyDelete()
-      ()
-    }
   }
 
   @State(Scope.Benchmark)
@@ -264,20 +219,9 @@ object LMDBOpsBench {
     @Setup(value = Level.Iteration)
     override def setup() =
       super.setup()
-
-    @TearDown
-    def tearDown() = {
-      store.close()
-      dbDir.recursivelyDelete()
-      ()
-    }
   }
 
-  class BaseLMDBOpsBenchState {
-    implicit val codecC: Codec[Channel]       = serializeChannel.toCodec
-    implicit val codecP: Codec[Pattern]       = serializePattern.toCodec
-    implicit val codecA: Codec[Entry]         = serializeInfo.toCodec
-    implicit val codecK: Codec[EntriesCaptor] = serializeEntriesCaptor.toCodec
+  trait BaseLMDBOpsBenchState {
 
     val mapSize: Long  = 1024L * 1024L * 1024L
     val noTls: Boolean = false
@@ -294,8 +238,6 @@ object LMDBOpsBench {
       val mbb   = ByteBuffer.allocateDirect(bytes.length + 4)
       mbb.put(bytes)
       mbb.putInt(i)
-      println(mbb.getInt(2))
-      println(s"!!!(${mbb.get(0)}${mbb.get(1)})==${mbb.getInt(2)} ---- $i")
       mbb.flip()
       mbb
     }
@@ -309,21 +251,9 @@ object LMDBOpsBench {
 
     def setup(): Unit = {
       dbDir = Files.createTempDirectory("rchain-rspace-mixed-bench-")
-      val branch = Branch.MASTER
-      val flags  = List(EnvFlags.MDB_NOTLS)
+      val flags = List(EnvFlags.MDB_NOTLS)
       env = Context.env(dbDir, mapSize, flags)
-      dbGnats = env.openDbi(s"${branch.name}-gnats", MDB_CREATE)
-      dbJoins = env.openDbi(s"${branch.name}-joins", MDB_CREATE)
-      val trieStore = LMDBTrieStore
-        .create[Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]](env, dbDir)
-      store = new LMDBStore[Channel, Pattern, Entry, EntriesCaptor](
-        env,
-        dbDir,
-        dbGnats,
-        dbJoins,
-        trieStore,
-        branch
-      )
+      dbGnats = env.openDbi(s"db-gnats", MDB_CREATE)
       populate()
     }
 
@@ -363,7 +293,11 @@ object LMDBOpsBench {
       bb.put(bytes)
     }
 
-    var store: LMDBStore[Channel, Pattern, Entry, EntriesCaptor] = _
+    @TearDown
+    def tearDown() = {
+      dbDir.recursivelyDelete()
+      ()
+    }
   }
 
 }
