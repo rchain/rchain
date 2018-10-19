@@ -26,7 +26,7 @@ class BasicWalletSpec extends FlatSpec with Matchers {
   val deploys = List(
     //TODO: Replace all compiledSourceDeploy with StandardDeploys when they are ready
     StandardDeploys.nonNegativeNumber,
-    compiledSourceDeploy(MakeMint, 1L, accounting.MAX_VALUE),
+    StandardDeploys.makeMint,
     compiledSourceDeploy(BasicWallet, 2L, accounting.MAX_VALUE)
   )
   TestSetUtil.runTestsWithDeploys(BasicWalletTest, deploys, runtime)
@@ -51,9 +51,9 @@ class BasicWalletSpec extends FlatSpec with Matchers {
 /**
   * A tool for generating withdrawal signatures for the BasicWalletTest.rho
   */
-object Signer extends App {
+object Signer {
 
-  override def main(args: Array[String]): Unit = {
+  def main(args: Array[String]): Unit = {
     val sigKey = "1388803416a5869f3d4682fb3fae738278287b80d1a5a52ddf89be8eb9dac59d"
     println(signWithdrawal(0, 60, sigKey))
     println(signWithdrawal(1, 10, sigKey))

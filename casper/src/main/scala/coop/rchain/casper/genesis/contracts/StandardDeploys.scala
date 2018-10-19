@@ -46,7 +46,12 @@ object StandardDeploys {
       "d89a1e6d2b8f53595b3d0d47effd48f0e537d19d847ad5811cf5216157a3a63c",
       1539963224985L
     )
-  def makeMint: Deploy          = toDeploy(MakeMint, "", 0L)
+  def makeMint: Deploy =
+    toDeploy(
+      MakeMint,
+      "d9ba2075d355755060205605f4cdbd5ecd3cce5ed1f39690f34772f7c9aa30ab",
+      1539969637029L
+    )
   def makePoS: Deploy           = toDeploy(MakePoS, "", 0L)
   def basicWallet: Deploy       = toDeploy(BasicWallet, "", 0L)
   def basicWalletFaucet: Deploy = toDeploy(BasicWalletFaucet, "", 0L)

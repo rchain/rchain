@@ -2,11 +2,11 @@
 
 //requires MakeMint, BasicWallet
 
-contract @"BasicWalletFaucet"(@mint, return) = {
+contract @"BasicWalletFaucet"(mint, return) = {
   new this in {
     contract this(@amount, @algorithm, @publicKey, return) = {
       new walletPurseCh in {
-        @(mint, "makePurse")!(amount, *walletPurseCh) |
+        mint!("makePurse", amount, *walletPurseCh) |
         for(@walletPurse <- walletPurseCh) {
           @"BasicWallet"!(walletPurse, algorithm, publicKey, *return)
         }

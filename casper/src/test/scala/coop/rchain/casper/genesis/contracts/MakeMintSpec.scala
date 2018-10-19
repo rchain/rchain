@@ -14,9 +14,8 @@ class MakeMintSpec extends FlatSpec with Matchers {
   val tests   = TestSetUtil.getTests("./casper/src/test/rholang/MakeMintTest.rho").toList
 
   val deploys = List(
-    //TODO: Replace all compiledSourceDeploy with StandardDeploys when they are ready
     StandardDeploys.nonNegativeNumber,
-    compiledSourceDeploy(MakeMint, 1L, accounting.MAX_VALUE)
+    StandardDeploys.makeMint
   )
   TestSetUtil.runTestsWithDeploys(MakeMintTest, deploys, runtime)
   val tuplespace = StoragePrinter.prettyPrint(runtime.space.store)

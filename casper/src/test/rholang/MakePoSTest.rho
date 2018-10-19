@@ -3,11 +3,12 @@
 //requires MakePoS, MakeMint, TestSet, ListOps, Either
 
 new 
-  rl(`rho:registry:lookup`), TestSetCh,
+  rl(`rho:registry:lookup`), TestSetCh, MakeMintCh,
   test1, test2
 in {
   rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *TestSetCh) |
-  for(@(_, TestSet) <- TestSetCh) {
+  rl!(`rho:id:exunyijimapk7z43g3bbr69awqdz54kyroj9q43jgu3dh567fxsftx`, *MakeMintCh) |
+  for(@(_, TestSet) <- TestSetCh; @(_, MakeMint) <- MakeMintCh) {
     @"pk"!!("79d16233dedf8e8e4cc25272b2b98ac096dac9239ade20dcee5987a1c1d101c7") |
     @"minimumBond"!!(5) |
     @"maximumBond"!!(100) |
@@ -29,18 +30,18 @@ in {
       }
     } |
 
-    contract @"balance"(@purse, return) = {
+    contract @"balance"(purse, return) = {
       new balance in {
-        contract balance(return) = { @(purse, "getBalance")!(*return) } |
+        contract balance(return) = { purse!("getBalance", *return) } |
         return!(*balance)
       }
     } |
 
-    @"MakeMint"!("mint") | for(@mint <- @"mint") {
-      @(mint, "makePurse")!(0, "posPurse") |
-      @(mint, "makePurse")!(50, "bondPurse") |
-      @(mint, "makePurse")!(500, "tooBigBondPurse") |
-      @(mint, "makePurse")!(1, "tooSmallBondPurse") |
+    @MakeMint!("mint") | for(mint <- @"mint") {
+      mint!("makePurse", 0, "posPurse") |
+      mint!("makePurse", 50, "bondPurse") |
+      mint!("makePurse", 500, "tooBigBondPurse") |
+      mint!("makePurse", 1, "tooSmallBondPurse") |
       for(
         @posPurse <- @"posPurse";
         @bondPurse <- @"bondPurse";

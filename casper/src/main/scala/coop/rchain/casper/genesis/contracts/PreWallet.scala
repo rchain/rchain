@@ -15,7 +15,7 @@ object PreWallet {
     */
   def rhoCode(w: PreWallet): String = s"""
     |new purseCh in {
-    |  @(revMint, "makePurse")!(${w.initRevBalance}, *purseCh) |
+    |  @revMint!("makePurse", ${w.initRevBalance}, *purseCh) |
     |  for(@purse <- purseCh) {
     |    @("WalletCheck", "create")!("${w.ethAddress}", purse)
     |  }

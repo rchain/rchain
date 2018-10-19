@@ -1,7 +1,7 @@
 //scalapackage coop.rchain.rholang.wallet
 
 //assumes standard purse API from MakeMint
-contract @"BasicWallet"(@purse, @algorithm, @pk, return) = {
+contract @"BasicWallet"(purse, @algorithm, @pk, return) = {
   new cryptoVerifyCh in {
     match algorithm {
       "ed25519" => {
@@ -44,17 +44,17 @@ contract @"BasicWallet"(@purse, @algorithm, @pk, return) = {
               }
             } |
             contract @(*basicWallet, "getBalance")(return) = {
-              @(purse, "getBalance")!(*return)
+              purse!("getBalance", *return)
             } |
             contract @(*basicWallet, "deposit")(@amount, @src, success) = {
-              @(purse, "deposit")!(amount, src, *success)
+              purse!("deposit", amount, src, *success)
             } |
             contract @(*basicWallet, "transfer")(@amount, @nonce, @sig, destination, status) = {
               new verifyResult in {
                 verify!(nonce, amount, *destination, sig, *verifyResult) | for(@verified <- verifyResult) {
                   if (verified) { 
                     new splitResultCh in {
-                      @(purse, "split")!(amount, *splitResultCh) |
+                      purse!("split", amount, *splitResultCh) |
                       for(@splitResult  <- splitResultCh) {
                         match splitResult {
                           []        => { status!("Overdraft") }

@@ -4,7 +4,7 @@ new rl(`rho:registry:lookup`), ListOpsCh, EitherCh in {
   rl!(`rho:id:dputnspi15oxxnyymjrpu7rkaok3bjkiwq84z7cqcrx4ktqfpyapn4`, *ListOpsCh) |
   rl!(`rho:id:j6trahbxycumerwpr5qype7j43b7eqh8auebwsa9nn68if47gswh73`, *EitherCh) |
   for(@(_, ListOps) <- ListOpsCh; @(_, Either) <- EitherCh) {
-    contract @"MakePoS"(@purse, @minimumBond, @maximumBond, @initBonds, return) = {
+    contract @"MakePoS"(purse, @minimumBond, @maximumBond, @initBonds, return) = {
       new this, bondsCh, joiningFeeCh, clonePurse, depositPurse, updateBonds, feeDistribution in {
         bondsCh!(initBonds) |
         joiningFeeCh!!(minimumBond) | //joining fee equal to minimum bond amount
@@ -13,11 +13,11 @@ new rl(`rho:registry:lookup`), ListOpsCh, EitherCh in {
         //of an existing purse into a new purse. This prevents
         //the owner of the given purse from modifying the balance
         //during processing.
-        contract clonePurse(@givenPurse, return) = {
+        contract clonePurse(givenPurse, return) = {
           new balanceCh, resultCh in {
-            @(givenPurse, "getBalance")!(*balanceCh) |
+            givenPurse!("getBalance", *balanceCh) |
             for(@balance <- balanceCh) {
-              @(givenPurse, "split")!(balance, *resultCh) |
+              givenPurse!("split", balance, *resultCh) |
               for(@result <- resultCh) {
                 match result {
                   [] => { return!(("Left", "Could not extract funds from given purse")) }
@@ -30,7 +30,7 @@ new rl(`rho:registry:lookup`), ListOpsCh, EitherCh in {
       
         contract @(*this, "validateBondAmount")(@bondPurse, return) = {
           new balanceCh in {
-            @(bondPurse, "getBalance")!(*balanceCh) |
+            @bondPurse!("getBalance", *balanceCh) |
             for(@balance <- balanceCh; @joiningFee <- joiningFeeCh) {
               if      (balance - joiningFee < minimumBond) { return!(("Left", "Bond less than minimum!")) }
               else if (balance - joiningFee > maximumBond) { return!(("Left", "Bond greater than maximum!")) }
@@ -46,7 +46,7 @@ new rl(`rho:registry:lookup`), ListOpsCh, EitherCh in {
         
         contract depositPurse(@bondPurse, @amount, return) = {
           new successCh in {
-            @(purse, "deposit")!(amount, bondPurse, *successCh) |
+            purse!("deposit", amount, bondPurse, *successCh) |
             for(@success <- successCh) {
               if (success) { return!(("Right", bondPurse)) }
               else         { return!(("Left", "Deposit failed.")) }
@@ -150,7 +150,7 @@ new rl(`rho:registry:lookup`), ListOpsCh, EitherCh in {
 
                       ("Left", message) => {
                         //return funds to original purse since an error occurred
-                        @(givenBondPurse, "deposit")!(bondAmount, bondPurse, *resultCh) |
+                        @givenBondPurse!("deposit", bondAmount, bondPurse, *resultCh) |
                         for(_ <- resultCh) { return!((false, message)) }
                       }
                     }

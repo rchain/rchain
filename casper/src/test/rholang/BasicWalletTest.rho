@@ -2,11 +2,12 @@
 
 //requires BasicWallet, MakeMint, TestSet, ListOps
 new
-  rl(`rho:registry:lookup`), TestSetCh,
+  rl(`rho:registry:lookup`), TestSetCh, MakeMintCh,
   test1, test2, test3, test4, test5
 in {
   rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *TestSetCh) |
-  for(@(_, TestSet) <- TestSetCh) {
+  rl!(`rho:id:exunyijimapk7z43g3bbr69awqdz54kyroj9q43jgu3dh567fxsftx`, *MakeMintCh) |
+  for(@(_, TestSet) <- TestSetCh; @(_, MakeMint) <- MakeMintCh) {
     @"sk"!("1388803416a5869f3d4682fb3fae738278287b80d1a5a52ddf89be8eb9dac59d") |
     @"pk"!("79d16233dedf8e8e4cc25272b2b98ac096dac9239ade20dcee5987a1c1d101c7") |
     @"sig0"!("04f9a5f223fdf61ceaa290d04df2c171892d46cee31faad55061896b16340558d27e6b27d55a7133ec6ebf07433a059d1e3c2fd2ea864ad01de69e05f860180e") |
@@ -48,6 +49,15 @@ in {
       }
     } |
 
+    contract @"getBalance2"(purse, return) = {
+      new getBalance in {
+        contract getBalance(return) = {
+          purse!("getBalance", *return)
+        } |
+        return!(*getBalance)
+      }
+    } |
+    
     contract @"getNonce"(@wallet, return) = {
       new getNonce in {
         contract getNonce(return) = {
@@ -57,10 +67,10 @@ in {
       }
     } |
 
-    @"MakeMint"!("mint") | for(@mint <- @"mint") {
-      @(mint, "makePurse")!(100, "purse") |
-      @(mint, "makePurse")!(30, "otherPurse") |
-      @(mint, "makePurse")!(74, "ethereumPurse") |
+    @MakeMint!("mint") | for(mint <- @"mint") {
+      mint!("makePurse", 100, "purse") |
+      mint!("makePurse", 30, "otherPurse") |
+      mint!("makePurse", 74, "ethereumPurse") |
       for(
         @purse <- @"purse"; 
         @otherPurse <- @"otherPurse"; 
@@ -136,7 +146,7 @@ in {
               for(doTransfer <- @"transfer0Nonce") {
                 @"transfer0Nonce"!(*doTransfer) |
                 doTransfer!("status") | for(@wPurse <- @"wPurse"; @"Success" <- @"status") {
-                  @"getBalance"!(wPurse, "purseBalance") |
+                  @"getBalance2"!(wPurse, "purseBalance") |
                   @"getNonce"!(wallet, "walletNonce") |
                   @TestSet!("define",
                     "Wallet transfer should work as expected.",
