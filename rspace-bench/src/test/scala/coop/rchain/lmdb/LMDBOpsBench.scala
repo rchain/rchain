@@ -223,12 +223,10 @@ object LMDBOpsBench {
 
   trait BaseLMDBOpsBenchState {
 
-    val mapSize: Long  = 1024L * 1024L * 1024L
-    val noTls: Boolean = false
+    val mapSize: Long = 1024L * 1024L * 1024L
 
     var dbDir: Path              = _
     var dbGnats: Dbi[ByteBuffer] = _
-    var dbJoins: Dbi[ByteBuffer] = _
     var env: Env[ByteBuffer]     = _
 
     val randomData = generate(100, 100)
