@@ -1,8 +1,12 @@
+import sys
+sys.path.insert(0, '.')
+
+
 import pytest
 import collections
-from tools.profiling import log_prof_data
-from tools.util import parse_config, docker, validators_data
-from tools.rnode import start_bootstrap
+from rnode_testing.profiling import log_prof_data
+from rnode_testing.util import parse_config, docker, validators_data
+from rnode_testing.rnode import start_bootstrap
 
 System = collections.namedtuple("System", ["config", "docker", "validators_data"])
 

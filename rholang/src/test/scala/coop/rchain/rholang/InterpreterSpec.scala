@@ -69,9 +69,10 @@ class InterpreterSpec extends FlatSpec with Matchers {
           """@{0}!("Pr") |""",
           """@{0}!("Co") |""",
           """@{0}!("Nil") |""",
-          """@{0}!("Pr") |""",
+          """@{0}!("Pr") |"""
         ).mkString("\n")
-      ))
+      )
+    )
   }
 
   private def storageContents(): String =

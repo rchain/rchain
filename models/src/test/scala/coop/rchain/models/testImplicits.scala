@@ -52,6 +52,7 @@ object testImplicits {
   implicit val MatchCaseArbitrary          = implicitly[Arbitrary[MatchCase]]
   implicit val NewArbitrary                = implicitly[Arbitrary[New]]
   implicit val ParWithRandomArbitrary      = implicitly[Arbitrary[ParWithRandom]]
+  implicit val ListParWithRandomArbitrary  = implicitly[Arbitrary[ListParWithRandom]]
   implicit val PCostArbitrary              = implicitly[Arbitrary[PCost]]
   implicit val ReceiveArbitrary            = implicitly[Arbitrary[Receive]]
   implicit val ReceiveBindArbitrary        = implicitly[Arbitrary[ReceiveBind]]
@@ -85,6 +86,7 @@ object testImplicits {
   implicit val MatchCaseShrink          = implicitly[Shrink[MatchCase]]
   implicit val NewShrink                = implicitly[Shrink[New]]
   implicit val ParWithRandomShrink      = implicitly[Shrink[ParWithRandom]]
+  implicit val ListParWithRandomShrink  = implicitly[Shrink[ListParWithRandom]]
   implicit val PCostShrink              = implicitly[Shrink[PCost]]
   implicit val ReceiveShrink            = implicitly[Shrink[Receive]]
   implicit val ReceiveBindShrink        = implicitly[Shrink[ReceiveBind]]
@@ -94,7 +96,6 @@ object testImplicits {
   implicit val VarRefShrink             = implicitly[Shrink[VarRef]]
   implicit val ParSetShrink             = implicitly[Shrink[ParSet]]
   implicit val ParMapShrink             = implicitly[Shrink[ParMap]]
-
 
   implicit def alwaysEqualArbitrary[A: Arbitrary]: Arbitrary[AlwaysEqual[A]] =
     Arbitrary(Arbitrary.arbitrary[A].map(AlwaysEqual(_)))

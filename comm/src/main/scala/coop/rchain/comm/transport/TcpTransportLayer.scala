@@ -119,17 +119,19 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
   ): Task[CommErr[Option[Protocol]]] =
     withClient(peer, enforce)(f).attempt.map(processResponse(peer, _))
 
-  def chunkIt(blob: Blob): List[Chunk] = {
-
+  def chunkIt(blob: Blob): Iterator[Chunk] = {
     def header: Chunk =
       Chunk().withHeader(
         ChunkHeader().withSender(ProtocolHelper.node(blob.sender)).withTypeId(blob.packet.typeId)
       )
+    val buffer    = 2 * 1024 // 2 kbytes for protobuf related stuff
+    val chunkSize = maxMessageSize - buffer
+    def data: Iterator[Chunk] =
+      blob.packet.content.toByteArray.sliding(chunkSize, chunkSize).map { data =>
+        Chunk().withData(ChunkData().withContentData(ProtocolHelper.toProtocolBytes(data)))
+      }
 
-    // FIX-ME actually chunk the data
-    def data: List[Chunk] = List(Chunk().withData(ChunkData().withContentData(blob.packet.content)))
-
-    header +: data
+    Iterator(header) ++ data
   }
 
   /**
@@ -141,7 +143,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
       .traverse(
         peer =>
           withClient(peer, enforce = false) { stub =>
-            stub.stream(Observable(chunkIt(blob): _*))
+            stub.stream(Observable.fromIterator(chunkIt(blob)))
           }.attempt.flatMap {
             case Left(error) => log.debug(s"Error while streaming packet, error: $error")
             case Right(_)    => Task.unit
@@ -211,13 +213,13 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
 
     def dispatchInternal: ServerMessage => Task[Unit] = {
       // TODO: consider logging on failure (Left)
-      case Tell(protocol) => dispatch(protocol).attempt.void
+      case Tell(protocol) => dispatch(protocol).attemptAndLog.void
       case Ask(protocol, handle) if !handle.complete =>
         dispatch(protocol).attempt.map {
           case Left(e)         => handle.failWith(e)
           case Right(response) => handle.reply(response)
         }.void
-      case StreamMessage(blob) => handleStreamed(blob)
+      case StreamMessage(blob) => handleStreamed(blob).attemptAndLog
       case _                   => Task.unit // sender timeout
     }
 

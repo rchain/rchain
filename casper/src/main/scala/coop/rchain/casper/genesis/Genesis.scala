@@ -9,7 +9,7 @@ import cats.{Applicative, Foldable, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil.{blockHeader, compiledSourceDeploy, unsignedBlockProto}
+import coop.rchain.casper.util.ProtoUtil.{blockHeader, stringToByteString, unsignedBlockProto}
 import coop.rchain.casper.util.{EventConverter, Sorting}
 import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -17,11 +17,6 @@ import coop.rchain.casper.util.{EventConverter, Sorting}
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.rholang.collection.{Either, ListOps}
-import coop.rchain.rholang.math.NonNegativeNumber
-import coop.rchain.rholang.mint.{BasicWalletFaucet, MakeMint}
-import coop.rchain.rholang.proofofstake.MakePoS
-import coop.rchain.rholang.wallet.{BasicWallet, WalletCheck}
 import coop.rchain.shared.{Log, LogSource, Time}
 import monix.execution.Scheduler
 
@@ -41,16 +36,16 @@ object Genesis {
       faucetCode: String => String
   ): List[Deploy] =
     List(
-      ListOps,
-      Either,
-      NonNegativeNumber,
-      MakeMint,
-      MakePoS,
-      BasicWallet,
-      BasicWalletFaucet,
-      WalletCheck,
-      new PreWalletRev(wallets, faucetCode, posParams)
-    ).map(compiledSourceDeploy(_, timestamp, accounting.MAX_VALUE))
+      StandardDeploys.listOps,
+      StandardDeploys.either,
+      StandardDeploys.nonNegativeNumber,
+      StandardDeploys.makeMint,
+      StandardDeploys.makePoS,
+      StandardDeploys.basicWallet,
+      StandardDeploys.basicWalletFaucet,
+      StandardDeploys.walletCheck,
+      StandardDeploys.rev(wallets, faucetCode, posParams)
+    )
 
   def withContracts(
       initial: BlockMessage,
