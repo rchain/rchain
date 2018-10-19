@@ -27,7 +27,7 @@ class CompressionSpec extends FunSpec with Matchers with GeneratorDrivenProperty
       }
     }
 
-    it("should compress effectivly when data is compressable (repeatable patterns)") {
+    it("should compress effectively when data is compressable (repeatable patterns)") {
       val word       = Array.fill(1024)((Random.nextInt(24) + 33).toByte)
       val ar         = Array.concat(List.fill(1024)(word): _*)
       val compressed = Compression.compress(ar)
