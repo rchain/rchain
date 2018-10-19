@@ -148,7 +148,7 @@ class TcpServerObservable(
       }
 
       private def toContent(raw: Array[Byte], decompressLength: Option[Int]): ByteString = {
-        val decompressed = decompressLength.map(raw.decompress(_)).getOrElse(raw)
+        val decompressed = (decompressLength >>= (raw.decompress(_))).getOrElse(raw)
         ProtocolHelper.toProtocolBytes(decompressed)
       }
 

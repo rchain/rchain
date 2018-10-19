@@ -18,10 +18,19 @@ class CompressionSpec extends FunSpec with Matchers with GeneratorDrivenProperty
       }
     }
 
+    it("decompress should return None when decompresssedLength is incorrect ") {
+      forAll(byteArrays) { ar: Array[Byte] =>
+        val compressed    = Compression.compress(ar)
+        val illegalLength = ar.length + 1
+        noException should be thrownBy Compression.decompress(compressed, illegalLength)
+        Compression.decompress(compressed, illegalLength) shouldBe None
+      }
+    }
+
     it("should decompress to uncompressed data") {
       forAll(byteArrays) { ar: Array[Byte] =>
         val compressed = Compression.compress(ar)
-        val backAgain  = Compression.decompress(compressed, ar.length)
+        val backAgain  = Compression.decompress(compressed, ar.length).get
         backAgain.size shouldBe (ar.size)
         backAgain shouldBe ar
       }
