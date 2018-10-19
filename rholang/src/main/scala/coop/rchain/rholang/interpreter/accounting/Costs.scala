@@ -1,7 +1,6 @@
 package coop.rchain.rholang.interpreter.accounting
 
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.PhloLimit
 import coop.rchain.models.Par
 import scalapb.GeneratedMessage
 
@@ -104,5 +103,5 @@ trait Costs {
   // which may result in overflow when we start with maximum value.
   // In normal scenario this will never happen because user would need to provide equivalent of Long.MaxValue
   // in REVs and this is more than there is REVs available.
-  final val MAX_VALUE = PhloLimit(Integer.MAX_VALUE)
+  final val MAX_VALUE = Integer.MAX_VALUE
 }
