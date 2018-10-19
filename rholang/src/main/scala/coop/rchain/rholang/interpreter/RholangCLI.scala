@@ -28,13 +28,13 @@ object RholangCLI {
     val binary = opt[Boolean](descr = "outputs binary protobuf serialization")
     val text   = opt[Boolean](descr = "outputs textual protobuf serialization")
 
-    val data_dir = opt[Path](
+    val dataDir = opt[Path](
       required = false,
       descr = "Path to data directory",
       default = Some(Files.createTempDirectory("rspace-store-"))
     )
 
-    val map_size = opt[Long](
+    val mapSize = opt[Long](
       required = false,
       descr = "Map size (in bytes)",
       default = Some(1024L * 1024L * 1024L)
@@ -51,7 +51,7 @@ object RholangCLI {
 
     val conf = new Conf(args)
 
-    val runtime = Runtime.create(conf.data_dir(), conf.map_size())
+    val runtime = Runtime.create(conf.dataDir(), conf.mapSize())
     Await.result(runtime.injectEmptyRegistryRoot[Task].runAsync, 5.seconds)
 
     try {
