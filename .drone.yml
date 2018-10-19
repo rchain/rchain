@@ -74,6 +74,8 @@ pipeline:
 
   run-integration-tests:
     <<: *buildenv
+    environment:
+      - _JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G
     commands:
       - ./scripts/ci/run-integration-tests.sh
     volumes:

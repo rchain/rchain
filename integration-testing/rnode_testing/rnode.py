@@ -156,6 +156,12 @@ def create_node_container(docker_client, image, name, network, bonds_file, comma
     cmd, args = command
     str_command = cmd + " " + " ".join(f"{k} {v}" for (k, v) in args.items())
 
+    env = {}
+    java_options = os.environ.get('_JAVA_OPTIONS')
+    if java_options is not None:
+        env['_JAVA_OPTIONS'] = java_options
+    logging.info('Using _JAVA_OPTIONS: {}'.format(java_options))
+
     container = docker_client.containers.run(image,
                                              name=name,
                                              user='root',
@@ -170,7 +176,8 @@ def create_node_container(docker_client, image, name, network, bonds_file, comma
                                                            f"{deploy_dir}:{rnode_deploy_dir}"
                                                        ] + extra_volumes,
                                              command=str_command,
-                                             hostname=name)
+                                             hostname=name,
+                                             environment=env)
     return Node(container, deploy_dir, docker_client, rnode_timeout, network)
 
 
