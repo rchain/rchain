@@ -6,7 +6,7 @@ import java.nio.file.{Path, Paths}
 
 import cats.implicits._
 
-import coop.rchain.blockstorage.LMDBBlockStore
+import coop.rchain.blockstorage.{BlockDagFileStorage, LMDBBlockStore}
 import coop.rchain.casper.CasperConf
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
@@ -183,6 +183,10 @@ object Configuration {
             hasFaucet = DefaultHasFaucet
           ),
           LMDBBlockStore.Config(dataDir.resolve("casper-block-store"), DefaultCasperBlockStoreSize),
+          BlockDagFileStorage.Config(
+            dataDir.resolve("casper-block-dag-file-storage-log"),
+            dataDir.resolve("casper-block-dag-file-storage-crc")
+          ),
           options
         )
       )
@@ -375,6 +379,10 @@ object Configuration {
       dataDir.resolve("casper-block-store"),
       casperBlockStoreSize
     )
+    val blockDagStorage = BlockDagFileStorage.Config(
+      dataDir.resolve("casper-block-dag-file-storage-log"),
+      dataDir.resolve("casper-block-dag-file-storage-crc")
+    )
 
     new Configuration(
       command,
@@ -383,6 +391,7 @@ object Configuration {
       tls,
       casper,
       blockstorage,
+      blockDagStorage,
       options
     )
   }
@@ -428,6 +437,7 @@ final class Configuration(
     val tls: Tls,
     val casper: CasperConf,
     val blockstorage: LMDBBlockStore.Config,
+    val blockDagStorage: BlockDagFileStorage.Config,
     private val options: commandline.Options
 ) {
   import coop.rchain.catscontrib.Capture._

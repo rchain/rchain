@@ -7,8 +7,8 @@ import cats.Id
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.casper.BlockDag
 import coop.rchain.casper.helper.BlockStoreFixture
+import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockStoreFixture}
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
@@ -20,10 +20,13 @@ import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.shared.PathOps.RichPath
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
-
 import java.nio.file.Path
 
-class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {
+class GenesisTest
+    extends FlatSpec
+    with Matchers
+    with BlockStoreFixture
+    with BlockDagStorageFixture {
   import GenesisTest._
 
   val validators = Seq(
@@ -121,26 +124,27 @@ class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {
   }
 
   it should "create a valid genesis block" in withStore { implicit store =>
-    withGenResources {
-      (
-          runtimeManager: RuntimeManager,
-          genesisPath: Path,
-          log: LogStub[Id],
-          time: LogicalTime[Id]
-      ) =>
-        implicit val logEff = log
-        val genesis         = fromInputFiles()(runtimeManager, genesisPath, log, time)
-        BlockStore[Id].put(genesis.blockHash, genesis)
-        val blockDag = BlockDag.empty
+    withBlockDagStorage { implicit blockDagStorage =>
+      withGenResources {
+        (
+            runtimeManager: RuntimeManager,
+            genesisPath: Path,
+            log: LogStub[Id],
+            time: LogicalTime[Id]
+        ) =>
+          implicit val logEff = log
+          val genesis         = fromInputFiles()(runtimeManager, genesisPath, log, time)
+          BlockStore[Id].put(genesis.blockHash, genesis)
 
-        val maybePostGenesisStateHash = InterpreterUtil
-          .validateBlockCheckpoint[Id](
-            genesis,
-            blockDag,
-            runtimeManager
-          )
+          val maybePostGenesisStateHash = InterpreterUtil
+            .validateBlockCheckpoint[Id](
+              genesis,
+              blockDagStorage.getRepresentation,
+              runtimeManager
+            )
 
-        maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
+          maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
+      }
     }
   }
 

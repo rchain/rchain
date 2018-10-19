@@ -29,6 +29,19 @@ sealed abstract class StreamT[F[_], +A] { self =>
     case _: SNil[F]      => StreamT.empty[F, A]
   }
 
+  def filterF[AA >: A](p: A => F[Boolean])(implicit monad: Monad[F]): F[StreamT[F, AA]] =
+    self match {
+      case SCons(curr, lazyTail) =>
+        p(curr).flatMap { cond =>
+          if (cond)
+            monad.pure[StreamT[F, AA]](StreamT.cons(curr, lazyTail.map(_.flatMap(_.filterF(p)))))
+          else
+            lazyTail.value.flatMap(_.filterF(p))
+        }
+      case SLazy(lazyTail) => lazyTail.value.flatMap(_.filterF(p))
+      case _: SNil[F]      => StreamT.empty[F, AA].pure[F]
+    }
+
   def find[AA >: A](p: A => Boolean)(implicit monad: Monad[F]): F[Option[AA]] = self match {
     case SCons(curr, lazyTail) =>
       if (p(curr)) monad.pure[Option[AA]](curr.some)

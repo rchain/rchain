@@ -258,6 +258,12 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val casperBlockStoreSize =
       opt[Long](required = false, descr = "Casper BlockStore map size (in bytes)")
 
+    val casperLatestMessagesDataPath =
+      opt[Path](required = false, descr = "Path to latest messages data file")
+
+    val casperLatestMessagesCrcPath =
+      opt[Path](required = false, descr = "Path to latest messages crc file")
+
     val validatorPublicKey = opt[String](
       descr = "Base16 encoding of the public key to use for signing a proposed blocks. " +
         "Can be inferred from the private key for some signature algorithms."

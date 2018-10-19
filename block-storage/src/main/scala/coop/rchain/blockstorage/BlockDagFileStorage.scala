@@ -15,7 +15,7 @@ import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.errors._
 import coop.rchain.blockstorage.util.BlockMessageUtil.{blockNumber, bonds, parentHashes}
-import coop.rchain.blockstorage.util.{Crc32, TopologicalSortUtil}
+import coop.rchain.blockstorage.util.{BlockMessageUtil, Crc32, TopologicalSortUtil}
 import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.shared.{Log, LogSource}
@@ -706,6 +706,60 @@ object BlockDagFileStorage {
         dataLookupCrcRef,
         config.blockMetadataLogPath,
         config.blockMetadataCrcPath
+      )
+
+  def createEmptyFromGenesis[F[_]: Monad: Concurrent: Sync: Log](
+      config: Config,
+      genesis: BlockMessage
+  ): F[BlockDagFileStorage[F]] =
+    for {
+      lock                  <- Semaphore[F](1)
+      _                     = Files.createFile(config.latestMessagesDataPath)
+      _                     = Files.createFile(config.latestMessagesCrcPath)
+      genesisBonds          = BlockMessageUtil.bonds(genesis)
+      initialLatestMessages = genesisBonds.map(_.validator -> genesis.blockHash).toMap
+      data = initialLatestMessages
+        .foldLeft(ByteString.EMPTY) {
+          case (byteString, (validator, blockHash)) =>
+            byteString.concat(validator).concat(blockHash)
+        }
+        .toByteArray
+      crc = Crc32.empty[F]()
+      _ <- initialLatestMessages.toList.traverse_ {
+            case (validator, blockHash) =>
+              crc.update(validator.concat(blockHash).toByteArray)
+          }
+      crcBytes <- crc.bytes
+      _        = Files.write(config.latestMessagesDataPath, data)
+      _        = Files.write(config.latestMessagesCrcPath, crcBytes)
+      latestMessagesDataOutputStream = new FileOutputStream(
+        config.latestMessagesDataPath.toFile,
+        true
+      )
+      latestMessagesRef        <- Ref.of[F, Map[Validator, BlockHash]](initialLatestMessages)
+      latestMessagesLogSizeRef <- Ref.of[F, Int](initialLatestMessages.size)
+      latestMessagesCrcRef     <- Ref.of[F, Crc32[F]](crc)
+      childMapRef <- Ref.of[F, Map[BlockHash, Set[BlockHash]]](
+                      Map(genesis.blockHash -> Set.empty[BlockHash])
+                    )
+      dataLookupRef <- Ref.of[F, Map[BlockHash, BlockMetadata]](
+                        Map(genesis.blockHash -> BlockMetadata.fromBlock(genesis))
+                      )
+      topoSortRef                       <- Ref.of[F, Vector[Vector[BlockHash]]](Vector(Vector(genesis.blockHash)))
+      latestMessagesDataOutputStreamRef <- Ref.of[F, OutputStream](latestMessagesDataOutputStream)
+    } yield
+      new BlockDagFileStorage[F](
+        lock,
+        latestMessagesRef,
+        childMapRef,
+        dataLookupRef,
+        topoSortRef,
+        latestMessagesDataOutputStreamRef,
+        latestMessagesLogSizeRef,
+        latestMessagesCrcRef,
+        config.latestMessagesDataPath,
+        config.latestMessagesCrcPath,
+        config.latestMessagesLogMaxSizeFactor
       )
 
   def createWithId(config: Config)(implicit blockStore: BlockStore[Id]): BlockDagFileStorage[Id] = {

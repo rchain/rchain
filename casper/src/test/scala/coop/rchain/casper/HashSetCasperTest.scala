@@ -1149,11 +1149,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       deploys: immutable.IndexedSeq[ProcessedDeploy],
       signedInvalidBlock: BlockMessage
   ) = {
-    val postState     = RChainState().withBonds(ProtoUtil.bonds(genesis)).withBlockNumber(2)
+    val postState     = RChainState().withBonds(ProtoUtil.bonds(genesis)).withBlockNumber(1)
     val postStateHash = Blake2b256.hash(postState.toByteArray)
     val header = Header()
       .withPostStateHash(ByteString.copyFrom(postStateHash))
-      .withParentsHashList(Seq(signedInvalidBlock.blockHash))
+      .withParentsHashList(signedInvalidBlock.header.get.parentsHashList)
       .withDeploysHash(ProtoUtil.protoSeqHash(deploys))
     val blockHash = Blake2b256.hash(header.toByteArray)
     val body      = Body().withState(postState).withDeploys(deploys)
@@ -1162,7 +1162,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val serializedBlockHash = ByteString.copyFrom(blockHash)
     val blockThatPointsToInvalidBlock =
       BlockMessage(serializedBlockHash, Some(header), Some(body), serializedJustifications)
-    ProtoUtil.signBlock(
+    ProtoUtil.signBlock[Id](
       blockThatPointsToInvalidBlock,
       nodes(1).casperEff.blockDag,
       validators(1),
@@ -1175,10 +1175,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
 object HashSetCasperTest {
   def validateBlockStore[R](node: HashSetCasperTestNode[Id])(f: BlockStore[Id] => R) = {
-    val bs = BlockStoreTestFixture.create(node.dir)
+    val bs = BlockStoreTestFixture.create(node.blockStoreDir)
     f(bs)
     bs.close()
-    node.dir.recursivelyDelete()
+    node.blockStoreDir.recursivelyDelete()
   }
 
   def blockTuplespaceContents(

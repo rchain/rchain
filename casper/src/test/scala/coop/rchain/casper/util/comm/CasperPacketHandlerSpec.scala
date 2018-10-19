@@ -1,9 +1,14 @@
 package coop.rchain.casper.util.comm
 
-import cats.effect.concurrent.Ref
+import cats.effect.concurrent.{Ref, Semaphore}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.blockstorage.InMemBlockStore
+import coop.rchain.blockstorage.{
+  BlockDagRepresentation,
+  BlockMetadata,
+  InMemBlockDagStorage,
+  InMemBlockStore
+}
 import coop.rchain.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import coop.rchain.casper._
 import coop.rchain.casper.genesis.contracts.Faucet
@@ -23,7 +28,8 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.{ApplicativeError_, Capture}
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
-import coop.rchain.comm.rp.ProtocolHelper, ProtocolHelper._
+import coop.rchain.comm.rp.ProtocolHelper
+import ProtocolHelper._
 import coop.rchain.comm.{transport, _}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
@@ -89,12 +95,15 @@ class CasperPacketHandlerSpec extends WordSpec {
       LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val blockMap   = Ref.unsafe[Task, Map[BlockHash, BlockMessage]](Map.empty)
     implicit val blockStore = InMemBlockStore.create[Task]
-    implicit val casperRef  = MultiParentCasperRef.unsafe[Task](None)
+    implicit val blockDagStorage = InMemBlockDagStorage
+      .create[Task]
+      .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+    implicit val casperRef = MultiParentCasperRef.unsafe[Task](None)
     implicit val safetyOracle = new SafetyOracle[Task] {
       override def normalizedFaultTolerance(
-          blockDag: BlockDag,
+          blockDag: BlockDagRepresentation[Task],
           estimateBlockHash: BlockHash
-      ): Float = 1.0f
+      ): Task[Float] = Task.pure(1.0f)
     }
   }
 

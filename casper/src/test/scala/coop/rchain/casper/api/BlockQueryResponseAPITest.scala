@@ -3,11 +3,12 @@ package coop.rchain.casper.api
 import cats._
 import cats.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.blockstorage.{BlockMetadata, BlockStore}
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper._
-import coop.rchain.casper.helper.{BlockStoreFixture, NoOpsCasperEffect}
+import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockStoreFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
@@ -17,9 +18,12 @@ import coop.rchain.catscontrib.Capture._
 
 import scala.collection.immutable.HashMap
 
-class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFixture {
+class BlockQueryResponseAPITest
+    extends FlatSpec
+    with Matchers
+    with BlockStoreFixture
+    with BlockDagStorageFixture {
   implicit val timeEff = new LogicalTime[Id]
-
   val secondBlockQuery = "1234"
   val badTestHashQuery = "No such a hash"
 

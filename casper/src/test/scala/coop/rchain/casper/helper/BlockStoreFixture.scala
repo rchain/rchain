@@ -5,7 +5,6 @@ import java.nio.file.{Files, Path}
 
 import cats.Id
 import coop.rchain.blockstorage.{BlockStore, LMDBBlockStore}
-import coop.rchain.casper.helper.BlockGenerator.{storeForStateWithChain, StateWithChain}
 import org.lmdbjava.{Env, EnvFlags}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, Suite}
 import coop.rchain.shared.PathOps.RichPath
@@ -48,16 +47,14 @@ object BlockStoreTestFixture {
 
 trait BlockStoreTestFixture extends BeforeAndAfterAll { self: Suite =>
 
-  val dir = BlockStoreTestFixture.dbDir
+  val blockStoreDir = BlockStoreTestFixture.dbDir
 
-  val store = BlockStoreTestFixture.create(dir)
+  val store = BlockStoreTestFixture.create(blockStoreDir)
 
   implicit val blockStore = store
 
-  implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
-
   override def afterAll(): Unit = {
     store.close()
-    dir.recursivelyDelete()
+    blockStoreDir.recursivelyDelete()
   }
 }
