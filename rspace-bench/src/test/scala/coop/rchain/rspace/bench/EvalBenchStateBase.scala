@@ -6,10 +6,13 @@ import java.nio.file.{Files, Path}
 import org.openjdk.jmh.annotations.{Setup, TearDown}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccounting}
+import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccounting}
 import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
 import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
+import monix.execution.Scheduler
+
+import scala.concurrent.duration._
 
 trait EvalBenchStateBase {
   private lazy val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
@@ -25,6 +28,11 @@ trait EvalBenchStateBase {
   @Setup
   def doSetup(): Unit = {
     deleteOldStorage(dbDir)
+
+    implicit val scheduler: Scheduler = monix.execution.Scheduler.Implicits.global
+
+    runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
+    runtime.replayReducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
 
     term = Interpreter.buildNormalizedTerm(resourceFileReader(rhoScriptSource)).runAttempt match {
       case Right(par) => Some(par)

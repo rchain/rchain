@@ -137,42 +137,34 @@ class LMDBTrieStore[K, V] private (
       )
 
   override private[rspace] def applyCache(txn: Txn[ByteBuffer], trieCache:TrieCache[Txn[ByteBuffer], K, V]): Unit = {
-
     for((branch, hash) <- trieCache._dbRoot) {
       hash match {
-        case Some(value) =>
+        case StoredItem(value) =>
           _dbRoot.put(txn, branch, value)
-        case None =>
-          _dbRoot.delete(txn, branch)
+        case _ => //do nothing
       }
     }
 
     for((hash, trie) <- trieCache._dbTrie) {
       trie match {
-        case Some(value) =>
+        case StoredItem(value) =>
           _dbTrie.put(txn, hash, value)
-        case None =>
-          _dbTrie.delete(txn, hash)
+        case _ => //do nothing
       }
     }
 
     for((branch, pastRoots) <- trieCache._dbPastRoots) {
       pastRoots match {
-        case Some(value) =>
+        case StoredItem(value) =>
           _dbPastRoots.put(txn, branch, value)
-        case None =>
-          _dbPastRoots.delete(txn, branch)
+        case _ => //do nothing
       }
     }
 
     trieCache._dbEmptyRoot match {
-      case None => {
-        //unchanged/not accessed
-      }
-      case Some(None) =>
-        _dbEmptyRoots.delete(txn, LMDBTrieStore.emptyRootKey)
-      case Some(Some(value)) =>
+      case StoredItem(value) =>
         putEmptyRoot(txn, value)
+      case _ => //do nothing
     }
   }
 }
