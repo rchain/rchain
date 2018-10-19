@@ -38,7 +38,7 @@ Once Python is installed you can run within `integration-testing` subdirectory
 the following command:
 
 ```bash
-$ pipenv install
+$ pipenv sync
 ```
 
 

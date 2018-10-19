@@ -36,9 +36,11 @@ class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] 
       TcpTlsEnvironment(host, port, cert, key, peer)
     }
 
+  def maxMessageSize: Int = 4 * 1024 * 1024
+
   def createTransportLayer(env: TcpTlsEnvironment): Task[TransportLayer[Task]] =
     Cell.mvarCell(TransportState.empty).map { cell =>
-      new TcpTransportLayer(env.host, env.port, env.cert, env.key, 4 * 1024 * 1024)(
+      new TcpTransportLayer(env.host, env.port, env.cert, env.key, maxMessageSize)(
         scheduler,
         cell,
         log
