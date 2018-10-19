@@ -25,7 +25,14 @@ __sbtenv: &sbtenv
 
 clone:
   git-clone:
-    image: plugins/git:next
+    image: rchain/buildenv:latest
+    commands: |
+      set -ex
+      git clone -b ${DRONE_TAG:-$DRONE_BRANCH} $DRONE_REMOTE_URL .
+      if [ x$DRONE_PULL_REQUEST != x ]; then
+          git fetch origin refs/pull/$DRONE_PULL_REQUEST/head
+          EMAIL=ci git merge --no-edit FETCH_HEAD
+      fi
 
 pipeline:
 
@@ -63,17 +70,18 @@ pipeline:
       - /var/cache/rchain-build/.ivy2:/root/.ivy2
       - /var/run/docker.sock:/var/run/docker.sock
     when:
-      event: push
+      event: [ push, tag ]
 
   run-integration-tests:
     <<: *buildenv
     commands:
-      - ./scripts/ci/run-p2p-test
+      - ./scripts/ci/run-integration-tests.sh
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp:/tmp
+      - /var/tmp/rchain-it:/var/tmp/rchain-it
     when:
-      event: push
+      event: [ push, tag ]
 
   publish:
     <<: *buildenv
@@ -86,7 +94,7 @@ pipeline:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     when:
-      event: push
+      event: [ push, tag ]
 
   notify:
     <<: *buildenv
@@ -98,5 +106,5 @@ pipeline:
       - email_password
       - email_recipients
     when:
-      event: push
+      event: [ push, tag ]
       status: [ changed, failure ]
