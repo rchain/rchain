@@ -12,6 +12,7 @@ case class Server(
     port: Int,
     httpPort: Int,
     kademliaPort: Int,
+    dynamicHostAddress: Boolean,
     noUpnp: Boolean,
     defaultTimeout: Int,
     bootstrap: PeerNode,

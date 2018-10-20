@@ -3,6 +3,7 @@ package coop.rchain.node.configuration
 import java.io.File
 import java.net.InetAddress
 import java.nio.file.{Path, Paths}
+import java.util.concurrent.atomic.AtomicReference
 
 import cats.implicits._
 
@@ -18,7 +19,7 @@ import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.shared.StoreType
 import coop.rchain.shared.StoreType._
 
-import monix.eval.Task
+import monix.eval.{Callback, Task}
 import scala.concurrent.duration._
 
 import monix.execution.Scheduler
@@ -44,6 +45,7 @@ object Configuration {
   private val DefaultHttPort                    = 40403
   private val DefaultKademliaPort               = 40404
   private val DefaultGrpcHost                   = "localhost"
+  private val DefaultDynamicHostAddress         = false
   private val DefaultNoUpNP                     = false
   private val DefaultStandalone                 = false
   private val DefaultTimeout                    = 2000
@@ -138,6 +140,7 @@ object Configuration {
             DefaultPort,
             DefaultHttPort,
             DefaultKademliaPort,
+            DefaultDynamicHostAddress,
             DefaultNoUpNP,
             DefaultTimeout,
             DefaultBootstrapServer,
@@ -220,6 +223,12 @@ object Configuration {
     val httpPort: Int = get(_.run.httpPort, _.server.flatMap(_.httpPort), DefaultHttPort)
     val kademliaPort: Int =
       get(_.run.kademliaPort, _.server.flatMap(_.kademliaPort), DefaultKademliaPort)
+    val dynamicHostAddress: Boolean =
+      get(
+        _.run.dynamicHostAddress,
+        _.server.flatMap(_.dynamicHostAddress),
+        DefaultDynamicHostAddress
+      )
     val noUpnp: Boolean = get(_.run.noUpnp, _.server.flatMap(_.noUpnp), DefaultNoUpNP)
     val defaultTimeout: Int =
       get(_.run.defaultTimeout, _.server.flatMap(_.defaultTimeout), DefaultTimeout)
@@ -307,6 +316,7 @@ object Configuration {
       port,
       httpPort,
       kademliaPort,
+      dynamicHostAddress,
       noUpnp,
       defaultTimeout,
       bootstrap,
@@ -423,7 +433,11 @@ final class Configuration(
       externalAddress <- retriveExternalAddress
       host            <- fetchHost(externalAddress)
       peerNode        = PeerNode.from(id, host, server.port, server.kademliaPort)
-    } yield () => peerNode
+    } yield {
+      if (server.host.isEmpty && server.dynamicHostAddress)
+        new DynamicLocalPeerNode(peerNode)
+      else () => peerNode
+    }
 
   private def fetchHost(externalAddress: Option[String])(implicit log: Log[Task]): Task[String] =
     server.host match {
@@ -470,6 +484,27 @@ final class Configuration(
       _      <- log.info(s"guessed $a from source: $s")
     } yield a
 
+  private final class DynamicLocalPeerNode(peerNode: PeerNode)(implicit scheduler: Scheduler)
+      extends LocalPeerNode {
+    private val ip        = new AtomicReference[PeerNode](peerNode)
+    def apply(): PeerNode = ip.get()
+
+    scheduler.scheduleAtFixedRate(1.minute, 1.minute) {
+      checkAll(None)
+        .map(_._2)
+        .runAsync(
+          new Callback[String] {
+            def onSuccess(host: String): Unit =
+              ip.set(
+                PeerNode
+                  .from(peerNode.id, host, server.port, server.kademliaPort)
+              )
+
+            def onError(ex: Throwable): Unit = ()
+          }
+        )
+    }
+  }
 }
 
 case class Profile(name: String, dataDir: (() => Path, String))
