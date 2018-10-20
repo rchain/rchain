@@ -22,6 +22,7 @@ import coop.rchain.shared.StoreType._
 import monix.eval.{Callback, Task}
 import scala.concurrent.duration._
 
+import com.google.common.base.Optional
 import monix.execution.Scheduler
 
 object Configuration {
@@ -463,7 +464,7 @@ final class Configuration(
   private def upnpIpCheck(externalAddress: Option[String]): Task[(String, Option[String])] =
     Task.delay(("UPnP", externalAddress.map(InetAddress.getByName(_).getHostAddress)))
 
-  private def checkAll(externalAddress: Option[String]): Task[(String, String)] =
+  private def checkAll(externalAddress: Option[String] = None): Task[(String, String)] =
     for {
       r1 <- check("AmazonAWS service", "http://checkip.amazonaws.com")
       r2 <- checkNext(r1, check("WhatIsMyIP service", "http://bot.whatismyipaddress.com"))
@@ -484,25 +485,32 @@ final class Configuration(
       _      <- log.info(s"guessed $a from source: $s")
     } yield a
 
-  private final class DynamicLocalPeerNode(peerNode: PeerNode)(implicit scheduler: Scheduler)
-      extends LocalPeerNode {
+  private final class DynamicLocalPeerNode(peerNode: PeerNode)(
+      implicit scheduler: Scheduler,
+      log: Log[Task]
+  ) extends LocalPeerNode {
     private val ip        = new AtomicReference[PeerNode](peerNode)
     def apply(): PeerNode = ip.get()
 
     scheduler.scheduleAtFixedRate(1.minute, 1.minute) {
-      checkAll(None)
-        .map(_._2)
-        .runAsync(
-          new Callback[String] {
-            def onSuccess(host: String): Unit =
-              ip.set(
-                PeerNode
-                  .from(peerNode.id, host, server.port, server.kademliaPort)
-              )
+      val checkProgram =
+        for {
+          r      <- checkAll()
+          (_, a) = r
+          host <- if (a == ip.get().endpoint.host) Task.now(Option.empty[String])
+                 else log.info(s"external IP address has changed to $a").map(kp(Some(a)))
+        } yield host
 
-            def onError(ex: Throwable): Unit = ()
-          }
-        )
+      checkProgram.runAsync(
+        new Callback[Option[String]] {
+          def onSuccess(host: Option[String]): Unit =
+            host.foreach { h =>
+              ip.set(PeerNode.from(peerNode.id, h, server.port, server.kademliaPort))
+            }
+
+          def onError(ex: Throwable): Unit = ()
+        }
+      )
     }
   }
 }
