@@ -141,9 +141,13 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
         terms match {
           case deploy +: rem =>
             for {
-              _                   <- Task.delay(runtime.space.reset(hash))
-              availablePhlos      = Cost(deploy.raw.flatMap(_.phloLimit).get.value)
-              _                   <- runtime.reducer.setAvailablePhlos(availablePhlos)
+              _              <- Task.delay(runtime.space.reset(hash))
+              availablePhlos = Cost(deploy.raw.map(_.phloLimit).get.value)
+              _              <- runtime.reducer.setAvailablePhlos(availablePhlos)
+              (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(
+                deploy.raw.get
+              )
+              _                   <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
               injResult           <- injAttempt(deploy, runtime.reducer, runtime.errorLog)
               (phlosLeft, errors) = injResult
               cost                = phlosLeft.copy(cost = availablePhlos.value - phlosLeft.cost)
@@ -180,7 +184,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       Task.defer {
         terms match {
           case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
-            val availablePhlos = Cost(deploy.raw.flatMap(_.phloLimit).get.value)
+            val availablePhlos = Cost(deploy.raw.map(_.phloLimit).get.value)
             for {
               _         <- runtime.replayReducer.setAvailablePhlos(availablePhlos)
               _         <- Task.delay(runtime.replaySpace.rig(hash, log.toList))
