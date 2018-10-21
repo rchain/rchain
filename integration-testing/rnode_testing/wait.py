@@ -64,14 +64,23 @@ def node_logs(node):
     return go
 
 
-def show_blocks(node):
+def show_blocks(node, blocks_num):
+    # block_hash re
+    rx = re.compile(r"blockHash: \"([a-zA-Z0-9]*)\"")
+
     def go():
-        exit_code, output = node.show_blocks()
+        exit_code, output = node.show_blocks(blocks_num)
 
         if exit_code != 0:
             raise Exception("Show-blocks failed")
+        block_infos = ''
+        for block_hash in rx.findall(output):
+            exit_code , block_info = node.show_block(block_hash)
+            if exit_code != 0:
+                raise Exception(f"Show-block {block_hash} failed")
+            block_infos += block_info
 
-        return output
+        return block_infos
 
     go.__doc__ = f"show_blocks({node.name})"
     return go
