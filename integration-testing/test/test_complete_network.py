@@ -64,10 +64,9 @@ def test_node_logs_for_RuntimeException(complete_network):
 
     assert_expectations()
 
-@pytest.mark.skip(reason="This doesn't work since the show-blocks functionality was removed")
 @profile
-def test_casper_propose_and_deploy(config, complete_network):
-    rnode_testing.casper_propose_and_deploy.run(config, complete_network)
+def test_casper_propose_and_deploy(system, complete_network):
+    rnode_testing.casper_propose_and_deploy.run(system.config, complete_network)
 
 def test_convergence(complete_network):
     logging.info("Complete network converged successfully.")
