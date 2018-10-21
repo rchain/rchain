@@ -87,8 +87,11 @@ class Node:
     def propose_contract(self):
         return self.exec_run(f'{rnode_binary} propose')
 
-    def show_blocks(self):
-        return self.exec_run(f'{rnode_binary} show-blocks')
+    def show_blocks(self, blocks_num):
+        return self.exec_run(f'{rnode_binary} show-blocks -d{blocks_num}')
+
+    def show_block(self, block_hash):
+        return self.exec_run(f'{rnode_binary} show-block {block_hash}')
 
     def exec_run(self, cmd):
         queue = Queue(1)
