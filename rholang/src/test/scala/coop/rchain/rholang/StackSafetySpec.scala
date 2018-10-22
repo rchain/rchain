@@ -90,11 +90,17 @@ class StackSafetySpec extends FlatSpec with Matchers {
   }
 
   it should "handle a huge nested list" in {
-    checkNormalize(hugeNested("[", "", "]"))
+    checkAll(hugeNested("[", "", "]"))
   }
 
+  //FIXME java.lang.OutOfMemoryError: GC overhead limit exceeded
+  //it should "handle a huge nested set" in {
+  //  checkAll(hugeNested("Set(", "42", ")"))
+  //}
+
+  //FIXME 11.5 s
   it should "handle a nested new" in {
-    checkNormalize(hugeNested("new x in { ", "1", "}"))
+    checkAll(hugeNested("new x in { ", "1", "}"))
   }
 
   it should "handle a huge nested name" in {
@@ -118,7 +124,7 @@ class StackSafetySpec extends FlatSpec with Matchers {
   }
 
   it should "handle a huge nested send" in {
-    checkNormalize(hugeNested("@0!(", "1", ")"))
+    checkAll(hugeNested("@0!(", "1", ")"))
   }
 
   //FIXME: unbelievably slow: takes 4 s for depth 500 = 8 ms / level
@@ -128,7 +134,7 @@ class StackSafetySpec extends FlatSpec with Matchers {
     //      @0
     //    ) { Nil }}) { Nil }}
     //  ) { Nil }
-    checkNormalize("for(x <- " + hugeNested("@{for(x <- ", "@0", ") { Nil }}") + ") { Nil }")
+    checkAll("for(x <- " + hugeNested("@{for(x <- ", "@0", ") { Nil }}") + ") { Nil }")
   }
 
   // TODO receive where patterns are other receives
@@ -155,12 +161,19 @@ class StackSafetySpec extends FlatSpec with Matchers {
 
   private def checkReduce(rho: String): Unit =
     isolateStackOverflow {
+      //FIXME make this pass:
+      //val reduceRho = s"@0!($rho) | for (@x <- @0) { @1 ! (x) | @2 ! (x)  } | for (@y <- @1; @z <- @2) { @0!(Set(y, z)) }"
+      //val reduceRho = s"""@0!( { @"serializeMe"!($rho) } )"""
+      //val reduceRho = s"""for (_ <- @0) { Nil } | @0!( { @"serializeMe"!($rho) } )"""
+      //val reduceRho = s"@0!($rho)"
       val reduceRho = s"for (_ <- @0) { Nil } | @0!($rho)"
       checkSuccess(reduceRho) { rho =>
         Interpreter
           .execute(runtime, new StringReader(rho))
       }
     }
+
+  checkNormalize("Nil") //silence "unused" warnings
 
   private def checkNormalize(rho: String): Unit =
     isolateStackOverflow {
