@@ -39,6 +39,7 @@ class LMDBOpsBench {
       val txn = state.env.txnWrite()
       state.dbGnats.put(txn, x._1, x._2)
       txn.commit()
+      txn.close()
     })
 
   @Benchmark
@@ -52,6 +53,7 @@ class LMDBOpsBench {
       val txn = state.env.txnRead()
       val r   = (x._1, state.dbGnats.get(txn, x._1))
       txn.commit()
+      txn.close()
       r
     })
     bh.consume(res)
@@ -80,6 +82,7 @@ class LMDBOpsBench {
       val txn = state.env.txnWrite()
       state.dbGnats.put(txn, x._1, x._2)
       txn.commit()
+      txn.close()
     })
 
   @Benchmark
@@ -93,6 +96,7 @@ class LMDBOpsBench {
       val txn = state.env.txnRead()
       val r   = (x._1, state.dbGnats.get(txn, x._1))
       txn.commit()
+      txn.close()
       r
     })
     bh.consume(res)
@@ -121,6 +125,7 @@ class LMDBOpsBench {
       val txn = state.env.txnWrite()
       state.dbGnats.put(txn, x._1, x._2)
       txn.commit()
+      txn.close()
     })
 
   @Benchmark
@@ -134,6 +139,7 @@ class LMDBOpsBench {
       val txn = state.env.txnRead()
       val r   = (x._1, state.dbGnats.get(txn, x._1))
       txn.commit()
+      txn.close()
       r
     })
     bh.consume(res)
@@ -240,12 +246,14 @@ object LMDBOpsBench {
       mbb
     }
 
-    def populate(): Unit =
+    def populate(): Unit = {
+      val txn = env.txnWrite()
       randomData.foreach(x => {
-        val txn = env.txnWrite()
         dbGnats.put(txn, x._1, x._2)
-        txn.commit()
       })
+      txn.commit()
+      txn.close()
+    }
 
     def setup(): Unit = {
       dbDir = Files.createTempDirectory("rchain-rspace-mixed-bench-")
@@ -267,11 +275,13 @@ object LMDBOpsBench {
         val txn = env.txnWrite()
         db.put(txn, x._1, x._2)
         txn.commit()
+        txn.close()
       })
       data.map(x => {
         val txn = env.txnRead()
         val r   = (x._1, db.get(txn, x._1))
         txn.commit()
+        txn.close()
         r
       })
     }
