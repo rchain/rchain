@@ -13,7 +13,7 @@ private[rspace] case class LoadedItem[TItem](value: TItem) extends CachedItem[TI
   override def asOption : Option[TItem] = Some(value)
 }
 
-private[rspace] case class StoredItem[TItem](value: TItem, bytes: Option[Array[Byte]] = None) extends CachedItem[TItem] {
+private[rspace] case class StoredItem[TItem](value: TItem) extends CachedItem[TItem] {
   override def asOption : Option[TItem] = Some(value)
 }
 
@@ -51,12 +51,13 @@ private[rspace] class TrieCache[T, K, V](trieStore: ITrieStore[T, K, V], val tri
     _dbTrie.put(key, StoredItem(value))
   }
 
-  override private[rspace] def put(txn: T,
-                                   key: Blake2b256Hash,
-                                   value: Trie[K, V],
-                                   valueBytes: Array[Byte]
-                                  ): Unit =
-    _dbTrie.put(key, StoredItem(value, Some(valueBytes)))
+  //TODO: ys-pyrofex remove
+//  override private[rspace] def put(txn: T,
+//                                   key: Blake2b256Hash,
+//                                   value: Trie[K, V],
+//                                   valueBytes: Array[Byte]
+//                                  ): Unit =
+//    _dbTrie.put(key, StoredItem(value, Some(valueBytes)))
 
   override private[rspace] def get(txn: T, key: Blake2b256Hash): Option[Trie[K, V]] = {
     _dbTrie.get(key) match {
@@ -140,7 +141,7 @@ private[rspace] class TrieCache[T, K, V](trieStore: ITrieStore[T, K, V], val tri
     _dbEmptyRoot match {
       case LoadedItem(value) =>
         value
-      case StoredItem(value, _) =>
+      case StoredItem(value) =>
         value
       case AbsentItem() => {
         val hash = trieStore.getEmptyRoot(txn)
@@ -178,4 +179,9 @@ private[rspace] class TrieCache[T, K, V](trieStore: ITrieStore[T, K, V], val tri
       txn: T,
       trieCache: TrieCache[T, K, V],
       rootHash: Blake2b256Hash): Unit = throw new NotImplementedError("Can't apply cache to cache?!")
+}
+
+//TODO: ys-pyrofex remove
+object TrieCache {
+  val useCache = false
 }

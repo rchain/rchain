@@ -119,8 +119,6 @@ trait IStore[C, P, A, K] {
 
   protected def processTrieUpdate(cacheStore: TrieStoreType, update: TrieUpdate[C, P, A, K]): Unit
 
-  val useCache = true
-
   def createCheckpoint(): Blake2b256Hash = {
     val trieUpdates = _trieUpdates.take
     _trieUpdates.put(Seq.empty)
@@ -129,7 +127,7 @@ trait IStore[C, P, A, K] {
     val timeStart = System.nanoTime()
     var timeInWriteTxn : Long = 0L
 
-    val res = if(useCache) {
+    val res = if(TrieCache.useCache) {
       val trieCache = new TrieCache(trieStore, trieBranch)
       collapse(trieUpdates).foreach(processTrieUpdate(trieCache, _))
       val rootHash = trieCache.withTxn(trieCache.createTxnRead()) { txn =>
@@ -154,7 +152,7 @@ trait IStore[C, P, A, K] {
     }
     val timeTotal = (System.nanoTime() - timeStart).asInstanceOf[Double] / 1000000000.0
     val timeInWriteTxnTotal = (System.nanoTime() - timeInWriteTxn).asInstanceOf[Double] / 1000000000.0
-    println(s"createCheckpoint(), processed ${trieUpdates.length} trie updates, cache=$useCache, time,sec=$timeTotal; writeTxnTime,sec=$timeInWriteTxnTotal")
+    println(s"createCheckpoint(), processed ${trieUpdates.length} trie updates, cache=${TrieCache.useCache}, time,sec=$timeTotal; writeTxnTime,sec=$timeInWriteTxnTotal")
     res
   }
 

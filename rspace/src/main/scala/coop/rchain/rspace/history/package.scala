@@ -45,8 +45,8 @@ package object history {
       store.getRoot(txn, branch) match {
         case None =>
           val root     = Trie.create[K, V]()
-          val (rootBytes, rootHash) = Trie.encodeAndHash(root)
-          store.put(txn, rootHash, root, rootBytes)
+          val rootHash = Trie.hash(root)
+          store.put(txn, rootHash, root)
           store.putRoot(txn, branch, rootHash)
           store.putEmptyRoot(txn, rootHash)
           logger.debug(s"workingRootHash: $rootHash, setup the empty root in trie")
@@ -206,8 +206,8 @@ package object history {
           val encodedKeyByteVector = ByteVector(encodedKeyNew)
           // Create the new leaf and put it into the store
           val newLeaf     = Leaf(key, value)
-          val (newLeafBytes, newLeafHash) = Trie.encodeAndHash(newLeaf)
-          store.put(txn, newLeafHash, newLeaf, newLeafBytes)
+          val newLeafHash = Trie.hash(newLeaf)
+          store.put(txn, newLeafHash, newLeaf)
           // Using the path we created from the key, get the existing parents of the new leaf.
           val (tip, parents) = getParents(store, txn, encodedKeyNew, currentRoot)
           val maybeNewNodes: Option[Seq[(Blake2b256Hash, Trie[K, V])]] = tip match {

@@ -31,14 +31,25 @@ class LMDBTrieStore[K, V] private (
 ) extends ITrieStore[Txn[ByteBuffer], K, V]
     with LMDBOps {
 
-  private[rspace] def put(txn: Txn[ByteBuffer], key: Blake2b256Hash, value: Trie[K, V]): Unit =
-    _dbTrie.put(txn, key, value)
+  private[rspace] def put(txn: Txn[ByteBuffer], key: Blake2b256Hash, value: Trie[K, V]): Unit = {
+    if (TrieCache.useCache) {
+      value.asInstanceOf[HashedEntity].get match {
+        case Some((_, valueBytes)) =>
+          _dbTrie.putBytes(txn, key, valueBytes)
+        case None =>
+          _dbTrie.put(txn, key, value)
+      }
+    } else {
+      _dbTrie.put(txn, key, value)
+    }
+  }
 
-  private[rspace] def put(txn: Txn[ByteBuffer],
-                          key: Blake2b256Hash,
-                          value: Trie[K, V],
-                          valueBytes: Array[Byte]): Unit =
-    _dbTrie.putBytes(txn, key, valueBytes)
+  //TODO: ys-pyrofex remove
+//  private[rspace] def put(txn: Txn[ByteBuffer],
+//                          key: Blake2b256Hash,
+//                          value: Trie[K, V],
+//                          valueBytes: Array[Byte]): Unit =
+//    _dbTrie.putBytes(txn, key, valueBytes)
 
   private[rspace] def get(txn: Txn[ByteBuffer], key: Blake2b256Hash): Option[Trie[K, V]] =
     _dbTrie.get(txn, key)(Codec[Trie[K, V]])
@@ -147,23 +158,19 @@ class LMDBTrieStore[K, V] private (
                                           trieCache:TrieCache[Txn[ByteBuffer], K, V],
                                           rootHash: Blake2b256Hash): Unit = {
     trieCache._dbRoot match {
-      case StoredItem(value, None) =>
+      case StoredItem(value) =>
         _dbRoot.put(txn, trieCache.trieBranch, value)
-      case StoredItem(_, Some(bytes)) =>
-        _dbRoot.putBytes(txn, trieCache.trieBranch, bytes)
       case _ => //do nothing
     }
 
     trieCache._dbPastRoots match {
-      case StoredItem(value, None) =>
+      case StoredItem(value) =>
         _dbPastRoots.put(txn, trieCache.trieBranch, value)
-      case StoredItem(_, Some(bytes)) =>
-        _dbPastRoots.putBytes(txn, trieCache.trieBranch, bytes)
       case _ => //do nothing
     }
 
     trieCache._dbEmptyRoot match {
-      case StoredItem(value, _) =>
+      case StoredItem(value) =>
         putEmptyRoot(txn, value)
       case _ => //do nothing
     }
@@ -179,11 +186,8 @@ class LMDBTrieStore[K, V] private (
 
     def processTrieItem(hash: Blake2b256Hash, item: CachedItem[Trie[K,V]]) : Option[Trie[K, V]] = {
       item match {
-        case StoredItem(value, None) =>
-          _dbTrie.put(txn, hash, value)
-          Some(value)
-        case StoredItem(value, Some(bytes)) =>
-          _dbTrie.putBytes(txn, hash, bytes)
+        case StoredItem(value) =>
+          this.put(txn, hash, value)
           Some(value)
         case _ => None //no need to save, no need to traverse deeper
       }
