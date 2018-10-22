@@ -143,18 +143,21 @@ object Substitute {
             case ConnAndBody(ConnectiveBody(ps)) =>
               ps.toVector
                 .traverse(substitutePar[M].substituteNoSort(_))
-                .map(ps => Connective(ConnAndBody(ConnectiveBody(ps))))
+                .map(ps => par.prepend(Connective(ConnAndBody(ConnectiveBody(ps))), depth))
             case ConnOrBody(ConnectiveBody(ps)) =>
               ps.toVector
                 .traverse(substitutePar[M].substituteNoSort(_))
-                .map(ps => Connective(ConnOrBody(ConnectiveBody(ps))))
+                .map(ps => par.prepend(Connective(ConnOrBody(ConnectiveBody(ps))), depth))
             case ConnNotBody(p) =>
-              substitutePar[M].substituteNoSort(p).map(p => Connective(ConnNotBody(p)))
-            case c: ConnBool      => fromConnective(Connective(c)).pure[M]
-            case c: ConnInt       => fromConnective(Connective(c)).pure[M]
-            case c: ConnString    => fromConnective(Connective(c)).pure[M]
-            case c: ConnUri       => fromConnective(Connective(c)).pure[M]
-            case c: ConnByteArray => fromConnective(Connective(c)).pure[M]
+              substitutePar[M]
+                .substituteNoSort(p)
+                .map(p => Connective(ConnNotBody(p)))
+                .map(par.prepend(_, depth))
+            case c: ConnBool      => par.prepend(Connective(c), depth).pure[M]
+            case c: ConnInt       => par.prepend(Connective(c), depth).pure[M]
+            case c: ConnString    => par.prepend(Connective(c), depth).pure[M]
+            case c: ConnUri       => par.prepend(Connective(c), depth).pure[M]
+            case c: ConnByteArray => par.prepend(Connective(c), depth).pure[M]
           }
         }
 

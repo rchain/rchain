@@ -119,6 +119,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     val logMessages = List(
       "Received Deploy",
+      "Block",
       "Sent Block #1",
       "Added",
       "New fork-choice tip is block"
@@ -137,12 +138,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     def now = System.currentTimeMillis()
     val registerDeploy = ProtoUtil.sourceDeploy(
-      """new rr(`rho:registry:insertArbitrary`), hello, uriCh in {
+      """new uriCh, rr(`rho:registry:insertArbitrary`), hello in {
         |  contract hello(@name, return) = { return!("Hello, ${name}!" %% {"name" : name}) } |
         |  rr!(bundle+{*hello}, *uriCh)
         |}
       """.stripMargin,
-      now,
+      1539788365118L, //fix the timestamp so that `uriCh` is known
       accounting.MAX_VALUE
     )
 
@@ -153,7 +154,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val id: String = casperEff
       .storageContents(block.getBody.getPostState.tuplespace)
       .split('|')
-      .find(_.contains("rho:id"))
+      .find(
+        _.contains(
+          //based on the timestamp of registerDeploy, this is uriCh
+          "@{Unforgeable(0x744dc7e287a955d8f794054ce07fff6efeecec4473a1ebdf26728d93258e3ad6)}!"
+        )
+      )
       .get
       .split('`')(1)
     val callDeploy = ProtoUtil.sourceDeploy(
@@ -756,14 +762,21 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       nodes(0).casperEff.addBlock(block)
       nodes(1).transportLayerEff.clear(nodes(1).local) //nodes(1) misses this block
     }
-    val Created(block) = nodes(0).casperEff
+    val Created(block11) = nodes(0).casperEff
       .deploy(ProtoUtil.basicDeployData(10)) *> nodes(0).casperEff.createBlock
-    nodes(0).casperEff.addBlock(block)
+    nodes(0).casperEff.addBlock(block11)
 
-    (0 to 10).foreach { i =>
+    // Cycle of requesting and passing blocks until block #3 from nodes(0) to nodes(1)
+    (0 to 8).foreach { i =>
       nodes(1).receive()
       nodes(0).receive()
     }
+
+    // We simulate a network failure here by not allowing block #2 to get passed to nodes(1)
+
+    // And then we assume fetchDependencies eventually gets called
+    nodes(1).casperEff.fetchDependencies
+    nodes(0).receive()
 
     nodes(1).logEff.infos
       .count(_ startsWith "Requested missing block") should be(10)
@@ -845,7 +858,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
     import node._
 
-    val deployData = ProtoUtil.basicDeployData(0).withPhloLimit(PhloLimit(1))
+    val deployData = ProtoUtil.basicDeployData(0).withPhloLimit(1)
     node.casperEff.deploy(deployData)
 
     val Created(block) = MultiParentCasper[Id].createBlock
@@ -856,7 +869,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
     import node._
 
-    val deployData = ProtoUtil.basicDeployData(0).withPhloLimit(PhloLimit(100))
+    val deployData = ProtoUtil.basicDeployData(0).withPhloLimit(100)
     node.casperEff.deploy(deployData)
 
     val Created(block) = MultiParentCasper[Id].createBlock

@@ -2,10 +2,10 @@ import pytest
 import test
 import logging
 from delayed_assert import expect, assert_expectations
-from tools.profiling import profile
-from tools.network import start_network, wait_for_started_network, wait_for_converged_network
-from tools.rnode import start_bootstrap
-import test.casper_propose_and_deploy
+from rnode_testing.profiling import profile
+from rnode_testing.network import start_network, wait_for_started_network, wait_for_converged_network
+from rnode_testing.rnode import start_bootstrap
+import rnode_testing.casper_propose_and_deploy
 
 @pytest.fixture(scope="module")
 def complete_network(system):
@@ -67,7 +67,7 @@ def test_node_logs_for_RuntimeException(complete_network):
 @pytest.mark.skip(reason="This doesn't work since the show-blocks functionality was removed")
 @profile
 def test_casper_propose_and_deploy(config, complete_network):
-    test.casper_propose_and_deploy.run(config, complete_network)
+    rnode_testing.casper_propose_and_deploy.run(config, complete_network)
 
 def test_convergence(complete_network):
     logging.info("Complete network converged successfully.")

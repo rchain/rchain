@@ -8,7 +8,7 @@ import cats.effect.concurrent.Ref
 import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.catscontrib.ski._
-import coop.rchain.blockstorage.LMDBBlockStore
+import coop.rchain.blockstorage.{BlockMetadata, LMDBBlockStore}
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
@@ -112,12 +112,10 @@ class HashSetCasperTestNode[F[_]](
         .validateBlockCheckpoint[F](
           genesis,
           dag,
-          Set(runtimeManager.emptyStateHash),
           runtimeManager
         )
         .void
 
-  // FIX-ME
   def receive(): F[Unit] = tle.receive(p => handle[F](p, defaultTimeout), kp(().pure[F]))
 
   def tearDown(): Unit = {

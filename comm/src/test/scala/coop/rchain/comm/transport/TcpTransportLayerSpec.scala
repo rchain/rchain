@@ -1,18 +1,28 @@
 package coop.rchain.comm.transport
 
-import scala.concurrent.duration.Duration
-import coop.rchain.shared
+import cats.effect.Timer
+
+import scala.concurrent.duration.{Duration, FiniteDuration}
 import coop.rchain.comm.{CachedConnections, PeerNode, TcpConnTag}
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Log, Time}
+import java.util.concurrent.TimeUnit._
 import monix.eval.Task
 import monix.execution.Scheduler
 
-// FIXME:
-class TcpTransportLayerSpec { //extends TransportLayerSpec[Task, TcpTlsEnvironment] {
+class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] {
 
-  implicit val log: Log[Task]       = new shared.Log.NOPLog[Task]
+  implicit val log: Log[Task]       = new Log.NOPLog[Task]
   implicit val scheduler: Scheduler = Scheduler.Implicits.global
+
+  def timer: Timer[Task] = implicitly[Timer[Task]]
+
+  def time: Time[Task] =
+    new Time[Task] {
+      def currentMillis: Task[Long]                   = timer.clock.realTime(MILLISECONDS)
+      def nanoTime: Task[Long]                        = timer.clock.monotonic(NANOSECONDS)
+      def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
+    }
 
   def createEnvironment(port: Int): Task[TcpTlsEnvironment] =
     Task.delay {
@@ -25,6 +35,8 @@ class TcpTransportLayerSpec { //extends TransportLayerSpec[Task, TcpTlsEnvironme
       val peer    = PeerNode.fromAddress(address).right.get
       TcpTlsEnvironment(host, port, cert, key, peer)
     }
+
+  def maxMessageSize: Int = 4 * 1024 * 1024
 
   def createTransportLayer(env: TcpTlsEnvironment): Task[TransportLayer[Task]] =
     CachedConnections[Task, TcpConnTag].map { implicit cache =>

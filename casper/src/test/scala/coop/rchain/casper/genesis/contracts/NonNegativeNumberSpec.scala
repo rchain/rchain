@@ -8,7 +8,7 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
 class NonNegativeNumberSpec extends FlatSpec with Matchers {
-  val runtime = TestSetUtil.runtime("rholang-non-negative-number-test")
+  val runtime = TestSetUtil.runtime
   val tests   = TestSetUtil.getTests("./casper/src/test/rholang/NonNegativeNumberTest.rho").toList
 
   TestSetUtil.runTests(NonNegativeNumberTest, List(NonNegativeNumber), runtime)

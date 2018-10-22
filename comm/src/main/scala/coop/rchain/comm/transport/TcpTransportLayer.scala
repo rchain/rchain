@@ -10,14 +10,12 @@ import coop.rchain.comm.CommError._
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
 import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.shared.{Cell, Log, LogSource}
+import coop.rchain.shared.Compression._
 import io.grpc._
 import io.grpc.netty._
 import io.netty.handler.ssl.{ClientAuth, SslContext, SslContextBuilder}
-import monix.eval._
-import monix.execution._
-import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
-import coop.rchain.comm.rp.ProtocolHelper
 import monix.eval._
 import monix.execution._
 import monix.reactive._
@@ -127,17 +125,28 @@ class TcpTransportLayer(
   ): Task[CommErr[Option[Protocol]]] =
     withClient(peer, enforce)(f).attempt.map(processResponse(peer, _))
 
-  def chunkIt(blob: Blob): List[Chunk] = {
+  def chunkIt(blob: Blob): Iterator[Chunk] = {
+    val raw      = blob.packet.content.toByteArray
+    val kb500    = 1024 * 500
+    val compress = raw.length > kb500
+    val content  = if (compress) raw.compress else raw
 
     def header: Chunk =
       Chunk().withHeader(
-        ChunkHeader().withSender(ProtocolHelper.node(blob.sender)).withTypeId(blob.packet.typeId)
+        ChunkHeader()
+          .withCompressed(compress)
+          .withDecompressedLength(raw.length)
+          .withSender(ProtocolHelper.node(blob.sender))
+          .withTypeId(blob.packet.typeId)
       )
+    val buffer    = 2 * 1024 // 2 kbytes for protobuf related stuff
+    val chunkSize = maxMessageSize - buffer
+    def data: Iterator[Chunk] =
+      content.sliding(chunkSize, chunkSize).map { data =>
+        Chunk().withData(ChunkData().withContentData(ProtocolHelper.toProtocolBytes(data)))
+      }
 
-    // FIX-ME actually chunk the data
-    def data: List[Chunk] = List(Chunk().withData(ChunkData().withContentData(blob.packet.content)))
-
-    header +: data
+    Iterator(header) ++ data
   }
 
   /**
@@ -149,7 +158,7 @@ class TcpTransportLayer(
       .traverse(
         peer =>
           withClient(peer, enforce = false) { stub =>
-            stub.stream(Observable(chunkIt(blob): _*))
+            stub.stream(Observable.fromIterator(chunkIt(blob)))
           }.attempt.flatMap {
             case Left(error) => log.debug(s"Error while streaming packet, error: $error")
             case Right(_)    => Task.unit
@@ -219,13 +228,13 @@ class TcpTransportLayer(
 
     def dispatchInternal: ServerMessage => Task[Unit] = {
       // TODO: consider logging on failure (Left)
-      case Tell(protocol) => dispatch(protocol).attempt.void
+      case Tell(protocol) => dispatch(protocol).attemptAndLog.void
       case Ask(protocol, handle) if !handle.complete =>
         dispatch(protocol).attempt.map {
           case Left(e)         => handle.failWith(e)
           case Right(response) => handle.reply(response)
         }.void
-      case StreamMessage(blob) => handleStreamed(blob)
+      case StreamMessage(blob) => handleStreamed(blob).attemptAndLog
       case _                   => Task.unit // sender timeout
     }
 
