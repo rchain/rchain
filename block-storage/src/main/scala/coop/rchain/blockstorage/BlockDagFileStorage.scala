@@ -114,7 +114,8 @@ final class BlockDagFileStorage[F[_]: Monad: Concurrent: Sync: Log] private (
       )
       _ = Files.move(tmpSquashedCrc, latestMessagesCrcFilePath, StandardCopyOption.REPLACE_EXISTING)
       _ <- latestMessagesLogOutputStreamRef.set(
-            new FileOutputStream(latestMessagesDataFilePath.toFile, true))
+            new FileOutputStream(latestMessagesDataFilePath.toFile, true)
+          )
       _ <- latestMessagesCrcRef.set(squashedCrc)
       _ <- latestMessagesLogSizeRef.set(0)
     } yield ()
@@ -146,7 +147,7 @@ final class BlockDagFileStorage[F[_]: Monad: Concurrent: Sync: Log] private (
                 case (acc, p) =>
                   val currChildren = acc.getOrElse(p, HashSet.empty[BlockHash])
                   acc.updated(p, currChildren + block.blockHash)
-            }
+              }
           )
       _ <- topoSortRef.update(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
       //Block which contains newly bonded validators will not
@@ -186,7 +187,8 @@ final class BlockDagFileStorage[F[_]: Monad: Concurrent: Sync: Log] private (
       _                             <- topoSortRef.set(Vector.empty)
       _                             <- latestMessagesRef.set(Map.empty)
       _ <- latestMessagesLogOutputStreamRef.set(
-            new FileOutputStream(latestMessagesDataFilePath.toFile))
+            new FileOutputStream(latestMessagesDataFilePath.toFile)
+          )
       _ <- latestMessagesLogSizeRef.set(0)
       _ <- latestMessagesCrcRef.set(newCrc)
       _ <- lock.release
@@ -300,14 +302,18 @@ object BlockDagFileStorage {
       latestMessagesRaf             = new RandomAccessFile(config.latestMessagesDataPath.toFile, "rw")
       readCrc                       <- readLatestMessagesCrc[F](config.latestMessagesCrcPath)
       (latestMessagesList, logSize) = readLatestMessagesData(latestMessagesRaf)
-      validateDataResult <- validateData[F](latestMessagesRaf,
-                                            readCrc,
-                                            config.latestMessagesCrcPath,
-                                            latestMessagesList)
+      validateDataResult <- validateData[F](
+                             latestMessagesRaf,
+                             readCrc,
+                             config.latestMessagesCrcPath,
+                             latestMessagesList
+                           )
       (latestMessagesMap, calculatedCrc) = validateDataResult
       _                                  = latestMessagesRaf.close()
-      latestMessagesDataOutputStream = new FileOutputStream(config.latestMessagesDataPath.toFile,
-                                                            true)
+      latestMessagesDataOutputStream = new FileOutputStream(
+        config.latestMessagesDataPath.toFile,
+        true
+      )
       latestMessagesRef                 <- Ref.of[F, Map[Validator, BlockHash]](latestMessagesMap)
       latestMessagesLogSizeRef          <- Ref.of[F, Int](logSize)
       latestMessagesCrcRef              <- Ref.of[F, Crc32[F]](calculatedCrc)

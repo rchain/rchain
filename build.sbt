@@ -62,6 +62,7 @@ lazy val shared = (project in file("shared"))
       catsCore,
       catsEffect,
       catsMtl,
+      lz4,
       monix,
       scodecCore,
       scodecBits,
@@ -418,10 +419,16 @@ lazy val rspaceBench = (project in file("rspace-bench"))
     libraryDependencies += "com.esotericsoftware" % "kryo" % "4.0.2",
     dependencyOverrides ++= Seq(
       "org.ow2.asm" % "asm" % "5.0.4"
-    )
+    ),
+    sourceDirectory in Jmh := (sourceDirectory in Test).value,
+    classDirectory in Jmh := (classDirectory in Test).value,
+    dependencyClasspath in Jmh := (dependencyClasspath in Test).value,
+    // rewire tasks, so that 'jmh:run' automatically invokes 'jmh:compile' (otherwise a clean 'jmh:run' would fail),
+    compile in Jmh := (compile in Jmh).dependsOn(compile in Test).value,
+    run in Jmh := (run in Jmh).dependsOn(Keys.compile in Jmh).evaluated
   )
   .enablePlugins(JmhPlugin)
-  .dependsOn(rspace, rholang)
+  .dependsOn(rspace, rholang, models % "test->test")
 
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)
