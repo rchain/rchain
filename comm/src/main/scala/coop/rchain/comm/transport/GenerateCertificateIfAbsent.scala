@@ -29,21 +29,24 @@ class GenerateCertificateIfAbsent[F[_]: Sync](implicit log: Log[F]) {
     } else ().pure[F]
   }
 
+  import cats.syntax.IfMOps
+  import cats.syntax.applicative._
+
   def generateCertificate(tls: Tls): F[Unit] =
     for {
       _ <- info(s"No certificate found at path ${tls.certificate}")
       _ <- info("Generating a X.509 certificate for the node")
       _ <- // If there is a private key, use it for the certificate
-      if (tls.key.toFile.exists()) readKeyPair(tls)
-      else generateSecretKey(tls)
+        tls.key.toFile.exists().pure[F].ifM(
+          readKeyPair(tls),
+          generateSecretKey(tls)
+        )
     } yield ()
 
   def readKeyPair(tls: Tls): F[Unit] =
     for {
       _ <- info(s"Using secret key ${tls.key}")
-
       res <- Sync[F].delay(certHelp.readKeyPair(tls.key.toFile)).attempt
-
       _ <- res match {
             case Right(keyPair) =>
               writeCert(tls, keyPair)
