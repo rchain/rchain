@@ -75,14 +75,12 @@ sealed abstract class MultiParentCasperInstances {
         topoSort = Vector(Vector(genesis.blockHash))
       )
     for {
-      validateBlockCheckpointResult <- InterpreterUtil
-                                        .validateBlockCheckpoint[F](
-                                          genesis,
-                                          dag,
-                                          Set[StateHash](runtimeManager.emptyStateHash),
-                                          runtimeManager
-                                        )
-      (maybePostGenesisStateHash, _) = validateBlockCheckpointResult
+      maybePostGenesisStateHash <- InterpreterUtil
+                                    .validateBlockCheckpoint[F](
+                                      genesis,
+                                      dag,
+                                      runtimeManager
+                                    )
       postGenesisStateHash <- maybePostGenesisStateHash match {
                                case Left(BlockException(ex)) => Sync[F].raiseError[StateHash](ex)
                                case Right(None) =>

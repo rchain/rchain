@@ -24,7 +24,7 @@ object NodeEnvironment {
         }
       }
 
-      // Check if data_dir has read/write access
+      // Check if data-dir has read/write access
       if (!dataDirFile.isDirectory || !dataDirFile.canRead || !dataDirFile.canWrite) {
         println(
           s"The data dir must be a directory and have read and write permissions:\n${dataDirFile.getAbsolutePath}"
@@ -32,7 +32,7 @@ object NodeEnvironment {
         System.exit(-1)
       }
 
-      println(s"Using data_dir: ${dataDirFile.getAbsolutePath}")
+      println(s"Using data-dir: ${dataDirFile.getAbsolutePath}")
 
       // Generate certificate if not provided as option or in the data dir
       if (!conf.tls.customCertificateLocation

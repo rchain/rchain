@@ -158,9 +158,6 @@ object BlockApproverProtocol {
       Try(UnapprovedBlock.parseFrom(msg.content.toByteArray)).toOption
     else None
 
-  implicit val phloPriceEq = Eq.by[PhloPrice, Long](_.value)
-  implicit val phloLimitEq = Eq.by[PhloLimit, Long](_.value)
-
   val deployDataEq: cats.kernel.Eq[DeployData] = new cats.kernel.Eq[DeployData] {
     override def eqv(x: DeployData, y: DeployData): Boolean =
       x.user.equals(y.user) &&
