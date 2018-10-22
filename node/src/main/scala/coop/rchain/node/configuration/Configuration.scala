@@ -7,7 +7,6 @@ import java.nio.file.{Path, Paths}
 import cats.implicits._
 import coop.rchain.blockstorage.LMDBBlockStore
 import coop.rchain.casper.CasperConf
-import coop.rchain.casper.protocol.{PhloLimit, PhloPrice}
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.{PeerNode, UPnP}
 import coop.rchain.node.IpChecker
@@ -375,8 +374,8 @@ object Configuration {
         import options.deploy._
         Deploy(
           from.getOrElse("0x"),
-          PhloLimit(phloLimit()),
-          PhloPrice(phloPrice()),
+          phloLimit(),
+          phloPrice(),
           nonce.getOrElse(0),
           location()
         )
