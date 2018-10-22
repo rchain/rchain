@@ -19,10 +19,15 @@ class Rev[A](
   private val maximumBond = posParams.maximumBond
 
   final val code = s"""
-    |//requires MakeMint, BasicWallet
-    |new rl(`rho:registry:lookup`), MakeMintCh, revMintCh, posPurseCh in {
+    |//requires MakeMint, BasicWallet, WalletCheck, MakePoS
+    |new
+    |  rl(`rho:registry:lookup`), MakeMintCh, WalletCheckCh, BasicWalletCh,
+    |  revMintCh, posPurseCh
+    |in {
     |  rl!(`rho:id:exunyijimapk7z43g3bbr69awqdz54kyroj9q43jgu3dh567fxsftx`, *MakeMintCh) |
-    |  for(@(_, MakeMint) <- MakeMintCh) {
+    |  rl!(`rho:id:oqez475nmxx9ktciscbhps18wnmnwtm6egziohc3rkdzekkmsrpuyt`, *WalletCheckCh) |
+    |  rl!(`rho:id:3yicxut5xtx5tnmnneta7actof4yse3xangw4awzt8c8owqmddgyms`, *BasicWalletCh) |
+    |  for(@(_, MakeMint) <- MakeMintCh; @(_, WalletCheck) <- WalletCheckCh; @(_, BasicWallet) <- BasicWalletCh) {
     |    @MakeMint!(*revMintCh) | for(@revMint <- revMintCh) {
     |      //TODO: How should the revMint unforgeable name be exposed (if at all)?
     |

@@ -74,7 +74,13 @@ object BondingUtil {
       unlockSigData = Keccak256.hash(sigBytes)
       unlockSig     = Secp256k1.sign(unlockSigData, secKey)
       _             = assert(Secp256k1.verify(unlockSigData, unlockSig, Base16.decode("04" + pubKey)))
-    } yield s"""@"$ethAddress"!(["$pubKey", "$statusOut"], "${Base16.encode(unlockSig)}")"""
+      sigString     = Base16.encode(unlockSig)
+    } yield s"""new rl(`rho:registry:lookup`), WalletCheckCh in {
+           |  rl!(`rho:id:oqez475nmxx9ktciscbhps18wnmnwtm6egziohc3rkdzekkmsrpuyt`, *WalletCheckCh) |
+           |  for(@(_, WalletCheck) <- WalletCheckCh) {
+           |    @WalletCheck!("claim", "$ethAddress", "$pubKey", "$sigString", "$statusOut")
+           |  }
+           |}""".stripMargin
   }
 
   def walletTransferSigData[F[_]: Sync](

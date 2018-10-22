@@ -17,7 +17,7 @@ object PreWallet {
     |new purseCh in {
     |  @revMint!("makePurse", ${w.initRevBalance}, *purseCh) |
     |  for(@purse <- purseCh) {
-    |    @("WalletCheck", "create")!("${w.ethAddress}", purse)
+    |    @WalletCheck!("create", "${w.ethAddress}", purse)
     |  }
     |}""".stripMargin
 

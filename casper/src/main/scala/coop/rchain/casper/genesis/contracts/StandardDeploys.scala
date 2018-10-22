@@ -60,7 +60,12 @@ object StandardDeploys {
       1540214070797L
     )
   def basicWalletFaucet: Deploy = toDeploy(BasicWalletFaucet, "", 0L)
-  def walletCheck: Deploy       = toDeploy(WalletCheck, "", 0L)
+  def walletCheck: Deploy =
+    toDeploy(
+      WalletCheck,
+      "852a03854f285b36a44c7e84b1c07d30352196de60b593522653ba5e71c8e016",
+      1540218618622L
+    )
   def rev(
       wallets: Seq[PreWallet],
       faucetCode: String => String,
