@@ -13,6 +13,9 @@ import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rspace.util._
 import monix.eval.Task
+import coop.rchain.catscontrib.TaskContrib._
+import monix.execution.Scheduler
+import monix.execution.Scheduler.Implicits.global
 
 import scala.util.Try
 
@@ -38,7 +41,7 @@ object SystemProcesses {
         dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
     ): Task[Unit] =
       res.fold(err => Task.raiseError(OutOfPhlogistonsError), _.fold(Task.unit) {
-        case (cont, channels) => _dispatch(dispatcher)(cont, channels)
+        case (cont, channels) => Task.pure(_dispatch(dispatcher)(cont, channels).unsafeRunSync)
       })
   }
 

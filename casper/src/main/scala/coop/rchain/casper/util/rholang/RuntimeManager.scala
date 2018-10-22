@@ -27,10 +27,10 @@ import scala.util.{Failure, Success, Try}
 
 //runtime is a SyncVar for thread-safety, as all checkpoints share the same "hot store"
 class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: SyncVar[Runtime]) {
-  def setTimestamp(now: Long): Unit = {
+  def setTimestamp(now: Long)(implicit scheduler: Scheduler): Unit = {
     val runtime        = runtimeContainer.take()
-    val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GString(String.valueOf(now)))))
-    runtime.blockTime.setParams(timestamp)
+    val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(now))))
+    runtime.blockTime.setParams(timestamp).unsafeRunSync
     runtimeContainer.put(runtime)
   }
 
