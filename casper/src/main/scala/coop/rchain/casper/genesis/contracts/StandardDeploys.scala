@@ -52,7 +52,12 @@ object StandardDeploys {
       "d9ba2075d355755060205605f4cdbd5ecd3cce5ed1f39690f34772f7c9aa30ab",
       1539969637029L
     )
-  def makePoS: Deploy = toDeploy(MakePoS, "", 0L)
+  def makePoS: Deploy =
+    toDeploy(
+      MakePoS,
+      "0cbe092b27e04a944c7ac184619f3abeacffdd823ded94113ae918a63e55d5f2",
+      1540221220574L
+    )
   def basicWallet: Deploy =
     toDeploy(
       BasicWallet,

@@ -17,11 +17,10 @@ class MakePoSSpec extends FlatSpec with Matchers {
   val tests   = TestSetUtil.getTests("./casper/src/test/rholang/MakePoSTest.rho").toList
 
   val deploys = List(
-    //TODO: Replace all compiledSourceDeploy with StandardDeploys when they are ready
     StandardDeploys.nonNegativeNumber,
     StandardDeploys.makeMint,
     StandardDeploys.either,
-    compiledSourceDeploy(MakePoS, 3L, accounting.MAX_VALUE)
+    StandardDeploys.makePoS
   )
   TestSetUtil.runTestsWithDeploys(MakePoSTest, deploys, runtime)
   val tuplespace = StoragePrinter.prettyPrint(runtime.space.store)

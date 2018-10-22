@@ -415,7 +415,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes.forall(_.logEff.warns.isEmpty) shouldBe true
 
     val rankedValidatorQuery =
-      mkTerm("""for(@pos <- @"proofOfStake"){ 
+      mkTerm("""for(pos <- @"proofOfStake"){ 
     |  new bondsCh, getRanking in {
     |    contract getRanking(@bonds, @acc, return) = {
     |      match bonds {
@@ -425,7 +425,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     |        _ => { return!(acc) }
     |      }
     |    } |
-    |    @(pos, "getBonds")!(*bondsCh) | for(@bonds <- bondsCh) {
+    |    pos!("getBonds", *bondsCh) | for(@bonds <- bondsCh) {
     |      getRanking!(bonds, [], "__SCALA__")
     |    }
     |  }

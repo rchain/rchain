@@ -3,29 +3,30 @@
 //requires MakePoS, MakeMint, TestSet, ListOps, Either
 
 new 
-  rl(`rho:registry:lookup`), TestSetCh, MakeMintCh,
+  rl(`rho:registry:lookup`), TestSetCh, MakeMintCh, MakePoSCh,
   test1, test2
 in {
   rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *TestSetCh) |
   rl!(`rho:id:exunyijimapk7z43g3bbr69awqdz54kyroj9q43jgu3dh567fxsftx`, *MakeMintCh) |
-  for(@(_, TestSet) <- TestSetCh; @(_, MakeMint) <- MakeMintCh) {
+  rl!(`rho:id:nqt875jea4rr83383ys6guzsbebg6k7o7uhrint6d7km67886c4y4s`, *MakePoSCh) |
+  for(@(_, TestSet) <- TestSetCh; @(_, MakeMint) <- MakeMintCh; @(_, MakePoS) <- MakePoSCh) {
     @"pk"!!("79d16233dedf8e8e4cc25272b2b98ac096dac9239ade20dcee5987a1c1d101c7") |
     @"minimumBond"!!(5) |
     @"maximumBond"!!(100) |
     @"initBonds"!!({"someKey" : (37, "verify", "reward", 1)}) |
 
-    contract @"bond"(@pos, @publicKey, @sigVerify, @givenBondPurse, @rewardsForwarder, return) = {
+    contract @"bond"(pos, @publicKey, @sigVerify, @givenBondPurse, @rewardsForwarder, return) = {
       new bond in {
         contract bond(return) = {
-          @(pos, "bond")!(publicKey, sigVerify, givenBondPurse, rewardsForwarder, *return)
+          pos!("bond", publicKey, sigVerify, givenBondPurse, rewardsForwarder, *return)
         } |
         return!(*bond)
       }
     } |
 
-    contract @"getBonds"(@pos, return) = {
+    contract @"getBonds"(pos, return) = {
       new getBonds in {
-        contract getBonds(return) = { @(pos, "getBonds")!(*return) } |
+        contract getBonds(return) = { pos!("getBonds", *return) } |
         return!(*getBonds)
       }
     } |
@@ -52,7 +53,7 @@ in {
         @maximumBond <- @"maximumBond";
         @initBonds <- @"initBonds"
       ) {
-        @"MakePoS"!(posPurse, minimumBond, maximumBond, initBonds, "pos") | 
+        @MakePoS!(posPurse, minimumBond, maximumBond, initBonds, "pos") | 
         for(@pos <- @"pos") {
           
           @"balance"!(tooSmallBondPurse, "tooSmallBalance") |

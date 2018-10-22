@@ -22,8 +22,8 @@ object BondingUtil {
   def transferStatusOut(ethAddress: String): String       = s"${ethAddress}_transferOut"
 
   def bondingForwarderDeploy(bondKey: String, ethAddress: String): String =
-    s"""for(@purse <- @"${bondingForwarderAddress(ethAddress)}"; @pos <- @"proofOfStake"){
-       |  @(pos, "bond")!("$bondKey".hexToBytes(), "ed25519Verify", purse, "$ethAddress", "${bondingStatusOut(
+    s"""for(@purse <- @"${bondingForwarderAddress(ethAddress)}"; pos <- @"proofOfStake"){
+       |  pos!("bond", "$bondKey".hexToBytes(), "ed25519Verify", purse, "$ethAddress", "${bondingStatusOut(
          ethAddress
        )}")
        |}""".stripMargin
