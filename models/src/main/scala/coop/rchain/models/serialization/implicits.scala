@@ -3,18 +3,16 @@ package coop.rchain.models.serialization
 import cats.implicits._
 import coop.rchain.models._
 import coop.rchain.rspace.Serialize
-import scodec.bits.ByteVector
-
+import monix.eval.Coeval
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
+import scodec.bits.ByteVector
 
 object implicits {
   def mkProtobufInstance[T <: GeneratedMessage with Message[T]: GeneratedMessageCompanion] =
     new Serialize[T] {
 
-      override def encode(a: T): ByteVector = {
-        val comp: GeneratedMessageCompanion[T] = implicitly
-        ByteVector.view(comp.toByteArray(a))
-      }
+      override def encode(a: T): ByteVector =
+        ByteVector.view(ProtoM.toByteArray[Coeval](a).value())
 
       override def decode(bytes: ByteVector): Either[Throwable, T] = {
         val comp: GeneratedMessageCompanion[T] = implicitly
