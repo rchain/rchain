@@ -38,7 +38,7 @@ in {
         contract internalMakePurse(balance, return) = {
           //balance must be a name that NonNegativeNumber contract is listening on
           new thisPurse in {
-            contract @(*thisPurse, *decr)(@amount, success) = { balance!("sub", amount, *success) } |
+            contract thisPurse(@=*decr, @amount, success) = { balance!("sub", amount, *success) } |
             contract thisPurse(@"getBalance", return) = { balance!("value", *return) } |
             contract thisPurse(@"sprout", return) = { thisMint!("makePurse", 0, *return) } |
             contract thisPurse(@"split", @amount, return) = {
@@ -57,7 +57,7 @@ in {
             } |
             contract thisPurse(@"deposit", @amount, @src, success) = {
               new result in {
-                @(src, *decr)!(amount, *result) | //call src decr function.
+                @src!(*decr, amount, *result) | //call src decr function.
                 for(@decrSuccess <- result) {
                   if (decrSuccess) {
                     balance!("add", amount, *success) // add transferred amount to this purse
@@ -67,10 +67,10 @@ in {
                 }
               }
             } |
-            return!(*thisPurse)
+            return!(bundle+{*thisPurse})
           }
         } |
-        return!(*thisMint)
+        return!(bundle+{*thisMint})
       }
     }
   } |

@@ -79,7 +79,7 @@ in {
                   }
                 }
               } |
-              return!([*basicWallet])
+              return!([bundle+{*basicWallet}])
             }
           }
         }
