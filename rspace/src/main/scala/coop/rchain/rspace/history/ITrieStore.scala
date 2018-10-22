@@ -70,7 +70,7 @@ trait ITrieStore[T, K, V] {
       case None =>
         throw new LookupException(s"could not get node at $hash ")
     }
-  }
+  } 
 
   private[rspace] def clear(txn: T): Unit
 
