@@ -23,11 +23,15 @@ class RholangBuildTest extends FlatSpec with Matchers {
     import node._
 
     val code =
-      """new double, dprimes, rl(`rho:registry:lookup`), ListOpsCh in {
+      """new double, dprimes, rl(`rho:registry:lookup`), ListOpsCh, time(`rho:block:timestamp`), timeRtn, stdout(`rho:io:stdout`) in {
         |  contract double(@x, ret) = { ret!(2 * x) } |
         |  rl!(`rho:id:dputnspi15oxxnyymjrpu7rkaok3bjkiwq84z7cqcrx4ktqfpyapn4`, *ListOpsCh) |
         |  for(@(_, ListOps) <- ListOpsCh) {
         |    @ListOps!("map", [2, 3, 5, 7], *double, *dprimes)
+        |  } |
+        |  time!(timeRtn) |
+        |  for (timestamp <- timeRtn) {
+        |   stdout!(timestamp)
         |  }
         |}""".stripMargin
 

@@ -232,6 +232,28 @@ object SystemProcesses {
       illegalArgumentException("getDeployParams expects only a return channel.")
   }
 
+  def blockTime(
+      space: RhoISpace,
+      dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation],
+      blockTime: Runtime.BlockTime[Task]
+  ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
+    case Seq(ListParWithRandomAndPhlos(Seq(ack), rand, _)) =>
+      for {
+        timestamp <- blockTime.timestamp.get
+      } yield {
+        space
+          .produce(
+            ack,
+            ListParWithRandom(Seq(timestamp), rand),
+            false
+          )(MATCH_UNLIMITED_PHLOS)
+          .map(unpackOption(_))
+          .foldResult(dispatcher)
+      }
+    case _ =>
+      illegalArgumentException("blockTime expects only a return channel.")
+  }
+
   private def _dispatch(
       dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
   )(cont: TaggedContinuation, dataList: Seq[ListParWithRandomAndPhlos]): Task[Unit] =
