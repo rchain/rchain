@@ -1,6 +1,5 @@
 package coop.rchain.rspace
 
-import coop.rchain.rspace.spaces.FineGrainedRSpace
 import java.nio.file.{Files, Path}
 
 import cats.Id
@@ -12,9 +11,8 @@ import coop.rchain.rspace.ISpace.IdISpace
 import scala.collection.JavaConverters._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, InMemoryTrieStore, LMDBTrieStore}
+import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.test._
 import coop.rchain.shared.PathOps._
 import org.scalatest._
 
@@ -133,16 +131,14 @@ class InMemoryStoreTestsBase
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
     val branch                                = Branch("inmem")
 
-    val trieStore =
-      InMemoryTrieStore.create[Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]]()
-
-    val testStore = InMemoryStore
-      .create[InMemTransaction[
-        history.State[Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]]
-      ], String, Pattern, String, StringsCaptor](trieStore, branch)
+    val ctx: Context[String, Pattern, String, StringsCaptor] = Context.createInMemory()
 
     val testSpace =
-      RSpace.create[Id, String, Pattern, Nothing, String, String, StringsCaptor](testStore, branch)
+      RSpace.create[Id, String, Pattern, Nothing, String, String, StringsCaptor](ctx, branch)
+
+    val testStore = testSpace.store
+    val trieStore = testStore.trieStore
+
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
       testStore.withTrieTxn(txn) { trieTxn =>
         testStore.clear(txn)
@@ -178,12 +174,14 @@ class LMDBStoreTestsBase
 
     val testBranch = Branch("test")
     val env        = Context.create[String, Pattern, String, StringsCaptor](dbDir, mapSize)
-    val testStore  = LMDBStore.create[String, Pattern, String, StringsCaptor](env, testBranch)
+
     val testSpace =
       RSpace.create[Id, String, Pattern, Nothing, String, String, StringsCaptor](
-        testStore,
+        env,
         testBranch
       )
+
+    val testStore = testSpace.store
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
       testStore.withTrieTxn(txn) { trieTxn =>
         testStore.clear(txn)
@@ -220,17 +218,15 @@ class MixedStoreTestsBase
 
     val testBranch = Branch("test")
     val env        = Context.createMixed[String, Pattern, String, StringsCaptor](dbDir, mapSize)
-    val testStore = InMemoryStore
-      .create[org.lmdbjava.Txn[java.nio.ByteBuffer], String, Pattern, String, StringsCaptor](
-        env.trieStore,
-        testBranch
-      )
 
     val testSpace =
       RSpace.create[Id, String, Pattern, Nothing, String, String, StringsCaptor](
-        testStore,
+        env,
         testBranch
       )
+
+    val testStore = testSpace.store
+
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
       testStore.withTrieTxn(txn) { trieTxn =>
         testStore.clear(txn)
