@@ -64,7 +64,12 @@ object StandardDeploys {
       "d72d0a7c0c9378b4874efbf871ae8089dd81f2ed3c54159fffeaba6e6fca4236",
       1540214070797L
     )
-  def basicWalletFaucet: Deploy = toDeploy(BasicWalletFaucet, "", 0L)
+  def basicWalletFaucet: Deploy =
+    toDeploy(
+      BasicWalletFaucet,
+      "7645ec68813655c4be91dc60f759804c64e5f84319d18c66e40bbfb3a202ddc8",
+      1540228756441L
+    )
   def walletCheck: Deploy =
     toDeploy(
       WalletCheck,
