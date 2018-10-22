@@ -119,28 +119,31 @@ trait IStore[C, P, A, K] {
 
   protected def processTrieUpdate(cacheStore: TrieStoreType, update: TrieUpdate[C, P, A, K]): Unit
 
-  val useCache = false
+  val useCache = true
 
   def createCheckpoint(): Blake2b256Hash = {
     val trieUpdates = _trieUpdates.take
     _trieUpdates.put(Seq.empty)
     _trieUpdateCount.set(0L)
 
-    println(s"createCheckpoint(), processing ${trieUpdates.length} trie updates, cache=$useCache")
+    val timeStart = System.nanoTime()
+    var timeInWriteTxn : Long = 0L
 
-    if(useCache) {
-      val trieCache = new TrieCache(trieStore)
+    val res = if(useCache) {
+      val trieCache = new TrieCache(trieStore, trieBranch)
       collapse(trieUpdates).foreach(processTrieUpdate(trieCache, _))
       val rootHash = trieCache.withTxn(trieCache.createTxnRead()) { txn =>
         trieCache
           .persistAndGetRoot(txn, trieBranch)
           .getOrElse(throw new Exception("Could not get root hash"))
       }
+      timeInWriteTxn = System.nanoTime()
       trieStore.withTxn(trieStore.createTxnWrite()) { txn =>
-        trieStore.applyCache(txn, trieCache)
+        trieStore.applyCache(txn, trieCache, rootHash)
       }
       rootHash
     } else {
+      timeInWriteTxn = System.nanoTime()
       collapse(trieUpdates).foreach(processTrieUpdate(trieStore, _))
       trieStore.withTxn(trieStore.createTxnWrite()) { txn =>
         val rootHash = trieStore
@@ -149,6 +152,10 @@ trait IStore[C, P, A, K] {
         rootHash
       }
     }
+    val timeTotal = (System.nanoTime() - timeStart).asInstanceOf[Double] / 1000000000.0
+    val timeInWriteTxnTotal = (System.nanoTime() - timeInWriteTxn).asInstanceOf[Double] / 1000000000.0
+    println(s"createCheckpoint(), processed ${trieUpdates.length} trie updates, cache=$useCache, time,sec=$timeTotal; writeTxnTime,sec=$timeInWriteTxnTotal")
+    res
   }
 
   private[rspace] def collapse(in: Seq[TrieUpdate[C, P, A, K]]): Seq[TrieUpdate[C, P, A, K]] =

@@ -1,7 +1,7 @@
 package coop.rchain.rspace.history
 import coop.rchain.rspace.{Blake2b256Hash, InMemTransaction, InMemoryOps}
 import kamon.Kamon
-
+import scala.annotation.tailrec
 import scala.collection.immutable.Seq
 
 case class State[K, V](
@@ -118,6 +118,12 @@ class InMemoryTrieStore[K, V]
   ): Unit =
     txn.writeState(state => (state.changeTrie(state._dbTrie + (key -> value)), ()))
 
+  override private[rspace] def put(txn: InMemTransaction[State[K, V]],
+                                   key: Blake2b256Hash,
+                                   value: Trie[K, V],
+                                   valueBytes: Array[Byte]): Unit =
+    txn.writeState(state => (state.changeTrie(state._dbTrie + (key -> value)), ()))
+
   override private[rspace] def get(
       txn: InMemTransaction[State[K, V]],
       key: Blake2b256Hash
@@ -141,36 +147,31 @@ class InMemoryTrieStore[K, V]
   ): Unit =
     txn.writeState(state => (state.changeEmptyRoot(hash), ()))
 
-  override private[rspace] def applyCache(
-                                           txn: InMemTransaction[State[K, V]],
-                                           trieCache: TrieCache[InMemTransaction[State[K, V]], K, V]): Unit = {
-
-    for((branch, hash) <- trieCache._dbRoot) {
-      hash match {
-        case StoredItem(value) =>
-          txn.writeState(state => (state.changeRoot(state._dbRoot + (branch->value)), ()))
-        case _ => //do nothing
-      }
+  override private[rspace] def applyCache( txn: InMemTransaction[State[K, V]],
+                                           trieCache: TrieCache[InMemTransaction[State[K, V]], K, V],
+                                           rootHash: Blake2b256Hash): Unit = {
+    trieCache._dbRoot match {
+      case StoredItem(value, _) =>
+        txn.writeState(state => (state.changeRoot(state._dbRoot + (trieCache.trieBranch -> value)), ()))
+      case _ => //do nothing
     }
 
     for((hash, trie) <- trieCache._dbTrie) {
       trie match {
-        case StoredItem(value) =>
+        case StoredItem(value, _) =>
           txn.writeState(state => (state.changeTrie(state._dbTrie + (hash -> value)), ()))
         case _ => //do nothing
       }
     }
 
-    for((branch, pastRoots) <- trieCache._dbPastRoots) {
-      pastRoots match {
-        case StoredItem(value) =>
-          txn.writeState(state => (state.changePastRoots(state._dbPastRoots + (branch -> value)), ()))
-        case _ => //do nothing
-      }
+    trieCache._dbPastRoots match {
+      case StoredItem(value, _) =>
+        txn.writeState(state => (state.changePastRoots(state._dbPastRoots + (trieCache.trieBranch -> value)), ()))
+      case _ => //do nothing
     }
 
     trieCache._dbEmptyRoot match {
-      case StoredItem(value) =>
+      case StoredItem(value, _) =>
         putEmptyRoot(txn, value)
       case _ => //do nothing
     }

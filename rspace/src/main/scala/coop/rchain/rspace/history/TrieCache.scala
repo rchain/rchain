@@ -1,5 +1,5 @@
 package coop.rchain.rspace.history
-import coop.rchain.rspace.{Blake2b256Hash}
+import coop.rchain.rspace.Blake2b256Hash
 
 import scala.collection.immutable.{Map => ImmutableMap}
 import scala.collection.immutable.Seq
@@ -13,7 +13,7 @@ private[rspace] case class LoadedItem[TItem](value: TItem) extends CachedItem[TI
   override def asOption : Option[TItem] = Some(value)
 }
 
-private[rspace] case class StoredItem[TItem](value: TItem) extends CachedItem[TItem] {
+private[rspace] case class StoredItem[TItem](value: TItem, bytes: Option[Array[Byte]] = None) extends CachedItem[TItem] {
   override def asOption : Option[TItem] = Some(value)
 }
 
@@ -21,19 +21,19 @@ private[rspace] case class AbsentItem[TItem]() extends CachedItem[TItem] {
   override def asOption : Option[TItem] = None
 }
 
-private[rspace] class TrieCache[T, K, V](trieStore: ITrieStore[T, K, V], trieStoreOwner: Boolean = false) extends  ITrieStore[T, K, V] {
+private[rspace] class TrieCache[T, K, V](trieStore: ITrieStore[T, K, V], val trieBranch: Branch, trieStoreOwner: Boolean = false) extends  ITrieStore[T, K, V] {
 
   private[this] val absentRootValue = AbsentItem[Blake2b256Hash]()
 
-  val _dbRoot : Map[Branch, CachedItem[Blake2b256Hash]] = Map.empty
+  var _dbRoot : CachedItem[Blake2b256Hash] = absentRootValue
 
   private[this] val absentTrieValue = AbsentItem[Trie[K, V]]()
 
   val _dbTrie : Map[Blake2b256Hash, CachedItem[Trie[K, V]]] = Map.empty
 
-  //private[this] val absentPastRootValue = AbsentItem[Seq[Blake2b256Hash]]()
+  private[this] val absentPastRootValue = AbsentItem[Seq[Blake2b256Hash]]()
 
-  val _dbPastRoots : Map[Branch, CachedItem[Seq[Blake2b256Hash]]] = Map.empty
+  var _dbPastRoots : CachedItem[Seq[Blake2b256Hash]] = absentPastRootValue
 
   private[this] val absentEmptyRootValue = AbsentItem[Blake2b256Hash]()
 
@@ -50,6 +50,13 @@ private[rspace] class TrieCache[T, K, V](trieStore: ITrieStore[T, K, V], trieSto
   override private[rspace] def put(txn: T, key: Blake2b256Hash, value: Trie[K, V]): Unit = {
     _dbTrie.put(key, StoredItem(value))
   }
+
+  override private[rspace] def put(txn: T,
+                                   key: Blake2b256Hash,
+                                   value: Trie[K, V],
+                                   valueBytes: Array[Byte]
+                                  ): Unit =
+    _dbTrie.put(key, StoredItem(value, Some(valueBytes)))
 
   override private[rspace] def get(txn: T, key: Blake2b256Hash): Option[Trie[K, V]] = {
     _dbTrie.get(key) match {
@@ -68,27 +75,35 @@ private[rspace] class TrieCache[T, K, V](trieStore: ITrieStore[T, K, V], trieSto
   }
 
   override private[rspace] def getRoot(txn: T, branch: Branch): Option[Blake2b256Hash] = {
-    _dbRoot.get(branch) match {
-      case None => //first access to trieStore for the key
+    if(branch != trieBranch)
+      throw new IllegalArgumentException("Only initial branch allowed")
+
+    _dbRoot match {
+      case AbsentItem() => //first access to trieStore for the key
         trieStore.getRoot(txn, branch) match {
           case optValue @ Some(value) =>
-            _dbRoot.put(branch, LoadedItem(value))
+            _dbRoot = LoadedItem(value)
             optValue
           case None =>
-            _dbRoot.put(branch, absentRootValue)
+            _dbRoot = absentRootValue
             None
         }
-      case Some(result) =>
+      case result =>
         result.asOption //we already looked up this branch, result cached
     }
   }
 
   override private[rspace] def putRoot(txn: T, branch: Branch, hash: Blake2b256Hash): Unit = {
-    _dbRoot.put(branch, StoredItem(hash))
+    if(branch != trieBranch)
+      throw new IllegalArgumentException("Only initial branch allowed")
+    _dbRoot = StoredItem(hash)
   }
 
   override private[rspace] def persistAndGetRoot(txn: T,
                                         branch: Branch) : Option[Blake2b256Hash] = {
+    if(branch != trieBranch)
+      throw new IllegalArgumentException("Only initial branch allowed")
+
     getRoot(txn, branch)
       .map { currentRoot =>
         val pastRoots = getPastRootsInBranch(txn, branch).filter(_ != currentRoot)
@@ -96,18 +111,21 @@ private[rspace] class TrieCache[T, K, V](trieStore: ITrieStore[T, K, V], trieSto
       }
       .map {
         case (currentRoot, updatedPastRoots) =>
-          _dbPastRoots.put(branch, StoredItem(updatedPastRoots))
+          _dbPastRoots = StoredItem(updatedPastRoots)
           currentRoot
       }
   }
 
   override private[rspace] def getPastRootsInBranch(txn: T, branch: Branch): Seq[Blake2b256Hash] = {
-    _dbPastRoots.get(branch) match {
-      case None =>
+    if(branch != trieBranch)
+      throw new IllegalArgumentException("Only initial branch allowed")
+
+    _dbPastRoots match {
+      case AbsentItem() =>
         val cold = trieStore.getPastRootsInBranch(txn, branch)
-        _dbPastRoots.put(branch, LoadedItem(cold))
+        _dbPastRoots = LoadedItem(cold)
         cold
-      case Some(result)=>
+      case result =>
         result.asOption.getOrElse(Seq.empty)
     }
   }
@@ -122,7 +140,7 @@ private[rspace] class TrieCache[T, K, V](trieStore: ITrieStore[T, K, V], trieSto
     _dbEmptyRoot match {
       case LoadedItem(value) =>
         value
-      case StoredItem(value) =>
+      case StoredItem(value, _) =>
         value
       case AbsentItem() => {
         val hash = trieStore.getEmptyRoot(txn)
@@ -138,15 +156,15 @@ private[rspace] class TrieCache[T, K, V](trieStore: ITrieStore[T, K, V], trieSto
 
   override private[rspace] def toMap: ImmutableMap[Blake2b256Hash, Trie[K, V]] = {
     trieStore.withTxn(trieStore.createTxnWrite()) {
-      txn => trieStore.applyCache(txn, this)
+      txn => trieStore.applyCache(txn, this, this._dbRoot.asOption.get)
     }
     trieStore.toMap
   }
 
   override private[rspace] def clear(txn: T): Unit = {
-    _dbRoot.clear()
+    _dbRoot = absentRootValue
     _dbTrie.clear()
-    _dbPastRoots.clear()
+    _dbPastRoots = absentPastRootValue
     _dbEmptyRoot = absentEmptyRootValue
     trieStore.clear(txn)
   }
@@ -158,5 +176,6 @@ private[rspace] class TrieCache[T, K, V](trieStore: ITrieStore[T, K, V], trieSto
 
   override private[rspace] def applyCache(
       txn: T,
-      trieCache: TrieCache[T, K, V]): Unit = throw new NotImplementedError("Can't apply cache to cache?!")
+      trieCache: TrieCache[T, K, V],
+      rootHash: Blake2b256Hash): Unit = throw new NotImplementedError("Can't apply cache to cache?!")
 }

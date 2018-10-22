@@ -13,6 +13,7 @@ import org.lmdbjava._
 import scodec.Codec
 import scodec.bits.{BitVector, ByteVector}
 
+import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
 
@@ -32,6 +33,12 @@ class LMDBTrieStore[K, V] private (
 
   private[rspace] def put(txn: Txn[ByteBuffer], key: Blake2b256Hash, value: Trie[K, V]): Unit =
     _dbTrie.put(txn, key, value)
+
+  private[rspace] def put(txn: Txn[ByteBuffer],
+                          key: Blake2b256Hash,
+                          value: Trie[K, V],
+                          valueBytes: Array[Byte]): Unit =
+    _dbTrie.putBytes(txn, key, valueBytes)
 
   private[rspace] def get(txn: Txn[ByteBuffer], key: Blake2b256Hash): Option[Trie[K, V]] =
     _dbTrie.get(txn, key)(Codec[Trie[K, V]])
@@ -136,36 +143,75 @@ class LMDBTrieStore[K, V] private (
         Codec[Blake2b256Hash].encode(hash).map(_.bytes.toDirectByteBuffer).get
       )
 
-  override private[rspace] def applyCache(txn: Txn[ByteBuffer], trieCache:TrieCache[Txn[ByteBuffer], K, V]): Unit = {
-    for((branch, hash) <- trieCache._dbRoot) {
-      hash match {
-        case StoredItem(value) =>
-          _dbRoot.put(txn, branch, value)
-        case _ => //do nothing
-      }
+  override private[rspace] def applyCache(txn: Txn[ByteBuffer],
+                                          trieCache:TrieCache[Txn[ByteBuffer], K, V],
+                                          rootHash: Blake2b256Hash): Unit = {
+    trieCache._dbRoot match {
+      case StoredItem(value, None) =>
+        _dbRoot.put(txn, trieCache.trieBranch, value)
+      case StoredItem(_, Some(bytes)) =>
+        _dbRoot.putBytes(txn, trieCache.trieBranch, bytes)
+      case _ => //do nothing
     }
 
-    for((hash, trie) <- trieCache._dbTrie) {
-      trie match {
-        case StoredItem(value) =>
-          _dbTrie.put(txn, hash, value)
-        case _ => //do nothing
-      }
-    }
-
-    for((branch, pastRoots) <- trieCache._dbPastRoots) {
-      pastRoots match {
-        case StoredItem(value) =>
-          _dbPastRoots.put(txn, branch, value)
-        case _ => //do nothing
-      }
+    trieCache._dbPastRoots match {
+      case StoredItem(value, None) =>
+        _dbPastRoots.put(txn, trieCache.trieBranch, value)
+      case StoredItem(_, Some(bytes)) =>
+        _dbPastRoots.putBytes(txn, trieCache.trieBranch, bytes)
+      case _ => //do nothing
     }
 
     trieCache._dbEmptyRoot match {
-      case StoredItem(value) =>
+      case StoredItem(value, _) =>
         putEmptyRoot(txn, value)
       case _ => //do nothing
     }
+
+//    //dumb and easy store
+//    for((hash, trie) <- trieCache._dbTrie) {
+//      trie match {
+//        case StoredItem(value) =>
+//          _dbTrie.put(txn, hash, value)
+//        case _ => //no need to store
+//      }
+//    }
+
+    def processTrieItem(hash: Blake2b256Hash, item: CachedItem[Trie[K,V]]) : Option[Trie[K, V]] = {
+      item match {
+        case StoredItem(value, None) =>
+          _dbTrie.put(txn, hash, value)
+          Some(value)
+        case StoredItem(value, Some(bytes)) =>
+          _dbTrie.putBytes(txn, hash, bytes)
+          Some(value)
+        case _ => None //no need to save, no need to traverse deeper
+      }
+    }
+
+    //non tail-recursive, however deepest recursion depth = Blake2b256Hash.length == 32
+    //so no SO can occur
+    //can be converted to a tail-recursive version, in cost of memory allocations
+    def loop(hash: Blake2b256Hash): Unit = {
+      trieCache._dbTrie.get(hash) match {
+        case None => //item with this hash wasn't loaded, ignore it
+        case Some(currentRoot) =>
+          processTrieItem(hash, currentRoot) match {
+            case None => //nothing to do with this trie item
+            case Some(trie) =>
+              trie match {
+                case Leaf(_, _) => //no need to traverse leaf
+                case Skip(_, pointer) => loop(pointer.hash) //trying to store pointer's child
+                case Node(pointerBlock) =>
+                  for (child <- pointerBlock.children) {
+                    loop(child.hash)
+                  }
+              }
+          }
+      }
+    }
+
+    loop(rootHash)
   }
 }
 

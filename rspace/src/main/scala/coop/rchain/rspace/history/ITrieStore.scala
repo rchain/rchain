@@ -34,6 +34,8 @@ trait ITrieStore[T, K, V] {
 
   private[rspace] def put(txn: T, key: Blake2b256Hash, value: Trie[K, V]): Unit
 
+  private[rspace] def put(txn: T, key: Blake2b256Hash, value: Trie[K, V], encodedValues: Array[Byte]): Unit
+
   private[rspace] def get(txn: T, key: Blake2b256Hash): Option[Trie[K, V]]
 
   private[rspace] def toMap: Map[Blake2b256Hash, Trie[K, V]]
@@ -74,5 +76,5 @@ trait ITrieStore[T, K, V] {
 
   def close(): Unit
 
-  private[rspace] def applyCache(txn: T, trieCache: TrieCache[T, K, V]): Unit
+  private[rspace] def applyCache(txn: T, trieCache: TrieCache[T, K, V], rootHash: Blake2b256Hash): Unit
 }

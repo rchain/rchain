@@ -8,6 +8,7 @@ import java.nio.file.Path
 import org.lmdbjava.{Dbi, Env, Txn, TxnOps}
 import scodec.Codec
 import coop.rchain.shared.ByteVectorOps._
+import coop.rchain.shared.ByteArrayOps._
 import coop.rchain.shared.PathOps._
 import scodec.bits.BitVector
 import kamon._
@@ -119,5 +120,24 @@ trait LMDBOps extends CloseOps {
       if (!dbi.delete(txn, codecK.encode(key).get.bytes.toDirectByteBuffer)) {
         throw new Exception(s"could not delete: $key")
       }
+
+    def putBytes(txn: Txn[ByteBuffer], key: Blake2b256Hash, data: Array[Byte]) : Unit = {
+      if (!dbi.put(
+        txn,
+        key.bytes.toDirectByteBuffer,
+        data.toDirectByteBuffer)) {
+        throw new Exception(s"could not persist array of ${data.length} bytes")
+      }
+    }
+
+    def putBytes[K](txn: Txn[ByteBuffer], key: K, data: Array[Byte])
+                   (implicit codecK: Codec[K]): Unit = {
+      if (!dbi.put(
+        txn,
+        codecK.encode(key).get.bytes.toDirectByteBuffer,
+        data.toDirectByteBuffer)) {
+        throw new Exception(s"could not persist array of ${data.length} bytes")
+      }
+    }
   }
 }

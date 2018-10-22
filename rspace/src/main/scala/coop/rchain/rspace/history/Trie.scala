@@ -43,4 +43,13 @@ object Trie {
       .encode(trie)
       .map((vector: BitVector) => Blake2b256Hash.create(vector.toByteArray))
       .get
+
+  def encodeAndHash[K, V](trie: Trie[K, V])(implicit codecK: Codec[K], codecV: Codec[V]): (Array[Byte], Blake2b256Hash) =
+    codecTrie[K, V]
+      .encode(trie)
+      .map((vector: BitVector) => {
+        val bytes = vector.toByteArray
+        (bytes, Blake2b256Hash.create(bytes))
+      })
+      .get
 }
