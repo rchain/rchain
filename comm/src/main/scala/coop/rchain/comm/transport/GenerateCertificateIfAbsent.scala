@@ -59,7 +59,7 @@ class GenerateCertificateIfAbsent[F[_]: Sync](implicit log: Log[F]) {
     for {
       _ <- info("Generating a PEM secret key for the node")
 
-      keyPair = certHelp.generateKeyPair(tls.secureRandomNonBlocking)
+      keyPair <- Sync[F].delay(certHelp.generateKeyPair(tls.secureRandomNonBlocking))
 
       _ <- writeCert(tls, keyPair)
       _ <- writeKey(tls, keyPair)
