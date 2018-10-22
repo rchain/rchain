@@ -30,7 +30,7 @@ object TestSetUtil {
       ),
       timestamp = 1539808849271L,
       term = TestSet.code,
-      phloLimit = Some(accounting.MAX_VALUE)
+      phloLimit = accounting.MAX_VALUE
     )
 
     Deploy(
