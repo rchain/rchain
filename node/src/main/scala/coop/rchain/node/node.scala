@@ -120,7 +120,7 @@ class InitNodeRuntime(conf: Configuration, host: String, scheduler: Scheduler) {
   )
 }
 
-class NodeRuntime(
+private class NodeRuntime(
     conf: Configuration,
     host: String,
     scheduler: Scheduler,
