@@ -858,7 +858,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
     import node._
 
-    val deployData = ProtoUtil.basicDeployData(0).withPhloLimit(PhloLimit(1))
+    val deployData = ProtoUtil.basicDeployData(0).withPhloLimit(1)
     node.casperEff.deploy(deployData)
 
     val Created(block) = MultiParentCasper[Id].createBlock
@@ -869,7 +869,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
     import node._
 
-    val deployData = ProtoUtil.basicDeployData(0).withPhloLimit(PhloLimit(100))
+    val deployData = ProtoUtil.basicDeployData(0).withPhloLimit(100)
     node.casperEff.deploy(deployData)
 
     val Created(block) = MultiParentCasper[Id].createBlock

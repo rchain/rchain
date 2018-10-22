@@ -127,17 +127,15 @@ class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {
           log: LogStub[Id],
           time: LogicalTime[Id]
       ) =>
-        val emptyStateHash  = runtimeManager.emptyStateHash
         implicit val logEff = log
         val genesis         = fromInputFiles()(runtimeManager, genesisPath, log, time)
         BlockStore[Id].put(genesis.blockHash, genesis)
         val blockDag = BlockDag.empty
 
-        val (maybePostGenesisStateHash, _) = InterpreterUtil
+        val maybePostGenesisStateHash = InterpreterUtil
           .validateBlockCheckpoint[Id](
             genesis,
             blockDag,
-            Set[ByteString](emptyStateHash),
             runtimeManager
           )
 

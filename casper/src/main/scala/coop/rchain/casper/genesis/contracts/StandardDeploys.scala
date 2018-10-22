@@ -20,7 +20,7 @@ object StandardDeploys {
       user = stringToByteString(user),
       timestamp = timestamp,
       term = compiledSource.code,
-      phloLimit = Some(accounting.MAX_VALUE)
+      phloLimit = accounting.MAX_VALUE
     )
 
     Deploy(

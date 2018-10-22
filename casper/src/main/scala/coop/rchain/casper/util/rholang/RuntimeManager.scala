@@ -66,12 +66,12 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     result
   }
 
-  def storageRepr(hash: StateHash): String = {
-    val resetRuntime = getResetRuntime(hash)
-    val result       = StoragePrinter.prettyPrint(resetRuntime.space.store)
-    runtimeContainer.put(resetRuntime)
-    result
-  }
+  def storageRepr(hash: StateHash): Option[String] =
+    getResetRuntimeOpt(hash).map { resetRuntime =>
+      val result = StoragePrinter.prettyPrint(resetRuntime.space.store)
+      runtimeContainer.put(resetRuntime)
+      result
+    }
 
   def computeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] = {
     // TODO: Switch to a read only name
@@ -95,6 +95,17 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       case Failure(ex) =>
         runtimeContainer.put(runtime)
         throw ex
+    }
+  }
+
+  private def getResetRuntimeOpt(hash: StateHash) = {
+    val runtime   = runtimeContainer.take()
+    val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
+    Try(runtime.space.reset(blakeHash)) match {
+      case Success(_) => Some(runtime)
+      case Failure(_) =>
+        runtimeContainer.put(runtime)
+        None
     }
   }
 
@@ -141,9 +152,13 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
         terms match {
           case deploy +: rem =>
             for {
-              _                   <- Task.delay(runtime.space.reset(hash))
-              availablePhlos      = Cost(deploy.raw.flatMap(_.phloLimit).get.value)
-              _                   <- runtime.reducer.setAvailablePhlos(availablePhlos)
+              _              <- Task.delay(runtime.space.reset(hash))
+              availablePhlos = Cost(deploy.raw.map(_.phloLimit).get.value)
+              _              <- runtime.reducer.setAvailablePhlos(availablePhlos)
+              (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(
+                deploy.raw.get
+              )
+              _                   <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
               injResult           <- injAttempt(deploy, runtime.reducer, runtime.errorLog)
               (phlosLeft, errors) = injResult
               cost                = phlosLeft.copy(cost = availablePhlos.value - phlosLeft.cost)
@@ -180,7 +195,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       Task.defer {
         terms match {
           case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
-            val availablePhlos = Cost(deploy.raw.flatMap(_.phloLimit).get.value)
+            val availablePhlos = Cost(deploy.raw.map(_.phloLimit).get.value)
             for {
               _         <- runtime.replayReducer.setAvailablePhlos(availablePhlos)
               _         <- Task.delay(runtime.replaySpace.rig(hash, log.toList))

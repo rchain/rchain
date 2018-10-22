@@ -70,17 +70,18 @@ pipeline:
       - /var/cache/rchain-build/.ivy2:/root/.ivy2
       - /var/run/docker.sock:/var/run/docker.sock
     when:
-      event: push
+      event: [ push, tag ]
 
   run-integration-tests:
     <<: *buildenv
     commands:
-      - ./scripts/ci/run-p2p-test
+      - ./scripts/ci/run-integration-tests.sh
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp:/tmp
+      - /var/tmp/rchain-it:/var/tmp/rchain-it
     when:
-      event: push
+      event: [ push, tag ]
 
   publish:
     <<: *buildenv
@@ -93,7 +94,7 @@ pipeline:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     when:
-      event: push
+      event: [ push, tag ]
 
   notify:
     <<: *buildenv
@@ -105,5 +106,5 @@ pipeline:
       - email_password
       - email_recipients
     when:
-      event: push
+      event: [ push, tag ]
       status: [ changed, failure ]

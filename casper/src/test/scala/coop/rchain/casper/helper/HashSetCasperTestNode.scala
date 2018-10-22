@@ -112,7 +112,6 @@ class HashSetCasperTestNode[F[_]](
         .validateBlockCheckpoint[F](
           genesis,
           dag,
-          Set(runtimeManager.emptyStateHash),
           runtimeManager
         )
         .void
