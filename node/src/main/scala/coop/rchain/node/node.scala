@@ -58,7 +58,7 @@ class InitNodeRuntime(conf: Configuration, host: String, scheduler: Scheduler) {
   def init: Effect[NodeRuntime] =
     for {
       _ <- canCreateDataDir
-      _ <- Log[Effect].info(s"Using data_dir: ${dataDirFile.getAbsolutePath}")
+      _ <- Log[Effect].info(s"Using data dir: ${dataDirFile.getAbsolutePath}")
       _ <- transport.generateCertificateIfAbsent[Effect].apply(conf.tls)
       _ <- hasCertificate
       _ <- hasKey
@@ -120,7 +120,7 @@ class InitNodeRuntime(conf: Configuration, host: String, scheduler: Scheduler) {
   )
 }
 
-private class NodeRuntime(
+class NodeRuntime private[node] (
     conf: Configuration,
     host: String,
     scheduler: Scheduler,
