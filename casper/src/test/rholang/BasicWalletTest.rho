@@ -3,31 +3,32 @@
 //requires BasicWallet, MakeMint, TestSet, ListOps
 new
   rl(`rho:registry:lookup`), TestSetCh, MakeMintCh,
-  test1, test2, test3, test4, test5
+  BasicWalletCh, test1, test2, test3, test4, test5
 in {
   rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *TestSetCh) |
   rl!(`rho:id:exunyijimapk7z43g3bbr69awqdz54kyroj9q43jgu3dh567fxsftx`, *MakeMintCh) |
-  for(@(_, TestSet) <- TestSetCh; @(_, MakeMint) <- MakeMintCh) {
+  rl!(`rho:id:3yicxut5xtx5tnmnneta7actof4yse3xangw4awzt8c8owqmddgyms`, *BasicWalletCh) |
+  for(@(_, TestSet) <- TestSetCh; @(_, MakeMint) <- MakeMintCh; @(_, BasicWallet) <- BasicWalletCh) {
     @"sk"!("1388803416a5869f3d4682fb3fae738278287b80d1a5a52ddf89be8eb9dac59d") |
     @"pk"!("79d16233dedf8e8e4cc25272b2b98ac096dac9239ade20dcee5987a1c1d101c7") |
     @"sig0"!("04f9a5f223fdf61ceaa290d04df2c171892d46cee31faad55061896b16340558d27e6b27d55a7133ec6ebf07433a059d1e3c2fd2ea864ad01de69e05f860180e") |
     @"sig1"!("ed1d624af32b9ec1d252c1df8faac112e1a5b9839ca4ba4027105453e8b23c71768fb80bd324c3605a8412cb51c1d86b641538e276965a5b2a742a10d136770c") |
     @"invalidSig"!("b8cea97ee7afdab7eb6ebabe8fde9ca8f9dbd3b877e8fe6b6cfd4bcef5cfdcfccec9fd8de9e39df4b6f5a2f7b6d9da8cffef48fab85faddbaab8ebca4af4ab07") |
 
-    contract @"deposit"(@wallet, @amount, @otherPurse, return) = {
+    contract @"deposit"(wallet, @amount, @otherPurse, return) = {
       new deposit in {
         contract deposit(return) = {
-          @(wallet, "deposit")!(amount, otherPurse, *return)
+          wallet!("deposit", amount, otherPurse, *return)
         } |
         return!(*deposit)
       }
     } |
 
-    contract @"transfer"(@wallet, @amount, @nonce, @sig, destination, contractReturn) = {
+    contract @"transfer"(wallet, @amount, @nonce, @sig, destination, contractReturn) = {
       new transfer, status in {
         contract transfer(return) = {
           //send to known channel so that I can make the right signature
-          @(wallet, "transfer")!(amount, nonce, sig, "myWithdraw", *status) |
+          wallet!("transfer", amount, nonce, sig, "myWithdraw", *status) |
           for(@result <- status){ 
             match result {
               "Success" => {for(@purse <- @"myWithdraw"){ destination!(purse) }}
@@ -40,28 +41,19 @@ in {
       }
     } |
 
-    contract @"getBalance"(@wallet, return) = {
+    contract @"getBalance"(wallet, return) = {
       new getBalance in {
         contract getBalance(return) = {
-          @(wallet, "getBalance")!(*return)
-        } |
-        return!(*getBalance)
-      }
-    } |
-
-    contract @"getBalance2"(purse, return) = {
-      new getBalance in {
-        contract getBalance(return) = {
-          purse!("getBalance", *return)
+          wallet!("getBalance", *return)
         } |
         return!(*getBalance)
       }
     } |
     
-    contract @"getNonce"(@wallet, return) = {
+    contract @"getNonce"(wallet, return) = {
       new getNonce in {
         contract getNonce(return) = {
-          @(wallet, "getNonce")!(*return)
+          wallet!("getNonce", *return)
         } |
         return!(*getNonce)
       }
@@ -83,7 +75,7 @@ in {
         contract @"newWallet"(@algorithm, return) = {
           new makeWallet in {
             contract makeWallet(return) = {
-              @"BasicWallet"!(purse, algorithm, pk, *return)
+              @BasicWallet!(purse, algorithm, pk, *return)
             } |
             return!(*makeWallet)
           }
@@ -99,7 +91,7 @@ in {
           *test1
         ) |
       
-        @"BasicWallet"!(ethereumPurse, "secp256k1", "04C591A8FF19AC9C4E4E5793673B83123437E975285E7B442F4EE2654DFFCA5E2D2103ED494718C697AC9AEBCFD19612E224DB46661011863ED2FC54E71861E2A6", "ethWallet") |  
+        @BasicWallet!(ethereumPurse, "secp256k1", "04C591A8FF19AC9C4E4E5793673B83123437E975285E7B442F4EE2654DFFCA5E2D2103ED494718C697AC9AEBCFD19612E224DB46661011863ED2FC54E71861E2A6", "ethWallet") |  
         for(@[ethWallet] <- @"ethWallet") {
           @"ethWallet"!([ethWallet]) |
           @"getBalance"!(ethWallet, "ethWalletBalance") |
@@ -112,7 +104,7 @@ in {
           )      
         } |
 
-        @"BasicWallet"!(purse, "ed25519", pk, "wallet") |
+        @BasicWallet!(purse, "ed25519", pk, "wallet") |
         for(@[wallet] <- @"wallet") {
             @"wallet"!([wallet]) |
             @"getBalance"!(wallet, "walletBalance") |
@@ -146,7 +138,7 @@ in {
               for(doTransfer <- @"transfer0Nonce") {
                 @"transfer0Nonce"!(*doTransfer) |
                 doTransfer!("status") | for(@wPurse <- @"wPurse"; @"Success" <- @"status") {
-                  @"getBalance2"!(wPurse, "purseBalance") |
+                  @"getBalance"!(wPurse, "purseBalance") |
                   @"getNonce"!(wallet, "walletNonce") |
                   @TestSet!("define",
                     "Wallet transfer should work as expected.",

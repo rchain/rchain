@@ -2,16 +2,21 @@
 
 //requires MakeMint, BasicWallet
 
-contract @"BasicWalletFaucet"(mint, return) = {
-  new this in {
-    contract this(@amount, @algorithm, @publicKey, return) = {
-      new walletPurseCh in {
-        mint!("makePurse", amount, *walletPurseCh) |
-        for(@walletPurse <- walletPurseCh) {
-          @"BasicWallet"!(walletPurse, algorithm, publicKey, *return)
-        }
+new rl(`rho:registry:lookup`), BasicWalletCh in {
+  rl!(`rho:id:3yicxut5xtx5tnmnneta7actof4yse3xangw4awzt8c8owqmddgyms`, *BasicWalletCh) |
+  for(@(_, BasicWallet) <- BasicWalletCh) {
+    contract @"BasicWalletFaucet"(mint, return) = {
+      new this in {
+        contract this(@amount, @algorithm, @publicKey, return) = {
+          new walletPurseCh in {
+            mint!("makePurse", amount, *walletPurseCh) |
+            for(@walletPurse <- walletPurseCh) {
+              @BasicWallet!(walletPurse, algorithm, publicKey, *return)
+            }
+          }
+        } |
+        return!(*this)
       }
-    } |
-    return!(*this)
+    }
   }
 }

@@ -482,7 +482,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val blockStatus    = casperEff.addBlock(block)
 
     val balanceQuery =
-      mkTerm("""for(@[wallet] <- @"myWallet"){ @(wallet, "getBalance")!("__SCALA__") }""").right.get
+      mkTerm("""for(@[wallet] <- @"myWallet"){ @wallet!("getBalance", "__SCALA__") }""").right.get
     val newWalletBalance =
       node.runtimeManager.captureResults(block.getBody.getPostState.tuplespace, balanceQuery)
 

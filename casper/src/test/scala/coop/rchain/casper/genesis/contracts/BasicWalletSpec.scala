@@ -24,10 +24,9 @@ class BasicWalletSpec extends FlatSpec with Matchers {
   val tests   = TestSetUtil.getTests("./casper/src/test/rholang/BasicWalletTest.rho").toList
 
   val deploys = List(
-    //TODO: Replace all compiledSourceDeploy with StandardDeploys when they are ready
     StandardDeploys.nonNegativeNumber,
     StandardDeploys.makeMint,
-    compiledSourceDeploy(BasicWallet, 2L, accounting.MAX_VALUE)
+    StandardDeploys.basicWallet
   )
   TestSetUtil.runTestsWithDeploys(BasicWalletTest, deploys, runtime)
   val tuplespace = StoragePrinter.prettyPrint(runtime.space.store)

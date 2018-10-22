@@ -110,8 +110,8 @@ object BondingUtil {
       transferSigData <- walletTransferSigData[F](nonce, amount, destination)
       transferSig     = Secp256k1.sign(transferSigData, secKey)
     } yield s"""
-             |for(@wallet <- @"$pubKey") {
-             |  @(wallet, "transfer")!($amount, $nonce, "${Base16.encode(transferSig)}", "$destination", "$transferStatusOut")
+             |for(wallet <- @"$pubKey") {
+             |  wallet!("transfer", $amount, $nonce, "${Base16.encode(transferSig)}", "$destination", "$transferStatusOut")
              |}""".stripMargin
 
   def faucetBondDeploy[F[_]: Sync](
@@ -139,7 +139,7 @@ object BondingUtil {
     } yield s"""new walletCh in {
                |  for(faucet <- @"faucet"){ faucet!($amount, "ed25519", "$pubKey", *walletCh) } |
                |  for(@[wallet] <- walletCh) {
-               |    @(wallet, "transfer")!($amount, $nonce, "${Base16.encode(transferSig)}", "$destination", "$statusOut")
+               |    @wallet!("transfer", $amount, $nonce, "${Base16.encode(transferSig)}", "$destination", "$statusOut")
                |  }
                |}""".stripMargin
 
