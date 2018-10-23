@@ -289,6 +289,52 @@ trait StorageExamplesTests
   }
 }
 
+class MixedInMemoryStoreStorageExamplesTestsBase
+    extends StorageTestsBase[Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    with BeforeAndAfterAll {
+
+  val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
+  val mapSize: Long = 1024L * 1024L * 1024L
+
+  override def withTestSpace[R](f: T => R): R = {
+
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+
+    implicit val cg: Codec[GNAT[Channel, Pattern, Entry, EntriesCaptor]] = codecGNAT(
+      implicits.serializeChannel.toCodec,
+      implicits.serializePattern.toCodec,
+      implicits.serializeInfo.toCodec,
+      implicits.serializeEntriesCaptor.toCodec
+    )
+
+    val branch = Branch("inmem")
+
+    val ctx: Context[Channel, Pattern, Entry, EntriesCaptor] = Context.createMixed(dbDir, mapSize)
+
+    val testSpace =
+      RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](ctx, branch)
+
+    val testStore = testSpace.store
+    val trieStore = testStore.trieStore
+
+    testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
+    trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear)
+    initialize(trieStore, branch)
+    try {
+      f(testSpace)
+    } finally {
+      trieStore.close()
+      testStore.close()
+      ctx.close()
+    }
+  }
+
+  override def afterAll(): Unit = {
+    dbDir.recursivelyDelete
+    super.afterAll()
+  }
+}
+
 class InMemoryStoreStorageExamplesTestsBase
     extends StorageTestsBase[Channel, Pattern, Nothing, Entry, EntriesCaptor] {
 
@@ -305,16 +351,14 @@ class InMemoryStoreStorageExamplesTestsBase
 
     val branch = Branch("inmem")
 
-    val trieStore =
-      InMemoryTrieStore.create[Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]]()
-
-    val testStore = InMemoryStore
-      .create[InMemTransaction[
-        history.State[Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]]
-      ], Channel, Pattern, Entry, EntriesCaptor](trieStore, branch)
+    val ctx: Context[Channel, Pattern, Entry, EntriesCaptor] = Context.createInMemory()
 
     val testSpace =
-      RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](testStore, branch)
+      RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](ctx, branch)
+
+    val testStore = testSpace.store
+    val trieStore = testStore.trieStore
+
     testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
     trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear)
     initialize(trieStore, branch)
@@ -327,10 +371,6 @@ class InMemoryStoreStorageExamplesTestsBase
   }
 }
 
-class InMemoryStoreStorageExamplesTests
-    extends InMemoryStoreStorageExamplesTestsBase
-    with StorageExamplesTests
-
 class LMDBStoreStorageExamplesTestBase
     extends StorageTestsBase[Channel, Pattern, Nothing, Entry, EntriesCaptor]
     with BeforeAndAfterAll {
@@ -342,13 +382,14 @@ class LMDBStoreStorageExamplesTestBase
   override def withTestSpace[R](f: T => R): R = {
     implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
 
-    val context   = Context.create[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
-    val testStore = LMDBStore.create[Channel, Pattern, Entry, EntriesCaptor](context)
+    val context = Context.create[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
     val testSpace =
       RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
-        testStore,
+        context,
         Branch.MASTER
       )
+
+    val testStore = testSpace.store
     try {
       testStore.withTxn(testStore.createTxnWrite())(txn => testStore.clear(txn))
       f(testSpace)
@@ -364,6 +405,14 @@ class LMDBStoreStorageExamplesTestBase
     super.afterAll()
   }
 }
+
+class InMemoryStoreStorageExamplesTests
+    extends InMemoryStoreStorageExamplesTestsBase
+    with StorageExamplesTests
+
+class MixedInMemoryStoreStorageExamplesTests
+    extends MixedInMemoryStoreStorageExamplesTestsBase
+    with StorageExamplesTests
 
 class LMDBStoreStorageExamplesTest
     extends LMDBStoreStorageExamplesTestBase
