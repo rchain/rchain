@@ -143,7 +143,154 @@ class StacksafeProtobufGenerator(params: GeneratorParams) extends ProtobufGenera
 
   private def generateMergeFromM(
       message: Descriptor
-  )(printer: FunctionalPrinter): FunctionalPrinter =
-    printer //do nothing for now
+  )(printer: FunctionalPrinter): FunctionalPrinter = {
+
+    import scala.collection.JavaConverters._
+
+    val myFullScalaName = message.scalaTypeNameWithMaybeRoot(message)
+    val requiredFieldMap: Map[FieldDescriptor, Int] =
+      message.fields.filter(_.isRequired).zipWithIndex.toMap
+    printer
+      .add(
+        s"def mergeFromM(`_input__`: _root_.com.google.protobuf.CodedInputStream): $myFullScalaName = {"
+      )
+      .indent
+      .print(message.fieldsWithoutOneofs)(
+        (printer, field) =>
+          if (!field.isRepeated)
+            printer.add(s"var __${field.scalaName} = this.${field.scalaName.asSymbol}")
+          else if (field.isMapField)
+            printer.add(
+              s"val __${field.scalaName} = (scala.collection.immutable.Map.newBuilder[${field.mapType.keyType}, ${field.mapType.valueType}] ++= this.${field.scalaName.asSymbol})"
+            )
+          else
+            printer.add(
+              s"val __${field.scalaName} = (${field.collectionBuilder} ++= this.${field.scalaName.asSymbol})"
+            )
+      )
+      .when(message.preservesUnknownFields)(
+        _.add(
+          "val _unknownFields__ = new _root_.scalapb.UnknownFieldSet.Builder(this.unknownFields)"
+        )
+      )
+      .when(requiredFieldMap.nonEmpty) { fp =>
+        // Sets the bit 0...(n-1) inclusive to 1.
+        def hexBits(n: Int): String = "0x%xL".format((0 to (n - 1)).map(i => (1L << i)).sum)
+        val requiredFieldCount      = requiredFieldMap.size
+        val fullWords               = (requiredFieldCount - 1) / 64
+        val bits: Seq[String] = (1 to fullWords).map(_ => hexBits(64)) :+ hexBits(
+          requiredFieldCount - 64 * fullWords
+        )
+        fp.print(bits.zipWithIndex) {
+          case (fp, (bn, index)) =>
+            fp.add(s"var __requiredFields$index: _root_.scala.Long = $bn")
+        }
+      }
+      .print(message.getOneofs.asScala)(
+        (printer, oneof) =>
+          printer.add(s"var __${oneof.scalaName} = this.${oneof.scalaName.asSymbol}")
+      )
+      .addStringMargin(s"""var _done__ = false
+           |while (!_done__) {
+           |  val _tag__ = _input__.readTag()
+           |  _tag__ match {
+           |    case 0 => _done__ = true""")
+      .print(message.fields) { (printer, field) =>
+        val p = {
+          val newValBase = if (field.isMessage) {
+            val defInstance =
+              s"${field.getMessageType.scalaTypeNameWithMaybeRoot(message)}.defaultInstance"
+            val baseInstance =
+              if (field.isRepeated) defInstance
+              else {
+                val expr =
+                  if (field.isInOneof)
+                    fieldAccessorSymbol(field)
+                  else s"__${field.scalaName}"
+                val mappedType =
+                  toBaseFieldType(field).apply(expr, field.enclosingType)
+                if (field.isInOneof || field.supportsPresence)
+                  (mappedType + s".getOrElse($defInstance)")
+                else mappedType
+              }
+            s"_root_.scalapb.LiteParser.readMessage(_input__, $baseInstance)"
+          } else if (field.isEnum)
+            s"${field.getEnumType.scalaTypeNameWithMaybeRoot(message)}.fromValue(_input__.readEnum())"
+          else s"_input__.read${Types.capitalizedType(field.getType)}()"
+
+          val newVal = toCustomType(field)(newValBase)
+
+          val updateOp =
+            if (field.supportsPresence) s"__${field.scalaName} = Option($newVal)"
+            else if (field.isInOneof) {
+              s"__${field.getContainingOneof.scalaName} = ${field.oneOfTypeName}($newVal)"
+            } else if (field.isRepeated) s"__${field.scalaName} += $newVal"
+            else s"__${field.scalaName} = $newVal"
+
+          printer
+            .addStringMargin(
+              s"""    case ${(field.getNumber << 3) + Types.wireType(field.getType)} =>
+                 |      $updateOp"""
+            )
+            .when(field.isRequired) { p =>
+              val fieldNumber = requiredFieldMap(field)
+              p.add(
+                s"      __requiredFields${fieldNumber / 64} &= 0x${"%x".format(~(1L << fieldNumber))}L"
+              )
+            }
+        }
+
+        if (field.isPackable) {
+          val read = {
+            val tmp = s"""_input__.read${Types.capitalizedType(field.getType)}"""
+            if (field.isEnum)
+              s"${field.getEnumType.scalaTypeName}.fromValue($tmp)"
+            else tmp
+          }
+          val readExpr = toCustomType(field)(read)
+          p.addStringMargin(
+            s"""    case ${(field.getNumber << 3) + Types.WIRETYPE_LENGTH_DELIMITED} => {
+                 |      val length = _input__.readRawVarint32()
+                 |      val oldLimit = _input__.pushLimit(length)
+                 |      while (_input__.getBytesUntilLimit > 0) {
+                 |        __${field.scalaName} += $readExpr
+                 |      }
+                 |      _input__.popLimit(oldLimit)
+                 |    }"""
+          )
+        } else p
+      }
+      .when(!message.preservesUnknownFields)(_.add("    case tag => _input__.skipField(tag)"))
+      .when(message.preservesUnknownFields)(
+        _.add("    case tag => _unknownFields__.parseField(tag, _input__)")
+      )
+      .add("  }")
+      .add("}")
+      .when(requiredFieldMap.nonEmpty) { p =>
+        val r = (0 until (requiredFieldMap.size + 63) / 64)
+          .map(i => s"__requiredFields$i != 0L")
+          .mkString(" || ")
+        p.add(
+          s"""if (${r}) { throw new _root_.com.google.protobuf.InvalidProtocolBufferException("Message missing required fields.") } """
+        )
+      }
+      .add(s"$myFullScalaName(")
+      .indent
+      .addWithDelimiter(",")(
+        (message.fieldsWithoutOneofs ++ message.getOneofs.asScala).map {
+          case e: FieldDescriptor if e.isRepeated =>
+            s"  ${e.scalaName.asSymbol} = __${e.scalaName}.result()"
+          case e: FieldDescriptor =>
+            s"  ${e.scalaName.asSymbol} = __${e.scalaName}"
+          case e: OneofDescriptor =>
+            s"  ${e.scalaName.asSymbol} = __${e.scalaName}"
+        } ++ (if (message.preservesUnknownFields) Seq("  unknownFields = _unknownFields__.result()")
+              else Seq())
+      )
+      .outdent
+      .add(")")
+      .outdent
+      .add("}")
+  }
 
 }
