@@ -41,6 +41,7 @@ class RhoTypesTest extends FlatSpec with PropertyChecks with Matchers {
       forAll { a: A =>
         roundTripSerialization(a)
         stacksafeSizeSameAsReference(a)
+        stacksafeWriteToSameAsReference(a)
       }
     }
 
@@ -53,6 +54,9 @@ class RhoTypesTest extends FlatSpec with PropertyChecks with Matchers {
 
   def stacksafeSizeSameAsReference[A <: GeneratedMessage](a: A): Assertion =
     assert(ProtoM.serializedSize[Coeval](a).value() == a.serializedSize)
+
+  def stacksafeWriteToSameAsReference[A <: GeneratedMessage](a: A): Assertion =
+    assert(ProtoM.toByteArray[Coeval](a).value sameElements a.toByteArray)
 
 }
 
