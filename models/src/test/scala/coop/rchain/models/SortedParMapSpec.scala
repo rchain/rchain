@@ -2,6 +2,7 @@ package coop.rchain.models
 
 import java.util
 
+import com.google.protobuf.ByteString
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.Var.VarInstance.BoundVar
 import org.scalatest.{Assertion, FlatSpec, Matchers}
@@ -9,6 +10,8 @@ import coop.rchain.rspace.Serialize
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance.BoundVar
 import coop.rchain.models.rholang.implicits._
+
+import scala.collection.immutable.BitSet
 
 class SortedParMapSpec extends FlatSpec with Matchers {
 
@@ -61,4 +64,24 @@ class SortedParMapSpec extends FlatSpec with Matchers {
     } should be(true)
   }
 
+  it should "be equal when it is equal" in {
+    val ps = Seq(
+      (
+        Par(),
+        Par(
+          List(),
+          List(),
+          List(),
+          List(),
+          List(),
+          List(GPrivate(ByteString.copyFrom(Array[Byte](0))), GPrivate(ByteString.EMPTY)),
+          List(),
+          List(),
+          AlwaysEqual(BitSet()),
+          true
+        )
+      )
+    )
+    assert(SortedParMap(ps) == SortedParMap(ps))
+  }
 }

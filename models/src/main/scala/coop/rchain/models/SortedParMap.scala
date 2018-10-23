@@ -11,14 +11,19 @@ case class SortedParMap(private val ps: Map[Par, Par])
 
   override def empty: SortedParMap = SortedParMap.empty
 
-  override def get(key: Par): Option[Par] = ps.get(key)
+  override def get(key: Par): Option[Par] = sortedMap.toMap.get(key)
 
   override def iterator: Iterator[(Par, Par)] = sortedMap.toIterator
 
   override def +[V1 >: Par](kv: (Par, V1)): Map[Par, V1] = sortedMap.toMap + kv
 
-  override def -(key: Par): SortedParMap = SortedParMap(ps - key)
+  override def -(key: Par): SortedParMap = SortedParMap(sortedMap.toMap - key)
 
+  override def equals(that: Any): Boolean =
+    that match {
+      case _: SortedParMap => this.sortedMap == that.asInstanceOf[SortedParMap].sortedMap
+      case _               => false
+    }
 }
 
 object SortedParMap {
