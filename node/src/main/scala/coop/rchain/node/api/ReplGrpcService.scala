@@ -39,7 +39,6 @@ import coop.rchain.rholang.interpreter.accounting.CostAccount
 import storage.StoragePrinter
 
 private[api] class ReplGrpcService(runtime: Runtime, worker: Scheduler) extends ReplGrpcMonix.Repl {
-  private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def exec(reader: Reader): Task[ReplResponse] =
     Task

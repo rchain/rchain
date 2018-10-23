@@ -21,9 +21,15 @@ import io.grpc.Server
 import monix.eval.Task
 import monix.execution.Scheduler
 
+class GrpcServer(server: Server) {
+  def start: Task[Unit] = Task.delay(server.start())
+  def stop: Task[Unit]  = Task.delay(server.shutdown())
+  def port: Int         = server.getPort
+}
+
 object GrpcServer {
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  def apply(server: Server): GrpcServer = new GrpcServer(server)
 
   def acquireInternalServer(
       port: Int,
@@ -36,40 +42,36 @@ object GrpcServer {
       jvmMetrics: JvmMetrics[Task],
       nodeMetrics: NodeMetrics[Task],
       connectionsCell: ConnectionsCell[Task]
-  ): Task[Server] =
+  ): Task[GrpcServer] =
     Task.delay {
-      NettyServerBuilder
-        .forPort(port)
-        .executor(grpcExecutor)
-        .maxMessageSize(maxMessageSize)
-        .addService(
-          ReplGrpcMonix.bindService(new ReplGrpcService(runtime, worker), grpcExecutor)
-        )
-        .addService(DiagnosticsGrpcMonix.bindService(diagnostics.grpc, grpcExecutor))
-        .build
+      GrpcServer(
+        NettyServerBuilder
+          .forPort(port)
+          .executor(grpcExecutor)
+          .maxMessageSize(maxMessageSize)
+          .addService(
+            ReplGrpcMonix.bindService(new ReplGrpcService(runtime, worker), grpcExecutor)
+          )
+          .addService(DiagnosticsGrpcMonix.bindService(diagnostics.grpc, grpcExecutor))
+          .build
+      )
     }
 
   def acquireExternalServer[F[_]: Sync: Capture: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
       port: Int,
       maxMessageSize: Int,
       grpcExecutor: Scheduler
-  )(implicit worker: Scheduler): F[Server] =
+  )(implicit worker: Scheduler): F[GrpcServer] =
     Capture[F].capture {
-      NettyServerBuilder
-        .forPort(port)
-        .executor(grpcExecutor)
-        .maxMessageSize(maxMessageSize)
-        .addService(
-          CasperMessageGrpcMonix.bindService(DeployGrpcService.instance(worker), grpcExecutor)
-        )
-        .build
+      GrpcServer(
+        NettyServerBuilder
+          .forPort(port)
+          .executor(grpcExecutor)
+          .maxMessageSize(maxMessageSize)
+          .addService(
+            CasperMessageGrpcMonix.bindService(DeployGrpcService.instance(worker), grpcExecutor)
+          )
+          .build
+      )
     }
-
-  def start(serverExternal: Server, serverInternal: Server)(implicit log: Log[Task]): Task[Unit] =
-    for {
-      _ <- Task.delay(serverExternal.start)
-      _ <- Task.delay(serverInternal.start)
-      _ <- log.info("gRPC server started, listening on ")
-    } yield ()
-
 }
