@@ -7,9 +7,11 @@ import coop.rchain.models.Connective.ConnectiveInstance.{Empty => _}
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.testImplicits._
 import coop.rchain.rspace.Serialize
+import monix.eval.Coeval
 import org.scalacheck.{Arbitrary, Shrink}
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{Assertion, FlatSpec, Matchers}
+import scalapb.GeneratedMessage
 
 import scala.collection.immutable.BitSet
 import scala.reflect.ClassTag
@@ -32,12 +34,13 @@ class RhoTypesTest extends FlatSpec with PropertyChecks with Matchers {
   roundTripSerialization[ESet]
   roundTripSerialization[EMap]
 
-  def roundTripSerialization[A: Serialize: Arbitrary: Shrink: Pretty](
+  def roundTripSerialization[A <: GeneratedMessage: Serialize: Arbitrary: Shrink: Pretty](
       implicit tag: ClassTag[A]
   ): Unit =
     it must s"work for ${tag.runtimeClass.getSimpleName}" in {
       forAll { a: A =>
         roundTripSerialization(a)
+        stacksafeSizeSameAsReference(a)
       }
     }
 
@@ -47,6 +50,10 @@ class RhoTypesTest extends FlatSpec with PropertyChecks with Matchers {
     val expected = Right(a)
     assertEqual(result, expected)
   }
+
+  def stacksafeSizeSameAsReference[A <: GeneratedMessage](a: A): Assertion =
+    assert(ProtoM.serializedSize[Coeval](a).value() == a.serializedSize)
+
 }
 
 class BitSetBytesMapperTest extends FlatSpec with PropertyChecks with Matchers {
