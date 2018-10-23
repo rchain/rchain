@@ -49,8 +49,8 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
       BlockDagFileStorage.Config(
         dataDir.resolve("latest-messsages-data"),
         dataDir.resolve("latest-messsages-checksum"),
-        dataDir.resolve("data-lookup-data"),
-        dataDir.resolve("data-lookup-checksum")
+        dataDir.resolve("block-metadata-data"),
+        dataDir.resolve("block-metadata-checksum")
       )
     )
     try {
@@ -68,8 +68,8 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
       BlockDagFileStorage.Config(
         dataDir.resolve("latest-messsages-data"),
         dataDir.resolve("latest-messsages-checksum"),
-        dataDir.resolve("data-lookup-data"),
-        dataDir.resolve("data-lookup-checksum"),
+        dataDir.resolve("block-metadata-data"),
+        dataDir.resolve("block-metadata-checksum"),
         maxSizeFactor
       )
     )

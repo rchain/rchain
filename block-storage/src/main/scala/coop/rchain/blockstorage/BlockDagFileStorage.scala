@@ -33,10 +33,10 @@ final class BlockDagFileStorage[F[_]: Monad: Concurrent: Sync: Log] private (
     latestMessagesDataFilePath: Path,
     latestMessagesCrcFilePath: Path,
     latestMessagesLogMaxSizeFactor: Int,
-    dataLookupDataOutputStreamRef: Ref[F, OutputStream],
-    dataLookupCrcRef: Ref[F, Crc32[F]],
-    dataLookupDataFilePath: Path,
-    dataLookupCrcFilePath: Path
+    blockMetadataLogOutputStreamRef: Ref[F, OutputStream],
+    blockMetadataCrcRef: Ref[F, Crc32[F]],
+    blockMetadataLogPath: Path,
+    blockMetadataCrcPath: Path
 ) extends BlockDagStorage[F] {
   private final case class FileDagRepresentation(
       latestMessagesMap: Map[Validator, BlockHash],
@@ -130,8 +130,8 @@ final class BlockDagFileStorage[F[_]: Monad: Concurrent: Sync: Log] private (
 
   private def updateDataLookupFile(blockMetadata: BlockMetadata): F[Unit] =
     for {
-      dataLookupOutputStream <- dataLookupDataOutputStreamRef.get
-      dataLookupCrc          <- dataLookupCrcRef.get
+      dataLookupOutputStream <- blockMetadataLogOutputStreamRef.get
+      dataLookupCrc          <- blockMetadataCrcRef.get
       blockBytes             = blockMetadata.toByteString
       toAppend               = blockBytes.size.toByteString.concat(blockBytes).toByteArray
       _                      = dataLookupOutputStream.write(toAppend)
@@ -144,7 +144,7 @@ final class BlockDagFileStorage[F[_]: Monad: Concurrent: Sync: Log] private (
     newCrc.bytes.map { newCrcBytes =>
       val tmpCrc = Files.createTempFile("rchain-block-dag-file-storage-data-lookup-", "-crc")
       Files.write(tmpCrc, newCrcBytes)
-      Files.move(tmpCrc, dataLookupCrcFilePath, StandardCopyOption.REPLACE_EXISTING)
+      Files.move(tmpCrc, blockMetadataCrcPath, StandardCopyOption.REPLACE_EXISTING)
     }
 
   def getRepresentation: F[BlockDagRepresentation[F]] =
@@ -236,10 +236,10 @@ object BlockDagFileStorage {
   private implicit val logSource = LogSource(BlockDagFileStorage.getClass)
 
   final case class Config(
-      latestMessagesDataPath: Path,
+      latestMessagesLogPath: Path,
       latestMessagesCrcPath: Path,
-      dataLookupDataPath: Path,
-      dataLookupCrcPath: Path,
+      blockMetadataLogPath: Path,
+      blockMetadataCrcPath: Path,
       latestMessagesLogMaxSizeFactor: Int = 10
   )
 
@@ -391,7 +391,7 @@ object BlockDagFileStorage {
   def create[F[_]: Monad: Concurrent: Sync: Log](config: Config): F[BlockDagFileStorage[F]] =
     for {
       lock                          <- Semaphore[F](1)
-      latestMessagesRaf             = new RandomAccessFile(config.latestMessagesDataPath.toFile, "rw")
+      latestMessagesRaf             = new RandomAccessFile(config.latestMessagesLogPath.toFile, "rw")
       readLatestMessagesCrc         <- readCrc[F](config.latestMessagesCrcPath)
       (latestMessagesList, logSize) = readLatestMessagesData(latestMessagesRaf)
       validateLatestMessagesDataResult <- validateLatestMessagesData[F](
@@ -403,7 +403,7 @@ object BlockDagFileStorage {
       (latestMessagesMap, calculatedLatestMessagesCrc) = validateLatestMessagesDataResult
       _                                                = latestMessagesRaf.close()
       latestMessagesDataOutputStream = new FileOutputStream(
-        config.latestMessagesDataPath.toFile,
+        config.latestMessagesLogPath.toFile,
         true
       )
       latestMessagesRef                 <- Ref.of[F, Map[Validator, BlockHash]](latestMessagesMap)
@@ -411,19 +411,19 @@ object BlockDagFileStorage {
       latestMessagesCrcRef              <- Ref.of[F, Crc32[F]](calculatedLatestMessagesCrc)
       latestMessagesDataOutputStreamRef <- Ref.of[F, OutputStream](latestMessagesDataOutputStream)
       childMapRef                       <- Ref.of[F, Map[BlockHash, Set[BlockHash]]](Map.empty)
-      dataLookupRandomAccessFile        = new RandomAccessFile(config.dataLookupDataPath.toFile, "rw")
+      dataLookupRandomAccessFile        = new RandomAccessFile(config.blockMetadataLogPath.toFile, "rw")
       dataLookupList                    = readDataLookupData(dataLookupRandomAccessFile)
-      readDataLookupCrc                 <- readCrc[F](config.dataLookupCrcPath)
+      readDataLookupCrc                 <- readCrc[F](config.blockMetadataCrcPath)
       validateDataLookupDataResult <- validateDataLookupData[F](
                                        dataLookupRandomAccessFile,
                                        readDataLookupCrc,
-                                       config.dataLookupCrcPath,
+                                       config.blockMetadataCrcPath,
                                        dataLookupList
                                      )
       (dataLookup, calculatedDataLookupCrc) = validateDataLookupDataResult
       _                                     = dataLookupRandomAccessFile.close()
       dataLookupDataOutputStream = new FileOutputStream(
-        config.dataLookupDataPath.toFile,
+        config.blockMetadataLogPath.toFile,
         true
       )
       dataLookupRef                 <- Ref.of[F, Map[BlockHash, BlockMetadata]](dataLookup)
@@ -440,13 +440,13 @@ object BlockDagFileStorage {
         latestMessagesDataOutputStreamRef,
         latestMessagesLogSizeRef,
         latestMessagesCrcRef,
-        config.latestMessagesDataPath,
+        config.latestMessagesLogPath,
         config.latestMessagesCrcPath,
         config.latestMessagesLogMaxSizeFactor,
         dataLookupDataOutputStreamRef,
         dataLookupCrcRef,
-        config.dataLookupDataPath,
-        config.dataLookupCrcPath
+        config.blockMetadataLogPath,
+        config.blockMetadataCrcPath
       )
 
   def createWithId(config: Config): BlockDagFileStorage[Id] = {
