@@ -1,4 +1,4 @@
-package coop.rchain.comm.transport
+package coop.rchain.crypto.util
 
 import java.io.{File, FileInputStream}
 import java.math.BigInteger
@@ -8,11 +8,10 @@ import java.security.interfaces.{ECPrivateKey, ECPublicKey}
 import java.security.spec._
 import java.util.Base64
 
-import scala.io.Source
-
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Keccak256
-import coop.rchain.crypto.util.SecureRandomUtil
+
+import scala.io.Source
 
 object CertificateHelper {
 
