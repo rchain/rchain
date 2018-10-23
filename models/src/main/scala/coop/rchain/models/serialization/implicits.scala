@@ -1,10 +1,10 @@
 package coop.rchain.models.serialization
 
-import cats.implicits._
+import com.google.protobuf.CodedInputStream
 import coop.rchain.models._
 import coop.rchain.rspace.Serialize
 import monix.eval.Coeval
-import scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
+import scalapb.GeneratedMessageCompanion
 import scodec.bits.ByteVector
 
 object implicits {
@@ -15,8 +15,9 @@ object implicits {
         ByteVector.view(ProtoM.toByteArray(a).value())
 
       override def decode(bytes: ByteVector): Either[Throwable, T] = {
-        val comp: GeneratedMessageCompanion[T] = implicitly
-        Either.catchNonFatal(comp.parseFrom(bytes.toArray))
+        val companion = implicitly[GeneratedMessageCompanion[T]]
+        val buffer    = CodedInputStream.newInstance(bytes.toArray)
+        companion.defaultInstance.mergeFromM[Coeval](buffer).runAttempt()
       }
     }
 
