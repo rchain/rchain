@@ -52,7 +52,7 @@ def run(config, network):
 
     token_size = 20
 
-    contract_path = 'test/casper_propose_and_deploy/contract.rho'
+    contract_path = 'contract.rho'
 
     for node in network.nodes:
         with log_box(logging.info, f"Run test on node '{node.name}'"):
