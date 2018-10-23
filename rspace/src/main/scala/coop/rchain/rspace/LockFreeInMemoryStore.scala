@@ -10,6 +10,10 @@ import scodec.Codec
 import scala.collection.concurrent.TrieMap
 import scala.collection.immutable.Seq
 
+/**
+  * This implementation of Transaction exists only to satisfy the requirements of IStore.
+  * Ideally this can be dropped after InMemoryStore is removed.
+  */
 class NoopTxn[S] extends InMemTransaction[S] {
   override def commit(): Unit                   = ()
   override def abort(): Unit                    = ()
@@ -19,6 +23,12 @@ class NoopTxn[S] extends InMemTransaction[S] {
   override def name: String                     = "noop"
 }
 
+/**
+  * This store is an optimized version of IStore.
+  * It does not handle high level locking.
+  *
+  * It should be used with RSpace that solves high level locking (e.g. FineGrainedRSpace).
+  */
 class LockFreeInMemoryStore[T, C, P, A, K](
     val trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]],
     val trieBranch: Branch
