@@ -183,7 +183,7 @@ object ProcGen {
       pnilGen
 
   private val processContextProcs: Seq[State => Gen[Proc]] =
-    Seq(pgroundGen, pparGen, psendGen, pnewGen)
+    Seq(pgroundGen, pparGen, psendGen, pnewGen, pevalGen)
 
   def topLevelGen(height: Int): Gen[Proc] =
     procGen(processContextProcs, State(height))
