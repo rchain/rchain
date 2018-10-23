@@ -7,6 +7,7 @@ import coop.rchain.catscontrib._, Catscontrib._, ski._
 // TODO we need lower level errors and general error, for now all in one place
 // TODO cleanup unused errors (UDP trash)
 sealed trait CommError
+final case class InitializationError(msg: String)        extends CommError
 final case class UnknownCommError(msg: String)           extends CommError
 final case class DatagramSizeError(size: Int)            extends CommError
 final case class DatagramFramingError(ex: Exception)     extends CommError

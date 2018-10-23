@@ -1,101 +1,88 @@
 package coop.rchain.node
 
+import java.io.File
+import java.security.cert.X509Certificate
+
 import scala.util._
 
-import coop.rchain.comm.NodeIdentifier
-import coop.rchain.comm.transport.{CertificateHelper, CertificatePrinter}
+import cats.data.EitherT.{leftT, rightT}
+import cats.syntax.applicativeError._
+import cats.syntax.either._
+
+import coop.rchain.comm._
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.util.CertificateHelper
 import coop.rchain.node.configuration.Configuration
+import coop.rchain.shared.Log
 
 import monix.eval.Task
+import monix.execution.Scheduler
 
 object NodeEnvironment {
 
-  def create(conf: Configuration): Task[NodeIdentifier] =
-    Task.delay {
-      val dataDirFile = conf.server.dataDir.toFile
+  def create(conf: Configuration)(implicit log: Log[Task]): Effect[NodeIdentifier] =
+    for {
+      dataDir <- Task.delay(conf.server.dataDir.toFile).toEffect
+      _       <- canCreateDataDir(dataDir)
+      _       <- haveAccessToDataDir(dataDir)
+      _       <- log.info(s"Using data dir: ${dataDir.getAbsolutePath}").toEffect
+      _       <- transport.generateCertificateIfAbsent[Effect].apply(conf.tls)
+      _       <- hasCertificate(conf)
+      _       <- hasKey(conf)
+      name    <- name(conf)
+    } yield NodeIdentifier(name)
 
-      if (!dataDirFile.exists()) {
-        if (!dataDirFile.mkdir()) {
-          println(
-            s"The data dir must be a directory and have read and write permissions:\n${dataDirFile.getAbsolutePath}"
+  private def isValid(pred: Boolean, msg: String): Effect[Unit] =
+    if (pred) Left[CommError, Unit](InitializationError(msg)).toEitherT
+    else Right(()).toEitherT
+
+  private def name(conf: Configuration): Effect[String] = {
+    val certificate: Effect[X509Certificate] =
+      Task
+        .delay(CertificateHelper.fromFile(conf.tls.certificate.toFile))
+        .attemptT
+        .leftMap(e => InitializationError(s"Failed to read the X.509 certificate: ${e.getMessage}"))
+
+    for {
+      cert <- certificate
+      pk   = cert.getPublicKey
+      name <- certBase16(CertificateHelper.publicAddress(pk))
+    } yield name
+  }
+
+  private def certBase16(maybePubAddr: Option[Array[Byte]]): Effect[String] =
+    maybePubAddr match {
+      case Some(bytes) =>
+        rightT(
+          Base16.encode(
+            CertificateHelper.publicAddress(bytes)
           )
-          System.exit(-1)
-        }
-      }
-
-      // Check if data-dir has read/write access
-      if (!dataDirFile.isDirectory || !dataDirFile.canRead || !dataDirFile.canWrite) {
-        println(
-          s"The data dir must be a directory and have read and write permissions:\n${dataDirFile.getAbsolutePath}"
         )
-        System.exit(-1)
-      }
-
-      println(s"Using data-dir: ${dataDirFile.getAbsolutePath}")
-
-      // Generate certificate if not provided as option or in the data dir
-      if (!conf.tls.customCertificateLocation
-          && !conf.tls.certificate.toFile.exists()) {
-        println(s"No certificate found at path ${conf.tls.certificate}")
-        println("Generating a X.509 certificate for the node")
-
-        import coop.rchain.shared.Resources._
-        // If there is a key, use it for the certificate
-        if (conf.tls.key.toFile.exists()) {
-          println(s"Using secret key ${conf.tls.key}")
-          Try(CertificateHelper.readKeyPair(conf.tls.key.toFile)) match {
-            case Success(keyPair) =>
-              withResource(new java.io.PrintWriter(conf.tls.certificate.toFile)) {
-                _.write(CertificatePrinter.print(CertificateHelper.generate(keyPair)))
-              }
-            case Failure(e) =>
-              println(s"Invalid secret key: ${e.getMessage}")
-          }
-        } else {
-          println("Generating a PEM secret key for the node")
-          val keyPair = CertificateHelper.generateKeyPair(conf.tls.secureRandomNonBlocking)
-          withResource(new java.io.PrintWriter(conf.tls.certificate.toFile)) { pw =>
-            pw.write(CertificatePrinter.print(CertificateHelper.generate(keyPair)))
-          }
-          withResource(new java.io.PrintWriter(conf.tls.key.toFile)) { pw =>
-            pw.write(CertificatePrinter.printPrivateKey(keyPair.getPrivate))
-          }
-        }
-      }
-
-      if (!conf.tls.certificate.toFile.exists()) {
-        println(s"Certificate file ${conf.tls.certificate} not found")
-        System.exit(-1)
-      }
-
-      if (!conf.tls.key.toFile.exists()) {
-        println(s"Secret key file ${conf.tls.certificate} not found")
-        System.exit(-1)
-      }
-
-      val name: String = {
-        val publicKey = Try(CertificateHelper.fromFile(conf.tls.certificate.toFile)) match {
-          case Success(c) => Some(c.getPublicKey)
-          case Failure(e) =>
-            println(s"Failed to read the X.509 certificate: ${e.getMessage}")
-            System.exit(1)
-            None
-          case _ => None
-        }
-
-        val publicKeyHash = publicKey
-          .flatMap(CertificateHelper.publicAddress)
-          .map(Base16.encode)
-
-        if (publicKeyHash.isEmpty) {
-          println("Certificate must contain a secp256r1 EC Public Key")
-          System.exit(1)
-        }
-
-        publicKeyHash.get
-      }
-
-      NodeIdentifier(name)
+      case None =>
+        leftT(
+          InitializationError(
+            "Certificate must contain a secp256r1 EC Public Key"
+          )
+        )
     }
+
+  private def canCreateDataDir(dataDir: File): Effect[Unit] = isValid(
+    !dataDir.exists() && !dataDir.mkdir(),
+    s"The data dir must be a directory and have read and write permissions:\\n${dataDir.getAbsolutePath}"
+  )
+
+  private def haveAccessToDataDir(dataDir: File): Effect[Unit] = isValid(
+    !dataDir.isDirectory || !dataDir.canRead || !dataDir.canWrite,
+    s"The data dir must be a directory and have read and write permissions:\n${dataDir.getAbsolutePath}"
+  )
+
+  private def hasCertificate(conf: Configuration): Effect[Unit] = isValid(
+    !conf.tls.certificate.toFile.exists(),
+    s"Certificate file ${conf.tls.certificate} not found"
+  )
+
+  private def hasKey(conf: Configuration): Effect[Unit] = isValid(
+    !conf.tls.key.toFile.exists(),
+    s"Secret key file ${conf.tls.certificate} not found"
+  )
 }

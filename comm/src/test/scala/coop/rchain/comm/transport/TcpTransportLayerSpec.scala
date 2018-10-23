@@ -5,6 +5,7 @@ import cats._, cats.data._, cats.implicits._, cats.mtl._, cats.effect.Timer
 import coop.rchain.shared._
 import coop.rchain.comm.PeerNode
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.util.{CertificateHelper, CertificatePrinter}
 import coop.rchain.shared.{Cell, Log}
 import scala.concurrent.duration._
 import monix.eval.Task

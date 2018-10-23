@@ -1,25 +1,30 @@
 package coop.rchain.node
 
+import scala.concurrent.duration._
+
 import cats._
 import cats.data._
 import cats.effect._
 import cats.effect.concurrent.Ref
-import cats.implicits._
+import cats.syntax.applicative._
+import cats.syntax.apply._
+import cats.syntax.functor._
+
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
+import coop.rchain.casper._
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.comm.CasperPacketHandler
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.{LastApprovedBlock, MultiParentCasper, MultiParentCasperRef, SafetyOracle}
+import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.catscontrib._
-import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm._
+import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.discovery._
-import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.rp._
+import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
 import coop.rchain.node.api._
@@ -28,17 +33,20 @@ import coop.rchain.node.diagnostics._
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
+
+import io.grpc.Server
 import kamon._
 import kamon.zipkin.ZipkinReporter
-import io.grpc.Server
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.{Server => Http4sServer}
 import org.http4s.server.blaze._
 
-import scala.concurrent.duration._
-
-class NodeRuntime(conf: Configuration, localPeerNode: LocalPeerNode, scheduler: Scheduler) {
+class NodeRuntime private[node] (
+    conf: Configuration,
+    localPeerNode: LocalPeerNode,
+    scheduler: Scheduler
+)(implicit log: Log[Task]) {
 
   private val loopScheduler = Scheduler.fixedPool("loop", 4)
   private val grpcScheduler = Scheduler.cached("grpc-io", 4, 64)
@@ -62,17 +70,6 @@ class NodeRuntime(conf: Configuration, localPeerNode: LocalPeerNode, scheduler: 
   private val storeType         = conf.server.storeType
   private val defaultTimeout    = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS) // TODO remove
 
-  /** Final Effect + helper methods */
-  type CommErrT[F[_], A] = EitherT[F, CommError, A]
-  type Effect[A]         = CommErrT[Task, A]
-
-  implicit class EitherEffectOps[A](e: Either[CommError, A]) {
-    def toEffect: Effect[A] = EitherT[Task, CommError, A](e.pure[Task])
-  }
-  implicit class TaskEffectOps[A](t: Task[A]) {
-    def toEffect: Effect[A] = t.liftM[CommErrT]
-  }
-
   case class Servers(
       grpcServerExternal: Server,
       grpcServerInternal: Server,
@@ -81,7 +78,6 @@ class NodeRuntime(conf: Configuration, localPeerNode: LocalPeerNode, scheduler: 
 
   def acquireServers(runtime: Runtime)(
       implicit
-      log: Log[Task],
       nodeDiscovery: NodeDiscovery[Task],
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect],
@@ -125,16 +121,12 @@ class NodeRuntime(conf: Configuration, localPeerNode: LocalPeerNode, scheduler: 
     } yield Servers(grpcServerExternal, grpcServerInternal, httpServer)
   }
 
-  def startServers(servers: Servers)(
-      implicit
-      log: Log[Task]
-  ): Effect[Unit] =
+  def startServers(servers: Servers): Effect[Unit] =
     GrpcServer.start(servers.grpcServerExternal, servers.grpcServerInternal).toEffect
 
   def clearResources(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
       implicit
       transport: TransportLayer[Task],
-      log: Log[Task],
       blockStore: BlockStore[Effect]
   ): Unit =
     (for {
@@ -170,7 +162,6 @@ class NodeRuntime(conf: Configuration, localPeerNode: LocalPeerNode, scheduler: 
 
   def addShutdownHook(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
       implicit transport: TransportLayer[Task],
-      log: Log[Task],
       blockStore: BlockStore[Effect]
   ): Task[Unit] =
     Task.delay(sys.addShutdownHook(clearResources(servers, runtime, casperRuntime)))
@@ -179,7 +170,6 @@ class NodeRuntime(conf: Configuration, localPeerNode: LocalPeerNode, scheduler: 
 
   private def nodeProgram(runtime: Runtime, casperRuntime: Runtime)(
       implicit
-      log: Log[Task],
       time: Time[Task],
       rpConfAsk: RPConfAsk[Task],
       metrics: Metrics[Task],
@@ -236,14 +226,13 @@ class NodeRuntime(conf: Configuration, localPeerNode: LocalPeerNode, scheduler: 
     * Handles unrecoverable errors in program. Those are errors that should not happen in properly
     * configured enviornment and they mean immediate termination of the program
     */
-  private def handleUnrecoverableErrors(prog: Effect[Unit])(implicit log: Log[Task]): Effect[Unit] =
+  private def handleUnrecoverableErrors(prog: Effect[Unit]): Effect[Unit] =
     EitherT[Task, CommError, Unit](
       prog.value
-        .onErrorHandleWith {
-          case th =>
-            log.error("Caught unhandable error. Exiting. Stacktrace below.") *> Task.delay {
-              th.printStackTrace();
-            }
+        .onErrorHandleWith { th =>
+          log.error("Caught unhandable error. Exiting. Stacktrace below.") *> Task.delay {
+            th.printStackTrace()
+          }
         } *> exit0.as(Right(()))
     )
 
@@ -269,7 +258,6 @@ class NodeRuntime(conf: Configuration, localPeerNode: LocalPeerNode, scheduler: 
     ) // TODO read from conf
     // 2. create instances of typeclasses
     rpConfAsk            = effects.rpConfAsk(RPConf(localPeerNode, defaultTimeout, rpClearConnConf))
-    log                  = effects.log
     time                 = effects.time
     metrics              = diagnostics.metrics[Task]
     multiParentCasperRef <- MultiParentCasperRef.of[Effect]
@@ -335,7 +323,6 @@ class NodeRuntime(conf: Configuration, localPeerNode: LocalPeerNode, scheduler: 
     jvmMetrics      = diagnostics.jvmMetrics[Task]
     // 3. run the node program.
     program = nodeProgram(runtime, casperRuntime)(
-      log,
       time,
       rpConfAsk,
       metrics,
@@ -349,7 +336,18 @@ class NodeRuntime(conf: Configuration, localPeerNode: LocalPeerNode, scheduler: 
       nodeCoreMetrics,
       jvmMetrics
     )
-    _ <- handleUnrecoverableErrors(program)(log)
+    _ <- handleUnrecoverableErrors(program)
   } yield ()
 
+}
+
+object NodeRuntime {
+  def apply(
+      conf: Configuration
+  )(implicit scheduler: Scheduler, log: Log[Task]): Effect[NodeRuntime] =
+    for {
+      id      <- NodeEnvironment.create(conf)
+      local   <- conf.fetchLocalPeerNode(id).toEffect
+      runtime <- Task.delay(new NodeRuntime(conf, local, scheduler)).toEffect
+    } yield runtime
 }
