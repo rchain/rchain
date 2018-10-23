@@ -32,3 +32,6 @@ Each method needs its own technical description.
 
 (Not yet in the interpreter)
 - `confine`
+
+
+Some standard form for these: function, inputs, outputs. Easy to read, uniform.
