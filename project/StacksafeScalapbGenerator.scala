@@ -131,4 +131,19 @@ class StacksafeProtobufGenerator(params: GeneratorParams) extends ProtobufGenera
         "@transient val serializedSizeM = new coop.rchain.models.Memo(coop.rchain.models.ProtoM.serializedSize(this))"
       )
       .newline
+
+  override def generateMergeFrom(
+      message: Descriptor
+  )(originalPrinter: FunctionalPrinter): FunctionalPrinter = {
+
+    val printer = super.generateMergeFrom(message)(originalPrinter)
+
+    generateMergeFromM(message)(printer)
+  }
+
+  private def generateMergeFromM(
+      message: Descriptor
+  )(printer: FunctionalPrinter): FunctionalPrinter =
+    printer //do nothing for now
+
 }
