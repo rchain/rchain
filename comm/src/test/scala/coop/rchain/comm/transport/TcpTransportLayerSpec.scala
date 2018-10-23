@@ -1,14 +1,16 @@
 package coop.rchain.comm.transport
 
-import cats.effect.Timer
+import java.util.concurrent.TimeUnit._
 
-import scala.concurrent.duration.{Duration, FiniteDuration}
+import cats.effect.Timer
 import coop.rchain.comm.{CachedConnections, PeerNode, TcpConnTag}
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.util.{CertificateHelper, CertificatePrinter}
 import coop.rchain.shared.{Log, Time}
-import java.util.concurrent.TimeUnit._
 import monix.eval.Task
 import monix.execution.Scheduler
+
+import scala.concurrent.duration.{Duration, FiniteDuration}
 
 class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] {
 
