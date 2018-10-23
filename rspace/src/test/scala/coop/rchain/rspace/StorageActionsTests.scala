@@ -1316,7 +1316,14 @@ trait StorageActionsTests[F[_]]
     (ex.getMessage shouldBe "Installing can be done only on startup").pure[F]
   }
 
-  /*
+}
+
+trait LegacyStorageActionsTests
+    extends StorageTestsBase[Id, String, Pattern, Nothing, String, StringsCaptor]
+    with TestImplicitHelpers
+    with GeneratorDrivenPropertyChecks
+    with Checkers {
+
   "after close space" should "throw RSpaceClosedException on all store operations" in withTestSpace {
     val channel  = "ch1"
     val key      = List(channel)
@@ -1337,7 +1344,6 @@ trait StorageActionsTests[F[_]]
         space.produce(channel, null, false)
       )
   }
- */
 }
 
 trait IdTests[C, P, A, R, K] extends StorageTestsBase[Id, C, P, A, R, K] {
@@ -1351,6 +1357,7 @@ class InMemoryStoreStorageActionsTests
     with IdTests[String, Pattern, Nothing, String, StringsCaptor]
     with StorageActionsTests[Id]
     with JoinOperationsTests
+    with LegacyStorageActionsTests
 
 class LMDBStoreActionsTests
     extends LMDBStoreTestsBase
@@ -1358,6 +1365,7 @@ class LMDBStoreActionsTests
     with StorageActionsTests[Id]
     with JoinOperationsTests
     with BeforeAndAfterAll
+    with LegacyStorageActionsTests
 
 class MixedStoreActionsTests
     extends MixedStoreTestsBase
@@ -1365,3 +1373,4 @@ class MixedStoreActionsTests
     with StorageActionsTests[Id]
     with JoinOperationsTests
     with BeforeAndAfterAll
+    with LegacyStorageActionsTests

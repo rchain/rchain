@@ -284,17 +284,6 @@ trait HistoryActionsTests[F[_]]
       } yield (space.store.isEmpty shouldBe true)
     }
 
-  "reset to an unknown checkpoint" should "result in an exception" in
-    withTestSpace { space =>
-      val unknownHash =
-        Blake2b256Hash.fromHex("ff3c5e70a028b7956791a6b3d8db00000f469e0088db22dd3afbc86997fe86a0")
-      (the[Exception] thrownBy {
-        for {
-          _ <- Sync[F].attempt(space.reset(unknownHash))
-        } yield (())
-      } should have message "Unknown root.").pure[F]
-    }
-
   "createCheckpoint, consume, createCheckpoint, reset to first checkpoint, reset to second checkpoint" should
     "result in a store that contains the consume and appropriate join map" in withTestSpace {
     space =>
@@ -542,17 +531,37 @@ trait HistoryActionsTests[F[_]]
         produceEvent
       )))
   }
+
+}
+
+trait LegacyHistoryActionsTests
+    extends StorageTestsBase[Id, String, Pattern, Nothing, String, StringsCaptor]
+    with TestImplicitHelpers
+    with GeneratorDrivenPropertyChecks
+    with Checkers {
+
+  "reset to an unknown checkpoint" should "result in an exception" in
+    withTestSpace { space =>
+      val unknownHash =
+        Blake2b256Hash.fromHex("ff3c5e70a028b7956791a6b3d8db00000f469e0088db22dd3afbc86997fe86a0")
+      (the[Exception] thrownBy {
+        space.reset(unknownHash)
+      } should have message "Unknown root.")
+    }
 }
 
 class MixedStoreHistoryActionsTests
     extends MixedStoreTestsBase
     with HistoryActionsTests[Id]
+    with LegacyHistoryActionsTests
     with IdTests[String, Pattern, Nothing, String, StringsCaptor]
 class LMDBStoreHistoryActionsTests
     extends LMDBStoreTestsBase
     with HistoryActionsTests[Id]
+    with LegacyHistoryActionsTests
     with IdTests[String, Pattern, Nothing, String, StringsCaptor]
 class InMemStoreHistoryActionsTests
     extends InMemoryStoreTestsBase[Id]
     with HistoryActionsTests[Id]
+    with LegacyHistoryActionsTests
     with IdTests[String, Pattern, Nothing, String, StringsCaptor]
