@@ -68,29 +68,27 @@ object tools {
     names
   }
 
-  def extractFreeVariables(p: Proc): Set[String] = {
-    def go(localNames: Set[String], p: Proc): Set[String] =
-      p match {
-        case par: PPar => go(localNames, par.proc_1) ++ go(localNames, par.proc_2)
-        case v: PVar =>
-          v.procvar_ match {
-            case vv: ProcVarVar if (!localNames.contains(vv.var_)) => Set(vv.var_)
-            case _                                                 => Set.empty[String]
-          }
-        case n: PNew =>
-          val newNames = extractNames(javaCollectionToSeq[ListNameDecl, NameDecl](n.listnamedecl_))
-          go(localNames ++ newNames, n.proc_)
+  def extractFreeVariables(localNames: Set[String], p: Proc): Set[String] =
+    p match {
+      case par: PPar =>
+        extractFreeVariables(localNames, par.proc_1) ++ extractFreeVariables(localNames, par.proc_2)
+      case v: PVar =>
+        v.procvar_ match {
+          case vv: ProcVarVar if !localNames.contains(vv.var_) => Set(vv.var_)
+          case _                                               => Set.empty[String]
+        }
+      case n: PNew =>
+        val newNames = extractNames(javaCollectionToSeq[ListNameDecl, NameDecl](n.listnamedecl_))
+        extractFreeVariables(localNames ++ newNames, n.proc_)
 
-        case _ => Set.empty[String]
-      }
-    go(Set.empty[String], p)
-  }
+      case _ => Set.empty[String]
+    }
 }
 
 object ProcGen {
   import tools._
 
-  case class State(height: Int, boundNames: Set[String]) {
+  private case class State(height: Int, boundNames: Set[String] = Set.empty[String]) {
     def decrementHeight: State                   = this.copy(height = height - 1)
     def addNames(names: Iterable[String]): State = this.copy(boundNames = boundNames ++ names)
   }
@@ -102,15 +100,6 @@ object ProcGen {
       p2 <- procGen(processContextProcs, newState)
     } yield new PPar(p1, p2)
   }
-
-  private def pvarGen(state: State): Gen[Proc] =
-    if (state.boundNames.isEmpty)
-      pnilGen
-    else
-      procVarVarGen(Gen.oneOf(state.boundNames.toSeq)).map(new PVar(_))
-
-  private def procVarVarGen(identifierGen: Gen[String]): Gen[ProcVarVar] =
-    identifierGen.map(new ProcVarVar(_))
 
   private def pgroundGen(state: State): Gen[Proc] = {
     val groundIntGen = arbitrary[Long]
@@ -136,8 +125,15 @@ object ProcGen {
 
   private def nameQuoteGen(state: State): Gen[NameQuote] =
     procGen(processContextProcs, state.decrementHeight).map(new NameQuote(_))
-  private def nameGen(state: State): Gen[Name] =
-    nameQuoteGen(state)
+
+  private def nameVarGen(state: ProcGen.State): Gen[NameVar] =
+    Gen.oneOf(state.boundNames.toSeq).map(new NameVar(_))
+
+  private def existingNameGen(state: ProcGen.State): Gen[Name] =
+    if (state.boundNames.isEmpty)
+      nameQuoteGen(state)
+    else
+      Gen.oneOf(nameQuoteGen(state), nameVarGen(state))
 
   private lazy val sendGen: Gen[Send] =
     Gen.oneOf(
@@ -148,11 +144,14 @@ object ProcGen {
   private def psendGen(state: State): Gen[PSend] = {
     val newState = state.decrementHeight
     for {
-      name     <- nameGen(newState)
+      name     <- existingNameGen(newState)
       send     <- sendGen
-      listProc <- Gen.listOf(procGen(allProcs, newState))
+      listProc <- Gen.listOf(procGen(processContextProcs, newState))
     } yield new PSend(name, send, seqToJavaCollection[ListProc, Proc](listProc))
   }
+
+  private def pevalGen(state: State): Gen[PEval] =
+    existingNameGen(state).map(new PEval(_))
 
   private lazy val pnilGen: Gen[PNil] = Gen.const(new PNil())
 
@@ -186,12 +185,10 @@ object ProcGen {
   private val processContextProcs: Seq[State => Gen[Proc]] =
     Seq(pgroundGen, pparGen, psendGen, pnewGen)
 
-  private val allProcs: Seq[State => Gen[Proc]] = pvarGen _ +: processContextProcs
-
   def topLevelGen(height: Int): Gen[Proc] =
-    procGen(processContextProcs, State(height, Set.empty))
+    procGen(processContextProcs, State(height))
 
-  private val uriShrinker: Shrink[String] = Shrink { (x: String) =>
+  private val uriShrinker: Shrink[String] = Shrink { x: String =>
     {
       val components = x.split(":")
 
@@ -245,13 +242,21 @@ object ProcGen {
         .map(procs => new PSend(p.name_, p.send_, seqToJavaCollection[ListProc, Proc](procs)))
 
     case p: PNew =>
-      val initialNames = javaCollectionToSeq[ListNameDecl, NameDecl](p.listnamedecl_)
+      val initialNames = javaCollectionToSeq[ListNameDecl, NameDecl](p.listnamedecl_).toList
+
+      def shrinkListNameDecl(initialNames: Seq[NameDecl]) =
+        shrinkContainer[Seq, NameDecl].shrink(initialNames).takeWhile(_.nonEmpty)
+
+      def hasNoFreeVars(localVars: Set[String], p: Proc) = {
+        val freeVars = extractFreeVariables(localVars, p)
+
+        freeVars.isEmpty
+      }
 
       for {
-        newNames     <- shrinkContainer[Seq, NameDecl].shrink(initialNames).takeWhile(_.nonEmpty)
+        newNames     <- shrinkListNameDecl(initialNames)
         newLocalVars = extractNames(newNames)
-        proc <- shrink(p.proc_)
-                 .filter(extractFreeVariables(_).subsetOf(newLocalVars))
+        proc         <- shrink(p.proc_).filter(hasNoFreeVars(newLocalVars, _))
       } yield new PNew(seqToJavaCollection[ListNameDecl, NameDecl](newNames), proc)
 
     case p: PVar =>
@@ -263,5 +268,11 @@ object ProcGen {
       shrink(p.proc_).map(new PNeg(_))
 
     case p: PNil => streamSingleton(p)
+
+    case p: PEval =>
+      (p.name_ match {
+        case nv: NameVar   => streamSingleton(nv)
+        case nq: NameQuote => shrink(nq.proc_).map(new NameQuote(_))
+      }).map(new PEval(_))
   }
 }
