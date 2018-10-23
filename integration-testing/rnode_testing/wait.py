@@ -82,7 +82,7 @@ def show_blocks(node, blocks_num):
 
         return block_infos
 
-    go.__doc__ = f"show_blocks({node.name})"
+    go.__doc__ = f"show_blocks {blocks_num} on node ({node.name})"
     return go
 
 
