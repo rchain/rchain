@@ -388,6 +388,27 @@ object BlockDagFileStorage {
     }
   }
 
+  private def extractChildMap(
+      dataLookup: Map[BlockHash, BlockMetadata]
+  ): Map[BlockHash, Set[BlockHash]] =
+    dataLookup.foldLeft(Map.empty[BlockHash, Set[BlockHash]]) {
+      case (childMap, (_, blockMetadata)) =>
+        blockMetadata.parents.foldLeft(childMap) {
+          case (acc, p) =>
+            val currentChildren = acc.getOrElse(p, Set.empty[BlockHash])
+            acc.updated(p, currentChildren + blockMetadata.blockHash)
+        }
+    }
+
+  private def extractTopoSort(
+      dataLookup: Map[BlockHash, BlockMetadata]
+  ): Vector[Vector[BlockHash]] = {
+    val indexedTopoSort =
+      dataLookup.values.toVector.groupBy(_.blockNum).mapValues(_.map(_.blockHash)).toVector
+    assert(indexedTopoSort.zipWithIndex.forall { case ((readI, _), i) => readI == i })
+    indexedTopoSort.map(_._2)
+  }
+
   def create[F[_]: Monad: Concurrent: Sync: Log](config: Config): F[BlockDagFileStorage[F]] =
     for {
       lock                          <- Semaphore[F](1)
@@ -410,7 +431,6 @@ object BlockDagFileStorage {
       latestMessagesLogSizeRef          <- Ref.of[F, Int](logSize)
       latestMessagesCrcRef              <- Ref.of[F, Crc32[F]](calculatedLatestMessagesCrc)
       latestMessagesDataOutputStreamRef <- Ref.of[F, OutputStream](latestMessagesDataOutputStream)
-      childMapRef                       <- Ref.of[F, Map[BlockHash, Set[BlockHash]]](Map.empty)
       dataLookupRandomAccessFile        = new RandomAccessFile(config.blockMetadataLogPath.toFile, "rw")
       dataLookupList                    = readDataLookupData(dataLookupRandomAccessFile)
       readDataLookupCrc                 <- readCrc[F](config.blockMetadataCrcPath)
@@ -429,7 +449,10 @@ object BlockDagFileStorage {
       dataLookupRef                 <- Ref.of[F, Map[BlockHash, BlockMetadata]](dataLookup)
       dataLookupDataOutputStreamRef <- Ref.of[F, OutputStream](dataLookupDataOutputStream)
       dataLookupCrcRef              <- Ref.of[F, Crc32[F]](calculatedDataLookupCrc)
-      topoSortRef                   <- Ref.of[F, Vector[Vector[BlockHash]]](Vector.empty)
+      childMap                      = extractChildMap(dataLookup)
+      topoSort                      = extractTopoSort(dataLookup)
+      childMapRef                   <- Ref.of[F, Map[BlockHash, Set[BlockHash]]](childMap)
+      topoSortRef                   <- Ref.of[F, Vector[Vector[BlockHash]]](topoSort)
     } yield
       new BlockDagFileStorage[F](
         lock,
