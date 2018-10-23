@@ -62,6 +62,7 @@ lazy val shared = (project in file("shared"))
       catsCore,
       catsEffect,
       catsMtl,
+      lz4,
       monix,
       scodecCore,
       scodecBits,
@@ -133,6 +134,7 @@ lazy val crypto = (project in file("crypto"))
     fork := true,
     doctestTestFramework := DoctestTestFramework.ScalaTest
   )
+  .dependsOn(shared)
 
 lazy val models = (project in file("models"))
   .settings(commonSettings: _*)

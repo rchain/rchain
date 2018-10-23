@@ -276,6 +276,54 @@ trait StorageExamplesTests[F[_]]
   }
 }
 
+abstract class MixedInMemoryStoreStorageExamplesTestsBase[F[_]]
+    extends StorageTestsBase[F, Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    with BeforeAndAfterAll {
+
+  val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
+  val mapSize: Long = 1024L * 1024L * 1024L
+
+  override def withTestSpace[R](f: T => F[R]): R = {
+
+    implicit val cg: Codec[GNAT[Channel, Pattern, Entry, EntriesCaptor]] = codecGNAT(
+      serializeChannel.toCodec,
+      serializePattern.toCodec,
+      serializeInfo.toCodec,
+      serializeEntriesCaptor.toCodec
+    )
+
+    val branch = Branch("inmem")
+
+    val ctx: Context[Channel, Pattern, Entry, EntriesCaptor] = Context.createMixed(dbDir, mapSize)
+
+    run(for {
+      testSpace <- RSpace.create[F, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+                    ctx,
+                    branch
+                  )
+      testStore = testSpace.store
+      trieStore = testStore.trieStore
+      _         = testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
+      _         = trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear)
+      _         = initialize(trieStore, branch)
+      res       <- f(testSpace)
+    } yield {
+      try {
+        res
+      } finally {
+        trieStore.close()
+        testStore.close()
+        ctx.close()
+      }
+    })
+  }
+
+  override def afterAll(): Unit = {
+    dbDir.recursivelyDelete
+    super.afterAll()
+  }
+}
+
 abstract class InMemoryStoreStorageExamplesTestsBase[F[_]]
     extends StorageTestsBase[F, Channel, Pattern, Nothing, Entry, EntriesCaptor] {
 
@@ -290,23 +338,19 @@ abstract class InMemoryStoreStorageExamplesTestsBase[F[_]]
 
     val branch = Branch("inmem")
 
-    val trieStore =
-      InMemoryTrieStore.create[Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]]()
-
-    val testStore = InMemoryStore
-      .create[InMemTransaction[
-        history.State[Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]]
-      ], Channel, Pattern, Entry, EntriesCaptor](trieStore, branch)
+    val ctx: Context[Channel, Pattern, Entry, EntriesCaptor] = Context.createInMemory()
 
     run(for {
       testSpace <- RSpace.create[F, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
-                    testStore,
+                    ctx,
                     branch
                   )
-      _   = testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
-      _   = trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear)
-      _   = initialize(trieStore, branch)
-      res <- f(testSpace)
+      testStore = testSpace.store
+      trieStore = testStore.trieStore
+      _         <- testStore.withTxn(testStore.createTxnWrite())(testStore.clear).pure[F]
+      _         <- trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear).pure[F]
+      _         = initialize(trieStore, branch)
+      res       <- f(testSpace)
     } yield {
       try {
         res
@@ -355,6 +399,11 @@ abstract class LMDBStoreStorageExamplesTestBase[F[_]]
 
 class InMemoryStoreStorageExamplesTests
     extends InMemoryStoreStorageExamplesTestsBase[Id]
+    with IdTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    with StorageExamplesTests[Id]
+
+class MixedInMemoryStoreStorageExamplesTests
+    extends MixedInMemoryStoreStorageExamplesTestsBase[Id]
     with IdTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
     with StorageExamplesTests[Id]
 
