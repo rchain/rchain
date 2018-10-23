@@ -41,7 +41,7 @@ class RhoTypesTest extends FlatSpec with PropertyChecks with Matchers {
       }
     }
 
-  def roundTripSerialization[A: Serialize: Arbitrary: Shrink: Pretty](a: A): Assertion = {
+  def roundTripSerialization[A: Serialize: Pretty](a: A): Assertion = {
     val bytes    = Serialize[A].encode(a)
     val result   = Serialize[A].decode(bytes)
     val expected = Right(a)
