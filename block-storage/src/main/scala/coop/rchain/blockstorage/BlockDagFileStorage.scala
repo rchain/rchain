@@ -9,9 +9,10 @@ import cats.implicits._
 import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.{Ref, Semaphore}
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.BlockDagFileStorage.{Checkpoint, CheckpointedDagInfo}
 import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.blockstorage.util.BlockMessageUtil.{bonds, parentHashes}
+import coop.rchain.blockstorage.util.BlockMessageUtil.{blockNumber, bonds, parentHashes}
 import coop.rchain.blockstorage.util.{Crc32, TopologicalSortUtil}
 import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.casper.protocol.BlockMessage
@@ -19,14 +20,17 @@ import coop.rchain.shared.{Log, LogSource}
 
 import scala.annotation.tailrec
 import scala.collection.immutable.HashSet
+import scala.ref.WeakReference
 import scala.util.{Failure, Success, Try}
 
-final class BlockDagFileStorage[F[_]: Monad: Concurrent: Sync: Log] private (
+final class BlockDagFileStorage[F[_]: Monad: Concurrent: Sync: Log: BlockStore] private (
     lock: Semaphore[F],
     latestMessagesRef: Ref[F, Map[Validator, BlockHash]],
     childMapRef: Ref[F, Map[BlockHash, Set[BlockHash]]],
     dataLookupRef: Ref[F, Map[BlockHash, BlockMetadata]],
     topoSortRef: Ref[F, Vector[Vector[BlockHash]]],
+    sortOffsetRef: Ref[F, Long],
+    checkpointsRef: Ref[F, List[Checkpoint]],
     latestMessagesLogOutputStreamRef: Ref[F, OutputStream],
     latestMessagesLogSizeRef: Ref[F, Int],
     latestMessagesCrcRef: Ref[F, Crc32[F]],
@@ -38,20 +42,111 @@ final class BlockDagFileStorage[F[_]: Monad: Concurrent: Sync: Log] private (
     blockMetadataLogPath: Path,
     blockMetadataCrcPath: Path
 ) extends BlockDagStorage[F] {
+  private implicit val logSource = LogSource(BlockDagFileStorage.getClass)
+
   private final case class FileDagRepresentation(
       latestMessagesMap: Map[Validator, BlockHash],
       childMap: Map[BlockHash, Set[BlockHash]],
       dataLookup: Map[BlockHash, BlockMetadata],
-      topoSortVector: Vector[Vector[BlockHash]]
+      topoSortVector: Vector[Vector[BlockHash]],
+      sortOffset: Long
   ) extends BlockDagRepresentation[F] {
     def children(blockHash: BlockHash): F[Option[Set[BlockHash]]] =
-      childMap.get(blockHash).pure[F]
+      for {
+        result <- childMap.get(blockHash) match {
+                   case Some(children) =>
+                     Option(children).pure[F]
+                   case None =>
+                     for {
+                       blockOpt <- BlockStore[F].get(blockHash)
+                       result <- blockOpt match {
+                                  case Some(block) =>
+                                    val number = blockNumber(block)
+                                    if (number >= sortOffset) {
+                                      none[Set[BlockHash]].pure[F]
+                                    } else {
+                                      for {
+                                        _          <- lock.acquire
+                                        oldDagInfo <- loadCheckpoint(number)
+                                        _          <- lock.release
+                                      } yield oldDagInfo.flatMap(_.childMap.get(blockHash))
+                                    }
+                                  case None => none[Set[BlockHash]].pure[F]
+                                }
+                     } yield result
+                 }
+      } yield result
     def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
-      dataLookup.get(blockHash).pure[F]
+      for {
+        result <- dataLookup.get(blockHash) match {
+                   case Some(metadata) =>
+                     Option(metadata).pure[F]
+                   case None =>
+                     for {
+                       blockOpt <- BlockStore[F].get(blockHash)
+                     } yield blockOpt.map(BlockMetadata.fromBlock)
+                 }
+      } yield result
     def contains(blockHash: BlockHash): F[Boolean] =
-      dataLookup.contains(blockHash).pure[F]
+      for {
+        result <- dataLookup.get(blockHash) match {
+                   case Some(_) =>
+                     true.pure[F]
+                   case None =>
+                     BlockStore[F].contains(blockHash)
+                 }
+      } yield result
     def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
-      topoSortVector.drop(startBlockNumber.toInt).pure[F]
+      if (startBlockNumber >= sortOffset) {
+        topoSortVector.drop(startBlockNumber.toInt).pure[F]
+      } else {
+        for {
+          _           <- lock.acquire
+          checkpoints <- checkpointsRef.get
+          startingCheckpointOpt = checkpoints.zipWithIndex.find {
+            case (c, _) => c.start <= startBlockNumber && startBlockNumber < c.end
+          }
+          startingCheckpointDagInfoOpt <- startingCheckpointOpt.flatTraverse {
+                                           case (startingCheckpoint, index) =>
+                                             loadCheckpointDagInfo(startingCheckpoint, index)
+                                         }
+          result <- startingCheckpointDagInfoOpt match {
+                     case None =>
+                       Log[F].error(
+                         s"Could not load all necessary checkpoints to build toposort starting from $startBlockNumber"
+                       ) *> Vector.empty[Vector[BlockHash]].pure[F]
+                     case Some(startingCheckpointDagInfo) =>
+                       val tailCheckpoints = checkpoints.zipWithIndex.filter {
+                         case (c, _) => c.start > startBlockNumber
+                       }
+                       for {
+                         loadedTailCheckpointOpts <- tailCheckpoints.traverse {
+                                                      case (checkpoint, index) =>
+                                                        loadCheckpointDagInfo(checkpoint, index)
+                                                    }
+                         result <- if (loadedTailCheckpointOpts.forall(_.isDefined)) {
+                                    val loadedTailCheckpoints = loadedTailCheckpointOpts.map(_.get)
+                                    val startingOffset        = startBlockNumber - startingCheckpointDagInfo.sortOffset
+                                    assert(startingOffset.isValidInt)
+                                    val topoSortPrefix =
+                                      startingCheckpointDagInfo.topoSort.drop(startingOffset.toInt)
+                                    val topoSortMiddle =
+                                      loadedTailCheckpoints
+                                        .sortBy(_.sortOffset)
+                                        .flatMap(_.topoSort)
+                                        .toVector
+                                    val topoSortSuffix = topoSortVector
+                                    (topoSortPrefix ++ topoSortMiddle ++ topoSortSuffix).pure[F]
+                                  } else {
+                                    Log[F].error(
+                                      s"Could not load all necessary checkpoints to build toposort starting from $startBlockNumber"
+                                    ) *> Vector.empty[Vector[BlockHash]].pure[F]
+                                  }
+                       } yield result
+                   }
+          _ <- lock.release
+        } yield result
+      }
     def topoSortTail(tailLength: Long): F[Vector[Vector[BlockHash]]] =
       topoSortVector.takeRight(tailLength.toInt).pure[F]
     def deriveOrdering(startBlockNumber: Long): F[Ordering[BlockMetadata]] =
@@ -72,6 +167,48 @@ final class BlockDagFileStorage[F[_]: Monad: Concurrent: Sync: Log] private (
         }
         .map(_.toMap)
   }
+
+  private def loadDagInfo(checkpoint: Checkpoint): Option[CheckpointedDagInfo] = {
+    val checkpointDataInput  = new RandomAccessFile(checkpoint.path.toFile, "r")
+    val blockMetadataListOpt = BlockDagFileStorage.readDataLookupData(checkpointDataInput)
+    checkpointDataInput.close()
+    blockMetadataListOpt.map { blockMetadataList =>
+      val dataLookup = blockMetadataList.toMap
+      val childMap   = BlockDagFileStorage.extractChildMap(dataLookup)
+      val topoSort   = BlockDagFileStorage.extractTopoSort(dataLookup)
+      CheckpointedDagInfo(childMap, dataLookup, topoSort, checkpoint.start)
+    }
+  }
+
+  private def loadCheckpointDagInfo(checkpoint: Checkpoint,
+                                    index: Int): F[Option[CheckpointedDagInfo]] =
+    checkpoint.dagInfo.flatMap(_.get) match {
+      case Some(dagInfo) =>
+        Option(dagInfo).pure[F]
+      case None =>
+        val loadedDagInfo = loadDagInfo(checkpoint)
+        val newCheckpoint =
+          checkpoint.copy(dagInfo = loadedDagInfo.map(WeakReference(_)))
+        for {
+          _ <- checkpointsRef.update(_.patch(index, List(newCheckpoint), 1))
+        } yield loadedDagInfo
+    }
+
+  private def loadCheckpoint(offset: Long): F[Option[CheckpointedDagInfo]] =
+    for {
+      checkpoints <- checkpointsRef.get
+      neededCheckpoint = checkpoints.zipWithIndex.find {
+        case (c, _) => c.start <= offset && offset < c.end
+      }
+      result <- neededCheckpoint match {
+                 case None =>
+                   Log[F].warn(
+                     s"Requested a block with block number $offset, but there is no checkpoint for it") *>
+                     None.pure[F]
+                 case Some((checkpoint, i)) =>
+                   loadCheckpointDagInfo(checkpoint, i)
+               }
+    } yield result
 
   private def updateLatestMessagesFile(validators: List[Validator], blockHash: BlockHash): F[Unit] =
     for {
@@ -154,8 +291,9 @@ final class BlockDagFileStorage[F[_]: Monad: Concurrent: Sync: Log] private (
       childMap       <- childMapRef.get
       dataLookup     <- dataLookupRef.get
       topoSort       <- topoSortRef.get
+      sortOffset     <- sortOffsetRef.get
       _              <- lock.release
-    } yield FileDagRepresentation(latestMessages, childMap, dataLookup, topoSort)
+    } yield FileDagRepresentation(latestMessages, childMap, dataLookup, topoSort, sortOffset)
 
   def insert(block: BlockMessage): F[Unit] =
     for {
@@ -241,6 +379,20 @@ object BlockDagFileStorage {
       blockMetadataLogPath: Path,
       blockMetadataCrcPath: Path,
       latestMessagesLogMaxSizeFactor: Int = 10
+  )
+
+  private final case class CheckpointedDagInfo(
+      childMap: Map[BlockHash, Set[BlockHash]],
+      dataLookup: Map[BlockHash, BlockMetadata],
+      topoSort: Vector[Vector[BlockHash]],
+      sortOffset: Long
+  )
+
+  private final case class Checkpoint(
+      start: Long,
+      end: Long,
+      path: Path,
+      dagInfo: Option[WeakReference[CheckpointedDagInfo]]
   )
 
   private def readCrc[F[_]: Monad: Sync: Log](crcPath: Path): F[Long] = {
@@ -337,9 +489,11 @@ object BlockDagFileStorage {
 
   private def readDataLookupData(
       dataLookupDataInput: DataInput
-  ): List[(BlockHash, BlockMetadata)] = {
+  ): Option[List[(BlockHash, BlockMetadata)]] = {
     @tailrec
-    def readRec(result: List[(BlockHash, BlockMetadata)]): List[(BlockHash, BlockMetadata)] =
+    def readRec(
+        result: List[(BlockHash, BlockMetadata)]
+    ): Option[List[(BlockHash, BlockMetadata)]] =
       Try {
         val blockSize          = dataLookupDataInput.readInt()
         val blockMetadataBytes = Array.ofDim[Byte](blockSize)
@@ -351,7 +505,9 @@ object BlockDagFileStorage {
           val newPair = (blockMetadata.blockHash, blockMetadata)
           readRec(newPair :: result)
         case Failure(_: EOFException) =>
-          result.reverse
+          Some(result.reverse)
+        case Failure(_) =>
+          None
       }
     readRec(List.empty)
   }
@@ -409,7 +565,9 @@ object BlockDagFileStorage {
     indexedTopoSort.map(_._2)
   }
 
-  def create[F[_]: Monad: Concurrent: Sync: Log](config: Config): F[BlockDagFileStorage[F]] =
+  def create[F[_]: Monad: Concurrent: Sync: Log: BlockStore](
+      config: Config
+  ): F[BlockDagFileStorage[F]] =
     for {
       lock                          <- Semaphore[F](1)
       latestMessagesRaf             = new RandomAccessFile(config.latestMessagesLogPath.toFile, "rw")
@@ -432,13 +590,13 @@ object BlockDagFileStorage {
       latestMessagesCrcRef              <- Ref.of[F, Crc32[F]](calculatedLatestMessagesCrc)
       latestMessagesDataOutputStreamRef <- Ref.of[F, OutputStream](latestMessagesDataOutputStream)
       dataLookupRandomAccessFile        = new RandomAccessFile(config.blockMetadataLogPath.toFile, "rw")
-      dataLookupList                    = readDataLookupData(dataLookupRandomAccessFile)
+      dataLookupListOpt                 = readDataLookupData(dataLookupRandomAccessFile)
       readDataLookupCrc                 <- readCrc[F](config.blockMetadataCrcPath)
       validateDataLookupDataResult <- validateDataLookupData[F](
                                        dataLookupRandomAccessFile,
                                        readDataLookupCrc,
                                        config.blockMetadataCrcPath,
-                                       dataLookupList
+                                       dataLookupListOpt.getOrElse(List.empty)
                                      )
       (dataLookup, calculatedDataLookupCrc) = validateDataLookupDataResult
       _                                     = dataLookupRandomAccessFile.close()
@@ -453,6 +611,8 @@ object BlockDagFileStorage {
       topoSort                      = extractTopoSort(dataLookup)
       childMapRef                   <- Ref.of[F, Map[BlockHash, Set[BlockHash]]](childMap)
       topoSortRef                   <- Ref.of[F, Vector[Vector[BlockHash]]](topoSort)
+      sortOffsetRef                 <- Ref.of[F, Long](0L)
+      checkPointsRef                <- Ref.of[F, List[Checkpoint]](List.empty)
     } yield
       new BlockDagFileStorage[F](
         lock,
@@ -460,6 +620,8 @@ object BlockDagFileStorage {
         childMapRef,
         dataLookupRef,
         topoSortRef,
+        sortOffsetRef,
+        checkPointsRef,
         latestMessagesDataOutputStreamRef,
         latestMessagesLogSizeRef,
         latestMessagesCrcRef,
@@ -472,7 +634,7 @@ object BlockDagFileStorage {
         config.blockMetadataCrcPath
       )
 
-  def createWithId(config: Config): BlockDagFileStorage[Id] = {
+  def createWithId(config: Config)(implicit blockStore: BlockStore[Id]): BlockDagFileStorage[Id] = {
     import coop.rchain.catscontrib.effect.implicits._
     implicit val log = new Log.NOPLog[Id]()
     BlockDagFileStorage.create[Id](config)

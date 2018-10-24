@@ -45,6 +45,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
 
   override def withDagStorage[R](f: BlockDagStorage[Id] => R): R = {
     val dataDir = mkTmpDir()
+    implicit val blockStore = InMemBlockStore.createWithId
     val store = BlockDagFileStorage.createWithId(
       BlockDagFileStorage.Config(
         dataDir.resolve("latest-messsages-data"),
@@ -63,7 +64,8 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   private def createAtDefaultLocation(
       dataDir: Path,
       maxSizeFactor: Int = 10
-  ): BlockDagFileStorage[Id] =
+  ): BlockDagFileStorage[Id] = {
+    implicit val blockStore = InMemBlockStore.createWithId
     BlockDagFileStorage.createWithId(
       BlockDagFileStorage.Config(
         dataDir.resolve("latest-messsages-data"),
@@ -73,6 +75,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
         maxSizeFactor
       )
     )
+  }
 
   it should "be able to restore state on startup" in {
     forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockElements =>
