@@ -1,8 +1,19 @@
 ## A Rholang Reference
 
-A Rholang reference in the style of [the Rust reference](https://doc.rust-lang.org/stable/reference/).
+A Rholang reference in the style of  * [the Rust reference](https://doc.rust-lang.org/stable/reference/).
 
 Table of contents are preliminary and subject to change.
+
+* [Sends and Receives](sends_and_receives/)
+* [Primitive Types and Operators](primitives/)
+* [Unforgeable Names](unforgeable_names/)
+* [Conditionals](conditionals/)
+* [Variable Reference](variable_reference)
+* [Bundles](bundles/)
+* [Patterns](patterns/)
+* [Pattern Matching](pattern_matching/) Derek, patterns and matching go together? Is there a need for patterns without matching?
+* [Normalization Process](normalization process/)
+* [Data Structures](data_structures/)
 
 ### Timeline
 
