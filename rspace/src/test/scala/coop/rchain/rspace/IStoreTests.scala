@@ -1,5 +1,8 @@
 package coop.rchain.rspace
 
+import cats._
+import cats.implicits._
+import cats.effect.Sync
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.internal._
@@ -10,7 +13,7 @@ import org.scalatest.AppendedClues
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
 trait IStoreTests
-    extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor]
+    extends StorageTestsBase[Id, String, Pattern, Nothing, String, StringsCaptor]
     with GeneratorDrivenPropertyChecks
     with AppendedClues {
 
@@ -19,15 +22,16 @@ trait IStoreTests
 
   "putDatum" should "put datum in a new channel" in withTestSpace { space =>
     forAll("channel", "datum") { (channel: String, datumValue: String) =>
-      val store = space.store
-      val key   = List(channel)
-      val datum = Datum.create(channel, datumValue, false)
+      val store: IStore[String, Pattern, String, StringsCaptor] = space.store
+      val key                                                   = List(channel)
+      val datum                                                 = Datum.create(channel, datumValue, false)
 
-      store.withTxn(store.createTxnWrite()) { txn =>
-        store.putDatum(txn, key, datum)
-        store.getData(txn, key) should contain theSameElementsAs (Seq(datum))
-        store.clear(txn)
-      }
+      store
+        .withTxn(store.createTxnWrite()) { txn =>
+          store.putDatum(txn, key, datum)
+          store.getData(txn, key) should contain theSameElementsAs (Seq(datum))
+          store.clear(txn)
+        }
     }
   }
 
@@ -280,6 +284,15 @@ trait IStoreTests
   }
 }
 
-class InMemoryStoreTests extends InMemoryStoreTestsBase with IStoreTests
-class LMDBStoreTests     extends LMDBStoreTestsBase with IStoreTests
-class MixedStoreTests    extends MixedStoreTestsBase with IStoreTests
+class InMemoryStoreTests
+    extends InMemoryStoreTestsBase[Id]
+    with IStoreTests
+    with IdTests[String, Pattern, Nothing, String, StringsCaptor]
+class LMDBStoreTests
+    extends LMDBStoreTestsBase
+    with IStoreTests
+    with IdTests[String, Pattern, Nothing, String, StringsCaptor]
+class MixedStoreTests
+    extends MixedStoreTestsBase
+    with IStoreTests
+    with IdTests[String, Pattern, Nothing, String, StringsCaptor]
