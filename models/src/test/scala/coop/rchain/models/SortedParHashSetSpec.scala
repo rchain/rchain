@@ -1,15 +1,12 @@
 package coop.rchain.models
 
-import java.io.ByteArrayOutputStream
 import java.util
 
-import com.google.protobuf.CodedInputStream
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.Blake2b256
+import com.google.protobuf.ByteString
+import coop.rchain.models.Assertions.assertEqual
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance.BoundVar
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.rholang.sorter.ordering._
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
@@ -82,4 +79,21 @@ class SortedParHashSetSpec extends FlatSpec with Matchers {
     shs.sortedPars should contain theSameElementsAs (expected)
   }
 
+  it should "be equal when it is equal" in {
+    val elements: Seq[Par] = Seq(
+      Par(
+        List(),
+        List(),
+        List(),
+        List(),
+        List(),
+        List(GPrivate(ByteString.copyFrom(Array[Byte](0))), GPrivate(ByteString.EMPTY)),
+        List(),
+        List(),
+        AlwaysEqual(BitSet()),
+        true
+      )
+    )
+    assertEqual(SortedParHashSet(elements), SortedParHashSet(elements))
+  }
 }
