@@ -121,23 +121,16 @@ trait LMDBOps extends CloseOps {
         throw new Exception(s"could not delete: $key")
       }
 
-    def putBytes(txn: Txn[ByteBuffer], key: Blake2b256Hash, data: Array[Byte]) : Unit = {
-      if (!dbi.put(
-        txn,
-        key.bytes.toDirectByteBuffer,
-        data.toDirectByteBuffer)) {
+    def putBytes(txn: Txn[ByteBuffer], key: Blake2b256Hash, data: Array[Byte]): Unit =
+      if (!dbi.put(txn, key.bytes.toDirectByteBuffer, data.toDirectByteBuffer)) {
         throw new Exception(s"could not persist array of ${data.length} bytes")
       }
-    }
 
-    def putBytes[K](txn: Txn[ByteBuffer], key: K, data: Array[Byte])
-                   (implicit codecK: Codec[K]): Unit = {
-      if (!dbi.put(
-        txn,
-        codecK.encode(key).get.bytes.toDirectByteBuffer,
-        data.toDirectByteBuffer)) {
+    def putBytes[K](txn: Txn[ByteBuffer], key: K, data: Array[Byte])(
+        implicit codecK: Codec[K]
+    ): Unit =
+      if (!dbi.put(txn, codecK.encode(key).get.bytes.toDirectByteBuffer, data.toDirectByteBuffer)) {
         throw new Exception(s"could not persist array of ${data.length} bytes")
       }
-    }
   }
 }

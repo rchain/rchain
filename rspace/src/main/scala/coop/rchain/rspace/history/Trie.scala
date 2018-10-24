@@ -18,21 +18,17 @@ case class NodePointer(hash: Blake2b256Hash) extends NonEmptyPointer
 case class LeafPointer(hash: Blake2b256Hash) extends NonEmptyPointer
 case object EmptyPointer                     extends Pointer
 
-sealed trait Trie[+K, +V]                                          extends Product with Serializable
-final case class Leaf[K, V](key: K, value: V)                      extends HashedEntity with Trie[K, V]
-final case class Node(pointerBlock: PointerBlock)                  extends HashedEntity with Trie[Nothing, Nothing]
-final case class Skip(affix: ByteVector, pointer: NonEmptyPointer) extends HashedEntity with Trie[Nothing, Nothing]
+sealed trait Trie[+K, +V]                                          extends HashedEntity with Product with Serializable
+final case class Leaf[K, V](key: K, value: V)                      extends Trie[K, V]
+final case class Node(pointerBlock: PointerBlock)                  extends Trie[Nothing, Nothing]
+final case class Skip(affix: ByteVector, pointer: NonEmptyPointer) extends Trie[Nothing, Nothing]
 
-class HashedEntity {
-  private[this] var memoizedData : WeakReference[(Blake2b256Hash, Array[Byte])] = WeakReference(null)
+private[rspace] class HashedEntity {
+  private[this] var memoizedData: WeakReference[(Blake2b256Hash, Array[Byte])] = WeakReference(null)
 
-  //TODO: ys-pyrofex remove
-//  def hash : Blake2b256Hash = memoizedData.get.get._1
-//  def bytes : Array[Byte] = memoizedData.get.get._2
+  def getMemoized: Option[(Blake2b256Hash, Array[Byte])] = memoizedData.get
 
-  def get : Option[(Blake2b256Hash, Array[Byte])] = memoizedData.get
-
-  def initialize(f : => (Blake2b256Hash, Array[Byte])) : Blake2b256Hash = {
+  def initialize(f: => (Blake2b256Hash, Array[Byte])): Blake2b256Hash = {
     val result = memoizedData.get
     result match {
       case Some((hash, _)) => hash
@@ -62,14 +58,15 @@ object Trie {
       }((codecByteVector :: codecNonEmptyPointer).as[Skip])
 
   def hash[K, V](trie: Trie[K, V])(implicit codecK: Codec[K], codecV: Codec[V]): Blake2b256Hash =
-    if(TrieCache.useCache) {
-      trie.asInstanceOf[HashedEntity].initialize {
+    if (TrieCache.useCache) {
+      trie.initialize {
         codecTrie[K, V]
           .encode(trie)
           .map((vector: BitVector) => {
             val bytes = vector.toByteArray
             (Blake2b256Hash.create(bytes), bytes)
-          }).get
+          })
+          .get
       }
     } else {
       codecTrie[K, V]
@@ -77,14 +74,4 @@ object Trie {
         .map((vector: BitVector) => Blake2b256Hash.create(vector.toByteArray))
         .get
     }
-
-  //TODO: ys-pyrofex remove
-//  def encodeAndHash[K, V](trie: Trie[K, V])(implicit codecK: Codec[K], codecV: Codec[V]): (Array[Byte], Blake2b256Hash) =
-//    codecTrie[K, V]
-//      .encode(trie)
-//      .map((vector: BitVector) => {
-//        val bytes = vector.toByteArray
-//        (bytes, Blake2b256Hash.create(bytes))
-//      })
-//      .get
 }

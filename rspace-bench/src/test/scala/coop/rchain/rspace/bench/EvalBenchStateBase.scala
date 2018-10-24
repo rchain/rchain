@@ -4,6 +4,7 @@ import java.io.{FileNotFoundException, InputStreamReader}
 import java.nio.file.{Files, Path}
 
 import org.openjdk.jmh.annotations.{Setup, TearDown}
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccounting}
@@ -31,8 +32,8 @@ trait EvalBenchStateBase {
 
     implicit val scheduler: Scheduler = monix.execution.Scheduler.Implicits.global
 
-    runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
-    runtime.replayReducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
+    runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).unsafeRunSync
+    runtime.replayReducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).unsafeRunSync
 
     term = Interpreter.buildNormalizedTerm(resourceFileReader(rhoScriptSource)).runAttempt match {
       case Right(par) => Some(par)

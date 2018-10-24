@@ -52,8 +52,8 @@ abstract class WideBenchBaseState {
       case Left(err)  => throw err
     }
     runtime = createRuntime()
-    runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
-    runtime.replayReducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
+    runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).unsafeRunSync
+    runtime.replayReducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).unsafeRunSync
 
     val emptyCheckpoint = runtime.space.createCheckpoint()
     //make sure we always start from clean rspace & trie

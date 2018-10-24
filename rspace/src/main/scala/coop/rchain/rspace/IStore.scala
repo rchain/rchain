@@ -28,7 +28,7 @@ trait IStore[C, P, A, K] {
 
   private[rspace] type TrieTransaction
 
-  private[rspace] type TrieStoreType =  ITrieStore[TrieTransaction, Blake2b256Hash, GNAT[C, P, A, K]]
+  private[rspace] type TrieStoreType = ITrieStore[TrieTransaction, Blake2b256Hash, GNAT[C, P, A, K]]
 
   private[rspace] def createTxnRead(): Transaction
 
@@ -124,12 +124,14 @@ trait IStore[C, P, A, K] {
     _trieUpdates.put(Seq.empty)
     _trieUpdateCount.set(0L)
 
-    val timeStart = System.nanoTime()
-    var timeInWriteTxn : Long = 0L
+    val timeStart            = System.nanoTime()
+    var timeInWriteTxn: Long = 0L
 
-    val res = if(TrieCache.useCache) {
-      val trieCache = new TrieCache(trieStore, trieBranch)
-      collapse(trieUpdates).foreach(processTrieUpdate(trieCache, _))
+    val res = if (TrieCache.useCache) {
+      val trieCache        = new TrieCache(trieStore, trieBranch)
+      val collapsedUpdates = collapse(trieUpdates)
+
+      collapsedUpdates.foreach(processTrieUpdate(trieCache, _))
       val rootHash = trieCache.withTxn(trieCache.createTxnRead()) { txn =>
         trieCache
           .persistAndGetRoot(txn, trieBranch)
@@ -151,8 +153,11 @@ trait IStore[C, P, A, K] {
       }
     }
     val timeTotal = (System.nanoTime() - timeStart).asInstanceOf[Double] / 1000000000.0
-    val timeInWriteTxnTotal = (System.nanoTime() - timeInWriteTxn).asInstanceOf[Double] / 1000000000.0
-    println(s"createCheckpoint(), processed ${trieUpdates.length} trie updates, cache=${TrieCache.useCache}, time,sec=$timeTotal; writeTxnTime,sec=$timeInWriteTxnTotal")
+    val timeInWriteTxnTotal = (System.nanoTime() - timeInWriteTxn)
+      .asInstanceOf[Double] / 1000000000.0
+    println(
+      s"createCheckpoint(), processed ${trieUpdates.length} trie updates, cache=${TrieCache.useCache}, time,sec=$timeTotal; writeTxnTime,sec=$timeInWriteTxnTotal"
+    )
     res
   }
 

@@ -68,11 +68,15 @@ trait ITrieStore[T, K, V] {
       case None =>
         throw new LookupException(s"could not get node at $hash ")
     }
-  } 
+  }
 
   private[rspace] def clear(txn: T): Unit
 
   def close(): Unit
 
-  private[rspace] def applyCache(txn: T, trieCache: TrieCache[T, K, V], rootHash: Blake2b256Hash): Unit
+  private[rspace] def applyCache(
+      txn: T,
+      trieCache: TrieCache[T, K, V],
+      rootHash: Blake2b256Hash
+  ): Unit
 }
