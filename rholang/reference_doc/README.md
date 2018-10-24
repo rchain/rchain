@@ -16,7 +16,7 @@ Table of contents are preliminary and subject to change.
 * [Data Structures](data_structures/)
 
 ## Related Resources
-* Rholang's [Formal Symantics](???) in K-Framework. Derek, insert this link.
+* Rholang's [Formal Symantics](https://github.com/MrChico/krho/blob/master/rho-syntax.k) in K-Framework.
 * A gentler [rholang tutorial](https://github.com/JoshOrndorff/LearnRholangByExample)
 
 ## Timeline
