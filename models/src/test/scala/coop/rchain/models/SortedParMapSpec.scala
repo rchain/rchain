@@ -18,7 +18,7 @@ class SortedParMapSpec extends FlatSpec with Matchers {
   private[this] def toKVpair(pair: (Par, Par)): KeyValuePair = KeyValuePair(pair._1, pair._2)
 
   private[this] def serializeEMap(map: SortedParMap): Array[Byte] =
-    EMap(map.sortedMap.map(toKVpair)).toByteArray
+    EMap(map.sortedMap.map(toKVpair).toSeq).toByteArray
 
   val pars: Seq[(Par, Par)] = Seq[(Par, Par)](
     (GInt(7), GString("Seven")),
@@ -29,7 +29,7 @@ class SortedParMapSpec extends FlatSpec with Matchers {
   )
 
   private def roundTripTest(parMap: SortedParMap): Assertion =
-    EMap.parseFrom(serializeEMap(parMap)) should ===(EMap(parMap.sortedMap.map(toKVpair)))
+    EMap.parseFrom(serializeEMap(parMap)) should ===(EMap(parMap.sortedMap.map(toKVpair).toSeq))
 
   def sample = SortedParMap(pars)
 
