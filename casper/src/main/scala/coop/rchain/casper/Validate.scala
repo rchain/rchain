@@ -495,14 +495,9 @@ object Validate {
     val latestMessagesOfBlock = ProtoUtil.toLatestMessageHashes(b.justifications)
     dag.latestMessage(b.sender).map(_.get.justifications)
     for {
-      maybeLatestMessagesFromSenderView <- dag
-                                            .latestMessage(b.sender)
-                                            .map(
-                                              _.map(
-                                                bm =>
-                                                  ProtoUtil.toLatestMessageHashes(bm.justifications)
-                                              )
-                                            )
+      maybeLatestMessage <- dag.latestMessage(b.sender)
+      maybeLatestMessagesFromSenderView = maybeLatestMessage.map(bm =>
+        ProtoUtil.toLatestMessageHashes(bm.justifications))
       result <- maybeLatestMessagesFromSenderView match {
                  case Some(latestMessagesFromSenderView) =>
                    justificationRegressionsAux[F](
