@@ -346,10 +346,12 @@ class NodeRuntime private[node] (
     ) // TODO read from conf
     // 2. create instances of typeclasses
     rpConfAsk            = effects.rpConfAsk(RPConf(local, defaultTimeout, rpClearConnConf))
-    tcpConnections       <- effects.tcpConnections.toEffect
     rpConnections        <- effects.rpConnections.toEffect
+    kademliaConnections  <- CachedConnections[Task, KademliaConnTag].toEffect
+    tcpConnections       <- CachedConnections[Task, TcpConnTag].toEffect
     log                  = effects.log
     time                 = effects.time
+    timerTask            = Task.timer
     metrics              = diagnostics.metrics[Task]
     multiParentCasperRef <- MultiParentCasperRef.of[Effect]
     lab                  <- LastApprovedBlock.of[Task].toEffect
@@ -360,11 +362,12 @@ class NodeRuntime private[node] (
       conf.tls.certificate,
       conf.tls.key,
       conf.server.maxMessageSize
-    )(grpcScheduler, tcpConnections, log)
+    )(grpcScheduler, log, tcpConnections)
     kademliaRPC = effects.kademliaRPC(local, kademliaPort, defaultTimeout)(
       grpcScheduler,
       metrics,
-      log
+      log,
+      kademliaConnections
     )
     initPeer = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     nodeDiscovery <- effects
