@@ -8,6 +8,7 @@ import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.{Connective, Par, ProtoM}
 import coop.rchain.rholang.StackSafetySpec.findMaxRecursionDepth
 import coop.rchain.rholang.interpreter.{Interpreter, PrettyPrinter, Runtime}
+import coop.rchain.rspace.Serialize
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertions, FlatSpec, Matchers}
@@ -200,6 +201,9 @@ class SerializationStackSafetySpec extends FlatSpec with Matchers {
 
     noException shouldBe thrownBy {
       ProtoM.serializedSize(par).value
+
+      import coop.rchain.models.serialization.implicits._
+      Serialize[Par].encode(par)
     }
   }
 
