@@ -126,14 +126,8 @@ object ProcGen {
   private def nameQuoteGen(state: State): Gen[NameQuote] =
     procGen(processContextProcs, state.decrementHeight).map(new NameQuote(_))
 
-  private def nameVarGen(state: ProcGen.State): Gen[NameVar] =
-    Gen.oneOf(state.boundNames.toSeq).map(new NameVar(_))
-
-  private def existingNameGen(state: ProcGen.State): Gen[Name] =
-    if (state.boundNames.isEmpty)
-      nameQuoteGen(state)
-    else
-      Gen.oneOf(nameQuoteGen(state), nameVarGen(state))
+  private def nameGen(state: ProcGen.State): Gen[Name] =
+    nameQuoteGen(state)
 
   private lazy val sendGen: Gen[Send] =
     Gen.oneOf(
@@ -144,14 +138,14 @@ object ProcGen {
   private def psendGen(state: State): Gen[PSend] = {
     val newState = state.decrementHeight
     for {
-      name     <- existingNameGen(newState)
+      name     <- nameGen(newState)
       send     <- sendGen
       listProc <- Gen.listOf(procGen(processContextProcs, newState))
     } yield new PSend(name, send, seqToJavaCollection[ListProc, Proc](listProc))
   }
 
   private def pevalGen(state: State): Gen[PEval] =
-    existingNameGen(state).map(new PEval(_))
+    nameGen(state).map(new PEval(_))
 
   private lazy val pnilGen: Gen[PNil] = Gen.const(new PNil())
 
