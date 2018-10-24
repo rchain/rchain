@@ -64,20 +64,16 @@ class SortedParMapSpec extends FlatSpec with Matchers {
 
   it should "be equal when it is equal" in {
     val ps = Map(
-      (
-        Par(),
-        Par(
-          List(),
-          List(),
-          List(),
-          List(),
-          List(),
-          List(GPrivate(ByteString.copyFrom(Array[Byte](0))), GPrivate(ByteString.EMPTY)),
-          List(),
-          List(),
-          AlwaysEqual(BitSet()),
-          true
-        )
+      Par() -> Par(
+        ids = Seq(
+          GPrivate(
+            ByteString.copyFrom(Array[Byte](
+              0
+            ))
+          ),
+          GPrivate()
+        ),
+        connectiveUsed = true
       )
     )
     assertEqual(SortedParMap(ps), SortedParMap(ps))
