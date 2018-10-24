@@ -66,7 +66,7 @@ new stdout(`rho:io:stdout`) in {
 ### URIs
 A unique aspect of rholang is its URI primitives. Which are colon-delimited hierarchical names surrounded by backticks.
 
-Some URIs have special powers attached such as this example.
+Some URIs have special powers attached such as this example. Read more about rholang's [system powerbox](../powerbox/).
 ```rholang
 new stdout(`rho:io:stdout`) in {
 
@@ -74,7 +74,7 @@ new stdout(`rho:io:stdout`) in {
 }
 ```
 
-URIs are also used with rholangs name registry TODO link to section on registry.
+URIs are also used with rholangs name registry. Read more about the [name registry](../registry/).
 ```rholang
 new someNameCh, lookup(`rho:registry:lookup`) in {
   lookup!(`rho:registry:edcaf122143g13241gd34132b4324b213b4gd`, *answerCh) |

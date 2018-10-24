@@ -7,6 +7,8 @@ Table of contents are preliminary and subject to change.
 * [Sends and Receives](sends_and_receives/)
 * [Primitive Types and Operators](primitives/)
 * [Unforgeable Names](unforgeable_names/)
+* [Registry](registry/)
+* [System Powerbox](system_powerbox/)
 * [Conditionals](conditionals/)
 * [Bundles](bundles/)
 * [Patterns](patterns/)
