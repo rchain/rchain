@@ -8,9 +8,9 @@ Table of contents are preliminary and subject to change.
 * [Primitive Types and Operators](primitives/)
 * [Unforgeable Names](unforgeable_names/)
 * [Conditionals](conditionals/)
-* [Variable Reference](variable_reference)
 * [Bundles](bundles/)
 * [Patterns](patterns/)
+* [Shadowing](shadowing/)
 * [Pattern Matching](pattern_matching/) Derek, patterns and matching go together? Is there a need for patterns without matching?
 * [Normalization Process](normalization process/)
 * [Data Structures](data_structures/)
