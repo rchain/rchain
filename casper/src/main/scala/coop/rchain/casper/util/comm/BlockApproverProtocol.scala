@@ -65,7 +65,7 @@ class BlockApproverProtocol(
       validCandidate match {
         case Right(_) =>
           for {
-            local <- RPConfAsk[F].reader(_.local())
+            local <- RPConfAsk[F].reader(_.local)
             serializedApproval = BlockApproverProtocol
               .getApproval(candidate, validatorId)
               .toByteString

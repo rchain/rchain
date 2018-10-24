@@ -63,7 +63,7 @@ object HandleMessages {
       packet: Packet
   ): F[CommunicationResponse] =
     for {
-      local               <- RPConfAsk[F].reader(_.local())
+      local               <- RPConfAsk[F].reader(_.local)
       maybeResponsePacket <- PacketHandler[F].handlePacket(remote, packet)
     } yield
       maybeResponsePacket
@@ -89,7 +89,7 @@ object HandleMessages {
       } yield handledWithMessage(ProtocolHelper.protocolHandshakeResponse(local))
 
     for {
-      local        <- RPConfAsk[F].reader(_.local())
+      local        <- RPConfAsk[F].reader(_.local)
       hbrErr       <- TransportLayer[F].roundTrip(peer, ProtocolHelper.heartbeat(local), defaultTimeout)
       commResponse <- hbrErr.fold(error => notHandledHandshake(error), _ => handledHandshake(local))
     } yield commResponse
@@ -99,7 +99,7 @@ object HandleMessages {
       peer: PeerNode,
       heartbeat: Heartbeat
   ): F[CommunicationResponse] =
-    RPConfAsk[F].reader(_.local()) map (
+    RPConfAsk[F].reader(_.local) map (
         local => handledWithMessage(ProtocolHelper.heartbeatResponse(local))
     )
 

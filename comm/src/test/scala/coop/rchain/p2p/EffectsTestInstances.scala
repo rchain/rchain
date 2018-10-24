@@ -48,7 +48,7 @@ object EffectsTestInstances {
   }
 
   def createRPConfAsk[F[_]: Applicative](
-      local: LocalPeerNode,
+      local: PeerNode,
       defaultTimeout: FiniteDuration = FiniteDuration(1, MILLISECONDS),
       clearConnections: ClearConnetionsConf = ClearConnetionsConf(1, 1)
   ) =

@@ -7,6 +7,7 @@ import cats._, cats.data._, cats.implicits._, cats.mtl._, cats.effect.Timer
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import monix.eval._
 import monix.execution._
+import monix.execution.atomic.AtomicAny
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared._
@@ -35,12 +36,13 @@ package object effects {
       def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
     }
 
-  def kademliaRPC(localPeerNode: LocalPeerNode, port: Int, timeout: FiniteDuration)(
+  def kademliaRPC(port: Int, timeout: FiniteDuration)(
       implicit
       scheduler: Scheduler,
+      peerNodeAsk: PeerNodeAsk[Task],
       metrics: Metrics[Task],
       log: Log[Task]
-  ): KademliaRPC[Task] = new GrpcKademliaRPC(localPeerNode, port, timeout)
+  ): KademliaRPC[Task] = new GrpcKademliaRPC(port, timeout)
 
   def tcpTransportLayer(
       port: Int,
@@ -64,6 +66,19 @@ package object effects {
   def rpConnections: Task[ConnectionsCell[Task]] =
     Cell.mvarCell[Connections](Connections.empty)
 
-  def rpConfAsk(conf: RPConf): ApplicativeAsk[Task, RPConf] =
-    new ConstApplicativeAsk[Task, RPConf](conf)
+  def rpConfState(conf: RPConf): MonadState[Task, RPConf] =
+    new AtomicMonadState[Task, RPConf](AtomicAny(conf))
+
+  def rpConfAsk(implicit state: MonadState[Task, RPConf]): ApplicativeAsk[Task, RPConf] =
+    new DefaultApplicativeAsk[Task, RPConf] {
+      val applicative: Applicative[Task] = Applicative[Task]
+      def ask: Task[RPConf]              = state.get
+    }
+
+  def peerNodeAsk(implicit state: MonadState[Task, RPConf]): ApplicativeAsk[Task, PeerNode] =
+    new DefaultApplicativeAsk[Task, PeerNode] {
+      val applicative: Applicative[Task] = Applicative[Task]
+      def ask: Task[PeerNode]            = state.get.map(_.local)
+    }
+
 }

@@ -189,7 +189,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         peer: PeerNode,
         br: ApprovedBlockRequest
     ): F[Option[Packet]] =
-      RPConfAsk[F].reader(_.local()).map(noApprovedBlockAvailable(_).some)
+      RPConfAsk[F].reader(_.local).map(noApprovedBlockAvailable(_).some)
 
     override def handleBlockApproval(ba: BlockApproval): F[Option[Packet]] =
       nonePacket
@@ -228,7 +228,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         peer: PeerNode,
         br: ApprovedBlockRequest
     ): F[Option[Packet]] =
-      RPConfAsk[F].reader(_.local()).map(noApprovedBlockAvailable(_).some)
+      RPConfAsk[F].reader(_.local).map(noApprovedBlockAvailable(_).some)
 
     override def handleUnapprovedBlock(peer: PeerNode, ub: UnapprovedBlock): F[Option[Packet]] =
       nonePacket
@@ -360,7 +360,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
 
     override def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Option[Packet]] =
       for {
-        local      <- RPConfAsk[F].reader(_.local())
+        local      <- RPConfAsk[F].reader(_.local)
         block      <- BlockStore[F].get(br.hash) // TODO: Refactor
         serialized = block.map(_.toByteString)
         maybeMsg = serialized.map(

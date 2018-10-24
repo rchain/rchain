@@ -24,7 +24,7 @@ import coop.rchain.comm._
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.rp._
-import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
+import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
 import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
 import coop.rchain.node.api._
@@ -44,7 +44,7 @@ import org.http4s.server.blaze._
 
 class NodeRuntime private[node] (
     conf: Configuration,
-    localPeerNode: LocalPeerNode,
+    id: NodeIdentifier,
     scheduler: Scheduler
 )(implicit log: Log[Task]) {
 
@@ -59,11 +59,8 @@ class NodeRuntime private[node] (
   import ApplicativeError_._
 
   /** Configuration */
-  private val id                = localPeerNode().id
-  private val host              = localPeerNode().endpoint.host
   private val port              = conf.server.port
   private val kademliaPort      = conf.server.kademliaPort
-  private val address           = s"rnode://$id@$host?protocol=$port&discovery=$kademliaPort"
   private val storagePath       = conf.server.dataDir.resolve("rspace")
   private val casperStoragePath = storagePath.resolve("casper")
   private val storageSize       = conf.server.mapSize
@@ -127,14 +124,15 @@ class NodeRuntime private[node] (
   def clearResources(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
       implicit
       transport: TransportLayer[Task],
-      blockStore: BlockStore[Effect]
+      blockStore: BlockStore[Effect],
+      peerNodeAsk: PeerNodeAsk[Task]
   ): Unit =
     (for {
       _   <- log.info("Shutting down gRPC servers...")
       _   <- Task.delay(servers.grpcServerExternal.shutdown())
       _   <- Task.delay(servers.grpcServerInternal.shutdown())
       _   <- log.info("Shutting down transport layer, broadcasting DISCONNECT")
-      loc = localPeerNode()
+      loc <- peerNodeAsk.ask
       msg = ProtocolHelper.disconnect(loc)
       _   <- transport.shutdown(msg)
       _   <- log.info("Shutting down HTTP server....")
@@ -162,7 +160,8 @@ class NodeRuntime private[node] (
 
   def addShutdownHook(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
       implicit transport: TransportLayer[Task],
-      blockStore: BlockStore[Effect]
+      blockStore: BlockStore[Effect],
+      peerNodeAsk: PeerNodeAsk[Task]
   ): Task[Unit] =
     Task.delay(sys.addShutdownHook(clearResources(servers, runtime, casperRuntime)))
 
@@ -171,7 +170,9 @@ class NodeRuntime private[node] (
   private def nodeProgram(runtime: Runtime, casperRuntime: Runtime)(
       implicit
       time: Time[Task],
+      rpConfState: RPConfState[Task],
       rpConfAsk: RPConfAsk[Task],
+      peerNodeAsk: PeerNodeAsk[Task],
       metrics: Metrics[Task],
       transport: TransportLayer[Task],
       nodeDiscovery: NodeDiscovery[Task],
@@ -190,15 +191,24 @@ class NodeRuntime private[node] (
           else Log[Effect].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
     } yield ()
 
-    val loop: Effect[Unit] = for {
-      _ <- Connect.clearConnections[Effect]
-      _ <- Connect.findAndConnect[Effect](Connect.connect[Effect])
-      _ <- time.sleep(5.seconds).toEffect
-    } yield ()
+    val dynamicIpLoop: Task[Unit] =
+      for {
+        _        <- time.sleep(1.minute)
+        local    <- peerNodeAsk.ask
+        newLocal <- conf.checkLocalPeerNode(local)
+        _        <- newLocal.fold(Task.unit)(pn => rpConfState.set(rpConf(pn)))
+      } yield ()
+
+    val loop: Effect[Unit] =
+      for {
+        _ <- Connect.clearConnections[Effect]
+        _ <- Connect.findAndConnect[Effect](Connect.connect[Effect])
+        _ <- time.sleep(5.seconds).toEffect
+      } yield ()
 
     val casperLoop: Effect[Unit] =
       for {
-        _ <- casperConstructor.get map {
+        _ <- casperConstructor.get.map {
               case Some(casper) => casper.fetchDependencies
               case None         => ().pure[Effect]
             }
@@ -207,6 +217,7 @@ class NodeRuntime private[node] (
 
     for {
       _       <- info
+      local   <- peerNodeAsk.ask.toEffect
       servers <- acquireServers(runtime)
       _       <- addShutdownHook(servers, runtime, casperRuntime).toEffect
       _       <- startServers(servers)
@@ -216,9 +227,14 @@ class NodeRuntime private[node] (
             blob => packetHandler.handlePacket(blob.sender, blob.packet).as(())
           )
       _ <- NodeDiscovery[Task].discover.executeOn(loopScheduler).start.toEffect
-      _ <- Log[Effect].info(s"Listening for traffic on $address.")
-      _ <- EitherT(Task.defer(loop.forever.value).executeOn(loopScheduler))
-      _ <- EitherT(Task.defer(casperLoop.forever.value).executeOn(loopScheduler))
+      _ <- if (conf.server.dynamicHostAddress)
+            dynamicIpLoop.forever.executeOn(loopScheduler).start.toEffect
+          else Task.unit.toEffect
+      host    = local.endpoint.host
+      address = s"rnode://$id@$host?protocol=$port&discovery=$kademliaPort"
+      _       <- Log[Effect].info(s"Listening for traffic on $address.")
+      _       <- EitherT(Task.defer(loop.forever.value).executeOn(loopScheduler))
+      _       <- EitherT(Task.defer(casperLoop.forever.value).executeOn(loopScheduler))
     } yield ()
   }
 
@@ -240,6 +256,13 @@ class NodeRuntime private[node] (
     new Exception(s"CommError: $commError")
   }, e => { UnknownCommError(e.getMessage) })
 
+  private val rpClearConnConf = ClearConnetionsConf(
+    conf.server.maxNumOfConnections,
+    numOfConnectionsPinged = 10
+  ) // TODO read from conf
+
+  private def rpConf(peerNode: PeerNode) = RPConf(peerNode, defaultTimeout, rpClearConnConf)
+
   /**
     * Main node entry. It will:
     * 1. set up configurations
@@ -248,16 +271,18 @@ class NodeRuntime private[node] (
     */
   // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
   val main: Effect[Unit] = for {
-    // 1. set up configurations
+    // 1. fetch local peer node
+    local <- conf.fetchLocalPeerNode(id).toEffect
+
+    // 2. set up configurations
     tcpConnections <- effects.tcpConnections.toEffect
     rpConnections  <- effects.rpConnections.toEffect
     defaultTimeout = conf.server.defaultTimeout.millis
-    rpClearConnConf = ClearConnetionsConf(
-      conf.server.maxNumOfConnections,
-      numOfConnectionsPinged = 10
-    ) // TODO read from conf
-    // 2. create instances of typeclasses
-    rpConfAsk            = effects.rpConfAsk(RPConf(localPeerNode, defaultTimeout, rpClearConnConf))
+
+    // 3. create instances of typeclasses
+    rpConfState          = effects.rpConfState(rpConf(local))
+    rpConfAsk            = effects.rpConfAsk(rpConfState)
+    peerNodeAsk          = effects.peerNodeAsk(rpConfState)
     time                 = effects.time
     metrics              = diagnostics.metrics[Task]
     multiParentCasperRef <- MultiParentCasperRef.of[Effect]
@@ -269,19 +294,15 @@ class NodeRuntime private[node] (
       conf.tls.key,
       conf.server.maxMessageSize
     )(grpcScheduler, tcpConnections, log)
-    kademliaRPC = effects.kademliaRPC(localPeerNode, kademliaPort, defaultTimeout)(
+    kademliaRPC = effects.kademliaRPC(kademliaPort, defaultTimeout)(
       grpcScheduler,
+      peerNodeAsk,
       metrics,
       log
     )
     initPeer = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     nodeDiscovery <- effects
-                      .nodeDiscovery(id, defaultTimeout)(initPeer)(
-                        log,
-                        time,
-                        metrics,
-                        kademliaRPC
-                      )
+                      .nodeDiscovery(id, defaultTimeout)(initPeer)(log, time, metrics, kademliaRPC)
                       .toEffect
     // TODO: This change is temporary until itegulov's BlockStore implementation is in
     blockMap <- Ref.of[Effect, Map[BlockHash, BlockMessage]](Map.empty[BlockHash, BlockMessage])
@@ -321,10 +342,13 @@ class NodeRuntime private[node] (
     )
     nodeCoreMetrics = diagnostics.nodeCoreMetrics[Task]
     jvmMetrics      = diagnostics.jvmMetrics[Task]
-    // 3. run the node program.
+
+    // 4. run the node program.
     program = nodeProgram(runtime, casperRuntime)(
       time,
+      rpConfState,
       rpConfAsk,
+      peerNodeAsk,
       metrics,
       transport,
       nodeDiscovery,
@@ -347,7 +371,6 @@ object NodeRuntime {
   )(implicit scheduler: Scheduler, log: Log[Task]): Effect[NodeRuntime] =
     for {
       id      <- NodeEnvironment.create(conf)
-      local   <- conf.fetchLocalPeerNode(id).toEffect
-      runtime <- Task.delay(new NodeRuntime(conf, local, scheduler)).toEffect
+      runtime <- Task.delay(new NodeRuntime(conf, id, scheduler)).toEffect
     } yield runtime
 }

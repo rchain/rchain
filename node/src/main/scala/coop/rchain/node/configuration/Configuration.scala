@@ -316,7 +316,7 @@ object Configuration {
       port,
       httpPort,
       kademliaPort,
-      dynamicHostAddress,
+      host.isEmpty && dynamicHostAddress,
       noUpnp,
       defaultTimeout,
       bootstrap,
@@ -428,16 +428,22 @@ final class Configuration(
 
   def fetchLocalPeerNode(
       id: NodeIdentifier
-  )(implicit scheduler: Scheduler, log: Log[Task]): Task[LocalPeerNode] =
+  )(implicit log: Log[Task]): Task[PeerNode] =
     for {
       externalAddress <- retriveExternalAddress
       host            <- fetchHost(externalAddress)
       peerNode        = PeerNode.from(id, host, server.port, server.kademliaPort)
-    } yield {
-      if (server.host.isEmpty && server.dynamicHostAddress)
-        new DynamicLocalPeerNode(peerNode)
-      else () => peerNode
-    }
+    } yield peerNode
+
+  def checkLocalPeerNode(
+      peerNode: PeerNode
+  )(implicit log: Log[Task]): Task[Option[PeerNode]] =
+    for {
+      r      <- checkAll()
+      (_, a) = r
+      host <- if (a == peerNode.endpoint.host) Task.now(Option.empty[String])
+             else log.info(s"external IP address has changed to $a").map(kp(Some(a)))
+    } yield host.map(h => PeerNode.from(peerNode.id, h, server.port, server.kademliaPort))
 
   private def fetchHost(externalAddress: Option[String])(implicit log: Log[Task]): Task[String] =
     server.host match {
@@ -456,7 +462,7 @@ final class Configuration(
 
   private def checkNext(
       prev: (String, Option[String]),
-      next: Task[(String, Option[String])]
+      next: => Task[(String, Option[String])]
   ): Task[(String, Option[String])] =
     prev._2.fold(next)(_ => Task.pure(prev))
 
@@ -483,35 +489,6 @@ final class Configuration(
       (s, a) = r
       _      <- log.info(s"guessed $a from source: $s")
     } yield a
-
-  private final class DynamicLocalPeerNode(peerNode: PeerNode)(
-      implicit scheduler: Scheduler,
-      log: Log[Task]
-  ) extends LocalPeerNode {
-    private val ip        = new AtomicReference[PeerNode](peerNode)
-    def apply(): PeerNode = ip.get()
-
-    scheduler.scheduleAtFixedRate(1.minute, 1.minute) {
-      val checkProgram =
-        for {
-          r      <- checkAll()
-          (_, a) = r
-          host <- if (a == ip.get().endpoint.host) Task.now(Option.empty[String])
-                 else log.info(s"external IP address has changed to $a").map(kp(Some(a)))
-        } yield host
-
-      checkProgram.runAsync(
-        new Callback[Option[String]] {
-          def onSuccess(host: Option[String]): Unit =
-            host.foreach { h =>
-              ip.set(PeerNode.from(peerNode.id, h, server.port, server.kademliaPort))
-            }
-
-          def onError(ex: Throwable): Unit = ()
-        }
-      )
-    }
-  }
 }
 
 case class Profile(name: String, dataDir: (() => Path, String))

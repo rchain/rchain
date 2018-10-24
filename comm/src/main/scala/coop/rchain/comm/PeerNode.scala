@@ -56,7 +56,3 @@ object PeerNode {
     maybePeer.fold[Either[CommError, PeerNode]](Left(ParseError(s"bad address: $str")))(Right(_))
   }
 }
-
-trait LocalPeerNode {
-  def apply(): PeerNode
-}

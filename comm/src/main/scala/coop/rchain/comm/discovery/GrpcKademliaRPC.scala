@@ -14,9 +14,10 @@ import com.google.protobuf.ByteString
 import scala.concurrent.duration._
 import com.google.protobuf.ByteString
 
-class GrpcKademliaRPC(localPeerNode: LocalPeerNode, port: Int, timeout: FiniteDuration)(
+class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
     implicit
     scheduler: Scheduler,
+    peerNodeAsk: PeerNodeAsk[Task],
     metrics: Metrics[Task],
     log: Log[Task]
 ) extends KademliaRPC[Task] {
@@ -27,9 +28,10 @@ class GrpcKademliaRPC(localPeerNode: LocalPeerNode, port: Int, timeout: FiniteDu
     for {
       _       <- Metrics[Task].incrementCounter("protocol-ping-sends")
       channel <- clientChannel(peer)
+      local   <- peerNodeAsk.ask
       pongErr <- KademliaGrpcMonix
                   .stub(channel)
-                  .sendPing(Ping().withSender(node(localPeerNode())))
+                  .sendPing(Ping().withSender(node(local)))
                   .nonCancelingTimeout(timeout)
                   .attempt
       _ <- Task.delay(channel.shutdown())
@@ -38,10 +40,11 @@ class GrpcKademliaRPC(localPeerNode: LocalPeerNode, port: Int, timeout: FiniteDu
 
   def lookup(key: Seq[Byte], peer: PeerNode): Task[Seq[PeerNode]] =
     for {
-      _ <- Metrics[Task].incrementCounter("protocol-lookup-send")
+      _     <- Metrics[Task].incrementCounter("protocol-lookup-send")
+      local <- peerNodeAsk.ask
       lookup = Lookup()
         .withId(ByteString.copyFrom(key.toArray))
-        .withSender(node(localPeerNode()))
+        .withSender(node(local))
       channel <- clientChannel(peer)
       responseErr <- KademliaGrpcMonix
                       .stub(channel)

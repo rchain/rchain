@@ -118,7 +118,7 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
       RPConf(
         clearConnections = ClearConnetionsConf(maxNumOfConnections, numOfConnectionsPinged),
         defaultTimeout = defaultTimeout,
-        local = () => peer("src")
+        local = peer("src")
       )
     )
 
