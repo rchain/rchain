@@ -3,13 +3,11 @@ package coop.rchain.models
 import java.util
 
 import com.google.protobuf.ByteString
-import coop.rchain.models.Expr.ExprInstance.GInt
-import coop.rchain.models.Var.VarInstance.BoundVar
-import org.scalatest.{Assertion, FlatSpec, Matchers}
-import coop.rchain.rspace.Serialize
-import coop.rchain.models.Expr.ExprInstance._
+import coop.rchain.models.Assertions.assertEqual
+import coop.rchain.models.Expr.ExprInstance.{GInt, _}
 import coop.rchain.models.Var.VarInstance.BoundVar
 import coop.rchain.models.rholang.implicits._
+import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
 
@@ -82,6 +80,6 @@ class SortedParMapSpec extends FlatSpec with Matchers {
         )
       )
     )
-    assert(SortedParMap(ps) == SortedParMap(ps))
+    assertEqual(SortedParMap(ps), SortedParMap(ps))
   }
 }
