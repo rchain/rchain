@@ -1,6 +1,6 @@
-## A Rholang Reference
+# A Rholang Reference
 
-A Rholang reference in the style of  * [the Rust reference](https://doc.rust-lang.org/stable/reference/).
+A Rholang reference in the style of [the Rust reference](https://doc.rust-lang.org/stable/reference/).
 
 Table of contents are preliminary and subject to change.
 
@@ -15,7 +15,11 @@ Table of contents are preliminary and subject to change.
 * [Normalization Process](normalization process/)
 * [Data Structures](data_structures/)
 
-### Timeline
+## Related Resources
+* Rholang's [Formal Symantics](???) in K-Framework. Derek, insert this link.
+* A gentler [rholang tutorial](https://github.com/JoshOrndorff/LearnRholangByExample)
+
+## Timeline
 
 Nov 5, 2018: Deadline for brain dump.
 
