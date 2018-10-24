@@ -124,10 +124,7 @@ trait IStore[C, P, A, K] {
     _trieUpdates.put(Seq.empty)
     _trieUpdateCount.set(0L)
 
-    val timeStart            = System.nanoTime()
-    var timeInWriteTxn: Long = 0L
-
-    val res = if (TrieCache.useCache) {
+    if (TrieCache.useCache) {
       val trieCache        = new TrieCache(trieStore, trieBranch)
       val collapsedUpdates = collapse(trieUpdates)
 
@@ -137,13 +134,11 @@ trait IStore[C, P, A, K] {
           .persistAndGetRoot(txn, trieBranch)
           .getOrElse(throw new Exception("Could not get root hash"))
       }
-      timeInWriteTxn = System.nanoTime()
       trieStore.withTxn(trieStore.createTxnWrite()) { txn =>
         trieStore.applyCache(txn, trieCache, rootHash)
       }
       rootHash
     } else {
-      timeInWriteTxn = System.nanoTime()
       collapse(trieUpdates).foreach(processTrieUpdate(trieStore, _))
       trieStore.withTxn(trieStore.createTxnWrite()) { txn =>
         val rootHash = trieStore
@@ -152,13 +147,6 @@ trait IStore[C, P, A, K] {
         rootHash
       }
     }
-    val timeTotal = (System.nanoTime() - timeStart).asInstanceOf[Double] / 1000000000.0
-    val timeInWriteTxnTotal = (System.nanoTime() - timeInWriteTxn)
-      .asInstanceOf[Double] / 1000000000.0
-    println(
-      s"createCheckpoint(), processed ${trieUpdates.length} trie updates, cache=${TrieCache.useCache}, time,sec=$timeTotal; writeTxnTime,sec=$timeInWriteTxnTotal"
-    )
-    res
   }
 
   private[rspace] def collapse(in: Seq[TrieUpdate[C, P, A, K]]): Seq[TrieUpdate[C, P, A, K]] =
