@@ -125,8 +125,6 @@ class NodeRuntime private[node] (
     host: String,
     scheduler: Scheduler,
     name: String
-)(
-    implicit log: Log[Task]
 ) {
 
   private val loopScheduler = Scheduler.fixedPool("loop", 4)
@@ -150,8 +148,8 @@ class NodeRuntime private[node] (
   private val defaultTimeout    = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS) // TODO remove
 
   case class Servers(
-      grpcServerExternal: Server,
-      grpcServerInternal: Server,
+      grpcServerExternal: GrpcServer,
+      grpcServerInternal: GrpcServer,
       httpServer: Http4sServer[IO]
   )
 
@@ -201,12 +199,6 @@ class NodeRuntime private[node] (
     } yield Servers(grpcServerExternal, grpcServerInternal, httpServer)
   }
 
-  def startServers(servers: Servers)(
-      implicit
-      log: Log[Task]
-  ): Effect[Unit] =
-    GrpcServer.start(servers.grpcServerExternal, servers.grpcServerInternal).toEffect
-
   def clearResources(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
       implicit
       transport: TransportLayer[Task],
@@ -216,8 +208,8 @@ class NodeRuntime private[node] (
   ): Unit =
     (for {
       _   <- log.info("Shutting down gRPC servers...")
-      _   <- Task.delay(servers.grpcServerExternal.shutdown())
-      _   <- Task.delay(servers.grpcServerInternal.shutdown())
+      _   <- servers.grpcServerExternal.stop
+      _   <- servers.grpcServerInternal.stop
       _   <- log.info("Shutting down transport layer, broadcasting DISCONNECT")
       loc <- rpConfAsk.reader(_.local)
       msg = ProtocolHelper.disconnect(loc)
@@ -297,8 +289,16 @@ class NodeRuntime private[node] (
       _       <- info
       servers <- acquireServers(runtime)
       _       <- addShutdownHook(servers, runtime, casperRuntime).toEffect
-      _       <- startServers(servers)
-      _       <- startReportJvmMetrics.toEffect
+      _       <- servers.grpcServerExternal.start.toEffect
+      _ <- Log[Effect].info(
+            s"gRPC external server started at $host:${servers.grpcServerExternal.port}"
+          )
+      _ <- servers.grpcServerInternal.start.toEffect
+      _ <- Log[Effect].info(
+            s"gRPC internal server started at $host:${servers.grpcServerInternal.port}"
+          )
+      _ <- startReportJvmMetrics.toEffect
+
       _ <- TransportLayer[Effect].receive(
             pm => HandleMessages.handle[Effect](pm, defaultTimeout),
             blob => packetHandler.handlePacket(blob.sender, blob.packet).as(())
@@ -346,10 +346,12 @@ class NodeRuntime private[node] (
     ) // TODO read from conf
     // 2. create instances of typeclasses
     rpConfAsk            = effects.rpConfAsk(RPConf(local, defaultTimeout, rpClearConnConf))
-    tcpConnections       <- effects.tcpConnections.toEffect
     rpConnections        <- effects.rpConnections.toEffect
+    kademliaConnections  <- CachedConnections[Task, KademliaConnTag].toEffect
+    tcpConnections       <- CachedConnections[Task, TcpConnTag].toEffect
     log                  = effects.log
     time                 = effects.time
+    timerTask            = Task.timer
     metrics              = diagnostics.metrics[Task]
     multiParentCasperRef <- MultiParentCasperRef.of[Effect]
     lab                  <- LastApprovedBlock.of[Task].toEffect
@@ -360,11 +362,12 @@ class NodeRuntime private[node] (
       conf.tls.certificate,
       conf.tls.key,
       conf.server.maxMessageSize
-    )(grpcScheduler, tcpConnections, log)
+    )(grpcScheduler, log, tcpConnections)
     kademliaRPC = effects.kademliaRPC(local, kademliaPort, defaultTimeout)(
       grpcScheduler,
       metrics,
-      log
+      log,
+      kademliaConnections
     )
     initPeer = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     nodeDiscovery <- effects
