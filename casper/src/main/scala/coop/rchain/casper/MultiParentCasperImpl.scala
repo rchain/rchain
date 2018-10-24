@@ -255,7 +255,6 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   ): F[CreateBlockStatus] =
     for {
       now                      <- Time[F].currentMillis
-      _                        <- Sync[F].delay { runtimeManager.setTimestamp(now) }
       possibleProcessedDeploys <- updateKnownStateHashes(p, r)
       result <- possibleProcessedDeploys match {
                  case Left(ex) =>
@@ -305,11 +304,13 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
       r: Seq[Deploy]
   ): F[Either[Throwable, (StateHash, Seq[InternalProcessedDeploy])]] =
     for {
+      now <- Time[F].currentMillis
       possibleProcessedDeploys <- InterpreterUtil.computeDeploysCheckpoint[F](
                                    p,
                                    r,
                                    _blockDag.get,
-                                   runtimeManager
+                                   runtimeManager,
+                                   Some(now)
                                  )
     } yield possibleProcessedDeploys
 
