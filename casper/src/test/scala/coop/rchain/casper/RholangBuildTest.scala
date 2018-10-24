@@ -31,7 +31,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
         |  } |
         |  time!(*timeRtn) |
         |  for (@timestamp <- timeRtn) {
-        |   stdout!(timestamp)
+        |   @"timestampOutput"!(timestamp)
         |  }
         |}""".stripMargin
 
@@ -43,6 +43,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
 
     logEff.warns should be(Nil)
     storage.contains("!([4, 6, 10, 14])") should be(true)
+    storage.contains("@{\"timestampOutput\"}!(2)") should be(true)
 
     node.tearDown()
   }
