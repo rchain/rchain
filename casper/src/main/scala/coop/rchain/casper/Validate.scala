@@ -493,7 +493,6 @@ object Validate {
       dag: BlockDagRepresentation[F]
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val latestMessagesOfBlock = ProtoUtil.toLatestMessageHashes(b.justifications)
-    dag.latestMessage(b.sender).map(_.get.justifications)
     for {
       maybeLatestMessage <- dag.latestMessage(b.sender)
       maybeLatestMessagesFromSenderView = maybeLatestMessage.map(bm =>
