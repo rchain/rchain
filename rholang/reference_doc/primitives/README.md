@@ -3,6 +3,8 @@
 Rholang has several primitive data types built in.
 
 ### Integers
+Iguess this is about to change https://rchain.atlassian.net/browse/RHOL-446
+
 Rholang's integers are 64-bit signed, represented internally as two's compliment binary data. These integers are "unsafe" in the sense that they make no attempt to avoid over- or underflow. There are no built-in fixed- or floating-point numbers.
 
 | Integer Max Value |  9223372036854775807 |
