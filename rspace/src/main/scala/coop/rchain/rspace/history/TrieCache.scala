@@ -177,5 +177,5 @@ private[rspace] class TrieCache[T, K, V](
 }
 
 object TrieCache {
-  val useCache = false
+  var useCache = true
 }
