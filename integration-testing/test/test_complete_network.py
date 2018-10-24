@@ -64,6 +64,8 @@ def test_node_logs_for_RuntimeException(complete_network):
 
     assert_expectations()
 
+# TODO This test can't pass now because newly proposed blocks can not sync up in other nodes.
+# More details at OPS-355
 @profile
 def test_casper_propose_and_deploy(system, complete_network):
     rnode_testing.casper_propose_and_deploy.run(system.config, complete_network)
