@@ -41,7 +41,7 @@ object SystemProcesses {
         dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
     ): Task[Unit] =
       res.fold(err => Task.raiseError(OutOfPhlogistonsError), _.fold(Task.unit) {
-        case (cont, channels) => Task.pure(_dispatch(dispatcher)(cont, channels).unsafeRunSync)
+        case (cont, channels) => _dispatch(dispatcher)(cont, channels)
       })
   }
 
@@ -221,16 +221,15 @@ object SystemProcesses {
         phloRate  <- shortLeashParams.phloRate.get
         userId    <- shortLeashParams.userId.get
         timestamp <- shortLeashParams.timestamp.get
-      } yield {
-        space
-          .produce(
-            ack,
-            ListParWithRandom(Seq(codeHash, phloRate, userId, timestamp), rand),
-            false
-          )(MATCH_UNLIMITED_PHLOS)
-          .map(unpackOption(_))
-          .foldResult(dispatcher)
-      }
+        _ <- space
+              .produce(
+                ack,
+                ListParWithRandom(Seq(codeHash, phloRate, userId, timestamp), rand),
+                false
+              )(MATCH_UNLIMITED_PHLOS)
+              .map(unpackOption(_))
+              .foldResult(dispatcher)
+      } yield ()
     case _ =>
       illegalArgumentException("getDeployParams expects only a return channel.")
   }
@@ -243,16 +242,15 @@ object SystemProcesses {
     case Seq(ListParWithRandomAndPhlos(Seq(ack), rand, _)) =>
       for {
         timestamp <- blockTime.timestamp.get
-      } yield {
-        space
-          .produce(
-            ack,
-            ListParWithRandom(Seq(timestamp), rand),
-            false
-          )(MATCH_UNLIMITED_PHLOS)
-          .map(unpackOption(_))
-          .foldResult(dispatcher)
-      }
+        _ <- space
+              .produce(
+                ack,
+                ListParWithRandom(Seq(timestamp), rand),
+                false
+              )(MATCH_UNLIMITED_PHLOS)
+              .map(unpackOption(_))
+              .foldResult(dispatcher)
+      } yield ()
     case _ =>
       illegalArgumentException("blockTime expects only a return channel.")
   }
