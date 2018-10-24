@@ -22,6 +22,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.rholang.interpreter.{accounting, Runtime}
+import coop.rchain.models.{Expr, Par}
 import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -414,24 +415,30 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     block3PrimeStatus shouldBe Valid
     nodes.forall(_.logEff.warns.isEmpty) shouldBe true
 
-    val rankedValidatorQuery =
-      mkTerm("""for(pos <- @"proofOfStake"){ 
-    |  new bondsCh, getRanking in {
-    |    contract getRanking(@bonds, @acc, return) = {
-    |      match bonds {
-    |        {key:(stake, _, _, index) ...rest} => {
-    |          getRanking!(rest, acc ++ [(key, stake, index)], *return)
-    |        }
-    |        _ => { return!(acc) }
-    |      }
-    |    } |
-    |    pos!("getBonds", *bondsCh) | for(@bonds <- bondsCh) {
-    |      getRanking!(bonds, [], "__SCALA__")
-    |    }
-    |  }
-    |}""".stripMargin).right.get
+    val rankedValidatorQuery = ProtoUtil.sourceDeploy(
+      """for(pos <- @"proofOfStake"){
+        |  new bondsCh, getRanking in {
+        |    contract getRanking(@bonds, @acc, return) = {
+        |      match bonds {
+        |        {key:(stake, _, _, index) ...rest} => {
+        |          getRanking!(rest, acc ++ [(key, stake, index)], *return)
+        |        }
+        |        _ => { return!(acc) }
+        |      }
+        |    } |
+        |    pos!("getBonds", *bondsCh) | for(@bonds <- bondsCh) {
+        |      getRanking!(bonds, [], "__SCALA__")
+        |    }
+        |  }
+        |}""".stripMargin,
+      0L,
+      accounting.MAX_VALUE
+    )
     val validatorBondsAndRanks: Seq[(ByteString, Long, Int)] = runtimeManager
-      .captureResults(block1.getBody.getPostState.tuplespace, rankedValidatorQuery)
+      .captureResults(
+        block1.getBody.getPostState.tuplespace,
+        ProtoUtil.deployDataToDeploy(rankedValidatorQuery)
+      )
       .head
       .exprs
       .head
@@ -481,10 +488,16 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val Created(block) = casperEff.deploy(createWalletDeploy) *> casperEff.createBlock
     val blockStatus    = casperEff.addBlock(block)
 
-    val balanceQuery =
-      mkTerm("""for(@[wallet] <- @"myWallet"){ @wallet!("getBalance", "__SCALA__") }""").right.get
+    val balanceQuery = ProtoUtil.sourceDeploy(
+      """for(@[wallet] <- @"myWallet"){ @wallet!("getBalance", "__SCALA__") }""",
+      0L,
+      accounting.MAX_VALUE
+    )
     val newWalletBalance =
-      node.runtimeManager.captureResults(block.getBody.getPostState.tuplespace, balanceQuery)
+      node.runtimeManager.captureResults(
+        block.getBody.getPostState.tuplespace,
+        ProtoUtil.deployDataToDeploy(balanceQuery)
+      )
 
     blockStatus shouldBe Valid
     newWalletBalance.head.exprs.head.getGInt shouldBe amount
@@ -521,6 +534,71 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     (oldBonds.size + 1) shouldBe newBonds.size
 
     node.tearDown()
+  }
+
+  it should "allow paying for deploys" in {
+    val node      = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
+    val (sk, pk)  = Ed25519.newKeyPair
+    val user      = ByteString.copyFrom(pk)
+    val timestamp = System.currentTimeMillis()
+    val phloPrice = 1L
+    val amount    = 847L
+    val sigDeployData = ProtoUtil
+      .sourceDeploy(
+        s"""new retCh in { @"blake2b256Hash"!([0, $amount, *retCh].toByteArray(), "__SCALA__") }""",
+        timestamp,
+        accounting.MAX_VALUE
+      )
+      .withUser(user)
+    val sigData = node.runtimeManager
+      .captureResults(genesis.getBody.getPostState.tuplespace, ProtoUtil.deployDataToDeploy(sigDeployData))
+      .head
+      .exprs
+      .head
+      .getGByteArray
+    val sig   = Base16.encode(Ed25519.sign(sigData.toByteArray, sk))
+    val pkStr = Base16.encode(pk)
+    val paymentCode =
+      s"""new paymentForward, walletCh in {
+         |  for(faucet <- @"faucet"; pos <- @"proofOfStake"){
+         |    faucet!($amount, "ed25519", "$pkStr", *walletCh) |
+         |    for(@[wallet] <- walletCh) {
+         |      for(@purse <- paymentForward){ pos!("pay", purse, Nil) } |
+         |      @wallet!("transfer", $amount, 0, "$sig".hexToBytes(), *paymentForward, Nil)
+         |    }
+         |  }
+         |}""".stripMargin
+    val paymentDeployData = ProtoUtil
+      .sourceDeploy(paymentCode, timestamp, accounting.MAX_VALUE)
+      .withPhloPrice(phloPrice)
+      .withUser(user)
+
+    val paymentQuery = ProtoUtil.sourceDeploy(
+      """for(pos <- @"proofOfStake") {
+        |  pos!("lastPayment", "__SCALA__")
+        |}""".stripMargin,
+      0L,
+      accounting.MAX_VALUE
+    )
+
+    val Created(block) = node.casperEff.deploy(
+      paymentDeployData
+    ) *> node.casperEff.createBlock
+    val blockStatus = node.casperEff.addBlock(block)
+    val queryResult = node.runtimeManager
+      .captureResults(block.getBody.getPostState.tuplespace, ProtoUtil.deployDataToDeploy(paymentQuery))
+
+    val (codeHashPar, _, userIdPar, timestampPar) =
+      ProtoUtil.getRholangDeployParams(paymentDeployData)
+    val phloPurchasedPar = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(phloPrice * amount))))
+
+    blockStatus shouldBe Valid
+    queryResult.head.exprs.head.getETupleBody.ps shouldBe Seq(
+      codeHashPar,
+      userIdPar,
+      timestampPar,
+      phloPurchasedPar
+    )
   }
 
   it should "reject addBlock when there exist deploy by the same (user, millisecond timestamp) in the chain" in {

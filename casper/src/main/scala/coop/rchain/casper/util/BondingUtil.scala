@@ -4,11 +4,11 @@ import cats.effect.{Resource, Sync}
 import cats.implicits._
 
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
+import coop.rchain.casper.util.ProtoUtil.{deployDataToDeploy, sourceDeploy}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
-import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.{accounting, Runtime}
 import coop.rchain.shared.PathOps.RichPath
 
 import java.io.PrintWriter
@@ -59,8 +59,13 @@ object BondingUtil {
       statusOut: String
   )(implicit runtimeManager: RuntimeManager, scheduler: Scheduler): F[String] = {
     require(Base16.encode(Keccak256.hash(Base16.decode(pubKey)).drop(12)) == ethAddress.drop(2))
-    val unlockSigDataTerm =
-      mkTerm(s""" @"__SCALA__"!(["$pubKey", "$statusOut"].toByteArray())""").right.get
+    val unlockSigDataTerm = deployDataToDeploy(
+      sourceDeploy(
+        s""" @"__SCALA__"!(["$pubKey", "$statusOut"].toByteArray())""",
+        0L,
+        accounting.MAX_VALUE
+      )
+    )
     for {
       sigBytes <- Sync[F].delay {
                    runtimeManager
@@ -88,8 +93,13 @@ object BondingUtil {
       amount: Long,
       destination: String
   )(implicit runtimeManager: RuntimeManager, scheduler: Scheduler): F[Array[Byte]] = {
-    val transferSigDataTerm =
-      mkTerm(s""" @"__SCALA__"!([$nonce, $amount, "$destination"].toByteArray())""").right.get
+    val transferSigDataTerm = deployDataToDeploy(
+      sourceDeploy(
+        s""" @"__SCALA__"!([$nonce, $amount, "$destination"].toByteArray())""",
+        0L,
+        accounting.MAX_VALUE
+      )
+    )
 
     for {
       sigBytes <- Sync[F].delay {
