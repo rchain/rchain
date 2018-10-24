@@ -171,9 +171,9 @@ trait HistoryActionsTests[F[_]]
       } yield (())
     }
 
-  "produce a bunch and then createCheckpoint" should "persist the expected values in the TrieStore" in withTestSpace {
-    space =>
-      forAll { (data: TestProduceMap) =>
+  "produce a bunch and then createCheckpoint" should "persist the expected values in the TrieStore" in
+    forAll { (data: TestProduceMap) =>
+      withTestSpace { space =>
         (for {
           gnats <- (data
                     .map {
@@ -191,18 +191,19 @@ trait HistoryActionsTests[F[_]]
               space.produce(channel, datum.a, datum.persist)
           }
           channelHashes = gnats.map(gnat => space.store.hashChannels(gnat.channels))
-          _             = history.lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
-          _             <- space.createCheckpoint()
           _ = history
+            .lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
+          _ <- space.createCheckpoint()
+        } yield
+          (history
             .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
-            .get should contain theSameElementsAs gnats
-        } yield (()))
-      }.pure[F]
-  }
+            .get should contain theSameElementsAs gnats))
+      }
+    }
 
   "consume a bunch and then createCheckpoint" should "persist the expected values in the TrieStore" in
-    withTestSpace { space =>
-      forAll { (data: TestConsumeMap) =>
+    forAll { (data: TestConsumeMap) =>
+      withTestSpace { space =>
         for {
           gnats <- (data
                     .map {
@@ -234,7 +235,7 @@ trait HistoryActionsTests[F[_]]
                 )
                 .sequence
         } yield (())
-      }.pure[F]
+      }
     }
 
   "consume and produce a match and then createCheckpoint " should "result in an empty TrieStore" in
