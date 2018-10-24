@@ -265,6 +265,7 @@ sealed abstract class SafetyOracleInstances {
             if x.toString > y.toString // TODO: Order ByteString
           } yield (x, y)).toList.filterA {
             case (first: Validator, second: Validator) =>
+              // TODO: Replace with equivalent of <&&>
               Monad[F].ifM(seesAgreement(first, second))(
                 Monad[F].ifM(seesAgreement(second, first))(
                   Monad[F].ifM(neverEventuallySeeDisagreement(first, second))(
