@@ -29,8 +29,8 @@ class RholangBuildTest extends FlatSpec with Matchers {
         |  for(@(_, ListOps) <- ListOpsCh) {
         |    @ListOps!("map", [2, 3, 5, 7], *double, *dprimes)
         |  } |
-        |  time!(timeRtn) |
-        |  for (timestamp <- timeRtn) {
+        |  time!(*timeRtn) |
+        |  for (@timestamp <- timeRtn) {
         |   stdout!(timestamp)
         |  }
         |}""".stripMargin
