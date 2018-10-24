@@ -1,33 +1,39 @@
 package coop.rchain.comm.discovery
 
-import cats._, cats.data._, cats.implicits._, cats.mtl._
-import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
+import cats.implicits._
+import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.catscontrib.ski._
+import coop.rchain.comm.CachedConnections.ConnectionsCache
 import coop.rchain.comm._
-import monix.eval._
-import monix.execution.atomic._
-import monix.execution._
 import coop.rchain.metrics.Metrics
-import coop.rchain.shared.{Cell, Log, LogSource}
-import scala.concurrent.Future
-import io.grpc._, io.grpc.netty._
-import com.google.protobuf.ByteString
+import coop.rchain.shared.{Log, LogSource}
+import io.grpc._
+import io.grpc.netty._
+import monix.eval._
+import monix.execution._
+
 import scala.concurrent.duration._
-import com.google.protobuf.ByteString
 
 class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
     implicit
     scheduler: Scheduler,
     peerNodeAsk: PeerNodeAsk[Task],
     metrics: Metrics[Task],
-    log: Log[Task]
+    log: Log[Task],
+    connectionsCache: ConnectionsCache[Task, KademliaConnTag]
 ) extends KademliaRPC[Task] {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
+  private val connections = connectionsCache(clientChannel)
+
+  import connections.connection
+
   def ping(peer: PeerNode): Task[Boolean] =
     for {
       _       <- Metrics[Task].incrementCounter("protocol-ping-sends")
-      channel <- clientChannel(peer)
+      channel <- connection(peer, enforce = false)
       local   <- peerNodeAsk.ask
       pongErr <- KademliaGrpcMonix
                   .stub(channel)
@@ -45,7 +51,7 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
       lookup = Lookup()
         .withId(ByteString.copyFrom(key.toArray))
         .withSender(node(local))
-      channel <- clientChannel(peer)
+      channel <- connection(peer, enforce = false)
       responseErr <- KademliaGrpcMonix
                       .stub(channel)
                       .sendLookup(lookup)

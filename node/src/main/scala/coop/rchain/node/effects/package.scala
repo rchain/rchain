@@ -1,20 +1,28 @@
 package coop.rchain.node
 
+import java.nio.file.Path
+
+import cats.effect.Timer
+import cats.mtl._
+
+import coop.rchain.catscontrib._
+import coop.rchain.comm.CachedConnections.ConnectionsCache
 import coop.rchain.comm._
+import coop.rchain.comm.discovery._
+import coop.rchain.comm.rp.Connect._
+import coop.rchain.comm.rp._
+import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
-import scala.tools.jline.console._
-import cats._, cats.data._, cats.implicits._, cats.mtl._, cats.effect.Timer
-import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
+import coop.rchain.shared._
+
 import monix.eval._
 import monix.execution._
 import monix.execution.atomic.AtomicAny
-import coop.rchain.comm.transport._
-import coop.rchain.comm.discovery._
-import coop.rchain.shared._
 import scala.concurrent.duration._
-import java.nio.file.Path
 import scala.io.Source
-import coop.rchain.comm.rp._, Connect._
+import scala.tools.jline.console._
+
+import cats.Applicative
 
 package object effects {
 
@@ -41,7 +49,8 @@ package object effects {
       scheduler: Scheduler,
       peerNodeAsk: PeerNodeAsk[Task],
       metrics: Metrics[Task],
-      log: Log[Task]
+      log: Log[Task],
+      cache: ConnectionsCache[Task, KademliaConnTag]
   ): KademliaRPC[Task] = new GrpcKademliaRPC(port, timeout)
 
   def tcpTransportLayer(
@@ -51,8 +60,8 @@ package object effects {
       maxMessageSize: Int
   )(
       implicit scheduler: Scheduler,
-      connections: TcpTransportLayer.TransportCell[Task],
-      log: Log[Task]
+      log: Log[Task],
+      cache: ConnectionsCache[Task, TcpConnTag]
   ): TcpTransportLayer = {
     val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
     val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
@@ -61,10 +70,8 @@ package object effects {
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 
-  def tcpConnections: Task[Cell[Task, TransportState]] = Cell.mvarCell(TransportState.empty)
-
   def rpConnections: Task[ConnectionsCell[Task]] =
-    Cell.mvarCell[Connections](Connections.empty)
+    Cell.mvarCell[Task, Connections](Connections.empty)
 
   def rpConfState(conf: RPConf): MonadState[Task, RPConf] =
     new AtomicMonadState[Task, RPConf](AtomicAny(conf))

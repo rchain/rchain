@@ -451,11 +451,9 @@ final class Configuration(
       case None    => whoAmI(externalAddress)
     }
 
-  private def retriveExternalAddress: Task[Option[String]] =
-    Task.delay {
-      if (server.noUpnp) None
-      else UPnP.assurePortForwarding(Seq(server.port))
-    }
+  private def retriveExternalAddress(implicit log: Log[Task]): Task[Option[String]] =
+    if (server.noUpnp) None.pure[Task]
+    else UPnP.assurePortForwarding[Task](List(server.port))
 
   private def check(source: String, from: String): Task[(String, Option[String])] =
     IpChecker.checkFrom[Task](from).map((source, _))
