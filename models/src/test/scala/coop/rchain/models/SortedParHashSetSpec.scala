@@ -82,16 +82,15 @@ class SortedParHashSetSpec extends FlatSpec with Matchers {
   it should "be equal when it is equal" in {
     val elements: Seq[Par] = Seq(
       Par(
-        List(),
-        List(),
-        List(),
-        List(),
-        List(),
-        List(GPrivate(ByteString.copyFrom(Array[Byte](0))), GPrivate(ByteString.EMPTY)),
-        List(),
-        List(),
-        AlwaysEqual(BitSet()),
-        true
+        ids = Seq(
+          GPrivate(
+            ByteString.copyFrom(Array[Byte](
+              0
+            ))
+          ),
+          GPrivate()
+        ),
+        connectiveUsed = true
       )
     )
     assertEqual(SortedParHashSet(elements), SortedParHashSet(elements))
