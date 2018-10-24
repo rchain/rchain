@@ -203,7 +203,8 @@ class SerializationStackSafetySpec extends FlatSpec with Matchers {
       ProtoM.serializedSize(par).value
 
       import coop.rchain.models.serialization.implicits._
-      Serialize[Par].encode(par)
+      val encoded = Serialize[Par].encode(par)
+      Serialize[Par].decode(encoded)
     }
   }
 
