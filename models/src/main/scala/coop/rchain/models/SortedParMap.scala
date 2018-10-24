@@ -21,5 +21,9 @@ class SortedParMap(private val ps: Map[Par, Par])
 }
 
 object SortedParMap {
+  def apply(map: Map[Par, Par]): SortedParMap = new SortedParMap(map)
+
+  def apply(seq: Seq[(Par, Par)]): SortedParMap = new SortedParMap(seq.toMap)
+
   def empty: SortedParMap = new SortedParMap(Map.empty[Par, Par])
 }

@@ -29,7 +29,7 @@ class SortedParMapSpec extends FlatSpec with Matchers {
   private def roundTripTest(parMap: SortedParMap): Assertion =
     EMap.parseFrom(serializeEMap(parMap)) should ===(EMap(parMap.sortedMap.map(toKVpair).toSeq))
 
-  def sample = new SortedParMap(pars.toMap)
+  def sample = SortedParMap(pars)
 
   "SortedParMap" should "preserve structure during round trip protobuf serialization" in {
     roundTripTest(sample)
@@ -80,6 +80,6 @@ class SortedParMapSpec extends FlatSpec with Matchers {
         )
       )
     )
-    assertEqual(new SortedParMap(ps), new SortedParMap(ps))
+    assertEqual(SortedParMap(ps), SortedParMap(ps))
   }
 }

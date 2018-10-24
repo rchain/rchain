@@ -538,7 +538,7 @@ class RegistryImpl[F[_]](
           val Some(Expr(EMapBody(parMap))) = data.singleExpr
           def insert() = {
             val tuple: Par  = ETuple(Seq(GInt(0), parByteArray(tail), value))
-            val newMap: Par = ParMap(new SortedParMap(parMap.ps + (parByteArray(head) -> tuple)))
+            val newMap: Par = ParMap(SortedParMap(parMap.ps + (parByteArray(head) -> tuple)))
             replace(newMap, replaceChan, dataRand)
               .flatMap(_ => succeed(value, ret, callRand))
           }
@@ -559,7 +559,7 @@ class RegistryImpl[F[_]](
                   val (oldEdgeHead, oldEdgeTail)  = safeUncons(oldEdgeStr)
                   val (newEdgeHead, newEdgeTail)  = safeUncons(newEdgeStr)
                   val newMap: ParMap = ParMap(
-                    new SortedParMap(
+                    SortedParMap(
                       Map[Par, Par](
                         parByteArray(oldEdgeHead) -> ETuple(
                           Seq(ps(0), parByteArray(oldEdgeTail), ps(2))
@@ -573,7 +573,7 @@ class RegistryImpl[F[_]](
                   val newName: Par      = GPrivate(ByteString.copyFrom(callRand.next()))
                   val updatedTuple: Par = ETuple(Seq(GInt(1), outgoingEdge, newName))
                   val updatedMap: Par = ParMap(
-                    new SortedParMap(parMap.ps + (parByteArray(head) -> updatedTuple))
+                    SortedParMap(parMap.ps + (parByteArray(head) -> updatedTuple))
                   )
                   for {
                     _ <- replace(updatedMap, replaceChan, dataRand)
@@ -656,7 +656,7 @@ class RegistryImpl[F[_]](
             ps(0).singleExpr() match {
               case Some(Expr(GInt(0))) =>
                 if (tail == edgeAdditional) {
-                  val updatedMap: Par = ParMap(new SortedParMap(parMap.ps - parByteArray(head)))
+                  val updatedMap: Par = ParMap(SortedParMap(parMap.ps - parByteArray(head)))
                   replace(updatedMap, replaceChan, dataRand)
                     .flatMap(_ => succeed(ps(2), ret, callRand))
                 } else {
@@ -728,7 +728,7 @@ class RegistryImpl[F[_]](
                 val mergedEdge        = parByteArray(mergeStream.toByteString())
                 val updatedTuple: Par = ETuple(Seq(ps(0), mergedEdge, ps(2)))
                 val updatedMap: Par = ParMap(
-                  new SortedParMap(parMap.ps + (parentKey -> updatedTuple))
+                  SortedParMap(parMap.ps + (parentKey -> updatedTuple))
                 )
                 replace(updatedMap, parentReplace, parentRand)
               }
@@ -747,7 +747,7 @@ class RegistryImpl[F[_]](
               case Some(Expr(GInt(0))) =>
                 if (tail == edgeAdditional) {
                   if (parMap.ps.size > 2) {
-                    val updatedMap: Par = ParMap(new SortedParMap(parMap.ps - parByteArray(head)))
+                    val updatedMap: Par = ParMap(SortedParMap(parMap.ps - parByteArray(head)))
                     for {
                       _ <- replace(updatedMap, replaceChan, dataRand)
                       _ <- replace(parentData, parentReplace, parentRand)

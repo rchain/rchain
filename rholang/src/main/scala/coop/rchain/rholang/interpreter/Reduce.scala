@@ -849,7 +849,7 @@ object Reduce {
                              eValue <- evalExpr(value).map(updateLocallyFree)
                            } yield (eKey, eValue)
                        }
-          } yield map.copy(ps = new SortedParMap(evaledPs.toMap))
+          } yield map.copy(ps = SortedParMap(evaledPs))
 
         case EMethodBody(EMethod(method, target, arguments, _, _)) => {
           val methodLookup = methodTable.get(method)
@@ -1239,7 +1239,7 @@ object Reduce {
       def set(baseExpr: Expr, key: Par, value: Par): M[Par] =
         baseExpr.exprInstance match {
           case EMapBody(ParMap(basePs, _, _, _)) =>
-            Applicative[M].pure[Par](ParMap(new SortedParMap(basePs + (key -> value))))
+            Applicative[M].pure[Par](ParMap(SortedParMap(basePs + (key -> value))))
           case other =>
             s.raiseError(MethodNotDefined("set", other.typ))
         }
