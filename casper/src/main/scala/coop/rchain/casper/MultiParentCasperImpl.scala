@@ -49,11 +49,6 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
 
   private val emptyStateHash = runtimeManager.emptyStateHash
 
-  private val knownStateHashesContainer: AtomicSyncVarF[F, Set[StateHash]] =
-    AtomicSyncVarF.of[F, Set[StateHash]](
-      Set[StateHash](emptyStateHash, postGenesisStateHash)
-    )
-
   private val blockBuffer: mutable.HashSet[BlockMessage] =
     new mutable.HashSet[BlockMessage]()
   private val blockBufferDependencyDagState =
@@ -260,7 +255,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   ): F[CreateBlockStatus] =
     for {
       now                      <- Time[F].currentMillis
-      possibleProcessedDeploys <- updateKnownStateHashes(knownStateHashesContainer, p, r)
+      possibleProcessedDeploys <- updateKnownStateHashes(p, r)
       result <- possibleProcessedDeploys match {
                  case Left(ex) =>
                    Log[F]
@@ -305,36 +300,27 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     } yield result
 
   private def updateKnownStateHashes(
-      knownStateHashesContainer: AtomicSyncVarF[F, Set[StateHash]],
       p: Seq[BlockMessage],
       r: Seq[Deploy]
   ): F[Either[Throwable, (StateHash, Seq[InternalProcessedDeploy])]] =
-    knownStateHashesContainer
-      .modify[(Either[Throwable, (StateHash, Seq[InternalProcessedDeploy])])] { knownStateHashes =>
-        for {
-          possibleProcessedDeploys <- InterpreterUtil.computeDeploysCheckpoint[F](
-                                       p,
-                                       r,
-                                       _blockDag.get,
-                                       knownStateHashes,
-                                       runtimeManager
-                                     )
-        } yield (possibleProcessedDeploys._2, possibleProcessedDeploys._1)
-      }
+    for {
+      possibleProcessedDeploys <- InterpreterUtil.computeDeploysCheckpoint[F](
+                                   p,
+                                   r,
+                                   _blockDag.get,
+                                   runtimeManager
+                                 )
+    } yield possibleProcessedDeploys
 
   def blockDag: F[BlockDag] = Capture[F].capture {
     _blockDag.get
   }
 
   def storageContents(hash: StateHash): F[String] =
-    for {
-      knownStateHashes <- knownStateHashesContainer.get
-    } yield
-      if (knownStateHashes.contains(hash)) {
-        runtimeManager.storageRepr(hash)
-      } else {
-        s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!"
-      }
+    runtimeManager
+      .storageRepr(hash)
+      .getOrElse(s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!")
+      .pure[F]
 
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     (equivocationsTracker
@@ -362,8 +348,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                                           b,
                                           dag,
                                           emptyStateHash,
-                                          runtimeManager,
-                                          knownStateHashesContainer
+                                          runtimeManager
                                         )
                                     )
       postBondsCacheStatus <- postTransactionsCheckStatus.joinRight.traverse(

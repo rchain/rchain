@@ -93,19 +93,26 @@ object Main {
     )
   }
 
-  private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] =
-    for {
-      host   <- conf.fetchHost
-      result <- new NodeRuntime(conf, host, scheduler).main.value
-      _ <- result match {
-            case Right(_) =>
-              Task.unit
-            case Left(CouldNotConnectToBootstrap) =>
-              log.error("Node could not connect to bootstrap node.")
-            case Left(error) =>
-              log.error(s"Failed! Reason: '$error")
-          }
-    } yield ()
+  private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
+    val node =
+      for {
+        host    <- conf.fetchHost.toEffect
+        runtime <- NodeRuntime(conf, host, scheduler)
+        _       <- runtime.main
+      } yield ()
+
+    node.value >>= {
+      case Right(_) =>
+        Task.unit
+      case Left(CouldNotConnectToBootstrap) =>
+        log.error("Node could not connect to bootstrap node.")
+      case Left(InitializationError(msg)) =>
+        log.error(msg)
+        Task.delay(System.exit(-1))
+      case Left(error) =>
+        log.error(s"Failed! Reason: '$error")
+    }
+  }
 
   implicit private def consoleIO: ConsoleIO[Task] = {
     val console = new ConsoleReader()

@@ -24,11 +24,11 @@ import scala.collection.immutable.Seq
   *
   * To create an instance, use [[LMDBStore.create]].
   */
-class LMDBStore[C, P, A, K] private (
+class LMDBStore[C, P, A, K] private[rspace] (
     val env: Env[ByteBuffer],
     protected[this] val databasePath: Path,
-    _dbGNATs: Dbi[ByteBuffer],
-    _dbJoins: Dbi[ByteBuffer],
+    private[this] val _dbGNATs: Dbi[ByteBuffer],
+    private[this] val _dbJoins: Dbi[ByteBuffer],
     val trieStore: ITrieStore[Txn[ByteBuffer], Blake2b256Hash, GNAT[C, P, A, K]],
     val trieBranch: Branch
 )(

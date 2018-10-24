@@ -66,12 +66,12 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     result
   }
 
-  def storageRepr(hash: StateHash): String = {
-    val resetRuntime = getResetRuntime(hash)
-    val result       = StoragePrinter.prettyPrint(resetRuntime.space.store)
-    runtimeContainer.put(resetRuntime)
-    result
-  }
+  def storageRepr(hash: StateHash): Option[String] =
+    getResetRuntimeOpt(hash).map { resetRuntime =>
+      val result = StoragePrinter.prettyPrint(resetRuntime.space.store)
+      runtimeContainer.put(resetRuntime)
+      result
+    }
 
   def computeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] = {
     // TODO: Switch to a read only name
@@ -95,6 +95,17 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       case Failure(ex) =>
         runtimeContainer.put(runtime)
         throw ex
+    }
+  }
+
+  private def getResetRuntimeOpt(hash: StateHash) = {
+    val runtime   = runtimeContainer.take()
+    val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
+    Try(runtime.space.reset(blakeHash)) match {
+      case Success(_) => Some(runtime)
+      case Failure(_) =>
+        runtimeContainer.put(runtime)
+        None
     }
   }
 
