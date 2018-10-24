@@ -30,7 +30,7 @@ object ParMap {
       locallyFree: Coeval[BitSet],
       remainder: Option[Var]
   ) =
-    new ParMap(SortedParMap(seq), connectiveUsed, locallyFree.memoize, remainder)
+    new ParMap(new SortedParMap(seq.toMap), connectiveUsed, locallyFree.memoize, remainder)
 
   def apply(
       seq: Seq[(Par, Par)],
