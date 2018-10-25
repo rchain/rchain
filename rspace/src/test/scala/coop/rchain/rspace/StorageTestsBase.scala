@@ -169,15 +169,14 @@ abstract class InMemoryStoreTestsBase[F[_]]
     super.afterAll()
 }
 
-abstract class LMDBStoreTestsBase
-    extends StorageTestsBase[Id, String, Pattern, Nothing, String, StringsCaptor]
+abstract class LMDBStoreTestsBase[F[_]]
+    extends StorageTestsBase[F, String, Pattern, Nothing, String, StringsCaptor]
     with BeforeAndAfterAll {
 
   val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
   val mapSize: Long = 1024L * 1024L * 4096L
 
-  override def withTestSpace[S](f: T => S): S = {
-    implicit val syncF: Sync[Id]              = coop.rchain.catscontrib.effect.implicits.syncId
+  override def withTestSpace[S](f: T => F[S]): S = {
     implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
     implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
@@ -185,43 +184,46 @@ abstract class LMDBStoreTestsBase
     val testBranch = Branch("test")
     val env        = Context.create[String, Pattern, String, StringsCaptor](dbDir, mapSize)
 
-    val testSpace =
-      RSpace.create[Id, String, Pattern, Nothing, String, String, StringsCaptor](
-        env,
-        testBranch
-      )
-
-    val testStore = testSpace.store
-    testStore.withTxn(testStore.createTxnWrite()) { txn =>
-      testStore.withTrieTxn(txn) { trieTxn =>
-        testStore.clear(txn)
-        testStore.trieStore.clear(trieTxn)
+    run(for {
+      testSpace <- RSpace.create[F, String, Pattern, Nothing, String, String, StringsCaptor](
+                    env,
+                    testBranch
+                  )
+      testStore = testSpace.store
+      _ <- testStore
+            .withTxn(testStore.createTxnWrite()) { txn =>
+              testStore.withTrieTxn(txn) { trieTxn =>
+                testStore.clear(txn)
+                testStore.trieStore.clear(trieTxn)
+              }
+            }
+            .pure[F]
+      _   <- history.initialize(testStore.trieStore, testBranch).pure[F]
+      _   <- testSpace.createCheckpoint()
+      res <- f(testSpace)
+    } yield {
+      try {
+        res
+      } finally {
+        testStore.trieStore.close()
+        testStore.close()
+        env.close()
       }
-    }
-    history.initialize(testStore.trieStore, testBranch)
-    val _ = testSpace.createCheckpoint()
-    try {
-      f(testSpace)
-    } finally {
-      testStore.trieStore.close()
-      testStore.close()
-      env.close()
-    }
+    })
   }
 
   override def afterAll(): Unit =
     dbDir.recursivelyDelete
 }
 
-abstract class MixedStoreTestsBase
-    extends StorageTestsBase[Id, String, Pattern, Nothing, String, StringsCaptor]
+abstract class MixedStoreTestsBase[F[_]]
+    extends StorageTestsBase[F, String, Pattern, Nothing, String, StringsCaptor]
     with BeforeAndAfterAll {
 
   val dbDir: Path   = Files.createTempDirectory("rchain-mixed-storage-test-")
   val mapSize: Long = 1024L * 1024L * 4096L
 
-  override def withTestSpace[S](f: T => S): S = {
-    implicit val syncF: Sync[Id]              = coop.rchain.catscontrib.effect.implicits.syncId
+  override def withTestSpace[S](f: T => F[S]): S = {
     implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
     implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
@@ -229,29 +231,32 @@ abstract class MixedStoreTestsBase
     val testBranch = Branch("test")
     val env        = Context.createMixed[String, Pattern, String, StringsCaptor](dbDir, mapSize)
 
-    val testSpace =
-      RSpace.create[Id, String, Pattern, Nothing, String, String, StringsCaptor](
-        env,
-        testBranch
-      )
-
-    val testStore = testSpace.store
-
-    testStore.withTxn(testStore.createTxnWrite()) { txn =>
-      testStore.withTrieTxn(txn) { trieTxn =>
-        testStore.clear(txn)
-        testStore.trieStore.clear(trieTxn)
+    run(for {
+      testSpace <- RSpace.create[F, String, Pattern, Nothing, String, String, StringsCaptor](
+                    env,
+                    testBranch
+                  )
+      testStore = testSpace.store
+      _ <- testStore
+            .withTxn(testStore.createTxnWrite()) { txn =>
+              testStore.withTrieTxn(txn) { trieTxn =>
+                testStore.clear(txn)
+                testStore.trieStore.clear(trieTxn)
+              }
+            }
+            .pure[F]
+      _   <- history.initialize(testStore.trieStore, testBranch).pure[F]
+      _   <- testSpace.createCheckpoint()
+      res <- f(testSpace)
+    } yield {
+      try {
+        res
+      } finally {
+        testStore.trieStore.close()
+        testStore.close()
+        env.close()
       }
-    }
-    history.initialize(testStore.trieStore, testBranch)
-    val _ = testSpace.createCheckpoint()
-    try {
-      f(testSpace)
-    } finally {
-      testStore.trieStore.close()
-      testStore.close()
-      env.close()
-    }
+    })
   }
 
   override def afterAll(): Unit =

@@ -1292,6 +1292,13 @@ trait StorageActionsTests[F[_]]
       })
   }
 
+}
+trait MonadicStorageActionsTests[F[_]]
+    extends StorageTestsBase[F, String, Pattern, Nothing, String, StringsCaptor]
+    with TestImplicitHelpers
+    with GeneratorDrivenPropertyChecks
+    with Checkers {
+
   "consuming with a list of patterns that is a different length than the list of channels" should
     "raise error" in withTestSpace { space =>
     for {
@@ -1407,8 +1414,21 @@ trait TaskTests[C, P, A, R, K] extends StorageTestsBase[Task, C, P, A, R, K] {
 
 class InMemoryStoreStorageActionsTests
     extends InMemoryStoreTestsBase[Task]
-    with StorageActionsTests[Task]
     with TaskTests[String, Pattern, Nothing, String, StringsCaptor]
+    with StorageActionsTests[Task]
+    with MonadicStorageActionsTests[Task]
+
+class LMDBStoreStorageActionsTests
+    extends LMDBStoreTestsBase[Task]
+    with TaskTests[String, Pattern, Nothing, String, StringsCaptor]
+    with StorageActionsTests[Task]
+    with MonadicStorageActionsTests[Task]
+
+class MixedStoreStorageActionsTests
+    extends MixedStoreTestsBase[Task]
+    with TaskTests[String, Pattern, Nothing, String, StringsCaptor]
+    with StorageActionsTests[Task]
+    with MonadicStorageActionsTests[Task]
 
 class LegacyInMemoryStoreStorageActionsTests
     extends InMemoryStoreTestsBase[Id]
@@ -1416,16 +1436,16 @@ class LegacyInMemoryStoreStorageActionsTests
     with JoinOperationsTests
     with LegacyStorageActionsTests
 
-class LMDBStoreActionsTests
-    extends LMDBStoreTestsBase
+class LegacyLMDBStoreActionsTests
+    extends LMDBStoreTestsBase[Id]
     with IdTests[String, Pattern, Nothing, String, StringsCaptor]
     with StorageActionsTests[Id]
     with JoinOperationsTests
     with BeforeAndAfterAll
     with LegacyStorageActionsTests
 
-class MixedStoreActionsTests
-    extends MixedStoreTestsBase
+class LegacyMixedStoreActionsTests
+    extends MixedStoreTestsBase[Id]
     with IdTests[String, Pattern, Nothing, String, StringsCaptor]
     with StorageActionsTests[Id]
     with JoinOperationsTests
