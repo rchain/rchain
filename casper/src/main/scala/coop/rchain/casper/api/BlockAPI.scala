@@ -278,7 +278,7 @@ object BlockAPI {
     def casperResponse(implicit casper: MultiParentCasper[F]): F[BlockQueryResponse] =
       for {
         dag                <- MultiParentCasper[F].blockDag
-        maybeBlock         <- findBlockWithDeploy[F](dag.topoSort.flatten, user, timestamp)
+        maybeBlock         <- findBlockWithDeploy[F](dag.topoSort.flatten.reverse, user, timestamp)
         blockQueryResponse <- maybeBlock.traverse(getFullBlockInfo[F])
       } yield
         blockQueryResponse.fold(
