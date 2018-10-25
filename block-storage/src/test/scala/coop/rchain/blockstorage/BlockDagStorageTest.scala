@@ -2,9 +2,18 @@ package coop.rchain.blockstorage
 
 import java.nio.file.StandardOpenOption
 
-import cats.Id
+import cats.implicits._
 import coop.rchain.shared.PathOps._
+import coop.rchain.catscontrib.TaskContrib.TaskOps
 import BlockGen.blockElementsGen
+import cats.effect.Sync
+import cats.effect.concurrent.Ref
+import coop.rchain.blockstorage.BlockStore.BlockHash
+import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.metrics.Metrics.MetricsNOP
+import coop.rchain.shared
+import monix.eval.Task
+import monix.execution.Scheduler
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers, OptionValues}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
@@ -16,22 +25,38 @@ trait BlockDagStorageTest
     with OptionValues
     with GeneratorDrivenPropertyChecks
     with BeforeAndAfterAll {
+  val scheduler = Scheduler.fixedPool("block-dag-storage-test-scheduler", 4)
 
-  def withDagStorage[R](f: BlockDagStorage[Id] => R): R
+  def withDagStorage[R](f: Task[BlockDagStorage[Task]] => R): R
 
   "DAG Storage" should "be able to lookup a stored block" in {
-    withDagStorage { dagStorage =>
+    withDagStorage { dagStorageTask =>
       forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockElements =>
-        blockElements.foreach(dagStorage.insert)
-        blockElements.foreach { b =>
-          val dag = dagStorage.getRepresentation
-          dag.lookup(b.blockHash) shouldBe Some(BlockMetadata.fromBlock(b))
-          dag.latestMessageHash(b.sender) shouldBe Some(b.blockHash)
-          dag.latestMessage(b.sender) shouldBe Some(BlockMetadata.fromBlock(b))
+        val testProgram = for {
+          dagStorage <- dagStorageTask
+          _          <- blockElements.traverse_(dagStorage.insert)
+          dag        <- dagStorage.getRepresentation
+          blockElementLookups <- blockElements.traverse { b =>
+                                  for {
+                                    blockMetadata     <- dag.lookup(b.blockHash)
+                                    latestMessageHash <- dag.latestMessageHash(b.sender)
+                                    latestMessage     <- dag.latestMessage(b.sender)
+                                  } yield (blockMetadata, latestMessageHash, latestMessage)
+                                }
+          latestMessageHashes <- dag.latestMessageHashes
+          latestMessages      <- dag.latestMessages
+          _                   <- dagStorage.clear()
+        } yield (blockElementLookups, latestMessageHashes, latestMessages)
+        val (blockElementLookups, latestMessageHashes, latestMessages) =
+          testProgram.unsafeRunSync(scheduler)
+        blockElementLookups.zip(blockElements).foreach {
+          case ((blockMetadata, latestMessageHash, latestMessage), b) =>
+            blockMetadata shouldBe Some(BlockMetadata.fromBlock(b))
+            latestMessageHash shouldBe Some(b.blockHash)
+            latestMessage shouldBe Some(BlockMetadata.fromBlock(b))
         }
-        dagStorage.getRepresentation.latestMessageHashes.size shouldBe blockElements.size
-        dagStorage.getRepresentation.latestMessages.size shouldBe blockElements.size
-        dagStorage.clear()
+        latestMessageHashes.size shouldBe blockElements.size
+        latestMessages.size shouldBe blockElements.size
       }
     }
   }
@@ -43,19 +68,11 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
 
   private[this] def mkTmpDir(): Path = Files.createTempDirectory("rchain-dag-storage-test-")
 
-  override def withDagStorage[R](f: BlockDagStorage[Id] => R): R = {
-    val dataDir = mkTmpDir()
-    implicit val blockStore = InMemBlockStore.createWithId
-    val store = BlockDagFileStorage.createWithId(
-      BlockDagFileStorage.Config(
-        dataDir.resolve("latest-messsages-data"),
-        dataDir.resolve("latest-messsages-checksum"),
-        dataDir.resolve("block-metadata-data"),
-        dataDir.resolve("block-metadata-checksum")
-      )
-    )
+  override def withDagStorage[R](f: Task[BlockDagStorage[Task]] => R): R = {
+    val dataDir   = mkTmpDir()
+    val storeTask = createAtDefaultLocation(dataDir)
     try {
-      f(store)
+      f(storeTask)
     } finally {
       dataDir.recursivelyDelete()
     }
@@ -64,9 +81,12 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   private def createAtDefaultLocation(
       dataDir: Path,
       maxSizeFactor: Int = 10
-  ): BlockDagFileStorage[Id] = {
-    implicit val blockStore = InMemBlockStore.createWithId
-    BlockDagFileStorage.createWithId(
+  ): Task[BlockDagFileStorage[Task]] = {
+    implicit val log        = new shared.Log.NOPLog[Task]()
+    implicit val metrics    = new MetricsNOP[Task]()
+    implicit val refF       = Ref.unsafe[Task, Map[BlockHash, BlockMessage]](Map.empty)
+    implicit val blockStore = InMemBlockStore.create[Task]
+    BlockDagFileStorage.create[Task](
       BlockDagFileStorage.Config(
         dataDir.resolve("latest-messsages-data"),
         dataDir.resolve("latest-messsages-checksum"),
@@ -77,92 +97,128 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
     )
   }
 
+  type LookupResult = List[(Option[BlockMetadata], Option[BlockHash], Option[BlockMetadata])]
+
+  private def lookupElements(
+      blockElements: List[BlockMessage],
+      storage: BlockDagStorage[Task]
+  ): Task[LookupResult] =
+    for {
+      dag <- storage.getRepresentation
+      result <- blockElements.traverse { b =>
+                 for {
+                   blockMetadata     <- dag.lookup(b.blockHash)
+                   latestMessageHash <- dag.latestMessageHash(b.sender)
+                   latestMessage     <- dag.latestMessage(b.sender)
+                 } yield (blockMetadata, latestMessageHash, latestMessage)
+               }
+    } yield result
+
+  private def testLookupElementsResult(
+      lookupResult: LookupResult,
+      blockElements: List[BlockMessage]
+  ): Unit =
+    lookupResult.zip(blockElements).foreach {
+      case ((blockMetadata, latestMessageHash, latestMessage), b) =>
+        blockMetadata shouldBe Some(BlockMetadata.fromBlock(b))
+        latestMessageHash shouldBe Some(b.blockHash)
+        latestMessage shouldBe Some(BlockMetadata.fromBlock(b))
+    }
+
   it should "be able to restore state on startup" in {
     forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockElements =>
-      val dataDir    = mkTmpDir()
-      val firstStore = createAtDefaultLocation(dataDir)
-      blockElements.foreach(firstStore.insert)
-      firstStore.close()
-      val secondStore = createAtDefaultLocation(dataDir)
-      blockElements.foreach { b =>
-        val dag = secondStore.getRepresentation
-        dag.latestMessageHash(b.sender) shouldBe Some(b.blockHash)
-        dag.lookup(b.blockHash) shouldBe Some(BlockMetadata.fromBlock(b))
-      }
-      secondStore.close()
-      dataDir.recursivelyDelete()
+      val dataDir = mkTmpDir()
+      val testProgram = for {
+        firstStorage  <- createAtDefaultLocation(dataDir)
+        _             <- blockElements.traverse_(firstStorage.insert)
+        _             <- firstStorage.close()
+        secondStorage <- createAtDefaultLocation(dataDir)
+        result        <- lookupElements(blockElements, secondStorage)
+        _             <- secondStorage.close()
+      } yield result
+      val blockElementLookups = testProgram.unsafeRunSync(scheduler)
+      testLookupElementsResult(blockElementLookups, blockElements)
     }
   }
 
   it should "be able to restore state from the previous two instances" in {
     forAll(blockElementsGen, minSize(0), sizeRange(10)) { firstBlockElements =>
       forAll(blockElementsGen, minSize(0), sizeRange(10)) { secondBlockElements =>
-        val dataDir    = mkTmpDir()
-        val firstStore = createAtDefaultLocation(dataDir)
-        firstBlockElements.foreach(firstStore.insert)
-        firstStore.close()
-        val secondStore = createAtDefaultLocation(dataDir)
-        secondBlockElements.foreach(secondStore.insert)
-        secondStore.close()
-        val thirdStore = createAtDefaultLocation(dataDir)
-        (firstBlockElements ++ secondBlockElements).foreach { b =>
-          val dag = thirdStore.getRepresentation
-          dag.latestMessageHash(b.sender) shouldBe Some(b.blockHash)
-          dag.lookup(b.blockHash) shouldBe Some(BlockMetadata.fromBlock(b))
-          dag.latestMessage(b.sender) shouldBe Some(BlockMetadata.fromBlock(b))
-        }
-        thirdStore.close()
-        dataDir.recursivelyDelete()
+        val dataDir = mkTmpDir()
+        val testProgram = for {
+          firstStorage  <- createAtDefaultLocation(dataDir)
+          _             <- firstBlockElements.traverse_(firstStorage.insert)
+          _             <- firstStorage.close()
+          secondStorage <- createAtDefaultLocation(dataDir)
+          _             <- secondBlockElements.traverse_(secondStorage.insert)
+          _             <- secondStorage.close()
+          thirdStorage  <- createAtDefaultLocation(dataDir)
+          result        <- lookupElements(firstBlockElements ++ secondBlockElements, thirdStorage)
+          _             <- thirdStorage.close()
+        } yield result
+        val blockElementLookups = testProgram.unsafeRunSync(scheduler)
+        testLookupElementsResult(blockElementLookups, firstBlockElements ++ secondBlockElements)
       }
     }
   }
 
   it should "be able to restore latest messages on startup with appended 64 garbage bytes" in {
     forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockElements =>
-      val dataDir    = mkTmpDir()
-      val firstStore = createAtDefaultLocation(dataDir)
-      blockElements.foreach(firstStore.insert)
-      firstStore.close()
-      val garbageBytes = Array.fill[Byte](64)(0)
-      Random.nextBytes(garbageBytes)
-      Files.write(dataDir.resolve("latest-messsages-data"), garbageBytes, StandardOpenOption.APPEND)
-      val secondStore = createAtDefaultLocation(dataDir)
-      blockElements.foreach { b =>
-        val dag = secondStore.getRepresentation
-        dag.latestMessageHash(b.sender) shouldBe Some(b.blockHash)
-      }
-      secondStore.close()
-      dataDir.recursivelyDelete()
+      val dataDir = mkTmpDir()
+      val testProgram = for {
+        firstStorage <- createAtDefaultLocation(dataDir)
+        _            <- blockElements.traverse_(firstStorage.insert)
+        _            <- firstStorage.close()
+        garbageBytes = Array.fill[Byte](64)(0)
+        _            <- Sync[Task].delay { Random.nextBytes(garbageBytes) }
+        _ <- Sync[Task].delay {
+              Files.write(
+                dataDir.resolve("latest-messsages-data"),
+                garbageBytes,
+                StandardOpenOption.APPEND
+              )
+            }
+        secondStorage <- createAtDefaultLocation(dataDir)
+        result        <- lookupElements(blockElements, secondStorage)
+        _             <- secondStorage.close()
+      } yield result
+      val blockElementLookups = testProgram.unsafeRunSync(scheduler)
+      testLookupElementsResult(blockElementLookups, blockElements)
     }
   }
 
   it should "be able to handle fully corrupted latest messages data file" in {
     val dataDir      = mkTmpDir()
     val garbageBytes = Array.fill[Byte](789)(0)
-    Random.nextBytes(garbageBytes)
-    Files.write(dataDir.resolve("latest-messsages-data"), garbageBytes)
-    val store = createAtDefaultLocation(dataDir)
-    val dag   = store.getRepresentation
-    dag.latestMessageHashes.size shouldBe 0
-    store.close()
-    dataDir.recursivelyDelete()
+    val testProgram = for {
+      _                   <- Sync[Task].delay { Random.nextBytes(garbageBytes) }
+      _                   <- Sync[Task].delay { Files.write(dataDir.resolve("latest-messsages-data"), garbageBytes) }
+      storage             <- createAtDefaultLocation(dataDir)
+      dag                 <- storage.getRepresentation
+      latestMessageHashes <- dag.latestMessageHashes
+      latestMessages      <- dag.latestMessages
+      _                   <- storage.close()
+    } yield (latestMessageHashes, latestMessages)
+    val (latestMessageHashes, latestMessages) = testProgram.unsafeRunSync(scheduler)
+    latestMessageHashes.size shouldBe 0
+    latestMessages.size shouldBe 0
   }
 
   it should "be able to restore after squashing latest messages" in {
     forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockElements =>
-      val dataDir    = mkTmpDir()
-      val firstStore = createAtDefaultLocation(dataDir, 2)
-      blockElements.foreach(firstStore.insert)
-      blockElements.foreach(firstStore.insert)
-      blockElements.foreach(firstStore.insert)
-      firstStore.close()
-      val secondStore = createAtDefaultLocation(dataDir)
-      blockElements.foreach { b =>
-        val dag = secondStore.getRepresentation
-        dag.latestMessageHash(b.sender) shouldBe Some(b.blockHash)
-      }
-      secondStore.close()
-      dataDir.recursivelyDelete()
+      val dataDir = mkTmpDir()
+      val testProgram = for {
+        firstStorage  <- createAtDefaultLocation(dataDir, 2)
+        _             <- blockElements.traverse_(firstStorage.insert)
+        _             <- blockElements.traverse_(firstStorage.insert)
+        _             <- blockElements.traverse_(firstStorage.insert)
+        _             <- firstStorage.close()
+        secondStorage <- createAtDefaultLocation(dataDir)
+        result        <- lookupElements(blockElements, secondStorage)
+        _             <- secondStorage.close()
+      } yield result
+      val blockElementLookups = testProgram.unsafeRunSync(scheduler)
+      testLookupElementsResult(blockElementLookups, blockElements)
     }
   }
 }
