@@ -266,10 +266,16 @@ object Configuration {
     // Validators
     val numValidators =
       get(_.run.numValidators, _.validators.flatMap(_.count), DefaultNumValidators)
-    val bondsFile           = getOpt(_.run.bondsFile, _.validators.flatMap(_.bondsFile))
-    val knownValidators     = getOpt(_.run.knownValidators, _.validators.flatMap(_.known))
-    val validatorPublicKey  = getOpt(_.run.validatorPublicKey, _.validators.flatMap(_.publicKey))
-    val validatorPrivateKey = getOpt(_.run.validatorPrivateKey, _.validators.flatMap(_.privateKey))
+    val bondsFile          = getOpt(_.run.bondsFile, _.validators.flatMap(_.bondsFile))
+    val knownValidators    = getOpt(_.run.knownValidators, _.validators.flatMap(_.known))
+    val validatorPublicKey = getOpt(_.run.validatorPublicKey, _.validators.flatMap(_.publicKey))
+
+    val maybePrivateKeyPath =
+      getOpt(_.run.validatorPrivateKeyPath.toOption.map(Right(_)), _.validators.flatMap(_.privateKeyPath))
+    val maybePrivateKey =
+      getOpt(_.run.validatorPrivateKey, _.validators.flatMap(_.privateKey)).map(Left(_))
+    val validatorPrivateKey = maybePrivateKeyPath.orElse(maybePrivateKey)
+
     val validatorSigAlgorithm = get(
       _.run.validatorSigAlgorithm,
       _.validators.flatMap(_.sigAlgorithm),
