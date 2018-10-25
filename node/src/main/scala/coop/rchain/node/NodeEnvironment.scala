@@ -52,12 +52,7 @@ object NodeEnvironment {
 
   private def certBase16(maybePubAddr: Option[Array[Byte]]): Effect[String] =
     maybePubAddr match {
-      case Some(bytes) =>
-        rightT(
-          Base16.encode(
-            CertificateHelper.publicAddress(bytes)
-          )
-        )
+      case Some(bytes) => rightT(Base16.encode(bytes))
       case None =>
         leftT(
           InitializationError(
