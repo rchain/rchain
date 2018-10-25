@@ -551,7 +551,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       )
       .withUser(user)
     val sigData = node.runtimeManager
-      .captureResults(genesis.getBody.getPostState.tuplespace, ProtoUtil.deployDataToDeploy(sigDeployData))
+      .captureResults(
+        genesis.getBody.getPostState.tuplespace,
+        ProtoUtil.deployDataToDeploy(sigDeployData)
+      )
       .head
       .exprs
       .head
@@ -586,7 +589,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     ) *> node.casperEff.createBlock
     val blockStatus = node.casperEff.addBlock(block)
     val queryResult = node.runtimeManager
-      .captureResults(block.getBody.getPostState.tuplespace, ProtoUtil.deployDataToDeploy(paymentQuery))
+      .captureResults(
+        block.getBody.getPostState.tuplespace,
+        ProtoUtil.deployDataToDeploy(paymentQuery)
+      )
 
     val (codeHashPar, _, userIdPar, timestampPar) =
       ProtoUtil.getRholangDeployParams(paymentDeployData)
@@ -599,6 +605,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       timestampPar,
       phloPurchasedPar
     )
+
+    node.tearDown()
   }
 
   it should "reject addBlock when there exist deploy by the same (user, millisecond timestamp) in the chain" in {
