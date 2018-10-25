@@ -1339,7 +1339,7 @@ trait MonadicStorageActionsTests[F[_]]
              .attempt(space.consume(key, patterns, null, false))
       _ = e2.left.get shouldBe an[RSpaceClosedException]
       e3 <- Sync[F]
-             .attempt(space.produce(channel, null, false))
+             .attempt(space.produce(channel, "test-data", false))
       _ = e3.left.get shouldBe an[RSpaceClosedException]
     } yield ()
   }
