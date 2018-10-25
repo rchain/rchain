@@ -220,9 +220,8 @@ object ProtoUtil {
 
   def containsDeploy(b: BlockMessage, user: ByteString, timestamp: Long): Boolean =
     deploys(b).toStream
-      .traverse(getDeployData)
-      .map(_.exists(deployData => deployData.user == user && deployData.timestamp == timestamp))
-      .getOrElse(false)
+      .flatMap(getDeployData)
+      .exists(deployData => deployData.user == user && deployData.timestamp == timestamp)
 
   private def getDeployData(d: ProcessedDeploy): Option[DeployData] =
     for {

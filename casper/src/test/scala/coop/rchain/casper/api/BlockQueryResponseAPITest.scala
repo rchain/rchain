@@ -179,8 +179,8 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
       )
     implicit val casperEffect = NoOpsCasperEffect(
       HashMap[BlockHash, BlockMessage](
-        (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
-        (ProtoUtil.stringToByteString(secondHashString), secondBlock)
+        (genesisHash, genesisBlock),
+        (secondHash, secondBlock)
       ),
       Vector(BlockMessage()),
       dag
