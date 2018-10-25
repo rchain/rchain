@@ -207,6 +207,31 @@ object SystemProcesses {
       illegalArgumentException("blake2b256Hash expects byte array and return channel as arguments")
   }
 
+  def getDeployParams(
+      space: RhoISpace,
+      dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation],
+      shortLeashParams: Runtime.ShortLeashParams[Task]
+  ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
+    case Seq(ListParWithRandomAndPhlos(Seq(ack), rand, _)) =>
+      for {
+        codeHash  <- shortLeashParams.codeHash.get
+        phloRate  <- shortLeashParams.phloRate.get
+        userId    <- shortLeashParams.userId.get
+        timestamp <- shortLeashParams.timestamp.get
+      } yield {
+        space
+          .produce(
+            ack,
+            ListParWithRandom(Seq(codeHash, phloRate, userId, timestamp), rand),
+            false
+          )(MATCH_UNLIMITED_PHLOS)
+          .map(unpackOption(_))
+          .foldResult(dispatcher)
+      }
+    case _ =>
+      illegalArgumentException("getDeployParams expects only a return channel.")
+  }
+
   private def _dispatch(
       dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
   )(cont: TaggedContinuation, dataList: Seq[ListParWithRandomAndPhlos]): Task[Unit] =

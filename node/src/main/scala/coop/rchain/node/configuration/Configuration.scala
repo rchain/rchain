@@ -7,7 +7,6 @@ import java.nio.file.{Path, Paths}
 import cats.implicits._
 import coop.rchain.blockstorage.LMDBBlockStore
 import coop.rchain.casper.CasperConf
-import coop.rchain.casper.protocol.{PhloLimit, PhloPrice}
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.{PeerNode, UPnP}
 import coop.rchain.node.IpChecker
@@ -59,11 +58,11 @@ object Configuration {
   private val DefaultApprovalProtocolInterval   = 5.seconds
   private val DefaultMaxMessageSize: Int        = 4 * 1024 * 1024
   // within range HTTP2 RFC 7540
-  private val MaxMessageSizeMinimumValue: Int   = 1 * 1024 * 1024
-  private val MaxMessageSizeMaximumValue: Int   = 10 * 1024 * 1024
-  private val DefaultMinimumBond: Long          = 1L
-  private val DefaultMaximumBond: Long          = Long.MaxValue
-  private val DefaultHasFaucet: Boolean         = false
+  private val MaxMessageSizeMinimumValue: Int = 1 * 1024 * 1024
+  private val MaxMessageSizeMaximumValue: Int = 10 * 1024 * 1024
+  private val DefaultMinimumBond: Long        = 1L
+  private val DefaultMaximumBond: Long        = Long.MaxValue
+  private val DefaultHasFaucet: Boolean       = false
 
   private val DefaultBootstrapServer: PeerNode = PeerNode
     .fromAddress(
@@ -112,12 +111,12 @@ object Configuration {
   ): Task[Configuration] =
     if (command == Run) {
       for {
-        dataDir    <- Task.pure(options.run.data_dir.getOrElse(profile.dataDir._1()))
+        dataDir    <- Task.pure(options.run.dataDir.getOrElse(profile.dataDir._1()))
         _          = System.setProperty("rnode.data.dir", dataDir.toString)
         configFile <- Task.delay(options.configFile.getOrElse(dataDir.resolve("rnode.toml")).toFile)
         config     <- loadConfigurationFile(configFile)
         effectiveDataDir <- Task.pure(
-                             if (options.run.data_dir.isDefined) dataDir
+                             if (options.run.dataDir.isDefined) dataDir
                              else config.flatMap(_.server.flatMap(_.dataDir)).getOrElse(dataDir)
                            )
         _      = System.setProperty("rnode.data.dir", effectiveDataDir.toString)
@@ -244,7 +243,7 @@ object Configuration {
     val deployTimestamp = getOpt(_.run.deployTimestamp, _.validators.flatMap(_.deployTimestamp))
 
     val host: Option[String] = getOpt(_.run.host, _.server.flatMap(_.host))
-    val mapSize: Long        = get(_.run.map_size, _.server.flatMap(_.mapSize), DefaultMapSize)
+    val mapSize: Long        = get(_.run.mapSize, _.server.flatMap(_.mapSize), DefaultMapSize)
     val storeType: StoreType =
       get(_.run.storeType, _.server.flatMap(_.storeType.flatMap(StoreType.from)), DefaultStoreType)
     val casperBlockStoreSize: Long = get(
@@ -375,8 +374,8 @@ object Configuration {
         import options.deploy._
         Deploy(
           from.getOrElse("0x"),
-          PhloLimit(phloLimit()),
-          PhloPrice(phloPrice()),
+          phloLimit(),
+          phloPrice(),
           nonce.getOrElse(0),
           location()
         )
@@ -425,11 +424,9 @@ final class Configuration(
       case None    => whoAmI(server.port, externalAddress)
     }
 
-  private def retriveExternalAddress: Task[Option[String]] =
-    Task.delay {
-      if (server.noUpnp) None
-      else UPnP.assurePortForwarding(Seq(server.port))
-    }
+  private def retriveExternalAddress(implicit log: Log[Task]): Task[Option[String]] =
+    if (server.noUpnp) None.pure[Task]
+    else UPnP.assurePortForwarding[Task](List(server.port))
 
   private def check(source: String, from: String): Task[(String, Option[String])] =
     IpChecker.checkFrom[Task](from).map((source, _))

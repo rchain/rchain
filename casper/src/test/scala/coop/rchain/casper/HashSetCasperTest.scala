@@ -125,6 +125,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     val logMessages = List(
       "Received Deploy",
+      "Block",
       "Sent Block #1",
       "Added",
       "New fork-choice tip is block"
@@ -143,12 +144,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     def now = System.currentTimeMillis()
     val registerDeploy = ProtoUtil.sourceDeploy(
-      """new rr(`rho:registry:insertArbitrary`), hello, uriCh in {
+      """new uriCh, rr(`rho:registry:insertArbitrary`), hello in {
         |  contract hello(@name, return) = { return!("Hello, ${name}!" %% {"name" : name}) } |
         |  rr!(bundle+{*hello}, *uriCh)
         |}
       """.stripMargin,
-      now,
+      1539788365118L, //fix the timestamp so that `uriCh` is known
       accounting.MAX_VALUE
     )
 
@@ -159,7 +160,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val id: String = casperEff
       .storageContents(block.getBody.getPostState.tuplespace)
       .split('|')
-      .find(_.contains("rho:id"))
+      .find(
+        _.contains(
+          //based on the timestamp of registerDeploy, this is uriCh
+          "@{Unforgeable(0x744dc7e287a955d8f794054ce07fff6efeecec4473a1ebdf26728d93258e3ad6)}!"
+        )
+      )
       .get
       .split('`')(1)
     val callDeploy = ProtoUtil.sourceDeploy(
@@ -416,7 +422,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes.forall(_.logEff.warns.isEmpty) shouldBe true
 
     val rankedValidatorQuery =
-      mkTerm("""for(@pos <- @"proofOfStake"){ 
+      mkTerm("""for(pos <- @"proofOfStake"){ 
     |  new bondsCh, getRanking in {
     |    contract getRanking(@bonds, @acc, return) = {
     |      match bonds {
@@ -426,7 +432,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     |        _ => { return!(acc) }
     |      }
     |    } |
-    |    @(pos, "getBonds")!(*bondsCh) | for(@bonds <- bondsCh) {
+    |    pos!("getBonds", *bondsCh) | for(@bonds <- bondsCh) {
     |      getRanking!(bonds, [], "__SCALA__")
     |    }
     |  }
@@ -483,7 +489,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val blockStatus    = casperEff.addBlock(block)
 
     val balanceQuery =
-      mkTerm("""for(@[wallet] <- @"myWallet"){ @(wallet, "getBalance")!("__SCALA__") }""").right.get
+      mkTerm("""for(@[wallet] <- @"myWallet"){ @wallet!("getBalance", "__SCALA__") }""").right.get
     val newWalletBalance =
       node.runtimeManager.captureResults(block.getBody.getPostState.tuplespace, balanceQuery)
 
@@ -763,14 +769,21 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       nodes(0).casperEff.addBlock(block)
       nodes(1).transportLayerEff.clear(nodes(1).local) //nodes(1) misses this block
     }
-    val Created(block) = nodes(0).casperEff
+    val Created(block11) = nodes(0).casperEff
       .deploy(ProtoUtil.basicDeployData[Id](10)) *> nodes(0).casperEff.createBlock
-    nodes(0).casperEff.addBlock(block)
+    nodes(0).casperEff.addBlock(block11)
 
-    (0 to 10).foreach { i =>
+    // Cycle of requesting and passing blocks until block #3 from nodes(0) to nodes(1)
+    (0 to 8).foreach { i =>
       nodes(1).receive()
       nodes(0).receive()
     }
+
+    // We simulate a network failure here by not allowing block #2 to get passed to nodes(1)
+
+    // And then we assume fetchDependencies eventually gets called
+    nodes(1).casperEff.fetchDependencies
+    nodes(0).receive()
 
     nodes(1).logEff.infos
       .count(_ startsWith "Requested missing block") should be(10)
@@ -853,7 +866,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     import node._
     implicit val timeEff = new LogicalTime[Id]
 
-    val deployData = ProtoUtil.basicDeployData[Id](0).withPhloLimit(PhloLimit(1))
+    val deployData = ProtoUtil.basicDeployData[Id](0).withPhloLimit(1)
     node.casperEff.deploy(deployData)
 
     val Created(block) = MultiParentCasper[Id].createBlock
@@ -865,7 +878,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     import node._
     implicit val timeEff = new LogicalTime[Id]
 
-    val deployData = ProtoUtil.basicDeployData[Id](0).withPhloLimit(PhloLimit(100))
+    val deployData = ProtoUtil.basicDeployData[Id](0).withPhloLimit(100)
     node.casperEff.deploy(deployData)
 
     val Created(block) = MultiParentCasper[Id].createBlock

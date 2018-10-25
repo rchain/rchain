@@ -56,8 +56,8 @@ object DeployRuntime {
   //Accepts a Rholang source file and deploys it to Casper
   def deployFileProgram[F[_]: Monad: ErrorHandler: Capture: DeployService](
       purseAddress: String,
-      phloLimit: PhloLimit,
-      phloPrice: PhloPrice,
+      phloLimit: Long,
+      phloPrice: Long,
       nonce: Int,
       file: String
   ): F[Unit] =

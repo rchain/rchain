@@ -5,7 +5,8 @@ import cats.effect.concurrent.Ref
 import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.{BlockMetadata, BlockStore}
+import coop.rchain.blockstorage.util.TopologicalSortUtil
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util._
@@ -47,11 +48,6 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   private val _blockDag: AtomicSyncVar[BlockDag] = new AtomicSyncVar(initialDag)
 
   private val emptyStateHash = runtimeManager.emptyStateHash
-
-  private val knownStateHashesContainer: AtomicSyncVarF[F, Set[StateHash]] =
-    AtomicSyncVarF.of[F, Set[StateHash]](
-      Set[StateHash](emptyStateHash, postGenesisStateHash)
-    )
 
   private val blockBuffer: mutable.HashSet[BlockMessage] =
     new mutable.HashSet[BlockMessage]()
@@ -95,7 +91,10 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                      )
                      .map(_ => BlockStatus.processing)
                  case Right((_, true)) =>
-                   internalAddBlock(b).flatMap(
+                   Log[F]
+                     .info(
+                       s"Block ${PrettyPrinter.buildString(b.blockHash)} is now processing."
+                     ) *> internalAddBlock(b).flatMap(
                      status =>
                        Capture[F].capture { processingBlocks.update(_ - b.blockHash); status }
                    )
@@ -256,7 +255,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   ): F[CreateBlockStatus] =
     for {
       now                      <- Time[F].currentMillis
-      possibleProcessedDeploys <- updateKnownStateHashes(knownStateHashesContainer, p, r)
+      possibleProcessedDeploys <- updateKnownStateHashes(p, r)
       result <- possibleProcessedDeploys match {
                  case Left(ex) =>
                    Log[F]
@@ -301,36 +300,27 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     } yield result
 
   private def updateKnownStateHashes(
-      knownStateHashesContainer: AtomicSyncVarF[F, Set[StateHash]],
       p: Seq[BlockMessage],
       r: Seq[Deploy]
   ): F[Either[Throwable, (StateHash, Seq[InternalProcessedDeploy])]] =
-    knownStateHashesContainer
-      .modify[(Either[Throwable, (StateHash, Seq[InternalProcessedDeploy])])] { knownStateHashes =>
-        for {
-          possibleProcessedDeploys <- InterpreterUtil.computeDeploysCheckpoint[F](
-                                       p,
-                                       r,
-                                       _blockDag.get,
-                                       knownStateHashes,
-                                       runtimeManager
-                                     )
-        } yield (possibleProcessedDeploys._2, possibleProcessedDeploys._1)
-      }
+    for {
+      possibleProcessedDeploys <- InterpreterUtil.computeDeploysCheckpoint[F](
+                                   p,
+                                   r,
+                                   _blockDag.get,
+                                   runtimeManager
+                                 )
+    } yield possibleProcessedDeploys
 
   def blockDag: F[BlockDag] = Capture[F].capture {
     _blockDag.get
   }
 
   def storageContents(hash: StateHash): F[String] =
-    for {
-      knownStateHashes <- knownStateHashesContainer.get
-    } yield
-      if (knownStateHashes.contains(hash)) {
-        runtimeManager.storageRepr(hash)
-      } else {
-        s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!"
-      }
+    runtimeManager
+      .storageRepr(hash)
+      .getOrElse(s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!")
+      .pure[F]
 
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     (equivocationsTracker
@@ -349,6 +339,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
    */
   private def attemptAdd(b: BlockMessage): F[BlockStatus] =
     for {
+      _                    <- Log[F].info(s"Attempting to add Block ${PrettyPrinter.buildString(b.blockHash)} to DAG.")
       dag                  <- Capture[F].capture { _blockDag.get }
       postValidationStatus <- Validate.blockSummary[F](b, genesis, dag, shardId)
       postTransactionsCheckStatus <- postValidationStatus.traverse(
@@ -357,8 +348,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                                           b,
                                           dag,
                                           emptyStateHash,
-                                          runtimeManager,
-                                          knownStateHashesContainer
+                                          runtimeManager
                                         )
                                     )
       postBondsCacheStatus <- postTransactionsCheckStatus.joinRight.traverse(
@@ -402,18 +392,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
           s"Added ${PrettyPrinter.buildString(block.blockHash)}"
         )
       case MissingBlocks =>
-        for {
-          _              <- Capture[F].capture { blockBuffer += block }
-          dag            <- blockDag
-          missingParents = parentHashes(block).toSet
-          missingJustifications = block.justifications
-            .map(_.latestBlockHash)
-            .toSet
-          missingDependencies = (missingParents union missingJustifications).toList.filterNot(
-            blockHash => dag.dataLookup.contains(blockHash)
-          )
-          _ <- missingDependencies.traverse(hash => handleMissingDependency(hash, block))
-        } yield ()
+        Capture[F].capture { blockBuffer += block } *> fetchMissingDependencies(block)
       case AdmissibleEquivocation =>
         Capture[F].capture {
           val baseEquivocationBlockSeqNum = block.seqNum - 1
@@ -474,6 +453,21 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
         Log[F].error(s"Encountered exception in while processing block ${PrettyPrinter
           .buildString(block.blockHash)}: ${ex.getMessage}")
     }
+
+  private def fetchMissingDependencies(b: BlockMessage): F[Unit] =
+    for {
+      dag            <- blockDag
+      missingParents = parentHashes(b).toSet
+      missingJustifications = b.justifications
+        .map(_.latestBlockHash)
+        .toSet
+      allDependencies = (missingParents union missingJustifications).toList
+      missingDependencies = allDependencies.filterNot(
+        blockHash =>
+          dag.dataLookup.contains(blockHash) || blockBuffer.exists(_.blockHash == blockHash)
+      )
+      _ <- missingDependencies.traverse(hash => handleMissingDependency(hash, b))
+    } yield ()
 
   private def handleMissingDependency(hash: BlockHash, parentBlock: BlockMessage): F[Unit] =
     for {
@@ -606,4 +600,12 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     )
 
   def getRuntimeManager: F[Option[RuntimeManager]] = Applicative[F].pure(Some(runtimeManager))
+
+  def fetchDependencies: F[Unit] =
+    for {
+      blockBufferDependencyDag <- blockBufferDependencyDagState.get
+      _ <- blockBufferDependencyDag.dependencyFree.toList.traverse { hash =>
+            CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash))
+          }
+    } yield ()
 }

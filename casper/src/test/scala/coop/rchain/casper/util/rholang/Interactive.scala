@@ -13,6 +13,7 @@ import coop.rchain.rspace.Checkpoint
 import coop.rchain.shared.StoreType.InMem
 import coop.rchain.models._
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
+import coop.rchain.catscontrib.TaskContrib._
 import scala.collection.mutable
 
 /**
@@ -37,11 +38,8 @@ import scala.collection.mutable
   * >>> itp.cleanUp()
   * }}}
   */
-class Interactive private (runtime: Runtime) {
+class Interactive private (runtime: Runtime)(implicit scheduler: Scheduler) {
   private implicit val rand = Blake2b512Random(128)
-  private implicit val costAccountingAlg =
-    CostAccounting.unsafe[Task](CostAccount(Integer.MAX_VALUE))
-  private implicit val scheduler = Scheduler.io("rhoang-interpreter")
 
   private val prettyPrinter = PrettyPrinter()
 
@@ -90,8 +88,8 @@ class Interactive private (runtime: Runtime) {
 }
 object Interactive {
   def apply(): Interactive = {
-    val runtime = Runtime.create(Paths.get("/not/a/path"), -1, InMem)
+    implicit val scheduler = Scheduler.io("rhoang-interpreter")
 
-    new Interactive(runtime)
+    new Interactive(TestSetUtil.runtime)
   }
 }

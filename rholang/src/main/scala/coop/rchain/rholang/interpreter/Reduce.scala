@@ -682,6 +682,8 @@ object Reduce {
                 Applicative[M].pure[(String, String)](keyString -> valueInt.toString)
               case (GString(keyString), GBool(valueBool)) =>
                 Applicative[M].pure[(String, String)](keyString -> valueBool.toString)
+              case (GString(keyString), GUri(uri)) =>
+                Applicative[M].pure[(String, String)](keyString -> uri)
               // TODO: Add cases for other ground terms as well? Maybe it would be better
               // to implement cats.Show for all ground terms.
               case (_: GString, value) =>

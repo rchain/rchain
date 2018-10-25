@@ -29,14 +29,6 @@ service DeployService {
   rpc findBlockWithDeploy(FindDeployInBlockQuery) returns (BlockQueryResponse) {}
 }
 
-message PhloLimit {
-  int64 value = 1;
-}
-
-message PhloPrice {
-  int64 value = 1;
-}
-
 message DeployData {
   bytes  user         = 1; //public key
   string term         = 2; //rholang source code to deploy (will be parsed into `Par`)
@@ -44,8 +36,8 @@ message DeployData {
   bytes  sig          = 4; //signature of (hash(term) + timestamp) using private key
   string sigAlgorithm = 5; // name of the algorithm used to sign
   string from         = 6; //wallet address which will be used to pay for the deployment
-  PhloPrice phloPrice  = 7; //phlo price
-  PhloLimit phloLimit  = 8; //phlo limit for the deployment
+  int64 phloPrice     = 7; //phlo price
+  int64 phloLimit     = 8; //phlo limit for the deployment
   int32 nonce         = 9; //nonce for transaction made against `from` wallet
 }
 

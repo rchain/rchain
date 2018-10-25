@@ -237,10 +237,10 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val host = opt[String](descr = "Hostname or IP of this node.")
 
-    val data_dir =
+    val dataDir =
       opt[Path](required = false, descr = "Path to data directory. Defaults to $HOME/.rnode")
 
-    val map_size = opt[Long](required = false, descr = "Map size (in bytes)")
+    val mapSize = opt[Long](required = false, descr = "Map size (in bytes)")
 
     val storeType = opt[StoreType](required = false, descr = "Type of RSpace backing store")
 
