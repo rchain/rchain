@@ -96,8 +96,7 @@ object Main {
   private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
     val node =
       for {
-        host    <- conf.fetchHost.toEffect
-        runtime <- NodeRuntime(conf, host, scheduler)
+        runtime <- NodeRuntime(conf)
         _       <- runtime.main
       } yield ()
 

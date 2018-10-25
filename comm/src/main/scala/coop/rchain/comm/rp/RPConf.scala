@@ -1,7 +1,8 @@
 package coop.rchain.comm.rp
 
-import coop.rchain.comm.PeerNode
 import scala.concurrent.duration._
+
+import coop.rchain.comm.PeerNode
 
 case class RPConf(
     local: PeerNode,

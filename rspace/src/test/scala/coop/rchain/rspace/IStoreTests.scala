@@ -289,10 +289,10 @@ class InMemoryStoreTests
     with IStoreTests
     with IdTests[String, Pattern, Nothing, String, StringsCaptor]
 class LMDBStoreTests
-    extends LMDBStoreTestsBase
+    extends LMDBStoreTestsBase[Id]
     with IStoreTests
     with IdTests[String, Pattern, Nothing, String, StringsCaptor]
 class MixedStoreTests
-    extends MixedStoreTestsBase
+    extends MixedStoreTestsBase[Id]
     with IStoreTests
     with IdTests[String, Pattern, Nothing, String, StringsCaptor]
