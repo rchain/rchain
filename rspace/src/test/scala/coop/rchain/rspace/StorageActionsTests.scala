@@ -1341,7 +1341,7 @@ trait LegacyStorageActionsTests
       )
 
       an[RSpaceClosedException] shouldBe thrownBy(
-        space.produce(channel, null, false)
+        space.produce(channel, "test data", false)
       )
   }
 }
