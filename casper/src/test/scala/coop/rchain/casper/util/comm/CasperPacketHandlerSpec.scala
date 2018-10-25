@@ -227,6 +227,8 @@ class CasperPacketHandlerSpec extends WordSpec {
           lastApprovedBlockO <- LastApprovedBlock[Task].get
           _                  = assert(lastApprovedBlockO.isDefined)
           approvedPacket     = approvedBlockRequestPacket
+          // TODO: Since now a ApprovedBlock is streamed back, approvedBlockRes is None
+          // Somehow adjust this assert; do we even need it?
           approvedBlockRes   <- casperPacketHandler.handle(local)(approvedBlockRequestPacket)
           _ = assert(
             approvedBlockRes.map(p => ApprovedBlock.parseFrom(p.content.toByteArray)) == Some(
@@ -425,6 +427,7 @@ class CasperPacketHandlerSpec extends WordSpec {
         test.unsafeRunSync
       }
 
+      // TODO: This is no longer true; instead check that a ApprovedBlock is streamed back
       "respond to ApprovedBlockRequest messages" in {
         val approvedBlockRequest = ApprovedBlockRequest("test")
         val requestPacket =

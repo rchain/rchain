@@ -16,7 +16,7 @@ import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.rp._
 import coop.rchain.comm.rp.ProtocolHelper.{packet, toPacket}
 import coop.rchain.comm.transport.{Blob, PacketType, TransportLayer}
-import coop.rchain.comm.{transport, PeerNode}
+import coop.rchain.comm.{PeerNode, transport}
 import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.effects._
@@ -76,7 +76,8 @@ object CommUtil {
   ): F[Unit] = {
     val request = ApprovedBlockRequest("PleaseSendMeAnApprovedBlock").toByteString
     for {
-      _ <- sendToPeers[F](transport.ApprovedBlockRequest, request)
+      msg   = packet(PUT_BOOTSTRAP_HERE, transport.ApprovedBlockRequest, request)
+      _     <- TransportLayer[F].send(PUT_BOOTSTRAP_HERE, msg)
     } yield ()
   }
 }
