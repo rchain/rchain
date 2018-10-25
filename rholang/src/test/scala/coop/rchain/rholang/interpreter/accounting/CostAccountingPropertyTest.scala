@@ -31,6 +31,8 @@ class CostAccountingPropertyTest extends FlatSpec with PropertyChecks with Match
     ProcGen.topLevelGen(5).map(PrettyPrinted[Proc](_, PrettyPrinter.print))
   )
 
+  implicit val taskExecutionDuration = 5.seconds
+
   def cost(proc: Proc): Cost = Cost(Interpreter.buildPar(proc).apply)
 
   behavior of "Cost accounting in Reducer"
@@ -45,30 +47,27 @@ class CostAccountingPropertyTest extends FlatSpec with PropertyChecks with Match
 
   it should "charge the same if the evaluation order is reversed" in {
     forAll { (p: PrettyPrinted[Proc], q: PrettyPrinted[Proc]) =>
-      val task =
-        for {
-          cost1 <- costOfExecution(p.value, q.value)
-          cost2 <- costOfExecution(q.value, p.value)
-        } yield (cost1 == cost2)
-
-      task.runSyncUnsafe(5.seconds)
+      haveEqualResults(costOfExecution(p.value, q.value), costOfExecution(q.value, p.value))
     }
   }
 
   it should "sequential execution and parallel execution have the same cost" in {
     forAll { (p: PrettyPrinted[Proc], q: PrettyPrinted[Proc]) =>
-      val task =
-        for {
-          cost1 <- costOfExecution(new PPar(p.value, q.value))
-          cost2 <- costOfExecution(q.value, p.value)
-        } yield (cost1 == cost2)
-
-      task.runSyncUnsafe(5.seconds)
+      haveEqualResults(
+        costOfExecution(new PPar(p.value, q.value)),
+        costOfExecution(q.value, p.value)
+      )
     }
   }
 }
 
 object CostAccountingPropertyTest {
+  def haveEqualResults[A](tasks: Task[A]*)(implicit duration: Duration): Boolean =
+    tasks.toList
+      .sequence[Task, A]
+      .map { _.sliding(2).forall { case List(r1, r2) => r1 == r2 } }
+      .runSyncUnsafe(duration)
+
   def createRhoISpace(): RhoISpace = {
     implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
     import coop.rchain.rholang.interpreter.storage.implicits._
