@@ -2,9 +2,10 @@ package coop.rchain.casper.util.rholang
 
 import java.nio.file.Files
 
+import coop.rchain.casper.genesis.contracts.StandardDeploys
+import coop.rchain.casper.protocol.Deploy
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.rholang.interpreter.{accounting, Runtime}
-import coop.rchain.rholang.math.NonNegativeNumber
 import coop.rchain.shared.StoreType
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
@@ -26,16 +27,29 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   "captureResult" should "return the value at the specified channel after a rholang computation" in {
     val purseValue     = "37"
     val captureChannel = "__PURSEVALUE__"
+    val deployData = ProtoUtil.sourceDeploy(
+      s"""new rl(`rho:registry:lookup`), NonNegativeNumberCh in {
+         |  rl!(`rho:id:nd74ztexkao5awjhj95e3octkza7tydwiy7euthnyrt5ihgi9rj495`, *NonNegativeNumberCh) |
+         |  for(@(_, NonNegativeNumber) <- NonNegativeNumberCh) {
+         |    @NonNegativeNumber!($purseValue, "nn")
+         |  }
+         |}""".stripMargin,
+      System.currentTimeMillis(),
+      accounting.MAX_VALUE
+    )
     val deploys = Seq(
-      NonNegativeNumber.term,
-      InterpreterUtil.mkTerm(s""" @"NonNegativeNumber"!($purseValue, "nn") """).right.get
-    ).map(ProtoUtil.termDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
+      StandardDeploys.nonNegativeNumber,
+      Deploy(
+        term = InterpreterUtil.mkTerm(deployData.term).toOption,
+        raw = Some(deployData)
+      )
+    )
 
     val (hash, _) = runtimeManager.computeState(runtimeManager.emptyStateHash, deploys)
     val result = runtimeManager.captureResults(
       hash,
       InterpreterUtil
-        .mkTerm(s""" for(@nn <- @"nn"){ @(nn, "value")!("$captureChannel") } """)
+        .mkTerm(s""" for(nn <- @"nn"){ nn!("value", "$captureChannel") } """)
         .right
         .get,
       captureChannel

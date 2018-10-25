@@ -415,7 +415,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes.forall(_.logEff.warns.isEmpty) shouldBe true
 
     val rankedValidatorQuery =
-      mkTerm("""for(@pos <- @"proofOfStake"){ 
+      mkTerm("""for(pos <- @"proofOfStake"){ 
     |  new bondsCh, getRanking in {
     |    contract getRanking(@bonds, @acc, return) = {
     |      match bonds {
@@ -425,7 +425,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     |        _ => { return!(acc) }
     |      }
     |    } |
-    |    @(pos, "getBonds")!(*bondsCh) | for(@bonds <- bondsCh) {
+    |    pos!("getBonds", *bondsCh) | for(@bonds <- bondsCh) {
     |      getRanking!(bonds, [], "__SCALA__")
     |    }
     |  }
@@ -482,7 +482,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val blockStatus    = casperEff.addBlock(block)
 
     val balanceQuery =
-      mkTerm("""for(@[wallet] <- @"myWallet"){ @(wallet, "getBalance")!("__SCALA__") }""").right.get
+      mkTerm("""for(@[wallet] <- @"myWallet"){ @wallet!("getBalance", "__SCALA__") }""").right.get
     val newWalletBalance =
       node.runtimeManager.captureResults(block.getBody.getPostState.tuplespace, balanceQuery)
 

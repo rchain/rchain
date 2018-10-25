@@ -15,13 +15,10 @@ import monix.execution._
 
 import scala.concurrent.duration._
 
-class GrpcKademliaRPC(
-    src: PeerNode,
-    port: Int,
-    timeout: FiniteDuration
-)(
+class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
     implicit
     scheduler: Scheduler,
+    peerNodeAsk: PeerNodeAsk[Task],
     metrics: Metrics[Task],
     log: Log[Task],
     connectionsCache: ConnectionsCache[Task, KademliaConnTag]
@@ -37,9 +34,10 @@ class GrpcKademliaRPC(
     for {
       _       <- Metrics[Task].incrementCounter("protocol-ping-sends")
       channel <- connection(peer, enforce = false)
+      local   <- peerNodeAsk.ask
       pongErr <- KademliaGrpcMonix
                   .stub(channel)
-                  .sendPing(Ping().withSender(node(src)))
+                  .sendPing(Ping().withSender(node(local)))
                   .nonCancelingTimeout(timeout)
                   .attempt
       _ <- Task.delay(channel.shutdown())
@@ -48,10 +46,11 @@ class GrpcKademliaRPC(
 
   def lookup(key: Seq[Byte], peer: PeerNode): Task[Seq[PeerNode]] =
     for {
-      _ <- Metrics[Task].incrementCounter("protocol-lookup-send")
+      _     <- Metrics[Task].incrementCounter("protocol-lookup-send")
+      local <- peerNodeAsk.ask
       lookup = Lookup()
         .withId(ByteString.copyFrom(key.toArray))
-        .withSender(node(src))
+        .withSender(node(local))
       channel <- connection(peer, enforce = false)
       responseErr <- KademliaGrpcMonix
                       .stub(channel)

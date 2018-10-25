@@ -12,7 +12,7 @@ import monix.execution.Scheduler
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
 
-class TcpTransportLayerSpec {//extends TransportLayerSpec[Task, TcpTlsEnvironment] {
+class TcpTransportLayerSpec { //extends TransportLayerSpec[Task, TcpTlsEnvironment] {
 
   implicit val log: Log[Task]       = new Log.NOPLog[Task]
   implicit val scheduler: Scheduler = Scheduler.Implicits.global
@@ -42,7 +42,7 @@ class TcpTransportLayerSpec {//extends TransportLayerSpec[Task, TcpTlsEnvironmen
 
   def createTransportLayer(env: TcpTlsEnvironment): Task[TransportLayer[Task]] =
     CachedConnections[Task, TcpConnTag].map { implicit cache =>
-      new TcpTransportLayer(env.host, env.port, env.cert, env.key, 4 * 1024 * 1024)
+      new TcpTransportLayer(env.port, env.cert, env.key, 4 * 1024 * 1024)
     }
 
   def extract[A](fa: Task[A]): A = fa.runSyncUnsafe(Duration.Inf)

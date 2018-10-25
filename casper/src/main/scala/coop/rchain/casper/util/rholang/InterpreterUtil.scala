@@ -39,18 +39,21 @@ object InterpreterUtil {
     val tsHash          = ProtoUtil.tuplespace(b)
     val deploys         = ProtoUtil.deploys(b)
     val internalDeploys = deploys.flatMap(ProcessedDeployUtil.toInternal)
+    val timestamp       = Some(b.header.get.timestamp) // TODO: Ensure header exists through type
     for {
       parents <- ProtoUtil.unsafeGetParents[F](b)
       possiblePreStateHash <- computeParentsPostState[F](
                                parents,
                                dag,
-                               runtimeManager
+                               runtimeManager,
+                               timestamp
                              )
       result <- processPossiblePreStateHash[F](
                  runtimeManager,
                  tsHash,
                  internalDeploys,
-                 possiblePreStateHash
+                 possiblePreStateHash,
+                 timestamp
                )
     } yield result
   }
@@ -59,13 +62,14 @@ object InterpreterUtil {
       runtimeManager: RuntimeManager,
       tsHash: Option[StateHash],
       internalDeploys: Seq[InternalProcessedDeploy],
-      possiblePreStateHash: Either[Throwable, StateHash]
+      possiblePreStateHash: Either[Throwable, StateHash],
+      time: Option[Long]
   )(implicit scheduler: Scheduler): F[Either[BlockException, Option[StateHash]]] =
     possiblePreStateHash match {
       case Left(ex) =>
         Left(BlockException(ex)).rightCast[Option[StateHash]].pure[F]
       case Right(parentStateHash) =>
-        runtimeManager.replayComputeState(parentStateHash, internalDeploys) match {
+        runtimeManager.replayComputeState(parentStateHash, internalDeploys, time) match {
           case Left((Some(deploy), status)) =>
             status match {
               case InternalErrors(exs) =>
@@ -114,16 +118,18 @@ object InterpreterUtil {
       parents: Seq[BlockMessage],
       deploys: Seq[Deploy],
       dag: BlockDag,
-      runtimeManager: RuntimeManager
+      runtimeManager: RuntimeManager,
+      time: Option[Long] = None
   )(
       implicit scheduler: Scheduler
   ): F[Either[Throwable, (StateHash, Seq[InternalProcessedDeploy])]] =
     for {
-      possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager)
+      possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager, time)
     } yield
       possiblePreStateHash match {
         case Right(preStateHash) =>
-          val (postStateHash, processedDeploys) = runtimeManager.computeState(preStateHash, deploys)
+          val (postStateHash, processedDeploys) =
+            runtimeManager.computeState(preStateHash, deploys, time)
           Right(postStateHash, processedDeploys)
         case Left(err) =>
           Left(err)
@@ -132,7 +138,8 @@ object InterpreterUtil {
   private def computeParentsPostState[F[_]: Monad: BlockStore](
       parents: Seq[BlockMessage],
       dag: BlockDag,
-      runtimeManager: RuntimeManager
+      runtimeManager: RuntimeManager,
+      time: Option[Long]
   )(implicit scheduler: Scheduler): F[Either[Throwable, StateHash]] = {
     val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
 
@@ -169,7 +176,7 @@ object InterpreterUtil {
           blocks      = maybeBlocks.flatten
           deploys     = blocks.flatMap(_.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal))
         } yield
-          runtimeManager.replayComputeState(initStateHash, deploys) match {
+          runtimeManager.replayComputeState(initStateHash, deploys, time) match {
             case result @ Right(hash) => result.leftCast[Throwable]
             case Left((_, status)) =>
               val parentHashes = parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))

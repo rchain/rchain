@@ -22,8 +22,8 @@ object BondingUtil {
   def transferStatusOut(ethAddress: String): String       = s"${ethAddress}_transferOut"
 
   def bondingForwarderDeploy(bondKey: String, ethAddress: String): String =
-    s"""for(@purse <- @"${bondingForwarderAddress(ethAddress)}"; @pos <- @"proofOfStake"){
-       |  @(pos, "bond")!("$bondKey".hexToBytes(), "ed25519Verify", purse, "$ethAddress", "${bondingStatusOut(
+    s"""for(@purse <- @"${bondingForwarderAddress(ethAddress)}"; pos <- @"proofOfStake"){
+       |  pos!("bond", "$bondKey".hexToBytes(), "ed25519Verify", purse, "$ethAddress", "${bondingStatusOut(
          ethAddress
        )}")
        |}""".stripMargin
@@ -74,7 +74,13 @@ object BondingUtil {
       unlockSigData = Keccak256.hash(sigBytes)
       unlockSig     = Secp256k1.sign(unlockSigData, secKey)
       _             = assert(Secp256k1.verify(unlockSigData, unlockSig, Base16.decode("04" + pubKey)))
-    } yield s"""@"$ethAddress"!(["$pubKey", "$statusOut"], "${Base16.encode(unlockSig)}")"""
+      sigString     = Base16.encode(unlockSig)
+    } yield s"""new rl(`rho:registry:lookup`), WalletCheckCh in {
+           |  rl!(`rho:id:oqez475nmxx9ktciscbhps18wnmnwtm6egziohc3rkdzekkmsrpuyt`, *WalletCheckCh) |
+           |  for(@(_, WalletCheck) <- WalletCheckCh) {
+           |    @WalletCheck!("claim", "$ethAddress", "$pubKey", "$sigString", "$statusOut")
+           |  }
+           |}""".stripMargin
   }
 
   def walletTransferSigData[F[_]: Sync](
@@ -110,8 +116,8 @@ object BondingUtil {
       transferSigData <- walletTransferSigData[F](nonce, amount, destination)
       transferSig     = Secp256k1.sign(transferSigData, secKey)
     } yield s"""
-             |for(@wallet <- @"$pubKey") {
-             |  @(wallet, "transfer")!($amount, $nonce, "${Base16.encode(transferSig)}", "$destination", "$transferStatusOut")
+             |for(wallet <- @"$pubKey") {
+             |  wallet!("transfer", $amount, $nonce, "${Base16.encode(transferSig)}", "$destination", "$transferStatusOut")
              |}""".stripMargin
 
   def faucetBondDeploy[F[_]: Sync](
@@ -139,7 +145,7 @@ object BondingUtil {
     } yield s"""new walletCh in {
                |  for(faucet <- @"faucet"){ faucet!($amount, "ed25519", "$pubKey", *walletCh) } |
                |  for(@[wallet] <- walletCh) {
-               |    @(wallet, "transfer")!($amount, $nonce, "${Base16.encode(transferSig)}", "$destination", "$statusOut")
+               |    @wallet!("transfer", $amount, $nonce, "${Base16.encode(transferSig)}", "$destination", "$statusOut")
                |  }
                |}""".stripMargin
 
