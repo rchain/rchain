@@ -754,7 +754,7 @@ class RholangMethodsCostsSpec
   def mapN(n: Long, value: Par): Map[Par, Par] =
     (1L to n).map(i => (Par().withExprs(Seq(GInt(i))), value)).toMap
   def toRholangMap(map: Map[Par, Par]): EMapBody =
-    EMapBody(ParMap(new SortedParMap(map)))
+    EMapBody(ParMap(SortedParMap(map)))
 
   def emptySet: Set[Par] = setN(0)
   def setN(n: Long): Set[Par] =

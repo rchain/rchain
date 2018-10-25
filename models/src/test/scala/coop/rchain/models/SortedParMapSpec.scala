@@ -67,9 +67,11 @@ class SortedParMapSpec extends FlatSpec with Matchers {
       Par() -> Par(
         ids = Seq(
           GPrivate(
-            ByteString.copyFrom(Array[Byte](
-              0
-            ))
+            ByteString.copyFrom(
+              Array[Byte](
+                0
+              )
+            )
           ),
           GPrivate()
         ),

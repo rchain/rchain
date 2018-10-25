@@ -560,7 +560,7 @@ class RegistryImpl[F[_]](
                   val (newEdgeHead, newEdgeTail)  = safeUncons(newEdgeStr)
                   val newMap: ParMap = ParMap(
                     SortedParMap(
-                      Map[Par, Par](
+                      Seq[(Par, Par)](
                         parByteArray(oldEdgeHead) -> ETuple(
                           Seq(ps(0), parByteArray(oldEdgeTail), ps(2))
                         ),
