@@ -34,14 +34,15 @@ object Cell extends CellInstances0 {
       }
     }
 
-  def unsafe[F[_]: Applicative, S](const: S): Cell[F, S] = new Cell[F, S] {
-    private var s: S = const
-    def modify(f: S => F[S]): F[Unit] = f(s).map { newS =>
-      s = newS
-      ()
+  def unsafe[F[_]: Applicative, S](const: S): Cell[F, S] =
+    new Cell[F, S] {
+      private var s: S = const
+      def modify(f: S => F[S]): F[Unit] = f(s).map { newS =>
+        s = newS
+        ()
+      }
+      def read: F[S] = s.pure[F]
     }
-    def read: F[S] = s.pure[F]
-  }
 
   def id[S](init: S): Cell[Id, S] = new Cell[Id, S] {
     var s: S = init

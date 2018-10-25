@@ -61,7 +61,7 @@ object TomlConfiguration {
 
   def from(file: File): Either[TomlConfigurationError, Configuration] =
     if (file.exists())
-      withResource(Source.fromFile(file))(f => from(f.getLines().mkString("\n")))
+      withResource(Source.fromFile(file))(f => from(f.mkString))
     else Either.left(ConfigurationFileNotFound(file.getAbsolutePath))
 
   private def rewriteKeysToCamelCase(tbl: Value.Tbl): Value.Tbl = {
