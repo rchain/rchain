@@ -24,13 +24,7 @@ import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
 import scala.util._
 
-class TcpTransportLayer(
-    host: String,
-    port: Int,
-    cert: String,
-    key: String,
-    maxMessageSize: Int
-)(
+class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: Int)(
     implicit scheduler: Scheduler,
     log: Log[Task],
     connectionsCache: ConnectionsCache[Task, TcpConnTag]
@@ -155,7 +149,7 @@ class TcpTransportLayer(
     */
   def stream(peers: Seq[PeerNode], blob: Blob): Task[Unit] =
     peers.toList
-      .traverse(
+      .traverse[Task, Unit](
         peer =>
           withClient(peer, enforce = false) { stub =>
             stub.stream(Observable.fromIterator(chunkIt(blob)))

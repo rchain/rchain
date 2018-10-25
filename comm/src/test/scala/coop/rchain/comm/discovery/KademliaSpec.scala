@@ -21,11 +21,11 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
   val DISTANCE_4 = Some(4)
   val DISTANCE_6 = Some(6)
 
-  var table       = PeerTable(local, 3)
+  var table       = PeerTable[PeerNode](local.key, 3)
   var pingedPeers = mutable.MutableList.empty[PeerNode]
 
   override def beforeEach(): Unit = {
-    table = PeerTable(local, 3)
+    table = PeerTable[PeerNode](local.key, 3)
     pingedPeers = mutable.MutableList.empty[PeerNode]
     // peer1-4 distance is 4
     table.distance(peer1) shouldBe DISTANCE_4

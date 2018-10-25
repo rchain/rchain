@@ -3,21 +3,26 @@ package coop.rchain.node.configuration
 import java.io.File
 import java.net.InetAddress
 import java.nio.file.{Path, Paths}
+import java.util.concurrent.atomic.AtomicReference
 
 import cats.implicits._
+
 import coop.rchain.blockstorage.LMDBBlockStore
 import coop.rchain.casper.CasperConf
 import coop.rchain.catscontrib.ski._
-import coop.rchain.comm.{PeerNode, UPnP}
+import coop.rchain.comm._
 import coop.rchain.node.IpChecker
 import coop.rchain.node.configuration.toml.error._
 import coop.rchain.node.configuration.toml.{Configuration => TomlConfiguration}
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.shared.StoreType
 import coop.rchain.shared.StoreType._
-import monix.eval.Task
 
+import monix.eval.{Callback, Task}
 import scala.concurrent.duration._
+
+import com.google.common.base.Optional
+import monix.execution.Scheduler
 
 object Configuration {
   private implicit val logSource: LogSource = LogSource(this.getClass)
@@ -40,6 +45,7 @@ object Configuration {
   private val DefaultHttPort                    = 40403
   private val DefaultKademliaPort               = 40404
   private val DefaultGrpcHost                   = "localhost"
+  private val DefaultDynamicHostAddress         = false
   private val DefaultNoUpNP                     = false
   private val DefaultStandalone                 = false
   private val DefaultTimeout                    = 2000
@@ -134,6 +140,7 @@ object Configuration {
             DefaultPort,
             DefaultHttPort,
             DefaultKademliaPort,
+            DefaultDynamicHostAddress,
             DefaultNoUpNP,
             DefaultTimeout,
             DefaultBootstrapServer,
@@ -216,6 +223,12 @@ object Configuration {
     val httpPort: Int = get(_.run.httpPort, _.server.flatMap(_.httpPort), DefaultHttPort)
     val kademliaPort: Int =
       get(_.run.kademliaPort, _.server.flatMap(_.kademliaPort), DefaultKademliaPort)
+    val dynamicHostAddress: Boolean =
+      get(
+        _.run.dynamicHostAddress,
+        _.server.flatMap(_.dynamicHostAddress),
+        DefaultDynamicHostAddress
+      )
     val noUpnp: Boolean = get(_.run.noUpnp, _.server.flatMap(_.noUpnp), DefaultNoUpNP)
     val defaultTimeout: Int =
       get(_.run.defaultTimeout, _.server.flatMap(_.defaultTimeout), DefaultTimeout)
@@ -303,6 +316,7 @@ object Configuration {
       port,
       httpPort,
       kademliaPort,
+      host.isEmpty && dynamicHostAddress,
       noUpnp,
       defaultTimeout,
       bootstrap,
@@ -412,16 +426,29 @@ final class Configuration(
 
   def printHelp(): Task[Unit] = Task.delay(options.printHelp())
 
-  def fetchHost(implicit log: Log[Task]): Task[String] =
+  def fetchLocalPeerNode(
+      id: NodeIdentifier
+  )(implicit log: Log[Task]): Task[PeerNode] =
     for {
       externalAddress <- retriveExternalAddress
       host            <- fetchHost(externalAddress)
-    } yield host
+      peerNode        = PeerNode.from(id, host, server.port, server.kademliaPort)
+    } yield peerNode
+
+  def checkLocalPeerNode(
+      peerNode: PeerNode
+  )(implicit log: Log[Task]): Task[Option[PeerNode]] =
+    for {
+      r      <- checkAll()
+      (_, a) = r
+      host <- if (a == peerNode.endpoint.host) Task.now(Option.empty[String])
+             else log.info(s"external IP address has changed to $a").map(kp(Some(a)))
+    } yield host.map(h => PeerNode.from(peerNode.id, h, server.port, server.kademliaPort))
 
   private def fetchHost(externalAddress: Option[String])(implicit log: Log[Task]): Task[String] =
     server.host match {
       case Some(h) => Task.pure(h)
-      case None    => whoAmI(server.port, externalAddress)
+      case None    => whoAmI(externalAddress)
     }
 
   private def retriveExternalAddress(implicit log: Log[Task]): Task[Option[String]] =
@@ -433,14 +460,14 @@ final class Configuration(
 
   private def checkNext(
       prev: (String, Option[String]),
-      next: Task[(String, Option[String])]
+      next: => Task[(String, Option[String])]
   ): Task[(String, Option[String])] =
     prev._2.fold(next)(_ => Task.pure(prev))
 
   private def upnpIpCheck(externalAddress: Option[String]): Task[(String, Option[String])] =
     Task.delay(("UPnP", externalAddress.map(InetAddress.getByName(_).getHostAddress)))
 
-  private def checkAll(externalAddress: Option[String]): Task[(String, String)] =
+  private def checkAll(externalAddress: Option[String] = None): Task[(String, String)] =
     for {
       r1 <- check("AmazonAWS service", "http://checkip.amazonaws.com")
       r2 <- checkNext(r1, check("WhatIsMyIP service", "http://bot.whatismyipaddress.com"))
@@ -451,7 +478,7 @@ final class Configuration(
       (s, a)
     }
 
-  private def whoAmI(port: Int, externalAddress: Option[String])(
+  private def whoAmI(externalAddress: Option[String])(
       implicit log: Log[Task]
   ): Task[String] =
     for {
