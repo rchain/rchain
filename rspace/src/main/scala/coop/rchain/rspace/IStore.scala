@@ -141,10 +141,9 @@ trait IStore[C, P, A, K] {
     } else {
       collapse(trieUpdates).foreach(processTrieUpdate(trieStore, _))
       trieStore.withTxn(trieStore.createTxnWrite()) { txn =>
-        val rootHash = trieStore
+        trieStore
           .persistAndGetRoot(txn, trieBranch)
           .getOrElse(throw new Exception("Could not get root hash"))
-        rootHash
       }
     }
   }
