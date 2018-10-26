@@ -552,12 +552,12 @@ trait LegacyHistoryActionsTests
 }
 
 class MixedStoreHistoryActionsTests
-    extends MixedStoreTestsBase
+    extends MixedStoreTestsBase[Id]
     with HistoryActionsTests[Id]
     with LegacyHistoryActionsTests
     with IdTests[String, Pattern, Nothing, String, StringsCaptor]
 class LMDBStoreHistoryActionsTests
-    extends LMDBStoreTestsBase
+    extends LMDBStoreTestsBase[Id]
     with HistoryActionsTests[Id]
     with LegacyHistoryActionsTests
     with IdTests[String, Pattern, Nothing, String, StringsCaptor]

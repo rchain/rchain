@@ -93,7 +93,7 @@ case class PrettyPrinter(
         pure("{") |+| (pure("") /: ps.sortedMap.zipWithIndex) {
           case (string, (kv, i)) =>
             string |+| buildStringM(kv._1) |+| pure(" : ") |+| buildStringM(kv._2) |+| pure {
-              if (i != ps.sortedMap.length - 1) ", "
+              if (i != ps.sortedMap.size - 1) ", "
               else ""
             }
         } |+| buildRemainderString(remainder) |+| pure("}")
