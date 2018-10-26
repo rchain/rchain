@@ -93,7 +93,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
         |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
         |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
-        |    SystemInstancesRegistry!("lookup", "pos", *posCh) |
+        |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
         |    for(pos <- posCh){ pos!("getBonds", "__SCALA__") }
         |  }
         |}""".stripMargin

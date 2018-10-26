@@ -25,7 +25,7 @@ object BondingUtil {
     s"""new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
        |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
        |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
-       |    SystemInstancesRegistry!("lookup", "pos", *posCh) |
+       |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
        |    for(@purse <- @"${bondingForwarderAddress(ethAddress)}"; pos <- posCh){
        |      pos!("bond", "$bondKey".hexToBytes(), "ed25519Verify", purse, "$ethAddress", "${bondingStatusOut(
          ethAddress
@@ -124,9 +124,9 @@ object BondingUtil {
     } yield s"""new rl(`rho:registry:lookup`), WalletCheckCh, result in {
                |  rl!(`rho:id:oqez475nmxx9ktciscbhps18wnmnwtm6egziohc3rkdzekkmsrpuyt`, *WalletCheckCh) |
                |  for(@(_, WalletCheck) <- WalletCheckCh) {
-               |    WalletCheck!("access", $pubKey, *result) |
+               |    @WalletCheck!("access", "$pubKey", *result) |
                |    for(@(true, wallet) <- result) {
-               |      wallet!("transfer", $amount, $nonce, "${Base16.encode(transferSig)}", "$destination", "$transferStatusOut")
+               |      @wallet!("transfer", $amount, $nonce, "${Base16.encode(transferSig)}", "$destination", "$transferStatusOut")
                |    }
                |  }
                |}""".stripMargin
@@ -156,7 +156,7 @@ object BondingUtil {
     } yield s"""new rl(`rho:registry:lookup`), SystemInstancesCh, walletCh, faucetCh in {
                |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
                |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
-               |    SystemInstancesRegistry!("lookup", "faucet", *faucetCh) |
+               |    @SystemInstancesRegistry!("lookup", "faucet", *faucetCh) |
                |    for(faucet <- faucetCh){ faucet!($amount, "ed25519", "$pubKey", *walletCh) } |
                |    for(@[wallet] <- walletCh) {
                |      @wallet!("transfer", $amount, $nonce, "${Base16.encode(transferSig)}", "$destination", "$statusOut")

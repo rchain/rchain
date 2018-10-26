@@ -46,7 +46,7 @@ in {
           for (@done <- doneStore) {
             if (done) {
               doneStore!(done) |
-              @statusOut!([false, "Already claimed wallet"])
+              @statusOut!((false, "Already claimed wallet"))
             } else {
 
               // Verify signature 

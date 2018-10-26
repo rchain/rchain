@@ -41,16 +41,16 @@ class Rev[A](
     |      contract rev(@"makePurse", return) = {
     |         @revMint!("makePurse", 0, *return)
     |      } |
-    |      SystemInstancesRegistry!("register", "rev", bundle+{*rev})
+    |      @SystemInstancesRegistry!("register", "rev", bundle+{*rev}) |
     |
     |      ${faucetCode("revMint")} |
     |
     |      //PoS purse and contract creation
     |      @revMint!("makePurse", $initialTotalBond, *posPurseCh) |
     |      for(@posPurse <- posPurseCh) {
-    |        @MakePoS!(posPurse, $minimumBond, $maximumBond, $initialBondsCode, posCh) |
+    |        @MakePoS!(posPurse, $minimumBond, $maximumBond, $initialBondsCode, *posCh) |
     |        for(@pos <- posCh) {
-    |          SystemInstancesRegistry!("register", "pos", pos)
+    |          @SystemInstancesRegistry!("register", "pos", pos)
     |        }
     |      } |
     |

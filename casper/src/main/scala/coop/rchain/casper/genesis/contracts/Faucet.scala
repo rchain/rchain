@@ -17,12 +17,12 @@ object Faucet {
        |  for(@(_, BasicWalletFaucet) <- BasicWalletFaucetCh) {
        |    @BasicWalletFaucet!($mintName, *faucetCh) |
        |    for(@faucet <- faucetCh){
-       |      SystemInstancesRegistry!("register", "faucet", faucet)
+       |      @SystemInstancesRegistry!("register", "faucet", faucet)
        |    }
        |  }
        |}""".stripMargin
 
   val noopFaucet: String => String = (mintName: String) =>
-    """SystemInstancesRegistry!("register", "faucet", Nil)"""
+    """@SystemInstancesRegistry!("register", "faucet", Nil)"""
 
 }

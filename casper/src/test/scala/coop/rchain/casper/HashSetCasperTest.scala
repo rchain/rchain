@@ -418,7 +418,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
       |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
       |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
-      |    SystemInstancesRegistry!("lookup", "pos", *posCh) |
+      |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
       |    for(pos <- posCh){
       |      new bondsCh, getRanking in {
       |        contract getRanking(@bonds, @acc, return) = {
@@ -479,8 +479,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     //val skStr = "6061f3ea36d0419d1e9e23c33bba88ed1435427fa2a8f7300ff210b4e9f18a14"
     val pkStr = "16989775f3f207a717134216816d3c9d97b0bfb8d560b29485f23f6ead435f09"
-    val sigStr = "c5d019c761bcc15a928e1dab4e77df0e17c29aa541a52f0716fe74adedf654f2" +
-      "6a415abcd5171b97c9d080b341f671b56c17ae10f9d35eb812ca10440ea83408"
+    val sigStr = "51c2b091559745d51c7270189911d9d894d538f76150ed67d164705dcf0af52" +
+      "e101fa06396db2b2ac21a4bfbe3461567b5f8b3d2e666c377cb92d96bc38e2c08"
     val amount = 157L
     val createWalletCode =
       s"""new 
@@ -489,7 +489,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
          |in {
          |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
          |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
-         |    SystemInstancesRegistry!("lookup", "faucet", *faucetCh) |
+         |    @SystemInstancesRegistry!("lookup", "faucet", *faucetCh) |
          |    for(faucet <- faucetCh){ faucet!($amount, "ed25519", "$pkStr", *walletCh) } |
          |    for(@[wallet] <- walletCh){ walletCh!!(wallet) }
          |  } |
