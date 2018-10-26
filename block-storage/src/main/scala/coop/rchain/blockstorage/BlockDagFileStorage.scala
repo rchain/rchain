@@ -20,7 +20,6 @@ import coop.rchain.shared.{Log, LogSource}
 
 import scala.collection.immutable.HashSet
 import scala.ref.WeakReference
-import scala.util.{Failure, Success, Try}
 
 final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private (
     lock: Semaphore[F],
@@ -385,19 +384,19 @@ object BlockDagFileStorage {
       dagInfo: Option[WeakReference[CheckpointedDagInfo]]
   )
 
-  private def readCrc[F[_]: Sync: Log](crcPath: Path): F[Long] = {
-    crcPath.toFile.createNewFile()
-    val byteBuffer = ByteBuffer.wrap(Files.readAllBytes(crcPath))
-    Try(byteBuffer.getLong()) match {
-      case Success(value) => value.pure[F]
-      case Failure(_: BufferUnderflowException) =>
-        for {
-          _ <- Log[F].warn(s"CRC file $crcPath did not contain a valid CRC value")
-        } yield 0
-      case Failure(exception) =>
-        exception.raiseError[F, Long]
-    }
-  }
+  private def readCrc[F[_]: Sync: Log](crcPath: Path): F[Long] =
+    for {
+      bytes      <- Sync[F].delay { crcPath.toFile.createNewFile(); Files.readAllBytes(crcPath) }
+      byteBuffer = ByteBuffer.wrap(bytes)
+      result <- Sync[F].delay { byteBuffer.getLong() }.handleErrorWith {
+                 case _: BufferUnderflowException =>
+                   for {
+                     _ <- Log[F].warn(s"CRC file $crcPath did not contain a valid CRC value")
+                   } yield 0
+                 case exception =>
+                   Sync[F].raiseError(exception)
+               }
+    } yield result
 
   private def calculateLatestMessagesCrc[F[_]: Monad](
       latestMessagesList: List[(Validator, BlockHash)]
@@ -411,7 +410,7 @@ object BlockDagFileStorage {
         .toByteArray
     )
 
-  private def readLatestMessagesData[F[_]: Sync](
+  private def readLatestMessagesData[F[_]: Sync: Log](
       latestMessagesDataDi: DataInput
   ): F[(List[(Validator, BlockHash)], Int)] = {
     def readRec(
@@ -421,18 +420,23 @@ object BlockDagFileStorage {
       val validatorPk = Array.fill[Byte](32)(0)
       val blockHash   = Array.fill[Byte](32)(0)
       for {
-        validatorPkRead <- Sync[F].delay { Try(latestMessagesDataDi.readFully(validatorPk)) }
-        blockHashRead   <- Sync[F].delay { Try(latestMessagesDataDi.readFully(blockHash)) }
+        validatorPkRead <- Sync[F].delay { latestMessagesDataDi.readFully(validatorPk) }.attempt
+        blockHashRead   <- Sync[F].delay { latestMessagesDataDi.readFully(blockHash) }.attempt
         result <- (validatorPkRead, blockHashRead) match {
-                   case (Success(_), Success(_)) =>
+                   case (Right(_), Right(_)) =>
                      val pair = (ByteString.copyFrom(validatorPk), ByteString.copyFrom(blockHash))
                      readRec(
                        pair :: result,
                        logSize + 1
                      )
-                   case (Failure(_: EOFException), Failure(_: EOFException)) =>
+                   case (Left(_: EOFException), Left(_: EOFException)) =>
                      (result.reverse, logSize).pure[F]
-                   case (Failure(exception), _) =>
+                   case (Right(_), Left(e: EOFException)) =>
+                     for {
+                       _ <- Log[F].error("Latest messages log is malformed")
+                       result <- Sync[F].raiseError[(List[(Validator, BlockHash)], Int)](e)
+                     } yield result
+                   case (Left(exception), _) =>
                      Sync[F].raiseError(exception)
                  }
       } yield result
@@ -486,24 +490,18 @@ object BlockDagFileStorage {
         result: List[(BlockHash, BlockMetadata)]
     ): F[List[(BlockHash, BlockMetadata)]] =
       for {
-        blockSizeTry <- Sync[F].delay { Try(dataLookupDataInput.readInt()) }
-        result <- blockSizeTry match {
-                   case Success(blockSize) =>
+        blockSizeEither <- Sync[F].delay { dataLookupDataInput.readInt() }.attempt
+        result <- blockSizeEither match {
+                   case Right(blockSize) =>
                      val blockMetaBytes = Array.ofDim[Byte](blockSize)
-                     Sync[F].delay { Try(dataLookupDataInput.readFully(blockMetaBytes)) }.flatMap {
-                       case Success(_) =>
-                         Try(BlockMetadata.fromBytes(blockMetaBytes)) match {
-                           case Success(blockMetadata) =>
-                             readRec((blockMetadata.blockHash -> blockMetadata) :: result)
-                           case Failure(exception) =>
-                             Sync[F].raiseError[List[(BlockHash, BlockMetadata)]](exception)
-                         }
-                       case Failure(exception) =>
-                         Sync[F].raiseError[List[(BlockHash, BlockMetadata)]](exception)
-                     }
-                   case Failure(_: EOFException) =>
+                     for {
+                       _             <- Sync[F].delay { dataLookupDataInput.readFully(blockMetaBytes) }
+                       blockMetadata <- Sync[F].delay { BlockMetadata.fromBytes(blockMetaBytes) }
+                       result        <- readRec((blockMetadata.blockHash -> blockMetadata) :: result)
+                     } yield result
+                   case Left(_: EOFException) =>
                      result.reverse.pure[F]
-                   case Failure(exception) =>
+                   case Left(exception) =>
                      Sync[F].raiseError(exception)
                  }
       } yield result
