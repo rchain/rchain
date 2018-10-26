@@ -3,6 +3,7 @@ package coop.rchain.blockstorage
 import java.io._
 import java.nio.{BufferUnderflowException, ByteBuffer}
 import java.nio.file.{Files, Path, StandardCopyOption}
+import java.util.stream.Collectors
 
 import cats.{Id, Monad}
 import cats.implicits._
@@ -12,6 +13,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagFileStorage.{Checkpoint, CheckpointedDagInfo}
 import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.blockstorage.BlockStore.BlockHash
+import coop.rchain.blockstorage.errors.{CheckpointsAreNotConsecutive, CheckpointsDoNotStartFromZero}
 import coop.rchain.blockstorage.util.BlockMessageUtil.{blockNumber, bonds, parentHashes}
 import coop.rchain.blockstorage.util.{Crc32, TopologicalSortUtil}
 import coop.rchain.blockstorage.util.byteOps._
@@ -20,6 +22,8 @@ import coop.rchain.shared.{Log, LogSource}
 
 import scala.collection.immutable.HashSet
 import scala.ref.WeakReference
+import scala.util.matching.Regex
+import collection.JavaConverters._
 
 final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private (
     lock: Semaphore[F],
@@ -413,24 +417,26 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
 }
 
 object BlockDagFileStorage {
-  private implicit val logSource = LogSource(BlockDagFileStorage.getClass)
+  private implicit val logSource       = LogSource(BlockDagFileStorage.getClass)
+  private val checkpointPattern: Regex = "([0-9]+)-([0-9]+)".r
 
   final case class Config(
       latestMessagesLogPath: Path,
       latestMessagesCrcPath: Path,
       blockMetadataLogPath: Path,
       blockMetadataCrcPath: Path,
+      checkpointsDirPath: Path,
       latestMessagesLogMaxSizeFactor: Int = 10
   )
 
-  private final case class CheckpointedDagInfo(
+  private[blockstorage] final case class CheckpointedDagInfo(
       childMap: Map[BlockHash, Set[BlockHash]],
       dataLookup: Map[BlockHash, BlockMetadata],
       topoSort: Vector[Vector[BlockHash]],
       sortOffset: Long
   )
 
-  private final case class Checkpoint(
+  private[blockstorage] final case class Checkpoint(
       start: Long,
       end: Long,
       path: Path,
@@ -615,6 +621,37 @@ object BlockDagFileStorage {
     indexedTopoSort.map(_._2)
   }
 
+  private def loadCheckpoints[F[_]: Sync: Log](checkpointsDirPath: Path): F[List[Checkpoint]] =
+    for {
+      files <- Sync[F].delay {
+                checkpointsDirPath.toFile.mkdir()
+                Files.list(checkpointsDirPath).filter(p => Files.isRegularFile(p))
+              }
+      filesList = files.collect(Collectors.toList[Path]).asScala.toList
+      checkpoints <- filesList.flatTraverse { filePath =>
+                      filePath.getFileName.toString match {
+                        case checkpointPattern(start, end) =>
+                          List(Checkpoint(start.toLong, end.toLong, filePath, None)).pure[F]
+                        case other =>
+                          Log[F].warn(s"Ignoring file '$other': not a valid checkpoint name") *>
+                            List.empty[Checkpoint].pure[F]
+                      }
+                    }
+      sortedCheckpoints = checkpoints.sortBy(_.start)
+      result <- if (sortedCheckpoints.headOption.forall(_.start == 0)) {
+                 if (sortedCheckpoints.isEmpty ||
+                     sortedCheckpoints.zip(sortedCheckpoints.tail).forall {
+                       case (current, next) => current.end == next.start
+                     }) {
+                   sortedCheckpoints.pure[F]
+                 } else {
+                   Sync[F].raiseError(CheckpointsAreNotConsecutive(sortedCheckpoints))
+                 }
+               } else {
+                 Sync[F].raiseError(CheckpointsDoNotStartFromZero(sortedCheckpoints))
+               }
+    } yield result
+
   def create[F[_]: Concurrent: Sync: Log: BlockStore](
       config: Config
   ): F[BlockDagFileStorage[F]] =
@@ -669,13 +706,14 @@ object BlockDagFileStorage {
                                           config.blockMetadataLogPath.toFile,
                                           true
                                         ))
-      dataLookupCrcRef <- Ref.of[F, Crc32[F]](calculatedDataLookupCrc)
-      childMap         = extractChildMap(dataLookup)
-      topoSort         = extractTopoSort(dataLookup)
-      childMapRef      <- Ref.of[F, Map[BlockHash, Set[BlockHash]]](childMap)
-      topoSortRef      <- Ref.of[F, Vector[Vector[BlockHash]]](topoSort)
-      sortOffsetRef    <- Ref.of[F, Long](0L)
-      checkPointsRef   <- Ref.of[F, List[Checkpoint]](List.empty)
+      dataLookupCrcRef  <- Ref.of[F, Crc32[F]](calculatedDataLookupCrc)
+      childMap          = extractChildMap(dataLookup)
+      topoSort          = extractTopoSort(dataLookup)
+      childMapRef       <- Ref.of[F, Map[BlockHash, Set[BlockHash]]](childMap)
+      topoSortRef       <- Ref.of[F, Vector[Vector[BlockHash]]](topoSort)
+      sortedCheckpoints <- loadCheckpoints(config.checkpointsDirPath)
+      checkPointsRef    <- Ref.of[F, List[Checkpoint]](sortedCheckpoints)
+      sortOffsetRef     <- Ref.of[F, Long](sortedCheckpoints.lastOption.map(_.end).getOrElse(0L))
     } yield
       new BlockDagFileStorage[F](
         lock,
