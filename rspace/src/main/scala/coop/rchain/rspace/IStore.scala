@@ -117,7 +117,7 @@ trait IStore[C, P, A, K] {
     _trieUpdateCount.set(0L)
   }
 
-  protected def processTrieUpdate(cacheStore: TrieStoreType, update: TrieUpdate[C, P, A, K]): Unit
+  protected def processTrieUpdate(store: TrieStoreType, update: TrieUpdate[C, P, A, K]): Unit
 
   def createCheckpoint(): Blake2b256Hash = {
     val trieUpdates = _trieUpdates.take
