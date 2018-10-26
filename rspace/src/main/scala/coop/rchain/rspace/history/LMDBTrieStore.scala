@@ -169,7 +169,6 @@ class LMDBTrieStore[K, V] private (
       case _ => //do nothing
     }
 
-
     def processTrieItem(hash: Blake2b256Hash, item: CachedItem[Trie[K, V]]): Option[Trie[K, V]] =
       item match {
         case StoredItem(value) =>

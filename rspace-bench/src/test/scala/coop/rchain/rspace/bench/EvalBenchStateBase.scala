@@ -8,7 +8,7 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccounting}
-import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
+import coop.rchain.rholang.interpreter.{ChargingReducer, Interpreter, Runtime}
 import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -20,11 +20,13 @@ trait EvalBenchStateBase {
   private val mapSize: Long    = 1024L * 1024L * 1024L
 
   val rhoScriptSource: String
-  lazy val runtime: Runtime  = Runtime.create(dbDir, mapSize)
-  val rand: Blake2b512Random = Blake2b512Random(128)
+  lazy val runtime: Runtime           = Runtime.create(dbDir, mapSize)
+  implicit val rand: Blake2b512Random = Blake2b512Random(128)
   val costAccountAlg: CostAccounting[Task] =
     CostAccounting.unsafe[Task](CostAccount(Integer.MAX_VALUE))
   var term: Option[Par] = None
+
+  implicit def readErrors: () => Vector[Throwable] = () => runtime.readAndClearErrorVector()
 
   @Setup
   def doSetup(): Unit = {
@@ -39,9 +41,12 @@ trait EvalBenchStateBase {
       case Right(par) => Some(par)
       case Left(err)  => throw err
     }
-    //make sure we always start from clean rspace
+    val emptyCheckpoint = runtime.space.createCheckpoint()
+    //make sure we always start from clean rspace & trie
     runtime.replaySpace.clear()
+    runtime.replaySpace.reset(emptyCheckpoint.root)
     runtime.space.clear()
+    runtime.space.reset(emptyCheckpoint.root)
   }
 
   @TearDown
@@ -53,4 +58,14 @@ trait EvalBenchStateBase {
       Option(getClass.getResourceAsStream(path))
         .getOrElse(throw new FileNotFoundException(path))
     )
+
+  def createTest(t: Option[Par], reducer: ChargingReducer[Task])(
+      implicit errorProcessor: () => Vector[Throwable],
+      rand: Blake2b512Random
+  ): Task[Vector[Throwable]] = {
+    val par = t.getOrElse(throw new Error("Failed to prepare executable rholang term"))
+    reducer
+      .inj(par)
+      .map(_ => errorProcessor())
+  }
 }
