@@ -842,7 +842,7 @@ object Reduce {
 
         case EMapBody(map) =>
           for {
-            evaledPs <- map.ps.sortedMap.traverse {
+            evaledPs <- map.ps.sortedMap.toList.traverse {
                          case (key, value) =>
                            for {
                              eKey   <- evalExpr(key).map(updateLocallyFree)
