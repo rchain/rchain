@@ -170,8 +170,8 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
                             BlockDagFileStorage.readDataLookupData(checkpointDataInput)
                           }
       dataLookup = blockMetadataList.toMap
-      childMap   = BlockDagFileStorage.extractChildMap(dataLookup)
-      topoSort   = BlockDagFileStorage.extractTopoSort(dataLookup)
+      childMap   = BlockDagFileStorage.extractChildMap(blockMetadataList)
+      topoSort   = BlockDagFileStorage.extractTopoSort(blockMetadataList)
     } yield CheckpointedDagInfo(childMap, dataLookup, topoSort, checkpoint.start)
   }
 
@@ -572,11 +572,11 @@ object BlockDagFileStorage {
       readDataLookupCrc: Long,
       dataLookupCrcPath: Path,
       dataLookupList: List[(BlockHash, BlockMetadata)]
-  ): F[(Map[BlockHash, BlockMetadata], Crc32[F])] = {
+  ): F[(List[(BlockHash, BlockMetadata)], Crc32[F])] = {
     val fullCalculatedCrc = calculateDataLookupCrc[F](dataLookupList)
     fullCalculatedCrc.value.flatMap { fullCalculatedCrcValue =>
       if (fullCalculatedCrcValue == readDataLookupCrc) {
-        (dataLookupList.toMap, fullCalculatedCrc).pure[F]
+        (dataLookupList, fullCalculatedCrc).pure[F]
       } else if (dataLookupList.nonEmpty) {
         val withoutLastCalculatedCrc = calculateDataLookupCrc[F](dataLookupList.init)
         withoutLastCalculatedCrc.value.map { withoutLastCalculatedCrcValue =>
@@ -585,23 +585,23 @@ object BlockDagFileStorage {
             val lastDataLookupEntrySize: Long = 4 + byteString.size()
             dataLookupRandomAccessFile.setLength(
               dataLookupRandomAccessFile.length() - lastDataLookupEntrySize)
-            (dataLookupList.init.toMap, withoutLastCalculatedCrc)
+            (dataLookupList.init, withoutLastCalculatedCrc)
           } else {
             // TODO: Restore data lookup from block storage
             dataLookupRandomAccessFile.setLength(0)
-            (Map.empty[BlockHash, BlockMetadata], Crc32.empty[F]())
+            (List.empty[(BlockHash, BlockMetadata)], Crc32.empty[F]())
           }
         }
       } else {
         // TODO: Restore data lookup from block storage
         dataLookupRandomAccessFile.setLength(0)
-        (Map.empty[BlockHash, BlockMetadata], Crc32.empty[F]()).pure[F]
+        (List.empty[(BlockHash, BlockMetadata)], Crc32.empty[F]()).pure[F]
       }
     }
   }
 
   private def extractChildMap(
-      dataLookup: Map[BlockHash, BlockMetadata]
+      dataLookup: List[(BlockHash, BlockMetadata)]
   ): Map[BlockHash, Set[BlockHash]] =
     dataLookup.foldLeft(Map.empty[BlockHash, Set[BlockHash]]) {
       case (childMap, (_, blockMetadata)) =>
@@ -613,10 +613,10 @@ object BlockDagFileStorage {
     }
 
   private def extractTopoSort(
-      dataLookup: Map[BlockHash, BlockMetadata]
+      dataLookup: List[(BlockHash, BlockMetadata)]
   ): Vector[Vector[BlockHash]] = {
     val indexedTopoSort =
-      dataLookup.values.toVector.groupBy(_.blockNum).mapValues(_.map(_.blockHash)).toVector
+      dataLookup.map(_._2).toVector.groupBy(_.blockNum).mapValues(_.map(_.blockHash)).toVector
     assert(indexedTopoSort.zipWithIndex.forall { case ((readI, _), i) => readI == i })
     indexedTopoSort.map(_._2)
   }
@@ -699,16 +699,16 @@ object BlockDagFileStorage {
                                       )
                            } yield result
                          }
-      (dataLookup, calculatedDataLookupCrc) = dataLookupResult
-      dataLookupRef                         <- Ref.of[F, Map[BlockHash, BlockMetadata]](dataLookup)
+      (dataLookupList, calculatedDataLookupCrc) = dataLookupResult
+      dataLookupRef                         <- Ref.of[F, Map[BlockHash, BlockMetadata]](dataLookupList.toMap)
       dataLookupDataOutputStreamRef <- Ref.of[F, OutputStream](
                                         new FileOutputStream(
                                           config.blockMetadataLogPath.toFile,
                                           true
                                         ))
       dataLookupCrcRef  <- Ref.of[F, Crc32[F]](calculatedDataLookupCrc)
-      childMap          = extractChildMap(dataLookup)
-      topoSort          = extractTopoSort(dataLookup)
+      childMap          = extractChildMap(dataLookupList)
+      topoSort          = extractTopoSort(dataLookupList)
       childMapRef       <- Ref.of[F, Map[BlockHash, Set[BlockHash]]](childMap)
       topoSortRef       <- Ref.of[F, Vector[Vector[BlockHash]]](topoSort)
       sortedCheckpoints <- loadCheckpoints(config.checkpointsDirPath)
