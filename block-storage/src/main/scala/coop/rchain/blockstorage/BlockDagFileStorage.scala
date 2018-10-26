@@ -22,7 +22,7 @@ import scala.collection.immutable.HashSet
 import scala.ref.WeakReference
 import scala.util.{Failure, Success, Try}
 
-final class BlockDagFileStorage[F[_]: Monad: Concurrent: Sync: Log: BlockStore] private (
+final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private (
     lock: Semaphore[F],
     latestMessagesRef: Ref[F, Map[Validator, BlockHash]],
     childMapRef: Ref[F, Map[BlockHash, Set[BlockHash]]],
@@ -385,7 +385,7 @@ object BlockDagFileStorage {
       dagInfo: Option[WeakReference[CheckpointedDagInfo]]
   )
 
-  private def readCrc[F[_]: Monad: Sync: Log](crcPath: Path): F[Long] = {
+  private def readCrc[F[_]: Sync: Log](crcPath: Path): F[Long] = {
     crcPath.toFile.createNewFile()
     val byteBuffer = ByteBuffer.wrap(Files.readAllBytes(crcPath))
     Try(byteBuffer.getLong()) match {
@@ -563,7 +563,7 @@ object BlockDagFileStorage {
     indexedTopoSort.map(_._2)
   }
 
-  def create[F[_]: Monad: Concurrent: Sync: Log: BlockStore](
+  def create[F[_]: Concurrent: Sync: Log: BlockStore](
       config: Config
   ): F[BlockDagFileStorage[F]] =
     for {
