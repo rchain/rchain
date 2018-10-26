@@ -125,12 +125,5 @@ trait LMDBOps extends CloseOps {
       if (!dbi.put(txn, key.bytes.toDirectByteBuffer, data.toDirectByteBuffer)) {
         throw new Exception(s"could not persist array of ${data.length} bytes")
       }
-
-    def putBytes[K](txn: Txn[ByteBuffer], key: K, data: Array[Byte])(
-        implicit codecK: Codec[K]
-    ): Unit =
-      if (!dbi.put(txn, codecK.encode(key).get.bytes.toDirectByteBuffer, data.toDirectByteBuffer)) {
-        throw new Exception(s"could not persist array of ${data.length} bytes")
-      }
   }
 }
