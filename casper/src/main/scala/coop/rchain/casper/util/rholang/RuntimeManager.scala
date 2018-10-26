@@ -89,10 +89,14 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     }
 
   def computeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] = {
-    // TODO: Switch to a read only name
     val bondsQuery =
-      """for(pos <- @"proofOfStake"){ pos!("getBonds", "__SCALA__") }"""
-    //TODO: construct directly instead of parsing rholang source
+      """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
+        |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+        |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
+        |    SystemInstancesRegistry!("lookup", "pos", *posCh) |
+        |    for(pos <- posCh){ pos!("getBonds", "__SCALA__") }
+        |  }
+        |}""".stripMargin
     val bondsQueryTerm = InterpreterUtil.mkTerm(bondsQuery).right.get
     val bondsPar       = captureResults(hash, bondsQueryTerm)
     assert(
