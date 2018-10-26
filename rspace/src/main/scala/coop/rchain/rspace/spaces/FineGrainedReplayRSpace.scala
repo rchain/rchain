@@ -1,6 +1,5 @@
 package coop.rchain.rspace.spaces
 
-import cats.Monad
 import cats.effect.Sync
 import coop.rchain.rspace._
 import cats.implicits._
@@ -12,7 +11,6 @@ import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{Produce, _}
 import scodec.Codec
 
-import scala.Function.const
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
@@ -403,7 +401,7 @@ object FineGrainedReplayRSpace {
         InMemoryStore.create(memContext.trieStore, branch)
 
       case mixedContext: MixedContext[C, P, A, K] =>
-        InMemoryStore.create(mixedContext.trieStore, branch)
+        LockFreeInMemoryStore.create(mixedContext.trieStore, branch)
     }
 
     val replaySpace = new FineGrainedReplayRSpace[F, C, P, E, A, R, K](mainStore, branch)

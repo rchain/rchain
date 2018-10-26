@@ -81,8 +81,10 @@ message TLResponse {
 }
 
 message ChunkHeader {
-  Node   sender = 1;
-  string typeId = 2;
+  Node   sender             = 1;
+  string typeId             = 2;
+  bool   compressed         = 3;
+  int32  decompressedLength = 4;
 }
 
 message ChunkData {

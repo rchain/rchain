@@ -1,12 +1,12 @@
 package coop.rchain.casper.util
 
-import coop.rchain.casper.{BlockDag, BlockMetadata, MultiParentCasperInstances}
+import coop.rchain.casper.{BlockDag, MultiParentCasperInstances}
 import coop.rchain.casper.protocol._
 import org.scalatest.{FlatSpec, Matchers}
 import cats.{Id, Monad}
 import cats.implicits._
 import cats.mtl.implicits._
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.{BlockMetadata, BlockStore}
 import coop.rchain.casper.helper.{BlockGenerator, BlockStoreTestFixture, IndexedBlockDag}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.shared.Time

@@ -3,9 +3,10 @@ package coop.rchain.rholang.interpreter
 import java.nio.file.{Files, Path}
 
 import cats.Id
-import cats.mtl.FunctorTell
 import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import cats.implicits._
+import cats.mtl.FunctorTell
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GString
@@ -36,7 +37,9 @@ class Runtime private (
     val space: RhoISpace,
     val replaySpace: RhoReplayISpace,
     val errorLog: ErrorLog,
-    val context: RhoContext
+    val context: RhoContext,
+    val shortLeashParams: Runtime.ShortLeashParams[Task],
+    val blockTime: Runtime.BlockTime[Task]
 ) {
   def readAndClearErrorVector(): Vector[Throwable] = errorLog.readAndClearErrorVector()
   def close(): Unit = {
@@ -84,6 +87,7 @@ class Runtime private (
           }
     } yield ()
   }
+
 }
 
 object Runtime {
@@ -126,7 +130,57 @@ object Runtime {
   type Name      = Par
   type Arity     = Int
   type Remainder = Option[Var]
-  type Ref       = Long
+  type BodyRef   = Long
+
+  class ShortLeashParams[F[_]](
+      val codeHash: Ref[F, Par],
+      var phloRate: Ref[F, Par],
+      var userId: Ref[F, Par],
+      var timestamp: Ref[F, Par]
+  ) {
+    def setParams(codeHash: Par, phloRate: Par, userId: Par, timestamp: Par)(implicit F: Sync[F]) =
+      for {
+        _ <- this.codeHash.set(codeHash)
+        _ <- this.phloRate.set(phloRate)
+        _ <- this.userId.set(userId)
+        _ <- this.timestamp.set(timestamp)
+      } yield ()
+  }
+
+  object ShortLeashParams {
+    def apply[F[_]]()(implicit F: Sync[F]): F[ShortLeashParams[F]] =
+      for {
+        codeHash  <- Ref[F].of(Par())
+        phloRate  <- Ref[F].of(Par())
+        userId    <- Ref[F].of(Par())
+        timestamp <- Ref[F].of(Par())
+      } yield new ShortLeashParams[F](codeHash, phloRate, userId, timestamp)
+
+    def unsafe[F[_]]()(implicit F: Sync[F]): ShortLeashParams[F] =
+      new ShortLeashParams(
+        Ref.unsafe[F, Par](Par()),
+        Ref.unsafe[F, Par](Par()),
+        Ref.unsafe[F, Par](Par()),
+        Ref.unsafe[F, Par](Par())
+      )
+  }
+
+  class BlockTime[F[_]](val timestamp: Ref[F, Par]) {
+    def setParams(timestamp: Par)(implicit F: Sync[F]): F[Unit] =
+      for {
+        _ <- this.timestamp.set(timestamp)
+      } yield ()
+  }
+
+  object BlockTime {
+    def apply[F[_]]()(implicit F: Sync[F]): F[BlockTime[F]] =
+      for {
+        timestamp <- Ref[F].of(Par())
+      } yield new BlockTime[F](timestamp)
+
+    def unsafe[F[_]]()(implicit F: Sync[F]): BlockTime[F] =
+      new BlockTime(Ref.unsafe[F, Par](Par()))
+  }
 
   object BodyRefs {
     val STDOUT: Long                       = 0L
@@ -150,6 +204,8 @@ object Runtime {
     val REG_REGISTER_INSERT_CALLBACK: Long = 19L
     val REG_PUBLIC_REGISTER_SIGNED: Long   = 20L
     val REG_NONCE_INSERT_CALLBACK: Long    = 21L
+    val GET_DEPLOY_PARAMS: Long            = 22L
+    val GET_TIMESTAMP: Long                = 23L
   }
 
   def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
@@ -167,6 +223,8 @@ object Runtime {
     val REG_LOOKUP: Par        = byteName(9)
     val REG_INSERT_RANDOM: Par = byteName(10)
     val REG_INSERT_SIGNED: Par = byteName(11)
+    val GET_DEPLOY_PARAMS: Par = byteName(12)
+    val GET_TIMESTAMP: Par     = byteName(13)
   }
 
   // because only we do installs
@@ -175,7 +233,7 @@ object Runtime {
   private def introduceSystemProcesses(
       space: RhoISpace,
       replaySpace: RhoISpace,
-      processes: immutable.Seq[(Name, Arity, Remainder, Ref)]
+      processes: immutable.Seq[(Name, Arity, Remainder, BodyRef)]
   ): Seq[Option[(TaggedContinuation, Seq[ListParWithRandomAndPhlos])]] =
     processes.flatMap {
       case (name, arity, remainder, ref) =>
@@ -247,7 +305,9 @@ object Runtime {
     def dispatchTableCreator(
         space: RhoISpace,
         dispatcher: RhoDispatch[Task],
-        registry: Registry[Task]
+        registry: Registry[Task],
+        shortLeashParams: ShortLeashParams[Task],
+        blockTime: BlockTime[Task]
     ): RhoDispatchMap = {
       import BodyRefs._
       Map(
@@ -271,7 +331,9 @@ object Runtime {
         REG_PUBLIC_LOOKUP            -> (registry.publicLookup(_)),
         REG_PUBLIC_REGISTER_RANDOM   -> (registry.publicRegisterRandom(_)),
         REG_PUBLIC_REGISTER_SIGNED   -> (registry.publicRegisterSigned(_)),
-        REG_NONCE_INSERT_CALLBACK    -> (registry.nonceInsertCallback(_))
+        REG_NONCE_INSERT_CALLBACK    -> (registry.nonceInsertCallback(_)),
+        GET_DEPLOY_PARAMS            -> SystemProcesses.getDeployParams(space, dispatcher, shortLeashParams),
+        GET_TIMESTAMP                -> SystemProcesses.blockTime(space, dispatcher, blockTime)
       )
     }
 
@@ -285,14 +347,25 @@ object Runtime {
       "rho:registry:insertSigned:ed25519" -> Bundle(
         FixedChannels.REG_INSERT_SIGNED,
         writeFlag = true
-      )
+      ),
+      "rho:deploy:params"   -> Bundle(FixedChannels.GET_DEPLOY_PARAMS, writeFlag = true),
+      "rho:block:timestamp" -> Bundle(FixedChannels.GET_TIMESTAMP, writeFlag = true)
     )
 
+    val shortLeashParams = ShortLeashParams.unsafe[Task]()
+    val blockTime        = BlockTime.unsafe[Task]()
+
     lazy val dispatchTable: RhoDispatchMap =
-      dispatchTableCreator(space, dispatcher, registry)
+      dispatchTableCreator(space, dispatcher, registry, shortLeashParams, blockTime)
 
     lazy val replayDispatchTable: RhoDispatchMap =
-      dispatchTableCreator(replaySpace, replayDispatcher, replayRegistry)
+      dispatchTableCreator(
+        replaySpace,
+        replayDispatcher,
+        replayRegistry,
+        shortLeashParams,
+        blockTime
+      )
 
     lazy val (dispatcher, reducer, registry) =
       RholangAndScalaDispatcher.create(space, dispatchTable, urnMap)
@@ -300,7 +373,7 @@ object Runtime {
     lazy val (replayDispatcher, replayReducer, replayRegistry) =
       RholangAndScalaDispatcher.create(replaySpace, replayDispatchTable, urnMap)
 
-    val procDefs: immutable.Seq[(Name, Arity, Remainder, Ref)] = {
+    val procDefs: immutable.Seq[(Name, Arity, Remainder, BodyRef)] = {
       import BodyRefs._
       List(
         (FixedChannels.STDOUT, 1, None, STDOUT),
@@ -314,7 +387,9 @@ object Runtime {
         (FixedChannels.SECP256K1_VERIFY, 4, None, SECP256K1_VERIFY),
         (FixedChannels.REG_LOOKUP, 2, None, REG_PUBLIC_LOOKUP),
         (FixedChannels.REG_INSERT_RANDOM, 2, None, REG_PUBLIC_REGISTER_RANDOM),
-        (FixedChannels.REG_INSERT_SIGNED, 4, None, REG_PUBLIC_REGISTER_SIGNED)
+        (FixedChannels.REG_INSERT_SIGNED, 4, None, REG_PUBLIC_REGISTER_SIGNED),
+        (FixedChannels.GET_DEPLOY_PARAMS, 1, None, GET_DEPLOY_PARAMS),
+        (FixedChannels.GET_TIMESTAMP, 1, None, GET_TIMESTAMP)
       )
     }
 
@@ -323,6 +398,15 @@ object Runtime {
 
     assert(res.forall(_.isEmpty))
 
-    new Runtime(reducer, replayReducer, space, replaySpace, errorLog, context)
+    new Runtime(
+      reducer,
+      replayReducer,
+      space,
+      replaySpace,
+      errorLog,
+      context,
+      shortLeashParams,
+      blockTime
+    )
   }
 }

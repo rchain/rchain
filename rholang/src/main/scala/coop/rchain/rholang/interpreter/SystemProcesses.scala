@@ -13,6 +13,9 @@ import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rspace.util._
 import monix.eval.Task
+import coop.rchain.catscontrib.TaskContrib._
+import monix.execution.Scheduler
+import monix.execution.Scheduler.Implicits.global
 
 import scala.util.Try
 
@@ -205,6 +208,51 @@ object SystemProcesses {
       }
     case _ =>
       illegalArgumentException("blake2b256Hash expects byte array and return channel as arguments")
+  }
+
+  def getDeployParams(
+      space: RhoISpace,
+      dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation],
+      shortLeashParams: Runtime.ShortLeashParams[Task]
+  ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
+    case Seq(ListParWithRandomAndPhlos(Seq(ack), rand, _)) =>
+      for {
+        codeHash  <- shortLeashParams.codeHash.get
+        phloRate  <- shortLeashParams.phloRate.get
+        userId    <- shortLeashParams.userId.get
+        timestamp <- shortLeashParams.timestamp.get
+        _ <- space
+              .produce(
+                ack,
+                ListParWithRandom(Seq(codeHash, phloRate, userId, timestamp), rand),
+                false
+              )(MATCH_UNLIMITED_PHLOS)
+              .map(unpackOption(_))
+              .foldResult(dispatcher)
+      } yield ()
+    case _ =>
+      illegalArgumentException("getDeployParams expects only a return channel.")
+  }
+
+  def blockTime(
+      space: RhoISpace,
+      dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation],
+      blockTime: Runtime.BlockTime[Task]
+  ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
+    case Seq(ListParWithRandomAndPhlos(Seq(ack), rand, _)) =>
+      for {
+        timestamp <- blockTime.timestamp.get
+        _ <- space
+              .produce(
+                ack,
+                ListParWithRandom(Seq(timestamp), rand),
+                false
+              )(MATCH_UNLIMITED_PHLOS)
+              .map(unpackOption(_))
+              .foldResult(dispatcher)
+      } yield ()
+    case _ =>
+      illegalArgumentException("blockTime expects only a return channel.")
   }
 
   private def _dispatch(

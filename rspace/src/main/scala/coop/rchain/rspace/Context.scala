@@ -68,7 +68,7 @@ private[rspace] class MixedContext[C, P, A, K] private[rspace] (
       sa: Serialize[A],
       sk: Serialize[K]
   ): IStore[C, P, A, K] =
-    InMemoryStore.create(trieStore, branch)
+    LockFreeInMemoryStore.create(trieStore, branch)
 
   def close(): Unit = {
     trieStore.close()

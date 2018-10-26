@@ -2,33 +2,45 @@ package coop.rchain.comm.transport
 
 import java.io.ByteArrayInputStream
 
-import coop.rchain.comm._, CommError._
-import coop.rchain.comm.protocol.routing._
-import coop.rchain.comm.rp.ProtocolHelper
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
-import coop.rchain.shared.{Cell, Log, LogSource}
-
+import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
 import scala.util._
-import io.grpc._, io.grpc.netty._
-import io.netty.handler.ssl.{ClientAuth, SslContext, SslContextBuilder}
-import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
-import monix.eval._, monix.execution._, monix.reactive._
-import scala.concurrent.TimeoutException
 
-class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxMessageSize: Int)(
+import cats.implicits._
+
+import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.catscontrib.ski._
+import coop.rchain.comm._
+import coop.rchain.comm.CachedConnections.ConnectionsCache
+import coop.rchain.comm.CommError._
+import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
+import coop.rchain.comm.rp.ProtocolHelper
+import coop.rchain.shared._
+import coop.rchain.shared.Compression._
+
+import io.grpc._
+import io.grpc.netty._
+import io.netty.handler.ssl._
+import monix.eval._
+import monix.execution._
+import monix.reactive._
+
+class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: Int)(
     implicit scheduler: Scheduler,
-    cell: TcpTransportLayer.TransportCell[Task],
-    log: Log[Task]
+    log: Log[Task],
+    connectionsCache: ConnectionsCache[Task, TcpConnTag]
 ) extends TransportLayer[Task] {
 
   private val DefaultSendTimeout = 5.seconds
+  private val connections        = connectionsCache(clientChannel)
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   private def certInputStream = new ByteArrayInputStream(cert.getBytes())
   private def keyInputStream  = new ByteArrayInputStream(key.getBytes())
+
+  import connections.cell
 
   private lazy val serverSslContext: SslContext =
     try {
@@ -71,16 +83,6 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
           }
     } yield c
 
-  private def connection(peer: PeerNode, enforce: Boolean): Task[ManagedChannel] =
-    cell.modify { s =>
-      if (s.shutdown && !enforce)
-        Task.raiseError(new RuntimeException("The transport layer has been shut down")).as(s)
-      else
-        for {
-          c <- s.connections.get(peer).fold(clientChannel(peer))(_.pure[Task])
-        } yield s.copy(connections = s.connections + (peer -> c))
-    } >>= kp(cell.read.map(_.connections.apply(peer)))
-
   def disconnect(peer: PeerNode): Task[Unit] =
     cell.modify { s =>
       for {
@@ -105,7 +107,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
       f: TransportLayerStub => Task[A]
   ): Task[A] =
     for {
-      channel <- connection(peer, enforce)
+      channel <- connections.connection(peer, enforce)
       stub    <- Task.delay(RoutingGrpcMonix.stub(channel))
       result <- f(stub).doOnFinish {
                  case Some(PeerUnavailable()) => disconnect(peer)
@@ -120,13 +122,23 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
     withClient(peer, enforce)(f).attempt.map(processResponse(peer, _))
 
   def chunkIt(blob: Blob): Iterator[Chunk] = {
+    val raw      = blob.packet.content.toByteArray
+    val kb500    = 1024 * 500
+    val compress = raw.length > kb500
+    val content  = if (compress) raw.compress else raw
+
     def header: Chunk =
       Chunk().withHeader(
-        ChunkHeader().withSender(ProtocolHelper.node(blob.sender)).withTypeId(blob.packet.typeId)
+        ChunkHeader()
+          .withCompressed(compress)
+          .withDecompressedLength(raw.length)
+          .withSender(ProtocolHelper.node(blob.sender))
+          .withTypeId(blob.packet.typeId)
       )
-    val buffer = 2 * 1024 // 2 kbytes for protobuf related stuff
+    val buffer    = 2 * 1024 // 2 kbytes for protobuf related stuff
+    val chunkSize = maxMessageSize - buffer
     def data: Iterator[Chunk] =
-      blob.packet.content.toByteArray.sliding(maxMessageSize - buffer).map { data =>
+      content.sliding(chunkSize, chunkSize).map { data =>
         Chunk().withData(ChunkData().withContentData(ProtocolHelper.toProtocolBytes(data)))
       }
 
@@ -139,7 +151,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
     */
   def stream(peers: Seq[PeerNode], blob: Blob): Task[Unit] =
     peers.toList
-      .traverse(
+      .traverse[Task, Unit](
         peer =>
           withClient(peer, enforce = false) { stub =>
             stub.stream(Observable.fromIterator(chunkIt(blob)))
@@ -212,13 +224,13 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
 
     def dispatchInternal: ServerMessage => Task[Unit] = {
       // TODO: consider logging on failure (Left)
-      case Tell(protocol) => dispatch(protocol).attempt.void
+      case Tell(protocol) => dispatch(protocol).attemptAndLog.void
       case Ask(protocol, handle) if !handle.complete =>
         dispatch(protocol).attempt.map {
           case Left(e)         => handle.failWith(e)
           case Right(response) => handle.reply(response)
         }.void
-      case StreamMessage(blob) => handleStreamed(blob)
+      case StreamMessage(blob) => handleStreamed(blob).attemptAndLog
       case _                   => Task.unit // sender timeout
     }
 

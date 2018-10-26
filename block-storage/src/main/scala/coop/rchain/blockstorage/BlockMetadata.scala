@@ -1,9 +1,9 @@
-package coop.rchain.casper
+package coop.rchain.blockstorage
 
 import com.google.protobuf.ByteString
-import coop.rchain.casper.Estimator.BlockHash
+import coop.rchain.blockstorage.BlockStore.BlockHash
+import coop.rchain.blockstorage.util.BlockMessageUtil
 import coop.rchain.casper.protocol.{BlockMessage, Justification}
-import coop.rchain.casper.util.ProtoUtil
 
 final case class BlockMetadata(
     blockHash: BlockHash,
@@ -11,6 +11,7 @@ final case class BlockMetadata(
     sender: ByteString,
     justifications: List[Justification],
     weightMap: Map[ByteString, Long],
+    blockNum: Long,
     seqNum: Int
 )
 
@@ -22,7 +23,8 @@ object BlockMetadata {
     b.header.fold(List.empty[BlockHash])(_.parentsHashList.toList),
     b.sender,
     b.justifications.toList,
-    ProtoUtil.weightMap(b),
+    BlockMessageUtil.weightMap(b),
+    BlockMessageUtil.blockNumber(b),
     b.seqNum
   )
 }

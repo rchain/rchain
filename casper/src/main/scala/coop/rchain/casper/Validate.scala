@@ -421,11 +421,10 @@ object Validate {
     }
 
     for {
-      latestMessages        <- ProtoUtil.toLatestMessage[F](b.justifications, dag)
-      dagViewOfBlockCreator = dag.copy(latestMessages = latestMessages)
-      estimate              <- Estimator.tips[F](dagViewOfBlockCreator, genesis.blockHash)
-      computedParents       <- ProtoUtil.chooseNonConflicting[F](estimate, genesis, dag)
-      computedParentHashes  = computedParents.map(_.blockHash)
+      latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure[F]
+      estimate             <- Estimator.tips[F](dag, genesis.blockHash, latestMessagesHashes)
+      computedParents      <- ProtoUtil.chooseNonConflicting[F](estimate, genesis, dag)
+      computedParentHashes = computedParents.map(_.blockHash)
       status <- if (parentHashes == computedParentHashes)
                  Applicative[F].pure(Right(Valid))
                else
@@ -548,24 +547,15 @@ object Validate {
       block: BlockMessage,
       dag: BlockDag,
       emptyStateHash: StateHash,
-      runtimeManager: RuntimeManager,
-      knownStateHashesContainer: AtomicSyncVarF[F, Set[StateHash]]
+      runtimeManager: RuntimeManager
   )(implicit scheduler: Scheduler): F[Either[BlockStatus, ValidBlock]] =
     for {
-      maybeStateHash <- knownStateHashesContainer
-                         .modify[Either[BlockException, Option[StateHash]]] { knownStateHashes =>
-                           for {
-                             //invalid blocks return None and don't update the checkpoints
-                             validateBlockCheckpointResult <- InterpreterUtil
-                                                               .validateBlockCheckpoint[F](
-                                                                 block,
-                                                                 dag,
-                                                                 knownStateHashes,
-                                                                 runtimeManager
-                                                               )
-                             (maybeStateHash, updatedknownStateHashes) = validateBlockCheckpointResult
-                           } yield (updatedknownStateHashes, maybeStateHash)
-                         }
+      maybeStateHash <- InterpreterUtil
+                         .validateBlockCheckpoint[F](
+                           block,
+                           dag,
+                           runtimeManager
+                         )
     } yield
       maybeStateHash match {
         case Left(ex)       => Left(ex)
