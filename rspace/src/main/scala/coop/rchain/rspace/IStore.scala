@@ -113,16 +113,17 @@ trait IStore[C, P, A, K] {
     _trieUpdateCount.get()
 
   private[rspace] def clearTrieUpdates(): Unit = {
-    _trieUpdates.update(const(Seq.empty))
+    _trieUpdates.take
     _trieUpdateCount.set(0L)
+    _trieUpdates.put(Seq.empty)
   }
 
   protected def processTrieUpdate(store: TrieStoreType, update: TrieUpdate[C, P, A, K]): Unit
 
   def createCheckpoint(): Blake2b256Hash = {
     val trieUpdates = _trieUpdates.take
-    _trieUpdates.put(Seq.empty)
     _trieUpdateCount.set(0L)
+    _trieUpdates.put(Seq.empty)
 
     if (TrieCache.useCache) {
       val trieCache        = new TrieCache(trieStore, trieBranch)
