@@ -10,6 +10,7 @@ import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.shared
 import monix.eval.Task
@@ -78,6 +79,21 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
     }
   }
 
+  private def defaultLatestMessagesLog(dataDir: Path): Path =
+    dataDir.resolve("latest-messsages-data")
+
+  private def defaultLatestMessagesCrc(dataDir: Path): Path =
+    dataDir.resolve("latest-messsages-checksum")
+
+  private def defaultBlockMetadataLog(dataDir: Path): Path =
+    dataDir.resolve("block-metadata-data")
+
+  private def defaultBlockMetadataCrc(dataDir: Path): Path =
+    dataDir.resolve("block-metadata-checksum")
+
+  private def defaultCheckpointsDir(dataDir: Path): Path =
+    dataDir.resolve("checkpoints")
+
   private def createAtDefaultLocation(
       dataDir: Path,
       maxSizeFactor: Int = 10
@@ -92,6 +108,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
         dataDir.resolve("latest-messsages-checksum"),
         dataDir.resolve("block-metadata-data"),
         dataDir.resolve("block-metadata-checksum"),
+        dataDir.resolve("checkpoints"),
         maxSizeFactor
       )
     )
@@ -173,7 +190,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
         _            <- Sync[Task].delay { Random.nextBytes(garbageBytes) }
         _ <- Sync[Task].delay {
               Files.write(
-                dataDir.resolve("latest-messsages-data"),
+                defaultLatestMessagesLog(dataDir),
                 garbageBytes,
                 StandardOpenOption.APPEND
               )
@@ -192,7 +209,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
     val garbageBytes = Array.fill[Byte](789)(0)
     val testProgram = for {
       _                   <- Sync[Task].delay { Random.nextBytes(garbageBytes) }
-      _                   <- Sync[Task].delay { Files.write(dataDir.resolve("latest-messsages-data"), garbageBytes) }
+      _                   <- Sync[Task].delay { Files.write(defaultLatestMessagesLog(dataDir), garbageBytes) }
       storage             <- createAtDefaultLocation(dataDir)
       dag                 <- storage.getRepresentation
       latestMessageHashes <- dag.latestMessageHashes
@@ -219,6 +236,28 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
       } yield result
       val blockElementLookups = testProgram.unsafeRunSync(scheduler)
       testLookupElementsResult(blockElementLookups, blockElements)
+    }
+  }
+
+  it should "be able to load checkpoints" in {
+    forAll(blockElementsGen, minSize(1), sizeRange(2)) { blockElements =>
+      val dataDir = mkTmpDir()
+      val testProgram = for {
+        firstStorage <- createAtDefaultLocation(dataDir, 2)
+        _            <- blockElements.traverse_(firstStorage.insert)
+        _            <- firstStorage.close()
+        _ <- Sync[Task].delay {
+              Files.move(defaultBlockMetadataLog(dataDir),
+                         defaultCheckpointsDir(dataDir).resolve("0-1"))
+              Files.delete(defaultBlockMetadataCrc(dataDir))
+            }
+        secondStorage <- createAtDefaultLocation(dataDir)
+        dag           <- secondStorage.getRepresentation
+        result        <- dag.topoSort(0L)
+        _             <- secondStorage.close()
+      } yield result
+      val topoSort = testProgram.unsafeRunSync(scheduler)
+      topoSort shouldBe Vector(blockElements.map(_.blockHash).toVector)
     }
   }
 }
