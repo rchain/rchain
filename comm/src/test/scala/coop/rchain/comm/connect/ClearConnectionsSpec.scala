@@ -136,7 +136,8 @@ class ClearConnectionsSpec
       RPConf(
         clearConnections = ClearConnetionsConf(maxNumOfConnections, numOfConnectionsPinged),
         defaultTimeout = FiniteDuration(1, MILLISECONDS),
-        local = peer("src")
+        local = peer("src"),
+        bootstrap = None
       )
     )
 
