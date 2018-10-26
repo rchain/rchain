@@ -522,7 +522,8 @@ object BlockDagFileStorage {
         val withoutLastCalculatedCrc = calculateDataLookupCrc[F](dataLookupList.init)
         withoutLastCalculatedCrc.value.map { withoutLastCalculatedCrcValue =>
           if (withoutLastCalculatedCrcValue == readDataLookupCrc) {
-            val lastDataLookupEntrySize: Long = ???
+            val byteString = dataLookupList.last._2.toByteString
+            val lastDataLookupEntrySize: Long = 4 + byteString.size()
             dataLookupRandomAccessFile.setLength(
               dataLookupRandomAccessFile.length() - lastDataLookupEntrySize)
             (dataLookupList.init.toMap, withoutLastCalculatedCrc)
