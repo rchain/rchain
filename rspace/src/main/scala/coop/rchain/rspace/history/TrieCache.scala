@@ -5,19 +5,19 @@ import scala.collection.immutable.{Map => ImmutableMap}
 import scala.collection.immutable.Seq
 import scala.collection.mutable.Map
 
-private[rspace] trait CachedItem[TItem] {
+private[rspace] sealed trait CachedItem[TItem] {
   def asOption: Option[TItem]
 }
 
-private[rspace] case class LoadedItem[TItem](value: TItem) extends CachedItem[TItem] {
+private[rspace] sealed case class LoadedItem[TItem](value: TItem) extends CachedItem[TItem] {
   override def asOption: Option[TItem] = Some(value)
 }
 
-private[rspace] case class StoredItem[TItem](value: TItem) extends CachedItem[TItem] {
+private[rspace] sealed case class StoredItem[TItem](value: TItem) extends CachedItem[TItem] {
   override def asOption: Option[TItem] = Some(value)
 }
 
-private[rspace] case class AbsentItem[TItem]() extends CachedItem[TItem] {
+private[rspace] sealed case class AbsentItem[TItem]() extends CachedItem[TItem] {
   override def asOption: Option[TItem] = None
 }
 
