@@ -10,6 +10,13 @@ import monix.execution.atomic.Atomic
 import monix.execution.atomic.PaddingStrategy.LeftRight256
 import monix.reactive.observers.Subscriber
 
+/**
+  * The purpose of the LimitedBuffer is to build a message queue with an
+  * overflow strategy that informs the caller if the message has been enqueued
+  * or dropped. Most of this code is copied from the Monix codebase,
+  * specifically from monix.reactive.observers.buffers.DropNewBufferedSubscriber
+  */
+
 trait LimitedBuffer[A] {
   def pushNext(elem: A): Boolean
   def complete(): Unit

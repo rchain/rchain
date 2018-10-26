@@ -10,11 +10,78 @@ import monix.reactive.observers.{BufferedSubscriber, Subscriber}
 import monix.reactive.subjects._
 import monix.reactive.OverflowStrategy._
 
+/**
+  * The Sequencer is a similar functionality as Monix ConcurrentSubject.
+  * However, it allows to use any Monix OverflowStrategy and not only
+  * the synchronous ones. Most importantly it allows to use backpressure
+  * in a concurrent environment, where multiple threads are adding items
+  * to the queue. In case of backpressure all adding threads are suspended
+  * until the queue can accept further items.
+  */
 trait Sequencer[A] extends Observable[A] {
   def pushNext(elem: A): Task[Ack]
   def complete(): Task[Unit]
 }
 
+/**
+  * Each time a thread is pushing a new element to the queue a
+  * SequencerMessage gets created and enqueued to an unbounded
+  * buffer. A SequencerMessage consists of the item and a
+  * callback. The thread is suspended until the callback gets
+  * called, either with a success message or a failure. The
+  * buffer pushes the SequencerMessages one by one to a
+  * backpressured observer which tries to push the message to the
+  * underlying subject. On success the observer calls the callback
+  * and the suspended thread (fiber) gets resumed and can enqueue
+  * further items to the queue. See diagram:
+  *
+  *   +---+   SequencerMessage
+  *   |   |   (item and callback)
+  *   +-+-+
+  *     |
+  *     |
+  * +---v---+
+  * | +---+ |
+  * | |   | |
+  * | +---+ | Unbounded concurrent buffer
+  * | +---+ | with SequencerMessages can
+  * | |   | | enqueue from multiple threads
+  * | +---+ |
+  * | +---+ |
+  * | |   | |
+  * | +---+ |
+  * +---+---+
+  *     |
+  *     |
+  * +---v---+  Backpressured observer
+  * | +---+ |  calls the callback after
+  * | |   | |  pushing the item to the
+  * | +---+ |  subject. One by one.
+  * +---+---+
+  *     |
+  *     |
+  * +---v---+
+  * |       |
+  * |  +-+  |  Backpressured subject with items
+  * |  +-+  |  can have only one publisher with
+  * |       |  respect to the backpressure contract
+  * |  +-+  |
+  * |  +-+  |
+  * |       |
+  * |  +-+  |
+  * |  +-+  |
+  * |       |
+  * +---+---+
+  *     |
+  * +---v---+
+  * |   +   |
+  * |  +++  |  Consumer, can backpressure the source
+  * |   +   |
+  * +-------+
+  *
+  * Caveat: the sequencer should be used by a limited number of fibers
+  * and/or a constraint parallelism. Otherwise the backpressure is pointless.
+  */
 object Sequencer {
 
   def apply[A]()(implicit s: Scheduler): Sequencer[A] =

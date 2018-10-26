@@ -10,6 +10,10 @@ import org.jctools.queues._
 import org.jctools.queues.MessagePassingQueue.Consumer
 import org.jctools.queues.atomic.MpscAtomicArrayQueue
 
+/**
+  * This code has been copied from the Monix codebase because unfortunately
+  * these trait and object are private there.
+  */
 abstract class ConcurrentQueue[A] {
   def isEmpty: Boolean
   def poll(): A
