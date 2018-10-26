@@ -111,15 +111,6 @@ trait StorageActionsTests[F[_]]
     } yield (store.isEmpty shouldBe false)
   }
 
-  "consuming with a list of patterns that is a different length than the list of channels" should
-    "throw" in withTestSpace { space =>
-    // FIXME: replace with raiseError
-    an[IllegalArgumentException] shouldBe thrownBy(
-      space.consume(List("ch1", "ch2"), List(Wildcard), new StringsCaptor, persist = false)
-    )
-    (space.store.isEmpty shouldBe true).pure[F]
-  }
-
   "consuming on three channels" should
     "persist a continuation in the store" in withTestSpace { space =>
     val store    = space.store
@@ -1301,21 +1292,57 @@ trait StorageActionsTests[F[_]]
       })
   }
 
+}
+trait MonadicStorageActionsTests[F[_]]
+    extends StorageTestsBase[F, String, Pattern, Nothing, String, StringsCaptor]
+    with TestImplicitHelpers
+    with GeneratorDrivenPropertyChecks
+    with Checkers {
+
+  "consuming with a list of patterns that is a different length than the list of channels" should
+    "raise error" in withTestSpace { space =>
+    for {
+      res <- Sync[F].attempt(
+              space.consume(List("ch1", "ch2"), List(Wildcard), new StringsCaptor, persist = false)
+            )
+      err = res.left.get
+      _   = err shouldBe an[IllegalArgumentException]
+      _   = err.getMessage shouldBe "channels.length must equal patterns.length"
+    } yield (space.store.isEmpty shouldBe true)
+  }
+
   "an install" should "not allow installing after a produce operation" in withTestSpace { space =>
     val channel  = "ch1"
     val datum    = "datum1"
     val key      = List(channel)
     val patterns = List(Wildcard)
 
-    val ex = the[RuntimeException] thrownBy {
-      for {
-        _ <- space.produce(channel, datum, persist = false)
-        _ <- space.install(key, patterns, new StringsCaptor)
-      } yield ()
-    }
-    (ex.getMessage shouldBe "Installing can be done only on startup").pure[F]
+    for {
+      _   <- space.produce(channel, datum, persist = false)
+      res <- Sync[F].attempt(space.install(key, patterns, new StringsCaptor))
+      ex  = res.left.get
+    } yield (ex.getMessage shouldBe "Installing can be done only on startup")
   }
 
+  "after space was closed" should "reject all store operations" in withTestSpace { space =>
+    val channel  = "ch1"
+    val key      = List(channel)
+    val patterns = List(Wildcard)
+
+    for {
+      _ <- space.close()
+      //using some nulls here to ensure that exception is thrown even before args check
+      e1 <- Sync[F]
+             .attempt(space.install(key, patterns, null))
+      _ = e1.left.get shouldBe an[RSpaceClosedException]
+      e2 <- Sync[F]
+             .attempt(space.consume(key, patterns, null, false))
+      _ = e2.left.get shouldBe an[RSpaceClosedException]
+      e3 <- Sync[F]
+             .attempt(space.produce(channel, "test-data", false))
+      _ = e3.left.get shouldBe an[RSpaceClosedException]
+    } yield ()
+  }
 }
 
 trait LegacyStorageActionsTests
@@ -1323,6 +1350,27 @@ trait LegacyStorageActionsTests
     with TestImplicitHelpers
     with GeneratorDrivenPropertyChecks
     with Checkers {
+
+  "consuming with a list of patterns that is a different length than the list of channels" should
+    "throw" in withTestSpace { space =>
+    an[IllegalArgumentException] shouldBe thrownBy(
+      space.consume(List("ch1", "ch2"), List(Wildcard), new StringsCaptor, persist = false)
+    )
+    space.store.isEmpty shouldBe true
+  }
+
+  "an install" should "not allow installing after a produce operation" in withTestSpace { space =>
+    val channel  = "ch1"
+    val datum    = "datum1"
+    val key      = List(channel)
+    val patterns = List(Wildcard)
+
+    val ex = the[RuntimeException] thrownBy {
+      space.produce(channel, datum, persist = false)
+      space.install(key, patterns, new StringsCaptor)
+    }
+    ex.getMessage shouldBe "Installing can be done only on startup"
+  }
 
   "after close space" should "throw RSpaceClosedException on all store operations" in withTestSpace {
     val channel  = "ch1"
@@ -1341,34 +1389,63 @@ trait LegacyStorageActionsTests
       )
 
       an[RSpaceClosedException] shouldBe thrownBy(
-        space.produce(channel, null, false)
+        space.produce(channel, "test data", false)
       )
   }
 }
 
 trait IdTests[C, P, A, R, K] extends StorageTestsBase[Id, C, P, A, R, K] {
   override implicit val syncF: Sync[Id]   = coop.rchain.catscontrib.effect.implicits.syncId
-  override implicit val monadF: Monad[Id] = catsInstancesForId
+  override implicit val monadF: Monad[Id] = syncF
   override def run[RES](f: Id[RES]): RES  = f
 }
 
+import monix.eval.Task
+trait TaskTests[C, P, A, R, K] extends StorageTestsBase[Task, C, P, A, R, K] {
+  import coop.rchain.catscontrib.TaskContrib._
+  override implicit val syncF: Sync[Task] = new monix.eval.instances.CatsEffectForTask()(
+    monix.execution.Scheduler.Implicits.global,
+    Task.defaultOptions
+  )
+  override implicit val monadF: Monad[Task] = syncF
+  override def run[RES](f: Task[RES]): RES =
+    f.unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+}
+
 class InMemoryStoreStorageActionsTests
+    extends InMemoryStoreTestsBase[Task]
+    with TaskTests[String, Pattern, Nothing, String, StringsCaptor]
+    with StorageActionsTests[Task]
+    with MonadicStorageActionsTests[Task]
+
+class LMDBStoreStorageActionsTests
+    extends LMDBStoreTestsBase[Task]
+    with TaskTests[String, Pattern, Nothing, String, StringsCaptor]
+    with StorageActionsTests[Task]
+    with MonadicStorageActionsTests[Task]
+
+class MixedStoreStorageActionsTests
+    extends MixedStoreTestsBase[Task]
+    with TaskTests[String, Pattern, Nothing, String, StringsCaptor]
+    with StorageActionsTests[Task]
+    with MonadicStorageActionsTests[Task]
+
+class LegacyInMemoryStoreStorageActionsTests
     extends InMemoryStoreTestsBase[Id]
     with IdTests[String, Pattern, Nothing, String, StringsCaptor]
-    with StorageActionsTests[Id]
     with JoinOperationsTests
     with LegacyStorageActionsTests
 
-class LMDBStoreActionsTests
-    extends LMDBStoreTestsBase
+class LegacyLMDBStoreActionsTests
+    extends LMDBStoreTestsBase[Id]
     with IdTests[String, Pattern, Nothing, String, StringsCaptor]
     with StorageActionsTests[Id]
     with JoinOperationsTests
     with BeforeAndAfterAll
     with LegacyStorageActionsTests
 
-class MixedStoreActionsTests
-    extends MixedStoreTestsBase
+class LegacyMixedStoreActionsTests
+    extends MixedStoreTestsBase[Id]
     with IdTests[String, Pattern, Nothing, String, StringsCaptor]
     with StorageActionsTests[Id]
     with JoinOperationsTests
