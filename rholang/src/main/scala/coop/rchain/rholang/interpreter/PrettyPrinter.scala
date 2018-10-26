@@ -27,7 +27,7 @@ object PrettyPrinter {
 case class PrettyPrinter(
     freeShift: Int,
     boundShift: Int,
-    newsShiftIdx: Vector[Int],
+    newsShiftIndices: Vector[Int],
     freeId: String,
     baseId: String,
     rotation: Int,
@@ -190,7 +190,7 @@ case class PrettyPrinter(
         val introducedNewsShiftIdx = (0 until n.bindCount).map(i => i + boundShift)
         pure("new " + buildVariables(n.bindCount) + " in {\n" + indentStr * (indent + 1)) |+| this
           .copy(boundShift = boundShift + n.bindCount)
-          .copy(newsShiftIdx = newsShiftIdx ++ introducedNewsShiftIdx)
+          .copy(newsShiftIndices = newsShiftIndices ++ introducedNewsShiftIdx)
           .buildStringM(n.p, indent + 1) |+|
           pure("\n" + (indentStr * indent) + "}")
 
@@ -293,7 +293,7 @@ case class PrettyPrinter(
     def isName(p: GeneratedMessage): Boolean =
       p match {
         case Par(_, _, _, List(Expr(EVarBody(EVar(Var(BoundVar(i)))))), _, _, _, _, _, _) =>
-          if (newsShiftIdx.contains(boundShift - i - 1)) true else false
+          if (newsShiftIndices.contains(boundShift - i - 1)) true else false
         case _ => false
       }
 
