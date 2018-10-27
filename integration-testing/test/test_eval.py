@@ -22,6 +22,7 @@ def test_eval_repl_time_consuming(bootstrap_node):
     relative_paths = bootstrap_node.shell_out('sh', '-c', 'ls /opt/docker/examples/*.rho').splitlines()
     for relative_path in relative_paths:
         full_path = os.path.join('/opt/docker/examples', relative_path)
+        # sed remove the comment line in the examples
         reformat_rho_script = bootstrap_node.shell_out("sed" ,"-e", 's/\/\/.*//', full_path)
         reformat_rho_script = reformat_rho_script.replace("\n", "")
 
