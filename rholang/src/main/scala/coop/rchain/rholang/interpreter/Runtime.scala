@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.{Files, Path}
 
+import cats.{Id, Monad}
 import scala.collection.immutable
 
 import cats.Applicative
@@ -17,6 +18,7 @@ import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.Runtime.ShortLeashParams.ShortLeashParameters
 import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.{OutOfPhlogistonsError, SetupError}
@@ -90,10 +92,10 @@ object Runtime {
   type BodyRef   = Long
 
   class ShortLeashParams[F[_]](
-      val codeHash: Ref[F, Par],
-      var phloRate: Ref[F, Par],
-      var userId: Ref[F, Par],
-      var timestamp: Ref[F, Par]
+      private val codeHash: Ref[F, Par],
+      private val phloRate: Ref[F, Par],
+      private val userId: Ref[F, Par],
+      private val timestamp: Ref[F, Par]
   ) {
     def setParams(codeHash: Par, phloRate: Par, userId: Par, timestamp: Par)(implicit F: Sync[F]) =
       for {
@@ -102,9 +104,18 @@ object Runtime {
         _ <- this.userId.set(userId)
         _ <- this.timestamp.set(timestamp)
       } yield ()
+
+    def getParams(implicit M: Monad[F]): F[ShortLeashParameters] =
+      for {
+        codeHash  <- this.codeHash.get
+        phloRate  <- this.phloRate.get
+        userId    <- this.userId.get
+        timestamp <- this.timestamp.get
+      } yield ShortLeashParameters(codeHash, phloRate, userId, timestamp)
   }
 
   object ShortLeashParams {
+    final case class ShortLeashParameters(codeHash: Par, phloRate: Par, userId: Par, timestamp: Par)
     def apply[F[_]]()(implicit F: Sync[F]): F[ShortLeashParams[F]] =
       for {
         codeHash  <- Ref[F].of(Par())

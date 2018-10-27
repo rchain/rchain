@@ -49,12 +49,12 @@ object SystemProcesses {
       for {
         _ <- Task.delay(Console.println(prettyPrinter.buildString(arg)))
         produced <- space
-          .produce(
-            ack,
-            ListParWithRandom(Seq(Par.defaultInstance), rand),
-            false
-          )(MATCH_UNLIMITED_PHLOS)
-          .foldResult(dispatcher)
+                     .produce(
+                       ack,
+                       ListParWithRandom(Seq(Par.defaultInstance), rand),
+                       false
+                     )(MATCH_UNLIMITED_PHLOS)
+                     .foldResult(dispatcher)
       } yield produced
 
   }
@@ -72,12 +72,12 @@ object SystemProcesses {
       for {
         _ <- Task.delay(Console.err.println(prettyPrinter.buildString(arg)))
         produced <- space
-          .produce(
-            ack,
-            ListParWithRandom(Seq(Par.defaultInstance), rand),
-            false
-          )(MATCH_UNLIMITED_PHLOS)
-          .foldResult(dispatcher)
+                     .produce(
+                       ack,
+                       ListParWithRandom(Seq(Par.defaultInstance), rand),
+                       false
+                     )(MATCH_UNLIMITED_PHLOS)
+                     .foldResult(dispatcher)
       } yield produced
 
   }
@@ -106,12 +106,12 @@ object SystemProcesses {
       for {
         verified <- Task.fromTry(Try(Secp256k1.verify(data, signature, pub)))
         produced <- space
-          .produce(
-            ack,
-            ListParWithRandom(Seq(Expr(GBool(verified))), rand),
-            false
-          )(MATCH_UNLIMITED_PHLOS)
-          .foldResult(dispatcher)
+                     .produce(
+                       ack,
+                       ListParWithRandom(Seq(Expr(GBool(verified))), rand),
+                       false
+                     )(MATCH_UNLIMITED_PHLOS)
+                     .foldResult(dispatcher)
       } yield produced
 
   }
@@ -130,12 +130,12 @@ object SystemProcesses {
       for {
         verified <- Task.fromTry(Try(Ed25519.verify(data, signature, pub)))
         produced <- space
-          .produce(
-            ack,
-            ListParWithRandom(Seq(Expr(GBool(verified))), rand),
-            false
-          )(MATCH_UNLIMITED_PHLOS)
-          .foldResult(dispatcher)
+                     .produce(
+                       ack,
+                       ListParWithRandom(Seq(Expr(GBool(verified))), rand),
+                       false
+                     )(MATCH_UNLIMITED_PHLOS)
+                     .foldResult(dispatcher)
       } yield produced
     case _ =>
       illegalArgumentException(
@@ -151,15 +151,15 @@ object SystemProcesses {
       for {
         hash <- Task.fromTry(Try(Sha256.hash(input)))
         produced <- space
-          .produce(
-            ack,
-            ListParWithRandom(
-              Seq(Expr(GByteArray(ByteString.copyFrom(hash)))),
-              rand
-            ),
-            false
-          )(MATCH_UNLIMITED_PHLOS)
-          .foldResult(dispatcher)
+                     .produce(
+                       ack,
+                       ListParWithRandom(
+                         Seq(Expr(GByteArray(ByteString.copyFrom(hash)))),
+                         rand
+                       ),
+                       false
+                     )(MATCH_UNLIMITED_PHLOS)
+                     .foldResult(dispatcher)
       } yield produced
     case _ =>
       illegalArgumentException("sha256Hash expects byte array and return channel as arguments")
@@ -173,15 +173,15 @@ object SystemProcesses {
       for {
         hash <- Task.fromTry(Try(Keccak256.hash(input)))
         produced <- space
-          .produce(
-            ack,
-            ListParWithRandom(
-              Seq(Expr(GByteArray(ByteString.copyFrom(hash)))),
-              rand
-            ),
-            false
-          )(MATCH_UNLIMITED_PHLOS)
-          .foldResult(dispatcher)
+                     .produce(
+                       ack,
+                       ListParWithRandom(
+                         Seq(Expr(GByteArray(ByteString.copyFrom(hash)))),
+                         rand
+                       ),
+                       false
+                     )(MATCH_UNLIMITED_PHLOS)
+                     .foldResult(dispatcher)
       } yield produced
 
     case _ =>
@@ -196,15 +196,15 @@ object SystemProcesses {
       for {
         hash <- Task.fromTry(Try(Blake2b256.hash(input)))
         produced <- space
-          .produce(
-            ack,
-            ListParWithRandom(
-              Seq(Expr(GByteArray(ByteString.copyFrom(hash)))),
-              rand
-            ),
-            false
-          )(MATCH_UNLIMITED_PHLOS)
-          .foldResult(dispatcher)
+                     .produce(
+                       ack,
+                       ListParWithRandom(
+                         Seq(Expr(GByteArray(ByteString.copyFrom(hash)))),
+                         rand
+                       ),
+                       false
+                     )(MATCH_UNLIMITED_PHLOS)
+                     .foldResult(dispatcher)
       } yield produced
     case _ =>
       illegalArgumentException("blake2b256Hash expects byte array and return channel as arguments")
@@ -216,20 +216,16 @@ object SystemProcesses {
       shortLeashParams: Runtime.ShortLeashParams[Task]
   ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
     case Seq(ListParWithRandomAndPhlos(Seq(ack), rand, _)) =>
-      for {
-        codeHash  <- shortLeashParams.codeHash.get
-        phloRate  <- shortLeashParams.phloRate.get
-        userId    <- shortLeashParams.userId.get
-        timestamp <- shortLeashParams.timestamp.get
-        produced <- space
+      shortLeashParams.getParams.flatMap { parameters =>
+        import parameters._
+        space
           .produce(
             ack,
             ListParWithRandom(Seq(codeHash, phloRate, userId, timestamp), rand),
             false
           )(MATCH_UNLIMITED_PHLOS)
           .foldResult(dispatcher)
-      } yield produced
-
+      }
     case _ =>
       illegalArgumentException("getDeployParams expects only a return channel.")
   }
@@ -243,12 +239,12 @@ object SystemProcesses {
       for {
         timestamp <- blockTime.timestamp.get
         produced <- space
-          .produce(
-            ack,
-            ListParWithRandom(Seq(timestamp), rand),
-            false
-          )(MATCH_UNLIMITED_PHLOS)
-          .foldResult(dispatcher)
+                     .produce(
+                       ack,
+                       ListParWithRandom(Seq(timestamp), rand),
+                       false
+                     )(MATCH_UNLIMITED_PHLOS)
+                     .foldResult(dispatcher)
       } yield produced
     case _ =>
       illegalArgumentException("blockTime expects only a return channel.")
