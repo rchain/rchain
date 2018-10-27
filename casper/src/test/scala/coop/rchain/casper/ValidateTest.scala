@@ -578,4 +578,12 @@ class ValidateTest
       genesis.withHeader(genesis.header.get.withDeployCount(100))
     ) should be(Left(InvalidDeployCount))
   }
+
+  "Block version validation" should "work" in {
+    val (sk, pk) = Ed25519.newKeyPair
+    val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+    val genesis  = ProtoUtil.signBlock(block, BlockDag.empty, pk, sk, "ed25519", "rchain")
+    Validate.version[Id](genesis, -1) should be(false)
+    Validate.version[Id](genesis, 1) should be(true)
+  }
 }
