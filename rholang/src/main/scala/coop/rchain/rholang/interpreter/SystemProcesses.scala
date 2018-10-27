@@ -14,6 +14,7 @@ import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rspace.util._
 import monix.eval.Task
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.rspace.{ContResult, Result}
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 
@@ -33,7 +34,7 @@ object SystemProcesses {
   private implicit class ProduceOps(
       res: Id[
         Either[OutOfPhlogistonsError.type, Option[
-          (TaggedContinuation, Seq[ListParWithRandomAndPhlos])
+          (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandomAndPhlos]])
         ]]
       ]
   ) {
@@ -41,7 +42,7 @@ object SystemProcesses {
         dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
     ): Task[Unit] =
       res.fold(err => Task.raiseError(OutOfPhlogistonsError), _.fold(Task.unit) {
-        case (cont, channels) => _dispatch(dispatcher)(cont, channels)
+        case (cont, channels) => _dispatch(dispatcher)(unpackCont(cont), channels.map(_.value))
       })
   }
 
@@ -57,7 +58,6 @@ object SystemProcesses {
             ListParWithRandom(Seq(Par.defaultInstance), rand),
             false
           )(MATCH_UNLIMITED_PHLOS)
-          .map(unpackOption(_))
           .foldResult(dispatcher)
       }
   }
@@ -79,7 +79,6 @@ object SystemProcesses {
             ListParWithRandom(Seq(Par.defaultInstance), rand),
             false
           )(MATCH_UNLIMITED_PHLOS)
-          .map(unpackOption(_))
           .foldResult(dispatcher)
       }
   }
@@ -112,7 +111,6 @@ object SystemProcesses {
             ListParWithRandom(Seq(Expr(GBool(verified))), rand),
             false
           )(MATCH_UNLIMITED_PHLOS)
-          .map(unpackOption(_))
           .foldResult(dispatcher)
       }
   }
@@ -135,7 +133,6 @@ object SystemProcesses {
             ListParWithRandom(Seq(Expr(GBool(verified))), rand),
             false
           )(MATCH_UNLIMITED_PHLOS)
-          .map(unpackOption(_))
           .foldResult(dispatcher)
       }
     case _ =>
@@ -159,7 +156,6 @@ object SystemProcesses {
             ),
             false
           )(MATCH_UNLIMITED_PHLOS)
-          .map(unpackOption(_))
           .foldResult(dispatcher)
       }
     case _ =>
@@ -181,7 +177,6 @@ object SystemProcesses {
             ),
             false
           )(MATCH_UNLIMITED_PHLOS)
-          .map(unpackOption(_))
           .foldResult(dispatcher)
       }
     case _ =>
@@ -203,7 +198,6 @@ object SystemProcesses {
             ),
             false
           )(MATCH_UNLIMITED_PHLOS)
-          .map(unpackOption(_))
           .foldResult(dispatcher)
       }
     case _ =>
@@ -227,7 +221,6 @@ object SystemProcesses {
                 ListParWithRandom(Seq(codeHash, phloRate, userId, timestamp), rand),
                 false
               )(MATCH_UNLIMITED_PHLOS)
-              .map(unpackOption(_))
               .foldResult(dispatcher)
       } yield ()
     case _ =>
@@ -248,7 +241,6 @@ object SystemProcesses {
                 ListParWithRandom(Seq(timestamp), rand),
                 false
               )(MATCH_UNLIMITED_PHLOS)
-              .map(unpackOption(_))
               .foldResult(dispatcher)
       } yield ()
     case _ =>
