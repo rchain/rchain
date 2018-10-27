@@ -162,14 +162,12 @@ object Validate {
     if (blockVersion == version) {
       true.pure[F]
     } else {
-      for {
-        _ <- Log[F].warn(
-              ignore(
-                b,
-                s"received block version ${blockVersion.toString} is the expected version ${version.toString}."
-              )
-            )
-      } yield false
+      Log[F].warn(
+        ignore(
+          b,
+          s"received block version ${blockVersion.toString} is the expected version ${version.toString}."
+        )
+      ) *> false.pure[F]
     }
   }
 
