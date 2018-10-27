@@ -10,7 +10,7 @@ import scala.reflect.{classTag, ClassTag}
 
 object tools {
   def seqToJavaCollection[C <: java.util.Collection[T]: ClassTag, T](input: Seq[T]): C = {
-    val r = classTag[C].runtimeClass.newInstance().asInstanceOf[C]
+    val r = classTag[C].runtimeClass.getDeclaredConstructor().newInstance().asInstanceOf[C]
     input.foreach(r.add)
     r
   }
