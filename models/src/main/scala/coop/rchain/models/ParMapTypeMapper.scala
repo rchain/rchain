@@ -11,7 +11,7 @@ object ParMapTypeMapper {
 
   private[models] def parMapToEMap(parMap: ParMap): EMap =
     EMap(
-      parMap.ps.sortedMap.map(t => zip(t._1, t._2)),
+      parMap.ps.sortedMap.map(t => zip(t._1, t._2)).toSeq,
       parMap.locallyFree.value,
       parMap.connectiveUsed,
       parMap.remainder
