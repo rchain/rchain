@@ -12,11 +12,8 @@ import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rspace.util._
-import monix.eval.Task
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.rspace.{ContResult, Result}
-import monix.execution.Scheduler
-import monix.execution.Scheduler.Implicits.global
+import monix.eval.Task
 
 import scala.util.Try
 
