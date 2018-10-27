@@ -43,7 +43,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   type Validator = ByteString
 
   //TODO: Extract hardcoded version
-  private val version = 0L
+  private val version = 1L
 
   private val _blockDag: AtomicSyncVar[BlockDag] = new AtomicSyncVar(initialDag)
 
@@ -109,13 +109,15 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
 
   def internalAddBlock(b: BlockMessage): F[BlockStatus] =
     for {
-      validFormat <- Validate.formatOfFields[F](b)
-      validSig    <- Validate.blockSignature[F](b)
-      dag         <- blockDag
-      validSender <- Validate.blockSender[F](b, genesis, dag)
+      validFormat  <- Validate.formatOfFields[F](b)
+      validSig     <- Validate.blockSignature[F](b)
+      dag          <- blockDag
+      validSender  <- Validate.blockSender[F](b, genesis, dag)
+      validVersion <- Validate.version[F](b, version)
       attempt <- if (!validFormat) InvalidUnslashableBlock.pure[F]
                 else if (!validSig) InvalidUnslashableBlock.pure[F]
                 else if (!validSender) InvalidUnslashableBlock.pure[F]
+                else if (!validVersion) InvalidUnslashableBlock.pure[F]
                 else if (validatorId.exists(id => ByteString.copyFrom(id.publicKey) == b.sender))
                   addEffects(Valid, b).map(_ => Valid)
                 else attemptAdd(b)

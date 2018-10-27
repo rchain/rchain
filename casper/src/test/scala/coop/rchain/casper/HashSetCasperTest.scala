@@ -934,7 +934,7 @@ object HashSetCasperTest {
       faucetCode: String => String,
       deployTimestamp: Long
   ): BlockMessage = {
-    val initial           = Genesis.withoutContracts(bonds, 0L, deployTimestamp, "rchain")
+    val initial           = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "rchain")
     val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
     val storageSize: Long = 1024L * 1024
     val activeRuntime     = Runtime.create(storageDirectory, storageSize)
