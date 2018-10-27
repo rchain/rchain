@@ -1,6 +1,5 @@
 package coop.rchain.rholang.interpreter
 
-import cats.Id
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
@@ -12,10 +11,8 @@ import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rspace.util._
+import coop.rchain.rspace.{ContResult, Result}
 import monix.eval.Task
-import coop.rchain.catscontrib.TaskContrib._
-import monix.execution.Scheduler
-import monix.execution.Scheduler.Implicits.global
 
 import scala.util.Try
 
@@ -31,16 +28,17 @@ object SystemProcesses {
   }
 
   private implicit class ProduceOps(
-      res: Either[OutOfPhlogistonsError.type, Option[
-        (TaggedContinuation, Seq[ListParWithRandomAndPhlos])
-      ]]
+      res:
+        Task[Either[OutOfPhlogistonsError.type, Option[
+          (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandomAndPhlos]])
+        ]]]
   ) {
     def foldResult(
         dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
     ): Task[Unit] =
-      res.fold(err => Task.raiseError(OutOfPhlogistonsError), _.fold(Task.unit) {
-        case (cont, channels) => _dispatch(dispatcher)(cont, channels)
-      })
+      res.flatMap(_.fold(err => Task.raiseError(OutOfPhlogistonsError), _.fold(Task.unit) {
+        case (cont, channels) => _dispatch(dispatcher)(unpackCont(cont), channels.map(_.value))
+      }))
   }
 
   def stdoutAck(
@@ -51,14 +49,13 @@ object SystemProcesses {
       for {
         _ <- Task.delay(Console.println(prettyPrinter.buildString(arg)))
         produced <- space
-                     .produce(
-                       ack,
-                       ListParWithRandom(Seq(Par.defaultInstance), rand),
-                       false
-                     )(MATCH_UNLIMITED_PHLOS)
-        unpacked = produced.map(unpackOption(_))
-        res      <- unpacked.foldResult(dispatcher)
-      } yield { res }
+          .produce(
+            ack,
+            ListParWithRandom(Seq(Par.defaultInstance), rand),
+            false
+          )(MATCH_UNLIMITED_PHLOS)
+          .foldResult(dispatcher)
+      } yield produced
 
   }
 
@@ -75,14 +72,13 @@ object SystemProcesses {
       for {
         _ <- Task.delay(Console.err.println(prettyPrinter.buildString(arg)))
         produced <- space
-                     .produce(
-                       ack,
-                       ListParWithRandom(Seq(Par.defaultInstance), rand),
-                       false
-                     )(MATCH_UNLIMITED_PHLOS)
-        unpacked = produced.map(unpackOption(_))
-        res      <- unpacked.foldResult(dispatcher)
-      } yield { res }
+          .produce(
+            ack,
+            ListParWithRandom(Seq(Par.defaultInstance), rand),
+            false
+          )(MATCH_UNLIMITED_PHLOS)
+          .foldResult(dispatcher)
+      } yield produced
 
   }
 
@@ -110,14 +106,13 @@ object SystemProcesses {
       for {
         verified <- Task.fromTry(Try(Secp256k1.verify(data, signature, pub)))
         produced <- space
-                     .produce(
-                       ack,
-                       ListParWithRandom(Seq(Expr(GBool(verified))), rand),
-                       false
-                     )(MATCH_UNLIMITED_PHLOS)
-        unpacked = produced.map(unpackOption(_))
-        res      <- unpacked.foldResult(dispatcher)
-      } yield { res }
+          .produce(
+            ack,
+            ListParWithRandom(Seq(Expr(GBool(verified))), rand),
+            false
+          )(MATCH_UNLIMITED_PHLOS)
+          .foldResult(dispatcher)
+      } yield produced
 
   }
 
@@ -135,14 +130,13 @@ object SystemProcesses {
       for {
         verified <- Task.fromTry(Try(Ed25519.verify(data, signature, pub)))
         produced <- space
-                     .produce(
-                       ack,
-                       ListParWithRandom(Seq(Expr(GBool(verified))), rand),
-                       false
-                     )(MATCH_UNLIMITED_PHLOS)
-        unpacked = produced.map(unpackOption(_))
-        res      <- unpacked.foldResult(dispatcher)
-      } yield { res }
+          .produce(
+            ack,
+            ListParWithRandom(Seq(Expr(GBool(verified))), rand),
+            false
+          )(MATCH_UNLIMITED_PHLOS)
+          .foldResult(dispatcher)
+      } yield produced
     case _ =>
       illegalArgumentException(
         "ed25519Verify expects data, signature and public key (all as byte arrays) and ack channel as arguments"
@@ -157,17 +151,16 @@ object SystemProcesses {
       for {
         hash <- Task.fromTry(Try(Sha256.hash(input)))
         produced <- space
-                     .produce(
-                       ack,
-                       ListParWithRandom(
-                         Seq(Expr(GByteArray(ByteString.copyFrom(hash)))),
-                         rand
-                       ),
-                       false
-                     )(MATCH_UNLIMITED_PHLOS)
-        unpacked = produced.map(unpackOption(_))
-        res      <- unpacked.foldResult(dispatcher)
-      } yield { res }
+          .produce(
+            ack,
+            ListParWithRandom(
+              Seq(Expr(GByteArray(ByteString.copyFrom(hash)))),
+              rand
+            ),
+            false
+          )(MATCH_UNLIMITED_PHLOS)
+          .foldResult(dispatcher)
+      } yield produced
     case _ =>
       illegalArgumentException("sha256Hash expects byte array and return channel as arguments")
   }
@@ -180,17 +173,16 @@ object SystemProcesses {
       for {
         hash <- Task.fromTry(Try(Keccak256.hash(input)))
         produced <- space
-                     .produce(
-                       ack,
-                       ListParWithRandom(
-                         Seq(Expr(GByteArray(ByteString.copyFrom(hash)))),
-                         rand
-                       ),
-                       false
-                     )(MATCH_UNLIMITED_PHLOS)
-        unpacked = produced.map(unpackOption(_))
-        res      <- unpacked.foldResult(dispatcher)
-      } yield { res }
+          .produce(
+            ack,
+            ListParWithRandom(
+              Seq(Expr(GByteArray(ByteString.copyFrom(hash)))),
+              rand
+            ),
+            false
+          )(MATCH_UNLIMITED_PHLOS)
+          .foldResult(dispatcher)
+      } yield produced
 
     case _ =>
       illegalArgumentException("keccak256Hash expects byte array and return channel as arguments")
@@ -204,17 +196,16 @@ object SystemProcesses {
       for {
         hash <- Task.fromTry(Try(Blake2b256.hash(input)))
         produced <- space
-                     .produce(
-                       ack,
-                       ListParWithRandom(
-                         Seq(Expr(GByteArray(ByteString.copyFrom(hash)))),
-                         rand
-                       ),
-                       false
-                     )(MATCH_UNLIMITED_PHLOS)
-        unpacked = produced.map(unpackOption(_))
-        res      <- unpacked.foldResult(dispatcher)
-      } yield { res }
+          .produce(
+            ack,
+            ListParWithRandom(
+              Seq(Expr(GByteArray(ByteString.copyFrom(hash)))),
+              rand
+            ),
+            false
+          )(MATCH_UNLIMITED_PHLOS)
+          .foldResult(dispatcher)
+      } yield produced
     case _ =>
       illegalArgumentException("blake2b256Hash expects byte array and return channel as arguments")
   }
@@ -231,14 +222,13 @@ object SystemProcesses {
         userId    <- shortLeashParams.userId.get
         timestamp <- shortLeashParams.timestamp.get
         produced <- space
-                     .produce(
-                       ack,
-                       ListParWithRandom(Seq(codeHash, phloRate, userId, timestamp), rand),
-                       false
-                     )(MATCH_UNLIMITED_PHLOS)
-        unpacked = produced.map(unpackOption(_))
-        res      <- unpacked.foldResult(dispatcher)
-      } yield { res }
+          .produce(
+            ack,
+            ListParWithRandom(Seq(codeHash, phloRate, userId, timestamp), rand),
+            false
+          )(MATCH_UNLIMITED_PHLOS)
+          .foldResult(dispatcher)
+      } yield produced
 
     case _ =>
       illegalArgumentException("getDeployParams expects only a return channel.")
@@ -253,14 +243,13 @@ object SystemProcesses {
       for {
         timestamp <- blockTime.timestamp.get
         produced <- space
-                     .produce(
-                       ack,
-                       ListParWithRandom(Seq(timestamp), rand),
-                       false
-                     )(MATCH_UNLIMITED_PHLOS)
-        unpacked = produced.map(unpackOption(_))
-        res      <- unpacked.foldResult(dispatcher)
-      } yield { res }
+          .produce(
+            ack,
+            ListParWithRandom(Seq(timestamp), rand),
+            false
+          )(MATCH_UNLIMITED_PHLOS)
+          .foldResult(dispatcher)
+      } yield produced
     case _ =>
       illegalArgumentException("blockTime expects only a return channel.")
   }
