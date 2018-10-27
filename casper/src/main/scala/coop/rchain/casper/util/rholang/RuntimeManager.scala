@@ -27,7 +27,6 @@ import scala.util.{Failure, Success, Try}
 
 //runtime is a SyncVar for thread-safety, as all checkpoints share the same "hot store"
 class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: SyncVar[Runtime]) {
-
   def captureResults(start: StateHash, term: Par, name: String = "__SCALA__")(
       implicit scheduler: Scheduler
   ): Seq[Par] = {
@@ -48,35 +47,51 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     result.flatMap(_.a.pars)
   }
 
-  def replayComputeState(hash: StateHash, terms: Seq[InternalProcessedDeploy])(
+  def replayComputeState(
+      hash: StateHash,
+      terms: Seq[InternalProcessedDeploy],
+      time: Option[Long] = None
+  )(
       implicit scheduler: Scheduler
   ): Either[(Option[Deploy], Failed), StateHash] = {
     val runtime = runtimeContainer.take()
-    val result  = replayEval(terms, runtime, hash)
+    unsafeSetTimestamp(time, runtime)
+    val result = replayEval(terms, runtime, hash)
     runtimeContainer.put(runtime)
     result
   }
 
-  def computeState(hash: StateHash, terms: Seq[Deploy])(
+  def computeState(hash: StateHash, terms: Seq[Deploy], time: Option[Long] = None)(
       implicit scheduler: Scheduler
   ): (StateHash, Seq[InternalProcessedDeploy]) = {
     val runtime = runtimeContainer.take()
-    val result  = newEval(terms, runtime, hash)
+    unsafeSetTimestamp(time, runtime)
+    val result = newEval(terms, runtime, hash)
     runtimeContainer.put(runtime)
     result
   }
 
-  def storageRepr(hash: StateHash): String = {
-    val resetRuntime = getResetRuntime(hash)
-    val result       = StoragePrinter.prettyPrint(resetRuntime.space.store)
-    runtimeContainer.put(resetRuntime)
-    result
-  }
+  private def unsafeSetTimestamp(time: Option[Long], runtime: Runtime)(
+      implicit scheduler: Scheduler
+  ): Unit =
+    time match {
+      case Some(t) =>
+        val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(t))))
+        runtime.blockTime.setParams(timestamp).unsafeRunSync
+      case None => ()
+    }
+
+  def storageRepr(hash: StateHash): Option[String] =
+    getResetRuntimeOpt(hash).map { resetRuntime =>
+      val result = StoragePrinter.prettyPrint(resetRuntime.space.store)
+      runtimeContainer.put(resetRuntime)
+      result
+    }
 
   def computeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] = {
     // TODO: Switch to a read only name
     val bondsQuery =
-      """for(@pos <- @"proofOfStake"){ @(pos, "getBonds")!("__SCALA__") }"""
+      """for(pos <- @"proofOfStake"){ pos!("getBonds", "__SCALA__") }"""
     //TODO: construct directly instead of parsing rholang source
     val bondsQueryTerm = InterpreterUtil.mkTerm(bondsQuery).right.get
     val bondsPar       = captureResults(hash, bondsQueryTerm)
@@ -95,6 +110,17 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       case Failure(ex) =>
         runtimeContainer.put(runtime)
         throw ex
+    }
+  }
+
+  private def getResetRuntimeOpt(hash: StateHash) = {
+    val runtime   = runtimeContainer.take()
+    val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
+    Try(runtime.space.reset(blakeHash)) match {
+      case Success(_) => Some(runtime)
+      case Failure(_) =>
+        runtimeContainer.put(runtime)
+        None
     }
   }
 
@@ -141,9 +167,13 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
         terms match {
           case deploy +: rem =>
             for {
-              _                   <- Task.delay(runtime.space.reset(hash))
-              availablePhlos      = Cost(deploy.raw.flatMap(_.phloLimit).get.value)
-              _                   <- runtime.reducer.setAvailablePhlos(availablePhlos)
+              _              <- Task.delay(runtime.space.reset(hash))
+              availablePhlos = Cost(deploy.raw.map(_.phloLimit).get.value)
+              _              <- runtime.reducer.setAvailablePhlos(availablePhlos)
+              (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(
+                deploy.raw.get
+              )
+              _                   <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
               injResult           <- injAttempt(deploy, runtime.reducer, runtime.errorLog)
               (phlosLeft, errors) = injResult
               cost                = phlosLeft.copy(cost = availablePhlos.value - phlosLeft.cost)
@@ -180,7 +210,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       Task.defer {
         terms match {
           case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
-            val availablePhlos = Cost(deploy.raw.flatMap(_.phloLimit).get.value)
+            val availablePhlos = Cost(deploy.raw.map(_.phloLimit).get.value)
             for {
               _         <- runtime.replayReducer.setAvailablePhlos(availablePhlos)
               _         <- Task.delay(runtime.replaySpace.rig(hash, log.toList))

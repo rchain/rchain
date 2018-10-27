@@ -3,86 +3,125 @@
 // WalletCheck: holds funds until a public key with the given hash is presented,
 //     then creates a wallet with that public key and those funds.
 
-// create: makes a wallet check
-//
-// string ethAddr: the address of the funds on Ethereum (pre-issuance)
-// Purse purse: the funds to put in the wallet
-contract @("WalletCheck", "create")(@ethAddr, @purse) = {
-  new doneStore in {
-    doneStore!(false) |
-    
-    // claims the wallet by presenting the preimage of the hash
+
+//Registry info:
+//  sk: e1726ef3da05912e2ffd1777bac30a391b626899f1215d9f145b0c05a6284061
+//  pk: 852a03854f285b36a44c7e84b1c07d30352196de60b593522653ba5e71c8e016
+//  user == pk
+//  timestamp: 1540218618622
+//Resulting unforgable name: Unforgeable(0xd1c1a398c665521341cde512ebc6273fcd5af9db6cfa276b64b43718cad1d2b2)
+//  ==> signature data == 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a20d1c1a398c665521341cde512ebc6273fcd5af9db6cfa276b64b43718cad1d2b21001
+//  ==> signature == 1bcdbfd224989e15070fd54ee1b2a00e68879deb7e273f9a57d1f4b264f38a7f4cafe200f5c80551fb9e218d4c32f465264f1c1e2041cb5eded90c4f75519409
+//URI derived from pk == `rho:id:oqez475nmxx9ktciscbhps18wnmnwtm6egziohc3rkdzekkmsrpuyt`
+new
+  WalletCheck, rs(`rho:registry:insertSigned:ed25519`), uriOut,
+  rl(`rho:registry:lookup`), BasicWalletCh, claimContractStore
+in {
+  rl!(`rho:id:3yicxut5xtx5tnmnneta7actof4yse3xangw4awzt8c8owqmddgyms`, *BasicWalletCh) |
+  for(@(_, BasicWallet) <- BasicWalletCh) {
+    claimContractStore!({}) |
+  
+    // create: makes a wallet check
     //
-    // string pubkey: Base16 encoded public key. It should be true that
-    //                "0x" + Base16.encode(keccak256.hash(Base16.decode(pubkey)).takeRight(20)) == ethAddr
-    // name statusOut
-    // string sig: signature of [pubKey, statusOut]
-    contract @ethAddr(@[pubKey, statusOut], @sig) = {
-      
-      // Make sure the purse hasn't already been claimed
-      for (@done <- doneStore) {
-        if (done) {
-          doneStore!(done) |
-          @statusOut!([false, "Already claimed wallet"])
-        } else {
+    // string ethAddr: the address of the funds on Ethereum (pre-issuance)
+    // Purse purse: the funds to put in the wallet
+    contract WalletCheck(@"create", @ethAddr, @purse) = {
+      new doneStore, claimContract in {
+        doneStore!(false) |
+        for(@claimContractMap <- claimContractStore) {
+          claimContractStore!(claimContractMap.set(ethAddr, *claimContract))
+        } |
+        
+        // claims the wallet by presenting the preimage of the hash
+        //
+        // string pubkey: Base16 encoded public key. It should be true that
+        //                "0x" + Base16.encode(keccak256.hash(Base16.decode(pubkey)).takeRight(20)) == ethAddr
+        // name statusOut
+        // string sig: signature of [pubKey, statusOut]
+        contract claimContract(@[pubKey, statusOut], @sig) = {
+          
+          // Make sure the purse hasn't already been claimed
+          for (@done <- doneStore) {
+            if (done) {
+              doneStore!(done) |
+              @statusOut!([false, "Already claimed wallet"])
+            } else {
 
-          // Verify signature 
-          new verifiedOut, calcAddrOut, hashOut in {
-            @"keccak256Hash"!([pubKey, statusOut].toByteArray(), *hashOut) |
-            for(@dataHash <- hashOut) {
-              //need to verify the signature using the provided plue 1 extra byte (for some reason...)
-              @"secp256k1Verify"!(dataHash, sig.hexToBytes(), ("04" ++ pubKey).hexToBytes(), *verifiedOut) |
-              for (@verified <- verifiedOut) {
-                if (verified) {
-                  // Check that given pubKey is the preimage of hash
-                  @("WalletCheck", "publicToAddr")!(pubKey, *calcAddrOut) |
-                  for (@calcAddr <- calcAddrOut) {
-                    //drop the "0x" from the Ethereum address then convert to bytes
-                    if (calcAddr == ethAddr.slice(2, ethAddr.length()).hexToBytes()) {
-                      new walletOut in {
+              // Verify signature 
+              new verifiedOut, calcAddrOut, hashOut in {
+                @"keccak256Hash"!([pubKey, statusOut].toByteArray(), *hashOut) |
+                for(@dataHash <- hashOut) {
+                  //need to verify the signature using the provided plue 1 extra byte (for some reason...)
+                  @"secp256k1Verify"!(dataHash, sig.hexToBytes(), ("04" ++ pubKey).hexToBytes(), *verifiedOut) |
+                  for (@verified <- verifiedOut) {
+                    if (verified) {
+                      // Check that given pubKey is the preimage of hash
+                      WalletCheck!("publicToAddr", pubKey, *calcAddrOut) |
+                      for (@calcAddr <- calcAddrOut) {
+                        //drop the "0x" from the Ethereum address then convert to bytes
+                        if (calcAddr == ethAddr.slice(2, ethAddr.length()).hexToBytes()) {
+                          new walletOut in {
 
-                        // Create the wallet
-                        @"BasicWallet"!(purse, "secp256k1", "04" ++ pubKey, *walletOut) |
+                            // Create the wallet
+                            @BasicWallet!(purse, "secp256k1", "04" ++ pubKey, *walletOut) |
 
-                        // Advertise the private name on a forgeable one
-                        // TODO: This is completely insecure.  Once the
-                        //   registry is done, use that.
-                        for (@[wallet] <- walletOut) {
-                          @pubKey!!(wallet) |
-                        
-                          // Return success
-                          @statusOut!([true, wallet])
-                        } |
-                        
-                        // All done
-                        doneStore!(true)
+                            // Advertise the private name on a forgeable one
+                            // TODO: This is completely insecure.  Once the
+                            //   registry is done, use that.
+                            for (@[wallet] <- walletOut) {
+                              @pubKey!!(wallet) |
+                            
+                              // Return success
+                              @statusOut!([true, wallet])
+                            } |
+                            
+                            // All done
+                            doneStore!(true)
+                          }
+                        } else {
+                          doneStore!(done) |
+                          @statusOut!([false, "Public key is not the preimage of hash"])
+                        }
                       }
                     } else {
                       doneStore!(done) |
-                      @statusOut!([false, "Public key is not the preimage of hash"])
+                      @statusOut!([false, "Signature verification failed"])
                     }
                   }
-                } else {
-                  doneStore!(done) |
-                  @statusOut!([false, "Signature verification failed"])
                 }
               }
             }
           }
         }
       }
-    }
-  }
-} |
+    } |
 
-//computes the ethereum address from a public key
-//string pubKey
-//returns bytearray
-contract @("WalletCheck", "publicToAddr")(@pubKey, ret) = {
-  new hashOut in {
-    @"keccak256Hash"!(pubKey.hexToBytes(), *hashOut) |
-    for(@pkHash <- hashOut) {
-      ret!(pkHash.slice(12, 32))
+    //computes the ethereum address from a public key
+    //string pubKey
+    //returns bytearray
+    contract WalletCheck(@"publicToAddr", @pubKey, ret) = {
+      new hashOut in {
+        @"keccak256Hash"!(pubKey.hexToBytes(), *hashOut) |
+        for(@pkHash <- hashOut) {
+          ret!(pkHash.slice(12, 32))
+        }
+      }
+    } |
+    
+    contract WalletCheck(@"claim", @ethAddr, @pubKey, @sig, statusOut) = {
+      for(@claimContractMap <- claimContractStore) {
+        claimContractStore!(claimContractMap) |
+        match claimContractMap.get(ethAddr) {
+          Nil           => { statusOut!([false, "Unknown Ethereum address"]) }
+          claimContract => { @claimContract!([pubKey, *statusOut], sig) }
+        }
+      }
     }
-  }
+  } |
+  rs!(
+    "852a03854f285b36a44c7e84b1c07d30352196de60b593522653ba5e71c8e016".hexToBytes(), 
+    (9223372036854775807, bundle+{*WalletCheck}), 
+    "1bcdbfd224989e15070fd54ee1b2a00e68879deb7e273f9a57d1f4b264f38a7f4cafe200f5c80551fb9e218d4c32f465264f1c1e2041cb5eded90c4f75519409".hexToBytes(), 
+    *uriOut
+  )
 }

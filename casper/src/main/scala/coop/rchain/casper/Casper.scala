@@ -23,7 +23,7 @@ import scala.annotation.tailrec
 import scala.collection.{immutable, mutable}
 import scala.collection.immutable.{HashMap, HashSet}
 import cats.effect.concurrent.Ref
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.{BlockMetadata, BlockStore}
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -43,6 +43,7 @@ trait Casper[F[_], A] {
 
 trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]] {
   def blockDag: F[BlockDag]
+  def fetchDependencies: F[Unit]
   // This is the weight of faults that have been accumulated so far.
   // We want the clique oracle to give us a fault tolerance that is greater than
   // this initial fault weight combined with our fault tolerance threshold t.
@@ -74,14 +75,12 @@ sealed abstract class MultiParentCasperInstances {
         topoSort = Vector(Vector(genesis.blockHash))
       )
     for {
-      validateBlockCheckpointResult <- InterpreterUtil
-                                        .validateBlockCheckpoint[F](
-                                          genesis,
-                                          dag,
-                                          Set[StateHash](runtimeManager.emptyStateHash),
-                                          runtimeManager
-                                        )
-      (maybePostGenesisStateHash, _) = validateBlockCheckpointResult
+      maybePostGenesisStateHash <- InterpreterUtil
+                                    .validateBlockCheckpoint[F](
+                                      genesis,
+                                      dag,
+                                      runtimeManager
+                                    )
       postGenesisStateHash <- maybePostGenesisStateHash match {
                                case Left(BlockException(ex)) => Sync[F].raiseError[StateHash](ex)
                                case Right(None) =>

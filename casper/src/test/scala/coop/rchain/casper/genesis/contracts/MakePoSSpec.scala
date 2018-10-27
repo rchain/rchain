@@ -1,5 +1,7 @@
 package coop.rchain.casper.genesis.contracts
 
+import coop.rchain.casper.util.ProtoUtil.compiledSourceDeploy
+import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.collection.Either
 import coop.rchain.rholang.math.NonNegativeNumber
@@ -11,10 +13,16 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
 class MakePoSSpec extends FlatSpec with Matchers {
-  val runtime = TestSetUtil.runtime("rholang-make-pos-test")
+  val runtime = TestSetUtil.runtime
   val tests   = TestSetUtil.getTests("./casper/src/test/rholang/MakePoSTest.rho").toList
 
-  TestSetUtil.runTests(MakePoSTest, List(NonNegativeNumber, MakeMint, Either, MakePoS), runtime)
+  val deploys = List(
+    StandardDeploys.nonNegativeNumber,
+    StandardDeploys.makeMint,
+    StandardDeploys.either,
+    StandardDeploys.makePoS
+  )
+  TestSetUtil.runTestsWithDeploys(MakePoSTest, deploys, runtime)
   val tuplespace = StoragePrinter.prettyPrint(runtime.space.store)
 
   "MakePoS rholang contract" should tests.head in {

@@ -16,9 +16,9 @@ object Wallet {
     */
   def rhoCode(w: Wallet): String = s"""
     |new purseCh, walletCh in {
-    |  @(revMint, "makePurse")!(${w.initRevBalance}, *purseCh) |
+    |  @revMint!("makePurse", ${w.initRevBalance}, *purseCh) |
     |  for(@purse <- purseCh) {
-    |    @"BasicWallet"!(purse, "${w.algorithm}", "${w.pk}", *walletCh) |
+    |    @BasicWallet!(purse, "${w.algorithm}", "${w.pk}", *walletCh) |
     |    for(@maybeWallet <- walletCh) {
     |      match maybeWallet {
     |        [wallet] => { ${rhoPublicName(w)}!!(wallet) }

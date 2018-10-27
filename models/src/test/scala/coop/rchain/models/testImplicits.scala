@@ -1,14 +1,11 @@
 package coop.rchain.models
 
 import com.google.protobuf.ByteString
-import coop.rchain.models.Expr.ExprInstance
-import org.scalacheck.{Arbitrary, Gen, Shrink}
+import monix.eval.Coeval
 import org.scalacheck.ScalacheckShapeless._
-import org.scalacheck.Gen.{const, frequency, resize, sized}
-import coop.rchain.models.rholang.sorter.ordering._
+import org.scalacheck.{Arbitrary, Gen, Shrink}
 
 import scala.collection.immutable.BitSet
-import monix.eval.Coeval
 
 object testImplicits {
   val genBitSet = for { bitMask <- Arbitrary.arbitrary[Array[Long]] } yield
@@ -24,6 +21,10 @@ object testImplicits {
 
   implicit val arbByteArray: Arbitrary[ByteString] =
     Arbitrary(Arbitrary.arbitrary[Array[Byte]].map(ba => ByteString.copyFrom(ba)))
+
+  implicit val arbSortedParMap: Arbitrary[SortedParMap] = Arbitrary(for {
+    ps <- Arbitrary.arbitrary[Seq[(Par, Par)]]
+  } yield SortedParMap(ps))
 
   implicit def coeval[A: Arbitrary]: Arbitrary[Coeval[A]] =
     Arbitrary(Arbitrary.arbitrary[A].map(a => Coeval.delay(a)))
@@ -52,6 +53,7 @@ object testImplicits {
   implicit val MatchCaseArbitrary          = implicitly[Arbitrary[MatchCase]]
   implicit val NewArbitrary                = implicitly[Arbitrary[New]]
   implicit val ParWithRandomArbitrary      = implicitly[Arbitrary[ParWithRandom]]
+  implicit val ListParWithRandomArbitrary  = implicitly[Arbitrary[ListParWithRandom]]
   implicit val PCostArbitrary              = implicitly[Arbitrary[PCost]]
   implicit val ReceiveArbitrary            = implicitly[Arbitrary[Receive]]
   implicit val ReceiveBindArbitrary        = implicitly[Arbitrary[ReceiveBind]]
@@ -85,6 +87,7 @@ object testImplicits {
   implicit val MatchCaseShrink          = implicitly[Shrink[MatchCase]]
   implicit val NewShrink                = implicitly[Shrink[New]]
   implicit val ParWithRandomShrink      = implicitly[Shrink[ParWithRandom]]
+  implicit val ListParWithRandomShrink  = implicitly[Shrink[ListParWithRandom]]
   implicit val PCostShrink              = implicitly[Shrink[PCost]]
   implicit val ReceiveShrink            = implicitly[Shrink[Receive]]
   implicit val ReceiveBindShrink        = implicitly[Shrink[ReceiveBind]]
@@ -94,7 +97,6 @@ object testImplicits {
   implicit val VarRefShrink             = implicitly[Shrink[VarRef]]
   implicit val ParSetShrink             = implicitly[Shrink[ParSet]]
   implicit val ParMapShrink             = implicitly[Shrink[ParMap]]
-
 
   implicit def alwaysEqualArbitrary[A: Arbitrary]: Arbitrary[AlwaysEqual[A]] =
     Arbitrary(Arbitrary.arbitrary[A].map(AlwaysEqual(_)))
