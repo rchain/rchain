@@ -314,7 +314,7 @@ class ValidateTest
           parents.map(_.blockHash),
           creator = validators(validator),
           bonds = bonds,
-          deploys = Seq(ProtoUtil.basicProcessedDeploy(0)),
+          deploys = Seq(ProtoUtil.basicProcessedDeploy[Id](0)),
           justifications = latestMessages(justifications)
         )
 
@@ -470,7 +470,7 @@ class ValidateTest
           parents.map(_.blockHash),
           creator = validators(validator),
           bonds = bonds,
-          deploys = Seq(ProtoUtil.basicProcessedDeploy(0)),
+          deploys = Seq(ProtoUtil.basicProcessedDeploy[Id](0)),
           justifications = latestMessages(justifications)
         )
 

@@ -26,6 +26,7 @@ service DeployService {
   rpc showBlocks(BlocksQuery) returns (stream BlockInfoWithoutTuplespace) {}
   rpc listenForDataAtName(DataAtNameQuery) returns (ListeningNameDataResponse) {}
   rpc listenForContinuationAtName(ContinuationAtNameQuery) returns (ListeningNameContinuationResponse) {}
+  rpc findBlockWithDeploy(FindDeployInBlockQuery) returns (BlockQueryResponse) {}
 }
 
 message DeployData {
@@ -46,6 +47,11 @@ message BlockRequest {
   //from other message types with similar serializations.
   string base16Hash = 1;
   bytes  hash       = 2;
+}
+
+message FindDeployInBlockQuery {
+  bytes user = 1;
+  int64 timestamp = 2;
 }
 
 message BlockQuery {
