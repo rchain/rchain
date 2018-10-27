@@ -45,21 +45,19 @@ class DeployParamsSpec extends fixture.FlatSpec with Matchers {
     implicit val emptyEnv = Env[Par]()
     val ackChannel: Par   = GPrivate(ByteString.copyFrom(rand.next()))
     val empty: Par        = GByteArray(ByteString.copyFrom(new Array[Byte](32)))
-
-    val send             = Send(Runtime.FixedChannels.GET_DEPLOY_PARAMS, List(ackChannel))
-    val shortLeashParams = runtime.shortLeashParams
+    val phloRate: Par     = GInt(98765)
+    val timestamp: Par    = GInt(1234567890)
+    val send              = Send(Runtime.FixedChannels.GET_DEPLOY_PARAMS, List(ackChannel))
+    val shortLeashParams  = runtime.shortLeashParams
     val task = for {
-      _ <- shortLeashParams.codeHash.set(empty)
-      _ <- shortLeashParams.phloRate.set(GInt(98765))
-      _ <- shortLeashParams.userId.set(empty)
-      _ <- shortLeashParams.timestamp.set(GInt(1234567890))
+      _ <- shortLeashParams.setParams(empty, phloRate, empty, timestamp)
       _ <- runtime.reducer.eval(send)
     } yield ()
     Await.result(task.runAsync, 3.seconds)
     assertStoreContains(
       runtime.space.store,
       ackChannel,
-      ListParWithRandom(List(empty, GInt(98765), empty, GInt(1234567890)), rand)
+      ListParWithRandom(List(empty, phloRate, empty, timestamp), rand)
     )
   }
 }
