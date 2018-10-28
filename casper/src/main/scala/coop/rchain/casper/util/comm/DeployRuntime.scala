@@ -86,13 +86,13 @@ object DeployRuntime {
     }
 
   //Simulates user requests by randomly deploying things to Casper.
-  def deployDemoProgram[F[_]: Monad: ErrorHandler: Capture: DeployService]: F[Unit] =
+  def deployDemoProgram[F[_]: Monad: Time: ErrorHandler: Capture: DeployService]: F[Unit] =
     gracefulExit(MonadOps.forever(singleDeploy[F]))
 
-  private def singleDeploy[F[_]: Monad: Capture: DeployService]: F[Unit] =
+  private def singleDeploy[F[_]: Monad: Time: Capture: DeployService]: F[Unit] =
     for {
       id <- Capture[F].capture { scala.util.Random.nextInt(100) }
-      d  = ProtoUtil.basicDeployData(id)
+      d  <- ProtoUtil.basicDeployData[F](id)
       _ <- Capture[F].capture {
             println(s"Sending the following to Casper: ${d.term}")
           }
