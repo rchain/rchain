@@ -6,6 +6,7 @@ import coop.rchain.comm.PeerNode
 
 case class RPConf(
     local: PeerNode,
+    bootstrap: Option[PeerNode],
     defaultTimeout: FiniteDuration,
     clearConnections: ClearConnetionsConf
 )
