@@ -165,7 +165,7 @@ object Validate {
       Log[F].warn(
         ignore(
           b,
-          s"received block version ${blockVersion.toString} is the expected version ${version.toString}."
+          s"received block version $blockVersion is the expected version $version."
         )
       ) *> false.pure[F]
     }
