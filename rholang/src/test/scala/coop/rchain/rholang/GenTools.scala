@@ -1,16 +1,15 @@
 package coop.rchain.rholang
+import cats.data.NonEmptyList
 import org.scalacheck.Gen
 
 object GenTools {
-  val identifierGen: Gen[String] = nonemptyString(Gen.alphaChar, 256)
 
-  def nonemptyString(g: Gen[Char], size: Int): Gen[String] = Gen.nonEmptyListOf(g).map(_.mkString)
+  val identifierGen: Gen[String] = nonemptyString(256)
 
-  def oneOf[T](gs: Seq[Gen[T]]): Gen[T] =
-    if (gs.nonEmpty)
-      Gen.choose(0, gs.size - 1).flatMap(gs(_))
-    else
-      throw new IllegalArgumentException("oneOf called on empty generator collection")
+  def nonemptyString(size: Int): Gen[String] = Gen.nonEmptyListOf(Gen.alphaChar).map(_.mkString)
+
+  def oneOf[T](gs: NonEmptyList[Gen[T]]): Gen[T] =
+    Gen.choose(0, gs.size - 1).flatMap(gs.toList(_))
 
   def nonemptySubSeq[T](items: Seq[T]): Gen[Seq[T]] =
     for {
@@ -23,4 +22,5 @@ object GenTools {
       length <- Gen.choose(1, maxLength)
       output <- Gen.listOfN(length, gen)
     } yield output
+
 }

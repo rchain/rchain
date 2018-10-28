@@ -30,7 +30,6 @@ class ProcGenTest extends FlatSpec with PropertyChecks with Matchers {
         .shrink(original.value)
         .headOption
         .map(shrinked => Interpreter.buildPar(shrinked).apply)
-        .map(Function.const(true))
         .getOrElse(true)
 
     }
@@ -43,8 +42,7 @@ class ProcGenTest extends FlatSpec with PropertyChecks with Matchers {
       ProcGen.procShrinker
         .shrink(original.value)
         .headOption
-        .map(shrinked => length(original.value) >= length(shrinked))
-        .getOrElse(true)
+        .forall(shrinked => length(original.value) >= length(shrinked))
     }
   }
 }

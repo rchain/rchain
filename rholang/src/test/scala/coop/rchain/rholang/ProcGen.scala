@@ -1,5 +1,6 @@
 package coop.rchain.rholang
 import cats.Invariant
+import cats.data.NonEmptyList
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn._
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.{Arbitrary, Gen, Shrink}
@@ -35,23 +36,14 @@ object tools {
   val uriGen: Gen[String] =
     for {
       componentCount <- Gen.choose(1, 10)
-      components     <- Gen.listOfN(componentCount, nonemptyString(Gen.alphaChar, 10))
+      components     <- Gen.listOfN(componentCount, nonemptyString(10))
     } yield uriQuotes(mkUri(components))
 
-  def extractNames(seqNameDecl: Seq[NameDecl]): Set[String] = {
-    var names = Set.empty[String]
-    seqNameDecl.foreach(
-      name =>
-        name.accept(
-          new NameDecl.Visitor[Unit, Unit] {
-            override def visit(p: NameDeclSimpl, arg: Unit): Unit = names = names + p.var_
-            override def visit(p: NameDeclUrn, arg: Unit): Unit   = names = names + p.var_
-          },
-          ()
-        )
-    )
-    names
-  }
+  def extractNames(seqNameDecl: Seq[NameDecl]): Set[String] =
+    seqNameDecl.map {
+      case simple: NameDeclSimpl => simple.var_
+      case urn: NameDeclUrn      => urn.var_
+    }.toSet
 
   def extractFreeVariables(localNames: Set[String], p: Proc): Set[String] =
     p match {
@@ -154,30 +146,30 @@ object ProcGen {
     } yield new PNew(seqToJavaCollection[ListNameDecl, NameDecl](seqNameDecl), proc)
   }
 
-  private def procGen(procGens: Seq[State => Gen[Proc]], state: State): Gen[Proc] =
+  private def procGen(procGens: NonEmptyList[State => Gen[Proc]], state: State): Gen[Proc] =
     if (state.height > 0) {
       val newState = state.decrementHeight
       oneOf(procGens.map(_.apply(newState)))
     } else
       pnilGen
 
-  private val processContextProcs: Seq[State => Gen[Proc]] =
-    Seq(pgroundGen, pparGen, psendGen, pnewGen, pevalGen)
+  private val processContextProcs: NonEmptyList[State => Gen[Proc]] =
+    NonEmptyList.of(pgroundGen, pparGen, psendGen, pnewGen, pevalGen)
 
   def topLevelGen(height: Int): Gen[Proc] =
     procGen(processContextProcs, State(height))
 
   private val uriShrinker: Shrink[String] = Shrink { x: String =>
-    {
-      val components = x.split(":")
+  {
+    val components = x.split(":")
 
-      for {
-        shrinkedComponentSeq <- shrinkContainer[Seq, String]
-                                 .shrink(components)
-                                 .takeWhile(_.nonEmpty)
-        shrinkedComponents <- shrinkedComponentSeq.map(c => shrinkString.shrink(c))
-      } yield mkUri(shrinkedComponents)
-    }
+    for {
+      shrinkedComponentSeq <- shrinkContainer[Seq, String]
+        .shrink(components)
+        .takeWhile(_.nonEmpty)
+      shrinkedComponents <- shrinkedComponentSeq.map(c => shrinkString.shrink(c))
+    } yield mkUri(shrinkedComponents)
+  }
   }
 
   private val invariantFunctorShrink = new Invariant[Shrink] {
