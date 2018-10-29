@@ -19,6 +19,7 @@ import monix.execution.Scheduler
 import coop.rchain.shared.{Log, LogSource}
 
 import scala.collection.immutable
+import scala.concurrent.duration._
 
 object InterpreterUtil {
 
@@ -69,7 +70,9 @@ object InterpreterUtil {
       case Left(ex) =>
         Left(BlockException(ex)).rightCast[Option[StateHash]].pure[F]
       case Right(parentStateHash) =>
-        runtimeManager.replayComputeState(parentStateHash, internalDeploys, time) match {
+        runtimeManager
+          .replayComputeState(parentStateHash, internalDeploys, time)
+          .runSyncUnsafe(5.seconds) match {
           case Left((Some(deploy), status)) =>
             status match {
               case InternalErrors(exs) =>
@@ -129,7 +132,7 @@ object InterpreterUtil {
       possiblePreStateHash match {
         case Right(preStateHash) =>
           val (postStateHash, processedDeploys) =
-            runtimeManager.computeState(preStateHash, deploys, time)
+            runtimeManager.computeState(preStateHash, deploys, time).runSyncUnsafe(15.seconds)
           Right(postStateHash, processedDeploys)
         case Left(err) =>
           Left(err)
@@ -176,7 +179,9 @@ object InterpreterUtil {
           blocks      = maybeBlocks.flatten
           deploys     = blocks.flatMap(_.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal))
         } yield
-          runtimeManager.replayComputeState(initStateHash, deploys, time) match {
+          runtimeManager
+            .replayComputeState(initStateHash, deploys, time)
+            .runSyncUnsafe(15.seconds) match {
             case result @ Right(hash) => result.leftCast[Throwable]
             case Left((_, status)) =>
               val parentHashes = parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))

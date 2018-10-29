@@ -53,29 +53,25 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       hash: StateHash,
       terms: Seq[InternalProcessedDeploy],
       time: Option[Long] = None
-  )(
-      implicit scheduler: Scheduler
-  ): Either[(Option[Deploy], Failed), StateHash] = {
-    val task = for {
+  ): Task[Either[(Option[Deploy], Failed), StateHash]] =
+    for {
       runtime <- Task.delay(runtimeContainer.take())
       _       <- setTimestamp(time, runtime)
       result  <- replayEval(terms, runtime, hash)
       _       <- Task.delay(runtimeContainer.put(runtime))
     } yield result
-    task.unsafeRunSync
-  }
 
-  def computeState(hash: StateHash, terms: Seq[Deploy], time: Option[Long] = None)(
-      implicit scheduler: Scheduler
-  ): (StateHash, Seq[InternalProcessedDeploy]) = {
-    val task = for {
+  def computeState(
+      hash: StateHash,
+      terms: Seq[Deploy],
+      time: Option[Long] = None
+  ): Task[(StateHash, Seq[InternalProcessedDeploy])] =
+    for {
       runtime <- Task.delay(runtimeContainer.take())
       _       <- setTimestamp(time, runtime)
       result  <- newEval(terms, runtime, hash)
       _       <- Task.delay(runtimeContainer.put(runtime))
     } yield result
-    task.unsafeRunSync
-  }
 
   private def setTimestamp(time: Option[Long], runtime: Runtime): Task[Unit] =
     time match {

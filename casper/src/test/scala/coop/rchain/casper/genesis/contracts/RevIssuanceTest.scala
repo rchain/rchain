@@ -20,6 +20,7 @@ import java.nio.file.Files
 
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
+import scala.concurrent.duration._
 
 class RevIssuanceTest extends FlatSpec with Matchers {
   "Rev" should "be issued and accessible based on inputs from Ethereum" in {
@@ -62,9 +63,11 @@ class RevIssuanceTest extends FlatSpec with Matchers {
       pubKey,
       secKey
     )(runtimeManager)
-    val transferDeploy      = ProtoUtil.deployDataToDeploy(transferDeployData)
-    val (postGenHash, _)    = runtimeManager.computeState(emptyHash, genesisDeploys)
-    val (postUnlockHash, _) = runtimeManager.computeState(postGenHash, unlockDeploy :: Nil)
+    val transferDeploy = ProtoUtil.deployDataToDeploy(transferDeployData)
+    val (postGenHash, _) =
+      runtimeManager.computeState(emptyHash, genesisDeploys).runSyncUnsafe(10.seconds)
+    val (postUnlockHash, _) =
+      runtimeManager.computeState(postGenHash, unlockDeploy :: Nil).runSyncUnsafe(10.seconds)
     val unlockResult =
       runtimeManager.getData(
         postUnlockHash,
@@ -72,7 +75,8 @@ class RevIssuanceTest extends FlatSpec with Matchers {
       )
     assert(unlockResult.head.exprs.head.getETupleBody.ps.head.exprs.head.getGBool) //assert unlock success
 
-    val (postTransferHash, _) = runtimeManager.computeState(postUnlockHash, transferDeploy :: Nil)
+    val (postTransferHash, _) =
+      runtimeManager.computeState(postUnlockHash, transferDeploy :: Nil).runSyncUnsafe(10.seconds)
     val transferSuccess = runtimeManager.getData(
       postTransferHash,
       Par().copy(exprs = Seq(Expr(GString(transferStatusOut))))
