@@ -10,12 +10,12 @@ object errors {
   }
 
   final case class CheckpointsDoNotStartFromZero(sortedCheckpoints: List[Checkpoint])
-    extends BlockDagStorageError(
-      s"Checkpoints do not start from block number 0: ${sortedCheckpoints.map(_.path.getFileName).mkString(",")}"
-    )
+      extends BlockDagStorageError(
+        s"Checkpoints do not start from block number 0: ${sortedCheckpoints.map(_.path.getFileName).mkString(",")}"
+      )
 
   final case class CheckpointsAreNotConsecutive(sortedCheckpoints: List[Checkpoint])
-    extends BlockDagStorageError(
-      s"Checkpoints are not consecutive: ${sortedCheckpoints.map(_.path.getFileName).mkString(",")}"
-    )
+      extends BlockDagStorageError(
+        s"Checkpoints are not consecutive: ${sortedCheckpoints.map(_.path.getFileName).mkString(",")}"
+      )
 }

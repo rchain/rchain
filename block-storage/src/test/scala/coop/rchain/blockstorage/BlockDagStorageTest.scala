@@ -122,17 +122,21 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   }
 
   type LookupResult =
-    (List[
-       (Option[BlockMetadata],
-        Option[BlockHash],
-        Option[BlockMetadata],
-        Option[Set[BlockHash]],
-        Boolean)
-     ],
-     Map[Validator, BlockHash],
-     Map[Validator, BlockMetadata],
-     Vector[Vector[BlockHash]],
-     Vector[Vector[BlockHash]])
+    (
+        List[
+          (
+              Option[BlockMetadata],
+              Option[BlockHash],
+              Option[BlockMetadata],
+              Option[Set[BlockHash]],
+              Boolean
+          )
+        ],
+        Map[Validator, BlockHash],
+        Map[Validator, BlockMetadata],
+        Vector[Vector[BlockHash]],
+        Vector[Vector[BlockHash]]
+    )
 
   private def lookupElements(
       blockElements: List[BlockMessage],
@@ -324,8 +328,10 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
         _            <- blockElements.traverse_(b => blockStore.put(b.blockHash, b) *> firstStorage.insert(b))
         _            <- firstStorage.close()
         _ <- Sync[Task].delay {
-              Files.move(defaultBlockMetadataLog(dagDataDir),
-                         defaultCheckpointsDir(dagDataDir).resolve("0-1"))
+              Files.move(
+                defaultBlockMetadataLog(dagDataDir),
+                defaultCheckpointsDir(dagDataDir).resolve("0-1")
+              )
               Files.delete(defaultBlockMetadataCrc(dagDataDir))
             }
         secondStorage <- createAtDefaultLocation(dagDataDir)

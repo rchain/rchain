@@ -131,7 +131,8 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
                          startingOffset = startBlockNumber - startingCheckpointDagInfo.sortOffset
                          _              = assert(startingOffset.isValidInt)
                          topoSortPrefix = startingCheckpointDagInfo.topoSort.drop(
-                           startingOffset.toInt)
+                           startingOffset.toInt
+                         )
                          topoSortMiddle = loadedTailCheckpoints
                            .sortBy(_.sortOffset)
                            .flatMap(_.topoSort)
@@ -246,12 +247,16 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
       latestMessagesLogOutputStream <- latestMessagesLogOutputStreamRef.get
       _                             = latestMessagesLogOutputStream.close()
       tmpSquashedData <- Sync[F].delay {
-                          Files.createTempFile("rchain-block-dag-file-storage-latest-messages-",
-                                               "-squashed-data")
+                          Files.createTempFile(
+                            "rchain-block-dag-file-storage-latest-messages-",
+                            "-squashed-data"
+                          )
                         }
       tmpSquashedCrc <- Sync[F].delay {
-                         Files.createTempFile("rchain-block-dag-file-storage-latest-messages-",
-                                              "-squashed-crc")
+                         Files.createTempFile(
+                           "rchain-block-dag-file-storage-latest-messages-",
+                           "-squashed-crc"
+                         )
                        }
       dataByteBuffer = ByteBuffer.allocate(64 * latestMessages.size)
       _ <- latestMessages.toList.traverse_ {
@@ -274,9 +279,11 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
             )
           }
       _ <- Sync[F].delay {
-            Files.move(tmpSquashedCrc,
-                       latestMessagesCrcFilePath,
-                       StandardCopyOption.REPLACE_EXISTING)
+            Files.move(
+              tmpSquashedCrc,
+              latestMessagesCrcFilePath,
+              StandardCopyOption.REPLACE_EXISTING
+            )
           }
       _ <- latestMessagesLogOutputStreamRef.set(
             new FileOutputStream(latestMessagesDataFilePath.toFile, true)
@@ -595,7 +602,8 @@ object BlockDagFileStorage {
             val byteString                    = dataLookupList.last._2.toByteString
             val lastDataLookupEntrySize: Long = 4L + byteString.size()
             dataLookupRandomAccessFile.setLength(
-              dataLookupRandomAccessFile.length() - lastDataLookupEntrySize)
+              dataLookupRandomAccessFile.length() - lastDataLookupEntrySize
+            )
             (dataLookupList.init, withoutLastCalculatedCrc)
           } else {
             // TODO: Restore data lookup from block storage
@@ -675,7 +683,8 @@ object BlockDagFileStorage {
       latestMessagesResult <- latestMessagesFileResource.use { latestMessagesFile =>
                                for {
                                  latestMessagesReadResult <- readLatestMessagesData(
-                                                              latestMessagesFile)
+                                                              latestMessagesFile
+                                                            )
                                  (latestMessagesList, logSize) = latestMessagesReadResult
                                  result <- validateLatestMessagesData[F](
                                             latestMessagesFile,
@@ -694,7 +703,8 @@ object BlockDagFileStorage {
                                             new FileOutputStream(
                                               config.latestMessagesLogPath.toFile,
                                               true
-                                            ))
+                                            )
+                                          )
       readDataLookupCrc <- readCrc[F](config.blockMetadataCrcPath)
       dataLookupFileResource = Resource.fromAutoCloseable(
         Sync[F].delay { new RandomAccessFile(config.blockMetadataLogPath.toFile, "rw") }
@@ -716,7 +726,8 @@ object BlockDagFileStorage {
                                         new FileOutputStream(
                                           config.blockMetadataLogPath.toFile,
                                           true
-                                        ))
+                                        )
+                                      )
       dataLookupCrcRef  <- Ref.of[F, Crc32[F]](calculatedDataLookupCrc)
       childMap          = extractChildMap(dataLookupList)
       topoSort          = extractTopoSort(dataLookupList)
