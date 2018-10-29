@@ -31,28 +31,32 @@ trait IReplaySpace[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, E, A, R, K] {
     *  @param startRoot A [Blake2b256Hash] representing the intial state
     *  @param log A [Log] with permitted operations
     */
-  def rig(startRoot: Blake2b256Hash, log: trace.Log): Unit = {
-    // create a set of the "new" IOEvents
-    val newStuff: Set[Event] = log.filter {
-      case Produce(_, _) => true
-      case Consume(_, _) => true
-      case _             => false
-    }.toSet
-    // create and prepare the ReplayData table
-    replayData.clear()
-    log.foreach {
-      case comm @ COMM(consume, produces) =>
-        (consume +: produces).foreach { ioEvent =>
-          if (newStuff(ioEvent)) {
-            replayData.addBinding(ioEvent, comm)
-          }
+  def rig(startRoot: Blake2b256Hash, log: trace.Log)(implicit syncF: Sync[F]): F[Unit] =
+    syncF
+      .delay {
+        // create a set of the "new" IOEvents
+        val newStuff: Set[Event] = log.filter {
+          case Produce(_, _) => true
+          case Consume(_, _) => true
+          case _             => false
+        }.toSet
+        // create and prepare the ReplayData table
+        replayData.clear()
+        log.foreach {
+          case comm @ COMM(consume, produces) =>
+            (consume +: produces).foreach { ioEvent =>
+              if (newStuff(ioEvent)) {
+                replayData.addBinding(ioEvent, comm)
+              }
+            }
+          case _ =>
+            ()
         }
-      case _ =>
-        ()
-    }
-    // reset to the starting checkpoint
-    reset(startRoot)
-  }
+      }
+      .flatMap { _ =>
+        // reset to the starting checkpoint
+        reset(startRoot)
+      }
 }
 
 object ReplayRSpace {

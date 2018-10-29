@@ -4,10 +4,12 @@ import java.nio.file.{Files, Path}
 
 import cats.Id
 import cats.effect.Sync
+import cats.effect.implicits._
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import cats.mtl.FunctorTell
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
@@ -34,8 +36,8 @@ import scala.collection.immutable
 class Runtime private (
     val reducer: ChargingReducer[Task],
     val replayReducer: ChargingReducer[Task],
-    val space: RhoISpace,
-    val replaySpace: RhoReplayISpace,
+    val space: RhoISpace[Task],
+    val replaySpace: RhoReplayISpace[Task],
     val errorLog: ErrorLog,
     val context: RhoContext,
     val shortLeashParams: Runtime.ShortLeashParams[Task],
@@ -43,11 +45,15 @@ class Runtime private (
 ) {
   def readAndClearErrorVector(): Vector[Throwable] = errorLog.readAndClearErrorVector()
   def close(): Unit = {
-    space.close()
-    replaySpace.close()
-    context.close()
+    import monix.execution.Scheduler.Implicits.global
+    (for {
+      _ <- space.close()
+      _ <- replaySpace.close()
+      _ = context.close()
+    } yield ()).unsafeRunSync
   }
-  def injectEmptyRegistryRoot[F[_]](implicit F: Sync[F]): F[Unit] = {
+
+  def injectEmptyRegistryRoot: Task[Unit] = Task.defer {
     // This random value stays dead in the tuplespace, so we can have some fun.
     // This is from Jeremy Bentham's "Defence of Usury"
     val rand = Blake2b512Random(
@@ -57,33 +63,29 @@ class Runtime private (
     )
     implicit val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
     for {
-      spaceResult <- F.delay(
-                      space.produce(
-                        Registry.registryRoot,
-                        ListParWithRandom(Seq(Registry.emptyMap), rand),
-                        false
-                      )
+      spaceResult <- space.produce(
+                      Registry.registryRoot,
+                      ListParWithRandom(Seq(Registry.emptyMap), rand),
+                      false
                     )
-      replayResult <- F.delay(
-                       replaySpace.produce(
-                         Registry.registryRoot,
-                         ListParWithRandom(Seq(Registry.emptyMap), rand),
-                         false
-                       )
+      replayResult <- replaySpace.produce(
+                       Registry.registryRoot,
+                       ListParWithRandom(Seq(Registry.emptyMap), rand),
+                       false
                      )
       _ <- spaceResult match {
             case Right(None) =>
               replayResult match {
-                case Right(None) => F.unit
+                case Right(None) => Task.unit
                 case Right(Some(_)) =>
-                  F.raiseError(
+                  Task.raiseError(
                     new SetupError("Registry insertion in replay fired continuation.")
                   )
-                case Left(err) => F.raiseError(err)
+                case Left(err) => Task.raiseError(err)
               }
             case Right(Some(_)) =>
-              F.raiseError(new SetupError("Registry insertion fired continuation."))
-            case Left(err) => F.raiseError(err)
+              Task.raiseError(new SetupError("Registry insertion fired continuation."))
+            case Left(err) => Task.raiseError(err)
           }
     } yield ()
   }
@@ -92,9 +94,9 @@ class Runtime private (
 
 object Runtime {
 
-  type RhoISpace          = TCPARK[Id, ISpace]
-  type RhoPureSpace[F[_]] = TCPARK[F, PureRSpace]
-  type RhoReplayISpace    = TCPARK[Id, IReplaySpace]
+  type RhoISpace[F[_]]       = TCPARK[F, ISpace]
+  type RhoPureSpace[F[_]]    = TCPARK[F, PureRSpace]
+  type RhoReplayISpace[F[_]] = TCPARK[F, IReplaySpace]
 
   type RhoIStore  = CPAK[IStore]
   type RhoContext = CPAK[Context]
@@ -231,54 +233,58 @@ object Runtime {
   private val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
 
   private def introduceSystemProcesses(
-      space: RhoISpace,
-      replaySpace: RhoISpace,
-      processes: immutable.Seq[(Name, Arity, Remainder, BodyRef)]
-  ): Seq[Option[(TaggedContinuation, Seq[ListParWithRandomAndPhlos])]] =
-    processes.flatMap {
-      case (name, arity, remainder, ref) =>
-        val channels = List(name)
-        val patterns = List(
-          BindPattern(
-            (0 until arity).map[Par, Seq[Par]](i => EVar(FreeVar(i))),
-            remainder,
-            freeCount = arity
-          )
-        )
-        val continuation = TaggedContinuation(ScalaBodyRef(ref))
-        Seq(
-          space.install(channels, patterns, continuation)(MATCH_UNLIMITED_PHLOS),
-          replaySpace.install(channels, patterns, continuation)(MATCH_UNLIMITED_PHLOS)
-        )
-    }
+      space: RhoISpace[Task],
+      replaySpace: RhoISpace[Task],
+      processes: Seq[(Name, Arity, Remainder, BodyRef)]
+  ): Task[Seq[Option[(TaggedContinuation, Seq[ListParWithRandomAndPhlos])]]] =
+    Task.sequence(
+      processes
+        .flatMap {
+          case (name, arity, remainder, ref) =>
+            val channels = List(name)
+            val patterns = List(
+              BindPattern(
+                (0 until arity).map[Par, Seq[Par]](i => EVar(FreeVar(i))),
+                remainder,
+                freeCount = arity
+              )
+            )
+            val continuation = TaggedContinuation(ScalaBodyRef(ref))
+            Seq(
+              space.install(channels, patterns, continuation)(MATCH_UNLIMITED_PHLOS),
+              replaySpace.install(channels, patterns, continuation)(MATCH_UNLIMITED_PHLOS)
+            )
+        }
+    )
 
   def setupRSpace(
       dataDir: Path,
       mapSize: Long,
       storeType: StoreType
-  ): (RhoContext, RhoISpace, RhoReplayISpace) = {
-    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
-    def createSpace(context: RhoContext): (RhoContext, RhoISpace, RhoReplayISpace) = {
-      val space: RhoISpace = RSpace.create[
-        Id,
-        Par,
-        BindPattern,
-        OutOfPhlogistonsError.type,
-        ListParWithRandom,
-        ListParWithRandomAndPhlos,
-        TaggedContinuation
-      ](context, Branch.MASTER)
-      val replaySpace: RhoReplayISpace = ReplayRSpace.create[
-        Id,
-        Par,
-        BindPattern,
-        OutOfPhlogistonsError.type,
-        ListParWithRandom,
-        ListParWithRandomAndPhlos,
-        TaggedContinuation
-      ](context, Branch.REPLAY)
-      (context, space, replaySpace)
-    }
+  ): Task[(RhoContext, RhoISpace[Task], RhoReplayISpace[Task])] = {
+    def createSpace(
+        context: RhoContext
+    ): Task[(RhoContext, RhoISpace[Task], RhoReplayISpace[Task])] =
+      for {
+        space <- RSpace.create[
+                  Task,
+                  Par,
+                  BindPattern,
+                  OutOfPhlogistonsError.type,
+                  ListParWithRandom,
+                  ListParWithRandomAndPhlos,
+                  TaggedContinuation
+                ](context, Branch.MASTER)
+        replaySpace <- ReplayRSpace.create[
+                        Task,
+                        Par,
+                        BindPattern,
+                        OutOfPhlogistonsError.type,
+                        ListParWithRandom,
+                        ListParWithRandomAndPhlos,
+                        TaggedContinuation
+                      ](context, Branch.REPLAY)
+      } yield ((context, space, replaySpace))
     storeType match {
       case InMem =>
         createSpace(Context.createInMemory())
@@ -297,13 +303,11 @@ object Runtime {
 
   // TODO: remove default store type
   def create(dataDir: Path, mapSize: Long, storeType: StoreType = LMDB): Runtime = {
-    val (context, space, replaySpace) = setupRSpace(dataDir, mapSize, storeType)
-
     val errorLog                                  = new ErrorLog()
     implicit val ft: FunctorTell[Task, Throwable] = errorLog
 
     def dispatchTableCreator(
-        space: RhoISpace,
+        space: RhoISpace[Task],
         dispatcher: RhoDispatch[Task],
         registry: Registry[Task],
         shortLeashParams: ShortLeashParams[Task],
@@ -355,24 +359,6 @@ object Runtime {
     val shortLeashParams = ShortLeashParams.unsafe[Task]()
     val blockTime        = BlockTime.unsafe[Task]()
 
-    lazy val dispatchTable: RhoDispatchMap =
-      dispatchTableCreator(space, dispatcher, registry, shortLeashParams, blockTime)
-
-    lazy val replayDispatchTable: RhoDispatchMap =
-      dispatchTableCreator(
-        replaySpace,
-        replayDispatcher,
-        replayRegistry,
-        shortLeashParams,
-        blockTime
-      )
-
-    lazy val (dispatcher, reducer, registry) =
-      RholangAndScalaDispatcher.create(space, dispatchTable, urnMap)
-
-    lazy val (replayDispatcher, replayReducer, replayRegistry) =
-      RholangAndScalaDispatcher.create(replaySpace, replayDispatchTable, urnMap)
-
     val procDefs: immutable.Seq[(Name, Arity, Remainder, BodyRef)] = {
       import BodyRefs._
       List(
@@ -393,20 +379,43 @@ object Runtime {
       )
     }
 
-    val res: Seq[Option[(TaggedContinuation, Seq[ListParWithRandomAndPhlos])]] =
-      introduceSystemProcesses(space, replaySpace, procDefs)
+    import monix.execution.Scheduler.Implicits.global
+    (for {
+      setup                         <- setupRSpace(dataDir, mapSize, storeType)
+      (context, space, replaySpace) = setup
+      (reducer, replayReducer) = {
+        lazy val replayDispatchTable: RhoDispatchMap =
+          dispatchTableCreator(
+            replaySpace,
+            replayDispatcher,
+            replayRegistry,
+            shortLeashParams,
+            blockTime
+          )
 
-    assert(res.forall(_.isEmpty))
+        lazy val dispatchTable: RhoDispatchMap =
+          dispatchTableCreator(space, dispatcher, registry, shortLeashParams, blockTime)
 
-    new Runtime(
-      reducer,
-      replayReducer,
-      space,
-      replaySpace,
-      errorLog,
-      context,
-      shortLeashParams,
-      blockTime
-    )
+        lazy val (dispatcher, reducer, registry) =
+          RholangAndScalaDispatcher.create(space, dispatchTable, urnMap)
+
+        lazy val (replayDispatcher, replayReducer, replayRegistry) =
+          RholangAndScalaDispatcher.create(replaySpace, replayDispatchTable, urnMap)
+        (reducer, replayReducer)
+      }
+      res <- introduceSystemProcesses(space, replaySpace, procDefs)
+    } yield {
+      assert(res.forall(_.isEmpty))
+      new Runtime(
+        reducer,
+        replayReducer,
+        space,
+        replaySpace,
+        errorLog,
+        context,
+        shortLeashParams,
+        blockTime
+      )
+    }).unsafeRunSync
   }
 }

@@ -52,7 +52,7 @@ object RholangCLI {
     val conf = new Conf(args)
 
     val runtime = Runtime.create(conf.dataDir(), conf.mapSize())
-    Await.result(runtime.injectEmptyRegistryRoot[Task].runAsync, 5.seconds)
+    Await.result(runtime.injectEmptyRegistryRoot.runAsync, 5.seconds)
 
     try {
       if (conf.files.supplied) {

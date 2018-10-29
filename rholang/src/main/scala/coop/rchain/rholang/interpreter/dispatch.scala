@@ -55,7 +55,7 @@ class RholangAndScalaDispatcher[M[_]] private (
 object RholangAndScalaDispatcher {
 
   def create[M[_], F[_]](
-      tuplespace: RhoISpace,
+      tuplespace: RhoISpace[M],
       dispatchTable: => Map[Long, Function1[Seq[ListParWithRandomAndPhlos], M[Unit]]],
       urnMap: Map[String, Par]
   )(

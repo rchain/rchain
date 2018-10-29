@@ -12,7 +12,7 @@ import coop.rchain.rholang.interpreter.Runtime.RhoDispatchMap
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccounting}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.ISpace.IdISpace
+import coop.rchain.rspace.ISpace
 import coop.rchain.rspace.internal.{Datum, Row}
 import coop.rchain.rspace.pure.PureRSpace
 import monix.eval.Task
@@ -48,7 +48,8 @@ trait RegistryTester extends PersistentStoreTester {
   def withRegistryAndTestSpace[R](
       f: (
           ChargingReducer[Task],
-          IdISpace[
+          ISpace[
+            Task,
             Par,
             BindPattern,
             OutOfPhlogistonsError.type,
