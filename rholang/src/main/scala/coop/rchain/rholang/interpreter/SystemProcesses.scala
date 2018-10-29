@@ -27,12 +27,11 @@ object SystemProcesses {
       Task.delay(Console.println(prettyPrinter.buildString(arg)))
   }
 
-  private implicit class ProduceOps(
-      res:
-        Task[Either[OutOfPhlogistonsError.type, Option[
-          (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandomAndPhlos]])
-        ]]]
-  ) {
+  private type ContinuationWithMetadata = ContResult[Par, BindPattern, TaggedContinuation]
+  private type ProduceResult = Either[OutOfPhlogistonsError.type, Option[
+    (ContinuationWithMetadata, Seq[Result[ListParWithRandomAndPhlos]])
+  ]]
+  private implicit class ProduceOps(res: Task[ProduceResult]) {
     def foldResult(
         dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
     ): Task[Unit] =
