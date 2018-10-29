@@ -334,11 +334,13 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
       _             <- dataLookupRef.update(_.updated(block.blockHash, blockMetadata))
       _ <- childMapRef.update(
             childMap =>
-              parentHashes(block).foldLeft(childMap) {
-                case (acc, p) =>
-                  val currChildren = acc.getOrElse(p, HashSet.empty[BlockHash])
-                  acc.updated(p, currChildren + block.blockHash)
-            }
+              parentHashes(block)
+                .foldLeft(childMap) {
+                  case (acc, p) =>
+                    val currChildren = acc.getOrElse(p, Set.empty[BlockHash])
+                    acc.updated(p, currChildren + block.blockHash)
+                }
+                .updated(block.blockHash, Set.empty[BlockHash])
           )
       _ <- topoSortRef.update(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
       //Block which contains newly bonded validators will not
@@ -612,7 +614,7 @@ object BlockDagFileStorage {
   private def extractChildMap(
       dataLookup: List[(BlockHash, BlockMetadata)]
   ): Map[BlockHash, Set[BlockHash]] =
-    dataLookup.foldLeft(Map.empty[BlockHash, Set[BlockHash]]) {
+    dataLookup.foldLeft(dataLookup.map(_._1 -> Set.empty[BlockHash]).toMap) {
       case (childMap, (_, blockMetadata)) =>
         blockMetadata.parents.foldLeft(childMap) {
           case (acc, p) =>
