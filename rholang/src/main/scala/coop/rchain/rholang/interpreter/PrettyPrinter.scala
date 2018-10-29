@@ -119,13 +119,20 @@ case class PrettyPrinter(
   private def buildRemainderString(remainder: Option[Var]): Coeval[String] =
     remainder.fold(pure(""))(v => pure("...") |+| buildStringM(v))
 
-  private def buildStringM(v: Var): Coeval[String] =
+  private def buildStringM(v: Var): Coeval[String] = {
+    def isNewVar(level: Int): Boolean =
+      if (newsShiftIndices.contains(boundShift - level - 1)) true else false
+
     v.varInstance match {
-      case FreeVar(level)    => pure(s"$freeId${freeShift + level}")
-      case BoundVar(level)   => pure(s"$boundId${boundShift - level - 1}")
+      case FreeVar(level) => pure(s"$freeId${freeShift + level}")
+      case BoundVar(level) =>
+        (if (isNewVar(level)) pure("*") else pure("")) |+| pure(
+          s"$boundId${boundShift - level - 1}"
+        )
       case Wildcard(_)       => pure("_")
       case VarInstance.Empty => pure("@Nil")
     }
+  }
 
   private def buildChannelStringM(p: Par): Coeval[String] = buildChannelStringM(p, 0)
 
@@ -147,7 +154,7 @@ case class PrettyPrinter(
         buildChannelStringM(s.chan) |+| pure {
           if (s.persistent) "!!("
           else "!("
-        } |+| buildSendSeq(s.data) |+| pure(")")
+        } |+| buildSeq(s.data) |+| pure(")")
 
       case r: Receive =>
         val (totalFree, bindsString) = ((0, pure("")) /: r.binds.zipWithIndex) {
@@ -288,23 +295,6 @@ case class PrettyPrinter(
           else ""
         }
     }
-
-  private def buildSendSeq[T <: GeneratedMessage](s: Seq[T]): Coeval[String] = {
-    def isName(p: GeneratedMessage): Boolean =
-      p match {
-        case Par(_, _, _, List(Expr(EVarBody(EVar(Var(BoundVar(i)))))), _, _, _, _, _, _) =>
-          if (newsShiftIndices.contains(boundShift - i - 1)) true else false
-        case _ => false
-      }
-
-    (pure("") /: s.zipWithIndex) {
-      case (string, (p, i)) =>
-        string |+| pure(if (isName(p)) "*" else "") |+| buildStringM(p) |+| pure {
-          if (i != s.length - 1) ", "
-          else ""
-        }
-    }
-  }
 
   private def buildPattern(patterns: Seq[Par]): Coeval[String] =
     (pure("") /: patterns.zipWithIndex) {
