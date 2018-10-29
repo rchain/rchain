@@ -52,7 +52,7 @@ object EffectsTestInstances {
       defaultTimeout: FiniteDuration = FiniteDuration(1, MILLISECONDS),
       clearConnections: ClearConnetionsConf = ClearConnetionsConf(1, 1)
   ) =
-    new ConstApplicativeAsk[F, RPConf](RPConf(local, None, defaultTimeout, clearConnections))
+    new ConstApplicativeAsk[F, RPConf](RPConf(local, Some(local), defaultTimeout, clearConnections))
 
   class TransportLayerStub[F[_]: Capture: Applicative] extends TransportLayer[F] {
     case class Request(peer: PeerNode, msg: Protocol)
