@@ -10,7 +10,6 @@ import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import coop.rchain.shared.SyncVarOps._
 import kamon._
-import scodec.Codec
 
 import scala.annotation.tailrec
 import scala.collection.immutable.Seq
