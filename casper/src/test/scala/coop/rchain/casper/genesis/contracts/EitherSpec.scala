@@ -9,7 +9,7 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class EitherSpec extends FlatSpec with Matchers {
   val runtime = TestSetUtil.runtime
-  val tests   = TestSetUtil.getTests("./casper/src/test/rholang/EitherTest.rho").toList
+  val tests   = TestSetUtil.getTests("../casper/src/test/rholang/EitherTest.rho").toList
 
   TestSetUtil.runTestsWithDeploys(EitherTest, List(StandardDeploys.either), runtime)
   val tuplespace = StoragePrinter.prettyPrint(runtime.space.store)
