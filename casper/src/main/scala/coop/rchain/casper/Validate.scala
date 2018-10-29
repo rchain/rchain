@@ -157,6 +157,20 @@ object Validate {
       true.pure[F]
     }
 
+  def version[F[_]: Applicative: Log](b: BlockMessage, version: Long): F[Boolean] = {
+    val blockVersion = b.header.get.version
+    if (blockVersion == version) {
+      true.pure[F]
+    } else {
+      Log[F].warn(
+        ignore(
+          b,
+          s"received block version $blockVersion is the expected version $version."
+        )
+      ) *> false.pure[F]
+    }
+  }
+
   /*
    * TODO: Double check ordering of validity checks
    * TODO: Add check for missing fields

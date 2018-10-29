@@ -1,11 +1,10 @@
 package coop.rchain.rspace
 
-import bench.serialization._
 import coop.rchain.models._
-
+import org.scalacheck._
 import org.scalatest._
 import org.scalatest.prop._
-import org.scalacheck._
+
 import scala.reflect.ClassTag
 
 class KryoRoundTripTest extends FlatSpec with PropertyChecks with Matchers {
@@ -18,13 +17,13 @@ class KryoRoundTripTest extends FlatSpec with PropertyChecks with Matchers {
   implicit val listParWithRandomSerialize  = KryoSerializers.serializer(classOf[ListParWithRandom])
   implicit val taggedContinuationSerialize = KryoSerializers.serializer(classOf[TaggedContinuation])
 
-  def roundTrip[A](in: A)(implicit s: Serialize2ByteBuffer[A]): A = {
+  def roundTrip[A](in: A)(implicit s: Serialize2ByteBuffer[A]): Assertion = {
     val meta = s.encode(in)
     val out  = s.decode(meta)
-    out
+    assert(out == in)
   }
 
-  def roundTripSerialization[A: Arbitrary](
+  def roundTripSerialization[A: Arbitrary :Shrink](
       implicit s: Serialize2ByteBuffer[A],
       tag: ClassTag[A]
   ): Unit =
