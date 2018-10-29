@@ -1,17 +1,18 @@
 package coop.rchain.rspace
 
+import cats.Id
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
 import coop.rchain.rspace.util._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import scala.concurrent.Await
 
+import scala.concurrent.Await
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration.Duration
 
 trait ConcurrencyTests
-    extends StorageTestsBase[Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    extends StorageTestsBase[Id, Channel, Pattern, Nothing, Entry, EntriesCaptor]
     with TestImplicitHelpers {
 
   def version: String
@@ -161,13 +162,15 @@ trait ConcurrencyTests
 }
 
 class InMemoryStoreConcurrencyTests
-    extends InMemoryStoreStorageExamplesTestsBase
+    extends InMemoryStoreStorageExamplesTestsBase[Id]
+    with IdTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
     with ConcurrencyTests {
   override def version: String = "InMemory"
 }
 
 class LMDBStoreConcurrencyTestsWithTls
-    extends LMDBStoreStorageExamplesTestBase
+    extends LMDBStoreStorageExamplesTestBase[Id]
+      with IdTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
     with ConcurrencyTests {
   override def version: String = "LMDB with TLS"
 
@@ -175,7 +178,8 @@ class LMDBStoreConcurrencyTestsWithTls
 }
 
 class LMDBStoreConcurrencyTestsNoTls
-    extends LMDBStoreStorageExamplesTestBase
+    extends LMDBStoreStorageExamplesTestBase[Id]
+      with IdTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
     with ConcurrencyTests {
 
   override def version: String = "LMDB NO_TLS"

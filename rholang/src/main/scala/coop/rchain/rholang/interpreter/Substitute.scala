@@ -346,7 +346,7 @@ object Substitute {
 
           case EMapBody(ParMap(spm, connectiveUsed, locallyFree, remainder)) =>
             for {
-              kvps <- spm.sortedMap.traverse {
+              kvps <- spm.sortedMap.toList.traverse {
                        case (p1, p2) =>
                          for {
                            pk1 <- s1(p1)

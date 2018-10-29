@@ -1,17 +1,18 @@
 package coop.rchain.comm.transport
 
-import scala.concurrent.duration.Duration
-import cats._, cats.data._, cats.implicits._, cats.mtl._, cats.effect.Timer
-import coop.rchain.shared._
-import coop.rchain.comm.PeerNode
+import java.util.concurrent.TimeUnit._
+
+import cats.effect.Timer
+import coop.rchain.comm.{CachedConnections, PeerNode, TcpConnTag}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.util.{CertificateHelper, CertificatePrinter}
-import coop.rchain.shared.{Cell, Log}
-import scala.concurrent.duration._
+import coop.rchain.shared.{Log, Time}
 import monix.eval.Task
 import monix.execution.Scheduler
 
-class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] {
+import scala.concurrent.duration.{Duration, FiniteDuration}
+
+class TcpTransportLayerSpec { //extends TransportLayerSpec[Task, TcpTlsEnvironment] {
 
   implicit val log: Log[Task]       = new Log.NOPLog[Task]
   implicit val scheduler: Scheduler = Scheduler.Implicits.global
@@ -40,12 +41,8 @@ class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] 
   def maxMessageSize: Int = 4 * 1024 * 1024
 
   def createTransportLayer(env: TcpTlsEnvironment): Task[TransportLayer[Task]] =
-    Cell.mvarCell(TransportState.empty).map { cell =>
-      new TcpTransportLayer(env.host, env.port, env.cert, env.key, maxMessageSize)(
-        scheduler,
-        cell,
-        log
-      )
+    CachedConnections[Task, TcpConnTag].map { implicit cache =>
+      new TcpTransportLayer(env.port, env.cert, env.key, 4 * 1024 * 1024)
     }
 
   def extract[A](fa: Task[A]): A = fa.runSyncUnsafe(Duration.Inf)

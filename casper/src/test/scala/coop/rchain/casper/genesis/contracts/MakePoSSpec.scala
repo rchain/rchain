@@ -14,14 +14,13 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class MakePoSSpec extends FlatSpec with Matchers {
   val runtime = TestSetUtil.runtime
-  val tests   = TestSetUtil.getTests("./casper/src/test/rholang/MakePoSTest.rho").toList
+  val tests   = TestSetUtil.getTests("../casper/src/test/rholang/MakePoSTest.rho").toList
 
   val deploys = List(
-    //TODO: Replace all compiledSourceDeploy with StandardDeploys when they are ready
-    compiledSourceDeploy(NonNegativeNumber, 1L, accounting.MAX_VALUE),
-    compiledSourceDeploy(MakeMint, 2L, accounting.MAX_VALUE),
+    StandardDeploys.nonNegativeNumber,
+    StandardDeploys.makeMint,
     StandardDeploys.either,
-    compiledSourceDeploy(MakePoS, 3L, accounting.MAX_VALUE)
+    StandardDeploys.makePoS
   )
   TestSetUtil.runTestsWithDeploys(MakePoSTest, deploys, runtime)
   val tuplespace = StoragePrinter.prettyPrint(runtime.space.store)

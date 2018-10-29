@@ -1,14 +1,11 @@
 package coop.rchain.models
 
 import com.google.protobuf.ByteString
-import coop.rchain.models.Expr.ExprInstance
-import org.scalacheck.{Arbitrary, Gen, Shrink}
+import monix.eval.Coeval
 import org.scalacheck.ScalacheckShapeless._
-import org.scalacheck.Gen.{const, frequency, resize, sized}
-import coop.rchain.models.rholang.sorter.ordering._
+import org.scalacheck.{Arbitrary, Gen, Shrink}
 
 import scala.collection.immutable.BitSet
-import monix.eval.Coeval
 
 object testImplicits {
   val genBitSet = for { bitMask <- Arbitrary.arbitrary[Array[Long]] } yield
@@ -24,6 +21,10 @@ object testImplicits {
 
   implicit val arbByteArray: Arbitrary[ByteString] =
     Arbitrary(Arbitrary.arbitrary[Array[Byte]].map(ba => ByteString.copyFrom(ba)))
+
+  implicit val arbSortedParMap: Arbitrary[SortedParMap] = Arbitrary(for {
+    ps <- Arbitrary.arbitrary[Seq[(Par, Par)]]
+  } yield SortedParMap(ps))
 
   implicit def coeval[A: Arbitrary]: Arbitrary[Coeval[A]] =
     Arbitrary(Arbitrary.arbitrary[A].map(a => Coeval.delay(a)))
