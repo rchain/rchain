@@ -1,25 +1,20 @@
 package coop.rchain.casper.genesis.contracts
 
 import cats.Id
-
 import coop.rchain.casper.HashSetCasperTest.createBonds
 import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.protocol.{Deploy, DeployData}
-import coop.rchain.casper.util.{BondingUtil, ProtoUtil}
+import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
-import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
-import coop.rchain.models._
-import coop.rchain.models.Expr.ExprInstance.GString
-import coop.rchain.rholang.interpreter.{accounting, Runtime}
+import coop.rchain.casper.util.{BondingUtil, ProtoUtil}
 import coop.rchain.catscontrib.effect.implicits._
-import coop.rchain.shared.PathOps.RichPath
-import java.nio.file.Files
-
+import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.models.Expr.ExprInstance.GString
+import coop.rchain.models._
+import coop.rchain.rholang.interpreter.accounting
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
+
 import scala.concurrent.duration._
 
 class RevIssuanceTest extends FlatSpec with Matchers {
