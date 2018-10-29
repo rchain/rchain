@@ -69,11 +69,11 @@ def show_blocks(node, blocks_num):
     rx = re.compile(r"blockHash: \"([a-zA-Z0-9]*)\"")
 
     def go():
-        exit_code, output = node.show_blocks(blocks_num)
+        output = node.show_blocks(blocks_num)
 
         block_infos = ''
         for block_hash in rx.findall(output):
-            exit_code , block_info = node.show_block(block_hash)
+            block_info = node.show_block(block_hash)
             block_infos += block_info
 
         return block_infos

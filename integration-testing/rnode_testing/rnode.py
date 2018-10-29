@@ -91,7 +91,7 @@ class Node:
         return self.call_rnode('show-blocks', f'-d{blocks_num}')
 
     def show_block(self, block_hash):
-        return self.call_rnode('show-block', f'{block_hash}')
+        return self.call_rnode('show-block', block_hash)
 
     def exec_run(self, cmd):
         queue = Queue(1)
