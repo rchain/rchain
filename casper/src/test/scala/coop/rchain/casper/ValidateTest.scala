@@ -314,7 +314,7 @@ class ValidateTest
           parents.map(_.blockHash),
           creator = validators(validator),
           bonds = bonds,
-          deploys = Seq(ProtoUtil.basicProcessedDeploy(0)),
+          deploys = Seq(ProtoUtil.basicProcessedDeploy[Id](0)),
           justifications = latestMessages(justifications)
         )
 
@@ -470,7 +470,7 @@ class ValidateTest
           parents.map(_.blockHash),
           creator = validators(validator),
           bonds = bonds,
-          deploys = Seq(ProtoUtil.basicProcessedDeploy(0)),
+          deploys = Seq(ProtoUtil.basicProcessedDeploy[Id](0)),
           justifications = latestMessages(justifications)
         )
 
@@ -577,5 +577,13 @@ class ValidateTest
     Validate.deployCount[Id](
       genesis.withHeader(genesis.header.get.withDeployCount(100))
     ) should be(Left(InvalidDeployCount))
+  }
+
+  "Block version validation" should "work" in {
+    val (sk, pk) = Ed25519.newKeyPair
+    val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+    val genesis  = ProtoUtil.signBlock(block, BlockDag.empty, pk, sk, "ed25519", "rchain")
+    Validate.version[Id](genesis, -1) should be(false)
+    Validate.version[Id](genesis, 1) should be(true)
   }
 }
