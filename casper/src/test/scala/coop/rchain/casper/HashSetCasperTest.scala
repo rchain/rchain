@@ -23,6 +23,7 @@ import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.{accounting, Runtime}
+import coop.rchain.models.{Expr, Par}
 import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -421,7 +422,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     block3PrimeStatus shouldBe Valid
     nodes.forall(_.logEff.warns.isEmpty) shouldBe true
 
-    val rankedValidatorQuery = mkTerm(
+    val rankedValidatorQuery = ProtoUtil.sourceDeploy(
       """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
       |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
       |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
@@ -442,10 +443,15 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       |      }
       |    }
       |  }
-      |}""".stripMargin
-    ).right.get
+      |}""".stripMargin,
+      0L,
+      accounting.MAX_VALUE
+    )
     val validatorBondsAndRanks: Seq[(ByteString, Long, Int)] = runtimeManager
-      .captureResults(block1.getBody.getPostState.tuplespace, rankedValidatorQuery)
+      .captureResults(
+        block1.getBody.getPostState.tuplespace,
+        ProtoUtil.deployDataToDeploy(rankedValidatorQuery)
+      )
       .head
       .exprs
       .head
@@ -517,7 +523,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val Created(block) = casperEff.deploy(createWalletDeploy) *> casperEff.createBlock
     val blockStatus    = casperEff.addBlock(block)
 
-    val balanceQuery = mkTerm(
+    val balanceQuery = ProtoUtil.sourceDeploy(
       s"""new 
          |  rl(`rho:registry:lookup`), walletFeedCh
          |in {
@@ -525,10 +531,15 @@ class HashSetCasperTest extends FlatSpec with Matchers {
          |  for(@(_, walletFeed) <- walletFeedCh) {
          |    for(wallet <- @walletFeed) { wallet!("getBalance", "__SCALA__") }
          |  }
-         |}""".stripMargin
-    ).right.get
+         |}""".stripMargin,
+      0L,
+      accounting.MAX_VALUE
+    )
     val newWalletBalance =
-      node.runtimeManager.captureResults(block.getBody.getPostState.tuplespace, balanceQuery)
+      node.runtimeManager.captureResults(
+        block.getBody.getPostState.tuplespace,
+        ProtoUtil.deployDataToDeploy(balanceQuery)
+      )
 
     blockStatus shouldBe Valid
     newWalletBalance.head.exprs.head.getGInt shouldBe amount
@@ -563,6 +574,84 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     block1Status shouldBe Valid
     block2Status shouldBe Valid
     (oldBonds.size + 1) shouldBe newBonds.size
+
+    node.tearDown()
+  }
+
+  it should "allow paying for deploys" in {
+    val node      = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
+    val (sk, pk)  = Ed25519.newKeyPair
+    val user      = ByteString.copyFrom(pk)
+    val timestamp = System.currentTimeMillis()
+    val phloPrice = 1L
+    val amount    = 847L
+    val sigDeployData = ProtoUtil
+      .sourceDeploy(
+        s"""new retCh in { @"blake2b256Hash"!([0, $amount, *retCh].toByteArray(), "__SCALA__") }""",
+        timestamp,
+        accounting.MAX_VALUE
+      )
+      .withUser(user)
+    val sigData = node.runtimeManager
+      .captureResults(
+        genesis.getBody.getPostState.tuplespace,
+        ProtoUtil.deployDataToDeploy(sigDeployData)
+      )
+      .head
+      .exprs
+      .head
+      .getGByteArray
+    val sig   = Base16.encode(Ed25519.sign(sigData.toByteArray, sk))
+    val pkStr = Base16.encode(pk)
+    val paymentCode =
+      s"""new 
+         |  paymentForward, walletCh, rl(`rho:registry:lookup`), 
+         |  SystemInstancesCh, faucetCh, posCh
+         |in {
+         |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+         |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
+         |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
+         |    @SystemInstancesRegistry!("lookup", "faucet", *faucetCh) |
+         |    for(faucet <- faucetCh; pos <- posCh){
+         |      faucet!($amount, "ed25519", "$pkStr", *walletCh) |
+         |      for(@[wallet] <- walletCh) {
+         |        @wallet!("transfer", $amount, 0, "$sig", *paymentForward, Nil) |
+         |        for(@purse <- paymentForward){ pos!("pay", purse, Nil) }
+         |      }
+         |    }
+         |  }
+         |}""".stripMargin
+    val paymentDeployData = ProtoUtil
+      .sourceDeploy(paymentCode, timestamp, accounting.MAX_VALUE)
+      .withPhloPrice(phloPrice)
+      .withUser(user)
+
+    val paymentQuery = ProtoUtil.sourceDeploy(
+      """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
+        |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+        |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
+        |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
+        |    for(pos <- posCh){ pos!("lastPayment", "__SCALA__") }
+        |  }
+        |}""".stripMargin,
+      0L,
+      accounting.MAX_VALUE
+    )
+
+    val (blockStatus, queryResult) =
+      deployAndQuery(node, paymentDeployData, ProtoUtil.deployDataToDeploy(paymentQuery))
+
+    val (codeHashPar, _, userIdPar, timestampPar) =
+      ProtoUtil.getRholangDeployParams(paymentDeployData)
+    val phloPurchasedPar = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(phloPrice * amount))))
+
+    blockStatus shouldBe Valid
+    queryResult.head.exprs.head.getETupleBody.ps shouldBe Seq(
+      codeHashPar,
+      userIdPar,
+      timestampPar,
+      phloPurchasedPar
+    )
 
     node.tearDown()
   }
@@ -964,6 +1053,22 @@ object HashSetCasperTest {
   )(implicit casper: MultiParentCasper[Id]): String = {
     val tsHash = block.body.get.postState.get.tuplespace
     MultiParentCasper[Id].storageContents(tsHash)
+  }
+
+  def deployAndQuery(
+      node: HashSetCasperTestNode[Id],
+      dd: DeployData,
+      query: Deploy
+  ): (BlockStatus, Seq[Par]) = {
+    val Created(block) = node.casperEff.deploy(dd) *> node.casperEff.createBlock
+    val blockStatus    = node.casperEff.addBlock(block)
+    val queryResult = node.runtimeManager
+      .captureResults(
+        block.getBody.getPostState.tuplespace,
+        query
+      )
+
+    (blockStatus, queryResult)
   }
 
   def createBonds(validators: Seq[Array[Byte]]): Map[Array[Byte], Long] =

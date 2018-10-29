@@ -27,11 +27,11 @@ import scala.util.{Failure, Success, Try}
 
 //runtime is a SyncVar for thread-safety, as all checkpoints share the same "hot store"
 class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: SyncVar[Runtime]) {
-  def captureResults(start: StateHash, term: Par, name: String = "__SCALA__")(
+
+  def captureResults(start: StateHash, deploy: Deploy, name: String = "__SCALA__")(
       implicit scheduler: Scheduler
   ): Seq[Par] = {
     val runtime                   = runtimeContainer.take()
-    val deploy                    = ProtoUtil.termDeploy(term, System.currentTimeMillis(), accounting.MAX_VALUE)
     val (_, Seq(processedDeploy)) = newEval(deploy :: Nil, runtime, start)
 
     //TODO: Is better error handling needed here?
@@ -97,8 +97,11 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
         |    for(pos <- posCh){ pos!("getBonds", "__SCALA__") }
         |  }
         |}""".stripMargin
-    val bondsQueryTerm = InterpreterUtil.mkTerm(bondsQuery).right.get
-    val bondsPar       = captureResults(hash, bondsQueryTerm)
+
+    val bondsQueryTerm =
+      ProtoUtil.deployDataToDeploy(ProtoUtil.sourceDeploy(bondsQuery, 0L, accounting.MAX_VALUE))
+    val bondsPar = captureResults(hash, bondsQueryTerm)
+
     assert(
       bondsPar.size == 1,
       s"Incorrect number of results from query of current bonds: ${bondsPar.size}"
