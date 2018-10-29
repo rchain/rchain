@@ -142,11 +142,11 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
           _ <- lock.release
         } yield result
       }
-    def topoSortTail(tailLength: Long): F[Vector[Vector[BlockHash]]] =
+    def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]] =
       if (tailLength <= topoSortVector.length)
         topoSortVector.takeRight(tailLength.toInt).pure[F]
       else {
-        val startBlockNumber = sortOffset - (tailLength - topoSortVector.length)
+        val startBlockNumber = Math.max(0L, sortOffset - (tailLength - topoSortVector.length))
         topoSort(startBlockNumber)
       }
     def deriveOrdering(startBlockNumber: Long): F[Ordering[BlockMetadata]] =
@@ -707,7 +707,7 @@ object BlockDagFileStorage {
                            } yield result
                          }
       (dataLookupList, calculatedDataLookupCrc) = dataLookupResult
-      dataLookupRef                         <- Ref.of[F, Map[BlockHash, BlockMetadata]](dataLookupList.toMap)
+      dataLookupRef                             <- Ref.of[F, Map[BlockHash, BlockMetadata]](dataLookupList.toMap)
       dataLookupDataOutputStreamRef <- Ref.of[F, OutputStream](
                                         new FileOutputStream(
                                           config.blockMetadataLogPath.toFile,
