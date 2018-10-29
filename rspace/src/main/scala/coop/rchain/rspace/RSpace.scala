@@ -22,38 +22,13 @@ object RSpace {
         create(LMDBStore.create[C, P, A, K](ctx, branch), branch)
 
       case ctx: InMemoryContext[C, P, A, K] =>
-        createInMemory(ctx.trieStore, branch)
+        create(InMemoryStore.create(ctx.trieStore, branch), branch)
 
       case ctx: MixedContext[C, P, A, K] =>
-        create(InMemoryStore.create(ctx.trieStore, branch), branch)
+        create(LockFreeInMemoryStore.create(ctx.trieStore, branch), branch)
     }
 
-  def createInMemory[F[_], C, P, E, A, R, K](
-      trieStore: ITrieStore[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], Blake2b256Hash, GNAT[
-        C,
-        P,
-        A,
-        K
-      ]],
-      branch: Branch
-  )(
-      implicit
-      sc: Serialize[C],
-      sp: Serialize[P],
-      sa: Serialize[A],
-      sk: Serialize[K],
-      syncF: Sync[F]
-  ): F[ISpace[F, C, P, E, A, R, K]] = {
-
-    val mainStore = InMemoryStore
-      .create[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
-        trieStore,
-        branch
-      )
-    create(mainStore, branch)
-  }
-
-  def create[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
+  private[rspace] def create[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],

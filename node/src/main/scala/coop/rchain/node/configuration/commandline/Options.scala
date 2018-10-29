@@ -141,6 +141,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
   val run = new Subcommand("run") {
 
+    val dynamicHostAddress = opt[Flag](descr = "Host IP address changes dynamically")
+
     val noUpnp = opt[Flag](descr = "Use this flag to disable UpNp.")
 
     val defaultTimeout =

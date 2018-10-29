@@ -4,7 +4,6 @@ import com.google.protobuf.ByteString
 import coop.rchain.models.Assertions.assertEqual
 import coop.rchain.models.BitSetBytesMapper._
 import coop.rchain.models.Connective.ConnectiveInstance.{Empty => _}
-import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.testImplicits._
 import coop.rchain.rspace.Serialize
@@ -33,26 +32,12 @@ class RhoTypesTest extends FlatSpec with PropertyChecks with Matchers {
   roundTripSerialization[ESet]
   roundTripSerialization[EMap]
 
-  def isExcluded(a: Any): Boolean = {
-    //This won't prevent such cases from being generated
-    //within the deeply-nested ast trees, but will make it much less likely.
-    //FIXME eradicate.
-    val exclusions: PartialFunction[Any, Boolean] = {
-      case Expr(EMapBody(_)) => true
-    }
-    exclusions.applyOrElse(a, { x: Any =>
-      false
-    })
-  }
-
   def roundTripSerialization[A: Serialize: Arbitrary: Shrink: Pretty](
       implicit tag: ClassTag[A]
   ): Unit =
     it must s"work for ${tag.runtimeClass.getSimpleName}" in {
       forAll { a: A =>
-        whenever(!isExcluded(a)) {
-          roundTripSerialization(a)
-        }
+        roundTripSerialization(a)
       }
     }
 

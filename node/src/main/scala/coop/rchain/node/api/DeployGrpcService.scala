@@ -1,7 +1,6 @@
 package coop.rchain.node.api
 
 import cats.effect.Sync
-
 import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
@@ -10,7 +9,6 @@ import coop.rchain.casper.api.BlockAPI
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.casper.protocol.{DeployData, DeployServiceResponse, _}
 import coop.rchain.catscontrib.Taskable
-import coop.rchain.models.Par
 import coop.rchain.shared._
 import coop.rchain.catscontrib.TaskContrib._
 import com.google.protobuf.empty.Empty
@@ -57,5 +55,8 @@ private[api] object DeployGrpcService {
         Observable
           .fromTask(defer(BlockAPI.showMainChain[F](request.depth)))
           .flatMap(Observable.fromIterable)
+
+      override def findBlockWithDeploy(request: FindDeployInBlockQuery): Task[BlockQueryResponse] =
+        defer(BlockAPI.findBlockWithDeploy[F](request.user, request.timestamp))
     }
 }
