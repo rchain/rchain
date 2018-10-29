@@ -591,15 +591,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       accounting.MAX_VALUE
     )
 
-    val Created(block) = node.casperEff.deploy(
-      paymentDeployData
-    ) *> node.casperEff.createBlock
-    val blockStatus = node.casperEff.addBlock(block)
-    val queryResult = node.runtimeManager
-      .captureResults(
-        block.getBody.getPostState.tuplespace,
-        ProtoUtil.deployDataToDeploy(paymentQuery)
-      )
+    val (blockStatus, queryResult) =
+      deployAndQuery(node, paymentDeployData, ProtoUtil.deployDataToDeploy(paymentQuery))
 
     val (codeHashPar, _, userIdPar, timestampPar) =
       ProtoUtil.getRholangDeployParams(paymentDeployData)
@@ -1013,6 +1006,22 @@ object HashSetCasperTest {
   )(implicit casper: MultiParentCasper[Id]): String = {
     val tsHash = block.body.get.postState.get.tuplespace
     MultiParentCasper[Id].storageContents(tsHash)
+  }
+
+  def deployAndQuery(
+      node: HashSetCasperTestNode[Id],
+      dd: DeployData,
+      query: Deploy
+  ): (BlockStatus, Seq[Par]) = {
+    val Created(block) = node.casperEff.deploy(dd) *> node.casperEff.createBlock
+    val blockStatus    = node.casperEff.addBlock(block)
+    val queryResult = node.runtimeManager
+      .captureResults(
+        block.getBody.getPostState.tuplespace,
+        query
+      )
+
+    (blockStatus, queryResult)
   }
 
   def createBonds(validators: Seq[Array[Byte]]): Map[Array[Byte], Long] =
