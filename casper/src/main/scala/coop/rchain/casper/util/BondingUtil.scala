@@ -22,10 +22,16 @@ object BondingUtil {
   def transferStatusOut(ethAddress: String): String       = s"${ethAddress}_transferOut"
 
   def bondingForwarderDeploy(bondKey: String, ethAddress: String): String =
-    s"""for(@purse <- @"${bondingForwarderAddress(ethAddress)}"; pos <- @"proofOfStake"){
-       |  pos!("bond", "$bondKey".hexToBytes(), "ed25519Verify", purse, "$ethAddress", "${bondingStatusOut(
+    s"""new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
+       |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+       |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
+       |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
+       |    for(@purse <- @"${bondingForwarderAddress(ethAddress)}"; pos <- posCh){
+       |      pos!("bond", "$bondKey".hexToBytes(), "ed25519Verify", purse, "$ethAddress", "${bondingStatusOut(
          ethAddress
        )}")
+       |    }
+       |  }
        |}""".stripMargin
 
   def unlockDeploy[F[_]: Sync](ethAddress: String, pubKey: String, secKey: String)(
@@ -115,10 +121,15 @@ object BondingUtil {
     for {
       transferSigData <- walletTransferSigData[F](nonce, amount, destination)
       transferSig     = Secp256k1.sign(transferSigData, secKey)
-    } yield s"""
-             |for(wallet <- @"$pubKey") {
-             |  wallet!("transfer", $amount, $nonce, "${Base16.encode(transferSig)}", "$destination", "$transferStatusOut")
-             |}""".stripMargin
+    } yield s"""new rl(`rho:registry:lookup`), WalletCheckCh, result in {
+               |  rl!(`rho:id:oqez475nmxx9ktciscbhps18wnmnwtm6egziohc3rkdzekkmsrpuyt`, *WalletCheckCh) |
+               |  for(@(_, WalletCheck) <- WalletCheckCh) {
+               |    @WalletCheck!("access", "$pubKey", *result) |
+               |    for(@(true, wallet) <- result) {
+               |      @wallet!("transfer", $amount, $nonce, "${Base16.encode(transferSig)}", "$destination", "$transferStatusOut")
+               |    }
+               |  }
+               |}""".stripMargin
 
   def faucetBondDeploy[F[_]: Sync](
       amount: Long,
@@ -142,10 +153,14 @@ object BondingUtil {
       statusOut       = transferStatusOut(pubKey)
       transferSigData <- walletTransferSigData(nonce, amount, destination)
       transferSig     = sigFunc(transferSigData)
-    } yield s"""new walletCh in {
-               |  for(faucet <- @"faucet"){ faucet!($amount, "ed25519", "$pubKey", *walletCh) } |
-               |  for(@[wallet] <- walletCh) {
-               |    @wallet!("transfer", $amount, $nonce, "${Base16.encode(transferSig)}", "$destination", "$statusOut")
+    } yield s"""new rl(`rho:registry:lookup`), SystemInstancesCh, walletCh, faucetCh in {
+               |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+               |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
+               |    @SystemInstancesRegistry!("lookup", "faucet", *faucetCh) |
+               |    for(faucet <- faucetCh){ faucet!($amount, "ed25519", "$pubKey", *walletCh) } |
+               |    for(@[wallet] <- walletCh) {
+               |      @wallet!("transfer", $amount, $nonce, "${Base16.encode(transferSig)}", "$destination", "$statusOut")
+               |    }
                |  }
                |}""".stripMargin
 
