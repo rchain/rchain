@@ -13,7 +13,7 @@ private[rspace] sealed case class LoadedItem[TItem](value: TItem) extends Cached
   override def asOption: Option[TItem] = Some(value)
 }
 
-private[rspace] sealed case class StoredItem[TItem](value: TItem) extends CachedItem[TItem] {
+private[rspace] sealed case class NewItem[TItem](value: TItem) extends CachedItem[TItem] {
   override def asOption: Option[TItem] = Some(value)
 }
 
@@ -52,7 +52,7 @@ private[rspace] class TrieCache[T, K, V](
   private[rspace] def withTxn[R](txn: T)(f: T => R): R = trieStore.withTxn(txn)(f)
 
   override private[rspace] def put(txn: T, key: Blake2b256Hash, value: Trie[K, V]): Unit =
-    _dbTrie.put(key, StoredItem(value))
+    _dbTrie.put(key, NewItem(value))
 
   override private[rspace] def get(txn: T, key: Blake2b256Hash): Option[Trie[K, V]] =
     _dbTrie.get(key) match {
@@ -91,7 +91,7 @@ private[rspace] class TrieCache[T, K, V](
   override private[rspace] def putRoot(txn: T, branch: Branch, hash: Blake2b256Hash): Unit = {
     if (branch != trieBranch)
       throw new IllegalArgumentException("Only initial branch allowed")
-    _dbRoot = StoredItem(hash)
+    _dbRoot = NewItem(hash)
   }
 
   override private[rspace] def persistAndGetRoot(txn: T, branch: Branch): Option[Blake2b256Hash] = {
@@ -105,7 +105,7 @@ private[rspace] class TrieCache[T, K, V](
       }
       .map {
         case (currentRoot, updatedPastRoots) =>
-          _dbPastRoots = StoredItem(updatedPastRoots)
+          _dbPastRoots = NewItem(updatedPastRoots)
           currentRoot
       }
   }
@@ -138,7 +138,7 @@ private[rspace] class TrieCache[T, K, V](
     _dbEmptyRoot match {
       case LoadedItem(value) =>
         value
-      case StoredItem(value) =>
+      case NewItem(value) =>
         value
       case AbsentItem() => {
         val hash = trieStore.getEmptyRoot(txn)
@@ -148,7 +148,7 @@ private[rspace] class TrieCache[T, K, V](
     }
 
   override private[rspace] def putEmptyRoot(txn: T, hash: Blake2b256Hash): Unit =
-    _dbEmptyRoot = StoredItem(hash)
+    _dbEmptyRoot = NewItem(hash)
 
   override private[rspace] def toMap: ImmutableMap[Blake2b256Hash, Trie[K, V]] = {
     trieStore.withTxn(trieStore.createTxnWrite()) { txn =>

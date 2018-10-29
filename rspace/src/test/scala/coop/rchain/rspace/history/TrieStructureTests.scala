@@ -2,8 +2,8 @@ package coop.rchain.rspace.history
 
 import java.nio.ByteBuffer
 
-import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.test.{printTree, TestKey4}
+import coop.rchain.rspace.{Blake2b256Hash, Context}
+import coop.rchain.rspace.test.{TestKey4, printTree}
 import org.lmdbjava.Txn
 import scodec.Codec
 import scodec.bits.ByteVector
@@ -315,4 +315,18 @@ class TrieStructureTests
 
       case default => fail(s"Expected a skip node under $currentHex, got $default")
     }
+}
+
+class TrieCacheTest extends TrieStructureTests {
+  override def withTestTrieStore[R](
+      f: (ITrieStore[
+            Txn[ByteBuffer],
+            TestKey4,
+            ByteVector],
+          Branch) => R): R = {
+    super.withTestTrieStore((trieStore, branch) => {
+      val trieCache = new TrieCache(trieStore, branch)
+      f(trieCache, branch)
+    })
+  }
 }

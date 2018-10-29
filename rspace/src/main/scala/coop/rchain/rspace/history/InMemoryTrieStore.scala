@@ -147,7 +147,7 @@ class InMemoryTrieStore[K, V]
       rootHash: Blake2b256Hash
   ): Unit = {
     trieCache._dbRoot match {
-      case StoredItem(value) =>
+      case NewItem(value) =>
         txn.writeState(
           state => (state.changeRoot(state._dbRoot + (trieCache.trieBranch -> value)), ())
         )
@@ -156,14 +156,14 @@ class InMemoryTrieStore[K, V]
 
     for ((hash, trie) <- trieCache._dbTrie) {
       trie match {
-        case StoredItem(value) =>
+        case NewItem(value) =>
           txn.writeState(state => (state.changeTrie(state._dbTrie + (hash -> value)), ()))
         case _ => //do nothing
       }
     }
 
     trieCache._dbPastRoots match {
-      case StoredItem(value) =>
+      case NewItem(value) =>
         txn.writeState(
           state => (state.changePastRoots(state._dbPastRoots + (trieCache.trieBranch -> value)), ())
         )
@@ -171,7 +171,7 @@ class InMemoryTrieStore[K, V]
     }
 
     trieCache._dbEmptyRoot match {
-      case StoredItem(value) =>
+      case NewItem(value) =>
         putEmptyRoot(txn, value)
       case _ => //do nothing
     }
