@@ -155,6 +155,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
 
   // Runs a short leash deploy and returns phlos used for it
   private def evalShortLeashDeploy(
+      runtime: Runtime,
       deploy: Deploy,
       reducer: ChargingReducer[Task],
       errorLog: ErrorLog,
@@ -167,6 +168,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
         deploy.raw.get
       )
       for {
+        _ <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
         injResult <- injAttempt(
                       deploy.payment.get,
                       reducer,
@@ -217,6 +219,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
           case deploy +: rem =>
             Task.delay(runtime.space.reset(hash)) *>
               evalShortLeashDeploy(
+                runtime,
                 deploy,
                 runtime.reducer,
                 runtime.errorLog,
@@ -265,6 +268,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
             for {
               _ <- Task.delay(runtime.replaySpace.rig(hash, log.toList))
               shortLeashCost <- evalShortLeashDeploy(
+                                 runtime,
                                  deploy,
                                  runtime.replayReducer,
                                  runtime.errorLog,
