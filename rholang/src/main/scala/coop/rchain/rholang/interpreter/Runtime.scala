@@ -91,46 +91,23 @@ object Runtime {
   type Remainder = Option[Var]
   type BodyRef   = Long
 
-  class ShortLeashParams[F[_]] private(
-      private val codeHash: Ref[F, Par],
-      private val phloRate: Ref[F, Par],
-      private val userId: Ref[F, Par],
-      private val timestamp: Ref[F, Par]
-  ) {
-    def setParams(codeHash: Par, phloRate: Par, userId: Par, timestamp: Par)(implicit F: Sync[F]) =
-      for {
-        _ <- this.codeHash.set(codeHash)
-        _ <- this.phloRate.set(phloRate)
-        _ <- this.userId.set(userId)
-        _ <- this.timestamp.set(timestamp)
-      } yield ()
+  class ShortLeashParams[F[_]] private (private val params: Ref[F, ShortLeashParameters]) {
+    def setParams(codeHash: Par, phloRate: Par, userId: Par, timestamp: Par): F[Unit] =
+      params.set(ShortLeashParameters(codeHash, phloRate, userId, timestamp))
 
-    def getParams(implicit M: Monad[F]): F[ShortLeashParameters] =
-      for {
-        codeHash  <- this.codeHash.get
-        phloRate  <- this.phloRate.get
-        userId    <- this.userId.get
-        timestamp <- this.timestamp.get
-      } yield ShortLeashParameters(codeHash, phloRate, userId, timestamp)
+    def getParams: F[ShortLeashParameters] = params.get
   }
 
   object ShortLeashParams {
     final case class ShortLeashParameters(codeHash: Par, phloRate: Par, userId: Par, timestamp: Par)
+    object ShortLeashParameters {
+      val empty: ShortLeashParameters = ShortLeashParameters(Par(), Par(), Par(), Par())
+    }
     def apply[F[_]]()(implicit F: Sync[F]): F[ShortLeashParams[F]] =
-      for {
-        codeHash  <- Ref[F].of(Par())
-        phloRate  <- Ref[F].of(Par())
-        userId    <- Ref[F].of(Par())
-        timestamp <- Ref[F].of(Par())
-      } yield new ShortLeashParams[F](codeHash, phloRate, userId, timestamp)
+      Ref[F].of(ShortLeashParameters.empty).map(new ShortLeashParams(_))
 
     def unsafe[F[_]]()(implicit F: Sync[F]): ShortLeashParams[F] =
-      new ShortLeashParams(
-        Ref.unsafe[F, Par](Par()),
-        Ref.unsafe[F, Par](Par()),
-        Ref.unsafe[F, Par](Par()),
-        Ref.unsafe[F, Par](Par())
-      )
+      new ShortLeashParams[F](Ref.unsafe[F, ShortLeashParameters](ShortLeashParameters.empty))
   }
 
   class BlockTime[F[_]](val timestamp: Ref[F, Par]) {
