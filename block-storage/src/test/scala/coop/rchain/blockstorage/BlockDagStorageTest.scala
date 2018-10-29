@@ -122,7 +122,13 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   }
 
   type LookupResult =
-    (List[(Option[BlockMetadata], Option[BlockHash], Option[BlockMetadata])],
+    (List[
+       (Option[BlockMetadata],
+        Option[BlockHash],
+        Option[BlockMetadata],
+        Option[Set[BlockHash]],
+        Boolean)
+     ],
      Map[Validator, BlockHash],
      Map[Validator, BlockMetadata],
      Vector[Vector[BlockHash]],
@@ -141,7 +147,9 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
                  blockMetadata     <- dag.lookup(b.blockHash)
                  latestMessageHash <- dag.latestMessageHash(b.sender)
                  latestMessage     <- dag.latestMessage(b.sender)
-               } yield (blockMetadata, latestMessageHash, latestMessage)
+                 children          <- dag.children(b.blockHash)
+                 contains          <- dag.contains(b.blockHash)
+               } yield (blockMetadata, latestMessageHash, latestMessage, children, contains)
              }
       latestMessageHashes <- dag.latestMessageHashes
       latestMessages      <- dag.latestMessages
@@ -161,10 +169,18 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
         lm.updated(b.sender, BlockMetadata.fromBlock(b))
     }
     list.zip(blockElements).foreach {
-      case ((blockMetadata, latestMessageHash, latestMessage), b) =>
+      case ((blockMetadata, latestMessageHash, latestMessage, children, contains), b) =>
         blockMetadata shouldBe Some(BlockMetadata.fromBlock(b))
         latestMessageHash shouldBe realLatestMessages.get(b.sender).map(_.blockHash)
         latestMessage shouldBe realLatestMessages.get(b.sender)
+        children shouldBe
+          Some(
+            blockElements
+              .filter(_.header.get.parentsHashList.contains(b.blockHash))
+              .map(_.blockHash)
+              .toSet
+          )
+        contains shouldBe true
     }
     latestMessageHashes shouldBe blockElements.map(b => b.sender -> b.blockHash).toMap
     latestMessages shouldBe blockElements.map(b => b.sender      -> BlockMetadata.fromBlock(b)).toMap
