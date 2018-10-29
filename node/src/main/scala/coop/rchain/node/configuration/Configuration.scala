@@ -286,9 +286,14 @@ object Configuration {
     val validatorPublicKey = getOpt(_.run.validatorPublicKey, _.validators.flatMap(_.publicKey))
 
     val maybePrivateKeyPath =
-      getOpt(_.run.validatorPrivateKeyPath.toOption.map(Right(_)), _.validators.flatMap(_.privateKeyPath))
+      getOpt(
+        _.run.validatorPrivateKeyPath.toOption.map(Right(_)),
+        _.validators.flatMap(_.privateKeyPath).map(Right(_))
+      )
+
     val maybePrivateKey =
       getOpt(_.run.validatorPrivateKey, _.validators.flatMap(_.privateKey)).map(Left(_))
+
     val validatorPrivateKey = maybePrivateKeyPath.orElse(maybePrivateKey)
 
     val validatorSigAlgorithm = get(
