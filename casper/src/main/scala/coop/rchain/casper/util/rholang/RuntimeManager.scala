@@ -89,13 +89,19 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     }
 
   def computeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] = {
-    // TODO: Switch to a read only name
     val bondsQuery =
-      """for(pos <- @"proofOfStake"){ pos!("getBonds", "__SCALA__") }"""
-    //TODO: construct directly instead of parsing rholang source
+      """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
+        |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+        |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
+        |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
+        |    for(pos <- posCh){ pos!("getBonds", "__SCALA__") }
+        |  }
+        |}""".stripMargin
+
     val bondsQueryTerm =
       ProtoUtil.deployDataToDeploy(ProtoUtil.sourceDeploy(bondsQuery, 0L, accounting.MAX_VALUE))
     val bondsPar = captureResults(hash, bondsQueryTerm)
+
     assert(
       bondsPar.size == 1,
       s"Incorrect number of results from query of current bonds: ${bondsPar.size}"

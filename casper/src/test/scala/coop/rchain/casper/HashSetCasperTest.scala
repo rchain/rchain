@@ -423,21 +423,27 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes.forall(_.logEff.warns.isEmpty) shouldBe true
 
     val rankedValidatorQuery = ProtoUtil.sourceDeploy(
-      """for(pos <- @"proofOfStake"){
-        |  new bondsCh, getRanking in {
-        |    contract getRanking(@bonds, @acc, return) = {
-        |      match bonds {
-        |        {key:(stake, _, _, index) ...rest} => {
-        |          getRanking!(rest, acc ++ [(key, stake, index)], *return)
-        |        }
-        |        _ => { return!(acc) }
-        |      }
-        |    } |
-        |    pos!("getBonds", *bondsCh) | for(@bonds <- bondsCh) {
-        |      getRanking!(bonds, [], "__SCALA__")
-        |    }
-        |  }
-        |}""".stripMargin,
+      """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
+      |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+      |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
+      |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
+      |    for(pos <- posCh){
+      |      new bondsCh, getRanking in {
+      |        contract getRanking(@bonds, @acc, return) = {
+      |          match bonds {
+      |            {key:(stake, _, _, index) ...rest} => {
+      |              getRanking!(rest, acc ++ [(key, stake, index)], *return)
+      |            }
+      |            _ => { return!(acc) }
+      |          }
+      |        } |
+      |        pos!("getBonds", *bondsCh) | for(@bonds <- bondsCh) {
+      |          getRanking!(bonds, [], "__SCALA__")
+      |        }
+      |      }
+      |    }
+      |  }
+      |}""".stripMargin,
       0L,
       accounting.MAX_VALUE
     )
@@ -484,19 +490,48 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
     import node.casperEff
 
-    val (_, pk) = Ed25519.newKeyPair
-    val pkStr   = Base16.encode(pk)
-    val amount  = 157L
+    //val skStr = "6061f3ea36d0419d1e9e23c33bba88ed1435427fa2a8f7300ff210b4e9f18a14"
+    val pkStr = "16989775f3f207a717134216816d3c9d97b0bfb8d560b29485f23f6ead435f09"
+    val sigStr = "51c2b091559745d51c7270189911d9d894d538f76150ed67d164705dcf0af52" +
+      "e101fa06396db2b2ac21a4bfbe3461567b5f8b3d2e666c377cb92d96bc38e2c08"
+    val amount = 157L
     val createWalletCode =
-      s"""for(faucet <- @"faucet"){ faucet!($amount, "ed25519", "$pkStr", "myWallet") }"""
-    val createWalletDeploy =
-      ProtoUtil.sourceDeploy(createWalletCode, System.currentTimeMillis(), accounting.MAX_VALUE)
+      s"""new 
+         |  walletCh, rl(`rho:registry:lookup`), SystemInstancesCh, faucetCh,
+         |  rs(`rho:registry:insertSigned:ed25519`), uriOut
+         |in {
+         |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+         |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
+         |    @SystemInstancesRegistry!("lookup", "faucet", *faucetCh) |
+         |    for(faucet <- faucetCh){ faucet!($amount, "ed25519", "$pkStr", *walletCh) } |
+         |    for(@[wallet] <- walletCh){ walletCh!!(wallet) }
+         |  } |
+         |  rs!(
+         |    "$pkStr".hexToBytes(), 
+         |    (9223372036854775807, bundle-{*walletCh}), 
+         |    "$sigStr".hexToBytes(), 
+         |    *uriOut
+         |  )
+         |}""".stripMargin
+
+    //with the fixed user+timestamp we know that walletCh is registered at `rho:id:mrs88izurkgki71dpjqamzg6tgcjd6sk476c9msks7tumw4a6e39or`
+    val createWalletDeploy = ProtoUtil
+      .sourceDeploy(createWalletCode, System.currentTimeMillis(), accounting.MAX_VALUE)
+      .withTimestamp(1540570144121L)
+      .withUser(ProtoUtil.stringToByteString(pkStr))
 
     val Created(block) = casperEff.deploy(createWalletDeploy) *> casperEff.createBlock
     val blockStatus    = casperEff.addBlock(block)
 
     val balanceQuery = ProtoUtil.sourceDeploy(
-      """for(@[wallet] <- @"myWallet"){ @wallet!("getBalance", "__SCALA__") }""",
+      s"""new 
+         |  rl(`rho:registry:lookup`), walletFeedCh
+         |in {
+         |  rl!(`rho:id:mrs88izurkgki71dpjqamzg6tgcjd6sk476c9msks7tumw4a6e39or`, *walletFeedCh) |
+         |  for(@(_, walletFeed) <- walletFeedCh) {
+         |    for(wallet <- @walletFeed) { wallet!("getBalance", "__SCALA__") }
+         |  }
+         |}""".stripMargin,
       0L,
       accounting.MAX_VALUE
     )
