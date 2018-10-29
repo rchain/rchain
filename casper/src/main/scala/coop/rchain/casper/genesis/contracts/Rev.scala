@@ -50,7 +50,7 @@ class Rev[A](
     |      for(@posPurse <- posPurseCh) {
     |        @MakePoS!(posPurse, $minimumBond, $maximumBond, $initialBondsCode, *posCh) |
     |        for(@pos <- posCh) {
-    |          @SystemInstancesRegistry!("register", "pos", pos)
+    |          @SystemInstancesRegistry!("register", "pos", bundle+{pos})
     |        }
     |      } |
     |
