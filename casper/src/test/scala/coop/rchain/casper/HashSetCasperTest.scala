@@ -573,8 +573,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
          |  for(faucet <- @"faucet"; pos <- @"proofOfStake"){
          |    faucet!($amount, "ed25519", "$pkStr", *walletCh) |
          |    for(@[wallet] <- walletCh) {
-         |      for(@purse <- paymentForward){ pos!("pay", purse, Nil) } |
-         |      @wallet!("transfer", $amount, 0, "$sig", *paymentForward, Nil)
+         |      @wallet!("transfer", $amount, 0, "$sig", *paymentForward, Nil) |
+         |      for(@purse <- paymentForward){ pos!("pay", purse, Nil) }
          |    }
          |  }
          |}""".stripMargin
