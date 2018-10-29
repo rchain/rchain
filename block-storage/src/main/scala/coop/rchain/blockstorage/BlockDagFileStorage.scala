@@ -143,7 +143,12 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
         } yield result
       }
     def topoSortTail(tailLength: Long): F[Vector[Vector[BlockHash]]] =
-      topoSortVector.takeRight(tailLength.toInt).pure[F]
+      if (tailLength <= topoSortVector.length)
+        topoSortVector.takeRight(tailLength.toInt).pure[F]
+      else {
+        val startBlockNumber = sortOffset - (tailLength - topoSortVector.length)
+        topoSort(startBlockNumber)
+      }
     def deriveOrdering(startBlockNumber: Long): F[Ordering[BlockMetadata]] =
       topoSort(startBlockNumber).map { topologicalSorting =>
         val order = topologicalSorting.flatten.zipWithIndex.toMap
