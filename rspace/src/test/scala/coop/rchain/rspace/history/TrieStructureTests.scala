@@ -317,7 +317,7 @@ class TrieStructureTests
     }
 }
 
-class TrieCacheTest extends TrieStructureTests {
+class TrieCacheTests extends TrieStructureTests {
   override def withTestTrieStore[R](
       f: (ITrieStore[
             Txn[ByteBuffer],
