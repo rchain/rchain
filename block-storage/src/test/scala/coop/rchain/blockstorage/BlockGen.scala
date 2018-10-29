@@ -66,4 +66,11 @@ object BlockGen {
 
   val blockHashElementsGen: Gen[List[(String, BlockMessage)]] =
     distinctListOfGen(blockHashElementGen)(_._1 == _._1)
+
+  def blockWithNewHashesGen(blockElements: List[BlockMessage]): Gen[List[BlockMessage]] =
+    Gen.listOfN(blockElements.size, blockHashGen).map { blockHashes =>
+      blockElements.zip(blockHashes).map {
+        case (b, hash) => b.withBlockHash(hash)
+      }
+    }
 }

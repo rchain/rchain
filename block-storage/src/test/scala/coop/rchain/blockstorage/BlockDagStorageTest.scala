@@ -5,13 +5,13 @@ import java.nio.file.StandardOpenOption
 import cats.implicits._
 import coop.rchain.shared.PathOps._
 import coop.rchain.catscontrib.TaskContrib.TaskOps
-import BlockGen.blockElementsGen
+import BlockGen._
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
+import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Metrics.MetricsNOP
+import coop.rchain.rspace.Context
 import coop.rchain.shared
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -70,151 +70,201 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   private[this] def mkTmpDir(): Path = Files.createTempDirectory("rchain-dag-storage-test-")
 
   override def withDagStorage[R](f: Task[BlockDagStorage[Task]] => R): R = {
-    val dataDir   = mkTmpDir()
-    val storeTask = createAtDefaultLocation(dataDir)
+    val dagDataDir          = mkTmpDir()
+    val blockStoreDataDir   = mkTmpDir()
+    implicit val blockStore = createBlockStore(blockStoreDataDir)
+    val storeTask           = createAtDefaultLocation(dagDataDir)
     try {
       f(storeTask)
     } finally {
-      dataDir.recursivelyDelete()
+      dagDataDir.recursivelyDelete()
+      blockStoreDataDir.recursivelyDelete()
     }
   }
 
-  private def defaultLatestMessagesLog(dataDir: Path): Path =
-    dataDir.resolve("latest-messsages-data")
+  private def defaultLatestMessagesLog(dagDataDir: Path): Path =
+    dagDataDir.resolve("latest-messsages-data")
 
-  private def defaultLatestMessagesCrc(dataDir: Path): Path =
-    dataDir.resolve("latest-messsages-checksum")
+  private def defaultLatestMessagesCrc(dagDataDir: Path): Path =
+    dagDataDir.resolve("latest-messsages-checksum")
 
-  private def defaultBlockMetadataLog(dataDir: Path): Path =
-    dataDir.resolve("block-metadata-data")
+  private def defaultBlockMetadataLog(dagDataDir: Path): Path =
+    dagDataDir.resolve("block-metadata-data")
 
-  private def defaultBlockMetadataCrc(dataDir: Path): Path =
-    dataDir.resolve("block-metadata-checksum")
+  private def defaultBlockMetadataCrc(dagDataDir: Path): Path =
+    dagDataDir.resolve("block-metadata-checksum")
 
-  private def defaultCheckpointsDir(dataDir: Path): Path =
-    dataDir.resolve("checkpoints")
+  private def defaultCheckpointsDir(dagDataDir: Path): Path =
+    dagDataDir.resolve("checkpoints")
+
+  private def createBlockStore(blockStoreDataDir: Path): BlockStore[Task] = {
+    val env              = Context.env(blockStoreDataDir, 100L * 1024L * 1024L * 4096L)
+    implicit val metrics = new MetricsNOP[Task]()
+    LMDBBlockStore.create[Task](env, blockStoreDataDir)
+  }
 
   private def createAtDefaultLocation(
-      dataDir: Path,
+      dagDataDir: Path,
       maxSizeFactor: Int = 10
-  ): Task[BlockDagFileStorage[Task]] = {
-    implicit val log        = new shared.Log.NOPLog[Task]()
-    implicit val metrics    = new MetricsNOP[Task]()
-    implicit val refF       = Ref.unsafe[Task, Map[BlockHash, BlockMessage]](Map.empty)
-    implicit val blockStore = InMemBlockStore.create[Task]
+  )(implicit blockStore: BlockStore[Task]): Task[BlockDagFileStorage[Task]] = {
+    implicit val log     = new shared.Log.NOPLog[Task]()
+    implicit val metrics = new MetricsNOP[Task]()
     BlockDagFileStorage.create[Task](
       BlockDagFileStorage.Config(
-        dataDir.resolve("latest-messsages-data"),
-        dataDir.resolve("latest-messsages-checksum"),
-        dataDir.resolve("block-metadata-data"),
-        dataDir.resolve("block-metadata-checksum"),
-        dataDir.resolve("checkpoints"),
+        dagDataDir.resolve("latest-messsages-data"),
+        dagDataDir.resolve("latest-messsages-checksum"),
+        dagDataDir.resolve("block-metadata-data"),
+        dagDataDir.resolve("block-metadata-checksum"),
+        dagDataDir.resolve("checkpoints"),
         maxSizeFactor
       )
     )
   }
 
-  type LookupResult = List[(Option[BlockMetadata], Option[BlockHash], Option[BlockMetadata])]
+  type LookupResult =
+    (List[(Option[BlockMetadata], Option[BlockHash], Option[BlockMetadata])],
+     Map[Validator, BlockHash],
+     Map[Validator, BlockMetadata],
+     Vector[Vector[BlockHash]],
+     Vector[Vector[BlockHash]])
 
   private def lookupElements(
       blockElements: List[BlockMessage],
-      storage: BlockDagStorage[Task]
+      storage: BlockDagStorage[Task],
+      topoSortStartBlockNumber: Long = 0,
+      topoSortTailLength: Int = 5
   ): Task[LookupResult] =
     for {
       dag <- storage.getRepresentation
-      result <- blockElements.traverse { b =>
-                 for {
-                   blockMetadata     <- dag.lookup(b.blockHash)
-                   latestMessageHash <- dag.latestMessageHash(b.sender)
-                   latestMessage     <- dag.latestMessage(b.sender)
-                 } yield (blockMetadata, latestMessageHash, latestMessage)
-               }
-    } yield result
+      list <- blockElements.traverse { b =>
+               for {
+                 blockMetadata     <- dag.lookup(b.blockHash)
+                 latestMessageHash <- dag.latestMessageHash(b.sender)
+                 latestMessage     <- dag.latestMessage(b.sender)
+               } yield (blockMetadata, latestMessageHash, latestMessage)
+             }
+      latestMessageHashes <- dag.latestMessageHashes
+      latestMessages      <- dag.latestMessages
+      topoSort            <- dag.topoSort(topoSortStartBlockNumber)
+      topoSortTail        <- dag.topoSortTail(topoSortTailLength)
+    } yield (list, latestMessageHashes, latestMessages, topoSort, topoSortTail)
 
   private def testLookupElementsResult(
       lookupResult: LookupResult,
-      blockElements: List[BlockMessage]
-  ): Unit =
-    lookupResult.zip(blockElements).foreach {
+      blockElements: List[BlockMessage],
+      topoSortStartBlockNumber: Long = 0,
+      topoSortTailLength: Int = 5
+  ): Unit = {
+    val (list, latestMessageHashes, latestMessages, topoSort, topoSortTail) = lookupResult
+    val realLatestMessages = blockElements.foldLeft(Map.empty[Validator, BlockMetadata]) {
+      case (lm, b) =>
+        lm.updated(b.sender, BlockMetadata.fromBlock(b))
+    }
+    list.zip(blockElements).foreach {
       case ((blockMetadata, latestMessageHash, latestMessage), b) =>
         blockMetadata shouldBe Some(BlockMetadata.fromBlock(b))
-        latestMessageHash shouldBe Some(b.blockHash)
-        latestMessage shouldBe Some(BlockMetadata.fromBlock(b))
+        latestMessageHash shouldBe realLatestMessages.get(b.sender).map(_.blockHash)
+        latestMessage shouldBe realLatestMessages.get(b.sender)
     }
+    latestMessageHashes shouldBe blockElements.map(b => b.sender -> b.blockHash).toMap
+    latestMessages shouldBe blockElements.map(b => b.sender      -> BlockMetadata.fromBlock(b)).toMap
+
+    def normalize(topoSort: Vector[Vector[BlockHash]]): Vector[Vector[BlockHash]] =
+      if (topoSort.size == 1 && topoSort.head.isEmpty)
+        Vector.empty
+      else
+        topoSort
+
+    val realTopoSort = normalize(Vector(blockElements.map(_.blockHash).toVector))
+    topoSort shouldBe realTopoSort.drop(topoSortStartBlockNumber.toInt)
+    topoSortTail shouldBe realTopoSort.takeRight(topoSortTailLength)
+  }
 
   it should "be able to restore state on startup" in {
     forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockElements =>
-      val dataDir = mkTmpDir()
+      val dagDataDir          = mkTmpDir()
+      val blockStoreDataDir   = mkTmpDir()
+      implicit val blockStore = createBlockStore(blockStoreDataDir)
       val testProgram = for {
-        firstStorage  <- createAtDefaultLocation(dataDir)
+        firstStorage  <- createAtDefaultLocation(dagDataDir)
         _             <- blockElements.traverse_(firstStorage.insert)
         _             <- firstStorage.close()
-        secondStorage <- createAtDefaultLocation(dataDir)
+        secondStorage <- createAtDefaultLocation(dagDataDir)
         result        <- lookupElements(blockElements, secondStorage)
         _             <- secondStorage.close()
+        _             <- blockStore.close()
       } yield result
-      val blockElementLookups = testProgram.unsafeRunSync(scheduler)
-      testLookupElementsResult(blockElementLookups, blockElements)
+      val testProgramResult = testProgram.unsafeRunSync(scheduler)
+      testLookupElementsResult(testProgramResult, blockElements)
     }
   }
 
   it should "be able to restore state from the previous two instances" in {
     forAll(blockElementsGen, minSize(0), sizeRange(10)) { firstBlockElements =>
       forAll(blockElementsGen, minSize(0), sizeRange(10)) { secondBlockElements =>
-        val dataDir = mkTmpDir()
+        val dagDataDir          = mkTmpDir()
+        val blockStoreDataDir   = mkTmpDir()
+        implicit val blockStore = createBlockStore(blockStoreDataDir)
         val testProgram = for {
-          firstStorage  <- createAtDefaultLocation(dataDir)
+          firstStorage  <- createAtDefaultLocation(dagDataDir)
           _             <- firstBlockElements.traverse_(firstStorage.insert)
           _             <- firstStorage.close()
-          secondStorage <- createAtDefaultLocation(dataDir)
+          secondStorage <- createAtDefaultLocation(dagDataDir)
           _             <- secondBlockElements.traverse_(secondStorage.insert)
           _             <- secondStorage.close()
-          thirdStorage  <- createAtDefaultLocation(dataDir)
+          thirdStorage  <- createAtDefaultLocation(dagDataDir)
           result        <- lookupElements(firstBlockElements ++ secondBlockElements, thirdStorage)
           _             <- thirdStorage.close()
+          _             <- blockStore.close()
         } yield result
-        val blockElementLookups = testProgram.unsafeRunSync(scheduler)
-        testLookupElementsResult(blockElementLookups, firstBlockElements ++ secondBlockElements)
+        val testProgramResult = testProgram.unsafeRunSync(scheduler)
+        testLookupElementsResult(testProgramResult, firstBlockElements ++ secondBlockElements)
       }
     }
   }
 
   it should "be able to restore latest messages on startup with appended 64 garbage bytes" in {
     forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockElements =>
-      val dataDir = mkTmpDir()
+      val dagDataDir          = mkTmpDir()
+      val blockStoreDataDir   = mkTmpDir()
+      implicit val blockStore = createBlockStore(blockStoreDataDir)
       val testProgram = for {
-        firstStorage <- createAtDefaultLocation(dataDir)
+        firstStorage <- createAtDefaultLocation(dagDataDir)
         _            <- blockElements.traverse_(firstStorage.insert)
         _            <- firstStorage.close()
         garbageBytes = Array.fill[Byte](64)(0)
         _            <- Sync[Task].delay { Random.nextBytes(garbageBytes) }
         _ <- Sync[Task].delay {
               Files.write(
-                defaultLatestMessagesLog(dataDir),
+                defaultLatestMessagesLog(dagDataDir),
                 garbageBytes,
                 StandardOpenOption.APPEND
               )
             }
-        secondStorage <- createAtDefaultLocation(dataDir)
+        secondStorage <- createAtDefaultLocation(dagDataDir)
         result        <- lookupElements(blockElements, secondStorage)
         _             <- secondStorage.close()
+        _             <- blockStore.close()
       } yield result
-      val blockElementLookups = testProgram.unsafeRunSync(scheduler)
-      testLookupElementsResult(blockElementLookups, blockElements)
+      val testProgramResult = testProgram.unsafeRunSync(scheduler)
+      testLookupElementsResult(testProgramResult, blockElements)
     }
   }
 
   it should "be able to handle fully corrupted latest messages data file" in {
-    val dataDir      = mkTmpDir()
-    val garbageBytes = Array.fill[Byte](789)(0)
+    val dagDataDir          = mkTmpDir()
+    val garbageBytes        = Array.fill[Byte](789)(0)
+    val blockStoreDataDir   = mkTmpDir()
+    implicit val blockStore = createBlockStore(blockStoreDataDir)
     val testProgram = for {
       _                   <- Sync[Task].delay { Random.nextBytes(garbageBytes) }
-      _                   <- Sync[Task].delay { Files.write(defaultLatestMessagesLog(dataDir), garbageBytes) }
-      storage             <- createAtDefaultLocation(dataDir)
+      _                   <- Sync[Task].delay { Files.write(defaultLatestMessagesLog(dagDataDir), garbageBytes) }
+      storage             <- createAtDefaultLocation(dagDataDir)
       dag                 <- storage.getRepresentation
       latestMessageHashes <- dag.latestMessageHashes
       latestMessages      <- dag.latestMessages
       _                   <- storage.close()
+      _                   <- blockStore.close()
     } yield (latestMessageHashes, latestMessages)
     val (latestMessageHashes, latestMessages) = testProgram.unsafeRunSync(scheduler)
     latestMessageHashes.size shouldBe 0
@@ -223,41 +273,55 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
 
   it should "be able to restore after squashing latest messages" in {
     forAll(blockElementsGen, minSize(0), sizeRange(10)) { blockElements =>
-      val dataDir = mkTmpDir()
-      val testProgram = for {
-        firstStorage  <- createAtDefaultLocation(dataDir, 2)
-        _             <- blockElements.traverse_(firstStorage.insert)
-        _             <- blockElements.traverse_(firstStorage.insert)
-        _             <- blockElements.traverse_(firstStorage.insert)
-        _             <- firstStorage.close()
-        secondStorage <- createAtDefaultLocation(dataDir)
-        result        <- lookupElements(blockElements, secondStorage)
-        _             <- secondStorage.close()
-      } yield result
-      val blockElementLookups = testProgram.unsafeRunSync(scheduler)
-      testLookupElementsResult(blockElementLookups, blockElements)
+      forAll(blockWithNewHashesGen(blockElements), blockWithNewHashesGen(blockElements)) {
+        (secondBlockElements, thirdBlockElements) =>
+          val dagDataDir          = mkTmpDir()
+          val blockStoreDataDir   = mkTmpDir()
+          implicit val blockStore = createBlockStore(blockStoreDataDir)
+          val testProgram = for {
+            firstStorage  <- createAtDefaultLocation(dagDataDir, 2)
+            _             <- blockElements.traverse_(firstStorage.insert)
+            _             <- secondBlockElements.traverse_(firstStorage.insert)
+            _             <- thirdBlockElements.traverse_(firstStorage.insert)
+            _             <- firstStorage.close()
+            secondStorage <- createAtDefaultLocation(dagDataDir)
+            result        <- lookupElements(blockElements, secondStorage)
+            _             <- secondStorage.close()
+            _             <- blockStore.close()
+          } yield result
+          val testProgramResult = testProgram.unsafeRunSync(scheduler)
+          testLookupElementsResult(
+            testProgramResult,
+            blockElements ++ secondBlockElements ++ thirdBlockElements
+          )
+      }
     }
   }
 
   it should "be able to load checkpoints" in {
     forAll(blockElementsGen, minSize(1), sizeRange(2)) { blockElements =>
-      val dataDir = mkTmpDir()
+      val dagDataDir          = mkTmpDir()
+      val blockStoreDataDir   = mkTmpDir()
+      implicit val blockStore = createBlockStore(blockStoreDataDir)
       val testProgram = for {
-        firstStorage <- createAtDefaultLocation(dataDir, 2)
-        _            <- blockElements.traverse_(firstStorage.insert)
+        firstStorage <- createAtDefaultLocation(dagDataDir)
+        _            <- blockElements.traverse_(b => blockStore.put(b.blockHash, b) *> firstStorage.insert(b))
         _            <- firstStorage.close()
         _ <- Sync[Task].delay {
-              Files.move(defaultBlockMetadataLog(dataDir),
-                         defaultCheckpointsDir(dataDir).resolve("0-1"))
-              Files.delete(defaultBlockMetadataCrc(dataDir))
+              Files.move(defaultBlockMetadataLog(dagDataDir),
+                         defaultCheckpointsDir(dagDataDir).resolve("0-1"))
+              Files.delete(defaultBlockMetadataCrc(dagDataDir))
             }
-        secondStorage <- createAtDefaultLocation(dataDir)
-        dag           <- secondStorage.getRepresentation
-        result        <- dag.topoSort(0L)
+        secondStorage <- createAtDefaultLocation(dagDataDir)
+        result        <- lookupElements(blockElements, secondStorage)
         _             <- secondStorage.close()
+        _             <- blockStore.close()
       } yield result
-      val topoSort = testProgram.unsafeRunSync(scheduler)
-      topoSort shouldBe Vector(blockElements.map(_.blockHash).toVector)
+      val testProgramResult = testProgram.unsafeRunSync(scheduler)
+      testLookupElementsResult(
+        testProgramResult,
+        blockElements
+      )
     }
   }
 }
