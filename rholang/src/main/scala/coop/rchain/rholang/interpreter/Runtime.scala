@@ -91,7 +91,7 @@ object Runtime {
   type Remainder = Option[Var]
   type BodyRef   = Long
 
-  class ShortLeashParams[F[_]](
+  class ShortLeashParams[F[_]] private(
       private val codeHash: Ref[F, Par],
       private val phloRate: Ref[F, Par],
       private val userId: Ref[F, Par],
