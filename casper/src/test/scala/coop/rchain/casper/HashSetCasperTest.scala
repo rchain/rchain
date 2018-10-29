@@ -604,12 +604,20 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val sig   = Base16.encode(Ed25519.sign(sigData.toByteArray, sk))
     val pkStr = Base16.encode(pk)
     val paymentCode =
-      s"""new paymentForward, walletCh in {
-         |  for(faucet <- @"faucet"; pos <- @"proofOfStake"){
-         |    faucet!($amount, "ed25519", "$pkStr", *walletCh) |
-         |    for(@[wallet] <- walletCh) {
-         |      @wallet!("transfer", $amount, 0, "$sig", *paymentForward, Nil) |
-         |      for(@purse <- paymentForward){ pos!("pay", purse, Nil) }
+      s"""new 
+         |  paymentForward, walletCh, rl(`rho:registry:lookup`), 
+         |  SystemInstancesCh, faucetCh, posCh
+         |in {
+         |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+         |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
+         |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
+         |    @SystemInstancesRegistry!("lookup", "faucet", *faucetCh) |
+         |    for(faucet <- faucetCh; pos <- posCh){
+         |      faucet!($amount, "ed25519", "$pkStr", *walletCh) |
+         |      for(@[wallet] <- walletCh) {
+         |        @wallet!("transfer", $amount, 0, "$sig", *paymentForward, Nil) |
+         |        for(@purse <- paymentForward){ pos!("pay", purse, Nil) }
+         |      }
          |    }
          |  }
          |}""".stripMargin
@@ -619,8 +627,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       .withUser(user)
 
     val paymentQuery = ProtoUtil.sourceDeploy(
-      """for(pos <- @"proofOfStake") {
-        |  pos!("lastPayment", "__SCALA__")
+      """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
+        |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+        |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
+        |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
+        |    for(pos <- posCh){ pos!("lastPayment", "__SCALA__") }
+        |  }
         |}""".stripMargin,
       0L,
       accounting.MAX_VALUE
