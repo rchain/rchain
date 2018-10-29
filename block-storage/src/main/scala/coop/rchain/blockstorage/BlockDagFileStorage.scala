@@ -100,7 +100,9 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
       } yield result
     def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
       if (startBlockNumber >= sortOffset) {
-        topoSortVector.drop(startBlockNumber.toInt).pure[F]
+        val offset = startBlockNumber - sortOffset
+        assert(offset.isValidInt)
+        topoSortVector.drop(offset.toInt).pure[F]
       } else {
         for {
           _           <- lock.acquire
