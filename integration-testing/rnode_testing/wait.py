@@ -71,13 +71,9 @@ def show_blocks(node, blocks_num):
     def go():
         exit_code, output = node.show_blocks(blocks_num)
 
-        if exit_code != 0:
-            raise Exception("Show-blocks failed")
         block_infos = ''
         for block_hash in rx.findall(output):
             exit_code , block_info = node.show_block(block_hash)
-            if exit_code != 0:
-                raise Exception(f"Show-block {block_hash} failed")
             block_infos += block_info
 
         return block_infos
