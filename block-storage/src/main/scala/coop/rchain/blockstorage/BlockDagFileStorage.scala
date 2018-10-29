@@ -46,7 +46,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
 ) extends BlockDagStorage[F] {
   private implicit val logSource = LogSource(BlockDagFileStorage.getClass)
 
-  private final case class FileDagRepresentation(
+  private case class FileDagRepresentation(
       latestMessagesMap: Map[Validator, BlockHash],
       childMap: Map[BlockHash, Set[BlockHash]],
       dataLookup: Map[BlockHash, BlockMetadata],
@@ -502,8 +502,10 @@ object BlockDagFileStorage {
                        _      <- Log[F].error("Latest messages log is malformed")
                        result <- Sync[F].raiseError[(List[(Validator, BlockHash)], Int)](e)
                      } yield result
-                   case (Left(exception), _) =>
-                     Sync[F].raiseError(exception)
+                   case (Right(_), Left(e)) =>
+                     Sync[F].raiseError(e)
+                   case (Left(e), _) =>
+                     Sync[F].raiseError(e)
                  }
       } yield result
     }
@@ -589,7 +591,7 @@ object BlockDagFileStorage {
         withoutLastCalculatedCrc.value.map { withoutLastCalculatedCrcValue =>
           if (withoutLastCalculatedCrcValue == readDataLookupCrc) {
             val byteString                    = dataLookupList.last._2.toByteString
-            val lastDataLookupEntrySize: Long = 4 + byteString.size()
+            val lastDataLookupEntrySize: Long = 4L + byteString.size()
             dataLookupRandomAccessFile.setLength(
               dataLookupRandomAccessFile.length() - lastDataLookupEntrySize)
             (dataLookupList.init, withoutLastCalculatedCrc)
