@@ -35,7 +35,8 @@ final case class PeerNode(id: NodeIdentifier, endpoint: Endpoint) {
 
 object PeerNode {
 
-  import scala.util.matching.Regex, Regex._
+  def from(id: NodeIdentifier, host: String, protocol: Int, discovery: Int): PeerNode =
+    PeerNode(id, Endpoint(host, protocol, discovery))
 
   def fromAddress(str: String): Either[CommError, PeerNode] = {
     // TODO toInt, not URL, scheme not rnode, renameflag to discovery-port
@@ -44,12 +45,12 @@ object PeerNode {
     val maybePeer = maybeUrl flatMap (
         url =>
           for {
-            scheme    <- url.schemeOption
-            key       <- url.user
+            _         <- url.schemeOption
+            id        <- url.user
             host      <- url.hostOption
             discovery <- url.query.param("discovery").flatMap(v => Try(v.toInt).toOption)
             protocol  <- url.query.param("protocol").flatMap(v => Try(v.toInt).toOption)
-          } yield PeerNode(NodeIdentifier(key), Endpoint(host.value, protocol, discovery))
+          } yield from(NodeIdentifier(id), host.value, protocol, discovery)
       )
 
     maybePeer.fold[Either[CommError, PeerNode]](Left(ParseError(s"bad address: $str")))(Right(_))

@@ -19,26 +19,38 @@ class Rev[A](
   private val maximumBond = posParams.maximumBond
 
   final val code = s"""
-    |//requires MakeMint, BasicWallet
-    |new revMintCh, posPurseCh in {
-    |  @"MakeMint"!(*revMintCh) | for(@revMint <- revMintCh) {
-    |    //TODO: How should the revMint unforgeable name be exposed (if at all)?
+    |//requires MakeMint, BasicWallet, WalletCheck, MakePoS
+    |new
+    |  rl(`rho:registry:lookup`), MakeMintCh, WalletCheckCh, BasicWalletCh,
+    |  MakePoSCh, revMintCh, posPurseCh
+    |in {
+    |  rl!(`rho:id:exunyijimapk7z43g3bbr69awqdz54kyroj9q43jgu3dh567fxsftx`, *MakeMintCh) |
+    |  rl!(`rho:id:oqez475nmxx9ktciscbhps18wnmnwtm6egziohc3rkdzekkmsrpuyt`, *WalletCheckCh) |
+    |  rl!(`rho:id:3yicxut5xtx5tnmnneta7actof4yse3xangw4awzt8c8owqmddgyms`, *BasicWalletCh) |
+    |  rl!(`rho:id:nqt875jea4rr83383ys6guzsbebg6k7o7uhrint6d7km67886c4y4s`, *MakePoSCh) |
+    |  for(
+    |    @(_, MakeMint) <- MakeMintCh; @(_, WalletCheck) <- WalletCheckCh;
+    |    @(_, BasicWallet) <- BasicWalletCh; @(_, MakePoS) <- MakePoSCh
+    |  ) {
+    |    @MakeMint!(*revMintCh) | for(@revMint <- revMintCh) {
+    |      //TODO: How should the revMint unforgeable name be exposed (if at all)?
     |
-    |    //public contract for making empty rev purses
-    |    contract @("Rev", "makePurse")(return) = {
-    |       @(revMint, "makePurse")!(0, *return)
-    |    } |
+    |      //public contract for making empty rev purses
+    |      contract @("Rev", "makePurse")(return) = {
+    |         @revMint!("makePurse", 0, *return)
+    |      } |
     |
-    |    ${faucetCode("revMint")} |
+    |      ${faucetCode("revMint")} |
     |
-    |    //PoS purse and contract creation
-    |    @(revMint, "makePurse")!($initialTotalBond, *posPurseCh) |
-    |    for(@posPurse <- posPurseCh) {
-    |      @"MakePoS"!(posPurse, $minimumBond, $maximumBond, $initialBondsCode, "proofOfStake")
-    |    } |
+    |      //PoS purse and contract creation
+    |      @revMint!("makePurse", $initialTotalBond, *posPurseCh) |
+    |      for(@posPurse <- posPurseCh) {
+    |        @MakePoS!(posPurse, $minimumBond, $maximumBond, $initialBondsCode, "proofOfStake")
+    |      } |
     |
-    |    //basic wallets which exist from genesis
-    |    $walletCode
+    |      //basic wallets which exist from genesis
+    |      $walletCode
+    |    }
     |  }
     |}
   """.stripMargin

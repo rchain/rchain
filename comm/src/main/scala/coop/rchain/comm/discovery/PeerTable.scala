@@ -5,7 +5,6 @@ import scala.collection.mutable
 import scala.annotation.tailrec
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._
-import coop.rchain.shared._
 
 trait Keyed {
   def key: Seq[Byte]
@@ -38,11 +37,11 @@ final case class PeerTableEntry[A](entry: A, gkey: A => Seq[Byte]) extends Keyed
 object PeerTable {
 
   def apply[A <: PeerNode](
-      home: A,
+      key: Seq[Byte],
       k: Int = PeerTable.Redundancy,
       alpha: Int = PeerTable.Alpha
   ): PeerTable[A] =
-    new PeerTable[A](home, k, alpha)
+    new PeerTable[A](key, k, alpha)
 
   // Number of bits considered in the distance function. Taken from the
   // passed-in "home" value to the table.
@@ -77,11 +76,15 @@ object PeerTable {
   * network discovery and routing protocol.
   *
   */
-final class PeerTable[A <: PeerNode](home: A, private[discovery] val k: Int, alpha: Int) {
+final class PeerTable[A <: PeerNode](
+    localKey: Seq[Byte],
+    private[discovery] val k: Int,
+    alpha: Int
+) {
 
   private[discovery] type Entry = PeerTableEntry[A]
 
-  private[discovery] val width = home.key.size // in bytes
+  private[discovery] val width = localKey.size // in bytes
   private[discovery] val table = Array.fill(8 * width) {
     new mutable.ListBuffer[Entry]
   }
@@ -109,13 +112,13 @@ final class PeerTable[A <: PeerNode](home: A, private[discovery] val k: Int, alp
     else Some(highBit(0))
   }
 
-  private[discovery] def distance(otherKey: Seq[Byte]): Option[Int] = distance(home.key, otherKey)
+  private[discovery] def distance(otherKey: Seq[Byte]): Option[Int] = distance(localKey, otherKey)
   private[discovery] def distance(other: A): Option[Int]            = distance(other.key)
 
   def updateLastSeen[F[_]: Monad: Capture: KademliaRPC](peer: A): F[Unit] = {
 
     def bucket: F[Option[mutable.ListBuffer[Entry]]] =
-      Capture[F].capture(distance(home.key, peer.key).filter(_ < 8 * width).map(table.apply))
+      Capture[F].capture(distance(localKey, peer.key).filter(_ < 8 * width).map(table.apply))
 
     def addUpdateOrPickOldPeer(ps: mutable.ListBuffer[Entry]): F[Option[Entry]] =
       Capture[F].capture {
@@ -167,7 +170,7 @@ final class PeerTable[A <: PeerNode](home: A, private[discovery] val k: Int, alp
     * Remove a peer with the given key.
     */
   def remove(key: Seq[Byte]): Unit =
-    distance(home.key, key) match {
+    distance(localKey, key) match {
       case Some(index) =>
         if (index < 8 * width) {
           val ps = table(index)
@@ -196,7 +199,7 @@ final class PeerTable[A <: PeerNode](home: A, private[discovery] val k: Int, alp
         case _                    => false
       }
 
-    distance(home.key, key) match {
+    distance(localKey, key) match {
       case Some(index) => {
         val entries = new mutable.ListBuffer[Entry]
 

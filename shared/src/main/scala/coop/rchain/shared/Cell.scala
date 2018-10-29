@@ -1,8 +1,14 @@
 package coop.rchain.shared
 
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._
-import monix.eval.{MVar, Task}
+import cats._
+import cats.data._
+import cats.effect.Concurrent
+import cats.effect.concurrent.MVar
+import cats.syntax.applicative._
+import cats.syntax.applicativeError._
+import cats.syntax.flatMap._
+import cats.syntax.functor._
+import cats.syntax.either._
 
 trait Cell[F[_], S] {
   def modify(f: S => F[S]): F[Unit]
@@ -12,30 +18,31 @@ trait Cell[F[_], S] {
 object Cell extends CellInstances0 {
   def apply[F[_], S](implicit ev: Cell[F, S]): Cell[F, S] = ev
 
-  def mvarCell[S](initalState: S): Task[Cell[Task, S]] =
-    MVar(initalState) map { mvar =>
-      new Cell[Task, S] {
-        def modify(f: S => Task[S]): Task[Unit] =
+  def mvarCell[F[_]: Concurrent, S](initalState: S): F[Cell[F, S]] =
+    MVar[F].of(initalState) map { mvar =>
+      new Cell[F, S] {
+        def modify(f: S => F[S]): F[Unit] =
           for {
             s <- mvar.take
-            _ <- f(s).transformWith(
-                  ns => mvar.put(ns),
-                  e => mvar.put(s).flatMap(_ => Task.raiseError(e))
-                )
+            _ <- f(s).attempt.flatMap {
+                  case Left(e)   => mvar.put(s).flatMap(_ => e.raiseError[F, Unit])
+                  case Right(ns) => mvar.put(ns)
+                }
           } yield ()
 
-        def read: Task[S] = mvar.read
+        def read: F[S] = mvar.read
       }
     }
 
-  def unsafe[F[_]: Applicative, S](const: S): Cell[F, S] = new Cell[F, S] {
-    private var s: S = const
-    def modify(f: S => F[S]): F[Unit] = f(s).map { newS =>
-      s = newS
-      ()
+  def unsafe[F[_]: Applicative, S](const: S): Cell[F, S] =
+    new Cell[F, S] {
+      private var s: S = const
+      def modify(f: S => F[S]): F[Unit] = f(s).map { newS =>
+        s = newS
+        ()
+      }
+      def read: F[S] = s.pure[F]
     }
-    def read: F[S] = s.pure[F]
-  }
 
   def id[S](init: S): Cell[Id, S] = new Cell[Id, S] {
     var s: S = init

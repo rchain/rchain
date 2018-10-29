@@ -1,12 +1,11 @@
 package coop.rchain.comm.transport
 
 import cats.Id
-
 import coop.rchain.catscontrib._
 import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.comm.protocol.routing._
+import coop.rchain.crypto.util.CertificateHelper
 import coop.rchain.shared.{Log, LogSource}
-
 import io.grpc._
 import javax.net.ssl.SSLSession
 

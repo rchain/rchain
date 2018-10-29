@@ -96,6 +96,7 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def lastFinalizedBlock: F[BlockMessage]          = underlying.lastFinalizedBlock
   def storageContents(hash: ByteString): F[String] = underlying.storageContents(hash)
   def getRuntimeManager: F[Option[RuntimeManager]] = underlying.getRuntimeManager
+  def fetchDependencies: F[Unit]                   = underlying.fetchDependencies
 
   override def createBlock: F[CreateBlockStatus] =
     for {

@@ -54,13 +54,15 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
           throw new IllegalArgumentException(msg)
         }
         val span = Kamon.currentSpan()
+        span.mark("before-consume-ref-compute")
+        val consumeRef = Consume.create(channels, patterns, continuation, persist)
+
         span.mark("before-consume-lock")
         consumeLock(channels) {
           span.mark("consume-lock-acquired")
           logger.debug(s"""|consume: searching for data matching <patterns: $patterns>
                          |at <channels: $channels>""".stripMargin.replace('\n', ' '))
 
-          val consumeRef = Consume.create(channels, patterns, continuation, persist)
           span.mark("before-event-log-lock-acquired")
           eventLog.update(consumeRef +: _)
           span.mark("event-log-updated")
@@ -148,6 +150,8 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
     syncF.delay {
       Kamon.withSpan(produceSpan.start(), finishSpan = true) {
         val span = Kamon.currentSpan()
+        span.mark("before-produce-ref-computed")
+        val produceRef = Produce.create(channel, data, persist)
         span.mark("before-produce-lock")
         produceLock(channel) {
           span.mark("produce-lock-acquired")
@@ -158,8 +162,6 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
           span.mark("grouped-channels")
           logger.debug(s"""|produce: searching for matching continuations
                          |at <groupedChannels: $groupedChannels>""".stripMargin.replace('\n', ' '))
-
-          val produceRef = Produce.create(channel, data, persist)
           span.mark("before-event-log-lock-acquired")
           eventLog.update(produceRef +: _)
           span.mark("event-log-updated")

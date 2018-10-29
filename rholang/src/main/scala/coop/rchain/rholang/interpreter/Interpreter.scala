@@ -44,15 +44,21 @@ object Interpreter {
   def buildNormalizedTerm(source: Reader): Coeval[Par] =
     try {
       for {
-        term    <- buildAST(source)
-        inputs  = ProcVisitInputs(VectorPar(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
-        outputs <- normalizeTerm(term, inputs)
-        sorted <- Sortable[Par]
-                   .sortMatch(outputs.par)
-      } yield sorted.term
+        term <- buildAST(source)
+        par  <- buildPar(term)
+      } yield par
     } catch {
       case th: Throwable => Coeval.raiseError(UnrecognizedInterpreterError(th))
     }
+
+  def buildPar(proc: Proc): Coeval[Par] = {
+
+    val inputs = ProcVisitInputs(VectorPar(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
+    for {
+      outputs <- normalizeTerm(proc, inputs)
+      sorted  <- Sortable[Par].sortMatch(outputs.par)
+    } yield sorted.term
+  }
 
   private def buildAST(source: Reader): Coeval[Proc] =
     Coeval

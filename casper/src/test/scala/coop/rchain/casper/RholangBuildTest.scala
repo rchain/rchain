@@ -22,37 +22,31 @@ class RholangBuildTest extends FlatSpec with Matchers {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.last)
     import node._
 
-    val llDeploy =
-      ProtoUtil.sourceDeploy(
-        ListOps.code,
-        System.currentTimeMillis(),
-        ProtoUtil.EMPTY_PAYMENT_CODE,
-        accounting.MAX_VALUE
-      )
-    val deploys = Vector(
-      "contract @\"double\"(@x, ret) = { ret!(2 * x) }",
-      "@(\"ListOps\", \"map\")!([2, 3, 5, 7], \"double\", \"dprimes\")"
-    ).zipWithIndex
-      .map {
-        case (d, i) =>
-          ProtoUtil.sourceDeploy(
-            d,
-            i.toLong + 1L,
-            ProtoUtil.EMPTY_PAYMENT_CODE,
-            accounting.MAX_VALUE
-          )
-      }
+    val code =
+      """new double, dprimes, rl(`rho:registry:lookup`), ListOpsCh, time(`rho:block:timestamp`), timeRtn, timeStore, stdout(`rho:io:stdout`) in {
+        |  contract double(@x, ret) = { ret!(2 * x) } |
+        |  rl!(`rho:id:dputnspi15oxxnyymjrpu7rkaok3bjkiwq84z7cqcrx4ktqfpyapn4`, *ListOpsCh) |
+        |  for(@(_, ListOps) <- ListOpsCh) {
+        |    @ListOps!("map", [2, 3, 5, 7], *double, *dprimes)
+        |  } |
+        |  time!(*timeRtn) |
+        |  for (@timestamp <- timeRtn) {
+        |    timeStore!("The timestamp is ${timestamp}" %% {"timestamp" : timestamp})
+        |  }
+        |}""".stripMargin
 
-    val Created(signedBlock) = deploys.traverse(MultiParentCasper[Id].deploy) *> MultiParentCasper[
-      Id
-    ].createBlock
-    val status = MultiParentCasper[Id].addBlock(signedBlock)
-    assert(status == Valid)
+    val deploy =
+      ProtoUtil.sourceDeploy(code, 1L, ProtoUtil.EMPTY_PAYMENT_CODE, accounting.MAX_VALUE)
+    val Created(signedBlock) = MultiParentCasper[Id].deploy(deploy) *> MultiParentCasper[Id].createBlock
+    val _                    = MultiParentCasper[Id].addBlock(signedBlock)
 
     val storage = HashSetCasperTest.blockTuplespaceContents(signedBlock)
 
     logEff.warns should be(Nil)
-    storage.contains("@{\"dprimes\"}!([4, 6, 10, 14])") should be(true)
+    storage.contains("!([4, 6, 10, 14])") should be(true)
+    storage.contains("!(\"The timestamp is 2\")") should be(true)
+
+    node.tearDown()
   }
 
 }

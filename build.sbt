@@ -26,7 +26,8 @@ lazy val projectSettings = Seq(
   testOptions in Test += Tests.Argument("-oD"), //output test durations
   dependencyOverrides ++= Seq(
     "io.kamon" %% "kamon-core" % kamonVersion
-  )
+  ),
+  fork := true
 )
 
 lazy val coverageSettings = Seq(
@@ -62,6 +63,7 @@ lazy val shared = (project in file("shared"))
       catsCore,
       catsEffect,
       catsMtl,
+      lz4,
       monix,
       scodecCore,
       scodecBits,
@@ -130,9 +132,9 @@ lazy val crypto = (project in file("crypto"))
       secp256k1Java,
       scodecBits
     ),
-    fork := true,
     doctestTestFramework := DoctestTestFramework.ScalaTest
   )
+  .dependsOn(shared)
 
 lazy val models = (project in file("models"))
   .settings(commonSettings: _*)
@@ -274,7 +276,6 @@ lazy val rholang = (project in file("rholang"))
       baseDirectory.value / "src" / "main" / "k",
       baseDirectory.value / "src" / "main" / "rbl"
     ).map(_.getPath ++ "/.*").mkString(";"),
-    fork in Test := true,
     //constrain the resource usage so that we hit SOE-s and OOME-s more quickly should they happen
     javaOptions in Test ++= Seq("-Xss240k", "-XX:MaxJavaStackTraceDepth=10000", "-Xmx128m")
   )
@@ -418,10 +419,16 @@ lazy val rspaceBench = (project in file("rspace-bench"))
     libraryDependencies += "com.esotericsoftware" % "kryo" % "4.0.2",
     dependencyOverrides ++= Seq(
       "org.ow2.asm" % "asm" % "5.0.4"
-    )
+    ),
+    sourceDirectory in Jmh := (sourceDirectory in Test).value,
+    classDirectory in Jmh := (classDirectory in Test).value,
+    dependencyClasspath in Jmh := (dependencyClasspath in Test).value,
+    // rewire tasks, so that 'jmh:run' automatically invokes 'jmh:compile' (otherwise a clean 'jmh:run' would fail),
+    compile in Jmh := (compile in Jmh).dependsOn(compile in Test).value,
+    run in Jmh := (run in Jmh).dependsOn(Keys.compile in Jmh).evaluated
   )
   .enablePlugins(JmhPlugin)
-  .dependsOn(rspace, rholang)
+  .dependsOn(rspace, rholang, models % "test->test")
 
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)

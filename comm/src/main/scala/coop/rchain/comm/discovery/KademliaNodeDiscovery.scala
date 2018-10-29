@@ -14,24 +14,22 @@ import coop.rchain.shared._
 
 object KademliaNodeDiscovery {
   def create[F[_]: Monad: Capture: Log: Time: Metrics: KademliaRPC](
-      src: PeerNode,
+      id: NodeIdentifier,
       defaultTimeout: FiniteDuration
   )(init: Option[PeerNode]): F[KademliaNodeDiscovery[F]] =
     for {
-      knd <- new KademliaNodeDiscovery[F](src, defaultTimeout).pure[F]
+      knd <- new KademliaNodeDiscovery[F](id, defaultTimeout).pure[F]
       _   <- init.fold(().pure[F])(p => knd.addNode(p))
     } yield knd
 
 }
 
 private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: KademliaRPC](
-    src: PeerNode,
+    id: NodeIdentifier,
     timeout: FiniteDuration
 ) extends NodeDiscovery[F] {
 
-  private val table = PeerTable(src)
-
-  private val id: NodeIdentifier = src.id
+  private val table = PeerTable[PeerNode](id.key)
 
   // TODO inline usage
   private[discovery] def addNode(peer: PeerNode): F[Unit] =

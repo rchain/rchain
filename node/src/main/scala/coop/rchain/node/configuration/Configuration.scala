@@ -3,22 +3,26 @@ package coop.rchain.node.configuration
 import java.io.File
 import java.net.InetAddress
 import java.nio.file.{Path, Paths}
+import java.util.concurrent.atomic.AtomicReference
 
 import cats.implicits._
+
 import coop.rchain.blockstorage.LMDBBlockStore
 import coop.rchain.casper.CasperConf
-import coop.rchain.casper.protocol.{PhloLimit, PhloPrice}
 import coop.rchain.catscontrib.ski._
-import coop.rchain.comm.{PeerNode, UPnP}
+import coop.rchain.comm._
 import coop.rchain.node.IpChecker
 import coop.rchain.node.configuration.toml.error._
 import coop.rchain.node.configuration.toml.{Configuration => TomlConfiguration}
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.shared.StoreType
 import coop.rchain.shared.StoreType._
-import monix.eval.Task
 
+import monix.eval.{Callback, Task}
 import scala.concurrent.duration._
+
+import com.google.common.base.Optional
+import monix.execution.Scheduler
 
 object Configuration {
   private implicit val logSource: LogSource = LogSource(this.getClass)
@@ -41,6 +45,7 @@ object Configuration {
   private val DefaultHttPort                    = 40403
   private val DefaultKademliaPort               = 40404
   private val DefaultGrpcHost                   = "localhost"
+  private val DefaultDynamicHostAddress         = false
   private val DefaultNoUpNP                     = false
   private val DefaultStandalone                 = false
   private val DefaultTimeout                    = 2000
@@ -57,10 +62,12 @@ object Configuration {
   private val DefaultRequiredSigns              = 0
   private val DefaultApprovalProtocolDuration   = 5.minutes
   private val DefaultApprovalProtocolInterval   = 5.seconds
-  private val DefaultMaxMessageSize: Int        = 4 * 1024 * 1024
+  // TODO this temporarly makes the allowed message size to be  256 MB on startup
+  // This will be rolled back after CORE-1394 and Kents changes
+  private val DefaultMaxMessageSize: Int = 256 * 1024 * 1024
   // within range HTTP2 RFC 7540
-  private val MaxMessageSizeMinimumValue: Int = 1 * 1024 * 1024
-  private val MaxMessageSizeMaximumValue: Int = 10 * 1024 * 1024
+  private val MaxMessageSizeMinimumValue: Int = 10 * 1024 * 1024
+  private val MaxMessageSizeMaximumValue: Int = DefaultMaxMessageSize * 4
   private val DefaultMinimumBond: Long        = 1L
   private val DefaultMaximumBond: Long        = Long.MaxValue
   private val DefaultHasFaucet: Boolean       = false
@@ -112,12 +119,12 @@ object Configuration {
   ): Task[Configuration] =
     if (command == Run) {
       for {
-        dataDir    <- Task.pure(options.run.data_dir.getOrElse(profile.dataDir._1()))
+        dataDir    <- Task.pure(options.run.dataDir.getOrElse(profile.dataDir._1()))
         _          = System.setProperty("rnode.data.dir", dataDir.toString)
         configFile <- Task.delay(options.configFile.getOrElse(dataDir.resolve("rnode.toml")).toFile)
         config     <- loadConfigurationFile(configFile)
         effectiveDataDir <- Task.pure(
-                             if (options.run.data_dir.isDefined) dataDir
+                             if (options.run.dataDir.isDefined) dataDir
                              else config.flatMap(_.server.flatMap(_.dataDir)).getOrElse(dataDir)
                            )
         _      = System.setProperty("rnode.data.dir", effectiveDataDir.toString)
@@ -135,6 +142,7 @@ object Configuration {
             DefaultPort,
             DefaultHttPort,
             DefaultKademliaPort,
+            DefaultDynamicHostAddress,
             DefaultNoUpNP,
             DefaultTimeout,
             DefaultBootstrapServer,
@@ -217,6 +225,12 @@ object Configuration {
     val httpPort: Int = get(_.run.httpPort, _.server.flatMap(_.httpPort), DefaultHttPort)
     val kademliaPort: Int =
       get(_.run.kademliaPort, _.server.flatMap(_.kademliaPort), DefaultKademliaPort)
+    val dynamicHostAddress: Boolean =
+      get(
+        _.run.dynamicHostAddress,
+        _.server.flatMap(_.dynamicHostAddress),
+        DefaultDynamicHostAddress
+      )
     val noUpnp: Boolean = get(_.run.noUpnp, _.server.flatMap(_.noUpnp), DefaultNoUpNP)
     val defaultTimeout: Int =
       get(_.run.defaultTimeout, _.server.flatMap(_.defaultTimeout), DefaultTimeout)
@@ -244,7 +258,7 @@ object Configuration {
     val deployTimestamp = getOpt(_.run.deployTimestamp, _.validators.flatMap(_.deployTimestamp))
 
     val host: Option[String] = getOpt(_.run.host, _.server.flatMap(_.host))
-    val mapSize: Long        = get(_.run.map_size, _.server.flatMap(_.mapSize), DefaultMapSize)
+    val mapSize: Long        = get(_.run.mapSize, _.server.flatMap(_.mapSize), DefaultMapSize)
     val storeType: StoreType =
       get(_.run.storeType, _.server.flatMap(_.storeType.flatMap(StoreType.from)), DefaultStoreType)
     val casperBlockStoreSize: Long = get(
@@ -304,6 +318,7 @@ object Configuration {
       port,
       httpPort,
       kademliaPort,
+      host.isEmpty && dynamicHostAddress,
       noUpnp,
       defaultTimeout,
       bootstrap,
@@ -375,8 +390,8 @@ object Configuration {
         import options.deploy._
         Deploy(
           from.getOrElse("0x"),
-          PhloLimit(phloLimit()),
-          PhloPrice(phloPrice()),
+          phloLimit(),
+          phloPrice(),
           nonce.getOrElse(0),
           location()
         )
@@ -413,37 +428,48 @@ final class Configuration(
 
   def printHelp(): Task[Unit] = Task.delay(options.printHelp())
 
-  def fetchHost(implicit log: Log[Task]): Task[String] =
+  def fetchLocalPeerNode(
+      id: NodeIdentifier
+  )(implicit log: Log[Task]): Task[PeerNode] =
     for {
       externalAddress <- retriveExternalAddress
       host            <- fetchHost(externalAddress)
-    } yield host
+      peerNode        = PeerNode.from(id, host, server.port, server.kademliaPort)
+    } yield peerNode
+
+  def checkLocalPeerNode(
+      peerNode: PeerNode
+  )(implicit log: Log[Task]): Task[Option[PeerNode]] =
+    for {
+      r      <- checkAll()
+      (_, a) = r
+      host <- if (a == peerNode.endpoint.host) Task.now(Option.empty[String])
+             else log.info(s"external IP address has changed to $a").map(kp(Some(a)))
+    } yield host.map(h => PeerNode.from(peerNode.id, h, server.port, server.kademliaPort))
 
   private def fetchHost(externalAddress: Option[String])(implicit log: Log[Task]): Task[String] =
     server.host match {
       case Some(h) => Task.pure(h)
-      case None    => whoAmI(server.port, externalAddress)
+      case None    => whoAmI(externalAddress)
     }
 
-  private def retriveExternalAddress: Task[Option[String]] =
-    Task.delay {
-      if (server.noUpnp) None
-      else UPnP.assurePortForwarding(Seq(server.port))
-    }
+  private def retriveExternalAddress(implicit log: Log[Task]): Task[Option[String]] =
+    if (server.noUpnp) None.pure[Task]
+    else UPnP.assurePortForwarding[Task](List(server.port))
 
   private def check(source: String, from: String): Task[(String, Option[String])] =
     IpChecker.checkFrom[Task](from).map((source, _))
 
   private def checkNext(
       prev: (String, Option[String]),
-      next: Task[(String, Option[String])]
+      next: => Task[(String, Option[String])]
   ): Task[(String, Option[String])] =
     prev._2.fold(next)(_ => Task.pure(prev))
 
   private def upnpIpCheck(externalAddress: Option[String]): Task[(String, Option[String])] =
     Task.delay(("UPnP", externalAddress.map(InetAddress.getByName(_).getHostAddress)))
 
-  private def checkAll(externalAddress: Option[String]): Task[(String, String)] =
+  private def checkAll(externalAddress: Option[String] = None): Task[(String, String)] =
     for {
       r1 <- check("AmazonAWS service", "http://checkip.amazonaws.com")
       r2 <- checkNext(r1, check("WhatIsMyIP service", "http://bot.whatismyipaddress.com"))
@@ -454,7 +480,7 @@ final class Configuration(
       (s, a)
     }
 
-  private def whoAmI(port: Int, externalAddress: Option[String])(
+  private def whoAmI(externalAddress: Option[String])(
       implicit log: Log[Task]
   ): Task[String] =
     for {

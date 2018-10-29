@@ -20,8 +20,8 @@ import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import coop.rchain.comm.rp.ProtocolHelper.packet
-import coop.rchain.comm.transport.TransportLayer
+import coop.rchain.comm.rp.ProtocolHelper.{packet, toPacket}
+import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.effects.PacketHandler
@@ -361,15 +361,15 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     override def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Option[Packet]] =
       for {
         local      <- RPConfAsk[F].reader(_.local)
-        block      <- BlockStore[F].get(br.hash)
+        block      <- BlockStore[F].get(br.hash) // TODO: Refactor
         serialized = block.map(_.toByteString)
         maybeMsg = serialized.map(
-          serializedMessage => packet(local, transport.BlockMessage, serializedMessage)
+          serializedMessage => Blob(local, Packet(transport.BlockMessage.id, serializedMessage))
         )
-        send     <- maybeMsg.traverse(msg => TransportLayer[F].send(peer, msg))
+        _        <- maybeMsg.traverse(msg => TransportLayer[F].stream(Seq(peer), msg))
         hash     = PrettyPrinter.buildString(br.hash)
         logIntro = s"Received request for block $hash from $peer."
-        _ <- send match {
+        _ <- block match {
               case None    => Log[F].info(logIntro + "No response given since block not found.")
               case Some(_) => Log[F].info(logIntro + "Response sent.")
             }
@@ -542,11 +542,10 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         }
     }
 
-  private def noApprovedBlockAvailable(peer: PeerNode): Packet =
-    Packet(
-      transport.NoApprovedBlockAvailable.id,
-      NoApprovedBlockAvailable("NoApprovedBlockAvailable", peer.toString).toByteString
-    )
+  private def noApprovedBlockAvailable(peer: PeerNode): Packet = Packet(
+    transport.NoApprovedBlockAvailable.id,
+    NoApprovedBlockAvailable("NoApprovedBlockAvailable", peer.toString).toByteString
+  )
 
 }
 

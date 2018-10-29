@@ -2,17 +2,21 @@ package coop.rchain.casper.util.rholang
 
 import java.nio.file.Files
 
+import cats.Id
+import coop.rchain.casper.genesis.contracts.StandardDeploys
+import coop.rchain.casper.protocol.Deploy
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.Var.VarInstance.Wildcard
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models.{EVar, Par, Send}
 import coop.rchain.rholang.interpreter.accounting.Chargeable
+import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.{accounting, Runtime}
-import coop.rchain.rholang.math.NonNegativeNumber
 import coop.rchain.shared.StoreType
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
+import coop.rchain.catscontrib.Capture._
 
 import scala.annotation.tailrec
 
@@ -35,19 +39,31 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   "captureResult" should "return the value at the specified channel after a rholang computation" in {
     val purseValue     = "37"
     val captureChannel = "__PURSEVALUE__"
+    val deployData = ProtoUtil.sourceDeploy(
+      s"""new rl(`rho:registry:lookup`), NonNegativeNumberCh in {
+         |  rl!(`rho:id:nd74ztexkao5awjhj95e3octkza7tydwiy7euthnyrt5ihgi9rj495`, *NonNegativeNumberCh) |
+         |  for(@(_, NonNegativeNumber) <- NonNegativeNumberCh) {
+         |    @NonNegativeNumber!($purseValue, "nn")
+         |  }
+         |}""".stripMargin,
+      System.currentTimeMillis(),
+      ProtoUtil.EMPTY_PAYMENT_CODE,
+      accounting.MAX_VALUE
+    )
     val deploys = Seq(
-      NonNegativeNumber.term,
-      InterpreterUtil.mkTerm(s""" @"NonNegativeNumber"!($purseValue, "nn") """).right.get
-    ).map(
-      ProtoUtil
-        .termDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE)
+      StandardDeploys.nonNegativeNumber,
+      Deploy(
+        term = InterpreterUtil.mkTerm(deployData.term).toOption,
+        raw = Some(deployData),
+        payment = InterpreterUtil.mkTerm(ProtoUtil.EMPTY_PAYMENT_CODE).toOption
+      )
     )
 
     val (hash, _) = runtimeManager.computeState(runtimeManager.emptyStateHash, deploys)
     val result = runtimeManager.captureResults(
       hash,
       InterpreterUtil
-        .mkTerm(s""" for(@nn <- @"nn"){ @(nn, "value")!("$captureChannel") } """)
+        .mkTerm(s""" for(nn <- @"nn"){ nn!("value", "$captureChannel") } """)
         .right
         .get,
       captureChannel
@@ -75,12 +91,14 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   }
 
   "emptyStateHash" should "not remember previous hot store state" in {
+    implicit val timeEff = new LogicalTime[Id]
+
     val testStorageDirectory = Files.createTempDirectory("casper-runtime-manager-test")
 
     val testRuntime1        = Runtime.create(testStorageDirectory, storageSize)
     val testRuntimeManager1 = RuntimeManager.fromRuntime(testRuntime1)
     val hash1               = testRuntimeManager1.emptyStateHash
-    val deploy              = ProtoUtil.basicDeploy(0)
+    val deploy              = ProtoUtil.basicDeploy[Id](0)
     val _                   = testRuntimeManager1.computeState(hash1, deploy :: Nil)
     testRuntime1.close()
 

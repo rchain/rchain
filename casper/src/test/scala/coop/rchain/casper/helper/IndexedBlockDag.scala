@@ -1,6 +1,7 @@
 package coop.rchain.casper.helper
 
-import coop.rchain.casper.{BlockDag, BlockMetadata}
+import coop.rchain.blockstorage.BlockMetadata
+import coop.rchain.casper.BlockDag
 import coop.rchain.casper.BlockDag.LatestMessages
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.BlockMessage

@@ -2,12 +2,22 @@ package coop.rchain.comm
 
 import java.net.InetAddress
 
+import cats.Monad
+import cats.effect.Sync
+import cats.instances.list._
+import cats.syntax.applicative._
+import cats.syntax.apply._
+import cats.syntax.flatMap._
+import cats.syntax.functor._
+import cats.syntax.traverse._
+import coop.rchain.shared.Log
+import org.bitlet.weupnp._
+
 import scala.collection.JavaConverters._
+import scala.language.higherKinds
 import scala.util.Try
 import scala.util.control.NonFatal
 import scala.util.matching.Regex
-
-import org.bitlet.weupnp._
 
 object UPnP {
 
@@ -17,7 +27,7 @@ object UPnP {
       "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\." +
       "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$").r
 
-  def isPrivateIpAddress(ip: String): Option[Boolean] = {
+  private def isPrivateIpAddress(ip: String): Option[Boolean] = {
     val parts =
       ip match {
         case IPv4(p1, p2, p3, p4) => Some((p1.toInt, p2.toInt, p3.toInt, p4.toInt))
@@ -35,78 +45,98 @@ object UPnP {
     }
   }
 
-  def assurePortForwarding(ports: Seq[Int]): Option[String] = {
-    println("INFO - trying to open ports using UPnP....")
-    val devices = discover
-    if (devices.gateways.isEmpty) {
-      println("INFO - No gateway devices found")
-      if (devices.all.isEmpty) {
-        println("INFO - No need to open any port")
-      } else {
-        println("INFO - Other devices:")
-        devices.all.foreach {
-          case (ip, d) =>
-            println(UPnP.showDevice(ip, d))
-        }
-        println()
+  private def printDevices[F[_]: Log](devices: UPnPDevices): F[Unit] = {
+    val devicesStr = devices.all
+      .map {
+        case (ip, d) =>
+          UPnP.showDevice(ip, d)
       }
-      None
-    } else {
-      print("INFO - Available gateway devices: ")
-      println(devices.gateways.map(d => d.getFriendlyName).mkString(", "))
+      .mkString("\n", "\n", "\n")
 
-      val gateway = devices.validGateway.getOrElse(devices.gateways.head)
-      println(s"INFO - Picking ${gateway.getFriendlyName} as gateway")
-      isPrivateIpAddress(gateway.getExternalIPAddress) match {
-        case Some(true) =>
-          println(
-            s"WARNING - Gateway's external IP address ${gateway.getExternalIPAddress} is from a private address block. " +
-              "This machine is behind more than one NAT."
-          )
-        case Some(_) =>
-          println("INFO - Gateway's external IP address is from a public address block.")
-        case _ => println("WARNING - Can't parse gateway's external IP address. It's maybe IPv6.")
-      }
-
-      val mappings = getPortMappings(gateway).filter(m => ports.contains(m.getExternalPort))
-      mappings.foreach { m =>
-        print(
-          s"INFO - Removing an existing port mapping for port ${m.getProtocol}/${m.getExternalPort}"
-        )
-        removePort(gateway, m) match {
-          case Right(_) => println(" [success]")
-          case _        => println(" [failed]")
-        }
-      }
-
-      val result = ports.map { p =>
-        print(s"INFO - Adding a port mapping for port TCP/$p")
-        addPort(gateway, p, "TCP", "RChain") match {
-          case Right(_) =>
-            println(" [success]")
-            true
-          case _ =>
-            println(" [failed]")
-            false
-        }
-      }
-
-      if (result.exists(r => !r)) {
-        println(
-          "ERROR - Could not open the ports via UPnP. Please open it manually on your router!"
-        )
-      } else {
-        println("INFO - UPnP port forwarding was most likely successful!")
-      }
-      println()
-      println(showPortMappingHeader)
-      getPortMappings(gateway).foreach(m => println(showPortMapping(m)))
-      println()
-      Some(gateway.getExternalIPAddress)
-    }
+    Log[F].info(s"Other devices: $devicesStr")
   }
 
-  def discover: UPnPDevices = {
+  private def logGatewayEmpty[F[_]: Log: Monad](devices: UPnPDevices): F[Unit] =
+    for {
+      _ <- Log[F].info("INFO - No gateway devices found")
+      _ <- if (devices.all.isEmpty) Log[F].info("No need to open any port")
+          else printDevices[F](devices)
+    } yield ()
+
+  private def removePorts[F[_]: Log: Sync](
+      mappings: List[PortMappingEntry],
+      gateway: GatewayDevice
+  ): F[List[Unit]] =
+    mappings.traverse { m =>
+      for {
+        res    <- Sync[F].delay(removePort(gateway, m))
+        resMsg = if (res.isRight) "[success]" else "[failed]"
+        _ <- Log[F].info(
+              s"Removing an existing port mapping for port ${m.getProtocol}/${m.getExternalPort} $resMsg"
+            )
+      } yield ()
+    }
+
+  private def addPorts[F[_]: Log: Sync](
+      ports: List[Int],
+      gateway: GatewayDevice
+  ): F[List[Boolean]] =
+    ports.traverse { p =>
+      for {
+        res    <- Sync[F].delay(addPort(gateway, p, "TCP", "RChain"))
+        resMsg = if (res.isRight) "[success]" else "[failed]"
+        _      <- Log[F].info(s"Adding a port mapping for port TCP/$p $resMsg")
+      } yield res.isRight
+    }
+
+  private def tryOpenPorts[F[_]: Log: Sync](
+      ports: List[Int],
+      devices: UPnPDevices
+  ): F[Option[String]] =
+    for {
+      _ <- Log[F].info(
+            s"Available gateway devices: ${devices.gateways.map(d => d.getFriendlyName).mkString(", ")}"
+          )
+      gateway = devices.validGateway.getOrElse(devices.gateways.head)
+      _       <- Log[F].info(s"Picking ${gateway.getFriendlyName} as gateway")
+      _ <- isPrivateIpAddress(gateway.getExternalIPAddress) match {
+            case Some(true) =>
+              Log[F].warn(
+                s"Gateway's external IP address ${gateway.getExternalIPAddress} is from a private address block. " +
+                  "This machine is behind more than one NAT."
+              )
+            case Some(_) =>
+              Log[F].info("Gateway's external IP address is from a public address block.")
+            case _ =>
+              Log[F].warn("Can't parse gateway's external IP address. It's maybe IPv6.")
+          }
+
+      mappings <- Sync[F].delay(
+                   getPortMappings(gateway).filter(m => ports.contains(m.getExternalPort)).toList
+                 )
+      _   <- removePorts(mappings, gateway)
+      res <- addPorts(ports, gateway)
+
+      _ <- if (res.exists(r => !r))
+            Log[F].error(
+              "Could not open the ports via UPnP. Please open it manually on your router!"
+            )
+          else
+            Log[F].info("UPnP port forwarding was most likely successful!")
+
+      _ <- Log[F].info(showPortMappingHeader)
+      _ <- getPortMappings(gateway).toList.map(showPortMapping).traverse(Log[F].info)
+    } yield Some(gateway.getExternalIPAddress)
+
+  def assurePortForwarding[F[_]: Log: Sync](ports: List[Int]): F[Option[String]] =
+    for {
+      _       <- Log[F].info("trying to open ports using UPnP....")
+      devices <- Sync[F].delay(discover)
+      res <- if (devices.gateways.isEmpty) logGatewayEmpty(devices) *> None.pure[F]
+            else tryOpenPorts(ports, devices)
+    } yield res
+
+  private def discover: UPnPDevices = {
     val discover = new GatewayDiscover
     UPnPDevices(
       discover.discover.asScala.toMap,
@@ -115,7 +145,7 @@ object UPnP {
     )
   }
 
-  def getPortMappings(device: GatewayDevice): Seq[PortMappingEntry] = {
+  private def getPortMappings(device: GatewayDevice): Seq[PortMappingEntry] = {
 
     def loop(i: Int, mappings: Seq[PortMappingEntry]): Seq[PortMappingEntry] = {
       val entry = new PortMappingEntry
@@ -127,7 +157,7 @@ object UPnP {
     loop(0, Seq.empty)
   }
 
-  def showDevice(ip: InetAddress, device: GatewayDevice): String =
+  private def showDevice(ip: InetAddress, device: GatewayDevice): String =
     s"""
        |Interface:    ${ip.getHostAddress}
        |Name:         ${device.getFriendlyName}
@@ -147,7 +177,7 @@ object UPnP {
   private val colInternalClient = "%1$-15s"
   private val colProtocol       = "%1$-10s"
 
-  val showPortMappingHeader: String = {
+  private val showPortMappingHeader: String = {
     val externalPort   = colExternalPort.format("Extern")
     val internalPort   = colInternalPort.format("Intern")
     val internalClient = colInternalClient.format("Host")
@@ -156,7 +186,7 @@ object UPnP {
     s"$protocol $externalPort $internalClient $internalPort $description"
   }
 
-  def showPortMapping(m: PortMappingEntry): String = {
+  private def showPortMapping(m: PortMappingEntry): String = {
     val externalPort   = colExternalPort.format(s"${m.getExternalPort}")
     val internalPort   = colInternalPort.format(s"${m.getInternalPort}")
     val internalClient = colInternalClient.format(m.getInternalClient)
@@ -166,7 +196,7 @@ object UPnP {
   }
 
   // TODO: Allow different external and internal ports
-  def addPort(
+  private def addPort(
       device: GatewayDevice,
       port: Int,
       protocol: String,
@@ -181,7 +211,10 @@ object UPnP {
       case NonFatal(ex: Exception) => Left(UnknownCommError(ex.toString))
     }
 
-  def removePort(device: GatewayDevice, portMapping: PortMappingEntry): Either[CommError, Unit] =
+  private def removePort(
+      device: GatewayDevice,
+      portMapping: PortMappingEntry
+  ): Either[CommError, Unit] =
     try {
       device.deletePortMapping(portMapping.getExternalPort, portMapping.getProtocol)
       Right(())

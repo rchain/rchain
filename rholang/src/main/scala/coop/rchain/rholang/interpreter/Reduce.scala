@@ -682,6 +682,8 @@ object Reduce {
                 Applicative[M].pure[(String, String)](keyString -> valueInt.toString)
               case (GString(keyString), GBool(valueBool)) =>
                 Applicative[M].pure[(String, String)](keyString -> valueBool.toString)
+              case (GString(keyString), GUri(uri)) =>
+                Applicative[M].pure[(String, String)](keyString -> uri)
               // TODO: Add cases for other ground terms as well? Maybe it would be better
               // to implement cats.Show for all ground terms.
               case (_: GString, value) =>
@@ -840,7 +842,7 @@ object Reduce {
 
         case EMapBody(map) =>
           for {
-            evaledPs <- map.ps.sortedMap.traverse {
+            evaledPs <- map.ps.sortedMap.toList.traverse {
                          case (key, value) =>
                            for {
                              eKey   <- evalExpr(key).map(updateLocallyFree)

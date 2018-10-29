@@ -60,7 +60,8 @@ object Connect {
 
   import Connections._
 
-  type RPConfAsk[F[_]] = ApplicativeAsk[F, RPConf]
+  type RPConfState[F[_]] = MonadState[F, RPConf]
+  type RPConfAsk[F[_]]   = ApplicativeAsk[F, RPConf]
 
   object RPConfAsk {
     def apply[F[_]](implicit ev: ApplicativeAsk[F, RPConf]): ApplicativeAsk[F, RPConf] = ev
@@ -83,7 +84,7 @@ object Connect {
       for {
         numOfConnectionsPinged <- RPConfAsk[F].reader(_.clearConnections.numOfConnectionsPinged)
         toPing                 = connections.take(numOfConnectionsPinged)
-        results                <- toPing.traverse(sendHeartbeat(_))
+        results                <- toPing.traverse(sendHeartbeat)
         successfulPeers        = results.collect { case (peer, Right(_)) => peer }
         failedPeers            = results.collect { case (peer, Left(_)) => peer }
         _ <- ConnectionsCell[F].modify { connections =>
@@ -124,7 +125,7 @@ object Connect {
       peerAddr = peer.toAddress
       _        <- Log[F].debug(s"Connecting to $peerAddr")
       _        <- Metrics[F].incrementCounter("connects")
-      _        <- Log[F].info(s"Initialize protocol handshake to $peerAddr")
+      _        <- Log[F].debug(s"Initialize protocol handshake to $peerAddr")
       local    <- RPConfAsk[F].reader(_.local)
       ph       = protocolHandshake(local)
       phsresp  <- TransportLayer[F].roundTrip(peer, ph, timeout * 2) >>= ErrorHandler[F].fromEither
