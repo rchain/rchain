@@ -61,11 +61,22 @@ object BlockGen {
     }
   }
 
-  val blockElementsGen: Gen[List[BlockMessage]] =
-    distinctListOfGen(blockElementGen)(_ == _)
-
   val blockHashElementsGen: Gen[List[(String, BlockMessage)]] =
     distinctListOfGen(blockHashElementGen)(_._1 == _._1)
+
+  def blockElementsGen: Gen[List[BlockMessage]] =
+    Gen.sized { size =>
+      (0 until size).foldLeft(Gen.listOfN(0, blockElementGen)) {
+        case (gen, _) =>
+          for {
+            blocks       <- gen
+            b            <- blockElementGen
+            parents      <- Gen.someOf(blocks)
+            parentHashes = parents.map(_.blockHash)
+            newBlock     = b.withHeader(b.header.get.withParentsHashList(parentHashes))
+          } yield newBlock :: blocks
+      }
+    }
 
   def blockWithNewHashesGen(blockElements: List[BlockMessage]): Gen[List[BlockMessage]] =
     Gen.listOfN(blockElements.size, blockHashGen).map { blockHashes =>
