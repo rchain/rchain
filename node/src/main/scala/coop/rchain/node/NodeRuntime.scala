@@ -193,7 +193,7 @@ class NodeRuntime private[node] (
         _        <- time.sleep(1.minute)
         local    <- peerNodeAsk.ask
         newLocal <- conf.checkLocalPeerNode(local)
-        _        <- newLocal.fold(Task.unit)(pn => rpConfState.set(rpConf(pn)))
+        _        <- newLocal.fold(Task.unit)(pn => rpConfState.modify(_.copy(local = pn)))
       } yield ()
 
     val loop: Effect[Unit] =
@@ -266,7 +266,8 @@ class NodeRuntime private[node] (
     numOfConnectionsPinged = 10
   ) // TODO read from conf
 
-  private def rpConf(peerNode: PeerNode) = RPConf(peerNode, defaultTimeout, rpClearConnConf)
+  private def rpConf(local: PeerNode, bootstrapNode: Option[PeerNode]) =
+    RPConf(local, bootstrapNode, defaultTimeout, rpClearConnConf)
 
   /**
     * Main node entry. It will:
@@ -283,7 +284,8 @@ class NodeRuntime private[node] (
     defaultTimeout = conf.server.defaultTimeout.millis
 
     // 3. create instances of typeclasses
-    rpConfState          = effects.rpConfState(rpConf(local))
+    initPeer             = if (conf.server.standalone) None else Some(conf.server.bootstrap)
+    rpConfState          = effects.rpConfState(rpConf(local, initPeer))
     rpConfAsk            = effects.rpConfAsk(rpConfState)
     peerNodeAsk          = effects.peerNodeAsk(rpConfState)
     rpConnections        <- effects.rpConnections.toEffect
@@ -308,7 +310,6 @@ class NodeRuntime private[node] (
       log,
       kademliaConnections
     )
-    initPeer = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     nodeDiscovery <- effects
                       .nodeDiscovery(id, defaultTimeout)(initPeer)(log, time, metrics, kademliaRPC)
                       .toEffect
