@@ -30,6 +30,7 @@ import coop.rchain.rspace.spaces.FineGrainedReplayRSpace
 import coop.rchain.shared.StoreType
 import coop.rchain.shared.StoreType._
 import monix.eval.Task
+import monix.execution.Scheduler
 
 import scala.collection.immutable
 
@@ -44,14 +45,14 @@ class Runtime private (
     val blockTime: Runtime.BlockTime[Task]
 ) {
   def readAndClearErrorVector(): Vector[Throwable] = errorLog.readAndClearErrorVector()
-  def close(): Unit = {
-    import monix.execution.Scheduler.Implicits.global
+  def close()(
+      implicit scheduler: Scheduler
+  ): Unit =
     (for {
       _ <- space.close()
       _ <- replaySpace.close()
       _ = context.close()
     } yield ()).unsafeRunSync
-  }
 
   def injectEmptyRegistryRoot: Task[Unit] = Task.defer {
     // This random value stays dead in the tuplespace, so we can have some fun.
