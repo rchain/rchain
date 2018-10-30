@@ -54,45 +54,6 @@ class Runtime private (
       _ = context.close()
     } yield ()).unsafeRunSync
 
-  def injectEmptyRegistryRoot[F[_]](space: RhoISpace[F], replaySpace: RhoReplayISpace[F])(
-      implicit F: Sync[F]
-  ): F[Unit] = {
-    // This random value stays dead in the tuplespace, so we can have some fun.
-    // This is from Jeremy Bentham's "Defence of Usury"
-    val rand = Blake2b512Random(
-      ("there can be no such thing as usury: " +
-        "for what rate of interest is there that can naturally be more proper than another?")
-        .getBytes()
-    )
-    implicit val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
-    for {
-      spaceResult <- space.produce(
-                      Registry.registryRoot,
-                      ListParWithRandom(Seq(Registry.emptyMap), rand),
-                      false
-                    )
-      replayResult <- replaySpace.produce(
-                       Registry.registryRoot,
-                       ListParWithRandom(Seq(Registry.emptyMap), rand),
-                       false
-                     )
-      _ <- spaceResult match {
-            case Right(None) =>
-              replayResult match {
-                case Right(None) => F.unit
-                case Right(Some(_)) =>
-                  F.raiseError(
-                    new SetupError("Registry insertion in replay fired continuation.")
-                  )
-                case Left(err) => F.raiseError(err)
-              }
-            case Right(Some(_)) =>
-              F.raiseError(new SetupError("Registry insertion fired continuation."))
-            case Left(err) => F.raiseError(err)
-          }
-    } yield ()
-  }
-
 }
 
 object Runtime {
@@ -420,5 +381,44 @@ object Runtime {
         blockTime
       )
     }).unsafeRunSync
+  }
+
+  def injectEmptyRegistryRoot[F[_]](space: RhoISpace[F], replaySpace: RhoReplayISpace[F])(
+      implicit F: Sync[F]
+  ): F[Unit] = {
+    // This random value stays dead in the tuplespace, so we can have some fun.
+    // This is from Jeremy Bentham's "Defence of Usury"
+    val rand = Blake2b512Random(
+      ("there can be no such thing as usury: " +
+        "for what rate of interest is there that can naturally be more proper than another?")
+        .getBytes()
+    )
+    implicit val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
+    for {
+      spaceResult <- space.produce(
+                      Registry.registryRoot,
+                      ListParWithRandom(Seq(Registry.emptyMap), rand),
+                      false
+                    )
+      replayResult <- replaySpace.produce(
+                       Registry.registryRoot,
+                       ListParWithRandom(Seq(Registry.emptyMap), rand),
+                       false
+                     )
+      _ <- spaceResult match {
+            case Right(None) =>
+              replayResult match {
+                case Right(None) => F.unit
+                case Right(Some(_)) =>
+                  F.raiseError(
+                    new SetupError("Registry insertion in replay fired continuation.")
+                  )
+                case Left(err) => F.raiseError(err)
+              }
+            case Right(Some(_)) =>
+              F.raiseError(new SetupError("Registry insertion fired continuation."))
+            case Left(err) => F.raiseError(err)
+          }
+    } yield ()
   }
 }

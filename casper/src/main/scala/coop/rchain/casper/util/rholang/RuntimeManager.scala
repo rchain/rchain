@@ -284,7 +284,7 @@ object RuntimeManager {
     (for {
       _                <- active.space.clear()
       _                <- active.replaySpace.clear()
-      _                <- active.injectEmptyRegistryRoot(active.space, active.replaySpace)
+      _                <- Runtime.injectEmptyRegistryRoot(active.space, active.replaySpace)
       checkpoint       <- active.space.createCheckpoint()
       replayCheckpoint <- active.replaySpace.createCheckpoint()
       hash             = ByteString.copyFrom(checkpoint.root.bytes.toArray)

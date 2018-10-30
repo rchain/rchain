@@ -53,7 +53,7 @@ object RholangCLI {
 
     val runtime = Runtime.create(conf.dataDir(), conf.mapSize())
     Await.result(
-      runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace).runAsync,
+      Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace).runAsync,
       5.seconds
     )
 
