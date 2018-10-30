@@ -218,6 +218,10 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
         p                <- chooseNonConflicting[F](orderedHeads, genesis, dag)
         r                <- remDeploys(dag, p)
         bondedValidators = bonds(p.head).map(_.validator).toSet
+        //We ensure that only the justifications given in the block are those
+        //which are bonded validators in the chosen parent. This is safe because
+        //any latest message not from a bonded validator will not change the
+        //final fork-choice.
         justifications = toJustification(dag.latestMessages)
           .filter(j => bondedValidators.contains(j.validator))
         proposal <- if (r.nonEmpty || p.length > 1) {
