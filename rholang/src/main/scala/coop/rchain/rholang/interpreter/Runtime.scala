@@ -211,7 +211,9 @@ object Runtime {
     }).sequence
 
   // TODO: remove default store type
-  def create(dataDir: Path, mapSize: Long, storeType: StoreType = LMDB): Runtime = {
+  def create(dataDir: Path, mapSize: Long, storeType: StoreType = LMDB)(
+      implicit scheduler: Scheduler
+  ): Runtime = {
     val errorLog                                  = new ErrorLog()
     implicit val ft: FunctorTell[Task, Throwable] = errorLog
 
@@ -288,7 +290,6 @@ object Runtime {
       )
     }
 
-    import monix.execution.Scheduler.Implicits.global
     (for {
       setup                         <- setupRSpace[Task](dataDir, mapSize, storeType)
       (context, space, replaySpace) = setup

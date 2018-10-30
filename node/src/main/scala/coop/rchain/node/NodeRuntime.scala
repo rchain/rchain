@@ -322,11 +322,11 @@ class NodeRuntime private[node] (
     )
     _       <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
     oracle  = SafetyOracle.turanOracle[Effect](Monad[Effect])
-    runtime = Runtime.create(storagePath, storageSize, storeType)
+    runtime = Runtime.create(storagePath, storageSize, storeType)(scheduler)
     _ = Runtime
       .injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
       .toEffect
-    casperRuntime  = Runtime.create(casperStoragePath, storageSize, storeType)
+    casperRuntime  = Runtime.create(casperStoragePath, storageSize, storeType)(scheduler)
     runtimeManager = RuntimeManager.fromRuntime(casperRuntime)(scheduler)
     casperPacketHandler <- CasperPacketHandler
                             .of[Effect](conf.casper, defaultTimeout, runtimeManager, _.value)(
