@@ -86,6 +86,7 @@ trait IStore[C, P, A, K] {
   private val _trieUpdates: AtomicReference[(Long, List[TrieUpdate[C, P, A, K]])] =
     new AtomicReference[(Long, List[TrieUpdate[C, P, A, K]])]((0L, Nil))
 
+
   def trieDelete(key: Blake2b256Hash, gnat: GNAT[C, P, A, K]): Unit =
     _trieUpdates.getAndUpdate((t: (Long, List[TrieUpdate[C, P, A, K]])) => {
       (t._1 + 1, TrieUpdate(t._1, Delete, key, gnat) :: t._2)
@@ -104,12 +105,11 @@ trait IStore[C, P, A, K] {
 
   protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): Unit
 
-  private[rspace] def clearTrieUpdates(): Unit =
-    _trieUpdates.updateAndGet(const((0L, Nil)))
+  private[rspace] def getAndClearTrieUpdates(): Seq[TrieUpdate[C, P, A, K]] =
+    _trieUpdates.getAndUpdate(const((0L, Nil)))._2
 
   def createCheckpoint(): Blake2b256Hash = {
-    val trieUpdates = getTrieUpdates
-    clearTrieUpdates()
+    val trieUpdates = getAndClearTrieUpdates()
     collapse(trieUpdates).foreach(processTrieUpdate)
     trieStore.withTxn(trieStore.createTxnWrite()) { txn =>
       trieStore

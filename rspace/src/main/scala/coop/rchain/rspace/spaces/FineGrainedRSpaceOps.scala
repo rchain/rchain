@@ -149,7 +149,7 @@ abstract class FineGrainedRSpaceOps[F[_], C, P, E, A, R, K](
           store.trieStore.validateAndPutRoot(trieTxn, store.trieBranch, root)
           val leaves = store.trieStore.getLeaves(trieTxn, root)
           eventLog.update(const(Seq.empty))
-          store.clearTrieUpdates()
+          store.getAndClearTrieUpdates()
           store.clear(txn)
           restoreInstalls(txn)
           store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
