@@ -729,13 +729,12 @@ trait ReplayRSpaceTests
       val replayStore = replaySpace.store
 
       replayStore.isEmpty shouldBe false
-      replayStore.getTrieUpdates.length shouldBe 1
-      replayStore.getTrieUpdateCount shouldBe 1
+      replayStore.getTrieUpdates.size shouldBe 1
+      replayStore.getTrieUpdates.head._2.size shouldBe 1
 
       replaySpace.reset(emptyPoint.root)
       replayStore.isEmpty shouldBe true
-      replayStore.getTrieUpdates.length shouldBe 0
-      replayStore.getTrieUpdateCount shouldBe 0
+      replayStore.getTrieUpdates.size shouldBe 0
       replaySpace.replayData shouldBe empty
 
       val checkpoint1 = replaySpace.createCheckpoint()
@@ -765,16 +764,15 @@ trait ReplayRSpaceTests
       val replayStore = replaySpace.store
 
       replayStore.isEmpty shouldBe false
-      replayStore.getTrieUpdates.length shouldBe 1
-      replayStore.getTrieUpdateCount shouldBe 1
+      replayStore.getTrieUpdates.size shouldBe 1
+      replayStore.getTrieUpdates.head._2.size shouldBe 1
 
       val checkpoint0 = replaySpace.createCheckpoint()
       checkpoint0.log shouldBe empty // we don't record trace logs in ReplayRspace
 
       replaySpace.clear()
       replayStore.isEmpty shouldBe true
-      replayStore.getTrieUpdates.length shouldBe 0
-      replayStore.getTrieUpdateCount shouldBe 0
+      replayStore.getTrieUpdates.size shouldBe 0
       replaySpace.replayData shouldBe empty
 
       val checkpoint1 = replaySpace.createCheckpoint()

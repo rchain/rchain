@@ -267,9 +267,9 @@ class LMDBStore[C, P, A, K] private[rspace] (
 
   protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): Unit =
     update match {
-      case TrieUpdate(_, Insert, channelsHash, gnat) =>
+      case TrieUpdate(Insert, channelsHash, gnat) =>
         history.insert(trieStore, trieBranch, channelsHash, canonicalize(gnat))
-      case TrieUpdate(_, Delete, channelsHash, gnat) =>
+      case TrieUpdate(Delete, channelsHash, gnat) =>
         history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat))
     }
 

@@ -205,7 +205,7 @@ trait IStoreTests
     }
 
   "collapse" should "work on empty history" in withTestSpace { space =>
-    space.store.collapse(List.empty) shouldBe List.empty
+    IStore.collapse(Map.empty) shouldBe List.empty
   }
 
   it should "return unmodified history when nothing to prune" in
@@ -216,8 +216,9 @@ trait IStoreTests
           .distinct should contain only gnat.channels.size withClue "#patterns in each continuation should equal #channels"
 
         val store   = space.store
-        val history = List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat))
-        store.collapse(history) shouldBe history
+        val hash    = store.hashChannels(gnat.channels)
+        val history = Map((hash, TrieUpdate(Insert, hash, gnat) :: Nil))
+        IStore.collapse(history) shouldBe history.flatMap(_._2)
       }
     }
 
@@ -226,9 +227,12 @@ trait IStoreTests
       withTestSpace { space => (gnats: Seq[GNAT[String, Pattern, String, StringsCaptor]]) =>
         val store = space.store
         val history = gnats
-          .flatMap(gnat => List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat)))
-          .toList
-        store.collapse(history) should contain theSameElementsAs (history)
+          .map(gnat => {
+            val hash = store.hashChannels(gnat.channels)
+            (hash, List(TrieUpdate(Insert, hash, gnat)))
+          })
+          .toMap
+        IStore.collapse(history) should contain theSameElementsAs history.flatMap(_._2)
       }
     }
 
@@ -242,13 +246,19 @@ trait IStoreTests
                 gnat2: GNAT[String, Pattern, String, StringsCaptor]
             ) =>
               val store = space.store
-              val gnat1Ops = List(
-                TrieUpdate(0, Insert, store.hashChannels(gnat1.channels), gnat1),
-                TrieUpdate(1, Delete, store.hashChannels(gnat1.channels), gnat1)
+              val hash1 = store.hashChannels(gnat1.channels)
+              val gnat1Ops = Map(
+                (
+                  hash1,
+                  TrieUpdate(Delete, hash1, gnat1) ::
+                    TrieUpdate(Insert, hash1, gnat1) ::
+                    Nil
+                )
               )
-              val gnat2Ops = List(TrieUpdate(2, Insert, store.hashChannels(gnat2.channels), gnat2))
+              val hash2    = store.hashChannels(gnat2.channels)
+              val gnat2Ops = Map((hash2, TrieUpdate(Insert, hash2, gnat2) :: Nil))
               val history  = gnat1Ops ++ gnat2Ops
-              store.collapse(history) shouldBe gnat2Ops
+              IStore.collapse(history) shouldBe gnat2Ops.flatMap(_._2)
           }
       }
     }
@@ -257,13 +267,18 @@ trait IStoreTests
     forAll("gnat1") { (gnat1: GNAT[String, Pattern, String, StringsCaptor]) =>
       withTestSpace { space =>
         val store = space.store
-        val gnatOps = List(
-          TrieUpdate(0, Insert, store.hashChannels(gnat1.channels), gnat1),
-          TrieUpdate(1, Insert, store.hashChannels(gnat1.channels), gnat1),
-          TrieUpdate(2, Insert, store.hashChannels(gnat1.channels), gnat1),
-          TrieUpdate(3, Delete, store.hashChannels(gnat1.channels), gnat1)
+        val hash  = store.hashChannels(gnat1.channels)
+        val gnatOps = Map(
+          (
+            hash,
+            TrieUpdate(Delete, hash, gnat1) ::
+              TrieUpdate(Insert, hash, gnat1) ::
+              TrieUpdate(Insert, hash, gnat1) ::
+              TrieUpdate(Insert, hash, gnat1) ::
+              Nil
+          )
         )
-        store.collapse(gnatOps) shouldBe empty
+        IStore.collapse(gnatOps) shouldBe empty
       }
     }
 
@@ -271,11 +286,12 @@ trait IStoreTests
     forAll("gnat") { (gnat: GNAT[String, Pattern, String, StringsCaptor]) =>
       withTestSpace { space =>
         val store      = space.store
-        val lastInsert = TrieUpdate(1, Insert, store.hashChannels(gnat.channels), gnat)
+        val lastInsert = TrieUpdate(Insert, store.hashChannels(gnat.channels), gnat)
 
-        val history =
-          List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat), lastInsert)
-        store.collapse(history) shouldBe List(lastInsert)
+        val hash = store.hashChannels(gnat.channels)
+
+        val history = Map((hash, lastInsert :: TrieUpdate(Insert, hash, gnat) :: Nil))
+        IStore.collapse(history) shouldBe List(lastInsert)
       }
     }
 
@@ -283,14 +299,18 @@ trait IStoreTests
     forAll("gnat") { (gnat: GNAT[String, Pattern, String, StringsCaptor]) =>
       withTestSpace { space =>
         val store      = space.store
-        val lastInsert = TrieUpdate(2, Insert, store.hashChannels(gnat.channels), gnat)
+        val lastInsert = TrieUpdate(Insert, store.hashChannels(gnat.channels), gnat)
 
-        val history = List(
-          TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat),
-          lastInsert,
-          TrieUpdate(1, Delete, store.hashChannels(gnat.channels), gnat)
+        val hash = store.hashChannels(gnat.channels)
+
+        val history = Map(
+          hash ->
+            (TrieUpdate(Insert, hash, gnat) ::
+              TrieUpdate(Delete, store.hashChannels(gnat.channels), gnat) ::
+              lastInsert ::
+              Nil)
         )
-        store.collapse(history) shouldBe List(lastInsert)
+        IStore.collapse(history) shouldBe List(lastInsert)
       }
     }
 }

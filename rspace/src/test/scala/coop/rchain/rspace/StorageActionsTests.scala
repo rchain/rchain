@@ -971,14 +971,13 @@ trait StorageActionsTests[F[_]]
         r           <- space.consume(key, patterns, new StringsCaptor, persist = false)
         _           = r shouldBe Right(None)
         _           = store.isEmpty shouldBe false
-        _           = store.getTrieUpdates.length shouldBe 1
-        _           = store.getTrieUpdateCount shouldBe 1
+        _           = store.getTrieUpdates.size shouldBe 1
+        _           = store.getTrieUpdates.head._2.size shouldBe 1
 
         _ <- space.reset(checkpoint0.root)
 
         _ = store.isEmpty shouldBe true
-        _ = store.getTrieUpdates.length shouldBe 0
-        _ = store.getTrieUpdateCount shouldBe 0
+        _ = store.getTrieUpdates.size shouldBe 0
 
         checkpoint1 <- space.createCheckpoint()
       } yield (checkpoint1.log shouldBe empty)
@@ -1003,16 +1002,15 @@ trait StorageActionsTests[F[_]]
 
         _ = r shouldBe Right(None)
         _ = store.isEmpty shouldBe false
-        _ = store.getTrieUpdates.length shouldBe 1
-        _ = store.getTrieUpdateCount shouldBe 1
+        _ = store.getTrieUpdates.size shouldBe 1
+        _ = store.getTrieUpdates.head._2.size shouldBe 1
 
         checkpoint0 <- space.createCheckpoint()
         _           = checkpoint0.log should not be empty
 
         _ <- space.clear()
         _ = store.isEmpty shouldBe true
-        _ = store.getTrieUpdates.length shouldBe 0
-        _ = store.getTrieUpdateCount shouldBe 0
+        _ = store.getTrieUpdates.size shouldBe 0
 
         checkpoint1 <- space.createCheckpoint()
       } yield (checkpoint1.log shouldBe empty)

@@ -69,7 +69,6 @@ object internal {
   case object Delete     extends Operation
 
   final case class TrieUpdate[C, P, A, K](
-      count: Long,
       operation: Operation,
       channelsHash: Blake2b256Hash,
       gnat: GNAT[C, P, A, K]

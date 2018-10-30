@@ -5,6 +5,7 @@ import coop.rchain.rspace.internal._
 import monix.execution.atomic.AtomicAny
 
 import scala.Function.const
+import scala.collection.concurrent.TrieMap
 import scala.collection.immutable.Seq
 
 /** The interface for the underlying store
@@ -82,53 +83,48 @@ trait IStore[C, P, A, K] {
 
   def withTrieTxn[R](txn: Transaction)(f: TrieTransaction => R): R
 
-  private val _trieUpdates: AtomicAny[(Long, List[TrieUpdate[C, P, A, K]])] =
-    AtomicAny[(Long, List[TrieUpdate[C, P, A, K]])]((0L, Nil))
+  /**
+    * high level locking is solved by RSpace
+    */
+  private val _trieUpdates: TrieMap[Blake2b256Hash, List[TrieUpdate[C, P, A, K]]] = TrieMap.empty
 
-  def trieDelete(key: Blake2b256Hash, gnat: GNAT[C, P, A, K]): Unit =
-    _trieUpdates.getAndTransform((t: (Long, List[TrieUpdate[C, P, A, K]])) => {
-      (t._1 + 1, TrieUpdate(t._1, Delete, key, gnat) :: t._2)
-    })
+  def trieDelete(key: Blake2b256Hash, gnat: GNAT[C, P, A, K]): Unit = {
+    val value = TrieUpdate(Delete, key, gnat)
+    _trieUpdates.putIfAbsent(key, value :: Nil) match {
+      case Some(x) => _trieUpdates.replace(key, x, value :: x)
+      case None    => ()
+    }
+  }
 
-  def trieInsert(key: Blake2b256Hash, gnat: GNAT[C, P, A, K]): Unit =
-    _trieUpdates.getAndTransform((t: (Long, List[TrieUpdate[C, P, A, K]])) => {
-      (t._1 + 1, TrieUpdate(t._1, Insert, key, gnat) :: t._2)
-    })
+  def trieInsert(key: Blake2b256Hash, gnat: GNAT[C, P, A, K]): Unit = {
+    val value = TrieUpdate(Insert, key, gnat)
+    _trieUpdates.putIfAbsent(key, value :: Nil) match {
+      case Some(x) => _trieUpdates.replace(key, x, value :: x)
+      case None    => ()
+    }
+  }
 
-  private[rspace] def getTrieUpdates: Seq[TrieUpdate[C, P, A, K]] =
-    _trieUpdates.get._2
-
-  private[rspace] def getTrieUpdateCount: Long =
-    _trieUpdates.get._1
+  private[rspace] def getTrieUpdates: Map[Blake2b256Hash, List[TrieUpdate[C, P, A, K]]] =
+    _trieUpdates.toMap
 
   protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): Unit
 
-  private[rspace] def getAndClearTrieUpdates(): Seq[TrieUpdate[C, P, A, K]] =
-    _trieUpdates.getAndTransform(const((0L, Nil)))._2
+  private[rspace] def getAndClearTrieUpdates()
+    : Map[Blake2b256Hash, List[TrieUpdate[C, P, A, K]]] = {
+    val r = getTrieUpdates
+    _trieUpdates.clear()
+    r
+  }
 
   def createCheckpoint(): Blake2b256Hash = {
     val trieUpdates = getAndClearTrieUpdates()
-    collapse(trieUpdates).foreach(processTrieUpdate)
+    IStore.collapse(trieUpdates).foreach(processTrieUpdate)
     trieStore.withTxn(trieStore.createTxnWrite()) { txn =>
       trieStore
         .persistAndGetRoot(txn, trieBranch)
         .getOrElse(throw new Exception("Could not get root hash"))
     }
   }
-
-  private[rspace] def collapse(in: Seq[TrieUpdate[C, P, A, K]]): Seq[TrieUpdate[C, P, A, K]] =
-    in.groupBy(_.channelsHash)
-      .flatMap {
-        case (_, value) =>
-          value
-            .sorted(Ordering.by((tu: TrieUpdate[C, P, A, K]) => tu.count).reverse)
-            .headOption match {
-            case Some(TrieUpdate(_, Delete, _, _))          => List.empty
-            case Some(insert @ TrieUpdate(_, Insert, _, _)) => List(insert)
-            case _                                          => value
-          }
-      }
-      .toList
 
   private[rspace] def bulkInsert(
       txn: Transaction,
@@ -138,4 +134,18 @@ trait IStore[C, P, A, K] {
   private[rspace] def clear(txn: Transaction): Unit
 
   def isEmpty: Boolean
+}
+
+object IStore {
+  private[rspace] def collapse[C, P, A, K](
+      in: Map[Blake2b256Hash, List[TrieUpdate[C, P, A, K]]]
+  ): Seq[TrieUpdate[C, P, A, K]] =
+    in.flatMap {
+      case (_, value) =>
+        value.headOption match {
+          case Some(TrieUpdate(Delete, _, _))          => List.empty
+          case Some(insert @ TrieUpdate(Insert, _, _)) => List(insert)
+          case _                                       => value
+        }
+    }.toList
 }
