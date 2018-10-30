@@ -221,50 +221,6 @@ object Runtime {
         }
     )
 
-  def setupRSpace(
-      dataDir: Path,
-      mapSize: Long,
-      storeType: StoreType
-  ): Task[(RhoContext, RhoISpace[Task], RhoReplayISpace[Task])] = {
-    def createSpace(
-        context: RhoContext
-    ): Task[(RhoContext, RhoISpace[Task], RhoReplayISpace[Task])] =
-      for {
-        space <- RSpace.create[
-                  Task,
-                  Par,
-                  BindPattern,
-                  OutOfPhlogistonsError.type,
-                  ListParWithRandom,
-                  ListParWithRandomAndPhlos,
-                  TaggedContinuation
-                ](context, Branch.MASTER)
-        replaySpace <- ReplayRSpace.create[
-                        Task,
-                        Par,
-                        BindPattern,
-                        OutOfPhlogistonsError.type,
-                        ListParWithRandom,
-                        ListParWithRandomAndPhlos,
-                        TaggedContinuation
-                      ](context, Branch.REPLAY)
-      } yield ((context, space, replaySpace))
-    storeType match {
-      case InMem =>
-        createSpace(Context.createInMemory())
-      case LMDB =>
-        if (Files.notExists(dataDir)) {
-          Files.createDirectories(dataDir)
-        }
-        createSpace(Context.create(dataDir, mapSize, true))
-      case Mixed =>
-        if (Files.notExists(dataDir)) {
-          Files.createDirectories(dataDir)
-        }
-        createSpace(Context.createMixed(dataDir, mapSize))
-    }
-  }
-
   // TODO: remove default store type
   def create(dataDir: Path, mapSize: Long, storeType: StoreType = LMDB): Runtime = {
     val errorLog                                  = new ErrorLog()
@@ -345,7 +301,7 @@ object Runtime {
 
     import monix.execution.Scheduler.Implicits.global
     (for {
-      setup                         <- setupRSpace(dataDir, mapSize, storeType)
+      setup                         <- setupRSpace[Task](dataDir, mapSize, storeType)
       (context, space, replaySpace) = setup
       (reducer, replayReducer) = {
         lazy val replayDispatchTable: RhoDispatchMap =
@@ -420,5 +376,49 @@ object Runtime {
             case Left(err) => F.raiseError(err)
           }
     } yield ()
+  }
+
+  def setupRSpace[F[_]: Sync](
+      dataDir: Path,
+      mapSize: Long,
+      storeType: StoreType
+  ): F[(RhoContext, RhoISpace[F], RhoReplayISpace[F])] = {
+    def createSpace(
+        context: RhoContext
+    ): F[(RhoContext, RhoISpace[F], RhoReplayISpace[F])] =
+      for {
+        space <- RSpace.create[
+                  F,
+                  Par,
+                  BindPattern,
+                  OutOfPhlogistonsError.type,
+                  ListParWithRandom,
+                  ListParWithRandomAndPhlos,
+                  TaggedContinuation
+                ](context, Branch.MASTER)
+        replaySpace <- ReplayRSpace.create[
+                        F,
+                        Par,
+                        BindPattern,
+                        OutOfPhlogistonsError.type,
+                        ListParWithRandom,
+                        ListParWithRandomAndPhlos,
+                        TaggedContinuation
+                      ](context, Branch.REPLAY)
+      } yield ((context, space, replaySpace))
+    storeType match {
+      case InMem =>
+        createSpace(Context.createInMemory())
+      case LMDB =>
+        if (Files.notExists(dataDir)) {
+          Files.createDirectories(dataDir)
+        }
+        createSpace(Context.create(dataDir, mapSize, true))
+      case Mixed =>
+        if (Files.notExists(dataDir)) {
+          Files.createDirectories(dataDir)
+        }
+        createSpace(Context.createMixed(dataDir, mapSize))
+    }
   }
 }
