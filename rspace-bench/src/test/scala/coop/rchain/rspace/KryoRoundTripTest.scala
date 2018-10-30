@@ -23,7 +23,7 @@ class KryoRoundTripTest extends FlatSpec with PropertyChecks with Matchers {
     assert(out == in)
   }
 
-  def roundTripSerialization[A: Arbitrary :Shrink](
+  def roundTripSerialization[A: Arbitrary: Shrink](
       implicit s: Serialize2ByteBuffer[A],
       tag: ClassTag[A]
   ): Unit =
