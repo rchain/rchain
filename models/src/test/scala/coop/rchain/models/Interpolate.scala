@@ -34,7 +34,9 @@ trait InterpolateInstances {
   implicit val sendInterpolate: Interpolate[Send, Par] = new Interpolate[Send, Par] {
     override def interpolate(term: Send, interpolateMap: Map[String, Par]): Send = {
       val newChan = replaceSingleExpr(term.chan, interpolateMap)
-      term.withChan(newChan)
+      val newData =
+        term.data.map(p => p.singleExpr().map(replaceSingleExpr(_, interpolateMap)).getOrElse(p))
+      term.withChan(newChan).withData(newData)
     }
   }
 
