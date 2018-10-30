@@ -34,35 +34,9 @@ class DeployPaymentCostTest extends FlatSpec {
     val secKey = Base16.decode(secKeyString)
     val pubKey = Base16.decode(pubKeyString)
 
-    // Create new wallet
-    val walletRetCh = "walletRet"
-    val newWalletName = deployAndCapture(
-      createWalletPar(pubKeyString, walletRetCh),
-      GString(walletRetCh),
-      node.runtimeManager
-    )
-    val walletAddress =
-      GPrivateBuilder(
-        ByteString.copyFrom(newWalletName.exprs.head.getEListBody.ps.head.ids.head.id.toByteArray)
-      )
+    val walletAddress = createWallet(node.runtimeManager)
 
-    // Register wallet in the Registry
-    val registerWalletTuple: Par = ETuple(Seq(GInt(1), walletAddress))
-    val registrySig              = Ed25519.sign(registerWalletTuple.toByteArray, secKey)
-    Ed25519.verify(registerWalletTuple.toByteArray, registrySig, pubKey)
-
-    val walletUriRet: Par = GPrivateBuilder()
-
-    val registerWalletPar = registerSigned(
-      registerWalletTuple,
-      ByteString.copyFrom(pubKey),
-      ByteString.copyFrom(registrySig),
-      walletUriRet
-    )
-
-    val walletUri = deployAndCapture(registerWalletPar, walletUriRet, node.runtimeManager)
-
-    val walletUriString = walletUri.exprs.head.getGUri
+    val walletUriString = registerWallet(walletAddress, secKey, pubKey, node.runtimeManager)
 
     // Prepare wallet transfer
     val nonce  = 0
@@ -218,6 +192,46 @@ object DeployPaymentCostTest {
 
   def parse(rho: String): Par =
     Interpreter.buildNormalizedTerm(rho).value()
+
+  def createWallet(rm: RuntimeManager)(implicit casper: MultiParentCasperImpl[Id]): Par = {
+    // Create new wallet
+    val walletRetCh = "walletRet"
+    val newWalletName = deployAndCapture(
+      createWalletPar(pubKeyString, walletRetCh),
+      GString(walletRetCh),
+      rm
+    )
+
+    println(Pretty.pretty(newWalletName))
+    GPrivateBuilder(
+      ByteString.copyFrom(
+        newWalletName.exprs.head.getEListBody.ps.head.bundles.head.body.ids.head.id.toByteArray
+      )
+    )
+  }
+
+  /** Registers wallet in the Registry
+    * @param walletAddress unforgeable name of the wallet
+    * @return Registry URI of the wallet
+    */
+  def registerWallet(walletAddress: Par, secKey: Array[Byte], pubKey: Array[Byte], rm: RuntimeManager)(implicit casper: MultiParentCasperImpl[Id]): String = {
+    val registerWalletTuple: Par = ETuple(Seq(GInt(1), walletAddress))
+    val registrySig              = Ed25519.sign(registerWalletTuple.toByteArray, secKey)
+    Ed25519.verify(registerWalletTuple.toByteArray, registrySig, pubKey)
+
+    val walletUriRet: Par = GPrivateBuilder()
+
+    val registerWalletPar = registerSigned(
+      registerWalletTuple,
+      ByteString.copyFrom(pubKey),
+      ByteString.copyFrom(registrySig),
+      walletUriRet
+    )
+
+    val walletUri = deployAndCapture(registerWalletPar, walletUriRet, rm)
+
+    walletUri.exprs.head.getGUri
+  }
 
   //TODO: use unforgeable names
   def createWalletRho(pubKey: String, retCh: String): String =
