@@ -6,7 +6,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.DeployPaymentCostTest._
 import coop.rchain.casper.genesis.contracts.{Faucet, PreWallet}
 import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.protocol.{BlockMessage, Deploy, DeployData, PhloPrice}
+import coop.rchain.casper.protocol.{BlockMessage, Deploy, DeployData}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.{Created, HashSetCasperTest, MultiParentCasperImpl, Valid}
@@ -91,7 +91,7 @@ class DeployPaymentCostTest extends FlatSpec {
 
     val paymentDeployData =
       DeployData()
-        .withPhloPrice(PhloPrice(1))
+        .withPhloPrice(1L)
         .withPhloLimit(accounting.MAX_VALUE)
         .withUser(user)
         .withTimestamp(timestamp)

@@ -32,9 +32,9 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
 
   def captureResults(start: StateHash, deploy: Deploy, name: String = "__SCALA__")(
       implicit scheduler: Scheduler
-  ): Seq[Par] = captureResults(start, term, Par().withExprs(Seq(Expr(GString(name)))))
+  ): Seq[Par] = captureResults(start, deploy, Par().withExprs(Seq(Expr(GString(name)))))
 
-  def captureResults(start: StateHash, term: Par, name: Par)(
+  def captureResults(start: StateHash, deploy: Deploy, name: Par)(
       implicit scheduler: Scheduler
   ): Seq[Par] = {
     val runtime                   = runtimeContainer.take()
@@ -43,7 +43,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     //TODO: Is better error handling needed here?
     val result: Seq[Datum[ListParWithRandom]] =
       if (processedDeploy.status.isFailed) Nil
-      else runtime.space.getData(name)
+      else runtime.space.getData(name).unsafeRunSync
 
     runtimeContainer.put(runtime)
 
