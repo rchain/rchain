@@ -213,11 +213,13 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   def createBlock: F[CreateBlockStatus] = validatorId match {
     case Some(vId @ ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
       for {
-        dag            <- blockDag
-        orderedHeads   <- estimator(dag)
-        p              <- chooseNonConflicting[F](orderedHeads, genesis, dag)
-        r              <- remDeploys(dag, p)
+        dag              <- blockDag
+        orderedHeads     <- estimator(dag)
+        p                <- chooseNonConflicting[F](orderedHeads, genesis, dag)
+        r                <- remDeploys(dag, p)
+        bondedValidators = bonds(p.head).map(_.validator).toSet
         justifications = toJustification(dag.latestMessages)
+          .filter(j => bondedValidators.contains(j.validator))
         proposal <- if (r.nonEmpty || p.length > 1) {
                      createProposal(p, r, justifications)
                    } else {
