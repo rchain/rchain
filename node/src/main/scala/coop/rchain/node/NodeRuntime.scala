@@ -325,7 +325,7 @@ class NodeRuntime private[node] (
     runtime = Runtime.create(storagePath, storageSize, storeType)
     _ = Runtime
       .injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
-      .unsafeRunSync(scheduler)
+      .toEffect
     casperRuntime  = Runtime.create(casperStoragePath, storageSize, storeType)
     runtimeManager = RuntimeManager.fromRuntime(casperRuntime)(scheduler)
     casperPacketHandler <- CasperPacketHandler
