@@ -54,7 +54,9 @@ class Runtime private (
       _ = context.close()
     } yield ()).unsafeRunSync
 
-  def injectEmptyRegistryRoot: Task[Unit] = Task.defer {
+  def injectEmptyRegistryRoot[F[_]](space: RhoISpace[F], replaySpace: RhoReplayISpace[F])(
+      implicit F: Sync[F]
+  ): F[Unit] = {
     // This random value stays dead in the tuplespace, so we can have some fun.
     // This is from Jeremy Bentham's "Defence of Usury"
     val rand = Blake2b512Random(
@@ -77,16 +79,16 @@ class Runtime private (
       _ <- spaceResult match {
             case Right(None) =>
               replayResult match {
-                case Right(None) => Task.unit
+                case Right(None) => F.unit
                 case Right(Some(_)) =>
-                  Task.raiseError(
+                  F.raiseError(
                     new SetupError("Registry insertion in replay fired continuation.")
                   )
-                case Left(err) => Task.raiseError(err)
+                case Left(err) => F.raiseError(err)
               }
             case Right(Some(_)) =>
-              Task.raiseError(new SetupError("Registry insertion fired continuation."))
-            case Left(err) => Task.raiseError(err)
+              F.raiseError(new SetupError("Registry insertion fired continuation."))
+            case Left(err) => F.raiseError(err)
           }
     } yield ()
   }
