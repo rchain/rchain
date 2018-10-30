@@ -27,11 +27,16 @@ lazy val projectSettings = Seq(
   dependencyOverrides ++= Seq(
     "io.kamon" %% "kamon-core" % kamonVersion
   ),
-  fork := true,
   javacOptions ++= (sys.env.get("JAVAC_VERSION") match {
     case None    => Seq()
     case Some(v) => Seq("-source", v, "-target", v)
-  })
+  }),
+  Test / fork := true,
+  Test / parallelExecution := true,
+  Test / testForkedParallel := true,
+  IntegrationTest / fork := true,
+  IntegrationTest / parallelExecution := true,
+  IntegrationTest / testForkedParallel := true
 )
 
 lazy val coverageSettings = Seq(
@@ -136,6 +141,7 @@ lazy val crypto = (project in file("crypto"))
       secp256k1Java,
       scodecBits
     ),
+    fork := true,
     doctestTestFramework := DoctestTestFramework.ScalaTest
   )
   .dependsOn(shared)
