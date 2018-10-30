@@ -64,7 +64,7 @@ pipeline:
   package:
     <<: *sbtenv
     commands:
-      - sbt node/docker:publishLocal node/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball
+      - sbt node/docker:publishLocal node/debian:packageBin node/universal:packageZipTarball
     volumes:
       - /var/cache/rchain-build/.sbt:/root/.sbt
       - /var/cache/rchain-build/.ivy2:/root/.ivy2
@@ -82,6 +82,16 @@ pipeline:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp:/tmp
       - /var/tmp/rchain-it:/var/tmp/rchain-it
+    when:
+      event: [ push, tag ]
+
+  package-rpm:
+    <<: *sbtenv
+    commands:
+      - env JAVAC_VERSION=1.8 sbt clean compile doc node/rpm:packageBin
+    volumes:
+      - /var/cache/rchain-build/.sbt:/root/.sbt
+      - /var/cache/rchain-build/.ivy2:/root/.ivy2
     when:
       event: [ push, tag ]
 
