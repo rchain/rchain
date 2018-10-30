@@ -83,7 +83,9 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       case None => ()
     }
 
-  def storageRepr(hash: StateHash): Option[String] =
+  def storageRepr(hash: StateHash)(
+      implicit scheduler: Scheduler
+  ): Option[String] =
     getResetRuntimeOpt(hash).map { resetRuntime =>
       val result = StoragePrinter.prettyPrint(resetRuntime.space.store)
       runtimeContainer.put(resetRuntime)
@@ -104,8 +106,9 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     toBondSeq(bondsPar.head)
   }
 
-  private def getResetRuntime(hash: StateHash) = {
-    import monix.execution.Scheduler.Implicits.global
+  private def getResetRuntime(hash: StateHash)(
+      implicit scheduler: Scheduler
+  ) = {
     val runtime   = runtimeContainer.take()
     val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
     Try(runtime.space.reset(blakeHash).unsafeRunSync) match {
@@ -116,8 +119,9 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     }
   }
 
-  private def getResetRuntimeOpt(hash: StateHash) = {
-    import monix.execution.Scheduler.Implicits.global
+  private def getResetRuntimeOpt(hash: StateHash)(
+      implicit scheduler: Scheduler
+  ) = {
     val runtime   = runtimeContainer.take()
     val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
     Try(runtime.space.reset(blakeHash).unsafeRunSync) match {
@@ -138,9 +142,10 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
         Bond(validatorName, stakeAmount)
     }.toList
 
-  def getData(hash: ByteString, channel: Par): Seq[Par] = {
-    val resetRuntime = getResetRuntime(hash)
-    import monix.execution.Scheduler.Implicits.global
+  def getData(hash: ByteString, channel: Par)(
+      implicit scheduler: Scheduler
+  ): Seq[Par] = {
+    val resetRuntime                          = getResetRuntime(hash)
     val result: Seq[Datum[ListParWithRandom]] = resetRuntime.space.getData(channel).unsafeRunSync
     runtimeContainer.put(resetRuntime)
     result.flatMap(_.a.pars)
@@ -149,9 +154,10 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   def getContinuation(
       hash: ByteString,
       channels: immutable.Seq[Par]
+  )(
+      implicit scheduler: Scheduler
   ): Seq[(Seq[BindPattern], Par)] = {
     val resetRuntime = getResetRuntime(hash)
-    import monix.execution.Scheduler.Implicits.global
     val results: Seq[WaitingContinuation[BindPattern, TaggedContinuation]] =
       resetRuntime.space.getWaitingContinuations(channels).unsafeRunSync
     runtimeContainer.put(resetRuntime)

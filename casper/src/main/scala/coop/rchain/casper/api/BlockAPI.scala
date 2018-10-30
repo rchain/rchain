@@ -31,6 +31,8 @@ import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil
 
+import monix.execution.Scheduler.Implicits.global
+
 object BlockAPI {
 
   private val createBlockLock = new SyncLock
