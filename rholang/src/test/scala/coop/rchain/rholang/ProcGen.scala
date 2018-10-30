@@ -8,7 +8,7 @@ import org.scalacheck.Shrink._
 import scala.collection.JavaConverters
 import scala.reflect.{classTag, ClassTag}
 
-object tools {
+object GenTools {
   def seqToJavaCollection[C <: java.util.Collection[T]: ClassTag, T](input: Seq[T]): C = {
     val r = classTag[C].runtimeClass.getDeclaredConstructor().newInstance().asInstanceOf[C]
     input.foreach(r.add)
@@ -86,7 +86,7 @@ object tools {
 }
 
 object ProcGen {
-  import tools._
+  import GenTools._
 
   private case class State(height: Int, boundNames: Set[String] = Set.empty[String]) {
     def decrementHeight: State                   = this.copy(height = height - 1)
