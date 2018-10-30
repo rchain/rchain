@@ -2,7 +2,8 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.{Files, Path}
 
-import cats.Id
+import cats.Applicative
+import cats.implicits._
 import cats.effect.Sync
 import cats.effect.implicits._
 import cats.effect.concurrent.Ref
@@ -196,30 +197,27 @@ object Runtime {
   // because only we do installs
   private val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
 
-  private def introduceSystemProcesses(
-      space: RhoISpace[Task],
-      replaySpace: RhoISpace[Task],
-      processes: Seq[(Name, Arity, Remainder, BodyRef)]
-  ): Task[Seq[Option[(TaggedContinuation, Seq[ListParWithRandomAndPhlos])]]] =
-    Task.sequence(
-      processes
-        .flatMap {
-          case (name, arity, remainder, ref) =>
-            val channels = List(name)
-            val patterns = List(
-              BindPattern(
-                (0 until arity).map[Par, Seq[Par]](i => EVar(FreeVar(i))),
-                remainder,
-                freeCount = arity
-              )
-            )
-            val continuation = TaggedContinuation(ScalaBodyRef(ref))
-            Seq(
-              space.install(channels, patterns, continuation)(MATCH_UNLIMITED_PHLOS),
-              replaySpace.install(channels, patterns, continuation)(MATCH_UNLIMITED_PHLOS)
-            )
-        }
-    )
+  private def introduceSystemProcesses[F[_]: Applicative](
+      space: RhoISpace[F],
+      replaySpace: RhoISpace[F],
+      processes: List[(Name, Arity, Remainder, BodyRef)]
+  ): F[List[Option[(TaggedContinuation, immutable.Seq[ListParWithRandomAndPhlos])]]] =
+    (processes.flatMap {
+      case (name, arity, remainder, ref) =>
+        val channels = List(name)
+        val patterns = List(
+          BindPattern(
+            (0 until arity).map[Par, Seq[Par]](i => EVar(FreeVar(i))),
+            remainder,
+            freeCount = arity
+          )
+        )
+        val continuation = TaggedContinuation(ScalaBodyRef(ref))
+        List(
+          space.install(channels, patterns, continuation)(MATCH_UNLIMITED_PHLOS),
+          replaySpace.install(channels, patterns, continuation)(MATCH_UNLIMITED_PHLOS)
+        )
+    }).sequence
 
   // TODO: remove default store type
   def create(dataDir: Path, mapSize: Long, storeType: StoreType = LMDB): Runtime = {
@@ -279,7 +277,7 @@ object Runtime {
     val shortLeashParams = ShortLeashParams.unsafe[Task]()
     val blockTime        = BlockTime.unsafe[Task]()
 
-    val procDefs: immutable.Seq[(Name, Arity, Remainder, BodyRef)] = {
+    val procDefs: List[(Name, Arity, Remainder, BodyRef)] = {
       import BodyRefs._
       List(
         (FixedChannels.STDOUT, 1, None, STDOUT),
