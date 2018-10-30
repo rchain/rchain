@@ -225,7 +225,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
             val availablePhlos = Cost(deploy.raw.map(_.phloLimit).get.value)
             for {
               _         <- runtime.replayReducer.setAvailablePhlos(availablePhlos)
-              _         <- Task.suspend { runtime.replaySpace.rig(hash, log.toList) }
+              _         <- runtime.replaySpace.rig(hash, log.toList)
               injResult <- injAttempt(deploy, runtime.replayReducer, runtime.errorLog)
               //TODO: compare replay deploy cost to given deploy cost
               (phlosLeft, errors) = injResult
@@ -239,12 +239,12 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
                            )
                          else if (errors.nonEmpty) doReplayEval(rem, hash)
                          else {
-                           Task.suspend(runtime.replaySpace.createCheckpoint().attempt.flatMap {
+                           runtime.replaySpace.createCheckpoint().attempt.flatMap {
                              case Right(newCheckpoint) =>
                                doReplayEval(rem, newCheckpoint.root)
                              case Left(ex: ReplayException) =>
                                Task.now(Left(none[Deploy] -> UnusedCommEvent(ex)))
-                           })
+                           }
                          }
                      }
             } yield cont
