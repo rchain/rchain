@@ -16,7 +16,7 @@ class Memo[A](f: => Coeval[A]) {
             case e: Eager[A] => e
             case _ =>
               thunk.map { r =>
-                thunk = null
+                thunk = null //allow GC-ing the thunk
                 result = Coeval.now(r)
                 r
               }
