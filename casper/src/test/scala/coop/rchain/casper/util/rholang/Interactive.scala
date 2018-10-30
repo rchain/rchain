@@ -86,7 +86,7 @@ class Interactive private (runtime: Runtime)(implicit scheduler: Scheduler) {
     checkpoints
       .get(name)
       .fold(false)(ch => {
-        runtime.space.reset(ch.root)
+        runtime.space.reset(ch.root).unsafeRunSync
         true
       })
 }
