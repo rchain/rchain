@@ -1,5 +1,6 @@
 package coop.rchain.models
 
+import coop.rchain.models.Expr.ExprInstance.{EListBody, ETupleBody}
 import coop.rchain.models.rholang.implicits._
 
 trait Interpolate[A, B] {
@@ -31,11 +32,13 @@ trait InterpolateInstances {
       }
       .getOrElse(par)
 
+  private def replaceSingleExprs(ps: Seq[Par], interpolateMap: Map[String, Par]): Seq[Par] =
+    ps.map(p => p.singleExpr().map(replaceSingleExpr(_, interpolateMap)).getOrElse(p))
+
   implicit val sendInterpolate: Interpolate[Send, Par] = new Interpolate[Send, Par] {
     override def interpolate(term: Send, interpolateMap: Map[String, Par]): Send = {
       val newChan = replaceSingleExpr(term.chan, interpolateMap)
-      val newData =
-        term.data.map(p => p.singleExpr().map(replaceSingleExpr(_, interpolateMap)).getOrElse(p))
+      val newData = replaceSingleExprs(term.data, interpolateMap)
       term.withChan(newChan).withData(newData)
     }
   }
@@ -65,11 +68,20 @@ trait InterpolateInstances {
       term.withP(Interpolate.interpolate(term.p, interpolateMap))
   }
 
+  implicit val exprInterpolate: Interpolate[Expr, Par] = new Interpolate[Expr, Par] {
+    override def interpolate(term: Expr, interpolateMap: Map[String, Par]): Expr = term match {
+      case Expr(ETupleBody(tuple)) => tuple.withPs(replaceSingleExprs(tuple.ps, interpolateMap))
+      case Expr(EListBody(list))   => list.withPs(replaceSingleExprs(list.ps, interpolateMap))
+      case _                       => term
+    }
+  }
+
   implicit val parInterpolate: Interpolate[Par, Par] = new Interpolate[Par, Par] {
     override def interpolate(term: Par, interpolateMap: Map[String, Par]): Par =
       term
         .withSends(Interpolate.interpolateSeq(term.sends, interpolateMap))
         .withReceives(Interpolate.interpolateSeq(term.receives, interpolateMap))
         .withNews(Interpolate.interpolateSeq(term.news, interpolateMap))
+        .withExprs(Interpolate.interpolateSeq(term.exprs, interpolateMap))
   }
 }

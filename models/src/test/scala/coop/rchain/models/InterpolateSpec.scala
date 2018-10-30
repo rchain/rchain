@@ -77,6 +77,28 @@ class InterpolateSpec extends FlatSpec with TripleEqualsSupport with Matchers {
     assert(interpolated === neu.withP(interpolatedReceive))
   }
 
+  "Interpolating Tuple" should "interpolate its content" in {
+    val tuple: Expr = ETuple(Seq(GString("#key1"), GString("#key2"), GInt(10)))
+    val interpolateMap = Map[String, Par](
+      "#key1" -> GPrivateBuilder(),
+      "#key2" -> GPrivateBuilder()
+    )
+    val interpolated   = Interpolate.interpolate(tuple, interpolateMap)
+    val expected: Expr = ETuple(Seq(interpolateMap("#key1"), interpolateMap("#key2"), GInt(10)))
+    assert(interpolated === expected)
+  }
+
+  "Interpolating List" should "interpolate its content" in {
+    val tuple: Expr = EList(Seq(GString("#key1"), GString("#key2"), GInt(10)))
+    val interpolateMap = Map[String, Par](
+      "#key1" -> GPrivateBuilder(),
+      "#key2" -> GPrivateBuilder()
+    )
+    val interpolated   = Interpolate.interpolate(tuple, interpolateMap)
+    val expected: Expr = EList(Seq(interpolateMap("#key1"), interpolateMap("#key2"), GInt(10)))
+    assert(interpolated === expected)
+  }
+
   "Interpolate" should "throw exception when key is not found in the interpolation map" in {
     val send           = Send(GString("#key1"), Seq(GInt(1), GInt(2)))
     val interpolateMap = Map.empty[String, Par]
