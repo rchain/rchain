@@ -36,6 +36,13 @@ class InterpolateSpec extends FlatSpec with TripleEqualsSupport with Matchers {
     assert(interpolated === send.withData(newData))
   }
 
+  it should "recurse" in {
+    val send           = Send(GPrivateBuilder(), Seq(ETuple(Seq(GString("#key1")))))
+    val interpolateMap = Map[String, Par]("#key1" -> GPrivateBuilder())
+    val interpolated   = Interpolate.interpolate(send, interpolateMap)
+    assert(interpolated === send.withData(Seq(ETuple(interpolateMap.values.toSeq))))
+  }
+
   "Interpolating Receive" should "replace source channel with the key from the interpolate map" in {
     val interpolateMap: Map[String, Par] = Map(
       "#key1" -> GPrivateBuilder(),

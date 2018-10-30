@@ -28,7 +28,7 @@ trait InterpolateInstances {
             key,
             throw new IllegalArgumentException(s"Key $key was not found in the interpolate map.")
           )
-        case _ => None
+        case expr => exprInterpolate.interpolate(expr, interpolateMap)
       }
       .getOrElse(par)
 
