@@ -40,11 +40,14 @@ class Runtime private (
     val blockTime: Runtime.BlockTime[Task]
 ) {
   def readAndClearErrorVector(): Vector[Throwable] = errorLog.readAndClearErrorVector()
-  def close(): Task[Unit] =
-    for {
+  def close()(
+      implicit scheduler: Scheduler
+  ): Unit =
+    (for {
       _ <- space.close()
       _ <- replaySpace.close()
-    } yield (context.close())
+      _ = context.close()
+    } yield ()).unsafeRunSync
 
 }
 
