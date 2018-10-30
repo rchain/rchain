@@ -1,14 +1,12 @@
 package coop.rchain.rspace
 
-import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
-import java.util.function.UnaryOperator
+import java.util.concurrent.atomic.AtomicReference
 
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 
 import scala.Function.const
 import scala.collection.immutable.Seq
-import scala.collection.parallel.mutable.ParHashSet
 
 /** The interface for the underlying store
   *
