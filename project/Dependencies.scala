@@ -4,8 +4,8 @@ object Dependencies {
 
   val osClassifier: String = Detector.detect(Seq("fedora")).osClassifier
 
-  val circeVersion  = "0.10.0-M2"
-  val http4sVersion = "0.19.0-M2"
+  val circeVersion  = "0.10.0"
+  val http4sVersion = "0.19.0"
   val kamonVersion  = "1.1.0"
 
   // format: off
@@ -45,6 +45,7 @@ object Dependencies {
   val scalacheckNoTest    = "org.scalacheck"             %% "scalacheck"                % "1.13.5"
   val scalacheckShapeless = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.8" % "test"
   val scalactic           = "org.scalactic"              %% "scalactic"                 % "3.0.5" % "test"
+  val scalapbCompiler     = "com.thesamet.scalapb"       %% "compilerplugin"            % scalapb.compiler.Version.scalapbVersion
   val scalapbRuntime      = "com.thesamet.scalapb"       %% "scalapb-runtime"           % scalapb.compiler.Version.scalapbVersion % "protobuf"
   val scalapbRuntimeLib   = "com.thesamet.scalapb"       %% "scalapb-runtime"           % scalapb.compiler.Version.scalapbVersion
   val scalapbRuntimegGrpc = "com.thesamet.scalapb"       %% "scalapb-runtime-grpc"      % scalapb.compiler.Version.scalapbVersion
