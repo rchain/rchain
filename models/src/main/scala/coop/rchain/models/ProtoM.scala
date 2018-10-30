@@ -56,7 +56,11 @@ object ProtoM extends DescriptorPimps {
     } else if (field.isRequired || field.isSingular || field.isOptional) {
       writeSingleField(out, value, field)
     } else {
-      Sync[Coeval].raiseError(new RuntimeException("This cannot be!"))
+      Sync[Coeval].raiseError(
+        new RuntimeException(
+          "This cannot be! A field that's none of: repeated, required, singluar, optional. Did protobuf spec change?"
+        )
+      )
     }
 
   private def writeRepeatedField(
@@ -65,8 +69,7 @@ object ProtoM extends DescriptorPimps {
       field: FieldDescriptor
   ): Coeval[Unit] =
     for {
-      _ <- raiseUnsupportedIf[Coeval](field.isPacked, "Packed fields are unsupported")
-
+      _         <- raiseUnsupportedIf[Coeval](field.isPacked, "Packed fields are unsupported")
       container = value.asInstanceOf[Seq[Any]].toList
       _         <- container.traverse(writeSingleField(out, _, field))
     } yield ()
@@ -165,7 +168,11 @@ object ProtoM extends DescriptorPimps {
     } else if (field.isRequired || field.isSingular || field.isOptional) {
       singleFieldSize(value, field)
     } else {
-      Sync[Coeval].raiseError(new RuntimeException("This cannot be!"))
+      Sync[Coeval].raiseError(
+        new RuntimeException(
+          "This cannot be! A field that's none of: repeated, required, singluar, optional. Did protobuf spec change?"
+        )
+      )
     }
 
   private def repeatedSize(value: Any, field: Descriptors.FieldDescriptor): Coeval[Int] =
