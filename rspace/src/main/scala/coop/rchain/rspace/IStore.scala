@@ -1,9 +1,8 @@
 package coop.rchain.rspace
 
-import java.util.concurrent.atomic.AtomicReference
-
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
+import monix.execution.atomic.AtomicAny
 
 import scala.Function.const
 import scala.collection.immutable.Seq
@@ -83,30 +82,29 @@ trait IStore[C, P, A, K] {
 
   def withTrieTxn[R](txn: Transaction)(f: TrieTransaction => R): R
 
-  private val _trieUpdates: AtomicReference[(Long, List[TrieUpdate[C, P, A, K]])] =
-    new AtomicReference[(Long, List[TrieUpdate[C, P, A, K]])]((0L, Nil))
-
+  private val _trieUpdates: AtomicAny[(Long, List[TrieUpdate[C, P, A, K]])] =
+    AtomicAny[(Long, List[TrieUpdate[C, P, A, K]])]((0L, Nil))
 
   def trieDelete(key: Blake2b256Hash, gnat: GNAT[C, P, A, K]): Unit =
-    _trieUpdates.getAndUpdate((t: (Long, List[TrieUpdate[C, P, A, K]])) => {
+    _trieUpdates.getAndTransform((t: (Long, List[TrieUpdate[C, P, A, K]])) => {
       (t._1 + 1, TrieUpdate(t._1, Delete, key, gnat) :: t._2)
     })
 
   def trieInsert(key: Blake2b256Hash, gnat: GNAT[C, P, A, K]): Unit =
-    _trieUpdates.getAndUpdate((t: (Long, List[TrieUpdate[C, P, A, K]])) => {
+    _trieUpdates.getAndTransform((t: (Long, List[TrieUpdate[C, P, A, K]])) => {
       (t._1 + 1, TrieUpdate(t._1, Insert, key, gnat) :: t._2)
     })
 
   private[rspace] def getTrieUpdates: Seq[TrieUpdate[C, P, A, K]] =
-    _trieUpdates.get()._2
+    _trieUpdates.get._2
 
   private[rspace] def getTrieUpdateCount: Long =
-    _trieUpdates.get()._1
+    _trieUpdates.get._1
 
   protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): Unit
 
   private[rspace] def getAndClearTrieUpdates(): Seq[TrieUpdate[C, P, A, K]] =
-    _trieUpdates.getAndUpdate(const((0L, Nil)))._2
+    _trieUpdates.getAndTransform(const((0L, Nil)))._2
 
   def createCheckpoint(): Blake2b256Hash = {
     val trieUpdates = getAndClearTrieUpdates()
