@@ -14,23 +14,15 @@
 //URI derived from pk == `rho:id:exunyijimapk7z43g3bbr69awqdz54kyroj9q43jgu3dh567fxsftx`
 new
   MakeMint, rs(`rho:registry:insertSigned:ed25519`), uriOut,
-  rl(`rho:registry:lookup`), NonNegativeNumberCh,
-  int2NN
+  rl(`rho:registry:lookup`), NonNegativeNumberCh
 in {
   rl!(`rho:id:nd74ztexkao5awjhj95e3octkza7tydwiy7euthnyrt5ihgi9rj495`, *NonNegativeNumberCh) |
   for(@(_, NonNegativeNumber) <- NonNegativeNumberCh) {
-    contract int2NN(@x, return) = {
-      new nnCh in {
-        @NonNegativeNumber!(x, *nnCh) | for(@nn <- nnCh) {
-          return!(nn)
-        }
-      }
-    } |
     contract MakeMint(return) = {
       new thisMint, internalMakePurse, decr in {
         contract thisMint(@"makePurse", @init, return) = {
           new balanceCh in {
-            int2NN!(init, *balanceCh) | for(@balance <- balanceCh) {
+            @NonNegativeNumber!(init, *balanceCh) | for(@balance <- balanceCh) {
               internalMakePurse!(balance, *return)
             }
           }

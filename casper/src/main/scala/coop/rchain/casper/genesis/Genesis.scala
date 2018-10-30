@@ -44,6 +44,7 @@ object Genesis {
       StandardDeploys.basicWallet,
       StandardDeploys.basicWalletFaucet,
       StandardDeploys.walletCheck,
+      StandardDeploys.systemInstances,
       StandardDeploys.rev(wallets, faucetCode, posParams)
     )
 
@@ -140,7 +141,7 @@ object Genesis {
       wallets     <- getWallets[F](walletsFile, maybeWalletsPath)
       bonds       <- getBonds[F](bondsFile, numValidators, genesisPath)
       timestamp   <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
-      initial     = withoutContracts(bonds = bonds, timestamp = 1L, version = 0L, shardId = shardId)
+      initial     = withoutContracts(bonds = bonds, timestamp = 1L, version = 1L, shardId = shardId)
       validators  = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
       faucetCode  = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
       withContr = withContracts(

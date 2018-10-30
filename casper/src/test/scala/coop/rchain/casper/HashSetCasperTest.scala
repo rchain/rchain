@@ -23,6 +23,7 @@ import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.{accounting, Runtime}
+import coop.rchain.models.{Expr, Par}
 import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -421,24 +422,36 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     block3PrimeStatus shouldBe Valid
     nodes.forall(_.logEff.warns.isEmpty) shouldBe true
 
-    val rankedValidatorQuery =
-      mkTerm("""for(pos <- @"proofOfStake"){ 
-    |  new bondsCh, getRanking in {
-    |    contract getRanking(@bonds, @acc, return) = {
-    |      match bonds {
-    |        {key:(stake, _, _, index) ...rest} => {
-    |          getRanking!(rest, acc ++ [(key, stake, index)], *return)
-    |        }
-    |        _ => { return!(acc) }
-    |      }
-    |    } |
-    |    pos!("getBonds", *bondsCh) | for(@bonds <- bondsCh) {
-    |      getRanking!(bonds, [], "__SCALA__")
-    |    }
-    |  }
-    |}""".stripMargin).right.get
+    val rankedValidatorQuery = ProtoUtil.sourceDeploy(
+      """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
+      |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+      |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
+      |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
+      |    for(pos <- posCh){
+      |      new bondsCh, getRanking in {
+      |        contract getRanking(@bonds, @acc, return) = {
+      |          match bonds {
+      |            {key:(stake, _, _, index) ...rest} => {
+      |              getRanking!(rest, acc ++ [(key, stake, index)], *return)
+      |            }
+      |            _ => { return!(acc) }
+      |          }
+      |        } |
+      |        pos!("getBonds", *bondsCh) | for(@bonds <- bondsCh) {
+      |          getRanking!(bonds, [], "__SCALA__")
+      |        }
+      |      }
+      |    }
+      |  }
+      |}""".stripMargin,
+      0L,
+      accounting.MAX_VALUE
+    )
     val validatorBondsAndRanks: Seq[(ByteString, Long, Int)] = runtimeManager
-      .captureResults(block1.getBody.getPostState.tuplespace, rankedValidatorQuery)
+      .captureResults(
+        block1.getBody.getPostState.tuplespace,
+        ProtoUtil.deployDataToDeploy(rankedValidatorQuery)
+      )
       .head
       .exprs
       .head
@@ -477,21 +490,56 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
     import node.casperEff
 
-    val (_, pk) = Ed25519.newKeyPair
-    val pkStr   = Base16.encode(pk)
-    val amount  = 157L
+    //val skStr = "6061f3ea36d0419d1e9e23c33bba88ed1435427fa2a8f7300ff210b4e9f18a14"
+    val pkStr = "16989775f3f207a717134216816d3c9d97b0bfb8d560b29485f23f6ead435f09"
+    val sigStr = "51c2b091559745d51c7270189911d9d894d538f76150ed67d164705dcf0af52" +
+      "e101fa06396db2b2ac21a4bfbe3461567b5f8b3d2e666c377cb92d96bc38e2c08"
+    val amount = 157L
     val createWalletCode =
-      s"""for(faucet <- @"faucet"){ faucet!($amount, "ed25519", "$pkStr", "myWallet") }"""
-    val createWalletDeploy =
-      ProtoUtil.sourceDeploy(createWalletCode, System.currentTimeMillis(), accounting.MAX_VALUE)
+      s"""new 
+         |  walletCh, rl(`rho:registry:lookup`), SystemInstancesCh, faucetCh,
+         |  rs(`rho:registry:insertSigned:ed25519`), uriOut
+         |in {
+         |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+         |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
+         |    @SystemInstancesRegistry!("lookup", "faucet", *faucetCh) |
+         |    for(faucet <- faucetCh){ faucet!($amount, "ed25519", "$pkStr", *walletCh) } |
+         |    for(@[wallet] <- walletCh){ walletCh!!(wallet) }
+         |  } |
+         |  rs!(
+         |    "$pkStr".hexToBytes(), 
+         |    (9223372036854775807, bundle-{*walletCh}), 
+         |    "$sigStr".hexToBytes(), 
+         |    *uriOut
+         |  )
+         |}""".stripMargin
+
+    //with the fixed user+timestamp we know that walletCh is registered at `rho:id:mrs88izurkgki71dpjqamzg6tgcjd6sk476c9msks7tumw4a6e39or`
+    val createWalletDeploy = ProtoUtil
+      .sourceDeploy(createWalletCode, System.currentTimeMillis(), accounting.MAX_VALUE)
+      .withTimestamp(1540570144121L)
+      .withUser(ProtoUtil.stringToByteString(pkStr))
 
     val Created(block) = casperEff.deploy(createWalletDeploy) *> casperEff.createBlock
     val blockStatus    = casperEff.addBlock(block)
 
-    val balanceQuery =
-      mkTerm("""for(@[wallet] <- @"myWallet"){ @wallet!("getBalance", "__SCALA__") }""").right.get
+    val balanceQuery = ProtoUtil.sourceDeploy(
+      s"""new 
+         |  rl(`rho:registry:lookup`), walletFeedCh
+         |in {
+         |  rl!(`rho:id:mrs88izurkgki71dpjqamzg6tgcjd6sk476c9msks7tumw4a6e39or`, *walletFeedCh) |
+         |  for(@(_, walletFeed) <- walletFeedCh) {
+         |    for(wallet <- @walletFeed) { wallet!("getBalance", "__SCALA__") }
+         |  }
+         |}""".stripMargin,
+      0L,
+      accounting.MAX_VALUE
+    )
     val newWalletBalance =
-      node.runtimeManager.captureResults(block.getBody.getPostState.tuplespace, balanceQuery)
+      node.runtimeManager.captureResults(
+        block.getBody.getPostState.tuplespace,
+        ProtoUtil.deployDataToDeploy(balanceQuery)
+      )
 
     blockStatus shouldBe Valid
     newWalletBalance.head.exprs.head.getGInt shouldBe amount
@@ -526,6 +574,84 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     block1Status shouldBe Valid
     block2Status shouldBe Valid
     (oldBonds.size + 1) shouldBe newBonds.size
+
+    node.tearDown()
+  }
+
+  it should "allow paying for deploys" in {
+    val node      = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
+    val (sk, pk)  = Ed25519.newKeyPair
+    val user      = ByteString.copyFrom(pk)
+    val timestamp = System.currentTimeMillis()
+    val phloPrice = 1L
+    val amount    = 847L
+    val sigDeployData = ProtoUtil
+      .sourceDeploy(
+        s"""new retCh in { @"blake2b256Hash"!([0, $amount, *retCh].toByteArray(), "__SCALA__") }""",
+        timestamp,
+        accounting.MAX_VALUE
+      )
+      .withUser(user)
+    val sigData = node.runtimeManager
+      .captureResults(
+        genesis.getBody.getPostState.tuplespace,
+        ProtoUtil.deployDataToDeploy(sigDeployData)
+      )
+      .head
+      .exprs
+      .head
+      .getGByteArray
+    val sig   = Base16.encode(Ed25519.sign(sigData.toByteArray, sk))
+    val pkStr = Base16.encode(pk)
+    val paymentCode =
+      s"""new 
+         |  paymentForward, walletCh, rl(`rho:registry:lookup`), 
+         |  SystemInstancesCh, faucetCh, posCh
+         |in {
+         |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+         |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
+         |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
+         |    @SystemInstancesRegistry!("lookup", "faucet", *faucetCh) |
+         |    for(faucet <- faucetCh; pos <- posCh){
+         |      faucet!($amount, "ed25519", "$pkStr", *walletCh) |
+         |      for(@[wallet] <- walletCh) {
+         |        @wallet!("transfer", $amount, 0, "$sig", *paymentForward, Nil) |
+         |        for(@purse <- paymentForward){ pos!("pay", purse, Nil) }
+         |      }
+         |    }
+         |  }
+         |}""".stripMargin
+    val paymentDeployData = ProtoUtil
+      .sourceDeploy(paymentCode, timestamp, accounting.MAX_VALUE)
+      .withPhloPrice(phloPrice)
+      .withUser(user)
+
+    val paymentQuery = ProtoUtil.sourceDeploy(
+      """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
+        |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+        |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
+        |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
+        |    for(pos <- posCh){ pos!("lastPayment", "__SCALA__") }
+        |  }
+        |}""".stripMargin,
+      0L,
+      accounting.MAX_VALUE
+    )
+
+    val (blockStatus, queryResult) =
+      deployAndQuery(node, paymentDeployData, ProtoUtil.deployDataToDeploy(paymentQuery))
+
+    val (codeHashPar, _, userIdPar, timestampPar) =
+      ProtoUtil.getRholangDeployParams(paymentDeployData)
+    val phloPurchasedPar = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(phloPrice * amount))))
+
+    blockStatus shouldBe Valid
+    queryResult.head.exprs.head.getETupleBody.ps shouldBe Seq(
+      codeHashPar,
+      userIdPar,
+      timestampPar,
+      phloPurchasedPar
+    )
 
     node.tearDown()
   }
@@ -929,6 +1055,22 @@ object HashSetCasperTest {
     MultiParentCasper[Id].storageContents(tsHash)
   }
 
+  def deployAndQuery(
+      node: HashSetCasperTestNode[Id],
+      dd: DeployData,
+      query: Deploy
+  ): (BlockStatus, Seq[Par]) = {
+    val Created(block) = node.casperEff.deploy(dd) *> node.casperEff.createBlock
+    val blockStatus    = node.casperEff.addBlock(block)
+    val queryResult = node.runtimeManager
+      .captureResults(
+        block.getBody.getPostState.tuplespace,
+        query
+      )
+
+    (blockStatus, queryResult)
+  }
+
   def createBonds(validators: Seq[Array[Byte]]): Map[Array[Byte], Long] =
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
 
@@ -943,7 +1085,7 @@ object HashSetCasperTest {
       faucetCode: String => String,
       deployTimestamp: Long
   ): BlockMessage = {
-    val initial           = Genesis.withoutContracts(bonds, 0L, deployTimestamp, "rchain")
+    val initial           = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "rchain")
     val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
     val storageSize: Long = 1024L * 1024
     val activeRuntime     = Runtime.create(storageDirectory, storageSize)
