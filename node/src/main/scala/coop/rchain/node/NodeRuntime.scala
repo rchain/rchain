@@ -136,9 +136,9 @@ class NodeRuntime private[node] (
       _   <- Task.delay(Kamon.stopAllReporters())
       _   <- servers.httpServer.cancel
       _   <- log.info("Shutting down interpreter runtime ...")
-      _   <- Task.delay(runtime.close()(scheduler))
+      _   <- runtime.close()
       _   <- log.info("Shutting down Casper runtime ...")
-      _   <- Task.delay(casperRuntime.close()(scheduler))
+      _   <- casperRuntime.close()
       _   <- log.info("Bringing BlockStore down ...")
       _   <- blockStore.close().value
       _   <- log.info("Goodbye.")
