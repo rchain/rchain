@@ -2,38 +2,32 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.{Files, Path}
 
+import scala.collection.immutable
+
 import cats.Applicative
-import cats.implicits._
 import cats.effect.Sync
-import cats.effect.implicits._
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import cats.mtl.FunctorTell
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.models._
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
-import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.rholang.interpreter.errors.SetupError
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.errors.{OutOfPhlogistonsError, SetupError}
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.IReplaySpace
-import coop.rchain.rspace.ISpace
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.pure.PureRSpace
-import coop.rchain.rspace.spaces.FineGrainedReplayRSpace
 import coop.rchain.shared.StoreType
 import coop.rchain.shared.StoreType._
 import monix.eval.Task
 import monix.execution.Scheduler
-
-import scala.collection.immutable
 
 class Runtime private (
     val reducer: ChargingReducer[Task],
