@@ -15,10 +15,10 @@ import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.{BindPattern, Par}
 import coop.rchain.models.rholang.sorter.Sortable
-import coop.rchain.rspace.StableHashProvider
+import coop.rchain.rspace.{Serialize, StableHashProvider}
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import coop.rchain.shared.{Log, SyncLock}
-import coop.rchain.models.serialization.implicits.serializePar
+import coop.rchain.models.serialization.implicits.mkProtobufInstance
 import coop.rchain.rholang.interpreter.{PrettyPrinter => RholangPrettyPrinter}
 import coop.rchain.models.rholang.sorter.Sortable._
 import scodec.Codec
@@ -107,7 +107,7 @@ object BlockAPI {
           length = blocksWithActiveName.length
         )
 
-    implicit val channelCodec: Codec[Par] = serializePar.toCodec
+    implicit val channelCodec: Codec[Par] = Serialize[Par].toCodec
     MultiParentCasperRef.withCasper[F, ListeningNameDataResponse](
       casperResponse(_, channelCodec),
       ListeningNameDataResponse(status = "Error: Casper instance not available")
@@ -140,7 +140,7 @@ object BlockAPI {
           length = blocksWithActiveName.length
         )
 
-    implicit val channelCodec: Codec[Par] = serializePar.toCodec
+    implicit val channelCodec: Codec[Par] = Serialize[Par].toCodec
     MultiParentCasperRef.withCasper[F, ListeningNameContinuationResponse](
       casperResponse(_, channelCodec),
       ListeningNameContinuationResponse(status = "Error: Casper instance not available")

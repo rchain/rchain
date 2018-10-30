@@ -8,7 +8,8 @@ import scalapb.GeneratedMessageCompanion
 import scodec.bits.ByteVector
 
 object implicits {
-  def mkProtobufInstance[T <: StacksafeMessage[T]: GeneratedMessageCompanion] =
+
+  implicit def mkProtobufInstance[T <: StacksafeMessage[T]: GeneratedMessageCompanion] =
     new Serialize[T] {
 
       override def encode(a: T): ByteVector =
@@ -21,13 +22,4 @@ object implicits {
       }
     }
 
-  implicit val serializePar: Serialize[Par]         = mkProtobufInstance
-  implicit val serializeVar: Serialize[Var]         = mkProtobufInstance
-  implicit val serializeSend: Serialize[Send]       = mkProtobufInstance
-  implicit val serializeReceive: Serialize[Receive] = mkProtobufInstance
-  implicit val serializeNew: Serialize[New]         = mkProtobufInstance
-  implicit val serializeExpr: Serialize[Expr]       = mkProtobufInstance
-  implicit val serializeMatch: Serialize[Match]     = mkProtobufInstance
-  implicit val serializeESet: Serialize[ESet]       = mkProtobufInstance
-  implicit val serializeEMap: Serialize[EMap]       = mkProtobufInstance
 }
