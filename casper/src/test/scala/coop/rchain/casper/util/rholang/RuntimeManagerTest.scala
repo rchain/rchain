@@ -51,10 +51,13 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val (hash, _) = runtimeManager.computeState(runtimeManager.emptyStateHash, deploys)
     val result = runtimeManager.captureResults(
       hash,
-      InterpreterUtil
-        .mkTerm(s""" for(nn <- @"nn"){ nn!("value", "$captureChannel") } """)
-        .right
-        .get,
+      ProtoUtil.deployDataToDeploy(
+        ProtoUtil.sourceDeploy(
+          s""" for(nn <- @"nn"){ nn!("value", "$captureChannel") } """,
+          0L,
+          accounting.MAX_VALUE
+        )
+      ),
       captureChannel
     )
 
@@ -65,7 +68,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   it should "handle multiple results and no results appropriately" in {
     val n    = 8
     val code = (1 to n).map(i => s""" @"__SCALA__"!($i) """).mkString("|")
-    val term = InterpreterUtil.mkTerm(code).right.get
+    val term = ProtoUtil.deployDataToDeploy(ProtoUtil.sourceDeploy(code, 0L, accounting.MAX_VALUE))
     val manyResults =
       runtimeManager.captureResults(runtimeManager.emptyStateHash, term, "__SCALA__")
     val noResults =
