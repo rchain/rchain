@@ -1,19 +1,15 @@
 #!/usr/bin/env python3.6
-# This is a simple script to boot a rchain p2p network using bootstrap/peer named containers
+# This is a simple script to boot a rchain p2p network using bootstrap/peer/bond named containers
 # It deletes bootstrap/peer named containers before it creates them leaving other named containers
 # This requires Python 3.6 to be installed for f-string. Install dependencies via pip
-# python3.6 -m pip install docker
+# python3.6 -m pip install docker ed25519
 # Return code of 0 is success on test and 1 is fail.
 # Example below shows how to boot network with 3 nodes, including bootstrap, and run specific test
-# sudo ./scripts/boot-p2p.py -m 2048m -p 2 -c 0 -i rchain/rnode:dev
-# Simple
-# sudo ./scripts/boot-p2p.py -i rchain/rnode:dev
-import subprocess
+# sudo ./boot-p2p.py -m 34360m -c 1 -p 3  --genesis --sigs 2 --bonds <bond_file_path> --wallet <wallet_file_path> --has-faucet  -i rchain-integration-testing:latest --remove
+
 import argparse
 import docker
 import os
-import tempfile
-import re
 import time
 import sys
 import random
@@ -58,27 +54,28 @@ parser.add_argument("-r", "--remove",
 parser.add_argument("--bonds",
                     dest="bonds_file",
                     type=str,
-                    default="bonds_file",
                     help="set the bond file of the genesis process")
 
 parser.add_argument("--wallet",
                     dest="wallet_file",
                     type=str,
-                    default="/var/lib/rnode/wallets.txt",
                     help="set the wallet file of the genesis process")
 
 parser.add_argument("--genesis",
+                    dest="genesis",
                     action='store_true',
                     help="set if start with the genesis process")
 
 parser.add_argument("--sigs",
                     dest="sigs",
                     type=int,
+                    default=0,
                     help="set the required signatures , this equals the number of nodes bonded at genesis")
 
 parser.add_argument("--has-faucet",
                     dest="has_faucet",
                     action="store_true",
+                    default=False,
                     help="set if the chain support has-faucet")
 
 # Print -h/help if no args
@@ -119,8 +116,8 @@ def main():
     networks = [network.name for network in client.networks.list()]
     if args.network not in networks:
         client.networks.create(args.network)
-    if args.remove == True:
-        #    # only removes boostrap/peer.rchain.coop or .network nodes
+    if args.remove:
+        # only removes boostrap/peer.rchain.coop or .network nodes
         remove_resources_by_network(args.network)
     boot_p2p_network()
 
@@ -149,19 +146,10 @@ def boot_p2p_network():
 
 def generate_validator_private_key():
     import ed25519
-    while True:
-        signing_key, verifying_key = ed25519.create_keypair()
-        encoded_private_key = signing_key.to_ascii(encoding="base16").decode('utf-8')
-        encoded_public_key = verifying_key.to_ascii(encoding="base16").decode('utf-8')
-        yield KeyPair(private_key=encoded_private_key, public_key=encoded_public_key)
-    # with open(keys_file) as f:
-    #     lines = f.readlines()
-    # random.shuffle(lines)
-    # for line in lines:
-    #     yield KeyPair(*line.split())
-
-
-key_pairs_gen = generate_validator_private_key()
+    signing_key, verifying_key = ed25519.create_keypair()
+    encoded_private_key = signing_key.to_ascii(encoding="base16").decode('utf-8')
+    encoded_public_key = verifying_key.to_ascii(encoding="base16").decode('utf-8')
+    return KeyPair(private_key=encoded_private_key, public_key=encoded_public_key)
 
 
 def modify_bonds_file():
@@ -169,13 +157,16 @@ def modify_bonds_file():
     # the bonded nodes key pair should be put into the bonds file
     # So I have to add the key pairs to the bonds file.
     print('Modify bonds file and add bonds key pair to the bond file')
-    with open(args.bonds_file) as bond_f:
-        with open(temp_bonds_file, 'w') as f:
-            f.write(bond_f.read())
-            for i in range(args.sigs):
-                key_pair = next(key_pairs_gen)
-                bond_key_pairs.append(key_pair)
-                f.write(f'{key_pair.public_key} {random.randint(50,1000)}\n')
+    if args.bonds_file:
+        with open(args.bonds_file) as bond_f:
+            content = bond_f.read()
+    with open(temp_bonds_file, 'w') as f:
+        if args.bonds_file:
+            f.write(content)
+        for i in range(args.sigs):
+            key_pair = generate_validator_private_key()
+            bond_key_pairs.append(key_pair)
+            f.write(f'{key_pair.public_key} {random.randint(50,1000)}\n')
 
 
 def create_bootstrap_node():
@@ -209,7 +200,6 @@ def create_bootstrap_node():
     with open(tmp_file_cert, 'w') as f:
         f.write(bootstrap_node_demo_cert)
 
-    modify_bonds_file()
 
     print("Starting bootstrap node.")
     name = f"bootstrap.{args.network}"
@@ -218,11 +208,25 @@ def create_bootstrap_node():
     timestamp = int(time.time() * 1000)
 
     command = ['run', "--standalone",
-               "--host", f"{name}",
+               "--host", name,
                "--deploy-timestamp", f"{timestamp}",
                "--map-size", "17179869184",
-               "--wallets-file", f"{container_wallets_file}",
-               "--bonds-file", f"{container_bonds_file}"]
+               ]
+    volume = {
+        tmp_file_cert: {
+            "bind": os.path.join(rnode_directory, 'node.certificate.pem'),
+            "mode": 'rw'},
+        tmp_file_key: {"bind": os.path.join(rnode_directory, 'node.key.pem'),
+                            "mode": 'rw'}
+    }
+
+    modify_bonds_file()
+    if args.bonds_file or args.sigs:
+        command.extend(["--bonds-file", container_bonds_file])
+        volume.update({temp_bonds_file: {"bind": container_bonds_file, "mode": 'rw'}})
+    if args.wallet_file:
+        command.extend(["--wallets-file", container_wallets_file])
+        volume.update({args.wallet_file: {"bind": container_wallets_file, "mode": 'rw'}})
     if args.has_faucet:
         command.append("--has-faucet")
     container = client.containers.run(args.image,
@@ -232,15 +236,7 @@ def create_bootstrap_node():
                                       cpuset_cpus=args.cpuset_cpus,
                                       mem_limit=args.memory,
                                       network=args.network,
-                                      volumes={
-                                          f"{temp_bonds_file}": {"bind": f"{container_bonds_file}", "mode": 'rw'},
-                                          f"{args.wallet_file}": {"bind": f"{container_wallets_file}", "mode": 'rw'},
-                                          f"{tmp_file_cert}": {
-                                              "bind": os.path.join(rnode_directory, 'node.certificate.pem'),
-                                              "mode": 'rw'},
-                                          f"{tmp_file_key}": {"bind": os.path.join(rnode_directory, 'node.key.pem'),
-                                                              "mode": 'rw'}
-                                      },
+                                      volumes=volume,
                                       command=command,
                                       hostname=name)
     return container
@@ -279,7 +275,7 @@ def create_peer_nodes():
     print("Create and run peer nodes to connect via bootstrap.")
 
     for i in range(read_only_peer_count):
-        key_pair = next(key_pairs_gen)
+        key_pair = generate_validator_private_key()
         create_peer_node(i, key_pair, "peer")
     return 0
 
