@@ -1,9 +1,8 @@
 package coop.rchain.rholang
 import java.io.File
 import java.nio.file.{Files, Path}
-
-import cats.{FlatMap, MonadError}
 import cats.implicits._
+import cats.{FlatMap, MonadError}
 import com.typesafe.scalalogging.Logger
 
 import scala.reflect.io.Directory

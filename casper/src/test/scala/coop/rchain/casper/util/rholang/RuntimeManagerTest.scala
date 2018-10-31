@@ -3,26 +3,34 @@ package coop.rchain.casper.util.rholang
 import java.nio.file.Files
 
 import cats.Id
+import cats.implicits._
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.protocol.Deploy
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.catscontrib.Capture._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.rholang.ResourceTools.withTempDir
 import coop.rchain.rholang.interpreter.{accounting, Runtime}
 import coop.rchain.shared.StoreType
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
-import coop.rchain.catscontrib.Capture._
+
+import scala.util.Try
 
 class RuntimeManagerTest extends FlatSpec with Matchers {
-  val storageSize      = 1024L * 1024
-  val storageDirectory = Files.createTempDirectory("casper-runtime-manager-test")
-  val activeRuntime    = Runtime.create(storageDirectory, storageSize, StoreType.LMDB)
-  val runtimeManager   = RuntimeManager.fromRuntime(activeRuntime)
+  val storageSize = 1024L * 1024
+  def withRuntimeManager[A](job: RuntimeManager => Try[A]): Try[A] =
+    withTempDir("casper-runtime-manager-test")(storageDirectory => {
+      val activeRuntime = Runtime.create(storageDirectory, storageSize, StoreType.LMDB)
+      val runtimeManger = RuntimeManager.fromRuntime(activeRuntime)
+      job(runtimeManger)
+    })
 
   "computeState" should "capture rholang errors" in {
-    val badRholang       = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
-    val deploy           = ProtoUtil.termDeployNow(InterpreterUtil.mkTerm(badRholang).right.get)
-    val (_, Seq(result)) = runtimeManager.computeState(runtimeManager.emptyStateHash, deploy :: Nil)
+    val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
+    val deploy     = ProtoUtil.termDeployNow(InterpreterUtil.mkTerm(badRholang).right.get)
+    val (_, Seq(result)) =
+      withRuntimeManager(mgr => Try { mgr.computeState(mgr.emptyStateHash, deploy :: Nil) }).get
 
     result.status.isFailed should be(true)
   }
@@ -48,18 +56,23 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       )
     )
 
-    val (hash, _) = runtimeManager.computeState(runtimeManager.emptyStateHash, deploys)
-    val result = runtimeManager.captureResults(
-      hash,
-      ProtoUtil.deployDataToDeploy(
-        ProtoUtil.sourceDeploy(
-          s""" for(nn <- @"nn"){ nn!("value", "$captureChannel") } """,
-          0L,
-          accounting.MAX_VALUE
-        )
-      ),
-      captureChannel
-    )
+    val result = withRuntimeManager(
+      mgr =>
+        Try {
+          val (hash, _) = mgr.computeState(mgr.emptyStateHash, deploys)
+          mgr.captureResults(
+            hash,
+            ProtoUtil.deployDataToDeploy(
+              ProtoUtil.sourceDeploy(
+                s""" for(nn <- @"nn"){ nn!("value", "$captureChannel") } """,
+                0L,
+                accounting.MAX_VALUE
+              )
+            ),
+            captureChannel
+          )
+        }
+    ).get
 
     result.size should be(1)
     result.head should be(InterpreterUtil.mkTerm(purseValue).right.get)
@@ -70,9 +83,11 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val code = (1 to n).map(i => s""" @"__SCALA__"!($i) """).mkString("|")
     val term = ProtoUtil.deployDataToDeploy(ProtoUtil.sourceDeploy(code, 0L, accounting.MAX_VALUE))
     val manyResults =
-      runtimeManager.captureResults(runtimeManager.emptyStateHash, term, "__SCALA__")
+      withRuntimeManager(mgr => Try { mgr.captureResults(mgr.emptyStateHash, term, "__SCALA__") }).get
     val noResults =
-      runtimeManager.captureResults(runtimeManager.emptyStateHash, term, "differentName")
+      withRuntimeManager(
+        mgr => Try { mgr.captureResults(mgr.emptyStateHash, term, "differentName") }
+      ).get
 
     noResults.isEmpty should be(true)
 
@@ -118,11 +133,13 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         )
     )
     val (_, firstDeploy) =
-      runtimeManager.computeState(runtimeManager.emptyStateHash, deploy.head :: Nil)
+      withRuntimeManager(mgr => Try { mgr.computeState(mgr.emptyStateHash, deploy.head :: Nil) }).get
     val (_, secondDeploy) =
-      runtimeManager.computeState(runtimeManager.emptyStateHash, deploy.drop(1).head :: Nil)
+      withRuntimeManager(
+        mgr => Try { mgr.computeState(mgr.emptyStateHash, deploy.drop(1).head :: Nil) }
+      ).get
     val (_, compoundDeploy) =
-      runtimeManager.computeState(runtimeManager.emptyStateHash, deploy)
+      withRuntimeManager(mgr => Try { mgr.computeState(mgr.emptyStateHash, deploy) }).get
     assert(firstDeploy.size == 1)
     val firstDeployCost = deployCost(firstDeploy)
     assert(secondDeploy.size == 1)
