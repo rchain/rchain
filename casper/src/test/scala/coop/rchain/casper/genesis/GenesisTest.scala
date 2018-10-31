@@ -6,6 +6,7 @@ import java.nio.file.Files
 import cats.Id
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.BlockDag
 import coop.rchain.casper.helper.BlockStoreFixture
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
@@ -220,7 +221,7 @@ object GenesisTest {
 
     body(runtime, genesisPath, log, time)
 
-    runtime.close()
+    runtime.close().unsafeRunSync
     storePath.recursivelyDelete()
     gp.recursivelyDelete()
   }

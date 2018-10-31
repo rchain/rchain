@@ -66,5 +66,5 @@ abstract class WideBenchBaseState {
 
   @TearDown
   def tearDown(): Unit =
-    runtime.close()
+    runtime.close().unsafeRunSync
 }

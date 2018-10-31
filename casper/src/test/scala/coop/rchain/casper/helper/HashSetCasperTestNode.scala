@@ -124,7 +124,7 @@ class HashSetCasperTestNode[F[_]](
   }
 
   def tearDownNode(): Unit = {
-    activeRuntime.close()
+    activeRuntime.close().unsafeRunSync
     blockStore.close()
   }
 }

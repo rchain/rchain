@@ -372,13 +372,12 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
   }
 
   override def clear(): F[Unit] =
-    syncF
-      .delay {
+    for {
+    _ <- syncF.delay {
         replayData.clear()
       }
-      .flatMap { _ =>
-        super.clear()
-      }
+    _ <- super.clear()
+    } yield ()
 }
 
 object FineGrainedReplayRSpace {
