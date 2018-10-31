@@ -68,7 +68,7 @@ object InterpreterUtil {
       case Right(parentStateHash) =>
         runtimeManager
           .replayComputeState(parentStateHash, internalDeploys, time)
-          .runSyncUnsafe(5.seconds) match {
+          .runSyncUnsafe(Duration.Inf) match {
           case Left((Some(deploy), status)) =>
             status match {
               case InternalErrors(exs) =>
@@ -128,7 +128,7 @@ object InterpreterUtil {
       possiblePreStateHash match {
         case Right(preStateHash) =>
           val (postStateHash, processedDeploys) =
-            runtimeManager.computeState(preStateHash, deploys, time).runSyncUnsafe(15.seconds)
+            runtimeManager.computeState(preStateHash, deploys, time).runSyncUnsafe(Duration.Inf)
           Right(postStateHash, processedDeploys)
         case Left(err) =>
           Left(err)
@@ -177,7 +177,7 @@ object InterpreterUtil {
         } yield
           runtimeManager
             .replayComputeState(initStateHash, deploys, time)
-            .runSyncUnsafe(15.seconds) match {
+            .runSyncUnsafe(Duration.Inf) match {
             case result @ Right(hash) => result.leftCast[Throwable]
             case Left((_, status)) =>
               val parentHashes = parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
