@@ -86,14 +86,16 @@ trait IStore[C, P, A, K] {
     AtomicAny[(Long, List[TrieUpdate[C, P, A, K]])]((0L, Nil))
 
   def trieDelete(key: Blake2b256Hash, gnat: GNAT[C, P, A, K]): Unit =
-    _trieUpdates.getAndTransform((t: (Long, List[TrieUpdate[C, P, A, K]])) => {
-      (t._1 + 1, TrieUpdate(t._1, Delete, key, gnat) :: t._2)
-    })
+    _trieUpdates.getAndTransform {
+      case (count, list) =>
+        (count + 1, TrieUpdate(count, Delete, key, gnat) :: list)
+    }
 
   def trieInsert(key: Blake2b256Hash, gnat: GNAT[C, P, A, K]): Unit =
-    _trieUpdates.getAndTransform((t: (Long, List[TrieUpdate[C, P, A, K]])) => {
-      (t._1 + 1, TrieUpdate(t._1, Insert, key, gnat) :: t._2)
-    })
+    _trieUpdates.getAndTransform {
+      case (count, list) =>
+        (count + 1, TrieUpdate(count, Insert, key, gnat) :: list)
+    }
 
   private[rspace] def getTrieUpdates: Seq[TrieUpdate[C, P, A, K]] =
     _trieUpdates.get._2
