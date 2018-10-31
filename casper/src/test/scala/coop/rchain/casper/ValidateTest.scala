@@ -10,6 +10,7 @@ import cats.mtl.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockHash
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, ProofOfStakeValidator, Rev}
@@ -528,7 +529,7 @@ class ValidateTest
       val modifiedGenesis   = genesis.withBody(modifiedBody)
       Validate.bondsCache[Id](modifiedGenesis, runtimeManager) should be(Left(InvalidBondsCache))
 
-      activeRuntime.close()
+      activeRuntime.close().unsafeRunSync
   }
 
   "Field format validation" should "succeed on a valid block and fail on empty fields" in {

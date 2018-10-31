@@ -3,6 +3,7 @@ package coop.rchain.rholang.interpreter
 import java.nio.file.Files
 
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
@@ -26,7 +27,7 @@ class DeployParamsSpec extends fixture.FlatSpec with Matchers {
     try {
       test(runtime)
     } finally {
-      runtime.close()
+      runtime.close().unsafeRunSync
       dbDir.recursivelyDelete
     }
   }

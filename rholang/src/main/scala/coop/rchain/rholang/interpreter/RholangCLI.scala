@@ -4,6 +4,7 @@ import java.io.{BufferedOutputStream, FileOutputStream, FileReader, StringReader
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
 
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Interpreter.EvaluateResult
 import coop.rchain.rholang.interpreter.Runtime.RhoIStore
@@ -65,7 +66,7 @@ object RholangCLI {
         repl(runtime)
       }
     } finally {
-      runtime.close()
+      runtime.close().unsafeRunSync
     }
   }
 
