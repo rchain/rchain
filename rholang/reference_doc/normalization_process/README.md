@@ -16,5 +16,10 @@
 - Evaluated each time a process is spawned.
 - Top level includes anything not in a pattern or in the body of a pattern-matching (var binding) process, i.e. `for`, `match`, or `contract`.
 
-### Contracts (?)
-- Syntactic sugar for a single persistent send (but not sure how that affects pattern matching). << Look this up.
+### Contracts
+- Syntactic sugar for a single persistent send. So, for example, the following evaluates to `@Nil!("success")`
+
+  match { for(@Nil <= @Nil){Nil} } {
+    {contract @Nil (@Nil) = { Nil }} => { @Nil!("success") }
+  }
+- In other words, it behaves like an alias
