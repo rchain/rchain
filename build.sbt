@@ -27,6 +27,7 @@ lazy val projectSettings = Seq(
   dependencyOverrides ++= Seq(
     "io.kamon" %% "kamon-core" % kamonVersion
   ),
+  fork := true,
   javacOptions ++= (sys.env.get("JAVAC_VERSION") match {
     case None    => Seq()
     case Some(v) => Seq("-source", v, "-target", v)
