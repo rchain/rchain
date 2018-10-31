@@ -52,6 +52,17 @@ Patterns match up to process equivalence, which is:
   - `for(){}`, `match`, `contract`
 - These bind the free variables in the body and substitute via the corresponding variables in the pattern.
 
+## Matching with `|`
+A pattern `x | y` will match with `Proc1 | Proc2 | ... | ProcN`, always in the same way:
+`x` will match greedily with all the parallel processes, i.e. with all of
+`Proc1 | Proc2 | ... | ProcN`, and `y` will match with `Nil`. In general, `x1 | ... | xN` will match
+with `Proc1| ... | ProcM` where `x1` matches to all of `Proc1| ... | ProcM` and `x2, ... , xN` each
+match with `Nil`.
+
+There is a canonical sort in the normalization process that makes sure the order of `Proc1` through
+`ProcN` is always the same, no matter what order they're written in the program, as long as the
+variables `x1` through `xM` don't change order. **As it stands, the normalizer does alpha
+equivalence up to ordering of the free variables in the pattern.**
 
 ## A Type Theoretic Approach
 One can derive a structural type system from the abstract syntax trees of processes, patterns, and names. Each process, pattern, and name gets a type which is written as its AST. We can define a type inclusion predicate, which says `type1 isIn type2` iff `type2` can be made into `type1` by appending a process or name on a leaf with a proc/name variable; appending something with type matching the simple type of a leaf; etc. with collection patterns and logical ands/ors.
