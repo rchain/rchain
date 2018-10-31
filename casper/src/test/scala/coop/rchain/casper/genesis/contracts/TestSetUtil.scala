@@ -42,7 +42,7 @@ object TestSetUtil {
 
   def runtime(implicit scheduler: Scheduler): Runtime = {
     val runtime = Runtime.create(Paths.get("/not/a/path"), -1, InMem)
-    runtime.injectEmptyRegistryRoot[Task].unsafeRunSync
+    Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace).unsafeRunSync
     runtime
   }
 

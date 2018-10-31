@@ -68,20 +68,23 @@ object CostAccountingPropertyTest {
       .map { _.sliding(2).forall { case List(r1, r2) => r1 == r2 } }
       .runSyncUnsafe(duration)
 
-  def createRhoISpace(): RhoISpace = {
-    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+  def createRhoISpace(): RhoISpace[Task] = {
+    import cats.implicits._
+    import coop.rchain.catscontrib.TaskContrib._
     import coop.rchain.rholang.interpreter.storage.implicits._
     val dbDir               = Files.createTempDirectory("cost-accounting-property-test-")
     val context: RhoContext = Context.create(dbDir, 1024L * 1024L * 4)
-    val space: RhoISpace = RSpace.create[
-      Id,
-      Par,
-      BindPattern,
-      OutOfPhlogistonsError.type,
-      ListParWithRandom,
-      ListParWithRandomAndPhlos,
-      TaggedContinuation
-    ](context, Branch("test"))
+    val space: RhoISpace[Task] = (RSpace
+      .create[
+        Task,
+        Par,
+        BindPattern,
+        OutOfPhlogistonsError.type,
+        ListParWithRandom,
+        ListParWithRandomAndPhlos,
+        TaggedContinuation
+      ](context, Branch("test")))
+      .unsafeRunSync
     space
   }
 

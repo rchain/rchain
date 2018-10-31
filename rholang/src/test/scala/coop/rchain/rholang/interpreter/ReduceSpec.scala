@@ -2,9 +2,9 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.Files
 
-import cats.Id
 import cats.effect.Sync
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Connective.ConnectiveInstance._
@@ -30,22 +30,23 @@ import scala.collection.mutable.HashMap
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
-final case class TestFixture(space: RhoISpace, reducer: ChargingReducer[Task])
+final case class TestFixture(space: RhoISpace[Task], reducer: ChargingReducer[Task])
 
 trait PersistentStoreTester {
   def withTestSpace[R](errorLog: ErrorLog)(f: TestFixture => R): R = {
-    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
-    val dbDir                    = Files.createTempDirectory("rholang-interpreter-test-")
-    val context: RhoContext      = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
-    val space = RSpace.create[
-      Id,
-      Par,
-      BindPattern,
-      OutOfPhlogistonsError.type,
-      ListParWithRandom,
-      ListParWithRandomAndPhlos,
-      TaggedContinuation
-    ](context, Branch("test"))
+    val dbDir               = Files.createTempDirectory("rholang-interpreter-test-")
+    val context: RhoContext = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
+    val space = (RSpace
+      .create[
+        Task,
+        Par,
+        BindPattern,
+        OutOfPhlogistonsError.type,
+        ListParWithRandom,
+        ListParWithRandomAndPhlos,
+        TaggedContinuation
+      ](context, Branch("test")))
+      .unsafeRunSync
     implicit val errLog = errorLog
     val reducer         = RholangOnlyDispatcher.create[Task, Task.Par](space)._2
     reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)

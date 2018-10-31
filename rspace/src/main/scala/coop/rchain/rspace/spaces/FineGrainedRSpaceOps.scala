@@ -149,7 +149,7 @@ abstract class FineGrainedRSpaceOps[F[_], C, P, E, A, R, K](
           store.trieStore.validateAndPutRoot(trieTxn, store.trieBranch, root)
           val leaves = store.trieStore.getLeaves(trieTxn, root)
           eventLog.update(const(Seq.empty))
-          store.clearTrieUpdates()
+          store.getAndClearTrieUpdates()
           store.clear(txn)
           restoreInstalls(txn)
           store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
@@ -157,14 +157,13 @@ abstract class FineGrainedRSpaceOps[F[_], C, P, E, A, R, K](
       }
     }
 
-  override def clear(): F[Unit] = {
-    val emptyRootHash: F[Blake2b256Hash] = syncF.delay {
-      store.withTxn(store.createTxnRead()) { txn =>
+  override def clear(): F[Unit] =
+    syncF.suspend {
+      val root = store.withTxn(store.createTxnRead()) { txn =>
         store.withTrieTxn(txn) { trieTxn =>
           store.trieStore.getEmptyRoot(trieTxn)
         }
       }
+      reset(root)
     }
-    emptyRootHash.flatMap(root => reset(root))
-  }
 }

@@ -11,16 +11,14 @@ import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccoun
 import coop.rchain.rholang.interpreter.{ChargingReducer, Interpreter, Runtime}
 import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
-import monix.execution.Scheduler
-
-import scala.concurrent.duration._
+import monix.execution.Scheduler.Implicits.global
 
 trait EvalBenchStateBase {
   private lazy val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
   private val mapSize: Long    = 1024L * 1024L * 1024L
 
   val rhoScriptSource: String
-  lazy val runtime: Runtime           = Runtime.create(dbDir, mapSize)
+  lazy val runtime: Runtime  = Runtime.create(dbDir, mapSize)
   implicit val rand: Blake2b512Random = Blake2b512Random(128)
   val costAccountAlg: CostAccounting[Task] =
     CostAccounting.unsafe[Task](CostAccount(Integer.MAX_VALUE))
@@ -32,8 +30,6 @@ trait EvalBenchStateBase {
   def doSetup(): Unit = {
     deleteOldStorage(dbDir)
 
-    implicit val scheduler: Scheduler = monix.execution.Scheduler.Implicits.global
-
     runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).unsafeRunSync
     runtime.replayReducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).unsafeRunSync
 
@@ -41,7 +37,8 @@ trait EvalBenchStateBase {
       case Right(par) => Some(par)
       case Left(err)  => throw err
     }
-    val emptyCheckpoint = runtime.space.createCheckpoint()
+
+    val emptyCheckpoint = runtime.space.createCheckpoint().unsafeRunSync
     //make sure we always start from clean rspace & trie
     runtime.replaySpace.clear()
     runtime.replaySpace.reset(emptyCheckpoint.root)
@@ -60,8 +57,8 @@ trait EvalBenchStateBase {
     )
 
   def createTest(t: Option[Par], reducer: ChargingReducer[Task])(
-      implicit errorProcessor: () => Vector[Throwable],
-      rand: Blake2b512Random
+    implicit errorProcessor: () => Vector[Throwable],
+    rand: Blake2b512Random
   ): Task[Vector[Throwable]] = {
     val par = t.getOrElse(throw new Error("Failed to prepare executable rholang term"))
     reducer
