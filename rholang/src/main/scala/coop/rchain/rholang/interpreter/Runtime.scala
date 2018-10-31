@@ -2,99 +2,60 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.{Files, Path}
 
-import cats.Id
+import scala.collection.immutable
+
+import cats.Applicative
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import cats.mtl.FunctorTell
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.models._
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
-import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.rholang.interpreter.errors.SetupError
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.errors.{OutOfPhlogistonsError, SetupError}
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.IReplaySpace
-import coop.rchain.rspace.ISpace
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.pure.PureRSpace
-import coop.rchain.rspace.spaces.FineGrainedReplayRSpace
 import coop.rchain.shared.StoreType
 import coop.rchain.shared.StoreType._
 import monix.eval.Task
-
-import scala.collection.immutable
+import monix.execution.Scheduler
 
 class Runtime private (
     val reducer: ChargingReducer[Task],
     val replayReducer: ChargingReducer[Task],
-    val space: RhoISpace,
-    val replaySpace: RhoReplayISpace,
+    val space: RhoISpace[Task],
+    val replaySpace: RhoReplayISpace[Task],
     val errorLog: ErrorLog,
     val context: RhoContext,
     val shortLeashParams: Runtime.ShortLeashParams[Task],
     val blockTime: Runtime.BlockTime[Task]
 ) {
   def readAndClearErrorVector(): Vector[Throwable] = errorLog.readAndClearErrorVector()
-  def close(): Unit = {
-    space.close()
-    replaySpace.close()
-    context.close()
-  }
-  def injectEmptyRegistryRoot[F[_]](implicit F: Sync[F]): F[Unit] = {
-    // This random value stays dead in the tuplespace, so we can have some fun.
-    // This is from Jeremy Bentham's "Defence of Usury"
-    val rand = Blake2b512Random(
-      ("there can be no such thing as usury: " +
-        "for what rate of interest is there that can naturally be more proper than another?")
-        .getBytes()
-    )
-    implicit val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
-    for {
-      spaceResult <- F.delay(
-                      space.produce(
-                        Registry.registryRoot,
-                        ListParWithRandom(Seq(Registry.emptyMap), rand),
-                        false
-                      )
-                    )
-      replayResult <- F.delay(
-                       replaySpace.produce(
-                         Registry.registryRoot,
-                         ListParWithRandom(Seq(Registry.emptyMap), rand),
-                         false
-                       )
-                     )
-      _ <- spaceResult match {
-            case Right(None) =>
-              replayResult match {
-                case Right(None) => F.unit
-                case Right(Some(_)) =>
-                  F.raiseError(
-                    new SetupError("Registry insertion in replay fired continuation.")
-                  )
-                case Left(err) => F.raiseError(err)
-              }
-            case Right(Some(_)) =>
-              F.raiseError(new SetupError("Registry insertion fired continuation."))
-            case Left(err) => F.raiseError(err)
-          }
-    } yield ()
-  }
+  def close()(
+      implicit scheduler: Scheduler
+  ): Unit =
+    (for {
+      _ <- space.close()
+      _ <- replaySpace.close()
+      _ = context.close()
+    } yield ()).unsafeRunSync
 
 }
 
 object Runtime {
 
-  type RhoISpace          = TCPARK[Id, ISpace]
-  type RhoPureSpace[F[_]] = TCPARK[F, PureRSpace]
-  type RhoReplayISpace    = TCPARK[Id, IReplaySpace]
+  type RhoISpace[F[_]]       = TCPARK[F, ISpace]
+  type RhoPureSpace[F[_]]    = TCPARK[F, PureRSpace]
+  type RhoReplayISpace[F[_]] = TCPARK[F, IReplaySpace]
 
   type RhoIStore  = CPAK[IStore]
   type RhoContext = CPAK[Context]
@@ -230,12 +191,12 @@ object Runtime {
   // because only we do installs
   private val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
 
-  private def introduceSystemProcesses(
-      space: RhoISpace,
-      replaySpace: RhoISpace,
-      processes: immutable.Seq[(Name, Arity, Remainder, BodyRef)]
-  ): Seq[Option[(TaggedContinuation, Seq[ListParWithRandomAndPhlos])]] =
-    processes.flatMap {
+  private def introduceSystemProcesses[F[_]: Applicative](
+      space: RhoISpace[F],
+      replaySpace: RhoISpace[F],
+      processes: List[(Name, Arity, Remainder, BodyRef)]
+  ): F[List[Option[(TaggedContinuation, immutable.Seq[ListParWithRandomAndPhlos])]]] =
+    (processes.flatMap {
       case (name, arity, remainder, ref) =>
         val channels = List(name)
         val patterns = List(
@@ -246,64 +207,21 @@ object Runtime {
           )
         )
         val continuation = TaggedContinuation(ScalaBodyRef(ref))
-        Seq(
+        List(
           space.install(channels, patterns, continuation)(MATCH_UNLIMITED_PHLOS),
           replaySpace.install(channels, patterns, continuation)(MATCH_UNLIMITED_PHLOS)
         )
-    }
-
-  def setupRSpace(
-      dataDir: Path,
-      mapSize: Long,
-      storeType: StoreType
-  ): (RhoContext, RhoISpace, RhoReplayISpace) = {
-    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
-    def createSpace(context: RhoContext): (RhoContext, RhoISpace, RhoReplayISpace) = {
-      val space: RhoISpace = RSpace.create[
-        Id,
-        Par,
-        BindPattern,
-        OutOfPhlogistonsError.type,
-        ListParWithRandom,
-        ListParWithRandomAndPhlos,
-        TaggedContinuation
-      ](context, Branch.MASTER)
-      val replaySpace: RhoReplayISpace = ReplayRSpace.create[
-        Id,
-        Par,
-        BindPattern,
-        OutOfPhlogistonsError.type,
-        ListParWithRandom,
-        ListParWithRandomAndPhlos,
-        TaggedContinuation
-      ](context, Branch.REPLAY)
-      (context, space, replaySpace)
-    }
-    storeType match {
-      case InMem =>
-        createSpace(Context.createInMemory())
-      case LMDB =>
-        if (Files.notExists(dataDir)) {
-          Files.createDirectories(dataDir)
-        }
-        createSpace(Context.create(dataDir, mapSize, true))
-      case Mixed =>
-        if (Files.notExists(dataDir)) {
-          Files.createDirectories(dataDir)
-        }
-        createSpace(Context.createMixed(dataDir, mapSize))
-    }
-  }
+    }).sequence
 
   // TODO: remove default store type
-  def create(dataDir: Path, mapSize: Long, storeType: StoreType = LMDB): Runtime = {
-    val (context, space, replaySpace) = setupRSpace(dataDir, mapSize, storeType)
-
+  def create(dataDir: Path, mapSize: Long, storeType: StoreType = LMDB)(
+      implicit scheduler: Scheduler
+  ): Runtime = {
     val errorLog                                  = new ErrorLog()
     implicit val ft: FunctorTell[Task, Throwable] = errorLog
 
     def dispatchTableCreator(
-        space: RhoISpace,
+        space: RhoISpace[Task],
         dispatcher: RhoDispatch[Task],
         registry: Registry[Task],
         shortLeashParams: ShortLeashParams[Task],
@@ -355,25 +273,7 @@ object Runtime {
     val shortLeashParams = ShortLeashParams.unsafe[Task]()
     val blockTime        = BlockTime.unsafe[Task]()
 
-    lazy val dispatchTable: RhoDispatchMap =
-      dispatchTableCreator(space, dispatcher, registry, shortLeashParams, blockTime)
-
-    lazy val replayDispatchTable: RhoDispatchMap =
-      dispatchTableCreator(
-        replaySpace,
-        replayDispatcher,
-        replayRegistry,
-        shortLeashParams,
-        blockTime
-      )
-
-    lazy val (dispatcher, reducer, registry) =
-      RholangAndScalaDispatcher.create(space, dispatchTable, urnMap)
-
-    lazy val (replayDispatcher, replayReducer, replayRegistry) =
-      RholangAndScalaDispatcher.create(replaySpace, replayDispatchTable, urnMap)
-
-    val procDefs: immutable.Seq[(Name, Arity, Remainder, BodyRef)] = {
+    val procDefs: List[(Name, Arity, Remainder, BodyRef)] = {
       import BodyRefs._
       List(
         (FixedChannels.STDOUT, 1, None, STDOUT),
@@ -393,20 +293,125 @@ object Runtime {
       )
     }
 
-    val res: Seq[Option[(TaggedContinuation, Seq[ListParWithRandomAndPhlos])]] =
-      introduceSystemProcesses(space, replaySpace, procDefs)
+    (for {
+      setup                         <- setupRSpace[Task](dataDir, mapSize, storeType)
+      (context, space, replaySpace) = setup
+      (reducer, replayReducer) = {
+        lazy val replayDispatchTable: RhoDispatchMap =
+          dispatchTableCreator(
+            replaySpace,
+            replayDispatcher,
+            replayRegistry,
+            shortLeashParams,
+            blockTime
+          )
 
-    assert(res.forall(_.isEmpty))
+        lazy val dispatchTable: RhoDispatchMap =
+          dispatchTableCreator(space, dispatcher, registry, shortLeashParams, blockTime)
 
-    new Runtime(
-      reducer,
-      replayReducer,
-      space,
-      replaySpace,
-      errorLog,
-      context,
-      shortLeashParams,
-      blockTime
+        lazy val (dispatcher, reducer, registry) =
+          RholangAndScalaDispatcher.create(space, dispatchTable, urnMap)
+
+        lazy val (replayDispatcher, replayReducer, replayRegistry) =
+          RholangAndScalaDispatcher.create(replaySpace, replayDispatchTable, urnMap)
+        (reducer, replayReducer)
+      }
+      res <- introduceSystemProcesses(space, replaySpace, procDefs)
+    } yield {
+      assert(res.forall(_.isEmpty))
+      new Runtime(
+        reducer,
+        replayReducer,
+        space,
+        replaySpace,
+        errorLog,
+        context,
+        shortLeashParams,
+        blockTime
+      )
+    }).unsafeRunSync
+  }
+
+  def injectEmptyRegistryRoot[F[_]](space: RhoISpace[F], replaySpace: RhoReplayISpace[F])(
+      implicit F: Sync[F]
+  ): F[Unit] = {
+    // This random value stays dead in the tuplespace, so we can have some fun.
+    // This is from Jeremy Bentham's "Defence of Usury"
+    val rand = Blake2b512Random(
+      ("there can be no such thing as usury: " +
+        "for what rate of interest is there that can naturally be more proper than another?")
+        .getBytes()
     )
+    implicit val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
+    for {
+      spaceResult <- space.produce(
+                      Registry.registryRoot,
+                      ListParWithRandom(Seq(Registry.emptyMap), rand),
+                      false
+                    )
+      replayResult <- replaySpace.produce(
+                       Registry.registryRoot,
+                       ListParWithRandom(Seq(Registry.emptyMap), rand),
+                       false
+                     )
+      _ <- spaceResult match {
+            case Right(None) =>
+              replayResult match {
+                case Right(None) => F.unit
+                case Right(Some(_)) =>
+                  F.raiseError(
+                    new SetupError("Registry insertion in replay fired continuation.")
+                  )
+                case Left(err) => F.raiseError(err)
+              }
+            case Right(Some(_)) =>
+              F.raiseError(new SetupError("Registry insertion fired continuation."))
+            case Left(err) => F.raiseError(err)
+          }
+    } yield ()
+  }
+
+  def setupRSpace[F[_]: Sync](
+      dataDir: Path,
+      mapSize: Long,
+      storeType: StoreType
+  ): F[(RhoContext, RhoISpace[F], RhoReplayISpace[F])] = {
+    def createSpace(
+        context: RhoContext
+    ): F[(RhoContext, RhoISpace[F], RhoReplayISpace[F])] =
+      for {
+        space <- RSpace.create[
+                  F,
+                  Par,
+                  BindPattern,
+                  OutOfPhlogistonsError.type,
+                  ListParWithRandom,
+                  ListParWithRandomAndPhlos,
+                  TaggedContinuation
+                ](context, Branch.MASTER)
+        replaySpace <- ReplayRSpace.create[
+                        F,
+                        Par,
+                        BindPattern,
+                        OutOfPhlogistonsError.type,
+                        ListParWithRandom,
+                        ListParWithRandomAndPhlos,
+                        TaggedContinuation
+                      ](context, Branch.REPLAY)
+      } yield ((context, space, replaySpace))
+    storeType match {
+      case InMem =>
+        createSpace(Context.createInMemory())
+      case LMDB =>
+        if (Files.notExists(dataDir)) {
+          Files.createDirectories(dataDir)
+        }
+        createSpace(Context.create(dataDir, mapSize, true))
+      case Mixed =>
+        if (Files.notExists(dataDir)) {
+          Files.createDirectories(dataDir)
+        }
+        createSpace(Context.createMixed(dataDir, mapSize))
+    }
   }
 }

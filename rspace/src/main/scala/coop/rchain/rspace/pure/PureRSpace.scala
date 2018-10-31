@@ -35,7 +35,7 @@ object PureRSpace {
 
   final class PureRSpaceApplyBuilders[F[_]](val F: Sync[F]) extends AnyVal {
     def of[C, P, E, A, R, K](
-        space: ISpace[Id, C, P, E, A, R, K]
+        space: ISpace[F, C, P, E, A, R, K]
     )(implicit mat: Match[P, E, A, R]): PureRSpace[F, C, P, E, A, R, K] =
       new PureRSpace[F, C, P, E, A, R, K] {
         def consume(
@@ -44,23 +44,23 @@ object PureRSpace {
             continuation: K,
             persist: Boolean
         ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
-          F.delay(space.consume(channels, patterns, continuation, persist))
+          space.consume(channels, patterns, continuation, persist)
 
         def install(channels: Seq[C], patterns: Seq[P], continuation: K): F[Option[(K, Seq[R])]] =
-          F.delay(space.install(channels, patterns, continuation))
+          space.install(channels, patterns, continuation)
 
         def produce(
             channel: C,
             data: A,
             persist: Boolean
         ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
-          F.delay(space.produce(channel, data, persist))
+          space.produce(channel, data, persist)
 
-        def createCheckpoint(): F[Checkpoint] = F.delay(space.createCheckpoint())
+        def createCheckpoint(): F[Checkpoint] = space.createCheckpoint()
 
-        def reset(hash: Blake2b256Hash): F[Unit] = F.delay(space.reset(hash))
+        def reset(hash: Blake2b256Hash): F[Unit] = space.reset(hash)
 
-        def close(): F[Unit] = F.delay(space.close())
+        def close(): F[Unit] = space.close()
       }
   }
 }

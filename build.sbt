@@ -142,12 +142,14 @@ lazy val models = (project in file("models"))
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       catsCore,
       magnolia,
+      scalapbCompiler,
       scalacheck,
       scalacheckShapeless,
       scalapbRuntimegGrpc
     ),
     PB.targets in Compile := Seq(
-      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value,
+      coop.rchain.scalapb.StacksafeScalapbGenerator
+        .gen(flatPackage = true) -> (sourceManaged in Compile).value,
       grpcmonix.generators
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )

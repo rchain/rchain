@@ -2,27 +2,29 @@ package coop.rchain.comm.transport
 
 import java.io.ByteArrayInputStream
 
-import cats.implicits._
-import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.catscontrib.ski._
-import coop.rchain.comm.CachedConnections.ConnectionsCache
-import coop.rchain.comm.CommError._
-import coop.rchain.comm._
-import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
-import coop.rchain.comm.protocol.routing._
-import coop.rchain.comm.rp.ProtocolHelper
-import coop.rchain.shared.{Cell, Log, LogSource}
-import coop.rchain.shared.Compression._
-import io.grpc._
-import io.grpc.netty._
-import io.netty.handler.ssl.{ClientAuth, SslContext, SslContextBuilder}
-import monix.eval._
-import monix.execution._
-import monix.reactive._
-
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
 import scala.util._
+
+import cats.implicits._
+
+import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.catscontrib.ski._
+import coop.rchain.comm._
+import coop.rchain.comm.CachedConnections.ConnectionsCache
+import coop.rchain.comm.CommError._
+import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
+import coop.rchain.comm.rp.ProtocolHelper
+import coop.rchain.shared._
+import coop.rchain.shared.Compression._
+
+import io.grpc._
+import io.grpc.netty._
+import io.netty.handler.ssl._
+import monix.eval._
+import monix.execution._
+import monix.reactive._
 
 class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: Int)(
     implicit scheduler: Scheduler,

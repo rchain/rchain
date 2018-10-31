@@ -19,6 +19,8 @@ import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 import monix.eval.Task
 import monix.execution.Scheduler
 
+import coop.rchain.catscontrib.TaskContrib._
+
 import scala.annotation.tailrec
 import scala.collection.immutable
 import scala.concurrent.SyncVar
@@ -27,11 +29,11 @@ import scala.util.{Failure, Success, Try}
 
 //runtime is a SyncVar for thread-safety, as all checkpoints share the same "hot store"
 class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: SyncVar[Runtime]) {
-  def captureResults(start: StateHash, term: Par, name: String = "__SCALA__")(
+
+  def captureResults(start: StateHash, deploy: Deploy, name: String = "__SCALA__")(
       implicit scheduler: Scheduler
   ): Seq[Par] = {
     val runtime                   = runtimeContainer.take()
-    val deploy                    = ProtoUtil.termDeploy(term, System.currentTimeMillis(), accounting.MAX_VALUE)
     val (_, Seq(processedDeploy)) = newEval(deploy :: Nil, runtime, start)
 
     //TODO: Is better error handling needed here?
@@ -39,7 +41,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       if (processedDeploy.status.isFailed) Nil
       else {
         val returnChannel = Par().copy(exprs = Seq(Expr(GString(name))))
-        runtime.space.getData(returnChannel)
+        runtime.space.getData(returnChannel).unsafeRunSync
       }
 
     runtimeContainer.put(runtime)
@@ -81,7 +83,9 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       case None => ()
     }
 
-  def storageRepr(hash: StateHash): Option[String] =
+  def storageRepr(hash: StateHash)(
+      implicit scheduler: Scheduler
+  ): Option[String] =
     getResetRuntimeOpt(hash).map { resetRuntime =>
       val result = StoragePrinter.prettyPrint(resetRuntime.space.store)
       runtimeContainer.put(resetRuntime)
@@ -89,12 +93,19 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     }
 
   def computeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] = {
-    // TODO: Switch to a read only name
     val bondsQuery =
-      """for(pos <- @"proofOfStake"){ pos!("getBonds", "__SCALA__") }"""
-    //TODO: construct directly instead of parsing rholang source
-    val bondsQueryTerm = InterpreterUtil.mkTerm(bondsQuery).right.get
-    val bondsPar       = captureResults(hash, bondsQueryTerm)
+      """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
+        |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+        |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
+        |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
+        |    for(pos <- posCh){ pos!("getBonds", "__SCALA__") }
+        |  }
+        |}""".stripMargin
+
+    val bondsQueryTerm =
+      ProtoUtil.deployDataToDeploy(ProtoUtil.sourceDeploy(bondsQuery, 0L, accounting.MAX_VALUE))
+    val bondsPar = captureResults(hash, bondsQueryTerm)
+
     assert(
       bondsPar.size == 1,
       s"Incorrect number of results from query of current bonds: ${bondsPar.size}"
@@ -102,10 +113,12 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     toBondSeq(bondsPar.head)
   }
 
-  private def getResetRuntime(hash: StateHash) = {
+  private def getResetRuntime(hash: StateHash)(
+      implicit scheduler: Scheduler
+  ) = {
     val runtime   = runtimeContainer.take()
     val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
-    Try(runtime.space.reset(blakeHash)) match {
+    Try(runtime.space.reset(blakeHash).unsafeRunSync) match {
       case Success(_) => runtime
       case Failure(ex) =>
         runtimeContainer.put(runtime)
@@ -113,10 +126,12 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     }
   }
 
-  private def getResetRuntimeOpt(hash: StateHash) = {
+  private def getResetRuntimeOpt(hash: StateHash)(
+      implicit scheduler: Scheduler
+  ) = {
     val runtime   = runtimeContainer.take()
     val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
-    Try(runtime.space.reset(blakeHash)) match {
+    Try(runtime.space.reset(blakeHash).unsafeRunSync) match {
       case Success(_) => Some(runtime)
       case Failure(_) =>
         runtimeContainer.put(runtime)
@@ -134,9 +149,11 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
         Bond(validatorName, stakeAmount)
     }.toList
 
-  def getData(hash: ByteString, channel: Par): Seq[Par] = {
+  def getData(hash: ByteString, channel: Par)(
+      implicit scheduler: Scheduler
+  ): Seq[Par] = {
     val resetRuntime                          = getResetRuntime(hash)
-    val result: Seq[Datum[ListParWithRandom]] = resetRuntime.space.getData(channel)
+    val result: Seq[Datum[ListParWithRandom]] = resetRuntime.space.getData(channel).unsafeRunSync
     runtimeContainer.put(resetRuntime)
     result.flatMap(_.a.pars)
   }
@@ -144,10 +161,12 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   def getContinuation(
       hash: ByteString,
       channels: immutable.Seq[Par]
+  )(
+      implicit scheduler: Scheduler
   ): Seq[(Seq[BindPattern], Par)] = {
     val resetRuntime = getResetRuntime(hash)
     val results: Seq[WaitingContinuation[BindPattern, TaggedContinuation]] =
-      resetRuntime.space.getWaitingContinuations(channels)
+      resetRuntime.space.getWaitingContinuations(channels).unsafeRunSync
     runtimeContainer.put(resetRuntime)
     for {
       result <- results.filter(_.continuation.taggedCont.isParBody)
@@ -167,7 +186,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
         terms match {
           case deploy +: rem =>
             for {
-              _              <- Task.delay(runtime.space.reset(hash))
+              _              <- runtime.space.reset(hash)
               availablePhlos = Cost(deploy.raw.map(_.phloLimit).get.value)
               _              <- runtime.reducer.setAvailablePhlos(availablePhlos)
               (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(
@@ -177,7 +196,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
               injResult           <- injAttempt(deploy, runtime.reducer, runtime.errorLog)
               (phlosLeft, errors) = injResult
               cost                = phlosLeft.copy(cost = availablePhlos.value - phlosLeft.cost)
-              newCheckpoint       <- Task.delay(runtime.space.createCheckpoint())
+              newCheckpoint       <- runtime.space.createCheckpoint()
               deployResult = InternalProcessedDeploy(
                 deploy,
                 cost,
@@ -189,7 +208,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
                      else doEval(rem, hash, acc :+ deployResult)
             } yield cont
 
-          case _ => Task.now((ByteString.copyFrom(hash.bytes.toArray), acc))
+          case _ => Task.now { (ByteString.copyFrom(hash.bytes.toArray), acc) }
         }
       }
 
@@ -213,7 +232,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
             val availablePhlos = Cost(deploy.raw.map(_.phloLimit).get.value)
             for {
               _         <- runtime.replayReducer.setAvailablePhlos(availablePhlos)
-              _         <- Task.delay(runtime.replaySpace.rig(hash, log.toList))
+              _         <- runtime.replaySpace.rig(hash, log.toList)
               injResult <- injAttempt(deploy, runtime.replayReducer, runtime.errorLog)
               //TODO: compare replay deploy cost to given deploy cost
               (phlosLeft, errors) = injResult
@@ -227,7 +246,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
                            )
                          else if (errors.nonEmpty) doReplayEval(rem, hash)
                          else {
-                           Task.delay(runtime.replaySpace.createCheckpoint()).attempt.flatMap {
+                           runtime.replaySpace.createCheckpoint().attempt.flatMap {
                              case Right(newCheckpoint) =>
                                doReplayEval(rem, newCheckpoint.root)
                              case Left(ex: ReplayException) =>
@@ -268,16 +287,17 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
 object RuntimeManager {
   type StateHash = ByteString
 
-  def fromRuntime(active: Runtime)(implicit scheduler: Scheduler): RuntimeManager = {
-    active.space.clear()
-    active.replaySpace.clear()
-    active.injectEmptyRegistryRoot[Task].unsafeRunSync
-    val hash       = ByteString.copyFrom(active.space.createCheckpoint().root.bytes.toArray)
-    val replayHash = ByteString.copyFrom(active.replaySpace.createCheckpoint().root.bytes.toArray)
-    assert(hash == replayHash)
-    val runtime = new SyncVar[Runtime]()
-    runtime.put(active)
-
-    new RuntimeManager(hash, runtime)
-  }
+  def fromRuntime(active: Runtime)(implicit scheduler: Scheduler): RuntimeManager =
+    (for {
+      _                <- active.space.clear()
+      _                <- active.replaySpace.clear()
+      _                <- Runtime.injectEmptyRegistryRoot(active.space, active.replaySpace)
+      checkpoint       <- active.space.createCheckpoint()
+      replayCheckpoint <- active.replaySpace.createCheckpoint()
+      hash             = ByteString.copyFrom(checkpoint.root.bytes.toArray)
+      replayHash       = ByteString.copyFrom(replayCheckpoint.root.bytes.toArray)
+      _                = assert(hash == replayHash)
+      runtime          = new SyncVar[Runtime]()
+      _                = runtime.put(active)
+    } yield (new RuntimeManager(hash, runtime))).unsafeRunSync
 }

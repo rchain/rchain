@@ -808,6 +808,8 @@ trait ReplayRSpaceTests
 trait ReplayRSpaceTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with OptionValues {
   val logger = Logger(this.getClass.getName.stripSuffix("$"))
 
+  implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+
   override def withFixture(test: NoArgTest): Outcome = {
     logger.debug(s"Test: ${test.name}")
     super.withFixture(test)
@@ -895,8 +897,6 @@ trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase
       oC: Ordering[C]
   ): S = {
 
-    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
-
     val ctx: Context[C, P, A, K] = Context.createInMemory()
     val space                    = RSpace.create[Id, C, P, E, A, A, K](ctx, Branch.REPLAY)
     val replaySpace              = ReplayRSpace.create[Id, C, P, E, A, A, K](ctx, Branch.REPLAY)
@@ -921,8 +921,6 @@ trait FaultyStoreReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsB
       sk: Serialize[K],
       oC: Ordering[C]
   ): S = {
-
-    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
 
     val trieStore = InMemoryTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]]()
     val mainStore = InMemoryStore

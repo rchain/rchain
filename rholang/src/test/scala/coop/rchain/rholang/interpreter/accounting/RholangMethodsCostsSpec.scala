@@ -796,24 +796,31 @@ class RholangMethodsCostsSpec
     test.runSyncUnsafe(5.seconds)
   }
 
-  private var dbDir: Path         = null
-  private var context: RhoContext = null
-  private var space: RhoISpace    = null
+  private var dbDir: Path            = null
+  private var context: RhoContext    = null
+  private var space: RhoISpace[Task] = null
 
   override protected def beforeAll(): Unit = {
+    import coop.rchain.catscontrib.TaskContrib._
     import coop.rchain.rholang.interpreter.storage.implicits._
-    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
     dbDir = Files.createTempDirectory("rholang-interpreter-test-")
     context = Context.createInMemory()
-    space = RSpace.create[
-      Id,
-      Par,
-      BindPattern,
-      OutOfPhlogistonsError.type,
-      ListParWithRandom,
-      ListParWithRandomAndPhlos,
-      TaggedContinuation
-    ](context, Branch("rholang-methods-cost-test"))
+    space = (
+      RSpace
+        .create[
+          Task,
+          Par,
+          BindPattern,
+          OutOfPhlogistonsError.type,
+          ListParWithRandom,
+          ListParWithRandomAndPhlos,
+          TaggedContinuation
+        ](
+          context,
+          Branch("rholang-methods-cost-test")
+        )
+      )
+      .unsafeRunSync
   }
 
   override protected def afterAll(): Unit = {

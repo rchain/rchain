@@ -128,13 +128,13 @@ object Interpreter {
     implicit val rand      = Blake2b512Random(128)
     val evaluatePhlosLimit = Cost(Integer.MAX_VALUE) //This is OK because evaluate is not called on deploy
     for {
-      checkpoint <- Task.now(runtime.space.createCheckpoint())
+      checkpoint <- runtime.space.createCheckpoint()
       _          <- runtime.reducer.setAvailablePhlos(evaluatePhlosLimit)
       _          <- runtime.reducer.inj(normalizedTerm)(rand)
       errors     <- Task.now(runtime.readAndClearErrorVector())
       leftPhlos  <- runtime.reducer.getAvailablePhlos()
       cost       = leftPhlos.copy(cost = evaluatePhlosLimit - leftPhlos.cost)
-      _          <- Task.now(if (errors.nonEmpty) runtime.space.reset(checkpoint.root))
+      _          <- if (errors.nonEmpty) runtime.space.reset(checkpoint.root) else Task.now(())
     } yield EvaluateResult(cost, errors)
   }
 
