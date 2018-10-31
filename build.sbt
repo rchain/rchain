@@ -26,7 +26,8 @@ lazy val projectSettings = Seq(
   testOptions in Test += Tests.Argument("-oD"), //output test durations
   dependencyOverrides ++= Seq(
     "io.kamon" %% "kamon-core" % kamonVersion
-  )
+  ),
+  fork := true
 )
 
 lazy val coverageSettings = Seq(
@@ -131,7 +132,6 @@ lazy val crypto = (project in file("crypto"))
       secp256k1Java,
       scodecBits
     ),
-    fork := true,
     doctestTestFramework := DoctestTestFramework.ScalaTest
   )
   .dependsOn(shared)
@@ -142,12 +142,14 @@ lazy val models = (project in file("models"))
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       catsCore,
       magnolia,
+      scalapbCompiler,
       scalacheck,
       scalacheckShapeless,
       scalapbRuntimegGrpc
     ),
     PB.targets in Compile := Seq(
-      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value,
+      coop.rchain.scalapb.StacksafeScalapbGenerator
+        .gen(flatPackage = true) -> (sourceManaged in Compile).value,
       grpcmonix.generators
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
@@ -276,7 +278,6 @@ lazy val rholang = (project in file("rholang"))
       baseDirectory.value / "src" / "main" / "k",
       baseDirectory.value / "src" / "main" / "rbl"
     ).map(_.getPath ++ "/.*").mkString(";"),
-    fork in Test := true,
     //constrain the resource usage so that we hit SOE-s and OOME-s more quickly should they happen
     javaOptions in Test ++= Seq("-Xss240k", "-XX:MaxJavaStackTraceDepth=10000", "-Xmx128m")
   )

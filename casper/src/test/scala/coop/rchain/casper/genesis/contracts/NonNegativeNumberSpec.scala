@@ -9,7 +9,7 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class NonNegativeNumberSpec extends FlatSpec with Matchers {
   val runtime = TestSetUtil.runtime
-  val tests   = TestSetUtil.getTests("./casper/src/test/rholang/NonNegativeNumberTest.rho").toList
+  val tests   = TestSetUtil.getTests("../casper/src/test/rholang/NonNegativeNumberTest.rho").toList
 
   TestSetUtil.runTestsWithDeploys(
     NonNegativeNumberTest,

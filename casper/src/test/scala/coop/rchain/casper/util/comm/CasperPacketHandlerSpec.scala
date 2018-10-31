@@ -35,6 +35,7 @@ import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.Cell
 import monix.eval.Task
 import monix.execution.Scheduler
+import monix.execution.Scheduler.Implicits.global
 import monix.execution.schedulers.TestScheduler
 import org.scalatest.WordSpec
 import coop.rchain.casper.util.TestTime

@@ -43,7 +43,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   type Validator = ByteString
 
   //TODO: Extract hardcoded version
-  private val version = 0L
+  private val version = 1L
 
   private val _blockDag: AtomicSyncVar[BlockDag] = new AtomicSyncVar(initialDag)
 
@@ -109,13 +109,15 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
 
   def internalAddBlock(b: BlockMessage): F[BlockStatus] =
     for {
-      validFormat <- Validate.formatOfFields[F](b)
-      validSig    <- Validate.blockSignature[F](b)
-      dag         <- blockDag
-      validSender <- Validate.blockSender[F](b, genesis, dag)
+      validFormat  <- Validate.formatOfFields[F](b)
+      validSig     <- Validate.blockSignature[F](b)
+      dag          <- blockDag
+      validSender  <- Validate.blockSender[F](b, genesis, dag)
+      validVersion <- Validate.version[F](b, version)
       attempt <- if (!validFormat) InvalidUnslashableBlock.pure[F]
                 else if (!validSig) InvalidUnslashableBlock.pure[F]
                 else if (!validSender) InvalidUnslashableBlock.pure[F]
+                else if (!validVersion) InvalidUnslashableBlock.pure[F]
                 else if (validatorId.exists(id => ByteString.copyFrom(id.publicKey) == b.sender))
                   addEffects(Valid, b).map(_ => Valid)
                 else attemptAdd(b)
@@ -211,11 +213,17 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   def createBlock: F[CreateBlockStatus] = validatorId match {
     case Some(vId @ ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
       for {
-        dag            <- blockDag
-        orderedHeads   <- estimator(dag)
-        p              <- chooseNonConflicting[F](orderedHeads, genesis, dag)
-        r              <- remDeploys(dag, p)
+        dag              <- blockDag
+        orderedHeads     <- estimator(dag)
+        p                <- chooseNonConflicting[F](orderedHeads, genesis, dag)
+        r                <- remDeploys(dag, p)
+        bondedValidators = bonds(p.head).map(_.validator).toSet
+        //We ensure that only the justifications given in the block are those
+        //which are bonded validators in the chosen parent. This is safe because
+        //any latest message not from a bonded validator will not change the
+        //final fork-choice.
         justifications = toJustification(dag.latestMessages)
+          .filter(j => bondedValidators.contains(j.validator))
         proposal <- if (r.nonEmpty || p.length > 1) {
                      createProposal(p, r, justifications)
                    } else {

@@ -24,7 +24,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
   val badTestHashQuery = "No such a hash"
 
   val genesisHashString = "00000000"
-  val version           = 0L
+  val version           = 1L
 
   def genesisBlock(genesisHashString: String, version: Long): BlockMessage = {
     val genesisHash = ProtoUtil.stringToByteString(genesisHashString)

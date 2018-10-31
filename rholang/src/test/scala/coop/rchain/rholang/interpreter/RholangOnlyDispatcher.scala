@@ -15,7 +15,7 @@ import coop.rchain.rspace.pure.PureRSpace
 
 object RholangOnlyDispatcher {
 
-  def create[M[_], F[_]](tuplespace: RhoISpace, urnMap: Map[String, Par] = Map.empty)(
+  def create[M[_], F[_]](tuplespace: RhoISpace[M], urnMap: Map[String, Par] = Map.empty)(
       implicit
       parallel: Parallel[M, F],
       s: Sync[M],

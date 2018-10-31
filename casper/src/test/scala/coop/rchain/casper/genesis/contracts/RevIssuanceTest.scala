@@ -70,7 +70,7 @@ class RevIssuanceTest extends FlatSpec with Matchers {
         postUnlockHash,
         Par().copy(exprs = Seq(Expr(GString(statusOut))))
       )
-    assert(unlockResult.head.exprs.head.getEListBody.ps.head.exprs.head.getGBool) //assert unlock success
+    assert(unlockResult.head.exprs.head.getETupleBody.ps.head.exprs.head.getGBool) //assert unlock success
 
     val (postTransferHash, _) = runtimeManager.computeState(postUnlockHash, transferDeploy :: Nil)
     val transferSuccess = runtimeManager.getData(

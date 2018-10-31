@@ -18,7 +18,7 @@ import monix.reactive.Observable
 
 private[api] object DeployGrpcService {
   def instance[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
-      worker: Scheduler
+      implicit worker: Scheduler
   ): CasperMessageGrpcMonix.DeployService =
     new CasperMessageGrpcMonix.DeployService {
 

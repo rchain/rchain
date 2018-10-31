@@ -10,6 +10,7 @@ import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccounting}
 import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
 import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
 
 trait EvalBenchStateBase {
   private lazy val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")

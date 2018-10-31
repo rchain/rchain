@@ -17,7 +17,10 @@ in {
   rl!(`rho:id:j6trahbxycumerwpr5qype7j43b7eqh8auebwsa9nn68if47gswh73`, *EitherCh) |
   for(@(_, ListOps) <- ListOpsCh; @(_, Either) <- EitherCh) {
     contract MakePoS(purse, @minimumBond, @maximumBond, @initBonds, return) = {
-      new this, bondsCh, joiningFeeCh, clonePurse, depositPurse, updateBonds, feeDistribution in {
+      new 
+        this, bondsCh, joiningFeeCh, clonePurse, depositPurse, 
+        updateBonds, feeDistribution, paymentStore
+      in {
         bondsCh!(initBonds) |
         joiningFeeCh!!(minimumBond) | //joining fee equal to minimum bond amount
       
@@ -178,6 +181,48 @@ in {
                   }
                 }
                 ("Left", message) => { return!((false, message)) }
+              }
+            }
+          }
+        } |
+      
+        //TODO: Fill in this contract (RHOL-462)
+        contract this(@"distribute", @purse) = {
+          Nil
+        } |
+      
+        paymentStore!((Nil, Nil, Nil, Nil)) |
+      
+        //Make it easy to query the last payment so that validators
+        //can check how much phlo there is for the deploy.
+        contract this(@"lastPayment", return) = {
+          for(@payment <- paymentStore) {
+            paymentStore!(payment) |
+            return!(payment)
+          }
+        } |
+      
+        //This is the contract that deploy payment code ultimately needs
+        //to call in order to pay for the deploy.
+        contract this(@"pay", @purse, return) = {
+          new payPurseCh, p(`rho:deploy:params`), paramsCh in {
+            clonePurse!(purse, *payPurseCh) |
+            p!(*paramsCh) |
+            for(
+              @cloneResult <- payPurseCh;
+              @codeHash, @phloRate, @userId, @timestamp <- paramsCh
+            ) {
+              match cloneResult {
+                ("Right", (payPurse, payAmount)) => {
+                  this!("distribute", payPurse) | //distribute rev paid to validators
+                  //update paymentStore
+                  for(_ <- paymentStore){ paymentStore!((codeHash, userId, timestamp, phloRate * payAmount)) } |
+                  return!(phloRate * payAmount) //return amount of phlo purchased to user (in case they care)
+                }
+                ("Left", message) => {
+                  for(_ <- paymentStore){ paymentStore!((codeHash, userId, timestamp, 0)) } |
+                  return!(0)
+                }
               }
             }
           }
