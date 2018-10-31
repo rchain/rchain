@@ -16,7 +16,7 @@ Bundles can be used to control the read/write privileges on a channel
   - EG here
 
 ### bundle: bundle read write
-- `bundle-{ chan }`
+- `bundle{ chan }`
 - `chan` can be read and written on
 - This is useful for other circumstances
   - EG here
