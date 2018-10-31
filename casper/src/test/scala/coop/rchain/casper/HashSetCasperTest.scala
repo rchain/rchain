@@ -30,6 +30,7 @@ import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.catscontrib.Capture._
+import coop.rchain.catscontrib.effect.implicits._
 
 import scala.collection.immutable
 import scala.util.Random
@@ -550,7 +551,6 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   it should "allow bonding via the faucet" in {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
     import node.casperEff
-    import coop.rchain.catscontrib.effect.implicits._
 
     implicit val runtimeManager = node.runtimeManager
     val (sk, pk)                = Ed25519.newKeyPair
@@ -576,6 +576,70 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     (oldBonds.size + 1) shouldBe newBonds.size
 
     node.tearDown()
+  }
+
+  it should "not fail if the forkchoice changes after a bonding event" in {
+    val localValidators = validatorKeys.take(3)
+    val localBonds      = localValidators.map(Ed25519.toPublic).zip(List(10L, 30L, 5000L)).toMap
+    val localGenesis =
+      buildGenesis(Nil, localBonds, 1L, Long.MaxValue, Faucet.basicWalletFaucet, 0L)
+    val nodes = HashSetCasperTestNode.network(localValidators, localGenesis)
+
+    implicit val rm = nodes.head.runtimeManager
+    val (sk, pk)    = Ed25519.newKeyPair
+    val pkStr       = Base16.encode(pk)
+    val forwardCode = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
+    val bondingCode = BondingUtil.faucetBondDeploy[Id](50, "ed25519", pkStr, sk)
+    val forwardDeploy =
+      ProtoUtil.sourceDeploy(forwardCode, System.currentTimeMillis(), accounting.MAX_VALUE)
+    val bondingDeploy =
+      ProtoUtil.sourceDeploy(bondingCode, forwardDeploy.timestamp + 1, accounting.MAX_VALUE)
+
+    nodes.head.casperEff.deploy(forwardDeploy)
+    nodes.head.casperEff.deploy(bondingDeploy)
+    val Created(bondedBlock) = nodes.head.casperEff.createBlock
+
+    val bondedBlockStatus = nodes.head.casperEff.addBlock(bondedBlock)
+    nodes(1).receive()
+    nodes.head.receive()
+    nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) misses bonding
+
+    val Created(block2) = {
+      val n = nodes(1)
+      import n.casperEff._
+      deploy(ProtoUtil.basicDeployData[Id](0)) *> createBlock
+    }
+    val status2 = nodes(1).casperEff.addBlock(block2)
+    nodes.head.receive()
+    nodes(1).receive()
+    nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) misses block built on bonding
+
+    val Created(block3) = { //nodes(2) proposes a block
+      val n = nodes(2)
+      import n.casperEff._
+      deploy(ProtoUtil.basicDeployData[Id](1)) *> createBlock
+    }
+    val status3 = nodes(2).casperEff.addBlock(block3)
+    nodes.foreach(_.receive())
+    //Since weight of nodes(2) is higher than nodes(0) and nodes(1)
+    //their fork-choice changes, thus the new validator
+    //is no longer bonded
+
+    val Created(block4) = { //nodes(0) proposes a new block
+      val n = nodes.head
+      import n.casperEff._
+      deploy(ProtoUtil.basicDeployData[Id](2)) *> createBlock
+    }
+    val status4 = nodes.head.casperEff.addBlock(block4)
+    nodes.foreach(_.receive())
+
+    bondedBlockStatus shouldBe Valid
+    status2 shouldBe Valid
+    status3 shouldBe Valid
+    status4 shouldBe Valid
+    nodes.foreach(_.logEff.warns shouldBe Nil)
+
+    nodes.foreach(_.tearDown())
   }
 
   it should "allow paying for deploys" in {
