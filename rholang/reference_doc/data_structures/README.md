@@ -1,13 +1,39 @@
 ## Data Structures
 
-### Structures
+All computation can be encoded in the raw rho calculus just as it can be in the lambda calculus. Convincing your self of this is an interesting and rewarding endeavor for the mathematically inclined. Rholang strives to b a useful general purpose programming language, and therefore introduces some additional native data structures.
 
-list, tuple, set, map
+All data structures are processes and [can be quote] todo insert link, to create channels.
+
+All data structures are immutable, and their methods return new data structures with the requested change (the original is not modified).
 
 
-### Operations on structures
+### Tuple
+A tuple is an ordered collection of 1 or more processes. The constituent processes need not be of the same type.
 
-concatenation, interpolation, slice, hex
+#### Basic syntax
+`(1, 2, "hello", *someChan)`
+
+#### `tuple.nth`
+Retrieve the nth item from the tuple or Nil if the index is out of range
+Syntax: `tuple.nth(n, ack)`
+Parameters:
+```
+n: An integer representing the index to retrieve
+ack: An acknowledgement channel on which the result will be returned.
+```
+
+Examples:
+```
+TODO include the examples from ../../examples/tut-tuples-methods.rho
+```
+
+### List
+
+### Set
+
+### Map
+
+
 
 
 ## Methods
