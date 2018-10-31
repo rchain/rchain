@@ -283,6 +283,7 @@ object BlockAPI {
     )
   }
 
+  // TODO: Replace with call to BlockStore
   def findBlockWithDeploy[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       user: ByteString,
       timestamp: Long
@@ -290,7 +291,8 @@ object BlockAPI {
     def casperResponse(implicit casper: MultiParentCasper[F]): F[BlockQueryResponse] =
       for {
         dag                <- MultiParentCasper[F].blockDag
-        maybeBlock         <- findBlockWithDeploy[F](dag.topoSort.flatten.reverse, user, timestamp)
+        allBlocksTopoSort  <- dag.topoSort(0L)
+        maybeBlock         <- findBlockWithDeploy[F](allBlocksTopoSort.flatten.reverse, user, timestamp)
         blockQueryResponse <- maybeBlock.traverse(getFullBlockInfo[F])
       } yield
         blockQueryResponse.fold(

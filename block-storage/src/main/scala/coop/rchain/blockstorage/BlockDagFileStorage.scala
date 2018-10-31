@@ -304,9 +304,8 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
                 .foldLeft(childMap) {
                   case (acc, p) =>
                     val currChildren = acc.getOrElse(p, Set.empty[BlockHash])
-                    acc.updated(p, currChildren + block.blockHash)
-                }
-                .updated(block.blockHash, Set.empty[BlockHash])
+                  acc.updated(p, currChildren + block.blockHash)
+              }.updated(block.blockHash, Set.empty[BlockHash])
           )
       _ <- topoSortRef.update(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
       //Block which contains newly bonded validators will not

@@ -205,7 +205,8 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
         //which are bonded validators in the chosen parent. This is safe because
         //any latest message not from a bonded validator will not change the
         //final fork-choice.
-        justifications = toJustification(dag.latestMessages)
+        latestMessages <- dag.latestMessages
+        justifications = toJustification(latestMessages)
           .filter(j => bondedValidators.contains(j.validator))
         proposal <- if (r.nonEmpty || p.length > 1) {
                      createProposal(dag, p, r, justifications)

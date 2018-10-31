@@ -127,7 +127,8 @@ class ValidateTest
         val block1           = blockDagStorage.lookupByIdUnsafe(1).withSigAlgorithm(rsa)
 
         Validate.blockSignature[Id](block0) should be(false)
-        log.warns.last.contains(s"signature algorithm $unknownAlgorithm is unsupported") should be(
+        log.warns.last
+          .contains(s"signature algorithm $unknownAlgorithm is unsupported") should be(
           true
         )
 
@@ -294,7 +295,8 @@ class ValidateTest
       createChain[Id](2)
       val block = blockDagStorage.lookupByIdUnsafe(1)
 
-      Validate.sequenceNumber[Id](block.withSeqNum(1), blockDagStorage.getRepresentation) should be(
+      Validate
+        .sequenceNumber[Id](block.withSeqNum(1), blockDagStorage.getRepresentation) should be(
         Left(InvalidSequenceNumber)
       )
       log.warns.size should be(1)
@@ -334,7 +336,8 @@ class ValidateTest
         Validate.blockSender[Id](genesis, genesis, blockDagStorage.getRepresentation) should be(
           true
         )
-        Validate.blockSender[Id](validBlock, genesis, blockDagStorage.getRepresentation) should be(
+        Validate
+          .blockSender[Id](validBlock, genesis, blockDagStorage.getRepresentation) should be(
           true
         )
         Validate
@@ -692,11 +695,13 @@ class ValidateTest
       }
   }
 
-  "Block version validation" should "work" in {
-    val (sk, pk) = Ed25519.newKeyPair
-    val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
-    val genesis  = ProtoUtil.signBlock(block, BlockDag.empty, pk, sk, "ed25519", "rchain")
-    Validate.version[Id](genesis, -1) should be(false)
-    Validate.version[Id](genesis, 1) should be(true)
+  "Block version validation" should "work" in withIndexedBlockDagStorage {
+    implicit blockDagStorage =>
+      val (sk, pk) = Ed25519.newKeyPair
+      val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+      val genesis =
+        ProtoUtil.signBlock(block, blockDagStorage.getRepresentation, pk, sk, "ed25519", "rchain")
+      Validate.version[Id](genesis, -1) should be(false)
+      Validate.version[Id](genesis, 1) should be(true)
   }
 }

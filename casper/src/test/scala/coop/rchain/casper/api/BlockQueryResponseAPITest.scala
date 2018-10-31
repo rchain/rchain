@@ -5,7 +5,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
-import coop.rchain.blockstorage.{BlockMetadata, BlockStore}
+import coop.rchain.blockstorage.{BlockDagFileStorage, BlockDagStorage, BlockMetadata, BlockStore}
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper._
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockStoreFixture, NoOpsCasperEffect}
@@ -71,62 +71,14 @@ class BlockQueryResponseAPITest
   // TODO: Test tsCheckpoint:
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
   "showBlock" should "return successful block info response" in withStore { implicit blockStore =>
-    val (
-      logEff: LogStub[Id],
-      casperRef: Id[MultiParentCasperRef[Id]],
-      turanOracleEffect: SafetyOracle[Id]
-    )     = effectsForSimpleCasperSetup(blockStore)
-    val q = BlockQuery(hash = secondBlockQuery)
-    val blockQueryResponse = BlockAPI.showBlock[Id](q)(
-      syncId,
-      casperRef,
-      logEff,
-      turanOracleEffect,
-      blockStore
-    )
-    val blockInfo = blockQueryResponse.blockInfo.get
-    blockQueryResponse.status should be("Success")
-    blockInfo.blockHash should be(secondHashString)
-    blockInfo.blockSize should be(secondBlock.serializedSize.toString)
-    blockInfo.blockNumber should be(blockNumber)
-    blockInfo.version should be(version)
-    blockInfo.deployCount should be(deployCount)
-    blockInfo.faultTolerance should be(faultTolerance)
-    blockInfo.mainParentHash should be(genesisHashString)
-    blockInfo.parentsHashList should be(parentsString)
-    blockInfo.sender should be(secondBlockSenderString)
-    blockInfo.shardId should be(shardId)
-  }
-
-  it should "return error when no block exists" in withStore { implicit blockStore =>
-    val (
-      logEff: LogStub[Id],
-      casperRef: Id[MultiParentCasperRef[Id]],
-      turanOracleEffect: SafetyOracle[Id]
-    )     = emptyEffects(blockStore)
-    val q = BlockQuery(hash = badTestHashQuery)
-    val blockQueryResponse = BlockAPI.showBlock[Id](q)(
-      syncId,
-      casperRef,
-      logEff,
-      turanOracleEffect,
-      blockStore
-    )
-    blockQueryResponse.status should be(
-      s"Error: Failure to find block with hash ${badTestHashQuery}"
-    )
-  }
-
-  "findBlockWithDeploy" should "return successful block info response" in withStore {
-    implicit blockStore =>
+    withBlockDagStorage { implicit blockDagStorage =>
       val (
         logEff: LogStub[Id],
         casperRef: Id[MultiParentCasperRef[Id]],
         turanOracleEffect: SafetyOracle[Id]
-      )             = effectsForSimpleCasperSetup(blockStore)
-      val user      = ByteString.EMPTY
-      val timestamp = 1L
-      val blockQueryResponse = BlockAPI.findBlockWithDeploy[Id](user, timestamp)(
+      )     = effectsForSimpleCasperSetup(blockStore, blockDagStorage)
+      val q = BlockQuery(hash = secondBlockQuery)
+      val blockQueryResponse = BlockAPI.showBlock[Id](q)(
         syncId,
         casperRef,
         logEff,
@@ -145,50 +97,98 @@ class BlockQueryResponseAPITest
       blockInfo.parentsHashList should be(parentsString)
       blockInfo.sender should be(secondBlockSenderString)
       blockInfo.shardId should be(shardId)
+    }
+  }
+
+  it should "return error when no block exists" in withStore { implicit blockStore =>
+    withBlockDagStorage { implicit blockDagStorage =>
+      val (
+        logEff: LogStub[Id],
+        casperRef: Id[MultiParentCasperRef[Id]],
+        turanOracleEffect: SafetyOracle[Id]
+      )     = emptyEffects(blockStore, blockDagStorage)
+      val q = BlockQuery(hash = badTestHashQuery)
+      val blockQueryResponse = BlockAPI.showBlock[Id](q)(
+        syncId,
+        casperRef,
+        logEff,
+        turanOracleEffect,
+        blockStore
+      )
+      blockQueryResponse.status should be(
+        s"Error: Failure to find block with hash ${badTestHashQuery}"
+      )
+    }
+  }
+
+  "findBlockWithDeploy" should "return successful block info response" in withStore {
+    implicit blockStore =>
+      withBlockDagStorage { implicit blockDagStorage =>
+        val (
+          logEff: LogStub[Id],
+          casperRef: Id[MultiParentCasperRef[Id]],
+          turanOracleEffect: SafetyOracle[Id]
+        )             = effectsForSimpleCasperSetup(blockStore, blockDagStorage)
+        val user      = ByteString.EMPTY
+        val timestamp = 1L
+        val blockQueryResponse = BlockAPI.findBlockWithDeploy[Id](user, timestamp)(
+          syncId,
+          casperRef,
+          logEff,
+          turanOracleEffect,
+          blockStore
+        )
+        val blockInfo = blockQueryResponse.blockInfo.get
+        blockQueryResponse.status should be("Success")
+        blockInfo.blockHash should be(secondHashString)
+        blockInfo.blockSize should be(secondBlock.serializedSize.toString)
+        blockInfo.blockNumber should be(blockNumber)
+        blockInfo.version should be(version)
+        blockInfo.deployCount should be(deployCount)
+        blockInfo.faultTolerance should be(faultTolerance)
+        blockInfo.mainParentHash should be(genesisHashString)
+        blockInfo.parentsHashList should be(parentsString)
+        blockInfo.sender should be(secondBlockSenderString)
+        blockInfo.shardId should be(shardId)
+      }
   }
 
   it should "return error when no block matching query exists" in withStore { implicit blockStore =>
-    val (
-      logEff: LogStub[Id],
-      casperRef: Id[MultiParentCasperRef[Id]],
-      turanOracleEffect: SafetyOracle[Id]
-    )             = emptyEffects(blockStore)
-    val user      = ByteString.EMPTY
-    val timestamp = 0L
-    val blockQueryResponse = BlockAPI.findBlockWithDeploy[Id](user, timestamp)(
-      syncId,
-      casperRef,
-      logEff,
-      turanOracleEffect,
-      blockStore
-    )
-    blockQueryResponse.status should be(
-      s"Error: Failure to find block containing deploy signed by  with timestamp ${timestamp.toString}"
-    )
+    withBlockDagStorage { implicit blockDagStorage =>
+      val (
+        logEff: LogStub[Id],
+        casperRef: Id[MultiParentCasperRef[Id]],
+        turanOracleEffect: SafetyOracle[Id]
+      )             = emptyEffects(blockStore, blockDagStorage)
+      val user      = ByteString.EMPTY
+      val timestamp = 0L
+      val blockQueryResponse = BlockAPI.findBlockWithDeploy[Id](user, timestamp)(
+        syncId,
+        casperRef,
+        logEff,
+        turanOracleEffect,
+        blockStore
+      )
+      blockQueryResponse.status should be(
+        s"Error: Failure to find block containing deploy signed by  with timestamp ${timestamp.toString}"
+      )
+    }
   }
 
   private def effectsForSimpleCasperSetup(
-      blockStore: BlockStore[Id]
+      blockStore: BlockStore[Id],
+      blockDagStorage: BlockDagStorage[Id]
   ): (LogStub[Id], Id[MultiParentCasperRef[Id]], SafetyOracle[Id]) = {
+    blockDagStorage.insert(genesisBlock)
+    blockDagStorage.insert(secondBlock)
     val genesisHash = ProtoUtil.stringToByteString(genesisHashString)
     val secondHash  = ProtoUtil.stringToByteString(secondHashString)
-    val dag = BlockDag.empty
-      .copy(
-        dataLookup = Map(
-          genesisHash -> BlockMetadata
-            .fromBlock(genesisBlock),
-          secondHash -> BlockMetadata.fromBlock(secondBlock)
-        ),
-        topoSort = Vector(Vector(genesisHash), Vector(secondHash))
-      )
     implicit val casperEffect = NoOpsCasperEffect(
       HashMap[BlockHash, BlockMessage](
         (genesisHash, genesisBlock),
         (secondHash, secondBlock)
-      ),
-      Vector(BlockMessage()),
-      dag
-    )(syncId, blockStore)
+      )
+    )(syncId, blockStore, blockDagStorage)
     implicit val logEff = new LogStub[Id]()(syncId)
     implicit val casperRef = {
       val tmp = MultiParentCasperRef.of[Id]
@@ -201,14 +201,15 @@ class BlockQueryResponseAPITest
   }
 
   private def emptyEffects(
-      blockStore: BlockStore[Id]
+      blockStore: BlockStore[Id],
+      blockDagStorage: BlockDagStorage[Id]
   ): (LogStub[Id], Id[MultiParentCasperRef[Id]], SafetyOracle[Id]) = {
     implicit val casperEffect = NoOpsCasperEffect(
       HashMap[BlockHash, BlockMessage](
         (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
         (ProtoUtil.stringToByteString(secondHashString), secondBlock)
       )
-    )(syncId, blockStore)
+    )(syncId, blockStore, blockDagStorage)
     implicit val logEff = new LogStub[Id]()(syncId)
     implicit val casperRef = {
       val tmp = MultiParentCasperRef.of[Id]
