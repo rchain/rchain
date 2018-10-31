@@ -29,6 +29,14 @@ TODO include the examples from ../../examples/tut-tuples-methods.rho
 
 ### List
 
+#### List Concatenation
+While not technically a method, lists support concatenation using the `++` binary operator. Both operands must be lists.
+
+Example:
+```rholang
+[1, 3, 5] ++ [2, 4, 6] -> [1, 3, 5, 2, 4, 6]
+```
+
 ### Set
 
 ### Map
