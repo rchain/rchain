@@ -136,9 +136,9 @@ class NodeRuntime private[node] (
       _   <- Task.delay(Kamon.stopAllReporters())
       _   <- servers.httpServer.cancel
       _   <- log.info("Shutting down interpreter runtime ...")
-      _   <- Task.delay(runtime.close())
+      _   <- Task.delay(runtime.close()(scheduler))
       _   <- log.info("Shutting down Casper runtime ...")
-      _   <- Task.delay(casperRuntime.close())
+      _   <- Task.delay(casperRuntime.close()(scheduler))
       _   <- log.info("Bringing BlockStore down ...")
       _   <- blockStore.close().value
       _   <- log.info("Goodbye.")
@@ -320,11 +320,13 @@ class NodeRuntime private[node] (
       blockMap,
       Metrics.eitherT(Monad[Task], metrics)
     )
-    _              <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
-    oracle         = SafetyOracle.turanOracle[Effect](Monad[Effect])
-    runtime        = Runtime.create(storagePath, storageSize, storeType)
-    _              <- runtime.injectEmptyRegistryRoot[Effect]
-    casperRuntime  = Runtime.create(casperStoragePath, storageSize, storeType)
+    _       <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
+    oracle  = SafetyOracle.turanOracle[Effect](Monad[Effect])
+    runtime = Runtime.create(storagePath, storageSize, storeType)(scheduler)
+    _ <- Runtime
+      .injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
+      .toEffect
+    casperRuntime  = Runtime.create(casperStoragePath, storageSize, storeType)(scheduler)
     runtimeManager = RuntimeManager.fromRuntime(casperRuntime)(scheduler)
     casperPacketHandler <- CasperPacketHandler
                             .of[Effect](conf.casper, defaultTimeout, runtimeManager, _.value)(

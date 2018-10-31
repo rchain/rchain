@@ -16,7 +16,6 @@ import monix.reactive.observers.Subscriber
   * or dropped. Most of this code is copied from the Monix codebase,
   * specifically from monix.reactive.observers.buffers.DropNewBufferedSubscriber
   */
-
 trait LimitedBuffer[A] {
   def pushNext(elem: A): Boolean
   def complete(): Unit

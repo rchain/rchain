@@ -83,7 +83,7 @@ object GrpcServer {
           .executor(grpcExecutor)
           .maxMessageSize(maxMessageSize)
           .addService(
-            CasperMessageGrpcMonix.bindService(DeployGrpcService.instance(worker), grpcExecutor)
+            CasperMessageGrpcMonix.bindService(DeployGrpcService.instance, grpcExecutor)
           )
           .build
       )

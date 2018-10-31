@@ -4,6 +4,7 @@ import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.casper.genesis.contracts.TestSetUtil
 import monix.execution.Scheduler
 import monix.eval.Task
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccounting}
 import coop.rchain.shared.PathOps.RichPath
@@ -44,7 +45,7 @@ class Interactive private (runtime: Runtime)(implicit scheduler: Scheduler) {
   private val prettyPrinter = PrettyPrinter()
 
   private val checkpoints = new mutable.HashMap[String, Checkpoint]()
-  checkpoints.update("empty", runtime.space.createCheckpoint())
+  checkpoints.update("empty", runtime.space.createCheckpoint().unsafeRunSync)
 
   def checkpointNames: List[String] = checkpoints.keys.toList
 
@@ -62,9 +63,11 @@ class Interactive private (runtime: Runtime)(implicit scheduler: Scheduler) {
   def query(code: String, name: String = "__out__"): Seq[Par] = {
     checkpoint("preQuery")
     eval(code)
-    val result = runtime.space.getData(
-      Par().copy(exprs = Seq(Expr(GString(name))))
-    )
+    val result = runtime.space
+      .getData(
+        Par().copy(exprs = Seq(Expr(GString(name))))
+      )
+      .unsafeRunSync
     restore("preQuery")
     checkpoints.remove("preQuery")
 
@@ -75,14 +78,15 @@ class Interactive private (runtime: Runtime)(implicit scheduler: Scheduler) {
   def cleanUp(): Unit =
     runtime.close()
 
-  def checkpoint(name: String): Unit                  = checkpoints.update(name, runtime.space.createCheckpoint())
+  def checkpoint(name: String): Unit =
+    checkpoints.update(name, runtime.space.createCheckpoint().unsafeRunSync)
   def getCheckpoint(name: String): Option[Checkpoint] = checkpoints.get(name)
 
   def restore(name: String): Boolean =
     checkpoints
       .get(name)
       .fold(false)(ch => {
-        runtime.space.reset(ch.root)
+        runtime.space.reset(ch.root).unsafeRunSync
         true
       })
 }

@@ -21,6 +21,7 @@ import coop.rchain.shared.{Log, SyncLock}
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
 import coop.rchain.rholang.interpreter.{PrettyPrinter => RholangPrettyPrinter}
 import coop.rchain.models.rholang.sorter.Sortable._
+import monix.execution.Scheduler
 import scodec.Codec
 
 import scala.collection.immutable
@@ -85,7 +86,7 @@ object BlockAPI {
   def getListeningNameDataResponse[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int,
       listeningName: Par
-  ): F[ListeningNameDataResponse] = {
+  )(implicit scheduler: Scheduler): F[ListeningNameDataResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F], channelCodec: Codec[Par]) =
       for {
         mainChain           <- getMainChainFromTip[F](depth)
@@ -117,7 +118,7 @@ object BlockAPI {
   def getListeningNameContinuationResponse[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int,
       listeningNames: Seq[Par]
-  ): F[ListeningNameContinuationResponse] = {
+  )(implicit scheduler: Scheduler): F[ListeningNameContinuationResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F], channelCodec: Codec[Par]) =
       for {
         mainChain           <- getMainChainFromTip[F](depth)
@@ -161,7 +162,7 @@ object BlockAPI {
       runtimeManager: RuntimeManager,
       sortedListeningName: Par,
       block: BlockMessage
-  )(implicit channelCodec: Codec[Par]): F[Option[DataWithBlockInfo]] =
+  )(implicit channelCodec: Codec[Par], scheduler: Scheduler): F[Option[DataWithBlockInfo]] =
     if (isListeningNameReduced(block, immutable.Seq(sortedListeningName))) {
       val stateHash =
         ProtoUtil.tuplespace(block).get
@@ -178,7 +179,10 @@ object BlockAPI {
       runtimeManager: RuntimeManager,
       sortedListeningNames: immutable.Seq[Par],
       block: BlockMessage
-  )(implicit channelCodec: Codec[Par]): F[Option[ContinuationsWithBlockInfo]] =
+  )(
+      implicit channelCodec: Codec[Par],
+      scheduler: Scheduler
+  ): F[Option[ContinuationsWithBlockInfo]] =
     if (isListeningNameReduced(block, sortedListeningNames)) {
       val stateHash =
         ProtoUtil.tuplespace(block).get
