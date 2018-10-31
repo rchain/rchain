@@ -9,6 +9,7 @@ import BlockGen._
 import cats.effect.Sync
 import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.blockstorage.BlockStore.BlockHash
+import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.rspace.Context
@@ -271,7 +272,36 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
     }
   }
 
-  it should "be able to handle fully corrupted latest messages data file" in {
+  it should "be able to restore data lookup on startup with appended garbage block metadata" in {
+    forAll(blockElementsGen, blockElementGen, minSize(0), sizeRange(10)) {
+      (blockElements, garbageBlock) =>
+        val dagDataDir          = mkTmpDir()
+        val blockStoreDataDir   = mkTmpDir()
+        implicit val blockStore = createBlockStore(blockStoreDataDir)
+        val testProgram = for {
+          firstStorage      <- createAtDefaultLocation(dagDataDir)
+          _                 <- blockElements.traverse_(firstStorage.insert)
+          _                 <- firstStorage.close()
+          garbageByteString = BlockMetadata.fromBlock(garbageBlock).toByteString
+          garbageBytes      = garbageByteString.size.toByteString.concat(garbageByteString).toByteArray
+          _ <- Sync[Task].delay {
+                Files.write(
+                  defaultBlockMetadataLog(dagDataDir),
+                  garbageBytes,
+                  StandardOpenOption.APPEND
+                )
+              }
+          secondStorage <- createAtDefaultLocation(dagDataDir)
+          result        <- lookupElements(blockElements, secondStorage)
+          _             <- secondStorage.close()
+          _             <- blockStore.close()
+        } yield result
+        val testProgramResult = testProgram.unsafeRunSync(scheduler)
+        testLookupElementsResult(testProgramResult, blockElements)
+    }
+  }
+
+  it should "be able to handle fully corrupted latest messages log file" in {
     val dagDataDir          = mkTmpDir()
     val garbageBytes        = Array.fill[Byte](789)(0)
     val blockStoreDataDir   = mkTmpDir()
