@@ -1,25 +1,23 @@
 package coop.rchain.rholang
 import java.nio.file.Path
 
-import cats.implicits._
-import cats.effect.Sync
+import cats.effect.{Resource, Sync}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Context, RSpace}
-import coop.rchain.rholang.ResourceTools.withTempDir
+import coop.rchain.rholang.ResourceTools.mkTempDir
 
 object RSpaceTools {
-  def runInRhoISpace[F[_]: Sync, A](
-      job: RhoISpace[F] => F[A],
+  def mkRhoISpace[F[_]: Sync, A](
       prefix: String = "",
       branch: String = "test",
       mapSize: Long = 1024L * 1024L * 4
-  ): F[A] = {
+  ): Resource[F, RhoISpace[F]] = {
     import coop.rchain.rholang.interpreter.storage.implicits._
 
-    def mkSpace(dbDir: Path): F[RhoISpace[F]] = {
+    def mkRspace(dbDir: Path): F[RhoISpace[F]] = {
       val context: RhoContext = Context.create(dbDir, mapSize)
 
       RSpace.create[
@@ -33,6 +31,7 @@ object RSpaceTools {
       ](context, Branch(branch))
     }
 
-    withTempDir(prefix)(mkSpace(_).flatMap(job))
+    mkTempDir(prefix)
+      .flatMap(tmpDir => Resource.liftF(mkRspace(tmpDir)))
   }
 }

@@ -1,4 +1,5 @@
 package coop.rchain.rholang.interpreter.accounting
+
 import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.rholang.interpreter._
@@ -11,7 +12,9 @@ import org.scalacheck.Arbitrary
 import org.scalacheck.Test.Parameters
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
-import coop.rchain.rholang.RSpaceTools.runInRhoISpace
+import coop.rchain.rholang.RSpaceTools.mkRhoISpace
+import coop.rchain.rholang.interpreter.Runtime.RhoISpace
+
 import scala.concurrent.duration._
 
 class CostAccountingPropertyTest extends FlatSpec with PropertyChecks with Matchers {
@@ -77,18 +80,15 @@ object CostAccountingPropertyTest {
     implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
     implicit val errLog: ErrorLog       = new ErrorLog()
 
-    runInRhoISpace[Task, Long](
-      pureRSpace => {
+    mkRhoISpace[Task, RhoISpace[Task]]("cost-accounting-property-test-")
+      .use { pureRSpace =>
         lazy val (_, reducer, _) =
           RholangAndScalaDispatcher.create[Task, Task.Par](pureRSpace, Map.empty, Map.empty)
 
         procs.toStream
           .traverse(execute(reducer, _))
           .map(_.sum)
-      },
-      prefix = "cost-accounting-property-test-"
-    )
-
+      }
   }
 
 }
