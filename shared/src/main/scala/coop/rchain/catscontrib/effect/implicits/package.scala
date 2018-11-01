@@ -87,13 +87,14 @@ package object implicits {
     }
 
   implicit val bracketTry: Bracket[Try, Throwable] = new Bracket[Try, Throwable] {
+    private val trySyntax = cats.implicits.catsStdInstancesForTry
 
     override def bracketCase[A, B](
         acquire: Try[A]
     )(use: A => Try[B])(release: (A, ExitCase[Throwable]) => Try[Unit]): Try[B] =
       acquire.flatMap(
         resource =>
-          cats.implicits.catsStdInstancesForTry
+          trySyntax
             .attempt(use(resource))
             .flatMap((result: Either[Throwable, B]) => {
               val releaseEff =
@@ -102,22 +103,19 @@ package object implicits {
                   case Right(_)  => release(resource, Completed)
                 }
 
-              cats.implicits.catsStdInstancesForTry.productR(releaseEff)(result.toTry)
+              trySyntax.productR(releaseEff)(result.toTry)
             })
       )
 
-    override def raiseError[A](e: Throwable): Try[A] =
-      cats.implicits.catsStdInstancesForTry.raiseError(e)
+    override def raiseError[A](e: Throwable): Try[A] = trySyntax.raiseError(e)
 
     override def handleErrorWith[A](fa: Try[A])(f: Throwable => Try[A]): Try[A] =
-      cats.implicits.catsStdInstancesForTry.handleErrorWith(fa)(f)
+      trySyntax.handleErrorWith(fa)(f)
 
-    override def pure[A](x: A): Try[A] = cats.implicits.catsStdInstancesForTry.pure(x)
+    override def pure[A](x: A): Try[A] = trySyntax.pure(x)
 
-    override def flatMap[A, B](fa: Try[A])(f: A => Try[B]): Try[B] =
-      cats.implicits.catsStdInstancesForTry.flatMap(fa)(f)
+    override def flatMap[A, B](fa: Try[A])(f: A => Try[B]): Try[B] = trySyntax.flatMap(fa)(f)
 
-    override def tailRecM[A, B](a: A)(f: A => Try[Either[A, B]]): Try[B] =
-      cats.implicits.catsStdInstancesForTry.tailRecM(a)(f)
+    override def tailRecM[A, B](a: A)(f: A => Try[Either[A, B]]): Try[B] = trySyntax.tailRecM(a)(f)
   }
 }
