@@ -1,7 +1,7 @@
 package coop.rchain.catscontrib.effect
 
 import cats._
-import cats.implicits._
+import cats.effect.ExitCase.{Completed, Error}
 import cats.effect._
 
 import scala.concurrent.duration.Duration
@@ -85,4 +85,39 @@ package object implicits {
         syncId.handleErrorWith(fa)(f)
       override def pure[A](x: A): Id[A] = x
     }
+
+  implicit val bracketTry: Bracket[Try, Throwable] = new Bracket[Try, Throwable] {
+
+    override def bracketCase[A, B](
+        acquire: Try[A]
+    )(use: A => Try[B])(release: (A, ExitCase[Throwable]) => Try[Unit]): Try[B] =
+      acquire.flatMap(
+        resource =>
+          cats.implicits.catsStdInstancesForTry
+            .attempt(use(resource))
+            .flatMap((result: Either[Throwable, B]) => {
+              val releaseEff =
+                result match {
+                  case Left(err) => release(resource, Error(err))
+                  case Right(_)  => release(resource, Completed)
+                }
+
+              cats.implicits.catsStdInstancesForTry.productR(releaseEff)(result.toTry)
+            })
+      )
+
+    override def raiseError[A](e: Throwable): Try[A] =
+      cats.implicits.catsStdInstancesForTry.raiseError(e)
+
+    override def handleErrorWith[A](fa: Try[A])(f: Throwable => Try[A]): Try[A] =
+      cats.implicits.catsStdInstancesForTry.handleErrorWith(fa)(f)
+
+    override def pure[A](x: A): Try[A] = cats.implicits.catsStdInstancesForTry.pure(x)
+
+    override def flatMap[A, B](fa: Try[A])(f: A => Try[B]): Try[B] =
+      cats.implicits.catsStdInstancesForTry.flatMap(fa)(f)
+
+    override def tailRecM[A, B](a: A)(f: A => Try[Either[A, B]]): Try[B] =
+      cats.implicits.catsStdInstancesForTry.tailRecM(a)(f)
+  }
 }
