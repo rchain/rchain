@@ -14,7 +14,7 @@ import coop.rchain.rspace.{Context, RSpace}
 
 import scala.reflect.io.Directory
 
-object ResourceTools {
+object Resources {
   val logger: Logger = Logger(this.getClass.getName.stripSuffix("$"))
 
   def mkTempDir[F[_]: Applicative](prefix: String): Resource[F, Path] =

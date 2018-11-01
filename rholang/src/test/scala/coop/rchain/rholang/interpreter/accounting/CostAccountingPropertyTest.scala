@@ -12,7 +12,7 @@ import org.scalacheck.Arbitrary
 import org.scalacheck.Test.Parameters
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
-import coop.rchain.rholang.ResourceTools.mkRhoISpace
+import coop.rchain.rholang.Resources.mkRhoISpace
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 
 import scala.concurrent.duration._
