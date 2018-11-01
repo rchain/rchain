@@ -1,6 +1,6 @@
 ## Data Structures
 
-All computation can be encoded in the raw rho calculus just as it can be in the lambda calculus. Convincing your self of this is an interesting and rewarding endeavor for the mathematically inclined. Rholang strives to b a useful general purpose programming language, and therefore introduces some additional native data structures.
+All computation can be encoded in the raw rho calculus just as it can be in the lambda calculus. Convincing your self of this is an interesting and rewarding endeavor for the mathematically inclined. Rholang strives to be a useful general purpose programming language, and therefore introduces some additional native data structures.
 
 All data structures are processes and [can be quote] todo insert link, to create channels.
 
@@ -11,7 +11,9 @@ All data structures are immutable, and their methods return new data structures 
 A tuple is an ordered collection of 1 or more processes. The constituent processes need not be of the same type.
 
 #### Basic syntax
-`(1, 2, "hello", *someChan)`
+`(1, 2, "hello", *someChan)` A 4-tuple
+`(true, false)` A 2-tuple
+`(1, )` A 1-tuple (notice the trailing comma)
 
 #### `tuple.nth`
 Retrieve the nth item from the tuple or Nil if the index is out of range

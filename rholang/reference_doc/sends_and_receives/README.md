@@ -12,7 +12,7 @@ Although it is unique from the Turing or Von Neuman architectures that many prog
 
 ### Sends
 ![Sends](send.png)
-Sending a name associates the sent data with the channel in the tuplespace. It will wait there forever until it matches with a receive on the same channel.
+Sending a process associates that process with the channel in the tuplespace. It will wait there forever until it matches with a receive on the same channel.
 
 #### Single Send
 `chan!(data)`
@@ -20,7 +20,7 @@ Sends data which must be a process on the channel chan.
 
 #### Persistent Send
 `chan!!(data)`
-This send will never be consumed. While arbitrarily many recieves can receive the data, it will still remain in the tuplespace.
+This send will never be consumed. While arbitrarily many receives can receive the data, it will still remain in the tuplespace.
 
 #### Polyadic Sends
 The simple sends we've described so far are sufficient to make rholang Turing complete, but it is often convenient to send multiple...
