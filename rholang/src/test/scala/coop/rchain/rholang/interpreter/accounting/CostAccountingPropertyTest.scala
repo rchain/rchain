@@ -21,17 +21,17 @@ import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.prop.PropertyChecks
 
 import scala.concurrent.duration._
-import monix.execution.Scheduler.Implicits.global
 
 class CostAccountingPropertyTest extends FlatSpec with PropertyChecks with Matchers {
   import CostAccountingPropertyTest._
 
   implicit val params: Parameters = Parameters.defaultVerbose.withMinSuccessfulTests(1000)
-  implicit val procArbitrary = Arbitrary(
-    ProcGen.topLevelGen(5).map(PrettyPrinted[Proc](_, PrettyPrinter.print))
-  )
 
-  implicit val taskExecutionDuration = 5.seconds
+  def procGen(maxHeight: Int) =
+    ProcGen.topLevelGen(5).map(PrettyPrinted[Proc](_, PrettyPrinter.print))
+  implicit val procArbitrary: Arbitrary[PrettyPrinted[Proc]] = Arbitrary(procGen(5))
+
+  implicit val taskExecutionDuration: FiniteDuration = 5.seconds
 
   def cost(proc: Proc): Cost = Cost(Interpreter.buildPar(proc).apply)
 
@@ -59,6 +59,18 @@ class CostAccountingPropertyTest extends FlatSpec with PropertyChecks with Match
       )
     }
   }
+
+  it should "repeated executions have the same cost" in {
+    implicit val procListArb =
+      Arbitrary(GenTools.nonemptyLimitedList(10, procGen(5)))
+
+    forAll { ps: List[PrettyPrinted[Proc]] =>
+      val costs = 1.to(20).map(_ => costOfExecution(ps.map(_.value): _*))
+
+      haveEqualResults(costs: _*)(30.seconds)
+    }
+  }
+
 }
 
 object CostAccountingPropertyTest {
