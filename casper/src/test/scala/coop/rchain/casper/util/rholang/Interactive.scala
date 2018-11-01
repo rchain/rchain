@@ -76,7 +76,7 @@ class Interactive private (runtime: Runtime)(implicit scheduler: Scheduler) {
   def pp(term: Par): String = prettyPrinter.buildString(term)
 
   def cleanUp(): Unit =
-    runtime.close()
+    runtime.close().unsafeRunSync
 
   def checkpoint(name: String): Unit =
     checkpoints.update(name, runtime.space.createCheckpoint().unsafeRunSync)

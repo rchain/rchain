@@ -4,6 +4,7 @@ import java.io.{FileNotFoundException, InputStreamReader}
 import java.nio.file.{Files, Path}
 
 import org.openjdk.jmh.annotations.{Setup, TearDown}
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccounting}
@@ -38,7 +39,7 @@ trait EvalBenchStateBase {
 
   @TearDown
   def tearDown(): Unit =
-    runtime.close()
+    runtime.close().unsafeRunSync
 
   def resourceFileReader(path: String): InputStreamReader =
     new InputStreamReader(

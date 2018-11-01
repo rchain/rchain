@@ -3,6 +3,7 @@ package coop.rchain.rholang.interpreter
 import java.nio.file.Files
 
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
@@ -216,7 +217,7 @@ class CryptoChannelsSpec
     try {
       test((runtime.reducer, runtime.space.store))
     } finally {
-      runtime.close()
+      runtime.close().unsafeRunSync
       dbDir.recursivelyDelete
     }
   }

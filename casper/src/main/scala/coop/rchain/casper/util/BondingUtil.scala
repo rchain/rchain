@@ -3,6 +3,7 @@ package coop.rchain.casper.util
 import cats.effect.{Resource, Sync}
 import cats.implicits._
 
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.ProtoUtil.{deployDataToDeploy, sourceDeploy}
 import coop.rchain.crypto.codec.Base16
@@ -194,7 +195,7 @@ object BondingUtil {
       runtimeDir =>
         Resource
           .make(Sync[F].delay { Runtime.create(runtimeDir, 1024L * 1024 * 1024) })(
-            runtime => Sync[F].delay { runtime.close() }
+            runtime => Sync[F].delay { runtime.close().unsafeRunSync }
           )
     )
 

@@ -497,7 +497,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       "e101fa06396db2b2ac21a4bfbe3461567b5f8b3d2e666c377cb92d96bc38e2c08"
     val amount = 157L
     val createWalletCode =
-      s"""new 
+      s"""new
          |  walletCh, rl(`rho:registry:lookup`), SystemInstancesCh, faucetCh,
          |  rs(`rho:registry:insertSigned:ed25519`), uriOut
          |in {
@@ -508,9 +508,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
          |    for(@[wallet] <- walletCh){ walletCh!!(wallet) }
          |  } |
          |  rs!(
-         |    "$pkStr".hexToBytes(), 
-         |    (9223372036854775807, bundle-{*walletCh}), 
-         |    "$sigStr".hexToBytes(), 
+         |    "$pkStr".hexToBytes(),
+         |    (9223372036854775807, bundle-{*walletCh}),
+         |    "$sigStr".hexToBytes(),
          |    *uriOut
          |  )
          |}""".stripMargin
@@ -525,7 +525,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val blockStatus    = casperEff.addBlock(block)
 
     val balanceQuery = ProtoUtil.sourceDeploy(
-      s"""new 
+      s"""new
          |  rl(`rho:registry:lookup`), walletFeedCh
          |in {
          |  rl!(`rho:id:mrs88izurkgki71dpjqamzg6tgcjd6sk476c9msks7tumw4a6e39or`, *walletFeedCh) |
@@ -668,8 +668,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val sig   = Base16.encode(Ed25519.sign(sigData.toByteArray, sk))
     val pkStr = Base16.encode(pk)
     val paymentCode =
-      s"""new 
-         |  paymentForward, walletCh, rl(`rho:registry:lookup`), 
+      s"""new
+         |  paymentForward, walletCh, rl(`rho:registry:lookup`),
          |  SystemInstancesCh, faucetCh, posCh
          |in {
          |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
@@ -1165,7 +1165,7 @@ object HashSetCasperTest {
       runtimeManager,
       deployTimestamp
     )
-    activeRuntime.close()
+    activeRuntime.close().unsafeRunSync
     genesis
   }
 }
