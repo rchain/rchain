@@ -27,7 +27,7 @@ class CostAccountingPropertyTest extends FlatSpec with PropertyChecks with Match
   implicit val params: Parameters = Parameters.defaultVerbose.withMinSuccessfulTests(1000)
 
   def procGen(maxHeight: Int) =
-    ProcGen.topLevelGen(5).map(PrettyPrinted[Proc](_, PrettyPrinter.print))
+    ProcGen.topLevelGen(maxHeight).map(PrettyPrinted[Proc](_, PrettyPrinter.print))
   implicit val procArbitrary: Arbitrary[PrettyPrinted[Proc]] = Arbitrary(procGen(5))
 
   implicit val taskExecutionDuration: FiniteDuration = 5.seconds
