@@ -32,5 +32,4 @@ def test_eval_repl_time_consuming(bootstrap_node):
         eval_time = time_func(bootstrap_node.eval, full_path)
         logging.info(f"It takes {eval_time} to run {full_path} in eval mode")
 
-        # performance gap between repl and eval should be +- 5% , details see OPS-347
         assert abs(repl_time - eval_time) / eval_time < 0.05
