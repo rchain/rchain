@@ -7,6 +7,7 @@ import org.scalacheck.Shrink._
 
 import scala.collection.JavaConverters
 import scala.reflect.{classTag, ClassTag}
+import GenTools._
 
 object tools {
   def seqToJavaCollection[C <: java.util.Collection[T]: ClassTag, T](input: Seq[T]): C = {
@@ -20,8 +21,6 @@ object tools {
 
   def streamSingleton[T](v: T): Stream[T] = v #:: Stream.empty[T]
 
-  def nonemptyString(g: Gen[Char], size: Int): Gen[String] = Gen.nonEmptyListOf(g).map(_.mkString)
-
   def withQuotes(quote: Char)(s: String): String = quote + s + quote
   val stringQuotes: String => String             = withQuotes('"')
   val uriQuotes: String => String                = withQuotes('`')
@@ -31,18 +30,6 @@ object tools {
     s.substring(1, s.length - 1)
   }
 
-  def oneOf[T](gs: Seq[Gen[T]]): Gen[T] =
-    if (gs.nonEmpty)
-      Gen.choose(0, gs.size - 1).flatMap(gs(_))
-    else
-      throw new IllegalArgumentException("oneOf called on empty generator collection")
-
-  def nonemptySubSeq[T](items: Seq[T]): Gen[Seq[T]] =
-    for {
-      count  <- Gen.choose(1, items.length)
-      output <- Gen.pick(count, items)
-    } yield output
-
   def mkUri(components: Seq[String]): String = components.mkString(":")
 
   val uriGen: Gen[String] =
@@ -50,8 +37,6 @@ object tools {
       componentCount <- Gen.choose(1, 10)
       components     <- Gen.listOfN(componentCount, nonemptyString(Gen.alphaChar, 10))
     } yield uriQuotes(mkUri(components))
-
-  val identifierGen: Gen[String] = nonemptyString(Gen.alphaChar, 256)
 
   def extractNames(seqNameDecl: Seq[NameDecl]): Set[String] = {
     var names = Set.empty[String]
