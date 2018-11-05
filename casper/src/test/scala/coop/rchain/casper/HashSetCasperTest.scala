@@ -114,30 +114,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   it should "accept signed blocks" in {
-    val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
-    import node._
-    implicit val timeEff = new LogicalTime[Id]
-
-    val deploy = ProtoUtil.basicDeployData[Id](0)
-    MultiParentCasper[Id].deploy(deploy)
-
-    val Created(signedBlock) = MultiParentCasper[Id].createBlock
-
-    MultiParentCasper[Id].addBlock(signedBlock)
-
-    val logMessages = List(
-      "Received Deploy",
-      "Block",
-      "Sent Block #1",
-      "Added",
-      "New fork-choice tip is block"
-    )
-
-    logEff.warns.isEmpty should be(true)
-    logEff.infos.zip(logMessages).forall { case (a, b) => a.startsWith(b) } should be(true)
-    val dag = MultiParentCasper[Id].blockDag
-    MultiParentCasper[Id].estimator(dag) should be(IndexedSeq(signedBlock))
-    node.tearDown()
+    (0 until 1000).foreach { i =>
+      println(s"Iteration $i")
+      val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
+      node.tearDown()
+    }
   }
 
   it should "be able to use the registry" in {

@@ -239,6 +239,7 @@ object Reduce {
       jobs.zipWithIndex
         .map {
           case (job, jobIdx) => {
+            //Thread.sleep(50)
             def mkRand(termIdx: Int) = split(starts.last, starts(jobIdx), rand)(termIdx)
             job.run(mkRand)(env, costAccountingAlg)
           }
