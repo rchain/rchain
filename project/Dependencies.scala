@@ -25,7 +25,7 @@ object Dependencies {
   val http4sBlazeServer   = "org.http4s"                 %% "http4s-blaze-server"       % http4sVersion
   val http4sCirce         = "org.http4s"                 %% "http4s-circe"              % http4sVersion
   val http4sDSL           = "org.http4s"                 %% "http4s-dsl"                % http4sVersion
-  val jaxb                = "javax.xml.bind"              % "jaxb-api"                  % "2.1"
+  val jaxb                = "javax.xml.bind"              % "jaxb-api"                  % "2.3.1"
   val jline               = ("org.scala-lang"             % "jline"                      % "2.10.7").exclude("org.fusesource.jansi", "jansi")
   val kalium              = "coop.rchain"                 % "kalium"                    % "0.8.1-SNAPSHOT"
   val kamonCore           = "io.kamon"                   %% "kamon-core"                % kamonVersion
