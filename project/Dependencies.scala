@@ -4,7 +4,7 @@ object Dependencies {
 
   val osClassifier: String = Detector.detect(Seq("fedora")).osClassifier
 
-  val circeVersion  = "0.9.1"
+  val circeVersion  = "0.9.3"
   val http4sVersion = "0.19.0-M1"
   val kamonVersion  = "1.1.0"
 
