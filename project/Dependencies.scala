@@ -53,7 +53,7 @@ object Dependencies {
   val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "0.7.0"
   val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.5"
   val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.2"
-  val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.+"
+  val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.4"
   val secp256k1Java       = "coop.rchain"                 % "secp256k1-java"            % "0.1-SNAPSHOT"
   val tomlScala           = "tech.sparse"                %% "toml-scala"                % "0.1.1"
 
