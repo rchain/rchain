@@ -38,7 +38,7 @@ object Dependencies {
   val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.13.4" % "test"
   val scalacheckNoTest    = "org.scalacheck"             %% "scalacheck"                % "1.13.4"
   val scalacheckShapeless = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.8" % "test"
-  val scalactic           = "org.scalactic"              %% "scalactic"                 % "3.0.1" % "test"
+  val scalactic           = "org.scalactic"              %% "scalactic"                 % "3.0.5" % "test"
   val scalapbRuntime      = "com.thesamet.scalapb"       %% "scalapb-runtime"           % scalapb.compiler.Version.scalapbVersion % "protobuf"
   val scalapbRuntimeLib   = "com.thesamet.scalapb"       %% "scalapb-runtime"           % scalapb.compiler.Version.scalapbVersion
   val scalapbRuntimegGrpc = "com.thesamet.scalapb"       %% "scalapb-runtime-grpc"      % scalapb.compiler.Version.scalapbVersion
