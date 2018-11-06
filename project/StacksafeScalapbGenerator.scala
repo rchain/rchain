@@ -123,14 +123,27 @@ class StacksafeProtobufGenerator(params: GeneratorParams) extends ProtobufGenera
 
   override def generateSerializedSize(
       message: Descriptor
-  )(fp: FunctionalPrinter): FunctionalPrinter =
+  )(fp: FunctionalPrinter): FunctionalPrinter = {
+
+    //we piggy-back on this method to emit a stacksafe equals and hashCode overrides
+    val withEquals = generateEqualsOverride(message)(fp.newline)
+
     super
-      .generateSerializedSize(message)(fp)
+      .generateSerializedSize(message)(withEquals)
       .newline
       .add(
         "@transient val serializedSizeM = new coop.rchain.models.Memo(coop.rchain.models.ProtoM.serializedSize(this))"
       )
       .newline
+  }
+
+  private def generateEqualsOverride(message: Descriptor)(fp: FunctionalPrinter) = {
+    val myFullScalaName = message.scalaTypeNameWithMaybeRoot(message)
+    fp.add(
+        s"override def equals(x: Any): Boolean = coop.rchain.models.EqualM[$myFullScalaName].equals[monix.eval.Coeval](this, x).value"
+      )
+      .newline
+  }
 
   override def generateMergeFrom(
       message: Descriptor
