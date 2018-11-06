@@ -1,7 +1,7 @@
 package coop.rchain.casper.genesis
 
 import cats.implicits._
-import cats.{Apply, Id}
+import cats.{Id, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.DeployPaymentCostTest._
 import coop.rchain.casper.genesis.contracts.{Faucet, PreWallet}
@@ -9,7 +9,7 @@ import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.protocol.{BlockMessage, Deploy, DeployData}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.{Created, HashSetCasperTest, MultiParentCasperImpl, Valid}
+import coop.rchain.casper.{genesis => _, _}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
@@ -17,11 +17,11 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.{accounting, InterpolateRholang, Interpreter}
+import coop.rchain.rholang.interpreter.{accounting, InterpolateRholang}
 import coop.rchain.rspace.Serialize
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.FlatSpec
-
+import org.scalatest.{FlatSpec, Matchers}
+import Matchers._
 import scala.collection.immutable.BitSet
 
 class DeployPaymentCostTest extends FlatSpec {
@@ -37,63 +37,18 @@ class DeployPaymentCostTest extends FlatSpec {
 
     val walletUriString = registerWallet(walletAddress, secKey, pubKey, node.runtimeManager)
 
-    // Prepare wallet transfer
-    val nonce: Par  = GInt(0)
-    val amount: Par = GInt(10)
-    //TODO: use unforgeable names
+    val statusChannel = GPrivateBuilder()
+    val paymentPar    = makePayment(0L, 10L, secKey, walletUriString, statusChannel)
+    val user          = ByteString.copyFrom(pubKey)
+    val timestamp     = System.currentTimeMillis()
 
-    val transferChannel: Par = GPrivateBuilder()
-    val statusChannel: Par   = GPrivateBuilder()
-    val transferTuple: Par   = ETuple(List(nonce, amount, transferChannel))
+    val paymentBlock = paymentDeploy(paymentPar, user, timestamp)
 
-    val transferBytes    = bytes(transferTuple)
-    val sigTransferBytes = Ed25519.sign(Blake2b256.hash(transferBytes), secKey)
+    val paymentDeployCost = deployCost(paymentBlock, user, timestamp)
 
-    val user      = ByteString.copyFrom(pubKey)
-    val timestamp = System.currentTimeMillis()
+    assertSuccessfulTransfer(node, paymentBlock.getBody.getPostState.tuplespace, statusChannel)
 
-    val paymentPar = payment(
-      walletUriString,
-      amount,
-      nonce,
-      Base16.encode(sigTransferBytes),
-      transferChannel,
-      statusChannel
-    )
-
-    // Lookup wallet in the registry and make a transfer
-    val paymentDeploy = Deploy(
-      term = Some(paymentPar),
-      raw = Some(
-        DeployData()
-          .withPhloPrice(1L)
-          .withPhloLimit(accounting.MAX_VALUE)
-          .withUser(user)
-          .withTimestamp(timestamp)
-          .withTerm(paymentPar.toProtoString)
-      )
-    )
-
-    val paymentBlock = deploy[Id](paymentDeploy)
-    val paymentDeployCost = for {
-      deploy     <- paymentBlock.body.toList.flatMap(_.deploys)
-      deployData <- deploy.deploy.flatMap(_.raw).toList
-      if (deployData.user == user && deployData.timestamp == timestamp)
-      cost <- deploy.cost
-    } yield cost
-
-    assert(paymentDeployCost.size == 1)
-    // assert that transfer was successful
-    val captureTransferStatusChannel = GPrivateBuilder()
-    val transferStatus = node.runtimeManager.captureResults(
-      paymentBlock.getBody.getPostState.tuplespace,
-      ProtoUtil.termDeployNow(captureSingleResult(statusChannel, captureTransferStatusChannel)),
-      captureTransferStatusChannel
-    )
-    assert(transferStatus.size == 1)
-    assert(transferStatus.head.exprs.head == Expr(GString("Success")))
-
-    println(s"Cost of deploying payment contract is at minimum: ${paymentDeployCost.head.cost}")
+    println(s"Cost of deploying payment contract is at minimum: $paymentDeployCost")
   }
 
 }
@@ -114,31 +69,115 @@ object DeployPaymentCostTest {
   private val genesis =
     buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, Faucet.basicWalletFaucet, 0L)
 
+  // Lookup wallet in the registry and make a transfer
+  def paymentDeploy[F[_]: MultiParentCasperImpl: Monad](
+      paymentPar: Par,
+      user: ByteString,
+      timestamp: Long
+  ): F[BlockMessage] = {
+    val d = Deploy(
+      term = Some(paymentPar),
+      raw = Some(
+        DeployData()
+          .withPhloPrice(1L)
+          .withPhloLimit(accounting.MAX_VALUE)
+          .withUser(user)
+          .withTimestamp(timestamp)
+          .withTerm(paymentPar.toProtoString)
+      )
+    )
+    deploy[F](d)
+  }
+
+  def deploy[F[_]: Monad](
+      deploy: Deploy
+  )(implicit casperEff: MultiParentCasperImpl[F]): F[BlockMessage] =
+    for {
+      _              <- casperEff.deploy(deploy)
+      b              <- casperEff.createBlock
+      Created(block) = b
+      blockStatus    <- casperEff.addBlock(block)
+      _              = assert(blockStatus == Valid)
+    } yield block
+
+  def deployCost(block: BlockMessage, user: ByteString, timestamp: Long): PCost = {
+    val costs = for {
+      deploy     <- block.body.toList.flatMap(_.deploys)
+      deployData <- deploy.deploy.flatMap(_.raw).toList
+      if (deployData.user == user && deployData.timestamp == timestamp)
+      cost <- deploy.cost
+    } yield cost
+    assert(costs.size == 1)
+    costs.head
+  }
+
+  def makePayment(
+      n: Long,
+      a: Long,
+      secKey: Array[Byte],
+      walletUri: String,
+      statusChannel: Par
+  ): Par = {
+    val nonce: Par  = GInt(n)
+    val amount: Par = GInt(a)
+
+    val transferChannel: Par = GPrivateBuilder()
+    val transferTuple: Par   = EList(List(nonce, amount, transferChannel))
+
+    val transferBytes    = bytes(transferTuple)
+    val sigTransferBytes = Ed25519.sign(Blake2b256.hash(transferBytes), secKey)
+
+    paymentPar(
+      walletUri,
+      amount,
+      nonce,
+      Base16.encode(sigTransferBytes),
+      transferChannel,
+      statusChannel
+    )
+  }
+
   def bytes(par: Par): Array[Byte] = {
     import coop.rchain.models.serialization.implicits._
     Serialize[Par].encode(par).toArray
   }
 
-  def deploy[F[_]: Apply](
-      dd: DeployData
-  )(implicit casperEff: MultiParentCasperImpl[F]): BlockMessage = {
-    val Created(block) = casperEff.deploy(dd) *> casperEff.createBlock
-    val blockStatus    = casperEff.addBlock(block)
-    assert(blockStatus == Valid)
-    block
-  }
+  // The real payment deploy will be a bit more complicated than this, it will additionally call:
+  // * getParams - which will be similar to crypto and stdout which we don't charge for
+  // * codePayment - a method that will verify the payment for code deploy
+  // but the core of this deployment will be very close to this:
+  // * lookup a wallet in the registry
+  // * transfer phlos that will be used to pay for the deployment from the wallet
+  def paymentPar(
+      walletUri: String,
+      amount: Par,
+      nonce: Par,
+      sig: String,
+      destination: Par,
+      statusChannel: Par
+  ): Par = {
+    val rho: String =
+      s"""
+        | new walletChan, lookup(`rho:registry:lookup`) in {
+        |   lookup!(`$walletUri`, *walletChan) |
+        |   for(@(_, wallet) <- walletChan) {
+        |     @wallet!("transfer", "#amount", "#nonce", "$sig", "#destination", "#status")
+        |   }
+        | }
+      """.stripMargin
 
-  def deploy[F[_]: Apply](
-      deploy: Deploy
-  )(implicit casperEff: MultiParentCasperImpl[F]): BlockMessage = {
-    val Created(block) = casperEff.deploy(deploy) *> casperEff.createBlock
-    val blockStatus    = casperEff.addBlock(block)
-    assert(blockStatus == Valid)
-    block
+    InterpolateRholang
+      .interpolate(
+        rho,
+        Map[String, Par](
+          "#destination" -> destination,
+          "#status"      -> statusChannel,
+          "#amount"      -> amount,
+          "#nonce"       -> nonce
+        )
+      )
+      .value()
   }
-
-  def parse(rho: String): Par =
-    Interpreter.buildNormalizedTerm(rho).value()
 
   def createWallet(rm: RuntimeManager)(implicit casper: MultiParentCasperImpl[Id]): Par = {
     // Create new wallet
@@ -160,38 +199,19 @@ object DeployPaymentCostTest {
       implicit casper: MultiParentCasperImpl[Id]
   ): Par = {
     val postDeployStateHash = deploy[Id](p).getBody.getPostState.tuplespace
-    val captureChan: Par    = GPrivateBuilder()
-    val res = rm.captureResults(
-      postDeployStateHash,
-      ProtoUtil.termDeployNow(captureSingleResult(retChannel, captureChan)),
-      captureChan
-    )
-    assert(res.size == 1)
-    res.head
+    val data                = rm.getData(postDeployStateHash, retChannel)
+    assert(data.size == 1)
+    data.head
   }
 
-  def deploy[F[_]: Apply](par: Par)(implicit casperEff: MultiParentCasperImpl[F]): BlockMessage = {
-    val parDeploy      = ProtoUtil.termDeployNow(par)
-    val Created(block) = casperEff.deploy(parDeploy) *> casperEff.createBlock
-    val blockStatus    = casperEff.addBlock(block)
-    assert(blockStatus == Valid)
-    block
-  }
-
-  def captureSingleResult(source: Par, forwardChan: Par): Par = Receive(
-    binds = Seq(
-      ReceiveBind(
-        patterns = Seq(EVar(FreeVar(0))),
-        source = source,
-        freeCount = 1
-      )
-    ),
-    body = Send(forwardChan, Seq(EVar(BoundVar(0))), false, AlwaysEqual(BitSet(0))),
-    persistent = false,
-    bindCount = 1,
-    locallyFree = AlwaysEqual(BitSet(0)),
-    connectiveUsed = false
-  )
+  def deploy[F[_]: Monad](par: Par)(implicit casperEff: MultiParentCasperImpl[F]): F[BlockMessage] =
+    for {
+      _              <- casperEff.deploy(ProtoUtil.termDeployNow(par))
+      newBlock       <- casperEff.createBlock
+      Created(block) = newBlock
+      status         <- casperEff.addBlock(block)
+      _              = assert(status == Valid)
+    } yield block
 
   def createWalletPar(pubKey: String, retCh: Par): Par = {
     val rho: String =
@@ -212,6 +232,21 @@ object DeployPaymentCostTest {
     InterpolateRholang.interpolate(rho, Map("#retCh" -> retCh)).value
   }
 
+  def captureSingleResult(source: Par, forwardChan: Par): Par = Receive(
+    binds = Seq(
+      ReceiveBind(
+        patterns = Seq(EVar(FreeVar(0))),
+        source = source,
+        freeCount = 1
+      )
+    ),
+    body = Send(forwardChan, Seq(EVar(BoundVar(0))), false, AlwaysEqual(BitSet(0))),
+    persistent = false,
+    bindCount = 1,
+    locallyFree = AlwaysEqual(BitSet(0)),
+    connectiveUsed = false
+  )
+
   /** Registers wallet in the Registry
     *
     * @param walletAddress unforgeable name of the wallet
@@ -225,22 +260,19 @@ object DeployPaymentCostTest {
   )(implicit casper: MultiParentCasperImpl[Id]): String = {
     val registerWalletTuple: Par = ETuple(Seq(GInt(1), walletAddress))
     val registrySig              = Ed25519.sign(registerWalletTuple.toByteArray, secKey)
-    Ed25519.verify(registerWalletTuple.toByteArray, registrySig, pubKey)
+    assert(Ed25519.verify(registerWalletTuple.toByteArray, registrySig, pubKey))
     val sigHex    = Base16.encode(registrySig)
     val pubKeyHex = Base16.encode(pubKey)
 
     val walletUriRet: Par = GPrivateBuilder()
 
-    val rho =
-      s"""
-         |new rs(`rho:registry:insertSigned:ed25519`) in {
-         |  rs!("$pubKeyHex".hexToBytes(), [1, "#walletAddress"], "$sigHex".hexToBytes(), "#walletUriRet")
-         | }
-       """.stripMargin
-
     val par = InterpolateRholang
       .interpolate(
-        rho,
+        s"""
+           |new rs(`rho:registry:insertSigned:ed25519`) in {
+           |  rs!("$pubKeyHex".hexToBytes(), (1, "#walletAddress"), "$sigHex".hexToBytes(), "#walletUriRet")
+           | }
+       """.stripMargin,
         Map("#walletAddress" -> walletAddress, "#walletUriRet" -> walletUriRet)
       )
       .value
@@ -250,59 +282,17 @@ object DeployPaymentCostTest {
     walletUri.exprs.head.getGUri
   }
 
-  def payment(
-      walletUri: String,
-      amount: Par,
-      nonce: Par,
-      sig: String,
-      destination: Par,
-      statusChannel: Par
-  ): Par = {
-    val rho: String =
-      s"""
-        | new walletChan, lookup(`rho:registry:lookup`) in {
-        |   lookup!(`$walletUri`, *walletChan) |
-        |   for(@(_, wallet) <- walletChan) {
-        |     wallet("transfer", "#amount", "#nonce", "$sig", "#destination", "#status")
-        |   }
-        | }
-      """.stripMargin
-
-    InterpolateRholang
-      .interpolate(
-        rho,
-        Map[String, Par](
-          "#destination" -> destination,
-          "#status"      -> statusChannel,
-          "#amount"      -> amount,
-          "#nonce"       -> nonce
-        )
-      )
-      .value()
+  def assertSuccessfulTransfer[F[_]](
+      node: HashSetCasperTestNode[F],
+      tuplespaceHash: ByteString,
+      statusChannel: GPrivate
+  ): Unit = {
+    val transferStatus = node.runtimeManager.getData(
+      tuplespaceHash,
+      statusChannel
+    )
+    assert(transferStatus.size == 1)
+    transferStatus.head.exprs.head should be(Expr(GString("Success")))
   }
-
-  // TODO: Update once the actual short leash deployment finalize
-  // TODO: Use unforgeable names
-  // The real payment deploy will be a bit more complicated than this, it will additionally call:
-  // * getParams - which will be similar to crypto and stdout which we don't charge for
-  // * codePayment - a method that will verify the payment for code deploy
-  // but the core of this deployment will be very close to this:
-  // * lookup a wallet in the registry
-  // * transfer phlos that will be used to pay for the deployment from the wallet
-  def paymentRho(
-      walletUri: String,
-      amount: Int,
-      nonce: Int,
-      sig: String,
-      destination: String,
-      statusChannel: String
-  ): String =
-    s"""
-    new walletChan, lookup(`rho:registry:lookup`) in {
-      lookup!(`$walletUri`, *walletChan) |
-        for (@(_, wallet) <- walletChan) {
-          @(wallet, "transfer")!($amount, $nonce, "$sig", "$destination", "$statusChannel")
-        }
-      }"""
 
 }
