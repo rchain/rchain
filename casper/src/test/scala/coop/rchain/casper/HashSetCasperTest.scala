@@ -6,6 +6,7 @@ import cats.Id
 import cats.data.EitherT
 import cats.implicits._
 import com.google.protobuf.ByteString
+import com.typesafe.scalalogging.{Logger, StrictLogging}
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
@@ -22,7 +23,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.rholang.interpreter.{accounting, Runtime}
+import coop.rchain.rholang.interpreter.{Runtime, accounting}
 import coop.rchain.models.{Expr, Par}
 import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
@@ -35,7 +36,7 @@ import coop.rchain.catscontrib.effect.implicits._
 import scala.collection.immutable
 import scala.util.Random
 
-class HashSetCasperTest extends FlatSpec with Matchers {
+class HashSetCasperTest extends FlatSpec with Matchers with StrictLogging {
 
   import HashSetCasperTest._
 
@@ -114,10 +115,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   it should "accept signed blocks" in {
-    (0 until 1000).foreach { i =>
-      println(s"Iteration $i")
+    (0 until 1).foreach { i =>
+      logger.debug("--------------------------------Iteration {}--------------------------------", i)
       val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
       node.tearDown()
+      logger.debug("++++++++++++++++++++++++++++++++Iteration {}++++++++++++++++++++++++++++++++", i)
     }
   }
 
