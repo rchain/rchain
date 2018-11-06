@@ -2,8 +2,11 @@ package coop.rchain.rspace.trace
 
 import coop.rchain.rspace.StableHashProvider
 import cats.implicits._
+import com.typesafe.scalalogging.StrictLogging
 import coop.rchain.rspace.{Blake2b256Hash, Serialize}
 import coop.rchain.rspace.internal.codecSeq
+import coop.rchain.rspace.trace.Produce.logger
+
 import scala.collection.immutable.Seq
 import scodec.Codec
 import scodec.codecs._
@@ -16,7 +19,7 @@ import scodec.codecs._
   */
 sealed trait Event
 
-object Event {
+object Event extends StrictLogging {
 
   implicit def codecEvent: Codec[Event] =
     discriminated[Event]
@@ -57,7 +60,7 @@ case class Produce private (channelsHash: Blake2b256Hash, hash: Blake2b256Hash) 
 
 }
 
-object Produce {
+object Produce extends StrictLogging {
 
   def unapply(arg: Produce): Option[(Blake2b256Hash, Blake2b256Hash)] =
     Some((arg.channelsHash, arg.hash))
@@ -66,11 +69,21 @@ object Produce {
       implicit
       serializeC: Serialize[C],
       serializeA: Serialize[A]
-  ): Produce =
+  ): Produce = {
+    logger.debug("channel: {}", serializeC.encode(channel))
+    logger.debug("datum: {}", serializeA.encode(datum))
+
+    val hashch = StableHashProvider.hash(Seq(channel))(serializeC.toCodec)
+    val hashd = StableHashProvider.hash(channel, datum, persist)
+
+    logger.debug("channel hash: {}", hashch)
+    logger.debug("datum hash: {}", hashd)
+
     new Produce(
-      StableHashProvider.hash(Seq(channel))(serializeC.toCodec),
-      StableHashProvider.hash(channel, datum, persist)
+      hashch,
+      hashd
     )
+  }
 
   def fromHash(channelsHash: Blake2b256Hash, hash: Blake2b256Hash): Produce =
     new Produce(channelsHash, hash)
@@ -92,7 +105,7 @@ case class Consume private (channelsHash: Blake2b256Hash, hash: Blake2b256Hash) 
     s"Consume(channels: ${channelsHash.toString}, hash: ${hash.toString})"
 }
 
-object Consume {
+object Consume extends StrictLogging {
 
   def unapply(arg: Consume): Option[(Blake2b256Hash, Blake2b256Hash)] =
     Some((arg.channelsHash, arg.hash))
@@ -102,11 +115,21 @@ object Consume {
       serializeC: Serialize[C],
       serializeP: Serialize[P],
       serializeK: Serialize[K]
-  ): Consume =
+  ): Consume = {
+    logger.debug("channels: {}", channels.map(serializeC.encode))
+    logger.debug("patterns: {}", patterns.map(serializeP.encode))
+    logger.debug("cont: {}", serializeK.encode(continuation))
+    val hashch = StableHashProvider.hash(channels)(serializeC.toCodec)
+    val hashpat   = StableHashProvider.hash(channels, patterns, continuation, persist)
+
+    logger.debug("channel hash: {}", hashch)
+    logger.debug("pattern hash: {}", hashpat)
+
     new Consume(
-      StableHashProvider.hash(channels)(serializeC.toCodec),
-      StableHashProvider.hash(channels, patterns, continuation, persist)
+      hashch,
+      hashpat
     )
+  }
 
   def fromHash(channelsHash: Blake2b256Hash, hash: Blake2b256Hash): Consume =
     new Consume(channelsHash, hash)

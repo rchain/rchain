@@ -40,6 +40,9 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     syncF.delay {
       Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
+        logger.debug("consume channels: {}", channels.map(serializeC.encode))
+        logger.debug("consume patterns: {}", patterns.map(serializeP.encode))
+        logger.debug("consume continuation: {}", serializeK.encode(continuation))
         if (channels.length =!= patterns.length) {
           val msg = "channels.length must equal patterns.length"
           logger.error(msg)
@@ -112,6 +115,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
       span.mark("handle-matches-begin")
       consumeCommCounter.increment()
       val commRef = COMM(consumeRef, mats.map(_.datum.source))
+      logger.debug("found a comm {}", commRef)
       assert(comms.contains(commRef), "COMM Event was not contained in the trace")
       mats
         .sortBy(_.datumIndex)(Ordering[Int].reverse)
@@ -160,6 +164,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
                      |at <channels: $channels>""".stripMargin.replace('\n', ' '))
 
     val consumeRef = Consume.create(channels, patterns, continuation, persist)
+    logger.debug("replaying consume {}", consumeRef)
 
     replayData.get(consumeRef) match {
       case None =>
@@ -186,6 +191,8 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     syncF.delay {
       Kamon.withSpan(produceSpan.start(), finishSpan = true) {
+        logger.debug("produce channels: {}", serializeC.encode(channel))
+        logger.debug("produce data: {}", serializeA.encode(data))
         val span = Kamon.currentSpan()
         span.mark("before-produce-lock")
         produceLock(channel) {
@@ -267,6 +274,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
           span.mark("handle-match-begin")
           produceCommCounter.increment()
           val commRef = COMM(consumeRef, dataCandidates.map(_.datum.source))
+          logger.debug("found a comm in produce {}", commRef)
           assert(comms.contains(commRef), "COMM Event was not contained in the trace")
           if (!persistK) {
             span.mark("acquire-write-lock")
@@ -309,6 +317,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
                        |at <groupedChannels: $groupedChannels>""".stripMargin.replace('\n', ' '))
 
       val produceRef = Produce.create(channel, data, persist)
+      logger.debug("replaying produce {}", produceRef)
 
       @tailrec
       def getCommOrProduceCandidate(
@@ -334,10 +343,13 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
       replayData.get(produceRef) match {
         case None =>
           span.mark("no-produce-ref-found")
+          logger.debug("no produce ref found for {}", produceRef)
           Right(storeDatum(produceRef, None))
         case Some(comms) =>
           val commOrProduceCandidate: Either[COMM, ProduceCandidate[C, P, R, K]] =
             getCommOrProduceCandidate(comms.iterator().asScala.toList)
+          logger.debug("produce ref found for {}", produceRef)
+          logger.debug("candidate {}", commOrProduceCandidate)
           commOrProduceCandidate match {
             case Left(comm) =>
               span.mark("no-produce-candidate-found")

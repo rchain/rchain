@@ -55,7 +55,7 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
         val span = Kamon.currentSpan()
         span.mark("before-consume-ref-compute")
         val consumeRef = Consume.create(channels, patterns, continuation, persist)
-
+        logger.debug("consume {}", consumeRef)
         span.mark("before-consume-lock")
         consumeLock(channels) {
           span.mark("consume-lock-acquired")
@@ -151,6 +151,7 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
         val span = Kamon.currentSpan()
         span.mark("before-produce-ref-computed")
         val produceRef = Produce.create(channel, data, persist)
+        logger.debug("produce {}", produceRef)
         span.mark("before-produce-lock")
         produceLock(channel) {
           span.mark("produce-lock-acquired")
