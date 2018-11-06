@@ -53,6 +53,6 @@ object Resources {
     }
 
     mkTempDir(prefix)
-      .flatMap(tmpDir => Resource.liftF(mkRspace(tmpDir)))
+      .flatMap(tmpDir => Resource.make(mkRspace(tmpDir))(_.close()))
   }
 }
