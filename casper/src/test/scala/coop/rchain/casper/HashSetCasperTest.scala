@@ -115,11 +115,17 @@ class HashSetCasperTest extends FlatSpec with Matchers with StrictLogging {
   }
 
   it should "accept signed blocks" in {
-    (0 until 1).foreach { i =>
-      logger.debug("--------------------------------Iteration {}--------------------------------", i)
+    (0 until 10000).foreach { i =>
+      logger.debug(
+        "--------------------------------Iteration {}--------------------------------",
+        i
+      )
       val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
       node.tearDown()
-      logger.debug("++++++++++++++++++++++++++++++++Iteration {}++++++++++++++++++++++++++++++++", i)
+      logger.debug(
+        "++++++++++++++++++++++++++++++++Iteration {}++++++++++++++++++++++++++++++++",
+        i
+      )
     }
   }
 
