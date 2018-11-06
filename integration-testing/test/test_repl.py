@@ -24,6 +24,6 @@ def test_repl(bootstrap_node):
 
 def test_repl_detects_invalid_rholang(bootstrap_node):
     input = 'foo'
-    output = bootstrap_node.repl(input)
+    output = bootstrap_node.repl(input, stderr=False)
     without_prologue = without_banner_and_prompt(input, output)
     assert without_prologue.startswith('\x1b[34mError: coop.rchain.rholang.interpreter.errors$TopLevelFreeVariablesNotAllowedError')

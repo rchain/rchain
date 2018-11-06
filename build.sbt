@@ -27,7 +27,11 @@ lazy val projectSettings = Seq(
   dependencyOverrides ++= Seq(
     "io.kamon" %% "kamon-core" % kamonVersion
   ),
-  fork := true
+  fork := true,
+  javacOptions ++= (sys.env.get("JAVAC_VERSION") match {
+    case None    => Seq()
+    case Some(v) => Seq("-source", v, "-target", v)
+  })
 )
 
 lazy val coverageSettings = Seq(
@@ -192,7 +196,7 @@ lazy val node = (project in file("node"))
     /* Dockerization */
     dockerUsername := Some(organization.value),
     dockerUpdateLatest := true,
-    dockerBaseImage := "openjdk:8u171-jre-slim-stretch",
+    dockerBaseImage := "openjdk:11-jre-slim",
     dockerCommands := {
       val daemon = (daemonUser in Docker).value
       Seq(
@@ -224,7 +228,7 @@ lazy val node = (project in file("node"))
     },
     /* Debian */
     debianPackageDependencies in Debian ++= Seq(
-      "openjdk-8-jre-headless (>= 1.8.0.171)",
+      "openjdk-11-jre-headless",
       "openssl(>= 1.0.2g) | openssl(>= 1.1.0f)", //ubuntu & debian
       "bash (>= 2.05a-11)"
     ),
@@ -237,6 +241,10 @@ lazy val node = (project in file("node"))
       RpmConstants.Post -> (sourceDirectory.value / "rpm" / "scriptlets" / "post")
     ),
     rpmPrerequisites := Seq(
+      /*
+       * https://access.redhat.com/articles/1299013
+       * Red Hat will skip Java SE 9 and 10, and ship an OpenJDK distribution based on Java SE 11.
+       */
       "java-1.8.0-openjdk-headless >= 1.8.0.171",
       //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
       "openssl"
