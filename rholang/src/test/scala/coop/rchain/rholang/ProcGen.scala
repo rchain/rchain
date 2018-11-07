@@ -1,5 +1,6 @@
 package coop.rchain.rholang
 import cats.Invariant
+import cats.data.NonEmptyList
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn._
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.{Arbitrary, Gen, Shrink}
@@ -7,6 +8,7 @@ import org.scalacheck.Shrink._
 
 import scala.collection.JavaConverters
 import scala.reflect.{classTag, ClassTag}
+import GenTools._
 
 object tools {
   def seqToJavaCollection[C <: java.util.Collection[T]: ClassTag, T](input: Seq[T]): C = {
@@ -20,8 +22,6 @@ object tools {
 
   def streamSingleton[T](v: T): Stream[T] = v #:: Stream.empty[T]
 
-  def nonemptyString(g: Gen[Char], size: Int): Gen[String] = Gen.nonEmptyListOf(g).map(_.mkString)
-
   def withQuotes(quote: Char)(s: String): String = quote + s + quote
   val stringQuotes: String => String             = withQuotes('"')
   val uriQuotes: String => String                = withQuotes('`')
@@ -31,42 +31,19 @@ object tools {
     s.substring(1, s.length - 1)
   }
 
-  def oneOf[T](gs: Seq[Gen[T]]): Gen[T] =
-    if (gs.nonEmpty)
-      Gen.choose(0, gs.size - 1).flatMap(gs(_))
-    else
-      throw new IllegalArgumentException("oneOf called on empty generator collection")
-
-  def nonemptySubSeq[T](items: Seq[T]): Gen[Seq[T]] =
-    for {
-      count  <- Gen.choose(1, items.length)
-      output <- Gen.pick(count, items)
-    } yield output
-
   def mkUri(components: Seq[String]): String = components.mkString(":")
 
   val uriGen: Gen[String] =
     for {
       componentCount <- Gen.choose(1, 10)
-      components     <- Gen.listOfN(componentCount, nonemptyString(Gen.alphaChar, 10))
+      components     <- Gen.listOfN(componentCount, nonemptyString(10))
     } yield uriQuotes(mkUri(components))
 
-  val identifierGen: Gen[String] = nonemptyString(Gen.alphaChar, 256)
-
-  def extractNames(seqNameDecl: Seq[NameDecl]): Set[String] = {
-    var names = Set.empty[String]
-    seqNameDecl.foreach(
-      name =>
-        name.accept(
-          new NameDecl.Visitor[Unit, Unit] {
-            override def visit(p: NameDeclSimpl, arg: Unit): Unit = names = names + p.var_
-            override def visit(p: NameDeclUrn, arg: Unit): Unit   = names = names + p.var_
-          },
-          ()
-        )
-    )
-    names
-  }
+  def extractNames(seqNameDecl: Seq[NameDecl]): Set[String] =
+    seqNameDecl.map {
+      case simple: NameDeclSimpl => simple.var_
+      case urn: NameDeclUrn      => urn.var_
+    }.toSet
 
   def extractFreeVariables(localNames: Set[String], p: Proc): Set[String] =
     p match {
@@ -169,15 +146,15 @@ object ProcGen {
     } yield new PNew(seqToJavaCollection[ListNameDecl, NameDecl](seqNameDecl), proc)
   }
 
-  private def procGen(procGens: Seq[State => Gen[Proc]], state: State): Gen[Proc] =
+  private def procGen(procGens: NonEmptyList[State => Gen[Proc]], state: State): Gen[Proc] =
     if (state.height > 0) {
       val newState = state.decrementHeight
       oneOf(procGens.map(_.apply(newState)))
     } else
       pnilGen
 
-  private val processContextProcs: Seq[State => Gen[Proc]] =
-    Seq(pgroundGen, pparGen, psendGen, pnewGen, pevalGen)
+  private val processContextProcs: NonEmptyList[State => Gen[Proc]] =
+    NonEmptyList.of(pgroundGen, pparGen, psendGen, pnewGen, pevalGen)
 
   def topLevelGen(height: Int): Gen[Proc] =
     procGen(processContextProcs, State(height))

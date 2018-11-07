@@ -81,6 +81,9 @@ object KryoSerializers {
   val ConnectiveSerializer =
     emptyReplacingSerializer[Connective](_.connectiveInstance.isEmpty, Connective())
 
+  val NoneSerializer: DefaultSerializer[None.type] =
+    emptyReplacingSerializer[None.type](_.isEmpty, None)
+
   val kryo = new Kryo()
   kryo.register(classOf[ParMap], ParMapSerializer)
   kryo.register(classOf[ParSet], ParSetSerializer)
@@ -88,6 +91,7 @@ object KryoSerializers {
   kryo.register(classOf[Var], VarSerializer)
   kryo.register(classOf[Expr], ExprSerializer)
   kryo.register(classOf[Connective], ConnectiveSerializer)
+  kryo.register(None.getClass, NoneSerializer)
 
   kryo.setRegistrationRequired(false)
   // Support deserialization of classes without no-arg constructors

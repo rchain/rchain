@@ -1,15 +1,11 @@
 package coop.rchain.rspace
 
-import java.util.concurrent.atomic.AtomicLong
-
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
-import coop.rchain.shared.SyncVarOps
-import coop.rchain.shared.SyncVarOps._
+import monix.execution.atomic.AtomicAny
 
 import scala.Function.const
 import scala.collection.immutable.Seq
-import scala.concurrent.SyncVar
 
 /** The interface for the underlying store
   *
@@ -86,40 +82,34 @@ trait IStore[C, P, A, K] {
 
   def withTrieTxn[R](txn: Transaction)(f: TrieTransaction => R): R
 
-  protected val _trieUpdates: SyncVar[Seq[TrieUpdate[C, P, A, K]]] =
-    SyncVarOps.create(Seq.empty)
+  private val _trieUpdates: AtomicAny[(Long, List[TrieUpdate[C, P, A, K]])] =
+    AtomicAny[(Long, List[TrieUpdate[C, P, A, K]])]((0L, Nil))
 
-  def trieDelete(key: Blake2b256Hash, gnat: GNAT[C, P, A, K]) = {
-    val count   = _trieUpdateCount.getAndIncrement()
-    val currLog = _trieUpdates.take()
-    _trieUpdates.put(currLog :+ TrieUpdate(count, Delete, key, gnat))
-  }
+  def trieDelete(key: Blake2b256Hash, gnat: GNAT[C, P, A, K]): Unit =
+    _trieUpdates.getAndTransform {
+      case (count, list) =>
+        (count + 1, TrieUpdate(count, Delete, key, gnat) :: list)
+    }
 
-  def trieInsert(key: Blake2b256Hash, gnat: GNAT[C, P, A, K]) = {
-    val count   = _trieUpdateCount.getAndIncrement()
-    val currLog = _trieUpdates.take()
-    _trieUpdates.put(currLog :+ TrieUpdate(count, Insert, key, gnat))
-  }
+  def trieInsert(key: Blake2b256Hash, gnat: GNAT[C, P, A, K]): Unit =
+    _trieUpdates.getAndTransform {
+      case (count, list) =>
+        (count + 1, TrieUpdate(count, Insert, key, gnat) :: list)
+    }
 
   private[rspace] def getTrieUpdates: Seq[TrieUpdate[C, P, A, K]] =
-    _trieUpdates.get
-
-  protected val _trieUpdateCount: AtomicLong = new AtomicLong(0L)
+    _trieUpdates.get._2
 
   private[rspace] def getTrieUpdateCount: Long =
-    _trieUpdateCount.get()
+    _trieUpdates.get._1
 
   protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): Unit
 
-  private[rspace] def clearTrieUpdates(): Unit = {
-    _trieUpdates.update(const(Seq.empty))
-    _trieUpdateCount.set(0L)
-  }
+  private[rspace] def getAndClearTrieUpdates(): Seq[TrieUpdate[C, P, A, K]] =
+    _trieUpdates.getAndTransform(const((0L, Nil)))._2
 
   def createCheckpoint(): Blake2b256Hash = {
-    val trieUpdates = _trieUpdates.take
-    _trieUpdates.put(Seq.empty)
-    _trieUpdateCount.set(0L)
+    val trieUpdates = getAndClearTrieUpdates()
     collapse(trieUpdates).foreach(processTrieUpdate)
     trieStore.withTxn(trieStore.createTxnWrite()) { txn =>
       trieStore

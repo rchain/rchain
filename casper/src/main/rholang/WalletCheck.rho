@@ -15,11 +15,13 @@
 //URI derived from pk == `rho:id:oqez475nmxx9ktciscbhps18wnmnwtm6egziohc3rkdzekkmsrpuyt`
 new
   WalletCheck, rs(`rho:registry:insertSigned:ed25519`), uriOut,
-  rl(`rho:registry:lookup`), BasicWalletCh, claimContractStore
+  rl(`rho:registry:lookup`), BasicWalletCh, claimContractStore,
+  walletStore
 in {
   rl!(`rho:id:3yicxut5xtx5tnmnneta7actof4yse3xangw4awzt8c8owqmddgyms`, *BasicWalletCh) |
   for(@(_, BasicWallet) <- BasicWalletCh) {
     claimContractStore!({}) |
+    walletStore!({}) |
   
     // create: makes a wallet check
     //
@@ -44,7 +46,7 @@ in {
           for (@done <- doneStore) {
             if (done) {
               doneStore!(done) |
-              @statusOut!([false, "Already claimed wallet"])
+              @statusOut!((false, "Already claimed wallet"))
             } else {
 
               // Verify signature 
@@ -65,14 +67,14 @@ in {
                             // Create the wallet
                             @BasicWallet!(purse, "secp256k1", "04" ++ pubKey, *walletOut) |
 
-                            // Advertise the private name on a forgeable one
-                            // TODO: This is completely insecure.  Once the
-                            //   registry is done, use that.
                             for (@[wallet] <- walletOut) {
-                              @pubKey!!(wallet) |
+                              //record the claimed wallet in the store for later retrieval
+                              for(@wallets <- walletStore) {
+                                walletStore!(wallets.set(pubKey, wallet))
+                              } |
                             
                               // Return success
-                              @statusOut!([true, wallet])
+                              @statusOut!((true, "Success!"))
                             } |
                             
                             // All done
@@ -80,12 +82,12 @@ in {
                           }
                         } else {
                           doneStore!(done) |
-                          @statusOut!([false, "Public key is not the preimage of hash"])
+                          @statusOut!((false, "Public key is not the preimage of hash"))
                         }
                       }
                     } else {
                       doneStore!(done) |
-                      @statusOut!([false, "Signature verification failed"])
+                      @statusOut!((false, "Signature verification failed"))
                     }
                   }
                 }
@@ -112,8 +114,18 @@ in {
       for(@claimContractMap <- claimContractStore) {
         claimContractStore!(claimContractMap) |
         match claimContractMap.get(ethAddr) {
-          Nil           => { statusOut!([false, "Unknown Ethereum address"]) }
+          Nil           => { statusOut!((false, "Unknown Ethereum address")) }
           claimContract => { @claimContract!([pubKey, *statusOut], sig) }
+        }
+      }
+    } |
+    
+    contract WalletCheck(@"access", @pubKey, return) = {
+      for(@wallets <- walletStore) {
+        walletStore!(wallets) |
+        match wallets.get(pubKey) {
+          Nil    => { return!((false, "Unknown wallet public key")) }
+          wallet => { return!((true, wallet)) }
         }
       }
     }

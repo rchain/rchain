@@ -4,6 +4,7 @@ import java.io.{BufferedOutputStream, FileOutputStream, FileReader, StringReader
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
 
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Interpreter.EvaluateResult
 import coop.rchain.rholang.interpreter.Runtime.RhoIStore
@@ -52,7 +53,10 @@ object RholangCLI {
     val conf = new Conf(args)
 
     val runtime = Runtime.create(conf.dataDir(), conf.mapSize())
-    Await.result(runtime.injectEmptyRegistryRoot[Task].runAsync, 5.seconds)
+    Await.result(
+      Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace).runAsync,
+      5.seconds
+    )
 
     try {
       if (conf.files.supplied) {
@@ -62,7 +66,7 @@ object RholangCLI {
         repl(runtime)
       }
     } finally {
-      runtime.close()
+      runtime.close().unsafeRunSync
     }
   }
 

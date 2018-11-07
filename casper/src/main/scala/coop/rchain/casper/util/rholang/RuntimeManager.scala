@@ -18,25 +18,26 @@ import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 import monix.eval.Task
 import monix.execution.Scheduler
 
+import scala.annotation.tailrec
 import scala.collection.immutable
 import scala.concurrent.SyncVar
 import scala.util.{Failure, Success, Try}
 
 //runtime is a SyncVar for thread-safety, as all checkpoints share the same "hot store"
 class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: SyncVar[Runtime]) {
-  def captureResults(start: StateHash, term: Par, name: String = "__SCALA__")(
+
+  def captureResults(start: StateHash, deploy: Deploy, name: String = "__SCALA__")(
       implicit scheduler: Scheduler
   ): Seq[Par] = {
     val runtime                   = runtimeContainer.take()
-    val deploy                    = ProtoUtil.termDeploy(term, System.currentTimeMillis(), accounting.MAX_VALUE)
-    val (_, Seq(processedDeploy)) = newEval(deploy :: Nil, runtime, start)
+    val (_, Seq(processedDeploy)) = newEval(deploy :: Nil, runtime, start).unsafeRunSync
 
     //TODO: Is better error handling needed here?
     val result: Seq[Datum[ListParWithRandom]] =
       if (processedDeploy.status.isFailed) Nil
       else {
         val returnChannel = Par().copy(exprs = Seq(Expr(GString(name))))
-        runtime.space.getData(returnChannel)
+        runtime.space.getData(returnChannel).unsafeRunSync
       }
 
     runtimeContainer.put(runtime)
@@ -48,37 +49,37 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       hash: StateHash,
       terms: Seq[InternalProcessedDeploy],
       time: Option[Long] = None
-  )(
-      implicit scheduler: Scheduler
-  ): Either[(Option[Deploy], Failed), StateHash] = {
-    val runtime = runtimeContainer.take()
-    unsafeSetTimestamp(time, runtime)
-    val result = replayEval(terms, runtime, hash)
-    runtimeContainer.put(runtime)
-    result
-  }
+  ): Task[Either[(Option[Deploy], Failed), StateHash]] =
+    for {
+      runtime <- Task.delay(runtimeContainer.take())
+      _       <- setTimestamp(time, runtime)
+      result  <- replayEval(terms, runtime, hash)
+      _       <- Task.delay(runtimeContainer.put(runtime))
+    } yield result
 
-  def computeState(hash: StateHash, terms: Seq[Deploy], time: Option[Long] = None)(
-      implicit scheduler: Scheduler
-  ): (StateHash, Seq[InternalProcessedDeploy]) = {
-    val runtime = runtimeContainer.take()
-    unsafeSetTimestamp(time, runtime)
-    val result = newEval(terms, runtime, hash)
-    runtimeContainer.put(runtime)
-    result
-  }
+  def computeState(
+      hash: StateHash,
+      terms: Seq[Deploy],
+      time: Option[Long] = None
+  ): Task[(StateHash, Seq[InternalProcessedDeploy])] =
+    for {
+      runtime <- Task.delay(runtimeContainer.take())
+      _       <- setTimestamp(time, runtime)
+      result  <- newEval(terms, runtime, hash)
+      _       <- Task.delay(runtimeContainer.put(runtime))
+    } yield result
 
-  private def unsafeSetTimestamp(time: Option[Long], runtime: Runtime)(
-      implicit scheduler: Scheduler
-  ): Unit =
+  private def setTimestamp(time: Option[Long], runtime: Runtime): Task[Unit] =
     time match {
       case Some(t) =>
         val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(t))))
-        runtime.blockTime.setParams(timestamp).unsafeRunSync
-      case None => ()
+        runtime.blockTime.setParams(timestamp)
+      case None => Task.unit
     }
 
-  def storageRepr(hash: StateHash): Option[String] =
+  def storageRepr(hash: StateHash)(
+      implicit scheduler: Scheduler
+  ): Option[String] =
     getResetRuntimeOpt(hash).map { resetRuntime =>
       val result = StoragePrinter.prettyPrint(resetRuntime.space.store)
       runtimeContainer.put(resetRuntime)
@@ -86,12 +87,21 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     }
 
   def computeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] = {
-    // TODO: Switch to a read only name
     val bondsQuery =
-      """for(pos <- @"proofOfStake"){ pos!("getBonds", "__SCALA__") }"""
-    //TODO: construct directly instead of parsing rholang source
-    val bondsQueryTerm = InterpreterUtil.mkTerm(bondsQuery).right.get
-    val bondsPar       = captureResults(hash, bondsQueryTerm)
+      """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
+        |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+        |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
+        |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
+        |    for(pos <- posCh){ pos!("getBonds", "__SCALA__") }
+        |  }
+        |}""".stripMargin
+
+    val bondsQueryTerm =
+      ProtoUtil.deployDataToDeploy(
+        ProtoUtil.sourceDeploy(bondsQuery, 0L, ProtoUtil.EMPTY_PAYMENT_CODE, accounting.MAX_VALUE)
+      )
+    val bondsPar = captureResults(hash, bondsQueryTerm)
+
     assert(
       bondsPar.size == 1,
       s"Incorrect number of results from query of current bonds: ${bondsPar.size}"
@@ -99,10 +109,12 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     toBondSeq(bondsPar.head)
   }
 
-  private def getResetRuntime(hash: StateHash) = {
+  private def getResetRuntime(hash: StateHash)(
+      implicit scheduler: Scheduler
+  ) = {
     val runtime   = runtimeContainer.take()
     val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
-    Try(runtime.space.reset(blakeHash)) match {
+    Try(runtime.space.reset(blakeHash).unsafeRunSync) match {
       case Success(_) => runtime
       case Failure(ex) =>
         runtimeContainer.put(runtime)
@@ -110,10 +122,12 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     }
   }
 
-  private def getResetRuntimeOpt(hash: StateHash) = {
+  private def getResetRuntimeOpt(hash: StateHash)(
+      implicit scheduler: Scheduler
+  ) = {
     val runtime   = runtimeContainer.take()
     val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
-    Try(runtime.space.reset(blakeHash)) match {
+    Try(runtime.space.reset(blakeHash).unsafeRunSync) match {
       case Success(_) => Some(runtime)
       case Failure(_) =>
         runtimeContainer.put(runtime)
@@ -131,9 +145,11 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
         Bond(validatorName, stakeAmount)
     }.toList
 
-  def getData(hash: ByteString, channel: Par): Seq[Par] = {
+  def getData(hash: ByteString, channel: Par)(
+      implicit scheduler: Scheduler
+  ): Seq[Par] = {
     val resetRuntime                          = getResetRuntime(hash)
-    val result: Seq[Datum[ListParWithRandom]] = resetRuntime.space.getData(channel)
+    val result: Seq[Datum[ListParWithRandom]] = resetRuntime.space.getData(channel).unsafeRunSync
     runtimeContainer.put(resetRuntime)
     result.flatMap(_.a.pars)
   }
@@ -141,10 +157,12 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   def getContinuation(
       hash: ByteString,
       channels: immutable.Seq[Par]
+  )(
+      implicit scheduler: Scheduler
   ): Seq[(Seq[BindPattern], Par)] = {
     val resetRuntime = getResetRuntime(hash)
     val results: Seq[WaitingContinuation[BindPattern, TaggedContinuation]] =
-      resetRuntime.space.getWaitingContinuations(channels)
+      resetRuntime.space.getWaitingContinuations(channels).unsafeRunSync
     runtimeContainer.put(resetRuntime)
     for {
       result <- results.filter(_.continuation.taggedCont.isParBody)
@@ -159,7 +177,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       deploy: Deploy,
       reducer: ChargingReducer[Task],
       errorLog: ErrorLog,
-      space: RhoISpace
+      space: RhoISpace[Task]
   ): Task[Cost] =
     if (deploy.payment.isEmpty)
       Task.raiseError(PaymentCodeError("Payment code must not be empty."))
@@ -182,9 +200,11 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       } yield costAcc.cost
     }
 
-  private def newEval(terms: Seq[Deploy], runtime: Runtime, initHash: StateHash)(
-      implicit scheduler: Scheduler
-  ): (StateHash, Seq[InternalProcessedDeploy]) = {
+  private def newEval(
+      terms: Seq[Deploy],
+      runtime: Runtime,
+      initHash: StateHash
+  ): Task[(StateHash, Seq[InternalProcessedDeploy])] = {
 
     def evalDeploy(
         shortLeashCost: Cost,
@@ -200,7 +220,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
                     )
         (injCost, errors) = injResult
         deployCost        = injCost + shortLeashCost
-        newCheckpoint     <- Task.delay(runtime.space.createCheckpoint())
+        newCheckpoint     <- runtime.space.createCheckpoint()
         deployResult = InternalProcessedDeploy(
           deploy,
           CostAccount.toProto(deployCost),
@@ -217,7 +237,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       Task.defer {
         terms match {
           case deploy +: rem =>
-            Task.delay(runtime.space.reset(hash)) *>
+            runtime.space.reset(hash) *>
               evalShortLeashDeploy(
                 runtime,
                 deploy,
@@ -244,19 +264,18 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
                 }
                 .flatMap { case (hash, errors) => doEval(rem, hash, errors) }
 
-          case _ => Task.now((ByteString.copyFrom(hash.bytes.toArray), acc))
+          case _ => Task.now { (ByteString.copyFrom(hash.bytes.toArray), acc) }
         }
       }
 
     doEval(terms, Blake2b256Hash.fromByteArray(initHash.toByteArray), Vector.empty)
-      .unsafeRunSync(scheduler)
   }
 
   private def replayEval(
       terms: Seq[InternalProcessedDeploy],
       runtime: Runtime,
       initHash: StateHash
-  )(implicit scheduler: Scheduler): Either[(Option[Deploy], Failed), StateHash] = {
+  ): Task[Either[(Option[Deploy], Failed), StateHash]] = {
 
     def doReplayEval(
         terms: Seq[InternalProcessedDeploy],
@@ -266,7 +285,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
         terms match {
           case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
             for {
-              _ <- Task.delay(runtime.replaySpace.rig(hash, log.toList))
+              _ <- runtime.replaySpace.rig(hash, log.toList)
               shortLeashCost <- evalShortLeashDeploy(
                                  runtime,
                                  deploy,
@@ -294,7 +313,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
                            )
                          else if (errors.nonEmpty) doReplayEval(rem, hash)
                          else {
-                           Task.delay(runtime.replaySpace.createCheckpoint()).attempt.flatMap {
+                           runtime.replaySpace.createCheckpoint().attempt.flatMap {
                              case Right(newCheckpoint) =>
                                doReplayEval(rem, newCheckpoint.root)
                              case Left(ex: ReplayException) =>
@@ -308,7 +327,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
         }
       }
 
-    doReplayEval(terms, Blake2b256Hash.fromByteArray(initHash.toByteArray)).unsafeRunSync(scheduler)
+    doReplayEval(terms, Blake2b256Hash.fromByteArray(initHash.toByteArray))
   }
 
   private def injAttempt(
@@ -336,16 +355,17 @@ object RuntimeManager {
 
   final val SHORT_LEASH_COST_LIMIT: Cost = Cost(17000)
 
-  def fromRuntime(active: Runtime)(implicit scheduler: Scheduler): RuntimeManager = {
-    active.space.clear()
-    active.replaySpace.clear()
-    active.injectEmptyRegistryRoot[Task].unsafeRunSync
-    val hash       = ByteString.copyFrom(active.space.createCheckpoint().root.bytes.toArray)
-    val replayHash = ByteString.copyFrom(active.replaySpace.createCheckpoint().root.bytes.toArray)
-    assert(hash == replayHash)
-    val runtime = new SyncVar[Runtime]()
-    runtime.put(active)
-
-    new RuntimeManager(hash, runtime)
-  }
+  def fromRuntime(active: Runtime)(implicit scheduler: Scheduler): RuntimeManager =
+    (for {
+      _                <- active.space.clear()
+      _                <- active.replaySpace.clear()
+      _                <- Runtime.injectEmptyRegistryRoot(active.space, active.replaySpace)
+      checkpoint       <- active.space.createCheckpoint()
+      replayCheckpoint <- active.replaySpace.createCheckpoint()
+      hash             = ByteString.copyFrom(checkpoint.root.bytes.toArray)
+      replayHash       = ByteString.copyFrom(replayCheckpoint.root.bytes.toArray)
+      _                = assert(hash == replayHash)
+      runtime          = new SyncVar[Runtime]()
+      _                = runtime.put(active)
+    } yield (new RuntimeManager(hash, runtime))).unsafeRunSync
 }

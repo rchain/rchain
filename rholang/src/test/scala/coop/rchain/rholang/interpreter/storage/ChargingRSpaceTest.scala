@@ -2,9 +2,9 @@ package coop.rchain.rholang.interpreter.storage
 
 import java.nio.file.Files
 
-import cats.Id
 import cats.effect.Sync
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
@@ -373,7 +373,7 @@ object ChargingRSpaceTest {
     TaggedContinuation(ParBody(ParWithRandom(par, r)))
 
   // This test ISpace wraps regular RhoISpace but adds predictable match cost
-  def createTestISpace(): RhoISpace = new RhoISpace {
+  def createTestISpace(): RhoISpace[Task] = new RhoISpace[Task] {
     private val rspace = createRhoISpace()
 
     override def consume(
@@ -388,7 +388,7 @@ object ChargingRSpaceTest {
           ListParWithRandom,
           ListParWithRandomAndPhlos
         ]
-    ): Id[Either[errors.OutOfPhlogistonsError.type, Option[
+    ): Task[Either[errors.OutOfPhlogistonsError.type, Option[
       (
           ContResult[Par, BindPattern, TaggedContinuation],
           immutable.Seq[Result[ListParWithRandomAndPhlos]]
@@ -397,8 +397,10 @@ object ChargingRSpaceTest {
       rspace
         .consume(channels, patterns, continuation, persist)
         .map(_.map {
-          case (cont, data) =>
-            cont -> data.map(r => r.copy(value = r.value.withCost(RSPACE_MATCH_PCOST)))
+          _.map {
+            case (cont, data) =>
+              cont -> data.map(r => r.copy(value = r.value.withCost(RSPACE_MATCH_PCOST)))
+          }
         })
 
     override def produce(channel: Par, data: ListParWithRandom, persist: Boolean)(
@@ -408,7 +410,7 @@ object ChargingRSpaceTest {
           ListParWithRandom,
           ListParWithRandomAndPhlos
         ]
-    ): Id[Either[errors.OutOfPhlogistonsError.type, Option[
+    ): Task[Either[errors.OutOfPhlogistonsError.type, Option[
       (
           ContResult[Par, BindPattern, TaggedContinuation],
           immutable.Seq[Result[ListParWithRandomAndPhlos]]
@@ -417,11 +419,13 @@ object ChargingRSpaceTest {
       rspace
         .produce(channel, data, persist)
         .map(_.map {
-          case (cont, data) =>
-            cont -> data.map(r => r.copy(value = r.value.withCost(RSPACE_MATCH_PCOST)))
+          _.map {
+            case (cont, data) =>
+              cont -> data.map(r => r.copy(value = r.value.withCost(RSPACE_MATCH_PCOST)))
+          }
         })
 
-    override def close(): Id[Unit] = rspace.close()
+    override def close(): Task[Unit] = rspace.close()
     override val store: IStore[Par, BindPattern, ListParWithRandom, TaggedContinuation] =
       rspace.store
     override def install(
@@ -435,29 +439,28 @@ object ChargingRSpaceTest {
           ListParWithRandom,
           ListParWithRandomAndPhlos
         ]
-    ): Id[Option[(TaggedContinuation, immutable.Seq[ListParWithRandomAndPhlos])]] = ???
-    override def createCheckpoint(): Id[Checkpoint]                               = ???
-    override def reset(root: Blake2b256Hash): Id[Unit]                            = ???
+    ): Task[Option[(TaggedContinuation, immutable.Seq[ListParWithRandomAndPhlos])]] = ???
+    override def createCheckpoint(): Task[Checkpoint]                               = ???
+    override def reset(root: Blake2b256Hash): Task[Unit]                            = ???
     override def retrieve(
         root: Blake2b256Hash,
         channelsHash: Blake2b256Hash
-    ): Id[Option[internal.GNAT[Par, BindPattern, ListParWithRandom, TaggedContinuation]]] =
+    ): Task[Option[internal.GNAT[Par, BindPattern, ListParWithRandom, TaggedContinuation]]] =
       ???
-    override def getData(channel: Par): immutable.Seq[internal.Datum[ListParWithRandom]] =
+    override def getData(channel: Par): Task[immutable.Seq[internal.Datum[ListParWithRandom]]] =
       ???
     override def getWaitingContinuations(
         channels: immutable.Seq[Par]
-    ): immutable.Seq[internal.WaitingContinuation[BindPattern, TaggedContinuation]] = ???
-    override def clear(): Id[Unit]                                                  = ???
+    ): Task[immutable.Seq[internal.WaitingContinuation[BindPattern, TaggedContinuation]]] = ???
+    override def clear(): Task[Unit]                                                      = ???
   }
 
-  def createRhoISpace(): RhoISpace = {
-    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+  def createRhoISpace(): RhoISpace[Task] = {
     import coop.rchain.rholang.interpreter.storage.implicits._
     val dbDir               = Files.createTempDirectory("rchain-charging-rspace-test-")
     val context: RhoContext = Context.create(dbDir, 1024L * 1024L * 4)
-    val space: RhoISpace = RSpace.create[
-      Id,
+    val space: Task[RhoISpace[Task]] = RSpace.create[
+      Task,
       Par,
       BindPattern,
       OutOfPhlogistonsError.type,
@@ -465,7 +468,7 @@ object ChargingRSpaceTest {
       ListParWithRandomAndPhlos,
       TaggedContinuation
     ](context, Branch("test"))
-    space
+    space.unsafeRunSync
   }
 
 }

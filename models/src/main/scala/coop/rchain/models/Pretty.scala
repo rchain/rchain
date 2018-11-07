@@ -1,7 +1,8 @@
 package coop.rchain.models
+import java.io.{PrintWriter, StringWriter}
+
 import com.google.protobuf.ByteString
 import monix.eval.Coeval
-import monix.eval.Coeval.Now
 
 import scala.annotation.switch
 import scala.collection.immutable.{BitSet, HashSet}
@@ -38,7 +39,11 @@ trait PrettyInstances extends PrettyDerivation {
 
   // obviously won't print compiling code,
   // but seeing the stacktrace is more important in this case
-  implicit val PrettyThrowable = fromToString[Throwable]
+  implicit val PrettyThrowable: Pretty[Throwable] = (value: Throwable, indentLevel: Int) => {
+    val stackTrace = new StringWriter()
+    value.printStackTrace(new PrintWriter(stackTrace))
+    "\n" + stackTrace.toString
+  }
 
   implicit val PrettyByteString: Pretty[ByteString] = (value: ByteString, indentLevel: Int) =>
     "ByteString.copyFrom(Array[Byte]" + parenthesised(value.toByteArray, indentLevel) + ")"

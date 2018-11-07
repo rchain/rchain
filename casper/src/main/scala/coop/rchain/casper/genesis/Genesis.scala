@@ -25,6 +25,8 @@ import scala.util.{Failure, Success, Try}
 import coop.rchain.casper.util.Sorting.byteArrayOrdering
 import coop.rchain.rholang.interpreter.accounting
 
+import scala.concurrent.duration.Duration
+
 object Genesis {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
@@ -44,6 +46,7 @@ object Genesis {
       StandardDeploys.basicWallet,
       StandardDeploys.basicWalletFaucet,
       StandardDeploys.walletCheck,
+      StandardDeploys.systemInstances,
       StandardDeploys.rev(wallets, faucetCode, posParams)
     )
 
@@ -69,7 +72,8 @@ object Genesis {
       startHash: StateHash,
       runtimeManager: RuntimeManager
   )(implicit scheduler: Scheduler): BlockMessage = {
-    val (stateHash, processedDeploys) = runtimeManager.computeState(startHash, blessedTerms)
+    val (stateHash, processedDeploys) =
+      runtimeManager.computeState(startHash, blessedTerms).runSyncUnsafe(Duration.Inf)
 
     val stateWithContracts = for {
       bd <- initial.body
