@@ -15,7 +15,11 @@ import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatest.{FlatSpec, Matchers}
+import coop.rchain.rholang.Resources.mkRhoISpace
+import coop.rchain.rholang.interpreter.Runtime.RhoISpace
+import coop.rchain.rspace.internal
 
+import scala.collection.immutable
 import scala.concurrent.duration._
 
 class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEqualsSupport {
@@ -86,31 +90,44 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
 
     implicit val rand   = Blake2b512Random(Array.empty[Byte])
     implicit val errLog = new ErrorLog()
-    lazy val pureRSpace = ChargingRSpaceTest.createRhoISpace()
-    lazy val (_, reducer, _) =
-      RholangAndScalaDispatcher.create[Task, Task.Par](pureRSpace, Map.empty, Map.empty)
 
-    def plainSendCost(p: Par): Cost = {
-      val storageCost = ChargingRSpace.storageCostProduce(
-        channel,
-        ListParWithRandom(Seq(p))
+    def testImplementation(pureRSpace: RhoISpace[Task]): Task[
+      (
+          Either[Throwable, Unit],
+          Map[immutable.Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]]
       )
-      val substitutionCost = Cost(Chargeable[Par].cost(channel)) + Cost(
-        Chargeable[Par].cost(p)
-      )
-      substitutionCost + storageCost + SEND_EVAL_COST
+    ] = {
+
+      lazy val (_, reducer, _) =
+        RholangAndScalaDispatcher.create[Task, Task.Par](pureRSpace, Map.empty, Map.empty)
+
+      def plainSendCost(p: Par): Cost = {
+        val storageCost = ChargingRSpace.storageCostProduce(
+          channel,
+          ListParWithRandom(Seq(p))
+        )
+        val substitutionCost = Cost(Chargeable[Par].cost(channel)) + Cost(
+          Chargeable[Par].cost(p)
+        )
+        substitutionCost + storageCost + SEND_EVAL_COST
+      }
+      val sendACost = plainSendCost(a)
+      val sendBCost = plainSendCost(b)
+
+      val initPhlos = sendACost + sendBCost - SEND_EVAL_COST - Cost(1)
+
+      for {
+        _      <- reducer.setAvailablePhlos(initPhlos)
+        result <- reducer.inj(program).attempt
+      } yield (result, pureRSpace.store.toMap)
     }
-    val sendACost = plainSendCost(a)
-    val sendBCost = plainSendCost(b)
 
-    val initPhlos = sendACost + sendBCost - SEND_EVAL_COST - Cost(1)
-    reducer.setAvailablePhlos(initPhlos).runSyncUnsafe(1.second)
+    val (result, map) =
+      mkRhoISpace[Task]("cost-accounting-reducer-test-")
+        .use(testImplementation(_))
+        .runSyncUnsafe(5.seconds)
 
-    val test   = reducer.inj(program)
-    val result = test.attempt.runSyncUnsafe(5.seconds)
     val errors = errLog.readAndClearErrorVector()
-    assert(errors === Vector.empty)
-    assert(result === Left(OutOfPhlogistonsError))
 
     def data(p: Par, rand: Blake2b512Random) = Row(
       List(
@@ -123,9 +140,15 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
       List()
     )
 
-    def stored(p: Par, rand: Blake2b512Random): Boolean =
-      pureRSpace.store.toMap.get(List(channel)) === Some(data(p, rand))
+    def stored(
+        map: Map[immutable.Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]],
+        p: Par,
+        rand: Blake2b512Random
+    ): Boolean =
+      map.get(List(channel)) === Some(data(p, rand))
 
-    assert(stored(a, rand.splitByte(0)) || stored(b, rand.splitByte(1)))
+    assert(errors === Vector.empty)
+    assert(result === Left(OutOfPhlogistonsError))
+    assert(stored(map, a, rand.splitByte(0)) || stored(map, b, rand.splitByte(1)))
   }
 }
