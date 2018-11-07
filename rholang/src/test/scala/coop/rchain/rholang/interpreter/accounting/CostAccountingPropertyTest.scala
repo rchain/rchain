@@ -1,9 +1,11 @@
 package coop.rchain.rholang.interpreter.accounting
+
 import java.nio.file.Files
 
 import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models._
+import coop.rchain.rholang.Resources.mkRhoISpace
 import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
@@ -113,16 +115,18 @@ object CostAccountingPropertyTest {
   }
 
   def costOfExecution(procs: Proc*): Task[Long] = {
-    implicit val rand   = Blake2b512Random(Array.empty[Byte])
-    implicit val errLog = new ErrorLog()
+    implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
+    implicit val errLog: ErrorLog       = new ErrorLog()
 
-    lazy val pureRSpace = createRhoISpace()
-    lazy val (_, reducer, _) =
-      RholangAndScalaDispatcher.create[Task, Task.Par](pureRSpace, Map.empty, Map.empty)
+    mkRhoISpace[Task, RhoISpace[Task]]("cost-accounting-property-test-")
+      .use { pureRSpace =>
+        lazy val (_, reducer, _) =
+          RholangAndScalaDispatcher.create[Task, Task.Par](pureRSpace, Map.empty, Map.empty)
 
-    procs.toStream
-      .traverse(execute(reducer, _))
-      .map(_.sum)
+        procs.toStream
+          .traverse(execute(reducer, _))
+          .map(_.sum)
+      }
   }
 
 }
