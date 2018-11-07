@@ -2,9 +2,9 @@ package coop.rchain.rholang
 import java.io.File
 import java.nio.file.{Files, Path}
 
-import cats.effect.{Resource, Sync}
 import cats.Applicative
 import cats.effect.ExitCase.Error
+import cats.effect.{Resource, Sync}
 import com.typesafe.scalalogging.Logger
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}

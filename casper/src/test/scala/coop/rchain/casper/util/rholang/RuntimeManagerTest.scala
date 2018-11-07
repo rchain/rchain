@@ -15,18 +15,16 @@ import coop.rchain.shared.StoreType
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.catscontrib.effect.implicits.bracketTry
+
 import scala.util.Try
 import coop.rchain.catscontrib.Capture._
+
 import scala.concurrent.duration._
+import Resources.mkRuntimeManager
+import monix.eval.Task
 
 class RuntimeManagerTest extends FlatSpec with Matchers {
-  val storageSize = 1024L * 1024
-  val runtimeManager: Resource[Try, RuntimeManager] =
-    mkTempDir[Try]("casper-runtime-manager-test").flatMap(storageDirectory => {
-      val activeRuntime = Runtime.create(storageDirectory, storageSize, StoreType.LMDB)
-      Resource.pure(RuntimeManager.fromRuntime(activeRuntime))
-    })
-
+  val runtimeManager = mkRuntimeManager("casper-runtime-manager-test")
   "computeState" should "capture rholang errors" in {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
     val deploy     = ProtoUtil.termDeployNow(InterpreterUtil.mkTerm(badRholang).right.get)
@@ -115,19 +113,21 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   "emptyStateHash" should "not remember previous hot store state" in {
     implicit val timeEff = new LogicalTime[Id]
 
+    import cats.implicits._
+
     val testStorageDirectory = Files.createTempDirectory("casper-runtime-manager-test")
 
-    val testRuntime1        = Runtime.create(testStorageDirectory, storageSize)
-    val testRuntimeManager1 = RuntimeManager.fromRuntime(testRuntime1)
-    val hash1               = testRuntimeManager1.emptyStateHash
-    val deploy              = ProtoUtil.basicDeploy[Id](0)
-    val _                   = testRuntimeManager1.computeState(hash1, deploy :: Nil)
-    testRuntime1.close()
+    val terms = ProtoUtil.basicDeploy[Id](0) :: Nil
 
-    val testRuntime2        = Runtime.create(testStorageDirectory, storageSize)
-    val testRuntimeManager2 = RuntimeManager.fromRuntime(testRuntime2)
-    val hash2               = testRuntimeManager2.emptyStateHash
-    testRuntime2.close()
+    def run =
+      mkRuntimeManager[Task]("casper-runtime-manager-test")
+        .use { m =>
+          val hash = m.emptyStateHash
+          m.computeState(hash, terms)
+            .map(_ => hash)
+        }
+
+    val hash1, hash2 = run.product(run).runSyncUnsafe(10.seconds)
 
     hash1 should be(hash2)
   }
@@ -171,6 +171,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       runtimeManager
         .use(mgr => Try { mgr.computeState(mgr.emptyStateHash, deploy).runSyncUnsafe(10.seconds) })
         .get
+
     assert(firstDeploy.size == 1)
     val firstDeployCost = deployCost(firstDeploy)
     assert(secondDeploy.size == 1)
