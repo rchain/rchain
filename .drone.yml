@@ -65,6 +65,8 @@ pipeline:
     <<: *sbtenv
     commands:
       - sbt node/docker:publishLocal node/debian:packageBin node/universal:packageZipTarball
+      - mkdir -p artifacts
+      - cp node/target/rnode_*_all.deb node/target/universal/*.tgz artifacts/
     volumes:
       - /var/cache/rchain-build/.sbt:/root/.sbt
       - /var/cache/rchain-build/.ivy2:/root/.ivy2
@@ -89,6 +91,8 @@ pipeline:
     <<: *sbtenv
     commands:
       - env JAVAC_VERSION=1.8 sbt clean compile doc node/rpm:packageBin
+      - mkdir -p artifacts
+      - cp node/target/rpm/RPMS/noarch/rnode-*.noarch.rpm artifacts/
     volumes:
       - /var/cache/rchain-build/.sbt:/root/.sbt
       - /var/cache/rchain-build/.ivy2:/root/.ivy2
