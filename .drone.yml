@@ -11,7 +11,7 @@ branches:
 # additional volumes, as in package step, you need to specify all volumes.
 
 __buildenv: &buildenv
-  image: rchain/buildenv:latest
+  image: rchain/buildenv:latest-java8
 
 __sbtenv: &sbtenv
   <<: *buildenv
@@ -64,7 +64,7 @@ pipeline:
   package:
     <<: *sbtenv
     commands:
-      - sbt node/docker:publishLocal node/debian:packageBin node/universal:packageZipTarball
+      - sbt node/docker:publishLocal node/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball
     volumes:
       - /var/cache/rchain-build/.sbt:/root/.sbt
       - /var/cache/rchain-build/.ivy2:/root/.ivy2
@@ -74,24 +74,12 @@ pipeline:
 
   run-integration-tests:
     <<: *buildenv
-    environment:
-      - _JAVA_OPTIONS=-Xms2G -Xmx8G
     commands:
       - ./scripts/ci/run-integration-tests.sh
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp:/tmp
       - /var/tmp/rchain-it:/var/tmp/rchain-it
-    when:
-      event: [ push, tag ]
-
-  package-rpm:
-    <<: *sbtenv
-    commands:
-      - env JAVAC_VERSION=1.8 sbt clean compile doc node/rpm:packageBin
-    volumes:
-      - /var/cache/rchain-build/.sbt:/root/.sbt
-      - /var/cache/rchain-build/.ivy2:/root/.ivy2
     when:
       event: [ push, tag ]
 
