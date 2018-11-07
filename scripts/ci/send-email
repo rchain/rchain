@@ -11,7 +11,7 @@ def top_commits():
             echo
         done
     """
-    proc = subprocess.run(cmd
+    proc = subprocess.run(cmd,
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT)
