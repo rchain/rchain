@@ -1,8 +1,8 @@
 ## Data Structures
 
-All computation can be encoded in the raw rho calculus just as it can be in the lambda calculus. Convincing your self of this is an interesting and rewarding endeavor for the mathematically inclined. Rholang strives to be a useful general purpose programming language, and therefore introduces some additional native data structures.
+All computation can be encoded in the raw rho calculus just as it can be in the lambda calculus. Convincing yourself of this is an interesting and rewarding endeavor for the mathematically inclined. Rholang strives to be a useful general purpose programming language, and therefore introduces some additional native data structures.
 
-All data structures are processes and [can be quote] todo insert link, to create channels.
+All data structures are processes and [can be quoted] todo insert link, to create channels.
 
 All data structures are immutable, and their methods return new data structures with the requested change (the original is not modified).
 
