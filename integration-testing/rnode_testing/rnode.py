@@ -214,6 +214,26 @@ def create_bootstrap_node(docker_client,
     return create_node_container(docker_client, image, name, network, bonds_file, command, rnode_timeout, volumes, allowed_peers, memory, cpuset_cpus)
 
 
+def make_peer_name(network, i):
+    return f"peer{i}.{network}"
+
+
+def create_peer(docker_client, image, network, bonds_file, rnode_timeout, allowed_peers, memory, cpuset_cpus, bootstrap, i, key_pair):
+    name = make_peer_name(network, i)
+
+    bootstrap_address = bootstrap.get_rnode_address()
+
+    command = ("run ", {"--bootstrap": bootstrap_address,
+                        "--validator-private-key": key_pair.private_key,
+                        "--validator-public-key": key_pair.public_key,
+                        "--host": name
+                        })
+
+    logging.info(f"Starting peer node {name} with command: `{command}`")
+
+    return create_node_container(docker_client, image, name, network, bonds_file, command, rnode_timeout, [], allowed_peers, memory, cpuset_cpus)
+
+
 def create_peer_nodes(docker_client,
                       bootstrap,
                       network,
@@ -224,34 +244,16 @@ def create_peer_nodes(docker_client,
                       image=default_image,
                       memory="1024m",
                       cpuset_cpus="0"):
-    """
-    Create peer nodes
-    """
     assert len(set(key_pairs)) == len(key_pairs), "There shouldn't be any duplicates in the key pairs"
 
-    def peer_name(i): return f"peer{i}.{network}"
-
     if allowed_peers is None:
-        allowed_peers = [bootstrap.name] + [peer_name(i) for i in range(0, len(key_pairs))]
+        allowed_peers = [bootstrap.name] + [make_peer_name(network, i) for i in range(0, len(key_pairs))]
 
-    bootstrap_address = bootstrap.get_rnode_address()
-
-    logging.info(f"Create {len(key_pairs)} peer nodes to connect to bootstrap {bootstrap_address}.")
-
-    def create_peer(i, key_pair):
-        name = peer_name(i)
-
-        command = ("run ", {"--bootstrap": bootstrap_address,
-                            "--validator-private-key": key_pair.private_key,
-                            "--validator-public-key": key_pair.public_key,
-                            "--host": name
-                            })
-
-        logging.info(f"Starting peer node {name} with command: `{command}`")
-
-        return create_node_container(docker_client, image, name, network, bonds_file, command, rnode_timeout, [], allowed_peers, memory, cpuset_cpus)
-
-    return [create_peer(i, key_pair) for i, key_pair in enumerate(key_pairs)]
+    result = []
+    for i, key_pair in enumerate(key_pairs):
+        peer_node = create_peer(docker_client, image, network, bonds_file, rnode_timeout, allowed_peers, memory, cpuset_cpus, bootstrap, i, key_pair)
+        result.append(peer_node)
+    return result
 
 
 @contextmanager
