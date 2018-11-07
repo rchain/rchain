@@ -18,6 +18,7 @@ import org.scalatest._
 import org.scalatest.concurrent.ScalaFutures
 
 import scala.Function.const
+import scala.collection.parallel.ParSeq
 import scala.collection.{immutable, mutable}
 import scala.concurrent.Future
 import scala.util.{Random, Right}
@@ -39,14 +40,14 @@ trait ReplayRSpaceTests
       persist: Boolean
   )(
       implicit matcher: Match[P, Nothing, A, R]
-  ): List[Option[(ContResult[C, P, K], Seq[Result[R]])]] =
+  ): ParSeq[Option[(ContResult[C, P, K], Seq[Result[R]])]] =
     (if (shuffle) Random.shuffle(range.toList) else range.toList).par.map { i: Int =>
       logger.debug("Started consume {}", i)
       val res =
         space.consume(channelsCreator(i), patterns, continuationCreator(i), persist).right.get
       logger.debug("Finished consume {}", i)
       res
-    }.toList
+    }
 
   def produceMany[C, P, A, R, K](
       space: IdISpace[C, P, Nothing, A, R, K],
@@ -57,13 +58,13 @@ trait ReplayRSpaceTests
       persist: Boolean
   )(
       implicit matcher: Match[P, Nothing, A, R]
-  ): List[Option[(ContResult[C, P, K], immutable.Seq[Result[R]])]] =
+  ): ParSeq[Option[(ContResult[C, P, K], immutable.Seq[Result[R]])]] =
     (if (shuffle) Random.shuffle(range.toList) else range.toList).par.map { i: Int =>
       logger.debug("Started produce {}", i)
       val res = space.produce(channelCreator(i), datumCreator(i), persist).right.get
       logger.debug("Finished produce {}", i)
       res
-    }.toList
+    }
 
   "reset to a checkpoint from a different branch" should "work" in withTestSpaces {
     (space, replaySpace) =>
