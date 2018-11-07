@@ -1,6 +1,7 @@
 package coop.rchain.grpcmonix
 
 import scala.concurrent.Future
+import scala.util.control.NonFatal
 
 import coop.rchain.shared.{Log, LogSource}
 
@@ -74,7 +75,7 @@ object GrpcMonix {
           observer.onNext(value)
           observer.onCompleted()
         } catch {
-          case t: Throwable => logger.warn(s"Failed to send response: ${t.getMessage}")
+          case NonFatal(e) => logger.warn(s"Failed to send a response: ${e.getMessage}")
         }
     }
 
