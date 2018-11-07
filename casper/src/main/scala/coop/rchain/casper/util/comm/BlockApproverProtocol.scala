@@ -22,6 +22,7 @@ import coop.rchain.shared._
 import monix.execution.Scheduler
 
 import scala.util.Try
+import scala.concurrent.duration.Duration
 
 /**
   * Validator side of the protocol defined in
@@ -141,6 +142,7 @@ object BlockApproverProtocol {
             .or("Mismatch between number of candidate deploys and expected number of deploys.")
       stateHash <- runtimeManager
                     .replayComputeState(runtimeManager.emptyStateHash, blockDeploys)
+                    .runSyncUnsafe(Duration.Inf)
                     .leftMap { case (_, status) => s"Failed status during replay: $status." }
       _ <- (stateHash == postState.tuplespace)
             .either(())
