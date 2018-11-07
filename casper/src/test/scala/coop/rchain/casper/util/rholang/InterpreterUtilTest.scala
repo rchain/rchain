@@ -1,41 +1,26 @@
 package coop.rchain.casper.util.rholang
 
-import com.google.protobuf.ByteString
-import InterpreterUtil._
-import coop.rchain.catscontrib.Capture._
-import coop.rchain.casper.{BlockDag, MultiParentCasperInstances}
-import coop.rchain.casper.protocol.{Event => CasperEvent, _}
-import coop.rchain.casper.util.{EventConverter, ProtoUtil}
-import coop.rchain.rholang.interpreter.{accounting, Runtime}
-import org.scalatest.{FlatSpec, Matchers}
-import cats.{Id, Monad}
-import cats.data.State
-import cats.mtl.implicits._
 import java.nio.file.Files
 
-import cats.effect.Bracket
-import cats.mtl.MonadState
+import cats.mtl.implicits._
+import cats.{Id, Monad}
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.casper.helper._
+import coop.rchain.casper.BlockDag
 import coop.rchain.casper.helper.BlockGenerator._
+import coop.rchain.casper.helper._
+import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.rholang.InterpreterUtil._
+import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.catscontrib.effect.implicits.bracketTry
 import coop.rchain.models.PCost
 import coop.rchain.p2p.EffectsTestInstances.LogStub
-import coop.rchain.rspace.Checkpoint
-import coop.rchain.shared.{Log, Time}
-import coop.rchain.rspace.trace.Event
-import coop.rchain.rspace.trace.Event._
-import coop.rchain.shared.AttemptOps._
-import monix.execution.Scheduler
+import coop.rchain.rholang.interpreter.{Runtime, accounting}
+import coop.rchain.shared.Time
 import monix.execution.Scheduler.Implicits.global
-import scodec.Codec
-
-import scala.collection.immutable
-import scala.collection.immutable.HashMap
-import scala.concurrent.SyncVar
-import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
-import coop.rchain.catscontrib.effect.implicits.bracketTry
+import org.scalatest.{FlatSpec, Matchers}
 
 import scala.util.Try
 
