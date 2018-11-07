@@ -34,7 +34,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       implicit scheduler: Scheduler
   ): Seq[Par] = {
     val runtime                   = runtimeContainer.take()
-    val (_, Seq(processedDeploy)) = newEval(deploy :: Nil, runtime, start)
+    val (_, Seq(processedDeploy)) = newEval(deploy :: Nil, runtime, start).unsafeRunSync
 
     //TODO: Is better error handling needed here?
     val result: Seq[Datum[ListParWithRandom]] =
@@ -53,34 +53,32 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       hash: StateHash,
       terms: Seq[InternalProcessedDeploy],
       time: Option[Long] = None
-  )(
-      implicit scheduler: Scheduler
-  ): Either[(Option[Deploy], Failed), StateHash] = {
-    val runtime = runtimeContainer.take()
-    unsafeSetTimestamp(time, runtime)
-    val result = replayEval(terms, runtime, hash)
-    runtimeContainer.put(runtime)
-    result
-  }
+  ): Task[Either[(Option[Deploy], Failed), StateHash]] =
+    for {
+      runtime <- Task.delay(runtimeContainer.take())
+      _       <- setTimestamp(time, runtime)
+      result  <- replayEval(terms, runtime, hash)
+      _       <- Task.delay(runtimeContainer.put(runtime))
+    } yield result
 
-  def computeState(hash: StateHash, terms: Seq[Deploy], time: Option[Long] = None)(
-      implicit scheduler: Scheduler
-  ): (StateHash, Seq[InternalProcessedDeploy]) = {
-    val runtime = runtimeContainer.take()
-    unsafeSetTimestamp(time, runtime)
-    val result = newEval(terms, runtime, hash)
-    runtimeContainer.put(runtime)
-    result
-  }
+  def computeState(
+      hash: StateHash,
+      terms: Seq[Deploy],
+      time: Option[Long] = None
+  ): Task[(StateHash, Seq[InternalProcessedDeploy])] =
+    for {
+      runtime <- Task.delay(runtimeContainer.take())
+      _       <- setTimestamp(time, runtime)
+      result  <- newEval(terms, runtime, hash)
+      _       <- Task.delay(runtimeContainer.put(runtime))
+    } yield result
 
-  private def unsafeSetTimestamp(time: Option[Long], runtime: Runtime)(
-      implicit scheduler: Scheduler
-  ): Unit =
+  private def setTimestamp(time: Option[Long], runtime: Runtime): Task[Unit] =
     time match {
       case Some(t) =>
         val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(t))))
-        runtime.blockTime.setParams(timestamp).unsafeRunSync
-      case None => ()
+        runtime.blockTime.setParams(timestamp)
+      case None => Task.unit
     }
 
   def storageRepr(hash: StateHash)(
@@ -173,9 +171,11 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     } yield (result.patterns, result.continuation.taggedCont.parBody.get.body)
   }
 
-  private def newEval(terms: Seq[Deploy], runtime: Runtime, initHash: StateHash)(
-      implicit scheduler: Scheduler
-  ): (StateHash, Seq[InternalProcessedDeploy]) = {
+  private def newEval(
+      terms: Seq[Deploy],
+      runtime: Runtime,
+      initHash: StateHash
+  ): Task[(StateHash, Seq[InternalProcessedDeploy])] = {
 
     def doEval(
         terms: Seq[Deploy],
@@ -213,14 +213,13 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       }
 
     doEval(terms, Blake2b256Hash.fromByteArray(initHash.toByteArray), Vector.empty)
-      .unsafeRunSync(scheduler)
   }
 
   private def replayEval(
       terms: Seq[InternalProcessedDeploy],
       runtime: Runtime,
       initHash: StateHash
-  )(implicit scheduler: Scheduler): Either[(Option[Deploy], Failed), StateHash] = {
+  ): Task[Either[(Option[Deploy], Failed), StateHash]] = {
 
     def doReplayEval(
         terms: Seq[InternalProcessedDeploy],
@@ -260,7 +259,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
         }
       }
 
-    doReplayEval(terms, Blake2b256Hash.fromByteArray(initHash.toByteArray)).unsafeRunSync(scheduler)
+    doReplayEval(terms, Blake2b256Hash.fromByteArray(initHash.toByteArray))
   }
 
   private def injAttempt(

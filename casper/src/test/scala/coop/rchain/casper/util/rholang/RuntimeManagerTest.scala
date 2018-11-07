@@ -16,6 +16,8 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.catscontrib.effect.implicits.bracketTry
 import scala.util.Try
+import coop.rchain.catscontrib.Capture._
+import scala.concurrent.duration._
 
 class RuntimeManagerTest extends FlatSpec with Matchers {
   val storageSize = 1024L * 1024
@@ -29,7 +31,16 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
     val deploy     = ProtoUtil.termDeployNow(InterpreterUtil.mkTerm(badRholang).right.get)
     val (_, Seq(result)) =
-      runtimeManager.use(mgr => Try { mgr.computeState(mgr.emptyStateHash, deploy :: Nil) }).get
+      runtimeManager
+        .use(
+          mgr =>
+            Try {
+              mgr
+                .computeState(mgr.emptyStateHash, deploy :: Nil)
+                .runSyncUnsafe(10.seconds)
+            }
+        )
+        .get
 
     result.status.isFailed should be(true)
   }
@@ -57,7 +68,10 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
     val result = runtimeManager.use { mgr =>
       Try {
-        val (hash, _) = mgr.computeState(mgr.emptyStateHash, deploys)
+        val (hash, _) =
+          mgr
+            .computeState(mgr.emptyStateHash, deploys)
+            .runSyncUnsafe(10.seconds)
 
         mgr.captureResults(
           hash,
@@ -135,14 +149,28 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     )
     val (_, firstDeploy) =
       runtimeManager
-        .use(mgr => Try { mgr.computeState(mgr.emptyStateHash, deploy.head :: Nil) })
+        .use(
+          mgr =>
+            Try {
+              mgr.computeState(mgr.emptyStateHash, deploy.head :: Nil).runSyncUnsafe(10.seconds)
+            }
+        )
         .get
     val (_, secondDeploy) =
       runtimeManager
-        .use(mgr => Try { mgr.computeState(mgr.emptyStateHash, deploy.drop(1).head :: Nil) })
+        .use(
+          mgr =>
+            Try {
+              mgr
+                .computeState(mgr.emptyStateHash, deploy.drop(1).head :: Nil)
+                .runSyncUnsafe(10.seconds)
+            }
+        )
         .get
     val (_, compoundDeploy) =
-      runtimeManager.use(mgr => Try { mgr.computeState(mgr.emptyStateHash, deploy) }).get
+      runtimeManager
+        .use(mgr => Try { mgr.computeState(mgr.emptyStateHash, deploy).runSyncUnsafe(10.seconds) })
+        .get
     assert(firstDeploy.size == 1)
     val firstDeployCost = deployCost(firstDeploy)
     assert(secondDeploy.size == 1)
