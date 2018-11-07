@@ -21,16 +21,55 @@ object EventConverter {
 
   def toCasperEvent(event: RspaceEvent): Event = event match {
     case produce: RspaceProduce =>
-      Event(Produce(ProduceEvent(produce.channelsHash, produce.hash)))
+      Event(
+        Produce(
+          ProduceEvent(
+            produce.channelsHash,
+            produce.hash,
+            produce.channel,
+            produce.datum,
+            produce.persist
+          )
+        )
+      )
     case consume: RspaceConsume =>
-      Event(Consume(ConsumeEvent(consume.channelsHash, consume.hash)))
+      Event(
+        Consume(
+          ConsumeEvent(
+            consume.channelsHash,
+            consume.hash,
+            consume.channels,
+            consume.patterns,
+            consume.continuation,
+            consume.persist
+          )
+        )
+      )
     case RspaceComm(rspaceConsume, rspaceProduces) =>
       Event(
         Comm(
           CommEvent(
-            Some(ConsumeEvent(rspaceConsume.channelsHash, rspaceConsume.hash)),
+            Some(
+              ConsumeEvent(
+                rspaceConsume.channelsHash,
+                rspaceConsume.hash,
+                rspaceConsume.channels,
+                rspaceConsume.patterns,
+                rspaceConsume.continuation,
+                rspaceConsume.persist
+              )
+            ),
             rspaceProduces
-              .map(rspaceProduce => ProduceEvent(rspaceProduce.channelsHash, rspaceProduce.hash))
+              .map(
+                rspaceProduce =>
+                  ProduceEvent(
+                    rspaceProduce.channelsHash,
+                    rspaceProduce.hash,
+                    rspaceProduce.channel,
+                    rspaceProduce.datum,
+                    rspaceProduce.persist
+                  )
+              )
           )
         )
       )
@@ -38,15 +77,44 @@ object EventConverter {
 
   def toRspaceEvent(event: Event): RspaceEvent = event match {
     case Event(Produce(produce: ProduceEvent)) =>
-      RspaceProduce.fromHash(produce.channelsHash, produce.hash)
+      RspaceProduce.fromHash(
+        produce.channelsHash,
+        produce.hash,
+        produce.channel,
+        produce.datum,
+        produce.persist
+      )
     case Event(Consume(consume: ConsumeEvent)) =>
-      RspaceConsume.fromHash(consume.channelsHash, consume.hash)
+      RspaceConsume.fromHash(
+        consume.channelsHash,
+        consume.hash,
+        consume.channels,
+        consume.patterns,
+        consume.continuation,
+        consume.persist
+      )
     case Event(Comm(CommEvent(Some(consume: ConsumeEvent), produces))) =>
       val rspaceProduces: Seq[RspaceProduce] = produces.map { produce =>
         val rspaceProduce: RspaceProduce =
-          RspaceProduce.fromHash(produce.channelsHash, produce.hash)
+          RspaceProduce.fromHash(
+            produce.channelsHash,
+            produce.hash,
+            produce.channel,
+            produce.datum,
+            produce.persist
+          )
         rspaceProduce
       }.toList
-      RspaceComm(RspaceConsume.fromHash(consume.channelsHash, consume.hash), rspaceProduces)
+      RspaceComm(
+        RspaceConsume.fromHash(
+          consume.channelsHash,
+          consume.hash,
+          consume.channels,
+          consume.patterns,
+          consume.continuation,
+          consume.persist
+        ),
+        rspaceProduces
+      )
   }
 }

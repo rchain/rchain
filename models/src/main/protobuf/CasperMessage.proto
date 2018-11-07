@@ -252,11 +252,18 @@ message Event {
 message ProduceEvent {
   bytes channelsHash = 1;
   bytes hash = 2;
+  string channel = 3;
+  string datum = 4;
+  string persist = 5;
 }
 
 message ConsumeEvent {
   bytes channelsHash = 1;
   bytes hash = 2;
+  string channels = 3;
+  string patterns = 4;
+  string continuation = 5;
+  string persist = 6;
 }
 
 message CommEvent {

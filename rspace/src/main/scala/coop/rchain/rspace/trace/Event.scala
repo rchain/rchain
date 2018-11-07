@@ -10,6 +10,7 @@ import coop.rchain.rspace.trace.Produce.logger
 import scala.collection.immutable.Seq
 import scodec.Codec
 import scodec.codecs._
+import scodec.codecs.implicits._
 
 /**
   * Broadly speaking, there are two kinds of events in RSpace,
@@ -46,7 +47,13 @@ object COMM {
 
 sealed trait IOEvent extends Event
 
-case class Produce private (channelsHash: Blake2b256Hash, hash: Blake2b256Hash) extends IOEvent {
+case class Produce(
+    channelsHash: Blake2b256Hash,
+    hash: Blake2b256Hash,
+    channel: String = "",
+    datum: String = "",
+    persist: String = ""
+) extends IOEvent {
 
   override def equals(obj: scala.Any): Boolean = obj match {
     case produce: Produce => produce.hash == hash
@@ -56,43 +63,61 @@ case class Produce private (channelsHash: Blake2b256Hash, hash: Blake2b256Hash) 
   override def hashCode(): Int = hash.hashCode()
 
   override def toString: String =
-    s"Produce(channels: ${channelsHash.toString}, hash: ${hash.toString})"
+    s"Produce(channel: $channel, datum: $datum, persist: $persist)"
 
 }
 
 object Produce extends StrictLogging {
 
-  def unapply(arg: Produce): Option[(Blake2b256Hash, Blake2b256Hash)] =
-    Some((arg.channelsHash, arg.hash))
+  def unapply(arg: Produce): Option[(Blake2b256Hash, Blake2b256Hash, String, String, String)] =
+    Some((arg.channelsHash, arg.hash, arg.channel, arg.datum, arg.persist))
 
   def create[C, A](channel: C, datum: A, persist: Boolean)(
       implicit
       serializeC: Serialize[C],
       serializeA: Serialize[A]
   ): Produce = {
-    logger.debug("channel: {}", serializeC.encode(channel))
-    logger.debug("datum: {}", serializeA.encode(datum))
+    logger.debug("channel: {}", channel.toString)
+    logger.debug("datum: {}", datum.toString)
 
     val hashch = StableHashProvider.hash(Seq(channel))(serializeC.toCodec)
-    val hashd = StableHashProvider.hash(channel, datum, persist)
+    val hashd  = StableHashProvider.hash(channel, datum, persist)
 
     logger.debug("channel hash: {}", hashch)
     logger.debug("datum hash: {}", hashd)
 
     new Produce(
       hashch,
-      hashd
+      hashd,
+      channel.toString,
+      datum.toString,
+      persist.toString
     )
   }
 
-  def fromHash(channelsHash: Blake2b256Hash, hash: Blake2b256Hash): Produce =
-    new Produce(channelsHash, hash)
+  def fromHash(
+      channelsHash: Blake2b256Hash,
+      hash: Blake2b256Hash,
+      channel: String,
+      datum: String,
+      persist: String
+  ): Produce =
+    new Produce(channelsHash, hash, channel, datum, persist)
 
   implicit val codecProduce: Codec[Produce] =
-    (Codec[Blake2b256Hash] :: Codec[Blake2b256Hash]).as[Produce]
+    (Codec[Blake2b256Hash] :: Codec[Blake2b256Hash] :: Codec[String] :: Codec[String] :: Codec[
+      String
+    ]).as[Produce]
 }
 
-case class Consume private (channelsHash: Blake2b256Hash, hash: Blake2b256Hash) extends IOEvent {
+case class Consume(
+    channelsHash: Blake2b256Hash,
+    hash: Blake2b256Hash,
+    channels: String = "",
+    patterns: String = "",
+    continuation: String = "",
+    persist: String = ""
+) extends IOEvent {
 
   override def equals(obj: scala.Any): Boolean = obj match {
     case consume: Consume => consume.hash == hash
@@ -102,13 +127,15 @@ case class Consume private (channelsHash: Blake2b256Hash, hash: Blake2b256Hash) 
   override def hashCode(): Int = hash.hashCode()
 
   override def toString: String =
-    s"Consume(channels: ${channelsHash.toString}, hash: ${hash.toString})"
+    s"Consume(channels: $channels, patterns: $patterns, continuation: $continuation, persist: $persist)"
 }
 
 object Consume extends StrictLogging {
 
-  def unapply(arg: Consume): Option[(Blake2b256Hash, Blake2b256Hash)] =
-    Some((arg.channelsHash, arg.hash))
+  def unapply(
+      arg: Consume
+  ): Option[(Blake2b256Hash, Blake2b256Hash, String, String, String, String)] =
+    Some((arg.channelsHash, arg.hash, arg.channels, arg.patterns, arg.continuation, arg.persist))
 
   def create[C, P, K](channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
       implicit
@@ -116,24 +143,37 @@ object Consume extends StrictLogging {
       serializeP: Serialize[P],
       serializeK: Serialize[K]
   ): Consume = {
-    logger.debug("channels: {}", channels.map(serializeC.encode))
-    logger.debug("patterns: {}", patterns.map(serializeP.encode))
-    logger.debug("cont: {}", serializeK.encode(continuation))
-    val hashch = StableHashProvider.hash(channels)(serializeC.toCodec)
-    val hashpat   = StableHashProvider.hash(channels, patterns, continuation, persist)
+    logger.debug("channels: {}", channels.toString)
+    logger.debug("patterns: {}", patterns.toString)
+    logger.debug("cont: {}", continuation.toString)
+    val hashch  = StableHashProvider.hash(channels)(serializeC.toCodec)
+    val hashpat = StableHashProvider.hash(channels, patterns, continuation, persist)
 
     logger.debug("channel hash: {}", hashch)
     logger.debug("pattern hash: {}", hashpat)
 
     new Consume(
       hashch,
-      hashpat
+      hashpat,
+      channels.toString,
+      patterns.toString,
+      continuation.toString,
+      persist.toString
     )
   }
 
-  def fromHash(channelsHash: Blake2b256Hash, hash: Blake2b256Hash): Consume =
-    new Consume(channelsHash, hash)
+  def fromHash(
+      channelsHash: Blake2b256Hash,
+      hash: Blake2b256Hash,
+      channels: String,
+      patterns: String,
+      continuation: String,
+      persist: String
+  ): Consume =
+    new Consume(channelsHash, hash, channels, patterns, continuation, persist)
 
   implicit val codecConsume: Codec[Consume] =
-    (Codec[Blake2b256Hash] :: Codec[Blake2b256Hash]).as[Consume]
+    (Codec[Blake2b256Hash] :: Codec[Blake2b256Hash] :: Codec[String] :: Codec[String] :: Codec[
+      String
+    ] :: Codec[String]).as[Consume]
 }
