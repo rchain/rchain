@@ -4,8 +4,14 @@ import os, subprocess
 from smtplib import SMTP
 from email.mime.text import MIMEText
 
-def top_commit():
-    proc = subprocess.run('git log -1',
+def top_commits():
+    cmd = """
+        for c in $(git rev-list --parents -n1 HEAD); do
+            git log -1 $c | sed 's/^/  /'
+            echo
+        done
+    """
+    proc = subprocess.run(cmd,
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT)
@@ -21,8 +27,9 @@ bn = os.environ['DRONE_BUILD_NUMBER']
 msg = MIMEText(
 f'''See {os.environ['DRONE_BUILD_LINK']}
 
-$ git log -1
-{top_commit()}
+Top commit with immediate parents:
+
+{top_commits()}
 
 -- 
 Hi Developer. Whaaat's happening? Listen. I'm gonna need you to fix

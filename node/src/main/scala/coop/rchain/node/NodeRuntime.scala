@@ -34,12 +34,10 @@ import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
 
-import io.grpc.Server
 import kamon._
 import kamon.zipkin.ZipkinReporter
 import monix.eval.Task
 import monix.execution.Scheduler
-import org.http4s.server.{Server => Http4sServer}
 import org.http4s.server.blaze._
 
 class NodeRuntime private[node] (
@@ -70,7 +68,7 @@ class NodeRuntime private[node] (
   case class Servers(
       grpcServerExternal: GrpcServer,
       grpcServerInternal: GrpcServer,
-      httpServer: Http4sServer[IO]
+      httpServer: Fiber[Task, Unit]
   )
 
   def acquireServers(runtime: Runtime)(
@@ -99,23 +97,25 @@ class NodeRuntime private[node] (
                                grpcScheduler
                              )
                              .toEffect
-      prometheusReporter = new NewPrometheusReporter()
 
-      httpServer <- LiftIO[Task].liftIO {
-                     val prometheusService     = NewPrometheusReporter.service(prometheusReporter)
-                     implicit val contextShift = IO.contextShift(scheduler)
-                     BlazeBuilder[IO]
-                       .bindHttp(conf.server.httpPort, "0.0.0.0")
-                       .mountService(prometheusService, "/metrics")
-                       .mountService(VersionInfo.service, "/version")
-                       .start
-                   }.toEffect
+      prometheusReporter = new NewPrometheusReporter()
+      prometheusService  = NewPrometheusReporter.service(prometheusReporter)
+
+      httpServerFiber <- BlazeBuilder[Task]
+                          .bindHttp(conf.server.httpPort, "0.0.0.0")
+                          .mountService(prometheusService, "/metrics")
+                          .mountService(VersionInfo.service, "/version")
+                          .resource
+                          .use(_ => Task.never[Unit])
+                          .start
+                          .toEffect
+
       _ <- Task.delay {
             Kamon.addReporter(prometheusReporter)
             Kamon.addReporter(new JmxReporter())
             Kamon.addReporter(new ZipkinReporter())
           }.toEffect
-    } yield Servers(grpcServerExternal, grpcServerInternal, httpServer)
+    } yield Servers(grpcServerExternal, grpcServerInternal, httpServerFiber)
   }
 
   def clearResources(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
@@ -134,11 +134,11 @@ class NodeRuntime private[node] (
       _   <- transport.shutdown(msg)
       _   <- log.info("Shutting down HTTP server....")
       _   <- Task.delay(Kamon.stopAllReporters())
-      _   <- LiftIO[Task].liftIO(servers.httpServer.shutdown).attempt
+      _   <- servers.httpServer.cancel
       _   <- log.info("Shutting down interpreter runtime ...")
-      _   <- Task.delay(runtime.close())
+      _   <- runtime.close()
       _   <- log.info("Shutting down Casper runtime ...")
-      _   <- Task.delay(casperRuntime.close())
+      _   <- casperRuntime.close()
       _   <- log.info("Bringing BlockStore down ...")
       _   <- blockStore.close().value
       _   <- log.info("Goodbye.")
@@ -320,11 +320,13 @@ class NodeRuntime private[node] (
       blockMap,
       Metrics.eitherT(Monad[Task], metrics)
     )
-    _              <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
-    oracle         = SafetyOracle.turanOracle[Effect](Monad[Effect])
-    runtime        = Runtime.create(storagePath, storageSize, storeType)
-    _              <- runtime.injectEmptyRegistryRoot[Effect]
-    casperRuntime  = Runtime.create(casperStoragePath, storageSize, storeType)
+    _       <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
+    oracle  = SafetyOracle.turanOracle[Effect](Monad[Effect])
+    runtime = Runtime.create(storagePath, storageSize, storeType)(scheduler)
+    _ <- Runtime
+          .injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
+          .toEffect
+    casperRuntime  = Runtime.create(casperStoragePath, storageSize, storeType)(scheduler)
     runtimeManager = RuntimeManager.fromRuntime(casperRuntime)(scheduler)
     casperPacketHandler <- CasperPacketHandler
                             .of[Effect](conf.casper, defaultTimeout, runtimeManager, _.value)(

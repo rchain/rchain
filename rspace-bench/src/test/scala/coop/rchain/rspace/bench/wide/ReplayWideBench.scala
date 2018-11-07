@@ -46,21 +46,22 @@ class ReplayFineBenchState extends ReplayWideBenchState {
 abstract class ReplayWideBenchState extends WideBenchBaseState {
 
   implicit val rand: Blake2b512Random        = Blake2b512Random(128)
-  var runReplayTask: Task[Vector[Throwable]] = Task.now(Vector.empty)
+  var runReplayTask: Task[Vector[Throwable]] = null
 
   @Setup(value = Level.Iteration)
   override def doSetup(): Unit = {
     super.doSetup()
 
     assert(createTest(setupTerm, runtime.reducer).unsafeRunSync.isEmpty)
-    val setupCheckpoint = runtime.space.createCheckpoint()
-    runtime.replaySpace.rig(setupCheckpoint.root, setupCheckpoint.log)
-    assert(createTest(setupTerm, runtime.replayReducer).unsafeRunSync.isEmpty)
-    val runTask = createTest(term, runtime.reducer)
-    assert(runTask.unsafeRunSync.isEmpty)
-
-    val checkpoint = runtime.space.createCheckpoint()
-    runtime.replaySpace.rig(checkpoint.root, checkpoint.log)
-    runReplayTask = createTest(term, runtime.replayReducer)
+    (for {
+      setupCheckpoint <- runtime.space.createCheckpoint()
+      _               <- runtime.replaySpace.rig(setupCheckpoint.root, setupCheckpoint.log)
+      _               = assert(createTest(setupTerm, runtime.replayReducer).unsafeRunSync.isEmpty)
+      runTask         = createTest(term, runtime.reducer)
+      _               = assert(runTask.unsafeRunSync.isEmpty)
+      checkpoint      <- runtime.space.createCheckpoint()
+      _               <- runtime.replaySpace.rig(checkpoint.root, checkpoint.log)
+      _               = runReplayTask = createTest(term, runtime.replayReducer)
+    } yield ()).unsafeRunSync
   }
 }

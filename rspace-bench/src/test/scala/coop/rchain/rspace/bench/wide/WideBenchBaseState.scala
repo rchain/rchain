@@ -32,7 +32,7 @@ abstract class WideBenchBaseState {
   var setupTerm: Option[Par] = None
   var term: Option[Par]      = None
 
-  var runTask: Task[Vector[Throwable]] = Task.now(Vector.empty)
+  var runTask: Task[Vector[Throwable]] = null
 
   implicit def readErrors = () => runtime.readAndClearErrorVector()
 
@@ -55,15 +55,16 @@ abstract class WideBenchBaseState {
     runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
     runtime.replayReducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
 
-    val emptyCheckpoint = runtime.space.createCheckpoint()
-    //make sure we always start from clean rspace & trie
-    runtime.replaySpace.clear()
-    runtime.replaySpace.reset(emptyCheckpoint.root)
-    runtime.space.clear()
-    runtime.space.reset(emptyCheckpoint.root)
+    (for {
+      emptyCheckpoint <- runtime.space.createCheckpoint()
+      //make sure we always start from clean rspace & trie
+      _ <- runtime.replaySpace.clear()
+      _ <- runtime.replaySpace.reset(emptyCheckpoint.root)
+      _ <- runtime.space.clear()
+    } yield (runtime.space.reset(emptyCheckpoint.root))).unsafeRunSync
   }
 
   @TearDown
   def tearDown(): Unit =
-    runtime.close()
+    runtime.close().unsafeRunSync
 }

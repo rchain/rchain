@@ -1,37 +1,36 @@
 package coop.rchain.rholang.interpreter.accounting
 import java.nio.file.Files
 
-import cats.Id
-import cats.effect.Sync
-import coop.rchain.crypto.hash.Blake2b512Random
 import cats.implicits._
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
-import coop.rchain.rholang.{PrettyPrinted, ProcGen}
 import coop.rchain.rholang.interpreter._
+import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{PPar, Proc}
 import coop.rchain.rholang.syntax.rholang_mercury.PrettyPrinter
+import coop.rchain.rholang.{GenTools, PrettyPrinted, ProcGen}
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Context, RSpace}
 import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.Arbitrary
 import org.scalacheck.Test.Parameters
-import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.prop.PropertyChecks
+import org.scalatest.{FlatSpec, Matchers}
 
 import scala.concurrent.duration._
-import monix.execution.Scheduler.Implicits.global
 
 class CostAccountingPropertyTest extends FlatSpec with PropertyChecks with Matchers {
   import CostAccountingPropertyTest._
 
   implicit val params: Parameters = Parameters.defaultVerbose.withMinSuccessfulTests(1000)
-  implicit val procArbitrary = Arbitrary(
-    ProcGen.topLevelGen(5).map(PrettyPrinted[Proc](_, PrettyPrinter.print))
-  )
 
-  implicit val taskExecutionDuration = 5.seconds
+  def procGen(maxHeight: Int) =
+    ProcGen.topLevelGen(maxHeight).map(PrettyPrinted[Proc](_, PrettyPrinter.print))
+  implicit val procArbitrary: Arbitrary[PrettyPrinted[Proc]] = Arbitrary(procGen(5))
+
+  implicit val taskExecutionDuration: FiniteDuration = 5.seconds
 
   def cost(proc: Proc): Cost = Cost(Interpreter.buildPar(proc).apply)
 
@@ -59,6 +58,18 @@ class CostAccountingPropertyTest extends FlatSpec with PropertyChecks with Match
       )
     }
   }
+
+  it should "repeated executions have the same cost" in {
+    implicit val procListArb =
+      Arbitrary(GenTools.nonemptyLimitedList(10, procGen(5)))
+
+    forAll { ps: List[PrettyPrinted[Proc]] =>
+      val costs = 1.to(20).map(_ => costOfExecution(ps.map(_.value): _*))
+
+      haveEqualResults(costs: _*)(30.seconds)
+    }
+  }
+
 }
 
 object CostAccountingPropertyTest {
@@ -68,20 +79,22 @@ object CostAccountingPropertyTest {
       .map { _.sliding(2).forall { case List(r1, r2) => r1 == r2 } }
       .runSyncUnsafe(duration)
 
-  def createRhoISpace(): RhoISpace = {
-    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+  def createRhoISpace(): RhoISpace[Task] = {
+    import coop.rchain.catscontrib.TaskContrib._
     import coop.rchain.rholang.interpreter.storage.implicits._
     val dbDir               = Files.createTempDirectory("cost-accounting-property-test-")
     val context: RhoContext = Context.create(dbDir, 1024L * 1024L * 4)
-    val space: RhoISpace = RSpace.create[
-      Id,
-      Par,
-      BindPattern,
-      OutOfPhlogistonsError.type,
-      ListParWithRandom,
-      ListParWithRandomAndPhlos,
-      TaggedContinuation
-    ](context, Branch("test"))
+    val space: RhoISpace[Task] = RSpace
+      .create[
+        Task,
+        Par,
+        BindPattern,
+        OutOfPhlogistonsError.type,
+        ListParWithRandom,
+        ListParWithRandomAndPhlos,
+        TaggedContinuation
+      ](context, Branch("test"))
+      .unsafeRunSync
     space
   }
 

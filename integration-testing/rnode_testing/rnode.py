@@ -93,11 +93,11 @@ class Node:
     def show_block(self, block_hash):
         return self.call_rnode('show-block', block_hash)
 
-    def exec_run(self, cmd):
+    def exec_run(self, cmd, stderr=True):
         queue = Queue(1)
 
         def execution():
-            r = self.container.exec_run(cmd)
+            r = self.container.exec_run(cmd, stderr=stderr)
             queue.put((r.exit_code, r.output.decode('utf-8')))
 
         process = Process(target=execution)
@@ -117,14 +117,14 @@ class Node:
             process.join()
             raise TimeoutError(cmd, self.timeout)
 
-    def shell_out(self, *cmd):
-        exit_code, output = self.exec_run(cmd)
+    def shell_out(self, *cmd, stderr=True):
+        exit_code, output = self.exec_run(cmd, stderr=stderr)
         if exit_code != 0:
             raise NonZeroExitCodeError(command=cmd, exit_code=exit_code, output=output)
         return output
 
-    def call_rnode(self, *node_args):
-        return self.shell_out(rnode_binary, *node_args)
+    def call_rnode(self, *node_args, stderr=True):
+        return self.shell_out(rnode_binary, *node_args, stderr=stderr)
 
     def eval(self, rho_file_path):
         return self.call_rnode('eval', rho_file_path)
@@ -135,9 +135,9 @@ class Node:
     def propose(self):
         return self.call_rnode('propose')
 
-    def repl(self, rholang_code):
+    def repl(self, rholang_code, stderr=False):
         quoted_rholang_code = shlex.quote(rholang_code)
-        return self.shell_out('sh', '-c', f'echo {quoted_rholang_code} | {rnode_binary} repl')
+        return self.shell_out('sh', '-c', f'echo {quoted_rholang_code} | {rnode_binary} repl', stderr=stderr)
 
     __timestamp_rx = "\\d\\d:\\d\\d:\\d\\d\\.\\d\\d\\d"
     __log_message_rx = re.compile(f"^{__timestamp_rx} (.*?)(?={__timestamp_rx})", re.MULTILINE | re.DOTALL)
@@ -159,6 +159,12 @@ def create_node_container(docker_client, image, name, network, bonds_file, comma
     cmd, args = command
     str_command = cmd + " " + " ".join(f"{k} {v}" for (k, v) in args.items())
 
+    env = {}
+    java_options = os.environ.get('_JAVA_OPTIONS')
+    if java_options is not None:
+        env['_JAVA_OPTIONS'] = java_options
+    logging.info('Using _JAVA_OPTIONS: {}'.format(java_options))
+
     container = docker_client.containers.run(image,
                                              name=name,
                                              user='root',
@@ -173,7 +179,8 @@ def create_node_container(docker_client, image, name, network, bonds_file, comma
                                                            f"{deploy_dir}:{rnode_deploy_dir}"
                                                        ] + extra_volumes,
                                              command=str_command,
-                                             hostname=name)
+                                             hostname=name,
+                                             environment=env)
     return Node(container, deploy_dir, docker_client, rnode_timeout, network)
 
 

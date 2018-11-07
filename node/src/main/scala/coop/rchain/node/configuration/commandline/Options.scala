@@ -264,7 +264,12 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     )
 
     val validatorPrivateKey = opt[String](
-      descr = "Base16 encoding of the private key to use for signing a proposed blocks."
+      descr = "Base16 encoding of the private key to use for signing a proposed blocks. " +
+        "It is not recommended to use in production since private key could be revealed through the process table"
+    )
+
+    val validatorPrivateKeyPath = opt[Path](
+      descr = "Path to the base16 encoded private key to use for signing a proposed blocks."
     )
 
     val validatorSigAlgorithm = opt[String](

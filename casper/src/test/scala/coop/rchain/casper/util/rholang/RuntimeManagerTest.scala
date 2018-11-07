@@ -12,6 +12,7 @@ import coop.rchain.shared.StoreType
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.catscontrib.Capture._
+import scala.concurrent.duration._
 
 class RuntimeManagerTest extends FlatSpec with Matchers {
   val storageSize      = 1024L * 1024
@@ -20,9 +21,11 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   val runtimeManager   = RuntimeManager.fromRuntime(activeRuntime)
 
   "computeState" should "capture rholang errors" in {
-    val badRholang       = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
-    val deploy           = ProtoUtil.termDeployNow(InterpreterUtil.mkTerm(badRholang).right.get)
-    val (_, Seq(result)) = runtimeManager.computeState(runtimeManager.emptyStateHash, deploy :: Nil)
+    val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
+    val deploy     = ProtoUtil.termDeployNow(InterpreterUtil.mkTerm(badRholang).right.get)
+    val (_, Seq(result)) = runtimeManager
+      .computeState(runtimeManager.emptyStateHash, deploy :: Nil)
+      .runSyncUnsafe(10.seconds)
 
     result.status.isFailed should be(true)
   }
@@ -48,13 +51,17 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       )
     )
 
-    val (hash, _) = runtimeManager.computeState(runtimeManager.emptyStateHash, deploys)
+    val (hash, _) =
+      runtimeManager.computeState(runtimeManager.emptyStateHash, deploys).runSyncUnsafe(10.seconds)
     val result = runtimeManager.captureResults(
       hash,
-      InterpreterUtil
-        .mkTerm(s""" for(nn <- @"nn"){ nn!("value", "$captureChannel") } """)
-        .right
-        .get,
+      ProtoUtil.deployDataToDeploy(
+        ProtoUtil.sourceDeploy(
+          s""" for(nn <- @"nn"){ nn!("value", "$captureChannel") } """,
+          0L,
+          accounting.MAX_VALUE
+        )
+      ),
       captureChannel
     )
 
@@ -65,7 +72,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   it should "handle multiple results and no results appropriately" in {
     val n    = 8
     val code = (1 to n).map(i => s""" @"__SCALA__"!($i) """).mkString("|")
-    val term = InterpreterUtil.mkTerm(code).right.get
+    val term = ProtoUtil.deployDataToDeploy(ProtoUtil.sourceDeploy(code, 0L, accounting.MAX_VALUE))
     val manyResults =
       runtimeManager.captureResults(runtimeManager.emptyStateHash, term, "__SCALA__")
     val noResults =
@@ -115,11 +122,15 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         )
     )
     val (_, firstDeploy) =
-      runtimeManager.computeState(runtimeManager.emptyStateHash, deploy.head :: Nil)
+      runtimeManager
+        .computeState(runtimeManager.emptyStateHash, deploy.head :: Nil)
+        .runSyncUnsafe(10.seconds)
     val (_, secondDeploy) =
-      runtimeManager.computeState(runtimeManager.emptyStateHash, deploy.drop(1).head :: Nil)
+      runtimeManager
+        .computeState(runtimeManager.emptyStateHash, deploy.drop(1).head :: Nil)
+        .runSyncUnsafe(10.seconds)
     val (_, compoundDeploy) =
-      runtimeManager.computeState(runtimeManager.emptyStateHash, deploy)
+      runtimeManager.computeState(runtimeManager.emptyStateHash, deploy).runSyncUnsafe(10.seconds)
     assert(firstDeploy.size == 1)
     val firstDeployCost = deployCost(firstDeploy)
     assert(secondDeploy.size == 1)

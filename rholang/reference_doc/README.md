@@ -7,6 +7,7 @@ Table of contents are preliminary and subject to change.
 * [Sends and Receives](sends_and_receives/)
 * [Primitive Types and Operators](primitives/)
 * [Unforgeable Names](unforgeable_names/)
+* [New](new/)
 * [Registry](registry/)
 * [System Powerbox](system_powerbox/)
 * [Conditionals](conditionals/)
@@ -14,6 +15,7 @@ Table of contents are preliminary and subject to change.
 * [Patterns](patterns/)
 * [Shadowing](shadowing/)
 * [Pattern Matching](pattern_matching/) Derek, patterns and matching go together? Is there a need for patterns without matching?
+* [Match](match/)
 * [Normalization Process](normalization process/)
 * [Data Structures](data_structures/)
 
