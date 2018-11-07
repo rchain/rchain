@@ -12,51 +12,53 @@
 //  ==> signature data == 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a209521551b4a8ae2cf0ba83aaf6996652b81d6a83d70985bc6f16ac6eb35f2f2dd1001
 //  ==> signature == 29c68a1d8e792eeaf88158cfcb9a6038ebdfea81c7193025c41f3f3b6731e53c3d593b8d773df11caee97d5933623eb9fa60992cab75b770cacfb873f6182c0a
 //URI derived from pk == `rho:id:j6trahbxycumerwpr5qype7j43b7eqh8auebwsa9nn68if47gswh73`
+
+// ListOpsCh == Unforgeable(0xaaf9a55056836d029ff045b02d52dc84d8b489ff67c54a619e258dff6e5d275f)
 new Either, rs(`rho:registry:insertSigned:ed25519`), uriOut, rl(`rho:registry:lookup`), ListOpsCh in {
-  rl!(`rho:id:dputnspi15oxxnyymjrpu7rkaok3bjkiwq84z7cqcrx4ktqfpyapn4`, *ListOpsCh) |
-  for(@(_, ListOps) <- ListOpsCh) {
-    //Right-biased flatMap; f must also return an Either
-    contract Either(@"flatMap", @either, f, return) = {
-      match either {
-        ("Right", value) => { f!(value, *return) }
-        ("Left", _)      => { return!(either) }
-      }
+   rl!(`rho:id:dputnspi15oxxnyymjrpu7rkaok3bjkiwq84z7cqcrx4ktqfpyapn4`, *ListOpsCh) |
+   for(@(_, ListOps) <- ListOpsCh) {
+    contract Either(@"garbage1", @either, f, return) = {
+      Nil
     } |
-
-    //Right-biased map to transform an Either
-    contract Either(@"map", @either, f, return) = {
-      match either {
-        ("Right", value) => {
-          new mappedResultCh in {
-            f!(value, *mappedResultCh) |
-            for(@mappedResult <- mappedResultCh) {
-              return!(("Right", mappedResult))
-            }
-          }
-        }
-        ("Left", _) => return!(either)
-      }
+    contract Either(@"garbage2", @either, f, return) = {
+      Nil
     } |
-
-    //Composes a list of functions returning Either into a
-    //single result by using flatMap. Similar to following Scala code:
-    //for {
-    //  r0 <- Right(input)
-    //  r1 <- f1(r0)
-    //  r2 <- f2(r1)
-    //  ...
-    //} yield fn
-    contract Either(@"compose", @input, @functions, return) = {
-      new combinator in {
-        contract combinator(@head, @accumulatedValue, return) = {
-          Either!("flatMap", accumulatedValue, head, *return)
-        } |
-        @ListOps!("fold", functions, ("Right", input), *combinator, *return)
-      }
-    }
+    contract Either(@"garbage3", @input, @functions, return) = {
+      Nil
+    } |
+contract Either(@"garbage4", @either, f, return) = {
+Nil
+} |
+contract Either(@"garbage5", @either, f, return) = {
+Nil
+} |
+contract Either(@"garbage6", @either, f, return) = {
+Nil
+} |
+contract Either(@"garbage7", @either, f, return) = {
+Nil
+} |
+contract Either(@"garbage8", @either, f, return) = {
+Nil
+} |
+contract Either(@"garbage9", @either, f, return) = {
+Nil
+} |
+contract Either(@"garbage10", @either, f, return) = {
+Nil
+} |
+contract Either(@"garbage11", @either, f, return) = {
+Nil
+} |
+contract Either(@"garbage12", @either, f, return) = {
+Nil
+} |
+contract Either(@"garbage13", @either, f, return) = {
+Nil
+}
   } |
-  
-  rs!(
+
+   rs!(
     "89a6d9c47f360e8ce145f8fe3c773786dc86bd0e70d19643d02b0eb126473c55".hexToBytes(), 
     (9223372036854775807, bundle+{*Either}), 
     "29c68a1d8e792eeaf88158cfcb9a6038ebdfea81c7193025c41f3f3b6731e53c3d593b8d773df11caee97d5933623eb9fa60992cab75b770cacfb873f6182c0a".hexToBytes(), 

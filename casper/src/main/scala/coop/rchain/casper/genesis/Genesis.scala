@@ -36,10 +36,10 @@ object Genesis {
       faucetCode: String => String
   ): List[Deploy] =
     List(
-      //StandardDeploys.listOps,
-      //StandardDeploys.either,
-      StandardDeploys.nonNegativeNumber,
-      StandardDeploys.makeMint
+      StandardDeploys.listOps,
+      StandardDeploys.either
+      //StandardDeploys.nonNegativeNumber,
+      //StandardDeploys.makeMint
       //StandardDeploys.makePoS,
       //StandardDeploys.basicWallet,
       //StandardDeploys.basicWalletFaucet,
