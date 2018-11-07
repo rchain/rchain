@@ -31,7 +31,7 @@ object Resources {
         })
     )
 
-  def mkRhoISpace[F[_]: Sync, A](
+  def mkRhoISpace[F[_]: Sync](
       prefix: String = "",
       branch: String = "test",
       mapSize: Long = 1024L * 1024L * 4

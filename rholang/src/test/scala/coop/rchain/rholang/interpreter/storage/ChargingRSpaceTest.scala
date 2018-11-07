@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter.storage
 
 import java.nio.file.Files
 
-import cats.effect.Sync
+import cats.effect.{Resource, Sync}
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -11,11 +11,12 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.Resources.mkRhoISpace
 import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace, RhoPureSpace}
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccounting, _}
 import coop.rchain.rholang.interpreter.errors
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
-import coop.rchain.rholang.interpreter.storage.ChargingRSpaceTest._
+import coop.rchain.rholang.interpreter.storage.ChargingRSpaceTest.{ChargingRSpace, _}
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Match, _}
 import monix.eval.Task
@@ -334,15 +335,21 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
   override type FixtureParam = TestFixture
 
   override protected def withFixture(test: OneArgTest): Outcome = {
-    implicit val costAlg    = CostAccounting.unsafe[Task](CostAccount(0))
-    implicit val pureRSpace = ChargingRSpaceTest.createTestISpace()
-    implicit val s          = implicitly[Sync[Task]]
-    val chargingRSpace      = ChargingRSpace.pureRSpace(s, costAlg, pureRSpace)
-    try {
-      test(TestFixture(chargingRSpace, costAlg))
-    } finally {
-      pureRSpace.close()
+    val costAlg = CostAccounting.unsafe[Task](CostAccount(0))
+
+    def mkChargingRspace(rhoISpace: RhoISpace[Task]): Task[ChargingRSpace] = {
+      val pureRSpace = ChargingRSpaceTest.createTestISpace(rhoISpace)
+      val s          = implicitly[Sync[Task]]
+      Task.delay(ChargingRSpace.pureRSpace(s, costAlg, pureRSpace))
     }
+
+    val chargingRSpaceResource =
+      mkRhoISpace[Task]("rchain-charging-rspace-test-")
+        .flatMap(rhoISpace => Resource.make(mkChargingRspace(rhoISpace))(_.close()))
+
+    chargingRSpaceResource
+      .use(chargingRSpace => Task.delay { test(TestFixture(chargingRSpace, costAlg)) })
+      .runSyncUnsafe(10.seconds)
   }
 }
 
@@ -373,9 +380,7 @@ object ChargingRSpaceTest {
     TaggedContinuation(ParBody(ParWithRandom(par, r)))
 
   // This test ISpace wraps regular RhoISpace but adds predictable match cost
-  def createTestISpace(): RhoISpace[Task] = new RhoISpace[Task] {
-    private val rspace = createRhoISpace()
-
+  def createTestISpace(rspace: RhoISpace[Task]): RhoISpace[Task] = new RhoISpace[Task] {
     override def consume(
         channels: immutable.Seq[Par],
         patterns: immutable.Seq[BindPattern],
@@ -453,22 +458,6 @@ object ChargingRSpaceTest {
         channels: immutable.Seq[Par]
     ): Task[immutable.Seq[internal.WaitingContinuation[BindPattern, TaggedContinuation]]] = ???
     override def clear(): Task[Unit]                                                      = ???
-  }
-
-  def createRhoISpace(): RhoISpace[Task] = {
-    import coop.rchain.rholang.interpreter.storage.implicits._
-    val dbDir               = Files.createTempDirectory("rchain-charging-rspace-test-")
-    val context: RhoContext = Context.create(dbDir, 1024L * 1024L * 4)
-    val space: Task[RhoISpace[Task]] = RSpace.create[
-      Task,
-      Par,
-      BindPattern,
-      OutOfPhlogistonsError.type,
-      ListParWithRandom,
-      ListParWithRandomAndPhlos,
-      TaggedContinuation
-    ](context, Branch("test"))
-    space.unsafeRunSync
   }
 
 }

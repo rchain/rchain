@@ -118,7 +118,7 @@ object CostAccountingPropertyTest {
     implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
     implicit val errLog: ErrorLog       = new ErrorLog()
 
-    mkRhoISpace[Task, RhoISpace[Task]]("cost-accounting-property-test-")
+    mkRhoISpace[Task]("cost-accounting-property-test-")
       .use { pureRSpace =>
         lazy val (_, reducer, _) =
           RholangAndScalaDispatcher.create[Task, Task.Par](pureRSpace, Map.empty, Map.empty)
