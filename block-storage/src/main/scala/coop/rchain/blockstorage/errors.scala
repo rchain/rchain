@@ -18,4 +18,9 @@ object errors {
       extends BlockDagStorageError(
         s"Checkpoints are not consecutive: ${sortedCheckpoints.map(_.path.getFileName).mkString(",")}"
       )
+
+  final case class TopoSortLengthIsTooBig(length: Long)
+      extends BlockDagStorageError(
+        s"Topological sorting of length $length was requested while maximal length is ${Int.MaxValue}"
+      )
 }
