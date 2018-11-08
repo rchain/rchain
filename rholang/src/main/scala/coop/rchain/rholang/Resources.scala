@@ -7,10 +7,13 @@ import cats.effect.ExitCase.Error
 import cats.effect.{Resource, Sync}
 import com.typesafe.scalalogging.Logger
 import coop.rchain.models._
+import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Context, RSpace}
+import coop.rchain.shared.StoreType
+import monix.execution.Scheduler
 
 import scala.reflect.io.Directory
 
@@ -55,4 +58,12 @@ object Resources {
     mkTempDir(prefix)
       .flatMap(tmpDir => Resource.make(mkRspace(tmpDir))(_.close()))
   }
+
+
+  def mkRuntime[F[_]: Applicative]( prefix: String,
+                                           storageSize: Long = 1024 * 1024,
+                                           storeType: StoreType = StoreType.LMDB
+                                         )(implicit scheduler: Scheduler): Resource[F, Runtime] =
+    mkTempDir[F](prefix)
+      .flatMap { tmpDir => Resource.pure(Runtime.create(tmpDir, storageSize, storeType))}
 }

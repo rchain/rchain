@@ -1,7 +1,8 @@
 package coop.rchain.rholang.interpreter
 import java.io.StringReader
-import java.nio.file.Files
 
+import coop.rchain.rholang.Resources.mkRuntime
+import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -12,7 +13,7 @@ class RuntimeSpec extends FlatSpec with Matchers {
   val tmpPrefix   = "rspace-store-"
   val maxDuration = 5.seconds
 
-  val runtime = Runtime.create(Files.createTempDirectory(tmpPrefix), mapSize)
+//  val runtime = Runtime.create(Files.createTempDirectory(tmpPrefix), mapSize)
 
   val channelReadOnlyError = "ReduceError: Trying to read from non-readable channel."
 
@@ -50,8 +51,11 @@ class RuntimeSpec extends FlatSpec with Matchers {
     execute(rho).swap.getOrElse(fail(s"Expected $rho to fail - it didn't."))
 
   private def execute(source: String): Either[Throwable, Runtime] =
-    Interpreter
-      .execute(runtime, new StringReader(source))
-      .attempt
+    mkRuntime[Task](tmpPrefix, mapSize)
+      .use { runtime =>
+        Interpreter
+          .execute(runtime, new StringReader(source))
+          .attempt
+      }
       .runSyncUnsafe(maxDuration)
 }
