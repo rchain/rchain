@@ -13,14 +13,14 @@ import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 
 class CompilerTests extends FunSuite with Matchers {
-  val mapSize     = 1024L * 1024L * 10
-  val tmpPrefix   = "rspace-store-"
-  val maxDuration = 5.seconds
+  private val mapSize     = 1024L * 1024L * 10
+  private val tmpPrefix   = "rspace-store-"
+  private val maxDuration = 5.seconds
 
-  val testFiles: Iterator[Path] =
+  private val testFiles: Iterator[Path] =
     Files.walk(Paths.get(getClass.getResource("/tests").getPath)).iterator().asScala
 
-  val failureTestFiles: Iterator[Path] =
+  private val failureTestFiles: Iterator[Path] =
     Files.walk(Paths.get(getClass.getResource("/failure_tests").getPath)).iterator().asScala
 
   for (file <- testFiles if file.getFileName.toString.endsWith(".rho")) {

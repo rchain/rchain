@@ -18,7 +18,7 @@ import scala.concurrent.duration._
 import scala.util.Try
 
 class RuntimeManagerTest extends FlatSpec with Matchers {
-  def runtimeManager[F[_] : Applicative]: Resource[F, RuntimeManager] =
+  private def runtimeManager[F[_] : Applicative]: Resource[F, RuntimeManager] =
     mkRuntimeManager[F]("casper-runtime-manager-test")
 
   "computeState" should "capture rholang errors" in {

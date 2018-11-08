@@ -12,9 +12,9 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.concurrent.duration._
 
 class InterpreterSpec extends FlatSpec with Matchers {
-  val mapSize     = 10L * 1024L * 1024L
-  val tmpPrefix   = "rspace-store-"
-  val maxDuration = 5.seconds
+  private val mapSize     = 10L * 1024L * 1024L
+  private val tmpPrefix   = "rspace-store-"
+  private val maxDuration = 5.seconds
 
   behavior of "Interpreter"
 
