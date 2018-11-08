@@ -9,7 +9,7 @@ import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.history.{Branch, ITrieStore, InMemoryTrieStore}
+import coop.rchain.rspace.history.{Branch, InMemoryTrieStore}
 import coop.rchain.rspace.internal.GNAT
 import coop.rchain.rspace.spaces._
 import coop.rchain.rspace.trace.{COMM, Consume, IOEvent, Produce}
@@ -803,6 +803,52 @@ trait ReplayRSpaceTests
         replaySpace.produce(channel, data, false)
       )
     }
+
+  "replay" should "result not allow for ambiguous executions" in  withTestSpaces { (space, replaySpace) =>
+    val empty = space.createCheckpoint()
+    val channel1      = "ch1"
+    val channel2      = "ch2"
+    val key1          = List(channel1, channel2)
+    val patterns: List[Pattern]      = List(Wildcard, Wildcard)
+    val continuation1  = "continuation"
+    val continuation2  = "continuation"
+    val data1         = "datum1"
+    val data2         = "datum2"
+    val data3         = "datum3"
+    //rigged log
+    val p1 = Produce.create(channel1, data3, false)
+    val p2 = Produce.create(channel2, data1, false)
+    val c1 = Consume.create(key1, patterns, continuation1, false)
+    val comm1 = COMM(c1, p1::p2::Nil)
+    //continuation1 produces data1 on ch2
+    val p3 = Produce.create(channel1, data3, false)
+    val p4 = Produce.create(channel2, data1, false)
+    val c2 = Consume.create(key1, patterns, continuation2, false)
+    val comm2 = COMM(c2, p3::p4::Nil)
+    //continuation2 produces data2 on ch2
+    val p5 = Produce.create(channel2, data1, false)
+
+    val log = p1::p2::c1::comm1::p3::p4::c2::comm2::p5::Nil
+
+    //rig
+    replaySpace.rig(empty.root, log)
+
+    //some maliciously 'random' replay order
+    replaySpace.produce(channel1, data3, false) shouldBe Right(None)
+    replaySpace.produce(channel1, data3, false) shouldBe Right(None)
+    replaySpace.produce(channel2, data2, false) shouldBe Right(None)
+    replaySpace.consume(key1, patterns, continuation2, false) shouldBe Right(None)
+
+    replaySpace.consume(key1, patterns, continuation1, false).getOrElse(None) should not be empty
+    //continuation1 produces data1 on ch2
+    replaySpace.produce(channel2, data1, false).getOrElse(None) should not be empty //runs continuation2
+    //continuation2 produces data2 on ch2
+    replaySpace.produce(channel2, data2, false) shouldBe Right(None)
+
+    replaySpace.replayData.foreach(println)
+
+    replaySpace.replayData.isEmpty shouldBe true
+  }
 }
 
 trait ReplayRSpaceTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with OptionValues {
