@@ -88,4 +88,5 @@ sealed abstract class LogInstances {
       Capture[F].capture(Logger(ev.clazz).error(msg))
   }
 
+  val logId: Log[Id] = log
 }
