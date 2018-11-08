@@ -209,24 +209,31 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
           }
     } yield ()
 
+  private def replaceFile(newFile: Path, oldFile: Path): F[Unit] =
+    Sync[F].delay {
+      Files.move(
+        newFile,
+        oldFile,
+        StandardCopyOption.REPLACE_EXISTING
+      )
+    }
+
+  private def createTmpFile(prefix: String, suffix: String): F[Path] =
+    Sync[F].delay {
+      Files.createTempFile(
+        prefix,
+        suffix
+      )
+    }
+
   private def squashLatestMessagesDataFile(): F[Unit] =
     for {
       latestMessages                <- latestMessagesRef.get
       latestMessagesLogOutputStream <- latestMessagesLogOutputStreamRef.get
       _                             = latestMessagesLogOutputStream.close()
-      tmpSquashedData <- Sync[F].delay {
-                          Files.createTempFile(
-                            "rchain-block-dag-file-storage-latest-messages-",
-                            "-squashed-data"
-                          )
-                        }
-      tmpSquashedCrc <- Sync[F].delay {
-                         Files.createTempFile(
-                           "rchain-block-dag-file-storage-latest-messages-",
-                           "-squashed-crc"
-                         )
-                       }
-      dataByteBuffer = ByteBuffer.allocate(64 * latestMessages.size)
+      tmpSquashedData               <- createTmpFile("rchain-block-dag-store-latest-messages-", "-squashed-data")
+      tmpSquashedCrc                <- createTmpFile("rchain-block-dag-store-latest-messages-", "-squashed-crc")
+      dataByteBuffer                = ByteBuffer.allocate(64 * latestMessages.size)
       _ <- latestMessages.toList.traverse_ {
             case (validator, blockHash) =>
               Sync[F].delay {
@@ -239,20 +246,8 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
       _                <- squashedCrc.update(dataByteBuffer.array())
       squashedCrcBytes <- squashedCrc.bytes
       _                <- Sync[F].delay { Files.write(tmpSquashedCrc, squashedCrcBytes) }
-      _ <- Sync[F].delay {
-            Files.move(
-              tmpSquashedData,
-              latestMessagesDataFilePath,
-              StandardCopyOption.REPLACE_EXISTING
-            )
-          }
-      _ <- Sync[F].delay {
-            Files.move(
-              tmpSquashedCrc,
-              latestMessagesCrcFilePath,
-              StandardCopyOption.REPLACE_EXISTING
-            )
-          }
+      _                <- replaceFile(tmpSquashedData, latestMessagesDataFilePath)
+      _                <- replaceFile(tmpSquashedCrc, latestMessagesCrcFilePath)
       _ <- latestMessagesLogOutputStreamRef.set(
             new FileOutputStream(latestMessagesDataFilePath.toFile, true)
           )
