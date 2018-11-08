@@ -1,7 +1,5 @@
 package coop.rchain.casper.util.rholang
 
-import java.nio.file.Files
-
 import cats.mtl.implicits._
 import cats.{Id, Monad}
 import com.google.protobuf.ByteString
@@ -17,7 +15,7 @@ import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.effect.implicits.bracketTry
 import coop.rchain.models.PCost
 import coop.rchain.p2p.EffectsTestInstances.LogStub
-import coop.rchain.rholang.interpreter.{Runtime, accounting}
+import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.Time
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
@@ -29,18 +27,9 @@ class InterpreterUtilTest
     with Matchers
     with BlockGenerator
     with BlockStoreTestFixture {
-  val initState = IndexedBlockDag.empty.copy(currentId = -1)
+  val initState: IndexedBlockDag = IndexedBlockDag.empty.copy(currentId = -1)
 
-  val runtimeManagerx = {
-
-    val storageSize      = 1024L * 1024
-    val storageDirectory = Files.createTempDirectory("casper-interp-util-test")
-    val activeRuntime    = Runtime.create(storageDirectory, storageSize)
-
-    RuntimeManager.fromRuntime(activeRuntime)
-  }
-
-  implicit val logEff = new LogStub[Id]
+  implicit val logEff: LogStub[Id] = new LogStub[Id]
 
   private def computeBlockCheckpoint(
       b: BlockMessage,
@@ -63,7 +52,7 @@ class InterpreterUtilTest
     ).flatMap(mkTerm(_).toOption)
       .map(ProtoUtil.termDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
     val genesisDeploysCost =
-      genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 0L)))
+      genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1)))
 
     val b1Deploys = Vector(
       "@1!(1)",
@@ -185,7 +174,7 @@ class InterpreterUtilTest
       "for(@a <- @1){ @123!(5 * a) }"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
     val genesisDeploysWithCost =
-      genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 0L)))
+      genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1)))
 
     val b1Deploys = Vector(
       "@5!(5)",
@@ -320,7 +309,7 @@ class InterpreterUtilTest
         }
     }.get
 
-    accCostBatch should contain theSameElementsAs (accCostsSep)
+    accCostBatch should contain theSameElementsAs accCostsSep
   }
 
   it should "return cost of deploying even if one of the programs withing the deployment throws an error" in {
@@ -360,7 +349,7 @@ class InterpreterUtilTest
           }
       }.get
 
-      accCostBatch should contain theSameElementsAs (accCostsSep)
+      accCostBatch should contain theSameElementsAs accCostsSep
     }
 
   }
@@ -652,7 +641,7 @@ class InterpreterUtilTest
       ProtoUtil.termDeployNow(term)
     })
 
-    val (tsHash, computedTsHash) = mkRuntimeManager[Try]("interpreter-util-test").use {
+    val tsHash = mkRuntimeManager[Try]("interpreter-util-test").use {
       runtimeManager =>
         Try {
           val Right((computedTsHash, processedDeploys)) =
@@ -672,7 +661,8 @@ class InterpreterUtilTest
 
           val Right(tsHash) =
             validateBlockCheckpoint[Id](block, chain, runtimeManager)
-          (tsHash, computedTsHash)
+
+          tsHash
         }
     }.get
 
