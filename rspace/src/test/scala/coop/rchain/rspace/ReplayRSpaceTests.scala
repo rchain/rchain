@@ -815,23 +815,22 @@ trait ReplayRSpaceTests
     val data1         = "datum1"
     val data2         = "datum2"
     val data3         = "datum3"
-    //rigged log
-    val p1 = Produce.create(channel1, data3, false)
-    val p2 = Produce.create(channel2, data1, false)
-    val c1 = Consume.create(key1, patterns, continuation1, false)
-    val comm1 = COMM(c1, p1::p2::Nil)
-    //continuation1 produces data1 on ch2
-    val p3 = Produce.create(channel1, data3, false)
-    val p4 = Produce.create(channel2, data1, false)
-    val c2 = Consume.create(key1, patterns, continuation2, false)
-    val comm2 = COMM(c2, p3::p4::Nil)
-    //continuation2 produces data2 on ch2
-    val p5 = Produce.create(channel2, data1, false)
 
-    val log = p1::p2::c1::comm1::p3::p4::c2::comm2::p5::Nil
+    //some maliciously 'random' play order
+    space.produce(channel1, data3, false) shouldBe Right(None)
+    space.produce(channel1, data3, false) shouldBe Right(None)
+    space.produce(channel2, data1, false) shouldBe Right(None)
+
+    space.consume(key1, patterns, continuation1, false).getOrElse(None) should not be empty
+    //continuation1 produces data1 on ch2
+    space.produce(channel2, data1, false) shouldBe Right(None) //runs continuation2
+    space.consume(key1, patterns, continuation2, false).getOrElse(None) should not be empty
+    //continuation2 produces data2 on ch2
+    space.produce(channel2, data2, false) shouldBe Right(None)
+    val afterPlay = space.createCheckpoint()
 
     //rig
-    replaySpace.rig(empty.root, log)
+    replaySpace.rig(empty.root, afterPlay.log)
 
     //some maliciously 'random' replay order
     replaySpace.produce(channel1, data3, false) shouldBe Right(None)
@@ -844,8 +843,6 @@ trait ReplayRSpaceTests
     replaySpace.produce(channel2, data1, false).getOrElse(None) should not be empty //runs continuation2
     //continuation2 produces data2 on ch2
     replaySpace.produce(channel2, data2, false) shouldBe Right(None)
-
-    replaySpace.replayData.foreach(println)
 
     replaySpace.replayData.isEmpty shouldBe true
   }
