@@ -1,44 +1,33 @@
 package coop.rchain.casper.util.rholang
 
-import java.nio.file.Files
-
-import cats.Id
 import cats.effect.Resource
+import cats.{Applicative, Id}
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.protocol.Deploy
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.catscontrib.Capture._
+import coop.rchain.catscontrib.effect.implicits.bracketTry
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.rholang.Resources.mkTempDir
-import coop.rchain.rholang.interpreter.{accounting, Runtime}
-import coop.rchain.shared.StoreType
+import coop.rchain.rholang.interpreter.accounting
+import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
-import coop.rchain.catscontrib.effect.implicits.bracketTry
-
-import scala.util.Try
-import coop.rchain.catscontrib.Capture._
 
 import scala.concurrent.duration._
-import Resources.mkRuntimeManager
-import monix.eval.Task
+import scala.util.Try
 
 class RuntimeManagerTest extends FlatSpec with Matchers {
-  val runtimeManager = mkRuntimeManager("casper-runtime-manager-test")
+  def runtimeManager[F[_] : Applicative]: Resource[F, RuntimeManager] =
+    mkRuntimeManager[F]("casper-runtime-manager-test")
+
   "computeState" should "capture rholang errors" in {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
     val deploy     = ProtoUtil.termDeployNow(InterpreterUtil.mkTerm(badRholang).right.get)
     val (_, Seq(result)) =
-      runtimeManager
-        .use(
-          mgr =>
-            Try {
-              mgr
-                .computeState(mgr.emptyStateHash, deploy :: Nil)
-                .runSyncUnsafe(10.seconds)
-            }
-        )
-        .get
+      runtimeManager[Task]
+        .use(mgr => mgr.computeState(mgr.emptyStateHash, deploy :: Nil))
+        .runSyncUnsafe(10.seconds)
 
     result.status.isFailed should be(true)
   }
@@ -64,7 +53,8 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       )
     )
 
-    val result = runtimeManager.use { mgr =>
+    val result =
+      runtimeManager[Try].use { mgr =>
       Try {
         val (hash, _) =
           mgr
@@ -95,7 +85,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val term = ProtoUtil.deployDataToDeploy(ProtoUtil.sourceDeploy(code, 0L, accounting.MAX_VALUE))
     val manyResults =
       runtimeManager
-        .use(mgr => Try { mgr.captureResults(mgr.emptyStateHash, term, "__SCALA__") })
+        .use(mgr => Try { mgr.captureResults(mgr.emptyStateHash, term) })
         .get
     val noResults =
       runtimeManager
@@ -111,16 +101,14 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   }
 
   "emptyStateHash" should "not remember previous hot store state" in {
-    implicit val timeEff = new LogicalTime[Id]
+    implicit val timeEff: LogicalTime[Id] = new LogicalTime[Id]
 
     import cats.implicits._
-
-    val testStorageDirectory = Files.createTempDirectory("casper-runtime-manager-test")
 
     val terms = ProtoUtil.basicDeploy[Id](0) :: Nil
 
     def run =
-      mkRuntimeManager[Task]("casper-runtime-manager-test")
+      runtimeManager[Task]
         .use { m =>
           val hash = m.emptyStateHash
           m.computeState(hash, terms)
@@ -148,29 +136,19 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         )
     )
     val (_, firstDeploy) =
-      runtimeManager
-        .use(
-          mgr =>
-            Try {
-              mgr.computeState(mgr.emptyStateHash, deploy.head :: Nil).runSyncUnsafe(10.seconds)
-            }
-        )
-        .get
+      runtimeManager[Task]
+        .use( mgr => mgr.computeState(mgr.emptyStateHash, deploy.head :: Nil))
+        .runSyncUnsafe(10.seconds)
+
     val (_, secondDeploy) =
-      runtimeManager
-        .use(
-          mgr =>
-            Try {
-              mgr
-                .computeState(mgr.emptyStateHash, deploy.drop(1).head :: Nil)
-                .runSyncUnsafe(10.seconds)
-            }
-        )
-        .get
+      runtimeManager[Task]
+        .use(mgr => mgr.computeState(mgr.emptyStateHash, deploy.drop(1).head :: Nil))
+        .runSyncUnsafe(10.seconds)
+
     val (_, compoundDeploy) =
-      runtimeManager
-        .use(mgr => Try { mgr.computeState(mgr.emptyStateHash, deploy).runSyncUnsafe(10.seconds) })
-        .get
+      runtimeManager[Task]
+        .use(mgr => mgr.computeState(mgr.emptyStateHash, deploy))
+        .runSyncUnsafe(10.seconds)
 
     assert(firstDeploy.size == 1)
     val firstDeployCost = deployCost(firstDeploy)
