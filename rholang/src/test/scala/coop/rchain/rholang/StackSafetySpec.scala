@@ -2,12 +2,13 @@ package coop.rchain.rholang
 
 import coop.rchain.models.Connective.ConnectiveInstance.ConnNotBody
 import coop.rchain.models.Expr.ExprInstance.GInt
-import coop.rchain.models.{Connective, Par, ProtoM}
+import coop.rchain.models._
+import coop.rchain.models.serialization.implicits._
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.StackSafetySpec.findMaxRecursionDepth
 import coop.rchain.rholang.interpreter.{Interpreter, PrettyPrinter}
 import coop.rchain.rspace.Serialize
-import monix.eval.Task
+import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.prop.TableDrivenPropertyChecks
 import org.scalatest.{Assertions, FlatSpec, Matchers}
@@ -50,8 +51,7 @@ class StackSafetySpec extends FlatSpec with TableDrivenPropertyChecks with Match
   val mapSize     = 10L * 1024L * 1024L
   val tmpPrefix   = "rspace-store-"
   val maxDuration = 20.seconds
-
-  val depth: Int = findMaxRecursionDepth()
+  val depth       = findMaxRecursionDepth()
 
   //FIXME make all the test cases work with checkAll.
   //To make this happen, we're going to have to change how AST hashCode and serialization work.
@@ -179,29 +179,36 @@ class StackSafetySpec extends FlatSpec with TableDrivenPropertyChecks with Match
 
 }
 
-class SerializationStackSafetySpec extends FlatSpec with Matchers {
+class AstTypeclassesStackSafetySpec extends FlatSpec with Matchers {
 
-  behavior of "Serialize"
+  behavior of "AST typeclasses"
 
   import coop.rchain.models.rholang.implicits._
 
-  val maxRecursionDepth: Int = findMaxRecursionDepth()
+  val maxRecursionDepth = findMaxRecursionDepth()
 
-  it should "do a round trip of a huge structure" in {
+  it should "not blow up on a huge structure" in {
 
     @tailrec
     def hugePar(n: Int, par: Par = Par(exprs = Seq(GInt(0)))): Par =
       if (n == 0) par
       else hugePar(n - 1, Par(connectives = Seq(Connective(ConnNotBody(par)))))
 
-    val par = hugePar(maxRecursionDepth)
+    val par        = hugePar(maxRecursionDepth)
+    val anotherPar = hugePar(maxRecursionDepth)
 
     noException shouldBe thrownBy {
       ProtoM.serializedSize(par).value
 
-      import coop.rchain.models.serialization.implicits._
       val encoded = Serialize[Par].encode(par)
       Serialize[Par].decode(encoded)
+
+      HashM[Par].hash[Coeval](par).value
+      par.hashCode()
+
+      EqualM[Par].equal[Coeval](par, anotherPar).value
+      par == anotherPar
+
     }
   }
 
