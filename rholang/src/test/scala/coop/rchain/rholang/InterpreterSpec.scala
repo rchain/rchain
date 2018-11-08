@@ -1,11 +1,12 @@
 package coop.rchain.rholang
 
 import java.io.StringReader
-import java.nio.file.Files
 
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
 import monix.execution.Scheduler.Implicits.global
+import coop.rchain.rholang.Resources.mkRuntime
+import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.concurrent.duration._
@@ -14,8 +15,6 @@ class InterpreterSpec extends FlatSpec with Matchers {
   val mapSize     = 10L * 1024L * 1024L
   val tmpPrefix   = "rspace-store-"
   val maxDuration = 5.seconds
-
-  val runtime = Runtime.create(Files.createTempDirectory(tmpPrefix), mapSize)
 
   behavior of "Interpreter"
 
@@ -75,7 +74,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
     )
   }
 
-  private def storageContents(): String =
+  private def storageContents(runtime : Runtime): String =
     StoragePrinter.prettyPrint(runtime.space.store)
 
   private def success(rho: String): Unit =
@@ -87,9 +86,8 @@ class InterpreterSpec extends FlatSpec with Matchers {
     execute(rho).swap.getOrElse(fail(s"Expected $rho to fail - it didn't."))
 
   private def execute(source: String): Either[Throwable, Runtime] =
-    Interpreter
-      .execute(runtime, new StringReader(source))
-      .attempt
+    mkRuntime[Task](tmpPrefix, mapSize)
+      .use{runtime => Interpreter.execute(runtime, new StringReader(source)).attempt}
       .runSyncUnsafe(maxDuration)
 
 }
