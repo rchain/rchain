@@ -11,7 +11,7 @@ import shlex
 from multiprocessing import Queue, Process
 from queue import Empty
 
-default_image = "rchain-integration-testing:latest"
+DEFAULT_IMAGE = "rchain-integration-testing:latest"
 
 rnode_binary = '/opt/docker/bin/rnode'
 rnode_directory = "/var/lib/rnode"
@@ -144,7 +144,7 @@ class Node:
         return Node.__log_message_rx.split(log_content)
 
 
-def create_node_container(docker_client, image, name, network, bonds_file, command, rnode_timeout, extra_volumes, allowed_peers, memory, cpuset_cpus):
+def create_node_container(docker_client, name, network, bonds_file, command, rnode_timeout, extra_volumes, allowed_peers, memory, cpuset_cpus, image=DEFAULT_IMAGE):
     deploy_dir = make_tempdir("rchain-integration-test")
 
     hosts_allow_file_content = \
@@ -187,7 +187,7 @@ def create_bootstrap_node(docker_client,
                           key_pair,
                           rnode_timeout,
                           allowed_peers=None,
-                          image=default_image,
+                          image=DEFAULT_IMAGE,
                           memory="1024m",
                           cpuset_cpus="0"):
 
@@ -211,14 +211,14 @@ def create_bootstrap_node(docker_client,
 
     logging.info(f"Starting bootstrap node {name}\ncommand:`{command}`")
 
-    return create_node_container(docker_client, image, name, network, bonds_file, command, rnode_timeout, volumes, allowed_peers, memory, cpuset_cpus)
+    return create_node_container(docker_client, name, network, bonds_file, command, rnode_timeout, volumes, allowed_peers, memory, cpuset_cpus)
 
 
 def make_peer_name(network, i):
     return f"peer{i}.{network}"
 
 
-def create_peer(docker_client, image, network, bonds_file, rnode_timeout, allowed_peers, memory, cpuset_cpus, bootstrap, i, key_pair):
+def create_peer(docker_client, network, bonds_file, rnode_timeout, allowed_peers, bootstrap, i, key_pair, image=DEFAULT_IMAGE, memory="1024m", cpuset_cpus="0"):
     name = make_peer_name(network, i)
 
     bootstrap_address = bootstrap.get_rnode_address()
@@ -231,7 +231,7 @@ def create_peer(docker_client, image, network, bonds_file, rnode_timeout, allowe
 
     logging.info(f"Starting peer node {name} with command: `{command}`")
 
-    return create_node_container(docker_client, image, name, network, bonds_file, command, rnode_timeout, [], allowed_peers, memory, cpuset_cpus)
+    return create_node_container(docker_client, name, network, bonds_file, command, rnode_timeout, [], allowed_peers, memory, cpuset_cpus)
 
 
 def create_peer_nodes(docker_client,
@@ -241,7 +241,7 @@ def create_peer_nodes(docker_client,
                       key_pairs,
                       rnode_timeout,
                       allowed_peers=None,
-                      image=default_image,
+                      image=DEFAULT_IMAGE,
                       memory="1024m",
                       cpuset_cpus="0"):
     assert len(set(key_pairs)) == len(key_pairs), "There shouldn't be any duplicates in the key pairs"
@@ -251,7 +251,19 @@ def create_peer_nodes(docker_client,
 
     result = []
     for i, key_pair in enumerate(key_pairs):
-        peer_node = create_peer(docker_client, image, network, bonds_file, rnode_timeout, allowed_peers, memory, cpuset_cpus, bootstrap, i, key_pair)
+        peer_node = create_peer(
+            docker_client,
+            network,
+            bonds_file,
+            rnode_timeout,
+            allowed_peers,
+            bootstrap,
+            i,
+            key_pair,
+            image=image,
+            memory=memory,
+            cpuset_cpus=cpuset_cpus,
+        )
         result.append(peer_node)
     return result
 

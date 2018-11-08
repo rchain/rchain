@@ -1,3 +1,8 @@
+import pytest
+import conftest
+
+from rnode_testing.rnode import start_bootstrap, create_peer
+
 """
 First approximation:
 1) Bootstrap node with a bonds file in the genesis block for at least one bonded validator
@@ -20,18 +25,62 @@ Second approximation:
 """
 
 
-def test_heterogenous_validators(bootstrap_node):
-    bonded_validator_key = generate_validator_key()
-    bonds_file = make_bonds_file(bonded_validator_key)
-    bootstrap_node = create_bootstrap_node(bonds_file)
-    bonded_validator_node = create_peer()
-    for _ in range(10):
-        bonded_validator_node.deploy()
-        bonded_validator_node.propose()
-    joining_validator = create_peer()
-    bond_validator(bootstrap_node, joining_validator)
-    for _ in range(10):
-        joining_validator.deploy()
-        last_block_id = joining_validator.propose()
-    unbonded_validator = create_peer()
-    unbonded_validator.wait_until_receives(last_block_id)
+BOOTSTRAP_NODE_KEYS = conftest.KeyPair(private_key='80366db5fbb8dad7946f27037422715e4176dda41d582224db87b6c3b783d709', public_key='1cd8bf79a2c1bd0afa160f6cdfeb8597257e48135c9bf5e4823f2875a1492c97')
+BONDED_VALIDATOR_KEYS = conftest.KeyPair(private_key='120d42175739387af0264921bb117e4c4c05fbe2ce5410031e8b158c6e414bb5', public_key='02ab69930f74b931209df3ce54e3993674ab3e7c98f715608a5e74048b332821')
+JOINING_VALIDATOR_KEYS = conftest.KeyPair(private_key='1f52d0bce0a92f5c79f2a88aae6d391ddf853e2eb8e688c5aa68002205f92dad', public_key='043c56051a613623cd024976427c073fe9c198ac2b98315a4baff9d333fbb42e')
+UNBONDED_VALIDATOR_KEYS = conftest.KeyPair(private_key='2bdedd2e4dd2e7b5f176b7a5bc155f10fafd3fbd9c03fb7556f2ffd22c786f8b', public_key='068e8311fe094e1a33646a1f8dfb50a5c12b49a1e5d0cf4cccf28d31b4a10255')
+
+
+@pytest.yield_fixture(scope='session')
+def validators_config():
+    validator_keys = [BONDED_VALIDATOR_KEYS]
+    with conftest.temporary_bonds_file(validator_keys) as f:
+        yield conftest.ValidatorsData(bonds_file=f, bootstrap_keys=BOOTSTRAP_NODE_KEYS, peers_keys=validator_keys)
+
+
+@pytest.yield_fixture(scope="session")
+def custom_system(request, validators_config, docker_client_session):
+    test_config = conftest.make_test_config(request)
+    yield conftest.System(test_config, docker_client_session, validators_config)
+
+
+def test_heterogenous_validators(custom_system):
+    with start_bootstrap(custom_system.docker, custom_system.config.node_startup_timeout, custom_system.config.rnode_timeout, custom_system.validators_data) as bootstrap_node:
+        bonded_validator_node = create_peer(
+            custom_system.docker,
+            bootstrap_node.network,
+            custom_system.validators_data.bonds_file,
+            custom_system.config.rnode_timeout,
+            None, # allowed_peers
+            bootstrap_node,
+            'bonded_validator',
+            BONDED_VALIDATOR_KEYS,
+        )
+        for _ in range(10):
+            bonded_validator_node.deploy()
+            bonded_validator_node.propose()
+        joining_validator = create_peer(
+            custom_system.docker,
+            bootstrap_node.network,
+            custom_system.validators_data.bonds_file,
+            custom_system.config.rnode_timeout,
+            None, # allowed_peers
+            bootstrap_node,
+            'joining_validator',
+            JOINING_VALIDATOR_KEYS,
+        )
+        bond_validator(bootstrap_node, joining_validator)
+        for _ in range(10):
+            joining_validator.deploy()
+            last_block_id = joining_validator.propose()
+        unbonded_validator = create_peer(
+            custom_system.docker,
+            bootstrap_node.network,
+            custom_system.validators_data.bonds_file,
+            custom_system.config.rnode_timeout,
+            None, # allowed_peers
+            bootstrap_node,
+            'unbonded_validator',
+            UNBONDED_VALIDATOR_KEYS,
+        )
+        unbonded_validator.wait_until_receives(last_block_id)

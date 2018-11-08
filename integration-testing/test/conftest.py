@@ -21,7 +21,7 @@ import rnode_testing.resources as resources
 System = collections.namedtuple("System", ["config", "docker", "validators_data"])
 
 
-Config = collections.namedtuple("Config", [
+TestConfig = collections.namedtuple("TestConfig", [
     "peer_count",
     "node_startup_timeout",
     "network_converge_timeout",
@@ -37,7 +37,7 @@ KeyPair = collections.namedtuple("KeyPair", ["private_key", "public_key"])
 ValidatorsData = collections.namedtuple("ValidatorsData", ["bonds_file", "bootstrap_keys", "peers_keys"])
 
 
-def parse_config(request):
+def make_test_config(request):
     peer_count = int(request.config.getoption("--peer-count"))
     start_timeout = int(request.config.getoption("--start-timeout"))
     converge_timeout = int(request.config.getoption("--converge-timeout"))
@@ -47,7 +47,7 @@ def parse_config(request):
 
     def make_timeout(value, base, peer_factor=10): return value if value > 0 else base + peer_count * peer_factor
 
-    config = Config(
+    config = TestConfig(
         peer_count=peer_count,
         node_startup_timeout=make_timeout(start_timeout, 30, 10),
         network_converge_timeout=make_timeout(converge_timeout, 200, 10),
@@ -64,7 +64,7 @@ def parse_config(request):
 
 
 @contextlib.contextmanager
-def bonds_file(validator_keys):
+def temporary_bonds_file(validator_keys):
     (fd, file) = tempfile.mkstemp(prefix="rchain-bonds-file-", suffix=".txt", dir="/tmp")
     try:
         with os.fdopen(fd, "w") as f:
@@ -83,7 +83,7 @@ def validators_data(config):
     lines = resources.file_content('pregenerated-validator-private-public-key-pairs.txt').splitlines()
     random.shuffle(lines)
     validator_keys = [KeyPair(*line.split()) for line in lines[0:config.peer_count+1]]
-    with bonds_file(validator_keys) as f:
+    with temporary_bonds_file(validator_keys) as f:
         yield ValidatorsData(bonds_file=f, bootstrap_keys=validator_keys[0], peers_keys=validator_keys[1:])
 
 
@@ -108,8 +108,8 @@ def pytest_addoption(parser):
     )
 
 
-@contextlib.contextmanager
-def docker():
+@pytest.yield_fixture(scope='session')
+def docker_client_session():
     docker_client = docker_py.from_env()
     try:
         yield docker_client
@@ -119,18 +119,17 @@ def docker():
 
 
 
-@pytest.fixture(scope="session")
-def system(request):
-    cfg = parse_config(request)
-
-    with docker() as docker_client, validators_data(cfg) as vd:
+@pytest.yield_fixture(scope="session")
+def system(request, docker_client_session):
+    cfg = make_test_config(request)
+    with validators_data(cfg) as vd:
         try:
-            yield System(cfg, docker_client, vd)
+            yield System(cfg, docker_client_session, vd)
         finally:
             log_prof_data()
 
 
-@pytest.fixture(scope="module")
+@pytest.yield_fixture(scope="module")
 def bootstrap_node(system):
     with start_bootstrap(system.docker,
                          system.config.node_startup_timeout,
