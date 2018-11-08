@@ -185,11 +185,9 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
       _ <- validators.traverse_ { validator =>
             val toAppend = validator.concat(blockHash).toByteArray
             for {
-              _ <- latestMessagesLogOutputStreamRef.update { latestMessagesLogOutputStream =>
-                    latestMessagesLogOutputStream.write(toAppend)
-                    latestMessagesLogOutputStream.flush()
-                    latestMessagesLogOutputStream
-                  }
+              latestMessagesLogOutputStream <- latestMessagesLogOutputStreamRef.get
+              _                             <- Sync[F].delay { latestMessagesLogOutputStream.write(toAppend) }
+              _                             <- Sync[F].delay { latestMessagesLogOutputStream.flush() }
               _ <- latestMessagesCrc.update(toAppend).flatMap { _ =>
                     updateLatestMessagesCrcFile(latestMessagesCrc)
                   }
@@ -257,16 +255,14 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
 
   private def updateDataLookupFile(blockMetadata: BlockMetadata): F[Unit] =
     for {
-      dataLookupCrc <- blockMetadataCrcRef.get
-      blockBytes    = blockMetadata.toByteString
-      toAppend      = blockBytes.size.toByteString.concat(blockBytes).toByteArray
-      _ <- blockMetadataLogOutputStreamRef.update { dataLookupOutputStream =>
-            dataLookupOutputStream.write(toAppend)
-            dataLookupOutputStream.flush()
-            dataLookupOutputStream
-          }
-      _ <- dataLookupCrc.update(toAppend)
-      _ <- updateDataLookupCrcFile(dataLookupCrc)
+      dataLookupCrc          <- blockMetadataCrcRef.get
+      blockBytes             = blockMetadata.toByteString
+      toAppend               = blockBytes.size.toByteString.concat(blockBytes).toByteArray
+      dataLookupOutputStream <- blockMetadataLogOutputStreamRef.get
+      _                      <- Sync[F].delay { dataLookupOutputStream.write(toAppend) }
+      _                      <- Sync[F].delay { dataLookupOutputStream.flush() }
+      _                      <- dataLookupCrc.update(toAppend)
+      _                      <- updateDataLookupCrcFile(dataLookupCrc)
     } yield ()
 
   private def updateDataLookupCrcFile(newCrc: Crc32[F]): F[Unit] =
@@ -339,15 +335,11 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
 
   def clear(): F[Unit] =
     for {
-      _ <- lock.acquire
-      _ <- latestMessagesLogOutputStreamRef.update { latestMessagesLogOutputStream =>
-            latestMessagesLogOutputStream.close()
-            latestMessagesLogOutputStream
-          }
-      _ <- blockMetadataLogOutputStreamRef.update { blockMetadataLogOutputStream =>
-            blockMetadataLogOutputStream.close()
-            blockMetadataLogOutputStream
-          }
+      _                             <- lock.acquire
+      latestMessagesLogOutputStream <- latestMessagesLogOutputStreamRef.get
+      _                             <- Sync[F].delay { latestMessagesLogOutputStream.close() }
+      blockMetadataLogOutputStream  <- blockMetadataLogOutputStreamRef.get
+      _                             <- Sync[F].delay { blockMetadataLogOutputStream.close() }
       _ <- Sync[F].delay {
             Files.write(latestMessagesDataFilePath, Array.emptyByteArray)
           }
@@ -382,16 +374,12 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
 
   def close(): F[Unit] =
     for {
-      _ <- lock.acquire
-      _ <- latestMessagesLogOutputStreamRef.update { latestMessagesLogOutputStream =>
-            latestMessagesLogOutputStream.close()
-            latestMessagesLogOutputStream
-          }
-      _ <- blockMetadataLogOutputStreamRef.update { blockMetadataLogOutputStream =>
-            blockMetadataLogOutputStream.close()
-            blockMetadataLogOutputStream
-          }
-      _ <- lock.release
+      _                             <- lock.acquire
+      latestMessagesLogOutputStream <- latestMessagesLogOutputStreamRef.get
+      _                             <- Sync[F].delay { latestMessagesLogOutputStream.close() }
+      blockMetadataLogOutputStream  <- blockMetadataLogOutputStreamRef.get
+      _                             <- Sync[F].delay { blockMetadataLogOutputStream.close() }
+      _                             <- lock.release
     } yield ()
 }
 
