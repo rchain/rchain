@@ -109,6 +109,10 @@ class StackSafetySpec extends FlatSpec with Matchers {
     checkAll(hugeNested("*@{", "1", "}"))
   }
 
+  it should "handle a non-trivial huge nested name" in {
+    checkAll(hugeNested("*@(1, ", "*@0", ")"))
+  }
+
   it should "handle a huge train wreck of method calls" in {
     checkAll("[]" + Seq.fill(depth)(".toByteArray()").mkString)
   }
