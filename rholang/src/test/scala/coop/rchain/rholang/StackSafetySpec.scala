@@ -1,7 +1,5 @@
 package coop.rchain.rholang
 
-import java.io.StringReader
-
 import coop.rchain.models.Connective.ConnectiveInstance.ConnNotBody
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.{Connective, Par, ProtoM}
@@ -11,6 +9,7 @@ import coop.rchain.rholang.interpreter.{Interpreter, PrettyPrinter}
 import coop.rchain.rspace.Serialize
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
+import org.scalatest.prop.TableDrivenPropertyChecks
 import org.scalatest.{Assertions, FlatSpec, Matchers}
 
 import scala.annotation.tailrec
@@ -45,7 +44,7 @@ object StackSafetySpec extends Assertions {
 
 }
 
-class StackSafetySpec extends FlatSpec with Matchers {
+class StackSafetySpec extends FlatSpec with TableDrivenPropertyChecks with Matchers {
   import StackSafetySpec._
 
   val mapSize     = 10L * 1024L * 1024L
@@ -157,29 +156,18 @@ class StackSafetySpec extends FlatSpec with Matchers {
   private def hugeNested(left: String, middle: String, right: String): String =
     Seq.fill(depth)(left).mkString + middle + Seq.fill(depth)(right).mkString
 
-  private def checkAll(rho: String): Unit = {
+  private def checkAll(term: String): Unit = {
+    val rho = s"for (_ <- @0) { Nil } | @0!($term)"
     isolateStackOverflow {
       val ast = Interpreter.buildNormalizedTerm(rho).value()
       PrettyPrinter().buildString(ast)
-    }
-    checkReduce(rho)
-  }
-
-  private def checkReduce(rho: String): Unit =
-    isolateStackOverflow {
-      //FIXME make this pass:
-      //val reduceRho = s"@0!($rho) | for (@x <- @0) { @1 ! (x) | @2 ! (x)  } | for (@y <- @1; @z <- @2) { @0!(Set(y, z)) }"
-      //val reduceRho = s"""@0!( { @"serializeMe"!($rho) } )"""
-      //val reduceRho = s"""for (_ <- @0) { Nil } | @0!( { @"serializeMe"!($rho) } )"""
-      //val reduceRho = s"@0!($rho)"
-      val reduceRho = s"for (_ <- @0) { Nil } | @0!($rho)"
-      checkSuccess(reduceRho) { rho =>
-        mkRuntime(tmpPrefix, mapSize)
-          .use { runtime =>
-            Interpreter.execute(runtime, new StringReader(rho))
-          }
+      checkSuccess(rho) { rho =>
+        mkRuntime(tmpPrefix, mapSize).use { runtime =>
+          Interpreter.evaluate(runtime, ast)
+        }
       }
     }
+  }
 
   checkNormalize("Nil") //silence "unused" warnings
 
