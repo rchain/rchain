@@ -5,18 +5,17 @@ import java.nio.file.{Files, Path, Paths}
 
 import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
 import monix.execution.Scheduler.Implicits.global
+import coop.rchain.rholang.Resources.mkRuntime
+import monix.eval.Task
 import org.scalatest.{FunSuite, Matchers}
 
 import scala.collection.JavaConverters._
-import scala.concurrent.Await
 import scala.concurrent.duration._
 
 class CompilerTests extends FunSuite with Matchers {
   val mapSize     = 1024L * 1024L * 10
   val tmpPrefix   = "rspace-store-"
   val maxDuration = 5.seconds
-
-  def runtime = Runtime.create(Files.createTempDirectory(tmpPrefix), mapSize)
 
   val testFiles: Iterator[Path] =
     Files.walk(Paths.get(getClass.getResource("/tests").getPath)).iterator().asScala
@@ -42,8 +41,9 @@ class CompilerTests extends FunSuite with Matchers {
   }
 
   private def execute(file: Path): Either[Throwable, Runtime] = {
-    val future = Interpreter.execute(runtime, new FileReader(file.toString)).attempt.runAsync
-    Await.result(future, maxDuration)
+    mkRuntime[Task](tmpPrefix, mapSize)
+      .use { runtime => Interpreter.execute(runtime, new FileReader(file.toString)).attempt}
+      .runSyncUnsafe(maxDuration)
   }
 
 }
