@@ -2,6 +2,7 @@ import pytest
 import conftest
 
 from rnode_testing.rnode import start_bootstrap, create_peer
+from rnode_testing.wait import wait_for
 
 """
 First approximation:
@@ -46,7 +47,7 @@ def custom_system(request, validators_config, docker_client_session):
 
 def test_heterogenous_validators(custom_system):
     with start_bootstrap(custom_system.docker, custom_system.config.node_startup_timeout, custom_system.config.rnode_timeout, custom_system.validators_data) as bootstrap_node:
-        bonded_validator_node = create_peer(
+        bonded_validator = create_peer(
             custom_system.docker,
             bootstrap_node.network,
             custom_system.validators_data.bonds_file,
@@ -56,31 +57,50 @@ def test_heterogenous_validators(custom_system):
             'bonded_validator',
             BONDED_VALIDATOR_KEYS,
         )
-        for _ in range(10):
-            bonded_validator_node.deploy()
-            bonded_validator_node.propose()
-        joining_validator = create_peer(
-            custom_system.docker,
-            bootstrap_node.network,
-            custom_system.validators_data.bonds_file,
-            custom_system.config.rnode_timeout,
-            None, # allowed_peers
-            bootstrap_node,
-            'joining_validator',
-            JOINING_VALIDATOR_KEYS,
-        )
-        bond_validator(bootstrap_node, joining_validator)
-        for _ in range(10):
-            joining_validator.deploy()
-            last_block_id = joining_validator.propose()
-        unbonded_validator = create_peer(
-            custom_system.docker,
-            bootstrap_node.network,
-            custom_system.validators_data.bonds_file,
-            custom_system.config.rnode_timeout,
-            None, # allowed_peers
-            bootstrap_node,
-            'unbonded_validator',
-            UNBONDED_VALIDATOR_KEYS,
-        )
-        unbonded_validator.wait_until_receives(last_block_id)
+        try:
+            contract_path = '/opt/docker/examples/hello_world_again.rho'
+            for _ in range(1):
+                bonded_validator.deploy(contract_path)
+                bonded_validator.propose()
+
+            joining_validator = create_peer(
+                custom_system.docker,
+                bootstrap_node.network,
+                custom_system.validators_data.bonds_file,
+                custom_system.config.rnode_timeout,
+                None, # allowed_peers
+                bootstrap_node,
+                'joining_validator',
+                JOINING_VALIDATOR_KEYS,
+            )
+            try:
+                joining_validator.generate_faucet_bonding_deploys(
+                    bond_amount=123,
+                    private_key=JOINING_VALIDATOR_KEYS.private_key,
+                    public_key=JOINING_VALIDATOR_KEYS.public_key,
+                )
+                bond_file = joining_validator.cat_bond_file(public_key=JOINING_VALIDATOR_KEYS.public_key)
+                bonded_validator.deploy_string(bond_file)
+                bonded_validator.propose()
+                for _ in range(1):
+                    joining_validator.deploy(contract_path)
+                    joining_validator.propose()
+
+                unbonded_validator = create_peer(
+                    custom_system.docker,
+                    bootstrap_node.network,
+                    custom_system.validators_data.bonds_file,
+                    custom_system.config.rnode_timeout,
+                    None, # allowed_peers
+                    bootstrap_node,
+                    'unbonded_validator',
+                    UNBONDED_VALIDATOR_KEYS,
+                )
+                try:
+                    wait_for(lambda: unbonded_validator.get_blocks_count() == 1, 10, "Unbonded validator did not receive any blocks")
+                finally:
+                    unbonded_validator.cleanup()
+            finally:
+                joining_validator.cleanup()
+        finally:
+            bonded_validator.cleanup()

@@ -90,6 +90,13 @@ class Node:
     def show_blocks(self):
         return self.exec_run(f'{rnode_binary} show-blocks')
 
+    def get_blocks_count(self):
+        output = self.call_rnode('show-blocks', stderr=False).strip()
+        spam = 'count: '
+        assert output.startswith(spam)
+        blocks_count = int(output[len(spam):])
+        return blocks_count
+
     def exec_run(self, cmd, stderr=True):
         queue = Queue(1)
 
@@ -129,12 +136,33 @@ class Node:
     def deploy(self, rho_file_path):
         return self.call_rnode('deploy', '--from=0x1', '--phlo-limit=1000000', '--phlo-price=1', '--nonce=0', rho_file_path)
 
+    def deploy_string(self, rholang_code):
+        quoted_rholang = shlex.quote(rholang_code)
+        return self.shell_out('sh', '-c', 'echo {quoted_rholang} >/tmp/deploy_string.rho && {rnode_binary} deploy --phlo-limit=10000000000 --phlo-price=1 /tmp/deploy_string.rho'.format(
+            rnode_binary=rnode_binary,
+            quoted_rholang=quoted_rholang,
+        ))
+
     def propose(self):
         return self.call_rnode('propose')
 
     def repl(self, rholang_code, stderr=False):
         quoted_rholang_code = shlex.quote(rholang_code)
         return self.shell_out('sh', '-c', f'echo {quoted_rholang_code} | {rnode_binary} repl', stderr=stderr)
+
+    def generate_faucet_bonding_deploys(self, bond_amount, private_key, public_key):
+        return self.call_rnode('generateFaucetBondingDeploys',
+            '--amount={}'.format(bond_amount),
+            '--private-key={}'.format(private_key),
+            '--public-key={}'.format(public_key),
+            '--sig-algorithm=ed25519',
+        )
+
+    def cat_forward_file(self, public_key):
+        return self.shell_out('cat', '/opt/docker/forward_{}.rho'.format(public_key))
+
+    def cat_bond_file(self, public_key):
+        return self.shell_out('cat', '/opt/docker/bond_{}.rho'.format(public_key))
 
     __timestamp_rx = "\\d\\d:\\d\\d:\\d\\d\\.\\d\\d\\d"
     __log_message_rx = re.compile(f"^{__timestamp_rx} (.*?)(?={__timestamp_rx})", re.MULTILINE | re.DOTALL)
