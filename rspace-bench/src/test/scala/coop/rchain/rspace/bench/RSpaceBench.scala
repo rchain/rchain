@@ -4,6 +4,7 @@ import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
 
 import cats.Id
+import cats.effect._
 import coop.rchain.rspace._
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
@@ -20,6 +21,9 @@ import scala.concurrent.{Await, Future}
 
 @org.openjdk.jmh.annotations.State(Scope.Thread)
 trait RSpaceBench {
+
+  implicit val contextShiftF: ContextShift[Id] =
+    coop.rchain.catscontrib.effect.implicits.contextShiftId
 
   var space: ISpace[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor] = null
 
