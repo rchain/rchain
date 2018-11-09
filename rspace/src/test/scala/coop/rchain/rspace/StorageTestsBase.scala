@@ -4,7 +4,7 @@ import java.nio.file.{Files, Path}
 
 import cats._
 import cats.implicits._
-import cats.effect.Sync
+import cats.effect._
 import com.typesafe.scalalogging.Logger
 import com.google.common.collect.HashMultiset
 import coop.rchain.rspace.ISpace.IdISpace
@@ -18,14 +18,15 @@ import coop.rchain.shared.PathOps._
 import org.scalatest._
 
 import scala.collection.immutable.{Seq, Set}
+import scala.concurrent.ExecutionContext
 import scodec.Codec
 
 trait StorageTestsBase[F[_], C, P, E, A, K] extends FlatSpec with Matchers with OptionValues {
-
   type T = ISpace[F, C, P, E, A, A, K]
 
   implicit def syncF: Sync[F]
   implicit def monadF: Monad[F]
+  implicit def contextShiftF: ContextShift[F]
 
   case class State(
       checkpoint: Blake2b256Hash,
@@ -129,7 +130,6 @@ abstract class InMemoryStoreTestsBase[F[_]]
     with BeforeAndAfterAll {
 
   override def withTestSpace[S](f: T => F[S]): S = {
-
     implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
     implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec

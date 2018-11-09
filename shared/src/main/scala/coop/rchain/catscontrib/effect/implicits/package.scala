@@ -3,6 +3,7 @@ package coop.rchain.catscontrib.effect
 import cats._
 import cats.effect.ExitCase.{Completed, Error}
 import cats.effect._
+import scala.concurrent.ExecutionContext
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Promise}
@@ -118,4 +119,14 @@ package object implicits {
 
     override def tailRecM[A, B](a: A)(f: A => Try[Either[A, B]]): Try[B] = trySyntax.tailRecM(a)(f)
   }
+
+  // TODO: move to test package
+  implicit val contextShiftId: ContextShift[Id] =
+    new ContextShift[Id] {
+
+      def shift: Id[Unit] = {}
+
+      def evalOn[A](ec: ExecutionContext)(fa: Id[A]): Id[A] = fa
+    }
+
 }

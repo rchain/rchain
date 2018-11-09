@@ -1,7 +1,7 @@
 package coop.rchain.rspace
 
 import cats.implicits._
-import cats.effect.Sync
+import cats.effect._
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.spaces.FineGrainedRSpace
@@ -15,7 +15,8 @@ object RSpace {
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
-      syncF: Sync[F]
+      syncF: Sync[F],
+      contextShift: ContextShift[F]
   ): F[ISpace[F, C, P, E, A, R, K]] =
     context match {
       case ctx: LMDBContext[C, P, A, K] =>
@@ -28,13 +29,40 @@ object RSpace {
         create(LockFreeInMemoryStore.create(ctx.trieStore, branch), branch)
     }
 
-  private[rspace] def create[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
+  def createInMemory[F[_], C, P, E, A, R, K](
+      trieStore: ITrieStore[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], Blake2b256Hash, GNAT[
+        C,
+        P,
+        A,
+        K
+      ]],
+      branch: Branch
+  )(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
-      syncF: Sync[F]
+      syncF: Sync[F],
+      contextShift: ContextShift[F]
+  ): F[ISpace[F, C, P, E, A, R, K]] = {
+
+    val mainStore = InMemoryStore
+      .create[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
+        trieStore,
+        branch
+      )
+    create(mainStore, branch)
+  }
+
+  def create[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      syncF: Sync[F],
+      contextShift: ContextShift[F]
   ): F[ISpace[F, C, P, E, A, R, K]] = {
 
     implicit val codecC: Codec[C] = sc.toCodec

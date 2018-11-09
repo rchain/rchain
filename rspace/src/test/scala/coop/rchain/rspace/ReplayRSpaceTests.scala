@@ -3,7 +3,7 @@ package coop.rchain.rspace
 import java.nio.file.Files
 
 import cats.Id
-import cats.effect.Sync
+import cats.effect._
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.ISpace.IdISpace
@@ -862,6 +862,8 @@ trait ReplayRSpaceTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with O
   val logger = Logger(this.getClass.getName.stripSuffix("$"))
 
   implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+  implicit val contextShiftF: ContextShift[Id] =
+    coop.rchain.catscontrib.effect.implicits.contextShiftId
 
   override def withFixture(test: NoArgTest): Outcome = {
     logger.debug(s"Test: ${test.name}")
@@ -891,6 +893,8 @@ trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, 
   ): S = {
 
     implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+    implicit val contextShiftF: ContextShift[Id] =
+      coop.rchain.catscontrib.effect.implicits.contextShiftId
 
     val dbDir       = Files.createTempDirectory("rchain-storage-test-")
     val context     = Context.create[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
@@ -921,6 +925,8 @@ trait MixedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C,
   ): S = {
 
     implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+    implicit val contextShiftF: ContextShift[Id] =
+      coop.rchain.catscontrib.effect.implicits.contextShiftId
 
     val dbDir       = Files.createTempDirectory("rchain-storage-test-")
     val context     = Context.createMixed[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
@@ -974,6 +980,9 @@ trait FaultyStoreReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsB
       sk: Serialize[K],
       oC: Ordering[C]
   ): S = {
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+    implicit val contextShiftF: ContextShift[Id] =
+      coop.rchain.catscontrib.effect.implicits.contextShiftId
 
     val trieStore = InMemoryTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]]()
     val mainStore = InMemoryStore

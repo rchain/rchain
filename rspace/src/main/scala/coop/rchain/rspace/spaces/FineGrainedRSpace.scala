@@ -1,6 +1,6 @@
 package coop.rchain.rspace.spaces
 
-import cats.effect.Sync
+import cats.effect.{ContextShift, Sync}
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
@@ -10,6 +10,7 @@ import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import coop.rchain.shared.SyncVarOps._
 import kamon._
+import monix.execution.Scheduler
 
 import scala.annotation.tailrec
 import scala.collection.immutable.Seq
@@ -24,7 +25,8 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
     serializeP: Serialize[P],
     serializeA: Serialize[A],
     serializeK: Serialize[K],
-    val syncF: Sync[F]
+    val syncF: Sync[F],
+    contextShift: ContextShift[F]
 ) extends FineGrainedRSpaceOps[F, C, P, E, A, R, K](store, branch)
     with ISpace[F, C, P, E, A, R, K] {
 
@@ -37,107 +39,114 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
   private[this] val produceSpan   = Kamon.buildSpan("rspace.produce")
   protected[this] val installSpan = Kamon.buildSpan("rspace.install")
 
+  // TODO: pass this as param or make it configurable
+  private[this] val blockingThreadPool = Scheduler.forkJoin(parallelism = 32, maxThreads = 128)
+
   override def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
       implicit m: Match[P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
-    syncF.delay {
-      Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
-        if (channels.isEmpty) {
-          val msg = "channels can't be empty"
-          logger.error(msg)
-          throw new IllegalArgumentException(msg)
-        }
-        if (channels.length =!= patterns.length) {
-          val msg = "channels.length must equal patterns.length"
-          logger.error(msg)
-          throw new IllegalArgumentException(msg)
-        }
-        val span = Kamon.currentSpan()
-        span.mark("before-consume-ref-compute")
-        val consumeRef = Consume.create(channels, patterns, continuation, persist)
+    contextShift.evalOn(blockingThreadPool) {
+      syncF.delay {
+        Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
+          if (channels.isEmpty) {
+            val msg = "channels can't be empty"
+            logger.error(msg)
+            throw new IllegalArgumentException(msg)
+          }
+          if (channels.length =!= patterns.length) {
+            val msg = "channels.length must equal patterns.length"
+            logger.error(msg)
+            throw new IllegalArgumentException(msg)
+          }
+          val span = Kamon.currentSpan()
+          span.mark("before-consume-ref-compute")
+          val consumeRef = Consume.create(channels, patterns, continuation, persist)
 
-        span.mark("before-consume-lock")
-        consumeLock(channels) {
-          span.mark("consume-lock-acquired")
-          logger.debug(s"""|consume: searching for data matching <patterns: $patterns>
+          span.mark("before-consume-lock")
+          consumeLock(channels) {
+            span.mark("consume-lock-acquired")
+            logger.debug(s"""|consume: searching for data matching <patterns: $patterns>
                          |at <channels: $channels>""".stripMargin.replace('\n', ' '))
 
-          span.mark("before-event-log-lock-acquired")
-          eventLog.update(consumeRef +: _)
-          span.mark("event-log-updated")
-          /*
-           * Here, we create a cache of the data at each channel as `channelToIndexedData`
-           * which is used for finding matches.  When a speculative match is found, we can
-           * remove the matching datum from the remaining data candidates in the cache.
-           *
-           * Put another way, this allows us to speculatively remove matching data without
-           * affecting the actual store contents.
-           */
+            span.mark("before-event-log-lock-acquired")
+            eventLog.update(consumeRef +: _)
+            span.mark("event-log-updated")
+            /*
+             * Here, we create a cache of the data at each channel as `channelToIndexedData`
+             * which is used for finding matches.  When a speculative match is found, we can
+             * remove the matching datum from the remaining data candidates in the cache.
+             *
+             * Put another way, this allows us to speculatively remove matching data without
+             * affecting the actual store contents.
+             */
 
-          span.mark("before-channel-to-indexed-data")
-          val channelToIndexedData = store.withTxn(store.createTxnRead()) { txn =>
-            channels.map { c: C =>
-              c -> Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
-            }.toMap
-          }
+            span.mark("before-channel-to-indexed-data")
+            val channelToIndexedData = store.withTxn(store.createTxnRead()) { txn =>
+              channels.map { c: C =>
+                c -> Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
+              }.toMap
+            }
 
-          span.mark("before-extract-data-candidates")
-          val options: Either[E, Option[Seq[DataCandidate[C, R]]]] =
-            extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).sequence
-              .map(_.sequence)
+            span.mark("before-extract-data-candidates")
+            val options: Either[E, Option[Seq[DataCandidate[C, R]]]] =
+              extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).sequence
+                .map(_.sequence)
 
-          options match {
-            case Left(e) =>
-              Left(e)
-            case Right(None) =>
-              span.mark("acquire-write-lock")
-              store.withTxn(store.createTxnWrite()) { txn =>
-                span.mark("before-put-continuation")
-                store.putWaitingContinuation(
-                  txn,
-                  channels,
-                  WaitingContinuation(patterns, continuation, persist, consumeRef)
-                )
-                span.mark("after-put-continuation")
-                for (channel <- channels)
-                  store.addJoin(txn, channel, channels)
-              }
-              logger.debug(s"""|consume: no data found,
+            options match {
+              case Left(e) =>
+                Left(e)
+              case Right(None) =>
+                span.mark("acquire-write-lock")
+
+                store
+                  .withTxn(store.createTxnWrite()) { txn =>
+                    span.mark("before-put-continuation")
+                    store.putWaitingContinuation(
+                      txn,
+                      channels,
+                      WaitingContinuation(patterns, continuation, persist, consumeRef)
+                    )
+                    span.mark("after-put-continuation")
+                    for (channel <- channels)
+                      store.addJoin(txn, channel, channels)
+                  }
+                logger.debug(s"""|consume: no data found,
                              |storing <(patterns, continuation): ($patterns, $continuation)>
                              |at <channels: $channels>""".stripMargin.replace('\n', ' '))
-              Right(None)
-            case Right(Some(dataCandidates)) =>
-              consumeCommCounter.increment()
+                Right(None)
+              case Right(Some(dataCandidates)) =>
+                consumeCommCounter.increment()
 
-              span.mark("before-event-log-update")
-              eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
-              span.mark("event-log-updated")
+                span.mark("before-event-log-update")
+                eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
+                span.mark("event-log-updated")
 
-              dataCandidates
-                .sortBy(_.datumIndex)(Ordering[Int].reverse)
-                .foreach {
-                  case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex)
-                      if !persistData =>
-                    span.mark("acquire-write-lock")
-                    store.withTxn(store.createTxnWrite()) { txn =>
-                      span.mark("before-remove-datum")
-                      store.removeDatum(txn, Seq(candidateChannel), dataIndex)
-                      span.mark("after-remove-datum")
-                    }
-                  case _ =>
-                    ()
-                }
-              logger.debug(
-                s"consume: data found for <patterns: $patterns> at <channels: $channels>"
-              )
-              Right(
-                Some(
-                  (
-                    ContResult(continuation, persist, channels, patterns),
-                    dataCandidates.map(dc => Result(dc.datum.a, dc.datum.persist))
+                dataCandidates
+                  .sortBy(_.datumIndex)(Ordering[Int].reverse)
+                  .foreach {
+                    case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex)
+                        if !persistData =>
+                      span.mark("acquire-write-lock")
+                      store.withTxn(store.createTxnWrite()) { txn =>
+                        span.mark("before-remove-datum")
+                        store.removeDatum(txn, Seq(candidateChannel), dataIndex)
+                        span.mark("after-remove-datum")
+                      }
+                    case _ =>
+                      ()
+                  }
+                logger.debug(
+                  s"consume: data found for <patterns: $patterns> at <channels: $channels>"
+                )
+                Right(
+                  Some(
+                    (
+                      ContResult(continuation, persist, channels, patterns),
+                      dataCandidates.map(dc => Result(dc.datum.a, dc.datum.persist))
+                    )
                   )
                 )
-              )
+            }
           }
         }
       }

@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter
 
+import cats.effect.ContextShift
 import java.nio.file.{Files, Path}
 
 import cats.{Id, Monad}
@@ -355,7 +356,7 @@ object Runtime {
     } yield ()
   }
 
-  def setupRSpace[F[_]: Sync](
+  def setupRSpace[F[_]: Sync: ContextShift](
       dataDir: Path,
       mapSize: Long,
       storeType: StoreType
