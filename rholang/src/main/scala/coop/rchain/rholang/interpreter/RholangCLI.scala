@@ -26,22 +26,22 @@ object RholangCLI {
     version("Rholang Mercury 0.2")
     banner("""Options:""")
 
-    val binary = opt[Boolean](descr = "outputs binary protobuf serialization")
-    val text   = opt[Boolean](descr = "outputs textual protobuf serialization")
+    val binary: ScallopOption[Boolean] = opt[Boolean](descr = "outputs binary protobuf serialization")
+    val text: ScallopOption[Boolean] = opt[Boolean](descr = "outputs textual protobuf serialization")
 
-    val dataDir = opt[Path](
+    val dataDir: ScallopOption[Path] = opt[Path](
       required = false,
       descr = "Path to data directory",
       default = Some(Files.createTempDirectory("rspace-store-"))
     )
 
-    val mapSize = opt[Long](
+    val mapSize: ScallopOption[Long] = opt[Long](
       required = false,
       descr = "Map size (in bytes)",
       default = Some(1024L * 1024L * 1024L)
     )
 
-    val files =
+    val files: ScallopOption[List[String]] =
       trailArg[List[String]](required = false, descr = "Rholang source file")(stringListConverter)
 
     verify()
