@@ -12,20 +12,25 @@ import monix.reactive.subjects.ConcurrentSubject
 
 case class ToStream(peerNode: PeerNode, blob: Blob)
 
-class StreamObservable(bufferSize: Int)(implicit scheduler: Scheduler)
+class StreamObservable(bufferSize: Int)(implicit log: Log[Task], scheduler: Scheduler)
     extends Observable[ToStream] {
 
-  val subject = ConcurrentSubject.publishToOne[ToStream](DropNew(bufferSize))
+  val subject = buffer.LimitedBufferObservable.dropNew[ToStream](bufferSize)
 
-  def stream(peers: List[PeerNode], blob: Blob): Task[Unit] =
-    peers
-      .traverse(
-        peer =>
-          Task.fromFuture {
-            subject.onNext(ToStream(peer, blob))
-          }
-      )
-      .as(())
+  def stream(peers: List[PeerNode], blob: Blob): Task[Unit] = {
+    def push(peer: PeerNode): Task[Boolean] =
+      Task.delay(subject.pushNext(ToStream(peer, blob)))
+
+    def retry(failed: List[PeerNode]): Task[Unit] =
+      log.debug(s"Retrying for $failed") *> stream(failed, blob)
+
+    for {
+      results     <- peers.traverse(push _)
+      paired      = peers.zip(results)
+      (_, failed) = paired.partition(_._2)
+      _           <- if (!failed.isEmpty) retry(failed.map(_._1)) else Task.unit
+    } yield ()
+  }
 
   def unsafeSubscribeFn(subscriber: Subscriber[ToStream]): Cancelable = {
     val subscription = subject.subscribe(subscriber)
