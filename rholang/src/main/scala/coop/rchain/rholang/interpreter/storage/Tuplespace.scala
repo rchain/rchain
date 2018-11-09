@@ -14,11 +14,12 @@ import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 
 trait Tuplespace[F[_]] {
-  def produce(chan: Par, data: ListParWithRandom, persistent: Boolean): F[Unit]
+  def produce(chan: Par, data: ListParWithRandom, persistent: Boolean, sequenceNumber: Int): F[Unit]
   def consume(
       binds: Seq[(BindPattern, Par)],
       body: ParWithRandom,
-      persistent: Boolean
+      persistent: Boolean,
+      sequenceNumber: Int
   ): F[Unit]
 }
 
@@ -38,33 +39,34 @@ object Tuplespace {
     override def produce(
         channel: Par,
         data: ListParWithRandom,
-        persistent: Boolean
+        persistent: Boolean,
+        sequenceNumber: Int
     ): F[Unit] = {
       // TODO: Handle the environment in the store
       def go(
           res: Either[OutOfPhlogistonsError.type, Option[
-            (TaggedContinuation, Seq[ListParWithRandomAndPhlos])
+            (TaggedContinuation, Seq[ListParWithRandomAndPhlos], Int)
           ]]
       ): F[Unit] =
         res match {
           case Left(oope) => F.raiseError(oope)
-          case Right(Some((continuation, dataList))) =>
+          case Right(Some((continuation, dataList, updatedSequenceNumber))) =>
             if (persistent) {
               Parallel
                 .parProduct(
-                  dispatcher.dispatch(continuation, dataList),
-                  produce(channel, data, persistent)
+                  dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
+                  produce(channel, data, persistent, updatedSequenceNumber)
                 )
                 .as(())
             } else {
-              dispatcher.dispatch(continuation, dataList)
+              dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
             }
 
           case Right(None) => F.unit
         }
 
       for {
-        res <- pureRSpace.produce(channel, data, persist = persistent)
+        res <- pureRSpace.produce(channel, data, persist = persistent, sequenceNumber)
         _   <- go(res)
       } yield ()
     }
@@ -72,7 +74,8 @@ object Tuplespace {
     override def consume(
         binds: Seq[(BindPattern, Par)],
         body: ParWithRandom,
-        persistent: Boolean
+        persistent: Boolean,
+        sequenceNumber: Int
     ): F[Unit] =
       binds match {
         case Nil => F.raiseError(ReduceError("Error: empty binds"))
@@ -80,21 +83,21 @@ object Tuplespace {
           val (patterns: Seq[BindPattern], sources: Seq[Par]) = binds.unzip
           def go(
               res: Either[OutOfPhlogistonsError.type, Option[
-                (TaggedContinuation, Seq[ListParWithRandomAndPhlos])
+                (TaggedContinuation, Seq[ListParWithRandomAndPhlos], Int)
               ]]
           ): F[Unit] =
             res match {
               case Left(oope) => F.raiseError(oope)
-              case Right(Some((continuation, dataList))) =>
+              case Right(Some((continuation, dataList, updatedSequenceNumber))) =>
                 if (persistent) {
                   Parallel
                     .parProduct(
-                      dispatcher.dispatch(continuation, dataList),
-                      consume(binds, body, persistent)
+                      dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
+                      consume(binds, body, persistent, updatedSequenceNumber)
                     )
                     .as(())
                 } else {
-                  dispatcher.dispatch(continuation, dataList)
+                  dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
                 }
               case Right(None) => F.unit
             }
@@ -104,7 +107,8 @@ object Tuplespace {
                     sources.toList,
                     patterns.toList,
                     TaggedContinuation(ParBody(body)),
-                    persist = persistent
+                    persist = persistent,
+                    sequenceNumber
                   )
             _ <- go(res)
           } yield ()

@@ -36,6 +36,7 @@ trait Reduce[M[_]] {
   def eval(par: Par)(
       implicit env: Env[Par],
       rand: Blake2b512Random,
+      sequenceNumber: Int,
       costAccountingAlg: CostAccounting[M]
   ): M[Unit]
 
@@ -64,7 +65,7 @@ class ChargingReducer[M[_]](implicit R: Reduce[M], C: CostAccounting[M]) {
   def setAvailablePhlos(limit: Cost): M[Unit] =
     C.set(CostAccount(0, limit))
 
-  def eval(par: Par)(implicit env: Env[Par], rand: Blake2b512Random): M[Unit] =
+  def eval(par: Par)(implicit env: Env[Par], rand: Blake2b512Random, sequenceNumber: Int): M[Unit] =
     R.eval(par)
 
   def inj(par: Par)(implicit rand: Blake2b512Random): M[Unit] =
@@ -102,9 +103,10 @@ object Reduce {
         chan: Par,
         data: Seq[Par],
         persistent: Boolean,
-        rand: Blake2b512Random
+        rand: Blake2b512Random,
+        sequenceNumber: Int
     ): M[Unit] =
-      tuplespaceAlg.produce(chan, ListParWithRandom(data, rand), persistent)
+      tuplespaceAlg.produce(chan, ListParWithRandom(data, rand), persistent, sequenceNumber)
 
     /**
       * Materialize a send in the store, optionally returning the matched continuation.
@@ -121,13 +123,15 @@ object Reduce {
         binds: Seq[(BindPattern, Par)],
         body: Par,
         persistent: Boolean,
-        rand: Blake2b512Random
+        rand: Blake2b512Random,
+        sequenceNumber: Int
     ): M[Unit] =
-      tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
+      tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent, sequenceNumber)
 
     private trait EvalJob {
       def run(mkRand: Int => Blake2b512Random)(
           env: Env[Par],
+          sequenceNumber: Int,
           costAccountingAlg: CostAccounting[M]
       ): M[List[Unit]]
       def size: Int
@@ -137,16 +141,17 @@ object Reduce {
 
       private def mkJob[A](
           input: Seq[A],
-          handler: A => (Env[Par], Blake2b512Random, CostAccounting[M]) => M[Unit]
+          handler: A => (Env[Par], Blake2b512Random, Int, CostAccounting[M]) => M[Unit]
       ): EvalJob =
         new EvalJob {
           override def run(mkRand: Int => Blake2b512Random)(
               env: Env[Par],
+              sequenceNumber: Int,
               costAccountingAlg: CostAccounting[M]
           ): M[List[Unit]] =
             Parallel.parTraverse(input.zipWithIndex.toList) {
               case (term, idx) =>
-                handler(term)(env, mkRand(idx), costAccountingAlg)
+                handler(term)(env, mkRand(idx), sequenceNumber, costAccountingAlg)
             }
 
           override def size = input.size
@@ -155,17 +160,22 @@ object Reduce {
       def apply(exprs: Seq[Expr]) = {
         def handler(
             expr: Expr
-        )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccounting[M]) =
+        )(
+            env: Env[Par],
+            rand: Blake2b512Random,
+            sequenceNumber: Int,
+            costAccountingAlg: CostAccounting[M]
+        ) =
           expr.exprInstance match {
             case EVarBody(EVar(v)) =>
               (for {
                 varref <- eval(v)(env, costAccountingAlg)
-                _      <- eval(varref)(env, rand, costAccountingAlg)
+                _      <- eval(varref)(env, rand, sequenceNumber, costAccountingAlg)
               } yield ()).handleError(fTell.tell)
             case e: EMethodBody =>
               (for {
                 p <- evalExprToPar(Expr(e))(env, costAccountingAlg)
-                _ <- eval(p)(env, rand, costAccountingAlg)
+                _ <- eval(p)(env, rand, sequenceNumber, costAccountingAlg)
               } yield ()).handleError(fTell.tell)
             case _ => s.unit
           }
@@ -175,12 +185,17 @@ object Reduce {
 
       def apply[A](
           terms: Seq[A],
-          handlerImpl: A => (Env[Par], Blake2b512Random, CostAccounting[M]) => M[Unit]
+          handlerImpl: A => (Env[Par], Blake2b512Random, Int, CostAccounting[M]) => M[Unit]
       ) = {
         def handler(
             term: A
-        )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccounting[M]) =
-          handlerImpl(term)(env, rand, costAccountingAlg)
+        )(
+            env: Env[Par],
+            rand: Blake2b512Random,
+            sequenceNumber: Int,
+            costAccountingAlg: CostAccounting[M]
+        ) =
+          handlerImpl(term)(env, rand, sequenceNumber, costAccountingAlg)
             .handleErrorWith {
               case e: OutOfPhlogistonsError.type =>
                 s.raiseError(e)
@@ -207,6 +222,7 @@ object Reduce {
     override def eval(par: Par)(
         implicit env: Env[Par],
         rand: Blake2b512Random,
+        sequenceNumber: Int,
         costAccountingAlg: CostAccounting[M]
     ): M[Unit] = {
       def split(totalSize: Int, termSize: Int, rand: Blake2b512Random)(idx: Int): Blake2b512Random =
@@ -240,7 +256,7 @@ object Reduce {
         .map {
           case (job, jobIdx) => {
             def mkRand(termIdx: Int) = split(starts.last, starts(jobIdx), rand)(termIdx)
-            job.run(mkRand)(env, costAccountingAlg)
+            job.run(mkRand)(env, sequenceNumber, costAccountingAlg)
           }
         }
         .parSequence
@@ -251,13 +267,18 @@ object Reduce {
         par: Par
     )(implicit rand: Blake2b512Random, costAccountingAlg: CostAccounting[M]): M[Unit] =
       for {
-        _ <- eval(par)(Env[Par](), rand, costAccountingAlg)
+        _ <- eval(par)(Env[Par](), rand, 0, costAccountingAlg)
       } yield ()
 
     private def evalExplicit(
         send: Send
-    )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccounting[M]): M[Unit] =
-      eval(send)(env, rand, costAccountingAlg)
+    )(
+        env: Env[Par],
+        rand: Blake2b512Random,
+        sequenceNumber: Int,
+        costAccountingAlg: CostAccounting[M]
+    ): M[Unit] =
+      eval(send)(env, rand, sequenceNumber, costAccountingAlg)
 
     /** Algorithm as follows:
       *
@@ -274,6 +295,7 @@ object Reduce {
     private def eval(send: Send)(
         implicit env: Env[Par],
         rand: Blake2b512Random,
+        sequenceNumber: Int,
         costAccountingAlg: CostAccounting[M]
     ): M[Unit] =
       for {
@@ -293,18 +315,24 @@ object Reduce {
         substData <- data.traverse(
                       p => substituteAndCharge[Par, M](p, 0, env)
                     )
-        _ <- produce(unbundled, substData, send.persistent, rand)
+        _ <- produce(unbundled, substData, send.persistent, rand, sequenceNumber)
         _ <- costAccountingAlg.charge(SEND_EVAL_COST)
       } yield ()
 
     private def evalExplicit(
         receive: Receive
-    )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccounting[M]): M[Unit] =
-      eval(receive)(env, rand, costAccountingAlg)
+    )(
+        env: Env[Par],
+        rand: Blake2b512Random,
+        sequenceNumber: Int,
+        costAccountingAlg: CostAccounting[M]
+    ): M[Unit] =
+      eval(receive)(env, rand, sequenceNumber, costAccountingAlg)
 
     private def eval(receive: Receive)(
         implicit env: Env[Par],
         rand: Blake2b512Random,
+        sequenceNumber: Int,
         costAccountingAlg: CostAccounting[M]
     ): M[Unit] =
       for {
@@ -330,7 +358,7 @@ object Reduce {
                       env.shift(receive.bindCount),
                       costAccountingAlg
                     )
-        _ <- consume(binds, substBody, receive.persistent, rand)
+        _ <- consume(binds, substBody, receive.persistent, rand, sequenceNumber)
         _ <- costAccountingAlg.charge(RECEIVE_EVAL_COST)
       } yield ()
 
@@ -368,11 +396,17 @@ object Reduce {
 
     private def evalExplicit(
         mat: Match
-    )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccounting[M]): M[Unit] =
-      eval(mat)(env, rand, costAccountingAlg)
+    )(
+        env: Env[Par],
+        rand: Blake2b512Random,
+        sequenceNumber: Int,
+        costAccountingAlg: CostAccounting[M]
+    ): M[Unit] =
+      eval(mat)(env, rand, sequenceNumber, costAccountingAlg)
     private def eval(mat: Match)(
         implicit env: Env[Par],
         rand: Blake2b512Random,
+        sequenceNumber: Int,
         costAccountingAlg: CostAccounting[M]
     ): M[Unit] = {
       def addToEnv(env: Env[Par], freeMap: Map[Int, Par], freeCount: Int): Env[Par] =
@@ -388,8 +422,8 @@ object Reduce {
 
       def firstMatch(target: Par, cases: Seq[MatchCase])(implicit env: Env[Par]): M[Unit] = {
         def firstMatchM(
-            state: Tuple2[Par, Seq[MatchCase]]
-        ): M[Either[Tuple2[Par, Seq[MatchCase]], Unit]] = {
+            state: (Par, Seq[MatchCase])
+        ): M[Either[(Par, Seq[MatchCase]), Unit]] = {
           val (target, cases) = state
           cases match {
             case Nil => Applicative[M].pure(Right(()))
@@ -406,13 +440,17 @@ object Reduce {
                           Applicative[M].pure(Left((target, caseRem)))
                         case Some((freeMap, _)) =>
                           val newEnv: Env[Par] = addToEnv(env, freeMap, singleCase.freeCount)
-                          eval(singleCase.source)(newEnv, implicitly, costAccountingAlg)
-                            .map(Right(_))
+                          eval(singleCase.source)(
+                            newEnv,
+                            implicitly,
+                            sequenceNumber,
+                            costAccountingAlg
+                          ).map(Right(_))
                       }
               } yield res
           }
         }
-        FlatMap[M].tailRecM[Tuple2[Par, Seq[MatchCase]], Unit]((target, cases))(firstMatchM)
+        FlatMap[M].tailRecM[(Par, Seq[MatchCase]), Unit]((target, cases))(firstMatchM)
       }
 
       for {
@@ -433,11 +471,17 @@ object Reduce {
       */
     private def evalExplicit(
         neu: New
-    )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccounting[M]): M[Unit] =
-      eval(neu)(env, rand, costAccountingAlg)
+    )(
+        env: Env[Par],
+        rand: Blake2b512Random,
+        sequenceNumber: Int,
+        costAccountingAlg: CostAccounting[M]
+    ): M[Unit] =
+      eval(neu)(env, rand, sequenceNumber, costAccountingAlg)
     private def eval(neu: New)(
         implicit env: Env[Par],
         rand: Blake2b512Random,
+        sequenceNumber: Int,
         costAccountingAlg: CostAccounting[M]
     ): M[Unit] = {
       def alloc(count: Int, urns: Seq[String]): M[Env[Par]] = {
@@ -464,7 +508,7 @@ object Reduce {
 
       costAccountingAlg.charge(newBindingsCost(neu.bindCount)) *>
         alloc(neu.bindCount, neu.uri).flatMap { newEnv =>
-          eval(neu.p)(newEnv, rand, costAccountingAlg)
+          eval(neu.p)(newEnv, rand, sequenceNumber, costAccountingAlg)
         }
     }
 
@@ -489,11 +533,17 @@ object Reduce {
 
     private def evalExplicit(
         bundle: Bundle
-    )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccounting[M]): M[Unit] =
-      eval(bundle)(env, rand, costAccountingAlg)
+    )(
+        env: Env[Par],
+        rand: Blake2b512Random,
+        sequenceNumber: Int,
+        costAccountingAlg: CostAccounting[M]
+    ): M[Unit] =
+      eval(bundle)(env, rand, sequenceNumber, costAccountingAlg)
     private def eval(bundle: Bundle)(
         implicit env: Env[Par],
         rand: Blake2b512Random,
+        sequenceNumber: Int,
         costAccountingAlg: CostAccounting[M]
     ): M[Unit] =
       eval(bundle.body)

@@ -37,7 +37,13 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
   private[this] val produceSpan   = Kamon.buildSpan("rspace.produce")
   protected[this] val installSpan = Kamon.buildSpan("rspace.install")
 
-  override def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
+  override def consume(
+      channels: Seq[C],
+      patterns: Seq[P],
+      continuation: K,
+      persist: Boolean,
+      sequenceNumber: Int
+  )(
       implicit m: Match[P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     syncF.delay {
@@ -54,7 +60,7 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
         }
         val span = Kamon.currentSpan()
         span.mark("before-consume-ref-compute")
-        val consumeRef = Consume.create(channels, patterns, continuation, persist)
+        val consumeRef = Consume.create(channels, patterns, continuation, persist, sequenceNumber)
 
         span.mark("before-consume-lock")
         consumeLock(channels) {
@@ -130,10 +136,16 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
               logger.debug(
                 s"consume: data found for <patterns: $patterns> at <channels: $channels>"
               )
+              val contSequenceNumber = Math.max(
+                consumeRef.sequenceNumber,
+                dataCandidates.map {
+                  case DataCandidate(_, Datum(_, _, source), _) => source.sequenceNumber
+                }.max
+              ) + 1
               Right(
                 Some(
                   (
-                    ContResult(continuation, persist, channels, patterns),
+                    ContResult(continuation, persist, channels, patterns, contSequenceNumber),
                     dataCandidates.map(dc => Result(dc.datum.a, dc.datum.persist))
                   )
                 )
@@ -143,14 +155,14 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
       }
     }
 
-  override def produce(channel: C, data: A, persist: Boolean)(
+  override def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
       implicit m: Match[P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     syncF.delay {
       Kamon.withSpan(produceSpan.start(), finishSpan = true) {
         val span = Kamon.currentSpan()
         span.mark("before-produce-ref-computed")
-        val produceRef = Produce.create(channel, data, persist)
+        val produceRef = Produce.create(channel, data, persist, sequenceNumber)
         span.mark("before-produce-lock")
         produceLock(channel) {
           span.mark("produce-lock-acquired")
@@ -252,10 +264,22 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
                     }
                 }
               logger.debug(s"produce: matching continuation found at <channels: $channels>")
+              val contSequenceNumber = Math.max(
+                consumeRef.sequenceNumber,
+                dataCandidates.map {
+                  case DataCandidate(_, Datum(_, _, source), _) => source.sequenceNumber
+                }.max
+              ) + 1
               Right(
                 Some(
                   (
-                    ContResult[C, P, K](continuation, persistK, channels, patterns),
+                    ContResult[C, P, K](
+                      continuation,
+                      persistK,
+                      channels,
+                      patterns,
+                      contSequenceNumber
+                    ),
                     dataCandidates.map(dc => Result(dc.datum.a, dc.datum.persist))
                   )
                 )

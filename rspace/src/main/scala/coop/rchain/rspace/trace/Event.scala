@@ -37,20 +37,20 @@ object Event {
 case class COMM(consume: Consume, produces: Seq[Produce]) extends Event
 
 object COMM {
-
   implicit val codecCOMM: Codec[COMM] = (Codec[Consume] :: Codec[Seq[Produce]]).as[COMM]
 }
 
 sealed trait IOEvent extends Event
 
-case class Produce private (channelsHash: Blake2b256Hash, hash: Blake2b256Hash) extends IOEvent {
+case class Produce private (channelsHash: Blake2b256Hash, hash: Blake2b256Hash, sequenceNumber: Int)
+    extends IOEvent {
 
   override def equals(obj: scala.Any): Boolean = obj match {
-    case produce: Produce => produce.hash == hash
+    case produce: Produce => produce.hash == hash && produce.sequenceNumber == sequenceNumber
     case _                => false
   }
 
-  override def hashCode(): Int = hash.hashCode()
+  override def hashCode(): Int = hash.hashCode() * 47 + sequenceNumber.hashCode()
 
   override def toString: String =
     s"Produce(channels: ${channelsHash.toString}, hash: ${hash.toString})"
@@ -59,34 +59,36 @@ case class Produce private (channelsHash: Blake2b256Hash, hash: Blake2b256Hash) 
 
 object Produce {
 
-  def unapply(arg: Produce): Option[(Blake2b256Hash, Blake2b256Hash)] =
-    Some((arg.channelsHash, arg.hash))
+  def unapply(arg: Produce): Option[(Blake2b256Hash, Blake2b256Hash, Int)] =
+    Some((arg.channelsHash, arg.hash, arg.sequenceNumber))
 
-  def create[C, A](channel: C, datum: A, persist: Boolean)(
+  def create[C, A](channel: C, datum: A, persist: Boolean, sequenceNumber: Int)(
       implicit
       serializeC: Serialize[C],
       serializeA: Serialize[A]
   ): Produce =
     new Produce(
       StableHashProvider.hash(Seq(channel))(serializeC.toCodec),
-      StableHashProvider.hash(channel, datum, persist)
+      StableHashProvider.hash(channel, datum, persist),
+      sequenceNumber
     )
 
-  def fromHash(channelsHash: Blake2b256Hash, hash: Blake2b256Hash): Produce =
-    new Produce(channelsHash, hash)
+  def fromHash(channelsHash: Blake2b256Hash, hash: Blake2b256Hash, sequenceNumber: Int): Produce =
+    new Produce(channelsHash, hash, sequenceNumber)
 
   implicit val codecProduce: Codec[Produce] =
-    (Codec[Blake2b256Hash] :: Codec[Blake2b256Hash]).as[Produce]
+    (Codec[Blake2b256Hash] :: Codec[Blake2b256Hash] :: int32).as[Produce]
 }
 
-case class Consume private (channelsHash: Blake2b256Hash, hash: Blake2b256Hash) extends IOEvent {
+case class Consume private (channelsHash: Blake2b256Hash, hash: Blake2b256Hash, sequenceNumber: Int)
+    extends IOEvent {
 
   override def equals(obj: scala.Any): Boolean = obj match {
-    case consume: Consume => consume.hash == hash
+    case consume: Consume => consume.hash == hash && consume.sequenceNumber == sequenceNumber
     case _                => false
   }
 
-  override def hashCode(): Int = hash.hashCode()
+  override def hashCode(): Int = hash.hashCode() * 47 + sequenceNumber.hashCode()
 
   override def toString: String =
     s"Consume(channels: ${channelsHash.toString}, hash: ${hash.toString})"
@@ -94,10 +96,16 @@ case class Consume private (channelsHash: Blake2b256Hash, hash: Blake2b256Hash) 
 
 object Consume {
 
-  def unapply(arg: Consume): Option[(Blake2b256Hash, Blake2b256Hash)] =
-    Some((arg.channelsHash, arg.hash))
+  def unapply(arg: Consume): Option[(Blake2b256Hash, Blake2b256Hash, Int)] =
+    Some((arg.channelsHash, arg.hash, arg.sequenceNumber))
 
-  def create[C, P, K](channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
+  def create[C, P, K](
+      channels: Seq[C],
+      patterns: Seq[P],
+      continuation: K,
+      persist: Boolean,
+      sequenceNumber: Int
+  )(
       implicit
       serializeC: Serialize[C],
       serializeP: Serialize[P],
@@ -105,12 +113,13 @@ object Consume {
   ): Consume =
     new Consume(
       StableHashProvider.hash(channels)(serializeC.toCodec),
-      StableHashProvider.hash(channels, patterns, continuation, persist)
+      StableHashProvider.hash(channels, patterns, continuation, persist),
+      sequenceNumber
     )
 
-  def fromHash(channelsHash: Blake2b256Hash, hash: Blake2b256Hash): Consume =
-    new Consume(channelsHash, hash)
+  def fromHash(channelsHash: Blake2b256Hash, hash: Blake2b256Hash, sequenceNumber: Int): Consume =
+    new Consume(channelsHash, hash, sequenceNumber)
 
   implicit val codecConsume: Codec[Consume] =
-    (Codec[Blake2b256Hash] :: Codec[Blake2b256Hash]).as[Consume]
+    (Codec[Blake2b256Hash] :: Codec[Blake2b256Hash] :: int32).as[Consume]
 }

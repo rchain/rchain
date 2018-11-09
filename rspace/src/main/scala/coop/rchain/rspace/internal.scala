@@ -15,12 +15,12 @@ object internal {
   final case class Datum[A](a: A, persist: Boolean, source: Produce)
 
   object Datum {
-    def create[C, A](channel: C, a: A, persist: Boolean)(
+    def create[C, A](channel: C, a: A, persist: Boolean, sequenceNumber: Int)(
         implicit
         serializeC: Serialize[C],
         serializeA: Serialize[A]
     ): Datum[A] =
-      Datum(a, persist, Produce.create(channel, a, persist))
+      Datum(a, persist, Produce.create(channel, a, persist, sequenceNumber))
   }
 
   final case class DataCandidate[C, A](channel: C, datum: Datum[A], datumIndex: Int)
@@ -33,7 +33,13 @@ object internal {
   )
 
   object WaitingContinuation {
-    def create[C, P, K](channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
+    def create[C, P, K](
+        channels: Seq[C],
+        patterns: Seq[P],
+        continuation: K,
+        persist: Boolean,
+        sequenceNumber: Int
+    )(
         implicit
         serializeC: Serialize[C],
         serializeP: Serialize[P],
@@ -43,7 +49,7 @@ object internal {
         patterns,
         continuation,
         persist,
-        Consume.create(channels, patterns, continuation, persist)
+        Consume.create(channels, patterns, continuation, persist, sequenceNumber)
       )
   }
 
