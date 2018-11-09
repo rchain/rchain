@@ -12,15 +12,15 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil._
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.catscontrib.effect.implicits.bracketTry
 import coop.rchain.models.PCost
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.Time
+import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
-import scala.util.Try
+import scala.concurrent.duration._
 
 class InterpreterUtilTest
     extends FlatSpec
@@ -95,50 +95,64 @@ class InterpreterUtilTest
     val genesis = chain.idToBlocks(0)
 
     val (genPostState, b1PostState, b3PostState) =
-      mkRuntimeManager[Try]("interpreter-util-test").use { runtimeManager =>
-        Try {
-          val (postGenStateHash, postGenProcessedDeploys) =
-            computeBlockCheckpoint(genesis, genesis, chain, runtimeManager)
-          val chainWithUpdatedGen =
-            injectPostStateHash(chain, 0, genesis, postGenStateHash, postGenProcessedDeploys)
-          val genPostState = runtimeManager.storageRepr(postGenStateHash).get
+      mkRuntimeManager("interpreter-util-test")
+        .use { runtimeManager =>
+          Task.delay {
+            val (postGenStateHash, postGenProcessedDeploys) =
+              computeBlockCheckpoint(genesis, genesis, chain, runtimeManager)
+            val chainWithUpdatedGen =
+              injectPostStateHash(chain, 0, genesis, postGenStateHash, postGenProcessedDeploys)
+            val genPostState = runtimeManager.storageRepr(postGenStateHash).get
 
-          val b1 = chainWithUpdatedGen.idToBlocks(1)
-          val (postB1StateHash, postB1ProcessedDeploys) =
-            computeBlockCheckpoint(
-              b1,
-              genesis,
-              chainWithUpdatedGen,
-              runtimeManager
-            )
-          val chainWithUpdatedB1 =
-            injectPostStateHash(chainWithUpdatedGen, 1, b1, postB1StateHash, postB1ProcessedDeploys)
-          val b1PostState = runtimeManager.storageRepr(postB1StateHash).get
+            val b1 = chainWithUpdatedGen.idToBlocks(1)
+            val (postB1StateHash, postB1ProcessedDeploys) =
+              computeBlockCheckpoint(
+                b1,
+                genesis,
+                chainWithUpdatedGen,
+                runtimeManager
+              )
+            val chainWithUpdatedB1 =
+              injectPostStateHash(
+                chainWithUpdatedGen,
+                1,
+                b1,
+                postB1StateHash,
+                postB1ProcessedDeploys
+              )
+            val b1PostState = runtimeManager.storageRepr(postB1StateHash).get
 
-          val b2 = chainWithUpdatedB1.idToBlocks(2)
-          val (postB2StateHash, postB2ProcessedDeploys) =
-            computeBlockCheckpoint(
-              b2,
-              genesis,
-              chainWithUpdatedB1,
-              runtimeManager
-            )
-          val chainWithUpdatedB2 =
-            injectPostStateHash(chainWithUpdatedB1, 2, b2, postB2StateHash, postB2ProcessedDeploys)
+            val b2 = chainWithUpdatedB1.idToBlocks(2)
+            val (postB2StateHash, postB2ProcessedDeploys) =
+              computeBlockCheckpoint(
+                b2,
+                genesis,
+                chainWithUpdatedB1,
+                runtimeManager
+              )
+            val chainWithUpdatedB2 =
+              injectPostStateHash(
+                chainWithUpdatedB1,
+                2,
+                b2,
+                postB2StateHash,
+                postB2ProcessedDeploys
+              )
 
-          val b3 = chainWithUpdatedB2.idToBlocks(3)
-          val (postb3StateHash, _) =
-            computeBlockCheckpoint(
-              b3,
-              genesis,
-              chainWithUpdatedB2,
-              runtimeManager
-            )
-          val b3PostState = runtimeManager.storageRepr(postb3StateHash).get
+            val b3 = chainWithUpdatedB2.idToBlocks(3)
+            val (postb3StateHash, _) =
+              computeBlockCheckpoint(
+                b3,
+                genesis,
+                chainWithUpdatedB2,
+                runtimeManager
+              )
+            val b3PostState = runtimeManager.storageRepr(postb3StateHash).get
 
-          (genPostState, b1PostState, b3PostState)
+            (genPostState, b1PostState, b3PostState)
+          }
         }
-      }.get
+        .runSyncUnsafe(10.seconds)
 
     genPostState.contains("@{2}!(2)") should be(true)
     genPostState.contains("@{123}!(5)") should be(true)
@@ -218,44 +232,46 @@ class InterpreterUtilTest
     val chain   = createChain[StateWithChain].runS(initState)
     val genesis = chain.idToBlocks(0)
 
-    val b3PostState = mkRuntimeManager[Try]("interpreter-util-test").use { runtimeManager =>
-      Try {
-        val (postGenStateHash, postGenProcessedDeploys) =
-          computeBlockCheckpoint(genesis, genesis, chain, runtimeManager)
-        val chainWithUpdatedGen =
-          injectPostStateHash(chain, 0, genesis, postGenStateHash, postGenProcessedDeploys)
-        val b1 = chainWithUpdatedGen.idToBlocks(1)
-        val (postB1StateHash, postB1ProcessedDeploys) =
-          computeBlockCheckpoint(
-            b1,
-            genesis,
-            chainWithUpdatedGen,
-            runtimeManager
-          )
-        val chainWithUpdatedB1 =
-          injectPostStateHash(chainWithUpdatedGen, 1, b1, postB1StateHash, postB1ProcessedDeploys)
-        val b2 = chainWithUpdatedB1.idToBlocks(2)
-        val (postB2StateHash, postB2ProcessedDeploys) =
-          computeBlockCheckpoint(
-            b2,
-            genesis,
-            chainWithUpdatedB1,
-            runtimeManager
-          )
-        val chainWithUpdatedB2 =
-          injectPostStateHash(chainWithUpdatedB1, 2, b2, postB2StateHash, postB2ProcessedDeploys)
-        val updatedGenesis = chainWithUpdatedB2.idToBlocks(0)
-        val b3             = chainWithUpdatedB2.idToBlocks(3)
-        val (postb3StateHash, _) =
-          computeBlockCheckpoint(
-            b3,
-            updatedGenesis,
-            chainWithUpdatedB2,
-            runtimeManager
-          )
-        runtimeManager.storageRepr(postb3StateHash).get
+    val b3PostState = mkRuntimeManager("interpreter-util-test")
+      .use { runtimeManager =>
+        Task.delay {
+          val (postGenStateHash, postGenProcessedDeploys) =
+            computeBlockCheckpoint(genesis, genesis, chain, runtimeManager)
+          val chainWithUpdatedGen =
+            injectPostStateHash(chain, 0, genesis, postGenStateHash, postGenProcessedDeploys)
+          val b1 = chainWithUpdatedGen.idToBlocks(1)
+          val (postB1StateHash, postB1ProcessedDeploys) =
+            computeBlockCheckpoint(
+              b1,
+              genesis,
+              chainWithUpdatedGen,
+              runtimeManager
+            )
+          val chainWithUpdatedB1 =
+            injectPostStateHash(chainWithUpdatedGen, 1, b1, postB1StateHash, postB1ProcessedDeploys)
+          val b2 = chainWithUpdatedB1.idToBlocks(2)
+          val (postB2StateHash, postB2ProcessedDeploys) =
+            computeBlockCheckpoint(
+              b2,
+              genesis,
+              chainWithUpdatedB1,
+              runtimeManager
+            )
+          val chainWithUpdatedB2 =
+            injectPostStateHash(chainWithUpdatedB1, 2, b2, postB2StateHash, postB2ProcessedDeploys)
+          val updatedGenesis = chainWithUpdatedB2.idToBlocks(0)
+          val b3             = chainWithUpdatedB2.idToBlocks(3)
+          val (postb3StateHash, _) =
+            computeBlockCheckpoint(
+              b3,
+              updatedGenesis,
+              chainWithUpdatedB2,
+              runtimeManager
+            )
+          runtimeManager.storageRepr(postb3StateHash).get
+        }
       }
-    }.get
+      .runSyncUnsafe(10.seconds)
 
     b3PostState.contains("@{1}!(15)") should be(true)
     b3PostState.contains("@{5}!(5)") should be(true)
@@ -292,9 +308,9 @@ class InterpreterUtilTest
         accounting.MAX_VALUE
       )
 
-    val (accCostBatch, accCostsSep) = mkRuntimeManager[Try]("interpreter-util-test").use {
-      runtimeManager =>
-        Try {
+    val (accCostBatch, accCostsSep) = mkRuntimeManager("interpreter-util-test")
+      .use { runtimeManager =>
+        Task.delay {
           val cost1 = computeSingleProcessedDeploy(runtimeManager, deploy1)
           val cost2 = computeSingleProcessedDeploy(runtimeManager, deploy2)
           val cost3 = computeSingleProcessedDeploy(runtimeManager, deploy3)
@@ -307,7 +323,8 @@ class InterpreterUtilTest
 
           (accCostBatch, accCostsSep)
         }
-    }.get
+      }
+      .runSyncUnsafe(10.seconds)
 
     accCostBatch should contain theSameElementsAs accCostsSep
   }
@@ -328,9 +345,9 @@ class InterpreterUtilTest
           accounting.MAX_VALUE
         )
 
-      val (accCostBatch, accCostsSep) = mkRuntimeManager[Try]("interpreter-util-test").use {
-        runtimeManager =>
-          Try {
+      val (accCostBatch, accCostsSep) = mkRuntimeManager("interpreter-util-test")
+        .use { runtimeManager =>
+          Task.delay {
             val cost1 = computeSingleProcessedDeploy(runtimeManager, deploy1)
             val cost2 = computeSingleProcessedDeploy(runtimeManager, deploy2)
 
@@ -347,7 +364,8 @@ class InterpreterUtilTest
 
             (accCostBatch, accCostsSep)
           }
-      }.get
+        }
+        .runSyncUnsafe(10.seconds)
 
       accCostBatch should contain theSameElementsAs accCostsSep
     }
@@ -363,9 +381,11 @@ class InterpreterUtilTest
         .runS(initState)
     val block = chain.idToBlocks(0)
 
-    val Right(stateHash) = mkRuntimeManager[Try]("interpreter-util-test").use { runtimeManager =>
-      Try { validateBlockCheckpoint[Id](block, chain, runtimeManager) }
-    }.get
+    val Right(stateHash) = mkRuntimeManager("interpreter-util-test")
+      .use { runtimeManager =>
+        Task.delay { validateBlockCheckpoint[Id](block, chain, runtimeManager) }
+      }
+      .runSyncUnsafe(10.seconds)
 
     stateHash should be(None)
   }
@@ -384,9 +404,9 @@ class InterpreterUtilTest
       ).flatMap(mkTerm(_).toOption)
         .map(ProtoUtil.termDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
 
-    val (tsHash, computedTsHash) = mkRuntimeManager[Try]("interpreter-util-test").use {
-      runtimeManager =>
-        Try {
+    val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
+      .use { runtimeManager =>
+        Task.delay {
           val Right((computedTsHash, processedDeploys)) =
             computeDeploysCheckpoint[Id](Seq.empty, deploys, initState, runtimeManager)
           val chain: IndexedBlockDag =
@@ -402,7 +422,8 @@ class InterpreterUtilTest
 
           (tsHash, computedTsHash)
         }
-    }.get
+      }
+      .runSyncUnsafe(10.seconds)
 
     tsHash should be(Some(computedTsHash))
   }
@@ -441,9 +462,9 @@ class InterpreterUtilTest
         )
     )
 
-    val (tsHash, computedTsHash) = mkRuntimeManager[Try]("interpreter-util-test").use {
-      runtimeManager =>
-        Try {
+    val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
+      .use { runtimeManager =>
+        Task.delay {
           val Right((computedTsHash, processedDeploys)) =
             computeDeploysCheckpoint[Id](Seq.empty, deploys, initState, runtimeManager)
           val chain: IndexedBlockDag =
@@ -459,7 +480,8 @@ class InterpreterUtilTest
 
           (tsHash, computedTsHash)
         }
-    }.get
+      }
+      .runSyncUnsafe(10.seconds)
 
     tsHash should be(Some(computedTsHash))
   }
@@ -501,9 +523,9 @@ class InterpreterUtilTest
               accounting.MAX_VALUE
             )
         )
-    val (tsHash, computedTsHash) = mkRuntimeManager[Try]("interpreter-util-test").use {
-      runtimeManager =>
-        Try {
+    val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
+      .use { runtimeManager =>
+        Task.delay {
           val Right((computedTsHash, processedDeploys)) =
             computeDeploysCheckpoint[Id](Seq.empty, deploys, initState, runtimeManager)
           val chain: IndexedBlockDag =
@@ -519,7 +541,8 @@ class InterpreterUtilTest
 
           (tsHash, computedTsHash)
         }
-    }.get
+      }
+      .runSyncUnsafe(10.seconds)
 
     tsHash should be(Some(computedTsHash))
   }
@@ -558,9 +581,9 @@ class InterpreterUtilTest
             accounting.MAX_VALUE
           )
       )
-    val (tsHash, computedTsHash) = mkRuntimeManager[Try]("interpreter-util-test").use {
-      runtimeManager =>
-        Try {
+    val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
+      .use { runtimeManager =>
+        Task.delay {
           val Right((computedTsHash, processedDeploys)) =
             computeDeploysCheckpoint[Id](Seq.empty, deploys, initState, runtimeManager)
           val chain: IndexedBlockDag =
@@ -575,7 +598,8 @@ class InterpreterUtilTest
             validateBlockCheckpoint[Id](block, chain, runtimeManager)
           (tsHash, computedTsHash)
         }
-    }.get
+      }
+      .runSyncUnsafe(10.seconds)
 
     tsHash should be(Some(computedTsHash))
   }
@@ -606,9 +630,9 @@ class InterpreterUtilTest
               accounting.MAX_VALUE
             )
         )
-      val (tsHash, computedTsHash) = mkRuntimeManager[Try]("interpreter-util-test").use {
-        runtimeManager =>
-          Try {
+      val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
+        .use { runtimeManager =>
+          Task.delay {
             val Right((computedTsHash, processedDeploys)) =
               computeDeploysCheckpoint[Id](
                 Seq.empty,
@@ -628,7 +652,8 @@ class InterpreterUtilTest
               validateBlockCheckpoint[Id](block, chain, runtimeManager)
             (tsHash, computedTsHash)
           }
-      }.get
+        }
+        .runSyncUnsafe(10.seconds)
 
       tsHash should be(Some(computedTsHash))
     }
@@ -641,9 +666,9 @@ class InterpreterUtilTest
       ProtoUtil.termDeployNow(term)
     })
 
-    val tsHash = mkRuntimeManager[Try]("interpreter-util-test").use {
-      runtimeManager =>
-        Try {
+    val tsHash = mkRuntimeManager("interpreter-util-test")
+      .use { runtimeManager =>
+        Task.delay {
           val Right((computedTsHash, processedDeploys)) =
             computeDeploysCheckpoint[Id](Seq.empty, deploys, initState, runtimeManager)
           val intProcessedDeploys = processedDeploys.map(ProcessedDeployUtil.fromInternal)
@@ -664,7 +689,8 @@ class InterpreterUtilTest
 
           tsHash
         }
-    }.get
+      }
+      .runSyncUnsafe(10.seconds)
 
     tsHash should be(None)
   }
@@ -691,9 +717,9 @@ class InterpreterUtilTest
           """.stripMargin
         ).map(s => ProtoUtil.termDeployNow(InterpreterUtil.mkTerm(s).right.get))
 
-      val (tsHash, computedTsHash) = mkRuntimeManager[Try]("interpreter-util-test").use {
-        runtimeManager =>
-          Try {
+      val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
+        .use { runtimeManager =>
+          Task.delay {
             val Right((computedTsHash, processedDeploys)) =
               computeDeploysCheckpoint[Id](
                 Seq.empty,
@@ -714,7 +740,8 @@ class InterpreterUtilTest
 
             (tsHash, computedTsHash)
           }
-      }.get
+        }
+        .runSyncUnsafe(10.seconds)
 
       tsHash should be(Some(computedTsHash))
     }

@@ -13,6 +13,7 @@ import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Context, RSpace}
 import coop.rchain.shared.StoreType
+import monix.eval.Task
 import monix.execution.Scheduler
 
 import scala.reflect.io.Directory
@@ -59,11 +60,15 @@ object Resources {
       .flatMap(tmpDir => Resource.make(mkRspace(tmpDir))(_.close()))
   }
 
-
-  def mkRuntime[F[_]: Applicative]( prefix: String,
-                                           storageSize: Long = 1024 * 1024,
-                                           storeType: StoreType = StoreType.LMDB
-                                         )(implicit scheduler: Scheduler): Resource[F, Runtime] =
-    mkTempDir[F](prefix)
-      .flatMap { tmpDir => Resource.pure(Runtime.create(tmpDir, storageSize, storeType))}
+  def mkRuntime(
+      prefix: String,
+      storageSize: Long = 1024 * 1024,
+      storeType: StoreType = StoreType.LMDB
+  )(implicit scheduler: Scheduler): Resource[Task, Runtime] =
+    mkTempDir[Task](prefix)
+      .flatMap { tmpDir =>
+        Resource.make[Task, Runtime](Task.delay { Runtime.create(tmpDir, storageSize, storeType) })(
+          rt => rt.close()
+        )
+      }
 }
