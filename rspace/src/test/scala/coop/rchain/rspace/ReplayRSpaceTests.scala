@@ -15,20 +15,17 @@ import coop.rchain.rspace.spaces._
 import coop.rchain.rspace.trace.{COMM, Consume, IOEvent, Produce}
 import coop.rchain.shared.PathOps._
 import org.scalatest._
-import org.scalatest.concurrent.ScalaFutures
 
 import scala.Function.const
 import scala.collection.parallel.ParSeq
 import scala.collection.{immutable, mutable}
-import scala.concurrent.Future
 import scala.util.{Random, Right}
 import scala.concurrent.ExecutionContext.Implicits.global
 
 //noinspection ZeroIndexToHead,NameBooleanParameters
 trait ReplayRSpaceTests
     extends ReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
-    with TestImplicitHelpers
-    with ScalaFutures {
+    with TestImplicitHelpers {
 
   def consumeMany[C, P, A, R, K](
       space: IdISpace[C, P, Nothing, A, R, K],
@@ -1015,8 +1012,7 @@ class InMemoryReplayRSpaceTests
     with ReplayRSpaceTests {}
 
 class FaultyReplayRSpaceTests
-    extends FaultyStoreReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
-    with ScalaFutures {
+    extends FaultyStoreReplayRSpaceTestsBase[String, Pattern, Nothing, String, String] {
 
   "an exception thrown inside a consume" should "not make replay rspace unresponsive" in
     withTestSpaces { (space, replaySpace) =>
@@ -1025,12 +1021,14 @@ class FaultyReplayRSpaceTests
       val patterns     = List(Wildcard)
       val continuation = "continuation"
 
-      an[RuntimeException] shouldBe thrownBy(
-        replaySpace.consume(key, patterns, continuation, false)
-      )
-
-      val res = Future { replaySpace.consume(key, patterns, continuation, false) }.failed.futureValue
-      res.getMessage shouldBe "Couldn't write to underlying store"
+      the[RuntimeException] thrownBy (
+        replaySpace.consume(
+          key,
+          patterns,
+          continuation,
+          false
+        )
+      ) should have message "Couldn't write to underlying store"
     }
 
   "an exception thrown inside a produce" should "not make replay rspace unresponsive" in
@@ -1038,11 +1036,12 @@ class FaultyReplayRSpaceTests
       val channel = "ch1"
       val data    = "datum1"
 
-      an[RuntimeException] shouldBe thrownBy(
-        replaySpace.produce(channel, data, false)
-      )
-
-      val res = Future { replaySpace.produce(channel, data, false) }.failed.futureValue
-      res.getMessage shouldBe "Couldn't write to underlying store"
+      the[RuntimeException] thrownBy (
+        replaySpace.produce(
+          channel,
+          data,
+          false
+        )
+      ) should have message "Couldn't write to underlying store"
     }
 }
