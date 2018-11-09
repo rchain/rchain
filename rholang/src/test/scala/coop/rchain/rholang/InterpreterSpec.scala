@@ -25,23 +25,19 @@ class InterpreterSpec extends FlatSpec with Matchers {
     val sendRho = "@{0}!(0)"
 
     val (initStorage, beforeError, afterError, afterSend, finalContent) =
-      mkRuntime[Try](tmpPrefix, mapSize)
-      .use { runtime =>
-        Try {
-          val initStorage = storageContents(runtime)
-          success(runtime, sendRho).runSyncUnsafe(maxDuration)
-          val beforeError = storageContents(runtime)
-          failure(runtime, "@1!(1) | @2!(3.noSuchMethod())").runSyncUnsafe(maxDuration)
-          val afterError = storageContents(runtime)
-          success(runtime, "new stdout(`rho:io:stdout`) in { stdout!(42) }").runSyncUnsafe(maxDuration)
-          val afterSend = storageContents(runtime)
-          success(runtime, "for (_ <- @0) { Nil }").runSyncUnsafe(maxDuration)
-          val finalContent = storageContents(runtime)
-
-          (initStorage, beforeError, afterError, afterSend, finalContent)
-        }
-      }
-      .get
+      mkRuntime(tmpPrefix, mapSize).use { runtime =>
+        val initStorage = storageContents(runtime)
+        for {
+          _ <- success(runtime, sendRho)
+          beforeError = storageContents(runtime)
+          _ <- failure(runtime, "@1!(1) | @2!(3.noSuchMethod())")
+          afterError = storageContents(runtime)
+          _ <- success(runtime, "new stdout(`rho:io:stdout`) in { stdout!(42) }")
+          afterSend = storageContents(runtime)
+          _ <- success(runtime, "for (_ <- @0) { Nil }")
+          finalContent = storageContents(runtime)
+        } yield (initStorage, beforeError, afterError, afterSend, finalContent)
+      }.runSyncUnsafe(maxDuration)
 
     assert(beforeError.contains(sendRho))
     assert(afterError == beforeError)
@@ -51,12 +47,11 @@ class InterpreterSpec extends FlatSpec with Matchers {
 
   it should "yield correct results for the PrimeCheck contract" in {
     import coop.rchain.catscontrib.effect.implicits.bracketTry
-    val contents = mkRuntime[Try](tmpPrefix, mapSize)
-        .use { runtime =>
-          Try {
-            success(
-              runtime,
-              """
+    val contents = mkRuntime(tmpPrefix, mapSize).use { runtime =>
+      for {
+        _ <- success(
+          runtime,
+          """
               |new loop, primeCheck, stdoutAck(`rho:io:stdoutAck`) in {
               |            contract loop(@x) = {
               |              match x {
@@ -80,12 +75,11 @@ class InterpreterSpec extends FlatSpec with Matchers {
               |            loop!([Nil, 7, 7 | 8, 9 | Nil, 9 | 10, Nil, 9])
               |  }
             """.stripMargin
-            ).runSyncUnsafe(maxDuration)
+        )
 
-            storageContents(runtime)
-          }
-        }
-        .get
+        contents = storageContents(runtime)
+      } yield contents
+    }.runSyncUnsafe(maxDuration)
 
     // TODO: this is not the way we should be testing execution results,
     // yet strangely it works - and we don't have a better way for now
@@ -104,18 +98,18 @@ class InterpreterSpec extends FlatSpec with Matchers {
     )
   }
 
-  private def storageContents(runtime : Runtime): String =
+  private def storageContents(runtime: Runtime): String =
     StoragePrinter.prettyPrint(runtime.space.store)
 
-  private def success(runtime : Runtime, rho: String): Task[Unit] =
+  private def success(runtime: Runtime, rho: String): Task[Unit] =
     execute(runtime, rho).map(_.swap.foreach(error => fail(s"""Execution failed for: $rho
                                                |Cause:
                                                |$error""".stripMargin)))
 
-  private def failure(runtime : Runtime, rho: String): Task[Throwable] =
+  private def failure(runtime: Runtime, rho: String): Task[Throwable] =
     execute(runtime, rho).map(_.swap.getOrElse(fail(s"Expected $rho to fail - it didn't.")))
 
-  private def execute(runtime:Runtime, source: String): Task[Either[Throwable, Runtime]] =
+  private def execute(runtime: Runtime, source: String): Task[Either[Throwable, Runtime]] =
     Interpreter.execute(runtime, new StringReader(source)).attempt
 
 }

@@ -51,7 +51,7 @@ class RuntimeSpec extends FlatSpec with Matchers {
     execute(rho).swap.getOrElse(fail(s"Expected $rho to fail - it didn't."))
 
   private def execute(source: String): Either[Throwable, Runtime] =
-    mkRuntime[Task](tmpPrefix, mapSize)
+    mkRuntime(tmpPrefix, mapSize)
       .use { runtime =>
         Interpreter
           .execute(runtime, new StringReader(source))
