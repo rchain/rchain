@@ -55,7 +55,7 @@ object Tuplespace {
               Parallel
                 .parProduct(
                   dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
-                  produce(channel, data, persistent, updatedSequenceNumber)
+                  produce(channel, data, persistent, sequenceNumber)
                 )
                 .as(())
             } else {
@@ -93,7 +93,7 @@ object Tuplespace {
                   Parallel
                     .parProduct(
                       dispatcher.dispatch(continuation, dataList, updatedSequenceNumber),
-                      consume(binds, body, persistent, updatedSequenceNumber)
+                      consume(binds, body, persistent, sequenceNumber)
                     )
                     .as(())
                 } else {
