@@ -5,6 +5,7 @@ import contextlib
 from rnode_testing.rnode import start_bootstrap, create_peer
 from rnode_testing.wait import wait_for, node_started
 
+
 """
 First approximation:
 1) Bootstrap node with a bonds file in the genesis block for at least one bonded validator
@@ -106,11 +107,13 @@ def started_unbonded_validator(system, bootstrap_node):
 
 
 def test_heterogenous_validators(custom_system):
+    BONDED_VALIDATOR_BLOCKS = 10
+    JOINING_VALIDATOR_BLOCKS = 10
     with start_bootstrap(custom_system.docker, custom_system.config.node_startup_timeout, custom_system.config.rnode_timeout, custom_system.validators_data) as bootstrap_node:
         with started_bonded_validator(custom_system, bootstrap_node) as bonded_validator:
             contract_path = '/opt/docker/examples/hello_world_again.rho'
-            for _ in range(1):
-                bonded_validator.deploy(contract_path)
+            bonded_validator.deploy(contract_path)
+            for _ in range(BONDED_VALIDATOR_BLOCKS):
                 bonded_validator.propose()
 
             with started_joining_validator(custom_system, bootstrap_node) as joining_validator:
@@ -122,9 +125,9 @@ def test_heterogenous_validators(custom_system):
                 bond_file = joining_validator.cat_bond_file(public_key=JOINING_VALIDATOR_KEYS.public_key)
                 bonded_validator.deploy_string(bond_file)
                 bonded_validator.propose()
-                for _ in range(1):
-                    joining_validator.deploy(contract_path)
+                joining_validator.deploy(contract_path)
+                for _ in range(JOINING_VALIDATOR_BLOCKS):
                     joining_validator.propose()
 
                 with started_unbonded_validator(custom_system, bootstrap_node) as unbonded_validator:
-                    wait_for(lambda: unbonded_validator.get_blocks_count() > 0, 600, "Unbonded validator did not receive any blocks")
+                    wait_for(lambda: unbonded_validator.get_blocks_count() >= BONDED_VALIDATOR_BLOCKS+JOINING_VALIDATOR_BLOCKS, 600, "Unbonded validator did not receive any blocks")
