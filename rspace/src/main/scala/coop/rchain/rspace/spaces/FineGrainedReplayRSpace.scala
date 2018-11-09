@@ -136,10 +136,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
       logger.debug(s"consume: data found for <patterns: $patterns> at <channels: $channels>")
       removeBindingsFor(commRef)
       span.mark("handle-matches-end")
-      val contSequenceNumber = Math.max(
-        commRef.consume.sequenceNumber,
-        commRef.produces.map(_.sequenceNumber).max
-      ) + 1
+      val contSequenceNumber = commRef.nextSequenceNumber
       Some(
         (
           ContResult(continuation, persist, channels, patterns, contSequenceNumber),
@@ -305,10 +302,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
           logger.debug(s"produce: matching continuation found at <channels: $channels>")
           removeBindingsFor(commRef)
           span.mark("handle-match-end")
-          val contSequenceNumber = Math.max(
-            commRef.consume.sequenceNumber,
-            commRef.produces.map(_.sequenceNumber).max
-          ) + 1
+          val contSequenceNumber = commRef.nextSequenceNumber
           Some(
             (
               ContResult(continuation, persistK, channels, patterns, contSequenceNumber),

@@ -837,7 +837,7 @@ trait ReplayRSpaceTests
 
     //rig
     replaySpace.rig(empty.root, afterPlay.log)
-    
+
     //some maliciously 'random' replay order
     replaySpace.produce(channel1, data3, false, 0) shouldBe noMatch
     replaySpace.produce(channel1, data3, false, 0) shouldBe noMatch

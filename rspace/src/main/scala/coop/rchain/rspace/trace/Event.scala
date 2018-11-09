@@ -34,7 +34,13 @@ object Event {
   implicit def codecLog: Codec[Seq[Event]] = codecSeq[Event](codecEvent)
 }
 
-case class COMM(consume: Consume, produces: Seq[Produce]) extends Event
+case class COMM(consume: Consume, produces: Seq[Produce]) extends Event {
+  def nextSequenceNumber: Int =
+    Math.max(
+      consume.sequenceNumber,
+      produces.map(_.sequenceNumber).max
+    ) + 1
+}
 
 object COMM {
   implicit val codecCOMM: Codec[COMM] = (Codec[Consume] :: Codec[Seq[Produce]]).as[COMM]
