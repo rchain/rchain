@@ -200,7 +200,7 @@ object Runtime {
   // TODO: remove default store type
   def create(dataDir: Path, mapSize: Long, storeType: StoreType = LMDB)(
       implicit scheduler: Scheduler
-  ): Runtime = {
+  ): Task[Runtime] = {
     val errorLog                                  = new ErrorLog()
     implicit val ft: FunctorTell[Task, Throwable] = errorLog
 
@@ -277,7 +277,7 @@ object Runtime {
       )
     }
 
-    (for {
+    for {
       setup                         <- setupRSpace[Task](dataDir, mapSize, storeType)
       (context, space, replaySpace) = setup
       (reducer, replayReducer) = {
@@ -313,7 +313,7 @@ object Runtime {
         shortLeashParams,
         blockTime
       )
-    }).unsafeRunSync
+    }
   }
 
   def injectEmptyRegistryRoot[F[_]](space: RhoISpace[F], replaySpace: RhoReplayISpace[F])(

@@ -1,24 +1,21 @@
 package coop.rchain.rholang.interpreter
 
-import java.io.{BufferedOutputStream, FileOutputStream, FileReader, StringReader}
+import java.io.{BufferedOutputStream, FileOutputStream, FileReader}
 import java.nio.file.{Files, Path}
-import java.util.concurrent.TimeoutException
 
-import coop.rchain.catscontrib.TaskContrib._
+import cats.effect.Resource
+import cats.implicits._
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.Interpreter.EvaluateResult
 import coop.rchain.rholang.interpreter.Runtime.RhoIStore
 import coop.rchain.rholang.interpreter.accounting.CostAccount
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import monix.eval.Task
-import monix.execution.{CancelableFuture, Scheduler}
-import org.rogach.scallop.{stringListConverter, ScallopConf}
+import monix.execution.Scheduler
+import org.rogach.scallop.{stringListConverter, ScallopConf, ScallopOption}
 
 import scala.annotation.tailrec
-import scala.concurrent.Await
 import scala.concurrent.duration._
-import scala.util.{Failure, Success}
 
 object RholangCLI {
 
@@ -26,8 +23,10 @@ object RholangCLI {
     version("Rholang Mercury 0.2")
     banner("""Options:""")
 
-    val binary: ScallopOption[Boolean] = opt[Boolean](descr = "outputs binary protobuf serialization")
-    val text: ScallopOption[Boolean] = opt[Boolean](descr = "outputs textual protobuf serialization")
+    val binary: ScallopOption[Boolean] =
+      opt[Boolean](descr = "outputs binary protobuf serialization")
+    val text: ScallopOption[Boolean] =
+      opt[Boolean](descr = "outputs textual protobuf serialization")
 
     val dataDir: ScallopOption[Path] = opt[Path](
       required = false,
@@ -48,26 +47,33 @@ object RholangCLI {
   }
 
   def main(args: Array[String]): Unit = {
+    import cats.implicits._
     import monix.execution.Scheduler.Implicits.global
 
     val conf = new Conf(args)
 
-    val runtime = Runtime.create(conf.dataDir(), conf.mapSize())
-    Await.result(
-      Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace).runAsync,
-      5.seconds
-    )
+    val runtimeResource: Resource[Task, Runtime] =
+      Resource
+        .make(Runtime.create(conf.dataDir(), conf.mapSize()))(_.close())
+        .flatMap(
+          runtime =>
+            Resource.liftF(
+              Runtime
+                .injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
+                .map(Function.const(runtime))
+            )
+        )
 
-    try {
-      if (conf.files.supplied) {
-        val fileNames = conf.files()
-        fileNames.foreach(f => processFile(conf, runtime, f))
-      } else {
-        repl(runtime)
+    if (conf.files.supplied) {
+      runtimeResource.use { runtime =>
+        conf
+          .files()
+          .traverse[Task, Unit](f => processFile(conf, runtime, f))
+          .map(_.combineAll)
       }
-    } finally {
-      runtime.close().unsafeRunSync
-    }
+    } else {
+      runtimeResource.use(runtime => Task.delay(repl(runtime)))
+    }.runSyncUnsafe(Duration.Inf)
   }
 
   def reader(fileName: String): FileReader = new FileReader(fileName)
@@ -88,8 +94,23 @@ object RholangCLI {
   private def printCost(cost: CostAccount): Unit =
     Console.println(s"Estimated deploy cost: $cost")
 
-  private def printErrors(errors: Vector[Throwable]) =
-    if (!errors.isEmpty) {
+  def processFile(conf: Conf, runtime: Runtime, fileName: String): Task[Unit] = {
+    val processTerm: Par => Task[Unit] =
+      if (conf.binary()) writeBinary(fileName)
+      else if (conf.text()) writeHumanReadable(fileName)
+      else evaluatePar(runtime)
+
+    val source = reader(fileName)
+
+    Interpreter
+      .buildNormalizedTerm(source)
+      .runAttempt
+      .traverse(processTerm)
+      .map(result => result.leftMap(ex => ex.printStackTrace(Console.err)))
+  }
+
+  private def printErrors(errors: Vector[Throwable]): Unit =
+    if (errors.nonEmpty) {
       Console.println("Errors received during evaluation:")
       for {
         error <- errors
@@ -111,46 +132,24 @@ object RholangCLI {
         }
       case None =>
         Console.println("\nExiting...")
-        return
     }
     repl(runtime)
   }
 
-  def processFile(conf: Conf, runtime: Runtime, fileName: String)(
-      implicit scheduler: Scheduler
-  ): Unit = {
-    val processTerm: Par => Unit =
-      if (conf.binary()) writeBinary(fileName)
-      else if (conf.text()) writeHumanReadable(fileName)
-      else evaluatePar(runtime)
+  def doAfter[A](timeout: FiniteDuration, action: => Unit)(task: Task[A]): Task[A] = {
+    val longTaskHelper =
+      for {
+        _ <- Task.sleep(timeout)
+        _ <- Task.delay(action)
+        _ <- Task.never[Unit]
+      } yield ()
 
-    val source = reader(fileName)
-
-    Interpreter
-      .buildNormalizedTerm(source)
-      .runAttempt
-      .fold(_.printStackTrace(Console.err), processTerm)
+    Task
+      .race(task, longTaskHelper)
+      .map(_.left.get)
   }
 
-  @tailrec
-  def waitForSuccess(evaluatorFuture: CancelableFuture[EvaluateResult]): Unit =
-    try {
-      Await.ready(evaluatorFuture, 5.seconds).value match {
-        case Some(Success(EvaluateResult(cost, errors))) =>
-          printCost(cost)
-          printErrors(errors)
-        case Some(Failure(e)) => throw e
-        case None             => throw new Exception("Future claimed to be ready, but value was None")
-      }
-    } catch {
-      case _: TimeoutException =>
-        Console.println("This is taking a long time. Feel free to ^C and quit.")
-        waitForSuccess(evaluatorFuture)
-      case e: Exception =>
-        throw e
-    }
-
-  private def writeHumanReadable(fileName: String)(sortedTerm: Par): Unit = {
+  private def writeHumanReadable(fileName: String)(sortedTerm: Par): Task[Unit] = Task.delay {
     val compiledFileName = fileName.replaceAll(".rho$", "") + ".rhoc"
     new java.io.PrintWriter(compiledFileName) {
       write(sortedTerm.toProtoString)
@@ -159,7 +158,7 @@ object RholangCLI {
     println(s"Compiled $fileName to $compiledFileName")
   }
 
-  private def writeBinary(fileName: String)(sortedTerm: Par): Unit = {
+  private def writeBinary(fileName: String)(sortedTerm: Par): Task[Unit] = Task.delay {
     val binaryFileName = fileName.replaceAll(".rho$", "") + ".bin"
     val output         = new BufferedOutputStream(new FileOutputStream(binaryFileName))
     output.write(sortedTerm.toByteString.toByteArray)
@@ -167,14 +166,19 @@ object RholangCLI {
     println(s"Compiled $fileName to $binaryFileName")
   }
 
-  def evaluatePar(runtime: Runtime)(par: Par)(implicit scheduler: Scheduler): Unit = {
-    val evaluatorTask =
+  def evaluatePar(runtime: Runtime)(par: Par): Task[Unit] = {
+    val evaluation: Task[Unit] =
       for {
         _      <- Task.now(printNormalizedTerm(par))
         result <- Interpreter.evaluate(runtime, par)
-      } yield result
+      } yield {
+        printStorageContents(runtime.space.store)
+        printCost(result.cost)
+        printErrors(result.errors)
+      }
 
-    waitForSuccess(evaluatorTask.runAsync)
-    printStorageContents(runtime.space.store)
+    doAfter(5.seconds, Console.println("This is taking a long time. Feel free to ^C and quit."))(
+      evaluation
+    )
   }
 }

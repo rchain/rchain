@@ -64,10 +64,10 @@ object Resources {
       prefix: String,
       storageSize: Long = 1024 * 1024,
       storeType: StoreType = StoreType.LMDB
-  )(implicit scheduler: Scheduler): Resource[Task, Runtime] =
+  ): Resource[Task, Runtime] =
     mkTempDir[Task](prefix)
       .flatMap { tmpDir =>
-        Resource.make[Task, Runtime](Task.delay { Runtime.create(tmpDir, storageSize, storeType) })(
+        Resource.make[Task, Runtime](Runtime.create(tmpDir, storageSize, storeType))(
           rt => rt.close()
         )
       }
