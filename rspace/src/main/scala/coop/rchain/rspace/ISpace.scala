@@ -53,7 +53,7 @@ trait ISpace[F[_], C, P, E, A, R, K] {
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
-      sequenceNumber: Int
+      sequenceNumber: Int = 0
   )(
       implicit m: Match[P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
@@ -85,7 +85,7 @@ trait ISpace[F[_], C, P, E, A, R, K] {
     * @param data A piece of data
     * @param persist Whether or not to attempt to persist the data
     */
-  def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
+  def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int = 0)(
       implicit m: Match[P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
 

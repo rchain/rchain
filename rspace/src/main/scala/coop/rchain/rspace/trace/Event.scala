@@ -62,7 +62,7 @@ object Produce {
   def unapply(arg: Produce): Option[(Blake2b256Hash, Blake2b256Hash, Int)] =
     Some((arg.channelsHash, arg.hash, arg.sequenceNumber))
 
-  def create[C, A](channel: C, datum: A, persist: Boolean, sequenceNumber: Int)(
+  def create[C, A](channel: C, datum: A, persist: Boolean, sequenceNumber: Int = 0)(
       implicit
       serializeC: Serialize[C],
       serializeA: Serialize[A]
@@ -104,7 +104,7 @@ object Consume {
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
-      sequenceNumber: Int
+      sequenceNumber: Int = 0
   )(
       implicit
       serializeC: Serialize[C],
