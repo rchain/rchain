@@ -13,7 +13,7 @@ trait PureRSpace[F[_], C, P, E, A, R, K] {
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
-      sequenceNumber: Int
+      sequenceNumber: Int = 0
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
 
   def install(channels: Seq[C], patterns: Seq[P], continuation: K): F[Option[(K, Seq[R])]]
@@ -22,7 +22,7 @@ trait PureRSpace[F[_], C, P, E, A, R, K] {
       channel: C,
       data: A,
       persist: Boolean,
-      sequenceNumber: Int
+      sequenceNumber: Int = 0
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
 
   def createCheckpoint(): F[Checkpoint]

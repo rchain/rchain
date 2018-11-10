@@ -65,7 +65,9 @@ class ChargingReducer[M[_]](implicit R: Reduce[M], C: CostAccounting[M]) {
   def setAvailablePhlos(limit: Cost): M[Unit] =
     C.set(CostAccount(0, limit))
 
-  def eval(par: Par)(implicit env: Env[Par], rand: Blake2b512Random, sequenceNumber: Int): M[Unit] =
+  def eval(
+      par: Par
+  )(implicit env: Env[Par], rand: Blake2b512Random, sequenceNumber: Int = 0): M[Unit] =
     R.eval(par)
 
   def inj(par: Par)(implicit rand: Blake2b512Random): M[Unit] =
