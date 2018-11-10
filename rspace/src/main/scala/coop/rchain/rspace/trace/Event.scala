@@ -59,7 +59,7 @@ case class Produce private (channelsHash: Blake2b256Hash, hash: Blake2b256Hash, 
   override def hashCode(): Int = hash.hashCode() * 47 + sequenceNumber.hashCode()
 
   override def toString: String =
-    s"Produce(channels: ${channelsHash.toString}, hash: ${hash.toString})"
+    s"Produce(channels: ${channelsHash.toString}, hash: ${hash.toString}, sequenceNumber: ${sequenceNumber.toString})"
 
 }
 
@@ -97,7 +97,7 @@ case class Consume private (channelsHash: Blake2b256Hash, hash: Blake2b256Hash, 
   override def hashCode(): Int = hash.hashCode() * 47 + sequenceNumber.hashCode()
 
   override def toString: String =
-    s"Consume(channels: ${channelsHash.toString}, hash: ${hash.toString})"
+    s"Consume(channels: ${channelsHash.toString}, hash: ${hash.toString}, sequenceNumber: ${sequenceNumber.toString})"
 }
 
 object Consume {

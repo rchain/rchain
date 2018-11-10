@@ -211,8 +211,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     **/
   private[comm] class StandaloneCasperHandler[F[_]: Sync: Capture: ConnectionsCell: NodeDiscovery: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock](
       approveProtocol: ApproveBlockProtocol[F]
-  )(implicit scheduler: Scheduler)
-      extends CasperPacketHandlerInternal[F] {
+  ) extends CasperPacketHandlerInternal[F] {
 
     private val nonePacket: F[Option[Packet]] = Applicative[F].pure(None: Option[Packet])
 
@@ -536,10 +535,9 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       implicit C: CasperPacketHandler[F]
   ): CasperPacketHandler[T[F, ?]] =
     new CasperPacketHandler[T[F, ?]] {
-      override def handle(peer: PeerNode): PartialFunction[Packet, T[F, Option[Packet]]] =
-        PartialFunction { (p: Packet) =>
-          C.handle(peer)(p).liftM[T]
-        }
+      override def handle(peer: PeerNode): PartialFunction[Packet, T[F, Option[Packet]]] = {
+        case (p: Packet) => C.handle(peer)(p).liftM[T]
+      }
     }
 
   private def noApprovedBlockAvailable(peer: PeerNode): Packet = Packet(

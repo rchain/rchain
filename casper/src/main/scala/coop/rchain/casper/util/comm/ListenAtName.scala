@@ -72,12 +72,12 @@ object ListenAtName {
 
   def listenAtNameUntilChanges[A, G[_], F[_]: Sync: Time](
       name: G[Name]
-  )(request: G[Par] => F[Seq[A]])(implicit par: BuildPar[λ[A => F[G[A]]]]) = {
+  )(request: G[Par] => F[Seq[A]])(implicit par: BuildPar[λ[B => F[G[B]]]]): F[Unit] = {
     val nameF = name.pure[F]
 
     val retrieve =
       for {
-        par  <- buildPar[λ[A => F[G[A]]]](nameF)
+        par  <- buildPar[λ[B => F[G[B]]]](nameF)
         init <- request(par)
       } yield init
 

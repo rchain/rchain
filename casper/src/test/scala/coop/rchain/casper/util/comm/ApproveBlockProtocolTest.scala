@@ -41,7 +41,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
       ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 1.millisecond, Set(validatorPk))
     val a = ApproveBlockProtocolTest.approval(candidate, validatorSk, validatorPk)
 
-    val cancelToken = abp.run().fork.runAsync
+    val cancelToken = abp.run().start.runAsync
     sigsF.get.unsafeRunSync.size should be(0)
     metricsTest.counters.get(ApproveBlockProtocol.METRICS_APPROVAL_COUNTER_NAME) should be(None)
     abp.addApproval(a).unsafeRunSync
@@ -61,7 +61,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
       ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 1.millisecond, Set(validatorPk))
     val a = ApproveBlockProtocolTest.approval(candidate, validatorSk, validatorPk)
 
-    val cancelToken = abp.run().fork.runAsync
+    val cancelToken = abp.run().start.runAsync
     sigsF.get.unsafeRunSync.size should be(0)
     metricsTest.counters.get(ApproveBlockProtocol.METRICS_APPROVAL_COUNTER_NAME) should be(None)
     abp.addApproval(a).unsafeRunSync
@@ -80,12 +80,12 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     implicit val logStub     = new LogStub[Task]()
     implicit val metricsTest = new MetricsTestImpl[Task]()
 
-    val (validatorSk, validatorPk) = Ed25519.newKeyPair
+    val (validatorSk, _) = Ed25519.newKeyPair
     val TestFixture(_, abp, candidate, _, sigs) =
       ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 1.millisecond, Set(validatorSk))
     val a = ApproveBlockProtocolTest.invalidApproval(candidate)
 
-    val cancelToken = abp.run().fork.runAsync
+    val cancelToken = abp.run().start.runAsync
     ctx.tick(1.millisecond)
     sigs.get.unsafeRunSync.size should be(0)
     metricsTest.counters.get(ApproveBlockProtocol.METRICS_APPROVAL_COUNTER_NAME) should be(None)
@@ -104,7 +104,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     implicit val metricsTest = new MetricsTestImpl[Task]()
 
     val sigs = (1 to n).map(_ => Ed25519.newKeyPair)
-    val TestFixture(lab, abp, candidate, startTime, sigsF) =
+    val TestFixture(lab, abp, candidate, startTime, _) =
       ApproveBlockProtocolTest.createProtocol(
         n,
         duration = d,
@@ -112,7 +112,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
         sigs.map(_._2).toSet
       )
     ctx.tick(startTime.milliseconds) //align clocks
-    val cancelToken = abp.run().fork.runAsync
+    val cancelToken = abp.run().start.runAsync
 
     (1 to n).foreach { i =>
       val (validatorSk, validatorPk) = sigs(i - 1)
@@ -147,7 +147,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
       )
     ctx.tick(startTime.milliseconds) // align clocks
 
-    val cancelToken = abp.run().fork.runAsync
+    val cancelToken = abp.run().start.runAsync
 
     (1 to (n / 2)).foreach { i =>
       val (validatorSk, validatorPk) = sigs(i - 1)
@@ -180,11 +180,11 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
   }
 
   it should "skip the duration and create and approved block immediately if the required signatures is zero" in {
-    val d: FiniteDuration          = 30.milliseconds
-    val (validatorSk, validatorPk) = Ed25519.newKeyPair
-    implicit val ctx               = TestScheduler()
-    implicit val logStub           = new LogStub[Task]()
-    implicit val metricsTest       = new MetricsTestImpl[Task]()
+    val d: FiniteDuration    = 30.milliseconds
+    val (_, validatorPk)     = Ed25519.newKeyPair
+    implicit val ctx         = TestScheduler()
+    implicit val logStub     = new LogStub[Task]()
+    implicit val metricsTest = new MetricsTestImpl[Task]()
 
     val TestFixture(lab, abp, _, startTime, _) =
       ApproveBlockProtocolTest.createProtocol(
@@ -196,7 +196,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
 
     ctx.tick(startTime.milliseconds) // align clocks
 
-    val cancelToken = abp.run().fork.runAsync
+    val cancelToken = abp.run().start.runAsync
     ctx.tick()
 
     lab.get.runAsync.value.nonEmpty should be(true)
@@ -211,13 +211,13 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     implicit val logStub     = new LogStub[Task]()
     implicit val metricsTest = new MetricsTestImpl[Task]()
 
-    val (validatorSk, validatorPk) = Ed25519.newKeyPair
-    val (invalidSk, invalidPk)     = Ed25519.newKeyPair
+    val (_, validatorPk)       = Ed25519.newKeyPair
+    val (invalidSk, invalidPk) = Ed25519.newKeyPair
     val TestFixture(_, abp, candidate, _, sigsF) =
       ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 1.millisecond, Set(validatorPk))
     val a = ApproveBlockProtocolTest.approval(candidate, invalidSk, invalidPk)
 
-    val cancelToken = abp.run().fork.runAsync
+    val cancelToken = abp.run().start.runAsync
     sigsF.get.unsafeRunSync.size should be(0)
     metricsTest.counters.get(ApproveBlockProtocol.METRICS_APPROVAL_COUNTER_NAME) should be(None)
     abp.addApproval(a).unsafeRunSync
@@ -240,7 +240,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     val TestFixture(_, abp, candidate, _, sigsF) =
       ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 5.millisecond, Set(validatorPk))
 
-    val cancelToken = abp.run().fork.runAsync
+    val cancelToken = abp.run().start.runAsync
 
     // I know that testing the logs is not the best way but I comparing messages sent won't work
     // because we attach `System.currentMillis` to every message.
@@ -271,7 +271,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     val startTime = start
     ctx.tick(startTime.milliseconds) // align clocks
 
-    val cancelToken = abp.run().fork.runAsync
+    val cancelToken = abp.run().start.runAsync
     ctx.tick()
 
     // I know that testing the logs is not the best way but I comparing messages sent won't work
@@ -341,15 +341,14 @@ object ApproveBlockProtocolTest {
     implicit val connectionsCell = Cell.mvarCell[Task, Connections](List(src)).unsafeRunSync
     implicit val lab             = LastApprovedBlock.unsafe[Task](None)
 
-    val (sk, pk)   = Ed25519.newKeyPair
-    val bonds      = HashSetCasperTest.createBonds(Seq(pk))
-    val genesis    = HashSetCasperTest.createGenesis(bonds)
-    val validators = validatorsPk.map(ByteString.copyFrom(_))
-    val candidate  = ApprovedBlockCandidate(Some(genesis), requiredSigs)
-    val sigs       = Ref.unsafe[Task, Set[Signature]](Set.empty)
-    val startTime  = System.currentTimeMillis()
+    val (_, pubKey) = Ed25519.newKeyPair
+    val bonds       = HashSetCasperTest.createBonds(Seq(pubKey))
+    val genesis     = HashSetCasperTest.createGenesis(bonds)
+    val validators  = validatorsPk.map(ByteString.copyFrom(_))
+    val candidate   = ApprovedBlockCandidate(Some(genesis), requiredSigs)
+    val sigs        = Ref.unsafe[Task, Set[Signature]](Set.empty)
+    val startTime   = System.currentTimeMillis()
 
-    val node = HashSetCasperTestNode.standalone(genesis, sk)
     val protocol = ApproveBlockProtocol
       .unsafe[Task](genesis, validators, requiredSigs, duration, interval, sigs, startTime)
 

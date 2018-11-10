@@ -90,6 +90,10 @@ object InterpreterUtil {
                 Log[F].warn(s"Found unknown failure") *> Right(none[StateHash])
                   .leftCast[BlockException]
                   .pure[F]
+              case UnusedCommEvent(_) =>
+                throw new Exception(
+                  "Unused comm event should be handled in case Left((None, _)) below"
+                )
             }
           case Left((None, status)) =>
             status match {
@@ -97,6 +101,8 @@ object InterpreterUtil {
                 Log[F].warn(s"Found unused comm event ${ex.getMessage}") *> Right(none[StateHash])
                   .leftCast[BlockException]
                   .pure[F]
+              case _ =>
+                throw new Exception("Only unused comm event should reach this case Left((None, _))")
             }
           case Right(computedStateHash) =>
             if (tsHash.contains(computedStateHash)) {
@@ -129,7 +135,7 @@ object InterpreterUtil {
         case Right(preStateHash) =>
           val (postStateHash, processedDeploys) =
             runtimeManager.computeState(preStateHash, deploys, time).runSyncUnsafe(Duration.Inf)
-          Right(postStateHash, processedDeploys)
+          Right((postStateHash, processedDeploys))
         case Left(err) =>
           Left(err)
       }
@@ -178,7 +184,7 @@ object InterpreterUtil {
           runtimeManager
             .replayComputeState(initStateHash, deploys, time)
             .runSyncUnsafe(Duration.Inf) match {
-            case result @ Right(hash) => result.leftCast[Throwable]
+            case result @ Right(_) => result.leftCast[Throwable]
             case Left((_, status)) =>
               val parentHashes = parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
               Left(

@@ -64,5 +64,6 @@ object EventConverter {
         RspaceConsume.fromHash(consume.channelsHash, consume.hash, consume.sequenceNumber),
         rspaceProduces
       )
+    case _ => throw new Exception(s"Unknown Event type: $event")
   }
 }

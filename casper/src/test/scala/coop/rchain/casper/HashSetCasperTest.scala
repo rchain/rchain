@@ -74,8 +74,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     val deploy = ProtoUtil.basicDeployData[Id](0)
     val testProgram = for {
-      _     <- casper.deploy(deploy)
-      block <- casper.createBlock.map { case Created(block) => block }
+      _ <- casper.deploy(deploy)
+      block <- casper.createBlock.map {
+                case Created(block) => block
+                case _              => throw new Exception("Block was not created")
+              }
       result <- EitherT(
                  Task.racePair(casper.addBlock(block).value, casper.addBlock(block).value).flatMap {
                    case Left((statusA, running)) =>

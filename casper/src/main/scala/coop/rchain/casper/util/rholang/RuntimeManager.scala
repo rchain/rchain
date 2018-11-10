@@ -250,6 +250,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
                                doReplayEval(rem, newCheckpoint.root)
                              case Left(ex: ReplayException) =>
                                Task.now(Left(none[Deploy] -> UnusedCommEvent(ex)))
+                             case Left(ex) => throw ex
                            }
                          }
                      }

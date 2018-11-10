@@ -25,6 +25,7 @@ object Clique {
             val adjQ = adj.getOrElse(elem, Set())
             expand(ans :+ elem, (P &~ s) & adjQ, (P ++ s) & adjQ)
           }
+          case (_, None) => throw new Exception("Failure during expansion")
         }
       }
 
