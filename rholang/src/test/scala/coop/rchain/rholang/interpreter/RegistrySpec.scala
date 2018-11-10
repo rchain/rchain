@@ -172,21 +172,28 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       s: String,
       expected: Par,
       rand: Blake2b512Random
-  ): Unit =
-    result.get(List[Par](GString(s))) should be(
+  ): Unit = {
+    val resultRow = result.get(List[Par](GString(s)))
+    // It is safe to pull out the sequence number because it can vary depending
+    // on the registry execution of the produces/consumes and we are not
+    // testing replay
+    val sequenceNumber = resultRow.fold(0)(_.data.head.source.sequenceNumber)
+    resultRow should be(
       Some(
         Row(
           List(
             Datum.create[Par, ListParWithRandom](
               GString(s),
               ListParWithRandom(Seq(expected), rand),
-              false
+              false,
+              sequenceNumber
             )
           ),
           List()
         )
       )
     )
+  }
 
   "lookup" should "recurse" in {
     val lookupString: String =
