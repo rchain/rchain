@@ -330,6 +330,7 @@ class CasperPacketHandlerSpec extends WordSpec {
         } yield ()
 
         test.unsafeRunSync
+        transportLayer.reset()
       }
 
       "respond to BlockRequest messages" in {
@@ -345,6 +346,7 @@ class CasperPacketHandlerSpec extends WordSpec {
         } yield ()
 
         test.unsafeRunSync
+        transportLayer.reset()
       }
 
       "respond to ApprovedBlockRequest messages" in {
@@ -363,6 +365,7 @@ class CasperPacketHandlerSpec extends WordSpec {
         } yield ()
 
         test.unsafeRunSync
+        transportLayer.reset()
       }
     }
   }
