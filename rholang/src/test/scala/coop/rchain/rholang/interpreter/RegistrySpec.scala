@@ -461,14 +461,20 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     checkResult(result, "result5", GInt(8), result5Rand)
     checkResult(result, "result6", GInt(8), result6Rand)
     checkResult(result, "result6", GInt(8), result6Rand)
-    result.get(List[Par](Registry.registryRoot)) should be(
+    val registryRootResult = result.get(List[Par](Registry.registryRoot))
+    // It is safe to pull out the sequence number because it can vary depending
+    // on the registry execution of the produces/consumes and we are not
+    // testing replay
+    val sequenceNumber = registryRootResult.fold(0)(_.data.head.source.sequenceNumber)
+    registryRootResult should be(
       Some(
         Row(
           List(
             Datum.create[Par, ListParWithRandom](
               Registry.registryRoot,
               ListParWithRandom(Seq(EMapBody(ParMap(SortedParMap.empty))), rootRand),
-              false
+              false,
+              sequenceNumber
             )
           ),
           List()
