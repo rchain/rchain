@@ -185,7 +185,7 @@ object BondingUtil {
 
   def makeRuntimeDir[F[_]: Sync]: Resource[F, Path] =
     Resource.make[F, Path](Sync[F].delay { Files.createTempDirectory("casper-bonding-helper-") })(
-      runtimeDir => Sync[F].delay { runtimeDir.recursivelyDelete() }
+      runtimeDir => Sync[F].delay { runtimeDir.recursivelyDelete() }.as(())
     )
 
   def makeRuntimeResource[F[_]: Sync](

@@ -91,7 +91,8 @@ count: ${response.length}
       println(
         "warn: did not shutdown after 10 seconds, retrying with additional 10 seconds timeout"
       )
-      channel.awaitTermination(10, TimeUnit.SECONDS)
+      val terminated = channel.awaitTermination(10, TimeUnit.SECONDS)
+      println(s"warn: terminated? $terminated")
     }
   }
 }
