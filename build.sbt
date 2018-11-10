@@ -85,6 +85,14 @@ lazy val casper = (project in file("casper"))
   .settings(rholangSettings: _*)
   .settings(
     name := "casper",
+    scalacOptions ++= Seq(
+      "-language:existentials",
+      "-language:higherKinds",
+      "-Yno-adapted-args",
+      "-Xfatal-warnings",
+      "-Ywarn-value-discard",
+      "-Xlint:_,-missing-interpolator" // disable "possible missing interpolator" warning
+    ),
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       catsCore,
       catsMtl,
