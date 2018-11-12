@@ -7,7 +7,7 @@ import coop.rchain.models.rholang.implicits.{GPrivateBuilder, _}
 import coop.rchain.models.{Send, _}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn._
 import monix.eval.Coeval
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
 
@@ -432,44 +432,39 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
   }
 
   it should "Print asterisk for variable introduced by new" in {
-    val result = prettyPrint("new x in { *x }")
-    val target =
+    checkRoundTrip(
       """new x0 in {
         |  *x0
         |}""".stripMargin
-    result shouldBe target
+    )
   }
 
   it should "Print asterisk for sent name introduced by new" in {
-    val result = prettyPrint("new x in { @Nil!(*x) }")
-    val target =
+    checkRoundTrip(
       """new x0 in {
         |  @{Nil}!(*x0)
         |}""".stripMargin
-    result shouldBe target
+    )
   }
 
   it should "Print asterisk for multiple sent names introduced by new" in {
-    val result = prettyPrint("new x, y in { @Nil!(*x) | @Nil!(*y) }")
-    val target =
+    checkRoundTrip(
       """new x0, x1 in {
-        |  @{Nil}!(*x1) |
-        |  @{Nil}!(*x0)
+        |  @{0}!(*x1) |
+        |  @{1}!(*x0)
         |}""".stripMargin
-    result shouldBe target
+    )
   }
 
   it should "Print asterisk for multiple sent names introduced by different news" in {
-    val result =
-      prettyPrint("new x in { new y in { @Nil!(*x) | @Nil!(*y) }}")
-    val target =
+    checkRoundTrip(
       """new x0 in {
         |  new x1 in {
-        |    @{Nil}!(*x1) |
-        |    @{Nil}!(*x0)
+        |    @{0}!(*x1) |
+        |    @{1}!(*x0)
         |  }
         |}""".stripMargin
-    result shouldBe target
+    )
   }
 
   "PSend" should "Print" in {
@@ -795,7 +790,10 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     result shouldBe "(1 matches _)"
   }
 
-  private def prettyPrint(source: String): String = PrettyPrinter().buildString(
+  private def checkRoundTrip(prettySource: String): Assertion =
+    assert(parseAndPrint(prettySource) == prettySource)
+
+  private def parseAndPrint(source: String): String = PrettyPrinter().buildString(
     Interpreter.buildNormalizedTerm(new StringReader(source)).runAttempt().right.get
   )
 }

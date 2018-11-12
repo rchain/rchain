@@ -120,8 +120,7 @@ case class PrettyPrinter(
     remainder.fold(pure(""))(v => pure("...") |+| buildStringM(v))
 
   private def buildStringM(v: Var): Coeval[String] = {
-    def isNewVar(level: Int): Boolean =
-      if (newsShiftIndices.contains(boundShift - level - 1)) true else false
+    def isNewVar(level: Int): Boolean = newsShiftIndices.contains(boundShift - level - 1)
 
     v.varInstance match {
       case FreeVar(level) => pure(s"$freeId${freeShift + level}")
@@ -196,8 +195,10 @@ case class PrettyPrinter(
       case n: New =>
         val introducedNewsShiftIdx = (0 until n.bindCount).map(i => i + boundShift)
         pure("new " + buildVariables(n.bindCount) + " in {\n" + indentStr * (indent + 1)) |+| this
-          .copy(boundShift = boundShift + n.bindCount)
-          .copy(newsShiftIndices = newsShiftIndices ++ introducedNewsShiftIdx)
+          .copy(
+            boundShift = boundShift + n.bindCount,
+            newsShiftIndices = newsShiftIndices ++ introducedNewsShiftIdx
+          )
           .buildStringM(n.p, indent + 1) |+|
           pure("\n" + (indentStr * indent) + "}")
 
