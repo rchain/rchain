@@ -1,5 +1,7 @@
 package coop.rchain.rholang.interpreter
 
+import cats.implicits._
+import cats.effect.Sync
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
@@ -12,8 +14,7 @@ import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.{ContResult, Result}
-import monix.eval.Task
-
+import scala.collection.immutable
 import scala.util.Try
 
 object SystemProcesses {
@@ -22,59 +23,65 @@ object SystemProcesses {
 
   private val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
 
-  def stdout: Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
-    case (Seq(ListParWithRandomAndPhlos(Seq(arg), _, _))) =>
-      Task.delay(Console.println(prettyPrinter.buildString(arg)))
+  def stdout[F[_]: Sync]: Seq[ListParWithRandomAndPhlos] => F[Unit] = {
+    case Seq(ListParWithRandomAndPhlos(Seq(arg), _, _)) =>
+      Sync[F].delay(Console.println(prettyPrinter.buildString(arg)))
   }
 
   private type ContinuationWithMetadata = ContResult[Par, BindPattern, TaggedContinuation]
-  private type ProduceResult = Either[OutOfPhlogistonsError.type, Option[
-    (ContinuationWithMetadata, Seq[Result[ListParWithRandomAndPhlos]])
-  ]]
-  private implicit class ProduceOps(res: Task[ProduceResult]) {
+  private type SuccessfulResult =
+    Option[(ContinuationWithMetadata, immutable.Seq[Result[ListParWithRandomAndPhlos]])]
+  private type ProduceResult = Either[errors.OutOfPhlogistonsError.type, SuccessfulResult]
+
+  private implicit class ProduceOps[F[_]: Sync](res: F[ProduceResult]) {
     def foldResult(
-        dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
-    ): Task[Unit] =
-      res.flatMap(_.fold(err => Task.raiseError(OutOfPhlogistonsError), _.fold(Task.unit) {
-        case (cont, channels) => _dispatch(dispatcher)(unpackCont(cont), channels.map(_.value))
-      }))
+        dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
+    ): F[Unit] = {
+      def handleSuccess(success: SuccessfulResult): F[Unit] =
+        success.fold(Sync[F].pure(())) {
+          case (cont, channels) =>
+            dispatcher.dispatch(unpackCont(cont), channels.map(_.value))
+        }
+
+      res.flatMap(_.fold(_ => Sync[F].raiseError(OutOfPhlogistonsError), handleSuccess))
+    }
   }
 
-  def stdoutAck(
-      space: RhoISpace[Task],
-      dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
-  ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
+  def stdoutAck[F[_]: Sync](
+      space: RhoISpace[F],
+      dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
+  ): Seq[ListParWithRandomAndPhlos] => F[Unit] = {
     case Seq(ListParWithRandomAndPhlos(Seq(arg, ack), rand, _)) =>
       for {
-        _ <- Task.delay(Console.println(prettyPrinter.buildString(arg)))
+        _ <- Sync[F].delay(Console.println(prettyPrinter.buildString(arg)))
         produced <- space
                      .produce(
                        ack,
                        ListParWithRandom(Seq(Par.defaultInstance), rand),
-                       false
+                       persist = false
                      )(MATCH_UNLIMITED_PHLOS)
                      .foldResult(dispatcher)
       } yield produced
 
   }
 
-  def stderr: Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
-    case (Seq(ListParWithRandomAndPhlos(Seq(arg), _, _))) =>
-      Task.delay(Console.err.println(prettyPrinter.buildString(arg)))
+  def stderr[F[_]: Sync]: Seq[ListParWithRandomAndPhlos] => F[Unit] = {
+    case Seq(ListParWithRandomAndPhlos(Seq(arg), _, _)) =>
+      Sync[F].delay(Console.err.println(prettyPrinter.buildString(arg)))
   }
 
-  def stderrAck(
-      space: RhoISpace[Task],
-      dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
-  ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
+  def stderrAck[F[_]: Sync](
+      space: RhoISpace[F],
+      dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
+  ): Seq[ListParWithRandomAndPhlos] => F[Unit] = {
     case Seq(ListParWithRandomAndPhlos(Seq(arg, ack), rand, _)) =>
       for {
-        _ <- Task.delay(Console.err.println(prettyPrinter.buildString(arg)))
+        _ <- Sync[F].delay(Console.err.println(prettyPrinter.buildString(arg)))
         produced <- space
                      .produce(
                        ack,
                        ListParWithRandom(Seq(Par.defaultInstance), rand),
-                       false
+                       persist = false
                      )(MATCH_UNLIMITED_PHLOS)
                      .foldResult(dispatcher)
       } yield produced
@@ -91,10 +98,10 @@ object SystemProcesses {
 
   //  The following methods will be made available to contract authors.
 
-  def secp256k1Verify(
-      space: RhoISpace[Task],
-      dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
-  ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
+  def secp256k1Verify[F[_]: Sync](
+      space: RhoISpace[F],
+      dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
+  ): Seq[ListParWithRandomAndPhlos] => F[Unit] = {
     case Seq(
         ListParWithRandomAndPhlos(
           Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
@@ -103,22 +110,22 @@ object SystemProcesses {
         )
         ) =>
       for {
-        verified <- Task.fromTry(Try(Secp256k1.verify(data, signature, pub)))
+        verified <- Sync[F].fromTry(Try(Secp256k1.verify(data, signature, pub)))
         produced <- space
                      .produce(
                        ack,
                        ListParWithRandom(Seq(Expr(GBool(verified))), rand),
-                       false
+                       persist = false
                      )(MATCH_UNLIMITED_PHLOS)
                      .foldResult(dispatcher)
       } yield produced
 
   }
 
-  def ed25519Verify(
-      space: RhoISpace[Task],
-      dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
-  ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
+  def ed25519Verify[F[_]: Sync](
+      space: RhoISpace[F],
+      dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
+  ): Seq[ListParWithRandomAndPhlos] => F[Unit] = {
     case Seq(
         ListParWithRandomAndPhlos(
           Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
@@ -127,12 +134,12 @@ object SystemProcesses {
         )
         ) =>
       for {
-        verified <- Task.fromTry(Try(Ed25519.verify(data, signature, pub)))
+        verified <- Sync[F].fromTry(Try(Ed25519.verify(data, signature, pub)))
         produced <- space
                      .produce(
                        ack,
                        ListParWithRandom(Seq(Expr(GBool(verified))), rand),
-                       false
+                       persist = false
                      )(MATCH_UNLIMITED_PHLOS)
                      .foldResult(dispatcher)
       } yield produced
@@ -142,13 +149,13 @@ object SystemProcesses {
       )
   }
 
-  def sha256Hash(
-      space: RhoISpace[Task],
-      dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
-  ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
+  def sha256Hash[F[_]: Sync](
+      space: RhoISpace[F],
+      dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
+  ): Seq[ListParWithRandomAndPhlos] => F[Unit] = {
     case Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)) =>
       for {
-        hash <- Task.fromTry(Try(Sha256.hash(input)))
+        hash <- Sync[F].fromTry(Try(Sha256.hash(input)))
         produced <- space
                      .produce(
                        ack,
@@ -156,7 +163,7 @@ object SystemProcesses {
                          Seq(Expr(GByteArray(ByteString.copyFrom(hash)))),
                          rand
                        ),
-                       false
+                       persist = false
                      )(MATCH_UNLIMITED_PHLOS)
                      .foldResult(dispatcher)
       } yield produced
@@ -164,13 +171,13 @@ object SystemProcesses {
       illegalArgumentException("sha256Hash expects byte array and return channel as arguments")
   }
 
-  def keccak256Hash(
-      space: RhoISpace[Task],
-      dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
-  ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
+  def keccak256Hash[F[_]: Sync](
+      space: RhoISpace[F],
+      dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
+  ): Seq[ListParWithRandomAndPhlos] => F[Unit] = {
     case Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)) =>
       for {
-        hash <- Task.fromTry(Try(Keccak256.hash(input)))
+        hash <- Sync[F].fromTry(Try(Keccak256.hash(input)))
         produced <- space
                      .produce(
                        ack,
@@ -178,7 +185,7 @@ object SystemProcesses {
                          Seq(Expr(GByteArray(ByteString.copyFrom(hash)))),
                          rand
                        ),
-                       false
+                       persist = false
                      )(MATCH_UNLIMITED_PHLOS)
                      .foldResult(dispatcher)
       } yield produced
@@ -187,13 +194,13 @@ object SystemProcesses {
       illegalArgumentException("keccak256Hash expects byte array and return channel as arguments")
   }
 
-  def blake2b256Hash(
-      space: RhoISpace[Task],
-      dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
-  ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
+  def blake2b256Hash[F[_]: Sync](
+      space: RhoISpace[F],
+      dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
+  ): Seq[ListParWithRandomAndPhlos] => F[Unit] = {
     case Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)) =>
       for {
-        hash <- Task.fromTry(Try(Blake2b256.hash(input)))
+        hash <- Sync[F].fromTry(Try(Blake2b256.hash(input)))
         produced <- space
                      .produce(
                        ack,
@@ -201,7 +208,7 @@ object SystemProcesses {
                          Seq(Expr(GByteArray(ByteString.copyFrom(hash)))),
                          rand
                        ),
-                       false
+                       persist = false
                      )(MATCH_UNLIMITED_PHLOS)
                      .foldResult(dispatcher)
       } yield produced
@@ -209,11 +216,11 @@ object SystemProcesses {
       illegalArgumentException("blake2b256Hash expects byte array and return channel as arguments")
   }
 
-  def getDeployParams(
-      space: RhoISpace[Task],
-      dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation],
-      shortLeashParams: Runtime.ShortLeashParams[Task]
-  ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
+  def getDeployParams[F[_]: Sync](
+      space: RhoISpace[F],
+      dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation],
+      shortLeashParams: Runtime.ShortLeashParams[F]
+  ): Seq[ListParWithRandomAndPhlos] => F[Unit] = {
     case Seq(ListParWithRandomAndPhlos(Seq(ack), rand, _)) =>
       shortLeashParams.getParams.flatMap { parameters =>
         import parameters._
@@ -221,7 +228,7 @@ object SystemProcesses {
           .produce(
             ack,
             ListParWithRandom(Seq(codeHash, phloRate, userId, timestamp), rand),
-            false
+            persist = false
           )(MATCH_UNLIMITED_PHLOS)
           .foldResult(dispatcher)
       }
@@ -229,11 +236,11 @@ object SystemProcesses {
       illegalArgumentException("getDeployParams expects only a return channel.")
   }
 
-  def blockTime(
-      space: RhoISpace[Task],
-      dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation],
-      blockTime: Runtime.BlockTime[Task]
-  ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
+  def blockTime[F[_]: Sync](
+      space: RhoISpace[F],
+      dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation],
+      blockTime: Runtime.BlockTime[F]
+  ): Seq[ListParWithRandomAndPhlos] => F[Unit] = {
     case Seq(ListParWithRandomAndPhlos(Seq(ack), rand, _)) =>
       for {
         timestamp <- blockTime.timestamp.get
@@ -241,7 +248,7 @@ object SystemProcesses {
                      .produce(
                        ack,
                        ListParWithRandom(Seq(timestamp), rand),
-                       false
+                       persist = false
                      )(MATCH_UNLIMITED_PHLOS)
                      .foldResult(dispatcher)
       } yield produced
@@ -249,11 +256,6 @@ object SystemProcesses {
       illegalArgumentException("blockTime expects only a return channel.")
   }
 
-  private def _dispatch(
-      dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
-  )(cont: TaggedContinuation, dataList: Seq[ListParWithRandomAndPhlos]): Task[Unit] =
-    dispatcher.dispatch(cont, dataList)
-
-  private def illegalArgumentException(msg: String): Task[Unit] =
-    Task.raiseError(new IllegalArgumentException(msg))
+  private def illegalArgumentException[F[_]: Sync](msg: String): F[Unit] =
+    Sync[F].raiseError(new IllegalArgumentException(msg))
 }

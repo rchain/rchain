@@ -71,7 +71,7 @@ class NodeRuntime private[node] (
       httpServer: Fiber[Task, Unit]
   )
 
-  def acquireServers(runtime: Runtime)(
+  def acquireServers(runtime: Runtime[Effect])(
       implicit
       nodeDiscovery: NodeDiscovery[Task],
       blockStore: BlockStore[Effect],
@@ -118,7 +118,7 @@ class NodeRuntime private[node] (
     } yield Servers(grpcServerExternal, grpcServerInternal, httpServerFiber)
   }
 
-  def clearResources(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
+  def clearResources(servers: Servers, runtime: Runtime[Effect], casperRuntime: Runtime[Effect])(
       implicit
       transport: TransportLayer[Task],
       blockStore: BlockStore[Effect],
@@ -136,9 +136,9 @@ class NodeRuntime private[node] (
       _   <- Task.delay(Kamon.stopAllReporters())
       _   <- servers.httpServer.cancel
       _   <- log.info("Shutting down interpreter runtime ...")
-      _   <- runtime.close()
+      _   <- runtime.close().value
       _   <- log.info("Shutting down Casper runtime ...")
-      _   <- casperRuntime.close()
+      _   <- casperRuntime.close().value
       _   <- log.info("Bringing BlockStore down ...")
       _   <- blockStore.close().value
       _   <- log.info("Goodbye.")
@@ -155,7 +155,7 @@ class NodeRuntime private[node] (
       )
     }
 
-  def addShutdownHook(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
+  def addShutdownHook(servers: Servers, runtime: Runtime[Effect], casperRuntime: Runtime[Effect])(
       implicit transport: TransportLayer[Task],
       blockStore: BlockStore[Effect],
       peerNodeAsk: PeerNodeAsk[Task]
@@ -164,7 +164,7 @@ class NodeRuntime private[node] (
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
-  private def nodeProgram(runtime: Runtime, casperRuntime: Runtime)(
+  private def nodeProgram(runtime: Runtime[Effect], casperRuntime: Runtime[Effect])(
       implicit
       time: Time[Task],
       rpConfState: RPConfState[Task],
@@ -269,6 +269,22 @@ class NodeRuntime private[node] (
   private def rpConf(local: PeerNode, bootstrapNode: Option[PeerNode]) =
     RPConf(local, bootstrapNode, defaultTimeout, rpClearConnConf)
 
+  implicit def effectParallel = new Parallel[Effect, EffectPar] {
+    override def applicative: Applicative[EffectPar] = Applicative[EffectPar]
+    override def monad: Monad[Effect]                = Monad[Effect]
+    override def sequential: ~>[EffectPar,Effect] = new ~>[EffectPar, Effect] {
+      override def apply[A](par: EffectPar[A]): Effect[A] =
+        EitherT.liftF[Task, CommError, A](Task.Par.unwrap(par.value).flatMap {
+        case Left(ex) => Task.raiseError(new Exception(ex.toString))
+        case Right(x) => Task.pure(x)
+      })
+    }
+
+    override def parallel: ~>[Effect, EffectPar]     = new ~>[Effect, EffectPar] {
+      override def apply[A](eff: Effect[A]): EffectPar[A] = ??? //TODO
+    }
+  }
+
   /**
     * Main node entry. It will:
     * 1. set up configurations
@@ -322,12 +338,11 @@ class NodeRuntime private[node] (
     )
     _       <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
     oracle  = SafetyOracle.turanOracle[Effect](Monad[Effect])
-    runtime = Runtime.create(storagePath, storageSize, storeType)(scheduler)
+    runtime <- Runtime.create[Effect, EffectPar](storagePath, storageSize, storeType)
     _ <- Runtime
-          .injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
-          .toEffect
-    casperRuntime  = Runtime.create(casperStoragePath, storageSize, storeType)(scheduler)
-    runtimeManager = RuntimeManager.fromRuntime(casperRuntime)(scheduler)
+          .injectEmptyRegistryRoot[Effect](runtime.space, runtime.replaySpace)
+    casperRuntime  <- Runtime.create[Effect, EffectPar](casperStoragePath, storageSize, storeType)
+    runtimeManager <- RuntimeManager.fromRuntime[Effect](casperRuntime)
     casperPacketHandler <- CasperPacketHandler
                             .of[Effect](conf.casper, defaultTimeout, runtimeManager, _.value)(
                               labEff,

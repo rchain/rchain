@@ -6,10 +6,11 @@ import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.mtl.FunctorTell
 
-class ErrorLog[F[_] : Sync] (private val errors : Ref[F, Vector[Throwable]]) extends FunctorTell[F, Throwable] {
-  override  val functor: Functor[F] = implicitly[Functor[F]]
+class ErrorLog[F[_]: Sync](private val errors: Ref[F, Vector[Throwable]])
+    extends FunctorTell[F, Throwable] {
+  override val functor: Functor[F] = implicitly[Functor[F]]
 
-  override def tell(e: Throwable): F[Unit] = errors.update( es => es :+ e )
+  override def tell(e: Throwable): F[Unit] = errors.update(es => es :+ e)
 
   override def writer[A](a: A, e: Throwable): F[A] = tell(e) *> a.pure[F]
 
@@ -18,11 +19,11 @@ class ErrorLog[F[_] : Sync] (private val errors : Ref[F, Vector[Throwable]]) ext
   def readAndClearErrorVector(): F[Vector[Throwable]] =
     for {
       previousErrors <- errors.get
-      _ <- errors.set(Vector.empty)
+      _              <- errors.set(Vector.empty)
     } yield previousErrors
 }
 
 object ErrorLog {
-  def create[F[_] : Sync]: F[ErrorLog[F]] =
+  def create[F[_]: Sync]: F[ErrorLog[F]] =
     Ref.of[F, Vector[Throwable]](Vector.empty[Throwable]).map(new ErrorLog(_))
 }

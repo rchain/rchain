@@ -77,9 +77,10 @@ object Main {
       case ContAtName(names) => DeployRuntime.listenForContinuationAtName[Task](names)
       case Run               => nodeProgram(conf)
       case BondingDeployGen(bondKey, ethAddress, amount, secKey, pubKey) =>
-        BondingUtil.writeIssuanceBasedRhoFiles[Task](bondKey, ethAddress, amount, secKey, pubKey)
+        BondingUtil
+          .writeIssuanceBasedRhoFiles[Task, Task.Par](bondKey, ethAddress, amount, secKey, pubKey)
       case FaucetBondingDeployGen(amount, sigAlgorithm, secKey, pubKey) =>
-        BondingUtil.writeFaucetBasedRhoFiles[Task](amount, sigAlgorithm, secKey, pubKey)
+        BondingUtil.writeFaucetBasedRhoFiles[Task, Task.Par](amount, sigAlgorithm, secKey, pubKey)
       case _ => conf.printHelp()
     }
 

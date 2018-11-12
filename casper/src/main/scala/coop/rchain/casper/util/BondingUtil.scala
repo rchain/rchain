@@ -2,8 +2,6 @@ package coop.rchain.casper.util
 
 import cats.effect.{Resource, Sync}
 import cats.implicits._
-
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.ProtoUtil.{deployDataToDeploy, sourceDeploy}
 import coop.rchain.crypto.codec.Base16
@@ -11,11 +9,11 @@ import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.rholang.interpreter.{accounting, Runtime}
 import coop.rchain.shared.PathOps.RichPath
-
 import java.io.PrintWriter
 import java.nio.file.{Files, Path}
 
-import monix.execution.Scheduler
+import cats.Parallel
+import scala.language.higherKinds
 
 object BondingUtil {
   def bondingForwarderAddress(ethAddress: String): String = s"${ethAddress}_bondingForwarder"
@@ -36,8 +34,7 @@ object BondingUtil {
        |}""".stripMargin
 
   def unlockDeploy[F[_]: Sync](ethAddress: String, pubKey: String, secKey: String)(
-      implicit runtimeManager: RuntimeManager,
-      scheduler: Scheduler
+      implicit runtimeManager: RuntimeManager[F]
   ): F[String] =
     preWalletUnlockDeploy(ethAddress, pubKey, Base16.decode(secKey), s"${ethAddress}_unlockOut")
 
@@ -46,10 +43,7 @@ object BondingUtil {
       ethAddress: String,
       pubKey: String,
       secKey: String
-  )(
-      implicit runtimeManager: RuntimeManager,
-      scheduler: Scheduler
-  ): F[String] =
+  )(implicit runtimeManager: RuntimeManager[F]): F[String] =
     issuanceWalletTransferDeploy(
       0, //nonce
       amount,
@@ -64,7 +58,7 @@ object BondingUtil {
       pubKey: String,
       secKey: Array[Byte],
       statusOut: String
-  )(implicit runtimeManager: RuntimeManager, scheduler: Scheduler): F[String] = {
+  )(implicit runtimeManager: RuntimeManager[F]): F[String] = {
     require(Base16.encode(Keccak256.hash(Base16.decode(pubKey)).drop(12)) == ethAddress.drop(2))
     val unlockSigDataTerm = deployDataToDeploy(
       sourceDeploy(
@@ -73,33 +67,27 @@ object BondingUtil {
         accounting.MAX_VALUE
       )
     )
-    for {
-      sigBytes <- Sync[F].delay {
-                   runtimeManager
-                     .captureResults(runtimeManager.emptyStateHash, unlockSigDataTerm)
-                     .head
-                     .exprs
-                     .head
-                     .getGByteArray
-                     .toByteArray
-                 }
-      unlockSigData = Keccak256.hash(sigBytes)
-      unlockSig     = Secp256k1.sign(unlockSigData, secKey)
-      _             = assert(Secp256k1.verify(unlockSigData, unlockSig, Base16.decode("04" + pubKey)))
-      sigString     = Base16.encode(unlockSig)
-    } yield s"""new rl(`rho:registry:lookup`), WalletCheckCh in {
+    runtimeManager
+      .captureResults(runtimeManager.emptyStateHash, unlockSigDataTerm)
+      .map { pars =>
+        val unlockSigData = Keccak256.hash(pars.head.exprs.head.getGByteArray.toByteArray)
+        val unlockSig     = Secp256k1.sign(unlockSigData, secKey)
+        assert(Secp256k1.verify(unlockSigData, unlockSig, Base16.decode("04" + pubKey)))
+        val sigString = Base16.encode(unlockSig)
+        s"""new rl(`rho:registry:lookup`), WalletCheckCh in {
            |  rl!(`rho:id:oqez475nmxx9ktciscbhps18wnmnwtm6egziohc3rkdzekkmsrpuyt`, *WalletCheckCh) |
            |  for(@(_, WalletCheck) <- WalletCheckCh) {
            |    @WalletCheck!("claim", "$ethAddress", "$pubKey", "$sigString", "$statusOut")
            |  }
            |}""".stripMargin
+      }
   }
 
   def walletTransferSigData[F[_]: Sync](
       nonce: Int,
       amount: Long,
       destination: String
-  )(implicit runtimeManager: RuntimeManager, scheduler: Scheduler): F[Array[Byte]] = {
+  )(implicit runtimeManager: RuntimeManager[F]): F[Array[Byte]] = {
     val transferSigDataTerm = deployDataToDeploy(
       sourceDeploy(
         s""" @"__SCALA__"!([$nonce, $amount, "$destination"].toByteArray())""",
@@ -108,17 +96,11 @@ object BondingUtil {
       )
     )
 
-    for {
-      sigBytes <- Sync[F].delay {
-                   runtimeManager
-                     .captureResults(runtimeManager.emptyStateHash, transferSigDataTerm)
-                     .head
-                     .exprs
-                     .head
-                     .getGByteArray
-                     .toByteArray
-                 }
-    } yield Blake2b256.hash(sigBytes)
+    runtimeManager
+      .captureResults(runtimeManager.emptyStateHash, transferSigDataTerm)
+      .map { pars =>
+        Blake2b256.hash(pars.head.exprs.head.getGByteArray.toByteArray)
+      }
   }
 
   def issuanceWalletTransferDeploy[F[_]: Sync](
@@ -128,7 +110,7 @@ object BondingUtil {
       transferStatusOut: String,
       pubKey: String,
       secKey: Array[Byte]
-  )(implicit runtimeManager: RuntimeManager, scheduler: Scheduler): F[String] =
+  )(implicit runtimeManager: RuntimeManager[F]): F[String] =
     for {
       transferSigData <- walletTransferSigData[F](nonce, amount, destination)
       transferSig     = Secp256k1.sign(transferSigData, secKey)
@@ -147,7 +129,7 @@ object BondingUtil {
       sigAlgorithm: String,
       pubKey: String,
       secKey: Array[Byte]
-  )(implicit runtimeManager: RuntimeManager, scheduler: Scheduler): F[String] =
+  )(implicit runtimeManager: RuntimeManager[F]): F[String] =
     for {
       sigFunc <- sigAlgorithm match {
                   case "ed25519"   => ((d: Array[Byte]) => Ed25519.sign(d, secKey)).pure[F]
@@ -188,64 +170,61 @@ object BondingUtil {
       runtimeDir => Sync[F].delay { runtimeDir.recursivelyDelete() }
     )
 
-  def makeRuntimeResource[F[_]: Sync](
-      runtimeDirResource: Resource[F, Path]
-  )(implicit scheduler: Scheduler): Resource[F, Runtime] =
+  def makeRuntimeResource[M[_], F[_]](
+      runtimeDirResource: Resource[M, Path]
+  )(implicit syncM: Sync[M], parallelMF: Parallel[M, F]): Resource[M, Runtime[M]] =
     runtimeDirResource.flatMap(
       runtimeDir =>
         Resource
-          .make(Sync[F].delay { Runtime.create(runtimeDir, 1024L * 1024 * 1024) })(
-            runtime => Sync[F].delay { runtime.close().unsafeRunSync }
-          )
+          .make(Runtime.create(runtimeDir, 1024L * 1024 * 1024))(_.close())
     )
 
   def makeRuntimeManagerResource[F[_]: Sync](
-      runtimeResource: Resource[F, Runtime]
-  )(implicit scheduler: Scheduler): Resource[F, RuntimeManager] =
+      runtimeResource: Resource[F, Runtime[F]]
+  ): Resource[F, RuntimeManager[F]] =
     runtimeResource.flatMap(
-      activeRuntime =>
-        Resource.make(RuntimeManager.fromRuntime(activeRuntime).pure[F])(_ => Sync[F].unit)
+      activeRuntime => Resource.make(RuntimeManager.fromRuntime(activeRuntime))(_ => Sync[F].unit)
     )
 
-  def writeIssuanceBasedRhoFiles[F[_]: Sync](
+  def writeIssuanceBasedRhoFiles[M[_], F[_]](
       bondKey: String,
       ethAddress: String,
       amount: Long,
       secKey: String,
       pubKey: String
-  )(implicit scheduler: Scheduler): F[Unit] = {
-    val runtimeDirResource     = makeRuntimeDir[F]
-    val runtimeResource        = makeRuntimeResource[F](runtimeDirResource)
-    val runtimeManagerResource = makeRuntimeManagerResource[F](runtimeResource)
+  )(implicit syncM: Sync[M], parallelMF: Parallel[M, F]): M[Unit] = {
+    val runtimeDirResource     = makeRuntimeDir[M]
+    val runtimeResource        = makeRuntimeResource[M, F](runtimeDirResource)
+    val runtimeManagerResource = makeRuntimeManagerResource[M](runtimeResource)
     runtimeManagerResource.use(
       implicit runtimeManager =>
         for {
-          unlockCode  <- unlockDeploy[F](ethAddress, pubKey, secKey)
+          unlockCode  <- unlockDeploy[M](ethAddress, pubKey, secKey)
           forwardCode = bondingForwarderDeploy(bondKey, ethAddress)
-          bondCode    <- issuanceBondDeploy[F](amount, ethAddress, pubKey, secKey)
-          _           <- writeFile[F](s"unlock_${ethAddress}.rho", unlockCode)
-          _           <- writeFile[F](s"forward_${ethAddress}_${bondKey}.rho", forwardCode)
-          _           <- writeFile[F](s"bond_${ethAddress}.rho", bondCode)
+          bondCode    <- issuanceBondDeploy[M](amount, ethAddress, pubKey, secKey)
+          _           <- writeFile[M](s"unlock_$ethAddress.rho", unlockCode)
+          _           <- writeFile[M](s"forward_${ethAddress}_$bondKey.rho", forwardCode)
+          _           <- writeFile[M](s"bond_$ethAddress.rho", bondCode)
         } yield ()
     )
   }
 
-  def writeFaucetBasedRhoFiles[F[_]: Sync](
+  def writeFaucetBasedRhoFiles[M[_], F[_]](
       amount: Long,
       sigAlgorithm: String,
       secKey: String,
       pubKey: String
-  )(implicit scheduler: Scheduler): F[Unit] = {
-    val runtimeDirResource     = makeRuntimeDir[F]
-    val runtimeResource        = makeRuntimeResource[F](runtimeDirResource)
-    val runtimeManagerResource = makeRuntimeManagerResource[F](runtimeResource)
+  )(implicit syncM: Sync[M], parallelMF: Parallel[M, F]): M[Unit] = {
+    val runtimeDirResource     = makeRuntimeDir[M]
+    val runtimeResource        = makeRuntimeResource[M, F](runtimeDirResource)
+    val runtimeManagerResource = makeRuntimeManagerResource[M](runtimeResource)
     runtimeManagerResource.use(
       implicit runtimeManager =>
         for {
-          bondCode    <- faucetBondDeploy[F](amount, sigAlgorithm, pubKey, Base16.decode(secKey))
+          bondCode    <- faucetBondDeploy[M](amount, sigAlgorithm, pubKey, Base16.decode(secKey))
           forwardCode = bondingForwarderDeploy(pubKey, pubKey)
-          _           <- writeFile[F](s"forward_${pubKey}.rho", forwardCode)
-          _           <- writeFile[F](s"bond_${pubKey}.rho", bondCode)
+          _           <- writeFile[M](s"forward_$pubKey.rho", forwardCode)
+          _           <- writeFile[M](s"bond_$pubKey.rho", bondCode)
         } yield ()
     )
   }

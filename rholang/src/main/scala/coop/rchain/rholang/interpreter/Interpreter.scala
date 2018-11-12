@@ -11,7 +11,6 @@ import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
 import coop.rchain.rholang.interpreter.errors.{
-  InterpreterError,
   LexerError,
   SyntaxError,
   TopLevelFreeVariablesNotAllowedError,
@@ -21,23 +20,13 @@ import coop.rchain.rholang.interpreter.errors.{
 }
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
-import monix.eval.{Coeval, Task}
-
-private class FailingTask[T](task: Task[Either[Throwable, T]]) {
-  def raiseOnLeft =
-    task.flatMap {
-      case Left(err) => Task.raiseError(err)
-      case Right(v)  => Task.now(v)
-    }
-}
+import monix.eval.Coeval
 
 object Interpreter {
-  implicit private def toFailingTask[T](task: Task[Either[Throwable, T]]) = new FailingTask(task)
-
   private def lexer(fileReader: Reader): Yylex = new Yylex(fileReader)
-  private def parser(lexer: Yylex): parser     = new parser(lexer, lexer.getSymbolFactory())
+  private def parser(lexer: Yylex): parser     = new parser(lexer, lexer.getSymbolFactory)
 
-  implicit lazy val sync = implicitly[Sync[Coeval]]
+  implicit lazy val sync: Sync[Coeval] = implicitly[Sync[Coeval]]
 
   def buildNormalizedTerm(rho: String): Coeval[Par] = buildNormalizedTerm(new StringReader(rho))
 
@@ -114,27 +103,27 @@ object Interpreter {
       } else normalizedTerm.pure[M]
     }
 
-  def execute(runtime: Runtime, reader: Reader): Task[Runtime] =
+  def execute[F[_]: Sync](runtime: Runtime[F], reader: Reader): F[Runtime[F]] =
     for {
-      term   <- Task.coeval(buildNormalizedTerm(reader)).attempt.raiseOnLeft
-      errors <- evaluate(runtime, term).map(_.errors).attempt.raiseOnLeft
+      term   <- Sync[F].rethrow(Sync[F].pure(buildNormalizedTerm(reader).attempt.apply))
+      errors <- evaluate(runtime, term).map(_.errors)
       result <- if (errors.isEmpty)
-                 Task.now(runtime)
+                 Sync[F].delay(runtime)
                else
-                 Task.raiseError(new RuntimeException(mkErrorMsg(errors)))
+                 Sync[F].raiseError(new RuntimeException(mkErrorMsg(errors)))
     } yield result
 
-  def evaluate(runtime: Runtime, normalizedTerm: Par): Task[EvaluateResult] = {
-    implicit val rand      = Blake2b512Random(128)
-    val evaluatePhlosLimit = Cost(Integer.MAX_VALUE) //This is OK because evaluate is not called on deploy
+  def evaluate[F[_]: Sync](runtime: Runtime[F], normalizedTerm: Par): F[EvaluateResult] = {
+    implicit val rand: Blake2b512Random = Blake2b512Random(128)
+    val evaluatePhlosLimit              = Cost(Integer.MAX_VALUE) //This is OK because evaluate is not called on deploy
     for {
       checkpoint <- runtime.space.createCheckpoint()
       _          <- runtime.reducer.setAvailablePhlos(evaluatePhlosLimit)
       _          <- runtime.reducer.inj(normalizedTerm)(rand)
-      errors     <- Task.now(runtime.readAndClearErrorVector())
+      errors     <- runtime.readAndClearErrorVector()
       leftPhlos  <- runtime.reducer.getAvailablePhlos()
       cost       = leftPhlos.copy(cost = evaluatePhlosLimit - leftPhlos.cost)
-      _          <- if (errors.nonEmpty) runtime.space.reset(checkpoint.root) else Task.now(())
+      _          <- if (errors.nonEmpty) runtime.space.reset(checkpoint.root) else Sync[F].delay(())
     } yield EvaluateResult(cost, errors)
   }
 

@@ -14,6 +14,7 @@ package object node {
   /** Final Effect + helper methods */
   type CommErrT[F[_], A] = EitherT[F, CommError, A]
   type Effect[A]         = CommErrT[Task, A]
+  type EffectPar[A]      = CommErrT[Task.Par, A]
 
   implicit class EitherEffectOps[A](e: Either[CommError, A]) {
     def toEffect: Effect[A] = EitherT[Task, CommError, A](e.pure[Task])

@@ -2,9 +2,10 @@ package coop.rchain.casper
 
 import cats.Monad
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
 import cats.implicits._
 import coop.rchain.shared.{Log, LogSource, MaybeCell}
+
+import scala.language.higherKinds
 
 object MultiParentCasperRef {
   private implicit val logSource: LogSource = LogSource(this.getClass)
@@ -12,12 +13,6 @@ object MultiParentCasperRef {
   type MultiParentCasperRef[F[_]] = MaybeCell[F, MultiParentCasper[F]]
 
   def apply[F[_]](implicit ev: MultiParentCasperRef[F]): MultiParentCasperRef[F] = ev
-
-  private class MultiParentCasperRefImpl[F[_]](state: Ref[F, Option[MultiParentCasper[F]]])
-      extends MultiParentCasperRef[F] {
-    override def get: F[Option[MultiParentCasper[F]]]       = state.get
-    override def set(casper: MultiParentCasper[F]): F[Unit] = state.set(Some(casper))
-  }
 
   def of[F[_]: Sync]: F[MultiParentCasperRef[F]] = MaybeCell.of[F, MultiParentCasper[F]]
 
