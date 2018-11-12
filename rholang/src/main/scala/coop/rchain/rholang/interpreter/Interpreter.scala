@@ -26,7 +26,7 @@ object Interpreter {
   private def lexer(fileReader: Reader): Yylex = new Yylex(fileReader)
   private def parser(lexer: Yylex): parser     = new parser(lexer, lexer.getSymbolFactory)
 
-  implicit lazy val sync: Sync[Coeval] = implicitly[Sync[Coeval]]
+  implicit lazy val sync = implicitly[Sync[Coeval]]
 
   def buildNormalizedTerm(rho: String): Coeval[Par] = buildNormalizedTerm(new StringReader(rho))
 
