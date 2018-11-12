@@ -1,29 +1,50 @@
 package coop.rchain.models
 
-import scala.collection.MapLike
 import coop.rchain.models.rholang.sorter.ordering._
 
-class SortedParMap private (private val ps: Map[Par, Par])
-    extends Map[Par, Par]
-    with MapLike[Par, Par, SortedParMap] {
+import scala.collection.GenTraversableOnce
+import scala.collection.immutable.ListMap
 
-  lazy val sortedMap: Map[Par, Par] = ps.sort.toMap
+final class SortedParMap private (ps: Map[Par, Par]) extends Iterable[(Par, Par)] {
 
-  override def empty: SortedParMap = SortedParMap(Map.empty[Par, Par])
+  lazy val sortedMap: ListMap[Par, Par] = ListMap(ps.sort: _*)
 
-  override def get(key: Par): Option[Par] = sortedMap.get(key)
+  def +(kv: (Par, Par)): SortedParMap = SortedParMap(sortedMap + kv)
 
-  override def iterator: Iterator[(Par, Par)] = sortedMap.toIterator
+  def ++(kvs: GenTraversableOnce[(Par, Par)]): SortedParMap = SortedParMap(sortedMap ++ kvs)
 
-  override def +[V1 >: Par](kv: (Par, V1)): Map[Par, V1] = sortedMap + kv
+  def -(key: Par): SortedParMap = SortedParMap(sortedMap - key)
 
-  override def -(key: Par): SortedParMap = SortedParMap(sortedMap - key)
+  def --(keys: GenTraversableOnce[Par]): SortedParMap = SortedParMap(sortedMap -- keys)
+
+  def apply(par: Par): Par = sortedMap(par)
+
+  def contains(par: Par): Boolean = sortedMap.contains(par)
+
+  def empty: SortedParMap = SortedParMap(ListMap.empty[Par, Par])
+
+  def get(key: Par): Option[Par] = sortedMap.get(key)
+
+  def getOrElse(key: Par, default: Par): Par = sortedMap.getOrElse(key, default)
+
+  def iterator: Iterator[(Par, Par)] = sortedMap.toIterator
+
+  def keys: Iterable[Par] = sortedMap.keys
+
+  def values: Iterable[Par] = sortedMap.values
+
+  override def equals(that: Any): Boolean = that match {
+    case spm: SortedParMap => spm.sortedMap == this.sortedMap
+    case _                 => false
+  }
 }
 
 object SortedParMap {
   def apply(map: Map[Par, Par]): SortedParMap = new SortedParMap(map)
 
   def apply(seq: Seq[(Par, Par)]): SortedParMap = SortedParMap(seq.toMap)
+
+  def apply(sortedParMap: SortedParMap): SortedParMap = SortedParMap(sortedParMap.sortedMap)
 
   def empty: SortedParMap = SortedParMap(Map.empty[Par, Par])
 }
