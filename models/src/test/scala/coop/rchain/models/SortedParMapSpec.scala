@@ -4,14 +4,17 @@ import java.util
 
 import com.google.protobuf.ByteString
 import coop.rchain.models.Assertions.assertEqual
+import coop.rchain.models.Connective.ConnectiveInstance.ConnBool
 import coop.rchain.models.Expr.ExprInstance.{GInt, _}
 import coop.rchain.models.Var.VarInstance.BoundVar
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.models.rholang.sorter.Sortable
+import coop.rchain.models.rholang.sorter.ordering._
+import monix.eval.Coeval
+import org.scalatest.prop.PropertyChecks
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
-import scala.collection.immutable.BitSet
-
-class SortedParMapSpec extends FlatSpec with Matchers {
+class SortedParMapSpec extends FlatSpec with PropertyChecks with Matchers {
 
   private[this] def toKVpair(pair: (Par, Par)): KeyValuePair = KeyValuePair(pair._1, pair._2)
 
@@ -80,4 +83,73 @@ class SortedParMapSpec extends FlatSpec with Matchers {
     )
     assertEqual(SortedParMap(ps), SortedParMap(ps))
   }
+
+  it should "keep keys sorted" in {
+    val sortedParMapKeys = List(
+      Par(
+        connectiveUsed = true
+      ),
+      Par(
+        bundles = Seq(
+          Bundle(
+            writeFlag = true
+          )
+        )
+      ),
+      Par(
+        connectives = Seq(
+          Connective(
+            ConnBool(
+              false
+            )
+          )
+        )
+      ),
+      Par(
+        ids = Seq(
+          GPrivate()
+        )
+      ),
+      Par()
+    )
+    val sortedParMap = SortedParMap(sortedParMapKeys.zip(Seq.fill(sortedParMapKeys.size)(Par())))
+    val keys         = sortedParMap.sortedMap.keys
+    assert(keys.toList == keys.toList.sort)
+  }
+
+  it should "preserve sortedness of all elements and the whole map for all its operations" in {
+    import coop.rchain.models.testImplicits._
+
+    forAll { (pars1: Seq[Par], pars2: Seq[Par]) =>
+      val map1 = SortedParMap(pars1.zip(pars2))
+      val map2 = SortedParMap(pars2.zip(pars1))
+      checkSorted(map1)
+      checkSorted(map2)
+      Seq(map1.headOption, map2.headOption).flatten.foreach(kv => {
+        checkSorted(map1 + kv)
+        checkSorted(map2 - kv._1)
+        checkSorted(map2 + kv)
+        checkSorted(map1 - kv._1)
+      })
+    }
+  }
+
+  private def checkSorted(sortedParMap: SortedParMap): Unit = {
+    checkSorted(sortedParMap.keys)
+    sortedParMap.values.foreach(p => assert(isSorted(p)))
+    sortedParMap.foreach(kv => {
+      assert(isSorted(kv._1))
+      assert(isSorted(kv._2))
+      assert(isSorted(sortedParMap(kv._1)))
+    })
+  }
+
+  private def checkSorted(iterable: Iterable[Par]) = {
+    import coop.rchain.models.rholang.sorter.ordering._
+    iterable.foreach(p => assert(isSorted(p)))
+    assert(iterable.toList == iterable.toList.sort)
+  }
+
+  def isSorted[A: Sortable](a: A): Boolean =
+    a == Sortable[A].sortMatch[Coeval](a).value().term
 }
