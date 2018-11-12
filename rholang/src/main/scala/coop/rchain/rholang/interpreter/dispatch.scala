@@ -23,7 +23,7 @@ object Dispatch {
 
 class RholangAndScalaDispatcher[M[_]] private (
     reducer: => ChargingReducer[M],
-    _dispatchTable: => Map[Long, Function2[Seq[ListParWithRandomAndPhlos], Int, M[Unit]]]
+    _dispatchTable: => Map[Long, (Seq[ListParWithRandomAndPhlos], Int) => M[Unit]]
 )(implicit s: Sync[M])
     extends Dispatch[M, ListParWithRandomAndPhlos, TaggedContinuation] {
 
