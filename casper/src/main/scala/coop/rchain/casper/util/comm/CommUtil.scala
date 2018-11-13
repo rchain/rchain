@@ -77,9 +77,10 @@ object CommUtil {
     val request = ApprovedBlockRequest("PleaseSendMeAnApprovedBlock").toByteString
     for {
       maybeBootstrap <- RPConfAsk[F].reader(_.bootstrap)
+      local          <- RPConfAsk[F].reader(_.local)
       _ <- maybeBootstrap match {
             case Some(bootstrap) =>
-              val msg = packet(bootstrap, transport.ApprovedBlockRequest, request)
+              val msg = packet(local, transport.ApprovedBlockRequest, request)
               TransportLayer[F].send(bootstrap, msg)
             case None => Log[F].warn("Cannot request for an approved block as standalone")
           }

@@ -32,11 +32,11 @@ lazy val projectSettings = Seq(
     case Some(v) => Seq("-source", v, "-target", v)
   }),
   Test / fork := true,
-  Test / parallelExecution := true,
-  Test / testForkedParallel := true,
+  Test / parallelExecution := false,
+  Test / testForkedParallel := false,
   IntegrationTest / fork := true,
-  IntegrationTest / parallelExecution := true,
-  IntegrationTest / testForkedParallel := true
+  IntegrationTest / parallelExecution := false,
+  IntegrationTest / testForkedParallel := false
 )
 
 lazy val coverageSettings = Seq(

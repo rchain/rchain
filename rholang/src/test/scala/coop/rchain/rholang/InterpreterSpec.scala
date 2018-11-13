@@ -25,19 +25,21 @@ class InterpreterSpec extends FlatSpec with Matchers {
     val sendRho = "@{0}!(0)"
 
     val (initStorage, beforeError, afterError, afterSend, finalContent) =
-      mkRuntime(tmpPrefix, mapSize).use { runtime =>
-        val initStorage = storageContents(runtime)
-        for {
-          _ <- success(runtime, sendRho)
-          beforeError = storageContents(runtime)
-          _ <- failure(runtime, "@1!(1) | @2!(3.noSuchMethod())")
-          afterError = storageContents(runtime)
-          _ <- success(runtime, "new stdout(`rho:io:stdout`) in { stdout!(42) }")
-          afterSend = storageContents(runtime)
-          _ <- success(runtime, "for (_ <- @0) { Nil }")
-          finalContent = storageContents(runtime)
-        } yield (initStorage, beforeError, afterError, afterSend, finalContent)
-      }.runSyncUnsafe(maxDuration)
+      mkRuntime(tmpPrefix, mapSize)
+        .use { runtime =>
+          val initStorage = storageContents(runtime)
+          for {
+            _            <- success(runtime, sendRho)
+            beforeError  = storageContents(runtime)
+            _            <- failure(runtime, "@1!(1) | @2!(3.noSuchMethod())")
+            afterError   = storageContents(runtime)
+            _            <- success(runtime, "new stdout(`rho:io:stdout`) in { stdout!(42) }")
+            afterSend    = storageContents(runtime)
+            _            <- success(runtime, "for (_ <- @0) { Nil }")
+            finalContent = storageContents(runtime)
+          } yield (initStorage, beforeError, afterError, afterSend, finalContent)
+        }
+        .runSyncUnsafe(maxDuration)
 
     assert(beforeError.contains(sendRho))
     assert(afterError == beforeError)
@@ -47,11 +49,12 @@ class InterpreterSpec extends FlatSpec with Matchers {
 
   it should "yield correct results for the PrimeCheck contract" in {
     import coop.rchain.catscontrib.effect.implicits.bracketTry
-    val contents = mkRuntime(tmpPrefix, mapSize).use { runtime =>
-      for {
-        _ <- success(
-          runtime,
-          """
+    val contents = mkRuntime(tmpPrefix, mapSize)
+      .use { runtime =>
+        for {
+          _ <- success(
+                runtime,
+                """
               |new loop, primeCheck, stdoutAck(`rho:io:stdoutAck`) in {
               |            contract loop(@x) = {
               |              match x {
@@ -75,11 +78,12 @@ class InterpreterSpec extends FlatSpec with Matchers {
               |            loop!([Nil, 7, 7 | 8, 9 | Nil, 9 | 10, Nil, 9])
               |  }
             """.stripMargin
-        )
+              )
 
-        contents = storageContents(runtime)
-      } yield contents
-    }.runSyncUnsafe(maxDuration)
+          contents = storageContents(runtime)
+        } yield contents
+      }
+      .runSyncUnsafe(maxDuration)
 
     // TODO: this is not the way we should be testing execution results,
     // yet strangely it works - and we don't have a better way for now
