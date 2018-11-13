@@ -239,7 +239,19 @@ def create_bootstrap_node(docker_client,
 
     logging.info(f"Starting bootstrap node {name}\ncommand:`{command}`")
 
-    return create_node_container(docker_client, name, network, bonds_file, command, rnode_timeout, volumes, allowed_peers, memory, cpuset_cpus)
+    container = create_node_container(
+        docker_client=docker_client,
+        name=name,
+        network=network,
+        bonds_file=bonds_file,
+        command=command,
+        rnode_timeout=rnode_timeout,
+        volumes=volumes,
+        allowed_peers=allowed_peers,
+        memory=memory,
+        cpuset_cpus=cpuset_cpus,
+    )
+    return container
 
 
 def make_peer_name(network, i):
@@ -259,7 +271,19 @@ def create_peer(docker_client, network, name, bonds_file, rnode_timeout, bootstr
 
     logging.info(f"Starting peer node {name} with command: `{command}`")
 
-    return create_node_container(docker_client, name, network, bonds_file, command, rnode_timeout, [], allowed_peers, memory, cpuset_cpus)
+    container = create_node_container(
+        docker_client=docker_client,
+        name=name,
+        network=network,
+        bonds_file=bonds_file,
+        command=command,
+        rnode_timeout=rnode_timeout,
+        extra_volumes=[],
+        allowed_peers=allowed_peers,
+        memory=memory,
+        cpuset_cpus=cpuset_cpus,
+    )
+    return container
 
 
 def create_peer_nodes(docker_client,

@@ -50,13 +50,13 @@ def custom_system(request, validators_config, docker_client_session):
 @contextlib.contextmanager
 def started_bonded_validator(system, bootstrap_node):
     bonded_validator = create_peer(
-        system.docker,
-        bootstrap_node.network,
-        'bonded_validator',
-        system.validators_data.bonds_file,
-        system.config.rnode_timeout,
-        bootstrap_node,
-        BONDED_VALIDATOR_KEYS,
+        docker_client=system.docker,
+        network=bootstrap_node.network,
+        name='bonded_validator',
+        bonds_file=system.validators_data.bonds_file,
+        rnode_timeout=system.config.rnode_timeout,
+        bootstrap=bootstrap_node,
+        key_pair=BONDED_VALIDATOR_KEYS,
     )
     try:
         wait_for(node_started(bonded_validator), system.config.node_startup_timeout, "Bonded validator node didn't start correctly")
@@ -68,13 +68,13 @@ def started_bonded_validator(system, bootstrap_node):
 @contextlib.contextmanager
 def started_joining_validator(system, bootstrap_node):
     joining_validator = create_peer(
-        system.docker,
-        bootstrap_node.network,
-        'joining_validator',
-        system.validators_data.bonds_file,
-        system.config.rnode_timeout,
-        bootstrap_node,
-        JOINING_VALIDATOR_KEYS,
+        docker_client=system.docker,
+        network=bootstrap_node.network,
+        name='joining_validator',
+        bonds_file=system.validators_data.bonds_file,
+        rnode_timeout=system.config.rnode_timeout,
+        bootstrap=bootstrap_node,
+        key_pair=JOINING_VALIDATOR_KEYS,
     )
     try:
         wait_for(node_started(joining_validator), system.config.node_startup_timeout, "Joining validator node didn't start correctly")
@@ -87,13 +87,13 @@ def started_joining_validator(system, bootstrap_node):
 @contextlib.contextmanager
 def started_unbonded_validator(system, bootstrap_node):
     unbonded_validator = create_peer(
-        system.docker,
-        bootstrap_node.network,
-        'unbonded_validator',
-        system.validators_data.bonds_file,
-        system.config.rnode_timeout,
-        bootstrap_node,
-        UNBONDED_VALIDATOR_KEYS,
+        docker_client=system.docker,
+        network=bootstrap_node.network,
+        name='unbonded_validator',
+        bonds_file=system.validators_data.bonds_file,
+        rnode_timeout=system.config.rnode_timeout,
+        bootstrap=bootstrap_node,
+        key_pair=UNBONDED_VALIDATOR_KEYS,
     )
     try:
         wait_for(node_started(unbonded_validator), system.config.node_startup_timeout, "Unbonded validator node didn't start correctly")
