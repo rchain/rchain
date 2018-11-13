@@ -11,7 +11,7 @@ import shlex
 from multiprocessing import Queue, Process
 from queue import Empty
 
-default_image = "rchain-integration-testing:latest"
+DEFAULT_IMAGE = "rchain-integration-testing:latest"
 
 rnode_binary = '/opt/docker/bin/rnode'
 rnode_directory = "/var/lib/rnode"
@@ -90,6 +90,13 @@ class Node:
     def show_blocks(self):
         return self.exec_run(f'{rnode_binary} show-blocks')
 
+    def get_blocks_count(self):
+        output = self.call_rnode('show-blocks', stderr=False).strip()
+        spam = 'count: '
+        assert output.startswith(spam)
+        blocks_count = int(output[len(spam):])
+        return blocks_count
+
     def exec_run(self, cmd, stderr=True):
         queue = Queue(1)
 
@@ -129,12 +136,33 @@ class Node:
     def deploy(self, rho_file_path):
         return self.call_rnode('deploy', '--from=0x1', '--phlo-limit=1000000', '--phlo-price=1', '--nonce=0', rho_file_path)
 
+    def deploy_string(self, rholang_code):
+        quoted_rholang = shlex.quote(rholang_code)
+        return self.shell_out('sh', '-c', 'echo {quoted_rholang} >/tmp/deploy_string.rho && {rnode_binary} deploy --phlo-limit=10000000000 --phlo-price=1 /tmp/deploy_string.rho'.format(
+            rnode_binary=rnode_binary,
+            quoted_rholang=quoted_rholang,
+        ))
+
     def propose(self):
         return self.call_rnode('propose')
 
     def repl(self, rholang_code, stderr=False):
         quoted_rholang_code = shlex.quote(rholang_code)
         return self.shell_out('sh', '-c', f'echo {quoted_rholang_code} | {rnode_binary} repl', stderr=stderr)
+
+    def generate_faucet_bonding_deploys(self, bond_amount, private_key, public_key):
+        return self.call_rnode('generateFaucetBondingDeploys',
+            '--amount={}'.format(bond_amount),
+            '--private-key={}'.format(private_key),
+            '--public-key={}'.format(public_key),
+            '--sig-algorithm=ed25519',
+        )
+
+    def cat_forward_file(self, public_key):
+        return self.shell_out('cat', '/opt/docker/forward_{}.rho'.format(public_key))
+
+    def cat_bond_file(self, public_key):
+        return self.shell_out('cat', '/opt/docker/bond_{}.rho'.format(public_key))
 
     __timestamp_rx = "\\d\\d:\\d\\d:\\d\\d\\.\\d\\d\\d"
     __log_message_rx = re.compile(f"^{__timestamp_rx} (.*?)(?={__timestamp_rx})", re.MULTILINE | re.DOTALL)
@@ -144,7 +172,7 @@ class Node:
         return Node.__log_message_rx.split(log_content)
 
 
-def create_node_container(docker_client, image, name, network, bonds_file, command, rnode_timeout, extra_volumes, allowed_peers, memory, cpuset_cpus):
+def create_node_container(docker_client, name, network, bonds_file, command, rnode_timeout, extra_volumes, allowed_peers, memory, cpuset_cpus, image=DEFAULT_IMAGE):
     deploy_dir = make_tempdir("rchain-integration-test")
 
     hosts_allow_file_content = \
@@ -187,7 +215,7 @@ def create_bootstrap_node(docker_client,
                           key_pair,
                           rnode_timeout,
                           allowed_peers=None,
-                          image=default_image,
+                          image=DEFAULT_IMAGE,
                           memory="1024m",
                           cpuset_cpus="0"):
 
@@ -211,7 +239,27 @@ def create_bootstrap_node(docker_client,
 
     logging.info(f"Starting bootstrap node {name}\ncommand:`{command}`")
 
-    return create_node_container(docker_client, image, name, network, bonds_file, command, rnode_timeout, volumes, allowed_peers, memory, cpuset_cpus)
+    return create_node_container(docker_client, name, network, bonds_file, command, rnode_timeout, volumes, allowed_peers, memory, cpuset_cpus)
+
+
+def make_peer_name(network, i):
+    return f"peer{i}.{network}"
+
+
+def create_peer(docker_client, network, bonds_file, rnode_timeout, allowed_peers, bootstrap, i, key_pair, image=DEFAULT_IMAGE, memory="1024m", cpuset_cpus="0"):
+    name = make_peer_name(network, i)
+
+    bootstrap_address = bootstrap.get_rnode_address()
+
+    command = ("run ", {"--bootstrap": bootstrap_address,
+                        "--validator-private-key": key_pair.private_key,
+                        "--validator-public-key": key_pair.public_key,
+                        "--host": name
+                        })
+
+    logging.info(f"Starting peer node {name} with command: `{command}`")
+
+    return create_node_container(docker_client, name, network, bonds_file, command, rnode_timeout, [], allowed_peers, memory, cpuset_cpus)
 
 
 def create_peer_nodes(docker_client,
@@ -221,37 +269,31 @@ def create_peer_nodes(docker_client,
                       key_pairs,
                       rnode_timeout,
                       allowed_peers=None,
-                      image=default_image,
+                      image=DEFAULT_IMAGE,
                       memory="1024m",
                       cpuset_cpus="0"):
-    """
-    Create peer nodes
-    """
     assert len(set(key_pairs)) == len(key_pairs), "There shouldn't be any duplicates in the key pairs"
 
-    def peer_name(i): return f"peer{i}.{network}"
-
     if allowed_peers is None:
-        allowed_peers = [bootstrap.name] + [peer_name(i) for i in range(0, len(key_pairs))]
+        allowed_peers = [bootstrap.name] + [make_peer_name(network, i) for i in range(0, len(key_pairs))]
 
-    bootstrap_address = bootstrap.get_rnode_address()
-
-    logging.info(f"Create {len(key_pairs)} peer nodes to connect to bootstrap {bootstrap_address}.")
-
-    def create_peer(i, key_pair):
-        name = peer_name(i)
-
-        command = ("run ", {"--bootstrap": bootstrap_address,
-                            "--validator-private-key": key_pair.private_key,
-                            "--validator-public-key": key_pair.public_key,
-                            "--host": name
-                            })
-
-        logging.info(f"Starting peer node {name} with command: `{command}`")
-
-        return create_node_container(docker_client, image, name, network, bonds_file, command, rnode_timeout, [], allowed_peers, memory, cpuset_cpus)
-
-    return [create_peer(i, key_pair) for i, key_pair in enumerate(key_pairs)]
+    result = []
+    for i, key_pair in enumerate(key_pairs):
+        peer_node = create_peer(
+            docker_client,
+            network,
+            bonds_file,
+            rnode_timeout,
+            allowed_peers,
+            bootstrap,
+            i,
+            key_pair,
+            image=image,
+            memory=memory,
+            cpuset_cpus=cpuset_cpus,
+        )
+        result.append(peer_node)
+    return result
 
 
 @contextmanager
