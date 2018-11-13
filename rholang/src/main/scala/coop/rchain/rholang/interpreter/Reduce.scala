@@ -1291,7 +1291,7 @@ object Reduce {
       def set(baseExpr: Expr, key: Par, value: Par): M[Par] =
         baseExpr.exprInstance match {
           case EMapBody(ParMap(basePs, _, _, _)) =>
-            Applicative[M].pure[Par](ParMap(SortedParMap(basePs + (key -> value))))
+            Applicative[M].pure[Par](ParMap(basePs + (key -> value)))
           case other =>
             s.raiseError(MethodNotDefined("set", other.typ))
         }

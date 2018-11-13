@@ -48,7 +48,5 @@ object SortedParMap {
 
   def apply(seq: Seq[(Par, Par)]): SortedParMap = SortedParMap(seq.toMap)
 
-  def apply(sortedParMap: SortedParMap): SortedParMap = SortedParMap(sortedParMap.sortedMap)
-
   def empty: SortedParMap = SortedParMap(Map.empty[Par, Par])
 }
