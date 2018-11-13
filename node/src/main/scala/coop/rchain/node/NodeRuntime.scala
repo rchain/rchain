@@ -328,10 +328,10 @@ class NodeRuntime private[node] (
       Metrics.eitherT(Monad[Task], metrics)
     )
     blockDagStorage <- BlockDagFileStorage.create[Effect](conf.blockDagStorage)(
-                        Monad[Effect],
                         Concurrent[Effect],
                         Sync[Effect],
-                        Log.eitherTLog(Monad[Task], log)
+                        Log.eitherTLog(Monad[Task], log),
+                        blockStore
                       )
     _       <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
     oracle  = SafetyOracle.turanOracle[Effect](Monad[Effect])

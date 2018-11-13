@@ -184,8 +184,11 @@ object Configuration {
           ),
           LMDBBlockStore.Config(dataDir.resolve("casper-block-store"), DefaultCasperBlockStoreSize),
           BlockDagFileStorage.Config(
-            dataDir.resolve("casper-block-dag-file-storage-log"),
-            dataDir.resolve("casper-block-dag-file-storage-crc")
+            dataDir.resolve("casper-block-dag-file-storage-latest-messages-log"),
+            dataDir.resolve("casper-block-dag-file-storage-latest-messages-crc"),
+            dataDir.resolve("casper-block-dag-file-storage-block-metadata-log"),
+            dataDir.resolve("casper-block-dag-file-storage-block-metadata-crc"),
+            dataDir.resolve("casper-block-dag-file-storage-checkpoints")
           ),
           options
         )
@@ -380,8 +383,11 @@ object Configuration {
       casperBlockStoreSize
     )
     val blockDagStorage = BlockDagFileStorage.Config(
-      dataDir.resolve("casper-block-dag-file-storage-log"),
-      dataDir.resolve("casper-block-dag-file-storage-crc")
+      dataDir.resolve("casper-block-dag-file-storage-latest-messages-log"),
+      dataDir.resolve("casper-block-dag-file-storage-latest-messages-crc"),
+      dataDir.resolve("casper-block-dag-file-storage-block-metadata-log"),
+      dataDir.resolve("casper-block-dag-file-storage-block-metadata-crc"),
+      dataDir.resolve("casper-block-dag-file-storage-checkpoints")
     )
 
     new Configuration(
