@@ -1,19 +1,18 @@
 package coop.rchain.rholang.interpreter
 import java.io.StringReader
 
+import cats.Parallel
+import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.rholang.Resources.mkRuntime
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
-import scala.concurrent.duration._
+import scala.util.Try
 
 class RuntimeSpec extends FlatSpec with Matchers {
-  private val mapSize     = 10L * 1024L * 1024L
-  private val tmpPrefix   = "rspace-store-"
-  private val maxDuration = 5.seconds
+  private val mapSize   = 10L * 1024L * 1024L
+  private val tmpPrefix = "rspace-store-"
 
-//  val runtime = Runtime.create(Files.createTempDirectory(tmpPrefix), mapSize)
+  implicit val parallelTry: Parallel[Try, Try] = Parallel.identity[Try]
 
   private val channelReadOnlyError = "ReduceError: Trying to read from non-readable channel."
 
@@ -48,14 +47,13 @@ class RuntimeSpec extends FlatSpec with Matchers {
     failure(rho).getMessage.stripLineEnd should endWith(error)
 
   private def failure(rho: String): Throwable =
-    execute(rho).swap.getOrElse(fail(s"Expected $rho to fail - it didn't."))
+    execute(rho).toEither.swap.getOrElse(fail(s"Expected $rho to fail - it didn't."))
 
-  private def execute(source: String): Either[Throwable, Runtime] =
-    mkRuntime(tmpPrefix, mapSize)
+  private def execute(source: String): Try[Runtime[Try]] =
+    mkRuntime[Try, Try](tmpPrefix, mapSize)
       .use { runtime =>
         Interpreter
           .execute(runtime, new StringReader(source))
-          .attempt
+
       }
-      .runSyncUnsafe(maxDuration)
 }

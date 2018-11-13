@@ -1,8 +1,8 @@
 package coop.rchain.rholang.interpreter
 
-import java.io.StringReader
-
+import cats.Id
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random}
 import coop.rchain.models.Expr.ExprInstance._
@@ -14,20 +14,14 @@ import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.ISpace
 import coop.rchain.rspace.internal.{Datum, Row}
-import coop.rchain.rspace.pure.PureRSpace
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
-import scala.concurrent.Await
-import scala.concurrent.duration._
-
 trait RegistryTester extends PersistentStoreTester {
-  implicit val errorLog = new ErrorLog()
-  implicit val costAccounting =
-    CostAccounting.unsafe[Task](CostAccount(Integer.MAX_VALUE))
+  implicit val errorLog: ErrorLog[Id] = ErrorLog.create[Id]
+  implicit val costAccounting: CostAccounting[Id] =
+    CostAccounting.unsafe[Id](CostAccount(Integer.MAX_VALUE))
 
-  private[this] def dispatchTableCreator(registry: Registry[Task]): RhoDispatchMap = {
+  private[this] def dispatchTableCreator(registry: Registry[Id]): RhoDispatchMap[Id] = {
     import coop.rchain.rholang.interpreter.Runtime.BodyRefs._
     Map(
       REG_LOOKUP                   -> registry.lookup,
@@ -47,9 +41,9 @@ trait RegistryTester extends PersistentStoreTester {
 
   def withRegistryAndTestSpace[R](
       f: (
-          ChargingReducer[Task],
+          ChargingReducer[Id],
           ISpace[
-            Task,
+            Id,
             Par,
             BindPattern,
             OutOfPhlogistonsError.type,
@@ -61,13 +55,13 @@ trait RegistryTester extends PersistentStoreTester {
   ): R =
     withTestSpace(errorLog) {
       case TestFixture(space, _) =>
-        val _                                  = errorLog.readAndClearErrorVector()
-        lazy val dispatchTable: RhoDispatchMap = dispatchTableCreator(registry)
-        lazy val (dispatcher @ _, reducer, registry) =
+        val _                                      = errorLog.readAndClearErrorVector()
+        lazy val dispatchTable: RhoDispatchMap[Id] = dispatchTableCreator(registry)
+        lazy val (_, reducer, registry) =
           RholangAndScalaDispatcher
             .create(space, dispatchTable, Registry.testingUrnMap)
-        reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
-        registry.testInstall().runSyncUnsafe(1.second)
+        reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE))
+        registry.testInstall()
         f(reducer, space)
     }
 }
@@ -90,9 +84,8 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     chan = Registry.registryRoot,
     data = Seq(
       Expr(EMapBody(
-        ParMap(Seq(eightByteArray -> Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(1), ninetySevenByteArray, branchName))))))))))),
-    persistent = false
-  )
+        ParMap(Seq(eightByteArray -> Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(1), ninetySevenByteArray, branchName)))))))))))
+    )
   // format: on
   val sevenFiveByteArray: Par = GByteArray(ByteString.copyFrom(Array[Byte](0x75.toByte)))
   val aThreeByteArray: Par    = GByteArray(ByteString.copyFrom(Array[Byte](0xa3.toByte)))
@@ -131,8 +124,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
           )
         )
       )
-    ),
-    persistent = false
+    )
   )
 
   val fullBranchSend: Send = Send(
@@ -158,8 +150,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
           )
         )
       )
-    ),
-    persistent = false
+    )
   )
 
   val baseRand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
@@ -182,7 +173,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
             Datum.create[Par, ListParWithRandom](
               GString(s),
               ListParWithRandom(Seq(expected), rand),
-              false,
+              persist = false,
               sequenceNumber
             )
           ),
@@ -215,18 +206,16 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     implicit val rand: Blake2b512Random = baseRand.splitByte(1)
     val newRand                         = rand.splitByte(2)
     val randResult0                     = newRand.splitByte(0)
-    randResult0.next; randResult0.next
+    randResult0.next(); randResult0.next()
     val randResult1 = newRand.splitByte(1)
-    randResult1.next; randResult1.next
+    randResult1.next(); randResult1.next()
     val randResult2 = newRand.splitByte(2)
-    randResult2.next; randResult2.next
+    randResult2.next(); randResult2.next()
 
     val result = withRegistryAndTestSpace { (reducer, space) =>
       implicit val env = Env[Par]()
-      val resultTask = for {
-        _ <- reducer.eval(completePar)
-      } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
+      reducer.eval(completePar)
+      space.store.toMap
     }
 
     checkResult(result, "result0", GInt(7), randResult0)
@@ -326,20 +315,19 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     val result7Rand = merge7.splitByte(2)
     result7Rand.next(); result7Rand.next(); result7Rand.next(); result7Rand.next()
     val result8Rand = merge7.splitByte(3)
-    result8Rand.next(); result8Rand.next(); result8Rand.next(); result8Rand.next();
+    result8Rand.next(); result8Rand.next(); result8Rand.next(); result8Rand.next()
     result8Rand.next()
     val result9Rand = merge7.splitByte(4)
-    result9Rand.next(); result9Rand.next(); result9Rand.next(); result9Rand.next();
+    result9Rand.next(); result9Rand.next(); result9Rand.next(); result9Rand.next()
     result9Rand.next()
     val result10Rand = merge7.splitByte(5)
     result10Rand.next(); result10Rand.next()
 
     val result = withRegistryAndTestSpace { (reducer, space) =>
       implicit val env = Env[Par]()
-      val resultTask = for {
-        _ <- reducer.eval(completePar)
-      } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
+
+      reducer.eval(completePar)
+      space.store.toMap
     }
 
     checkResult(result, "result0", GInt(8), result0Rand)
@@ -402,10 +390,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
 
     val result = withRegistryAndTestSpace { (reducer, space) =>
       implicit val env = Env[Par]()
-      val resultTask = for {
-        _ <- reducer.eval(completePar)
-      } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
+
+      reducer.eval(completePar)
+      space.store.toMap
     }
 
     // Compute the random states for the results
@@ -420,15 +407,15 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     delete0Rand.next(); delete0Rand.next(); delete0Rand.next()
     val merge0      = Blake2b512Random.merge(Seq(newRand.splitByte(1), delete0Rand))
     val lookup0Rand = merge0.splitByte(0)
-    lookup0Rand.next(); lookup0Rand.next();
+    lookup0Rand.next(); lookup0Rand.next()
     val merge1      = Blake2b512Random.merge(Seq(merge0.splitByte(1), lookup0Rand))
     val result0Rand = merge1.splitByte(0)
     val lookup1Rand = merge1.splitByte(1)
-    lookup1Rand.next(); lookup1Rand.next();
+    lookup1Rand.next(); lookup1Rand.next()
     val merge2      = Blake2b512Random.merge(Seq(merge1.splitByte(2), lookup1Rand))
     val result1Rand = merge2.splitByte(0)
     val lookup2Rand = merge2.splitByte(1)
-    lookup2Rand.next(); lookup2Rand.next();
+    lookup2Rand.next(); lookup2Rand.next()
     val merge3      = Blake2b512Random.merge(Seq(merge2.splitByte(2), lookup2Rand))
     val result2Rand = merge3.splitByte(0)
     val delete1Rand = merge3.splitByte(1)
@@ -436,11 +423,11 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     delete1Rand.next(); delete1Rand.next(); delete1Rand.next()
     val merge4      = Blake2b512Random.merge(Seq(merge3.splitByte(2), delete1Rand))
     val lookup3Rand = merge4.splitByte(0)
-    lookup3Rand.next(); lookup3Rand.next();
+    lookup3Rand.next(); lookup3Rand.next()
     val merge5      = Blake2b512Random.merge(Seq(merge4.splitByte(1), lookup3Rand))
     val result3Rand = merge5.splitByte(0)
     val lookup4Rand = merge5.splitByte(1)
-    lookup4Rand.next(); lookup4Rand.next();
+    lookup4Rand.next(); lookup4Rand.next()
     val merge6      = Blake2b512Random.merge(Seq(merge5.splitByte(2), lookup4Rand))
     val result4Rand = merge6.splitByte(0)
     val delete2Rand = merge6.splitByte(1)
@@ -450,7 +437,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     val lookup5Rand = merge7.splitByte(0)
     // The last delete should have merged into the root, so it should only take
     // 1 new name.
-    lookup5Rand.next();
+    lookup5Rand.next()
     val merge8      = Blake2b512Random.merge(Seq(merge7.splitByte(1), lookup5Rand))
     val result5Rand = merge8.splitByte(0)
     val result6Rand = merge8.splitByte(1)
@@ -475,7 +462,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
             Datum.create[Par, ListParWithRandom](
               Registry.registryRoot,
               ListParWithRandom(Seq(EMapBody(ParMap(SortedParMap.empty))), rootRand),
-              false,
+              persist = false,
               sequenceNumber
             )
           ),
@@ -497,16 +484,15 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     implicit val rand: Blake2b512Random = baseRand.splitByte(4)
     val newRand                         = rand.splitByte(2)
     val randResult0                     = newRand.splitByte(0)
-    randResult0.next; randResult0.next
+    randResult0.next(); randResult0.next()
     val randResult1 = newRand.splitByte(1)
-    randResult1.next; randResult1.next
+    randResult1.next(); randResult1.next()
 
     val result = withRegistryAndTestSpace { (reducer, space) =>
       implicit val env = Env[Par]()
-      val resultTask = for {
-        _ <- reducer.eval(completePar)
-      } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
+
+      reducer.eval(completePar)
+      space.store.toMap
     }
 
     checkResult(result, "result0", GInt(8), randResult0)
@@ -527,31 +513,30 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     val completePar                     = registerPar.addSends(rootSend, branchSend)
     implicit val rand: Blake2b512Random = baseRand.splitByte(5)
     val newRand                         = rand.splitByte(2)
-    val registeredName                  = newRand.next();
+    val registeredName                  = newRand.next()
     newRand.next()
     val registerRand = newRand.splitByte(0)
     // Once for Uri and twice for temporary channels to handle the insert.
-    val uriBytes = registerRand.next();
+    val uriBytes = registerRand.next()
     registerRand.next(); registerRand.next()
     val insertRand = registerRand
     // Goes directly into root
-    insertRand.next();
+    insertRand.next()
     val merge0Rand  = Blake2b512Random.merge(Seq(newRand.splitByte(1), insertRand))
     val randResult0 = merge0Rand.splitByte(0)
     val lookupRand  = merge0Rand.splitByte(1)
-    lookupRand.next();
+    lookupRand.next()
     val randResult1 = lookupRand
 
     val result = withRegistryAndTestSpace { (reducer, space) =>
       implicit val env = Env[Par]()
-      val resultTask = for {
-        _ <- reducer.eval(completePar)
-      } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
+
+      reducer.eval(completePar)
+      space.store.toMap
     }
 
     val expectedBundle: Par =
-      Bundle(GPrivate(ByteString.copyFrom(registeredName)), writeFlag = true, readFlag = false)
+      Bundle(GPrivate(ByteString.copyFrom(registeredName)), writeFlag = true)
 
     val expectedUri = Registry.buildURI(uriBytes)
 
@@ -682,10 +667,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
 
     val result = withRegistryAndTestSpace { (reducer, space) =>
       implicit val env = Env[Par]()
-      val resultTask = for {
-        _ <- reducer.eval(completePar)
-      } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
+
+      reducer.eval(completePar)
+      space.store.toMap
     }
 
     checkResult(result, "result0", ETuple(List(GInt(789), GString("entry"))), result0Rand)

@@ -2,30 +2,24 @@ package coop.rchain.rholang.interpreter.accounting
 
 import java.nio.file.{Files, Path}
 
-import cats.Id
-import cats.effect.Sync
+import cats.{Id, Parallel}
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.effect.implicits.syncId
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter._
-import org.scalatest.{Assertion, BeforeAndAfterAll, Matchers, WordSpec}
 import coop.rchain.models.rholang.implicits._
-import monix.eval.Task
-import org.scalatest.prop.PropertyChecks._
-
-import scala.concurrent.duration._
-import monix.execution.Scheduler.Implicits.global
-import org.scalactic.TripleEqualsSupport
-import coop.rchain.models.testImplicits._
 import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
+import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting.Chargeable._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rspace.history.Branch
-import coop.rchain.rspace.{Context, ISpace, RSpace}
-import org.scalacheck.{Arbitrary, Gen}
-import org.scalatest.prop.TableFor1
+import coop.rchain.rspace.{Context, RSpace}
+import org.scalactic.TripleEqualsSupport
+import org.scalatest.prop.PropertyChecks._
+import org.scalatest.{Assertion, BeforeAndAfterAll, Matchers, WordSpec}
 
 import scala.collection.immutable.BitSet
+import scala.util.Try
 
 class RholangMethodsCostsSpec
     extends WordSpec
@@ -54,16 +48,15 @@ class RholangMethodsCostsSpec
           (listN(0), 1L)
         )
         forAll(table) { (pars, n) =>
-          implicit val errLog = new ErrorLog()
-          implicit val env    = Env[Par]()
-          val method          = methodCall("nth", EList(pars), List(GInt(n)))
+          implicit val errLog: ErrorLog[Id] = ErrorLog.create[Id]
+          implicit val env                  = Env[Par]()
+          val method                        = methodCall("nth", EList(pars), List(GInt(n)))
           withReducer[Assertion] { reducer =>
-            for {
-              err  <- reducer.evalExprToPar(method).attempt
-              _    = assert(err.isLeft)
-              cost <- methodCallCost(reducer)
-            } yield assert(cost === Cost(0))
-          }
+            val err = Try { reducer.evalExprToPar(method) }
+            assert(err.isFailure)
+            val cost = methodCallCost(reducer)
+            assert(cost === Cost(0))
+          }(errLog)
         }
       }
     }
@@ -88,16 +81,14 @@ class RholangMethodsCostsSpec
           (listN(0), 1L)
         )
         forAll(table) { (pars, n) =>
-          implicit val errLog = new ErrorLog()
-          implicit val env    = Env[Par]()
-          val method          = methodCall("nth", EList(pars), List(GInt(n)))
+          implicit val env = Env[Par]()
+          val method       = methodCall("nth", EList(pars), List(GInt(n)))
           withReducer[Assertion] { reducer =>
-            for {
-              err  <- reducer.evalExprToPar(method).attempt
-              _    = assert(err.isLeft)
-              cost <- methodCallCost(reducer)
-            } yield assert(cost === Cost(0))
-          }
+            val err = Try { reducer.evalExprToPar(method) }
+            assert(err.isFailure)
+            val cost = methodCallCost(reducer)
+            assert(cost === Cost(0))
+          }(ErrorLog.create[Id])
         }
       }
     }
@@ -111,14 +102,12 @@ class RholangMethodsCostsSpec
       factor: Double,
       method: Expr
   ): Assertion = {
-    implicit val errorLog = new ErrorLog()
-    implicit val env      = Env[Par]()
+    implicit val env = Env[Par]()
     withReducer { reducer =>
-      for {
-        _    <- reducer.evalExprToPar(method)
-        cost <- methodCallCost(reducer)
-      } yield costIsProportional(baseCost, factor, cost)
-    }
+      reducer.evalExprToPar(method)
+      val cost = methodCallCost(reducer)
+      costIsProportional(baseCost, factor, cost)
+    }(ErrorLog.create[Id])
   }
 
   "toByteArray" when {
@@ -127,10 +116,10 @@ class RholangMethodsCostsSpec
         val pars = Table[Par](
           "par",
           Par(exprs = Seq(GInt(1))),
-          Send(GString("result"), List(GString("Success")), false, BitSet()),
+          Send(GString("result"), List(GString("Success")), persistent = false, BitSet()),
           Receive(
             Seq(
-              ReceiveBind(Seq(Par()), Bundle(GString("y"), readFlag = false, writeFlag = true))
+              ReceiveBind(Seq(Par()), Bundle(GString("y"), writeFlag = true))
             ),
             Par()
           ),
@@ -191,7 +180,7 @@ class RholangMethodsCostsSpec
         val refString = "a"
         val refCost   = hexToBytesCost(refString)
         forAll(utf8Strings) { string =>
-          val factor = string.length.toDouble / refString.size
+          val factor = string.length.toDouble / refString.length
           val method = methodCall("toUtf8Bytes", GString(string), List.empty)
           testProportional(refCost, factor, method)
         }
@@ -651,7 +640,7 @@ class RholangMethodsCostsSpec
           ("a", stringN(100)),
           (stringN(1000), stringN(20))
         )
-        val refPair                                = ("" -> "a")
+        val refPair                                = "" -> "a"
         val refPairLength: (String, String) => Int = (l, r) => l.length + r.length
         val refCost                                = stringAppendCost(refPair._1.length, refPair._2.length)
         forAll(strings) {
@@ -696,7 +685,8 @@ class RholangMethodsCostsSpec
           (setN(1), setN(1000)),
           (setN(1000), setN(1))
         )
-        val refSet  = Set(Send(GString("result"), List(GString("Success")), false, BitSet()))
+        val refSet =
+          Set(Send(GString("result"), List(GString("Success")), persistent = false, BitSet()))
         val refCost = unionCost(refSet.size)
         forAll(sets) {
           case (left, right) =>
@@ -744,10 +734,10 @@ class RholangMethodsCostsSpec
   def methodCall(method: String, target: Par, arguments: List[Par]): Expr =
     EMethod(method, target, arguments)
 
-  def methodCallCost(reducer: ChargingReducer[Task]): Task[Cost] =
-    reducer
-      .getAvailablePhlos()
-      .map(ca => Cost(Integer.MAX_VALUE) - ca.cost - METHOD_CALL_COST)
+  def methodCallCost(reducer: ChargingReducer[Id]): Id[Cost] = {
+    val ca = reducer.getAvailablePhlos()
+    Cost(Integer.MAX_VALUE) - ca.cost - METHOD_CALL_COST
+  }
 
   def map(pairs: Seq[(Par, Par)]): Map[Par, Par] = Map(pairs: _*)
   def emptyMap: Map[Par, Par]                    = map(Seq.empty[(Par, Par)])
@@ -778,49 +768,42 @@ class RholangMethodsCostsSpec
   def emptyString: String = ""
 
   def test(method: Expr, expectedCost: Cost): Assertion = {
-    implicit val errLog = new ErrorLog()
-    implicit val env    = Env[Par]()
+    implicit val env = Env[Par]()
     withReducer[Assertion] { reducer =>
-      for {
-        _    <- reducer.evalExprToPar(method)
-        cost <- methodCallCost(reducer)
-      } yield assert(cost === expectedCost)
-    }
-  }
-  def withReducer[R](f: ChargingReducer[Task] => Task[R])(implicit errLog: ErrorLog): R = {
-    val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space)._2
-    val test = for {
-      _   <- reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE))
-      res <- f(reducer)
-    } yield res
-    test.runSyncUnsafe(5.seconds)
+      reducer.evalExprToPar(method)
+      val cost = methodCallCost(reducer)
+      assert(cost === expectedCost)
+    }(ErrorLog.create[Id])
   }
 
-  private var dbDir: Path            = null
-  private var context: RhoContext    = null
-  private var space: RhoISpace[Task] = null
+  def withReducer[R](f: ChargingReducer[Id] => Id[R])(errLog: ErrorLog[Id]): R = {
+    val reducer =
+      RholangOnlyDispatcher.create[Id, Id](space)(Parallel.identity[Id], syncId, errLog)._2
+    reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE))
+    f(reducer)
+  }
+
+  private var dbDir: Path          = _
+  private var context: RhoContext  = _
+  private var space: RhoISpace[Id] = _
 
   override protected def beforeAll(): Unit = {
-    import coop.rchain.catscontrib.TaskContrib._
     import coop.rchain.rholang.interpreter.storage.implicits._
     dbDir = Files.createTempDirectory("rholang-interpreter-test-")
     context = Context.createInMemory()
-    space = (
-      RSpace
-        .create[
-          Task,
-          Par,
-          BindPattern,
-          OutOfPhlogistonsError.type,
-          ListParWithRandom,
-          ListParWithRandomAndPhlos,
-          TaggedContinuation
-        ](
-          context,
-          Branch("rholang-methods-cost-test")
-        )
+    space = RSpace
+      .create[
+        Id,
+        Par,
+        BindPattern,
+        OutOfPhlogistonsError.type,
+        ListParWithRandom,
+        ListParWithRandomAndPhlos,
+        TaggedContinuation
+      ](
+        context,
+        Branch("rholang-methods-cost-test")
       )
-      .unsafeRunSync
   }
 
   override protected def afterAll(): Unit = {

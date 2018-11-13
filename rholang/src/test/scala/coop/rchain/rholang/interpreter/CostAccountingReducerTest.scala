@@ -1,26 +1,26 @@
 package coop.rchain.rholang.interpreter
 
+import cats.Id
+import coop.rchain.catscontrib.effect.implicits.syncId
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.Resources.mkRhoISpace
 import coop.rchain.rholang.interpreter.Reduce.DebruijnInterpreter
+import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting.{Chargeable, Cost, CostAccount, CostAccounting, _}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rholang.interpreter.storage.{ChargingRSpace, ChargingRSpaceTest, Tuplespace}
+import coop.rchain.rholang.interpreter.storage.{ChargingRSpace, Tuplespace}
 import coop.rchain.rspace.internal.{Datum, Row}
-import monix.eval.{Coeval, Task}
-import monix.execution.Scheduler.Implicits.global
+import monix.eval.Coeval
 import org.scalactic.TripleEqualsSupport
 import org.scalatest.{FlatSpec, Matchers}
-import coop.rchain.rholang.Resources.mkRhoISpace
-import coop.rchain.rholang.interpreter.Runtime.RhoISpace
-import coop.rchain.rspace.internal
 
 import scala.collection.immutable
-import scala.concurrent.duration._
+import scala.util.{Failure, Try}
 
 class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEqualsSupport {
 
@@ -52,29 +52,29 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
   }
 
   it should "stop if OutOfPhloError is returned from RSpace" in {
-    val tuplespaceAlg = new Tuplespace[Task] {
+    val tuplespaceAlg = new Tuplespace[Id] {
       override def produce(
           chan: Par,
           data: ListParWithRandom,
           persistent: Boolean,
           sequenceNumber: Int
-      ): Task[Unit] =
-        Task.raiseError(OutOfPhlogistonsError)
+      ): Id[Unit] =
+        syncId.raiseError(OutOfPhlogistonsError)
       override def consume(
           binds: Seq[(BindPattern, Par)],
           body: ParWithRandom,
           persistent: Boolean,
           sequenceNumber: Int
-      ): Task[Unit] = Task.raiseError(OutOfPhlogistonsError)
+      ): Id[Unit] = syncId.raiseError(OutOfPhlogistonsError)
     }
 
-    implicit val errorLog = new ErrorLog()
-    implicit val rand     = Blake2b512Random(128)
-    implicit val costAlg  = CostAccounting.unsafe[Task](CostAccount(1000))
-    val reducer           = new DebruijnInterpreter[Task, Task.Par](tuplespaceAlg, Map.empty)
-    val send              = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
-    val test              = reducer.inj(send).attempt.runSyncUnsafe(1.second)
-    assert(test === Left(OutOfPhlogistonsError))
+    implicit val errorLog: ErrorLog[Id] = ErrorLog.create[Id]
+    implicit val rand                   = Blake2b512Random(128)
+    implicit val costAlg                = CostAccounting.unsafe[Id](CostAccount(1000))
+    val reducer                         = new DebruijnInterpreter[Id, Id](tuplespaceAlg, Map.empty)
+    val send                            = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
+    val test                            = Try { reducer.inj(send) }
+    assert(test === Failure(OutOfPhlogistonsError))
   }
 
   it should "stop interpreter threads as soon as deploy runs out of phlo" in {
@@ -90,10 +90,10 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     val program =
       Par(sends = Seq(Send(channel, Seq(a)), Send(channel, Seq(b))))
 
-    implicit val rand   = Blake2b512Random(Array.empty[Byte])
-    implicit val errLog = new ErrorLog()
+    implicit val rand                 = Blake2b512Random(Array.empty[Byte])
+    implicit val errLog: ErrorLog[Id] = ErrorLog.create[Id]
 
-    def testImplementation(pureRSpace: RhoISpace[Task]): Task[
+    def testImplementation(pureRSpace: RhoISpace[Id]): Id[
       (
           Either[Throwable, Unit],
           Map[immutable.Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]]
@@ -101,7 +101,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     ] = {
 
       lazy val (_, reducer, _) =
-        RholangAndScalaDispatcher.create[Task, Task.Par](pureRSpace, Map.empty, Map.empty)
+        RholangAndScalaDispatcher.create[Id, Id](pureRSpace, Map.empty, Map.empty)
 
       def plainSendCost(p: Par): Cost = {
         val storageCost = ChargingRSpace.storageCostProduce(
@@ -118,16 +118,14 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
 
       val initPhlos = sendACost + sendBCost - SEND_EVAL_COST - Cost(1)
 
-      for {
-        _      <- reducer.setAvailablePhlos(initPhlos)
-        result <- reducer.inj(program).attempt
-      } yield (result, pureRSpace.store.toMap)
+      val result = Try { reducer.setAvailablePhlos(initPhlos) }.toEither
+      reducer.inj(program)
+      (result, pureRSpace.store.toMap)
     }
 
     val (result, map) =
-      mkRhoISpace[Task]("cost-accounting-reducer-test-")
-        .use(testImplementation(_))
-        .runSyncUnsafe(5.seconds)
+      mkRhoISpace[Id]("cost-accounting-reducer-test-")
+        .use(testImplementation)
 
     val errors = errLog.readAndClearErrorVector()
 
@@ -136,7 +134,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
         Datum.create(
           channel,
           ListParWithRandom(Seq(p), rand),
-          false
+          persist = false
         )
       ),
       List()

@@ -17,7 +17,7 @@ import scala.util.Try
 import coop.rchain.catscontrib.effect.implicits._
 
 object StackSafetySpec extends Assertions {
-  implicit val parallelTry : Parallel[Try, Try] = Parallel.identity[Try]
+  implicit val parallelTry: Parallel[Try, Try] = Parallel.identity[Try]
 
   def findMaxRecursionDepth(): Int = {
     def count(i: Int): Int =
@@ -45,8 +45,8 @@ object StackSafetySpec extends Assertions {
 class StackSafetySpec extends FlatSpec with Matchers {
   import StackSafetySpec._
 
-  val mapSize: Long               = 10L * 1024L * 1024L
-  val tmpPrefix: String           = "rspace-store-"
+  val mapSize: Long     = 10L * 1024L * 1024L
+  val tmpPrefix: String = "rspace-store-"
 
   val depth: Int = findMaxRecursionDepth()
 
@@ -178,13 +178,12 @@ class StackSafetySpec extends FlatSpec with Matchers {
   private def checkNormalize(rho: String): Unit =
     isolateStackOverflow {
       checkSuccess(rho) { rho =>
-        Try { Interpreter.buildNormalizedTerm(rho)()}
+        Try { Interpreter.buildNormalizedTerm(rho)() }
       }
     }
 
   private def checkSuccess(rho: String)(interpreter: String => Try[_]): Unit =
-    interpreter(rho).toEither
-      .swap
+    interpreter(rho).toEither.swap
       .foreach(error => fail(s"""Execution failed for: $rho
                                                |Cause:
                                                |$error""".stripMargin))

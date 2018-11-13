@@ -13,6 +13,7 @@ import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{PPar, Proc}
 import coop.rchain.rholang.syntax.rholang_mercury.PrettyPrinter
 import coop.rchain.rholang.{GenTools, PrettyPrinted, ProcGen}
 import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.pure.PureRSpace
 import coop.rchain.rspace.{Context, RSpace}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -116,17 +117,21 @@ object CostAccountingPropertyTest {
 
   def costOfExecution(procs: Proc*): Task[Long] = {
     implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
-    implicit val errLog: ErrorLog       = new ErrorLog()
+
+    def run(pureRSpace: Runtime.RhoISpace[Task]): Task[Long] =
+      for {
+        errLog <- ErrorLog.create[Task]
+
+        (_, reducer, _) = {
+          implicit val ft: ErrorLog[Task] = errLog
+          RholangAndScalaDispatcher.create[Task, Task.Par](pureRSpace, Map.empty, Map.empty)
+        }
+
+        result <- procs.toStream.traverse(execute(reducer, _))
+      } yield result.sum
 
     mkRhoISpace[Task]("cost-accounting-property-test-")
-      .use { pureRSpace =>
-        lazy val (_, reducer, _) =
-          RholangAndScalaDispatcher.create[Task, Task.Par](pureRSpace, Map.empty, Map.empty)
-
-        procs.toStream
-          .traverse(execute(reducer, _))
-          .map(_.sum)
-      }
+      .use(run)
   }
 
 }

@@ -12,10 +12,10 @@ import scala.util.Try
 import coop.rchain.catscontrib.effect.implicits.syncTry
 
 class InterpreterSpec extends FlatSpec with Matchers {
-  private val mapSize     = 10L * 1024L * 1024L
-  private val tmpPrefix   = "rspace-store-"
+  private val mapSize   = 10L * 1024L * 1024L
+  private val tmpPrefix = "rspace-store-"
 
-  implicit val parallelTry : Parallel[Try,Try] = Parallel.identity[Try]
+  implicit val parallelTry: Parallel[Try, Try] = Parallel.identity[Try]
 
   behavior of "Interpreter"
 
@@ -23,21 +23,19 @@ class InterpreterSpec extends FlatSpec with Matchers {
     val sendRho = "@{0}!(0)"
 
     val (initStorage, beforeError, afterError, afterSend, finalContent) =
-      mkRuntime[Try, Try](tmpPrefix, mapSize)
-        .use { runtime =>
-          val initStorage = storageContents(runtime)
-          for {
-            _            <- success(runtime, sendRho)
-            beforeError  = storageContents(runtime)
-            _            <- failure(runtime, "@1!(1) | @2!(3.noSuchMethod())")
-            afterError   = storageContents(runtime)
-            _            <- success(runtime, "new stdout(`rho:io:stdout`) in { stdout!(42) }")
-            afterSend    = storageContents(runtime)
-            _            <- success(runtime, "for (_ <- @0) { Nil }")
-            finalContent = storageContents(runtime)
-          } yield (initStorage, beforeError, afterError, afterSend, finalContent)
-        }
-        .get
+      mkRuntime[Try, Try](tmpPrefix, mapSize).use { runtime =>
+        val initStorage = storageContents(runtime)
+        for {
+          _            <- success(runtime, sendRho)
+          beforeError  = storageContents(runtime)
+          _            <- failure(runtime, "@1!(1) | @2!(3.noSuchMethod())")
+          afterError   = storageContents(runtime)
+          _            <- success(runtime, "new stdout(`rho:io:stdout`) in { stdout!(42) }")
+          afterSend    = storageContents(runtime)
+          _            <- success(runtime, "for (_ <- @0) { Nil }")
+          finalContent = storageContents(runtime)
+        } yield (initStorage, beforeError, afterError, afterSend, finalContent)
+      }.get
 
     assert(beforeError.contains(sendRho))
     assert(afterError == beforeError)
@@ -46,12 +44,11 @@ class InterpreterSpec extends FlatSpec with Matchers {
   }
 
   it should "yield correct results for the PrimeCheck contract" in {
-    val contents = mkRuntime(tmpPrefix, mapSize)
-      .use { runtime =>
-        for {
-          _ <- success(
-                runtime,
-                """
+    val contents = mkRuntime(tmpPrefix, mapSize).use { runtime =>
+      for {
+        _ <- success(
+              runtime,
+              """
               |new loop, primeCheck, stdoutAck(`rho:io:stdoutAck`) in {
               |            contract loop(@x) = {
               |              match x {
@@ -75,12 +72,11 @@ class InterpreterSpec extends FlatSpec with Matchers {
               |            loop!([Nil, 7, 7 | 8, 9 | Nil, 9 | 10, Nil, 9])
               |  }
             """.stripMargin
-              )
+            )
 
-          contents = storageContents(runtime)
-        } yield contents
-      }
-      .get
+        contents = storageContents(runtime)
+      } yield contents
+    }.get
 
     // TODO: this is not the way we should be testing execution results,
     // yet strangely it works - and we don't have a better way for now
@@ -111,6 +107,6 @@ class InterpreterSpec extends FlatSpec with Matchers {
     execute(runtime, rho).map(_.swap.getOrElse(fail(s"Expected $rho to fail - it didn't.")))
 
   private def execute(runtime: Runtime[Try], source: String): Try[Either[Throwable, Runtime[Try]]] =
-    Try{Interpreter.execute(runtime, new StringReader(source)).toEither}
+    Try { Interpreter.execute(runtime, new StringReader(source)).toEither }
 
 }

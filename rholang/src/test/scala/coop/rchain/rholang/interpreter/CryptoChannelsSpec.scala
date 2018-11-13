@@ -2,8 +2,9 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.Files
 
+import cats.{Id, Parallel}
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
@@ -12,21 +13,16 @@ import coop.rchain.models.Var.VarInstance.Wildcard
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.testImplicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoIStore
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rspace.Serialize
 import coop.rchain.shared.PathOps._
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{fixture, Assertion, Matchers, Outcome}
 
 import scala.collection.immutable.BitSet
-import scala.concurrent.Await
-import scala.concurrent.duration._
 
 class CryptoChannelsSpec
     extends fixture.FlatSpec
@@ -44,22 +40,21 @@ class CryptoChannelsSpec
   val serialize: Par => Array[Byte]                    = Serialize[Par].encode(_).toArray
   val byteArrayToByteString: Array[Byte] => ByteString = ba => ByteString.copyFrom(ba)
   val byteStringToExpr: ByteString => Expr             = bs => Expr(GByteArray(bs))
-  val byteArrayToExpr                                  = byteArrayToByteString andThen byteStringToExpr
+  val byteArrayToExpr: Array[Byte] => Expr             = byteArrayToByteString andThen byteStringToExpr
   val parToByteString: Par => ByteString               = serialize andThen (ba => ByteString.copyFrom(ba))
   val parToExpr: Par => Expr                           = parToByteString andThen byteStringToExpr
 
   // this should consume from the `ack` channel effectively preparing tuplespace for next test
   def clearStore(
       store: RhoIStore,
-      reduce: ChargingReducer[Task],
-      ackChannel: Par,
-      timeout: Duration = 3.seconds
+      reduce: ChargingReducer[Id],
+      ackChannel: Par
   )(implicit env: Env[Par]): Unit = {
     val consume = Receive(
       Seq(ReceiveBind(Seq(EVar(Var(Wildcard(WildcardMsg())))), ackChannel)),
       Par()
     )
-    Await.ready(reduce.eval(consume).runAsync, 3.seconds)
+    reduce.eval(consume)
   }
 
   def assertStoreContains(
@@ -91,31 +86,31 @@ class CryptoChannelsSpec
     val storeContainsTest: ListParWithRandom => Assertion =
       assertStoreContains(store)(ackChannel)(_)
 
-    forAll { (par: Par) =>
+    forAll { par: Par =>
       val byteArrayToSend = Expr(GByteArray(par.toByteString))
       val data: List[Par] = List(byteArrayToSend, ackChannel)
-      val send            = Send(hashChannel, data, false, BitSet())
+      val send            = Send(hashChannel, data, persistent = false, BitSet())
       val expected        = (hash andThen byteArrayToByteString andThen byteStringToExpr)(par)
       // Send byte array on hash channel. This should:
       // 1. meet with the system process in the tuplespace
       // 2. hash input array
       // 3. send result on supplied ack channel
-      Await.result(reduce.eval(send).runAsync, 3.seconds)
+      reduce.eval(send)
       storeContainsTest(ListParWithRandom(Seq(expected), rand))
       clearStore(store, reduce, ackChannel)
     }
   }
 
   "sha256Hash channel" should "hash input data and send result on ack channel" in { fixture =>
-    hashingChannel("sha256Hash", Sha256.hash _, fixture)
+    hashingChannel("sha256Hash", Sha256.hash, fixture)
   }
 
   "blake2b256Hash channel" should "hash input data and send result on ack channel" in { fixture =>
-    hashingChannel("blake2b256Hash", Blake2b256.hash _, fixture)
+    hashingChannel("blake2b256Hash", Blake2b256.hash, fixture)
   }
 
   "keccak256Hash channel" should "hash input data and send result on ack channel" in { fixture =>
-    hashingChannel("keccak256Hash", Keccak256.hash _, fixture)
+    hashingChannel("keccak256Hash", Keccak256.hash, fixture)
 
   }
 
@@ -139,9 +134,9 @@ class CryptoChannelsSpec
       val ackChannel        = GString("x")
       implicit val emptyEnv = Env[Par]()
       val storeContainsTest: ListParWithRandom => Assertion =
-        assertStoreContains(store)(ackChannel) _
+        assertStoreContains(store)(ackChannel)
 
-      forAll { (par: Par) =>
+      forAll { par: Par =>
         val parByteArray: Array[Byte] = Keccak256.hash(serialize(par))
 
         val signature = Secp256k1.sign(parByteArray, secKey)
@@ -159,7 +154,7 @@ class CryptoChannelsSpec
           persistent = false,
           BitSet()
         )
-        Await.result(reduce.eval(send).runAsync, 3.seconds)
+        reduce.eval(send)
         storeContainsTest(
           ListParWithRandom(Seq(Expr(GBool(true))), rand)
         )
@@ -179,9 +174,9 @@ class CryptoChannelsSpec
       val ackChannel        = GString("x")
       implicit val emptyEnv = Env[Par]()
       val storeContainsTest: ListParWithRandom => Assertion =
-        assertStoreContains(store)(ackChannel) _
+        assertStoreContains(store)(ackChannel)
 
-      forAll { (par: Par) =>
+      forAll { par: Par =>
         val parByteArray: Array[Byte] = serialize(par)
 
         val signature = Ed25519.sign(parByteArray, secKey)
@@ -199,7 +194,7 @@ class CryptoChannelsSpec
           persistent = false,
           BitSet()
         )
-        Await.result(reduce.eval(send).runAsync, 3.seconds)
+        reduce.eval(send)
         storeContainsTest(
           ListParWithRandom(List(Expr(GBool(true))), rand)
         )
@@ -211,20 +206,20 @@ class CryptoChannelsSpec
     val randomInt = scala.util.Random.nextInt
     val dbDir     = Files.createTempDirectory(s"rchain-storage-test-$randomInt")
     val size      = 1024L * 1024 * 10
-    val runtime   = Runtime.create(dbDir, size)
-    runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
+    val runtime   = Runtime.create[Id, Id](dbDir, size)(syncId, Parallel.identity[Id])
+    runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE))
 
     try {
       test((runtime.reducer, runtime.space.store))
     } finally {
-      runtime.close().unsafeRunSync
-      dbDir.recursivelyDelete
+      runtime.close()
+      dbDir.recursivelyDelete()
     }
   }
 
   /** TODO(mateusz.gorski): once we refactor Rholang[AndScala]Dispatcher
     *  to push effect choice up until declaration site refactor to `Reduce[Coeval]`
     */
-  override type FixtureParam = (ChargingReducer[Task], RhoIStore)
+  override type FixtureParam = (ChargingReducer[Id], RhoIStore)
 
 }
