@@ -73,7 +73,7 @@ trait RSpaceBench {
       persist = true
     )
 
-    val results: IndexedSeq[Future[Unit]] = tasks.map(f => f.executeOn(dupePool).runAsync(dupePool))
+    val results: IndexedSeq[Future[Unit]] = tasks.map(f => f.executeOn(dupePool).runToFuture(dupePool))
 
     implicit val ec = scala.concurrent.ExecutionContext.Implicits.global
     bh.consume(Await.ready(Future.sequence(results), Duration.Inf))

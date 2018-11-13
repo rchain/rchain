@@ -345,8 +345,9 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
       withDagStorageLocation { (dagDataDir, blockStore) =>
         for {
           firstStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
-          _ <- blockElements.traverse_(b =>
-                blockStore.put(b.blockHash, b) *> firstStorage.insert(b))
+          _ <- blockElements.traverse_(
+                b => blockStore.put(b.blockHash, b) *> firstStorage.insert(b)
+              )
           _ <- firstStorage.close()
           _ <- Sync[Task].delay {
                 Files.move(

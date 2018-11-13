@@ -94,7 +94,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                   conf.approveGenesisInterval
                 )
                 .map(protocol => {
-                  toTask(protocol.run()).forkAndForget.runAsync
+                  toTask(protocol.run()).forkAndForget.runToFuture
                   protocol
                 })
         standalone <- Ref.of[F, CasperPacketHandlerInternal[F]](new StandaloneCasperHandler[F](abp))
@@ -108,7 +108,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                     validatorId,
                     standalone
                   )
-              ).forkAndForget.runAsync
+              ).forkAndForget.runToFuture
               ().pure[F]
             }
       } yield new CasperPacketHandlerImpl[F](standalone)
@@ -128,7 +128,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         _ <- Sync[F].delay {
               implicit val ph: PacketHandler[F] = PacketHandler.pf[F](casperPacketHandler.handle)
               val rb                            = CommUtil.requestApprovedBlock[F](delay)
-              toTask(rb).forkAndForget.runAsync
+              toTask(rb).forkAndForget.runToFuture
               ().pure[F]
             }
       } yield casperPacketHandler

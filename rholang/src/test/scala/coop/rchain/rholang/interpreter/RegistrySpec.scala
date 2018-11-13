@@ -226,7 +226,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       val resultTask = for {
         _ <- reducer.eval(completePar)
       } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
+      Await.result(resultTask.runToFuture, 3.seconds)
     }
 
     checkResult(result, "result0", GInt(7), randResult0)
@@ -339,7 +339,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       val resultTask = for {
         _ <- reducer.eval(completePar)
       } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
+      Await.result(resultTask.runToFuture, 3.seconds)
     }
 
     checkResult(result, "result0", GInt(8), result0Rand)
@@ -405,7 +405,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       val resultTask = for {
         _ <- reducer.eval(completePar)
       } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
+      Await.result(resultTask.runToFuture, 3.seconds)
     }
 
     // Compute the random states for the results
@@ -506,7 +506,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       val resultTask = for {
         _ <- reducer.eval(completePar)
       } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
+      Await.result(resultTask.runToFuture, 3.seconds)
     }
 
     checkResult(result, "result0", GInt(8), randResult0)
@@ -547,7 +547,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       val resultTask = for {
         _ <- reducer.eval(completePar)
       } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
+      Await.result(resultTask.runToFuture, 3.seconds)
     }
 
     val expectedBundle: Par =
@@ -685,7 +685,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       val resultTask = for {
         _ <- reducer.eval(completePar)
       } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
+      Await.result(resultTask.runToFuture, 3.seconds)
     }
 
     checkResult(result, "result0", ETuple(List(GInt(789), GString("entry"))), result0Rand)

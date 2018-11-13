@@ -33,7 +33,7 @@ class GrpcDiagnosticsService(host: String, port: Int, maxMessageSize: Int)
     ManagedChannelBuilder
       .forAddress(host, port)
       .maxInboundMessageSize(maxMessageSize)
-      .usePlaintext(true)
+      .usePlaintext()
       .build
 
   private val stub = DiagnosticsGrpcMonix.stub(channel)

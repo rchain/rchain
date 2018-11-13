@@ -273,7 +273,7 @@ class GrpcMonixGenerator(override val params: GeneratorParams)
           s"override def invoke(request: ${method.scalaIn}, observer: ${grpcObserver(method.scalaOut)}): Unit ="
         ).indent
           .add(
-            s"serviceImpl.${method.name}(request).runAsync(grpcObserverToMonixCallback(observer))(scheduler)"
+            s"serviceImpl.${method.name}(request).runToFuture(grpcObserverToMonixCallback(observer))(scheduler)"
           )
           .outdent
       case StreamType.ClientStreaming =>

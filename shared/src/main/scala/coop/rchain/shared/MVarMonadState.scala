@@ -1,10 +1,13 @@
 package coop.rchain.shared
 
-import cats._, cats.implicits._, cats.mtl.MonadState
+import cats._
+import cats.implicits._
+import cats.mtl.MonadState
 
-import monix.eval.{MVar, Task}
+import monix.catnap.MVar
+import monix.eval.Task
 
-class MVarMonadState[S](state: Task[MVar[S]])(implicit val monad: Monad[Task])
+class MVarMonadState[S](state: Task[MVar[Task, S]])(implicit val monad: Monad[Task])
     extends MonadState[Task, S] {
   /*
     Removes a value from the state.
