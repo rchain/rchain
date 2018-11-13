@@ -172,7 +172,26 @@ class Node:
         return Node.__log_message_rx.split(log_content)
 
 
-def create_node_container(docker_client, name, network, bonds_file, command, rnode_timeout, extra_volumes, allowed_peers, memory, cpuset_cpus, image=DEFAULT_IMAGE):
+def make_container_command(container_command, container_command_options):
+    opts = ['{} {}'.format(option, argument) for option, argument in container_command_options.items()]
+    result = '{} {}'.format(container_command, ' '.join(opts))
+    return result
+
+
+def create_node_container(
+    *,
+    docker_client,
+    name, network,
+    bonds_file,
+    container_command,
+    container_command_options,
+    rnode_timeout,
+    extra_volumes,
+    allowed_peers,
+    memory,
+    cpuset_cpus,
+    image=DEFAULT_IMAGE,
+):
     deploy_dir = make_tempdir("rchain-integration-test")
 
     hosts_allow_file_content = \
@@ -181,8 +200,7 @@ def create_node_container(docker_client, name, network, bonds_file, command, rno
     hosts_allow_file = make_tempfile(f"hosts-allow-{name}", hosts_allow_file_content)
     hosts_deny_file = make_tempfile(f"hosts-deny-{name}", "ALL: ALL")
 
-    cmd, args = command
-    str_command = cmd + " " + " ".join(f"{k} {v}" for (k, v) in args.items())
+    command = make_container_command(container_command, container_command_options)
 
     env = {}
     java_options = os.environ.get('_JAVA_OPTIONS')
@@ -206,7 +224,7 @@ def create_node_container(docker_client, name, network, bonds_file, command, rno
         mem_limit=memory,
         network=network,
         volumes=volumes + extra_volumes,
-        command=str_command,
+        command=command,
         hostname=name,
         environment=env,
     )
@@ -230,28 +248,28 @@ def create_bootstrap_node(docker_client,
     logging.info(f"Using key_file={key_file} and cert_file={cert_file}")
 
     name = f"bootstrap.{network}"
-    command = ("run", {"--port": 40400,
-                       "--standalone": "",
-                       "--validator-private-key": key_pair.private_key,
-                       "--validator-public-key": key_pair.public_key,
-                       "--host": name
-                       })
+    container_command_options = {
+        "--port":                   40400,
+        "--standalone":             "",
+        "--validator-private-key":  key_pair.private_key,
+        "--validator-public-key":   key_pair.public_key,
+        "--host":                   name,
+    }
 
     volumes = [
         f"{cert_file}:{rnode_certificate}",
         f"{key_file}:{rnode_key}"
     ]
 
-    logging.info(f"Starting bootstrap node {name}\ncommand:`{command}`")
-
     container = create_node_container(
         docker_client=docker_client,
         name=name,
         network=network,
         bonds_file=bonds_file,
-        command=command,
+        container_command='run',
+        container_command_options=container_command_options,
         rnode_timeout=rnode_timeout,
-        volumes=volumes,
+        extra_volumes=volumes,
         allowed_peers=allowed_peers,
         memory=memory,
         cpuset_cpus=cpuset_cpus,
@@ -268,20 +286,20 @@ def create_peer(docker_client, network, name, bonds_file, rnode_timeout, bootstr
 
     bootstrap_address = bootstrap.get_rnode_address()
 
-    command = ("run ", {"--bootstrap": bootstrap_address,
-                        "--validator-private-key": key_pair.private_key,
-                        "--validator-public-key": key_pair.public_key,
-                        "--host": name
-                        })
-
-    logging.info(f"Starting peer node {name} with command: `{command}`")
+    container_command_options = {
+        "--bootstrap":              bootstrap_address,
+        "--validator-private-key":  key_pair.private_key,
+        "--validator-public-key":   key_pair.public_key,
+        "--host":                   name,
+    }
 
     container = create_node_container(
         docker_client=docker_client,
         name=name,
         network=network,
         bonds_file=bonds_file,
-        command=command,
+        container_command='run',
+        container_command_options=container_command_options,
         rnode_timeout=rnode_timeout,
         extra_volumes=[],
         allowed_peers=allowed_peers,
