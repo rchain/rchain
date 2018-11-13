@@ -105,48 +105,4 @@ object ReplayRSpace {
     }
   }
 
-  def createInMemory[F[_], C, P, E, A, R, K](
-      trieStore: ITrieStore[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], Blake2b256Hash, GNAT[
-        C,
-        P,
-        A,
-        K
-      ]],
-      branch: Branch
-  )(
-      implicit
-      sc: Serialize[C],
-      sp: Serialize[P],
-      sa: Serialize[A],
-      sk: Serialize[K],
-      syncF: Sync[F],
-      contextShift: ContextShift[F],
-      scheduler: ExecutionContext
-  ): F[IReplaySpace[F, C, P, E, A, R, K]] = {
-
-    implicit val codecC: Codec[C] = sc.toCodec
-    implicit val codecP: Codec[P] = sp.toCodec
-    implicit val codecA: Codec[A] = sa.toCodec
-    implicit val codecK: Codec[K] = sk.toCodec
-
-    val mainStore: IStore[C, P, A, K] = InMemoryStore
-      .create[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
-        trieStore,
-        branch
-      )
-    val replaySpace: IReplaySpace[F, C, P, E, A, R, K] =
-      new spaces.FineGrainedReplayRSpace[F, C, P, E, A, R, K](mainStore, branch)
-
-    /*
-     * history.initialize returns true if the history trie contains no root (i.e. is empty).
-     *
-     * In this case, we create a checkpoint for the empty store so that we can reset
-     * to the empty store state with the clear method.
-     */
-    if (history.initialize(mainStore.trieStore, branch)) {
-      replaySpace.createCheckpoint().map(_ => replaySpace)
-    } else {
-      replaySpace.pure[F]
-    }
-  }
 }

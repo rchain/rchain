@@ -31,33 +31,6 @@ object RSpace {
         create(LockFreeInMemoryStore.create(ctx.trieStore, branch), branch)
     }
 
-  def createInMemory[F[_], C, P, E, A, R, K](
-      trieStore: ITrieStore[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], Blake2b256Hash, GNAT[
-        C,
-        P,
-        A,
-        K
-      ]],
-      branch: Branch
-  )(
-      implicit
-      sc: Serialize[C],
-      sp: Serialize[P],
-      sa: Serialize[A],
-      sk: Serialize[K],
-      syncF: Sync[F],
-      contextShift: ContextShift[F],
-      scheduler: ExecutionContext
-  ): F[ISpace[F, C, P, E, A, R, K]] = {
-
-    val mainStore = InMemoryStore
-      .create[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
-        trieStore,
-        branch
-      )
-    create(mainStore, branch)
-  }
-
   def create[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
       implicit
       sc: Serialize[C],
