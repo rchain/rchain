@@ -73,6 +73,9 @@ trait RegistryTester extends PersistentStoreTester {
 }
 
 class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
+
+  private val EvaluateTimeout = 3.seconds
+
   /*
     0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2
     089775e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e
@@ -667,7 +670,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       val resultTask = for {
         _ <- reducer.eval(completePar)
       } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
+      Await.result(resultTask.runAsync, EvaluateTimeout)
     }
 
 }
