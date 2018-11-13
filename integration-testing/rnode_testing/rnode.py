@@ -340,21 +340,26 @@ def create_peer_nodes(docker_client,
         allowed_peers = [bootstrap.name] + [make_peer_name(network, i) for i in range(0, len(key_pairs))]
 
     result = []
-    for i, key_pair in enumerate(key_pairs):
-        peer_node = create_peer(
-            docker_client=docker_client,
-            network=network,
-            name=i,
-            bonds_file=bonds_file,
-            rnode_timeout=rnode_timeout,
-            bootstrap=bootstrap,
-            key_pair=key_pair,
-            allowed_peers=allowed_peers,
-            image=image,
-            memory=memory,
-            cpuset_cpus=cpuset_cpus,
-        )
-        result.append(peer_node)
+    try:
+        for i, key_pair in enumerate(key_pairs):
+            peer_node = create_peer(
+                docker_client=docker_client,
+                network=network,
+                name=i,
+                bonds_file=bonds_file,
+                rnode_timeout=rnode_timeout,
+                bootstrap=bootstrap,
+                key_pair=key_pair,
+                allowed_peers=allowed_peers,
+                image=image,
+                memory=memory,
+                cpuset_cpus=cpuset_cpus,
+            )
+            result.append(peer_node)
+    except:
+        for node in result:
+            node.cleanup()
+        raise
     return result
 
 
