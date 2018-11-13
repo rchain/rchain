@@ -99,7 +99,7 @@ lazy val casper = (project in file("casper"))
     crypto,
     models,
     rspace,
-    rholang,
+    rholang      % "compile->compile;test->test",
     rholangProtoBuild
   )
 
