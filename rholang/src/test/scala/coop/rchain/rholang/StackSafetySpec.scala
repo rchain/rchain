@@ -2,6 +2,7 @@ package coop.rchain.rholang
 
 import java.io.StringReader
 
+import cats.Parallel
 import coop.rchain.models.Connective.ConnectiveInstance.ConnNotBody
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.{Connective, Par, ProtoM}
@@ -9,14 +10,14 @@ import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.StackSafetySpec.findMaxRecursionDepth
 import coop.rchain.rholang.interpreter.{Interpreter, PrettyPrinter}
 import coop.rchain.rspace.Serialize
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertions, FlatSpec, Matchers}
 
 import scala.annotation.tailrec
-import scala.concurrent.duration._
+import scala.util.Try
+import coop.rchain.catscontrib.effect.implicits._
 
 object StackSafetySpec extends Assertions {
+  implicit val parallelTry : Parallel[Try, Try] = Parallel.identity[Try]
 
   def findMaxRecursionDepth(): Int = {
     def count(i: Int): Int =
@@ -46,7 +47,6 @@ class StackSafetySpec extends FlatSpec with Matchers {
 
   val mapSize: Long               = 10L * 1024L * 1024L
   val tmpPrefix: String           = "rspace-store-"
-  val maxDuration: FiniteDuration = 10.seconds
 
   val depth: Int = findMaxRecursionDepth()
 
@@ -166,9 +166,9 @@ class StackSafetySpec extends FlatSpec with Matchers {
       //val reduceRho = s"@0!($rho)"
       val reduceRho = s"for (_ <- @0) { Nil } | @0!($rho)"
       checkSuccess(reduceRho) { rho =>
-        mkRuntime(tmpPrefix, mapSize)
+        mkRuntime[Try, Try](tmpPrefix, mapSize)
           .use { runtime =>
-            Interpreter.execute(runtime, new StringReader(rho))
+            Interpreter.execute[Try](runtime, new StringReader(rho))
           }
       }
     }
@@ -178,16 +178,12 @@ class StackSafetySpec extends FlatSpec with Matchers {
   private def checkNormalize(rho: String): Unit =
     isolateStackOverflow {
       checkSuccess(rho) { rho =>
-        Task.coeval(
-          Interpreter
-            .buildNormalizedTerm(rho)
-        )
+        Try { Interpreter.buildNormalizedTerm(rho)()}
       }
     }
 
-  private def checkSuccess(rho: String)(interpreter: String => Task[_]): Unit =
-    interpreter(rho).attempt
-      .runSyncUnsafe(maxDuration)
+  private def checkSuccess(rho: String)(interpreter: String => Try[_]): Unit =
+    interpreter(rho).toEither
       .swap
       .foreach(error => fail(s"""Execution failed for: $rho
                                                |Cause:

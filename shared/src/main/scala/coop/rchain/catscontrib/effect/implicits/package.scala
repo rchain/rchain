@@ -118,4 +118,28 @@ package object implicits {
 
     override def tailRecM[A, B](a: A)(f: A => Try[Either[A, B]]): Try[B] = trySyntax.tailRecM(a)(f)
   }
+
+
+  implicit val syncTry : Sync[Try] = new Sync[Try] {
+    private val trySyntax = cats.implicits.catsStdInstancesForTry
+
+    override def suspend[A](thunk: => Try[A]): Try[A] = thunk
+
+    override def bracketCase[A, B](acquire: Try[A])(
+      use: A => Try[B])(
+                                    release: (A, ExitCase[Throwable]) => Try[Unit])
+    : Try[B]                                             = bracketTry(acquire)(use)(release)
+
+    override def raiseError[A](e: Throwable): Try[A] = trySyntax.raiseError(e)
+
+    override def handleErrorWith[A](fa: Try[A])(f: Throwable => Try[A]): Try[A] =
+      trySyntax.handleErrorWith(fa)(f)
+
+    override def pure[A](x: A): Try[A] = trySyntax.pure(x)
+
+    override def flatMap[A, B](fa: Try[A])(f: A => Try[B]): Try[B] = trySyntax.flatMap(fa)(f)
+
+    override def tailRecM[A, B](a: A)(f: A => Try[Either[A, B]]): Try[B] = trySyntax.tailRecM(a)(f)
+  }
+
 }

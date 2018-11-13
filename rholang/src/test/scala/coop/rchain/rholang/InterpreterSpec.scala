@@ -2,30 +2,28 @@ package coop.rchain.rholang
 
 import java.io.StringReader
 
+import cats.Parallel
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
-import monix.execution.Scheduler.Implicits.global
 import coop.rchain.rholang.Resources.mkRuntime
-import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
-import scala.concurrent.duration._
 import scala.util.Try
+import coop.rchain.catscontrib.effect.implicits.syncTry
 
 class InterpreterSpec extends FlatSpec with Matchers {
   private val mapSize     = 10L * 1024L * 1024L
   private val tmpPrefix   = "rspace-store-"
-  private val maxDuration = 5.seconds
+
+  implicit val parallelTry : Parallel[Try,Try] = Parallel.identity[Try]
 
   behavior of "Interpreter"
 
   it should "restore RSpace to its prior state after evaluation error" in {
-    import coop.rchain.catscontrib.effect.implicits.bracketTry
-
     val sendRho = "@{0}!(0)"
 
     val (initStorage, beforeError, afterError, afterSend, finalContent) =
-      mkRuntime(tmpPrefix, mapSize)
+      mkRuntime[Try, Try](tmpPrefix, mapSize)
         .use { runtime =>
           val initStorage = storageContents(runtime)
           for {
@@ -39,7 +37,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
             finalContent = storageContents(runtime)
           } yield (initStorage, beforeError, afterError, afterSend, finalContent)
         }
-        .runSyncUnsafe(maxDuration)
+        .get
 
     assert(beforeError.contains(sendRho))
     assert(afterError == beforeError)
@@ -48,7 +46,6 @@ class InterpreterSpec extends FlatSpec with Matchers {
   }
 
   it should "yield correct results for the PrimeCheck contract" in {
-    import coop.rchain.catscontrib.effect.implicits.bracketTry
     val contents = mkRuntime(tmpPrefix, mapSize)
       .use { runtime =>
         for {
@@ -83,7 +80,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
           contents = storageContents(runtime)
         } yield contents
       }
-      .runSyncUnsafe(maxDuration)
+      .get
 
     // TODO: this is not the way we should be testing execution results,
     // yet strangely it works - and we don't have a better way for now
@@ -102,18 +99,18 @@ class InterpreterSpec extends FlatSpec with Matchers {
     )
   }
 
-  private def storageContents(runtime: Runtime): String =
+  private def storageContents(runtime: Runtime[Try]): String =
     StoragePrinter.prettyPrint(runtime.space.store)
 
-  private def success(runtime: Runtime, rho: String): Task[Unit] =
+  private def success(runtime: Runtime[Try], rho: String): Try[Unit] =
     execute(runtime, rho).map(_.swap.foreach(error => fail(s"""Execution failed for: $rho
                                                |Cause:
                                                |$error""".stripMargin)))
 
-  private def failure(runtime: Runtime, rho: String): Task[Throwable] =
+  private def failure(runtime: Runtime[Try], rho: String): Try[Throwable] =
     execute(runtime, rho).map(_.swap.getOrElse(fail(s"Expected $rho to fail - it didn't.")))
 
-  private def execute(runtime: Runtime, source: String): Task[Either[Throwable, Runtime]] =
-    Interpreter.execute(runtime, new StringReader(source)).attempt
+  private def execute(runtime: Runtime[Try], source: String): Try[Either[Throwable, Runtime[Try]]] =
+    Try{Interpreter.execute(runtime, new StringReader(source)).toEither}
 
 }
