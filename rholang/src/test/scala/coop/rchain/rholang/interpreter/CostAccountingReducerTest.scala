@@ -56,13 +56,15 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
       override def produce(
           chan: Par,
           data: ListParWithRandom,
-          persistent: Boolean
+          persistent: Boolean,
+          sequenceNumber: Int
       ): Task[Unit] =
         Task.raiseError(OutOfPhlogistonsError)
       override def consume(
           binds: Seq[(BindPattern, Par)],
           body: ParWithRandom,
-          persistent: Boolean
+          persistent: Boolean,
+          sequenceNumber: Int
       ): Task[Unit] = Task.raiseError(OutOfPhlogistonsError)
     }
 

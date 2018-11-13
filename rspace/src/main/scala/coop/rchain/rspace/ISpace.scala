@@ -10,7 +10,8 @@ final case class ContResult[C, P, R](
     value: R,
     persistent: Boolean,
     channels: Seq[C],
-    patterns: Seq[P]
+    patterns: Seq[P],
+    sequenceNumber: Int
 )
 
 /** The interface for RSpace
@@ -47,7 +48,13 @@ trait ISpace[F[_], C, P, E, A, R, K] {
     * @param continuation A continuation
     * @param persist Whether or not to attempt to persist the data
     */
-  def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
+  def consume(
+      channels: Seq[C],
+      patterns: Seq[P],
+      continuation: K,
+      persist: Boolean,
+      sequenceNumber: Int = 0
+  )(
       implicit m: Match[P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
 
@@ -78,7 +85,7 @@ trait ISpace[F[_], C, P, E, A, R, K] {
     * @param data A piece of data
     * @param persist Whether or not to attempt to persist the data
     */
-  def produce(channel: C, data: A, persist: Boolean)(
+  def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int = 0)(
       implicit m: Match[P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
 

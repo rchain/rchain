@@ -40,7 +40,8 @@ class RholangOnlyDispatcher[M[_]] private (reducer: => ChargingReducer[M])(impli
 
   def dispatch(
       continuation: TaggedContinuation,
-      dataList: Seq[ListParWithRandomAndPhlos]
+      dataList: Seq[ListParWithRandomAndPhlos],
+      sequenceNumber: Int
   ): M[Unit] =
     for {
       res <- continuation.taggedCont match {

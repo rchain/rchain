@@ -385,7 +385,8 @@ object ChargingRSpaceTest {
         channels: immutable.Seq[Par],
         patterns: immutable.Seq[BindPattern],
         continuation: TaggedContinuation,
-        persist: Boolean
+        persist: Boolean,
+        sequenceNumber: Int
     )(
         implicit m: Match[
           BindPattern,
@@ -408,7 +409,12 @@ object ChargingRSpaceTest {
           }
         })
 
-    override def produce(channel: Par, data: ListParWithRandom, persist: Boolean)(
+    override def produce(
+        channel: Par,
+        data: ListParWithRandom,
+        persist: Boolean,
+        sequenceNumber: Int
+    )(
         implicit m: Match[
           BindPattern,
           errors.OutOfPhlogistonsError.type,
