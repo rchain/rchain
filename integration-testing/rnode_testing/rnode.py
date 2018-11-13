@@ -190,22 +190,27 @@ def create_node_container(docker_client, name, network, bonds_file, command, rno
         env['_JAVA_OPTIONS'] = java_options
     logging.info('Using _JAVA_OPTIONS: {}'.format(java_options))
 
-    container = docker_client.containers.run(image,
-                                             name=name,
-                                             user='root',
-                                             detach=True,
-                                             cpuset_cpus=cpuset_cpus,
-                                             mem_limit=memory,
-                                             network=network,
-                                             volumes=[
-                                                           f"{hosts_allow_file}:/etc/hosts.allow",
-                                                           f"{hosts_deny_file}:/etc/hosts.deny",
-                                                           f"{bonds_file}:{rnode_bonds_file}",
-                                                           f"{deploy_dir}:{rnode_deploy_dir}"
-                                                       ] + extra_volumes,
-                                             command=str_command,
-                                             hostname=name,
-                                             environment=env)
+    volumes = [
+        f"{hosts_allow_file}:/etc/hosts.allow",
+        f"{hosts_deny_file}:/etc/hosts.deny",
+        f"{bonds_file}:{rnode_bonds_file}",
+        f"{deploy_dir}:{rnode_deploy_dir}",
+    ]
+
+    container = docker_client.containers.run(
+        image,
+        name=name,
+        user='root',
+        detach=True,
+        cpuset_cpus=cpuset_cpus,
+        mem_limit=memory,
+        network=network,
+        volumes=volumes + extra_volumes,
+        command=str_command,
+        hostname=name,
+        environment=env,
+    )
+
     return Node(container, deploy_dir, docker_client, rnode_timeout, network)
 
 
