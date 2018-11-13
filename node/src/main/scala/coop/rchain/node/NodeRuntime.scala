@@ -1,7 +1,6 @@
 package coop.rchain.node
 
 import scala.concurrent.duration._
-
 import cats._
 import cats.data._
 import cats.effect._
@@ -9,7 +8,6 @@ import cats.effect.concurrent.Ref
 import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.functor._
-
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
 import coop.rchain.casper._
@@ -33,7 +31,6 @@ import coop.rchain.node.diagnostics._
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
-
 import kamon._
 import kamon.zipkin.ZipkinReporter
 import monix.eval.Task
@@ -269,21 +266,6 @@ class NodeRuntime private[node] (
   private def rpConf(local: PeerNode, bootstrapNode: Option[PeerNode]) =
     RPConf(local, bootstrapNode, defaultTimeout, rpClearConnConf)
 
-  implicit def effectParallel = new Parallel[Effect, EffectPar] {
-    override def applicative: Applicative[EffectPar] = Applicative[EffectPar]
-    override def monad: Monad[Effect]                = Monad[Effect]
-    override def sequential: ~>[EffectPar,Effect] = new ~>[EffectPar, Effect] {
-      override def apply[A](par: EffectPar[A]): Effect[A] =
-        EitherT.liftF[Task, CommError, A](Task.Par.unwrap(par.value).flatMap {
-        case Left(ex) => Task.raiseError(new Exception(ex.toString))
-        case Right(x) => Task.pure(x)
-      })
-    }
-
-    override def parallel: ~>[Effect, EffectPar]     = new ~>[Effect, EffectPar] {
-      override def apply[A](eff: Effect[A]): EffectPar[A] = ??? //TODO
-    }
-  }
 
   /**
     * Main node entry. It will:
@@ -308,7 +290,6 @@ class NodeRuntime private[node] (
     kademliaConnections  <- CachedConnections[Task, KademliaConnTag].toEffect
     tcpConnections       <- CachedConnections[Task, TcpConnTag].toEffect
     time                 = effects.time
-    timerTask            = Task.timer
     metrics              = diagnostics.metrics[Task]
     multiParentCasperRef <- MultiParentCasperRef.of[Effect]
     lab                  <- LastApprovedBlock.of[Task].toEffect
@@ -338,10 +319,10 @@ class NodeRuntime private[node] (
     )
     _       <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
     oracle  = SafetyOracle.turanOracle[Effect](Monad[Effect])
-    runtime <- Runtime.create[Effect, EffectPar](storagePath, storageSize, storeType)
+    runtime <- Runtime.create[Effect, Effect](storagePath, storageSize, storeType)(Sync[Effect], Parallel.identity[Effect])
     _ <- Runtime
           .injectEmptyRegistryRoot[Effect](runtime.space, runtime.replaySpace)
-    casperRuntime  <- Runtime.create[Effect, EffectPar](casperStoragePath, storageSize, storeType)
+    casperRuntime  <- Runtime.create[Effect, Effect](casperStoragePath, storageSize, storeType)(Sync[Effect], Parallel.identity[Effect])
     runtimeManager <- RuntimeManager.fromRuntime[Effect](casperRuntime)
     casperPacketHandler <- CasperPacketHandler
                             .of[Effect](conf.casper, defaultTimeout, runtimeManager, _.value)(
