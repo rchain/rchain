@@ -1,7 +1,7 @@
 package coop.rchain.rspace
 
 import cats.{Id, Monad}
-import cats.effect.Sync
+import cats.effect.{ContextShift, Sync}
 import cats.implicits._
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
@@ -17,6 +17,7 @@ import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
+import scala.concurrent.ExecutionContext
 import kamon._
 
 trait IReplaySpace[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, E, A, R, K] {
@@ -67,7 +68,9 @@ object ReplayRSpace {
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
-      syncF: Sync[F]
+      syncF: Sync[F],
+      contextShift: ContextShift[F],
+      scheduler: ExecutionContext
   ): F[IReplaySpace[F, C, P, E, A, R, K]] = {
 
     implicit val codecC: Codec[C] = sc.toCodec
@@ -116,7 +119,9 @@ object ReplayRSpace {
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
-      syncF: Sync[F]
+      syncF: Sync[F],
+      contextShift: ContextShift[F],
+      scheduler: ExecutionContext
   ): F[IReplaySpace[F, C, P, E, A, R, K]] = {
 
     implicit val codecC: Codec[C] = sc.toCodec
