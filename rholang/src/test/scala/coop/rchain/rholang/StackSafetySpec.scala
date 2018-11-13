@@ -18,6 +18,10 @@ import scala.concurrent.duration._
 
 object StackSafetySpec extends Assertions {
 
+  val mapSize     = 10L * 1024L * 1024L
+  val tmpPrefix   = "rspace-store-"
+  val maxDuration = 20.seconds
+
   def findMaxRecursionDepth(): Int = {
     def count(i: Int): Int =
       try {
