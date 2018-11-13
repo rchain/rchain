@@ -36,9 +36,9 @@ trait IReplaySpace[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, E, A, R, K] {
       .delay {
         // create a set of the "new" IOEvents
         val newStuff: Set[Event] = log.filter {
-          case Produce(_, _) => true
-          case Consume(_, _) => true
-          case _             => false
+          case _: Produce => true
+          case _: Consume => true
+          case _          => false
         }.toSet
         // create and prepare the ReplayData table
         replayData.clear()

@@ -60,7 +60,7 @@ object Runtime {
   type RhoContext = CPAK[Context]
 
   type RhoDispatch[F[_]] = Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
-  type RhoSysFunction    = Function1[Seq[ListParWithRandomAndPhlos], Task[Unit]]
+  type RhoSysFunction    = (Seq[ListParWithRandomAndPhlos], Int) => Task[Unit]
   type RhoDispatchMap    = Map[Long, RhoSysFunction]
 
   type CPAK[F[_, _, _, _]] =
@@ -181,7 +181,7 @@ object Runtime {
       replaySpace: RhoISpace[F],
       processes: List[(Name, Arity, Remainder, BodyRef)]
   ): F[List[Option[(TaggedContinuation, immutable.Seq[ListParWithRandomAndPhlos])]]] =
-    (processes.flatMap {
+    processes.flatMap {
       case (name, arity, remainder, ref) =>
         val channels = List(name)
         val patterns = List(
@@ -196,7 +196,7 @@ object Runtime {
           space.install(channels, patterns, continuation)(MATCH_UNLIMITED_PHLOS),
           replaySpace.install(channels, patterns, continuation)(MATCH_UNLIMITED_PHLOS)
         )
-    }).sequence
+    }.sequence
 
   // TODO: remove default store type
   def create(dataDir: Path, mapSize: Long, storeType: StoreType = LMDB)(
@@ -223,18 +223,18 @@ object Runtime {
         KECCAK256_HASH               -> SystemProcesses.keccak256Hash(space, dispatcher),
         BLAKE2B256_HASH              -> SystemProcesses.blake2b256Hash(space, dispatcher),
         SECP256K1_VERIFY             -> SystemProcesses.secp256k1Verify(space, dispatcher),
-        REG_LOOKUP                   -> (registry.lookup(_)),
-        REG_LOOKUP_CALLBACK          -> (registry.lookupCallback(_)),
-        REG_INSERT                   -> (registry.insert(_)),
-        REG_INSERT_CALLBACK          -> (registry.insertCallback(_)),
-        REG_REGISTER_INSERT_CALLBACK -> (registry.registerInsertCallback(_)),
-        REG_DELETE                   -> (registry.delete(_)),
-        REG_DELETE_ROOT_CALLBACK     -> (registry.deleteRootCallback(_)),
-        REG_DELETE_CALLBACK          -> (registry.deleteCallback(_)),
-        REG_PUBLIC_LOOKUP            -> (registry.publicLookup(_)),
-        REG_PUBLIC_REGISTER_RANDOM   -> (registry.publicRegisterRandom(_)),
-        REG_PUBLIC_REGISTER_SIGNED   -> (registry.publicRegisterSigned(_)),
-        REG_NONCE_INSERT_CALLBACK    -> (registry.nonceInsertCallback(_)),
+        REG_LOOKUP                   -> (registry.lookup(_, _)),
+        REG_LOOKUP_CALLBACK          -> (registry.lookupCallback(_, _)),
+        REG_INSERT                   -> (registry.insert(_, _)),
+        REG_INSERT_CALLBACK          -> (registry.insertCallback(_, _)),
+        REG_REGISTER_INSERT_CALLBACK -> (registry.registerInsertCallback(_, _)),
+        REG_DELETE                   -> (registry.delete(_, _)),
+        REG_DELETE_ROOT_CALLBACK     -> (registry.deleteRootCallback(_, _)),
+        REG_DELETE_CALLBACK          -> (registry.deleteCallback(_, _)),
+        REG_PUBLIC_LOOKUP            -> (registry.publicLookup(_, _)),
+        REG_PUBLIC_REGISTER_RANDOM   -> (registry.publicRegisterRandom(_, _)),
+        REG_PUBLIC_REGISTER_SIGNED   -> (registry.publicRegisterSigned(_, _)),
+        REG_NONCE_INSERT_CALLBACK    -> (registry.nonceInsertCallback(_, _)),
         GET_DEPLOY_PARAMS            -> SystemProcesses.getDeployParams(space, dispatcher, shortLeashParams),
         GET_TIMESTAMP                -> SystemProcesses.blockTime(space, dispatcher, blockTime)
       )
@@ -332,12 +332,14 @@ object Runtime {
       spaceResult <- space.produce(
                       Registry.registryRoot,
                       ListParWithRandom(Seq(Registry.emptyMap), rand),
-                      false
+                      false,
+                      0
                     )
       replayResult <- replaySpace.produce(
                        Registry.registryRoot,
                        ListParWithRandom(Seq(Registry.emptyMap), rand),
-                       false
+                       false,
+                       0
                      )
       _ <- spaceResult match {
             case Right(None) =>

@@ -252,11 +252,13 @@ message Event {
 message ProduceEvent {
   bytes channelsHash = 1;
   bytes hash = 2;
+  int32 sequenceNumber = 3;
 }
 
 message ConsumeEvent {
   bytes channelsHash = 1;
   bytes hash = 2;
+  int32 sequenceNumber = 3;
 }
 
 message CommEvent {

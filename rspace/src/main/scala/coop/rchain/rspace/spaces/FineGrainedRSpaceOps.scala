@@ -84,7 +84,7 @@ abstract class FineGrainedRSpaceOps[F[_], C, P, E, A, R, K](
     logger.debug(s"""|install: searching for data matching <patterns: $patterns>
                        |at <channels: $channels>""".stripMargin.replace('\n', ' '))
 
-    val consumeRef = Consume.create(channels, patterns, continuation, true)
+    val consumeRef = Consume.create(channels, patterns, continuation, true, 0)
 
     /*
      * Here, we create a cache of the data at each channel as `channelToIndexedData`

@@ -809,52 +809,51 @@ trait ReplayRSpaceTests
       )
     }
 
-  "replay" should "not allow for ambiguous executions" ignore withTestSpaces {
-    (space, replaySpace) =>
-      val noMatch                 = Right(None)
-      val empty                   = space.createCheckpoint()
-      val channel1                = "ch1"
-      val channel2                = "ch2"
-      val key1                    = List(channel1, channel2)
-      val patterns: List[Pattern] = List(Wildcard, Wildcard)
-      val continuation1           = "continuation"
-      val continuation2           = "continuation"
-      val data1                   = "datum1"
-      val data2                   = "datum2"
-      val data3                   = "datum3"
+  "replay" should "not allow for ambiguous executions" in withTestSpaces { (space, replaySpace) =>
+    val noMatch                 = Right(None)
+    val empty                   = space.createCheckpoint()
+    val channel1                = "ch1"
+    val channel2                = "ch2"
+    val key1                    = List(channel1, channel2)
+    val patterns: List[Pattern] = List(Wildcard, Wildcard)
+    val continuation1           = "continuation1"
+    val continuation2           = "continuation2"
+    val data1                   = "datum1"
+    val data2                   = "datum2"
+    val data3                   = "datum3"
 
-      //some maliciously 'random' play order
-      space.produce(channel1, data3, false) shouldBe noMatch
-      space.produce(channel1, data3, false) shouldBe noMatch
-      space.produce(channel2, data1, false) shouldBe noMatch
+    //some maliciously 'random' play order
+    space.produce(channel1, data3, false, 0) shouldBe noMatch
+    space.produce(channel1, data3, false, 0) shouldBe noMatch
+    space.produce(channel2, data1, false, 0) shouldBe noMatch
 
-      space.consume(key1, patterns, continuation1, false).right.get should not be empty
-      //continuation1 produces data1 on ch2
-      space.produce(channel2, data1, false) shouldBe noMatch
-      space.consume(key1, patterns, continuation2, false).right.get should not be empty
-      //continuation2 produces data2 on ch2
-      space.produce(channel2, data2, false) shouldBe noMatch
-      val afterPlay = space.createCheckpoint()
+    space.consume(key1, patterns, continuation1, false, 0).right.get should not be empty
+    //continuation1 produces data1 on ch2
+    space.produce(channel2, data1, false, 1) shouldBe noMatch
+    space.consume(key1, patterns, continuation2, false, 0).right.get should not be empty
+    //continuation2 produces data2 on ch2
+    space.produce(channel2, data2, false, 2) shouldBe noMatch
+    val afterPlay = space.createCheckpoint()
 
-      //rig
-      replaySpace.rig(empty.root, afterPlay.log)
+    //rig
+    replaySpace.rig(empty.root, afterPlay.log)
 
-      //some maliciously 'random' replay order
-      replaySpace.produce(channel1, data3, false) shouldBe noMatch
-      replaySpace.produce(channel1, data3, false) shouldBe noMatch
-      replaySpace.produce(channel2, data2, false) shouldBe noMatch
-      replaySpace.consume(key1, patterns, continuation2, false) shouldBe noMatch
+    //some maliciously 'random' replay order
+    replaySpace.produce(channel1, data3, false, 0) shouldBe noMatch
+    replaySpace.produce(channel1, data3, false, 0) shouldBe noMatch
+    replaySpace.produce(channel2, data1, false, 0) shouldBe noMatch
+    replaySpace.consume(key1, patterns, continuation2, false, 0) shouldBe noMatch
 
-      replaySpace.consume(key1, patterns, continuation1, false).right.get should not be empty
-      //continuation1 produces data1 on ch2
-      replaySpace
-        .produce(channel2, data1, false)
-        .right
-        .get should not be empty //matches continuation2
-      //continuation2 produces data2 on ch2
-      replaySpace.produce(channel2, data2, false) shouldBe noMatch
+    replaySpace.consume(key1, patterns, continuation1, false, 0).right.get should not be empty
+    //continuation1 produces data1 on ch2
+    replaySpace
+      .produce(channel2, data1, false, 1)
+      .right
+      .get should not be empty //matches continuation2
+    //continuation2 produces data2 on ch2
+    replaySpace.produce(channel2, data2, false, 1) shouldBe noMatch
 
-      replaySpace.replayData.isEmpty shouldBe true
+    replaySpace.replayData.isEmpty shouldBe true
   }
 }
 
