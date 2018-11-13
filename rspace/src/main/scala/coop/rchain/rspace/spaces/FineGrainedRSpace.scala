@@ -136,12 +136,7 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
               logger.debug(
                 s"consume: data found for <patterns: $patterns> at <channels: $channels>"
               )
-              val contSequenceNumber = Math.max(
-                consumeRef.sequenceNumber,
-                dataCandidates.map {
-                  case DataCandidate(_, Datum(_, _, source), _) => source.sequenceNumber
-                }.max
-              ) + 1
+              val contSequenceNumber: Int = nextSequenceNumber(consumeRef, dataCandidates)
               Right(
                 Some(
                   (
@@ -154,6 +149,14 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
         }
       }
     }
+
+  private def nextSequenceNumber(consumeRef: Consume, dataCandidates: Seq[DataCandidate[C, R]]) =
+    Math.max(
+      consumeRef.sequenceNumber,
+      dataCandidates.map {
+        case DataCandidate(_, Datum(_, _, source), _) => source.sequenceNumber
+      }.max
+    ) + 1
 
   override def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
       implicit m: Match[P, E, A, R]
@@ -264,12 +267,7 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
                     }
                 }
               logger.debug(s"produce: matching continuation found at <channels: $channels>")
-              val contSequenceNumber = Math.max(
-                consumeRef.sequenceNumber,
-                dataCandidates.map {
-                  case DataCandidate(_, Datum(_, _, source), _) => source.sequenceNumber
-                }.max
-              ) + 1
+              val contSequenceNumber: Int = nextSequenceNumber(consumeRef, dataCandidates)
               Right(
                 Some(
                   (
