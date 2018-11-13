@@ -5,40 +5,53 @@ import java.nio.file.{Files, Path}
 import java.util.zip.CRC32
 
 import cats.Id
+import cats.effect.Sync
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagRepresentation.Validator
-import coop.rchain.blockstorage.{
-  BlockDagFileStorage,
-  BlockDagStorage,
-  IndexedBlockDagStorage,
-  LMDBBlockStore
-}
-import coop.rchain.casper.Estimator.BlockHash
+import coop.rchain.blockstorage._
 import coop.rchain.casper.protocol.BlockMessage
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, Suite}
+import coop.rchain.catscontrib.TaskContrib.TaskOps
+import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.Metrics.MetricsNOP
+import coop.rchain.shared.Log
+import org.scalatest.{BeforeAndAfter, Suite}
 import coop.rchain.shared.PathOps.RichPath
+import monix.eval.Task
+import monix.execution.Scheduler
+import org.lmdbjava.{Env, EnvFlags}
 
 trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
-  def withBlockDagStorage[R](f: BlockDagStorage[Id] => R): R = {
-    val blockDagDir   = BlockDagStorageTestFixture.dir
-    val blockStoreDir = BlockStoreTestFixture.dbDir
-    val store         = BlockDagStorageTestFixture.create(blockDagDir, blockStoreDir)
-    try {
-      f(store)
-    } finally {
-      blockDagDir.recursivelyDelete()
-      blockStoreDir.recursivelyDelete()
-    }
-  }
+  val scheduler = Scheduler.fixedPool("block-dag-storage-fixture-scheduler", 4)
 
-  def withIndexedBlockDagStorage[R](f: IndexedBlockDagStorage[Id] => R): R =
-    withBlockDagStorage { blockDagStorage =>
-      f(IndexedBlockDagStorage.createWithId(blockDagStorage))
+  def withStorage[R](f: BlockStore[Task] => IndexedBlockDagStorage[Task] => Task[R]): R = {
+    val testProgram = Sync[Task].bracket {
+      Sync[Task].delay {
+        (BlockDagStorageTestFixture.blockDagStorageDir, BlockDagStorageTestFixture.blockStorageDir)
+      }
+    } {
+      case (blockDagStorageDir, blockStorageDir) =>
+        implicit val metrics = new MetricsNOP[Task]()
+        implicit val log     = new Log.NOPLog[Task]()
+        implicit val blockStore = BlockDagStorageTestFixture.createBlockStorage(blockStorageDir)
+          for {
+            blockDagStorage <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)
+            indexedBlockDagStorage <- IndexedBlockDagStorage.create(blockDagStorage)
+            result          <- f(blockStore)(indexedBlockDagStorage)
+          } yield result
+    } {
+      case (blockDagStorageDir, blockStorageDir) =>
+        Sync[Task].delay {
+          blockDagStorageDir.recursivelyDelete()
+          blockStorageDir.recursivelyDelete()
+        }
     }
+    testProgram.unsafeRunSync(scheduler)
+  }
 }
 
 object BlockDagStorageTestFixture {
-  def dir: Path = Files.createTempDirectory("casper-block-dag-storage-test-")
+  def blockDagStorageDir: Path = Files.createTempDirectory("casper-block-dag-storage-test-")
+  def blockStorageDir: Path    = Files.createTempDirectory("casper-block-storage-test-")
 
   def writeInitialLatestMessages(
       latestMessagesData: Path,
@@ -62,33 +75,37 @@ object BlockDagStorageTestFixture {
     Files.write(latestMessagesCrc, crcByteBuffer.array())
   }
 
-  def create(blockDagDir: Path, blockStoreDir: Path): IndexedBlockDagStorage[Id] = {
-    implicit val blockStore = BlockStoreTestFixture.create(blockStoreDir)
-    IndexedBlockDagStorage.createWithId(
-      BlockDagFileStorage.createWithId(
-        BlockDagFileStorage.Config(
-          dir.resolve("latest-messages-data"),
-          dir.resolve("latest-messages-crc"),
-          dir.resolve("block-metadata-data"),
-          dir.resolve("block-metadata-crc"),
-          dir.resolve("checkpoints")
-        )
+  def env(
+      path: Path,
+      mapSize: Long,
+      flags: List[EnvFlags] = List(EnvFlags.MDB_NOTLS)
+  ): Env[ByteBuffer] =
+    Env
+      .create()
+      .setMapSize(mapSize)
+      .setMaxDbs(8)
+      .setMaxReaders(126)
+      .open(path.toFile, flags: _*)
+
+  val mapSize: Long = 1024L * 1024L * 100L
+
+  def createBlockStorage(blockStorageDir: Path)(
+      implicit metrics: Metrics[Task]): BlockStore[Task] = {
+    val environment = env(blockStorageDir, mapSize)
+    LMDBBlockStore.create[Task](environment, blockStorageDir)
+  }
+
+  def createBlockDagStorage(blockDagStorageDir: Path)(
+      implicit metrics: Metrics[Task],
+      log: Log[Task],
+      blockStore: BlockStore[Task]): Task[BlockDagStorage[Task]] =
+    BlockDagFileStorage.create[Task](
+      BlockDagFileStorage.Config(
+        blockDagStorageDir.resolve("latest-messages-data"),
+        blockDagStorageDir.resolve("latest-messages-crc"),
+        blockDagStorageDir.resolve("block-metadata-data"),
+        blockDagStorageDir.resolve("block-metadata-crc"),
+        blockDagStorageDir.resolve("checkpoints")
       )
     )
-  }
-}
-
-trait BlockDagStorageTestFixture extends BeforeAndAfterAll { self: Suite =>
-
-  val blockDagStorageDir = BlockDagStorageTestFixture.dir
-  val blockStorageDir    = BlockStoreTestFixture.dbDir
-
-  implicit val blockDagStorage =
-    BlockDagStorageTestFixture.create(blockDagStorageDir, blockStorageDir)
-
-  override def afterAll(): Unit = {
-    blockDagStorage.close()
-    blockDagStorageDir.recursivelyDelete()
-    blockStorageDir.recursivelyDelete()
-  }
 }

@@ -1,5 +1,6 @@
 package coop.rchain.blockstorage
 
+import cats.effect.Concurrent
 import cats.{Id, Monad}
 import cats.implicits._
 import cats.effect.concurrent.{Ref, Semaphore}
@@ -68,13 +69,15 @@ final class IndexedBlockDagStorage[F[_]: Monad](
 object IndexedBlockDagStorage {
   def apply[F[_]](implicit B: IndexedBlockDagStorage[F]): IndexedBlockDagStorage[F] = B
 
-  def createWithId(underlying: BlockDagStorage[Id]): IndexedBlockDagStorage[Id] = {
-    import coop.rchain.catscontrib.effect.implicits._
-    new IndexedBlockDagStorage[Id](
-      Semaphore[Id](1),
+  def create[F[_]: Concurrent](underlying: BlockDagStorage[F]): F[IndexedBlockDagStorage[F]] =
+    for {
+      semaphore <- Semaphore[F](1)
+      idToBlocks <- Ref.of[F, Map[Int, BlockMessage]](Map.empty)
+      currentId <- Ref.of[F, Int](-1)
+    } yield new IndexedBlockDagStorage[F](
+      semaphore,
       underlying,
-      Ref.of[Id, Map[Int, BlockMessage]](Map.empty),
-      Ref.of[Id, Int](-1)
+      idToBlocks,
+      currentId
     )
-  }
 }
