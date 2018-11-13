@@ -204,9 +204,9 @@ object BlockAPI {
     val log =
       serializedLog.map(EventConverter.toRspaceEvent).toList
     log.exists {
-      case Produce(channelHash, _) =>
+      case Produce(channelHash, _, _) =>
         channelHash == StableHashProvider.hash(sortedListeningName)
-      case Consume(channelHash, _) =>
+      case Consume(channelHash, _, _) =>
         channelHash == StableHashProvider.hash(sortedListeningName)
       case COMM(consume, produces) =>
         consume.channelsHash == StableHashProvider.hash(sortedListeningName) ||

@@ -23,8 +23,8 @@ object SystemProcesses {
 
   private val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
 
-  def stdout[F[_]: Sync]: Seq[ListParWithRandomAndPhlos] => F[Unit] = {
-    case Seq(ListParWithRandomAndPhlos(Seq(arg), _, _)) =>
+  def stdout[F[_]: Sync]: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
+    case (Seq(ListParWithRandomAndPhlos(Seq(arg), _, _)), _) =>
       Sync[F].delay(Console.println(prettyPrinter.buildString(arg)))
   }
 
@@ -40,7 +40,7 @@ object SystemProcesses {
       def handleSuccess(success: SuccessfulResult): F[Unit] =
         success.fold(Sync[F].pure(())) {
           case (cont, channels) =>
-            dispatcher.dispatch(unpackCont(cont), channels.map(_.value))
+            dispatcher.dispatch(unpackCont(cont), channels.map(_.value), cont.sequenceNumber)
         }
 
       res.flatMap(_.fold(_ => Sync[F].raiseError(OutOfPhlogistonsError), handleSuccess))
@@ -50,38 +50,40 @@ object SystemProcesses {
   def stdoutAck[F[_]: Sync](
       space: RhoISpace[F],
       dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
-  ): Seq[ListParWithRandomAndPhlos] => F[Unit] = {
-    case Seq(ListParWithRandomAndPhlos(Seq(arg, ack), rand, _)) =>
+  ): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
+    case (Seq(ListParWithRandomAndPhlos(Seq(arg, ack), rand, _)), sequenceNumber) =>
       for {
         _ <- Sync[F].delay(Console.println(prettyPrinter.buildString(arg)))
         produced <- space
                      .produce(
                        ack,
                        ListParWithRandom(Seq(Par.defaultInstance), rand),
-                       persist = false
+                       persist = false,
+                       sequenceNumber
                      )(MATCH_UNLIMITED_PHLOS)
                      .foldResult(dispatcher)
       } yield produced
 
   }
 
-  def stderr[F[_]: Sync]: Seq[ListParWithRandomAndPhlos] => F[Unit] = {
-    case Seq(ListParWithRandomAndPhlos(Seq(arg), _, _)) =>
+  def stderr[F[_]: Sync]:(Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
+    case (Seq(ListParWithRandomAndPhlos(Seq(arg, ack), rand, _)), sequenceNumber) =>
       Sync[F].delay(Console.err.println(prettyPrinter.buildString(arg)))
   }
 
   def stderrAck[F[_]: Sync](
       space: RhoISpace[F],
       dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
-  ): Seq[ListParWithRandomAndPhlos] => F[Unit] = {
-    case Seq(ListParWithRandomAndPhlos(Seq(arg, ack), rand, _)) =>
+  ): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
+    case (Seq(ListParWithRandomAndPhlos(Seq(arg, ack), rand, _)), sequenceNumber) =>
       for {
         _ <- Sync[F].delay(Console.err.println(prettyPrinter.buildString(arg)))
         produced <- space
                      .produce(
                        ack,
                        ListParWithRandom(Seq(Par.defaultInstance), rand),
-                       persist = false
+                       persist = false,
+                       sequenceNumber
                      )(MATCH_UNLIMITED_PHLOS)
                      .foldResult(dispatcher)
       } yield produced
@@ -101,13 +103,14 @@ object SystemProcesses {
   def secp256k1Verify[F[_]: Sync](
       space: RhoISpace[F],
       dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
-  ): Seq[ListParWithRandomAndPhlos] => F[Unit] = {
-    case Seq(
+  ): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
+    case (Seq(
         ListParWithRandomAndPhlos(
           Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
           rand,
-          _
-        )
+          _),
+        _),
+        sequenceNumber
         ) =>
       for {
         verified <- Sync[F].fromTry(Try(Secp256k1.verify(data, signature, pub)))
@@ -115,7 +118,8 @@ object SystemProcesses {
                      .produce(
                        ack,
                        ListParWithRandom(Seq(Expr(GBool(verified))), rand),
-                       persist = false
+                       persist = false,
+                       sequenceNumber
                      )(MATCH_UNLIMITED_PHLOS)
                      .foldResult(dispatcher)
       } yield produced
@@ -125,21 +129,23 @@ object SystemProcesses {
   def ed25519Verify[F[_]: Sync](
       space: RhoISpace[F],
       dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
-  ): Seq[ListParWithRandomAndPhlos] => F[Unit] = {
-    case Seq(
-        ListParWithRandomAndPhlos(
-          Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
-          rand,
-          _
-        )
-        ) =>
+  ): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
+    case (Seq(
+            ListParWithRandomAndPhlos(
+              Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
+              rand,
+              _
+            ),
+          _),
+        sequenceNumber ) =>
       for {
         verified <- Sync[F].fromTry(Try(Ed25519.verify(data, signature, pub)))
         produced <- space
                      .produce(
                        ack,
                        ListParWithRandom(Seq(Expr(GBool(verified))), rand),
-                       persist = false
+                       persist = false,
+                       sequenceNumber
                      )(MATCH_UNLIMITED_PHLOS)
                      .foldResult(dispatcher)
       } yield produced
@@ -152,8 +158,8 @@ object SystemProcesses {
   def sha256Hash[F[_]: Sync](
       space: RhoISpace[F],
       dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
-  ): Seq[ListParWithRandomAndPhlos] => F[Unit] = {
-    case Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)) =>
+  ): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
+    case (Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)), sequenceNumber) =>
       for {
         hash <- Sync[F].fromTry(Try(Sha256.hash(input)))
         produced <- space
@@ -163,7 +169,8 @@ object SystemProcesses {
                          Seq(Expr(GByteArray(ByteString.copyFrom(hash)))),
                          rand
                        ),
-                       persist = false
+                       persist = false,
+                       sequenceNumber
                      )(MATCH_UNLIMITED_PHLOS)
                      .foldResult(dispatcher)
       } yield produced
@@ -174,8 +181,9 @@ object SystemProcesses {
   def keccak256Hash[F[_]: Sync](
       space: RhoISpace[F],
       dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
-  ): Seq[ListParWithRandomAndPhlos] => F[Unit] = {
-    case Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)) =>
+  ): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
+    case (Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)), sequenceNumber) =>
+
       for {
         hash <- Sync[F].fromTry(Try(Keccak256.hash(input)))
         produced <- space
@@ -185,7 +193,8 @@ object SystemProcesses {
                          Seq(Expr(GByteArray(ByteString.copyFrom(hash)))),
                          rand
                        ),
-                       persist = false
+                       persist = false,
+                       sequenceNumber
                      )(MATCH_UNLIMITED_PHLOS)
                      .foldResult(dispatcher)
       } yield produced
@@ -197,8 +206,8 @@ object SystemProcesses {
   def blake2b256Hash[F[_]: Sync](
       space: RhoISpace[F],
       dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
-  ): Seq[ListParWithRandomAndPhlos] => F[Unit] = {
-    case Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)) =>
+  ): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
+    case (Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)), sequenceNumber) =>
       for {
         hash <- Sync[F].fromTry(Try(Blake2b256.hash(input)))
         produced <- space
@@ -208,7 +217,8 @@ object SystemProcesses {
                          Seq(Expr(GByteArray(ByteString.copyFrom(hash)))),
                          rand
                        ),
-                       persist = false
+                       persist = false,
+                       sequenceNumber
                      )(MATCH_UNLIMITED_PHLOS)
                      .foldResult(dispatcher)
       } yield produced
@@ -220,15 +230,16 @@ object SystemProcesses {
       space: RhoISpace[F],
       dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation],
       shortLeashParams: Runtime.ShortLeashParams[F]
-  ): Seq[ListParWithRandomAndPhlos] => F[Unit] = {
-    case Seq(ListParWithRandomAndPhlos(Seq(ack), rand, _)) =>
+  ): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
+    case (Seq(ListParWithRandomAndPhlos(Seq(ack), rand, _)), sequenceNumber) =>
       shortLeashParams.getParams.flatMap { parameters =>
         import parameters._
         space
           .produce(
             ack,
             ListParWithRandom(Seq(codeHash, phloRate, userId, timestamp), rand),
-            persist = false
+            persist = false,
+            sequenceNumber
           )(MATCH_UNLIMITED_PHLOS)
           .foldResult(dispatcher)
       }
@@ -240,15 +251,16 @@ object SystemProcesses {
       space: RhoISpace[F],
       dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation],
       blockTime: Runtime.BlockTime[F]
-  ): Seq[ListParWithRandomAndPhlos] => F[Unit] = {
-    case Seq(ListParWithRandomAndPhlos(Seq(ack), rand, _)) =>
+  ): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
+    case (Seq(ListParWithRandomAndPhlos(Seq(ack), rand, _)), sequenceNumber) =>
       for {
         timestamp <- blockTime.timestamp.get
         produced <- space
                      .produce(
                        ack,
                        ListParWithRandom(Seq(timestamp), rand),
-                       persist = false
+                       persist = false,
+                       sequenceNumber
                      )(MATCH_UNLIMITED_PHLOS)
                      .foldResult(dispatcher)
       } yield produced
@@ -258,4 +270,13 @@ object SystemProcesses {
 
   private def illegalArgumentException[F[_]: Sync](msg: String): F[Unit] =
     Sync[F].raiseError(new IllegalArgumentException(msg))
+
+  private def _dispatch[F[_]](
+      dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
+  )(
+      cont: TaggedContinuation,
+      dataList: Seq[ListParWithRandomAndPhlos],
+      sequenceNumber: Int
+  ): F[Unit] =
+    dispatcher.dispatch(cont, dataList, sequenceNumber)
 }
