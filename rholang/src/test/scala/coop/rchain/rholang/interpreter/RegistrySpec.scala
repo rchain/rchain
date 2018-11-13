@@ -221,13 +221,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     val randResult2 = newRand.splitByte(2)
     randResult2.next; randResult2.next
 
-    val result = withRegistryAndTestSpace { (reducer, space) =>
-      implicit val env = Env[Par]()
-      val resultTask = for {
-        _ <- reducer.eval(completePar)
-      } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
-    }
+    val result = evaluate(completePar)
 
     checkResult(result, "result0", GInt(7), randResult0)
     checkResult(result, "result1", GInt(9), randResult1)
@@ -334,13 +328,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     val result10Rand = merge7.splitByte(5)
     result10Rand.next(); result10Rand.next()
 
-    val result = withRegistryAndTestSpace { (reducer, space) =>
-      implicit val env = Env[Par]()
-      val resultTask = for {
-        _ <- reducer.eval(completePar)
-      } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
-    }
+    val result = evaluate(completePar)
 
     checkResult(result, "result0", GInt(8), result0Rand)
     checkResult(result, "result1", GInt(10), result1Rand)
@@ -400,13 +388,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     val completePar                     = deletePar.addSends(rootSend, fullBranchSend)
     implicit val rand: Blake2b512Random = baseRand.splitByte(3)
 
-    val result = withRegistryAndTestSpace { (reducer, space) =>
-      implicit val env = Env[Par]()
-      val resultTask = for {
-        _ <- reducer.eval(completePar)
-      } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
-    }
+    val result = evaluate(completePar)
 
     // Compute the random states for the results
     val resultRand = baseRand.splitByte(3)
@@ -501,13 +483,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     val randResult1 = newRand.splitByte(1)
     randResult1.next; randResult1.next
 
-    val result = withRegistryAndTestSpace { (reducer, space) =>
-      implicit val env = Env[Par]()
-      val resultTask = for {
-        _ <- reducer.eval(completePar)
-      } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
-    }
+    val result = evaluate(completePar)
 
     checkResult(result, "result0", GInt(8), randResult0)
     checkResult(result, "result1", GInt(9), randResult1)
@@ -542,13 +518,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     lookupRand.next();
     val randResult1 = lookupRand
 
-    val result = withRegistryAndTestSpace { (reducer, space) =>
-      implicit val env = Env[Par]()
-      val resultTask = for {
-        _ <- reducer.eval(completePar)
-      } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
-    }
+    val result = evaluate(completePar)
 
     val expectedBundle: Par =
       Bundle(GPrivate(ByteString.copyFrom(registeredName)), writeFlag = true, readFlag = false)
@@ -680,13 +650,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         .hash(Base16.decode("11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d"))
     )
 
-    val result = withRegistryAndTestSpace { (reducer, space) =>
-      implicit val env = Env[Par]()
-      val resultTask = for {
-        _ <- reducer.eval(completePar)
-      } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
-    }
+    val result = evaluate(completePar)
 
     checkResult(result, "result0", ETuple(List(GInt(789), GString("entry"))), result0Rand)
     checkResult(result, "result1", ETuple(List(GInt(789), GString("entry"))), result1Rand)
@@ -696,4 +660,14 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     checkResult(result, "result5", ETuple(List(GInt(790), GString("entryReplace"))), result5Rand)
     checkResult(result, "result6", GUri(expectedUri), result6Rand)
   }
+
+  private def evaluate(completePar: Par)(implicit rand: Blake2b512Random) =
+    withRegistryAndTestSpace { (reducer, space) =>
+      implicit val env = Env[Par]()
+      val resultTask = for {
+        _ <- reducer.eval(completePar)
+      } yield space.store.toMap
+      Await.result(resultTask.runAsync, 3.seconds)
+    }
+
 }
