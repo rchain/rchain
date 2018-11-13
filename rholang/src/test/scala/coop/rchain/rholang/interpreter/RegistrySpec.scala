@@ -74,7 +74,7 @@ trait RegistryTester extends PersistentStoreTester {
 
 class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
 
-  private val EvaluateTimeout = 3.seconds
+  private val EvaluateTimeout = 10.seconds
 
   /*
     0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2
