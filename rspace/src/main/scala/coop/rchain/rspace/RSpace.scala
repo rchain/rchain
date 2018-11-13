@@ -5,6 +5,7 @@ import cats.effect._
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.spaces.FineGrainedRSpace
+import scala.concurrent.ExecutionContext
 import scodec.Codec
 
 object RSpace {
@@ -16,7 +17,8 @@ object RSpace {
       sa: Serialize[A],
       sk: Serialize[K],
       syncF: Sync[F],
-      contextShift: ContextShift[F]
+      contextShift: ContextShift[F],
+      scheduler: ExecutionContext
   ): F[ISpace[F, C, P, E, A, R, K]] =
     context match {
       case ctx: LMDBContext[C, P, A, K] =>
@@ -44,7 +46,8 @@ object RSpace {
       sa: Serialize[A],
       sk: Serialize[K],
       syncF: Sync[F],
-      contextShift: ContextShift[F]
+      contextShift: ContextShift[F],
+      scheduler: ExecutionContext
   ): F[ISpace[F, C, P, E, A, R, K]] = {
 
     val mainStore = InMemoryStore
@@ -62,7 +65,8 @@ object RSpace {
       sa: Serialize[A],
       sk: Serialize[K],
       syncF: Sync[F],
-      contextShift: ContextShift[F]
+      contextShift: ContextShift[F],
+      scheduler: ExecutionContext
   ): F[ISpace[F, C, P, E, A, R, K]] = {
 
     implicit val codecC: Codec[C] = sc.toCodec

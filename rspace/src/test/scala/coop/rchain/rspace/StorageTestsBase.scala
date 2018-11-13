@@ -21,6 +21,8 @@ import scala.collection.immutable.{Seq, Set}
 import scala.concurrent.ExecutionContext
 import scodec.Codec
 
+import scala.concurrent.ExecutionContext.Implicits.global
+
 trait StorageTestsBase[F[_], C, P, E, A, K] extends FlatSpec with Matchers with OptionValues {
   type T = ISpace[F, C, P, E, A, A, K]
 

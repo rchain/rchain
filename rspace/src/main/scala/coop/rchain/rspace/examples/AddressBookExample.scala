@@ -18,6 +18,8 @@ import scala.collection.immutable.Seq
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
+import scala.concurrent.ExecutionContext.Implicits.global
+
 object AddressBookExample {
 
   /* Here we define a type for channels */

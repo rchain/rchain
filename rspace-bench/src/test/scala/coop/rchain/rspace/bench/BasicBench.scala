@@ -12,6 +12,8 @@ import coop.rchain.rspace.{LMDBStore, _}
 import org.openjdk.jmh.annotations.{Benchmark, Scope, State, TearDown}
 import coop.rchain.shared.PathOps.RichPath
 
+import scala.concurrent.ExecutionContext.Implicits.global
+
 class BasicBench {
 
   import BasicBench._

@@ -10,10 +10,10 @@ import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import coop.rchain.shared.SyncVarOps._
 import kamon._
-import monix.execution.Scheduler
 
 import scala.annotation.tailrec
 import scala.collection.immutable.Seq
+import scala.concurrent.ExecutionContext
 import scala.util.Random
 
 class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
@@ -26,7 +26,8 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
     serializeA: Serialize[A],
     serializeK: Serialize[K],
     val syncF: Sync[F],
-    contextShift: ContextShift[F]
+    contextShift: ContextShift[F],
+    scheduler: ExecutionContext
 ) extends FineGrainedRSpaceOps[F, C, P, E, A, R, K](store, branch)
     with ISpace[F, C, P, E, A, R, K] {
 
@@ -39,9 +40,6 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
   private[this] val produceSpan   = Kamon.buildSpan("rspace.produce")
   protected[this] val installSpan = Kamon.buildSpan("rspace.install")
 
-  // TODO: pass this as param or make it configurable
-  private[this] val blockingThreadPool = Scheduler.forkJoin(parallelism = 32, maxThreads = 128)
-
   override def consume(
       channels: Seq[C],
       patterns: Seq[P],
@@ -51,7 +49,7 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
   )(
       implicit m: Match[P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
-    contextShift.evalOn(blockingThreadPool) {
+    contextShift.evalOn(scheduler) {
       syncF.delay {
         Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
           if (channels.isEmpty) {

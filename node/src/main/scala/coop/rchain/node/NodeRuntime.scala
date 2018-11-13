@@ -46,8 +46,9 @@ class NodeRuntime private[node] (
     scheduler: Scheduler
 )(implicit log: Log[Task]) {
 
-  private val loopScheduler = Scheduler.fixedPool("loop", 4)
-  private val grpcScheduler = Scheduler.cached("grpc-io", 4, 64)
+  private val loopScheduler           = Scheduler.fixedPool("loop", 4)
+  private val grpcScheduler           = Scheduler.cached("grpc-io", 4, 64)
+  private[this] val blockingScheduler = Scheduler.forkJoin(parallelism = 32, maxThreads = 128)
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
@@ -322,11 +323,11 @@ class NodeRuntime private[node] (
     )
     _       <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
     oracle  = SafetyOracle.turanOracle[Effect](Monad[Effect])
-    runtime = Runtime.create(storagePath, storageSize, storeType)(scheduler)
+    runtime = Runtime.create(storagePath, storageSize, storeType)(blockingScheduler)
     _ <- Runtime
           .injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
           .toEffect
-    casperRuntime  = Runtime.create(casperStoragePath, storageSize, storeType)(scheduler)
+    casperRuntime  = Runtime.create(casperStoragePath, storageSize, storeType)(blockingScheduler)
     runtimeManager = RuntimeManager.fromRuntime(casperRuntime)(scheduler)
     casperPacketHandler <- CasperPacketHandler
                             .of[Effect](conf.casper, defaultTimeout, runtimeManager, _.value)(

@@ -19,6 +19,8 @@ import org.openjdk.jmh.infra.Blackhole
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 
+import scala.concurrent.ExecutionContext.Implicits.global
+
 @org.openjdk.jmh.annotations.State(Scope.Thread)
 trait RSpaceBench {
 
@@ -79,7 +81,6 @@ trait RSpaceBench {
 
     val results: IndexedSeq[Future[Unit]] = tasks.map(f => f.executeOn(dupePool).runAsync(dupePool))
 
-    implicit val ec = scala.concurrent.ExecutionContext.Implicits.global
     bh.consume(Await.ready(Future.sequence(results), Duration.Inf))
   }
 }
