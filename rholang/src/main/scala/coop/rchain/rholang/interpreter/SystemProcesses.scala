@@ -66,8 +66,8 @@ object SystemProcesses {
 
   }
 
-  def stderr[F[_]: Sync]:(Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
-    case (Seq(ListParWithRandomAndPhlos(Seq(arg, ack), rand, _)), sequenceNumber) =>
+  def stderr[F[_]: Sync]: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
+    case (Seq(ListParWithRandomAndPhlos(Seq(arg, ack @ _), rand @ _, _)), sequenceNumber @ _) =>
       Sync[F].delay(Console.err.println(prettyPrinter.buildString(arg)))
   }
 
@@ -104,12 +104,15 @@ object SystemProcesses {
       space: RhoISpace[F],
       dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
   ): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
-    case (Seq(
-        ListParWithRandomAndPhlos(
-          Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
-          rand,
-          _),
-        _),
+    case (
+        Seq(
+          ListParWithRandomAndPhlos(
+            Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
+            rand,
+            _
+          ),
+          _
+        ),
         sequenceNumber
         ) =>
       for {
@@ -130,14 +133,17 @@ object SystemProcesses {
       space: RhoISpace[F],
       dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
   ): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
-    case (Seq(
-            ListParWithRandomAndPhlos(
-              Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
-              rand,
-              _
-            ),
-          _),
-        sequenceNumber ) =>
+    case (
+        Seq(
+          ListParWithRandomAndPhlos(
+            Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
+            rand,
+            _
+          ),
+          _
+        ),
+        sequenceNumber
+        ) =>
       for {
         verified <- Sync[F].fromTry(Try(Ed25519.verify(data, signature, pub)))
         produced <- space
@@ -183,7 +189,6 @@ object SystemProcesses {
       dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
   ): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
     case (Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)), sequenceNumber) =>
-
       for {
         hash <- Sync[F].fromTry(Try(Keccak256.hash(input)))
         produced <- space
@@ -270,13 +275,4 @@ object SystemProcesses {
 
   private def illegalArgumentException[F[_]: Sync](msg: String): F[Unit] =
     Sync[F].raiseError(new IllegalArgumentException(msg))
-
-  private def _dispatch[F[_]](
-      dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
-  )(
-      cont: TaggedContinuation,
-      dataList: Seq[ListParWithRandomAndPhlos],
-      sequenceNumber: Int
-  ): F[Unit] =
-    dispatcher.dispatch(cont, dataList, sequenceNumber)
 }
