@@ -34,9 +34,10 @@ class RuntimeManager[F[_]: Sync] private (
       (_, Seq(processedDeploy)) = evalResult
 
       //TODO: Is better error handling needed here?
-//      _ <- if (processedDeploy.status.isFailed)
-//            Sync[F].raiseError(new Exception("Processed deploy has failed"))
-//          else ()
+      _ <- if (processedDeploy.status.isFailed)
+            Sync[F].raiseError(new Exception("Processed deploy has failed"))
+          else
+            Sync[F].pure(())
 
       returnChannel = Par().copy(exprs = Seq(Expr(GString(name))))
       result        <- runtime.space.getData(returnChannel)
