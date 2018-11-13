@@ -1,24 +1,22 @@
 package coop.rchain.casper
 
 import cats.effect.Sync
-import cats.{Applicative, Monad}
 import cats.implicits._
+import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
-import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.bonds
-import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.catscontrib.Capture
+import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.shared._
-import monix.execution.Scheduler
-
-import scala.util.{Failure, Success, Try}
+import scala.language.higherKinds
+import scala.util.{Success, Try}
 
 object Validate {
   type PublicKey = Array[Byte]
@@ -466,13 +464,13 @@ object Validate {
       status <- if (bondedValidators == justifiedValidators) {
                  Applicative[F].pure(Right(Valid))
                } else {
-                 val justifiedValidatorsPP = justifiedValidators.map(PrettyPrinter.buildString(_))
-                 val bondedValidatorsPP    = bondedValidators.map(PrettyPrinter.buildString(_))
+                 val justifiedValidatorsPP = justifiedValidators.map(PrettyPrinter.buildString)
+                 val bondedValidatorsPP    = bondedValidators.map(PrettyPrinter.buildString)
                  for {
                    _ <- Log[F].warn(
                          ignore(
                            b,
-                           s"the justified validators, ${justifiedValidatorsPP}, do not match the bonded validators, ${bondedValidatorsPP}."
+                           s"the justified validators, $justifiedValidatorsPP, do not match the bonded validators, $bondedValidatorsPP."
                          )
                        )
                  } yield Left(InvalidFollows)
@@ -561,8 +559,8 @@ object Validate {
       block: BlockMessage,
       dag: BlockDag,
       emptyStateHash: StateHash,
-      runtimeManager: RuntimeManager
-  )(implicit scheduler: Scheduler): F[Either[BlockStatus, ValidBlock]] =
+      runtimeManager: RuntimeManager[F]
+  ): F[Either[BlockStatus, ValidBlock]] =
     for {
       maybeStateHash <- InterpreterUtil
                          .validateBlockCheckpoint[F](
@@ -602,28 +600,34 @@ object Validate {
     }
   }
 
-  def bondsCache[F[_]: Applicative: Log](b: BlockMessage, runtimeManager: RuntimeManager)(
-      implicit scheduler: Scheduler
+  def bondsCache[F[_]: Sync: Log](
+      b: BlockMessage,
+      runtimeManager: RuntimeManager[F]
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val bonds = ProtoUtil.bonds(b)
     ProtoUtil.tuplespace(b) match {
       case Some(tuplespaceHash) =>
-        Try(runtimeManager.computeBonds(tuplespaceHash)) match {
-          case Success(computedBonds) =>
-            if (bonds.toSet == computedBonds.toSet) {
-              Applicative[F].pure(Right(Valid))
-            } else {
-              for {
-                _ <- Log[F].warn(
-                      "Bonds in proof of stake contract do not match block's bond cache."
-                    )
-              } yield Left(InvalidBondsCache)
-            }
-          case Failure(ex: Throwable) =>
-            for {
-              _ <- Log[F].warn(s"Failed to compute bonds from tuplespace hash ${ex.getMessage}")
-            } yield Left(InvalidBondsCache)
-        }
+        for {
+          computeBondsResult <- runtimeManager.computeBonds(tuplespaceHash).attempt
+          result <- computeBondsResult match {
+                     case Right(computedBonds) =>
+                       if (bonds.toSet == computedBonds.toSet) {
+                         Applicative[F].pure(Right(Valid))
+                       } else {
+                         for {
+                           _ <- Log[F].warn(
+                                 "Bonds in proof of stake contract do not match block's bond cache."
+                               )
+                         } yield Left(InvalidBondsCache)
+                       }
+                     case Left(ex: Throwable) =>
+                       for {
+                         _ <- Log[F].warn(
+                               s"Failed to compute bonds from tuplespace hash ${ex.getMessage}"
+                             )
+                       } yield Left(InvalidBondsCache)
+                   }
+        } yield result
       case None =>
         for {
           _ <- Log[F].warn(s"Block ${PrettyPrinter.buildString(b)} is missing a tuplespace hash.")

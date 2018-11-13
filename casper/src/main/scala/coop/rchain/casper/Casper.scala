@@ -1,37 +1,20 @@
 package coop.rchain.casper
 
-import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import cats.{Applicative, Monad}
-import cats.implicits._
-import cats.mtl.implicits._
 import cats.effect.Sync
+import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.blockstorage.{BlockMetadata, BlockStore}
+import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
-import coop.rchain.casper.util.ProtoUtil._
-import coop.rchain.casper.util.comm.CommUtil
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib._
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.comm.CommError.ErrorHandler
+import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.shared._
-import coop.rchain.shared.AttemptOps._
-
-import scala.annotation.tailrec
-import scala.collection.{immutable, mutable}
-import scala.collection.immutable.{HashMap, HashSet}
-import cats.effect.concurrent.Ref
-import coop.rchain.blockstorage.{BlockMetadata, BlockStore}
-import coop.rchain.casper.EquivocationRecord.SequenceNumber
-import coop.rchain.casper.Estimator.Validator
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.rspace.Checkpoint
-import monix.execution.Scheduler
-import monix.execution.atomic.AtomicAny
-
-import scala.concurrent.SyncVar
+import scala.language.higherKinds
 
 trait Casper[F[_], A] {
   def addBlock(b: BlockMessage): F[BlockStatus]
@@ -51,7 +34,7 @@ trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]] {
   def lastFinalizedBlock: F[BlockMessage]
   def storageContents(hash: ByteString): F[String]
   // TODO: Refactor hashSetCasper to take a RuntimeManager[F] just like BlockStore[F]
-  def getRuntimeManager: F[Option[RuntimeManager]]
+  def getRuntimeManager: F[Option[RuntimeManager[F]]]
 }
 
 object MultiParentCasper extends MultiParentCasperInstances {
@@ -61,11 +44,11 @@ object MultiParentCasper extends MultiParentCasperInstances {
 sealed abstract class MultiParentCasperInstances {
 
   def hashSetCasper[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[F],
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       shardId: String
-  )(implicit scheduler: Scheduler): F[MultiParentCasper[F]] = {
+  ): F[MultiParentCasper[F]] = {
     val genesisBonds          = ProtoUtil.bonds(genesis)
     val initialLatestMessages = genesisBonds.map(_.validator -> genesis).toMap
     val dag = BlockDag.empty

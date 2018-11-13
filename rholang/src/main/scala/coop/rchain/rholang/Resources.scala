@@ -2,7 +2,7 @@ package coop.rchain.rholang
 import java.io.File
 import java.nio.file.{Files, Path}
 
-import cats.Applicative
+import cats.{Applicative, Parallel}
 import cats.effect.ExitCase.Error
 import cats.effect.{Resource, Sync}
 import com.typesafe.scalalogging.Logger
@@ -60,14 +60,14 @@ object Resources {
       .flatMap(tmpDir => Resource.make(mkRspace(tmpDir))(_.close()))
   }
 
-  def mkRuntime(
+  def mkRuntime[M[_], F[_]](
       prefix: String,
       storageSize: Long = 1024 * 1024,
       storeType: StoreType = StoreType.LMDB
-  ): Resource[Task, Runtime] =
-    mkTempDir[Task](prefix)
+  )(implicit syncF: Sync[M], parallel: Parallel[M, F]): Resource[M, Runtime[M]] =
+    mkTempDir[M](prefix)
       .flatMap { tmpDir =>
-        Resource.make[Task, Runtime](Runtime.create(tmpDir, storageSize, storeType))(
+        Resource.make[M, Runtime[M]](Runtime.create[M, F](tmpDir, storageSize, storeType))(
           rt => rt.close()
         )
       }

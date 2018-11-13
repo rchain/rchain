@@ -3,7 +3,8 @@ package coop.rchain.rholang.interpreter
 import java.io.{BufferedOutputStream, FileOutputStream, FileReader}
 import java.nio.file.{Files, Path}
 
-import cats.effect.Resource
+import cats.Parallel
+import cats.effect.{Resource, Sync}
 import cats.implicits._
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.RhoIStore
@@ -52,9 +53,11 @@ object RholangCLI {
 
     val conf = new Conf(args)
 
-    val runtimeResource: Resource[Task, Runtime] =
+    val runtimeResource: Resource[Task, Runtime[Task]] =
       Resource
-        .make(Runtime.create(conf.dataDir(), conf.mapSize()))(_.close())
+        .make(
+          Runtime.create[Task, Task.Par](conf.dataDir(), conf.mapSize())
+        )(_.close())
         .flatMap(
           runtime =>
             Resource.liftF(
@@ -94,7 +97,7 @@ object RholangCLI {
   private def printCost(cost: CostAccount): Unit =
     Console.println(s"Estimated deploy cost: $cost")
 
-  def processFile(conf: Conf, runtime: Runtime, fileName: String): Task[Unit] = {
+  def processFile(conf: Conf, runtime: Runtime[Task], fileName: String): Task[Unit] = {
     val processTerm: Par => Task[Unit] =
       if (conf.binary()) writeBinary(fileName)
       else if (conf.text()) writeHumanReadable(fileName)
@@ -118,7 +121,7 @@ object RholangCLI {
     }
 
   @tailrec
-  def repl(runtime: Runtime)(implicit scheduler: Scheduler): Unit = {
+  def repl(runtime: Runtime[Task])(implicit scheduler: Scheduler): Unit = {
     printPrompt()
     Option(scala.io.StdIn.readLine()) match {
       case Some(line) =>
@@ -166,7 +169,7 @@ object RholangCLI {
     println(s"Compiled $fileName to $binaryFileName")
   }
 
-  def evaluatePar(runtime: Runtime)(par: Par): Task[Unit] = {
+  def evaluatePar(runtime: Runtime[Task])(par: Par): Task[Unit] = {
     val evaluation: Task[Unit] =
       for {
         _      <- Task.now(printNormalizedTerm(par))

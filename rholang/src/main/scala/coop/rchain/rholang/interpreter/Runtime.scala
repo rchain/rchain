@@ -2,51 +2,47 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.{Files, Path}
 
-import cats.{Id, Monad}
-import scala.collection.immutable
-
-import cats.Applicative
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import cats.mtl.FunctorTell
+import cats.{Applicative, Parallel}
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models._
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
+import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.ShortLeashParams.ShortLeashParameters
 import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.{OutOfPhlogistonsError, SetupError}
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.pure.PureRSpace
+import coop.rchain.rspace.{Match, _}
 import coop.rchain.shared.StoreType
 import coop.rchain.shared.StoreType._
-import monix.eval.Task
-import monix.execution.Scheduler
 
-class Runtime private (
-    val reducer: ChargingReducer[Task],
-    val replayReducer: ChargingReducer[Task],
-    val space: RhoISpace[Task],
-    val replaySpace: RhoReplayISpace[Task],
-    val errorLog: ErrorLog,
+import scala.collection.immutable
+
+class Runtime[F[_]: Sync] private (
+    val reducer: ChargingReducer[F],
+    val replayReducer: ChargingReducer[F],
+    val space: RhoISpace[F],
+    val replaySpace: RhoReplayISpace[F],
+    val errorLog: ErrorLog[F],
     val context: RhoContext,
-    val shortLeashParams: Runtime.ShortLeashParams[Task],
-    val blockTime: Runtime.BlockTime[Task]
+    val shortLeashParams: Runtime.ShortLeashParams[F],
+    val blockTime: Runtime.BlockTime[F]
 ) {
-  def readAndClearErrorVector(): Vector[Throwable] = errorLog.readAndClearErrorVector()
-  def close(): Task[Unit] =
+  def readAndClearErrorVector(): F[Vector[Throwable]] = errorLog.readAndClearErrorVector()
+  def close(): F[Unit] =
     for {
       _ <- space.close()
       _ <- replaySpace.close()
-    } yield (context.close())
+    } yield context.close()
 }
 
 object Runtime {
@@ -58,9 +54,9 @@ object Runtime {
   type RhoIStore  = CPAK[IStore]
   type RhoContext = CPAK[Context]
 
-  type RhoDispatch[F[_]] = Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
-  type RhoSysFunction    = (Seq[ListParWithRandomAndPhlos], Int) => Task[Unit]
-  type RhoDispatchMap    = Map[Long, RhoSysFunction]
+  type RhoDispatch[F[_]]    = Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
+  type RhoSysFunction[F[_]] = (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
+  type RhoDispatchMap[F[_]] = Map[Long, RhoSysFunction[F]]
 
   type CPAK[F[_, _, _, _]] =
     F[Par, BindPattern, ListParWithRandom, TaggedContinuation]
@@ -103,11 +99,10 @@ object Runtime {
     object ShortLeashParameters {
       val empty: ShortLeashParameters = ShortLeashParameters(Par(), Par(), Par(), Par())
     }
-    def apply[F[_]]()(implicit F: Sync[F]): F[ShortLeashParams[F]] =
-      Ref[F].of(ShortLeashParameters.empty).map(new ShortLeashParams(_))
-
-    def unsafe[F[_]]()(implicit F: Sync[F]): ShortLeashParams[F] =
-      new ShortLeashParams[F](Ref.unsafe[F, ShortLeashParameters](ShortLeashParameters.empty))
+    def apply[F[_]: Sync]: F[ShortLeashParams[F]] =
+      Ref
+        .of[F, Runtime.ShortLeashParams.ShortLeashParameters](ShortLeashParameters.empty)
+        .map(new ShortLeashParams[F](_))
   }
 
   class BlockTime[F[_]](val timestamp: Ref[F, Par]) {
@@ -119,12 +114,7 @@ object Runtime {
 
   object BlockTime {
     def apply[F[_]]()(implicit F: Sync[F]): F[BlockTime[F]] =
-      for {
-        timestamp <- Ref[F].of(Par())
-      } yield new BlockTime[F](timestamp)
-
-    def unsafe[F[_]]()(implicit F: Sync[F]): BlockTime[F] =
-      new BlockTime(Ref.unsafe[F, Par](Par()))
+      Ref[F].of(Par()).map(new BlockTime[F](_))
   }
 
   object BodyRefs {
@@ -198,19 +188,18 @@ object Runtime {
     }.sequence
 
   // TODO: remove default store type
-  def create(dataDir: Path, mapSize: Long, storeType: StoreType = LMDB)(
-      implicit scheduler: Scheduler
-  ): Task[Runtime] = {
-    val errorLog                                  = new ErrorLog()
-    implicit val ft: FunctorTell[Task, Throwable] = errorLog
-
+  def create[M[_], F[_]](dataDir: Path, mapSize: Long, storeType: StoreType = LMDB)(
+      implicit syncM: Sync[M],
+      parallelMF: Parallel[M, F]
+  ): M[Runtime[M]] = {
     def dispatchTableCreator(
-        space: RhoISpace[Task],
-        dispatcher: RhoDispatch[Task],
-        registry: Registry[Task],
-        shortLeashParams: ShortLeashParams[Task],
-        blockTime: BlockTime[Task]
-    ): RhoDispatchMap = {
+        space: RhoISpace[M],
+        dispatcher: RhoDispatch[M],
+        registry: Registry[M],
+        shortLeashParams: ShortLeashParams[M],
+        blockTime: BlockTime[M]
+    ): RhoDispatchMap[M] = {
+
       import BodyRefs._
       Map(
         STDOUT                       -> SystemProcesses.stdout,
@@ -222,18 +211,18 @@ object Runtime {
         KECCAK256_HASH               -> SystemProcesses.keccak256Hash(space, dispatcher),
         BLAKE2B256_HASH              -> SystemProcesses.blake2b256Hash(space, dispatcher),
         SECP256K1_VERIFY             -> SystemProcesses.secp256k1Verify(space, dispatcher),
-        REG_LOOKUP                   -> (registry.lookup(_, _)),
-        REG_LOOKUP_CALLBACK          -> (registry.lookupCallback(_, _)),
-        REG_INSERT                   -> (registry.insert(_, _)),
-        REG_INSERT_CALLBACK          -> (registry.insertCallback(_, _)),
-        REG_REGISTER_INSERT_CALLBACK -> (registry.registerInsertCallback(_, _)),
-        REG_DELETE                   -> (registry.delete(_, _)),
-        REG_DELETE_ROOT_CALLBACK     -> (registry.deleteRootCallback(_, _)),
-        REG_DELETE_CALLBACK          -> (registry.deleteCallback(_, _)),
-        REG_PUBLIC_LOOKUP            -> (registry.publicLookup(_, _)),
-        REG_PUBLIC_REGISTER_RANDOM   -> (registry.publicRegisterRandom(_, _)),
-        REG_PUBLIC_REGISTER_SIGNED   -> (registry.publicRegisterSigned(_, _)),
-        REG_NONCE_INSERT_CALLBACK    -> (registry.nonceInsertCallback(_, _)),
+        REG_LOOKUP                   -> registry.lookup,
+        REG_LOOKUP_CALLBACK          -> registry.lookupCallback,
+        REG_INSERT                   -> registry.insert,
+        REG_INSERT_CALLBACK          -> registry.insertCallback,
+        REG_REGISTER_INSERT_CALLBACK -> registry.registerInsertCallback,
+        REG_DELETE                   -> registry.delete,
+        REG_DELETE_ROOT_CALLBACK     -> registry.deleteRootCallback,
+        REG_DELETE_CALLBACK          -> registry.deleteCallback,
+        REG_PUBLIC_LOOKUP            -> registry.publicLookup,
+        REG_PUBLIC_REGISTER_RANDOM   -> registry.publicRegisterRandom,
+        REG_PUBLIC_REGISTER_SIGNED   -> registry.publicRegisterSigned,
+        REG_NONCE_INSERT_CALLBACK    -> registry.nonceInsertCallback,
         GET_DEPLOY_PARAMS            -> SystemProcesses.getDeployParams(space, dispatcher, shortLeashParams),
         GET_TIMESTAMP                -> SystemProcesses.blockTime(space, dispatcher, blockTime)
       )
@@ -253,9 +242,6 @@ object Runtime {
       "rho:deploy:params"   -> Bundle(FixedChannels.GET_DEPLOY_PARAMS, writeFlag = true),
       "rho:block:timestamp" -> Bundle(FixedChannels.GET_TIMESTAMP, writeFlag = true)
     )
-
-    val shortLeashParams = ShortLeashParams.unsafe[Task]()
-    val blockTime        = BlockTime.unsafe[Task]()
 
     val procDefs: List[(Name, Arity, Remainder, BodyRef)] = {
       import BodyRefs._
@@ -278,10 +264,19 @@ object Runtime {
     }
 
     for {
-      setup                         <- setupRSpace[Task](dataDir, mapSize, storeType)
+      shortLeashParams              <- ShortLeashParams[M](syncM)
+      blockTime                     <- BlockTime[M]()
+      errorLog                      <- ErrorLog.create[M](syncM)
+      setup                         <- setupRSpace[M](dataDir, mapSize, storeType)
       (context, space, replaySpace) = setup
-      (reducer, replayReducer) = {
-        lazy val replayDispatchTable: RhoDispatchMap =
+      res                           <- introduceSystemProcesses(space, replaySpace, procDefs)
+    } yield {
+      assert(res.forall(_.isEmpty))
+
+      implicit val ft: FunctorTell[M, Throwable] = errorLog
+
+      val (reducer, replayReducer) = {
+        lazy val replayDispatchTable: RhoDispatchMap[M] =
           dispatchTableCreator(
             replaySpace,
             replayDispatcher,
@@ -290,7 +285,7 @@ object Runtime {
             blockTime
           )
 
-        lazy val dispatchTable: RhoDispatchMap =
+        lazy val dispatchTable: RhoDispatchMap[M] =
           dispatchTableCreator(space, dispatcher, registry, shortLeashParams, blockTime)
 
         lazy val (dispatcher, reducer, registry) =
@@ -300,10 +295,8 @@ object Runtime {
           RholangAndScalaDispatcher.create(replaySpace, replayDispatchTable, urnMap)
         (reducer, replayReducer)
       }
-      res <- introduceSystemProcesses(space, replaySpace, procDefs)
-    } yield {
-      assert(res.forall(_.isEmpty))
-      new Runtime(
+
+      new Runtime[M](
         reducer,
         replayReducer,
         space,
@@ -316,8 +309,9 @@ object Runtime {
     }
   }
 
-  def injectEmptyRegistryRoot[F[_]](space: RhoISpace[F], replaySpace: RhoReplayISpace[F])(
-      implicit F: Sync[F]
+  def injectEmptyRegistryRoot[F[_]: Sync](
+      space: RhoISpace[F],
+      replaySpace: RhoReplayISpace[F]
   ): F[Unit] = {
     // This random value stays dead in the tuplespace, so we can have some fun.
     // This is from Jeremy Bentham's "Defence of Usury"
@@ -326,33 +320,36 @@ object Runtime {
         "for what rate of interest is there that can naturally be more proper than another?")
         .getBytes()
     )
-    implicit val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
+    implicit val MATCH_UNLIMITED_PHLOS: Match[
+      BindPattern,
+      errors.OutOfPhlogistonsError.type,
+      ListParWithRandom,
+      ListParWithRandomAndPhlos
+    ] = matchListPar(Cost(Integer.MAX_VALUE))
     for {
       spaceResult <- space.produce(
                       Registry.registryRoot,
                       ListParWithRandom(Seq(Registry.emptyMap), rand),
-                      false,
-                      0
+                      persist = false
                     )
       replayResult <- replaySpace.produce(
                        Registry.registryRoot,
                        ListParWithRandom(Seq(Registry.emptyMap), rand),
-                       false,
-                       0
+                       persist = false
                      )
       _ <- spaceResult match {
             case Right(None) =>
               replayResult match {
-                case Right(None) => F.unit
+                case Right(None) => Sync[F].unit
                 case Right(Some(_)) =>
-                  F.raiseError(
-                    new SetupError("Registry insertion in replay fired continuation.")
+                  Sync[F].raiseError(
+                    SetupError("Registry insertion in replay fired continuation.")
                   )
-                case Left(err) => F.raiseError(err)
+                case Left(err) => Sync[F].raiseError(err)
               }
             case Right(Some(_)) =>
-              F.raiseError(new SetupError("Registry insertion fired continuation."))
-            case Left(err) => F.raiseError(err)
+              Sync[F].raiseError(SetupError("Registry insertion fired continuation."))
+            case Left(err) => Sync[F].raiseError(err)
           }
     } yield ()
   }
@@ -384,7 +381,7 @@ object Runtime {
                         ListParWithRandomAndPhlos,
                         TaggedContinuation
                       ](context, Branch.REPLAY)
-      } yield ((context, space, replaySpace))
+      } yield (context, space, replaySpace)
     storeType match {
       case InMem =>
         createSpace(Context.createInMemory())
@@ -392,7 +389,7 @@ object Runtime {
         if (Files.notExists(dataDir)) {
           Files.createDirectories(dataDir)
         }
-        createSpace(Context.create(dataDir, mapSize, true))
+        createSpace(Context.create(dataDir, mapSize, noTls = true))
       case Mixed =>
         if (Files.notExists(dataDir)) {
           Files.createDirectories(dataDir)

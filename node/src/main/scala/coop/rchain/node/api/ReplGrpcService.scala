@@ -1,44 +1,20 @@
 package coop.rchain.node.api
 
-import coop.rchain.node.diagnostics
-import coop.rchain.p2p.effects._
-import io.grpc.{Server, ServerBuilder}
+import java.io.{Reader, StringReader}
 
-import scala.concurrent.Future
-import cats._
-import cats.data._
-import cats.implicits._
-import com.google.protobuf.empty.Empty
-import coop.rchain.casper.MultiParentCasper
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.protocol.{Deploy, DeployData, DeployServiceGrpc, DeployServiceResponse}
-import coop.rchain.casper.util.rholang.InterpreterUtil
-import coop.rchain.catscontrib._
-import Catscontrib._
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.Par
+import coop.rchain.node.Effect
 import coop.rchain.node.model.repl._
-import coop.rchain.node.model.diagnostics._
-import coop.rchain.rholang.interpreter.{RholangCLI, Runtime}
+import coop.rchain.rholang.interpreter.Interpreter._
+import coop.rchain.rholang.interpreter.{Runtime, _}
+import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import monix.eval.Task
 import monix.execution.Scheduler
-import com.google.protobuf.ByteString
-import java.io.{Reader, StringReader}
+import coop.rchain.node._
 
-import coop.rchain.casper.api.BlockAPI
-import coop.rchain.node.diagnostics.{JvmMetrics, NodeMetrics}
-import coop.rchain.rholang.interpreter.errors.InterpreterError
-import coop.rchain.comm.transport._
-import coop.rchain.comm.discovery._
-import coop.rchain.shared._
-import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter._
-import Interpreter._
-import coop.rchain.rholang.interpreter.accounting.CostAccount
-import storage.StoragePrinter
-
-private[api] class ReplGrpcService(runtime: Runtime, worker: Scheduler) extends ReplGrpcMonix.Repl {
+private[api] class ReplGrpcService(runtime: Runtime[Effect], worker: Scheduler)
+    extends ReplGrpcMonix.Repl {
 
   def exec(reader: Reader): Task[ReplResponse] =
     Task
@@ -51,7 +27,7 @@ private[api] class ReplGrpcService(runtime: Runtime, worker: Scheduler) extends 
             case th: Throwable       => Task.now(s"Error: $th")
           }
         case Right(term) =>
-          runEvaluate(runtime, term).attempt.map {
+          runEvaluate(runtime, term).value.map {
             case Left(ex) => s"Caught boxed exception: $ex"
             case Right(EvaluateResult(cost, errors)) =>
               val errorStr =
@@ -76,9 +52,9 @@ private[api] class ReplGrpcService(runtime: Runtime, worker: Scheduler) extends 
   def eval(request: EvalRequest): Task[ReplResponse] =
     defer(exec(new StringReader(request.program)))
 
-  def runEvaluate(runtime: Runtime, term: Par): Task[EvaluateResult] =
+  def runEvaluate(runtime: Runtime[Effect], term: Par): Effect[EvaluateResult] =
     for {
-      _      <- Task.now(printNormalizedTerm(term))
+      _      <- Task.now(printNormalizedTerm(term)).toEffect
       result <- evaluate(runtime, term)
     } yield result
 

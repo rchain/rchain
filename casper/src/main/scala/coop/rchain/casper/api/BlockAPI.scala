@@ -9,28 +9,19 @@ import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper._
-import coop.rchain.casper.util.rholang.InterpreterUtil
+import coop.rchain.casper.util.{EventConverter, ProtoUtil}
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.models.{BindPattern, Par}
-import coop.rchain.models.rholang.sorter.Sortable
-import coop.rchain.rspace.{Serialize, StableHashProvider}
-import coop.rchain.rspace.trace.{COMM, Consume, Produce}
-import coop.rchain.shared.{Log, SyncLock}
-import coop.rchain.models.serialization.implicits.mkProtobufInstance
-import coop.rchain.rholang.interpreter.{PrettyPrinter => RholangPrettyPrinter}
+import coop.rchain.models.Par
 import coop.rchain.models.rholang.sorter.Sortable._
-import monix.execution.Scheduler
+import coop.rchain.models.serialization.implicits.mkProtobufInstance
+import coop.rchain.rspace.trace.{COMM, Consume, Produce}
+import coop.rchain.rspace.{Serialize, StableHashProvider}
+import coop.rchain.shared.{Log, SyncLock}
 import scodec.Codec
 
 import scala.collection.immutable
-import coop.rchain.catscontrib._
-import coop.rchain.casper.util.{EventConverter, ProtoUtil}
-import coop.rchain.casper._
-import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
-import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.rholang.InterpreterUtil
+import scala.language.higherKinds
 
 object BlockAPI {
 
@@ -86,7 +77,7 @@ object BlockAPI {
   def getListeningNameDataResponse[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int,
       listeningName: Par
-  )(implicit scheduler: Scheduler): F[ListeningNameDataResponse] = {
+  ): F[ListeningNameDataResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F], channelCodec: Codec[Par]) =
       for {
         mainChain           <- getMainChainFromTip[F](depth)
@@ -118,7 +109,7 @@ object BlockAPI {
   def getListeningNameContinuationResponse[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int,
       listeningNames: Seq[Par]
-  )(implicit scheduler: Scheduler): F[ListeningNameContinuationResponse] = {
+  ): F[ListeningNameContinuationResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F], channelCodec: Codec[Par]) =
       for {
         mainChain           <- getMainChainFromTip[F](depth)
@@ -159,16 +150,16 @@ object BlockAPI {
     } yield mainChain
 
   private def getDataWithBlockInfo[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[F],
       sortedListeningName: Par,
       block: BlockMessage
-  )(implicit channelCodec: Codec[Par], scheduler: Scheduler): F[Option[DataWithBlockInfo]] =
+  )(implicit channelCodec: Codec[Par]): F[Option[DataWithBlockInfo]] =
     if (isListeningNameReduced(block, immutable.Seq(sortedListeningName))) {
       val stateHash =
         ProtoUtil.tuplespace(block).get
-      val data =
-        runtimeManager.getData(stateHash, sortedListeningName)
+
       for {
+        data      <- runtimeManager.getData(stateHash, sortedListeningName)
         blockInfo <- getBlockInfoWithoutTuplespace[F](block)
       } yield Option[DataWithBlockInfo](DataWithBlockInfo(data, Some(blockInfo)))
     } else {
@@ -176,22 +167,22 @@ object BlockAPI {
     }
 
   private def getContinuationsWithBlockInfo[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[F],
       sortedListeningNames: immutable.Seq[Par],
       block: BlockMessage
   )(
-      implicit channelCodec: Codec[Par],
-      scheduler: Scheduler
+      implicit channelCodec: Codec[Par]
   ): F[Option[ContinuationsWithBlockInfo]] =
     if (isListeningNameReduced(block, sortedListeningNames)) {
       val stateHash =
         ProtoUtil.tuplespace(block).get
-      val continuations: Seq[(Seq[BindPattern], Par)] =
-        runtimeManager.getContinuation(stateHash, sortedListeningNames)
-      val continuationInfos = continuations.map(
-        continuation => WaitingContinuationInfo(continuation._1, Some(continuation._2))
-      )
+
       for {
+        continuations <- runtimeManager.getContinuation(stateHash, sortedListeningNames)
+        continuationInfos = continuations.map(
+          continuation => WaitingContinuationInfo(continuation._1, Some(continuation._2))
+        )
+
         blockInfo <- getBlockInfoWithoutTuplespace[F](block)
       } yield
         Option[ContinuationsWithBlockInfo](
@@ -230,9 +221,7 @@ object BlockAPI {
   ): F[List[BlockInfoWithoutTuplespace]] = {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
-        dag         <- MultiParentCasper[F].blockDag
-        maxHeight   = dag.topoSort.length + dag.sortOffset - 1
-        startHeight = math.max(0, maxHeight - depth)
+        dag <- MultiParentCasper[F].blockDag
         flattenedBlockInfosUntilDepth <- getFlattenedBlockInfosUntilDepth[F](
                                           depth,
                                           dag
@@ -310,7 +299,7 @@ object BlockAPI {
       timestamp: Long
   ): F[Option[BlockMessage]] =
     blockHashes.toStream
-      .traverse(ProtoUtil.unsafeGetBlock[F](_))
+      .traverse(ProtoUtil.unsafeGetBlock[F])
       .map(blocks => blocks.find(ProtoUtil.containsDeploy(_, user, timestamp)))
 
   def showBlock[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](

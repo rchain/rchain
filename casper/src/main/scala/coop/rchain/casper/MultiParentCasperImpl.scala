@@ -1,12 +1,12 @@
 package coop.rchain.casper
 
+import cats.Applicative
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
-import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{BlockMetadata, BlockStore}
 import coop.rchain.blockstorage.util.TopologicalSortUtil
+import coop.rchain.blockstorage.{BlockMetadata, BlockStore}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util._
@@ -19,23 +19,20 @@ import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.shared._
-import monix.execution.Scheduler
 import monix.execution.atomic.AtomicAny
-import coop.rchain.shared.AttemptOps._
-import coop.rchain.catscontrib.TaskContrib._
 
 import scala.collection.immutable.HashSet
 import scala.collection.mutable
+import scala.language.higherKinds
 
 class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
-    runtimeManager: RuntimeManager,
+    runtimeManager: RuntimeManager[F],
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
     initialDag: BlockDag,
     postGenesisStateHash: StateHash,
     shardId: String
-)(implicit scheduler: Scheduler)
-    extends MultiParentCasper[F] {
+) extends MultiParentCasper[F] {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
@@ -215,7 +212,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
    *  produced (no deploys, already processing, no validator id)
    */
   def createBlock: F[CreateBlockStatus] = validatorId match {
-    case Some(vId @ ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
+    case Some(_ @ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
       for {
         dag              <- blockDag
         orderedHeads     <- estimator(dag)
@@ -289,24 +286,30 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                          )
                        case _ => ().pure[F]
                      }
-                     .map(_ => {
+                     .flatMap(_ => {
                        val maxBlockNumber: Long =
                          p.foldLeft(-1L) {
                            case (acc, block) => math.max(acc, blockNumber(block))
                          }
 
-                       val newBonds = runtimeManager.computeBonds(computedStateHash)
-                       val postState = RChainState()
-                         .withTuplespace(computedStateHash)
-                         .withBonds(newBonds)
-                         .withBlockNumber(maxBlockNumber + 1)
+                       runtimeManager
+                         .computeBonds(computedStateHash)
+                         .map {
+                           newBonds =>
+                             val postState = RChainState()
+                               .withTuplespace(computedStateHash)
+                               .withBonds(newBonds)
+                               .withBlockNumber(maxBlockNumber + 1)
 
-                       val body = Body()
-                         .withPostState(postState)
-                         .withDeploys(persistableDeploys.map(ProcessedDeployUtil.fromInternal))
-                       val header = blockHeader(body, p.map(_.blockHash), version, now)
-                       val block  = unsignedBlockProto(body, header, justifications, shardId)
-                       CreateBlockStatus.created(block)
+                             val body = Body()
+                               .withPostState(postState)
+                               .withDeploys(
+                                 persistableDeploys.map(ProcessedDeployUtil.fromInternal)
+                               )
+                             val header = blockHeader(body, p.map(_.blockHash), version, now)
+                             val block  = unsignedBlockProto(body, header, justifications, shardId)
+                             CreateBlockStatus.created(block)
+                         }
                      })
                }
     } yield result
@@ -613,7 +616,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
       }
     )
 
-  def getRuntimeManager: F[Option[RuntimeManager]] = Applicative[F].pure(Some(runtimeManager))
+  def getRuntimeManager: F[Option[RuntimeManager[F]]] = Applicative[F].pure(Some(runtimeManager))
 
   def fetchDependencies: F[Unit] =
     for {
