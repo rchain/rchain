@@ -4,7 +4,7 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, 
 import java.nio.file.{Files, Path}
 
 import cats.Id
-import cats.effect.Sync
+import cats.effect.{ContextShift, Sync}
 import cats.implicits._
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.rspace.ISpace.IdISpace
@@ -12,6 +12,7 @@ import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Language.ignore
 import coop.rchain.rspace.util._
+import scala.concurrent.ExecutionContext
 import scodec.bits.ByteVector
 
 import scala.collection.immutable.Seq
@@ -84,6 +85,12 @@ object AddressBookExample {
   object implicits {
 
     implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+
+    implicit val contextShiftId: ContextShift[Id] =
+      new ContextShift[Id] {
+        def shift: Id[Unit]                                   = ???
+        def evalOn[A](ec: ExecutionContext)(fa: Id[A]): Id[A] = fa
+      }
 
     /* Now I will troll Greg... */
 

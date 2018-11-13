@@ -1398,7 +1398,7 @@ trait IdTests[C, P, A, R, K] extends StorageTestsBase[Id, C, P, A, R, K] {
   override implicit val syncF: Sync[Id]   = coop.rchain.catscontrib.effect.implicits.syncId
   override implicit val monadF: Monad[Id] = syncF
   override implicit val contextShiftF: ContextShift[Id] =
-    coop.rchain.catscontrib.effect.implicits.contextShiftId
+    coop.rchain.rspace.test.contextShiftId
 
   override def run[RES](f: Id[RES]): RES = f
 }

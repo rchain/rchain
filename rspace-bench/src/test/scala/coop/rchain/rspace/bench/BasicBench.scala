@@ -51,7 +51,7 @@ object BasicBench {
 
     implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
     implicit val contextShiftF: ContextShift[Id] =
-      coop.rchain.catscontrib.effect.implicits.contextShiftId
+      coop.rchain.rspace.test.contextShiftId
 
     private val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
 

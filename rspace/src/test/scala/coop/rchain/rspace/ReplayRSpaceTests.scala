@@ -862,7 +862,7 @@ trait ReplayRSpaceTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with O
 
   implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
   implicit val contextShiftF: ContextShift[Id] =
-    coop.rchain.catscontrib.effect.implicits.contextShiftId
+    coop.rchain.rspace.test.contextShiftId
 
   override def withFixture(test: NoArgTest): Outcome = {
     logger.debug(s"Test: ${test.name}")
@@ -893,7 +893,7 @@ trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, 
 
     implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
     implicit val contextShiftF: ContextShift[Id] =
-      coop.rchain.catscontrib.effect.implicits.contextShiftId
+      coop.rchain.rspace.test.contextShiftId
 
     val dbDir       = Files.createTempDirectory("rchain-storage-test-")
     val context     = Context.create[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
@@ -925,7 +925,7 @@ trait MixedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C,
 
     implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
     implicit val contextShiftF: ContextShift[Id] =
-      coop.rchain.catscontrib.effect.implicits.contextShiftId
+      coop.rchain.rspace.test.contextShiftId
 
     val dbDir       = Files.createTempDirectory("rchain-storage-test-")
     val context     = Context.createMixed[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
@@ -981,7 +981,7 @@ trait FaultyStoreReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsB
   ): S = {
     implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
     implicit val contextShiftF: ContextShift[Id] =
-      coop.rchain.catscontrib.effect.implicits.contextShiftId
+      coop.rchain.rspace.test.contextShiftId
 
     val trieStore = InMemoryTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]]()
     val mainStore = InMemoryStore

@@ -49,8 +49,6 @@ class ReplayRSpaceBench {
 object ReplayRSpaceBench {
 
   import scala.concurrent.ExecutionContext.Implicits.global
-  implicit val contextShiftF: ContextShift[Id] =
-    coop.rchain.catscontrib.effect.implicits.contextShiftId
 
   abstract class ReplayRSpaceBenchState {
     var space: IdISpace[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor] = null

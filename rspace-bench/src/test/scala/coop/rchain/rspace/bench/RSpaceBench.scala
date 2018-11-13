@@ -24,9 +24,6 @@ import scala.concurrent.ExecutionContext.Implicits.global
 @org.openjdk.jmh.annotations.State(Scope.Thread)
 trait RSpaceBench {
 
-  implicit val contextShiftF: ContextShift[Id] =
-    coop.rchain.catscontrib.effect.implicits.contextShiftId
-
   var space: ISpace[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor] = null
 
   val channel  = Channel("friends#" + 1.toString)
