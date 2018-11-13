@@ -5,14 +5,12 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{accounting, ChargingReducer, ErrorLog, Runtime}
-import coop.rchain.rspace.internal.Datum
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 
 import scala.collection.immutable
@@ -25,10 +23,15 @@ class RuntimeManager[F[_]: Sync] private (
     val emptyStateHash: ByteString,
     runtimeContainer: SyncVar[Runtime[F]]
 ) {
+  import RuntimeManager.StateHash
 
   def captureResults(start: StateHash, deploy: Deploy, name: String = "__SCALA__"): F[Seq[Par]] =
+    captureResults(start, deploy, Par().withExprs(Seq(Expr(GString(name)))))
+
+  def captureResults(start: StateHash, deploy: Deploy, name: Par): F[Seq[Par]] =
     for {
-      runtime    <- Sync[F].delay { runtimeContainer.take() }
+
+      runtime    <- Sync[F].delay(runtimeContainer.take())
       evalResult <- newEval(deploy :: Nil, runtime, start)
 
       (_, Seq(processedDeploy)) = evalResult
@@ -39,10 +42,9 @@ class RuntimeManager[F[_]: Sync] private (
           else
             Sync[F].pure(())
 
-      returnChannel = Par().copy(exprs = Seq(Expr(GString(name))))
-      result        <- runtime.space.getData(returnChannel)
+      result <- runtime.space.getData(name)
 
-      _ <- Sync[F].delay { runtimeContainer.put(runtime) }
+      _ <- Sync[F].delay(runtimeContainer.put(runtime))
     } yield result.flatMap(_.a.pars)
 
   def replayComputeState(
@@ -289,5 +291,5 @@ object RuntimeManager {
       _                = assert(hash == replayHash)
       runtime          = new SyncVar[Runtime[F]]()
       _                = runtime.put(active)
-    } yield new RuntimeManager(hash, runtime)
+    } yield new RuntimeManager[F](hash, runtime)
 }
