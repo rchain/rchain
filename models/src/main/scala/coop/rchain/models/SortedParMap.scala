@@ -7,7 +7,9 @@ import scala.collection.immutable.ListMap
 
 final class SortedParMap private (ps: Map[Par, Par]) extends Iterable[(Par, Par)] {
 
-  lazy val sortedMap: ListMap[Par, Par] = ListMap(ps.sort: _*)
+  // TODO: Merge `sortedMap` and `sortedMapLookup` into one VectorMap once available
+  lazy val sortedMap: ListMap[Par, Par]   = ListMap(ps.sort: _*)
+  lazy val sortedMapLookup: Map[Par, Par] = ps.sort.toMap
 
   def +(kv: (Par, Par)): SortedParMap = SortedParMap(sortedMap + kv)
 
@@ -17,15 +19,15 @@ final class SortedParMap private (ps: Map[Par, Par]) extends Iterable[(Par, Par)
 
   def --(keys: GenTraversableOnce[Par]): SortedParMap = SortedParMap(sortedMap -- keys)
 
-  def apply(par: Par): Par = sortedMap(par)
+  def apply(par: Par): Par = sortedMapLookup(par)
 
-  def contains(par: Par): Boolean = sortedMap.contains(par)
+  def contains(par: Par): Boolean = sortedMapLookup.contains(par)
 
-  def empty: SortedParMap = SortedParMap(ListMap.empty[Par, Par])
+  def empty: SortedParMap = SortedParMap(Map.empty[Par, Par])
 
-  def get(key: Par): Option[Par] = sortedMap.get(key)
+  def get(key: Par): Option[Par] = sortedMapLookup.get(key)
 
-  def getOrElse(key: Par, default: Par): Par = sortedMap.getOrElse(key, default)
+  def getOrElse(key: Par, default: Par): Par = sortedMapLookup.getOrElse(key, default)
 
   def iterator: Iterator[(Par, Par)] = sortedMap.toIterator
 
@@ -37,6 +39,8 @@ final class SortedParMap private (ps: Map[Par, Par]) extends Iterable[(Par, Par)
     case spm: SortedParMap => spm.sortedMap == this.sortedMap
     case _                 => false
   }
+
+  override def hashCode(): Int = sortedMap.hashCode()
 }
 
 object SortedParMap {
