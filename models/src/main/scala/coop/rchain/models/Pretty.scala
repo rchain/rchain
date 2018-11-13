@@ -2,6 +2,7 @@ package coop.rchain.models
 import java.io.{PrintWriter, StringWriter}
 
 import com.google.protobuf.ByteString
+import coop.rchain.crypto.hash.Blake2b512Random
 import monix.eval.Coeval
 
 import scala.annotation.switch
@@ -48,6 +49,11 @@ trait PrettyInstances extends PrettyDerivation {
   implicit val PrettyByteString: Pretty[ByteString] = (value: ByteString, indentLevel: Int) =>
     "ByteString.copyFrom(Array[Byte]" + parenthesised(value.toByteArray, indentLevel) + ")"
 
+  implicit val PrettyBlake2b512Random: Pretty[Blake2b512Random] = fromWrapped(
+    Blake2b512Random.typeMapper.toBase,
+    x => s"Blake2b512Random.typeMapper.toCustom($x)"
+  )
+
   implicit def prettyArray[A: Pretty]: Pretty[Array[A]] = "Array" + parenthesised(_, _)
 
   implicit def prettySeq[A: Pretty]     = fromIterable[Seq[A], A]("Seq")
@@ -83,7 +89,13 @@ trait PrettyInstances extends PrettyDerivation {
     (value: Coeval[A], indentLevel: Int) =>
       s"Coeval.now(${Pretty[A].pretty(value.value, indentLevel)}) /* was Coeval.${value.getClass.getSimpleName} */"
 
-  implicit val PrettyPar: Pretty[Par] = gen[Par]
+  implicit val PrettyPar: Pretty[Par]   = gen[Par]
+  implicit val PrettyExpr               = gen[Expr]
+  implicit val PrettyConnective         = gen[Connective]
+  implicit val PrettyReceive            = gen[Receive]
+  implicit val PrettyReceiveBind        = gen[ReceiveBind]
+  implicit val PrettyTaggedContinuation = gen[TaggedContinuation]
+  implicit val PrettyParWithRandom      = gen[ParWithRandom]
 
   def singleLine[A](print: A => String): Pretty[A] = (value: A, indentLevel: Int) => print(value)
 
