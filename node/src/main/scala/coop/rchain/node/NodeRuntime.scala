@@ -266,7 +266,6 @@ class NodeRuntime private[node] (
   private def rpConf(local: PeerNode, bootstrapNode: Option[PeerNode]) =
     RPConf(local, bootstrapNode, defaultTimeout, rpClearConnConf)
 
-
   /**
     * Main node entry. It will:
     * 1. set up configurations
@@ -317,12 +316,18 @@ class NodeRuntime private[node] (
       blockMap,
       Metrics.eitherT(Monad[Task], metrics)
     )
-    _       <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
-    oracle  = SafetyOracle.turanOracle[Effect](Monad[Effect])
-    runtime <- Runtime.create[Effect, Effect](storagePath, storageSize, storeType)(Sync[Effect], Parallel.identity[Effect])
+    _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
+    oracle = SafetyOracle.turanOracle[Effect](Monad[Effect])
+    runtime <- Runtime.create[Effect, Effect](storagePath, storageSize, storeType)(
+                Sync[Effect],
+                Parallel.identity[Effect]
+              )
     _ <- Runtime
           .injectEmptyRegistryRoot[Effect](runtime.space, runtime.replaySpace)
-    casperRuntime  <- Runtime.create[Effect, Effect](casperStoragePath, storageSize, storeType)(Sync[Effect], Parallel.identity[Effect])
+    casperRuntime <- Runtime.create[Effect, Effect](casperStoragePath, storageSize, storeType)(
+                      Sync[Effect],
+                      Parallel.identity[Effect]
+                    )
     runtimeManager <- RuntimeManager.fromRuntime[Effect](casperRuntime)
     casperPacketHandler <- CasperPacketHandler
                             .of[Effect](conf.casper, defaultTimeout, runtimeManager, _.value)(

@@ -10,6 +10,7 @@ import monix.eval.Task
 import scala.language.higherKinds
 
 package object node {
+
   /** Final Effect + helper methods */
   type CommErrT[F[_], A] = EitherT[F, CommError, A]
   type Effect[A]         = CommErrT[Task, A]
