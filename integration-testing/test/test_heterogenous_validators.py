@@ -55,7 +55,6 @@ def started_bonded_validator(system, bootstrap_node):
         'bonded_validator',
         system.validators_data.bonds_file,
         system.config.rnode_timeout,
-        None, # allowed_peers
         bootstrap_node,
         BONDED_VALIDATOR_KEYS,
     )
@@ -74,7 +73,6 @@ def started_joining_validator(system, bootstrap_node):
         'joining_validator',
         system.validators_data.bonds_file,
         system.config.rnode_timeout,
-        None, # allowed_peers
         bootstrap_node,
         JOINING_VALIDATOR_KEYS,
     )
@@ -94,7 +92,6 @@ def started_unbonded_validator(system, bootstrap_node):
         'unbonded_validator',
         system.validators_data.bonds_file,
         system.config.rnode_timeout,
-        None, # allowed_peers
         bootstrap_node,
         UNBONDED_VALIDATOR_KEYS,
     )

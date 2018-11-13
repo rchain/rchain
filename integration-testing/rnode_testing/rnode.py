@@ -246,7 +246,7 @@ def make_peer_name(network, i):
     return f"peer{i}.{network}"
 
 
-def create_peer(docker_client, network, name, bonds_file, rnode_timeout, allowed_peers, bootstrap, key_pair, image=DEFAULT_IMAGE, memory="1024m", cpuset_cpus="0"):
+def create_peer(docker_client, network, name, bonds_file, rnode_timeout, bootstrap, key_pair, allowed_peers=None, image=DEFAULT_IMAGE, memory="1024m", cpuset_cpus="0"):
     name = make_peer_name(network, name)
 
     bootstrap_address = bootstrap.get_rnode_address()
@@ -285,9 +285,9 @@ def create_peer_nodes(docker_client,
             i,
             bonds_file,
             rnode_timeout,
-            allowed_peers,
             bootstrap,
             key_pair,
+            allowed_peers=allowed_peers,
             image=image,
             memory=memory,
             cpuset_cpus=cpuset_cpus,
