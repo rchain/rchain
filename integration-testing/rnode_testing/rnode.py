@@ -232,16 +232,17 @@ def create_node_container(
     return Node(container, deploy_dir, docker_client, rnode_timeout, network)
 
 
-def create_bootstrap_node(docker_client,
-                          network,
-                          bonds_file,
-                          key_pair,
-                          rnode_timeout,
-                          allowed_peers=None,
-                          image=DEFAULT_IMAGE,
-                          memory="1024m",
-                          cpuset_cpus="0"):
-
+def create_bootstrap_node(
+    docker_client,
+    network,
+    bonds_file,
+    key_pair,
+    rnode_timeout,
+    allowed_peers=None,
+    image=DEFAULT_IMAGE,
+    memory="1024m",
+    cpuset_cpus="0",
+):
     key_file = resources.get_resource_path("bootstrap_certificate/node.key.pem")
     cert_file = resources.get_resource_path("bootstrap_certificate/node.certificate.pem")
 
@@ -281,7 +282,20 @@ def make_peer_name(network, i):
     return f"peer{i}.{network}"
 
 
-def create_peer(docker_client, network, name, bonds_file, rnode_timeout, bootstrap, key_pair, allowed_peers=None, image=DEFAULT_IMAGE, memory="1024m", cpuset_cpus="0"):
+def create_peer(
+    *,
+    docker_client,
+    network,
+    name,
+    bonds_file,
+    rnode_timeout,
+    bootstrap,
+    key_pair,
+    allowed_peers=None,
+    image=DEFAULT_IMAGE,
+    memory="1024m",
+    cpuset_cpus="0",
+):
     name = make_peer_name(network, name)
 
     bootstrap_address = bootstrap.get_rnode_address()
@@ -327,13 +341,13 @@ def create_peer_nodes(docker_client,
     result = []
     for i, key_pair in enumerate(key_pairs):
         peer_node = create_peer(
-            docker_client,
-            network,
-            i,
-            bonds_file,
-            rnode_timeout,
-            bootstrap,
-            key_pair,
+            docker_client=docker_client,
+            network=network,
+            name=i,
+            bonds_file=bonds_file,
+            rnode_timeout=rnode_timeout,
+            bootstrap=bootstrap,
+            key_pair=key_pair,
             allowed_peers=allowed_peers,
             image=image,
             memory=memory,
