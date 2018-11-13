@@ -46,8 +46,8 @@ class NodeRuntime private[node] (
     scheduler: Scheduler
 )(implicit log: Log[Task]) {
 
-  private val loopScheduler           = Scheduler.fixedPool("loop", 4)
-  private val grpcScheduler           = Scheduler.cached("grpc-io", 4, 64)
+  private[this] val loopScheduler     = Scheduler.fixedPool("loop", 4)
+  private[this] val grpcScheduler     = Scheduler.cached("grpc-io", 4, 64)
   private[this] val blockingScheduler = Scheduler.forkJoin(parallelism = 32, maxThreads = 128)
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
