@@ -233,6 +233,7 @@ def create_node_container(
 
 
 def create_bootstrap_node(
+    *,
     docker_client,
     network,
     bonds_file,
@@ -359,7 +360,13 @@ def create_peer_nodes(docker_client,
 
 @contextmanager
 def create_bootstrap(docker, docker_network, timeout, validators_data):
-    node = create_bootstrap_node(docker, docker_network, validators_data.bonds_file, validators_data.bootstrap_keys, timeout)
+    node = create_bootstrap_node(
+        docker_client=docker,
+        network=docker_network,
+        bonds_file=validators_data.bonds_file,
+        key_pair=validators_data.bootstrap_keys,
+        rnode_timeout=timeout,
+    )
     try:
         yield node
     finally:
