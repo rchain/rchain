@@ -1,6 +1,6 @@
 package coop.rchain.casper.util
 
-import cats.effect.{Resource, Sync}
+import cats.effect.{ContextShift, Resource, Sync}
 import cats.implicits._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.ProtoUtil.{deployDataToDeploy, sourceDeploy}
@@ -13,6 +13,8 @@ import java.io.PrintWriter
 import java.nio.file.{Files, Path}
 
 import cats.Parallel
+
+import scala.concurrent.ExecutionContext
 import scala.language.higherKinds
 
 object BondingUtil {
@@ -172,7 +174,13 @@ object BondingUtil {
 
   def makeRuntimeResource[M[_], F[_]](
       runtimeDirResource: Resource[M, Path]
-  )(implicit syncM: Sync[M], parallelMF: Parallel[M, F]): Resource[M, Runtime[M]] =
+  )(
+      implicit
+      syncM: Sync[M],
+      parallelMF: Parallel[M, F],
+      contextShift: ContextShift[M],
+      scheduler: ExecutionContext
+  ): Resource[M, Runtime[M]] =
     runtimeDirResource.flatMap(
       runtimeDir =>
         Resource
@@ -192,7 +200,13 @@ object BondingUtil {
       amount: Long,
       secKey: String,
       pubKey: String
-  )(implicit syncM: Sync[M], parallelMF: Parallel[M, F]): M[Unit] = {
+  )(
+      implicit
+      syncM: Sync[M],
+      parallelMF: Parallel[M, F],
+      contextShift: ContextShift[M],
+      executionContext: ExecutionContext
+  ): M[Unit] = {
     val runtimeDirResource     = makeRuntimeDir[M]
     val runtimeResource        = makeRuntimeResource[M, F](runtimeDirResource)
     val runtimeManagerResource = makeRuntimeManagerResource[M](runtimeResource)
@@ -214,7 +228,13 @@ object BondingUtil {
       sigAlgorithm: String,
       secKey: String,
       pubKey: String
-  )(implicit syncM: Sync[M], parallelMF: Parallel[M, F]): M[Unit] = {
+  )(
+      implicit
+      syncM: Sync[M],
+      parallelMF: Parallel[M, F],
+      contextShift: ContextShift[M],
+      executionContext: ExecutionContext
+  ): M[Unit] = {
     val runtimeDirResource     = makeRuntimeDir[M]
     val runtimeResource        = makeRuntimeResource[M, F](runtimeDirResource)
     val runtimeManagerResource = makeRuntimeManagerResource[M](runtimeResource)

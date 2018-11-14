@@ -328,11 +328,21 @@ class NodeRuntime private[node] (
       blockMap,
       Metrics.eitherT(Monad[Task], metrics)
     )
-    _       <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
-    oracle  = SafetyOracle.turanOracle[Effect](Monad[Effect])
-    runtime <- Runtime.create(storagePath, storageSize, storeType)(Sync[Effect], Parallel.identity[Effect], ContextShift[Effect], rspaceScheduler)
+    _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
+    oracle = SafetyOracle.turanOracle[Effect](Monad[Effect])
+    runtime <- Runtime.create[Effect, Effect](storagePath, storageSize, storeType)(
+                Sync[Effect],
+                Parallel.identity[Effect],
+                implicitly,
+                rspaceScheduler
+              )
     _ <- Runtime.injectEmptyRegistryRoot[Effect](runtime.space, runtime.replaySpace)
-    casperRuntime  <- Runtime.create[Effect,Effect](casperStoragePath, storageSize, storeType)(Sync[Effect], Parallel.identity[Effect], ContextShift[Effect], rspaceScheduler)
+    casperRuntime <- Runtime.create[Effect, Effect](casperStoragePath, storageSize, storeType)(
+                      Sync[Effect],
+                      Parallel.identity[Effect],
+                      implicitly,
+                      rspaceScheduler
+                    )
     runtimeManager <- RuntimeManager.fromRuntime[Effect](casperRuntime)(Sync[Effect])
 
     casperPacketHandler <- CasperPacketHandler
