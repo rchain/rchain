@@ -60,7 +60,7 @@ in {
                       for (function <- @functionCh) {
                         @functionCh!(*function) | //put back for possible re-use
                         new result in {
-                          runWithTimeout!(*function, 1000, *result) |
+                          runWithTimeout!(*function, 2000, *result) |
                           for(@r <- result) {
                             match r {
                               [result] => {
