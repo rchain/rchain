@@ -61,18 +61,7 @@ In the RHO calculus we don't have to worry about distinguishing the top level fr
 
 Patterns follow the same rules as channels in terms of equivalence. In the case of -arity matching, joins, logical connectives, etc. the rules apply to each name pattern individually.
 
-Here we need to treat statements that are not on the top level. We reemphasize that the rules for name equivalences described in the last section only apply on the top level. When we are matching *patterns within patterns*, these equivalence rules do not apply and we check for an exact text match, **excluding** alpha equivalence. This means that the following two channels are *not* equivalent:
-
-
-* `@for(  @for( @{ Nil | x } <- @Nil ){ Nil } <- @Nil ){ Nil }}`
-* `@for(  @for( @{ x | Nil } <- @Nil ){ Nil } <- @Nil ){ Nil }}`.
-
-Note that while the patterns `@{ x | Nil }}` and `@{ Nil | x }` are equivalent at the top level, the patterns
-
-* `@for( @{ Nil | x } <- @Nil ){ z }`
-* `@for( @{ x | Nil } <- @Nil ){ z }`
-
-are *not*. When we are matching *patterns within patterns*, these equivalence rules do not apply and we check for an exact text match, up to alpha equivalence. The principle is that you can only look through the looking glass once: when checking name equivalence or matching a pattern to a name or a process, if a given pattern is part of a larger pattern, there has to be an exact match.
+Here we need to treat statements that are not on the top level. We reemphasize that the rules for name equivalences described in the last section only apply on the top level. When we are matching *patterns within patterns*, these equivalence rules do not apply and we check for an exact text match after normalizing, **excluding** alpha equivalence. The principle is that you can only look through the looking glass once: when checking name equivalence or matching a pattern to a name or a process, if a given pattern is part of a larger pattern, there has to be an exact match.
 
 Furthermore, we can't bind variables to parts of patterns. For example, the following send/receive will not match:
 
