@@ -46,8 +46,16 @@ class NodeRuntime private[node] (
     scheduler: Scheduler
 )(implicit log: Log[Task]) {
 
-  private val loopScheduler = Scheduler.fixedPool("loop", 4)
-  private val grpcScheduler = Scheduler.cached("grpc-io", 4, 64)
+  private[this] val loopScheduler       = Scheduler.fixedPool("loop", 4)
+  private[this] val grpcScheduler       = Scheduler.cached("grpc-io", 4, 64)
+  private[this] val availableProcessors = java.lang.Runtime.getRuntime.availableProcessors()
+  // TODO: make it configurable
+  // TODO: fine tune this
+  private[this] val rspaceScheduler = Scheduler.forkJoin(
+    name = "rspace",
+    parallelism = availableProcessors * 2,
+    maxThreads = availableProcessors * 2
+  )
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
@@ -322,11 +330,11 @@ class NodeRuntime private[node] (
     )
     _       <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
     oracle  = SafetyOracle.turanOracle[Effect](Monad[Effect])
-    runtime <- Runtime.create[Effect, Effect](storagePath, storageSize, storeType)
-    _ <- Runtime
-          .injectEmptyRegistryRoot[Effect](runtime.space, runtime.replaySpace)
-    casperRuntime  <- Runtime.create[Effect, Effect](casperStoragePath, storageSize, storeType)
-    runtimeManager <- RuntimeManager.fromRuntime[Effect](casperRuntime)
+    runtime <- Runtime.create(storagePath, storageSize, storeType)(Sync[Effect], Parallel.identity[Effect], ContextShift[Effect], rspaceScheduler)
+    _ <- Runtime.injectEmptyRegistryRoot[Effect](runtime.space, runtime.replaySpace)
+    casperRuntime  <- Runtime.create[Effect,Effect](casperStoragePath, storageSize, storeType)(Sync[Effect], Parallel.identity[Effect], ContextShift[Effect], rspaceScheduler)
+    runtimeManager <- RuntimeManager.fromRuntime[Effect](casperRuntime)(Sync[Effect])
+
     casperPacketHandler <- CasperPacketHandler
                             .of[Effect](conf.casper, defaultTimeout, runtimeManager, _.value)(
                               labEff,

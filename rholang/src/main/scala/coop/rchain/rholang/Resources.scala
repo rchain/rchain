@@ -4,7 +4,7 @@ import java.nio.file.{Files, Path}
 
 import cats.{Applicative, Parallel}
 import cats.effect.ExitCase.Error
-import cats.effect.{Resource, Sync}
+import cats.effect.{ContextShift, Resource, Sync}
 import com.typesafe.scalalogging.Logger
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime
@@ -16,6 +16,7 @@ import coop.rchain.shared.StoreType
 import monix.eval.Task
 import monix.execution.Scheduler
 
+import scala.concurrent.ExecutionContext
 import scala.reflect.io.Directory
 
 object Resources {
@@ -35,12 +36,13 @@ object Resources {
         })
     )
 
-  def mkRhoISpace[F[_]: Sync](
+  def mkRhoISpace[F[_]: Sync: ContextShift](
       prefix: String = "",
       branch: String = "test",
       mapSize: Long = 1024L * 1024L * 4
   ): Resource[F, RhoISpace[F]] = {
     import coop.rchain.rholang.interpreter.storage.implicits._
+    import scala.concurrent.ExecutionContext.Implicits.global
 
     def mkRspace(dbDir: Path): F[RhoISpace[F]] = {
       val context: RhoContext = Context.create(dbDir, mapSize)
@@ -64,7 +66,12 @@ object Resources {
       prefix: String,
       storageSize: Long = 1024 * 1024,
       storeType: StoreType = StoreType.LMDB
-  )(implicit syncF: Sync[M], parallel: Parallel[M, F]): Resource[M, Runtime[M]] =
+  )(
+      implicit syncF: Sync[M],
+      parallel: Parallel[M, F],
+      contextShift: ContextShift[M],
+      executionContext: ExecutionContext
+  ): Resource[M, Runtime[M]] =
     mkTempDir[M](prefix)
       .flatMap { tmpDir =>
         Resource.make[M, Runtime[M]](Runtime.create[M, F](tmpDir, storageSize, storeType))(

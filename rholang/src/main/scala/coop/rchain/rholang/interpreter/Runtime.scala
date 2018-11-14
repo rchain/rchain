@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter
 
+import cats.effect.ContextShift
 import java.nio.file.{Files, Path}
 
 import cats.effect.Sync
@@ -24,7 +25,9 @@ import coop.rchain.rspace.pure.PureRSpace
 import coop.rchain.rspace.{Match, _}
 import coop.rchain.shared.StoreType
 import coop.rchain.shared.StoreType._
-
+import monix.eval.Task
+import monix.execution.Scheduler
+import scala.concurrent.ExecutionContext
 import scala.collection.immutable
 
 class Runtime[F[_]: Sync] private (
@@ -190,7 +193,9 @@ object Runtime {
   // TODO: remove default store type
   def create[M[_], F[_]](dataDir: Path, mapSize: Long, storeType: StoreType = LMDB)(
       implicit syncM: Sync[M],
-      parallelMF: Parallel[M, F]
+      parallelMF: Parallel[M, F],
+      contextShiftM: ContextShift[M],
+      scheduler: ExecutionContext
   ): M[Runtime[M]] = {
     def dispatchTableCreator(
         space: RhoISpace[M],
@@ -354,10 +359,8 @@ object Runtime {
     } yield ()
   }
 
-  def setupRSpace[F[_]: Sync](
-      dataDir: Path,
-      mapSize: Long,
-      storeType: StoreType
+  def setupRSpace[F[_]: Sync: ContextShift](dataDir: Path, mapSize: Long, storeType: StoreType)(
+      implicit executionContext: ExecutionContext
   ): F[(RhoContext, RhoISpace[F], RhoReplayISpace[F])] = {
     def createSpace(
         context: RhoContext

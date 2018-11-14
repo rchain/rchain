@@ -3,6 +3,7 @@ package coop.rchain.catscontrib.effect
 import cats._
 import cats.effect.ExitCase.{Completed, Error}
 import cats.effect._
+import scala.concurrent.ExecutionContext
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Promise}
