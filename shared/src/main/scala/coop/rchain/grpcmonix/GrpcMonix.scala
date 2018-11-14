@@ -7,8 +7,8 @@ import coop.rchain.shared.{Log, LogSource}
 
 import com.google.common.util.concurrent.ListenableFuture
 import io.grpc.stub.StreamObserver
-import monix.eval.{Callback, Task}
-import monix.execution.{Ack, Scheduler}
+import monix.eval.Task
+import monix.execution._
 import monix.execution.Ack.{Continue, Stop}
 import monix.reactive.Observable
 import monix.reactive.Observable.Operator
@@ -67,8 +67,8 @@ object GrpcMonix {
         }
     }
 
-  def grpcObserverToMonixCallback[T](observer: StreamObserver[T]): Callback[T] =
-    new Callback[T] {
+  def grpcObserverToMonixCallback[T](observer: StreamObserver[T]): Callback[Throwable, T] =
+    new Callback[Throwable, T] {
       override def onError(t: Throwable): Unit = observer.onError(t)
       override def onSuccess(value: T): Unit =
         try {

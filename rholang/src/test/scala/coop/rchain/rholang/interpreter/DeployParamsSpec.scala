@@ -56,7 +56,7 @@ class DeployParamsSpec extends fixture.FlatSpec with Matchers {
       _ <- shortLeashParams.setParams(empty, phloRate, empty, timestamp)
       _ <- runtime.reducer.eval(send)
     } yield ()
-    Await.result(task.runAsync, 3.seconds)
+    Await.result(task.runToFuture, 3.seconds)
     assertStoreContains(
       runtime.space.store,
       ackChannel,

@@ -121,6 +121,7 @@ pipeline:
       - email_username
       - email_password
       - email_recipients
+      - email_sender
     when:
       event: [ push, tag ]
       status: [ changed, failure ]

@@ -53,10 +53,10 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
         implicit casperRef: MultiParentCasperRef[Effect]
     ): Effect[(DeployServiceResponse, DeployServiceResponse)] = EitherT.liftF(
       for {
-        t1 <- (BlockAPI.deploy[Effect](deploys.head) *> BlockAPI.createBlock[Effect]).value.fork
+        t1 <- (BlockAPI.deploy[Effect](deploys.head) *> BlockAPI.createBlock[Effect]).value.start
         _  <- Time[Task].sleep(2.second)
         t2 <- (BlockAPI.deploy[Effect](deploys.last) *> BlockAPI
-               .createBlock[Effect]).value.fork //should fail because other not done
+               .createBlock[Effect]).value.start //should fail because other not done
         r1 <- t1.join
         r2 <- t2.join
       } yield (r1.right.get, r2.right.get)

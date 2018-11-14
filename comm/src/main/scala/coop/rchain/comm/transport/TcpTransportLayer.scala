@@ -121,29 +121,30 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
   ): Task[CommErr[Option[Protocol]]] =
     withClient(peer, enforce)(f).attempt.map(processResponse(peer, _))
 
-  def chunkIt(blob: Blob): Iterator[Chunk] = {
-    val raw      = blob.packet.content.toByteArray
-    val kb500    = 1024 * 500
-    val compress = raw.length > kb500
-    val content  = if (compress) raw.compress else raw
+  def chunkIt(blob: Blob): Task[Iterator[Chunk]] =
+    Task.delay {
+      val raw      = blob.packet.content.toByteArray
+      val kb500    = 1024 * 500
+      val compress = raw.length > kb500
+      val content  = if (compress) raw.compress else raw
 
-    def header: Chunk =
-      Chunk().withHeader(
-        ChunkHeader()
-          .withCompressed(compress)
-          .withDecompressedLength(raw.length)
-          .withSender(ProtocolHelper.node(blob.sender))
-          .withTypeId(blob.packet.typeId)
-      )
-    val buffer    = 2 * 1024 // 2 kbytes for protobuf related stuff
-    val chunkSize = maxMessageSize - buffer
-    def data: Iterator[Chunk] =
-      content.sliding(chunkSize, chunkSize).map { data =>
-        Chunk().withData(ChunkData().withContentData(ProtocolHelper.toProtocolBytes(data)))
-      }
+      def header: Chunk =
+        Chunk().withHeader(
+          ChunkHeader()
+            .withCompressed(compress)
+            .withDecompressedLength(raw.length)
+            .withSender(ProtocolHelper.node(blob.sender))
+            .withTypeId(blob.packet.typeId)
+        )
+      val buffer    = 2 * 1024 // 2 kbytes for protobuf related stuff
+      val chunkSize = maxMessageSize - buffer
+      def data: Iterator[Chunk] =
+        content.sliding(chunkSize, chunkSize).map { data =>
+          Chunk().withData(ChunkData().withContentData(ProtocolHelper.toProtocolBytes(data)))
+        }
 
-    Iterator(header) ++ data
-  }
+      Iterator(header) ++ data
+    }
 
   /**
     * This implmementation is temporary, it sequentially sends blob to each peers.

@@ -76,7 +76,7 @@ trait RSpaceBench {
       persist = true
     )
 
-    val results: IndexedSeq[Future[Unit]] = tasks.map(f => f.executeOn(dupePool).runAsync(dupePool))
+    val results: IndexedSeq[Future[Unit]] = tasks.map(f => f.executeOn(dupePool).runToFuture(dupePool))
 
     bh.consume(Await.ready(Future.sequence(results), Duration.Inf))
   }

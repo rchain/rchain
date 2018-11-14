@@ -39,7 +39,8 @@ class TcpServerObservable(
     val bufferTell        = buffer.LimitedBufferObservable.dropNew[ServerMessage](tellBufferSize)
     val bufferAsk         = buffer.LimitedBufferObservable.dropNew[ServerMessage](askBufferSize)
     val bufferBlobMessage = buffer.LimitedBufferObservable.dropNew[ServerMessage](blobBufferSize)
-    val merged            = Observable.merge(bufferTell, bufferAsk, bufferBlobMessage)(BackPressure(10))
+    val merged =
+      Observable(bufferTell, bufferAsk, bufferBlobMessage).mergeMap(identity)(BackPressure(10))
 
     val service = new RoutingGrpcMonix.TransportLayer {
 
