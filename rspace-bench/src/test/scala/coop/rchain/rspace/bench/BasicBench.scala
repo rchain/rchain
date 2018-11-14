@@ -3,7 +3,7 @@ package coop.rchain.rspace.bench
 import java.nio.file.{Files, Path}
 
 import cats.Id
-import cats.effect.Sync
+import cats.effect._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history.Branch
@@ -11,6 +11,8 @@ import coop.rchain.rspace.util._
 import coop.rchain.rspace.{LMDBStore, _}
 import org.openjdk.jmh.annotations.{Benchmark, Scope, State, TearDown}
 import coop.rchain.shared.PathOps.RichPath
+
+import scala.concurrent.ExecutionContext.Implicits.global
 
 class BasicBench {
 
@@ -48,6 +50,8 @@ object BasicBench {
   class BenchState {
 
     implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+    implicit val contextShiftF: ContextShift[Id] =
+      coop.rchain.rspace.test.contextShiftId
 
     private val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
 

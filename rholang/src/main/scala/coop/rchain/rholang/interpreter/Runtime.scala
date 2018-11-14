@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter
 
+import cats.effect.ContextShift
 import java.nio.file.{Files, Path}
 
 import cats.{Id, Monad}
@@ -30,6 +31,7 @@ import coop.rchain.shared.StoreType
 import coop.rchain.shared.StoreType._
 import monix.eval.Task
 import monix.execution.Scheduler
+import scala.concurrent.ExecutionContext
 
 class Runtime private (
     val reducer: ChargingReducer[Task],
@@ -357,11 +359,11 @@ object Runtime {
     } yield ()
   }
 
-  def setupRSpace[F[_]: Sync](
+  def setupRSpace[F[_]: Sync: ContextShift](
       dataDir: Path,
       mapSize: Long,
       storeType: StoreType
-  ): F[(RhoContext, RhoISpace[F], RhoReplayISpace[F])] = {
+  )(implicit scheduler: ExecutionContext): F[(RhoContext, RhoISpace[F], RhoReplayISpace[F])] = {
     def createSpace(
         context: RhoContext
     ): F[(RhoContext, RhoISpace[F], RhoReplayISpace[F])] =
