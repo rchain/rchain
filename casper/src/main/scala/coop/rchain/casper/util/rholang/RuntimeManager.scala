@@ -236,7 +236,6 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
               injResult <- injAttempt(deploy, runtime.replayReducer, runtime.errorLog)
               //TODO: compare replay deploy cost to given deploy cost
               (phlosLeft, errors) = injResult
-              cost                = phlosLeft.copy(cost = availablePhlos.value - phlosLeft.cost)
               cont <- DeployStatus.fromErrors(errors) match {
                        case int: InternalErrors => Task.now(Left(Some(deploy) -> int))
                        case replayStatus =>

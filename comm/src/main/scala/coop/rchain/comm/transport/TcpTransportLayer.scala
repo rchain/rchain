@@ -156,8 +156,10 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
           withClient(peer, enforce = false) { stub =>
             stub.stream(Observable.fromIterator(chunkIt(blob)))
           }.attempt.flatMap {
-            case Left(error) => log.debug(s"Error while streaming packet, error: $error")
-            case Right(_)    => Task.unit
+            case Left(error) =>
+              Task.now(error.printStackTrace) *> log
+                .debug(s"Error while streaming packet, error: $error")
+            case Right(_) => Task.unit
           }
       )
       .as(())
