@@ -15,13 +15,14 @@ object Futurable extends FuturableInstances {
 
 trait FuturableInstances extends FuturableInstances0 {
   implicit def taskFuturable(implicit scheduler: Scheduler): Futurable[Task] = new Futurable[Task] {
-    def toFuture[A](fa: Task[A]): Future[A] = fa.runAsync
+    def toFuture[A](fa: Task[A]): Future[A] = fa.runToFuture
   }
 }
 
 sealed trait FuturableInstances0 {
   implicit def eitherTFuturable[F[_]: Monad: Futurable, E](
-      implicit ec: ExecutionContext): Futurable[EitherT[F, E, ?]] =
+      implicit ec: ExecutionContext
+  ): Futurable[EitherT[F, E, ?]] =
     new Futurable[EitherT[F, E, ?]] {
       case class ToFutureException(e: E) extends RuntimeException
 

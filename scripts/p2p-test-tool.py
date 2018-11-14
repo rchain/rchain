@@ -10,6 +10,7 @@ import subprocess
 import argparse
 import docker
 import os
+import shutil
 import tempfile
 import requests
 import re
@@ -59,7 +60,7 @@ parser.add_argument("-n", "--network",
 parser.add_argument("--peer-command",
                     dest='peer_command',
                     type=str,
-                    default="run --bootstrap rnode://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.rchain.coop:40400",
+                    default="run --bootstrap rnode://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.rchain.coop?protocol=40400&discovery=40404",
                     help="peer container run command")
 parser.add_argument("-p", "--peers-amount",
                     dest='peer_amount',
@@ -113,7 +114,7 @@ parser.add_argument("-T", "--tests-to-run",
                     dest='tests_to_run',
                     type=str,
                     nargs='+',
-                    default=['count', 'eval', 'repl', 'propose', 'errors', 'RuntimeException'],
+                    default=['count', 'eval', 'propose', 'errors', 'RuntimeException'],
                     help="run these tests in this order")
 parser.add_argument("--thread-pool-size",
                     dest='thread_pool_size',
@@ -130,7 +131,8 @@ args = parser.parse_args()
 client = docker.from_env()
 RNODE_CMD = '/opt/docker/bin/rnode'
 # bonds_file = f'/tmp/bonds.{args.network}' alternate when dynamic bonds.txt creation/manpiulation file works
-bonds_file = os.path.dirname(os.path.realpath(__file__)) + '/demo-bonds.txt'
+src_bonds_file = os.path.dirname(os.path.realpath(__file__)) + '/demo-bonds.txt'
+bonds_file = f'/tmp/rnode_{args.network}_bonds.txt'
 container_bonds_file = f'{args.rnode_directory}/genesis/bonds.txt'
 
 
@@ -279,7 +281,7 @@ def test_propose(container):
         print(f"Loop number {i} of {args.propose_loop_amount} on {container.name}")
 
         # Deploy example contracts using 3 random example files
-        cmd = 'for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do echo "running deploy with ${i}"; /opt/docker/bin/rnode deploy --from "0x1" --phlo-limit 0 --phlo-price 0 --nonce 0 ${i}; done'
+        cmd = 'for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do echo "running deploy with ${i}"; /opt/docker/bin/rnode deploy --from "0x1" --phlo-limit 100000 --phlo-price 1 --nonce 0 ${i}; done'
         try:
             r = container.exec_run(['sh', '-c', cmd])
             for line in r.output.decode('utf-8').splitlines():
@@ -327,7 +329,7 @@ class rnode:
 
     @staticmethod
     def deploy_cmd(f):
-        return rnode.binary + f' deploy --from "0x1" --phlo-limit 0 --phlo-price 0 --nonce 0 {f}'
+        return rnode.binary + f' deploy --from "0x1" --phlo-limit 100000 --phlo-price 1 --nonce 0 {f}'
 
     propose_cmd = binary + " propose"
 
@@ -446,6 +448,7 @@ def create_empty_bonds_file():
 
 def boot_p2p_network():
     try:
+        shutil.copyfile(src_bonds_file, bonds_file)
         client.networks.create(args.network, driver="bridge")
         print("Starting bootstrap node.")
         # create_empty_bonds_file() # disabled until python generated keys work
@@ -519,7 +522,7 @@ def test_performance():
                 print(f"Loop number {i} of {args.propose_loop_amount} on {container.name}")
 
                 # Deploy example contracts using 3 random example files
-                cmd = 'for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do /opt/docker/bin/rnode deploy --from "0x1" --phlo-limit 0 --phlo-price 0 --nonce 0 ${i}; done'
+                cmd = 'for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do /opt/docker/bin/rnode deploy --from "0x1" --phlo-limit 100000 --phlo-price 1 --nonce 0 ${i}; done'
                 try: 
                     r = container.exec_run(['sh', '-c', cmd])
                     for line in r.output.decode('utf-8').splitlines():
@@ -631,8 +634,8 @@ def create_bootstrap_node():
         "VkEqI2rycmgp03DXsStJ7IGdBQ==\n"
         "-----END CERTIFICATE-----\n"
     )
-    tmp_file_key = '/tmp/node.key.pem'
-    tmp_file_cert = '/tmp/node.certificate.pem'
+    tmp_file_key = '/tmp/rnode_{args.network}_node.key.pem'
+    tmp_file_cert = '/tmp/rnode_{args.network}_node.certificate.pem'
     with open(tmp_file_key, 'w') as f:
         f.write(bootstrap_node_demo_key)
     with open(tmp_file_cert, 'w') as f:

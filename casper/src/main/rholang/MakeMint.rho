@@ -2,81 +2,74 @@
 
 //based on http://erights.org/elib/capability/ode/ode-capabilities.html#simple-money
 //requires NonNegativeNumber
-contract @("MakeMint", "int2NN")(@x, return) = {
-  new nnCh in {
-    @"NonNegativeNumber"!(x, *nnCh) | for(@nn <- nnCh) {
-      return!(nn)
-    }
-  }
-} |
-contract @"MakeMint"(return) = {
-  new pairCh, thisMint, internalMakePurse in {
-    contract @(*thisMint, "makePurse")(@init, return) = {
-      new balanceCh in {
-        @("MakeMint", "int2NN")!(init, *balanceCh) | for(@balance <- balanceCh) {
-          internalMakePurse!(balance, *return)
-        }
-      }
-    } |
-    contract internalMakePurse(@balance, return) = {
-      //balance must be a name that NonNegativeNumber contract is listening on
-      new thisPurse, decr in {
-        contract @(*thisPurse, *decr)(@amount, success) = { @(balance, "sub")!(amount, *success) } |
-        contract @(*thisPurse, "getBalance")(return) = { @(balance, "value")!(*return) } |
-        contract @(*thisPurse, "sprout")(return) = { @(*thisMint, "makePurse")!(0, *return) } |
-        contract @(*thisPurse, "split")(@amount, return) = {
-          new destPurseCh, successCh in {
-            @(*thisPurse, "sprout")!(*destPurseCh) | for(@destPurse <- destPurseCh) {
-              @(destPurse, "deposit")!(amount, *thisPurse, *successCh) |
-              for(@success <- successCh) {
-                if (success) {
-                  return!([destPurse])
-                } else {
-                  return!([])
-                }
-              }
+
+//Registry info:
+//  sk: a300690f29ac6385917cb94bf534f9b4163792ef8636c5db44608a77fa0356c2
+//  pk: d9ba2075d355755060205605f4cdbd5ecd3cce5ed1f39690f34772f7c9aa30ab
+//  user == pk
+//  timestamp: 1539969637029
+//Resulting unforgable name: Unforgeable(0xdf2886c69e880d611d9c609d5ea51a59e43a684f3a587b233be034dace00d092)
+//  ==> signature data == 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a20df2886c69e880d611d9c609d5ea51a59e43a684f3a587b233be034dace00d0921001
+//  ==> signature == 36229e3f4530c15f3b7c1d9165369201b70b4673289a003652af14b436b20a275d5909d6dfbbd06e685292d39eadf3af11db6f882dcc78ef0b794e6da0ad6109
+//URI derived from pk == `rho:id:exunyijimapk7z43g3bbr69awqdz54kyroj9q43jgu3dh567fxsftx`
+new
+  MakeMint, rs(`rho:registry:insertSigned:ed25519`), uriOut,
+  rl(`rho:registry:lookup`), NonNegativeNumberCh
+in {
+  rl!(`rho:id:nd74ztexkao5awjhj95e3octkza7tydwiy7euthnyrt5ihgi9rj495`, *NonNegativeNumberCh) |
+  for(@(_, NonNegativeNumber) <- NonNegativeNumberCh) {
+    contract MakeMint(return) = {
+      new thisMint, internalMakePurse, decr in {
+        contract thisMint(@"makePurse", @init, return) = {
+          new balanceCh in {
+            @NonNegativeNumber!(init, *balanceCh) | for(@balance <- balanceCh) {
+              internalMakePurse!(balance, *return)
             }
           }
         } |
-        contract @(*thisPurse, "getDecr")(return) = { 
-          new challenge, responseCh, correctAnswerCh in {
-            correctAnswerCh!(bundle0{*thisMint | *challenge}) |
-            for(@[response, answerCh] <- responseCh; @correctAnswer <- correctAnswerCh) {
-              if (response == correctAnswer) {
-                @answerCh!([(*thisPurse, *decr)])
-              } else {
-                @answerCh!([])
-              }
-            } |
-            return!([*challenge, *responseCh])
-          }
-        } |
-        contract @(*thisPurse, "deposit")(@amount, @src, success) = {
-          new result in {
-            @(src, "getDecr")!(*result) | //call getDecr function in src
-            for(@[challenge, response] <- result) { 
-              @response!([bundle0{*thisMint | challenge}, *result]) | //respond to challenge
-              for(@answer <- result) {
-                match answer {
-                  []        => { success!(false) } //did not meet challenge
-                  [srcDecr] => {
-                    @srcDecr!(amount, *result) | //call src decr function
-                    for(@decrSuccess <- result) {
-                      if (decrSuccess) {
-                        @(balance, "add")!(amount, *success)
-                      } else {
-                        success!(false)  //add transferred amount to this purse
-                      }
+        contract internalMakePurse(balance, return) = {
+          //balance must be a name that NonNegativeNumber contract is listening on
+          new thisPurse in {
+            contract thisPurse(@=*decr, @amount, success) = { balance!("sub", amount, *success) } |
+            contract thisPurse(@"getBalance", return) = { balance!("value", *return) } |
+            contract thisPurse(@"sprout", return) = { thisMint!("makePurse", 0, *return) } |
+            contract thisPurse(@"split", @amount, return) = {
+              new destPurseCh, successCh in {
+                thisPurse!("sprout", *destPurseCh) | for(@destPurse <- destPurseCh) {
+                  @destPurse!("deposit", amount, *thisPurse, *successCh) |
+                  for(@success <- successCh) {
+                    if (success) {
+                      return!([destPurse])
+                    } else {
+                      return!([])
                     }
                   }
                 }
               }
-            }
+            } |
+            contract thisPurse(@"deposit", @amount, @src, success) = {
+              new result in {
+                @src!(*decr, amount, *result) | //call src decr function.
+                for(@decrSuccess <- result) {
+                  if (decrSuccess) {
+                    balance!("add", amount, *success) // add transferred amount to this purse
+                  } else {
+                    success!(false) 
+                  }
+                }
+              }
+            } |
+            return!(bundle+{*thisPurse})
           }
         } |
-        return!(*thisPurse)
+        return!(bundle+{*thisMint})
       }
-    } |
-    return!(*thisMint)
-  }
+    }
+  } |
+  rs!(
+    "d9ba2075d355755060205605f4cdbd5ecd3cce5ed1f39690f34772f7c9aa30ab".hexToBytes(), 
+    (9223372036854775807, bundle+{*MakeMint}), 
+    "36229e3f4530c15f3b7c1d9165369201b70b4673289a003652af14b436b20a275d5909d6dfbbd06e685292d39eadf3af11db6f882dcc78ef0b794e6da0ad6109".hexToBytes(), 
+    *uriOut
+  )
 }

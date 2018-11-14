@@ -2,10 +2,13 @@ package coop.rchain.node.diagnostics
 
 import java.time.Duration
 
-import kamon._
 import com.typesafe.config.{Config, ConfigUtil}
+import coop.rchain.node.Ok
+import kamon._
 import kamon.metric._
-import org.slf4j.LoggerFactory
+import monix.eval.Task
+import org.http4s._
+import org.http4s.dsl.io._
 
 import scala.collection.JavaConverters._
 
@@ -48,14 +51,16 @@ class NewPrometheusReporter extends MetricReporter {
   */
 object NewPrometheusReporter {
 
-  case class Configuration(startEmbeddedServer: Boolean,
-                           embeddedServerHostname: String,
-                           embeddedServerPort: Int,
-                           defaultBuckets: Seq[java.lang.Double],
-                           timeBuckets: Seq[java.lang.Double],
-                           informationBuckets: Seq[java.lang.Double],
-                           customBuckets: Map[String, Seq[java.lang.Double]],
-                           includeEnvironmentTags: Boolean)
+  case class Configuration(
+      startEmbeddedServer: Boolean,
+      embeddedServerHostname: String,
+      embeddedServerPort: Int,
+      defaultBuckets: Seq[java.lang.Double],
+      timeBuckets: Seq[java.lang.Double],
+      informationBuckets: Seq[java.lang.Double],
+      customBuckets: Map[String, Seq[java.lang.Double]],
+      includeEnvironmentTags: Boolean
+  )
 
   object Configuration {
 
@@ -84,11 +89,7 @@ object NewPrometheusReporter {
         .toMap
   }
 
-  import cats.effect._
-  import org.http4s._
-  import org.http4s.dsl.io._
-
-  def service(reporter: NewPrometheusReporter) = HttpService[IO] {
+  def service(reporter: NewPrometheusReporter) = HttpRoutes.of[Task] {
     case GET -> Root => Ok(reporter.scrapeData())
   }
 }

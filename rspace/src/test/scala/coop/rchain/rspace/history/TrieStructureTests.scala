@@ -26,10 +26,13 @@ class TrieStructureTests
     }
 
   def withTrieTxnAndStore[R](
-      f: (ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector],
+      f: (
+          ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector],
           Branch,
           Txn[ByteBuffer],
-          Trie[TestKey4, ByteVector]) => R): R =
+          Trie[TestKey4, ByteVector]
+      ) => R
+  ): R =
     withTestTrieStore { (store, branch) =>
       store.withTxn(store.createTxnRead()) { txn =>
         val trieOpt = store.get(txn, store.getRoot(txn, branch).get)
@@ -118,10 +121,12 @@ class TrieStructureTests
       insert(store, branch, key2, val2)
 
       store.withTxn(store.createTxnWrite()) { txn =>
-        store.putRoot(txn,
-                      branch,
-                      Blake2b256Hash
-                        .fromHex(SingleElementData.rootHex))
+        store.putRoot(
+          txn,
+          branch,
+          Blake2b256Hash
+            .fromHex(SingleElementData.rootHex)
+        )
       }
 
       assertSingleElementTrie(store)
@@ -234,13 +239,15 @@ class TrieStructureTests
   }
 
   private[this] def assertSingleElementTrie(
-      implicit store: ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector]) = {
+      implicit store: ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector]
+  ) = {
     import SingleElementData._
     store.withTxn(store.createTxnRead()) { implicit txn =>
       expectNode(rootHex, Seq((1, NodePointer(skipHex))))
       val expectedSkipHash = Blake2b256Hash.fromHex(skipHex)
       store.get(txn, expectedSkipHash) shouldBe Some(
-        Skip(ByteVector(0, 0, 0), LeafPointer(leafHex)))
+        Skip(ByteVector(0, 0, 0), LeafPointer(leafHex))
+      )
 
       val expectedLeafHash = Blake2b256Hash.fromHex(leafHex)
       store.get(txn, expectedLeafHash) shouldBe Some(Leaf(key1, val1))
@@ -249,7 +256,8 @@ class TrieStructureTests
   }
 
   private[this] def assertCommonPrefixTrie(
-      implicit store: ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector]) = {
+      implicit store: ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector]
+  ) = {
     import CommonPrefixData._
     store.withTxn(store.createTxnRead()) { implicit txn =>
       expectNode(rootHex, Seq((1, NodePointer(level1Hex))))
@@ -269,12 +277,15 @@ class TrieStructureTests
   private[this] implicit def liftHexToBlake(hex: String): Blake2b256Hash =
     Blake2b256Hash.fromHex(hex)
 
-  private[this] def expectNode(currentHex: String, childHexes: Seq[(Int, Pointer)])(
-      implicit txn: Txn[ByteBuffer],
-      store: ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector]) =
-    store.get(txn,
-              Blake2b256Hash
-                .fromHex(currentHex)) match {
+  private[this] def expectNode(
+      currentHex: String,
+      childHexes: Seq[(Int, Pointer)]
+  )(implicit txn: Txn[ByteBuffer], store: ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector]) =
+    store.get(
+      txn,
+      Blake2b256Hash
+        .fromHex(currentHex)
+    ) match {
       case Some(Node(PointerBlock(vector))) =>
         vector should have size 256
         val expectedPointers = childHexes.map {
@@ -290,10 +301,13 @@ class TrieStructureTests
 
   def expectSkip(currentHex: String, expectedAffix: ByteVector, expectedPointer: NonEmptyPointer)(
       implicit txn: Txn[ByteBuffer],
-      store: ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector]) =
-    store.get(txn,
-              Blake2b256Hash
-                .fromHex(currentHex)) match {
+      store: ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector]
+  ) =
+    store.get(
+      txn,
+      Blake2b256Hash
+        .fromHex(currentHex)
+    ) match {
       case Some(Skip(affix, pointer)) =>
         affix shouldBe expectedAffix
         pointer shouldBe expectedPointer

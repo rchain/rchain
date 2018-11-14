@@ -2,31 +2,45 @@ package coop.rchain.comm.transport
 
 import java.io.ByteArrayInputStream
 
-import coop.rchain.comm._, CommError._
-import coop.rchain.comm.protocol.routing._
-
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
-import coop.rchain.shared.{Cell, Log, LogSource}
-
+import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
 import scala.util._
-import io.grpc._, io.grpc.netty._
-import io.netty.handler.ssl.{ClientAuth, SslContext, SslContextBuilder}
-import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
-import monix.eval._, monix.execution._
-import scala.concurrent.TimeoutException
 
-class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxMessageSize: Int)(
+import cats.implicits._
+
+import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.catscontrib.ski._
+import coop.rchain.comm._
+import coop.rchain.comm.CachedConnections.ConnectionsCache
+import coop.rchain.comm.CommError._
+import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
+import coop.rchain.comm.rp.ProtocolHelper
+import coop.rchain.shared._
+import coop.rchain.shared.Compression._
+
+import io.grpc._
+import io.grpc.netty._
+import io.netty.handler.ssl._
+import monix.eval._
+import monix.execution._
+import monix.reactive._
+
+class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: Int)(
     implicit scheduler: Scheduler,
-    cell: TcpTransportLayer.TransportCell[Task],
-    log: Log[Task])
-    extends TransportLayer[Task] {
+    log: Log[Task],
+    connectionsCache: ConnectionsCache[Task, TcpConnTag]
+) extends TransportLayer[Task] {
+
+  private val DefaultSendTimeout = 5.seconds
+  private val connections        = connectionsCache(clientChannel)
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   private def certInputStream = new ByteArrayInputStream(cert.getBytes())
   private def keyInputStream  = new ByteArrayInputStream(key.getBytes())
+
+  import connections.cell
 
   private lazy val serverSslContext: SslContext =
     try {
@@ -37,7 +51,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
         .build()
     } catch {
       case e: Throwable =>
-        println(e.getMessage)
+        e.printStackTrace()
         throw e
     }
 
@@ -59,6 +73,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
       c <- Task.delay {
             NettyChannelBuilder
               .forAddress(peer.endpoint.host, peer.endpoint.tcpPort)
+              .executor(scheduler)
               .maxInboundMessageSize(maxMessageSize)
               .negotiationType(NegotiationType.TLS)
               .sslContext(clientSslContext)
@@ -67,16 +82,6 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
               .build()
           }
     } yield c
-
-  private def connection(peer: PeerNode, enforce: Boolean): Task[ManagedChannel] =
-    cell.modify { s =>
-      if (s.shutdown && !enforce)
-        Task.raiseError(new RuntimeException("The transport layer has been shut down")).as(s)
-      else
-        for {
-          c <- s.connections.get(peer).fold(clientChannel(peer))(_.pure[Task])
-        } yield s.copy(connections = s.connections + (peer -> c))
-    } >>= kp(cell.read.map(_.connections.apply(peer)))
 
   def disconnect(peer: PeerNode): Task[Unit] =
     cell.modify { s =>
@@ -92,80 +97,165 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
       } yield s.copy(connections = s.connections - peer)
     }
 
+  private object PeerUnavailable {
+    def unapply(e: Throwable): Boolean =
+      e.isInstanceOf[StatusRuntimeException] &&
+        e.asInstanceOf[StatusRuntimeException].getStatus.getCode == Status.Code.UNAVAILABLE
+  }
+
   private def withClient[A](peer: PeerNode, enforce: Boolean)(
-      f: TransportLayerStub => Task[A]): Task[A] =
+      f: TransportLayerStub => Task[A]
+  ): Task[A] =
     for {
-      channel <- connection(peer, enforce)
+      channel <- connections.connection(peer, enforce)
       stub    <- Task.delay(RoutingGrpcMonix.stub(channel))
       result <- f(stub).doOnFinish {
-                 case None    => Task.unit
-                 case Some(_) => disconnect(peer)
+                 case Some(PeerUnavailable()) => disconnect(peer)
+                 case _                       => Task.unit
                }
+      _ <- Task.unit.asyncBoundary // return control to caller thread
     } yield result
 
-  private def sendRequest(peer: PeerNode, request: TLRequest, enforce: Boolean): Task[TLResponse] =
-    withClient(peer, enforce)(_.send(request))
+  private def transport(peer: PeerNode, enforce: Boolean)(
+      f: TransportLayerStub => Task[TLResponse]
+  ): Task[CommErr[Option[Protocol]]] =
+    withClient(peer, enforce)(f).attempt.map(processResponse(peer, _))
 
-  private def innerRoundTrip(peer: PeerNode,
-                             request: TLRequest,
-                             timeout: FiniteDuration,
-                             enforce: Boolean): Task[Either[CommError, TLResponse]] =
-    sendRequest(peer, request, enforce)
-      .nonCancelingTimeout(timeout)
-      .attempt
-      .map(_.leftMap {
-        case _: TimeoutException => CommError.timeout
-        case e: StatusRuntimeException if e.getStatus.getCode == Status.Code.UNAVAILABLE =>
-          peerUnavailable(peer)
-        case e => protocolException(e)
-      })
-
-  // TODO: Rename to send
-  def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): Task[CommErr[Protocol]] =
-    for {
-      tlResponseErr <- innerRoundTrip(peer, TLRequest(msg.some), timeout, enforce = false)
-      pmErr <- tlResponseErr
-                .flatMap(tlr =>
-                  tlr.payload match {
-                    case p if p.isProtocol => Right(tlr.getProtocol)
-                    case p if p.isNoResponse =>
-                      Left(internalCommunicationError("Was expecting message, nothing arrived"))
-                    case TLResponse.Payload.InternalServerError(ise) =>
-                      Left(internalCommunicationError("Got response: " + ise.error.toStringUtf8))
-                })
-                .pure[Task]
-    } yield pmErr
-
-  // TODO: rename to sendAndForget
-  def send(peer: PeerNode, msg: Protocol): Task[Unit] =
-    Task
-      .racePair(sendRequest(peer, TLRequest(msg.some), enforce = false), Task.unit)
-      .attempt
-      .void
-
-  def broadcast(peers: Seq[PeerNode], msg: Protocol): Task[Unit] =
-    Task.gatherUnordered(peers.map(send(_, msg))).void
-
-  private def buildServer(transportLayer: RoutingGrpcMonix.TransportLayer): Task[Server] =
+  def chunkIt(blob: Blob): Task[Iterator[Chunk]] =
     Task.delay {
-      NettyServerBuilder
-        .forPort(port)
-        .maxMessageSize(maxMessageSize)
-        .sslContext(serverSslContext)
-        .addService(RoutingGrpcMonix.bindService(transportLayer, scheduler))
-        .intercept(new SslSessionServerInterceptor())
-        .build
-        .start
+      val raw      = blob.packet.content.toByteArray
+      val kb500    = 1024 * 500
+      val compress = raw.length > kb500
+      val content  = if (compress) raw.compress else raw
+
+      def header: Chunk =
+        Chunk().withHeader(
+          ChunkHeader()
+            .withCompressed(compress)
+            .withContentLength(raw.length)
+            .withSender(ProtocolHelper.node(blob.sender))
+            .withTypeId(blob.packet.typeId)
+        )
+      val buffer    = 2 * 1024 // 2 kbytes for protobuf related stuff
+      val chunkSize = maxMessageSize - buffer
+      def data: Iterator[Chunk] =
+        content.sliding(chunkSize, chunkSize).map { data =>
+          Chunk().withData(ChunkData().withContentData(ProtocolHelper.toProtocolBytes(data)))
+        }
+
+      Iterator(header) ++ data
     }
 
-  def receive(dispatch: Protocol => Task[CommunicationResponse]): Task[Unit] =
+  /**
+    * This implmementation is temporary, it sequentially sends blob to each peers.
+    * TODO Provide solution that stacks blob on a queue that is later consumed
+    */
+  def stream(peers: Seq[PeerNode], blob: Blob): Task[Unit] =
+    peers.toList
+      .traverse[Task, Unit](
+        peer =>
+          withClient(peer, enforce = false) { stub =>
+            stub.stream(Observable.fromIterator(chunkIt(blob)))
+          }.attempt.flatMap {
+            case Left(error) => log.debug(s"Error while streaming packet, error: $error")
+            case Right(_)    => Task.unit
+          }
+      )
+      .as(())
+
+  private def processResponse(
+      peer: PeerNode,
+      response: Either[Throwable, TLResponse]
+  ): CommErr[Option[Protocol]] =
+    response
+      .leftMap {
+        case _: TimeoutException => CommError.timeout
+        case PeerUnavailable()   => peerUnavailable(peer)
+        case e                   => protocolException(e)
+      }
+      .flatMap(
+        tlr =>
+          tlr.payload match {
+            case p if p.isProtocol   => Right(Some(tlr.getProtocol))
+            case p if p.isNoResponse => Right(None)
+            case TLResponse.Payload.InternalServerError(ise) =>
+              Left(internalCommunicationError("Got response: " + ise.error.toStringUtf8))
+          }
+      )
+
+  def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): Task[CommErr[Protocol]] =
+    transport(peer, enforce = false)(_.ask(TLRequest(msg.some)).nonCancelingTimeout(timeout))
+      .map(_.flatMap {
+        case Some(p) => Right(p)
+        case _       => Left(internalCommunicationError("Was expecting message, nothing arrived"))
+      })
+
+  private def innerSend(
+      peer: PeerNode,
+      msg: Protocol,
+      enforce: Boolean = false,
+      timeout: FiniteDuration = DefaultSendTimeout
+  ): Task[CommErr[Unit]] =
+    transport(peer, enforce)(_.ask(TLRequest(msg.some)).nonCancelingTimeout(timeout))
+      .map(_.flatMap {
+        case Some(p) => Left(internalCommunicationError(s"Was expecting no message. Response: $p"))
+        case _       => Right(())
+      })
+
+  private def innerBroadcast(
+      peers: Seq[PeerNode],
+      msg: Protocol,
+      enforce: Boolean = false,
+      timeOut: FiniteDuration = DefaultSendTimeout
+  ): Task[Seq[CommErr[Unit]]] =
+    Task.gatherUnordered(peers.map(innerSend(_, msg, enforce, timeOut)))
+
+  def send(peer: PeerNode, msg: Protocol): Task[CommErr[Unit]] =
+    innerSend(peer, msg)
+
+  def broadcast(peers: Seq[PeerNode], msg: Protocol): Task[Seq[CommErr[Unit]]] =
+    innerBroadcast(peers, msg)
+
+  private def receiveInternal(
+      parallelism: Int
+  )(
+      dispatch: Protocol => Task[CommunicationResponse],
+      handleStreamed: Blob => Task[Unit]
+  ): Task[Cancelable] = {
+
+    def dispatchInternal: ServerMessage => Task[Unit] = {
+      // TODO: consider logging on failure (Left)
+      case Tell(protocol) => dispatch(protocol).attemptAndLog.void
+      case Ask(protocol, handle) if !handle.complete =>
+        dispatch(protocol).attempt.map {
+          case Left(e)         => handle.failWith(e)
+          case Right(response) => handle.reply(response)
+        }.void
+      case StreamMessage(blob) => handleStreamed(blob).attemptAndLog
+      case _                   => Task.unit // sender timeout
+    }
+
+    Task.delay {
+      new TcpServerObservable(port, serverSslContext, maxMessageSize)
+        .mapParallelUnordered(parallelism)(dispatchInternal)
+        .subscribe()(Scheduler.fixedPool("tl-dispatcher", parallelism))
+    }
+  }
+
+  def receive(
+      dispatch: Protocol => Task[CommunicationResponse],
+      handleStreamed: Blob => Task[Unit]
+  ): Task[Unit] =
     cell.modify { s =>
       for {
         server <- s.server match {
                    case Some(_) =>
                      Task.raiseError(
-                       new RuntimeException("TransportLayer server is already started"))
-                   case _ => buildServer(new TransportLayerImpl(dispatch))
+                       new RuntimeException("TransportLayer server is already started")
+                     )
+                   case _ =>
+                     val parallelism = Math.max(Runtime.getRuntime.availableProcessors(), 2)
+                     receiveInternal(parallelism)(dispatch, handleStreamed)
                  }
       } yield s.copy(server = Some(server))
 
@@ -175,7 +265,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
     def shutdownServer: Task[Unit] = cell.modify { s =>
       for {
         _ <- log.info("Shutting down server")
-        _ <- s.server.fold(Task.unit)(server => Task.delay(server.shutdown()))
+        _ <- s.server.fold(Task.unit)(server => Task.delay(server.cancel()))
       } yield s.copy(server = None, shutdown = true)
     }
 
@@ -183,16 +273,10 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
       for {
         peers <- cell.read.map(_.connections.keys.toSeq)
         _     <- log.info("Sending shutdown message to all peers")
-        _     <- sendShutdownMessage(peers, msg)
+        _     <- innerBroadcast(peers, msg, enforce = true, timeOut = 500.milliseconds)
         _     <- log.info("Disconnecting from all peers")
         _     <- Task.gatherUnordered(peers.map(disconnect))
       } yield ()
-
-    def sendShutdownMessage(peers: Seq[PeerNode], msg: Protocol): Task[Unit] = {
-      val createInstruction: PeerNode => Task[Unit] =
-        innerRoundTrip(_, TLRequest(msg.some), 500.milliseconds, enforce = true).as(())
-      Task.gatherUnordered(peers.map(createInstruction)).void
-    }
 
     cell.read.flatMap { s =>
       if (s.shutdown) Task.unit
@@ -209,36 +293,10 @@ object TcpTransportLayer {
 
 case class TransportState(
     connections: TcpTransportLayer.Connections = Map.empty,
-    server: Option[Server] = None,
+    server: Option[Cancelable] = None,
     shutdown: Boolean = false
 )
 
 object TransportState {
   def empty: TransportState = TransportState()
-}
-
-class TransportLayerImpl(dispatch: Protocol => Task[CommunicationResponse])
-    extends RoutingGrpcMonix.TransportLayer {
-
-  def send(request: TLRequest): Task[TLResponse] =
-    request.protocol
-      .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>
-        dispatch(protocol) map {
-          case NotHandled(error)            => internalServerError(error.message)
-          case HandledWitoutMessage         => noResponse
-          case HandledWithMessage(response) => returnProtocol(response)
-        }
-      }
-
-  private def returnProtocol(protocol: Protocol): TLResponse =
-    TLResponse(TLResponse.Payload.Protocol(protocol))
-
-  // TODO InternalServerError should take msg in constructor
-  private def internalServerError(msg: String): TLResponse =
-    TLResponse(
-      TLResponse.Payload.InternalServerError(
-        InternalServerError(ProtocolHelper.toProtocolBytes(msg))))
-
-  private def noResponse: TLResponse =
-    TLResponse(TLResponse.Payload.NoResponse(NoResponse()))
 }

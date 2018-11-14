@@ -1,19 +1,30 @@
 package coop.rchain.comm.transport
 
-import scala.concurrent.duration.Duration
+import java.util.concurrent.TimeUnit._
 
-import coop.rchain.shared
-import coop.rchain.comm.PeerNode
+import cats.effect.Timer
+import coop.rchain.comm.{CachedConnections, PeerNode, TcpConnTag}
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.shared.{Cell, Log}
-
+import coop.rchain.crypto.util.{CertificateHelper, CertificatePrinter}
+import coop.rchain.shared.{Log, Time}
 import monix.eval.Task
 import monix.execution.Scheduler
 
-class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] {
+import scala.concurrent.duration.{Duration, FiniteDuration}
 
-  implicit val log: Log[Task]       = new shared.Log.NOPLog[Task]
+class TcpTransportLayerSpec { //extends TransportLayerSpec[Task, TcpTlsEnvironment] {
+
+  implicit val log: Log[Task]       = new Log.NOPLog[Task]
   implicit val scheduler: Scheduler = Scheduler.Implicits.global
+
+  def timer: Timer[Task] = implicitly[Timer[Task]]
+
+  def time: Time[Task] =
+    new Time[Task] {
+      def currentMillis: Task[Long]                   = timer.clock.realTime(MILLISECONDS)
+      def nanoTime: Task[Long]                        = timer.clock.monotonic(NANOSECONDS)
+      def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
+    }
 
   def createEnvironment(port: Int): Task[TcpTlsEnvironment] =
     Task.delay {
@@ -22,16 +33,16 @@ class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] 
       val cert    = CertificatePrinter.print(CertificateHelper.generate(keyPair))
       val key     = CertificatePrinter.printPrivateKey(keyPair.getPrivate)
       val id      = CertificateHelper.publicAddress(keyPair.getPublic).map(Base16.encode).get
-      val address = s"rnode://$id@$host:$port"
-      val peer    = PeerNode.parse(address).right.get
+      val address = s"rnode://$id@$host?protocol=$port&discovery=0"
+      val peer    = PeerNode.fromAddress(address).right.get
       TcpTlsEnvironment(host, port, cert, key, peer)
     }
 
+  def maxMessageSize: Int = 4 * 1024 * 1024
+
   def createTransportLayer(env: TcpTlsEnvironment): Task[TransportLayer[Task]] =
-    Cell.mvarCell(TransportState.empty).map { cell =>
-      new TcpTransportLayer(env.host, env.port, env.cert, env.key, 4 * 1024 * 1024)(scheduler,
-                                                                                    cell,
-                                                                                    log)
+    CachedConnections[Task, TcpConnTag].map { implicit cache =>
+      new TcpTransportLayer(env.port, env.cert, env.key, 4 * 1024 * 1024)
     }
 
   def extract[A](fa: Task[A]): A = fa.runSyncUnsafe(Duration.Inf)

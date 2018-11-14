@@ -1,19 +1,19 @@
 package coop.rchain.casper.util.comm
 
 import cats.{Id, Monad, MonadError}
-import cats.effect.{Sync, Timer}
+import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.ListenAtName._
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib._
-import coop.rchain.models.Channel.ChannelInstance
-import coop.rchain.models.{Channel, Par}
-
+import coop.rchain.models.Par
 import scala.io.Source
 import scala.language.higherKinds
 import scala.util._
+
+import coop.rchain.shared.Time
 
 object DeployRuntime {
 
@@ -30,33 +30,37 @@ object DeployRuntime {
   def showBlock[F[_]: Monad: ErrorHandler: Capture: DeployService](hash: String): F[Unit] =
     gracefulExit(DeployService[F].showBlock(BlockQuery(hash)).map(println(_)))
 
-  def showBlocks[F[_]: Monad: ErrorHandler: Capture: DeployService](): F[Unit] =
-    gracefulExit(DeployService[F].showBlocks.map(println(_)))
+  def showBlocks[F[_]: Monad: ErrorHandler: Capture: DeployService](depth: Int): F[Unit] =
+    gracefulExit(DeployService[F].showBlocks(BlocksQuery(depth)).map(println(_)))
 
-  def listenForDataAtName[F[_]: Sync: DeployService: Timer: Capture](name: Id[Name]): F[Unit] =
+  def listenForDataAtName[F[_]: Sync: DeployService: Time: Capture](
+      name: Id[Name]
+  ): F[Unit] =
     gracefulExit {
       listenAtNameUntilChanges(name) { par: Par =>
-        val request = Channel(ChannelInstance.Quote(par))
+        val request = DataAtNameQuery(Int.MaxValue, Some(par))
         DeployService[F].listenForDataAtName(request) map (_.blockResults)
       }
     }
 
-  def listenForContinuationAtName[F[_]: Sync: Timer: DeployService: Capture](
-      names: List[Name]): F[Unit] =
+  def listenForContinuationAtName[F[_]: Sync: Time: DeployService: Capture](
+      names: List[Name]
+  ): F[Unit] =
     gracefulExit {
       listenAtNameUntilChanges(names) { pars: List[Par] =>
-        val channels = pars.map(par => Channel(ChannelInstance.Quote(par)))
-        val request  = Channels(channels)
+        val request = ContinuationAtNameQuery(Int.MaxValue, pars)
         DeployService[F].listenForContinuationAtName(request) map (_.blockResults)
       }
     }
 
   //Accepts a Rholang source file and deploys it to Casper
-  def deployFileProgram[F[_]: Monad: ErrorHandler: Capture: DeployService](purseAddress: String,
-                                                                           phloLimit: Int,
-                                                                           phloPrice: Int,
-                                                                           nonce: Int,
-                                                                           file: String): F[Unit] =
+  def deployFileProgram[F[_]: Monad: ErrorHandler: Capture: DeployService](
+      purseAddress: String,
+      phloLimit: Long,
+      phloPrice: Long,
+      nonce: Int,
+      file: String
+  ): F[Unit] =
     Try(Source.fromFile(file).mkString) match {
       case Success(code) =>
         gracefulExit(
@@ -82,13 +86,13 @@ object DeployRuntime {
     }
 
   //Simulates user requests by randomly deploying things to Casper.
-  def deployDemoProgram[F[_]: Monad: ErrorHandler: Capture: DeployService]: F[Unit] =
+  def deployDemoProgram[F[_]: Monad: Time: ErrorHandler: Capture: DeployService]: F[Unit] =
     gracefulExit(MonadOps.forever(singleDeploy[F]))
 
-  private def singleDeploy[F[_]: Monad: Capture: DeployService]: F[Unit] =
+  private def singleDeploy[F[_]: Monad: Time: Capture: DeployService]: F[Unit] =
     for {
       id <- Capture[F].capture { scala.util.Random.nextInt(100) }
-      d  = ProtoUtil.basicDeployData(id)
+      d  <- ProtoUtil.basicDeployData[F](id)
       _ <- Capture[F].capture {
             println(s"Sending the following to Casper: ${d.term}")
           }

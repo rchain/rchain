@@ -1,10 +1,15 @@
 package coop.rchain.grpcmonix
 
+import scala.concurrent.Future
+import scala.util.control.NonFatal
+
+import coop.rchain.shared.{Log, LogSource}
+
 import com.google.common.util.concurrent.ListenableFuture
 import io.grpc.stub.StreamObserver
-import monix.eval.{Callback, Task}
+import monix.eval.Task
+import monix.execution._
 import monix.execution.Ack.{Continue, Stop}
-import monix.execution.{Ack, Scheduler}
 import monix.reactive.Observable
 import monix.reactive.Observable.Operator
 import monix.reactive.observers.Subscriber
@@ -12,9 +17,10 @@ import monix.reactive.subjects.PublishSubject
 import org.reactivestreams.{Subscriber => SubscriberR}
 import scalapb.grpc.Grpc
 
-import scala.concurrent.Future
-
 object GrpcMonix {
+
+  private val logger                        = Log.logId
+  private implicit val logSource: LogSource = LogSource(this.getClass)
 
   type GrpcOperator[I, O] = StreamObserver[O] => StreamObserver[I]
   type Transformer[I, O]  = Observable[I] => Observable[O]
@@ -61,23 +67,30 @@ object GrpcMonix {
         }
     }
 
-  def grpcObserverToMonixCallback[T](observer: StreamObserver[T]): Callback[T] =
-    new Callback[T] {
+  def grpcObserverToMonixCallback[T](observer: StreamObserver[T]): Callback[Throwable, T] =
+    new Callback[Throwable, T] {
       override def onError(t: Throwable): Unit = observer.onError(t)
-      override def onSuccess(value: T): Unit = {
-        observer.onNext(value)
-        observer.onCompleted()
-      }
+      override def onSuccess(value: T): Unit =
+        try {
+          observer.onNext(value)
+          observer.onCompleted()
+        } catch {
+          case NonFatal(e) => logger.warn(s"Failed to send a response: ${e.getMessage}")
+        }
     }
 
-  def liftByGrpcOperator[I, O](observable: Observable[I],
-                               operator: GrpcOperator[I, O]): Observable[O] =
+  def liftByGrpcOperator[I, O](
+      observable: Observable[I],
+      operator: GrpcOperator[I, O]
+  ): Observable[O] =
     observable.liftByOperator(
       grpcOperatorToMonixOperator(operator)
     )
 
-  def unliftByTransformer[I, O](transformer: Transformer[I, O],
-                                subscriber: Subscriber[O]): Subscriber[I] =
+  def unliftByTransformer[I, O](
+      transformer: Transformer[I, O],
+      subscriber: Subscriber[O]
+  ): Subscriber[I] =
     new Subscriber[I] {
       private[this] val subject = PublishSubject[I]()
       transformer(subject).subscribe(subscriber)

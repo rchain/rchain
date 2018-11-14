@@ -16,13 +16,16 @@ import scala.util.{Failure, Success, Try}
 
 case class CasperConf(
     publicKeyBase16: Option[String],
-    privateKeyBase16: Option[String],
+    privateKey: Option[Either[String, Path]],
     sigAlgorithm: String,
     bondsFile: Option[String],
     knownValidatorsFile: Option[String],
     numValidators: Int,
     genesisPath: Path,
     walletsFile: Option[String],
+    minimumBond: Long,
+    maximumBond: Long,
+    hasFaucet: Boolean,
     requiredSigs: Int,
     shardId: String,
     createGenesis: Boolean,
@@ -30,16 +33,14 @@ case class CasperConf(
     approveGenesisInterval: FiniteDuration,
     approveGenesisDuration: FiniteDuration,
     deployTimestamp: Option[Long]
-) {
-  val publicKey: Option[Array[Byte]]  = publicKeyBase16.map(Base16.decode)
-  val privateKey: Option[Array[Byte]] = privateKeyBase16.map(Base16.decode)
-}
+)
 
 object CasperConf {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def parseValidatorsFile[F[_]: Monad: Capture: Log](
-      knownValidatorsFile: Option[String]): F[Set[ByteString]] =
+      knownValidatorsFile: Option[String]
+  ): F[Set[ByteString]] =
     knownValidatorsFile match {
       //TODO: Add default set? Throw error?
       case None => Set.empty[ByteString].pure[F]
@@ -52,7 +53,8 @@ object CasperConf {
                 .fromFile(file)
                 .getLines()
                 .map(line => ByteString.copyFrom(Base16.decode(line)))
-                .toSet)
+                .toSet
+            )
           }
           .flatMap {
             case Success(validators) => validators.pure[F]
@@ -64,9 +66,11 @@ object CasperConf {
           }
     }
 
-  def publicKey(givenPublicKey: Option[Array[Byte]],
-                sigAlgorithm: String,
-                privateKey: Array[Byte]): Array[Byte] = {
+  def publicKey(
+      givenPublicKey: Option[Array[Byte]],
+      sigAlgorithm: String,
+      privateKey: Array[Byte]
+  ): Array[Byte] = {
 
     val maybeInferred = sigAlgorithm match {
       case "ed25519" =>

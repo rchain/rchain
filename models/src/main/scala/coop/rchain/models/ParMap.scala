@@ -7,30 +7,37 @@ import monix.eval.Coeval
 import scala.collection.immutable.BitSet
 import coop.rchain.models.rholang.implicits._
 
-case class ParMap(ps: SortedParMap,
-                  connectiveUsed: Boolean,
-                  locallyFree: Coeval[BitSet],
-                  remainder: Option[Var]) {
+case class ParMap(
+    ps: SortedParMap,
+    connectiveUsed: Boolean,
+    locallyFree: Coeval[BitSet],
+    remainder: Option[Var]
+) {
 
   override def equals(o: scala.Any): Boolean = o match {
-    case parMap: ParMap => this.ps == parMap.ps && this.remainder == parMap.remainder
-    case _              => false
+    case parMap: ParMap =>
+      this.ps == parMap.ps && this.remainder == parMap.remainder && this.connectiveUsed == parMap.connectiveUsed
+    case _ => false
   }
 
-  override def hashCode(): Int = Objects.hash(ps, remainder)
+  override def hashCode(): Int = Objects.hash(ps, remainder, Boolean.box(connectiveUsed))
 }
 
 object ParMap {
-  def apply(seq: Seq[(Par, Par)],
-            connectiveUsed: Boolean,
-            locallyFree: Coeval[BitSet],
-            remainder: Option[Var]) =
+  def apply(
+      seq: Seq[(Par, Par)],
+      connectiveUsed: Boolean,
+      locallyFree: Coeval[BitSet],
+      remainder: Option[Var]
+  ) =
     new ParMap(SortedParMap(seq), connectiveUsed, locallyFree.memoize, remainder)
 
-  def apply(seq: Seq[(Par, Par)],
-            connectiveUsed: Boolean,
-            locallyFree: BitSet,
-            remainder: Option[Var]): ParMap =
+  def apply(
+      seq: Seq[(Par, Par)],
+      connectiveUsed: Boolean,
+      locallyFree: BitSet,
+      remainder: Option[Var]
+  ): ParMap =
     apply(seq, connectiveUsed, Coeval.pure(locallyFree), remainder)
 
   def apply(seq: Seq[(Par, Par)]): ParMap =

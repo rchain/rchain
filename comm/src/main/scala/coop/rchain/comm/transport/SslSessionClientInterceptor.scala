@@ -1,20 +1,21 @@
 package coop.rchain.comm.transport
 
 import cats.Id
-
 import coop.rchain.catscontrib._
-import coop.rchain.comm.ProtocolHelper
+import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.protocol.routing.TLResponse.Payload
+import coop.rchain.crypto.util.CertificateHelper
 import coop.rchain.shared.{Log, LogSource}
-
 import io.grpc._
 import javax.net.ssl.SSLSession
 
 class SslSessionClientInterceptor() extends ClientInterceptor {
-  def interceptCall[ReqT, RespT](method: MethodDescriptor[ReqT, RespT],
-                                 callOptions: CallOptions,
-                                 next: Channel): ClientCall[ReqT, RespT] =
+  def interceptCall[ReqT, RespT](
+      method: MethodDescriptor[ReqT, RespT],
+      callOptions: CallOptions,
+      next: Channel
+  ): ClientCall[ReqT, RespT] =
     new SslSessionClientCallInterceptor(next.newCall(method, callOptions))
 }
 
@@ -48,19 +49,12 @@ class SslSessionClientCallInterceptor[ReqT, RespT](next: ClientCall[ReqT, RespT]
         case TLResponse(Payload.Protocol(Protocol(Some(Header(Some(sender))), msg))) =>
           if (log.isTraceEnabled) {
             val peerNode = ProtocolHelper.toPeerNode(sender)
-            val msgType = msg match {
-              case m if m.isLookup         => "lookup"
-              case m if m.isLookupResponse => "lookup response"
-              case m if m.isPing           => "ping"
-              case m if m.isPong           => "pong"
-              case m if m.isUpstream       => "upstream"
-              case m if m.isEmpty          => "empty"
-              case _                       => "unknown"
-            }
+            val msgType  = msg.getClass.toString
             log.trace(s"Response [$msgType] from peer ${peerNode.toAddress}")
           }
           val sslSession: Option[SSLSession] = Option(
-            self.getAttributes.get(Grpc.TRANSPORT_ATTR_SSL_SESSION))
+            self.getAttributes.get(Grpc.TRANSPORT_ATTR_SSL_SESSION)
+          )
           if (sslSession.isEmpty) {
             log.warn("No TLS Session. Closing connection")
             close()

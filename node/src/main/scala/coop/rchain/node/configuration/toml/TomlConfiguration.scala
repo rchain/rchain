@@ -20,7 +20,7 @@ object TomlConfiguration {
     Codec {
       case (Value.Str(uri), _) =>
         PeerNode
-          .parse(uri)
+          .fromAddress(uri)
           .map(u => Right(u))
           .getOrElse(Left((Nil, "can't parse the rnode bootstrap address")))
       case _ => Left((Nil, "the rnode bootstrap address should be a string"))
@@ -61,7 +61,7 @@ object TomlConfiguration {
 
   def from(file: File): Either[TomlConfigurationError, Configuration] =
     if (file.exists())
-      withResource(Source.fromFile(file))(f => from(f.getLines().mkString("\n")))
+      withResource(Source.fromFile(file))(f => from(f.mkString))
     else Either.left(ConfigurationFileNotFound(file.getAbsolutePath))
 
   private def rewriteKeysToCamelCase(tbl: Value.Tbl): Value.Tbl = {

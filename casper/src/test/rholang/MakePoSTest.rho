@@ -1,0 +1,97 @@
+//scalapackage coop.rchain.rholang.proofofstake
+
+//requires MakePoS, MakeMint, TestSet, ListOps, Either
+
+new 
+  rl(`rho:registry:lookup`), TestSetCh, MakeMintCh, MakePoSCh,
+  test1, test2, pk, minimumBond, maximumBond, initBonds,
+  bond, getBonds, balance, mintCh, posPurse, bondPurse, 
+  tooBigBondPurse, tooSmallBondPurse, posCh, tooSmallBalance, 
+  tooBigBalance, tooSmallBond, tooBigBond, bondPurseBalance, 
+  justRightBond, posBonds
+in {
+  rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *TestSetCh) |
+  rl!(`rho:id:exunyijimapk7z43g3bbr69awqdz54kyroj9q43jgu3dh567fxsftx`, *MakeMintCh) |
+  rl!(`rho:id:nqt875jea4rr83383ys6guzsbebg6k7o7uhrint6d7km67886c4y4s`, *MakePoSCh) |
+  for(@(_, TestSet) <- TestSetCh; @(_, MakeMint) <- MakeMintCh; @(_, MakePoS) <- MakePoSCh) {
+    pk!!("79d16233dedf8e8e4cc25272b2b98ac096dac9239ade20dcee5987a1c1d101c7") |
+    minimumBond!!(5) |
+    maximumBond!!(100) |
+    initBonds!!({"someKey" : (37, "verify", "reward", 1)}) |
+
+    contract bond(pos, @publicKey, @sigVerify, @givenBondPurse, @rewardsForwarder, return) = {
+      new bond in {
+        contract bond(return) = {
+          pos!("bond", publicKey, sigVerify, givenBondPurse, rewardsForwarder, *return)
+        } |
+        return!(*bond)
+      }
+    } |
+
+    contract getBonds(pos, return) = {
+      new getBonds in {
+        contract getBonds(return) = { pos!("getBonds", *return) } |
+        return!(*getBonds)
+      }
+    } |
+
+    contract balance(purse, return) = {
+      new balance in {
+        contract balance(return) = { purse!("getBalance", *return) } |
+        return!(*balance)
+      }
+    } |
+
+    @MakeMint!(*mintCh) | for(mint <- mintCh) {
+      mint!("makePurse", 0, *posPurse) |
+      mint!("makePurse", 50, *bondPurse) |
+      mint!("makePurse", 500, *tooBigBondPurse) |
+      mint!("makePurse", 1, *tooSmallBondPurse) |
+      for(
+        @posPurse <- posPurse;
+        @bondPurse <- bondPurse;
+        @tooBigBondPurse <- tooBigBondPurse;
+        @tooSmallBondPurse <- tooSmallBondPurse;
+        @pk <- pk;
+        @minimumBond <- minimumBond;
+        @maximumBond <- maximumBond;
+        @initBonds <- initBonds
+      ) {
+        @MakePoS!(posPurse, minimumBond, maximumBond, initBonds, *posCh) | 
+        for(@pos <- posCh) {
+          balance!(tooSmallBondPurse, *tooSmallBalance) |
+          balance!(tooBigBondPurse, *tooBigBalance) |
+          bond!(pos, pk, "ed25519Verify", tooSmallBondPurse, Nil, *tooSmallBond) |
+          bond!(pos, pk, "ed25519Verify", tooBigBondPurse, Nil, *tooBigBond) |
+          @TestSet!("define",
+            "PoS bond should not accept bounds outside the min/max",
+            [
+              [*tooSmallBond, (false, "Bond less than minimum!")],
+              [*tooBigBond, (false, "Bond greater than maximum!")],
+              [*tooSmallBalance, 1],
+              [*tooBigBalance, 500]
+            ],
+            *test1
+          ) |
+
+          balance!(bondPurse, *bondPurseBalance) |
+          bond!(pos, pk, "ed25519Verify", bondPurse, Nil, *justRightBond) |
+          getBonds!(pos, *posBonds) |
+          @TestSet!("define",
+            "PoS bond should work for correct purses",
+            [
+              [*bondPurseBalance, 50],
+              [*justRightBond, (true, "Bond successful!")],
+              [*bondPurseBalance, 0],
+              [*posBonds, {
+                "someKey" : (37 + minimumBond, "verify", "reward", 1), 
+                pk        : (50 - minimumBond, "ed25519Verify", Nil, initBonds.size() + 1)
+              }]
+            ],
+            *test2
+          )
+        }
+      }
+    }
+  }
+}

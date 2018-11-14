@@ -20,6 +20,8 @@ trait Serialize[A] {
 
 object Serialize {
 
+  def apply[A](implicit ev: Serialize[A]): Serialize[A] = ev
+
   implicit class RichSerialize[A](instance: Serialize[A]) {
 
     def toCodec: Codec[A] = new Codec[A] {
@@ -40,11 +42,10 @@ object Serialize {
             Attempt.fromEither(
               value
                 .traverse[Either[Throwable, ?], A]((vec: ByteVector) => instance.decode(vec))
-                .leftMap((thw: Throwable) => Err(thw.getMessage)))
+                .leftMap((thw: Throwable) => Err(thw.getMessage))
+            )
           }
     }
   }
-
-  def apply[A](implicit ev: Serialize[A]): Serialize[A] = ev
 
 }

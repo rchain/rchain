@@ -31,7 +31,7 @@ class GrpcReplClient(host: String, port: Int, maxMessageSize: Int)
     ManagedChannelBuilder
       .forAddress(host, port)
       .maxInboundMessageSize(maxMessageSize)
-      .usePlaintext(true)
+      .usePlaintext()
       .build
 
   private val stub = ReplGrpcMonix.stub(channel)
@@ -68,7 +68,8 @@ class GrpcReplClient(host: String, port: Int, maxMessageSize: Int)
     val terminated = channel.shutdown().awaitTermination(10, TimeUnit.SECONDS)
     if (!terminated) {
       println(
-        "warn: did not shutdown after 10 seconds, retrying with additional 10 seconds timeout")
+        "warn: did not shutdown after 10 seconds, retrying with additional 10 seconds timeout"
+      )
       channel.awaitTermination(10, TimeUnit.SECONDS)
     }
   }

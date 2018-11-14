@@ -1,192 +1,179 @@
 #!/usr/bin/env python3.6
-# This is a simple script to boot a rchain p2p network using bootstrap/peer named containers
+# This is a simple script to boot a rchain p2p network using bootstrap/peer/bond named containers
 # It deletes bootstrap/peer named containers before it creates them leaving other named containers
 # This requires Python 3.6 to be installed for f-string. Install dependencies via pip
-# python3.6 -m pip install docker
+# python3.6 -m pip install docker ed25519
 # Return code of 0 is success on test and 1 is fail.
 # Example below shows how to boot network with 3 nodes, including bootstrap, and run specific test
-# sudo ./scripts/boot-p2p.py -m 2048m -p 2 -c 0 -i rchain/rnode:dev
-# Simple
-# sudo ./scripts/boot-p2p.py -i rchain/rnode:dev
-import subprocess
+# sudo ./boot-p2p.py -m 34360m -c 1 -p 3  --genesis --sigs 2 --bonds <bond_file_path> --wallet <wallet_file_path> --has-faucet  -i rchain-integration-testing:latest --remove
+
 import argparse
 import docker
 import os
-import tempfile
-import re
 import time
 import sys
 import random
+import collections
 
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-parser = argparse.ArgumentParser(
-             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument("-b", "--boot",
-                    action='store_true',
-                    help="boot network by creating resources and starting services by network name")
-parser.add_argument("--bootstrap-command",
-                    dest='bootstrap_command',
-                    type=str,
-                    default="run --port 40400 --standalone",
-                    help="bootstrap container run command")
 parser.add_argument("-c", "--cpuset-cpus",
                     dest='cpuset_cpus',
                     type=str,
                     default="0",
                     help="set docker cpuset-cpus for all nodes. Allows limiting execution in specific CPUs")
+
 parser.add_argument("-i", "--image",
                     dest='image',
                     type=str,
                     default="coop.rchain/rnode:latest",
                     help="source repo for docker image")
+
 parser.add_argument("-m", "--memory",
                     dest='memory',
                     type=str,
                     default="2048m",
                     help="set docker memory limit for all nodes")
+
 parser.add_argument("-n", "--network",
                     dest='network',
                     type=str,
                     default="rchain.coop",
                     help="set docker network name")
+
 parser.add_argument("-p", "--peers-amount",
                     dest='peer_amount',
                     type=int,
                     default="2",
                     help="set total amount of peers for network")
-parser.add_argument("--rnode-directory",
-                    dest='rnode_directory',
-                    type=str,
-                    default="/var/lib/rnode",
-                    help="rnode container root directory on each container")
+
 parser.add_argument("-r", "--remove",
                     action='store_true',
                     help="forcibly remove containers that start with bootstrap and peer associated to network name")
-parser.add_argument("-t", "--thread-pool-size",
-                    dest='thread_pool_size',
+
+parser.add_argument("--bonds",
+                    dest="bonds_file",
+                    type=str,
+                    help="set the bond file of the genesis process")
+
+parser.add_argument("--wallet",
+                    dest="wallet_file",
+                    type=str,
+                    help="set the wallet file of the genesis process")
+
+parser.add_argument("--genesis",
+                    dest="genesis",
+                    action='store_true',
+                    help="set if start with the genesis process")
+
+parser.add_argument("--sigs",
+                    dest="sigs",
                     type=int,
-                    default="100",
-                    help="set maximum number of threads used by rnode")
+                    default=0,
+                    help="set the required signatures , this equals the number of nodes bonded at genesis")
+
+parser.add_argument("--has-faucet",
+                    dest="has_faucet",
+                    action="store_true",
+                    default=False,
+                    help="set if the chain support has-faucet")
 
 # Print -h/help if no args
-if len(sys.argv)==1:
+if len(sys.argv) == 1:
     parser.print_help(sys.stderr)
     sys.exit(1)
 
-
 # Define globals
 args = parser.parse_args()
+
+if args.sigs > args.peer_amount:
+    raise Exception('Sigs should be lower than peer amount')
+
+read_only_peer_count = args.peer_amount - args.sigs
+
+KeyPair = collections.namedtuple("KeyPair", ["private_key", "public_key"])
+
+bonds_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'demo-bonds.txt')
+keys_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "demo-validator-private-public-key-pairs.txt")
 client = docker.from_env()
 RNODE_CMD = '/opt/docker/bin/rnode'
 # bonds_file = f'/tmp/bonds.{args.network}' alternate when dynamic bonds.txt creation/manpiulation file works
-bonds_file = os.path.dirname(os.path.realpath(__file__)) + '/demo-bonds.txt'
-container_bonds_file = f'{args.rnode_directory}/genesis/bonds.txt'
-peer_prefix_command=f'run --bootstrap rnode://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.{args.network}:40400'
+rnode_directory = "/var/lib/rnode"
+container_bonds_file = f'{rnode_directory}/genesis/bonds.txt'
+container_wallets_file = f'{rnode_directory}/genesis/wallets.txt'
+peer_prefix_command = ['run', '--bootstrap',
+                       f'rnode://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.{args.network}?protocol=40400&discovery=40404']
+
+temp_bonds_file = f'/tmp/bonds_{random.randint(10000,99999)}'
+
+bond_key_pairs = []
+peer_key_pairs = []
 
 
 def main():
     """Main program"""
-    #if args.remove == True:
-    #    # only removes boostrap/peer.rchain.coop or .network nodes
-    remove_resources_by_network(args.network)
+    # Check is the docket network exist and create one if not.
+    networks = [network.name for network in client.networks.list()]
+    if args.network not in networks:
+        client.networks.create(args.network)
+    if args.remove:
+        # only removes boostrap/peer.rchain.coop or .network nodes
+        remove_resources_by_network(args.network)
     boot_p2p_network()
 
 
 def remove_resources_by_network(args_network):
     """Remove bootstrap/peer resources in network name."""
     print(f"Removing bootstrap/peer named containers for docker network {args_network}")
-    for container in client.containers.list(all=True, filters={"name":f"peer\d.{args.network}"}):
-            container.remove(force=True, v=True)
-    for container in client.containers.list(all=True, filters={"name":f"bootstrap.{args.network}"}):
-            container.remove(force=True, v=True)
+    for container in client.containers.list(all=True, filters={"name": f"peer\d.{args.network}"}):
+        container.remove(force=True, v=True)
+    for container in client.containers.list(all=True, filters={"name": f"bootstrap.{args.network}"}):
+        container.remove(force=True, v=True)
+    for container in client.containers.list(all=True, filters={"name": f"bond\d.{args.network}"}):
+        container.remove(force=True, v=True)
     # client.volumes.prune() # Removes unused volumes
     return 0
 
 
-def create_empty_bonds_file():
-
-    # Create or zero out bonds file so it is empty and can be mounted as volumes by containers 
-    try:
-        with open(bonds_file, 'w+') as f:
-            f.write("")
-    except IOError as e:
-        print(f"Failed to open or write to file {e}.")
-
-
 def boot_p2p_network():
-    try:
-        create_bootstrap_node()
-        time.sleep(20) # Give bootstrap node an early start
-        print("Starting peer nodes.")
-        create_peer_nodes()
-        return 0
-    except Exception as e:
-        print(e)
-        return 1
+    create_bootstrap_node()
+    time.sleep(30)  # Give bootstrap node an early start
+    print("Starting bonded nodes")
+    create_bonded_nodes()
+    print("Starting peer nodes.")
+    create_peer_nodes()
 
 
 def generate_validator_private_key():
-    ### Create --validator-private-key and --validator--public-key and add to bonds.txt # ed25519 eventually secp256k1 ###
-
-    # # pynacl for libsodium
-    # # import nacl # libsodium/ed25519 support
-    # from nacl.public import PrivateKey, PublicKey
-    # import nacl.encoding
-    # import nacl.signing
-    # private_key = PrivateKey.generate()
-    # encoded_private_key = private_key.encode(encoder=nacl.encoding.Base16Encoder).decode('utf-8').lower()
-    # encoded_public_key = private_key.public_key.encode(encoder=nacl.encoding.Base16Encoder).decode('utf-8').lower()
-    # signing_key = nacl.signing.SigningKey.generate() 
-    # verify_key = signing_key.verify_key
-    # encoded_private_key = signing_key.encode(encoder=nacl.encoding.Base16Encoder).lower()
-    # encoded_public_key = verify_key.encode(encoder=nacl.encoding.Base16Encoder).lower() 
-
-    # import ed25519
-    # signing_key, verifying_key = ed25519.create_keypair()
-    # encoded_private_key = signing_key.to_ascii(encoding="base16").decode('utf-8')
-    # encoded_public_key = verifying_key.to_ascii(encoding="base16").decode('utf-8')
-
-    # import ecdsa # secp256k1 suppport
-
-    # Using pre-generated validator key pairs by rnode. We do this because warning below  with python generated keys
-    # WARN  coop.rchain.casper.Validate$ - CASPER: Ignoring block 2cb8fcc56e... because block creator 3641880481... has 0 weight
-    f=open('scripts/demo-validator-private-public-key-pairs.txt')
-    lines=f.readlines()
-    line_number = random.randint(1,295)
-    encoded_private_key = lines[line_number].split()[0]
-    encoded_public_key = lines[line_number].split()[1]
-
-    # print(f"Populating bonds file {bonds_file}")
-    # bond_weight = random.randint(1,100)
-    # line = f"{encoded_public_key} {bond_weight}"
-    # print(line)
-    # try:
-    #     with open(bonds_file, 'a+') as f:
-    #         f.write(f"{line}\n")
-    # except IOError as e:
-    #     print(f"Failed to open or write to file {e}.") 
-
-    return encoded_private_key, encoded_public_key
+    import ed25519
+    signing_key, verifying_key = ed25519.create_keypair()
+    encoded_private_key = signing_key.to_ascii(encoding="base16").decode('utf-8')
+    encoded_public_key = verifying_key.to_ascii(encoding="base16").decode('utf-8')
+    return KeyPair(private_key=encoded_private_key, public_key=encoded_public_key)
 
 
-def populate_bonds_file():
-    print(f"Populating bonds file {bonds_file}")
-    try:
-        with open(bonds_file, 'a+') as f:
-            for line in bonds:
-                print(line)
-                f.write(f"{line}\n")
-    except IOError as e:
-        print(f"Failed to open or write to file {e}.") 
+def modify_bonds_file():
+    # In order to produce a bonds.txt which contains the key pair of the bonded node which is going to start,
+    # the bonded nodes key pair should be put into the bonds file
+    # So I have to add the key pairs to the bonds file.
+    print('Modify bonds file and add bonds key pair to the bond file')
+    if args.bonds_file:
+        with open(args.bonds_file) as bond_f:
+            content = bond_f.read()
+    with open(temp_bonds_file, 'w') as f:
+        if args.bonds_file:
+            f.write(content)
+        for i in range(args.sigs):
+            key_pair = generate_validator_private_key()
+            bond_key_pairs.append(key_pair)
+            f.write(f'{key_pair.public_key} {random.randint(50,1000)}\n')
 
 
 def create_bootstrap_node():
     """Create bootstrap node."""
 
-    validator_private_key, validator_public_key = generate_validator_private_key()
-
     # Create key/cert pem files to be loaded into rnode volume
-    bootstrap_node_demo_key=(
+    bootstrap_node_demo_key = (
         "-----BEGIN PRIVATE KEY-----\n"
         "MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgYcybGU15SCs2x+5I\n"
         "JHrzzBHZ0c7k2WwokG6yU754XKKgCgYIKoZIzj0DAQehRANCAAR/MkqpcKUE+NtM\n"
@@ -194,7 +181,7 @@ def create_bootstrap_node():
         "Y5huc38x\n"
         "-----END PRIVATE KEY-----\n"
     )
-    bootstrap_node_demo_cert=(
+    bootstrap_node_demo_cert = (
         "-----BEGIN CERTIFICATE-----\n"
         "MIIBXzCCAQKgAwIBAgIIU0qinJbBW5MwDAYIKoZIzj0EAwIFADAzMTEwLwYDVQQD\n"
         "EyhjYjc0YmEwNDA4NTU3NGU5ZjAxMDJjYzEzZDM5ZjBjNzIyMTljNWJiMB4XDTE4\n"
@@ -212,63 +199,86 @@ def create_bootstrap_node():
         f.write(bootstrap_node_demo_key)
     with open(tmp_file_cert, 'w') as f:
         f.write(bootstrap_node_demo_cert)
- 
+
+
     print("Starting bootstrap node.")
-    bootstrap_node = {}
-    bootstrap_node['name'] = f"bootstrap.{args.network}"
-    bootstrap_node['volume'] = client.volumes.create()
-    print(f"creating {bootstrap_node['name']}")
-    container = client.containers.run(args.image, \
-        name=bootstrap_node['name'], \
-        user='root', \
-        detach=True, \
-        cpuset_cpus=args.cpuset_cpus, \
-        mem_limit=args.memory, \
-        network=args.network, \
-        volumes=[
-                f"{bootstrap_node['volume'].name}:{args.rnode_directory}", \
-                f"{bonds_file}:{container_bonds_file}", \
-                f"{tmp_file_cert}:{args.rnode_directory}/node.certificate.pem", \
-                f"{tmp_file_key}:{args.rnode_directory}/node.key.pem"
-        ],
-        # # Alternate volume mount
-        # volumes={
-        #         tmp_file_cert: {'bind': f'{args.rnode_directory}/node.certificate.pem', 'mode': 'rw'}, \
-        #         tmp_file_key: {'bind': f'{args.rnode_directory}/node.key.pem', 'mode': 'rw'}, \
-        #         bonds_file: {'bind': container_bonds_file, 'mode': 'rw'}, \
-        #         bootstrap_node['volume'].name: {'bind': args.rnode_directory, 'mode': 'rw'} \
-        # }, \
-        command=f"{args.bootstrap_command} --thread-pool-size {args.thread_pool_size} --validator-private-key {validator_private_key} --validator-public-key {validator_public_key} --host {bootstrap_node['name']}", \
-        hostname=bootstrap_node['name'])
-    return 0
+    name = f"bootstrap.{args.network}"
+    print(f"creating {name}")
+
+    timestamp = int(time.time() * 1000)
+
+    command = ['run', "--standalone",
+               "--host", name,
+               "--deploy-timestamp", f"{timestamp}",
+               "--map-size", "17179869184",
+               ]
+    volume = {
+        tmp_file_cert: {
+            "bind": os.path.join(rnode_directory, 'node.certificate.pem'),
+            "mode": 'rw'},
+        tmp_file_key: {"bind": os.path.join(rnode_directory, 'node.key.pem'),
+                            "mode": 'rw'}
+    }
+
+    modify_bonds_file()
+    if args.bonds_file or args.sigs:
+        command.extend(["--bonds-file", container_bonds_file])
+        volume.update({temp_bonds_file: {"bind": container_bonds_file, "mode": 'rw'}})
+    if args.wallet_file:
+        command.extend(["--wallets-file", container_wallets_file])
+        volume.update({args.wallet_file: {"bind": container_wallets_file, "mode": 'rw'}})
+    if args.has_faucet:
+        command.append("--has-faucet")
+    container = client.containers.run(args.image,
+                                      name=name,
+                                      user='root',
+                                      detach=True,
+                                      cpuset_cpus=args.cpuset_cpus,
+                                      mem_limit=args.memory,
+                                      network=args.network,
+                                      volumes=volume,
+                                      command=command,
+                                      hostname=name)
+    return container
+
+
+def create_peer_node(i, key_pair, name_prefix):
+    name = f"{name_prefix}{i}.{args.network}"
+    print(
+        f"creating {name_prefix} node {name} with private key:{key_pair.private_key} and public key:{key_pair.public_key}")
+    command = peer_prefix_command.copy()
+    keys_command = ["--validator-private-key", key_pair.private_key,
+                    "--validator-public-key", key_pair.public_key,
+                    "--host", name]
+    command.extend(keys_command)
+    container = client.containers.run(args.image,
+                                      name=name,
+                                      user='root',
+                                      detach=True,
+                                      cpuset_cpus=args.cpuset_cpus,
+                                      mem_limit=args.memory,
+                                      network=args.network,
+                                      command=command,
+                                      hostname=name)
+    return container
+
+
+def create_bonded_nodes():
+    print("Create and run bonded nodes to connect via bootstrap.")
+
+    for i, key_pair in enumerate(bond_key_pairs):
+        create_peer_node(i, key_pair, "bond")
 
 
 def create_peer_nodes():
     """Create peer nodes."""
     print("Create and run peer nodes to connect via bootstrap.")
 
-    for i in range(args.peer_amount):
-        validator_private_key, validator_public_key = generate_validator_private_key()
-        peer_node = {}
-        peer_node[i] = {}
-        peer_node[i]['name'] = f"peer{i}.{args.network}"
-        peer_node[i]['volume'] = client.volumes.create()
-        print(f"creating {peer_node[i]['name']}")
-        container = client.containers.run(args.image, \
-            name=peer_node[i]['name'], \
-            user='root', \
-            detach=True, \
-            cpuset_cpus=args.cpuset_cpus, \
-            mem_limit=args.memory, \
-            network=args.network, \
-            volumes=[
-                f"{bonds_file}:{container_bonds_file}", \
-                f"{peer_node[i]['volume'].name}:{args.rnode_directory}"
-            ], \
-            command=f"{peer_prefix_command} --thread-pool-size {args.thread_pool_size} --validator-private-key {validator_private_key} --validator-public-key {validator_public_key} --host {peer_node[i]['name']}", \
-            hostname=peer_node[i]['name'])
+    for i in range(read_only_peer_count):
+        key_pair = generate_validator_private_key()
+        create_peer_node(i, key_pair, "peer")
     return 0
-      
+
 
 if __name__ == "__main__":
     main()

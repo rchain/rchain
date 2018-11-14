@@ -28,3 +28,6 @@ services:
     volumes:
       - grafana_data_storage:/var/lib/grafana
       - ./grafana/provisioning/:/etc/grafana/provisioning/
+  zipkin:
+    image: openzipkin/zipkin
+    network_mode: "host"

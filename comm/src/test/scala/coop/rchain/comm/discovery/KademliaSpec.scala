@@ -4,6 +4,7 @@ import scala.collection.mutable
 
 import cats.Id
 
+import coop.rchain.comm.protocol.routing._
 import coop.rchain.catscontrib._, Catscontrib._
 import coop.rchain.comm._
 
@@ -20,11 +21,11 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
   val DISTANCE_4 = Some(4)
   val DISTANCE_6 = Some(6)
 
-  var table       = PeerTable(local, 3)
+  var table       = PeerTable[PeerNode](local.key, 3)
   var pingedPeers = mutable.MutableList.empty[PeerNode]
 
   override def beforeEach(): Unit = {
-    table = PeerTable(local, 3)
+    table = PeerTable[PeerNode](local.key, 3)
     pingedPeers = mutable.MutableList.empty[PeerNode]
     // peer1-4 distance is 4
     table.distance(peer1) shouldBe DISTANCE_4
@@ -162,6 +163,10 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       returns
     }
     def lookup(key: Seq[Byte], peer: PeerNode): Seq[PeerNode] = Seq.empty[PeerNode]
+    def receive(
+        pingHandler: PeerNode => Id[Unit],
+        lookupHandler: (PeerNode, Array[Byte]) => Id[Seq[PeerNode]]
+    ): Id[Unit] = ()
   }
 
   private def createPeer(id: String): PeerNode =

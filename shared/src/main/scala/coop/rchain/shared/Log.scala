@@ -1,7 +1,13 @@
 package coop.rchain.shared
 
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._
+import cats._
+import cats.data._
+import cats.implicits._
+import coop.rchain.catscontrib._
+import Catscontrib._
+
+import scala.language.experimental.macros
+import scala.reflect.macros.blackbox
 
 trait LogSource {
   val clazz: Class[_]
@@ -10,6 +16,21 @@ trait LogSource {
 object LogSource {
   def apply(c: Class[_]): LogSource = new LogSource {
     val clazz: Class[_] = c
+  }
+
+  implicit def matLogSource: LogSource = macro LogSourceMacros.mkLogSource
+}
+
+class LogSourceMacros(val c: blackbox.Context) {
+  import c.universe._
+
+  def mkLogSource: c.Expr[LogSource] = {
+    val tree =
+      q"""
+          coop.rchain.shared.LogSource(${c.reifyEnclosingRuntimeClass}.asInstanceOf[Class[_]])
+       """
+
+    c.Expr[LogSource](tree)
   }
 }
 
@@ -67,4 +88,5 @@ sealed abstract class LogInstances {
       Capture[F].capture(Logger(ev.clazz).error(msg))
   }
 
+  val logId: Log[Id] = log
 }

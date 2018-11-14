@@ -3,15 +3,14 @@ package coop.rchain.rholang.interpreter
 import cats.effect.Sync
 import cats.implicits._
 import cats.{Applicative, Monad}
-import coop.rchain.models.Channel.ChannelInstance
-import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.rholang.sort._
+import coop.rchain.models.rholang.sorter._
+import coop.rchain.rholang.interpreter.accounting.{Chargeable, Cost, CostAccounting}
 import coop.rchain.rholang.interpreter.errors.SubstituteError
 
 trait Substitute[M[_], A] {
@@ -20,24 +19,50 @@ trait Substitute[M[_], A] {
 }
 
 object Substitute {
-  def substitute2[M[_]: Monad, A, B, C](termA: A, termB: B)(f: (A, B) => C)(
-      implicit evA: Substitute[M, A],
-      evB: Substitute[M, B],
+  def charge[A: Chargeable, M[_]: Sync: CostAccounting](
+      substitutionResult: M[A],
+      failureCost: Cost
+  ): M[A] =
+    substitutionResult.attempt
+      .map(
+        _.fold(
+          th => (Left(th), failureCost),
+          substTerm => (Right(substTerm), Cost(substTerm))
+        )
+      )
+      .flatMap({ case (result, cost) => CostAccounting[M].charge(cost) *> Sync[M].pure(result) })
+      .rethrow
+
+  def substituteAndCharge[A: Chargeable, M[_]: CostAccounting: Substitute[?[_], A]: Sync](
+      term: A,
       depth: Int,
-      env: Env[Par]): M[C] =
+      env: Env[Par]
+  ): M[A] =
+    charge(Substitute[M, A].substitute(term)(depth, env), Cost(term))
+
+  def substituteNoSortAndCharge[A: Chargeable, M[_]: CostAccounting: Substitute[?[_], A]: Sync](
+      term: A,
+      depth: Int,
+      env: Env[Par],
+      costAccountingAlg: CostAccounting[M]
+  ): M[A] =
+    charge(Substitute[M, A].substituteNoSort(term)(depth, env), Cost(term))
+
+  def substitute2[M[_]: Monad, A, B, C](termA: A, termB: B)(
+      f: (A, B) => C
+  )(implicit evA: Substitute[M, A], evB: Substitute[M, B], depth: Int, env: Env[Par]): M[C] =
     (evA.substitute(termA), evB.substitute(termB)).mapN(f)
 
-  def substituteNoSort2[M[_]: Monad, A, B, C](termA: A, termB: B)(f: (A, B) => C)(
-      implicit evA: Substitute[M, A],
-      evB: Substitute[M, B],
-      depth: Int,
-      env: Env[Par]): M[C] =
+  def substituteNoSort2[M[_]: Monad, A, B, C](termA: A, termB: B)(
+      f: (A, B) => C
+  )(implicit evA: Substitute[M, A], evB: Substitute[M, B], depth: Int, env: Env[Par]): M[C] =
     (evA.substituteNoSort(termA), evB.substituteNoSort(termB)).mapN(f)
 
   def apply[M[_], A](implicit ev: Substitute[M, A]): Substitute[M, A] = ev
 
-  def maybeSubstitute[M[+ _]: Sync](term: Var)(implicit depth: Int,
-                                               env: Env[Par]): M[Either[Var, Par]] =
+  def maybeSubstitute[M[+ _]: Sync](
+      term: Var
+  )(implicit depth: Int, env: Env[Par]): M[Either[Var, Par]] =
     if (depth != 0)
       Applicative[M].pure(Left(term))
     else
@@ -52,27 +77,17 @@ object Substitute {
           Sync[M].raiseError(SubstituteError(s"Illegal Substitution [$term]"))
       }
 
-  def maybeSubstitute[M[_]: Sync](term: EVar)(implicit depth: Int,
-                                              env: Env[Par]): M[Either[EVar, Par]] =
+  def maybeSubstitute[M[_]: Sync](
+      term: EVar
+  )(implicit depth: Int, env: Env[Par]): M[Either[EVar, Par]] =
     maybeSubstitute[M](term.v).map {
       case Left(v)    => Left(EVar(v))
       case Right(par) => Right(par)
     }
 
-  def maybeSubstitute[M[_]: Sync](term: EEvalBody)(implicit depth: Int,
-                                                   env: Env[Par]): M[Either[Expr, Par]] =
-    term.value.channelInstance match {
-      case Quote(p) => substitutePar[M].substituteNoSort(p).map(Right(_))
-      case ChanVar(v) =>
-        maybeSubstitute[M](v).map {
-          case Left(v)    => Left(Expr(EEvalBody(ChanVar(v))))
-          case Right(par) => Right(par)
-        }
-      case ChannelInstance.Empty => Either.left[Expr, Par](Expr(term)).pure[M]
-    }
-
-  def maybeSubstitute[M[_]: Sync](term: VarRef)(implicit depth: Int,
-                                                env: Env[Par]): M[Either[VarRef, Par]] =
+  def maybeSubstitute[M[_]: Sync](
+      term: VarRef
+  )(implicit depth: Int, env: Env[Par]): M[Either[VarRef, Par]] =
     if (term.depth != depth)
       Applicative[M].pure(Left(term))
     else
@@ -81,14 +96,6 @@ object Substitute {
         case None =>
           Applicative[M].pure(Left(term))
       }
-
-  implicit def substituteQuote[M[_]: Sync]: Substitute[M, Quote] =
-    new Substitute[M, Quote] {
-      override def substitute(term: Quote)(implicit depth: Int, env: Env[Par]): M[Quote] =
-        substitutePar[M].substitute(term.value).map(Quote(_))
-      override def substituteNoSort(term: Quote)(implicit depth: Int, env: Env[Par]): M[Quote] =
-        substitutePar[M].substituteNoSort(term.value).map(Quote(_))
-    }
 
   implicit def substituteBundle[M[_]: Sync]: Substitute[M, Bundle] =
     new Substitute[M, Bundle] {
@@ -110,24 +117,6 @@ object Substitute {
         }
     }
 
-  implicit def substituteChannel[M[_]: Sync]: Substitute[M, Channel] =
-    new Substitute[M, Channel] {
-      override def substituteNoSort(term: Channel)(implicit depth: Int, env: Env[Par]): M[Channel] =
-        for {
-          channelSubst <- term.channelInstance match {
-                           case Quote(p) => substitutePar[M].substitute(p).map(Quote(_))
-                           case ChanVar(v) =>
-                             maybeSubstitute[M](v).map {
-                               case Left(_v) => ChanVar(_v)
-                               case Right(p) => Quote(p)
-                             }
-                           case ChannelInstance.Empty => term.channelInstance.pure[M]
-                         }
-        } yield channelSubst
-      override def substitute(term: Channel)(implicit depth: Int, env: Env[Par]): M[Channel] =
-        substituteNoSort(term).flatMap(channelSubst => Sortable.sortMatch(channelSubst)).map(_.term)
-    }
-
   implicit def substitutePar[M[_]: Sync]: Substitute[M, Par] =
     new Substitute[M, Par] {
       def subExp(exprs: Seq[Expr])(implicit depth: Int, env: Env[Par]): M[Par] =
@@ -136,11 +125,6 @@ object Substitute {
             case EVarBody(e) =>
               maybeSubstitute[M](e).map {
                 case Left(_e)    => par.prepend(_e, depth)
-                case Right(_par) => _par ++ par
-              }
-            case e: EEvalBody =>
-              maybeSubstitute[M](e).map {
-                case Left(expr)  => par.prepend(expr, depth)
                 case Right(_par) => _par ++ par
               }
             case _ => substituteExpr[M].substituteNoSort(expr).map(par.prepend(_, depth))
@@ -159,18 +143,21 @@ object Substitute {
             case ConnAndBody(ConnectiveBody(ps)) =>
               ps.toVector
                 .traverse(substitutePar[M].substituteNoSort(_))
-                .map(ps => Connective(ConnAndBody(ConnectiveBody(ps))))
+                .map(ps => par.prepend(Connective(ConnAndBody(ConnectiveBody(ps))), depth))
             case ConnOrBody(ConnectiveBody(ps)) =>
               ps.toVector
                 .traverse(substitutePar[M].substituteNoSort(_))
-                .map(ps => Connective(ConnOrBody(ConnectiveBody(ps))))
+                .map(ps => par.prepend(Connective(ConnOrBody(ConnectiveBody(ps))), depth))
             case ConnNotBody(p) =>
-              substitutePar[M].substituteNoSort(p).map(p => Connective(ConnNotBody(p)))
-            case c: ConnBool      => fromConnective(Connective(c)).pure[M]
-            case c: ConnInt       => fromConnective(Connective(c)).pure[M]
-            case c: ConnString    => fromConnective(Connective(c)).pure[M]
-            case c: ConnUri       => fromConnective(Connective(c)).pure[M]
-            case c: ConnByteArray => fromConnective(Connective(c)).pure[M]
+              substitutePar[M]
+                .substituteNoSort(p)
+                .map(p => Connective(ConnNotBody(p)))
+                .map(par.prepend(_, depth))
+            case c: ConnBool      => par.prepend(Connective(c), depth).pure[M]
+            case c: ConnInt       => par.prepend(Connective(c), depth).pure[M]
+            case c: ConnString    => par.prepend(Connective(c), depth).pure[M]
+            case c: ConnUri       => par.prepend(Connective(c), depth).pure[M]
+            case c: ConnByteArray => par.prepend(Connective(c), depth).pure[M]
           }
         }
 
@@ -206,7 +193,7 @@ object Substitute {
     new Substitute[M, Send] {
       override def substituteNoSort(term: Send)(implicit depth: Int, env: Env[Par]): M[Send] =
         for {
-          channelsSub <- substituteChannel[M].substituteNoSort(term.chan.get)
+          channelsSub <- substitutePar[M].substituteNoSort(term.chan.get)
           parsSub     <- term.data.toVector.traverse(substitutePar[M].substituteNoSort(_))
           send = Send(
             chan = channelsSub,
@@ -227,15 +214,18 @@ object Substitute {
           bindsSub <- term.binds.toVector.traverse {
                        case ReceiveBind(patterns, chan, rem, freeCount) =>
                          for {
-                           subChannel <- substituteChannel[M].substituteNoSort(chan)
+                           subChannel <- substitutePar[M].substituteNoSort(chan)
                            subPatterns <- patterns.toVector.traverse(
                                            pattern =>
-                                             substituteChannel[M]
-                                               .substituteNoSort(pattern)(depth + 1, env))
+                                             substitutePar[M]
+                                               .substituteNoSort(pattern)(depth + 1, env)
+                                         )
                          } yield ReceiveBind(subPatterns, subChannel, rem, freeCount)
                      }
-          bodySub <- substitutePar[M].substituteNoSort(term.body.get)(depth,
-                                                                      env.shift(term.bindCount))
+          bodySub <- substitutePar[M].substituteNoSort(term.body.get)(
+                      depth,
+                      env.shift(term.bindCount)
+                    )
           rec = Receive(
             binds = bindsSub,
             body = bodySub,
@@ -269,8 +259,10 @@ object Substitute {
           casesSub <- term.cases.toVector.traverse {
                        case MatchCase(_case, _par, freeCount) =>
                          for {
-                           par <- substitutePar[M].substituteNoSort(_par)(depth,
-                                                                          env.shift(freeCount))
+                           par <- substitutePar[M].substituteNoSort(_par)(
+                                   depth,
+                                   env.shift(freeCount)
+                                 )
                            subCase <- substitutePar[M].substituteNoSort(_case)(depth + 1, env)
                          } yield MatchCase(subCase, par, freeCount)
                      }
@@ -285,7 +277,8 @@ object Substitute {
       private[this] def substituteDelegate(
           term: Expr,
           s1: Par => M[Par],
-          s2: (Par, Par) => ((Par, Par) => Expr) => M[Expr])(implicit env: Env[Par]): M[Expr] =
+          s2: (Par, Par) => ((Par, Par) => Expr) => M[Expr]
+      )(implicit env: Env[Par]): M[Expr] =
         term.exprInstance match {
           case ENotBody(ENot(par)) => s1(par.get).map(ENot(_))
           case ENegBody(ENeg(par)) => s1(par.get).map(ENeg(_))
@@ -342,14 +335,18 @@ object Substitute {
             } yield
               Expr(
                 exprInstance = ESetBody(
-                  ParSet(SortedParHashSet(pss.toSeq),
-                         connectiveUsed,
-                         locallyFree.map(_.until(env.shift)),
-                         remainder)))
+                  ParSet(
+                    SortedParHashSet(pss.toSeq),
+                    connectiveUsed,
+                    locallyFree.map(_.until(env.shift)),
+                    remainder
+                  )
+                )
+              )
 
           case EMapBody(ParMap(spm, connectiveUsed, locallyFree, remainder)) =>
             for {
-              kvps <- spm.sortedMap.traverse {
+              kvps <- spm.sortedMap.toList.traverse {
                        case (p1, p2) =>
                          for {
                            pk1 <- s1(p1)
@@ -359,7 +356,9 @@ object Substitute {
             } yield
               Expr(
                 exprInstance = EMapBody(
-                  ParMap(kvps, connectiveUsed, locallyFree.map(_.until(env.shift)), remainder)))
+                  ParMap(kvps, connectiveUsed, locallyFree.map(_.until(env.shift)), remainder)
+                )
+              )
           case EMethodBody(EMethod(mtd, target, arguments, locallyFree, connectiveUsed)) =>
             for {
               subTarget    <- s1(target)
@@ -367,18 +366,24 @@ object Substitute {
             } yield
               Expr(
                 exprInstance = EMethodBody(
-                  EMethod(mtd,
-                          subTarget,
-                          subArguments,
-                          locallyFree.until(env.shift),
-                          connectiveUsed)))
+                  EMethod(
+                    mtd,
+                    subTarget,
+                    subArguments,
+                    locallyFree.until(env.shift),
+                    connectiveUsed
+                  )
+                )
+              )
           case g @ _ => Applicative[M].pure(term)
         }
       override def substitute(term: Expr)(implicit depth: Int, env: Env[Par]): M[Expr] =
         substituteDelegate(term, substitutePar[M].substitute, substitute2[M, Par, Par, Expr])
       override def substituteNoSort(term: Expr)(implicit depth: Int, env: Env[Par]): M[Expr] =
-        substituteDelegate(term,
-                           substitutePar[M].substituteNoSort,
-                           substituteNoSort2[M, Par, Par, Expr])
+        substituteDelegate(
+          term,
+          substitutePar[M].substituteNoSort,
+          substituteNoSort2[M, Par, Par, Expr]
+        )
     }
 }

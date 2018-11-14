@@ -1,0 +1,40 @@
+//scalapackage coop.rchain.rholang.mint
+
+//requires MakeMint, BasicWallet
+
+//Registry info:
+//  sk: 4d2235db0581c423e4982bbf3609478198e19551f9f51afd5d405da5c368e93a
+//  pk: 7645ec68813655c4be91dc60f759804c64e5f84319d18c66e40bbfb3a202ddc8
+//  user == pk
+//  timestamp: 1540228756441
+//Resulting unforgable name: Unforgeable(0x3b88933c23a6b2129868bf36bff0f3b512b0d43b32803052dc632f4720ccc214)
+//  ==> signature data == 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a203b88933c23a6b2129868bf36bff0f3b512b0d43b32803052dc632f4720ccc2141001
+//  ==> signature == b65137544d4ebd3abe448729bad76a462869c93f9d3c6f8fee1ab250dc5aea34b372f6b39c0ef59eab9ea72b775b37c15dec1e4fa2df62f9c5179cd03bba3801
+//URI derived from pk == `rho:id:r3pfwhwyzfg3n3yhcndwuszkszr11rjdbksizz4eqbqnwg5w49kfo7`
+new
+  BasicWalletFaucet, rs(`rho:registry:insertSigned:ed25519`), uriOut,
+  rl(`rho:registry:lookup`), BasicWalletCh
+in {
+  rl!(`rho:id:3yicxut5xtx5tnmnneta7actof4yse3xangw4awzt8c8owqmddgyms`, *BasicWalletCh) |
+  for(@(_, BasicWallet) <- BasicWalletCh) {
+    contract BasicWalletFaucet(mint, return) = {
+      new this in {
+        contract this(@amount, @algorithm, @publicKey, return) = {
+          new walletPurseCh in {
+            mint!("makePurse", amount, *walletPurseCh) |
+            for(@walletPurse <- walletPurseCh) {
+              @BasicWallet!(walletPurse, algorithm, publicKey, *return)
+            }
+          }
+        } |
+        return!(bundle+{*this})
+      }
+    }
+  } |
+  rs!(
+    "7645ec68813655c4be91dc60f759804c64e5f84319d18c66e40bbfb3a202ddc8".hexToBytes(), 
+    (9223372036854775807, bundle+{*BasicWalletFaucet}), 
+    "b65137544d4ebd3abe448729bad76a462869c93f9d3c6f8fee1ab250dc5aea34b372f6b39c0ef59eab9ea72b775b37c15dec1e4fa2df62f9c5179cd03bba3801".hexToBytes(), 
+    *uriOut
+  )
+}

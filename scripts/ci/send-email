@@ -1,0 +1,47 @@
+#!/usr/bin/python3
+
+import os, subprocess
+from smtplib import SMTP
+from email.mime.text import MIMEText
+
+def top_commits():
+    cmd = """
+        for c in $(git rev-list --parents -n1 HEAD); do
+            git log -1 $c | sed 's/^/  /'
+            echo
+        done
+    """
+    proc = subprocess.run(cmd,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT)
+    return proc.stdout.decode()
+
+repo = os.environ['DRONE_REPO_NAME']
+if 'DRONE_TAG' in os.environ:
+    ref = os.environ['DRONE_TAG']
+else:
+    ref = os.environ['DRONE_BRANCH']
+bn = os.environ['DRONE_BUILD_NUMBER']
+
+msg = MIMEText(
+f'''See {os.environ['DRONE_BUILD_LINK']}
+
+Top commit with immediate parents:
+
+{top_commits()}
+
+-- 
+Hi Developer. Whaaat's happening? Listen. I'm gonna need you to fix
+your broken code. So if you could just go ahead and make sure it
+builds again, that'd be terrific. OK? Thanks!
+''')
+msg['From'] = os.environ['EMAIL_SENDER']
+msg['To'] = os.environ['EMAIL_RECIPIENTS']
+msg['Subject'] = f'''Build {bn} of {repo}:{ref} has FAILED'''
+
+with SMTP(os.environ['EMAIL_HOST'], 587) as smtp:
+    smtp.starttls()
+    smtp.login(os.environ['EMAIL_USERNAME'], os.environ['EMAIL_PASSWORD'])
+    smtp.send_message(msg)
+    smtp.quit()

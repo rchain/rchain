@@ -1,0 +1,37 @@
+#!/bin/bash
+set -eo pipefail
+
+if [[ -n $DRONE_TAG ]]; then
+	REF=$DRONE_TAG
+	TAG=1
+elif [[ -n $DRONE_BRANCH ]]; then
+	REF=$DRONE_BRANCH
+	TAG=0
+else
+	# Like, really. It'll overwrite your SSH key.
+	echo "This script doesn't work outside of Drone" >&2
+	exit 1
+fi
+
+# Upload packages to repo.pyr8.io
+
+(
+umask 077
+mkdir -p ~/.ssh
+echo "$SSH_PRIVATE_KEY" | base64 -d | tr -d '\r' >~/.ssh/id_rsa
+)
+
+# We don't check host keys because artifacts are public.
+rsync -avrz --delete -e "ssh -p 22 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
+    artifacts/*.deb artifacts/*.rpm artifacts/*.tgz \
+    inbound@dispatch.pyr8.io:/home/inbound/cd/artifacts/$REF/
+
+# Upload Docker image
+
+builtin echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+docker tag coop.rchain/rnode:latest rchain/rnode:$REF
+docker push rchain/rnode:$REF
+if [[ $TAG == 1 ]]; then
+	docker tag coop.rchain/rnode:latest rchain/rnode:latest
+	docker push rchain/rnode:latest
+fi

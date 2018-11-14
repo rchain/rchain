@@ -21,31 +21,48 @@ object EventConverter {
 
   def toCasperEvent(event: RspaceEvent): Event = event match {
     case produce: RspaceProduce =>
-      Event(Produce(ProduceEvent(produce.channelsHash, produce.hash)))
+      Event(Produce(ProduceEvent(produce.channelsHash, produce.hash, produce.sequenceNumber)))
     case consume: RspaceConsume =>
-      Event(Consume(ConsumeEvent(consume.channelsHash, consume.hash)))
+      Event(Consume(ConsumeEvent(consume.channelsHash, consume.hash, consume.sequenceNumber)))
     case RspaceComm(rspaceConsume, rspaceProduces) =>
       Event(
         Comm(
           CommEvent(
-            Some(ConsumeEvent(rspaceConsume.channelsHash, rspaceConsume.hash)),
-            rspaceProduces.map(rspaceProduce =>
-              ProduceEvent(rspaceProduce.channelsHash, rspaceProduce.hash))
+            Some(
+              ConsumeEvent(
+                rspaceConsume.channelsHash,
+                rspaceConsume.hash,
+                rspaceConsume.sequenceNumber
+              )
+            ),
+            rspaceProduces
+              .map(
+                rspaceProduce =>
+                  ProduceEvent(
+                    rspaceProduce.channelsHash,
+                    rspaceProduce.hash,
+                    rspaceProduce.sequenceNumber
+                  )
+              )
           )
-        ))
+        )
+      )
   }
 
   def toRspaceEvent(event: Event): RspaceEvent = event match {
     case Event(Produce(produce: ProduceEvent)) =>
-      RspaceProduce.fromHash(produce.channelsHash, produce.hash)
+      RspaceProduce.fromHash(produce.channelsHash, produce.hash, produce.sequenceNumber)
     case Event(Consume(consume: ConsumeEvent)) =>
-      RspaceConsume.fromHash(consume.channelsHash, consume.hash)
+      RspaceConsume.fromHash(consume.channelsHash, consume.hash, consume.sequenceNumber)
     case Event(Comm(CommEvent(Some(consume: ConsumeEvent), produces))) =>
       val rspaceProduces: Seq[RspaceProduce] = produces.map { produce =>
         val rspaceProduce: RspaceProduce =
-          RspaceProduce.fromHash(produce.channelsHash, produce.hash)
+          RspaceProduce.fromHash(produce.channelsHash, produce.hash, produce.sequenceNumber)
         rspaceProduce
       }.toList
-      RspaceComm(RspaceConsume.fromHash(consume.channelsHash, consume.hash), rspaceProduces)
+      RspaceComm(
+        RspaceConsume.fromHash(consume.channelsHash, consume.hash, consume.sequenceNumber),
+        rspaceProduces
+      )
   }
 }

@@ -1,6 +1,5 @@
 package coop.rchain.node.configuration.toml
 
-import coop.rchain.shared.StoreType
 import java.nio.file.Paths
 
 import coop.rchain.comm.PeerNode
@@ -18,9 +17,10 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
       |host = "localhost"
       |port = 10
       |http-port = 12
+      |dynamic-host-address = false
       |no-upnp = false
       |default-timeout = 1000
-      |bootstrap = "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400"
+      |bootstrap = "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"
       |standalone = true
       |map-size = 200000000
       |store-type = "lmdb"
@@ -48,7 +48,7 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
       |approve-genesis-duration = "30min"
       |approve-genesis-interval = "1min"
       |deploy-timestamp = 1
-    """.stripMargin
+      |""".stripMargin
 
   test("Parse TOML configuration string") {
     val result: Either[TomlConfigurationError, Configuration] = TomlConfiguration.from(config)
@@ -57,7 +57,9 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
 
     val bootstrap =
       PeerNode
-        .parse("rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400")
+        .fromAddress(
+          "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"
+        )
         .right
         .get
 
@@ -65,6 +67,7 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
     root.server.flatMap(_.host) shouldEqual Some("localhost")
     root.server.flatMap(_.port) shouldEqual Some(10)
     root.server.flatMap(_.httpPort) shouldEqual Some(12)
+    root.server.flatMap(_.dynamicHostAddress) shouldEqual Some(false)
     root.server.flatMap(_.noUpnp) shouldEqual Some(false)
     root.server.flatMap(_.defaultTimeout) shouldEqual Some(1000)
     root.server.flatMap(_.bootstrap) shouldEqual Some(bootstrap)

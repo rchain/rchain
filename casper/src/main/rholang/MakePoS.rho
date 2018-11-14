@@ -1,0 +1,241 @@
+//scalapackage coop.rchain.rholang.proofofstake
+
+//Registry info:
+//  sk: 0ee85fdd077b2cb80b6ebb010745d37d8ae729afea5e8e9ddd5a98a0c3f83d7a
+//  pk: 0cbe092b27e04a944c7ac184619f3abeacffdd823ded94113ae918a63e55d5f2
+//  user == pk
+//  timestamp: 1540221220574
+//Resulting unforgable name: Unforgeable(0x8893dc03670ac506ba3005e3509f9591e03120664d02a3960ae821c2714eee7b)
+//  ==> signature data == 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a208893dc03670ac506ba3005e3509f9591e03120664d02a3960ae821c2714eee7b1001
+//  ==> signature == 99c6739350f2cfbe4817c1f236943894645c8eecb7248a4e01cef97476da072fb09628bb3bbe80397b5d503c399a28684b1fb921c239788b80862f905ce4010a
+//URI derived from pk == `rho:id:nqt875jea4rr83383ys6guzsbebg6k7o7uhrint6d7km67886c4y4s`
+new
+  MakePoS, rs(`rho:registry:insertSigned:ed25519`), uriOut,
+  rl(`rho:registry:lookup`), ListOpsCh, EitherCh
+in {
+  rl!(`rho:id:dputnspi15oxxnyymjrpu7rkaok3bjkiwq84z7cqcrx4ktqfpyapn4`, *ListOpsCh) |
+  rl!(`rho:id:j6trahbxycumerwpr5qype7j43b7eqh8auebwsa9nn68if47gswh73`, *EitherCh) |
+  for(@(_, ListOps) <- ListOpsCh; @(_, Either) <- EitherCh) {
+    contract MakePoS(purse, @minimumBond, @maximumBond, @initBonds, return) = {
+      new 
+        this, bondsCh, joiningFeeCh, clonePurse, depositPurse, 
+        updateBonds, feeDistribution, paymentStore
+      in {
+        bondsCh!(initBonds) |
+        joiningFeeCh!!(minimumBond) | //joining fee equal to minimum bond amount
+      
+        //The purpose of this contract is to move the contents
+        //of an existing purse into a new purse. This prevents
+        //the owner of the given purse from modifying the balance
+        //during processing.
+        contract clonePurse(givenPurse, return) = {
+          new balanceCh, resultCh in {
+            givenPurse!("getBalance", *balanceCh) |
+            for(@balance <- balanceCh) {
+              givenPurse!("split", balance, *resultCh) |
+              for(@result <- resultCh) {
+                match result {
+                  [] => { return!(("Left", "Could not extract funds from given purse")) }
+                  [newPurse] => { return!(("Right", (newPurse, balance))) }
+                }
+              }
+            }
+          }
+        } |
+      
+        contract this(@"validateBondAmount", @bondPurse, return) = {
+          new balanceCh in {
+            @bondPurse!("getBalance", *balanceCh) |
+            for(@balance <- balanceCh; @joiningFee <- joiningFeeCh) {
+              if      (balance - joiningFee < minimumBond) { return!(("Left", "Bond less than minimum!")) }
+              else if (balance - joiningFee > maximumBond) { return!(("Left", "Bond greater than maximum!")) }
+              else                                         { return!(("Right", bondPurse)) }
+            }
+          }
+        } |
+
+        contract this(@"validateBondingRate", @bondPurse, return) = {
+          //TODO: figure out rate-limiting of bonding
+          return!(("Right", bondPurse))
+        } |
+        
+        contract depositPurse(@bondPurse, @amount, return) = {
+          new successCh in {
+            purse!("deposit", amount, bondPurse, *successCh) |
+            for(@success <- successCh) {
+              if (success) { return!(("Right", bondPurse)) }
+              else         { return!(("Left", "Deposit failed.")) }
+            }
+          }
+        } |
+        
+        contract this(@"isBonded", @publicKey, return) = {
+          for(@bonds <- bondsCh) {
+            bondsCh!(bonds) | return!(bonds.contains(publicKey))
+          }
+        } |
+        
+        contract this(@"getBonds", return) = {
+          for(@bonds <- bondsCh) {
+            bondsCh!(bonds) | return!(bonds)
+          }
+        } |
+        
+        contract feeDistribution(@n, @joiningFee, return) = {
+          new rangeCh, feeDistFunc, feeDistCh, sum, nCh, totalCh in {
+            contract sum(@x, @y, return) = { return!(x + y) } |
+            contract feeDistFunc(@k, return) = { return!((2 * joiningFee * (n + 1 - k)) / (n * (n + 1))) } |
+            @ListOps!("range", 1, n + 1, *rangeCh) |
+            for(@range <- rangeCh) {
+              @ListOps!("map", range, *feeDistFunc, *feeDistCh) |
+              for(@feeDist <- feeDistCh) {
+                @ListOps!("fold", feeDist, 0, *sum, *totalCh) |
+                for(@total <- totalCh) {
+                  return!(
+                    //give remainder (non-zero from rounding) to first validator
+                    [feeDist.nth(0) + joiningFee - total] ++
+                      feeDist.slice(1, n)
+                  )
+                }
+              }
+            }
+          }
+        } |
+
+        contract updateBonds(@publicKey, @sigVerify, @bondAmount, @rewardsForwarder, return) = {
+          new feeDistCh, bondUpdateLoop, bondsWithFeeCh in {
+            //update the stakes of existing validators with their share of the joining fee
+            contract bondUpdateLoop(@bondsMap, @feeDist, @updatedMap, return) = {
+              match bondsMap {
+                {key:(stake, sigVerify, rewardsForwarder, index) ...rest} => { 
+                  bondUpdateLoop!(
+                    rest, 
+                    feeDist, 
+                    updatedMap.set(key, (stake + feeDist.nth(index - 1), sigVerify, rewardsForwarder, index)),
+                    *return
+                  )
+                }
+                
+                _ => { return!(updatedMap) }
+              }
+            } |
+            for(@bonds <- bondsCh; @joiningFee <- joiningFeeCh) {
+              feeDistribution!(bonds.size(), joiningFee, *feeDistCh) |
+              for(@feeDist <- feeDistCh) {
+                bondUpdateLoop!(bonds, feeDist, {}, *bondsWithFeeCh) |
+                for(@bondsWithFee <- bondsWithFeeCh) {
+                  bondsCh!(bondsWithFee.set(publicKey, (bondAmount - joiningFee, sigVerify, rewardsForwarder, bonds.size() + 1))) |
+                  return!((true, "Bond successful!"))
+                }
+              }
+            }
+          }
+        } |
+
+        contract this(@"bond", @publicKey, @sigVerify, @givenBondPurse, @rewardsForwarder, return) = {
+          //TODO: Validate that givenBondPurse comes from the same mint as purse
+
+          new
+            resultCh, bondPurseCh, validatePublicKey, depositClonePurse,
+            validateBondAmount, validateBondingRate
+          in {
+            //lambda-expression-like construction to insert key validation into the composition
+            for(@x, ret <- validatePublicKey){
+              new isBondedCh in {
+                this!("isBonded", publicKey, *isBondedCh) |
+                for(@isBonded <- isBondedCh) {
+                  if (isBonded) { ret!(("Left", "Public key ${pk} already bonded." %% {"pk" : publicKey})) }
+                  else          { ret!(("Right", x)) }
+                }
+              }
+            } |
+            for(@bp, ret <- validateBondAmount) {
+              this!("validateBondAmount", bp, *ret)
+            } |
+            for(@bp, ret <- validateBondingRate) {
+              this!("validateBondingRate", bp, *ret)
+            } |
+            clonePurse!(givenBondPurse, *bondPurseCh) |
+            for(@cloneResult <- bondPurseCh) {
+              match cloneResult {
+                ("Right", (bondPurse, bondAmount)) => {
+                  for(_, ret <- depositClonePurse) {
+                    depositPurse!(bondPurse, bondAmount, *ret)
+                  } |
+                  @Either!("compose", bondPurse, [
+                                        *validateBondAmount, 
+                                        *validateBondingRate,
+                                        *validatePublicKey,
+                                        *depositClonePurse
+                                        ], *resultCh) |
+                  for(@result <- resultCh) {
+                    match result {
+                      ("Right", _) => { updateBonds!(publicKey, sigVerify, bondAmount, rewardsForwarder, *return) }
+
+                      ("Left", message) => {
+                        //return funds to original purse since an error occurred
+                        @givenBondPurse!("deposit", bondAmount, bondPurse, *resultCh) |
+                        for(_ <- resultCh) { return!((false, message)) }
+                      }
+                    }
+                  }
+                }
+                ("Left", message) => { return!((false, message)) }
+              }
+            }
+          }
+        } |
+      
+        //TODO: Fill in this contract (RHOL-462)
+        contract this(@"distribute", @purse) = {
+          Nil
+        } |
+      
+        paymentStore!((Nil, Nil, Nil, Nil)) |
+      
+        //Make it easy to query the last payment so that validators
+        //can check how much phlo there is for the deploy.
+        contract this(@"lastPayment", return) = {
+          for(@payment <- paymentStore) {
+            paymentStore!(payment) |
+            return!(payment)
+          }
+        } |
+      
+        //This is the contract that deploy payment code ultimately needs
+        //to call in order to pay for the deploy.
+        contract this(@"pay", @purse, return) = {
+          new payPurseCh, p(`rho:deploy:params`), paramsCh in {
+            clonePurse!(purse, *payPurseCh) |
+            p!(*paramsCh) |
+            for(
+              @cloneResult <- payPurseCh;
+              @codeHash, @phloRate, @userId, @timestamp <- paramsCh
+            ) {
+              match cloneResult {
+                ("Right", (payPurse, payAmount)) => {
+                  this!("distribute", payPurse) | //distribute rev paid to validators
+                  //update paymentStore
+                  for(_ <- paymentStore){ paymentStore!((codeHash, userId, timestamp, phloRate * payAmount)) } |
+                  return!(phloRate * payAmount) //return amount of phlo purchased to user (in case they care)
+                }
+                ("Left", message) => {
+                  for(_ <- paymentStore){ paymentStore!((codeHash, userId, timestamp, 0)) } |
+                  return!(0)
+                }
+              }
+            }
+          }
+        } |
+      
+        return!(bundle+{*this})
+      }
+    }
+  } |
+  rs!(
+    "0cbe092b27e04a944c7ac184619f3abeacffdd823ded94113ae918a63e55d5f2".hexToBytes(), 
+    (9223372036854775807, bundle+{*MakePoS}), 
+    "99c6739350f2cfbe4817c1f236943894645c8eecb7248a4e01cef97476da072fb09628bb3bbe80397b5d503c399a28684b1fb921c239788b80862f905ce4010a".hexToBytes(), 
+    *uriOut
+  )
+}

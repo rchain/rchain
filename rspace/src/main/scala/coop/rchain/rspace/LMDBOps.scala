@@ -11,7 +11,7 @@ import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.PathOps._
 import scodec.bits.BitVector
 import kamon._
-import org.lmdbjava.Txn.NotReadyException
+import scala.util.control.NonFatal
 
 trait LMDBOps extends CloseOps {
 
@@ -45,37 +45,8 @@ trait LMDBOps extends CloseOps {
       txn.commit()
       ret
     } catch {
-      case ex: Throwable =>
-        try {
-          txn.abort()
-        } catch {
-          //  /**
-          //   * Commits this transaction.
-          //   */
-          //  public void commit() {
-          //    checkReady();
-          //    (1) state = DONE;
-          //    checkRc( (2) LIB.mdb_txn_commit(ptr));
-          //  }
-          //   /**
-          //   * Aborts this transaction.
-          //   */
-          //  public void abort() {
-          //    (3) checkReady();
-          //    state = DONE;
-          //    LIB.mdb_txn_abort(ptr);
-          //  }
-          case ex: NotReadyException =>
-            ex.printStackTrace()
-            TxnOps.manuallyAbortTxn(txn)
-          // due to the way LMDBjava tries to handle txn commit
-          // IF the DB runs out of space AND this occurs while trying to commit a txn (2)
-          // the internal java state (STATE in Txn) will be set to DONE (1) before the Txn is committed
-          // (the exception happens in the attempt to commit)
-          // the abort action will interpret this as an invalid state (3)
-          // A fix is to ignore this exception as the original one is a valid cause
-          // and it still will cause txn.close in the finally block
-        }
+      case NonFatal(ex) =>
+        ex.printStackTrace
         throw ex
     } finally {
       updateGauges()
@@ -108,10 +79,13 @@ trait LMDBOps extends CloseOps {
         }
 
     def put[V](txn: Txn[ByteBuffer], key: Blake2b256Hash, data: V)(
-        implicit codecV: Codec[V]): Unit =
-      if (!dbi.put(txn,
-                   key.bytes.toDirectByteBuffer,
-                   codecV.encode(data).map(_.bytes.toDirectByteBuffer).get)) {
+        implicit codecV: Codec[V]
+    ): Unit =
+      if (!dbi.put(
+            txn,
+            key.bytes.toDirectByteBuffer,
+            codecV.encode(data).map(_.bytes.toDirectByteBuffer).get
+          )) {
         throw new Exception(s"could not persist: $data")
       }
 
@@ -120,18 +94,24 @@ trait LMDBOps extends CloseOps {
         throw new Exception(s"could not delete: $key")
       }
 
-    def get[K, V](txn: Txn[ByteBuffer], key: K)(implicit codecK: Codec[K],
-                                                codecV: Codec[V]): Option[V] =
+    def get[K, V](
+        txn: Txn[ByteBuffer],
+        key: K
+    )(implicit codecK: Codec[K], codecV: Codec[V]): Option[V] =
       Option(dbi.get(txn, codecK.encode(key).get.bytes.toDirectByteBuffer))
         .map { bytes =>
           codecV.decode(BitVector(bytes)).map(_.value).get
         }
 
-    def put[K, V](txn: Txn[ByteBuffer], key: K, data: V)(implicit codecK: Codec[K],
-                                                         codecV: Codec[V]): Unit =
-      if (!dbi.put(txn,
-                   codecK.encode(key).get.bytes.toDirectByteBuffer,
-                   codecV.encode(data).map(_.bytes.toDirectByteBuffer).get)) {
+    def put[K, V](txn: Txn[ByteBuffer], key: K, data: V)(
+        implicit codecK: Codec[K],
+        codecV: Codec[V]
+    ): Unit =
+      if (!dbi.put(
+            txn,
+            codecK.encode(key).get.bytes.toDirectByteBuffer,
+            codecV.encode(data).map(_.bytes.toDirectByteBuffer).get
+          )) {
         throw new Exception(s"could not persist: $data")
       }
 

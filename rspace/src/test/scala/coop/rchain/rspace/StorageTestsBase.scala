@@ -1,22 +1,34 @@
 package coop.rchain.rspace
+
 import java.nio.file.{Files, Path}
 
+import cats._
+import cats.implicits._
+import cats.effect._
 import com.typesafe.scalalogging.Logger
 import com.google.common.collect.HashMultiset
+import coop.rchain.rspace.ISpace.IdISpace
+
 import scala.collection.JavaConverters._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, InMemoryTrieStore, LMDBTrieStore}
+import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.test._
 import coop.rchain.shared.PathOps._
 import org.scalatest._
+
 import scala.collection.immutable.{Seq, Set}
+import scala.concurrent.ExecutionContext
 import scodec.Codec
 
-trait StorageTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with OptionValues {
+import scala.concurrent.ExecutionContext.Implicits.global
 
-  type T = FreudianSpace[C, P, E, A, A, K]
+trait StorageTestsBase[F[_], C, P, E, A, K] extends FlatSpec with Matchers with OptionValues {
+  type T = ISpace[F, C, P, E, A, A, K]
+
+  implicit def syncF: Sync[F]
+  implicit def monadF: Monad[F]
+  implicit def contextShiftF: ContextShift[F]
 
   case class State(
       checkpoint: Blake2b256Hash,
@@ -33,12 +45,15 @@ trait StorageTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with Option
 
   /** A fixture for creating and running a test with a fresh instance of the test store.
     */
-  def withTestSpace[S](f: T => S): S
+  def withTestSpace[R](f: T => F[R]): R
+  def run[S](f: F[S]): S
 
-  def validateIndexedStates(space: T,
-                            indexedStates: Seq[(State, Int)],
-                            reportName: String,
-                            differenceReport: Boolean = false): Boolean = {
+  def validateIndexedStates(
+      space: T,
+      indexedStates: Seq[(State, Int)],
+      reportName: String,
+      differenceReport: Boolean = false
+  ): Boolean = {
     final case class SetRow(data: Set[Datum[A]], wks: Set[WaitingContinuation[P, K]])
 
     def convertMap(m: Map[Seq[C], Row[P, A, K]]): Map[Seq[C], SetRow] =
@@ -84,7 +99,8 @@ trait StorageTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with Option
                   case Some(row) =>
                     if (row != expectedRow) {
                       logger.error(
-                        s"key [$expectedChannels] invalid actual value: $row !== $expectedRow")
+                        s"key [$expectedChannels] invalid actual value: $row !== $expectedRow"
+                      )
                     }
                   case None => logger.error(s"key [$expectedChannels] not found in actual records")
                 }
@@ -97,7 +113,8 @@ trait StorageTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with Option
                   case Some(row) =>
                     if (row != actualRow) {
                       logger.error(
-                        s"key[$actualChannels] invalid actual value: $actualRow !== $row")
+                        s"key[$actualChannels] invalid actual value: $actualRow !== $row"
+                      )
                     }
                   case None => logger.error(s"key [$actualChannels] not found in expected records")
                 }
@@ -110,122 +127,138 @@ trait StorageTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with Option
   }
 }
 
-class InMemoryStoreTestsBase
-    extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor]
+abstract class InMemoryStoreTestsBase[F[_]]
+    extends StorageTestsBase[F, String, Pattern, Nothing, String, StringsCaptor]
     with BeforeAndAfterAll {
 
-  override def withTestSpace[S](f: T => S): S = {
+  override def withTestSpace[S](f: T => F[S]): S = {
     implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
     implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
     val branch                                = Branch("inmem")
 
-    val trieStore =
-      InMemoryTrieStore.create[Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]]()
+    val ctx: Context[String, Pattern, String, StringsCaptor] = Context.createInMemory()
 
-    val testStore = InMemoryStore.create[
-      InMemTransaction[history.State[Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]]],
-      String,
-      Pattern,
-      String,
-      StringsCaptor](trieStore, branch)
-
-    val testSpace =
-      RSpace.create[String, Pattern, Nothing, String, String, StringsCaptor](testStore, branch)
-    testStore.withTxn(testStore.createTxnWrite()) { txn =>
-      testStore.withTrieTxn(txn) { trieTxn =>
-        testStore.clear(txn)
-        testStore.trieStore.clear(trieTxn)
+    run(for {
+      testSpace <- RSpace.create[F, String, Pattern, Nothing, String, String, StringsCaptor](
+                    ctx,
+                    branch
+                  )
+      testStore = testSpace.store
+      trieStore = testStore.trieStore
+      _ <- testStore
+            .withTxn(testStore.createTxnWrite()) { txn =>
+              testStore.withTrieTxn(txn) { trieTxn =>
+                testStore.clear(txn)
+                testStore.trieStore.clear(trieTxn)
+              }
+            }
+            .pure[F]
+      _   <- history.initialize(trieStore, branch).pure[F]
+      _   <- testSpace.createCheckpoint()
+      res <- f(testSpace)
+    } yield {
+      try {
+        res
+      } finally {
+        trieStore.close()
+        testStore.close()
       }
-    }
-    history.initialize(trieStore, branch)
-    val _ = testSpace.createCheckpoint()
-    try {
-      f(testSpace)
-    } finally {
-      trieStore.close()
-      testStore.close()
-    }
+    })
   }
 
   override def afterAll(): Unit =
     super.afterAll()
 }
 
-class LMDBStoreTestsBase
-    extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor]
+abstract class LMDBStoreTestsBase[F[_]]
+    extends StorageTestsBase[F, String, Pattern, Nothing, String, StringsCaptor]
     with BeforeAndAfterAll {
 
   val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
   val mapSize: Long = 1024L * 1024L * 4096L
 
-  override def withTestSpace[S](f: T => S): S = {
+  override def withTestSpace[S](f: T => F[S]): S = {
     implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
     implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
 
     val testBranch = Branch("test")
     val env        = Context.create[String, Pattern, String, StringsCaptor](dbDir, mapSize)
-    val testStore  = LMDBStore.create[String, Pattern, String, StringsCaptor](env, testBranch)
-    val testSpace =
-      RSpace.create[String, Pattern, Nothing, String, String, StringsCaptor](testStore, testBranch)
-    testStore.withTxn(testStore.createTxnWrite()) { txn =>
-      testStore.withTrieTxn(txn) { trieTxn =>
-        testStore.clear(txn)
-        testStore.trieStore.clear(trieTxn)
+
+    run(for {
+      testSpace <- RSpace.create[F, String, Pattern, Nothing, String, String, StringsCaptor](
+                    env,
+                    testBranch
+                  )
+      testStore = testSpace.store
+      _ <- testStore
+            .withTxn(testStore.createTxnWrite()) { txn =>
+              testStore.withTrieTxn(txn) { trieTxn =>
+                testStore.clear(txn)
+                testStore.trieStore.clear(trieTxn)
+              }
+            }
+            .pure[F]
+      _   <- history.initialize(testStore.trieStore, testBranch).pure[F]
+      _   <- testSpace.createCheckpoint()
+      res <- f(testSpace)
+    } yield {
+      try {
+        res
+      } finally {
+        testStore.trieStore.close()
+        testStore.close()
+        env.close()
       }
-    }
-    history.initialize(testStore.trieStore, testBranch)
-    val _ = testSpace.createCheckpoint()
-    try {
-      f(testSpace)
-    } finally {
-      testStore.trieStore.close()
-      testStore.close()
-      env.close()
-    }
+    })
   }
 
   override def afterAll(): Unit =
     dbDir.recursivelyDelete
 }
 
-class MixedStoreTestsBase
-    extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor]
+abstract class MixedStoreTestsBase[F[_]]
+    extends StorageTestsBase[F, String, Pattern, Nothing, String, StringsCaptor]
     with BeforeAndAfterAll {
 
   val dbDir: Path   = Files.createTempDirectory("rchain-mixed-storage-test-")
   val mapSize: Long = 1024L * 1024L * 4096L
 
-  override def withTestSpace[S](f: T => S): S = {
+  override def withTestSpace[S](f: T => F[S]): S = {
     implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
     implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
 
     val testBranch = Branch("test")
     val env        = Context.createMixed[String, Pattern, String, StringsCaptor](dbDir, mapSize)
-    val testStore = InMemoryStore
-      .create[org.lmdbjava.Txn[java.nio.ByteBuffer], String, Pattern, String, StringsCaptor](
-        env.trieStore,
-        testBranch)
 
-    val testSpace =
-      RSpace.create[String, Pattern, Nothing, String, String, StringsCaptor](testStore, testBranch)
-    testStore.withTxn(testStore.createTxnWrite()) { txn =>
-      testStore.withTrieTxn(txn) { trieTxn =>
-        testStore.clear(txn)
-        testStore.trieStore.clear(trieTxn)
+    run(for {
+      testSpace <- RSpace.create[F, String, Pattern, Nothing, String, String, StringsCaptor](
+                    env,
+                    testBranch
+                  )
+      testStore = testSpace.store
+      _ <- testStore
+            .withTxn(testStore.createTxnWrite()) { txn =>
+              testStore.withTrieTxn(txn) { trieTxn =>
+                testStore.clear(txn)
+                testStore.trieStore.clear(trieTxn)
+              }
+            }
+            .pure[F]
+      _   <- history.initialize(testStore.trieStore, testBranch).pure[F]
+      _   <- testSpace.createCheckpoint()
+      res <- f(testSpace)
+    } yield {
+      try {
+        res
+      } finally {
+        testStore.trieStore.close()
+        testStore.close()
+        env.close()
       }
-    }
-    history.initialize(testStore.trieStore, testBranch)
-    val _ = testSpace.createCheckpoint()
-    try {
-      f(testSpace)
-    } finally {
-      testStore.trieStore.close()
-      testStore.close()
-      env.close()
-    }
+    })
   }
 
   override def afterAll(): Unit =

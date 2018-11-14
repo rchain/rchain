@@ -10,7 +10,8 @@ import org.scalatest.enablers.Containing
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 import coop.rchain.shared._
-import coop.rchain.comm.transport._, CommMessages._
+import coop.rchain.comm.transport._
+import coop.rchain.comm.rp.ProtocolHelper._
 
 class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
 
@@ -71,7 +72,8 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
 
     describe("and there already are some connections") {
       it(
-        "should ask NodeDiscovery for the list of peers and try to the one he is not connected yet") {
+        "should ask NodeDiscovery for the list of peers and try to the one he is not connected yet"
+      ) {
         // given
         implicit val connections = mkConnections(peer("B"))
         // when
@@ -113,9 +115,12 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
       defaultTimeout: FiniteDuration
   ): RPConfAsk[Id] =
     new ConstApplicativeAsk(
-      RPConf(clearConnections = ClearConnetionsConf(maxNumOfConnections, numOfConnectionsPinged),
-             defaultTimeout = defaultTimeout,
-             local = peer("src"))
+      RPConf(
+        clearConnections = ClearConnetionsConf(maxNumOfConnections, numOfConnectionsPinged),
+        defaultTimeout = defaultTimeout,
+        local = peer("src"),
+        bootstrap = None
+      )
     )
 
   implicit def eiterTrpConfAsk: RPConfAsk[Effect] =
