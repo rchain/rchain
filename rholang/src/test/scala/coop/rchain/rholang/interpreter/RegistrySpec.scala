@@ -670,7 +670,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       val resultTask = for {
         _ <- reducer.eval(completePar)
       } yield space.store.toMap
-      Await.result(resultTask.runAsync, EvaluateTimeout)
+      Await.result(resultTask.runToFuture, EvaluateTimeout)
     }
 
 }

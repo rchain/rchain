@@ -4,7 +4,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 import coop.rchain.comm.protocol.routing.Protocol
 
-import monix.eval.Callback
+import monix.execution.Callback
 
 trait ServerMessage
 // TODO rename to AksMesage and TellMesssage
@@ -18,7 +18,7 @@ trait SenderHandle {
   def complete: Boolean
 }
 
-final class Reply(callback: Callback[CommunicationResponse]) extends SenderHandle {
+final class Reply(callback: Callback[Throwable, CommunicationResponse]) extends SenderHandle {
   // contract: the callback can be called only once
   private val called = new AtomicBoolean(false)
 
@@ -36,5 +36,5 @@ final class Reply(callback: Callback[CommunicationResponse]) extends SenderHandl
 }
 
 object Reply {
-  def apply(callback: Callback[CommunicationResponse]): Reply = new Reply(callback)
+  def apply(callback: Callback[Throwable, CommunicationResponse]): Reply = new Reply(callback)
 }

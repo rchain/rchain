@@ -3,7 +3,6 @@ package coop.rchain.node.configuration
 import java.io.File
 import java.net.InetAddress
 import java.nio.file.{Path, Paths}
-import java.util.concurrent.atomic.AtomicReference
 
 import cats.implicits._
 
@@ -18,11 +17,8 @@ import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.shared.StoreType
 import coop.rchain.shared.StoreType._
 
-import monix.eval.{Callback, Task}
+import monix.eval.Task
 import scala.concurrent.duration._
-
-import com.google.common.base.Optional
-import monix.execution.Scheduler
 
 object Configuration {
   private implicit val logSource: LogSource = LogSource(this.getClass)

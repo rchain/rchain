@@ -22,7 +22,7 @@ class CostAccountingSpec extends FlatSpec with TripleEqualsSupport {
       alg <- CostAccounting.of[Task](initState)
       res <- f(alg)
     } yield res
-    Await.result(test.runAsync, 5.seconds)
+    Await.result(test.runToFuture, 5.seconds)
   }
 
   "get" should "return current cost account" in withCostAccAlg() { alg =>

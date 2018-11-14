@@ -204,11 +204,11 @@ class CasperPacketHandlerSpec extends WordSpec {
           standaloneCasper    = new StandaloneCasperHandler[Task](abp)
           refCasper           <- Ref.of[Task, CasperPacketHandlerInternal[Task]](standaloneCasper)
           casperPacketHandler = new CasperPacketHandlerImpl[Task](refCasper)
-          c1                  = abp.run().forkAndForget.runAsync
+          c1                  = abp.run().forkAndForget.runToFuture
           c2 = StandaloneCasperHandler
             .approveBlockInterval(interval, shardId, runtimeManager, Some(validatorId), refCasper)
             .forkAndForget
-            .runAsync
+            .runToFuture
           blockApproval = ApproveBlockProtocolTest.approval(
             ApprovedBlockCandidate(Some(genesis), requiredSigns),
             validatorSk,
