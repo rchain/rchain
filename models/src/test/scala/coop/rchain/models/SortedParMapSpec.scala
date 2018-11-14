@@ -113,7 +113,7 @@ class SortedParMapSpec extends FlatSpec with PropertyChecks with Matchers {
       Par()
     )
     val sortedParMap = SortedParMap(sortedParMapKeys.zip(Seq.fill(sortedParMapKeys.size)(Par())))
-    val keys         = sortedParMap.sortedMap.keys
+    val keys         = sortedParMap.keys
     assert(keys.toList == keys.toList.sort)
   }
 

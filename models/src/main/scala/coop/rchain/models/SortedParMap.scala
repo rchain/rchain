@@ -3,13 +3,13 @@ package coop.rchain.models
 import coop.rchain.models.rholang.sorter.ordering._
 
 import scala.collection.GenTraversableOnce
-import scala.collection.immutable.ListMap
+import scala.collection.immutable.HashMap
 
 final class SortedParMap private (ps: Map[Par, Par]) extends Iterable[(Par, Par)] {
 
-  // TODO: Merge `sortedMap` and `sortedMapLookup` into one VectorMap once available
-  lazy val sortedMap: ListMap[Par, Par]   = ListMap(ps.sort: _*)
-  lazy val sortedMapLookup: Map[Par, Par] = ps.sort.toMap
+  // TODO: Merge `sortedList` and `sortedMap` into one VectorMap once available
+  lazy val sortedList: List[(Par, Par)] = ps.sort
+  lazy val sortedMap: HashMap[Par, Par] = HashMap(sortedList: _*)
 
   def +(kv: (Par, Par)): SortedParMap = SortedParMap(sortedMap + kv)
 
@@ -19,28 +19,28 @@ final class SortedParMap private (ps: Map[Par, Par]) extends Iterable[(Par, Par)
 
   def --(keys: GenTraversableOnce[Par]): SortedParMap = SortedParMap(sortedMap -- keys)
 
-  def apply(par: Par): Par = sortedMapLookup(par)
+  def apply(par: Par): Par = sortedMap(par)
 
-  def contains(par: Par): Boolean = sortedMapLookup.contains(par)
+  def contains(par: Par): Boolean = sortedMap.contains(par)
 
   def empty: SortedParMap = SortedParMap(Map.empty[Par, Par])
 
-  def get(key: Par): Option[Par] = sortedMapLookup.get(key)
+  def get(key: Par): Option[Par] = sortedMap.get(key)
 
-  def getOrElse(key: Par, default: Par): Par = sortedMapLookup.getOrElse(key, default)
+  def getOrElse(key: Par, default: Par): Par = sortedMap.getOrElse(key, default)
 
-  def iterator: Iterator[(Par, Par)] = sortedMap.toIterator
+  def iterator: Iterator[(Par, Par)] = sortedList.toIterator
 
-  def keys: Iterable[Par] = sortedMap.keys
+  def keys: Iterable[Par] = sortedList.map(_._1)
 
-  def values: Iterable[Par] = sortedMap.values
+  def values: Iterable[Par] = sortedList.map(_._2)
 
   override def equals(that: Any): Boolean = that match {
-    case spm: SortedParMap => spm.sortedMap == this.sortedMap
+    case spm: SortedParMap => spm.sortedList == this.sortedList
     case _                 => false
   }
 
-  override def hashCode(): Int = sortedMap.hashCode()
+  override def hashCode(): Int = sortedList.hashCode()
 }
 
 object SortedParMap {
