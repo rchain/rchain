@@ -51,7 +51,7 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
         .build()
     } catch {
       case e: Throwable =>
-        println(e.getMessage)
+        e.printStackTrace()
         throw e
     }
 
@@ -132,7 +132,7 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
         Chunk().withHeader(
           ChunkHeader()
             .withCompressed(compress)
-            .withDecompressedLength(raw.length)
+            .withContentLength(raw.length)
             .withSender(ProtocolHelper.node(blob.sender))
             .withTypeId(blob.packet.typeId)
         )
