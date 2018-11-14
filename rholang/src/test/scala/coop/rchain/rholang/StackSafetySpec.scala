@@ -166,7 +166,7 @@ class StackSafetySpec extends FlatSpec with Matchers {
       //val reduceRho = s"@0!($rho)"
       val reduceRho = s"for (_ <- @0) { Nil } | @0!($rho)"
       checkSuccess(reduceRho) { rho =>
-        mkRuntime(tmpPrefix, mapSize)
+        mkRuntime[Task, Task.Par](tmpPrefix, mapSize)
           .use { runtime =>
             Interpreter.execute(runtime, new StringReader(rho))
           }

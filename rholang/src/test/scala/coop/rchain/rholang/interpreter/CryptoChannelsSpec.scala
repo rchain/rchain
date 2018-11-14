@@ -211,7 +211,7 @@ class CryptoChannelsSpec
     val randomInt = scala.util.Random.nextInt
     val dbDir     = Files.createTempDirectory(s"rchain-storage-test-$randomInt")
     val size      = 1024L * 1024 * 10
-    val runtime   = Runtime.create(dbDir, size)
+    val runtime   = Runtime.create[Task, Task.Par](dbDir, size).runSyncUnsafe(1.second)
     runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
 
     try {

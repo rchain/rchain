@@ -28,7 +28,7 @@ class CompilerTests extends FunSuite with Matchers {
       val result = execute(file)
       assert(result.isRight)
       val resRuntime = result.right.get
-      val errorLog   = resRuntime.readAndClearErrorVector()
+      val errorLog   = resRuntime.readAndClearErrorVector().runSyncUnsafe(1.second)
       assert(errorLog.isEmpty)
     }
   }
@@ -40,8 +40,8 @@ class CompilerTests extends FunSuite with Matchers {
     }
   }
 
-  private def execute(file: Path): Either[Throwable, Runtime] =
-    mkRuntime(tmpPrefix, mapSize)
+  private def execute(file: Path): Either[Throwable, Runtime[Task]] =
+    mkRuntime[Task, Task.Par](tmpPrefix, mapSize)
       .use { runtime =>
         Interpreter.execute(runtime, new FileReader(file.toString)).attempt
       }
