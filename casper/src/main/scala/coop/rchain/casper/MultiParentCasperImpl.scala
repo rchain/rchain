@@ -118,8 +118,9 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                 else if (!validSig) InvalidUnslashableBlock.pure[F]
                 else if (!validSender) InvalidUnslashableBlock.pure[F]
                 else if (!validVersion) InvalidUnslashableBlock.pure[F]
-                else if (validatorId.exists(id => ByteString.copyFrom(id.publicKey) == b.sender))
-                  addEffects(Valid, b).map(_ => Valid)
+                // TODO: Re-enable once node is more stable
+                //else if (validatorId.exists(id => ByteString.copyFrom(id.publicKey) == b.sender))
+                //  addEffects(Valid, b).map(_ => Valid)
                 else attemptAdd(b)
       _ <- attempt match {
             case MissingBlocks => ().pure[F]
