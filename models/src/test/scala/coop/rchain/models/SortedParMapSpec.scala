@@ -10,6 +10,7 @@ import coop.rchain.models.Var.VarInstance.BoundVar
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.models.rholang.sorter.ordering._
+import coop.rchain.models.testImplicits._
 import monix.eval.Coeval
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{Assertion, FlatSpec, Matchers}
@@ -117,9 +118,28 @@ class SortedParMapSpec extends FlatSpec with PropertyChecks with Matchers {
     assert(keys.toList == keys.toList.sort)
   }
 
-  it should "preserve sortedness of all elements and the whole map for all its operations" in {
-    import coop.rchain.models.testImplicits._
+  it should "sort all input" in {
+    forAll { (keys: Seq[Par], values: Seq[Par]) =>
+      val kvs = keys.zip(values)
+      val map = SortedParMap(kvs)
 
+      kvs.headOption
+        .map(_._1)
+        .foreach(
+          (unsorted: Par) => {
+            val sorted = unsorted.sort
+            checkSortedInput(map.-, unsorted, sorted)
+            checkSortedInput(map.apply, unsorted, sorted)
+            checkSortedInput(map.contains, unsorted, sorted)
+            checkSortedInput(map.get, unsorted, sorted)
+            checkSortedInput(map.getOrElse(_: Par, Par()), unsorted, sorted)
+          }
+        )
+      checkSortedInput(map.--, keys, keys.sort)
+    }
+  }
+
+  it should "preserve sortedness of all elements and the whole map for all its operations" in {
     forAll { (pars1: Seq[Par], pars2: Seq[Par]) =>
       val map1 = SortedParMap(pars1.zip(pars2))
       val map2 = SortedParMap(pars2.zip(pars1))
@@ -149,6 +169,9 @@ class SortedParMapSpec extends FlatSpec with PropertyChecks with Matchers {
     iterable.foreach(p => assert(isSorted(p)))
     assert(iterable.toList == iterable.toList.sort)
   }
+
+  private def checkSortedInput[A, B](f: A => B, unsorted: A, sorted: A): Assertion =
+    assert(f(sorted) == f(unsorted))
 
   def isSorted[A: Sortable](a: A): Boolean =
     a == Sortable[A].sortMatch[Coeval](a).value().term

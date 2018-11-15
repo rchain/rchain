@@ -48,8 +48,6 @@ class StackSafetySpec extends FlatSpec with Matchers {
   val tmpPrefix   = "rspace-store-"
   val maxDuration = 20.seconds
 
-  val runtime = Runtime.create(Files.createTempDirectory(tmpPrefix), mapSize)
-
   val depth: Int = findMaxRecursionDepth()
 
   //FIXME make all the test cases work with checkAll.

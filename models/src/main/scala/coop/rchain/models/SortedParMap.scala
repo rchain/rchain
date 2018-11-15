@@ -15,19 +15,19 @@ final class SortedParMap private (ps: Map[Par, Par]) extends Iterable[(Par, Par)
 
   def ++(kvs: GenTraversableOnce[(Par, Par)]): SortedParMap = SortedParMap(sortedMap ++ kvs)
 
-  def -(key: Par): SortedParMap = SortedParMap(sortedMap - key)
+  def -(key: Par): SortedParMap = SortedParMap(sortedMap - key.sort)
 
-  def --(keys: GenTraversableOnce[Par]): SortedParMap = SortedParMap(sortedMap -- keys)
+  def --(keys: GenTraversableOnce[Par]): SortedParMap = SortedParMap(sortedMap -- keys.sort)
 
-  def apply(par: Par): Par = sortedMap(par)
+  def apply(par: Par): Par = sortedMap(par.sort)
 
-  def contains(par: Par): Boolean = sortedMap.contains(par)
+  def contains(par: Par): Boolean = sortedMap.contains(par.sort)
 
   def empty: SortedParMap = SortedParMap(Map.empty[Par, Par])
 
-  def get(key: Par): Option[Par] = sortedMap.get(key)
+  def get(key: Par): Option[Par] = sortedMap.get(key.sort)
 
-  def getOrElse(key: Par, default: Par): Par = sortedMap.getOrElse(key, default)
+  def getOrElse(key: Par, default: Par): Par = sortedMap.getOrElse(key.sort, default)
 
   def iterator: Iterator[(Par, Par)] = sortedList.toIterator
 
