@@ -16,13 +16,13 @@ The second, in the same vein, is that a process variable does *not* match with a
           {for( x <-   y  ){ Nil }} => { y!(Nil) }
     }
 
-*will* match, returning `@Nil!(Nil)`, but
+*will* match, resulting in `@Nil!(Nil)`, but
 
     match {for( x <-  @{for( x <- @Nil ){ x!(Nil) }} ){ Nil }} {
           {for( x <-  @{for( x <- @Nil ){    y    }} ){ Nil }} => { y }
     }
 
-will not match since `y` cannot match with `x!(Nil)`, and thus evaluate to the empty process. Also,
+will not match since `y` cannot match with `x!(Nil)`, and thus will evaluate to the empty process. Also,
 
     for( x <- @{z!(Nil)} ){ Nil }
 
@@ -34,26 +34,26 @@ is incorrect, due to a logical connective being where a process should be, and
 
     for( x <- @{[1, 2 ... z]}){ Nil }
 
-won't compile because `z` is free and the given list is a pattern.
+won't compile because `z` is free and thus the given list is a pattern.
 
 ## Name Equivalence
 
 The RHO calculus, on which Rholang is based, says that two names are equivalent when the processes that they quote are equivalent, and that processes are equated via the relations below (and nothing more). Here, `P`, `Q` and `R` are processes:
 
-* `P | Q = Q | P` (commutativity)
-* `P = P | Nil = Nil | P` (identity)
-* `(P | Q) | R = P | (Q | R)` (associativity)
+* `P | Q` = `Q | P` (commutativity)
+* `P` = `P | Nil` = `Nil | P` (identity)
+* `(P | Q) | R` = `P | (Q | R)` (associativity)
 
-Therefore, `@ P | Q = @ Q | P` and `@ P | Nil = @ P = @ Nil | P`, etc.
+Therefore, `@{P | Q}` = `@{Q | P}` and `@{P | Nil}` = `@P = @{Nil | P}`, etc.
 
 In Rholang, these relations only apply *to the top level* of any name. In addition to the three given above, we also evaluate expressions on the top level. So for example, as channels,
 
-* `@{10 + 2} = @{5 + 7}` and
-* `@{for(x <- @Nil){ 10 + 2 }} = @{for(x <- @Nil){ 5 + 7 }}`.
+* `@{10 + 2}` = `@{5 + 7}` and
+* `@{for(x <- @Nil){ 10 + 2 }}` = `@{for(x <- @Nil){ 5 + 7 }}`.
 
 Since we use variables, channels also respect alpha equivalence, meaning that, for example, as channels
 
-* `@{for( x <- @Nil ){ Nil }}  = @{for( z <- @Nil ){ Nil }}`.
+* `@{for( x <- @Nil ){ Nil }}` = `@{for( z <- @Nil ){ Nil }}`.
 
 In the RHO calculus we don't have to worry about distinguishing the top level from other parts of a channel, but because of things like pattern-matching, we have to in Rholang. This will be relevant later on, where there are restrictions on pattern-matching because of this.
 
