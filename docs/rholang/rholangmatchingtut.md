@@ -44,7 +44,7 @@ The RHO calculus, on which Rholang is based, says that two names are equivalent 
 * `P` = `P | Nil` = `Nil | P` (identity)
 * `(P | Q) | R` = `P | (Q | R)` (associativity)
 
-Therefore, `@{P | Q}` = `@{Q | P}` and `@{P | Nil}` = `@P = @{Nil | P}`, etc.
+Therefore, `@{P | Q}` = `@{Q | P}` and `@{P | Nil}` = `@P` = `@{Nil | P}`, etc.
 
 In Rholang, these relations only apply *to the top level* of any name. In addition to the three given above, we also evaluate expressions on the top level. So for example, as channels,
 
@@ -66,9 +66,9 @@ Here we need to treat statements that are not on the top level. We reemphasize t
 Furthermore, we can't bind variables to parts of patterns. For example, the following send/receive will not match:
 
     for( @{for( @{x!(y)} <- @Nil ){ Nil }} <- @Nil ){ Nil }  |
-    @Nil!( for( @{x!(10)} <- @Nil ){ Nil } )
+    @Nil!( for( @{x!(9)} <- @Nil ){ Nil } )
 
-Naively, one might expect these to match, binding `y` to `10`, but to match with the above receive, one must send something alpha equivalent to:
+Naively, one might expect these to match, binding `y` to `9`, but to match with the above receive, one must send something alpha equivalent to:
 
     @Nil!( for( @{x!(y)} <- @Nil ){ Nil } )
 
@@ -175,7 +175,7 @@ due to the wildcard being in the body of the listen, even though it is correct t
 
     for( x <- @Nil){ x!(Nil) }
 
-It is, however, perfectly acceptable to write
+(becuase the `x` is bound in the body of the receive). It is, however, perfectly acceptable to write
 
     for( _ <- @Nil){ Nil }
 
