@@ -1932,6 +1932,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val result = test.attempt.runSyncUnsafe(1.second)
     assert(result === Left(OutOfPhlogistonsError))
-    errorLog.readAndClearErrorVector() should be(Vector.empty)
+    errorLog.readAndClearErrorVector().runSyncUnsafe(1.second) should be(Vector.empty)
   }
 }
