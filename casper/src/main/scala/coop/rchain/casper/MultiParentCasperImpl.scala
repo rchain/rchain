@@ -268,7 +268,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   ): F[CreateBlockStatus] =
     for {
       now                      <- Time[F].currentMillis
-      possibleProcessedDeploys <- updateKnownStateHashes(p, r)
+      possibleProcessedDeploys <- updateKnownStateHashes(p, r, now)
       result <- possibleProcessedDeploys match {
                  case Left(ex) =>
                    Log[F]
@@ -314,10 +314,10 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
 
   private def updateKnownStateHashes(
       p: Seq[BlockMessage],
-      r: Seq[Deploy]
+      r: Seq[Deploy],
+      now: Long
   ): F[Either[Throwable, (StateHash, Seq[InternalProcessedDeploy])]] =
     for {
-      now <- Time[F].currentMillis
       possibleProcessedDeploys <- InterpreterUtil.computeDeploysCheckpoint[F](
                                    p,
                                    r,
