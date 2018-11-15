@@ -21,16 +21,7 @@ object ordering {
   implicit class GenTraversableOnceOps(ps: GenTraversableOnce[Par]) {
     implicit val sync = implicitly[Sync[Coeval]]
 
-    def sort: GenTraversableOnce[Par] = {
-      val psSorted: List[Coeval[ScoredTerm[Par]]] =
-        ps.toList.map(par => Sortable[Par].sortMatch[Coeval](par))
-
-      val coeval: Coeval[List[Par]] = for {
-        parsSorted <- psSorted.sequence
-      } yield parsSorted.sorted.map(_.term)
-
-      coeval.value
-    }
+    def sort: GenTraversableOnce[Par] = ps.toList.sort
   }
 
   implicit class ListSortOps(ps: List[Par]) {
