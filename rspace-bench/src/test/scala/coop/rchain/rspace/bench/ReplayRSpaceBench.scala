@@ -3,6 +3,7 @@ package coop.rchain.rspace.bench
 import java.util.concurrent.TimeUnit
 
 import cats.Id
+import cats.effect._
 import coop.rchain.rspace.{State => _, _}
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace.examples.AddressBookExample._
@@ -46,6 +47,8 @@ class ReplayRSpaceBench {
 }
 
 object ReplayRSpaceBench {
+
+  import scala.concurrent.ExecutionContext.Implicits.global
 
   abstract class ReplayRSpaceBenchState {
     var space: IdISpace[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor] = null

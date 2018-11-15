@@ -204,11 +204,11 @@ class CasperPacketHandlerSpec extends WordSpec {
           standaloneCasper    = new StandaloneCasperHandler[Task](abp)
           refCasper           <- Ref.of[Task, CasperPacketHandlerInternal[Task]](standaloneCasper)
           casperPacketHandler = new CasperPacketHandlerImpl[Task](refCasper)
-          c1                  = abp.run().forkAndForget.runAsync
+          c1                  = abp.run().forkAndForget.runToFuture
           c2 = StandaloneCasperHandler
             .approveBlockInterval(interval, shardId, runtimeManager, Some(validatorId), refCasper)
             .forkAndForget
-            .runAsync
+            .runToFuture
           blockApproval = ApproveBlockProtocolTest.approval(
             ApprovedBlockCandidate(Some(genesis), requiredSigns),
             validatorSk,
@@ -225,14 +225,13 @@ class CasperPacketHandlerSpec extends WordSpec {
           handlerInternal <- refCasper.get
           _               = assert(handlerInternal.isInstanceOf[ApprovedBlockReceivedHandler[Task]])
           // assert that we really serve last approved block
-          lastApprovedBlockO <- LastApprovedBlock[Task].get
-          _                  = assert(lastApprovedBlockO.isDefined)
-          approvedPacket     = approvedBlockRequestPacket
-          approvedBlockRes   <- casperPacketHandler.handle(local)(approvedBlockRequestPacket)
+          lastApprovedBlock <- LastApprovedBlock[Task].get
+          _                 = assert(lastApprovedBlock.isDefined)
+          _                 <- casperPacketHandler.handle(local)(approvedBlockRequestPacket)
+          head              = transportLayer.requests.head
           _ = assert(
-            approvedBlockRes.map(p => ApprovedBlock.parseFrom(p.content.toByteArray)) == Some(
-              lastApprovedBlockO.get
-            )
+            ApprovedBlock
+              .parseFrom(head.msg.message.packet.get.content.toByteArray) == lastApprovedBlock.get
           )
         } yield ()
 
@@ -241,48 +240,6 @@ class CasperPacketHandlerSpec extends WordSpec {
     }
 
     "in  BootstrapCasperHandler state" should {
-      "query peers sequentially with ApprovedBlockRequest" in {
-        implicit val ctx = TestScheduler()
-        val fixture      = setup()
-        import fixture._
-
-        val request       = ApprovedBlockRequest("PleaseSendMeAnApprovedBlock").toByteString
-        val requestPacket = ProtocolHelper.packet(local, transport.ApprovedBlockRequest, request)
-
-        val peer1 = peerNode("peerNode1", 1)
-        val peer2 = peerNode("peerNode2", 2)
-
-        transportLayer.setResponses(_ => p => Right(p))
-        connectionsCell.modify(_ => Task.now(List(peer1, peer2))).unsafeRunSync
-        ctx.tick()
-        val peers = connectionsCell.read.unsafeRunSync
-        assert(peers.size == 2)
-
-        implicit val lab = LastApprovedBlock.unsafe[Task]()
-        implicit val ph = new PacketHandler[Task] {
-          override def handlePacket(peer: PeerNode, packet: Packet): Task[Option[Packet]] =
-            Task.now(None: Option[Packet])
-        }
-
-        def assertSent(sentOnPeers: List[PeerNode]): Unit =
-          transportLayer.requests.zipWithIndex.foreach {
-            case (request, idx) =>
-              assert(request.msg == requestPacket)
-              assert(request.peer == sentOnPeers(idx))
-          }
-
-        val interval = 1.second
-        val test = for {
-          _ <- CommUtil.requestApprovedBlock[Task](interval).forkAndForget
-          _ = ctx.tick()
-          _ = assertSent(List(peer1, peer2))
-          _ = ctx.tick(interval)
-          _ = assertSent(List(peer1, peer2, peer1, peer2))
-        } yield ()
-
-        test.unsafeRunSync
-      }
-
       "make a transition to ApprovedBlockReceivedHandler once ApprovedBlock has been received" in {
         import monix.execution.Scheduler.Implicits.global
         val fixture = setup()
@@ -325,44 +282,9 @@ class CasperPacketHandlerSpec extends WordSpec {
           // assert that we really serve last approved block
           lastApprovedBlockO <- LastApprovedBlock[Task].get
           _                  = assert(lastApprovedBlockO.isDefined)
-          approvedBlockRes   <- casperPacketHandler.handle(local)(approvedBlockRequestPacket)
-          _ = assert(
-            approvedBlockRes.map(p => ApprovedBlock.parseFrom(p.content.toByteArray)) == Some(
-              lastApprovedBlockO.get
-            )
-          )
-        } yield ()
-
-        test.unsafeRunSync
-      }
-
-      "stop querying peers once ApprovedBlock has been received" in {
-        implicit val ctx = TestScheduler()
-        val fixture      = setup()
-        import fixture._
-
-        transportLayer.setResponses(_ => p => Right(p))
-
-        implicit val ph = new PacketHandler[Task] {
-          override def handlePacket(peer: PeerNode, packet: Packet): Task[Option[Packet]] =
-            Task.now(None: Option[Packet])
-        }
-
-        implicit val lab = LastApprovedBlock.unsafe[Task]()
-        val interval     = 1.second
-
-        assert(transportLayer.requests.size == 0)
-        val test = for {
-          _ <- CommUtil.requestApprovedBlock[Task](interval).forkAndForget
-          _ = ctx.tick()
-          _ = assert(transportLayer.requests.size == 1)
-          _ = ctx.tick(interval)
-          _ = assert(transportLayer.requests.size == 2)
-          _ <- lab.set(ApprovedBlock())
-          _ = ctx.tick(interval)
-          _ = assert(transportLayer.requests.size == 2)
-          _ = ctx.tick(interval)
-          _ = assert(transportLayer.requests.size == 2)
+          _                  <- casperPacketHandler.handle(local)(approvedBlockRequestPacket)
+          head               = transportLayer.requests.head
+          _                  = assert(head.msg.message.packet.get.content == approvedBlock.toByteString)
         } yield ()
 
         test.unsafeRunSync
@@ -409,6 +331,7 @@ class CasperPacketHandlerSpec extends WordSpec {
         } yield ()
 
         test.unsafeRunSync
+        transportLayer.reset()
       }
 
       "respond to BlockRequest messages" in {
@@ -424,6 +347,7 @@ class CasperPacketHandlerSpec extends WordSpec {
         } yield ()
 
         test.unsafeRunSync
+        transportLayer.reset()
       }
 
       "respond to ApprovedBlockRequest messages" in {
@@ -432,12 +356,17 @@ class CasperPacketHandlerSpec extends WordSpec {
           Packet(transport.ApprovedBlockRequest.id, approvedBlockRequest.toByteString)
 
         val test: Task[Unit] = for {
-          response <- casperPacketHandler.handle(local)(requestPacket)
-          block    = Packet(transport.ApprovedBlock.id, approvedBlock.toByteString)
-          _        = assert(response == Some(block))
+          _    <- casperPacketHandler.handle(local)(requestPacket)
+          head = transportLayer.requests.head
+          _    = assert(head.peer == local)
+          _ = assert(
+            ApprovedBlock
+              .parseFrom(head.msg.message.packet.get.content.toByteArray) == approvedBlock
+          )
         } yield ()
 
         test.unsafeRunSync
+        transportLayer.reset()
       }
     }
   }

@@ -15,6 +15,8 @@ import coop.rchain.shared.PathOps._
 import org.scalatest.BeforeAndAfterAll
 import scodec.Codec
 
+import scala.concurrent.ExecutionContext.Implicits.global
+
 trait StorageExamplesTests[F[_]]
     extends StorageTestsBase[F, Channel, Pattern, Nothing, Entry, EntriesCaptor]
     with TestImplicitHelpers {

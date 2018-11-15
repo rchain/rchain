@@ -44,7 +44,7 @@ trait CaptureInstances extends CaptureInstances0 {
     import monix.execution.Scheduler.Implicits.global
 
     def capture[A](a: => A): Task[A]       = Task.delay(a)
-    def unsafeUncapture[A](fa: Task[A]): A = Await.result(fa.runAsync, Duration.Inf)
+    def unsafeUncapture[A](fa: Task[A]): A = Await.result(fa.runToFuture, Duration.Inf)
   }
 
   /** TEMP REMOVE once comm no longer imperative*/

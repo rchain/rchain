@@ -48,7 +48,7 @@ class EvalBench {
   def reduceMVCEPPMT(state: MVCEPPBenchState): Unit = {
     implicit val scheduler: Scheduler = monix.execution.Scheduler.Implicits.global
     val runTask                       = createTest(state)
-    processErrors(Await.result(runTask.runAsync, Duration.Inf))
+    processErrors(Await.result(runTask.runToFuture, Duration.Inf))
   }
 }
 

@@ -3,7 +3,7 @@ package coop.rchain.rspace
 import java.lang.{Byte => JByte}
 
 import cats._
-import cats.effect.Sync
+import cats.effect._
 import cats.implicits._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
@@ -1397,17 +1397,29 @@ trait LegacyStorageActionsTests
 trait IdTests[C, P, A, R, K] extends StorageTestsBase[Id, C, P, A, R, K] {
   override implicit val syncF: Sync[Id]   = coop.rchain.catscontrib.effect.implicits.syncId
   override implicit val monadF: Monad[Id] = syncF
-  override def run[RES](f: Id[RES]): RES  = f
+  override implicit val contextShiftF: ContextShift[Id] =
+    coop.rchain.rspace.test.contextShiftId
+
+  override def run[RES](f: Id[RES]): RES = f
 }
 
 import monix.eval.Task
 trait TaskTests[C, P, A, R, K] extends StorageTestsBase[Task, C, P, A, R, K] {
   import coop.rchain.catscontrib.TaskContrib._
+  import scala.concurrent.ExecutionContext
+
   override implicit val syncF: Sync[Task] = new monix.eval.instances.CatsEffectForTask()(
     monix.execution.Scheduler.Implicits.global,
     Task.defaultOptions
   )
   override implicit val monadF: Monad[Task] = syncF
+  override implicit val contextShiftF: ContextShift[Task] = new ContextShift[Task] {
+    override def shift: Task[Unit] =
+      Task.shift
+    override def evalOn[B](ec: ExecutionContext)(fa: Task[B]): Task[B] =
+      Task.shift(ec).bracket(_ => fa)(_ => Task.shift)
+  }
+
   override def run[RES](f: Task[RES]): RES =
     f.unsafeRunSync(monix.execution.Scheduler.Implicits.global)
 }

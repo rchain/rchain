@@ -4,6 +4,7 @@ import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
 
 import cats.Id
+import cats.effect._
 import coop.rchain.rspace._
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
@@ -17,6 +18,8 @@ import org.openjdk.jmh.infra.Blackhole
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
+
+import scala.concurrent.ExecutionContext.Implicits.global
 
 @org.openjdk.jmh.annotations.State(Scope.Thread)
 trait RSpaceBench {
@@ -73,9 +76,8 @@ trait RSpaceBench {
       persist = true
     )
 
-    val results: IndexedSeq[Future[Unit]] = tasks.map(f => f.executeOn(dupePool).runAsync(dupePool))
+    val results: IndexedSeq[Future[Unit]] = tasks.map(f => f.executeOn(dupePool).runToFuture(dupePool))
 
-    implicit val ec = scala.concurrent.ExecutionContext.Implicits.global
     bh.consume(Await.ready(Future.sequence(results), Duration.Inf))
   }
 }

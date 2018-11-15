@@ -160,16 +160,16 @@ object ProcGen {
     procGen(processContextProcs, State(height))
 
   private val uriShrinker: Shrink[String] = Shrink { x: String =>
-  {
-    val components = x.split(":")
+    {
+      val components = x.split(":")
 
-    for {
-      shrinkedComponentSeq <- shrinkContainer[Seq, String]
-        .shrink(components)
-        .takeWhile(_.nonEmpty)
-      shrinkedComponents <- shrinkedComponentSeq.map(c => shrinkString.shrink(c))
-    } yield mkUri(shrinkedComponents)
-  }
+      for {
+        shrinkedComponentSeq <- shrinkContainer[Seq, String]
+                                 .shrink(components)
+                                 .takeWhile(_.nonEmpty)
+        shrinkedComponents <- shrinkedComponentSeq.map(c => shrinkString.shrink(c))
+      } yield mkUri(shrinkedComponents)
+    }
   }
 
   private val invariantFunctorShrink = new Invariant[Shrink] {

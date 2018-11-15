@@ -22,8 +22,8 @@ object SystemProcesses {
 
   private val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
 
-  def stdout: Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
-    case (Seq(ListParWithRandomAndPhlos(Seq(arg), _, _))) =>
+  def stdout: (Seq[ListParWithRandomAndPhlos], Int) => Task[Unit] = {
+    case (Seq(ListParWithRandomAndPhlos(Seq(arg), _, _)), _) =>
       Task.delay(Console.println(prettyPrinter.buildString(arg)))
   }
 
@@ -35,46 +35,54 @@ object SystemProcesses {
     def foldResult(
         dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
     ): Task[Unit] =
-      res.flatMap(_.fold(err => Task.raiseError(OutOfPhlogistonsError), _.fold(Task.unit) {
-        case (cont, channels) => _dispatch(dispatcher)(unpackCont(cont), channels.map(_.value))
-      }))
+      res.flatMap(
+        _.fold(
+          err => Task.raiseError(OutOfPhlogistonsError),
+          _.fold(Task.unit) {
+            case (cont, channels) =>
+              _dispatch(dispatcher)(unpackCont(cont), channels.map(_.value), cont.sequenceNumber)
+          }
+        )
+      )
   }
 
   def stdoutAck(
       space: RhoISpace[Task],
       dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
-  ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
-    case Seq(ListParWithRandomAndPhlos(Seq(arg, ack), rand, _)) =>
+  ): (Seq[ListParWithRandomAndPhlos], Int) => Task[Unit] = {
+    case (Seq(ListParWithRandomAndPhlos(Seq(arg, ack), rand, _)), sequenceNumber) =>
       for {
         _ <- Task.delay(Console.println(prettyPrinter.buildString(arg)))
         produced <- space
                      .produce(
                        ack,
                        ListParWithRandom(Seq(Par.defaultInstance), rand),
-                       false
+                       false,
+                       sequenceNumber
                      )(MATCH_UNLIMITED_PHLOS)
                      .foldResult(dispatcher)
       } yield produced
 
   }
 
-  def stderr: Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
-    case (Seq(ListParWithRandomAndPhlos(Seq(arg), _, _))) =>
+  def stderr: (Seq[ListParWithRandomAndPhlos], Int) => Task[Unit] = {
+    case (Seq(ListParWithRandomAndPhlos(Seq(arg), _, _)), _) =>
       Task.delay(Console.err.println(prettyPrinter.buildString(arg)))
   }
 
   def stderrAck(
       space: RhoISpace[Task],
       dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
-  ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
-    case Seq(ListParWithRandomAndPhlos(Seq(arg, ack), rand, _)) =>
+  ): (Seq[ListParWithRandomAndPhlos], Int) => Task[Unit] = {
+    case (Seq(ListParWithRandomAndPhlos(Seq(arg, ack), rand, _)), sequenceNumber) =>
       for {
         _ <- Task.delay(Console.err.println(prettyPrinter.buildString(arg)))
         produced <- space
                      .produce(
                        ack,
                        ListParWithRandom(Seq(Par.defaultInstance), rand),
-                       false
+                       false,
+                       sequenceNumber
                      )(MATCH_UNLIMITED_PHLOS)
                      .foldResult(dispatcher)
       } yield produced
@@ -94,13 +102,16 @@ object SystemProcesses {
   def secp256k1Verify(
       space: RhoISpace[Task],
       dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
-  ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
-    case Seq(
-        ListParWithRandomAndPhlos(
-          Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
-          rand,
-          _
-        )
+  ): (Seq[ListParWithRandomAndPhlos], Int) => Task[Unit] = {
+    case (
+        Seq(
+          ListParWithRandomAndPhlos(
+            Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
+            rand,
+            _
+          )
+        ),
+        sequenceNumber
         ) =>
       for {
         verified <- Task.fromTry(Try(Secp256k1.verify(data, signature, pub)))
@@ -108,7 +119,8 @@ object SystemProcesses {
                      .produce(
                        ack,
                        ListParWithRandom(Seq(Expr(GBool(verified))), rand),
-                       false
+                       false,
+                       sequenceNumber
                      )(MATCH_UNLIMITED_PHLOS)
                      .foldResult(dispatcher)
       } yield produced
@@ -118,13 +130,16 @@ object SystemProcesses {
   def ed25519Verify(
       space: RhoISpace[Task],
       dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
-  ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
-    case Seq(
-        ListParWithRandomAndPhlos(
-          Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
-          rand,
-          _
-        )
+  ): (Seq[ListParWithRandomAndPhlos], Int) => Task[Unit] = {
+    case (
+        Seq(
+          ListParWithRandomAndPhlos(
+            Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
+            rand,
+            _
+          )
+        ),
+        sequenceNumber
         ) =>
       for {
         verified <- Task.fromTry(Try(Ed25519.verify(data, signature, pub)))
@@ -132,7 +147,8 @@ object SystemProcesses {
                      .produce(
                        ack,
                        ListParWithRandom(Seq(Expr(GBool(verified))), rand),
-                       false
+                       false,
+                       sequenceNumber
                      )(MATCH_UNLIMITED_PHLOS)
                      .foldResult(dispatcher)
       } yield produced
@@ -145,8 +161,8 @@ object SystemProcesses {
   def sha256Hash(
       space: RhoISpace[Task],
       dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
-  ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
-    case Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)) =>
+  ): (Seq[ListParWithRandomAndPhlos], Int) => Task[Unit] = {
+    case (Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)), sequenceNumber) =>
       for {
         hash <- Task.fromTry(Try(Sha256.hash(input)))
         produced <- space
@@ -156,7 +172,8 @@ object SystemProcesses {
                          Seq(Expr(GByteArray(ByteString.copyFrom(hash)))),
                          rand
                        ),
-                       false
+                       false,
+                       sequenceNumber
                      )(MATCH_UNLIMITED_PHLOS)
                      .foldResult(dispatcher)
       } yield produced
@@ -167,8 +184,8 @@ object SystemProcesses {
   def keccak256Hash(
       space: RhoISpace[Task],
       dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
-  ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
-    case Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)) =>
+  ): (Seq[ListParWithRandomAndPhlos], Int) => Task[Unit] = {
+    case (Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)), sequenceNumber) =>
       for {
         hash <- Task.fromTry(Try(Keccak256.hash(input)))
         produced <- space
@@ -178,7 +195,8 @@ object SystemProcesses {
                          Seq(Expr(GByteArray(ByteString.copyFrom(hash)))),
                          rand
                        ),
-                       false
+                       false,
+                       sequenceNumber
                      )(MATCH_UNLIMITED_PHLOS)
                      .foldResult(dispatcher)
       } yield produced
@@ -190,8 +208,8 @@ object SystemProcesses {
   def blake2b256Hash(
       space: RhoISpace[Task],
       dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
-  ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
-    case Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)) =>
+  ): (Seq[ListParWithRandomAndPhlos], Int) => Task[Unit] = {
+    case (Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)), sequenceNumber) =>
       for {
         hash <- Task.fromTry(Try(Blake2b256.hash(input)))
         produced <- space
@@ -201,7 +219,8 @@ object SystemProcesses {
                          Seq(Expr(GByteArray(ByteString.copyFrom(hash)))),
                          rand
                        ),
-                       false
+                       false,
+                       sequenceNumber
                      )(MATCH_UNLIMITED_PHLOS)
                      .foldResult(dispatcher)
       } yield produced
@@ -213,15 +232,16 @@ object SystemProcesses {
       space: RhoISpace[Task],
       dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation],
       shortLeashParams: Runtime.ShortLeashParams[Task]
-  ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
-    case Seq(ListParWithRandomAndPhlos(Seq(ack), rand, _)) =>
+  ): (Seq[ListParWithRandomAndPhlos], Int) => Task[Unit] = {
+    case (Seq(ListParWithRandomAndPhlos(Seq(ack), rand, _)), sequenceNumber) =>
       shortLeashParams.getParams.flatMap { parameters =>
         import parameters._
         space
           .produce(
             ack,
             ListParWithRandom(Seq(codeHash, phloRate, userId, timestamp), rand),
-            false
+            false,
+            sequenceNumber
           )(MATCH_UNLIMITED_PHLOS)
           .foldResult(dispatcher)
       }
@@ -233,15 +253,16 @@ object SystemProcesses {
       space: RhoISpace[Task],
       dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation],
       blockTime: Runtime.BlockTime[Task]
-  ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
-    case Seq(ListParWithRandomAndPhlos(Seq(ack), rand, _)) =>
+  ): (Seq[ListParWithRandomAndPhlos], Int) => Task[Unit] = {
+    case (Seq(ListParWithRandomAndPhlos(Seq(ack), rand, _)), sequenceNumber) =>
       for {
         timestamp <- blockTime.timestamp.get
         produced <- space
                      .produce(
                        ack,
                        ListParWithRandom(Seq(timestamp), rand),
-                       false
+                       false,
+                       sequenceNumber
                      )(MATCH_UNLIMITED_PHLOS)
                      .foldResult(dispatcher)
       } yield produced
@@ -251,8 +272,12 @@ object SystemProcesses {
 
   private def _dispatch(
       dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
-  )(cont: TaggedContinuation, dataList: Seq[ListParWithRandomAndPhlos]): Task[Unit] =
-    dispatcher.dispatch(cont, dataList)
+  )(
+      cont: TaggedContinuation,
+      dataList: Seq[ListParWithRandomAndPhlos],
+      sequenceNumber: Int
+  ): Task[Unit] =
+    dispatcher.dispatch(cont, dataList, sequenceNumber)
 
   private def illegalArgumentException(msg: String): Task[Unit] =
     Task.raiseError(new IllegalArgumentException(msg))

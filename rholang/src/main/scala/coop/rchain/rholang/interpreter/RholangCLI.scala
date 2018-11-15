@@ -54,7 +54,7 @@ object RholangCLI {
 
     val runtime = Runtime.create(conf.dataDir(), conf.mapSize())
     Await.result(
-      Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace).runAsync,
+      Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace).runToFuture,
       5.seconds
     )
 
@@ -174,7 +174,7 @@ object RholangCLI {
         result <- Interpreter.evaluate(runtime, par)
       } yield result
 
-    waitForSuccess(evaluatorTask.runAsync)
+    waitForSuccess(evaluatorTask.runToFuture)
     printStorageContents(runtime.space.store)
   }
 }
