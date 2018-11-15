@@ -28,10 +28,8 @@ def star_network(system):
 def test_convergence(star_network):
     logging.info("Star network converged successfully.")
 
-@pytest.mark.skip(reason="This doesn't work since the show-blocks functionality was removed")
 def test_casper_propose_and_deploy(star_network):
     rnode_testing.casper_propose_and_deploy.run(star_network)
-
 
 @pytest.fixture(scope="module")
 def complete_network(system):
@@ -90,8 +88,6 @@ def test_node_logs_for_RuntimeException(complete_network):
 
     assert_expectations()
 
-# TODO This test can't pass now because newly proposed blocks can not sync up in other nodes.
-# More details at OPS-355
 @profile
 def test_casper_propose_and_deploy(system, complete_network):
     rnode_testing.casper_propose_and_deploy.run(system.config, complete_network)

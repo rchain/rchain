@@ -26,7 +26,5 @@ def star_network(system):
 def test_convergence(star_network):
     logging.info("Star network converged successfully.")
 
-# TODO This test can't pass now because newly proposed blocks can not sync up in other nodes.
-# More details at OPS-355
 def test_casper_propose_and_deploy(system, star_network):
     rnode_testing.casper_propose_and_deploy.run(system.config, star_network)
