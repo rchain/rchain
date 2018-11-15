@@ -27,11 +27,16 @@ lazy val projectSettings = Seq(
   dependencyOverrides ++= Seq(
     "io.kamon" %% "kamon-core" % kamonVersion
   ),
-  fork := true,
   javacOptions ++= (sys.env.get("JAVAC_VERSION") match {
     case None    => Seq()
     case Some(v) => Seq("-source", v, "-target", v)
-  })
+  }),
+  Test / fork := true,
+  Test / parallelExecution := false,
+  Test / testForkedParallel := false,
+  IntegrationTest / fork := true,
+  IntegrationTest / parallelExecution := false,
+  IntegrationTest / testForkedParallel := false
 )
 
 lazy val coverageSettings = Seq(
@@ -94,7 +99,7 @@ lazy val casper = (project in file("casper"))
     crypto,
     models,
     rspace,
-    rholang,
+    rholang      % "compile->compile;test->test",
     rholangProtoBuild
   )
 
@@ -136,6 +141,7 @@ lazy val crypto = (project in file("crypto"))
       secp256k1Java,
       scodecBits
     ),
+    fork := true,
     doctestTestFramework := DoctestTestFramework.ScalaTest
   )
   .dependsOn(shared)
@@ -438,7 +444,7 @@ lazy val rspaceBench = (project in file("rspace-bench"))
     run in Jmh := (run in Jmh).dependsOn(Keys.compile in Jmh).evaluated
   )
   .enablePlugins(JmhPlugin)
-  .dependsOn(rspace, rholang, models % "test->test")
+  .dependsOn(rspace % "test->test", rholang, models % "test->test")
 
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)

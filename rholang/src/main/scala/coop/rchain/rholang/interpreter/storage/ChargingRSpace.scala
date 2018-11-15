@@ -36,16 +36,19 @@ object ChargingRSpace {
           channels: Seq[Par],
           patterns: Seq[BindPattern],
           continuation: TaggedContinuation,
-          persist: Boolean
+          persist: Boolean,
+          sequenceNumber: Int
       ): F[Either[errors.OutOfPhlogistonsError.type, Option[
         (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandomAndPhlos]])
       ]]] = {
         val storageCost = storageCostConsume(channels, patterns, continuation)
         for {
-          _       <- costAlg.charge(storageCost)
-          matchF  <- costAlg.get().map(ca => matchListPar(ca.cost))
-          consRes <- space.consume(channels, patterns, continuation, persist)(matchF)
-          _       <- handleResult(consRes)
+          _      <- costAlg.charge(storageCost)
+          matchF <- costAlg.get().map(ca => matchListPar(ca.cost))
+          consRes <- space.consume(channels, patterns, continuation, persist, sequenceNumber)(
+                      matchF
+                    )
+          _ <- handleResult(consRes)
         } yield consRes
       }
 
@@ -62,7 +65,8 @@ object ChargingRSpace {
       override def produce(
           channel: Par,
           data: ListParWithRandom,
-          persist: Boolean
+          persist: Boolean,
+          sequenceNumber: Int
       ): F[Either[errors.OutOfPhlogistonsError.type, Option[
         (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandomAndPhlos]])
       ]]] = {
@@ -70,7 +74,7 @@ object ChargingRSpace {
         for {
           _       <- costAlg.charge(storageCost)
           matchF  <- costAlg.get().map(ca => matchListPar(ca.cost))
-          prodRes <- space.produce(channel, data, persist)(matchF)
+          prodRes <- space.produce(channel, data, persist, sequenceNumber)(matchF)
           _       <- handleResult(prodRes)
         } yield prodRes
       }

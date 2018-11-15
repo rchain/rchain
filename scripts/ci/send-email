@@ -36,7 +36,7 @@ Hi Developer. Whaaat's happening? Listen. I'm gonna need you to fix
 your broken code. So if you could just go ahead and make sure it
 builds again, that'd be terrific. OK? Thanks!
 ''')
-msg['From'] = 'Pyrofex Drone <noreply-ci@pyr8.io>'
+msg['From'] = os.environ['EMAIL_SENDER']
 msg['To'] = os.environ['EMAIL_RECIPIENTS']
 msg['Subject'] = f'''Build {bn} of {repo}:{ref} has FAILED'''
 

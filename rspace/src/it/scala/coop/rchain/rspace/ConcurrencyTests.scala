@@ -133,12 +133,12 @@ trait ConcurrencyTests
       }
     //warm-up pass - short 10 iterations loop should be enough
     val tWarmup = createTask(0, iterationsCount)
-    val fWarmup = tWarmup.runAsync
+    val fWarmup = tWarmup.runToFuture
     Await.ready(fWarmup, Duration.Inf)
     //benchmark pass
     val tasks = (1 to tasksCount).map(idx => {
       val task = createTask(idx, iterationsCount)
-      task.runAsync
+      task.runToFuture
     })
 
     val times = tasks.map(t => Await.result(t, Duration.Inf))

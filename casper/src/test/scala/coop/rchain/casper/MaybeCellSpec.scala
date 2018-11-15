@@ -19,7 +19,7 @@ class MaybeCellSpec extends FunSpec with Matchers {
         block <- lab.get
       } yield block
 
-      val result = test.runAsync
+      val result = test.runToFuture
       testScheduler.tick()
       assert(result.value == Some(Success(Some(approvedBlock))))
     }
@@ -31,7 +31,7 @@ class MaybeCellSpec extends FunSpec with Matchers {
         block <- lab.get
       } yield block
 
-      val result = test.runAsync
+      val result = test.runToFuture
       testScheduler.tick()
       assert(result.value == Some(Success(None)))
     }

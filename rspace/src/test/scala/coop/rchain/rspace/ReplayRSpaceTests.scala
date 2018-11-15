@@ -3,31 +3,29 @@ package coop.rchain.rspace
 import java.nio.file.Files
 
 import cats.Id
-import cats.effect.Sync
+import cats.effect._
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.history.{Branch, ITrieStore, InMemoryTrieStore}
+import coop.rchain.rspace.history.{Branch, InMemoryTrieStore}
 import coop.rchain.rspace.internal.GNAT
 import coop.rchain.rspace.spaces._
 import coop.rchain.rspace.trace.{COMM, Consume, IOEvent, Produce}
 import coop.rchain.shared.PathOps._
 import org.scalatest._
-import org.scalatest.concurrent.ScalaFutures
 
 import scala.Function.const
+import scala.collection.parallel.ParSeq
 import scala.collection.{immutable, mutable}
-import scala.concurrent.Future
 import scala.util.{Random, Right}
 import scala.concurrent.ExecutionContext.Implicits.global
 
 //noinspection ZeroIndexToHead,NameBooleanParameters
 trait ReplayRSpaceTests
     extends ReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
-    with TestImplicitHelpers
-    with ScalaFutures {
+    with TestImplicitHelpers {
 
   def consumeMany[C, P, A, R, K](
       space: IdISpace[C, P, Nothing, A, R, K],
@@ -39,9 +37,13 @@ trait ReplayRSpaceTests
       persist: Boolean
   )(
       implicit matcher: Match[P, Nothing, A, R]
-  ): List[Option[(ContResult[C, P, K], Seq[Result[R]])]] =
-    (if (shuffle) Random.shuffle(range.toList) else range.toList).map { i: Int =>
-      space.consume(channelsCreator(i), patterns, continuationCreator(i), persist).right.get
+  ): ParSeq[Option[(ContResult[C, P, K], Seq[Result[R]])]] =
+    (if (shuffle) Random.shuffle(range.toList) else range.toList).par.map { i: Int =>
+      logger.debug("Started consume {}", i)
+      val res =
+        space.consume(channelsCreator(i), patterns, continuationCreator(i), persist).right.get
+      logger.debug("Finished consume {}", i)
+      res
     }
 
   def produceMany[C, P, A, R, K](
@@ -53,9 +55,12 @@ trait ReplayRSpaceTests
       persist: Boolean
   )(
       implicit matcher: Match[P, Nothing, A, R]
-  ): List[Option[(ContResult[C, P, K], immutable.Seq[Result[R]])]] =
-    (if (shuffle) Random.shuffle(range.toList) else range.toList).map { i: Int =>
-      space.produce(channelCreator(i), datumCreator(i), persist).right.get
+  ): ParSeq[Option[(ContResult[C, P, K], immutable.Seq[Result[R]])]] =
+    (if (shuffle) Random.shuffle(range.toList) else range.toList).par.map { i: Int =>
+      logger.debug("Started produce {}", i)
+      val res = space.produce(channelCreator(i), datumCreator(i), persist).right.get
+      logger.debug("Finished produce {}", i)
+      res
     }
 
   "reset to a checkpoint from a different branch" should "work" in withTestSpaces {
@@ -803,12 +808,61 @@ trait ReplayRSpaceTests
         replaySpace.produce(channel, data, false)
       )
     }
+
+  "replay" should "not allow for ambiguous executions" in withTestSpaces { (space, replaySpace) =>
+    val noMatch                 = Right(None)
+    val empty                   = space.createCheckpoint()
+    val channel1                = "ch1"
+    val channel2                = "ch2"
+    val key1                    = List(channel1, channel2)
+    val patterns: List[Pattern] = List(Wildcard, Wildcard)
+    val continuation1           = "continuation1"
+    val continuation2           = "continuation2"
+    val data1                   = "datum1"
+    val data2                   = "datum2"
+    val data3                   = "datum3"
+
+    //some maliciously 'random' play order
+    space.produce(channel1, data3, false, 0) shouldBe noMatch
+    space.produce(channel1, data3, false, 0) shouldBe noMatch
+    space.produce(channel2, data1, false, 0) shouldBe noMatch
+
+    space.consume(key1, patterns, continuation1, false, 0).right.get should not be empty
+    //continuation1 produces data1 on ch2
+    space.produce(channel2, data1, false, 1) shouldBe noMatch
+    space.consume(key1, patterns, continuation2, false, 0).right.get should not be empty
+    //continuation2 produces data2 on ch2
+    space.produce(channel2, data2, false, 2) shouldBe noMatch
+    val afterPlay = space.createCheckpoint()
+
+    //rig
+    replaySpace.rig(empty.root, afterPlay.log)
+
+    //some maliciously 'random' replay order
+    replaySpace.produce(channel1, data3, false, 0) shouldBe noMatch
+    replaySpace.produce(channel1, data3, false, 0) shouldBe noMatch
+    replaySpace.produce(channel2, data1, false, 0) shouldBe noMatch
+    replaySpace.consume(key1, patterns, continuation2, false, 0) shouldBe noMatch
+
+    replaySpace.consume(key1, patterns, continuation1, false, 0).right.get should not be empty
+    //continuation1 produces data1 on ch2
+    replaySpace
+      .produce(channel2, data1, false, 1)
+      .right
+      .get should not be empty //matches continuation2
+    //continuation2 produces data2 on ch2
+    replaySpace.produce(channel2, data2, false, 1) shouldBe noMatch
+
+    replaySpace.replayData.isEmpty shouldBe true
+  }
 }
 
 trait ReplayRSpaceTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with OptionValues {
   val logger = Logger(this.getClass.getName.stripSuffix("$"))
 
   implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+  implicit val contextShiftF: ContextShift[Id] =
+    coop.rchain.rspace.test.contextShiftId
 
   override def withFixture(test: NoArgTest): Outcome = {
     logger.debug(s"Test: ${test.name}")
@@ -838,6 +892,8 @@ trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, 
   ): S = {
 
     implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+    implicit val contextShiftF: ContextShift[Id] =
+      coop.rchain.rspace.test.contextShiftId
 
     val dbDir       = Files.createTempDirectory("rchain-storage-test-")
     val context     = Context.create[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
@@ -868,6 +924,8 @@ trait MixedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C,
   ): S = {
 
     implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+    implicit val contextShiftF: ContextShift[Id] =
+      coop.rchain.rspace.test.contextShiftId
 
     val dbDir       = Files.createTempDirectory("rchain-storage-test-")
     val context     = Context.createMixed[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
@@ -921,6 +979,9 @@ trait FaultyStoreReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsB
       sk: Serialize[K],
       oC: Ordering[C]
   ): S = {
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+    implicit val contextShiftF: ContextShift[Id] =
+      coop.rchain.rspace.test.contextShiftId
 
     val trieStore = InMemoryTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]]()
     val mainStore = InMemoryStore
@@ -955,13 +1016,12 @@ class LMDBReplayRSpaceTests
     extends LMDBReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
     with ReplayRSpaceTests {}
 
-class InMemoryRSpaceTests
+class InMemoryReplayRSpaceTests
     extends InMemoryReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
     with ReplayRSpaceTests {}
 
 class FaultyReplayRSpaceTests
-    extends FaultyStoreReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
-    with ScalaFutures {
+    extends FaultyStoreReplayRSpaceTestsBase[String, Pattern, Nothing, String, String] {
 
   "an exception thrown inside a consume" should "not make replay rspace unresponsive" in
     withTestSpaces { (space, replaySpace) =>
@@ -970,12 +1030,14 @@ class FaultyReplayRSpaceTests
       val patterns     = List(Wildcard)
       val continuation = "continuation"
 
-      an[RuntimeException] shouldBe thrownBy(
-        replaySpace.consume(key, patterns, continuation, false)
-      )
-
-      val res = Future { replaySpace.consume(key, patterns, continuation, false) }.failed.futureValue
-      res.getMessage shouldBe "Couldn't write to underlying store"
+      the[RuntimeException] thrownBy (
+        replaySpace.consume(
+          key,
+          patterns,
+          continuation,
+          false
+        )
+      ) should have message "Couldn't write to underlying store"
     }
 
   "an exception thrown inside a produce" should "not make replay rspace unresponsive" in
@@ -983,11 +1045,12 @@ class FaultyReplayRSpaceTests
       val channel = "ch1"
       val data    = "datum1"
 
-      an[RuntimeException] shouldBe thrownBy(
-        replaySpace.produce(channel, data, false)
-      )
-
-      val res = Future { replaySpace.produce(channel, data, false) }.failed.futureValue
-      res.getMessage shouldBe "Couldn't write to underlying store"
+      the[RuntimeException] thrownBy (
+        replaySpace.produce(
+          channel,
+          data,
+          false
+        )
+      ) should have message "Couldn't write to underlying store"
     }
 }

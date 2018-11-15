@@ -18,7 +18,7 @@ object PrettyPrinter {
   def apply(): PrettyPrinter = PrettyPrinter(0, 0)
 
   def apply(freeShift: Int, boundShift: Int): PrettyPrinter =
-    PrettyPrinter(freeShift, boundShift, "free", "a", 23, 128)
+    PrettyPrinter(freeShift, boundShift, Vector.empty[Int], "free", "a", 23, 128)
 
   implicit class CappedOps(val str: String) extends AnyVal {
     def cap() = Printer.OUTPUT_CAPPED.map(n => s"${str.take(n)}...").getOrElse(str)
@@ -27,6 +27,7 @@ object PrettyPrinter {
 case class PrettyPrinter(
     freeShift: Int,
     boundShift: Int,
+    newsShiftIndices: Vector[Int],
     freeId: String,
     baseId: String,
     rotation: Int,
@@ -118,13 +119,19 @@ case class PrettyPrinter(
   private def buildRemainderString(remainder: Option[Var]): Coeval[String] =
     remainder.fold(pure(""))(v => pure("...") |+| buildStringM(v))
 
-  private def buildStringM(v: Var): Coeval[String] =
+  private def buildStringM(v: Var): Coeval[String] = {
+    def isNewVar(level: Int): Boolean = newsShiftIndices.contains(boundShift - level - 1)
+
     v.varInstance match {
-      case FreeVar(level)    => pure(s"$freeId${freeShift + level}")
-      case BoundVar(level)   => pure(s"$boundId${boundShift - level - 1}")
+      case FreeVar(level) => pure(s"$freeId${freeShift + level}")
+      case BoundVar(level) =>
+        (if (isNewVar(level)) pure("*") else pure("")) |+| pure(
+          s"$boundId${boundShift - level - 1}"
+        )
       case Wildcard(_)       => pure("_")
       case VarInstance.Empty => pure("@Nil")
     }
+  }
 
   private def buildChannelStringM(p: Par): Coeval[String] = buildChannelStringM(p, 0)
 
@@ -186,8 +193,12 @@ case class PrettyPrinter(
           buildStringM(b.body, indent + 1) |+| pure(" }")
 
       case n: New =>
+        val introducedNewsShiftIdx = (0 until n.bindCount).map(i => i + boundShift)
         pure("new " + buildVariables(n.bindCount) + " in {\n" + indentStr * (indent + 1)) |+| this
-          .copy(boundShift = boundShift + n.bindCount)
+          .copy(
+            boundShift = boundShift + n.bindCount,
+            newsShiftIndices = newsShiftIndices ++ introducedNewsShiftIdx
+          )
           .buildStringM(n.p, indent + 1) |+|
           pure("\n" + (indentStr * indent) + "}")
 

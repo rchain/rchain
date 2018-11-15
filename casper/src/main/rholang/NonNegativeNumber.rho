@@ -47,8 +47,13 @@ new NonNegativeNumber, rs(`rho:registry:insertSigned:ed25519`), uriOut in {
         }
       } |
       return!(bundle+{*this}) |
-      if (init >= 0) { valueStore!(init) }
-      else           { valueStore!(0)    } //Initial balance is zero if given is negative}
+      match init { //Initial balance is zero if given is negative on non-integer
+        Int => {
+          if (init >= 0) { valueStore!(init)  }
+          else           { valueStore!(0) }
+        }
+         _ => { valueStore!(0) }
+      }
     }
   } |
   

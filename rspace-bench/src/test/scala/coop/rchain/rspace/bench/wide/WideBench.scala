@@ -61,7 +61,7 @@ abstract class WideBenchState extends WideBenchBaseState {
     //make sure we always start from clean rspace
     runtime.replaySpace.clear()
     runtime.space.clear()
-    processErrors(Await.result(createTest(setupTerm, runtime.reducer).runAsync, Duration.Inf))
+    processErrors(Await.result(createTest(setupTerm, runtime.reducer).runToFuture, Duration.Inf))
     runTask = createTest(term, runtime.reducer)
   }
 }

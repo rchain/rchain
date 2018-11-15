@@ -1,15 +1,15 @@
 package coop.rchain.rholang
 
 import java.io.StringReader
-import java.nio.file.Files
 
 import coop.rchain.models.Connective.ConnectiveInstance.ConnNotBody
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.{Connective, Par, ProtoM}
+import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.StackSafetySpec.findMaxRecursionDepth
-import coop.rchain.rholang.interpreter.{Interpreter, PrettyPrinter, Runtime}
+import coop.rchain.rholang.interpreter.{Interpreter, PrettyPrinter}
 import coop.rchain.rspace.Serialize
-import monix.eval.{Coeval, Task}
+import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertions, FlatSpec, Matchers}
 
@@ -44,11 +44,9 @@ object StackSafetySpec extends Assertions {
 class StackSafetySpec extends FlatSpec with Matchers {
   import StackSafetySpec._
 
-  val mapSize     = 10L * 1024L * 1024L
-  val tmpPrefix   = "rspace-store-"
-  val maxDuration = 10.seconds
-
-  val runtime = Runtime.create(Files.createTempDirectory(tmpPrefix), mapSize)
+  val mapSize: Long               = 10L * 1024L * 1024L
+  val tmpPrefix: String           = "rspace-store-"
+  val maxDuration: FiniteDuration = 10.seconds
 
   val depth: Int = findMaxRecursionDepth()
 
@@ -168,8 +166,10 @@ class StackSafetySpec extends FlatSpec with Matchers {
       //val reduceRho = s"@0!($rho)"
       val reduceRho = s"for (_ <- @0) { Nil } | @0!($rho)"
       checkSuccess(reduceRho) { rho =>
-        Interpreter
-          .execute(runtime, new StringReader(rho))
+        mkRuntime(tmpPrefix, mapSize)
+          .use { runtime =>
+            Interpreter.execute(runtime, new StringReader(rho))
+          }
       }
     }
 

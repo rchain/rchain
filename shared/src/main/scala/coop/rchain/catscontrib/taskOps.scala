@@ -11,7 +11,7 @@ import scala.concurrent.duration._
 object TaskContrib {
   implicit class TaskOps[A](task: Task[A]) {
     def unsafeRunSync(implicit scheduler: Scheduler): A =
-      Await.result(task.runAsync, Duration.Inf)
+      Await.result(task.runToFuture, Duration.Inf)
 
     def nonCancelingTimeout(after: FiniteDuration): Task[A] =
       nonCancelingTimeoutTo(

@@ -1,0 +1,50 @@
+// Expected output
+//
+// "REGISTRY_SIMPLE_INSERT_TEST: create arbitrary process X to store in the registry"
+// Unforgeable(0xd3f4cbdcc634e7d6f8edb05689395fef7e190f68fe3a2712e2a9bbe21eb6dd10)
+// "REGISTRY_SIMPLE_INSERT_TEST: adding X to the registry and getting back a new identifier"
+// `rho:id:pnrunpy1yntnsi63hm9pmbg8m1h1h9spyn7zrbh1mcf6pcsdunxcci`
+// "REGISTRY_SIMPLE_INSERT_TEST: got an identifier for X from the registry"
+// "REGISTRY_SIMPLE_LOOKUP_TEST: looking up X in the registry using identifier"
+// "REGISTRY_SIMPLE_LOOKUP_TEST: got X from the registry using identifier"
+// Unforgeable(0xd3f4cbdcc634e7d6f8edb05689395fef7e190f68fe3a2712e2a9bbe21eb6dd10)
+
+new simpleInsertTest, simpleInsertTestReturnID, simpleLookupTest,
+    signedInsertTest, signedInsertTestReturnID, signedLookupTest, 
+    ri(`rho:registry:insertArbitrary`), 
+    rl(`rho:registry:lookup`),
+    stdout(`rho:io:stdout`),
+    stdoutAck(`rho:io:stdoutAck`), ack in { 
+        simpleInsertTest!(*simpleInsertTestReturnID) |
+        for(@idFromTest1 <- simpleInsertTestReturnID) {
+            simpleLookupTest!(idFromTest1, *ack)
+        } |
+
+        contract simpleInsertTest(registryIdentifier) = {
+            stdout!("REGISTRY_SIMPLE_INSERT_TEST: create arbitrary process X to store in the registry") |
+            new X, Y, innerAck in {
+                stdoutAck!(*X, *innerAck) |
+                for(_ <- innerAck){
+                    stdout!("REGISTRY_SIMPLE_INSERT_TEST: adding X to the registry and getting back a new identifier") |
+                    ri!(*X, *Y) |
+                    for(@uri <- Y) {
+                        stdout!("REGISTRY_SIMPLE_INSERT_TEST: got an identifier for X from the registry") |
+                        stdout!(uri) |
+                        registryIdentifier!(uri)
+                    }
+                }
+            }
+        } |
+
+        contract simpleLookupTest(@uri, result) = {
+            stdout!("REGISTRY_SIMPLE_LOOKUP_TEST: looking up X in the registry using identifier") |
+            new lookupResponse in {
+                rl!(uri, *lookupResponse) |
+                for(@val <- lookupResponse) {
+                    stdout!("REGISTRY_SIMPLE_LOOKUP_TEST: got X from the registry using identifier") |
+                    stdoutAck!(val, *result)
+                }
+            }
+        }
+    }
+

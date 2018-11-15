@@ -1,6 +1,6 @@
 package coop.rchain.rspace.spaces
 
-import cats.effect.Sync
+import cats.effect.{ContextShift, Sync}
 import coop.rchain.rspace._
 import cats.implicits._
 import com.google.common.collect.Multiset
@@ -14,6 +14,7 @@ import scodec.Codec
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
+import scala.concurrent.ExecutionContext
 import kamon._
 
 class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
@@ -22,7 +23,9 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
     serializeP: Serialize[P],
     serializeA: Serialize[A],
     serializeK: Serialize[K],
-    val syncF: Sync[F]
+    val syncF: Sync[F],
+    contextShift: ContextShift[F],
+    scheduler: ExecutionContext
 ) extends FineGrainedRSpaceOps[F, C, P, E, A, R, K](store, branch)
     with IReplaySpace[F, C, P, E, A, R, K] {
 
@@ -35,31 +38,39 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
   private[this] val produceSpan   = Kamon.buildSpan("replayrspace.produce")
   protected[this] val installSpan = Kamon.buildSpan("replayrspace.install")
 
-  def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
+  def consume(
+      channels: Seq[C],
+      patterns: Seq[P],
+      continuation: K,
+      persist: Boolean,
+      sequenceNumber: Int
+  )(
       implicit m: Match[P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
-    syncF.delay {
-      Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
-        if (channels.length =!= patterns.length) {
-          val msg = "channels.length must equal patterns.length"
-          logger.error(msg)
-          throw new IllegalArgumentException(msg)
-        }
-        val span = Kamon.currentSpan()
-        span.mark("before-consume-lock")
-        consumeLock(channels) {
-          span.mark("consume-lock-acquired")
-          lockedConsume(channels, patterns, continuation, persist)
+    contextShift.evalOn(scheduler) {
+      syncF.delay {
+        Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
+          if (channels.length =!= patterns.length) {
+            val msg = "channels.length must equal patterns.length"
+            logger.error(msg)
+            throw new IllegalArgumentException(msg)
+          }
+          val span = Kamon.currentSpan()
+          span.mark("before-consume-lock")
+          consumeLock(channels) {
+            span.mark("consume-lock-acquired")
+            lockedConsume(channels, patterns, continuation, persist, sequenceNumber)
+          }
         }
       }
-
     }
 
   private[this] def lockedConsume(
       channels: Seq[C],
       patterns: Seq[P],
       continuation: K,
-      persist: Boolean
+      persist: Boolean,
+      sequenceNumber: Int
   )(
       implicit m: Match[P, E, A, R]
   ): Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]] = {
@@ -129,9 +140,10 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
       logger.debug(s"consume: data found for <patterns: $patterns> at <channels: $channels>")
       removeBindingsFor(commRef)
       span.mark("handle-matches-end")
+      val contSequenceNumber = commRef.nextSequenceNumber
       Some(
         (
-          ContResult(continuation, persist, channels, patterns),
+          ContResult(continuation, persist, channels, patterns, contSequenceNumber),
           mats.map(dc => Result(dc.datum.a, dc.datum.persist))
         )
       )
@@ -159,7 +171,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
     logger.debug(s"""|consume: searching for data matching <patterns: $patterns>
                      |at <channels: $channels>""".stripMargin.replace('\n', ' '))
 
-    val consumeRef = Consume.create(channels, patterns, continuation, persist)
+    val consumeRef = Consume.create(channels, patterns, continuation, persist, sequenceNumber)
 
     replayData.get(consumeRef) match {
       case None =>
@@ -181,20 +193,23 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
     }
   }
 
-  def produce(channel: C, data: A, persist: Boolean)(
+  def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
       implicit m: Match[P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
-    syncF.delay {
-      Kamon.withSpan(produceSpan.start(), finishSpan = true) {
-        val span = Kamon.currentSpan()
-        span.mark("before-produce-lock")
-        produceLock(channel) {
-          span.mark("produce-lock-acquired")
-          lockedProduce(channel, data, persist)
+    contextShift.evalOn(scheduler) {
+      syncF.delay {
+        Kamon.withSpan(produceSpan.start(), finishSpan = true) {
+          val span = Kamon.currentSpan()
+          span.mark("before-produce-lock")
+          produceLock(channel) {
+            span.mark("produce-lock-acquired")
+            lockedProduce(channel, data, persist, sequenceNumber)
+          }
         }
       }
     }
-  private[this] def lockedProduce(channel: C, data: A, persist: Boolean)(
+
+  private[this] def lockedProduce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
       implicit m: Match[P, E, A, R]
   ): Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]] = {
     val span = Kamon.currentSpan()
@@ -294,9 +309,10 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
           logger.debug(s"produce: matching continuation found at <channels: $channels>")
           removeBindingsFor(commRef)
           span.mark("handle-match-end")
+          val contSequenceNumber = commRef.nextSequenceNumber
           Some(
             (
-              ContResult(continuation, persistK, channels, patterns),
+              ContResult(continuation, persistK, channels, patterns, contSequenceNumber),
               dataCandidates.map(dc => Result(dc.datum.a, dc.datum.persist))
             )
           )
@@ -308,7 +324,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
       logger.debug(s"""|produce: searching for matching continuations
                        |at <groupedChannels: $groupedChannels>""".stripMargin.replace('\n', ' '))
 
-      val produceRef = Produce.create(channel, data, persist)
+      val produceRef = Produce.create(channel, data, persist, sequenceNumber)
 
       @tailrec
       def getCommOrProduceCandidate(
@@ -388,7 +404,9 @@ object FineGrainedReplayRSpace {
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
-      sync: Sync[F]
+      sync: Sync[F],
+      contextShift: ContextShift[F],
+      scheduler: ExecutionContext
   ): F[FineGrainedReplayRSpace[F, C, P, E, A, R, K]] = {
 
     implicit val codecC: Codec[C] = sc.toCodec
