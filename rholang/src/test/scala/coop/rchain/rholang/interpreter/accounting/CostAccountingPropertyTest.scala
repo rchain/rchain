@@ -63,7 +63,7 @@ class CostAccountingPropertyTest extends FlatSpec with PropertyChecks with Match
 
   it should "repeated executions have the same cost" in {
     implicit val procListArb =
-      Arbitrary(GenTools.nonemptyLimitedList(10, procGen(5)))
+      Arbitrary(GenTools.nonemptyLimitedList(5, procGen(5)))
 
     forAll { ps: List[PrettyPrinted[Proc]] =>
       val costs = 1.to(20).map(_ => costOfExecution(ps.map(_.value): _*))
