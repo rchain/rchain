@@ -1,30 +1,32 @@
 package coop.rchain.comm.transport
 
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
-import coop.rchain.shared._
+
 import scala.collection.mutable
-import scala.concurrent.duration._, Duration._
+import scala.concurrent.duration._
+
 import coop.rchain.catscontrib.ski._
 import cats._
+import cats.effect.Timer
+import cats.effect.concurrent.MVar
 import cats.implicits._
-import monix.eval.Task
+
 import coop.rchain.comm._
-import coop.rchain.comm.protocol.routing.{Packet, Protocol}
+import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.CommError.CommErr
 import coop.rchain.comm.rp.ProtocolHelper
 
-abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
+abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
 
   def createEnvironment(port: Int): F[E]
 
   def createTransportLayer(env: E): F[TransportLayer[F]]
 
+  def createDispatcherCallback: F[DispatcherCallback[F]]
+
   def extract[A](fa: F[A]): A
 
   private val nextPort = new AtomicInteger(41000)
-
-  def time: Time[F]
 
   def twoNodesEnvironment[A](block: (E, E) => F[A]): F[A] =
     for {
@@ -44,7 +46,7 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
   trait Runtime[A] {
     protected def protocolDispatcher: Dispatcher[F, Protocol, CommunicationResponse]
     protected def streamDispatcher: Dispatcher[F, Blob, Unit]
-    def run(): Result
+    def run(blockUntilDispatched: Boolean): Result
     trait Result {
       def localNode: PeerNode
       def apply(): A
@@ -58,7 +60,7 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
   ) extends Runtime[A] {
     def execute(transportLayer: TransportLayer[F], local: PeerNode, remote: PeerNode): F[A]
 
-    def run(): TwoNodesResult =
+    def run(blockUntilDispatched: Boolean = true): TwoNodesResult =
       extract(
         twoNodesEnvironment { (e1, e2) =>
           for {
@@ -66,13 +68,14 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
             remoteTl <- createTransportLayer(e2)
             local    = e1.peer
             remote   = e2.peer
+            cb       <- createDispatcherCallback
             _ <- remoteTl.receive(
-                  protocolDispatcher.dispatch(remote),
-                  streamDispatcher.dispatch(remote)
+                  protocolDispatcher.dispatch(remote, cb),
+                  streamDispatcher.dispatch(remote, cb)
                 )
             r <- execute(localTl, local, remote)
-            // arbitrary sleep value, so environment has time to handle requests
-            _ <- time.sleep(200 millisecond)
+            _ <- if (blockUntilDispatched) cb.waitUntilDispatched()
+                else implicitly[Timer[F]].sleep(1.second)
             _ <- remoteTl.shutdown(ProtocolHelper.disconnect(remote))
             _ <- localTl.shutdown(ProtocolHelper.disconnect(local))
           } yield
@@ -97,7 +100,7 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
   ) extends Runtime[A] {
     def execute(transportLayer: TransportLayer[F], local: PeerNode, remote: PeerNode): F[A]
 
-    def run(): TwoNodesResult =
+    def run(blockUntilDispatched: Boolean = false): TwoNodesResult =
       extract(
         twoNodesEnvironment { (e1, e2) =>
           for {
@@ -105,9 +108,7 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
             local   = e1.peer
             remote  = e2.peer
             r       <- execute(localTl, local, remote)
-            // arbitrary sleep value, so environment has time to handle requests
-            _ <- time.sleep(200 millisecond)
-            _ <- localTl.shutdown(ProtocolHelper.disconnect(local))
+            _       <- localTl.shutdown(ProtocolHelper.disconnect(local))
           } yield
             new TwoNodesResult {
               def localNode: PeerNode  = local
@@ -134,7 +135,7 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
         remote2: PeerNode
     ): F[A]
 
-    def run(): ThreeNodesResult =
+    def run(blockUntilDispatched: Boolean = true): ThreeNodesResult =
       extract(
         threeNodesEnvironment { (e1, e2, e3) =>
           for {
@@ -144,13 +145,21 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
             local     = e1.peer
             remote1   = e2.peer
             remote2   = e3.peer
-            _ <- remoteTl1
-                  .receive(protocolDispatcher.dispatch(remote1), streamDispatcher.dispatch(remote1))
-            _ <- remoteTl2
-                  .receive(protocolDispatcher.dispatch(remote2), streamDispatcher.dispatch(remote2))
+            cb1       <- createDispatcherCallback
+            cb2       <- createDispatcherCallback
+            _ <- remoteTl1.receive(
+                  protocolDispatcher.dispatch(remote1, cb1),
+                  streamDispatcher.dispatch(remote1, cb1)
+                )
+            _ <- remoteTl2.receive(
+                  protocolDispatcher.dispatch(remote2, cb2),
+                  streamDispatcher.dispatch(remote2, cb2)
+                )
             r <- execute(localTl, local, remote1, remote2)
-            // arbitrary sleep value, so environment has time to handle requests
-            _ <- time.sleep(200 millisecond)
+            _ <- if (blockUntilDispatched) cb1.waitUntilDispatched()
+                else implicitly[Timer[F]].sleep(1.second)
+            _ <- if (blockUntilDispatched) cb2.waitUntilDispatched()
+                else implicitly[Timer[F]].sleep(1.second)
             _ <- remoteTl1.shutdown(ProtocolHelper.disconnect(remote1))
             _ <- remoteTl2.shutdown(ProtocolHelper.disconnect(remote2))
             _ <- localTl.shutdown(ProtocolHelper.disconnect(local))
@@ -174,7 +183,7 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
       transport: TransportLayer[F],
       local: PeerNode,
       remote: PeerNode,
-      timeout: FiniteDuration = 3.second
+      timeout: FiniteDuration = 10.second
   ): F[CommErr[Protocol]] = {
     val msg = ProtocolHelper.heartbeat(local)
     transport.roundTrip(remote, msg, timeout)
@@ -206,32 +215,39 @@ trait Environment {
   def port: Int
 }
 
-final class Dispatcher[F[_]: Applicative, R, S](
+final class DispatcherCallback[F[_]: Functor](state: MVar[F, Unit]) {
+  def notifyThatDispatched(): F[Unit] = state.tryPut(()).void
+  def waitUntilDispatched(): F[Unit]  = state.take
+}
+
+final class Dispatcher[F[_]: Monad: Timer, R, S](
     response: PeerNode => S,
-    delay: Option[Long] = None,
+    delay: Option[FiniteDuration] = None,
     ignore: R => Boolean = kp(false)
 ) {
-  def dispatch(peer: PeerNode): R => F[S] =
-    p => {
-      delay.foreach(Thread.sleep)
-      if (!ignore(p))
-        receivedMessages.synchronized(receivedMessages += ((peer, p)))
-      response(peer).pure[F]
-    }
+  def dispatch(peer: PeerNode, callback: DispatcherCallback[F]): R => F[S] =
+    p =>
+      for {
+        _ <- delay.fold(().pure[F])(implicitly[Timer[F]].sleep)
+        _ = if (!ignore(p)) receivedMessages.synchronized(receivedMessages += ((peer, p)))
+        r = response(peer)
+        _ <- callback.notifyThatDispatched()
+      } yield r
+
   def received: Seq[(PeerNode, R)] = receivedMessages
   private val receivedMessages     = mutable.MutableList.empty[(PeerNode, R)]
 }
 
 object Dispatcher {
-  def heartbeatResponseDispatcher[F[_]: Applicative]
+  def heartbeatResponseDispatcher[F[_]: Monad: Timer]
     : Dispatcher[F, Protocol, CommunicationResponse] =
     new Dispatcher[F, Protocol, CommunicationResponse](
       peer => CommunicationResponse.handledWithMessage(ProtocolHelper.heartbeatResponse(peer)),
       ignore = _.message.isDisconnect
     )
 
-  def heartbeatResponseDispatcherWithDelay[F[_]: Applicative](
-      delay: Long
+  def heartbeatResponseDispatcherWithDelay[F[_]: Monad: Timer](
+      delay: FiniteDuration
   ): Dispatcher[F, Protocol, CommunicationResponse] =
     new Dispatcher[F, Protocol, CommunicationResponse](
       peer => CommunicationResponse.handledWithMessage(ProtocolHelper.heartbeatResponse(peer)),
@@ -239,21 +255,19 @@ object Dispatcher {
       ignore = _.message.isDisconnect
     )
 
-  def withoutMessageDispatcher[F[_]: Applicative]: Dispatcher[F, Protocol, CommunicationResponse] =
+  def withoutMessageDispatcher[F[_]: Monad: Timer]: Dispatcher[F, Protocol, CommunicationResponse] =
     new Dispatcher[F, Protocol, CommunicationResponse](
       _ => CommunicationResponse.handledWithoutMessage,
       ignore = _.message.isDisconnect
     )
 
-  def internalCommunicationErrorDispatcher[F[_]: Applicative]
+  def internalCommunicationErrorDispatcher[F[_]: Monad: Timer]
     : Dispatcher[F, Protocol, CommunicationResponse] =
     new Dispatcher[F, Protocol, CommunicationResponse](
       _ => CommunicationResponse.notHandled(InternalCommunicationError("Test")),
       ignore = _.message.isDisconnect
     )
 
-  def devNullPacketDispatcher[F[_]: Applicative]: Dispatcher[F, Blob, Unit] =
-    new Dispatcher[F, Blob, Unit](
-      kp(())
-    )
+  def devNullPacketDispatcher[F[_]: Monad: Timer]: Dispatcher[F, Blob, Unit] =
+    new Dispatcher[F, Blob, Unit](kp(()))
 }
