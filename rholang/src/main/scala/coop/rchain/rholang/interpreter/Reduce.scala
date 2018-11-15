@@ -173,12 +173,12 @@ object Reduce {
               (for {
                 varref <- eval(v)(env, costAccountingAlg)
                 _      <- eval(varref)(env, rand, sequenceNumber, costAccountingAlg)
-              } yield ()).handleError(fTell.tell)
+              } yield ()).handleErrorWith(fTell.tell)
             case e: EMethodBody =>
               (for {
                 p <- evalExprToPar(Expr(e))(env, costAccountingAlg)
                 _ <- eval(p)(env, rand, sequenceNumber, costAccountingAlg)
-              } yield ()).handleError(fTell.tell)
+              } yield ()).handleErrorWith(fTell.tell)
             case _ => s.unit
           }
 
