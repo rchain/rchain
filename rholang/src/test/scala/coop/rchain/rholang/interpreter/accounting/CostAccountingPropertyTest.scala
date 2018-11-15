@@ -63,7 +63,7 @@ class CostAccountingPropertyTest extends FlatSpec with PropertyChecks with Match
 
   it should "repeated executions have the same cost" in {
     implicit val procListArb =
-      Arbitrary(GenTools.nonemptyLimitedList(10, procGen(5)))
+      Arbitrary(GenTools.nonemptyLimitedList(5, procGen(5)))
 
     forAll { ps: List[PrettyPrinted[Proc]] =>
       val costs = 1.to(20).map(_ => costOfExecution(ps.map(_.value): _*))
@@ -80,25 +80,6 @@ object CostAccountingPropertyTest {
       .sequence[Task, A]
       .map { _.sliding(2).forall { case List(r1, r2) => r1 == r2 } }
       .runSyncUnsafe(duration)
-
-  def createRhoISpace(): RhoISpace[Task] = {
-    import coop.rchain.catscontrib.TaskContrib._
-    import coop.rchain.rholang.interpreter.storage.implicits._
-    val dbDir               = Files.createTempDirectory("cost-accounting-property-test-")
-    val context: RhoContext = Context.create(dbDir, 1024L * 1024L * 4)
-    val space: RhoISpace[Task] = RSpace
-      .create[
-        Task,
-        Par,
-        BindPattern,
-        OutOfPhlogistonsError.type,
-        ListParWithRandom,
-        ListParWithRandomAndPhlos,
-        TaggedContinuation
-      ](context, Branch("test"))
-      .unsafeRunSync
-    space
-  }
 
   def execute(reducer: ChargingReducer[Task], p: Proc)(
       implicit rand: Blake2b512Random
