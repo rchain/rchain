@@ -66,7 +66,7 @@ class CostAccountingPropertyTest extends FlatSpec with PropertyChecks with Match
       Arbitrary(GenTools.nonemptyLimitedList(5, procGen(5)))
 
     forAll { ps: List[PrettyPrinted[Proc]] =>
-      val costs = 1.to(20).map(_ => costOfExecution(ps.map(_.value): _*))
+      val costs = 1.to(10).map(_ => costOfExecution(ps.map(_.value): _*))
 
       haveEqualResults(costs: _*)(30.seconds)
     }
