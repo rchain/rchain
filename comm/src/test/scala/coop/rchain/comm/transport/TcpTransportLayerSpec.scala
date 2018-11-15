@@ -12,7 +12,7 @@ import monix.execution.Scheduler
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
 
-class TcpTransportLayerSpec { //extends TransportLayerSpec[Task, TcpTlsEnvironment] {
+class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] {
 
   implicit val log: Log[Task]       = new Log.NOPLog[Task]
   implicit val scheduler: Scheduler = Scheduler.Implicits.global
