@@ -12,15 +12,15 @@ The first is that a program cannot have any globally free variables. It also can
 
 The second, in the same vein, is that a process variable does *not* match with anything that is not a process, meaning that it cannot match with a statement that contains a free variable, logical connectives, wildcards, or expressions using list or set remainders, unless those are written in a pattern fully contained in the statement.  Likewise, a name variable cannot match with anything that is not a quoted process, in the sense that it cannot contain free variables, logical connectives, etc unless they are correctly written in a pattern fully contained in the quoted process. For example, the following code
 
-    1 match {for( x <- @Nil ){ Nil }} {
-    2       {for( x <-   y  ){ Nil }} => { y!(Nil) }
-    3 }
+    match {for( x <- @Nil ){ Nil }} {
+          {for( x <-   y  ){ Nil }} => { y!(Nil) }
+    }
 
 *will* match, returning `@Nil!(Nil)`, but
 
-    1 match {for( x <-  @{for( x <- @Nil ){ x!(Nil) }} ){ Nil }} {
-    2       {for( x <-  @{for( x <- @Nil ){    y    }} ){ Nil }} => { y }
-    3 }
+    match {for( x <-  @{for( x <- @Nil ){ x!(Nil) }} ){ Nil }} {
+          {for( x <-  @{for( x <- @Nil ){    y    }} ){ Nil }} => { y }
+    }
 
 will not match since `y` cannot match with `x!(Nil)`, and thus evaluate to the empty process. Also,
 
@@ -65,8 +65,8 @@ Here we need to treat statements that are not on the top level. We reemphasize t
 
 Furthermore, we can't bind variables to parts of patterns. For example, the following send/receive will not match:
 
-    1 for( @{for( @{x!(y)} <- @Nil ){ Nil }} <- @Nil ){ Nil }  |
-    2 @Nil!( for( @{x!(10)} <- @Nil ){ Nil } )
+    for( @{for( @{x!(y)} <- @Nil ){ Nil }} <- @Nil ){ Nil }  |
+    @Nil!( for( @{x!(10)} <- @Nil ){ Nil } )
 
 Naively, one might expect these to match, binding `y` to `10`, but to match with the above receive, one must send something alpha equivalent to:
 
@@ -106,17 +106,17 @@ Remember, however, that an arithmetic operation that is in a pattern within a pa
 
 can only match with something that preserves the `5 + 7` intact. This means that to match with this we need something of the form
 
-    1 for(
-    2   @{for( @{5 + 7} <- ... ){ ... }}   <-   @Nil )
-    3   { ... }
-    4 )
+    for(
+      @{for( @{5 + 7} <- ... ){ ... }}   <-   @Nil )
+      { ... }
+    )
 
 If we wanted to bind a variable to the `5`, for example, we would need something of the form
 
-    1 for(
-    2   @{for( @{x + 7} <- ... ){ ... }}   <-   @Nil )
-    3   { ... }
-    4 )
+    for(
+      @{for( @{x + 7} <- ... ){ ... }}   <-   @Nil )
+      { ... }
+    )
 
 which would never match because patterns within patterns must match exactly.
 
@@ -132,10 +132,10 @@ evaluating to `@Nil!(7)`.
 
 The other illegal move we ought to cover has to do with the `match` process. Remember that we cannot bind a free variable to any process or name containing free variables, or containing any out-of-context uses of logical connectives, joins, etc. In particular, it is syntactically incorrect to write:
 
-    1 match {match {@Nil!(Nil)} { x => {@Nil!(x)} }}
-    2   {
-    3       {match {@Nil!(Nil)} { y }} => { y }
-    4   }
+    match {match {@Nil!(Nil)} { x => {@Nil!(x)} }}
+      {
+          {match {@Nil!(Nil)} { y }} => { y }
+      }
 
 since, if it did match, `y` would match to `x => {@Nil!(x)}`, which is neither a process nor a name.
 
