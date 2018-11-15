@@ -10,7 +10,7 @@ import coop.rchain.models.{GPrivate}
 import org.scalatest.{FlatSpec, Matchers}
 
 class PreviewPrivateNameTest extends FlatSpec with Matchers {
-  case class Scenario(pkHex: String, timestamp: Long, expectedId: String)
+  case class Scenario(pkHex: String, timestamp: Long, expectedId: String, nth: Int = 0)
 
   val myNodePk = "464f6780d71b724525be14348b59c53dc8795346dfd7576c9f01c397ee7523e6"
 
@@ -37,6 +37,13 @@ class PreviewPrivateNameTest extends FlatSpec with Matchers {
     expectedId = "d472acf9c61e276e460de567a2b709bc9b97ff6135a812abcbaa60106d2744f9"
   )
 
+  val secondName = Scenario(
+    pkHex = myNodePk,
+    timestamp = 1542308065454L,
+    expectedId = "cdaba23ba96f28c7f443a84086e260b839cc33068d0f685648ba2ae08fd7f9da",
+    nth = 1
+  )
+
   for (scenario <- List(jsClientFreshNode, defaultUser, laterTimeStamp)) {
     val seed = DeployData()
       .withUser(ProtoUtil.stringToByteString(scenario.pkHex))
@@ -47,6 +54,10 @@ class PreviewPrivateNameTest extends FlatSpec with Matchers {
     )
 
     ProtoUtil.stripDeployData(seed) should equal(seed)
+
+    for (_ <- 0 until scenario.nth) {
+      rand.next()
+    }
 
     val id = rand.next()
 
