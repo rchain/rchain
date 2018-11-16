@@ -13,6 +13,7 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper._
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.{BindPattern, Par}
 import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rspace.{Serialize, StableHashProvider}
@@ -477,4 +478,19 @@ object BlockAPI {
           "No action taken since other thread is already processing the block."
         )
     }
+
+  def previewPrivateNames[F[_]: Monad: Log](
+      user: ByteString,
+      timestamp: Long,
+      nameQty: Int
+  ): F[PrivateNamePreviewResponse] = {
+    val seed    = DeployData().withUser(user).withTimestamp(timestamp)
+    val rand    = Blake2b512Random(DeployData.toByteArray(seed))
+    val safeQty = nameQty min 1024
+    val ids = for {
+      _  <- 0 until safeQty
+      id = ByteString.copyFrom(rand.next())
+    } yield id
+    PrivateNamePreviewResponse(ids.toList).pure[F]
+  }
 }
