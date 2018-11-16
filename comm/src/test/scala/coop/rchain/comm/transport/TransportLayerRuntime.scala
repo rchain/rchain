@@ -5,12 +5,12 @@ import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable
 import scala.concurrent.duration._
 
-import coop.rchain.catscontrib.ski._
 import cats._
 import cats.effect.Timer
 import cats.effect.concurrent.MVar
 import cats.implicits._
 
+import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.CommError.CommErr
@@ -68,7 +68,12 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
             remoteTl <- createTransportLayer(e2)
             local    = e1.peer
             remote   = e2.peer
+            cbl      <- createDispatcherCallback
             cb       <- createDispatcherCallback
+            _ <- localTl.receive(
+                  Dispatcher.withoutMessageDispatcher[F].dispatch(local, cbl),
+                  Dispatcher.devNullPacketDispatcher[F].dispatch(local, cbl)
+                )
             _ <- remoteTl.receive(
                   protocolDispatcher.dispatch(remote, cb),
                   streamDispatcher.dispatch(remote, cb)
@@ -107,8 +112,13 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
             localTl <- createTransportLayer(e1)
             local   = e1.peer
             remote  = e2.peer
-            r       <- execute(localTl, local, remote)
-            _       <- localTl.shutdown(ProtocolHelper.disconnect(local))
+            cbl     <- createDispatcherCallback
+            _ <- localTl.receive(
+                  Dispatcher.withoutMessageDispatcher[F].dispatch(local, cbl),
+                  Dispatcher.devNullPacketDispatcher[F].dispatch(local, cbl)
+                )
+            r <- execute(localTl, local, remote)
+            _ <- localTl.shutdown(ProtocolHelper.disconnect(local))
           } yield
             new TwoNodesResult {
               def localNode: PeerNode  = local
@@ -145,8 +155,13 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
             local     = e1.peer
             remote1   = e2.peer
             remote2   = e3.peer
+            cbl       <- createDispatcherCallback
             cb1       <- createDispatcherCallback
             cb2       <- createDispatcherCallback
+            _ <- localTl.receive(
+                  Dispatcher.withoutMessageDispatcher[F].dispatch(local, cbl),
+                  Dispatcher.devNullPacketDispatcher[F].dispatch(local, cbl)
+                )
             _ <- remoteTl1.receive(
                   protocolDispatcher.dispatch(remote1, cb1),
                   streamDispatcher.dispatch(remote1, cb1)
@@ -269,5 +284,5 @@ object Dispatcher {
     )
 
   def devNullPacketDispatcher[F[_]: Monad: Timer]: Dispatcher[F, Blob, Unit] =
-    new Dispatcher[F, Blob, Unit](kp(()))
+    new Dispatcher[F, Blob, Unit](response = kp(()))
 }
