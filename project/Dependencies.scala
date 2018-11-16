@@ -82,7 +82,7 @@ object Dependencies {
     "com.github.jnr"           % "jnr-ffi"                 % "2.1.7"
   )
 
-  private val kindProjector = compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4")
+  private val kindProjector = compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.8")
 
   private val testing = Seq(scalactic, scalatest, scalacheck)
 
