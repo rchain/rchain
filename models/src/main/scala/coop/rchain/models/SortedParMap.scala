@@ -1,23 +1,53 @@
 package coop.rchain.models
 
-import scala.collection.MapLike
+import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.models.rholang.sorter.ordering._
+import monix.eval.Coeval
 
-class SortedParMap private (private val ps: Map[Par, Par])
-    extends Map[Par, Par]
-    with MapLike[Par, Par, SortedParMap] {
+import scala.collection.GenTraversableOnce
+import scala.collection.immutable.HashMap
 
-  lazy val sortedMap: Map[Par, Par] = ps.sort.toMap
+final class SortedParMap private (ps: Map[Par, Par]) extends Iterable[(Par, Par)] {
 
-  override def empty: SortedParMap = SortedParMap(Map.empty[Par, Par])
+  // TODO: Merge `sortedList` and `sortedMap` into one VectorMap once available
+  lazy val sortedList: List[(Par, Par)] = ps.sort
+  lazy val sortedMap: HashMap[Par, Par] = HashMap(sortedList: _*)
 
-  override def get(key: Par): Option[Par] = sortedMap.get(key)
+  def +(kv: (Par, Par)): SortedParMap = SortedParMap(sortedMap + kv)
 
-  override def iterator: Iterator[(Par, Par)] = sortedMap.toIterator
+  def ++(kvs: GenTraversableOnce[(Par, Par)]): SortedParMap = SortedParMap(sortedMap ++ kvs)
 
-  override def +[V1 >: Par](kv: (Par, V1)): Map[Par, V1] = sortedMap + kv
+  def -(key: Par): SortedParMap = SortedParMap(sortedMap - sort(key))
 
-  override def -(key: Par): SortedParMap = SortedParMap(sortedMap - key)
+  def --(keys: GenTraversableOnce[Par]): SortedParMap =
+    SortedParMap(keys.foldLeft(sortedMap) { (map, kv) =>
+      map - sort(kv)
+    })
+
+  def apply(par: Par): Par = sortedMap(sort(par))
+
+  def contains(par: Par): Boolean = sortedMap.contains(sort(par))
+
+  def empty: SortedParMap = SortedParMap(Map.empty[Par, Par])
+
+  def get(key: Par): Option[Par] = sortedMap.get(sort(key))
+
+  def getOrElse(key: Par, default: Par): Par = sortedMap.getOrElse(sort(key), default)
+
+  def iterator: Iterator[(Par, Par)] = sortedList.toIterator
+
+  def keys: Iterable[Par] = sortedList.map(_._1)
+
+  def values: Iterable[Par] = sortedList.map(_._2)
+
+  override def equals(that: Any): Boolean = that match {
+    case spm: SortedParMap => spm.sortedList == this.sortedList
+    case _                 => false
+  }
+
+  override def hashCode(): Int = sortedList.hashCode()
+
+  private def sort(par: Par): Par = Sortable[Par].sortMatch[Coeval](par).map(_.term).value()
 }
 
 object SortedParMap {
