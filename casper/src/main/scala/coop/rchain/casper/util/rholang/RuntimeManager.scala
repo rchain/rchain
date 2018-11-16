@@ -231,7 +231,11 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
           case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
             val availablePhlos = Cost(deploy.raw.map(_.phloLimit).get.value)
             for {
-              _         <- runtime.replayReducer.setAvailablePhlos(availablePhlos)
+              _ <- runtime.replayReducer.setAvailablePhlos(availablePhlos)
+              (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(
+                deploy.raw.get
+              )
+              _         <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
               _         <- runtime.replaySpace.rig(hash, log.toList)
               injResult <- injAttempt(deploy, runtime.replayReducer, runtime.errorLog)
               //TODO: compare replay deploy cost to given deploy cost
