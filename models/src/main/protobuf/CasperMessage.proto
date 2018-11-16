@@ -27,6 +27,7 @@ service DeployService {
   rpc listenForDataAtName(DataAtNameQuery) returns (ListeningNameDataResponse) {}
   rpc listenForContinuationAtName(ContinuationAtNameQuery) returns (ListeningNameContinuationResponse) {}
   rpc findBlockWithDeploy(FindDeployInBlockQuery) returns (BlockQueryResponse) {}
+  rpc previewPrivateNames(PrivateNamePreviewQuery) returns (PrivateNamePreviewResponse) {}
 }
 
 message DeployData {
@@ -143,6 +144,17 @@ message BlockInfo {
   string sender = 12;
   string shardId = 13;
 }
+
+message PrivateNamePreviewQuery {
+  bytes  user         = 1; // public key a la DeployData
+  int64  timestamp    = 2; // millisecond timestamp
+  int32  nameQty      = 3; // how many names to preview? (max: 1024)
+}
+
+message PrivateNamePreviewResponse {
+  repeated bytes ids  = 1; // a la GPrivate
+}
+
 
 // --------- End DeployService  --------
 
