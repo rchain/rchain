@@ -3,7 +3,7 @@ addSbtPlugin("com.thesamet" % "sbt-protoc" % "0.99.18")
 libraryDependencies += "com.thesamet.scalapb" %% "compilerplugin" % "0.7.4"
 
 addSbtPlugin("com.geirsson"           %  "sbt-scalafmt"         % "1.6.0-RC4")
-addSbtPlugin("com.eed3si9n"           %  "sbt-assembly"         % "0.14.5")
+addSbtPlugin("com.eed3si9n"           %  "sbt-assembly"         % "0.14.9")
 addSbtPlugin("org.scoverage"          %  "sbt-scoverage"        % "1.5.1")
 addSbtPlugin("com.github.tkawachi"    %  "sbt-doctest"          % "0.7.1")
 addSbtPlugin("com.github.tkawachi"    %  "sbt-repeat"           % "0.1.0")
