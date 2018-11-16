@@ -337,7 +337,7 @@ lazy val roscala = (project in file("roscala"))
     mainClass in assembly := Some("coop.rchain.rosette.Main"),
     assemblyJarName in assembly := "rosette.jar",
     inThisBuild(
-      List(addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full))
+      List(addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full))
     ),
     libraryDependencies ++= commonDependencies
   )
