@@ -17,7 +17,10 @@ final class SortedParMap private (ps: Map[Par, Par]) extends Iterable[(Par, Par)
 
   def -(key: Par): SortedParMap = SortedParMap(sortedMap - key.sort)
 
-  def --(keys: GenTraversableOnce[Par]): SortedParMap = SortedParMap(sortedMap -- keys.sort)
+  def --(keys: GenTraversableOnce[Par]): SortedParMap =
+    SortedParMap(keys.foldLeft(sortedMap) { (map, kv) =>
+      map - kv.sort
+    })
 
   def apply(par: Par): Par = sortedMap(par.sort)
 

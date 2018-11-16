@@ -135,7 +135,7 @@ class SortedParMapSpec extends FlatSpec with PropertyChecks with Matchers {
             checkSortedInput(map.getOrElse(_: Par, Par()), unsorted, sorted)
           }
         )
-      checkSortedInput(map.--, keys, keys.sort)
+      checkSortedInput(map.--, keys, keys.toList.sort)
     }
   }
 

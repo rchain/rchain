@@ -6,8 +6,6 @@ import coop.rchain.models.rholang.sorter.ScoredTerm._
 import monix.eval.Coeval
 import cats.implicits._
 
-import scala.collection.{immutable, GenTraversableOnce}
-
 //FIXME the `.sort` methods in this file should return via F[_] : Sync, and the corresponding ParSet and ParMap should
 //be constructed via factory methods also returning via F. Otherwise we risk StackOverflowErrors.
 object ordering {
@@ -16,12 +14,6 @@ object ordering {
     implicit val sync = implicitly[Sync[Coeval]]
 
     def sort: Par = Sortable[Par].sortMatch[Coeval](par).map(_.term).value()
-  }
-
-  implicit class GenTraversableOnceOps(ps: GenTraversableOnce[Par]) {
-    implicit val sync = implicitly[Sync[Coeval]]
-
-    def sort: GenTraversableOnce[Par] = ps.toList.sort
   }
 
   implicit class ListSortOps(ps: List[Par]) {
