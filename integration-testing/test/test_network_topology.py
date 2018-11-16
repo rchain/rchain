@@ -3,7 +3,13 @@ import pytest
 from delayed_assert import expect, assert_expectations
 from rnode_testing.profiling import profile
 import rnode_testing.casper_propose_and_deploy
-from rnode_testing.network import start_network, wait_for_started_network, wait_for_converged_network
+from rnode_testing.network import (
+    start_network,
+    wait_for_started_network,
+    wait_for_converged_network,
+    wait_for_approved_block_received_handler_state,
+    wait_for_approved_block_received,
+)
 from rnode_testing.rnode import start_bootstrap
 
 @pytest.fixture(scope="module")
@@ -33,6 +39,8 @@ def complete_network(system):
                          system.config.rnode_timeout,
                          system.validators_data) as bootstrap_node:
 
+        wait_for_approved_block_received_handler_state(bootstrap_node, system.config.node_startup_timeout)
+
         with start_network(system.config,
                            system.docker,
                            bootstrap_node,
@@ -41,6 +49,8 @@ def complete_network(system):
             wait_for_started_network(system.config.node_startup_timeout, network)
 
             wait_for_converged_network(system.config.network_converge_timeout, network, len(network.peers))
+
+            wait_for_approved_block_received(network, system.config.node_startup_timeout)
 
             yield network
 
