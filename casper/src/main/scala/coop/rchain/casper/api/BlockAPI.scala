@@ -487,10 +487,7 @@ object BlockAPI {
     val seed    = DeployData().withUser(user).withTimestamp(timestamp)
     val rand    = Blake2b512Random(DeployData.toByteArray(seed))
     val safeQty = nameQty min 1024
-    val ids = for {
-      _  <- 0 until safeQty
-      id = ByteString.copyFrom(rand.next())
-    } yield id
-    PrivateNamePreviewResponse(ids.toList).pure[F]
+    val ids     = (0 until safeQty).map(_ => ByteString.copyFrom(rand.next()))
+    PrivateNamePreviewResponse(ids).pure[F]
   }
 }
