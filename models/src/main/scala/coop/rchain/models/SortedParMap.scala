@@ -1,6 +1,8 @@
 package coop.rchain.models
 
+import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.models.rholang.sorter.ordering._
+import monix.eval.Coeval
 
 import scala.collection.GenTraversableOnce
 import scala.collection.immutable.HashMap
@@ -15,22 +17,22 @@ final class SortedParMap private (ps: Map[Par, Par]) extends Iterable[(Par, Par)
 
   def ++(kvs: GenTraversableOnce[(Par, Par)]): SortedParMap = SortedParMap(sortedMap ++ kvs)
 
-  def -(key: Par): SortedParMap = SortedParMap(sortedMap - key.sort)
+  def -(key: Par): SortedParMap = SortedParMap(sortedMap - sort(key))
 
   def --(keys: GenTraversableOnce[Par]): SortedParMap =
     SortedParMap(keys.foldLeft(sortedMap) { (map, kv) =>
-      map - kv.sort
+      map - sort(kv)
     })
 
-  def apply(par: Par): Par = sortedMap(par.sort)
+  def apply(par: Par): Par = sortedMap(sort(par))
 
-  def contains(par: Par): Boolean = sortedMap.contains(par.sort)
+  def contains(par: Par): Boolean = sortedMap.contains(sort(par))
 
   def empty: SortedParMap = SortedParMap(Map.empty[Par, Par])
 
-  def get(key: Par): Option[Par] = sortedMap.get(key.sort)
+  def get(key: Par): Option[Par] = sortedMap.get(sort(key))
 
-  def getOrElse(key: Par, default: Par): Par = sortedMap.getOrElse(key.sort, default)
+  def getOrElse(key: Par, default: Par): Par = sortedMap.getOrElse(sort(key), default)
 
   def iterator: Iterator[(Par, Par)] = sortedList.toIterator
 
@@ -44,6 +46,8 @@ final class SortedParMap private (ps: Map[Par, Par]) extends Iterable[(Par, Par)
   }
 
   override def hashCode(): Int = sortedList.hashCode()
+
+  private def sort(par: Par): Par = Sortable[Par].sortMatch[Coeval](par).map(_.term).value()
 }
 
 object SortedParMap {

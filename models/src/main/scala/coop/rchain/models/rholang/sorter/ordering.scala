@@ -10,12 +10,6 @@ import cats.implicits._
 //be constructed via factory methods also returning via F. Otherwise we risk StackOverflowErrors.
 object ordering {
 
-  implicit class ParOps(par: Par) {
-    implicit val sync = implicitly[Sync[Coeval]]
-
-    def sort: Par = Sortable[Par].sortMatch[Coeval](par).map(_.term).value()
-  }
-
   implicit class ListSortOps(ps: List[Par]) {
     implicit val sync = implicitly[Sync[Coeval]]
 

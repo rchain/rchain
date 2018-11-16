@@ -127,7 +127,7 @@ class SortedParMapSpec extends FlatSpec with PropertyChecks with Matchers {
         .map(_._1)
         .foreach(
           (unsorted: Par) => {
-            val sorted = unsorted.sort
+            val sorted = sort(unsorted)
             checkSortedInput(map.-, unsorted, sorted)
             checkSortedInput(map.apply, unsorted, sorted)
             checkSortedInput(map.contains, unsorted, sorted)
@@ -172,6 +172,8 @@ class SortedParMapSpec extends FlatSpec with PropertyChecks with Matchers {
 
   private def checkSortedInput[A, B](f: A => B, unsorted: A, sorted: A): Assertion =
     assert(f(sorted) == f(unsorted))
+
+  private def sort(par: Par): Par = Sortable[Par].sortMatch[Coeval](par).map(_.term).value()
 
   def isSorted[A: Sortable](a: A): Boolean =
     a == Sortable[A].sortMatch[Coeval](a).value().term
