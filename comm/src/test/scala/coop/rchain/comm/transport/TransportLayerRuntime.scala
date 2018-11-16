@@ -66,13 +66,14 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
             remoteTl <- createTransportLayer(e2)
             local    = e1.peer
             remote   = e2.peer
+            _        <- localTl.receive(null, null)
             _ <- remoteTl.receive(
                   protocolDispatcher.dispatch(remote),
                   streamDispatcher.dispatch(remote)
                 )
             r <- execute(localTl, local, remote)
             // arbitrary sleep value, so environment has time to handle requests
-            _ <- time.sleep(200 millisecond)
+            _ <- time.sleep(1000 millisecond)
             _ <- remoteTl.shutdown(ProtocolHelper.disconnect(remote))
             _ <- localTl.shutdown(ProtocolHelper.disconnect(local))
           } yield
@@ -105,9 +106,7 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
             local   = e1.peer
             remote  = e2.peer
             r       <- execute(localTl, local, remote)
-            // arbitrary sleep value, so environment has time to handle requests
-            _ <- time.sleep(200 millisecond)
-            _ <- localTl.shutdown(ProtocolHelper.disconnect(local))
+            _       <- localTl.shutdown(ProtocolHelper.disconnect(local))
           } yield
             new TwoNodesResult {
               def localNode: PeerNode  = local
@@ -144,13 +143,14 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
             local     = e1.peer
             remote1   = e2.peer
             remote2   = e3.peer
+            _         <- localTl.receive(null, null)
             _ <- remoteTl1
                   .receive(protocolDispatcher.dispatch(remote1), streamDispatcher.dispatch(remote1))
             _ <- remoteTl2
                   .receive(protocolDispatcher.dispatch(remote2), streamDispatcher.dispatch(remote2))
             r <- execute(localTl, local, remote1, remote2)
             // arbitrary sleep value, so environment has time to handle requests
-            _ <- time.sleep(200 millisecond)
+            _ <- time.sleep(1000 millisecond)
             _ <- remoteTl1.shutdown(ProtocolHelper.disconnect(remote1))
             _ <- remoteTl2.shutdown(ProtocolHelper.disconnect(remote2))
             _ <- localTl.shutdown(ProtocolHelper.disconnect(local))
@@ -254,6 +254,6 @@ object Dispatcher {
 
   def devNullPacketDispatcher[F[_]: Applicative]: Dispatcher[F, Blob, Unit] =
     new Dispatcher[F, Blob, Unit](
-      kp(())
+      response = kp(())
     )
 }
