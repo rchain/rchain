@@ -40,13 +40,13 @@ object TestSetUtil {
 
   }
 
-  def runtime(implicit scheduler: Scheduler): Runtime = {
-    val runtime = Runtime.create(Paths.get("/not/a/path"), -1, InMem)
+  def runtime(implicit scheduler: Scheduler): Runtime[Task] = {
+    val runtime = Runtime.create[Task, Task.Par](Paths.get("/not/a/path"), -1, InMem).unsafeRunSync
     Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace).unsafeRunSync
     runtime
   }
 
-  def evalDeploy(deploy: Deploy, runtime: Runtime)(implicit scheduler: Scheduler): Unit = {
+  def evalDeploy(deploy: Deploy, runtime: Runtime[Task])(implicit scheduler: Scheduler): Unit = {
     runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
     implicit val rand: Blake2b512Random = Blake2b512Random(
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy.getRaw))
@@ -56,7 +56,7 @@ object TestSetUtil {
 
   def evalTerm(
       term: Par,
-      runtime: Runtime
+      runtime: Runtime[Task]
   )(implicit scheduler: Scheduler, rand: Blake2b512Random): Unit = {
     runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
     runtime.reducer.inj(term).unsafeRunSync
@@ -64,14 +64,18 @@ object TestSetUtil {
 
   def eval(
       code: String,
-      runtime: Runtime
+      runtime: Runtime[Task]
   )(implicit scheduler: Scheduler, rand: Blake2b512Random): Unit =
     mkTerm(code) match {
       case Right(term) => evalTerm(term, runtime)
       case Left(ex)    => throw ex
     }
 
-  def runTestsWithDeploys(tests: CompiledRholangSource, otherLibs: Seq[Deploy], runtime: Runtime)(
+  def runTestsWithDeploys(
+      tests: CompiledRholangSource,
+      otherLibs: Seq[Deploy],
+      runtime: Runtime[Task]
+  )(
       implicit scheduler: Scheduler
   ): Unit = {
     val rand = Blake2b512Random(128)
@@ -84,7 +88,7 @@ object TestSetUtil {
   def runTests(
       tests: CompiledRholangSource,
       otherLibs: Seq[CompiledRholangSource],
-      runtime: Runtime
+      runtime: Runtime[Task]
   )(implicit scheduler: Scheduler): Unit = {
     //load "libraries" required for all tests
     val rand = Blake2b512Random(128)

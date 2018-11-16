@@ -1,7 +1,7 @@
 package coop.rchain.casper.genesis
 
 import cats.implicits._
-import cats.{Id, Monad}
+import cats.Monad
 import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.DeployPaymentCostTest._
 import coop.rchain.casper.genesis.contracts.{Faucet, PreWallet}
@@ -22,6 +22,8 @@ import coop.rchain.rspace.Serialize
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 import Matchers._
+import monix.eval.Task
+import scala.concurrent.duration._
 import scala.collection.immutable.BitSet
 
 class DeployPaymentCostTest extends FlatSpec {
@@ -42,7 +44,7 @@ class DeployPaymentCostTest extends FlatSpec {
     val user          = ByteString.copyFrom(pubKey)
     val timestamp     = System.currentTimeMillis()
 
-    val paymentBlock = paymentDeploy(paymentPar, user, timestamp)
+    val paymentBlock = paymentDeploy(paymentPar, user, timestamp).runSyncUnsafe(1.second)
 
     val paymentDeployCost = deployCost(paymentBlock, user, timestamp)
 
@@ -179,7 +181,7 @@ object DeployPaymentCostTest {
       .value()
   }
 
-  def createWallet(rm: RuntimeManager)(implicit casper: MultiParentCasperImpl[Id]): Par = {
+  def createWallet(rm: RuntimeManager[Task])(implicit casper: MultiParentCasperImpl[Task]): Par = {
     // Create new wallet
     val walletRetCh = GPrivateBuilder()
     val newWalletName = deployAndCapture(
@@ -195,11 +197,12 @@ object DeployPaymentCostTest {
     )
   }
 
-  def deployAndCapture(p: Par, retChannel: Par, rm: RuntimeManager)(
-      implicit casper: MultiParentCasperImpl[Id]
+  def deployAndCapture(p: Par, retChannel: Par, rm: RuntimeManager[Task])(
+      implicit casper: MultiParentCasperImpl[Task]
   ): Par = {
-    val postDeployStateHash = deploy[Id](p).getBody.getPostState.tuplespace
-    val data                = rm.getData(postDeployStateHash, retChannel)
+    val postDeployStateHash =
+      deploy[Task](p).runSyncUnsafe(1.second).getBody.getPostState.tuplespace
+    val data = rm.getData(postDeployStateHash, retChannel).runSyncUnsafe(1.second)
     assert(data.size == 1)
     data.head
   }
@@ -256,8 +259,8 @@ object DeployPaymentCostTest {
       walletAddress: Par,
       secKey: Array[Byte],
       pubKey: Array[Byte],
-      rm: RuntimeManager
-  )(implicit casper: MultiParentCasperImpl[Id]): String = {
+      rm: RuntimeManager[Task]
+  )(implicit casper: MultiParentCasperImpl[Task]): String = {
     val registerWalletTuple: Par = ETuple(Seq(GInt(1), walletAddress))
     val registrySig              = Ed25519.sign(registerWalletTuple.toByteArray, secKey)
     assert(Ed25519.verify(registerWalletTuple.toByteArray, registrySig, pubKey))
@@ -282,15 +285,18 @@ object DeployPaymentCostTest {
     walletUri.exprs.head.getGUri
   }
 
-  def assertSuccessfulTransfer[F[_]](
-      node: HashSetCasperTestNode[F],
+  def assertSuccessfulTransfer(
+      node: HashSetCasperTestNode[Task],
       tuplespaceHash: ByteString,
       statusChannel: GPrivate
   ): Unit = {
-    val transferStatus = node.runtimeManager.getData(
-      tuplespaceHash,
-      statusChannel
-    )
+    val transferStatus = node.runtimeManager
+      .getData(
+        tuplespaceHash,
+        statusChannel
+      )
+      .runSyncUnsafe(1.second)
+
     assert(transferStatus.size == 1)
     transferStatus.head.exprs.head should be(Expr(GString("Success")))
   }

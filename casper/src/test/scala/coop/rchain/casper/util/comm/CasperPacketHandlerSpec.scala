@@ -35,7 +35,6 @@ import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.Cell
 import monix.eval.Task
 import monix.execution.Scheduler
-import monix.execution.Scheduler.Implicits.global
 import monix.execution.schedulers.TestScheduler
 import org.scalatest.WordSpec
 import coop.rchain.casper.util.TestTime
@@ -44,10 +43,11 @@ import scala.concurrent.duration._
 
 class CasperPacketHandlerSpec extends WordSpec {
   private def setup() = new {
-    val scheduler      = Scheduler.io("test")
-    val runtimeDir     = BlockStoreTestFixture.dbDir
-    val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024)
-    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)(scheduler)
+    implicit val scheduler = Scheduler.io("test")
+    val runtimeDir         = BlockStoreTestFixture.dbDir
+    val activeRuntime =
+      Runtime.create[Task, Task.Par](runtimeDir, 1024L * 1024).runSyncUnsafe(1.second)
+    val runtimeManager = RuntimeManager.fromRuntime[Task](activeRuntime).runSyncUnsafe(1.second)
 
     implicit val captureTask       = Capture.taskCapture
     val (genesisSk, genesisPk)     = Ed25519.newKeyPair
@@ -67,7 +67,7 @@ class CasperPacketHandlerSpec extends WordSpec {
       Long.MaxValue,
       false,
       requiredSigs
-    )(scheduler)
+    )
     val local: PeerNode = peerNode("src", 40400)
     val shardId         = "test-shardId"
 
@@ -129,7 +129,7 @@ class CasperPacketHandlerSpec extends WordSpec {
             assert(lastMessage.peer == local && lastMessage.msg == expectedPacket)
           }
         } yield ()
-        test.unsafeRunSync
+        test.unsafeRunSync(ctx)
         ctx.tick()
       }
 
@@ -164,7 +164,7 @@ class CasperPacketHandlerSpec extends WordSpec {
           _               = assert(packetResponse2.isEmpty)
           _               = assert(transportLayer.requests.isEmpty)
         } yield ()
-        test.unsafeRunSync
+        test.unsafeRunSync(ctx)
         ctx.tick()
       }
     }

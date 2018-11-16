@@ -15,35 +15,37 @@ import coop.rchain.catscontrib._
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Time
-
+import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
+import scala.concurrent.duration._
 import scala.collection.immutable.{HashMap, HashSet}
 import scala.language.higherKinds
 
 object BlockGenerator {
-  implicit val timeEff                                                  = new LogicalTime[Id]
+  implicit val timeEff                                                  = new LogicalTime[Task]
   implicit def indexedBlockDag2BlockDag(ibd: IndexedBlockDag): BlockDag = ibd.dag
 
-  type StateWithChain[A] = StateT[Id, IndexedBlockDag, A]
+  type StateWithChain[A] = StateT[Task, IndexedBlockDag, A]
 
   type BlockDagState[F[_]] = MonadState[F, IndexedBlockDag]
   def blockDagState[F[_]: Monad: BlockDagState]: BlockDagState[F] = MonadState[F, IndexedBlockDag]
 
-  def storeForStateWithChain[F[_]: Monad](idBs: BlockStore[Id]): BlockStore[F] =
+  def storeForStateWithChain[F[_]: Monad](idBs: BlockStore[Task]): BlockStore[F] =
     new BlockStore[F] {
       override def get(blockHash: BlockHash): F[Option[BlockMessage]] =
-        Monad[F].pure(idBs.get(blockHash))
+        Monad[F].pure(idBs.get(blockHash).runSyncUnsafe(1.second))
 
       override def asMap(): F[Map[BlockHash, BlockMessage]] =
-        Monad[F].pure(idBs.asMap())
+        Monad[F].pure(idBs.asMap().runSyncUnsafe(1.second))
 
       override def put(f: => (BlockHash, BlockMessage)): F[Unit] =
         Monad[F].pure(idBs.put(f))
 
       override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
-        Monad[F].pure(idBs.find(p))
+        Monad[F].pure(idBs.find(p).runSyncUnsafe(1.second))
 
-      override def clear(): F[Unit] = Monad[F].pure(idBs.clear())
-      override def close(): F[Unit] = Monad[F].pure(idBs.close())
+      override def clear(): F[Unit] = Monad[F].pure(idBs.clear().runSyncUnsafe(1.second))
+      override def close(): F[Unit] = Monad[F].pure(idBs.close().runSyncUnsafe(1.second))
     }
 }
 

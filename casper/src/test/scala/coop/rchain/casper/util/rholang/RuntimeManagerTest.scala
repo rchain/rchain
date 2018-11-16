@@ -16,8 +16,8 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.concurrent.duration._
 
 class RuntimeManagerTest extends FlatSpec with Matchers {
-  private val runtimeManager: Resource[Task, RuntimeManager] =
-    mkRuntimeManager("casper-runtime-manager-test")
+  private val runtimeManager: Resource[Task, RuntimeManager[Task]] =
+    mkRuntimeManager[Task, Task.Par]("casper-runtime-manager-test")
 
   "computeState" should "capture rholang errors" in {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
@@ -56,7 +56,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         .use { mgr =>
           mgr
             .computeState(mgr.emptyStateHash, deploys)
-            .map { result =>
+            .flatMap { result =>
               val hash = result._1
               mgr.captureResults(
                 hash,
@@ -83,11 +83,11 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val term = ProtoUtil.deployDataToDeploy(ProtoUtil.sourceDeploy(code, 0L, accounting.MAX_VALUE))
     val manyResults =
       runtimeManager
-        .use(mgr => Task.delay { mgr.captureResults(mgr.emptyStateHash, term) })
+        .use(mgr => mgr.captureResults(mgr.emptyStateHash, term))
         .runSyncUnsafe(10.seconds)
     val noResults =
       runtimeManager
-        .use(mgr => Task.delay { mgr.captureResults(mgr.emptyStateHash, term, "differentName") })
+        .use(mgr => mgr.captureResults(mgr.emptyStateHash, term, "differentName"))
         .runSyncUnsafe(10.seconds)
 
     noResults.isEmpty should be(true)

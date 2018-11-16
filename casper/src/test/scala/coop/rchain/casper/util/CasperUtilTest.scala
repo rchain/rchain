@@ -7,7 +7,7 @@ import coop.rchain.casper.protocol._
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.catscontrib._
 import Catscontrib._
-import cats._
+import cats.Monad
 import cats.data._
 import cats.effect.Bracket
 import cats.implicits._
@@ -18,14 +18,19 @@ import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture, IndexedBlockDag}
 import coop.rchain.casper.helper.BlockGenerator._
+import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.shared.Time
+import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
 
+import scala.concurrent.duration._
 import scala.collection.immutable.{HashMap, HashSet}
 
 class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with BlockStoreFixture {
-  val initState = IndexedBlockDag.empty.withOffset(1L)
+  implicit val metrics = new MetricsNOP[Task]
+  val initState        = IndexedBlockDag.empty.withOffset(1L)
 
-  "isInMainChain" should "classify appropriately" in withStore { implicit blockStore =>
+  "isInMainChain" should "classify appropriately" in withStore[Task, Unit] { implicit blockStore =>
     implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
     def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
       for {
@@ -33,7 +38,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
         b2      <- createBlock[F](Seq(genesis.blockHash))
         b3      <- createBlock[F](Seq(b2.blockHash))
       } yield b3
-    val chain = createChain[StateWithChain].runS(initState)
+    val chain = createChain[StateWithChain].runS(initState).runSyncUnsafe(1.second)
 
     val genesisBlockHash = chain.idToBlocks(1).blockHash
     val b2BlockHash      = chain.idToBlocks(2).blockHash
@@ -44,31 +49,32 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
     isInMainChain(chain, b3BlockHash, genesisBlockHash) should be(false)
   }
 
-  "isInMainChain" should "classify diamond DAGs appropriately" in withStore { implicit blockStore =>
-    implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
-    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
-      for {
-        genesis <- createBlock[F](Seq())
-        b2      <- createBlock[F](Seq(genesis.blockHash))
-        b3      <- createBlock[F](Seq(genesis.blockHash))
-        b4      <- createBlock[F](Seq(b2.blockHash, b3.blockHash))
-      } yield b4
+  "isInMainChain" should "classify diamond DAGs appropriately" in withStore[Task, Unit] {
+    implicit blockStore =>
+      implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
+      def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
+        for {
+          genesis <- createBlock[F](Seq())
+          b2      <- createBlock[F](Seq(genesis.blockHash))
+          b3      <- createBlock[F](Seq(genesis.blockHash))
+          b4      <- createBlock[F](Seq(b2.blockHash, b3.blockHash))
+        } yield b4
 
-    val chain = createChain[StateWithChain].runS(initState)
+      val chain = createChain[StateWithChain].runS(initState).runSyncUnsafe(1.second)
 
-    val genesisBlockHash = chain.idToBlocks(1).blockHash
-    val b2BlockHash      = chain.idToBlocks(2).blockHash
-    val b3BlockHash      = chain.idToBlocks(3).blockHash
-    val b4BlockHash      = chain.idToBlocks(4).blockHash
-    isInMainChain(chain, genesisBlockHash, b2BlockHash) should be(true)
-    isInMainChain(chain, genesisBlockHash, b3BlockHash) should be(true)
-    isInMainChain(chain, genesisBlockHash, b4BlockHash) should be(true)
-    isInMainChain(chain, b2BlockHash, b4BlockHash) should be(true)
-    isInMainChain(chain, b3BlockHash, b4BlockHash) should be(false)
+      val genesisBlockHash = chain.idToBlocks(1).blockHash
+      val b2BlockHash      = chain.idToBlocks(2).blockHash
+      val b3BlockHash      = chain.idToBlocks(3).blockHash
+      val b4BlockHash      = chain.idToBlocks(4).blockHash
+      isInMainChain(chain, genesisBlockHash, b2BlockHash) should be(true)
+      isInMainChain(chain, genesisBlockHash, b3BlockHash) should be(true)
+      isInMainChain(chain, genesisBlockHash, b4BlockHash) should be(true)
+      isInMainChain(chain, b2BlockHash, b4BlockHash) should be(true)
+      isInMainChain(chain, b3BlockHash, b4BlockHash) should be(false)
   }
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
-  "isInMainChain" should "classify complicated chains appropriately" in withStore {
+  "isInMainChain" should "classify complicated chains appropriately" in withStore[Task, Unit] {
     implicit blockStore =>
       implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
       val v1                       = ByteString.copyFromUtf8("Validator One")
@@ -85,7 +91,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
           b8      <- createBlock[F](Seq(b7.blockHash), v1)
         } yield b8
 
-      val chain = createChain[StateWithChain].runS(initState)
+      val chain = createChain[StateWithChain].runS(initState).runSyncUnsafe(1.second)
 
       val genesisBlockHash = chain.idToBlocks(1).blockHash
       val b2BlockHash      = chain.idToBlocks(2).blockHash
@@ -122,44 +128,55 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
    *        \       /
    *         genesis
    */
-  "Blocks" should "conflict if they use the same deploys in different histories" in withStore {
-    implicit blockStore =>
-      implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
-      val deploys                  = (0 until 6).map(basicProcessedDeploy[Id])
+  "Blocks" should "conflict if they use the same deploys in different histories" in withStore[
+    Task,
+    Unit
+  ] { implicit blockStore =>
+    implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
+    val deploys                  = (0 until 6).map(basicProcessedDeploy[Task])
 
-      def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
-        for {
-          genesis <- createBlock[F](Seq())
-          b2      <- createBlock[F](Seq(genesis.blockHash), deploys = Seq(deploys(0)))
-          b3      <- createBlock[F](Seq(genesis.blockHash), deploys = Seq(deploys(1)))
-          b4      <- createBlock[F](Seq(b2.blockHash), deploys = Seq(deploys(2)))
-          b5      <- createBlock[F](Seq(b3.blockHash), deploys = Seq(deploys(2)))
-          b6      <- createBlock[F](Seq(b2.blockHash, b3.blockHash), deploys = Seq(deploys(2)))
-          b7      <- createBlock[F](Seq(b6.blockHash), deploys = Seq(deploys(3)))
-          b8      <- createBlock[F](Seq(b6.blockHash), deploys = Seq(deploys(5)))
-          b9      <- createBlock[F](Seq(b7.blockHash), deploys = Seq(deploys(5)))
-          b10     <- createBlock[F](Seq(b8.blockHash), deploys = Seq(deploys(4)))
-        } yield b10
+    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
+      for {
+        genesis <- createBlock[F](Seq())
+        b2 <- createBlock[F](
+               Seq(genesis.blockHash),
+               deploys = Seq(deploys(0).runSyncUnsafe(1.second))
+             )
+        b3 <- createBlock[F](
+               Seq(genesis.blockHash),
+               deploys = Seq(deploys(1).runSyncUnsafe(1.second))
+             )
+        b4 <- createBlock[F](Seq(b2.blockHash), deploys = Seq(deploys(2).runSyncUnsafe(1.second)))
+        b5 <- createBlock[F](Seq(b3.blockHash), deploys = Seq(deploys(2).runSyncUnsafe(1.second)))
+        b6 <- createBlock[F](
+               Seq(b2.blockHash, b3.blockHash),
+               deploys = Seq(deploys(2).runSyncUnsafe(1.second))
+             )
+        b7  <- createBlock[F](Seq(b6.blockHash), deploys = Seq(deploys(3).runSyncUnsafe(1.second)))
+        b8  <- createBlock[F](Seq(b6.blockHash), deploys = Seq(deploys(5).runSyncUnsafe(1.second)))
+        b9  <- createBlock[F](Seq(b7.blockHash), deploys = Seq(deploys(5).runSyncUnsafe(1.second)))
+        b10 <- createBlock[F](Seq(b8.blockHash), deploys = Seq(deploys(4).runSyncUnsafe(1.second)))
+      } yield b10
 
-      val chain   = createChain[StateWithChain].runS(initState)
-      val genesis = chain.idToBlocks(1)
+    val chain   = createChain[StateWithChain].runS(initState).runSyncUnsafe(1.second)
+    val genesis = chain.idToBlocks(1)
 
-      val b2  = chain.idToBlocks(2)
-      val b3  = chain.idToBlocks(3)
-      val b4  = chain.idToBlocks(4)
-      val b5  = chain.idToBlocks(5)
-      val b6  = chain.idToBlocks(6)
-      val b7  = chain.idToBlocks(7)
-      val b8  = chain.idToBlocks(8)
-      val b9  = chain.idToBlocks(9)
-      val b10 = chain.idToBlocks(10)
+    val b2  = chain.idToBlocks(2)
+    val b3  = chain.idToBlocks(3)
+    val b4  = chain.idToBlocks(4)
+    val b5  = chain.idToBlocks(5)
+    val b6  = chain.idToBlocks(6)
+    val b7  = chain.idToBlocks(7)
+    val b8  = chain.idToBlocks(8)
+    val b9  = chain.idToBlocks(9)
+    val b10 = chain.idToBlocks(10)
 
-      conflicts[Id](b2, b3, genesis, chain) should be(false)
-      conflicts[Id](b4, b5, genesis, chain) should be(true)
-      conflicts[Id](b6, b6, genesis, chain) should be(false)
-      conflicts[Id](b6, b9, genesis, chain) should be(false)
-      conflicts[Id](b7, b8, genesis, chain) should be(false)
-      conflicts[Id](b7, b10, genesis, chain) should be(false)
-      conflicts[Id](b9, b10, genesis, chain) should be(true)
+    conflicts[Task](b2, b3, genesis, chain).runSyncUnsafe(1.second) should be(false)
+    conflicts[Task](b4, b5, genesis, chain).runSyncUnsafe(1.second) should be(true)
+    conflicts[Task](b6, b6, genesis, chain).runSyncUnsafe(1.second) should be(false)
+    conflicts[Task](b6, b9, genesis, chain).runSyncUnsafe(1.second) should be(false)
+    conflicts[Task](b7, b8, genesis, chain).runSyncUnsafe(1.second) should be(false)
+    conflicts[Task](b7, b10, genesis, chain).runSyncUnsafe(1.second) should be(false)
+    conflicts[Task](b9, b10, genesis, chain).runSyncUnsafe(1.second) should be(true)
   }
 }

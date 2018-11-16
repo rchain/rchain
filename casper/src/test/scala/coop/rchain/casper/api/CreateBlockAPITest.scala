@@ -72,7 +72,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
     response2.success shouldBe false
     response2.message shouldBe "Error: There is another propose in progress."
 
-    node.tearDown()
+    node.tearDown().value.runSyncUnsafe(1.second)
   }
 }
 
@@ -86,10 +86,10 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def blockDag: F[BlockDag]                                 = underlying.blockDag
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     underlying.normalizedInitialFault(weights)
-  def lastFinalizedBlock: F[BlockMessage]          = underlying.lastFinalizedBlock
-  def storageContents(hash: ByteString): F[String] = underlying.storageContents(hash)
-  def getRuntimeManager: F[Option[RuntimeManager]] = underlying.getRuntimeManager
-  def fetchDependencies: F[Unit]                   = underlying.fetchDependencies
+  def lastFinalizedBlock: F[BlockMessage]             = underlying.lastFinalizedBlock
+  def storageContents(hash: ByteString): F[String]    = underlying.storageContents(hash)
+  def getRuntimeManager: F[Option[RuntimeManager[F]]] = underlying.getRuntimeManager
+  def fetchDependencies: F[Unit]                      = underlying.fetchDependencies
 
   override def createBlock: F[CreateBlockStatus] =
     for {

@@ -3,13 +3,17 @@ package coop.rchain.casper.util
 import coop.rchain.casper.{BlockDag, MultiParentCasperInstances}
 import coop.rchain.casper.protocol._
 import org.scalatest.{FlatSpec, Matchers}
-import cats.{Id, Monad}
+import cats.Monad
 import cats.implicits._
 import cats.mtl.implicits._
 import coop.rchain.blockstorage.{BlockMetadata, BlockStore}
 import coop.rchain.casper.helper.{BlockGenerator, BlockStoreTestFixture, IndexedBlockDag}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.shared.Time
+import monix.eval.Task
+
+import scala.concurrent.duration._
+import monix.execution.Scheduler.Implicits.global
 
 import scala.collection.immutable.BitSet
 
@@ -21,7 +25,7 @@ class DagOperationsTest
   val initState = IndexedBlockDag.empty.copy(currentId = -1)
 
   "bfTraverseF" should "lazily breadth-first traverse a DAG with effectful neighbours" in {
-    val stream = DagOperations.bfTraverseF[Id, Int](List(1))(i => List(i * 2, i * 3))
+    val stream = DagOperations.bfTraverseF[Task, Int](List(1))(i => Task.delay(List(i * 2, i * 3)))
     stream.take(10).toList shouldBe List(1, 2, 3, 4, 6, 9, 8, 12, 18, 27)
   }
 
@@ -51,7 +55,7 @@ class DagOperationsTest
         b7      <- createBlock[F](Seq(b4.blockHash, b5.blockHash))
       } yield b7
 
-    val chain   = createChain[StateWithChain].runS(initState)
+    val chain   = createChain[StateWithChain].runS(initState).runSyncUnsafe(1.second)
     val genesis = chain.idToBlocks(0)
 
     val b1 = chain.idToBlocks(1)
@@ -61,11 +65,21 @@ class DagOperationsTest
     val b6 = chain.idToBlocks(6)
     val b7 = chain.idToBlocks(7)
 
-    DagOperations.greatestCommonAncestorF[Id](b1, b5, genesis, chain) should be(b1)
-    DagOperations.greatestCommonAncestorF[Id](b3, b2, genesis, chain) should be(b1)
-    DagOperations.greatestCommonAncestorF[Id](b6, b7, genesis, chain) should be(b1)
-    DagOperations.greatestCommonAncestorF[Id](b2, b2, genesis, chain) should be(b2)
-    DagOperations.greatestCommonAncestorF[Id](b3, b7, genesis, chain) should be(b3)
+    DagOperations
+      .greatestCommonAncestorF[Task](b1, b5, genesis, chain)
+      .runSyncUnsafe(1.second) should be(b1)
+    DagOperations
+      .greatestCommonAncestorF[Task](b3, b2, genesis, chain)
+      .runSyncUnsafe(1.second) should be(b1)
+    DagOperations
+      .greatestCommonAncestorF[Task](b6, b7, genesis, chain)
+      .runSyncUnsafe(1.second) should be(b1)
+    DagOperations
+      .greatestCommonAncestorF[Task](b2, b2, genesis, chain)
+      .runSyncUnsafe(1.second) should be(b2)
+    DagOperations
+      .greatestCommonAncestorF[Task](b3, b7, genesis, chain)
+      .runSyncUnsafe(1.second) should be(b3)
   }
 
   "uncommon ancestors" should "be computed properly" in {
@@ -94,7 +108,7 @@ class DagOperationsTest
         b7      <- createBlock[F](Seq(b2.blockHash, b5.blockHash))
       } yield b7
 
-    val chain      = createChain[StateWithChain].runS(initState)
+    val chain      = createChain[StateWithChain].runS(initState).runSyncUnsafe(1.second)
     val toMetadata = chain.dataLookup
 
     val b1 = toMetadata(chain.idToBlocks(1).blockHash)

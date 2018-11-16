@@ -14,7 +14,11 @@ import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.comm.CasperPacketHandler.{ApprovedBlockReceivedHandler, CasperPacketHandlerImpl, CasperPacketHandlerInternal}
+import coop.rchain.casper.util.comm.CasperPacketHandler.{
+  ApprovedBlockReceivedHandler,
+  CasperPacketHandlerImpl,
+  CasperPacketHandlerInternal
+}
 import coop.rchain.casper.util.comm.TransportLayerTestImpl
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.catscontrib._
@@ -44,8 +48,8 @@ import monix.eval.Task
 import scala.concurrent.ExecutionContext
 
 class HashSetCasperTestNode[F[_]](
-    val activeRuntime : Runtime[F],
-    val runtimeManager:RuntimeManager[F],
+    val activeRuntime: Runtime[F],
+    val runtimeManager: RuntimeManager[F],
     name: String,
     val local: PeerNode,
     tle: TransportLayerTestImpl[F],
@@ -55,11 +59,13 @@ class HashSetCasperTestNode[F[_]](
     implicit val errorHandlerEff: ErrorHandler[F],
     storageSize: Long,
     shardId: String = "rchain"
-)(implicit scheduler: Scheduler,
-  syncF: Sync[F],
-  captureF: Capture[F],
-  contextShift: ContextShift[F],
-  executionContext: ExecutionContext) {
+)(
+    implicit scheduler: Scheduler,
+    syncF: Sync[F],
+    captureF: Capture[F],
+    contextShift: ContextShift[F],
+    executionContext: ExecutionContext
+) {
 
   implicit val logEff            = new LogStub[F]
   implicit val timeEff           = logicalTime
@@ -119,47 +125,60 @@ class HashSetCasperTestNode[F[_]](
 
   def receive(): F[Unit] = tle.receive(p => handle[F](p, defaultTimeout), kp(().pure[F]))
 
-  def tearDown(): Unit = {
-    tearDownNode()
-    dir.recursivelyDelete()
-  }
+  def tearDown(): F[Unit] =
+    for {
+      _ <- tearDownNode()
+      _ <- Sync[F].delay { dir.recursivelyDelete() }
+    } yield ()
 
   def tearDownNode(): F[Unit] =
-  for {
-    _ <- activeRuntime.close()
-    _ <- blockStore.close()
-  } yield ()
+    for {
+      _ <- activeRuntime.close()
+      _ <- blockStore.close()
+    } yield ()
 }
 
 object HashSetCasperTestNode {
   type Effect[A] = EitherT[Task, CommError, A]
 
   def create[M[_], F[_]](
-    name: String,
-    local: PeerNode,
-    tle: TransportLayerTestImpl[M],
-    genesis: BlockMessage,
-    sk: Array[Byte],
-    logicalTime: LogicalTime[M],
-    errorHandlerEff: ErrorHandler[M],
-    storageSize: Long,
-    shardId: String = "rchain"
-  )( implicit
-     scheduler: Scheduler,
-     syncF : Sync[M],
-     parallel: Parallel[M,F],
-     contextShift: ContextShift[M],
-     executionContext: ExecutionContext,
-     capture: Capture[M]
-  ) : M[HashSetCasperTestNode[M]] =
+      name: String,
+      local: PeerNode,
+      tle: TransportLayerTestImpl[M],
+      genesis: BlockMessage,
+      sk: Array[Byte],
+      logicalTime: LogicalTime[M],
+      errorHandlerEff: ErrorHandler[M],
+      storageSize: Long,
+      shardId: String = "rchain"
+  )(
+      implicit
+      scheduler: Scheduler,
+      syncF: Sync[M],
+      parallel: Parallel[M, F],
+      contextShift: ContextShift[M],
+      executionContext: ExecutionContext,
+      capture: Capture[M]
+  ): M[HashSetCasperTestNode[M]] =
     for {
 
-      storageDirectory <- Sync[M].delay{ Files.createTempDirectory(s"hash-set-casper-test-$name")}
-      activeRuntime <- Runtime.create[M, F](storageDirectory, storageSize)
-      runtimeManager <- RuntimeManager.fromRuntime[M](activeRuntime)
-    } yield new HashSetCasperTestNode[M](
-      activeRuntime, runtimeManager, name, local, tle, genesis, sk, logicalTime, errorHandlerEff, storageSize, shardId
-    )
+      storageDirectory <- Sync[M].delay { Files.createTempDirectory(s"hash-set-casper-test-$name") }
+      activeRuntime    <- Runtime.create[M, F](storageDirectory, storageSize)
+      runtimeManager   <- RuntimeManager.fromRuntime[M](activeRuntime)
+    } yield
+      new HashSetCasperTestNode[M](
+        activeRuntime,
+        runtimeManager,
+        name,
+        local,
+        tle,
+        genesis,
+        sk,
+        logicalTime,
+        errorHandlerEff,
+        storageSize,
+        shardId
+      )
   def standaloneF[M[_], F[_]](
       genesis: BlockMessage,
       sk: Array[Byte],
@@ -168,7 +187,7 @@ object HashSetCasperTestNode {
       implicit scheduler: Scheduler,
       errorHandler: ErrorHandler[M],
       syncF: Sync[M],
-      parallel: Parallel[M,F],
+      parallel: Parallel[M, F],
       contextShift: ContextShift[M],
       captureF: Capture[M]
   ): M[HashSetCasperTestNode[M]] = {
@@ -179,24 +198,25 @@ object HashSetCasperTestNode {
     val logicalTime: LogicalTime[M] = new LogicalTime[M]
 
     for {
-      node <- HashSetCasperTestNode.create[M, F](name,
-                                           identity,
-                                           tle,
-                                           genesis,
-                                           sk,
-                                           logicalTime,
-                                           errorHandler,
-                                           storageSize)
+      node <- HashSetCasperTestNode.create[M, F](
+               name,
+               identity,
+               tle,
+               genesis,
+               sk,
+               logicalTime,
+               errorHandler,
+               storageSize
+             )
       _ <- node.initialize
     } yield node
   }
 
   def standalone(genesis: BlockMessage, sk: Array[Byte], storageSize: Long = 1024L * 1024 * 10)(
       implicit scheduler: Scheduler
-  ): HashSetCasperTestNode[Id] = {
+  ): HashSetCasperTestNode[Task] = {
     implicit val errorHandlerEff = errorHandler
-    implicit val contextShift = ContextShift[Id]
-    standaloneF[Id, Id](genesis, sk, storageSize)
+    standaloneF[Task, Task.Par](genesis, sk, storageSize).runSyncUnsafe(1.second)
   }
   def standaloneEff(genesis: BlockMessage, sk: Array[Byte], storageSize: Long = 1024L * 1024 * 10)(
       implicit scheduler: Scheduler
@@ -218,7 +238,7 @@ object HashSetCasperTestNode {
       implicit scheduler: Scheduler,
       errorHandler: ErrorHandler[M],
       syncM: Sync[M],
-      parallel: Parallel[M,M],
+      parallel: Parallel[M, F],
       contextShift: ContextShift[M],
       captureM: Capture[M]
   ): M[IndexedSeq[HashSetCasperTestNode[M]]] = {
@@ -254,18 +274,19 @@ object HashSetCasperTestNode {
                 }
                 .map(_.toVector)
 
-    //make sure all nodes know about each other
-    pairs = for {
-      n <- nodes
-      m <- nodes
-      if n.local != m.local
-    } yield (n, m)
+      //make sure all nodes know about each other
+      pairs = for {
+        n <- nodes
+        m <- nodes
+        if n.local != m.local
+      } yield (n, m)
 
       _ <- nodes.traverse(_.initialize).void
       _ <- pairs.foldLeft(().pure[M]) {
             case (f, (n, m)) =>
               f.flatMap(
-                _ => n.connectionsCell.modify(_.addConn[M](m.local)(Monad[M], n.logEff, n.metricEff))
+                _ =>
+                  n.connectionsCell.modify(_.addConn[M](m.local)(Monad[M], n.logEff, n.metricEff))
               )
           }
     } yield nodes
@@ -275,10 +296,9 @@ object HashSetCasperTestNode {
       sks: IndexedSeq[Array[Byte]],
       genesis: BlockMessage,
       storageSize: Long = 1024L * 1024 * 10
-  )(implicit scheduler: Scheduler): IndexedSeq[HashSetCasperTestNode[Id]] = {
+  )(implicit scheduler: Scheduler): IndexedSeq[HashSetCasperTestNode[Task]] = {
     implicit val errorHandlerEff = errorHandler
-    implicit val contextShift : ContextShift[Id] = ContextShift[Id]
-    networkF[Id, Id](sks, genesis, storageSize)
+    networkF[Task, Task.Par](sks, genesis, storageSize).runSyncUnsafe(1.second)
   }
   def networkEff(
       sks: IndexedSeq[Array[Byte]],
@@ -290,14 +310,14 @@ object HashSetCasperTestNode {
       ApplicativeError_[Effect, CommError],
       syncEffectInstance,
       Parallel.identity[Effect],
-      ContextShift[Effect],
+      implicitly,
       Capture[Effect]
     )
 
-  val appErrId = new ApplicativeError[Id, CommError] {
-    def ap[A, B](ff: Id[A => B])(fa: Id[A]): Id[B] = Applicative[Id].ap[A, B](ff)(fa)
-    def pure[A](x: A): Id[A]                       = Applicative[Id].pure[A](x)
-    def raiseError[A](e: CommError): Id[A] = {
+  val appErrTask = new ApplicativeError[Task, CommError] {
+    def ap[A, B](ff: Task[A => B])(fa: Task[A]): Task[B] = Applicative[Task].ap[A, B](ff)(fa)
+    def pure[A](x: A): Task[A]                           = Applicative[Task].pure[A](x)
+    def raiseError[A](e: CommError): Task[A] = {
       val errString = e match {
         case UnknownCommError(msg)                => s"UnknownCommError($msg)"
         case DatagramSizeError(size)              => s"DatagramSizeError($size)"
@@ -319,17 +339,17 @@ object HashSetCasperTestNode {
         case _                                    => e.toString
       }
 
-      throw new Exception(errString)
+      Task.raiseError(new Exception(errString))
     }
 
-    def handleErrorWith[A](fa: Id[A])(f: (CommError) => Id[A]): Id[A] = fa
+    def handleErrorWith[A](fa: Task[A])(f: (CommError) => Task[A]): Task[A] = fa
   }
 
   implicit val syncEffectInstance = SyncInstances.syncEffect[CommError](commError => {
     new Exception(s"CommError: $commError")
   }, e => { UnknownCommError(e.getMessage) })
 
-  val errorHandler = ApplicativeError_.applicativeError[Id, CommError](appErrId)
+  val errorHandler = ApplicativeError_.applicativeError[Task, CommError](appErrTask)
 
   def randomBytes(length: Int): Array[Byte] = Array.fill(length)(Random.nextInt(256).toByte)
 

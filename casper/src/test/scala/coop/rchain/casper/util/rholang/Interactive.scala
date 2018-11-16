@@ -16,6 +16,7 @@ import coop.rchain.models._
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import coop.rchain.catscontrib.TaskContrib._
 import scala.collection.mutable
+import scala.concurrent.duration._
 
 /**
   * This is a really handy class for working interactively with
@@ -39,7 +40,7 @@ import scala.collection.mutable
   * >>> itp.cleanUp()
   * }}}
   */
-class Interactive private (runtime: Runtime)(implicit scheduler: Scheduler) {
+class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler) {
   private implicit val rand = Blake2b512Random(128)
 
   private val prettyPrinter = PrettyPrinter()
@@ -53,7 +54,7 @@ class Interactive private (runtime: Runtime)(implicit scheduler: Scheduler) {
 
   def eval(code: String): Unit = {
     TestSetUtil.eval(code, runtime)
-    val errors = runtime.errorLog.readAndClearErrorVector()
+    val errors = runtime.errorLog.readAndClearErrorVector().runSyncUnsafe(1.second)
     if (errors.nonEmpty) {
       println("Errors during execution:")
       errors.foreach(println)

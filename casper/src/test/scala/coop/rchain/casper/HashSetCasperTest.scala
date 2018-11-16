@@ -2,7 +2,6 @@ package coop.rchain.casper
 
 import java.nio.file.Files
 
-import cats.Id
 import cats.data.EitherT
 import cats.implicits._
 import com.google.protobuf.ByteString
@@ -31,15 +30,18 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.catscontrib.Capture._
 import coop.rchain.catscontrib.effect.implicits._
+import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.Metrics.MetricsNOP
 
 import scala.collection.immutable
 import scala.util.Random
+import scala.concurrent.duration._
 
 class HashSetCasperTest extends FlatSpec with Matchers {
 
   import HashSetCasperTest._
 
-  implicit val timeEff = new LogicalTime[Id]
+  implicit val timeEff = new LogicalTime[Task]
 
   private val (otherSk, otherPk)          = Ed25519.newKeyPair
   private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
@@ -57,14 +59,14 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   "HashSetCasper" should "accept deploys" in {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
     import node._
-    implicit val timeEff = new LogicalTime[Id]
+    implicit val timeEff = new LogicalTime[Task]
 
-    val deploy = ProtoUtil.basicDeployData[Id](0)
-    MultiParentCasper[Id].deploy(deploy)
+    val deploy = ProtoUtil.basicDeployData[Task](0).runSyncUnsafe(1.second)
+    MultiParentCasper[Task].deploy(deploy).runSyncUnsafe(1.second)
 
     logEff.infos.size should be(1)
     logEff.infos.head.contains("Received Deploy") should be(true)
-    node.tearDown()
+    node.tearDown().runSyncUnsafe(1.second)
   }
 
   it should "not allow multiple threads to process the same block" in {
@@ -72,7 +74,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val node      = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)(scheduler)
     val casper    = node.casperEff
 
-    val deploy = ProtoUtil.basicDeployData[Id](0)
+    val deploy = ProtoUtil.basicDeployData[Task](0).runSyncUnsafe(1.second)
     val testProgram = for {
       _     <- casper.deploy(deploy)
       block <- casper.createBlock.map { case Created(block) => block }
@@ -90,17 +92,17 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       testProgram.value.unsafeRunSync(scheduler).right.get
 
     threadStatuses should matchPattern { case (Processing, Valid) | (Valid, Processing) => }
-    node.tearDown()
+    node.tearDown().value.runSyncUnsafe(1.second)
   }
 
   it should "create blocks based on deploys" in {
-    val node            = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
-    implicit val casper = node.casperEff
+    val node                                         = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
+    implicit val casper: MultiParentCasperImpl[Task] = node.casperEff
 
-    val deploy = ProtoUtil.basicDeployData[Id](0)
-    MultiParentCasper[Id].deploy(deploy)
+    val deploy = ProtoUtil.basicDeployData[Task](0).runSyncUnsafe(1.second)
+    MultiParentCasper[Task].deploy(deploy).runSyncUnsafe(1.second)
 
-    val Created(block) = MultiParentCasper[Id].createBlock
+    val Created(block) = MultiParentCasper[Task].createBlock.runSyncUnsafe(1.second)
     val deploys        = block.body.get.deploys.flatMap(_.deploy)
     val parents        = ProtoUtil.parentHashes(block)
     val storage        = blockTuplespaceContents(block)
@@ -110,20 +112,20 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     deploys.size should be(1)
     deploys.head.raw should be(Some(deploy))
     storage.contains("@{0}!(0)") should be(true)
-    node.tearDown()
+    node.tearDown().runSyncUnsafe(1.second)
   }
 
   it should "accept signed blocks" in {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
     import node._
-    implicit val timeEff = new LogicalTime[Id]
+    implicit val timeEff = new LogicalTime[Task]
 
-    val deploy = ProtoUtil.basicDeployData[Id](0)
-    MultiParentCasper[Id].deploy(deploy)
+    val deploy = ProtoUtil.basicDeployData[Task](0).runSyncUnsafe(1.second)
+    MultiParentCasper[Task].deploy(deploy)
 
-    val Created(signedBlock) = MultiParentCasper[Id].createBlock
+    val Created(signedBlock) = MultiParentCasper[Task].createBlock.runSyncUnsafe(1.second)
 
-    MultiParentCasper[Id].addBlock(signedBlock)
+    MultiParentCasper[Task].addBlock(signedBlock).runSyncUnsafe(1.second)
 
     val logMessages = List(
       "Received Deploy",
@@ -135,9 +137,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     logEff.warns.isEmpty should be(true)
     logEff.infos.zip(logMessages).forall { case (a, b) => a.startsWith(b) } should be(true)
-    val dag = MultiParentCasper[Id].blockDag
-    MultiParentCasper[Id].estimator(dag) should be(IndexedSeq(signedBlock))
-    node.tearDown()
+    val dag = MultiParentCasper[Task].blockDag.runSyncUnsafe(1.second)
+    MultiParentCasper[Task].estimator(dag).runSyncUnsafe(1.second) should be(
+      IndexedSeq(signedBlock)
+    )
+    node.tearDown().runSyncUnsafe(1.second)
   }
 
   it should "be able to use the registry" in {
@@ -156,11 +160,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     )
 
     casperEff.deploy(registerDeploy)
-    val Created(block) = casperEff.createBlock
-    val blockStatus    = casperEff.addBlock(block)
+    val Created(block) = casperEff.createBlock.runSyncUnsafe(1.second)
+    val blockStatus    = casperEff.addBlock(block).runSyncUnsafe(1.second)
 
     val id: String = casperEff
       .storageContents(block.getBody.getPostState.tuplespace)
+      .runSyncUnsafe(1.second)
       .split('|')
       .find(
         _.contains(
@@ -179,17 +184,18 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       now,
       accounting.MAX_VALUE
     )
-    casperEff.deploy(callDeploy)
-    val Created(block2) = casperEff.createBlock
-    val block2Status    = casperEff.addBlock(block2)
+    casperEff.deploy(callDeploy).runSyncUnsafe(1.second)
+    val Created(block2) = casperEff.createBlock.runSyncUnsafe(1.second)
+    val block2Status    = casperEff.addBlock(block2).runSyncUnsafe(1.second)
 
     blockStatus shouldBe Valid
     block2Status shouldBe Valid
     casperEff
       .storageContents(block2.getBody.getPostState.tuplespace)
+      .runSyncUnsafe(1.second)
       .contains("Hello, World!") shouldBe true
 
-    node.tearDown()
+    node.tearDown().runSyncUnsafe(1.second)
   }
 
   it should "be able to create a chain of blocks from different deploys" in {
@@ -203,23 +209,25 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       "new unforgable in { @\"add\"!(5, 7, *unforgable) }"
     ).zipWithIndex.map(s => ProtoUtil.sourceDeploy(s._1, start + s._2, accounting.MAX_VALUE))
 
-    val Created(signedBlock1) = MultiParentCasper[Id].deploy(deployDatas.head) *> MultiParentCasper[
-      Id
-    ].createBlock
-    MultiParentCasper[Id].addBlock(signedBlock1)
+    val Created(signedBlock1) =
+      (MultiParentCasper[Task].deploy(deployDatas.head) *> MultiParentCasper[
+        Task
+      ].createBlock).runSyncUnsafe(1.second)
+    MultiParentCasper[Task].addBlock(signedBlock1).runSyncUnsafe(1.second)
 
-    val Created(signedBlock2) = MultiParentCasper[Id].deploy(deployDatas(1)) *> MultiParentCasper[
-      Id
-    ].createBlock
-    MultiParentCasper[Id].addBlock(signedBlock2)
+    val Created(signedBlock2) =
+      (MultiParentCasper[Task].deploy(deployDatas(1)) *> MultiParentCasper[
+        Task
+      ].createBlock).runSyncUnsafe(1.second)
+    MultiParentCasper[Task].addBlock(signedBlock2).runSyncUnsafe(1.second)
     val storage = blockTuplespaceContents(signedBlock2)
 
     logEff.warns should be(Nil)
     ProtoUtil.parentHashes(signedBlock2) should be(Seq(signedBlock1.blockHash))
-    val dag = MultiParentCasper[Id].blockDag
-    MultiParentCasper[Id].estimator(dag) should be(IndexedSeq(signedBlock2))
+    val dag = MultiParentCasper[Task].blockDag.runSyncUnsafe(1.second)
+    MultiParentCasper[Task].estimator(dag) should be(IndexedSeq(signedBlock2))
     storage.contains("!(12)") should be(true)
-    node.tearDown()
+    node.tearDown().runSyncUnsafe(1.second)
   }
 
   it should "allow multiple deploys in a single block" in {
@@ -230,25 +238,27 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val source    = " for(@x <- @0){ @0!(x) } | @0!(0) "
     val deploys = (source #:: source #:: Stream.empty[String]).zipWithIndex
       .map(s => ProtoUtil.sourceDeploy(s._1, startTime + s._2, accounting.MAX_VALUE))
-    deploys.foreach(MultiParentCasper[Id].deploy(_))
-    val Created(block) = MultiParentCasper[Id].createBlock
-    val _              = MultiParentCasper[Id].addBlock(block)
+    deploys.traverse_(MultiParentCasper[Task].deploy(_)).runSyncUnsafe(1.second)
+    val Created(block) = MultiParentCasper[Task].createBlock.runSyncUnsafe(1.second)
+    val _              = MultiParentCasper[Task].addBlock(block).runSyncUnsafe(1.second)
 
-    MultiParentCasper[Id].contains(block) shouldBe true
-    node.tearDown()
+    MultiParentCasper[Task].contains(block).runSyncUnsafe(1.second) shouldBe true
+    node.tearDown().runSyncUnsafe(1.second)
   }
 
   it should "reject unsigned blocks" in {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
     import node._
-    implicit val timeEff = new LogicalTime[Id]
+    implicit val timeEff = new LogicalTime[Task]
 
-    val Created(block) = MultiParentCasper[Id].deploy(ProtoUtil.basicDeployData[Id](0)) *> MultiParentCasper[
-      Id
-    ].createBlock
+    val Created(block) = (MultiParentCasper[Task].deploy(
+      ProtoUtil.basicDeployData[Task](0).runSyncUnsafe(1.second)
+    ) *> MultiParentCasper[
+      Task
+    ].createBlock).runSyncUnsafe(1.second)
     val invalidBlock = block.withSig(ByteString.EMPTY)
 
-    MultiParentCasper[Id].addBlock(invalidBlock)
+    MultiParentCasper[Task].addBlock(invalidBlock)
 
     logEff.warns.head.contains("Ignoring block") should be(true)
     node.tearDownNode()
@@ -260,48 +270,50 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   it should "reject blocks not from bonded validators" in {
     val node = HashSetCasperTestNode.standalone(genesis, otherSk)
     import node._
-    implicit val timeEff = new LogicalTime[Id]
+    implicit val timeEff = new LogicalTime[Task]
 
     val Created(signedBlock) =
-      MultiParentCasper[Id].deploy(ProtoUtil.basicDeployData[Id](0)) *> MultiParentCasper[Id].createBlock
+      (MultiParentCasper[Task].deploy(ProtoUtil.basicDeployData[Task](0).runSyncUnsafe(1.second)) *> MultiParentCasper[
+        Task
+      ].createBlock).runSyncUnsafe(1.second)
 
-    MultiParentCasper[Id].addBlock(signedBlock)
+    MultiParentCasper[Task].addBlock(signedBlock).runSyncUnsafe(1.second)
 
     logEff.warns.head.contains("Ignoring block") should be(true)
-    node.tearDownNode()
+    node.tearDownNode().runSyncUnsafe(1.second)
     validateBlockStore(node) { blockStore =>
-      blockStore.get(signedBlock.blockHash) shouldBe None
+      blockStore.get(signedBlock.blockHash).runSyncUnsafe(1.second) shouldBe None
     }
   }
 
   it should "propose blocks it adds to peers" in {
     val nodes      = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
-    val deployData = ProtoUtil.basicDeployData[Id](0)
+    val deployData = ProtoUtil.basicDeployData[Task](0).runSyncUnsafe(1.second)
 
-    val Created(signedBlock) = nodes(0).casperEff
-      .deploy(deployData) *> nodes(0).casperEff.createBlock
+    val Created(signedBlock) = (nodes(0).casperEff
+      .deploy(deployData) *> nodes(0).casperEff.createBlock).runSyncUnsafe(1.second)
 
     nodes(0).casperEff.addBlock(signedBlock)
     nodes(1).receive()
 
-    val received = nodes(1).casperEff.contains(signedBlock)
+    val received = nodes(1).casperEff.contains(signedBlock).runSyncUnsafe(1.second)
 
     received should be(true)
 
     nodes.foreach(_.tearDownNode())
     nodes.foreach { node =>
       validateBlockStore(node) { blockStore =>
-        blockStore.get(signedBlock.blockHash) shouldBe Some(signedBlock)
+        blockStore.get(signedBlock.blockHash).runSyncUnsafe(1.second) shouldBe Some(signedBlock)
       }
     }
   }
 
   it should "add a valid block from peer" in {
     val nodes      = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
-    val deployData = ProtoUtil.basicDeployData[Id](1)
+    val deployData = ProtoUtil.basicDeployData[Task](1).runSyncUnsafe(1.second)
 
-    val Created(signedBlock1Prime) = nodes(0).casperEff
-      .deploy(deployData) *> nodes(0).casperEff.createBlock
+    val Created(signedBlock1Prime) = (nodes(0).casperEff
+      .deploy(deployData) *> nodes(0).casperEff.createBlock).runSyncUnsafe(1.second)
 
     nodes(0).casperEff.addBlock(signedBlock1Prime)
     nodes(1).receive()
@@ -312,7 +324,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes.foreach(_.tearDownNode())
     nodes.foreach { node =>
       validateBlockStore(node) { blockStore =>
-        blockStore.get(signedBlock1Prime.blockHash) shouldBe Some(signedBlock1Prime)
+        blockStore.get(signedBlock1Prime.blockHash).runSyncUnsafe(1.second) shouldBe Some(
+          signedBlock1Prime
+        )
       }
     }
   }
@@ -320,17 +334,19 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   it should "handle multi-parent blocks correctly" in {
     val nodes = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
     val deploys = Vector(
-      ProtoUtil.basicDeployData[Id](0),
+      ProtoUtil.basicDeployData[Task](0).runSyncUnsafe(1.second),
       ProtoUtil.sourceDeploy(
         "@1!(1) | for(@x <- @1){ @1!(x) }",
         System.currentTimeMillis(),
         accounting.MAX_VALUE
       ),
-      ProtoUtil.basicDeployData[Id](2)
+      ProtoUtil.basicDeployData[Task](2).runSyncUnsafe(1.second)
     )
 
-    val Created(block0) = nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
-    val Created(block1) = nodes(1).casperEff.deploy(deploys(1)) *> nodes(1).casperEff.createBlock
+    val Created(block0) = (nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock)
+      .runSyncUnsafe(1.second)
+    val Created(block1) = (nodes(1).casperEff.deploy(deploys(1)) *> nodes(1).casperEff.createBlock)
+      .runSyncUnsafe(1.second)
     nodes(0).casperEff.addBlock(block0)
     nodes(1).casperEff.addBlock(block1)
     nodes(0).receive()
@@ -339,19 +355,21 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(1).receive()
 
     //multiparent block joining block0 and block1 since they do not conflict
-    val Created(multiparentBlock) = nodes(0).casperEff
-      .deploy(deploys(2)) *> nodes(0).casperEff.createBlock
-    nodes(0).casperEff.addBlock(multiparentBlock)
-    nodes(1).receive()
+    val Created(multiparentBlock) = (nodes(0).casperEff
+      .deploy(deploys(2)) *> nodes(0).casperEff.createBlock).runSyncUnsafe(1.second)
+    nodes(0).casperEff.addBlock(multiparentBlock).runSyncUnsafe(1.second)
+    nodes(1).receive().runSyncUnsafe(1.second)
 
     nodes(0).logEff.warns.isEmpty shouldBe true
     nodes(1).logEff.warns.isEmpty shouldBe true
     multiparentBlock.header.get.parentsHashList.size shouldBe 2
-    nodes(0).casperEff.contains(multiparentBlock) shouldBe true
-    nodes(1).casperEff.contains(multiparentBlock) shouldBe true
+    nodes(0).casperEff.contains(multiparentBlock).runSyncUnsafe(1.second) shouldBe true
+    nodes(1).casperEff.contains(multiparentBlock).runSyncUnsafe(1.second) shouldBe true
 
     val finalTuplespace =
-      nodes(0).casperEff.storageContents(multiparentBlock.getBody.getPostState.tuplespace)
+      nodes(0).casperEff
+        .storageContents(multiparentBlock.getBody.getPostState.tuplespace)
+        .runSyncUnsafe(1.second)
     finalTuplespace.contains("@{0}!(0)") shouldBe true
     finalTuplespace.contains("@{1}!(1)") shouldBe true
     finalTuplespace.contains("@{2}!(2)") shouldBe true
@@ -372,7 +390,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val ethAddress              = ethAddresses.head
     val bondKey                 = Base16.encode(otherPk)
     val walletUnlockDeploy =
-      RevIssuanceTest.preWalletUnlockDeploy(ethAddress, pubKey, secKey, "unlockOut")
+      RevIssuanceTest
+        .preWalletUnlockDeploy[Task](ethAddress, pubKey, secKey, "unlockOut")
+        .runSyncUnsafe(1.second)
     val bondingForwarderAddress = BondingUtil.bondingForwarderAddress(ethAddress)
     val bondingForwarderDeploy = ProtoUtil.sourceDeploy(
       BondingUtil.bondingForwarderDeploy(bondKey, ethAddress),
@@ -381,24 +401,26 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     )
     val transferStatusOut = BondingUtil.transferStatusOut(ethAddress)
     val bondingTransferDeploy =
-      RevIssuanceTest.walletTransferDeploy(
-        0,
-        wallets.head.initRevBalance.toLong,
-        bondingForwarderAddress,
-        transferStatusOut,
-        pubKey,
-        secKey
-      )
+      RevIssuanceTest
+        .walletTransferDeploy[Task](
+          0,
+          wallets.head.initRevBalance.toLong,
+          bondingForwarderAddress,
+          transferStatusOut,
+          pubKey,
+          secKey
+        )
+        .runSyncUnsafe(1.second)
 
-    val Created(block1) = nodes(0).casperEff.deploy(walletUnlockDeploy) *> nodes(0).casperEff
-      .deploy(bondingForwarderDeploy) *> nodes(0).casperEff.createBlock
-    val block1Status = nodes(0).casperEff.addBlock(block1)
-    nodes.foreach(_.receive) //send to all peers
+    val Created(block1) = (nodes(0).casperEff.deploy(walletUnlockDeploy) *> nodes(0).casperEff
+      .deploy(bondingForwarderDeploy) *> nodes(0).casperEff.createBlock).runSyncUnsafe(1.second)
+    val block1Status = nodes(0).casperEff.addBlock(block1).runSyncUnsafe(1.second)
+    nodes.foreach(_.receive.runSyncUnsafe(1.second)) //send to all peers
 
-    val Created(block2) = nodes(1).casperEff
-      .deploy(bondingTransferDeploy) *> nodes(1).casperEff.createBlock
-    val block2Status = nodes(1).casperEff.addBlock(block2)
-    nodes.foreach(_.receive)
+    val Created(block2) = (nodes(1).casperEff
+      .deploy(bondingTransferDeploy) *> nodes(1).casperEff.createBlock).runSyncUnsafe(1.second)
+    val block2Status = nodes(1).casperEff.addBlock(block2).runSyncUnsafe(1.second)
+    nodes.foreach(_.receive.runSyncUnsafe(1.second))
 
     val helloWorldDeploy = ProtoUtil.sourceDeploy(
       """new s(`rho:io:stdout`) in { s!("Hello, World!") }""",
@@ -406,16 +428,16 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       accounting.MAX_VALUE
     )
     //new validator does deploy/propose
-    val Created(block3) = nodes.last.casperEff
-      .deploy(helloWorldDeploy) *> nodes.last.casperEff.createBlock
-    val block3Status = nodes.last.casperEff.addBlock(block3)
+    val Created(block3) = (nodes.last.casperEff
+      .deploy(helloWorldDeploy) *> nodes.last.casperEff.createBlock).runSyncUnsafe(1.second)
+    val block3Status = nodes.last.casperEff.addBlock(block3).runSyncUnsafe(1.second)
 
     //previous validator does deploy/propose
-    val Created(block3Prime) = nodes.head.casperEff
-      .deploy(helloWorldDeploy) *> nodes.head.casperEff.createBlock
-    val block3PrimeStatus = nodes.head.casperEff.addBlock(block3Prime)
+    val Created(block3Prime) = (nodes.head.casperEff
+      .deploy(helloWorldDeploy) *> nodes.head.casperEff.createBlock).runSyncUnsafe(1.second)
+    val block3PrimeStatus = nodes.head.casperEff.addBlock(block3Prime).runSyncUnsafe(1.second)
 
-    nodes.foreach(_.receive) //all nodes get the blocks
+    nodes.foreach(_.receive.runSyncUnsafe(1.second)) //all nodes get the blocks
 
     block1Status shouldBe Valid
     block2Status shouldBe Valid
@@ -453,6 +475,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         block1.getBody.getPostState.tuplespace,
         ProtoUtil.deployDataToDeploy(rankedValidatorQuery)
       )
+      .runSyncUnsafe(1.second)
       .head
       .exprs
       .head
@@ -521,8 +544,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       .withTimestamp(1540570144121L)
       .withUser(ProtoUtil.stringToByteString(pkStr))
 
-    val Created(block) = casperEff.deploy(createWalletDeploy) *> casperEff.createBlock
-    val blockStatus    = casperEff.addBlock(block)
+    val Created(block) =
+      (casperEff.deploy(createWalletDeploy) *> casperEff.createBlock).runSyncUnsafe(1.second)
+    val blockStatus = casperEff.addBlock(block).runSyncUnsafe(1.second)
 
     val balanceQuery = ProtoUtil.sourceDeploy(
       s"""new
@@ -537,15 +561,17 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       accounting.MAX_VALUE
     )
     val newWalletBalance =
-      node.runtimeManager.captureResults(
-        block.getBody.getPostState.tuplespace,
-        ProtoUtil.deployDataToDeploy(balanceQuery)
-      )
+      node.runtimeManager
+        .captureResults(
+          block.getBody.getPostState.tuplespace,
+          ProtoUtil.deployDataToDeploy(balanceQuery)
+        )
+        .runSyncUnsafe(1.second)
 
     blockStatus shouldBe Valid
     newWalletBalance.head.exprs.head.getGInt shouldBe amount
 
-    node.tearDown()
+    node.tearDown().runSyncUnsafe(1.second)
   }
 
   it should "allow bonding via the faucet" in {
@@ -557,16 +583,19 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val pkStr                   = Base16.encode(pk)
     val amount                  = 314L
     val forwardCode             = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
-    val bondingCode             = BondingUtil.faucetBondDeploy[Id](amount, "ed25519", pkStr, sk)
+    val bondingCode =
+      BondingUtil.faucetBondDeploy[Task](amount, "ed25519", pkStr, sk).runSyncUnsafe(1.second)
 
     val forwardDeploy =
       ProtoUtil.sourceDeploy(forwardCode, System.currentTimeMillis(), accounting.MAX_VALUE)
     val bondingDeploy =
       ProtoUtil.sourceDeploy(bondingCode, forwardDeploy.timestamp + 1, accounting.MAX_VALUE)
-    val Created(block1) = casperEff.deploy(forwardDeploy) *> casperEff.createBlock
-    val block1Status    = casperEff.addBlock(block1)
-    val Created(block2) = casperEff.deploy(bondingDeploy) *> casperEff.createBlock
-    val block2Status    = casperEff.addBlock(block2)
+    val Created(block1) =
+      (casperEff.deploy(forwardDeploy) *> casperEff.createBlock).runSyncUnsafe(1.second)
+    val block1Status = casperEff.addBlock(block1).runSyncUnsafe(1.second)
+    val Created(block2) =
+      (casperEff.deploy(bondingDeploy) *> casperEff.createBlock).runSyncUnsafe(1.second)
+    val block2Status = casperEff.addBlock(block2).runSyncUnsafe(1.second)
 
     val oldBonds = block1.getBody.getPostState.bonds
     val newBonds = block2.getBody.getPostState.bonds
@@ -575,7 +604,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     block2Status shouldBe Valid
     (oldBonds.size + 1) shouldBe newBonds.size
 
-    node.tearDown()
+    node.tearDown().runSyncUnsafe(1.second)
   }
 
   it should "not fail if the forkchoice changes after a bonding event" in {
@@ -589,15 +618,16 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val (sk, pk)    = Ed25519.newKeyPair
     val pkStr       = Base16.encode(pk)
     val forwardCode = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
-    val bondingCode = BondingUtil.faucetBondDeploy[Id](50, "ed25519", pkStr, sk)
+    val bondingCode =
+      BondingUtil.faucetBondDeploy[Task](50, "ed25519", pkStr, sk).runSyncUnsafe(1.second)
     val forwardDeploy =
       ProtoUtil.sourceDeploy(forwardCode, System.currentTimeMillis(), accounting.MAX_VALUE)
     val bondingDeploy =
       ProtoUtil.sourceDeploy(bondingCode, forwardDeploy.timestamp + 1, accounting.MAX_VALUE)
 
-    nodes.head.casperEff.deploy(forwardDeploy)
-    nodes.head.casperEff.deploy(bondingDeploy)
-    val Created(bondedBlock) = nodes.head.casperEff.createBlock
+    nodes.head.casperEff.deploy(forwardDeploy).runSyncUnsafe(1.second)
+    nodes.head.casperEff.deploy(bondingDeploy).runSyncUnsafe(1.second)
+    val Created(bondedBlock) = nodes.head.casperEff.createBlock.runSyncUnsafe(1.second)
 
     val bondedBlockStatus = nodes.head.casperEff.addBlock(bondedBlock)
     nodes(1).receive()
@@ -607,17 +637,21 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val Created(block2) = {
       val n = nodes(1)
       import n.casperEff._
-      deploy(ProtoUtil.basicDeployData[Id](0)) *> createBlock
+      (deploy(ProtoUtil.basicDeployData[Task](0).runSyncUnsafe(1.second)) *> createBlock)
+        .runSyncUnsafe(1.second)
     }
-    val status2 = nodes(1).casperEff.addBlock(block2)
-    nodes.head.receive()
-    nodes(1).receive()
-    nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) misses block built on bonding
+    val status2 = nodes(1).casperEff.addBlock(block2).runSyncUnsafe(1.second)
+    nodes.head.receive().runSyncUnsafe(1.second)
+    nodes(1).receive().runSyncUnsafe(1.second)
+    nodes(2).transportLayerEff
+      .clear(nodes(2).local)
+      .runSyncUnsafe(1.second) //nodes(2) misses block built on bonding
 
     val Created(block3) = { //nodes(2) proposes a block
       val n = nodes(2)
       import n.casperEff._
-      deploy(ProtoUtil.basicDeployData[Id](1)) *> createBlock
+      (deploy(ProtoUtil.basicDeployData[Task](1).runSyncUnsafe(1.second)) *> createBlock)
+        .runSyncUnsafe(1.second)
     }
     val status3 = nodes(2).casperEff.addBlock(block3)
     nodes.foreach(_.receive())
@@ -628,10 +662,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val Created(block4) = { //nodes(0) proposes a new block
       val n = nodes.head
       import n.casperEff._
-      deploy(ProtoUtil.basicDeployData[Id](2)) *> createBlock
+      (deploy(ProtoUtil.basicDeployData[Task](2).runSyncUnsafe(1.second)) *> createBlock)
+        .runSyncUnsafe(1.second)
     }
-    val status4 = nodes.head.casperEff.addBlock(block4)
-    nodes.foreach(_.receive())
+    val status4 = nodes.head.casperEff.addBlock(block4).runSyncUnsafe(1.second)
+    nodes.foreach(_.receive().runSyncUnsafe(1.second))
 
     bondedBlockStatus shouldBe Valid
     status2 shouldBe Valid
@@ -661,6 +696,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         genesis.getBody.getPostState.tuplespace,
         ProtoUtil.deployDataToDeploy(sigDeployData)
       )
+      .runSyncUnsafe(1.second)
       .head
       .exprs
       .head
@@ -717,41 +753,43 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       phloPurchasedPar
     )
 
-    node.tearDown()
+    node.tearDown().runSyncUnsafe(1.second)
   }
 
   it should "reject addBlock when there exist deploy by the same (user, millisecond timestamp) in the chain" in {
     val nodes = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
 
-    val deployDatas = (0 to 2).map(i => ProtoUtil.basicDeployData[Id](i))
+    val deployDatas = (0 to 2).map(i => ProtoUtil.basicDeployData[Task](i).runSyncUnsafe(1.second))
     val deployPrim0 = deployDatas(1)
       .withTimestamp(deployDatas(0).timestamp)
       .withUser(deployDatas(0).user) // deployPrim0 has the same (user, millisecond timestamp) with deployDatas(0)
 
-    val Created(signedBlock1) = nodes(0).casperEff
-      .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
-    nodes(0).casperEff.addBlock(signedBlock1)
-    nodes(1).receive() // receive block1
+    val Created(signedBlock1) = (nodes(0).casperEff
+      .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock).runSyncUnsafe(1.second)
+    nodes(0).casperEff.addBlock(signedBlock1).runSyncUnsafe(1.second)
+    nodes(1).receive().runSyncUnsafe(1.second) // receive block1
 
-    val Created(signedBlock2) = nodes(0).casperEff
-      .deploy(deployDatas(1)) *> nodes(0).casperEff.createBlock
-    nodes(0).casperEff.addBlock(signedBlock2)
-    nodes(1).receive() // receive block2
+    val Created(signedBlock2) = (nodes(0).casperEff
+      .deploy(deployDatas(1)) *> nodes(0).casperEff.createBlock).runSyncUnsafe(1.second)
+    nodes(0).casperEff.addBlock(signedBlock2).runSyncUnsafe(1.second)
+    nodes(1).receive().runSyncUnsafe(1.second) // receive block2
 
-    val Created(signedBlock3) = nodes(0).casperEff
-      .deploy(deployDatas(2)) *> nodes(0).casperEff.createBlock
-    nodes(0).casperEff.addBlock(signedBlock3)
-    nodes(1).receive() // receive block3
+    val Created(signedBlock3) = (nodes(0).casperEff
+      .deploy(deployDatas(2)) *> nodes(0).casperEff.createBlock).runSyncUnsafe(1.second)
+    nodes(0).casperEff.addBlock(signedBlock3).runSyncUnsafe(1.second)
+    nodes(1).receive().runSyncUnsafe(1.second) // receive block3
 
-    nodes(1).casperEff.contains(signedBlock3) should be(true)
+    nodes(1).casperEff.contains(signedBlock3).runSyncUnsafe(1.second) should be(true)
 
-    val Created(signedBlock4) = nodes(1).casperEff
-      .deploy(deployPrim0) *> nodes(1).casperEff.createBlock
-    nodes(1).casperEff.addBlock(signedBlock4) // should succeed
-    nodes(0).receive()                        // still receive signedBlock4
+    val Created(signedBlock4) = (nodes(1).casperEff
+      .deploy(deployPrim0) *> nodes(1).casperEff.createBlock).runSyncUnsafe(1.second)
+    nodes(1).casperEff.addBlock(signedBlock4).runSyncUnsafe(1.second) // should succeed
+    nodes(0).receive().runSyncUnsafe(1.second)                        // still receive signedBlock4
 
-    nodes(1).casperEff.contains(signedBlock4) should be(true) // Invalid blocks are still added
-    nodes(0).casperEff.contains(signedBlock4) should be(true)
+    nodes(1).casperEff
+      .contains(signedBlock4)
+      .runSyncUnsafe(1.second) should be(true) // Invalid blocks are still added
+    nodes(0).casperEff.contains(signedBlock4).runSyncUnsafe(1.second) should be(true)
 
     nodes(0).logEff.warns
       .count(_ contains "found deploy by the same (user, millisecond timestamp) produced") should be(
@@ -778,24 +816,26 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         d => ProtoUtil.sourceDeploy(d._1, System.currentTimeMillis() + d._2, accounting.MAX_VALUE)
       )
 
-    val Created(signedBlock1) = nodes(0).casperEff
-      .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
+    val Created(signedBlock1) = (nodes(0).casperEff
+      .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock).runSyncUnsafe(1.second)
 
-    nodes(0).casperEff.addBlock(signedBlock1)
-    nodes(1).receive()
-    nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) misses this block
+    nodes(0).casperEff.addBlock(signedBlock1).runSyncUnsafe(1.second)
+    nodes(1).receive().runSyncUnsafe(1.second)
+    nodes(2).transportLayerEff
+      .clear(nodes(2).local)
+      .runSyncUnsafe(1.second) //nodes(2) misses this block
 
-    val Created(signedBlock2) = nodes(0).casperEff
-      .deploy(deployDatas(1)) *> nodes(0).casperEff.createBlock
+    val Created(signedBlock2) = (nodes(0).casperEff
+      .deploy(deployDatas(1)) *> nodes(0).casperEff.createBlock).runSyncUnsafe(1.second)
 
-    nodes(0).casperEff.addBlock(signedBlock2)
-    nodes(1).receive() //receives block2
-    nodes(2).receive() //receives block2; asks for block1
-    nodes(1).receive() //receives request for block1; sends block1
-    nodes(2).receive() //receives block1; adds both block1 and block2
+    nodes(0).casperEff.addBlock(signedBlock2).runSyncUnsafe(1.second)
+    nodes(1).receive().runSyncUnsafe(1.second) //receives block2
+    nodes(2).receive().runSyncUnsafe(1.second) //receives block2; asks for block1
+    nodes(1).receive().runSyncUnsafe(1.second) //receives request for block1; sends block1
+    nodes(2).receive().runSyncUnsafe(1.second) //receives block1; adds both block1 and block2
 
-    nodes(2).casperEff.contains(signedBlock1) should be(true)
-    nodes(2).casperEff.contains(signedBlock2) should be(true)
+    nodes(2).casperEff.contains(signedBlock1).runSyncUnsafe(1.second) should be(true)
+    nodes(2).casperEff.contains(signedBlock2).runSyncUnsafe(1.second) should be(true)
 
     nodes(2).logEff.infos
       .count(_ startsWith "Requested missing block") should be(1)
@@ -803,11 +843,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       s => (s startsWith "Received request for block") && (s endsWith "Response sent.")
     ) should be(1)
 
-    nodes.foreach(_.tearDownNode())
+    nodes.foreach(_.tearDownNode().runSyncUnsafe(1.second))
     nodes.foreach { node =>
       validateBlockStore(node) { blockStore =>
-        blockStore.get(signedBlock1.blockHash) shouldBe Some(signedBlock1)
-        blockStore.get(signedBlock2.blockHash) shouldBe Some(signedBlock2)
+        blockStore.get(signedBlock1.blockHash).runSyncUnsafe(1.second) shouldBe Some(signedBlock1)
+        blockStore.get(signedBlock2.blockHash).runSyncUnsafe(1.second) shouldBe Some(signedBlock2)
       }
     }
   }
@@ -816,86 +856,105 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val nodes = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
 
     // Creates a pair that constitutes equivocation blocks
-    val Created(signedBlock1) = nodes(0).casperEff
-      .deploy(ProtoUtil.basicDeployData[Id](0)) *> nodes(0).casperEff.createBlock
-    val Created(signedBlock1Prime) = nodes(0).casperEff
-      .deploy(ProtoUtil.basicDeployData[Id](1)) *> nodes(0).casperEff.createBlock
+    val Created(signedBlock1) = (nodes(0).casperEff
+      .deploy(ProtoUtil.basicDeployData[Task](0).runSyncUnsafe(1.second)) *> nodes(0).casperEff.createBlock)
+      .runSyncUnsafe(1.second)
+    val Created(signedBlock1Prime) = (nodes(0).casperEff
+      .deploy(ProtoUtil.basicDeployData[Task](1).runSyncUnsafe(1.second)) *> nodes(0).casperEff.createBlock)
+      .runSyncUnsafe(1.second)
 
-    nodes(0).casperEff.addBlock(signedBlock1)
-    nodes(1).receive()
-    nodes(0).casperEff.addBlock(signedBlock1Prime)
-    nodes(1).receive()
+    nodes(0).casperEff.addBlock(signedBlock1).runSyncUnsafe(1.second)
+    nodes(1).receive().runSyncUnsafe(1.second)
+    nodes(0).casperEff.addBlock(signedBlock1Prime).runSyncUnsafe(1.second)
+    nodes(1).receive().runSyncUnsafe(1.second)
 
-    nodes(1).casperEff.contains(signedBlock1) should be(true)
+    nodes(1).casperEff.contains(signedBlock1).runSyncUnsafe(1.second) should be(true)
     nodes(1).casperEff
-      .contains(signedBlock1Prime) should be(false) // we still add the equivocation pair
+      .contains(signedBlock1Prime)
+      .runSyncUnsafe(1.second) should be(false) // we still add the equivocation pair
 
-    nodes(0).tearDownNode()
-    nodes(1).tearDownNode()
+    nodes(0).tearDownNode().runSyncUnsafe(1.second)
+    nodes(1).tearDownNode().runSyncUnsafe(1.second)
     validateBlockStore(nodes(1)) { blockStore =>
-      blockStore.get(signedBlock1.blockHash) shouldBe Some(signedBlock1)
-      blockStore.get(signedBlock1Prime.blockHash) shouldBe None
+      blockStore.get(signedBlock1.blockHash).runSyncUnsafe(1.second) shouldBe Some(signedBlock1)
+      blockStore.get(signedBlock1Prime.blockHash).runSyncUnsafe(1.second) shouldBe None
     }
   }
 
   // See [[/docs/casper/images/minimal_equivocation_neglect.png]] but cross out genesis block
   it should "not ignore equivocation blocks that are required for parents of proper nodes" in {
     val nodes       = HashSetCasperTestNode.network(validatorKeys.take(4), genesis)
-    val deployDatas = (0 to 5).map(i => ProtoUtil.basicDeployData[Id](i))
+    val deployDatas = (0 to 5).map(i => ProtoUtil.basicDeployData[Task](i).runSyncUnsafe(1.second))
 
     // Creates a pair that constitutes equivocation blocks
-    val Created(signedBlock1) = nodes(0).casperEff
-      .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
-    val Created(signedBlock1Prime) = nodes(0).casperEff
-      .deploy(deployDatas(1)) *> nodes(0).casperEff.createBlock
+    val Created(signedBlock1) = (nodes(0).casperEff
+      .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock).runSyncUnsafe(1.second)
+    val Created(signedBlock1Prime) = (nodes(0).casperEff
+      .deploy(deployDatas(1)) *> nodes(0).casperEff.createBlock).runSyncUnsafe(1.second)
 
-    nodes(1).casperEff.addBlock(signedBlock1)
-    nodes(3).receive()                               //node(3) receive block1
-    nodes(0).transportLayerEff.clear(nodes(0).local) //nodes(0) misses this block
-    nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) misses this block
+    nodes(1).casperEff.addBlock(signedBlock1).runSyncUnsafe(1.second)
+    nodes(3).receive().runSyncUnsafe(1.second) //node(3) receive block1
+    nodes(0).transportLayerEff
+      .clear(nodes(0).local)
+      .runSyncUnsafe(1.second) //nodes(0) misses this block
+    nodes(2).transportLayerEff
+      .clear(nodes(2).local)
+      .runSyncUnsafe(1.second) //nodes(2) misses this block
 
-    nodes(0).casperEff.addBlock(signedBlock1Prime)
-    nodes(2).receive()
-    nodes(1).transportLayerEff.clear(nodes(1).local) //nodes(1) misses this block
-    nodes(3).transportLayerEff.clear(nodes(3).local) //nodes(3) misses this block
+    nodes(0).casperEff.addBlock(signedBlock1Prime).runSyncUnsafe(1.second)
+    nodes(2).receive().runSyncUnsafe(1.second)
+    nodes(1).transportLayerEff
+      .clear(nodes(1).local)
+      .runSyncUnsafe(1.second) //nodes(1) misses this block
+    nodes(3).transportLayerEff
+      .clear(nodes(3).local)
+      .runSyncUnsafe(1.second) //nodes(3) misses this block
 
-    nodes(1).casperEff.contains(signedBlock1) should be(true)
-    nodes(3).casperEff.contains(signedBlock1) should be(true)
-    nodes(2).casperEff.contains(signedBlock1) should be(false)
+    nodes(1).casperEff.contains(signedBlock1).runSyncUnsafe(1.second) should be(true)
+    nodes(3).casperEff.contains(signedBlock1).runSyncUnsafe(1.second) should be(true)
+    nodes(2).casperEff.contains(signedBlock1).runSyncUnsafe(1.second) should be(false)
 
-    nodes(1).casperEff.contains(signedBlock1Prime) should be(false)
-    nodes(2).casperEff.contains(signedBlock1Prime) should be(true)
-    nodes(3).casperEff.contains(signedBlock1Prime) should be(false)
+    nodes(1).casperEff.contains(signedBlock1Prime).runSyncUnsafe(1.second) should be(false)
+    nodes(2).casperEff.contains(signedBlock1Prime).runSyncUnsafe(1.second) should be(true)
+    nodes(3).casperEff.contains(signedBlock1Prime).runSyncUnsafe(1.second) should be(false)
 
-    val Created(signedBlock2) = nodes(1).casperEff
-      .deploy(deployDatas(2)) *> nodes(1).casperEff.createBlock
-    val Created(signedBlock3) = nodes(2).casperEff
-      .deploy(deployDatas(3)) *> nodes(2).casperEff.createBlock
+    val Created(signedBlock2) = (nodes(1).casperEff
+      .deploy(deployDatas(2)) *> nodes(1).casperEff.createBlock).runSyncUnsafe(1.second)
+    val Created(signedBlock3) = (nodes(2).casperEff
+      .deploy(deployDatas(3)) *> nodes(2).casperEff.createBlock).runSyncUnsafe(1.second)
 
-    nodes(2).casperEff.addBlock(signedBlock3)
-    nodes(1).casperEff.addBlock(signedBlock2)
-    nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) ignores block2
-    nodes(1).receive()                               // receives block3; asks for block1'
-    nodes(2).receive()                               // receives request for block1'; sends block1'
-    nodes(1).receive()                               // receives block1'; adds both block3 and block1'
-    nodes(3).transportLayerEff.clear(nodes(3).local) // nodes(3) misses these blocks
+    nodes(2).casperEff.addBlock(signedBlock3).runSyncUnsafe(1.second)
+    nodes(1).casperEff.addBlock(signedBlock2).runSyncUnsafe(1.second)
+    nodes(2).transportLayerEff
+      .clear(nodes(2).local)
+      .runSyncUnsafe(1.second)                 //nodes(2) ignores block2
+    nodes(1).receive().runSyncUnsafe(1.second) // receives block3; asks for block1'
+    nodes(2).receive().runSyncUnsafe(1.second) // receives request for block1'; sends block1'
+    nodes(1).receive().runSyncUnsafe(1.second) // receives block1'; adds both block3 and block1'
+    nodes(3).transportLayerEff
+      .clear(nodes(3).local)
+      .runSyncUnsafe(1.second) // nodes(3) misses these blocks
 
-    nodes(1).casperEff.contains(signedBlock3) should be(true)
-    nodes(1).casperEff.contains(signedBlock1Prime) should be(true)
+    nodes(1).casperEff.contains(signedBlock3).runSyncUnsafe(1.second) should be(true)
+    nodes(1).casperEff.contains(signedBlock1Prime).runSyncUnsafe(1.second) should be(true)
 
-    val Created(signedBlock4) = nodes(1).casperEff
-      .deploy(deployDatas(4)) *> nodes(1).casperEff.createBlock
+    val Created(signedBlock4) = (nodes(1).casperEff
+      .deploy(deployDatas(4)) *> nodes(1).casperEff.createBlock).runSyncUnsafe(1.second)
 
-    nodes(1).casperEff.addBlock(signedBlock4)
-    nodes(3).receive() // receives block4, ask for block1', block2, block3
-    nodes(1).receive() // receive request, send these blocks
-    nodes(3).receive() // receives block1', block2 and block3, adds all these block
+    nodes(1).casperEff.addBlock(signedBlock4).runSyncUnsafe(1.second)
+    nodes(3).receive().runSyncUnsafe(1.second) // receives block4, ask for block1', block2, block3
+    nodes(1).receive().runSyncUnsafe(1.second) // receive request, send these blocks
+    nodes(3)
+      .receive()
+      .runSyncUnsafe(1.second) // receives block1', block2 and block3, adds all these block
 
     // Node 1 should contain both blocks constituting the equivocation
-    nodes(1).casperEff.contains(signedBlock1) should be(true)
-    nodes(1).casperEff.contains(signedBlock1Prime) should be(true)
+    nodes(1).casperEff.contains(signedBlock1).runSyncUnsafe(1.second) should be(true)
+    nodes(1).casperEff.contains(signedBlock1Prime).runSyncUnsafe(1.second) should be(true)
 
-    nodes(1).casperEff.contains(signedBlock4) should be(true) // However, in invalidBlockTracker
+    nodes(1).casperEff
+      .contains(signedBlock4)
+      .runSyncUnsafe(1.second) should be(true) // However, in invalidBlockTracker
 
     nodes(1).logEff.infos.count(_ startsWith "Added admissible equivocation") should be(1)
     nodes(3).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
@@ -903,32 +962,38 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(1).logEff.warns.size should be(0)
     nodes(0).logEff.warns.size should be(0)
 
-    nodes(1).casperEff.normalizedInitialFault(ProtoUtil.weightMap(genesis)) should be(
+    nodes(1).casperEff
+      .normalizedInitialFault(ProtoUtil.weightMap(genesis))
+      .runSyncUnsafe(1.second) should be(
       1f / (1f + 3f + 5f + 7f)
     )
     nodes.foreach(_.tearDownNode())
 
     validateBlockStore(nodes(0)) { blockStore =>
-      blockStore.get(signedBlock1.blockHash) shouldBe None
-      blockStore.get(signedBlock1Prime.blockHash) shouldBe Some(signedBlock1Prime)
+      blockStore.get(signedBlock1.blockHash).runSyncUnsafe(1.second) shouldBe None
+      blockStore.get(signedBlock1Prime.blockHash).runSyncUnsafe(1.second) shouldBe Some(
+        signedBlock1Prime
+      )
     }
     validateBlockStore(nodes(1)) { blockStore =>
-      blockStore.get(signedBlock2.blockHash) shouldBe Some(signedBlock2)
-      blockStore.get(signedBlock4.blockHash) shouldBe Some(signedBlock4)
+      blockStore.get(signedBlock2.blockHash).runSyncUnsafe(1.second) shouldBe Some(signedBlock2)
+      blockStore.get(signedBlock4.blockHash).runSyncUnsafe(1.second) shouldBe Some(signedBlock4)
     }
     validateBlockStore(nodes(2)) { blockStore =>
-      blockStore.get(signedBlock3.blockHash) shouldBe Some(signedBlock3)
-      blockStore.get(signedBlock1Prime.blockHash) shouldBe Some(signedBlock1Prime)
+      blockStore.get(signedBlock3.blockHash).runSyncUnsafe(1.second) shouldBe Some(signedBlock3)
+      blockStore.get(signedBlock1Prime.blockHash).runSyncUnsafe(1.second) shouldBe Some(
+        signedBlock1Prime
+      )
     }
   }
 
   it should "prepare to slash an block that includes a invalid block pointer" in {
     val nodes           = HashSetCasperTestNode.network(validatorKeys.take(3), genesis)
-    val deploys         = (0 to 5).map(i => ProtoUtil.basicDeploy[Id](i))
+    val deploys         = (0 to 5).map(i => ProtoUtil.basicDeploy[Task](i).runSyncUnsafe(1.second))
     val deploysWithCost = deploys.map(d => ProcessedDeploy(deploy = Some(d)))
 
-    val Created(signedBlock) = nodes(0).casperEff
-      .deploy(deploys(0).raw.get) *> nodes(0).casperEff.createBlock
+    val Created(signedBlock) = (nodes(0).casperEff
+      .deploy(deploys(0).raw.get) *> nodes(0).casperEff.createBlock).runSyncUnsafe(1.second)
     val signedInvalidBlock =
       BlockUtil.resignBlock(signedBlock.withSeqNum(-2), nodes(0).validatorId.privateKey) // Invalid seq num
 
@@ -953,27 +1018,31 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       HashSetCasperTestNode.network(validatorKeys.take(2), genesis, storageSize = 1024L * 1024 * 10)
 
     (0 to 9).foreach { i =>
-      val deploy         = ProtoUtil.basicDeployData[Id](i)
-      val Created(block) = nodes(0).casperEff.deploy(deploy) *> nodes(0).casperEff.createBlock
+      val deploy = ProtoUtil.basicDeployData[Task](i).runSyncUnsafe(1.second)
+      val Created(block) = (nodes(0).casperEff.deploy(deploy) *> nodes(0).casperEff.createBlock)
+        .runSyncUnsafe(1.second)
 
-      nodes(0).casperEff.addBlock(block)
-      nodes(1).transportLayerEff.clear(nodes(1).local) //nodes(1) misses this block
+      nodes(0).casperEff.addBlock(block).runSyncUnsafe(1.second)
+      nodes(1).transportLayerEff
+        .clear(nodes(1).local)
+        .runSyncUnsafe(1.second) //nodes(1) misses this block
     }
-    val Created(block11) = nodes(0).casperEff
-      .deploy(ProtoUtil.basicDeployData[Id](10)) *> nodes(0).casperEff.createBlock
-    nodes(0).casperEff.addBlock(block11)
+    val Created(block11) = (nodes(0).casperEff
+      .deploy(ProtoUtil.basicDeployData[Task](10).runSyncUnsafe(1.second)) *> nodes(0).casperEff.createBlock)
+      .runSyncUnsafe(1.second)
+    nodes(0).casperEff.addBlock(block11).runSyncUnsafe(1.second)
 
     // Cycle of requesting and passing blocks until block #3 from nodes(0) to nodes(1)
     (0 to 8).foreach { i =>
-      nodes(1).receive()
-      nodes(0).receive()
+      nodes(1).receive().runSyncUnsafe(1.second)
+      nodes(0).receive().runSyncUnsafe(1.second)
     }
 
     // We simulate a network failure here by not allowing block #2 to get passed to nodes(1)
 
     // And then we assume fetchDependencies eventually gets called
-    nodes(1).casperEff.fetchDependencies
-    nodes(0).receive()
+    nodes(1).casperEff.fetchDependencies.runSyncUnsafe(1.second)
+    nodes(0).receive().runSyncUnsafe(1.second)
 
     nodes(1).logEff.infos
       .count(_ startsWith "Requested missing block") should be(10)
@@ -990,63 +1059,71 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val genesisWithEqualBonds =
       buildGenesis(Seq.empty, equalBonds, 1L, Long.MaxValue, Faucet.noopFaucet, 0L)
     val nodes       = HashSetCasperTestNode.network(validatorKeys.take(3), genesisWithEqualBonds)
-    val deployDatas = (0 to 7).map(i => ProtoUtil.basicDeployData[Id](i))
+    val deployDatas = (0 to 7).map(i => ProtoUtil.basicDeployData[Task](i))
 
-    val Created(block1) = nodes(0).casperEff
-      .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
-    nodes(0).casperEff.addBlock(block1)
-    nodes(1).receive()
-    nodes(2).receive()
+    val Created(block1) = (nodes(0).casperEff
+      .deploy(deployDatas(0).runSyncUnsafe(1.second)) *> nodes(0).casperEff.createBlock)
+      .runSyncUnsafe(1.second)
+    nodes(0).casperEff.addBlock(block1).runSyncUnsafe(1.second)
+    nodes(1).receive().runSyncUnsafe(1.second)
+    nodes(2).receive().runSyncUnsafe(1.second)
 
-    val Created(block2) = nodes(1).casperEff
-      .deploy(deployDatas(1)) *> nodes(1).casperEff.createBlock
-    nodes(1).casperEff.addBlock(block2)
-    nodes(0).receive()
-    nodes(2).receive()
+    val Created(block2) = (nodes(1).casperEff
+      .deploy(deployDatas(1).runSyncUnsafe(1.second)) *> nodes(1).casperEff.createBlock)
+      .runSyncUnsafe(1.second)
+    nodes(1).casperEff.addBlock(block2).runSyncUnsafe(1.second)
+    nodes(0).receive().runSyncUnsafe(1.second)
+    nodes(2).receive().runSyncUnsafe(1.second)
 
-    val Created(block3) = nodes(2).casperEff
-      .deploy(deployDatas(2)) *> nodes(2).casperEff.createBlock
-    nodes(2).casperEff.addBlock(block3)
-    nodes(0).receive()
-    nodes(1).receive()
+    val Created(block3) = (nodes(2).casperEff
+      .deploy(deployDatas(2).runSyncUnsafe(1.second)) *> nodes(2).casperEff.createBlock)
+      .runSyncUnsafe(1.second)
+    nodes(2).casperEff.addBlock(block3).runSyncUnsafe(1.second)
+    nodes(0).receive().runSyncUnsafe(1.second)
+    nodes(1).receive().runSyncUnsafe(1.second)
 
-    val Created(block4) = nodes(0).casperEff
-      .deploy(deployDatas(3)) *> nodes(0).casperEff.createBlock
+    val Created(block4) = (nodes(0).casperEff
+      .deploy(deployDatas(3).runSyncUnsafe(1.second)) *> nodes(0).casperEff.createBlock)
+      .runSyncUnsafe(1.second)
     nodes(0).casperEff.addBlock(block4)
-    nodes(1).receive()
-    nodes(2).receive()
+    nodes(1).receive().runSyncUnsafe(1.second)
+    nodes(2).receive().runSyncUnsafe(1.second)
 
-    val Created(block5) = nodes(1).casperEff
-      .deploy(deployDatas(4)) *> nodes(1).casperEff.createBlock
-    nodes(1).casperEff.addBlock(block5)
-    nodes(0).receive()
-    nodes(2).receive()
+    val Created(block5) = (nodes(1).casperEff
+      .deploy(deployDatas(4).runSyncUnsafe(1.second)) *> nodes(1).casperEff.createBlock)
+      .runSyncUnsafe(1.second)
+    nodes(1).casperEff.addBlock(block5).runSyncUnsafe(1.second)
+    nodes(0).receive().runSyncUnsafe(1.second)
+    nodes(2).receive().runSyncUnsafe(1.second)
 
     nodes(0).casperEff.lastFinalizedBlock should be(genesisWithEqualBonds)
 
-    val Created(block6) = nodes(2).casperEff
-      .deploy(deployDatas(5)) *> nodes(2).casperEff.createBlock
-    nodes(2).casperEff.addBlock(block6)
-    nodes(0).receive()
-    nodes(1).receive()
+    val Created(block6) = (nodes(2).casperEff
+      .deploy(deployDatas(5).runSyncUnsafe(1.second)) *> nodes(2).casperEff.createBlock)
+      .runSyncUnsafe(1.second)
+    nodes(2).casperEff.addBlock(block6).runSyncUnsafe(1.second)
+    nodes(0).receive().runSyncUnsafe(1.second)
+    nodes(1).receive().runSyncUnsafe(1.second)
 
     nodes(0).casperEff.lastFinalizedBlock should be(block1)
 
-    val Created(block7) = nodes(0).casperEff
-      .deploy(deployDatas(6)) *> nodes(0).casperEff.createBlock
-    nodes(0).casperEff.addBlock(block7)
-    nodes(1).receive()
-    nodes(2).receive()
+    val Created(block7) = (nodes(0).casperEff
+      .deploy(deployDatas(6).runSyncUnsafe(1.second)) *> nodes(0).casperEff.createBlock)
+      .runSyncUnsafe(1.second)
+    nodes(0).casperEff.addBlock(block7).runSyncUnsafe(1.second)
+    nodes(1).receive().runSyncUnsafe(1.second)
+    nodes(2).receive().runSyncUnsafe(1.second)
 
-    nodes(0).casperEff.lastFinalizedBlock should be(block2)
+    nodes(0).casperEff.lastFinalizedBlock.runSyncUnsafe(1.second) should be(block2)
 
-    val Created(block8) = nodes(1).casperEff
-      .deploy(deployDatas(7)) *> nodes(1).casperEff.createBlock
-    nodes(1).casperEff.addBlock(block8)
-    nodes(0).receive()
-    nodes(2).receive()
+    val Created(block8) = (nodes(1).casperEff
+      .deploy(deployDatas(7).runSyncUnsafe(1.second)) *> nodes(1).casperEff.createBlock)
+      .runSyncUnsafe(1.second)
+    nodes(1).casperEff.addBlock(block8).runSyncUnsafe(1.second)
+    nodes(0).receive().runSyncUnsafe(1.second)
+    nodes(2).receive().runSyncUnsafe(1.second)
 
-    nodes(0).casperEff.lastFinalizedBlock should be(block3)
+    nodes(0).casperEff.lastFinalizedBlock.runSyncUnsafe(1.second) should be(block3)
 
     nodes.foreach(_.tearDown())
   }
@@ -1054,29 +1131,29 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   it should "fail when deploying with insufficient phlos" in {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
     import node._
-    implicit val timeEff = new LogicalTime[Id]
+    implicit val timeEff = new LogicalTime[Task]
 
-    val deployData = ProtoUtil.basicDeployData[Id](0).withPhloLimit(1)
-    node.casperEff.deploy(deployData)
+    val deployData = ProtoUtil.basicDeployData[Task](0).runSyncUnsafe(1.second).withPhloLimit(1)
+    node.casperEff.deploy(deployData).runSyncUnsafe(1.second)
 
-    val Created(block) = MultiParentCasper[Id].createBlock
+    val Created(block) = MultiParentCasper[Task].createBlock.runSyncUnsafe(1.second)
     assert(block.body.get.deploys.head.errored)
   }
 
   it should "succeed if given enough phlos for deploy" in {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
     import node._
-    implicit val timeEff = new LogicalTime[Id]
+    implicit val timeEff = new LogicalTime[Task]
 
-    val deployData = ProtoUtil.basicDeployData[Id](0).withPhloLimit(100)
-    node.casperEff.deploy(deployData)
+    val deployData = ProtoUtil.basicDeployData[Task](0).runSyncUnsafe(1.second).withPhloLimit(100)
+    node.casperEff.deploy(deployData).runSyncUnsafe(1.second)
 
-    val Created(block) = MultiParentCasper[Id].createBlock
+    val Created(block) = MultiParentCasper[Task].createBlock.runSyncUnsafe(1.second)
     assert(!block.body.get.deploys.head.errored)
   }
 
   private def buildBlockWithInvalidJustification(
-      nodes: IndexedSeq[HashSetCasperTestNode[Id]],
+      nodes: IndexedSeq[HashSetCasperTestNode[Task]],
       deploys: immutable.IndexedSeq[ProcessedDeploy],
       signedInvalidBlock: BlockMessage
   ) = {
@@ -1095,7 +1172,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       BlockMessage(serializedBlockHash, Some(header), Some(body), serializedJustifications)
     ProtoUtil.signBlock(
       blockThatPointsToInvalidBlock,
-      nodes(1).casperEff.blockDag,
+      nodes(1).casperEff.blockDag.runSyncUnsafe(1.second),
       validators(1),
       validatorKeys(1),
       "ed25519",
@@ -1105,8 +1182,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 }
 
 object HashSetCasperTest {
-  def validateBlockStore[R](node: HashSetCasperTestNode[Id])(f: BlockStore[Id] => R) = {
-    val bs = BlockStoreTestFixture.create(node.dir)
+  def validateBlockStore[R](node: HashSetCasperTestNode[Task])(f: BlockStore[Task] => R) = {
+    implicit val metrics: Metrics[Task] = new MetricsNOP[Task]
+    val bs                              = BlockStoreTestFixture.create[Task](node.dir)
     f(bs)
     bs.close()
     node.dir.recursivelyDelete()
@@ -1114,23 +1192,25 @@ object HashSetCasperTest {
 
   def blockTuplespaceContents(
       block: BlockMessage
-  )(implicit casper: MultiParentCasper[Id]): String = {
+  )(implicit casper: MultiParentCasper[Task]): String = {
     val tsHash = block.body.get.postState.get.tuplespace
-    MultiParentCasper[Id].storageContents(tsHash)
+    MultiParentCasper[Task].storageContents(tsHash).runSyncUnsafe(1.second)
   }
 
   def deployAndQuery(
-      node: HashSetCasperTestNode[Id],
+      node: HashSetCasperTestNode[Task],
       dd: DeployData,
       query: Deploy
   ): (BlockStatus, Seq[Par]) = {
-    val Created(block) = node.casperEff.deploy(dd) *> node.casperEff.createBlock
-    val blockStatus    = node.casperEff.addBlock(block)
+    val Created(block) =
+      (node.casperEff.deploy(dd) *> node.casperEff.createBlock).runSyncUnsafe(1.second)
+    val blockStatus = node.casperEff.addBlock(block).runSyncUnsafe(1.second)
     val queryResult = node.runtimeManager
       .captureResults(
         block.getBody.getPostState.tuplespace,
         query
       )
+      .runSyncUnsafe(1.second)
 
     (blockStatus, queryResult)
   }
@@ -1152,19 +1232,23 @@ object HashSetCasperTest {
     val initial           = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "rchain")
     val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
     val storageSize: Long = 1024L * 1024
-    val activeRuntime     = Runtime.create(storageDirectory, storageSize)
-    val runtimeManager    = RuntimeManager.fromRuntime(activeRuntime)
-    val emptyStateHash    = runtimeManager.emptyStateHash
-    val validators        = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
-    val genesis = Genesis.withContracts(
-      initial,
-      ProofOfStakeParams(minimumBond, maximumBond, validators),
-      wallets,
-      faucetCode,
-      emptyStateHash,
-      runtimeManager,
-      deployTimestamp
-    )
+    val activeRuntime =
+      Runtime.create[Task, Task.Par](storageDirectory, storageSize).runSyncUnsafe(1.second)
+    val runtimeManager = RuntimeManager.fromRuntime[Task](activeRuntime).runSyncUnsafe(1.second)
+    val emptyStateHash = runtimeManager.emptyStateHash
+    val validators     = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
+    val genesis = Genesis
+      .withContracts[Task](
+        initial,
+        ProofOfStakeParams(minimumBond, maximumBond, validators),
+        wallets,
+        faucetCode,
+        emptyStateHash,
+        runtimeManager,
+        deployTimestamp
+      )
+      .runSyncUnsafe(1.second)
+
     activeRuntime.close().unsafeRunSync
     genesis
   }

@@ -1,14 +1,16 @@
 package coop.rchain.casper
 
-import cats.Id
 import cats.implicits._
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.collection.ListOps
 import coop.rchain.rholang.interpreter.accounting
+import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
+
+import scala.concurrent.duration._
 
 class RholangBuildTest extends FlatSpec with Matchers {
 
@@ -35,9 +37,11 @@ class RholangBuildTest extends FlatSpec with Matchers {
         |  }
         |}""".stripMargin
 
-    val deploy               = ProtoUtil.sourceDeploy(code, 1L, accounting.MAX_VALUE)
-    val Created(signedBlock) = MultiParentCasper[Id].deploy(deploy) *> MultiParentCasper[Id].createBlock
-    val _                    = MultiParentCasper[Id].addBlock(signedBlock)
+    val deploy = ProtoUtil.sourceDeploy(code, 1L, accounting.MAX_VALUE)
+    val Created(signedBlock) =
+      (MultiParentCasper[Task].deploy(deploy) *> MultiParentCasper[Task].createBlock)
+        .runSyncUnsafe(1.second)
+    val _ = MultiParentCasper[Task].addBlock(signedBlock).runSyncUnsafe(1.second)
 
     val storage = HashSetCasperTest.blockTuplespaceContents(signedBlock)
 

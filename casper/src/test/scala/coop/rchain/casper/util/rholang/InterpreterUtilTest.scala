@@ -1,7 +1,7 @@
 package coop.rchain.casper.util.rholang
 
 import cats.mtl.implicits._
-import cats.{Id, Monad}
+import cats.Monad
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.BlockDag
@@ -29,17 +29,18 @@ class InterpreterUtilTest
     with BlockStoreTestFixture {
   val initState: IndexedBlockDag = IndexedBlockDag.empty.copy(currentId = -1)
 
-  implicit val logEff: LogStub[Id] = new LogStub[Id]
+  implicit val logEff: LogStub[Task] = new LogStub[Task]
 
   private def computeBlockCheckpoint(
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDag,
-      runtimeManager: RuntimeManager
+      runtimeManager: RuntimeManager[Task]
   ): (StateHash, Seq[ProcessedDeploy]) = {
     val Right((stateHash, processedDeploys)) =
       InterpreterUtil
-        .computeBlockCheckpointFromDeploys[Id](b, genesis, dag, runtimeManager)
+        .computeBlockCheckpointFromDeploys[Task](b, genesis, dag, runtimeManager)
+        .runSyncUnsafe(1.second)
 
     (stateHash, processedDeploys.map(ProcessedDeployUtil.fromInternal))
   }
@@ -91,11 +92,11 @@ class InterpreterUtilTest
         b3      <- createBlock[F](Seq(b2.blockHash), deploys = b3DeploysCost)
       } yield b3
     }
-    val chain   = createChain[StateWithChain].runS(initState)
+    val chain   = createChain[StateWithChain].runS(initState).runSyncUnsafe(1.second)
     val genesis = chain.idToBlocks(0)
 
     val (genPostState, b1PostState, b3PostState) =
-      mkRuntimeManager("interpreter-util-test")
+      mkRuntimeManager[Task, Task.Par]("interpreter-util-test")
         .use { runtimeManager =>
           Task.delay {
             val (postGenStateHash, postGenProcessedDeploys) =
@@ -177,7 +178,7 @@ class InterpreterUtilTest
     val updatedBlockBody =
       b.body.get.withPostState(updatedBlockPostState).withDeploys(processedDeploys)
     val updatedBlock = b.withBody(updatedBlockBody)
-    BlockStore[Id].put(b.blockHash, updatedBlock)
+    BlockStore[Task].put(b.blockHash, updatedBlock)
     chain.copy(idToBlocks = chain.idToBlocks.updated(id, updatedBlock))
   }
 
@@ -229,10 +230,10 @@ class InterpreterUtilTest
       } yield b3
     }
 
-    val chain   = createChain[StateWithChain].runS(initState)
+    val chain   = createChain[StateWithChain].runS(initState).runSyncUnsafe(1.second)
     val genesis = chain.idToBlocks(0)
 
-    val b3PostState = mkRuntimeManager("interpreter-util-test")
+    val b3PostState = mkRuntimeManager[Task, Task.Par]("interpreter-util-test")
       .use { runtimeManager =>
         Task.delay {
           val (postGenStateHash, postGenProcessedDeploys) =
@@ -279,11 +280,12 @@ class InterpreterUtilTest
   }
 
   def computeSingleProcessedDeploy(
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       deploy: Deploy*
   ): Seq[InternalProcessedDeploy] = {
     val Right((_, result)) =
-      computeDeploysCheckpoint[Id](Seq.empty, deploy, initState, runtimeManager)
+      computeDeploysCheckpoint[Task](Seq.empty, deploy, initState, runtimeManager)
+        .runSyncUnsafe(1.second)
     result
   }
 
@@ -308,7 +310,7 @@ class InterpreterUtilTest
         accounting.MAX_VALUE
       )
 
-    val (accCostBatch, accCostsSep) = mkRuntimeManager("interpreter-util-test")
+    val (accCostBatch, accCostsSep) = mkRuntimeManager[Task, Task.Par]("interpreter-util-test")
       .use { runtimeManager =>
         Task.delay {
           val cost1 = computeSingleProcessedDeploy(runtimeManager, deploy1)
@@ -345,7 +347,7 @@ class InterpreterUtilTest
           accounting.MAX_VALUE
         )
 
-      val (accCostBatch, accCostsSep) = mkRuntimeManager("interpreter-util-test")
+      val (accCostBatch, accCostsSep) = mkRuntimeManager[Task, Task.Par]("interpreter-util-test")
         .use { runtimeManager =>
           Task.delay {
             val cost1 = computeSingleProcessedDeploy(runtimeManager, deploy1)
@@ -379,11 +381,13 @@ class InterpreterUtilTest
     val chain =
       createBlock[StateWithChain](Seq.empty, deploys = processedDeploys, tsHash = invalidHash)
         .runS(initState)
+        .runSyncUnsafe(1.second)
+
     val block = chain.idToBlocks(0)
 
-    val Right(stateHash) = mkRuntimeManager("interpreter-util-test")
+    val Right(stateHash) = mkRuntimeManager[Task, Task.Par]("interpreter-util-test")
       .use { runtimeManager =>
-        Task.delay { validateBlockCheckpoint[Id](block, chain, runtimeManager) }
+        validateBlockCheckpoint[Task](block, chain, runtimeManager)
       }
       .runSyncUnsafe(10.seconds)
 
@@ -404,28 +408,30 @@ class InterpreterUtilTest
       ).flatMap(mkTerm(_).toOption)
         .map(ProtoUtil.termDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
 
-    val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
+    val (tsH, computedTsH) = mkRuntimeManager[Task, Task.Par]("interpreter-util-test")
       .use { runtimeManager =>
-        Task.delay {
-          val Right((computedTsHash, processedDeploys)) =
-            computeDeploysCheckpoint[Id](Seq.empty, deploys, initState, runtimeManager)
-          val chain: IndexedBlockDag =
-            createBlock[StateWithChain](
-              Seq.empty,
-              deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
-              tsHash = computedTsHash
-            ).runS(initState)
-          val block = chain.idToBlocks(0)
+        for {
+          result <- computeDeploysCheckpoint[Task](
+                     Seq.empty,
+                     deploys,
+                     initState,
+                     runtimeManager
+                   )
+          Right((computedTsH, processedDeploys)) = result
+          chain <- createBlock[StateWithChain](
+                    Seq.empty,
+                    deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal(_)),
+                    tsHash = computedTsH
+                  ).runS(initState)
+          block = chain.idToBlocks(0)
 
-          val Right(tsHash) =
-            validateBlockCheckpoint[Id](block, chain, runtimeManager)
-
-          (tsHash, computedTsHash)
-        }
+          result     <- validateBlockCheckpoint[Task](block, chain, runtimeManager)
+          Right(tsH) = result
+        } yield (tsH, computedTsH)
       }
       .runSyncUnsafe(10.seconds)
 
-    tsHash should be(Some(computedTsHash))
+    tsH should be(Some(computedTsH))
   }
 
   it should "pass linked list test" in {
@@ -462,28 +468,30 @@ class InterpreterUtilTest
         )
     )
 
-    val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
+    val (tsH, computedTsH) = mkRuntimeManager[Task, Task.Par]("interpreter-util-test")
       .use { runtimeManager =>
-        Task.delay {
-          val Right((computedTsHash, processedDeploys)) =
-            computeDeploysCheckpoint[Id](Seq.empty, deploys, initState, runtimeManager)
-          val chain: IndexedBlockDag =
-            createBlock[StateWithChain](
-              Seq.empty,
-              deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
-              tsHash = computedTsHash
-            ).runS(initState)
-          val block = chain.idToBlocks(0)
+        for {
+          result <- computeDeploysCheckpoint[Task](
+                     Seq.empty,
+                     deploys,
+                     initState,
+                     runtimeManager
+                   )
+          Right((computedTsH, processedDeploys)) = result
+          chain <- createBlock[StateWithChain](
+                    Seq.empty,
+                    deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal(_)),
+                    tsHash = computedTsH
+                  ).runS(initState)
+          block = chain.idToBlocks(0)
 
-          val Right(tsHash) =
-            validateBlockCheckpoint[Id](block, chain, runtimeManager)
-
-          (tsHash, computedTsHash)
-        }
+          result     <- validateBlockCheckpoint[Task](block, chain, runtimeManager)
+          Right(tsH) = result
+        } yield (tsH, computedTsH)
       }
       .runSyncUnsafe(10.seconds)
 
-    tsHash should be(Some(computedTsHash))
+    tsH should be(Some(computedTsH))
   }
 
   it should "pass persistent produce test with causality" in {
@@ -523,28 +531,30 @@ class InterpreterUtilTest
               accounting.MAX_VALUE
             )
         )
-    val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
+    val (tsH, computedTsH) = mkRuntimeManager[Task, Task.Par]("interpreter-util-test")
       .use { runtimeManager =>
-        Task.delay {
-          val Right((computedTsHash, processedDeploys)) =
-            computeDeploysCheckpoint[Id](Seq.empty, deploys, initState, runtimeManager)
-          val chain: IndexedBlockDag =
-            createBlock[StateWithChain](
-              Seq.empty,
-              deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
-              tsHash = computedTsHash
-            ).runS(initState)
-          val block = chain.idToBlocks(0)
+        for {
+          result <- computeDeploysCheckpoint[Task](
+                     Seq.empty,
+                     deploys,
+                     initState,
+                     runtimeManager
+                   )
+          Right((computedTsH, processedDeploys)) = result
+          chain <- createBlock[StateWithChain](
+                    Seq.empty,
+                    deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
+                    tsHash = computedTsH
+                  ).runS(initState)
+          block = chain.idToBlocks(0)
 
-          val Right(tsHash) =
-            validateBlockCheckpoint[Id](block, chain, runtimeManager)
-
-          (tsHash, computedTsHash)
-        }
+          result     <- validateBlockCheckpoint[Task](block, chain, runtimeManager)
+          Right(tsH) = result
+        } yield (tsH, computedTsH)
       }
       .runSyncUnsafe(10.seconds)
 
-    tsHash should be(Some(computedTsHash))
+    tsH should be(Some(computedTsH))
   }
 
   it should "pass tests involving primitives" in {
@@ -581,27 +591,30 @@ class InterpreterUtilTest
             accounting.MAX_VALUE
           )
       )
-    val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
+    val (tsH, computedTsH) = mkRuntimeManager[Task, Task.Par]("interpreter-util-test")
       .use { runtimeManager =>
-        Task.delay {
-          val Right((computedTsHash, processedDeploys)) =
-            computeDeploysCheckpoint[Id](Seq.empty, deploys, initState, runtimeManager)
-          val chain: IndexedBlockDag =
-            createBlock[StateWithChain](
-              Seq.empty,
-              deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
-              tsHash = computedTsHash
-            ).runS(initState)
-          val block = chain.idToBlocks(0)
+        for {
+          result <- computeDeploysCheckpoint[Task](
+                     Seq.empty,
+                     deploys,
+                     initState,
+                     runtimeManager
+                   )
+          Right((computedTsH, processedDeploys)) = result
+          chain <- createBlock[StateWithChain](
+                    Seq.empty,
+                    deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal(_)),
+                    tsHash = computedTsH
+                  ).runS(initState)
+          block = chain.idToBlocks(0)
 
-          val Right(tsHash) =
-            validateBlockCheckpoint[Id](block, chain, runtimeManager)
-          (tsHash, computedTsHash)
-        }
+          result     <- validateBlockCheckpoint[Task](block, chain, runtimeManager)
+          Right(tsH) = result
+        } yield (tsH, computedTsH)
       }
       .runSyncUnsafe(10.seconds)
 
-    tsHash should be(Some(computedTsHash))
+    tsH should be(Some(computedTsH))
   }
 
   it should "pass tests involving races" in {
@@ -630,32 +643,30 @@ class InterpreterUtilTest
               accounting.MAX_VALUE
             )
         )
-      val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
+      val (tsH, computedTsH) = mkRuntimeManager[Task, Task.Par]("interpreter-util-test")
         .use { runtimeManager =>
-          Task.delay {
-            val Right((computedTsHash, processedDeploys)) =
-              computeDeploysCheckpoint[Id](
-                Seq.empty,
-                deploys,
-                initState,
-                runtimeManager
-              )
-            val chain: IndexedBlockDag =
-              createBlock[StateWithChain](
-                Seq.empty,
-                deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
-                tsHash = computedTsHash
-              ).runS(initState)
-            val block = chain.idToBlocks(0)
+          for {
+            result <- computeDeploysCheckpoint[Task](
+                       Seq.empty,
+                       deploys,
+                       initState,
+                       runtimeManager
+                     )
+            Right((computedTsH, processedDeploys)) = result
+            chain <- createBlock[StateWithChain](
+                      Seq.empty,
+                      deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal(_)),
+                      tsHash = computedTsH
+                    ).runS(initState)
+            block = chain.idToBlocks(0)
 
-            val Right(tsHash) =
-              validateBlockCheckpoint[Id](block, chain, runtimeManager)
-            (tsHash, computedTsHash)
-          }
+            result     <- validateBlockCheckpoint[Task](block, chain, runtimeManager)
+            Right(tsH) = result
+          } yield (tsH, computedTsH)
         }
         .runSyncUnsafe(10.seconds)
 
-      tsHash should be(Some(computedTsHash))
+      tsH should be(Some(computedTsH))
     }
   }
 
@@ -666,33 +677,35 @@ class InterpreterUtilTest
       ProtoUtil.termDeployNow(term)
     })
 
-    val tsHash = mkRuntimeManager("interpreter-util-test")
+    val tsH = mkRuntimeManager[Task, Task.Par]("interpreter-util-test")
       .use { runtimeManager =>
-        Task.delay {
-          val Right((computedTsHash, processedDeploys)) =
-            computeDeploysCheckpoint[Id](Seq.empty, deploys, initState, runtimeManager)
-          val intProcessedDeploys = processedDeploys.map(ProcessedDeployUtil.fromInternal)
+        for {
+          result <- computeDeploysCheckpoint[Task](
+                     Seq.empty,
+                     deploys,
+                     initState,
+                     runtimeManager
+                   )
+          Right((computedTsH, processedDeploys)) = result
+          intProcessedDeploys                    = processedDeploys.map(ProcessedDeployUtil.fromInternal(_))
           //create single deploy with log that includes excess comm events
-          val badProcessedDeploy = intProcessedDeploys.head.copy(
+          badProcessedDeploy = intProcessedDeploys.head.copy(
             log = intProcessedDeploys.head.log ++ intProcessedDeploys.last.log
           )
-          val chain: IndexedBlockDag =
-            createBlock[StateWithChain](
-              Seq.empty,
-              deploys = Seq(badProcessedDeploy, intProcessedDeploys.last),
-              tsHash = computedTsHash
-            ).runS(initState)
-          val block = chain.idToBlocks(0)
+          chain <- createBlock[StateWithChain](
+                    Seq.empty,
+                    deploys = Seq(badProcessedDeploy, intProcessedDeploys.last),
+                    tsHash = computedTsH
+                  ).runS(initState)
+          block = chain.idToBlocks(0)
 
-          val Right(tsHash) =
-            validateBlockCheckpoint[Id](block, chain, runtimeManager)
-
-          tsHash
-        }
+          result     <- validateBlockCheckpoint[Task](block, chain, runtimeManager)
+          Right(tsH) = result
+        } yield tsH
       }
       .runSyncUnsafe(10.seconds)
 
-    tsHash should be(None)
+    tsH should be(None)
   }
 
   it should "pass map update test" in {
@@ -717,33 +730,29 @@ class InterpreterUtilTest
           """.stripMargin
         ).map(s => ProtoUtil.termDeployNow(InterpreterUtil.mkTerm(s).right.get))
 
-      val (tsHash, computedTsHash) = mkRuntimeManager("interpreter-util-test")
+      val (tsH, computedTsH) = mkRuntimeManager[Task, Task.Par]("interpreter-util-test")
         .use { runtimeManager =>
-          Task.delay {
-            val Right((computedTsHash, processedDeploys)) =
-              computeDeploysCheckpoint[Id](
-                Seq.empty,
-                deploys,
-                initState,
-                runtimeManager
-              )
-            val chain: IndexedBlockDag =
-              createBlock[StateWithChain](
-                Seq.empty,
-                deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
-                tsHash = computedTsHash
-              ).runS(initState)
-            val block = chain.idToBlocks(0)
+          for {
+            result <- computeDeploysCheckpoint[Task](
+                       Seq.empty,
+                       deploys,
+                       initState,
+                       runtimeManager
+                     )
+            Right((computedTsH, processedDeploys)) = result
+            chain <- createBlock[StateWithChain](
+                      Seq.empty,
+                      deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal _),
+                      tsHash = computedTsH
+                    ).runS(initState)
 
-            val Right(tsHash) =
-              validateBlockCheckpoint[Id](block, chain, runtimeManager)
-
-            (tsHash, computedTsHash)
-          }
+            result     <- validateBlockCheckpoint[Task](chain.idToBlocks(0), chain, runtimeManager)
+            Right(tsH) = result
+          } yield (tsH, computedTsH)
         }
         .runSyncUnsafe(10.seconds)
 
-      tsHash should be(Some(computedTsHash))
+      tsH should be(Some(computedTsH))
     }
   }
 }

@@ -4,16 +4,19 @@ import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 
 import cats.Id
+import cats.effect.Sync
 import coop.rchain.blockstorage.{BlockStore, LMDBBlockStore}
 import coop.rchain.casper.helper.BlockGenerator.{storeForStateWithChain, StateWithChain}
+import coop.rchain.metrics.Metrics
 import org.lmdbjava.{Env, EnvFlags}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, Suite}
 import coop.rchain.shared.PathOps.RichPath
+import monix.eval.Task
 
 trait BlockStoreFixture extends BeforeAndAfter { self: Suite =>
-  def withStore[R](f: BlockStore[Id] => R): R = {
+  def withStore[F[_]: Sync: Metrics, R](f: BlockStore[F] => R): R = {
     val dir   = BlockStoreTestFixture.dbDir
-    val store = BlockStoreTestFixture.create(dir)
+    val store = BlockStoreTestFixture.create[F](dir)
     try {
       f(store)
     } finally {
@@ -39,20 +42,24 @@ object BlockStoreTestFixture {
   def dbDir: Path   = Files.createTempDirectory("casper-block-store-test-")
   val mapSize: Long = 1024L * 1024L * 100L
 
-  def create(dir: Path): BlockStore[Id] = {
+  def create[F[_]: Sync: Metrics](dir: Path): BlockStore[F] = {
     val environment = env(dir, mapSize)
-    val blockStore  = LMDBBlockStore.createWithId(environment, dir)
+    val blockStore  = LMDBBlockStore.create(environment, dir)
     blockStore
   }
 }
 
 trait BlockStoreTestFixture extends BeforeAndAfterAll { self: Suite =>
 
+  import coop.rchain.metrics.Metrics.MetricsNOP
+
+  implicit val metrics: Metrics[Task] = new MetricsNOP[Task]
+
   val dir = BlockStoreTestFixture.dbDir
 
-  val store = BlockStoreTestFixture.create(dir)
+  val store = BlockStoreTestFixture.create[Task](dir)
 
-  implicit val blockStore = store
+  implicit val blockStore: BlockStore[Task] = store
 
   implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
 

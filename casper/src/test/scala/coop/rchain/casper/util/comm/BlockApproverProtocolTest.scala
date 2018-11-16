@@ -1,6 +1,5 @@
 package coop.rchain.casper.util.comm
 
-import cats.Id
 import coop.rchain.casper.HashSetCasperTest
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.{BlockStoreTestFixture, HashSetCasperTestNode}
@@ -12,6 +11,9 @@ import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.transport
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.interpreter.Runtime
+import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
+import scala.concurrent.duration._
 import org.scalatest.{FlatSpec, Matchers}
 
 class BlockApproverProtocolTest extends FlatSpec with Matchers {
@@ -25,12 +27,12 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
     val unapproved                 = createUnapproved(n, node.genesis)
     import node._
 
-    approver.unapprovedBlockPacketHandler[Id](node.local, unapproved)
+    approver.unapprovedBlockPacketHandler(node.local, unapproved)
 
     node.logEff.infos.exists(_.contains("Approval sent in response")) should be(true)
     node.logEff.warns.isEmpty should be(true)
 
-    node.transportLayerEff.msgQueues(node.local).get.size should be(1)
+    node.transportLayerEff.msgQueues(node.local).get.runSyncUnsafe(1.second).size should be(1)
   }
 
   it should "log a warning for invalid ApprovedBlockCandidates" in {
@@ -42,12 +44,12 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
     val differentUnapproved2       = createUnapproved(n, BlockMessage.defaultInstance) //wrong block
     import node._
 
-    approver.unapprovedBlockPacketHandler[Id](node.local, differentUnapproved1)
-    approver.unapprovedBlockPacketHandler[Id](node.local, differentUnapproved2)
+    approver.unapprovedBlockPacketHandler(node.local, differentUnapproved1)
+    approver.unapprovedBlockPacketHandler(node.local, differentUnapproved2)
 
     node.logEff.warns.count(_.contains("Received unexpected candidate")) should be(2)
 
-    node.transportLayerEff.msgQueues(node.local).get.isEmpty should be(true)
+    node.transportLayerEff.msgQueues(node.local).get.runSyncUnsafe(1.second).isEmpty should be(true)
   }
 }
 
@@ -63,12 +65,13 @@ object BlockApproverProtocolTest {
       wallets: Seq[PreWallet],
       sk: Array[Byte],
       bonds: Map[Array[Byte], Long]
-  ): (BlockApproverProtocol, HashSetCasperTestNode[Id]) = {
+  ): (BlockApproverProtocol[Task], HashSetCasperTestNode[Task]) = {
     import monix.execution.Scheduler.Implicits.global
 
-    val runtimeDir     = BlockStoreTestFixture.dbDir
-    val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024)
-    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
+    val runtimeDir = BlockStoreTestFixture.dbDir
+    val activeRuntime =
+      Runtime.create[Task, Task.Par](runtimeDir, 1024L * 1024).runSyncUnsafe(1.second)
+    val runtimeManager = RuntimeManager.fromRuntime[Task](activeRuntime).runSyncUnsafe(1.second)
 
     val deployTimestamp = 1L
     val validators      = bonds.map(b => ProofOfStakeValidator(b._1, b._2)).toSeq

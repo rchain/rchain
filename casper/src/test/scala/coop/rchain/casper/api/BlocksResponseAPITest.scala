@@ -1,6 +1,6 @@
 package coop.rchain.casper.api
 
-import cats.{Applicative, Id}
+import cats.Applicative
 import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.implicits._
@@ -17,6 +17,9 @@ import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.HashMap
 import coop.rchain.shared.Time
+import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
+import scala.concurrent.duration._
 
 // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
 class BlocksResponseAPITest
@@ -24,8 +27,6 @@ class BlocksResponseAPITest
     with Matchers
     with BlockGenerator
     with BlockStoreTestFixture {
-
-  implicit val syncId: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
 
   val initState = IndexedBlockDag.empty.withOffset(1L)
   val v1        = ByteString.copyFromUtf8("Validator One")
@@ -37,7 +38,7 @@ class BlocksResponseAPITest
   val bonds     = Seq(v1Bond, v2Bond, v3Bond)
 
   implicit def timeState[A]: Time[StateWithChain] =
-    Time.stateTTime[IndexedBlockDag, Id](syncId, timeEff)
+    Time.stateTTime[IndexedBlockDag, Task]
 
   val createChain =
     for {
@@ -86,57 +87,39 @@ class BlocksResponseAPITest
            )
     } yield b8
 
-  val chain: IndexedBlockDag = createChain.runS(initState)
+  val chain: IndexedBlockDag = createChain.runS(initState).runSyncUnsafe(1.second)
   val genesis                = chain.idToBlocks(1)
 
-  implicit val blockStoreEffect = BlockStore[Id]
-  implicit val casperEffect: MultiParentCasper[Id] =
-    NoOpsCasperEffect[Id](
+  implicit val blockStoreEffect = BlockStore[Task]
+  implicit val casperEffect: MultiParentCasper[Task] =
+    NoOpsCasperEffect[Task](
       HashMap.empty[BlockHash, BlockMessage],
-      Estimator.tips[Id](chain, genesis.blockHash),
+      Estimator.tips[Task](chain, genesis.blockHash).runSyncUnsafe(1.second),
       chain
-    )(syncId, blockStoreEffect)
-  implicit val logEff = new LogStub[Id]
+    ).runSyncUnsafe(1.second)
+  implicit val logEff = new LogStub[Task]
   implicit val casperRef = {
-    val tmp = MultiParentCasperRef.of[Id]
+    val tmp = MultiParentCasperRef.of[Task].runSyncUnsafe(1.second)
     tmp.set(casperEffect)
     tmp
   }
-  implicit val turanOracleEffect: SafetyOracle[Id] = SafetyOracle.turanOracle[Id]
+  implicit val turanOracleEffect: SafetyOracle[Task] = SafetyOracle.turanOracle[Task]
 
   "showMainChain" should "return only blocks in the main chain" in {
     val blocksResponse =
-      BlockAPI.showMainChain[Id](Int.MaxValue)(
-        syncId,
-        casperRef,
-        logEff,
-        turanOracleEffect,
-        blockStore
-      )
+      BlockAPI.showMainChain[Task](Int.MaxValue).runSyncUnsafe(1.second)
     blocksResponse.length should be(5)
   }
 
   "showBlocks" should "return all blocks" in {
     val blocksResponse =
-      BlockAPI.showBlocks[Id](Int.MaxValue)(
-        syncId,
-        casperRef,
-        logEff,
-        turanOracleEffect,
-        blockStore
-      )
+      BlockAPI.showBlocks[Task](Int.MaxValue).runSyncUnsafe(1.second)
     blocksResponse.length should be(8) // TODO: Switch to 4 when we implement block height correctly
   }
 
   it should "return until depth" in {
     val blocksResponse =
-      BlockAPI.showBlocks[Id](2)(
-        syncId,
-        casperRef,
-        logEff,
-        turanOracleEffect,
-        blockStore
-      )
+      BlockAPI.showBlocks[Task](2).runSyncUnsafe(1.second)
     blocksResponse.length should be(2) // TODO: Switch to 3 when we implement block height correctly
   }
 }
