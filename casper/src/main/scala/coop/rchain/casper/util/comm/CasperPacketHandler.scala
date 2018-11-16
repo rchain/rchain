@@ -380,10 +380,11 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         br: ApprovedBlockRequest
     ): F[Option[Packet]] =
       for {
-        _   <- Log[F].info(s"Received ApprovedBlockRequest from $peer")
-        msg = Blob(peer, Packet(transport.ApprovedBlock.id, approvedBlock.toByteString))
-        _   <- TransportLayer[F].stream(Seq(peer), msg)
-        _   <- Log[F].info(s"Sending ApprovedBlock to $peer")
+        local <- RPConfAsk[F].reader(_.local)
+        _     <- Log[F].info(s"Received ApprovedBlockRequest from $peer")
+        msg   = Blob(local, Packet(transport.ApprovedBlock.id, approvedBlock.toByteString))
+        _     <- TransportLayer[F].stream(Seq(peer), msg)
+        _     <- Log[F].info(s"Sending ApprovedBlock to $peer")
       } yield none[Packet]
 
     override def handleNoApprovedBlockAvailable(na: NoApprovedBlockAvailable): F[Option[Packet]] =
