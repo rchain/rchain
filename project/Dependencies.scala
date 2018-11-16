@@ -61,7 +61,7 @@ object Dependencies {
   val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.6"
   val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.3"
   val magnolia            = "com.propensive"             %% "magnolia"                  % "0.9.1"
-  val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.+"
+  val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.4"
   // see https://jitpack.io/#rchain/secp256k1-java
   val secp256k1Java       = "com.github.rchain"           % "secp256k1-java"            % "0.1"
   val tomlScala           = "tech.sparse"                %% "toml-scala"                % "0.1.1"
