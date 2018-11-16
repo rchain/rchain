@@ -1,5 +1,6 @@
 import re
 import os
+import shlex
 import logging
 import threading
 from contextlib import contextmanager
@@ -7,7 +8,6 @@ from rnode_testing.docker import docker_network
 import rnode_testing.resources as resources
 from rnode_testing.util import log_box, make_tempfile, make_tempdir
 from rnode_testing.wait import wait_for, node_started
-import shlex
 
 from multiprocessing import Queue, Process
 from queue import Empty
@@ -41,7 +41,12 @@ class TimeoutError(Exception):
 
 class UnexpectedShowBlocksOutputFormatError(Exception):
     def __init__(self, output):
-        self.command = output
+        self.output = output
+
+
+class UnexpectedProposeOutputFormatError(Exception):
+    def __init__(self, output):
+        self.output = output
 
 
 def extract_block_count_from_show_blocks(show_blocks_output):
@@ -57,6 +62,17 @@ def extract_block_count_from_show_blocks(show_blocks_output):
     except ValueError:
         raise UnexpectedShowBlocksOutputFormatError(show_blocks_output)
     return result
+
+
+def extract_block_hash_from_propose_output(propose_output):
+    """We're getting back something along the lines of:
+
+    Response: Success! Block a91208047c... created and added.\n
+    """
+    match = re.match(r'Response: Success! Block ([0-9a-f]+)\.\.\. created and added.', propose_output.strip())
+    if match is None:
+        raise UnexpectedProposeOutputFormatError(propose_output)
+    return match.group(1)
 
 
 class Node:
@@ -75,6 +91,9 @@ class Node:
             terminate_thread_event=self.terminate_background_logging_event,
         )
         self.background_logging.start()
+
+    def __repr__(self):
+        return '<Node(name={})>'.format(repr(self.name))
 
     def logs(self):
         return self.container.logs().decode('utf-8')
@@ -117,8 +136,11 @@ class Node:
         return self.exec_run(f'{rnode_binary} show-blocks --depth {depth}')
 
     def get_blocks_count(self, depth):
-        _,show_blocks_output = self.show_blocks_with_depth(depth)
+        _, show_blocks_output = self.show_blocks_with_depth(depth)
         return extract_block_count_from_show_blocks(show_blocks_output)
+
+    def get_block(self, block_hash):
+        return self.call_rnode('show-block', block_hash, stderr=False)
 
     def exec_run(self, cmd, stderr=True):
         queue = Queue(1)
@@ -165,7 +187,9 @@ class Node:
         ))
 
     def propose(self):
-        return self.call_rnode('propose')
+        output = self.call_rnode('propose', stderr=False)
+        block_hash = extract_block_hash_from_propose_output(output)
+        return block_hash
 
     def repl(self, rholang_code, stderr=False):
         quoted_rholang_code = shlex.quote(rholang_code)

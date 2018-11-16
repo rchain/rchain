@@ -25,13 +25,6 @@ def star_network(system):
 
             yield network
 
-def test_convergence(star_network):
-    logging.info("Star network converged successfully.")
-
-@pytest.mark.skip(reason="This doesn't work since the show-blocks functionality was removed")
-def test_casper_propose_and_deploy(star_network):
-    rnode_testing.casper_propose_and_deploy.run(star_network)
-
 
 @pytest.fixture(scope="module")
 def complete_network(system):
