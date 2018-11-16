@@ -73,6 +73,7 @@ object Dependencies {
     shapeless,
     guava,
     scodecBits,
+    scalacheckNoTest,
     //overrides for transitive dependencies (we don't use them directly, hence no val-s)
     "org.typelevel"            %% "machinist"              % "0.6.5",
     "com.lihaoyi"              %% "sourcecode"             % "0.1.4",
