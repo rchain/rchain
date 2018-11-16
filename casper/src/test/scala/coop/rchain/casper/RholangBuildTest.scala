@@ -43,7 +43,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
 
     logEff.warns should be(Nil)
     storage.contains("!([4, 6, 10, 14])") should be(true)
-    storage.contains("!(\"The timestamp is 2\")") should be(true)
+    storage.contains("!(\"The timestamp is 1\")") should be(true)
 
     node.tearDown()
   }
