@@ -30,15 +30,11 @@ object SyncInstances {
       def bracketCase[A, B](
           acquire: Effect[A]
       )(use: A => Effect[B])(release: (A, ExitCase[Throwable]) => Effect[Unit]): Effect[B] =
-        acquire flatMap { state =>
-          try {
-            use(state)
-          } catch {
-            case t: Throwable => raiseError(t)
-          } finally {
-            release(state, ExitCase.Completed)
-          }
-        }
+        EitherT(
+          acquire.value
+            .bracketCase(
+              resource => use(resource).value){
+              case (a, exitCase) => release(a, exitCase).value.map(_.right)})
 
       def handleErrorWith[A](fa: Effect[A])(f: Throwable => Effect[A]): Effect[A] =
         EitherT(fa.value flatMap {
