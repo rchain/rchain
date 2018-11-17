@@ -72,7 +72,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
     response2.success shouldBe false
     response2.message shouldBe "Error: There is another propose in progress."
 
-    node.tearDown().value.runSyncUnsafe(1.second)
+    node.tearDown().value.runSyncUnsafe(10.seconds)
   }
 }
 

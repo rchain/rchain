@@ -23,8 +23,8 @@ class DeployParamsSpec extends fixture.FlatSpec with Matchers {
     val randomInt = scala.util.Random.nextInt
     val dbDir     = Files.createTempDirectory(s"rchain-storage-test-$randomInt")
     val size      = 1024L * 1024 * 10
-    val runtime   = Runtime.create[Task, Task.Par](dbDir, size).runSyncUnsafe(1.second)
-    runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
+    val runtime   = Runtime.create[Task, Task.Par](dbDir, size).runSyncUnsafe(10.seconds)
+    runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(10.seconds)
 
     try {
       test(runtime)

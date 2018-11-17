@@ -40,8 +40,9 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     }
 
     val Created(block) =
-      (node.casperEff.deploy(basicDeployData) *> node.casperEff.createBlock).runSyncUnsafe(1.second)
-    node.casperEff.addBlock(block).runSyncUnsafe(1.second)
+      (node.casperEff.deploy(basicDeployData) *> node.casperEff.createBlock)
+        .runSyncUnsafe(10.seconds)
+    node.casperEff.addBlock(block).runSyncUnsafe(10.seconds)
 
     val listeningName =
       Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))
@@ -49,7 +50,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     val listeningNameResponse1 =
       BlockAPI
         .getListeningNameDataResponse[Task](Int.MaxValue, listeningName)
-        .runSyncUnsafe(1.second)
+        .runSyncUnsafe(10.seconds)
     val data1   = listeningNameResponse1.blockResults.map(_.postBlockData)
     val blocks1 = listeningNameResponse1.blockResults.map(_.block)
     data1 should be(List(List(resultData)))
@@ -68,17 +69,17 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     val deployDatas      = (0 to 7).map(_ => ProtoUtil.basicDeployData[Task](0).runSyncUnsafe(1.second))
 
     val Created(block1) = (nodes(0).casperEff
-      .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock).runSyncUnsafe(1.second)
-    nodes(0).casperEff.addBlock(block1).runSyncUnsafe(1.second)
-    nodes(1).receive().runSyncUnsafe(1.second)
-    nodes(2).receive().runSyncUnsafe(1.second)
+      .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock).runSyncUnsafe(10.seconds)
+    nodes(0).casperEff.addBlock(block1).runSyncUnsafe(10.seconds)
+    nodes(1).receive().runSyncUnsafe(10.seconds)
+    nodes(2).receive().runSyncUnsafe(10.seconds)
 
     val listeningName = Par().copy(exprs = Seq(Expr(GInt(0))))
     val resultData    = Par().copy(exprs = Seq(Expr(GInt(0))))
     val listeningNameResponse1 =
       BlockAPI
         .getListeningNameDataResponse[Task](Int.MaxValue, listeningName)
-        .runSyncUnsafe(1.second)
+        .runSyncUnsafe(10.seconds)
     val data1   = listeningNameResponse1.blockResults.map(_.postBlockData)
     val blocks1 = listeningNameResponse1.blockResults.map(_.block)
     data1 should be(List(List(resultData)))
@@ -86,27 +87,27 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     listeningNameResponse1.length should be(1)
 
     val Created(block2) = (nodes(1).casperEff
-      .deploy(deployDatas(1)) *> nodes(1).casperEff.createBlock).runSyncUnsafe(1.second)
-    nodes(1).casperEff.addBlock(block2).runSyncUnsafe(1.second)
-    nodes(0).receive().runSyncUnsafe(1.second)
-    nodes(2).receive().runSyncUnsafe(1.second)
+      .deploy(deployDatas(1)) *> nodes(1).casperEff.createBlock).runSyncUnsafe(10.seconds)
+    nodes(1).casperEff.addBlock(block2).runSyncUnsafe(10.seconds)
+    nodes(0).receive().runSyncUnsafe(10.seconds)
+    nodes(2).receive().runSyncUnsafe(10.seconds)
 
     val Created(block3) = (nodes(2).casperEff
-      .deploy(deployDatas(2)) *> nodes(2).casperEff.createBlock).runSyncUnsafe(1.second)
-    nodes(2).casperEff.addBlock(block3).runSyncUnsafe(1.second)
-    nodes(0).receive().runSyncUnsafe(1.second)
-    nodes(1).receive().runSyncUnsafe(1.second)
+      .deploy(deployDatas(2)) *> nodes(2).casperEff.createBlock).runSyncUnsafe(10.seconds)
+    nodes(2).casperEff.addBlock(block3).runSyncUnsafe(10.seconds)
+    nodes(0).receive().runSyncUnsafe(10.seconds)
+    nodes(1).receive().runSyncUnsafe(10.seconds)
 
     val Created(block4) = (nodes(0).casperEff
-      .deploy(deployDatas(3)) *> nodes(0).casperEff.createBlock).runSyncUnsafe(1.second)
-    nodes(0).casperEff.addBlock(block4).runSyncUnsafe(1.second)
-    nodes(1).receive().runSyncUnsafe(1.second)
-    nodes(2).receive().runSyncUnsafe(1.second)
+      .deploy(deployDatas(3)) *> nodes(0).casperEff.createBlock).runSyncUnsafe(10.seconds)
+    nodes(0).casperEff.addBlock(block4).runSyncUnsafe(10.seconds)
+    nodes(1).receive().runSyncUnsafe(10.seconds)
+    nodes(2).receive().runSyncUnsafe(10.seconds)
 
     val listeningNameResponse2 =
       BlockAPI
         .getListeningNameDataResponse[Task](Int.MaxValue, listeningName)
-        .runSyncUnsafe(1.second)
+        .runSyncUnsafe(10.seconds)
     val data2   = listeningNameResponse2.blockResults.map(_.postBlockData)
     val blocks2 = listeningNameResponse2.blockResults.map(_.block)
     data2 should be(
@@ -121,27 +122,27 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     listeningNameResponse2.length should be(4)
 
     val Created(block5) = (nodes(1).casperEff
-      .deploy(deployDatas(4)) *> nodes(1).casperEff.createBlock).runSyncUnsafe(1.second)
-    nodes(1).casperEff.addBlock(block5).runSyncUnsafe(1.second)
-    nodes(0).receive().runSyncUnsafe(1.second)
-    nodes(2).receive().runSyncUnsafe(1.second)
+      .deploy(deployDatas(4)) *> nodes(1).casperEff.createBlock).runSyncUnsafe(10.seconds)
+    nodes(1).casperEff.addBlock(block5).runSyncUnsafe(10.seconds)
+    nodes(0).receive().runSyncUnsafe(10.seconds)
+    nodes(2).receive().runSyncUnsafe(10.seconds)
 
     val Created(block6) = (nodes(2).casperEff
-      .deploy(deployDatas(5)) *> nodes(2).casperEff.createBlock).runSyncUnsafe(1.second)
-    nodes(2).casperEff.addBlock(block6).runSyncUnsafe(1.second)
-    nodes(0).receive().runSyncUnsafe(1.second)
-    nodes(1).receive().runSyncUnsafe(1.second)
+      .deploy(deployDatas(5)) *> nodes(2).casperEff.createBlock).runSyncUnsafe(10.seconds)
+    nodes(2).casperEff.addBlock(block6).runSyncUnsafe(10.seconds)
+    nodes(0).receive().runSyncUnsafe(10.seconds)
+    nodes(1).receive().runSyncUnsafe(10.seconds)
 
     val Created(block7) = (nodes(0).casperEff
-      .deploy(deployDatas(6)) *> nodes(0).casperEff.createBlock).runSyncUnsafe(1.second)
-    nodes(0).casperEff.addBlock(block7).runSyncUnsafe(1.second)
-    nodes(1).receive().runSyncUnsafe(1.second)
-    nodes(2).receive().runSyncUnsafe(1.second)
+      .deploy(deployDatas(6)) *> nodes(0).casperEff.createBlock).runSyncUnsafe(10.seconds)
+    nodes(0).casperEff.addBlock(block7).runSyncUnsafe(10.seconds)
+    nodes(1).receive().runSyncUnsafe(10.seconds)
+    nodes(2).receive().runSyncUnsafe(10.seconds)
 
     val listeningNameResponse3 =
       BlockAPI
         .getListeningNameDataResponse[Task](Int.MaxValue, listeningName)
-        .runSyncUnsafe(1.second)
+        .runSyncUnsafe(10.seconds)
     val data3   = listeningNameResponse3.blockResults.map(_.postBlockData)
     val blocks3 = listeningNameResponse3.blockResults.map(_.block)
     data3 should be(
@@ -159,11 +160,11 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     listeningNameResponse3.length should be(7)
 
     val listeningNameResponse3UntilDepth =
-      BlockAPI.getListeningNameDataResponse[Task](1, listeningName).runSyncUnsafe(1.second)
+      BlockAPI.getListeningNameDataResponse[Task](1, listeningName).runSyncUnsafe(10.seconds)
     listeningNameResponse3UntilDepth.length should be(1)
 
     val listeningNameResponse3UntilDepth2 =
-      BlockAPI.getListeningNameDataResponse[Task](2, listeningName).runSyncUnsafe(1.second)
+      BlockAPI.getListeningNameDataResponse[Task](2, listeningName).runSyncUnsafe(10.seconds)
     listeningNameResponse3UntilDepth2.length should be(2)
 
     nodes.foreach(_.tearDown().runSyncUnsafe(1.second))
@@ -183,8 +184,9 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     }
 
     val Created(block) =
-      (node.casperEff.deploy(basicDeployData) *> node.casperEff.createBlock).runSyncUnsafe(1.second)
-    node.casperEff.addBlock(block).runSyncUnsafe(1.second)
+      (node.casperEff.deploy(basicDeployData) *> node.casperEff.createBlock)
+        .runSyncUnsafe(10.seconds)
+    node.casperEff.addBlock(block).runSyncUnsafe(10.seconds)
 
     val listeningNamesShuffled1 =
       List(
@@ -201,7 +203,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     val listeningNameResponse1 =
       BlockAPI
         .getListeningNameContinuationResponse[Task](Int.MaxValue, listeningNamesShuffled1)
-        .runSyncUnsafe(1.second)
+        .runSyncUnsafe(10.seconds)
     val continuations1 = listeningNameResponse1.blockResults.map(_.postBlockContinuations)
     val blocks1        = listeningNameResponse1.blockResults.map(_.block)
     continuations1 should be(List(List(result)))
@@ -216,7 +218,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     val listeningNameResponse2 =
       BlockAPI
         .getListeningNameContinuationResponse[Task](Int.MaxValue, listeningNamesShuffled2)
-        .runSyncUnsafe(1.second)
+        .runSyncUnsafe(10.seconds)
     val continuations2 = listeningNameResponse2.blockResults.map(_.postBlockContinuations)
     val blocks2        = listeningNameResponse2.blockResults.map(_.block)
     continuations2 should be(List(List(result)))

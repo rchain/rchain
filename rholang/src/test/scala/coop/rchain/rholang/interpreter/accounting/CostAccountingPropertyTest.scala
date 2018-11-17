@@ -116,7 +116,7 @@ object CostAccountingPropertyTest {
 
   def costOfExecution(procs: Proc*): Task[Long] = {
     implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
-    implicit val errLog: ErrorLog[Task] = ErrorLog.create[Task].runSyncUnsafe(1.second)
+    implicit val errLog: ErrorLog[Task] = ErrorLog.create[Task].runSyncUnsafe(10.seconds)
 
     mkRhoISpace[Task]("cost-accounting-property-test-")
       .use { pureRSpace =>

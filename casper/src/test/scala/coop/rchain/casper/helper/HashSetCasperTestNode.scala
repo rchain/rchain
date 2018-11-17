@@ -60,11 +60,9 @@ class HashSetCasperTestNode[F[_]](
     storageSize: Long,
     shardId: String = "rchain"
 )(
-    implicit scheduler: Scheduler,
+    implicit
     syncF: Sync[F],
-    captureF: Capture[F],
-    contextShift: ContextShift[F],
-    executionContext: ExecutionContext
+    captureF: Capture[F]
 ) {
 
   implicit val logEff            = new LogStub[F]
@@ -216,7 +214,7 @@ object HashSetCasperTestNode {
       implicit scheduler: Scheduler
   ): HashSetCasperTestNode[Task] = {
     implicit val errorHandlerEff = errorHandler
-    standaloneF[Task, Task.Par](genesis, sk, storageSize).runSyncUnsafe(1.second)
+    standaloneF[Task, Task.Par](genesis, sk, storageSize).runSyncUnsafe(10.seconds)
   }
   def standaloneEff(genesis: BlockMessage, sk: Array[Byte], storageSize: Long = 1024L * 1024 * 10)(
       implicit scheduler: Scheduler
@@ -298,7 +296,7 @@ object HashSetCasperTestNode {
       storageSize: Long = 1024L * 1024 * 10
   )(implicit scheduler: Scheduler): IndexedSeq[HashSetCasperTestNode[Task]] = {
     implicit val errorHandlerEff = errorHandler
-    networkF[Task, Task.Par](sks, genesis, storageSize).runSyncUnsafe(1.second)
+    networkF[Task, Task.Par](sks, genesis, storageSize).runSyncUnsafe(10.seconds)
   }
   def networkEff(
       sks: IndexedSeq[Array[Byte]],

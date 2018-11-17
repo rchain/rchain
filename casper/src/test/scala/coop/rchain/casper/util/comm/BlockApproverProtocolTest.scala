@@ -32,7 +32,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
     node.logEff.infos.exists(_.contains("Approval sent in response")) should be(true)
     node.logEff.warns.isEmpty should be(true)
 
-    node.transportLayerEff.msgQueues(node.local).get.runSyncUnsafe(1.second).size should be(1)
+    node.transportLayerEff.msgQueues(node.local).get.runSyncUnsafe(10.seconds).size should be(1)
   }
 
   it should "log a warning for invalid ApprovedBlockCandidates" in {
@@ -49,7 +49,9 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
 
     node.logEff.warns.count(_.contains("Received unexpected candidate")) should be(2)
 
-    node.transportLayerEff.msgQueues(node.local).get.runSyncUnsafe(1.second).isEmpty should be(true)
+    node.transportLayerEff.msgQueues(node.local).get.runSyncUnsafe(10.seconds).isEmpty should be(
+      true
+    )
   }
 }
 
@@ -70,11 +72,10 @@ object BlockApproverProtocolTest {
 
     val runtimeDir = BlockStoreTestFixture.dbDir
     val activeRuntime =
-      Runtime.create[Task, Task.Par](runtimeDir, 1024L * 1024).runSyncUnsafe(1.second)
-    val runtimeManager = RuntimeManager.fromRuntime[Task](activeRuntime).runSyncUnsafe(1.second)
+      Runtime.create[Task, Task.Par](runtimeDir, 1024L * 1024).runSyncUnsafe(10.seconds)
+    val runtimeManager = RuntimeManager.fromRuntime[Task](activeRuntime).runSyncUnsafe(10.seconds)
 
     val deployTimestamp = 1L
-    val validators      = bonds.map(b => ProofOfStakeValidator(b._1, b._2)).toSeq
 
     val genesis = HashSetCasperTest.buildGenesis(
       wallets,

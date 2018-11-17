@@ -19,6 +19,8 @@ import scodec.bits._
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
 
+import coop.rchain.shared.Language.ignore
+
 /**
   * The main store class.
   *
@@ -270,7 +272,7 @@ class LMDBStore[C, P, A, K] private[rspace] (
       case TrieUpdate(_, Insert, channelsHash, gnat) =>
         history.insert(trieStore, trieBranch, channelsHash, canonicalize(gnat))
       case TrieUpdate(_, Delete, channelsHash, gnat) =>
-        history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat))
+        ignore(history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat)))
     }
 
   // TODO: Does using a cursor improve performance for bulk operations?

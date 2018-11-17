@@ -54,7 +54,7 @@ class RholangMethodsCostsSpec
           (listN(0), 1L)
         )
         forAll(table) { (pars, n) =>
-          implicit val errLog = ErrorLog.create[Task].runSyncUnsafe(1.second)
+          implicit val errLog = ErrorLog.create[Task].runSyncUnsafe(10.seconds)
           implicit val env    = Env[Par]()
           val method          = methodCall("nth", EList(pars), List(GInt(n)))
           withReducer[Assertion] { reducer =>
@@ -88,7 +88,7 @@ class RholangMethodsCostsSpec
           (listN(0), 1L)
         )
         forAll(table) { (pars, n) =>
-          implicit val errLog = ErrorLog.create[Task].runSyncUnsafe(1.second)
+          implicit val errLog = ErrorLog.create[Task].runSyncUnsafe(10.seconds)
           implicit val env    = Env[Par]()
           val method          = methodCall("nth", EList(pars), List(GInt(n)))
           withReducer[Assertion] { reducer =>
@@ -111,7 +111,7 @@ class RholangMethodsCostsSpec
       factor: Double,
       method: Expr
   ): Assertion = {
-    implicit val errorLog = ErrorLog.create[Task].runSyncUnsafe(1.second)
+    implicit val errorLog = ErrorLog.create[Task].runSyncUnsafe(10.seconds)
     implicit val env      = Env[Par]()
     withReducer { reducer =>
       for {
@@ -778,7 +778,7 @@ class RholangMethodsCostsSpec
   def emptyString: String = ""
 
   def test(method: Expr, expectedCost: Cost): Assertion = {
-    implicit val errLog = ErrorLog.create[Task].runSyncUnsafe(1.second)
+    implicit val errLog = ErrorLog.create[Task].runSyncUnsafe(10.seconds)
     implicit val env    = Env[Par]()
     withReducer[Assertion] { reducer =>
       for {

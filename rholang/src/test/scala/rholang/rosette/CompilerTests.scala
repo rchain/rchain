@@ -28,7 +28,7 @@ class CompilerTests extends FunSuite with Matchers {
       val result = execute(file)
       assert(result.isRight)
       val resRuntime = result.right.get
-      val errorLog   = resRuntime.readAndClearErrorVector().runSyncUnsafe(1.second)
+      val errorLog   = resRuntime.readAndClearErrorVector().runSyncUnsafe(10.seconds)
       assert(errorLog.isEmpty)
     }
   }

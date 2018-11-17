@@ -68,12 +68,12 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
       ): Task[Unit] = Task.raiseError(OutOfPhlogistonsError)
     }
 
-    implicit val errorLog = ErrorLog.create[Task].runSyncUnsafe(1.second)
+    implicit val errorLog = ErrorLog.create[Task].runSyncUnsafe(10.seconds)
     implicit val rand     = Blake2b512Random(128)
     implicit val costAlg  = CostAccounting.unsafe[Task](CostAccount(1000))
     val reducer           = new DebruijnInterpreter[Task, Task.Par](tuplespaceAlg, Map.empty)
     val send              = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
-    val test              = reducer.inj(send).attempt.runSyncUnsafe(1.second)
+    val test              = reducer.inj(send).attempt.runSyncUnsafe(10.seconds)
     assert(test === Left(OutOfPhlogistonsError))
   }
 
@@ -91,7 +91,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
       Par(sends = Seq(Send(channel, Seq(a)), Send(channel, Seq(b))))
 
     implicit val rand   = Blake2b512Random(Array.empty[Byte])
-    implicit val errLog = ErrorLog.create[Task].runSyncUnsafe(1.second)
+    implicit val errLog = ErrorLog.create[Task].runSyncUnsafe(10.seconds)
 
     def testImplementation(pureRSpace: RhoISpace[Task]): Task[
       (
@@ -129,7 +129,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
         .use(testImplementation(_))
         .runSyncUnsafe(5.seconds)
 
-    val errors = errLog.readAndClearErrorVector().runSyncUnsafe(1.second)
+    val errors = errLog.readAndClearErrorVector().runSyncUnsafe(10.seconds)
 
     def data(p: Par, rand: Blake2b512Random) = Row(
       List(

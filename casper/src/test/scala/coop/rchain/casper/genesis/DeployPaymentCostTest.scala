@@ -44,7 +44,7 @@ class DeployPaymentCostTest extends FlatSpec {
     val user          = ByteString.copyFrom(pubKey)
     val timestamp     = System.currentTimeMillis()
 
-    val paymentBlock = paymentDeploy(paymentPar, user, timestamp).runSyncUnsafe(1.second)
+    val paymentBlock = paymentDeploy(paymentPar, user, timestamp).runSyncUnsafe(10.seconds)
 
     val paymentDeployCost = deployCost(paymentBlock, user, timestamp)
 
@@ -201,8 +201,8 @@ object DeployPaymentCostTest {
       implicit casper: MultiParentCasperImpl[Task]
   ): Par = {
     val postDeployStateHash =
-      deploy[Task](p).runSyncUnsafe(1.second).getBody.getPostState.tuplespace
-    val data = rm.getData(postDeployStateHash, retChannel).runSyncUnsafe(1.second)
+      deploy[Task](p).runSyncUnsafe(10.seconds).getBody.getPostState.tuplespace
+    val data = rm.getData(postDeployStateHash, retChannel).runSyncUnsafe(10.seconds)
     assert(data.size == 1)
     data.head
   }
@@ -295,7 +295,7 @@ object DeployPaymentCostTest {
         tuplespaceHash,
         statusChannel
       )
-      .runSyncUnsafe(1.second)
+      .runSyncUnsafe(10.seconds)
 
     assert(transferStatus.size == 1)
     transferStatus.head.exprs.head should be(Expr(GString("Success")))

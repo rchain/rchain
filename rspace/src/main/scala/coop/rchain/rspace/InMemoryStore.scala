@@ -17,6 +17,8 @@ import scala.concurrent.SyncVar
 
 import kamon._
 
+import coop.rchain.shared.Language.ignore
+
 case class State[C, P, A, K](
     dbGNATs: Map[Blake2b256Hash, GNAT[C, P, A, K]],
     dbJoins: Map[C, Seq[Seq[C]]]
@@ -228,7 +230,7 @@ class InMemoryStore[T, C, P, A, K](
       case TrieUpdate(_, Insert, channelsHash, gnat) =>
         history.insert(trieStore, trieBranch, channelsHash, canonicalize(gnat))
       case TrieUpdate(_, Delete, channelsHash, gnat) =>
-        history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat))
+        ignore(history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat)))
     }
 
   private[rspace] def bulkInsert(

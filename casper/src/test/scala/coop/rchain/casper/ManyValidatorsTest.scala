@@ -38,7 +38,7 @@ class ManyValidatorsTest
             }.toMap)
       } yield b
 
-    val initialChain: IndexedBlockDag = createChain.runS(initState).runSyncUnsafe(1.second)
+    val initialChain: IndexedBlockDag = createChain.runS(initState).runSyncUnsafe(10.seconds)
     val genesis                       = initialChain.idToBlocks(1)
     val n1                            = initialChain.idToBlocks(2)
     val otherLatestMessages           = bonds.map { case Bond(validator, _) => validator -> n1 }
@@ -52,12 +52,12 @@ class ManyValidatorsTest
     implicit val casperEffect: MultiParentCasper[Task] =
       NoOpsCasperEffect[Task](
         HashMap.empty[BlockHash, BlockMessage],
-        Estimator.tips[Task](chain, genesis.blockHash).runSyncUnsafe(1.second),
+        Estimator.tips[Task](chain, genesis.blockHash).runSyncUnsafe(10.seconds),
         chain
-      )(Sync[Task], blockStore).runSyncUnsafe(1.second)
+      )(Sync[Task], blockStore).runSyncUnsafe(10.seconds)
     implicit val logEff = new LogStub[Task]
     implicit val casperRef = {
-      val tmp = MultiParentCasperRef.of[Task].runSyncUnsafe(1.second)
+      val tmp = MultiParentCasperRef.of[Task].runSyncUnsafe(10.seconds)
       tmp.set(casperEffect)
       tmp
     }

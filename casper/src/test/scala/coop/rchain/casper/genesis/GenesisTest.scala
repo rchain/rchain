@@ -147,7 +147,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {
         ) should be(true)
   }
 
-  it should "create a valid genesis block" in withStore[Task, Unit] { implicit store =>
+  it should "create a valid genesis block" in withStore { implicit store =>
     withGenResources {
       (
           runtimeManager: RuntimeManager[Task],
@@ -157,7 +157,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {
       ) =>
         implicit val logEff = log
         val genesis         = fromInputFiles()(runtimeManager, genesisPath, log, time)
-        BlockStore[Task].put(genesis.blockHash, genesis).runSyncUnsafe(1.second)
+        BlockStore[Task].put(genesis.blockHash, genesis).runSyncUnsafe(10.seconds)
         val blockDag = BlockDag.empty
 
         val maybePostGenesisStateHash = InterpreterUtil
@@ -199,7 +199,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {
       val walletsFile = genesisPath.resolve("wallets.txt").toString
       printWallets(walletsFile)
 
-      val runtimeManager  = RuntimeManager.fromRuntime[Task](runtime).runSyncUnsafe(1.second)
+      val runtimeManager  = RuntimeManager.fromRuntime[Task](runtime).runSyncUnsafe(10.seconds)
       val _               = fromInputFiles()(runtimeManager, genesisPath, log, time)
       val storageContents = StoragePrinter.prettyPrint(runtime.space.store)
 
@@ -243,20 +243,20 @@ object GenesisTest {
         shardId,
         deployTimestamp
       )
-      .runSyncUnsafe(1.second)
+      .runSyncUnsafe(10.seconds)
 
   def withRawGenResources(
       body: (Runtime[Task], Path, LogStub[Task], LogicalTime[Task]) => Unit
   ): Unit = {
     val storePath = storageLocation
-    val runtime   = Runtime.create[Task, Task.Par](storePath, storageSize).runSyncUnsafe(1.second)
+    val runtime   = Runtime.create[Task, Task.Par](storePath, storageSize).runSyncUnsafe(10.seconds)
     val gp        = genesisPath
     val log       = new LogStub[Task]
     val time      = new LogicalTime[Task]
 
     body(runtime, genesisPath, log, time)
 
-    runtime.close().runSyncUnsafe(1.second)
+    runtime.close().runSyncUnsafe(10.seconds)
     storePath.recursivelyDelete()
     gp.recursivelyDelete()
   }

@@ -40,7 +40,7 @@ class InterpreterUtilTest
     val Right((stateHash, processedDeploys)) =
       InterpreterUtil
         .computeBlockCheckpointFromDeploys[Task](b, genesis, dag, runtimeManager)
-        .runSyncUnsafe(1.second)
+        .runSyncUnsafe(10.seconds)
 
     (stateHash, processedDeploys.map(ProcessedDeployUtil.fromInternal))
   }
@@ -92,7 +92,7 @@ class InterpreterUtilTest
         b3      <- createBlock[F](Seq(b2.blockHash), deploys = b3DeploysCost)
       } yield b3
     }
-    val chain   = createChain[StateWithChain].runS(initState).runSyncUnsafe(1.second)
+    val chain   = createChain[StateWithChain].runS(initState).runSyncUnsafe(10.seconds)
     val genesis = chain.idToBlocks(0)
 
     val (genPostState, b1PostState, b3PostState) =
@@ -230,7 +230,7 @@ class InterpreterUtilTest
       } yield b3
     }
 
-    val chain   = createChain[StateWithChain].runS(initState).runSyncUnsafe(1.second)
+    val chain   = createChain[StateWithChain].runS(initState).runSyncUnsafe(10.seconds)
     val genesis = chain.idToBlocks(0)
 
     val b3PostState = mkRuntimeManager[Task, Task.Par]("interpreter-util-test")
@@ -285,7 +285,7 @@ class InterpreterUtilTest
   ): Seq[InternalProcessedDeploy] = {
     val Right((_, result)) =
       computeDeploysCheckpoint[Task](Seq.empty, deploy, initState, runtimeManager)
-        .runSyncUnsafe(1.second)
+        .runSyncUnsafe(10.seconds)
     result
   }
 
@@ -381,7 +381,7 @@ class InterpreterUtilTest
     val chain =
       createBlock[StateWithChain](Seq.empty, deploys = processedDeploys, tsHash = invalidHash)
         .runS(initState)
-        .runSyncUnsafe(1.second)
+        .runSyncUnsafe(10.seconds)
 
     val block = chain.idToBlocks(0)
 

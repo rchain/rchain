@@ -55,7 +55,7 @@ class DagOperationsTest
         b7      <- createBlock[F](Seq(b4.blockHash, b5.blockHash))
       } yield b7
 
-    val chain   = createChain[StateWithChain].runS(initState).runSyncUnsafe(1.second)
+    val chain   = createChain[StateWithChain].runS(initState).runSyncUnsafe(10.seconds)
     val genesis = chain.idToBlocks(0)
 
     val b1 = chain.idToBlocks(1)
@@ -67,19 +67,19 @@ class DagOperationsTest
 
     DagOperations
       .greatestCommonAncestorF[Task](b1, b5, genesis, chain)
-      .runSyncUnsafe(1.second) should be(b1)
+      .runSyncUnsafe(10.seconds) should be(b1)
     DagOperations
       .greatestCommonAncestorF[Task](b3, b2, genesis, chain)
-      .runSyncUnsafe(1.second) should be(b1)
+      .runSyncUnsafe(10.seconds) should be(b1)
     DagOperations
       .greatestCommonAncestorF[Task](b6, b7, genesis, chain)
-      .runSyncUnsafe(1.second) should be(b1)
+      .runSyncUnsafe(10.seconds) should be(b1)
     DagOperations
       .greatestCommonAncestorF[Task](b2, b2, genesis, chain)
-      .runSyncUnsafe(1.second) should be(b2)
+      .runSyncUnsafe(10.seconds) should be(b2)
     DagOperations
       .greatestCommonAncestorF[Task](b3, b7, genesis, chain)
-      .runSyncUnsafe(1.second) should be(b3)
+      .runSyncUnsafe(10.seconds) should be(b3)
   }
 
   "uncommon ancestors" should "be computed properly" in {
@@ -108,7 +108,7 @@ class DagOperationsTest
         b7      <- createBlock[F](Seq(b2.blockHash, b5.blockHash))
       } yield b7
 
-    val chain      = createChain[StateWithChain].runS(initState).runSyncUnsafe(1.second)
+    val chain      = createChain[StateWithChain].runS(initState).runSyncUnsafe(10.seconds)
     val toMetadata = chain.dataLookup
 
     val b1 = toMetadata(chain.idToBlocks(1).blockHash)

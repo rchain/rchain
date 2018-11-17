@@ -23,7 +23,7 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 
 trait RegistryTester extends PersistentStoreTester {
-  implicit val errorLog = ErrorLog.create[Task].runSyncUnsafe(1.second)
+  implicit val errorLog = ErrorLog.create[Task].runSyncUnsafe(10.seconds)
   implicit val costAccounting =
     CostAccounting.unsafe[Task](CostAccount(Integer.MAX_VALUE))
 
@@ -66,8 +66,8 @@ trait RegistryTester extends PersistentStoreTester {
         lazy val (dispatcher @ _, reducer, registry) =
           RholangAndScalaDispatcher
             .create(space, dispatchTable, Registry.testingUrnMap)
-        reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
-        registry.testInstall().runSyncUnsafe(1.second)
+        reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(10.seconds)
+        registry.testInstall().runSyncUnsafe(10.seconds)
         f(reducer, space)
     }
 }

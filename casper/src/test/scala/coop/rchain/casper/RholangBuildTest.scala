@@ -40,8 +40,8 @@ class RholangBuildTest extends FlatSpec with Matchers {
     val deploy = ProtoUtil.sourceDeploy(code, 1L, accounting.MAX_VALUE)
     val Created(signedBlock) =
       (MultiParentCasper[Task].deploy(deploy) *> MultiParentCasper[Task].createBlock)
-        .runSyncUnsafe(1.second)
-    val _ = MultiParentCasper[Task].addBlock(signedBlock).runSyncUnsafe(1.second)
+        .runSyncUnsafe(10.seconds)
+    val _ = MultiParentCasper[Task].addBlock(signedBlock).runSyncUnsafe(10.seconds)
 
     val storage = HashSetCasperTest.blockTuplespaceContents(signedBlock)
 

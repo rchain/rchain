@@ -23,7 +23,7 @@ class ErrorLogSpec extends FlatSpec with PropertyChecks with Matchers {
       }
 
       errors.sorted should be {
-        testTell[Task, Task.Par](errors).runSyncUnsafe(1.second).sorted
+        testTell[Task, Task.Par](errors).runSyncUnsafe(10.seconds).sorted
       }
     }
   }
@@ -35,7 +35,7 @@ class ErrorLogSpec extends FlatSpec with PropertyChecks with Matchers {
       }
 
       (Vector.empty[Throwable], Vector.empty[Throwable]) should be {
-        testBeforeAndAfterConditions[Task, Task.Par](errors).runSyncUnsafe(1.second)
+        testBeforeAndAfterConditions[Task, Task.Par](errors).runSyncUnsafe(10.seconds)
       }
     }
   }

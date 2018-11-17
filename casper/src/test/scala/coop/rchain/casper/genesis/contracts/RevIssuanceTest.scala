@@ -24,7 +24,7 @@ class RevIssuanceTest extends FlatSpec with Matchers {
   "Rev" should "be issued and accessible based on inputs from Ethereum" in {
     val activeRuntime = TestSetUtil.runtime
     implicit val runtimeManager: RuntimeManager[Task] =
-      RuntimeManager.fromRuntime[Task](activeRuntime).runSyncUnsafe(1.second)
+      RuntimeManager.fromRuntime[Task](activeRuntime).runSyncUnsafe(10.seconds)
     val emptyHash = runtimeManager.emptyStateHash
 
     val ethAddress      = "0x041e1eec23d118f0c4ffc814d4f415ac3ef3dcff"
@@ -49,7 +49,7 @@ class RevIssuanceTest extends FlatSpec with Matchers {
     val unlockDeployData =
       RevIssuanceTest
         .preWalletUnlockDeploy[Task](ethAddress, pubKey, secKey, statusOut)
-        .runSyncUnsafe(1.second)
+        .runSyncUnsafe(10.seconds)
     val unlockDeploy = ProtoUtil.deployDataToDeploy(unlockDeployData)
 
     val nonce             = 0
@@ -65,7 +65,7 @@ class RevIssuanceTest extends FlatSpec with Matchers {
         pubKey,
         secKey
       )
-      .runSyncUnsafe(1.second)
+      .runSyncUnsafe(10.seconds)
     val transferDeploy = ProtoUtil.deployDataToDeploy(transferDeployData)
     val (postGenHash, _) =
       runtimeManager.computeState(emptyHash, genesisDeploys).runSyncUnsafe(10.seconds)
@@ -77,7 +77,7 @@ class RevIssuanceTest extends FlatSpec with Matchers {
           postUnlockHash,
           Par().copy(exprs = Seq(Expr(GString(statusOut))))
         )
-        .runSyncUnsafe(1.second)
+        .runSyncUnsafe(10.seconds)
 
     assert(unlockResult.head.exprs.head.getETupleBody.ps.head.exprs.head.getGBool) //assert unlock success
 
@@ -88,7 +88,7 @@ class RevIssuanceTest extends FlatSpec with Matchers {
         postTransferHash,
         Par().copy(exprs = Seq(Expr(GString(transferStatusOut))))
       )
-      .runSyncUnsafe(1.second)
+      .runSyncUnsafe(10.seconds)
 
     val transferResult =
       runtimeManager
@@ -96,7 +96,7 @@ class RevIssuanceTest extends FlatSpec with Matchers {
           postTransferHash,
           Par().copy(exprs = Seq(Expr(GString(destination))))
         )
-        .runSyncUnsafe(1.second)
+        .runSyncUnsafe(10.seconds)
     assert(transferSuccess.head.exprs.head.getGString == "Success") //assert transfer success
     assert(transferResult.nonEmpty)
 

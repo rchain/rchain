@@ -21,6 +21,7 @@ object CompilerSettings {
       "-Ypartial-unification",
       "-Ywarn-dead-code",
       "-Ywarn-numeric-widen",
+      "-Ywarn-value-discard",
       "-deprecation",
       "-encoding", "UTF-8",
       "-feature",

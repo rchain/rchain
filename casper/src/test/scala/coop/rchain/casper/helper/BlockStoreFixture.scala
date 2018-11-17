@@ -3,24 +3,27 @@ package coop.rchain.casper.helper
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 
-import cats.Id
 import cats.effect.Sync
 import coop.rchain.blockstorage.{BlockStore, LMDBBlockStore}
 import coop.rchain.casper.helper.BlockGenerator.{storeForStateWithChain, StateWithChain}
 import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.Metrics.MetricsNOP
 import org.lmdbjava.{Env, EnvFlags}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, Suite}
 import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
+import scala.concurrent.duration._
 
 trait BlockStoreFixture extends BeforeAndAfter { self: Suite =>
-  def withStore[F[_]: Sync: Metrics, R](f: BlockStore[F] => R): R = {
-    val dir   = BlockStoreTestFixture.dbDir
-    val store = BlockStoreTestFixture.create[F](dir)
+  def withStore[R](f: BlockStore[Task] => R): R = {
+    implicit val metrics = new MetricsNOP[Task]
+    val dir              = BlockStoreTestFixture.dbDir
+    val store            = BlockStoreTestFixture.create[Task](dir)
     try {
       f(store)
     } finally {
-      store.close()
+      store.close().runSyncUnsafe(10.seconds)
       dir.recursivelyDelete()
     }
   }
@@ -64,7 +67,7 @@ trait BlockStoreTestFixture extends BeforeAndAfterAll { self: Suite =>
   implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
 
   override def afterAll(): Unit = {
-    store.close()
+    store.close().runSyncUnsafe(10.seconds)
     dir.recursivelyDelete()
   }
 }

@@ -6,6 +6,7 @@ import monix.execution.atomic.AtomicAny
 
 import scala.Function.const
 import scala.collection.immutable.Seq
+import coop.rchain.shared.Language.ignore
 
 /** The interface for the underlying store
   *
@@ -86,16 +87,16 @@ trait IStore[C, P, A, K] {
     AtomicAny[(Long, List[TrieUpdate[C, P, A, K]])]((0L, Nil))
 
   def trieDelete(key: Blake2b256Hash, gnat: GNAT[C, P, A, K]): Unit =
-    _trieUpdates.getAndTransform {
+    ignore(_trieUpdates.getAndTransform {
       case (count, list) =>
         (count + 1, TrieUpdate(count, Delete, key, gnat) :: list)
-    }
+    })
 
   def trieInsert(key: Blake2b256Hash, gnat: GNAT[C, P, A, K]): Unit =
-    _trieUpdates.getAndTransform {
+    ignore(_trieUpdates.getAndTransform {
       case (count, list) =>
         (count + 1, TrieUpdate(count, Insert, key, gnat) :: list)
-    }
+    })
 
   private[rspace] def getTrieUpdates: Seq[TrieUpdate[C, P, A, K]] =
     _trieUpdates.get._2

@@ -10,6 +10,8 @@ import scodec.Codec
 import scala.collection.concurrent.TrieMap
 import scala.collection.immutable.Seq
 
+import coop.rchain.shared.Language.ignore
+
 /**
   * This implementation of Transaction exists only to satisfy the requirements of IStore.
   * Ideally this can be dropped after InMemoryStore is removed.
@@ -140,9 +142,10 @@ class LockFreeInMemoryStore[T, C, P, A, K](
   private[rspace] def addJoin(txn: Transaction, channel: C, channels: Seq[C]): Unit =
     stateJoin
       .get(channel) match {
-      case Some(joins) if !joins.contains(channels) => stateJoin.put(channel, channels +: joins)
-      case None                                     => stateJoin.put(channel, Seq(channels))
-      case _                                        => ()
+      case Some(joins) if !joins.contains(channels) =>
+        ignore(stateJoin.put(channel, channels +: joins))
+      case None => ignore(stateJoin.put(channel, Seq(channels)))
+      case _    => ()
     }
 
   private[rspace] def removeDatum(txn: Transaction, channels: Seq[C], index: Int): Unit = {
@@ -188,13 +191,15 @@ class LockFreeInMemoryStore[T, C, P, A, K](
   private[rspace] def removeJoin(txn: Transaction, channel: C, channels: Seq[C]): Unit = {
     val gnatOpt = stateGNAT.get(hashChannels(channels))
     if (gnatOpt.isEmpty || gnatOpt.get.wks.isEmpty) {
-      stateJoin
-        .get(channel)
-        .map(removeFirst(_)(_ == channels))
-        .filter(_.nonEmpty) match {
-        case Some(value) => stateJoin.put(channel, value)
-        case None        => stateJoin.remove(channel)
-      }
+      ignore(
+        stateJoin
+          .get(channel)
+          .map(removeFirst(_)(_ == channels))
+          .filter(_.nonEmpty) match {
+          case Some(value) => stateJoin.put(channel, value)
+          case None        => stateJoin.remove(channel)
+        }
+      )
 
     }
   }
@@ -217,9 +222,9 @@ class LockFreeInMemoryStore[T, C, P, A, K](
   protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): Unit =
     update match {
       case TrieUpdate(_, Insert, channelsHash, gnat) =>
-        history.insert(trieStore, trieBranch, channelsHash, canonicalize(gnat))
+        ignore(history.insert(trieStore, trieBranch, channelsHash, canonicalize(gnat)))
       case TrieUpdate(_, Delete, channelsHash, gnat) =>
-        history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat))
+        ignore(history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat)))
     }
 
   private[rspace] def bulkInsert(

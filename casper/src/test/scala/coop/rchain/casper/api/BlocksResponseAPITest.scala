@@ -87,19 +87,19 @@ class BlocksResponseAPITest
            )
     } yield b8
 
-  val chain: IndexedBlockDag = createChain.runS(initState).runSyncUnsafe(1.second)
+  val chain: IndexedBlockDag = createChain.runS(initState).runSyncUnsafe(10.seconds)
   val genesis                = chain.idToBlocks(1)
 
   implicit val blockStoreEffect = BlockStore[Task]
   implicit val casperEffect: MultiParentCasper[Task] =
     NoOpsCasperEffect[Task](
       HashMap.empty[BlockHash, BlockMessage],
-      Estimator.tips[Task](chain, genesis.blockHash).runSyncUnsafe(1.second),
+      Estimator.tips[Task](chain, genesis.blockHash).runSyncUnsafe(10.seconds),
       chain
-    ).runSyncUnsafe(1.second)
+    ).runSyncUnsafe(10.seconds)
   implicit val logEff = new LogStub[Task]
   implicit val casperRef = {
-    val tmp = MultiParentCasperRef.of[Task].runSyncUnsafe(1.second)
+    val tmp = MultiParentCasperRef.of[Task].runSyncUnsafe(10.seconds)
     tmp.set(casperEffect)
     tmp
   }
@@ -107,19 +107,19 @@ class BlocksResponseAPITest
 
   "showMainChain" should "return only blocks in the main chain" in {
     val blocksResponse =
-      BlockAPI.showMainChain[Task](Int.MaxValue).runSyncUnsafe(1.second)
+      BlockAPI.showMainChain[Task](Int.MaxValue).runSyncUnsafe(10.seconds)
     blocksResponse.length should be(5)
   }
 
   "showBlocks" should "return all blocks" in {
     val blocksResponse =
-      BlockAPI.showBlocks[Task](Int.MaxValue).runSyncUnsafe(1.second)
+      BlockAPI.showBlocks[Task](Int.MaxValue).runSyncUnsafe(10.seconds)
     blocksResponse.length should be(8) // TODO: Switch to 4 when we implement block height correctly
   }
 
   it should "return until depth" in {
     val blocksResponse =
-      BlockAPI.showBlocks[Task](2).runSyncUnsafe(1.second)
+      BlockAPI.showBlocks[Task](2).runSyncUnsafe(10.seconds)
     blocksResponse.length should be(2) // TODO: Switch to 3 when we implement block height correctly
   }
 }
