@@ -72,30 +72,48 @@ object Connect {
   def clearConnections[F[_]: Capture: Monad: Time: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]
     : F[Int] = {
 
-    def sendHeartbeat(peer: PeerNode): F[(PeerNode, CommErr[Protocol])] =
+    def sendHeartbeat(peer: PeerNode, local: PeerNode): F[(PeerNode, CommErr[Protocol])] =
       for {
-        local   <- RPConfAsk[F].reader(_.local)
         timeout <- RPConfAsk[F].reader(_.defaultTimeout)
         hb      = heartbeat(local)
         res     <- TransportLayer[F].roundTrip(peer, hb, timeout)
       } yield (peer, res)
 
-    def clear(connections: Connections): F[Int] =
+    def clear(connections: Connections, local: PeerNode): F[Int] =
       for {
-        numOfConnectionsPinged <- RPConfAsk[F].reader(_.clearConnections.numOfConnectionsPinged)
-        toPing                 = connections.take(numOfConnectionsPinged)
-        results                <- toPing.traverse(sendHeartbeat)
-        successfulPeers        = results.collect { case (peer, Right(_)) => peer }
-        failedPeers            = results.collect { case (peer, Left(_)) => peer }
-        _ <- ConnectionsCell[F].modify { connections =>
-              connections.removeConn[F](toPing) >>= (_.addConn[F](successfulPeers))
-            }
+        toPingCount     <- RPConfAsk[F].reader(_.clearConnections.numOfConnectionsPinged)
+        toPing          = connections.take(toPingCount)
+        results         <- toPing.traverse(p => sendHeartbeat(p, local))
+        successfulPeers = results.collect { case (peer, Right(_)) => peer }
+        failedPeers     = results.collect { case (peer, Left(_)) => peer }
+        _               <- ConnectionsCell[F].modify(_.removeConn[F](toPing) >>= (_.addConn[F](successfulPeers)))
       } yield failedPeers.size
+
+    def reset(connections: Connections, prevLocal: PeerNode, newLocal: PeerNode): F[Int] =
+      for {
+        _ <- TransportLayer[F].broadcast(connections, disconnect(prevLocal))
+        _ <- connections.traverse(TransportLayer[F].disconnect)
+        _ <- ConnectionsCell[F].modify(_.removeConn[F](connections))
+      } yield connections.size
+
+    def clearOrReset(
+        connections: Connections,
+        maxNumOfConnections: Int,
+        local: PeerNode,
+        dynamicLocal: PeerNode
+    ): F[Int] =
+      if (local.endpoint != dynamicLocal.endpoint)
+        reset(connections, local, dynamicLocal)
+      else if (connections.size > ((maxNumOfConnections * 2) / 3))
+        clear(connections, local)
+      else 0.pure[F]
 
     for {
       connections <- ConnectionsCell[F].read
+      local       <- RPConfAsk[F].reader(_.local)
+      dynLocal    <- RPConfAsk[F].reader(_.dynamicLocal)
       max         <- RPConfAsk[F].reader(_.clearConnections.maxNumOfConnections)
-      cleared     <- if (connections.size > ((max * 2) / 3)) clear(connections) else 0.pure[F]
+      cleared     <- clearOrReset(connections, max, local, dynLocal)
     } yield cleared
   }
 

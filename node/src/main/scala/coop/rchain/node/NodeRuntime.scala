@@ -201,7 +201,7 @@ class NodeRuntime private[node] (
         _        <- time.sleep(1.minute)
         local    <- peerNodeAsk.ask
         newLocal <- conf.checkLocalPeerNode(local)
-        _        <- newLocal.fold(Task.unit)(pn => rpConfState.modify(_.copy(local = pn)))
+        _        <- newLocal.fold(Task.unit)(pn => rpConfState.modify(_.copy(dynamicLocal = pn)))
       } yield ()
 
     val loop: Effect[Unit] =
@@ -275,7 +275,7 @@ class NodeRuntime private[node] (
   ) // TODO read from conf
 
   private def rpConf(local: PeerNode, bootstrapNode: Option[PeerNode]) =
-    RPConf(local, bootstrapNode, defaultTimeout, rpClearConnConf)
+    RPConf(local, local, bootstrapNode, defaultTimeout, rpClearConnConf)
 
   /**
     * Main node entry. It will:
