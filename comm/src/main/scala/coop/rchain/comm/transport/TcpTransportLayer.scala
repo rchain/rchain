@@ -149,7 +149,7 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
     }
 
   def stream(peers: Seq[PeerNode], blob: Blob): Task[Unit] =
-    streamObservable.stream(peers.toList, blob) *> log.info("stream to $peers blob")
+    streamObservable.stream(peers.toList, blob) *> log.info(s"stream to $peers blob")
 
   private def processResponse(
       peer: PeerNode,

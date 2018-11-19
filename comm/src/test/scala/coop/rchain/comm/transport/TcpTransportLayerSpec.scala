@@ -1,30 +1,20 @@
 package coop.rchain.comm.transport
 
-import java.util.concurrent.TimeUnit._
+import scala.concurrent.duration.Duration
 
-import cats.effect.Timer
-import coop.rchain.comm.{CachedConnections, PeerNode, TcpConnTag}
+import coop.rchain.comm._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.util.{CertificateHelper, CertificatePrinter}
-import coop.rchain.shared.{Log, Time}
+import coop.rchain.shared.Log
+
+import monix.catnap.MVar
 import monix.eval.Task
 import monix.execution.Scheduler
-
-import scala.concurrent.duration.{Duration, FiniteDuration}
 
 class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] {
 
   implicit val log: Log[Task]       = new Log.NOPLog[Task]
   implicit val scheduler: Scheduler = Scheduler.Implicits.global
-
-  def timer: Timer[Task] = implicitly[Timer[Task]]
-
-  def time: Time[Task] =
-    new Time[Task] {
-      def currentMillis: Task[Long]                   = timer.clock.realTime(MILLISECONDS)
-      def nanoTime: Task[Long]                        = timer.clock.monotonic(NANOSECONDS)
-      def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
-    }
 
   def createEnvironment(port: Int): Task[TcpTlsEnvironment] =
     Task.delay {
@@ -46,6 +36,9 @@ class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] 
     }
 
   def extract[A](fa: Task[A]): A = fa.runSyncUnsafe(Duration.Inf)
+
+  def createDispatcherCallback: Task[DispatcherCallback[Task]] =
+    MVar.empty[Task, Unit]().map(new DispatcherCallback(_))
 }
 
 case class TcpTlsEnvironment(
