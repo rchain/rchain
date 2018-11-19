@@ -29,44 +29,27 @@ object SyncInstances {
       def pure[A](x: A): Effect[A] = implicitly[Applicative[Effect]].pure(x)
 
       def bracketCase[A, B](
-          acquire: Effect[A]
-      )(use: A => Effect[B])(release: (A, ExitCase[Throwable]) => Effect[Unit]): Effect[B] = {
-        def useTask(eitherResource: Either[Throwable, Either[E, A]]): Task[Either[Throwable, B]] = {
-          def go(eitherA: Either[E, A]): Task[Either[E, B]] =
-            eitherA
-              .traverse(use(_).value)
-              .map(_.joinRight)
-
-          eitherResource
-            .leftMap(fromThrowable(_))
-            .traverse(go)
-            .map(_.joinRight.leftMap(toThrowable))
-        }
+        acquire: Effect[A]
+      )(use: A => Effect[B])(
+        release: (A, ExitCase[Throwable]) => Effect[Unit]
+      ): Effect[B] = {
 
         def releaseTask(
-            exitValue: Either[Throwable, Either[E, A]],
+            exitValue: A,
             exitCase: ExitCase[Throwable]
-        ): Task[Unit] = {
-          def go(a: A): Task[Unit] =
-            release(a, exitCase).value
-              .flatMap {
-                case Left(ex)  => Task.raiseError(toThrowable(ex))
-                case Right(()) => Task.unit
-              }
-
-          exitValue
-            .map(x => x.leftMap(toThrowable))
-            .joinRight
-            .traverse(go)
-            .rethrow
-        }
+        ): Task[Unit] =
+          release(exitValue, exitCase).value
+            .flatMap {
+              case Left(ex)  => Task.raiseError(toThrowable(ex))
+              case Right(()) => Task.unit
+            }
 
         EitherT(
-          acquire.value.attempt
-            .bracketCase(useTask)(releaseTask)
-            .map(_.leftMap(fromThrowable))
+          acquire.value
+              .map(_.leftMap(toThrowable))
+              .rethrow
+              .bracketCase(use(_).value)(releaseTask)
         )
-
       }
 
       def handleErrorWith[A](fa: Effect[A])(f: Throwable => Effect[A]): Effect[A] =
