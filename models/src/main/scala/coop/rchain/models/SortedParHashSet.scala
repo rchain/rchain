@@ -1,32 +1,46 @@
 package coop.rchain.models
 
+import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.models.rholang.sorter.ordering._
+import monix.eval.Coeval
 
-import scala.collection.SetLike
+import scala.collection.GenSet
 import scala.collection.immutable.HashSet
 
 //Enforce ordering and uniqueness.
 // - uniqueness is handled by using HashSet.
 // - ordering comes from sorting the elements prior to serializing.
-class SortedParHashSet(private val ps: HashSet[Par])
-    extends Set[Par]
-    with SetLike[Par, SortedParHashSet] {
+final class SortedParHashSet(ps: HashSet[Par]) extends Iterable[Par] {
 
-  lazy val sortedPars: List[Par] = ps.toList.sort
+  lazy val sortedPars: List[Par]          = ps.toList.sort
+  private lazy val sortedPs: HashSet[Par] = HashSet(sortedPars: _*)
 
-  override def empty: SortedParHashSet = new SortedParHashSet(HashSet.empty[Par])
+  def +(elem: Par): SortedParHashSet = SortedParHashSet(ps + sort(elem))
 
-  override def contains(elem: Par): Boolean = sortedPars.contains(elem)
+  def -(elem: Par): SortedParHashSet = SortedParHashSet(ps - sort(elem))
 
-  override def +(elem: Par): SortedParHashSet = new SortedParHashSet(ps + elem)
+  def contains(elem: Par): Boolean = sortedPs.contains(sort(elem))
 
-  override def -(elem: Par): SortedParHashSet = new SortedParHashSet(ps - elem)
+  def union(that: GenSet[Par]): SortedParHashSet = SortedParHashSet(sortedPs.union(that.map(sort)))
 
-  override def iterator: Iterator[Par] = sortedPars.toIterator
+  def empty: SortedParHashSet = SortedParHashSet(HashSet.empty[Par])
+
+  def iterator: Iterator[Par] = sortedPars.toIterator
+
+  override def equals(that: Any): Boolean = that match {
+    case sph: SortedParHashSet => sph.sortedPars == this.sortedPars
+    case _                     => false
+  }
+
+  override def hashCode(): Int = sortedPars.hashCode()
+
+  private def sort(par: Par): Par = Sortable[Par].sortMatch[Coeval](par).map(_.term).value()
 }
 
 object SortedParHashSet {
   def apply(seq: Seq[Par]): SortedParHashSet = new SortedParHashSet(HashSet[Par](seq: _*))
 
-  def empty: SortedParHashSet = new SortedParHashSet(HashSet.empty[Par])
+  def apply(set: Set[Par]): SortedParHashSet = new SortedParHashSet(HashSet[Par](set.toSeq: _*))
+
+  def empty: SortedParHashSet = SortedParHashSet(HashSet.empty[Par])
 }
