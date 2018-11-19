@@ -32,6 +32,14 @@ class NonZeroExitCodeError(Exception):
         self.exit_code = exit_code
         self.output = output
 
+    def __repr__(self):
+        return '{}({}, {}, {})'.format(
+            self.__class__.__name__,
+            self.command,
+            self.exit_code,
+            repr(self.output),
+        )
+
 
 class TimeoutError(Exception):
     def __init__(self, command, timeout):
@@ -151,13 +159,14 @@ class Node:
 
         process = Process(target=execution)
 
-        logging.info("{name}: Execute '{cmd}'. Timeout: {timeout}s".format(name=self.name, cmd=cmd, timeout=self.timeout))
+        logging.info("container={} command={}".format(self.name, cmd))
 
         process.start()
 
         try:
             exit_code, output = queue.get(self.timeout)
-            logging.info("Returning: {exit_code}, '{output}'".format(exit_code=exit_code, output=output))
+            logging.info("exit_code={}".format(exit_code))
+            logging.debug('output={}'.format(repr(output)))
             return exit_code, output
         except Empty:
             process.terminate()
