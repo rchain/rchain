@@ -29,27 +29,24 @@ object SyncInstances {
       def pure[A](x: A): Effect[A] = implicitly[Applicative[Effect]].pure(x)
 
       def bracketCase[A, B](
-        acquire: Effect[A]
+          acquire: Effect[A]
       )(use: A => Effect[B])(
-        release: (A, ExitCase[Throwable]) => Effect[Unit]
+          release: (A, ExitCase[Throwable]) => Effect[Unit]
       ): Effect[B] = {
+        def useTask(a: A): Task[B] =
+          use(a).value
+            .flatMap(
+              _.fold(
+                err => {
+                  val throwable = toThrowable(err)
+                  release(a, ExitCase.error(throwable)).value *> Sync[Task]
+                    .raiseError[B](throwable)
+                },
+                v => release(a, ExitCase.complete).value *> Sync[Task].delay(v)
+              )
+            )
 
-        def releaseTask(
-            exitValue: A,
-            exitCase: ExitCase[Throwable]
-        ): Task[Unit] =
-          release(exitValue, exitCase).value
-            .flatMap {
-              case Left(ex)  => Task.raiseError(toThrowable(ex))
-              case Right(()) => Task.unit
-            }
-
-        EitherT(
-          acquire.value
-              .map(_.leftMap(toThrowable))
-              .rethrow
-              .bracketCase(use(_).value)(releaseTask)
-        )
+        EitherT(acquire.value.flatMap(_.traverse(useTask)))
       }
 
       def handleErrorWith[A](fa: Effect[A])(f: Throwable => Effect[A]): Effect[A] =
