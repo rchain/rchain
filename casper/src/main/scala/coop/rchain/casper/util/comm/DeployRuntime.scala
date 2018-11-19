@@ -107,7 +107,10 @@ object DeployRuntime {
     for {
       result <- program.attempt
       _ <- result match {
-            case Left(ex) => Capture[F].capture(println(s"Error: ${processError(ex).getMessage}"))
+        case Left(ex) => Capture[F].capture{
+          println(s"Error: ${processError(ex).getMessage}")
+          System.exit(1)
+        }
             case _        => ().pure[F]
           }
     } yield ()
