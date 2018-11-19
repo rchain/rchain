@@ -1,5 +1,6 @@
 package coop.rchain.rholang
 
+import coop.rchain.models.PrettyPrinted
 import coop.rchain.rholang.interpreter.Interpreter
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn._
 import coop.rchain.rholang.syntax.rholang_mercury.PrettyPrinter

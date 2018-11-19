@@ -1,4 +1,5 @@
-package coop.rchain.rholang
+package coop.rchain.models
+
 import org.scalacheck.Shrink
 
 case class PrettyPrinted[T](value: T, toStr: T => String) {
