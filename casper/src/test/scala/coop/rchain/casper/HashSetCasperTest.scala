@@ -1132,7 +1132,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
             .clear(nodes(0).local) // nodes(0) rejects normal adding process for blockThatPointsToInvalidBlock
 
       signedInvalidBlockPacketMessage = packet(
-        nodes(1).local,
+        nodes(0).local,
         transport.BlockMessage,
         signedInvalidBlock.toByteString
       )
