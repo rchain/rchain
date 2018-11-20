@@ -186,9 +186,9 @@ def create_node_container(
     rnode_timeout,
     extra_volumes,
     allowed_peers,
-    memory,
     cpuset_cpus,
     image=DEFAULT_IMAGE,
+    mem_limit=None,
 ):
     assert '_' not in name, 'Underscore is not allowed in host name'
     deploy_dir = make_tempdir("rchain-integration-test")
@@ -220,7 +220,7 @@ def create_node_container(
         user='root',
         detach=True,
         cpuset_cpus=cpuset_cpus,
-        mem_limit=memory,
+        mem_limit=mem_limit,
         network=network,
         volumes=volumes + extra_volumes,
         command=command,
@@ -240,8 +240,8 @@ def create_bootstrap_node(
     rnode_timeout,
     allowed_peers=None,
     image=DEFAULT_IMAGE,
-    memory="1024m",
     cpuset_cpus="0",
+    mem_limit=None,
 ):
     key_file = resources.get_resource_path("bootstrap_certificate/node.key.pem")
     cert_file = resources.get_resource_path("bootstrap_certificate/node.certificate.pem")
@@ -272,7 +272,7 @@ def create_bootstrap_node(
         rnode_timeout=rnode_timeout,
         extra_volumes=volumes,
         allowed_peers=allowed_peers,
-        memory=memory,
+        mem_limit=mem_limit if mem_limit is not None else '4G',
         cpuset_cpus=cpuset_cpus,
     )
     return container
@@ -293,8 +293,8 @@ def create_peer(
     key_pair,
     allowed_peers=None,
     image=DEFAULT_IMAGE,
-    memory="1024m",
     cpuset_cpus="0",
+    mem_limit=None,
 ):
     assert '_' not in name, 'Underscore is not allowed in host name'
     name = make_peer_name(network, name)
@@ -318,7 +318,7 @@ def create_peer(
         rnode_timeout=rnode_timeout,
         extra_volumes=[],
         allowed_peers=allowed_peers,
-        memory=memory,
+        mem_limit=mem_limit if not None else '4G',
         cpuset_cpus=cpuset_cpus,
     )
     return container
@@ -332,7 +332,7 @@ def create_peer_nodes(docker_client,
                       rnode_timeout,
                       allowed_peers=None,
                       image=DEFAULT_IMAGE,
-                      memory="1024m",
+                      mem_limit=None,
                       cpuset_cpus="0"):
     assert len(set(key_pairs)) == len(key_pairs), "There shouldn't be any duplicates in the key pairs"
 
@@ -352,7 +352,7 @@ def create_peer_nodes(docker_client,
                 key_pair=key_pair,
                 allowed_peers=allowed_peers,
                 image=image,
-                memory=memory,
+                mem_limit=mem_limit if mem_limit is not None else '4G',
                 cpuset_cpus=cpuset_cpus,
             )
             result.append(peer_node)
