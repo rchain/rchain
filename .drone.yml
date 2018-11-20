@@ -84,8 +84,6 @@ pipeline:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp:/tmp
       - /var/tmp/rchain-it:/var/tmp/rchain-it
-    when:
-      event: [ push, tag ]
 
   package-rpm:
     <<: *sbtenv
