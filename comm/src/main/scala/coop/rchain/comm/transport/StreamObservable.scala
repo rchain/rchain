@@ -1,5 +1,6 @@
 package coop.rchain.comm.transport
 
+import PacketOps._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.shared.Log
 import coop.rchain.comm.PeerNode
@@ -9,17 +10,20 @@ import monix.reactive.Observable
 import monix.reactive.observers.Subscriber
 import monix.reactive.OverflowStrategy._
 import monix.reactive.subjects.ConcurrentSubject
+import java.nio.file._
 
-case class ToStream(peerNode: PeerNode, blob: Blob)
+case class ToStream(peerNode: PeerNode, path: Path, sender: PeerNode)
 
-class StreamObservable(bufferSize: Int)(implicit log: Log[Task], scheduler: Scheduler)
+class StreamObservable(bufferSize: Int, folder: Path)(implicit log: Log[Task], scheduler: Scheduler)
     extends Observable[ToStream] {
 
   val subject = buffer.LimitedBufferObservable.dropNew[ToStream](bufferSize)
 
   def stream(peers: List[PeerNode], blob: Blob): Task[Unit] = {
     def push(peer: PeerNode): Task[Boolean] =
-      Task.delay(subject.pushNext(ToStream(peer, blob)))
+      blob.packet.store[Task](folder) >>= {
+        case file => Task.delay(subject.pushNext(ToStream(peer, file, blob.sender)))
+      }
 
     def retry(failed: List[PeerNode]): Task[Unit] =
       log.debug(s"Retrying for $failed") *> stream(failed, blob)
