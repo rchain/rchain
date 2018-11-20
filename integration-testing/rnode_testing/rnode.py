@@ -38,10 +38,30 @@ class TimeoutError(Exception):
         self.timeout = timeout
 
 
+class UnexpectedShowBlocksOutputFormatError(Exception):
+    def __init__(self, output):
+        self.command = output
+
+
 def make_container_logs_path(container_name):
     ci_logs_dir = os.environ.get('CI_LOGS_DIR')
     dir = 'logs' if ci_logs_dir is None else ci_logs_dir
     return os.path.join(dir, "{}.log".format(container_name))
+
+
+def extract_block_count_from_show_blocks(show_blocks_output):
+    lines = show_blocks_output.splitlines()
+    prefix = 'count: '
+    interesting_lines = [l for l in lines if l.startswith(prefix)]
+    if len(interesting_lines) != 1:
+        raise UnexpectedShowBlocksOutputFormatError(show_blocks_output)
+    line = interesting_lines[0]
+    count = line[len(prefix):]
+    try:
+        result = int(count)
+    except ValueError:
+        raise UnexpectedShowBlocksOutputFormatError(show_blocks_output)
+    return result
 
 
 class Node:
@@ -91,11 +111,8 @@ class Node:
         return self.exec_run(f'{rnode_binary} show-blocks')
 
     def get_blocks_count(self):
-        output = self.call_rnode('show-blocks', stderr=False).strip()
-        spam = 'count: '
-        assert output.startswith(spam)
-        blocks_count = int(output[len(spam):])
-        return blocks_count
+        show_blocks_output = self.call_rnode('show-blocks', stderr=False).strip()
+        return extract_block_count_from_show_blocks(show_blocks_output)
 
     def exec_run(self, cmd, stderr=True):
         queue = Queue(1)
@@ -186,10 +203,11 @@ def create_node_container(
     rnode_timeout,
     extra_volumes,
     allowed_peers,
-    memory,
     cpuset_cpus,
     image=DEFAULT_IMAGE,
+    mem_limit=None,
 ):
+    assert isinstance(name, str)
     assert '_' not in name, 'Underscore is not allowed in host name'
     deploy_dir = make_tempdir("rchain-integration-test")
 
@@ -220,7 +238,7 @@ def create_node_container(
         user='root',
         detach=True,
         cpuset_cpus=cpuset_cpus,
-        mem_limit=memory,
+        mem_limit=mem_limit,
         network=network,
         volumes=volumes + extra_volumes,
         command=command,
@@ -240,8 +258,8 @@ def create_bootstrap_node(
     rnode_timeout,
     allowed_peers=None,
     image=DEFAULT_IMAGE,
-    memory="1024m",
     cpuset_cpus="0",
+    mem_limit=None,
 ):
     key_file = resources.get_resource_path("bootstrap_certificate/node.key.pem")
     cert_file = resources.get_resource_path("bootstrap_certificate/node.certificate.pem")
@@ -272,7 +290,7 @@ def create_bootstrap_node(
         rnode_timeout=rnode_timeout,
         extra_volumes=volumes,
         allowed_peers=allowed_peers,
-        memory=memory,
+        mem_limit=mem_limit if mem_limit is not None else '4G',
         cpuset_cpus=cpuset_cpus,
     )
     return container
@@ -293,9 +311,10 @@ def create_peer(
     key_pair,
     allowed_peers=None,
     image=DEFAULT_IMAGE,
-    memory="1024m",
     cpuset_cpus="0",
+    mem_limit=None,
 ):
+    assert isinstance(name, str)
     assert '_' not in name, 'Underscore is not allowed in host name'
     name = make_peer_name(network, name)
 
@@ -318,7 +337,7 @@ def create_peer(
         rnode_timeout=rnode_timeout,
         extra_volumes=[],
         allowed_peers=allowed_peers,
-        memory=memory,
+        mem_limit=mem_limit if not None else '4G',
         cpuset_cpus=cpuset_cpus,
     )
     return container
@@ -332,7 +351,7 @@ def create_peer_nodes(docker_client,
                       rnode_timeout,
                       allowed_peers=None,
                       image=DEFAULT_IMAGE,
-                      memory="1024m",
+                      mem_limit=None,
                       cpuset_cpus="0"):
     assert len(set(key_pairs)) == len(key_pairs), "There shouldn't be any duplicates in the key pairs"
 
@@ -345,14 +364,14 @@ def create_peer_nodes(docker_client,
             peer_node = create_peer(
                 docker_client=docker_client,
                 network=network,
-                name=i,
+                name=str(i),
                 bonds_file=bonds_file,
                 rnode_timeout=rnode_timeout,
                 bootstrap=bootstrap,
                 key_pair=key_pair,
                 allowed_peers=allowed_peers,
                 image=image,
-                memory=memory,
+                mem_limit=mem_limit if mem_limit is not None else '4G',
                 cpuset_cpus=cpuset_cpus,
             )
             result.append(peer_node)

@@ -48,17 +48,6 @@ pipeline:
     commands:
       - sbt rholang/bnfc:generate compile test:compile it:compile doc
 
-  run-unit-tests:
-    <<: *sbtenv
-    commands:
-      - sbt test it:test
-
-  run-code-analysis:
-    <<: *sbtenv
-    commands:
-      - sbt scalafmtCheck coverage
-      - ./scripts/ci/codecov-upload
-
   # push
 
   package:
@@ -77,7 +66,7 @@ pipeline:
   run-integration-tests:
     <<: *buildenv
     environment:
-      - _JAVA_OPTIONS=-Xms2G -Xmx8G
+      - _JAVA_OPTIONS=-Xms2G -Xmx4G
     commands:
       - ./scripts/ci/run-integration-tests.sh
     volumes:
