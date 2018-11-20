@@ -190,6 +190,7 @@ def create_node_container(
     image=DEFAULT_IMAGE,
     mem_limit=None,
 ):
+    assert isinstance(name, str)
     assert '_' not in name, 'Underscore is not allowed in host name'
     deploy_dir = make_tempdir("rchain-integration-test")
 
@@ -296,6 +297,7 @@ def create_peer(
     cpuset_cpus="0",
     mem_limit=None,
 ):
+    assert isinstance(name, str)
     assert '_' not in name, 'Underscore is not allowed in host name'
     name = make_peer_name(network, name)
 
@@ -345,7 +347,7 @@ def create_peer_nodes(docker_client,
             peer_node = create_peer(
                 docker_client=docker_client,
                 network=network,
-                name=i,
+                name=str(i),
                 bonds_file=bonds_file,
                 rnode_timeout=rnode_timeout,
                 bootstrap=bootstrap,
