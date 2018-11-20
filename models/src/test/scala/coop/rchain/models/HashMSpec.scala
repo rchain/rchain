@@ -67,10 +67,10 @@ class HashMSpec extends FlatSpec with PropertyChecks with Matchers {
   sameResultAsReference(GInt(-1))
   sameResultAsReference(Expr(GInt(-1)))
 
-  def sameResultAsReference[A <: Any: HashM: Arbitrary](implicit tag: ClassTag[A]): Unit =
+  def sameResultAsReference[A <: Any: HashM: Arbitrary: Pretty](implicit tag: ClassTag[A]): Unit =
     it must s"provide same results as hashCode for ${tag.runtimeClass.getSimpleName}" in {
-      forAll { a: A =>
-        sameResultAsReference(a)
+      forAll { a: PrettyPrinted[A] =>
+        sameResultAsReference(a.value)
       }
     }
 
