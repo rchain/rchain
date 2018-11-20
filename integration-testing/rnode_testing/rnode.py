@@ -112,9 +112,7 @@ class Node:
 
         try:
             exit_code, output = queue.get(self.timeout)
-            printed_output = output if len(output) < 150 else (output[0:150] + "...")
-            single_line_output = printed_output.replace("\n", "\\n")
-            logging.info(f"Returning: {exit_code}, '{single_line_output}'")
+            logging.info(f"Returning: {exit_code}, '{output}'")
             return exit_code, output
         except Empty:
             process.terminate()
