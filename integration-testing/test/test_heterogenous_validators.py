@@ -52,7 +52,7 @@ def started_bonded_validator(system, bootstrap_node):
     bonded_validator = create_peer(
         docker_client=system.docker,
         network=bootstrap_node.network,
-        name='bonded_validator',
+        name='bonded-validator',
         bonds_file=system.validators_data.bonds_file,
         rnode_timeout=system.config.rnode_timeout,
         bootstrap=bootstrap_node,
@@ -70,7 +70,7 @@ def started_joining_validator(system, bootstrap_node):
     joining_validator = create_peer(
         docker_client=system.docker,
         network=bootstrap_node.network,
-        name='joining_validator',
+        name='joining-validator',
         bonds_file=system.validators_data.bonds_file,
         rnode_timeout=system.config.rnode_timeout,
         bootstrap=bootstrap_node,
@@ -89,7 +89,7 @@ def started_unbonded_validator(system, bootstrap_node):
     unbonded_validator = create_peer(
         docker_client=system.docker,
         network=bootstrap_node.network,
-        name='unbonded_validator',
+        name='unbonded-validator',
         bonds_file=system.validators_data.bonds_file,
         rnode_timeout=system.config.rnode_timeout,
         bootstrap=bootstrap_node,

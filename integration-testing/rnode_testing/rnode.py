@@ -190,6 +190,7 @@ def create_node_container(
     cpuset_cpus,
     image=DEFAULT_IMAGE,
 ):
+    assert '_' not in name, 'Underscore is not allowed in host name'
     deploy_dir = make_tempdir("rchain-integration-test")
 
     hosts_allow_file_content = \
@@ -295,6 +296,7 @@ def create_peer(
     memory="1024m",
     cpuset_cpus="0",
 ):
+    assert '_' not in name, 'Underscore is not allowed in host name'
     name = make_peer_name(network, name)
 
     bootstrap_address = bootstrap.get_rnode_address()
