@@ -40,7 +40,7 @@ final class SortedParHashSet(ps: HashSet[Par]) extends Iterable[Par] {
 object SortedParHashSet {
   def apply(seq: Seq[Par]): SortedParHashSet = new SortedParHashSet(HashSet[Par](seq: _*))
 
-  def apply(set: Set[Par]): SortedParHashSet = new SortedParHashSet(HashSet[Par](set.toSeq: _*))
+  def apply(set: Set[Par]): SortedParHashSet = SortedParHashSet(set.toSeq)
 
   def empty: SortedParHashSet = SortedParHashSet(HashSet.empty[Par])
 }
