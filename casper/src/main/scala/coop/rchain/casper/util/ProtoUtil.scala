@@ -157,7 +157,7 @@ object ProtoUtil {
   def weightMap(blockMessage: BlockMessage): Map[ByteString, Long] =
     blockMessage.body match {
       case Some(block) =>
-        block.postState match {
+        block.state match {
           case Some(state) => weightMap(state)
           case None        => Map.empty[ByteString, Long]
         }
@@ -235,19 +235,23 @@ object ProtoUtil {
   def tuplespace(b: BlockMessage): Option[ByteString] =
     for {
       bd <- b.body
-      ps <- bd.postState
-    } yield ps.tuplespace
+      ps <- bd.state
+    } yield ps.postStateHash
+
+  // TODO: Reconcile with def tuplespace above
+  def postStateHash(b: BlockMessage): ByteString =
+    b.getBody.getState.postStateHash
 
   def bonds(b: BlockMessage): Seq[Bond] =
     (for {
       bd <- b.body
-      ps <- bd.postState
+      ps <- bd.state
     } yield ps.bonds).getOrElse(List.empty[Bond])
 
   def blockNumber(b: BlockMessage): Long =
     (for {
       bd <- b.body
-      ps <- bd.postState
+      ps <- bd.state
     } yield ps.blockNumber).getOrElse(0L)
 
   /*
@@ -352,7 +356,7 @@ object ProtoUtil {
   ): Header =
     Header()
       .withParentsHashList(parentHashes)
-      .withPostStateHash(protoHash(body.postState.get))
+      .withPostStateHash(protoHash(body.state.get))
       .withDeploysHash(protoSeqHash(body.deploys))
       .withDeployCount(body.deploys.size)
       .withVersion(version)

@@ -100,13 +100,13 @@ class ValidateTest
   implicit class ChangeBlockNumber(b: BlockMessage) {
     def withBlockNumber(n: Long): BlockMessage = {
       val body     = b.body.getOrElse(Body())
-      val state    = body.postState.getOrElse(RChainState())
+      val state    = body.getState
       val newState = state.withBlockNumber(n)
 
       val header    = b.header.getOrElse(Header())
       val newHeader = header.withPostStateHash(ProtoUtil.protoHash(newState))
 
-      b.withBody(body.withPostState(newState)).withHeader(newHeader)
+      b.withBody(body.withState(newState)).withHeader(newHeader)
     }
   }
 
@@ -524,8 +524,8 @@ class ValidateTest
       Validate.bondsCache[Id](genesis, runtimeManager) should be(Right(Valid))
 
       val modifiedBonds     = Seq.empty[Bond]
-      val modifiedPostState = genesis.body.get.postState.get.withBonds(modifiedBonds)
-      val modifiedBody      = genesis.body.get.withPostState(modifiedPostState)
+      val modifiedPostState = genesis.getBody.getState.withBonds(modifiedBonds)
+      val modifiedBody      = genesis.getBody.withState(modifiedPostState)
       val modifiedGenesis   = genesis.withBody(modifiedBody)
       Validate.bondsCache[Id](modifiedGenesis, runtimeManager) should be(Left(InvalidBondsCache))
 
@@ -545,7 +545,7 @@ class ValidateTest
     Validate.formatOfFields[Id](genesis.withSig(ByteString.EMPTY)) should be(false)
     Validate.formatOfFields[Id](genesis.withSigAlgorithm("")) should be(false)
     Validate.formatOfFields[Id](genesis.withShardId("")) should be(false)
-    Validate.formatOfFields[Id](genesis.withBody(genesis.body.get.clearPostState)) should be(false)
+    Validate.formatOfFields[Id](genesis.withBody(genesis.getBody.clearState)) should be(false)
     Validate.formatOfFields[Id](
       genesis.withHeader(genesis.header.get.withPostStateHash(ByteString.EMPTY))
     ) should be(false)
