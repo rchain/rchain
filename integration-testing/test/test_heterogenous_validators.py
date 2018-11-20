@@ -127,4 +127,9 @@ def test_heterogenous_validators(custom_system):
                     joining_validator.propose()
 
                 with started_unbonded_validator(custom_system, bootstrap_node) as unbonded_validator:
-                    wait_for(lambda: unbonded_validator.get_blocks_count() >= BONDED_VALIDATOR_BLOCKS+JOINING_VALIDATOR_BLOCKS, 600, "Unbonded validator did not receive any blocks")
+                    def condition():
+                        expected_blocks_count = BONDED_VALIDATOR_BLOCKS + JOINING_VALIDATOR_BLOCKS
+                        actual_blocks_count = unbonded_validator.get_blocks_count()
+                        if actual_blocks_count < expected_blocks_count:
+                            raise Exception("Expected {} blocks, got {}".format(expected_blocks_count, actual_blocks_count))
+                    wait_for(condition, 600, "Unbonded validator did not receive any blocks")
