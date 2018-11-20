@@ -12,7 +12,7 @@ import coop.rchain.blockstorage.{
 import coop.rchain.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import coop.rchain.casper._
 import coop.rchain.casper.genesis.contracts.Faucet
-import coop.rchain.casper.helper.{BlockStoreTestFixture, NoOpsCasperEffect}
+import coop.rchain.casper.helper.{BlockDagStorageTestFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol.{NoApprovedBlockAvailable, _}
 import coop.rchain.casper.util.comm.CasperPacketHandler.{
   ApprovedBlockReceivedHandler,
@@ -51,7 +51,7 @@ import scala.concurrent.duration._
 class CasperPacketHandlerSpec extends WordSpec {
   private def setup() = new {
     val scheduler      = Scheduler.io("test")
-    val runtimeDir     = BlockStoreTestFixture.dbDir
+    val runtimeDir     = BlockDagStorageTestFixture.blockStorageDir
     val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024)
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)(scheduler)
 

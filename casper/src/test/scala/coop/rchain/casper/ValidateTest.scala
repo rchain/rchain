@@ -18,6 +18,7 @@ import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.Time
+import coop.rchain.casper.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertion, BeforeAndAfterEach, FlatSpec, Matchers}
@@ -102,11 +103,6 @@ class ValidateTest
 
       b.withBody(body.withState(newState)).withHeader(newHeader)
     }
-  }
-
-  implicit class AnyShouldF[F[_]: Monad, T](leftSideValue: F[T]) {
-    def shouldBeF(value: T): F[Assertion] =
-      leftSideValue.map(_ shouldBe value)
   }
 
   "Block signature validation" should "return false on unknown algorithms" in withStorage {
@@ -204,8 +200,8 @@ class ValidateTest
       for {
         _      <- createChain[Task](1)
         block  <- blockDagStorage.lookupByIdUnsafe(0)
-        _      = Validate.blockNumber[Task](block.withBlockNumber(1)) shouldBeF Left(InvalidBlockNumber)
-        _      = Validate.blockNumber[Task](block) shouldBeF Right(Valid)
+        _      <- Validate.blockNumber[Task](block.withBlockNumber(1)) shouldBeF Left(InvalidBlockNumber)
+        _      <- Validate.blockNumber[Task](block) shouldBeF Right(Valid)
         _      = log.warns.size should be(1)
         result = log.warns.head.contains("not zero, but block has no parents") should be(true)
       } yield result
@@ -217,11 +213,13 @@ class ValidateTest
         _     <- createChain[Task](2)
         block <- blockDagStorage.lookupByIdUnsafe(1)
         _ <- Validate.blockNumber[Task](block.withBlockNumber(17)) shouldBeF Left(
-              InvalidBlockNumber)
+              InvalidBlockNumber
+            )
         _ <- Validate.blockNumber[Task](block) shouldBeF Right(Valid)
         _ = log.warns.size should be(1)
         result = log.warns.head.contains("is not one more than maximum parent number") should be(
-          true)
+          true
+        )
       } yield result
   }
 
@@ -246,8 +244,10 @@ class ValidateTest
 
   it should "correctly validate a multiparent block where the parents have different block numbers" in withStorage {
     implicit blockStore => _ =>
-      def createBlockWithNumber(n: Long,
-                                parentHashes: Seq[ByteString] = Nil): Task[BlockMessage] = {
+      def createBlockWithNumber(
+          n: Long,
+          parentHashes: Seq[ByteString] = Nil
+      ): Task[BlockMessage] = {
         val blockWithNumber = BlockMessage.defaultInstance.withBlockNumber(n)
         val header          = blockWithNumber.getHeader.withParentsHashList(parentHashes)
         val hash            = ProtoUtil.hashUnsignedBlock(header, Nil)
@@ -262,7 +262,8 @@ class ValidateTest
         b3 <- createBlockWithNumber(8, Seq(b1.blockHash, b2.blockHash))
         _  <- Validate.blockNumber[Task](b3) shouldBeF Right(Valid)
         result <- Validate.blockNumber[Task](b3.withBlockNumber(4)) shouldBeF Left(
-                   InvalidBlockNumber)
+                   InvalidBlockNumber
+                 )
       } yield result
   }
 
@@ -273,7 +274,8 @@ class ValidateTest
         block <- blockDagStorage.lookupByIdUnsafe(0)
         dag   <- blockDagStorage.getRepresentation
         _ <- Validate.sequenceNumber[Task](block.withSeqNum(1), dag) shouldBeF Left(
-              InvalidSequenceNumber)
+              InvalidSequenceNumber
+            )
         _      <- Validate.sequenceNumber[Task](block, dag) shouldBeF Right(Valid)
         result = log.warns.size should be(1)
       } yield result
@@ -286,7 +288,8 @@ class ValidateTest
         block <- blockDagStorage.lookupByIdUnsafe(1)
         dag   <- blockDagStorage.getRepresentation
         _ <- Validate.sequenceNumber[Task](block.withSeqNum(1), dag) shouldBeF Left(
-              InvalidSequenceNumber)
+              InvalidSequenceNumber
+            )
         result = log.warns.size should be(1)
       } yield result
   }
@@ -409,12 +412,11 @@ class ValidateTest
 
             log.warns.size should be(3)
             log.warns.forall(
-              _.contains("block parents did not match estimate based on justification")
-            ) should be(
-              true
-            )
-          }
-        }
+          _.contains("block parents did not match estimate based on justification")
+        ) should be(
+          true
+        )
+      } }
         .runSyncUnsafe(10.seconds)
   }
 
@@ -604,7 +606,8 @@ class ValidateTest
         modifiedBody      = genesis.getBody.withState(modifiedPostState)
         modifiedGenesis   = genesis.withBody(modifiedBody)
         result <- Validate.bondsCache[Task](modifiedGenesis, runtimeManager) shouldBeF Left(
-                   InvalidBondsCache)
+                   InvalidBondsCache
+                 )
         _ <- activeRuntime.close()
       } yield result
   }

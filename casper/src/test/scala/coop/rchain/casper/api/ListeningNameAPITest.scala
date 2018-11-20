@@ -3,7 +3,7 @@ package coop.rchain.casper.api
 import cats.Id
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.helper.{BlockStoreFixture, HashSetCasperTestNode}
+import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.{Created, HashSetCasperTest}
@@ -17,7 +17,7 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.catscontrib.Capture._
 
-class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture {
+class ListeningNameAPITest extends FlatSpec with Matchers {
 
   import HashSetCasperTest._
 

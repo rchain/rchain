@@ -32,12 +32,13 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
       case (blockDagStorageDir, blockStorageDir) =>
         implicit val metrics = new MetricsNOP[Task]()
         implicit val log     = new Log.NOPLog[Task]()
-        implicit val blockStore = BlockDagStorageTestFixture.createBlockStorage(blockStorageDir)
-          for {
-            blockDagStorage <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)
-            indexedBlockDagStorage <- IndexedBlockDagStorage.create(blockDagStorage)
-            result          <- f(blockStore)(indexedBlockDagStorage)
-          } yield result
+        implicit val blockStore =
+          BlockDagStorageTestFixture.createBlockStorage[Task](blockStorageDir)
+        for {
+          blockDagStorage        <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)
+          indexedBlockDagStorage <- IndexedBlockDagStorage.create(blockDagStorage)
+          result                 <- f(blockStore)(indexedBlockDagStorage)
+        } yield result
     } {
       case (blockDagStorageDir, blockStorageDir) =>
         Sync[Task].delay {
@@ -89,16 +90,18 @@ object BlockDagStorageTestFixture {
 
   val mapSize: Long = 1024L * 1024L * 100L
 
-  def createBlockStorage(blockStorageDir: Path)(
-      implicit metrics: Metrics[Task]): BlockStore[Task] = {
+  def createBlockStorage[F[_]: Sync: Metrics](
+      blockStorageDir: Path
+  ): BlockStore[F] = {
     val environment = env(blockStorageDir, mapSize)
-    LMDBBlockStore.create[Task](environment, blockStorageDir)
+    LMDBBlockStore.create[F](environment, blockStorageDir)
   }
 
   def createBlockDagStorage(blockDagStorageDir: Path)(
       implicit metrics: Metrics[Task],
       log: Log[Task],
-      blockStore: BlockStore[Task]): Task[BlockDagStorage[Task]] =
+      blockStore: BlockStore[Task]
+  ): Task[BlockDagStorage[Task]] =
     BlockDagFileStorage.create[Task](
       BlockDagFileStorage.Config(
         blockDagStorageDir.resolve("latest-messages-data"),

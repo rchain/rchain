@@ -3,7 +3,7 @@ package coop.rchain.casper.util.comm
 import cats.Id
 import coop.rchain.casper.HashSetCasperTest
 import coop.rchain.casper.genesis.contracts._
-import coop.rchain.casper.helper.{BlockStoreTestFixture, HashSetCasperTestNode}
+import coop.rchain.casper.helper.{BlockDagStorageTestFixture, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib._
@@ -66,7 +66,7 @@ object BlockApproverProtocolTest {
   ): (BlockApproverProtocol, HashSetCasperTestNode[Id]) = {
     import monix.execution.Scheduler.Implicits.global
 
-    val runtimeDir     = BlockStoreTestFixture.dbDir
+    val runtimeDir     = BlockDagStorageTestFixture.blockStorageDir
     val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024)
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
 

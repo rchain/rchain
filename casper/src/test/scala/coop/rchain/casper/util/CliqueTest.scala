@@ -1,11 +1,11 @@
 package coop.rchain.casper.util
 
-import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture}
+import coop.rchain.casper.helper.BlockGenerator
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.annotation.tailrec
 
-class CliqueTest extends FlatSpec with Matchers with BlockGenerator with BlockStoreFixture {
+class CliqueTest extends FlatSpec with Matchers with BlockGenerator {
   val e = List(
     (1, 6),
     (1, 2),

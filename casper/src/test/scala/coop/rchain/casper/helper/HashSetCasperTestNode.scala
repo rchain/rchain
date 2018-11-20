@@ -150,8 +150,8 @@ object HashSetCasperTestNode {
     implicit val log                = new Log.NOPLog[F]()
     implicit val metricEff          = new Metrics.MetricsNOP[F]
 
-    val blockDagDir   = BlockDagStorageTestFixture.dir
-    val blockStoreDir = BlockStoreTestFixture.dbDir
+    val blockDagDir   = BlockDagStorageTestFixture.blockDagStorageDir
+    val blockStoreDir = BlockDagStorageTestFixture.blockStorageDir
     implicit val blockStore =
       LMDBBlockStore.create[F](
         LMDBBlockStore.Config(path = blockStoreDir, mapSize = storageSize)
@@ -231,8 +231,8 @@ object HashSetCasperTestNode {
             implicit val log       = new Log.NOPLog[F]()
             implicit val metricEff = new Metrics.MetricsNOP[F]
 
-            val blockDagDir   = BlockDagStorageTestFixture.dir
-            val blockStoreDir = BlockStoreTestFixture.dbDir
+            val blockDagDir   = BlockDagStorageTestFixture.blockDagStorageDir
+            val blockStoreDir = BlockDagStorageTestFixture.blockStorageDir
             implicit val blockStore =
               LMDBBlockStore.create[F](
                 LMDBBlockStore.Config(path = blockStoreDir, mapSize = storageSize)
