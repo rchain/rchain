@@ -77,8 +77,7 @@ trait PrettyInstances extends PrettyDerivation {
     }
 
   implicit def prettyAlwaysEqual[A: Pretty]: Pretty[AlwaysEqual[A]] =
-    (value: AlwaysEqual[A], indentLevel: Int) =>
-      s"AlwaysEqual(${Pretty[A].pretty(value.item, indentLevel)})"
+    fromWrapped(_.item, value => s"AlwaysEqual($value)")
 
   implicit def prettyCoeval[A: Pretty]: Pretty[Coeval[A]] =
     (value: Coeval[A], indentLevel: Int) =>
@@ -94,6 +93,9 @@ trait PrettyInstances extends PrettyDerivation {
     val prefixParensCount = prefix.count(_ == '(')
     prefix + parenthesised(_, _) + (")" * prefixParensCount)
   }
+
+  def fromWrapped[A, B: Pretty](f: A => B, wrappingCode: String => String): Pretty[A] =
+    (value: A, indentLevel: Int) => wrappingCode(Pretty[B].pretty(f(value), indentLevel))
 }
 
 trait PrettyDerivation {
