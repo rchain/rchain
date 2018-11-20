@@ -38,10 +38,30 @@ class TimeoutError(Exception):
         self.timeout = timeout
 
 
+class UnexpectedShowBlocksOutputFormatError(Exception):
+    def __init__(self, output):
+        self.command = output
+
+
 def make_container_logs_path(container_name):
     ci_logs_dir = os.environ.get('CI_LOGS_DIR')
     dir = 'logs' if ci_logs_dir is None else ci_logs_dir
     return os.path.join(dir, "{}.log".format(container_name))
+
+
+def extract_block_count_from_show_blocks(show_blocks_output):
+    lines = show_blocks_output.splitlines()
+    prefix = 'count: '
+    interesting_lines = [l for l in lines if l.startswith(prefix)]
+    if len(interesting_lines) != 1:
+        raise UnexpectedShowBlocksOutputFormatError(show_blocks_output)
+    line = interesting_lines[0]
+    count = line[len(prefix):]
+    try:
+        result = int(count)
+    except ValueError:
+        raise UnexpectedShowBlocksOutputFormatError(show_blocks_output)
+    return result
 
 
 class Node:
@@ -91,11 +111,8 @@ class Node:
         return self.exec_run(f'{rnode_binary} show-blocks')
 
     def get_blocks_count(self):
-        output = self.call_rnode('show-blocks', stderr=False).strip()
-        spam = 'count: '
-        assert output.startswith(spam)
-        blocks_count = int(output[len(spam):])
-        return blocks_count
+        show_blocks_output = self.call_rnode('show-blocks', stderr=False).strip()
+        return extract_block_count_from_show_blocks(show_blocks_output)
 
     def exec_run(self, cmd, stderr=True):
         queue = Queue(1)
