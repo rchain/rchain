@@ -206,19 +206,21 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
 
   def handleToStream: ToStream => Task[Unit] = {
     case ToStream(peer, path, sender) =>
-      PacketOps.restore[Task](path) >>= { packet =>
-        withClient(peer, enforce = false) { stub =>
-          val blob = Blob(sender, packet)
-          stub.stream(Observable.fromIterator(chunkIt(blob)))
-        }.attempt
-          .flatMap {
-            case Left(error) => log.debug(s"Error while streaming packet, error: $error")
-            case Right(_)    => Task.unit
-          }
-          .flatMap(kp(Task.delay {
-            if (path.toFile.exists)
-              path.toFile.delete
-          }))
+      PacketOps.restore[Task](path) >>= {
+        case Right(packet) =>
+          withClient(peer, enforce = false) { stub =>
+            val blob = Blob(sender, packet)
+            stub.stream(Observable.fromIterator(chunkIt(blob)))
+          }.attempt
+            .flatMap {
+              case Left(error) => log.error(s"Error while streaming packet, error: $error")
+              case Right(_)    => Task.unit
+            }
+            .flatMap(kp(Task.delay {
+              if (path.toFile.exists)
+                path.toFile.delete
+            }))
+        case Left(error) => log.error(s"Error while streaming packet, error: $error")
       }
   }
 

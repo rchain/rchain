@@ -19,7 +19,6 @@ class PacketStoreRestoreSpec
     with BeforeAndAfterEach
     with GeneratorDrivenPropertyChecks {
 
-
   import PacketOps._
 
   var tempFolder: Path = null
@@ -36,8 +35,8 @@ class PacketStoreRestoreSpec
         // given
         val packet = Packet(BlockMessage.id, ByteString.copyFrom(content))
         // when
-        val storedIn = packet.store[Id](tempFolder)
-        val restored = PacketOps.restore[Id](storedIn)
+        val storedIn = packet.store[Id](tempFolder).right.get
+        val restored = PacketOps.restore[Id](storedIn).right.get
         // then
         storedIn.toFile.exists() shouldBe (true)
         storedIn.getParent shouldBe (tempFolder)

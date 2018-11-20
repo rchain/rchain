@@ -1,6 +1,7 @@
 package coop.rchain.comm.transport
 
 import PacketOps._
+import coop.rchain.comm._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.shared.Log
 import coop.rchain.comm.PeerNode
@@ -22,7 +23,11 @@ class StreamObservable(bufferSize: Int, folder: Path)(implicit log: Log[Task], s
   def stream(peers: List[PeerNode], blob: Blob): Task[Unit] = {
     def push(peer: PeerNode): Task[Boolean] =
       blob.packet.store[Task](folder) >>= {
-        case file => Task.delay(subject.pushNext(ToStream(peer, file, blob.sender)))
+        case Right(file) => Task.delay(subject.pushNext(ToStream(peer, file, blob.sender)))
+        case Left(UnableToStorePacket(p, er)) =>
+          log.error(s"Could not serialize packet $p. Error message: $er") *> true.pure[Task]
+        case Left(er) =>
+          log.error(s"Could not serialize packet ${blob.packet}. Error: $er") *> true.pure[Task]
       }
 
     def retry(failed: List[PeerNode]): Task[Unit] =
