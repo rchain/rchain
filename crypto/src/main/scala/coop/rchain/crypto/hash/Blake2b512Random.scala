@@ -113,7 +113,7 @@ class Blake2b512Random private (
 }
 
 object Blake2b512Random {
-  def apply(init: Array[Byte], offset: Int, length: Int): Blake2b512Random = {
+  private[this] def apply(init: Array[Byte], offset: Int, length: Int): Blake2b512Random = {
     val result = new Blake2b512Random(Blake2b512Block(0.toByte), ByteBuffer.allocate(128))
     val range  = Range(offset, offset + length - 127, 128)
     range.foreach { base =>
