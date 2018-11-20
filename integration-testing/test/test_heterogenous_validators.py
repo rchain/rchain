@@ -4,6 +4,9 @@ import contextlib
 
 from rnode_testing.rnode import start_bootstrap, create_peer
 from rnode_testing.wait import wait_for, node_started
+from rnode_testing.network import (
+    wait_for_approved_block_received_handler_state,
+)
 
 
 """
@@ -60,6 +63,7 @@ def started_bonded_validator(system, bootstrap_node):
     )
     try:
         wait_for(node_started(bonded_validator), system.config.node_startup_timeout, "Bonded validator node didn't start correctly")
+        wait_for_approved_block_received_handler_state(bonded_validator, system.config.node_startup_timeout)
         yield bonded_validator
     finally:
         bonded_validator.cleanup()
@@ -78,6 +82,7 @@ def started_joining_validator(system, bootstrap_node):
     )
     try:
         wait_for(node_started(joining_validator), system.config.node_startup_timeout, "Joining validator node didn't start correctly")
+        wait_for_approved_block_received_handler_state(joining_validator, system.config.node_startup_timeout)
         yield joining_validator
     finally:
         joining_validator.cleanup()
