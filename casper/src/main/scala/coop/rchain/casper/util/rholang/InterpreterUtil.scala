@@ -121,7 +121,7 @@ object InterpreterUtil {
       time: Option[Long] = None
   )(
       implicit scheduler: Scheduler
-  ): F[Either[Throwable, (StateHash, Seq[InternalProcessedDeploy])]] =
+  ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     for {
       possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager, time)
     } yield
@@ -129,7 +129,7 @@ object InterpreterUtil {
         case Right(preStateHash) =>
           val (postStateHash, processedDeploys) =
             runtimeManager.computeState(preStateHash, deploys, time).runSyncUnsafe(Duration.Inf)
-          Right(postStateHash, processedDeploys)
+          Right(preStateHash, postStateHash, processedDeploys)
         case Left(err) =>
           Left(err)
       }
@@ -195,7 +195,7 @@ object InterpreterUtil {
       runtimeManager: RuntimeManager
   )(
       implicit scheduler: Scheduler
-  ): F[Either[Throwable, (StateHash, Seq[InternalProcessedDeploy])]] =
+  ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     for {
       parents <- ProtoUtil.unsafeGetParents[F](b)
 

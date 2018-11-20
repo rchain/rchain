@@ -115,7 +115,7 @@ object BlockApproverProtocol {
             .or("Candidate didn't have required signatures number.")
       block      <- Either.fromOption(candidate.block, "Candidate block is empty.")
       body       <- Either.fromOption(block.body, "Body is empty")
-      postState  <- Either.fromOption(body.postState, "Post state is empty")
+      postState  <- Either.fromOption(body.state, "Post state is empty")
       blockBonds = postState.bonds.map { case Bond(validator, stake) => validator -> stake }.toMap
       _ <- (blockBonds == bonds)
             .either(())
@@ -144,10 +144,10 @@ object BlockApproverProtocol {
                     .replayComputeState(runtimeManager.emptyStateHash, blockDeploys)
                     .runSyncUnsafe(Duration.Inf)
                     .leftMap { case (_, status) => s"Failed status during replay: $status." }
-      _ <- (stateHash == postState.tuplespace)
+      _ <- (stateHash == postState.postStateHash)
             .either(())
             .or("Tuplespace hash mismatch.")
-      tuplespaceBonds <- Try(runtimeManager.computeBonds(postState.tuplespace)).toEither
+      tuplespaceBonds <- Try(runtimeManager.computeBonds(postState.postStateHash)).toEither
                           .leftMap(_.getMessage)
       tuplespaceBondsMap = tuplespaceBonds.map { case Bond(validator, stake) => validator -> stake }.toMap
       _ <- (tuplespaceBondsMap == bonds)

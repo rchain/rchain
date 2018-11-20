@@ -65,7 +65,7 @@ trait BlockGenerator {
       nextId            = chain.currentId + 1
       nextCreatorSeqNum = chain.latestMessages.get(creator).fold(-1)(_.seqNum) + 1
       postState = RChainState()
-        .withTuplespace(tsHash)
+        .withPostStateHash(tsHash)
         .withBonds(bonds)
         .withBlockNumber(nextId.toLong)
       postStateHash = Blake2b256.hash(postState.toByteArray)
@@ -75,7 +75,7 @@ trait BlockGenerator {
         .withDeploysHash(ProtoUtil.protoSeqHash(deploys))
         .withTimestamp(now)
       blockHash = Blake2b256.hash(header.toByteArray)
-      body      = Body().withPostState(postState).withDeploys(deploys)
+      body      = Body().withState(postState).withDeploys(deploys)
       serializedJustifications = justifications.toList.map {
         case (creator: Validator, latestBlockHash: BlockHash) =>
           Justification(creator, latestBlockHash)
