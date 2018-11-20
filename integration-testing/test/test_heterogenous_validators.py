@@ -90,11 +90,11 @@ def started_joining_validator(system, bootstrap_node):
 
 
 @contextlib.contextmanager
-def started_unbonded_validator(system, bootstrap_node):
+def started_unbonded_validator(system, bootstrap_node,name='unbonded-validator'):
     unbonded_validator = create_peer(
         docker_client=system.docker,
         network=bootstrap_node.network,
-        name='unbonded-validator',
+        name=name,
         bonds_file=system.validators_data.bonds_file,
         rnode_timeout=system.config.rnode_timeout,
         bootstrap=bootstrap_node,
@@ -138,3 +138,60 @@ def test_heterogenous_validators(custom_system):
                         if actual_blocks_count < expected_blocks_count:
                             raise Exception("Expected {} blocks, got {}".format(expected_blocks_count, actual_blocks_count))
                     wait_for(condition, 600, "Unbonded validator did not receive any blocks")
+
+
+def test_heterogenous_validators_with_ronodes(custom_system):
+    BONDED_VALIDATOR_BLOCKS = 5
+    JOINING_VALIDATOR_BLOCKS = 3
+    with start_bootstrap(custom_system.docker, custom_system.config.node_startup_timeout, custom_system.config.rnode_timeout, custom_system.validators_data) as bootstrap_node:
+        with started_bonded_validator(custom_system, bootstrap_node) as bonded_validator:
+            contract_path = '/opt/docker/examples/hello_world_again.rho'
+            for _ in range(BONDED_VALIDATOR_BLOCKS):
+                bonded_validator.deploy(contract_path)
+                bonded_validator.propose()
+
+            with started_unbonded_validator(custom_system, bootstrap_node, 'ronode') as ronode:
+                for _ in range(BONDED_VALIDATOR_BLOCKS):
+                    bonded_validator.deploy(contract_path)
+                    bonded_validator.propose()
+
+                def condition_ronode():
+                    expected_blocks_count = 2 * BONDED_VALIDATOR_BLOCKS
+                    actual_blocks_count = ronode.get_blocks_count()
+                    if actual_blocks_count < expected_blocks_count:
+                        raise Exception("Expected {} blocks, got {}".format(expected_blocks_count, actual_blocks_count))
+                
+                wait_for(condition_ronode, 600, "Unbonded validator did not receive any blocks")
+
+                with started_joining_validator(custom_system, bootstrap_node) as joining_validator:
+                    joining_validator.generate_faucet_bonding_deploys(
+                        bond_amount=123,
+                        private_key=JOINING_VALIDATOR_KEYS.private_key,
+                        public_key=JOINING_VALIDATOR_KEYS.public_key,
+                    )
+                    bond_file = joining_validator.cat_bond_file(public_key=JOINING_VALIDATOR_KEYS.public_key)
+                    bonded_validator.deploy_string(bond_file)
+                    bonded_validator.propose()
+                    
+                    for _ in range(JOINING_VALIDATOR_BLOCKS):
+                        joining_validator.deploy(contract_path)
+                        joining_validator.propose()
+
+                    with started_unbonded_validator(custom_system, bootstrap_node) as unbonded_validator:
+                        for _ in range(JOINING_VALIDATOR_BLOCKS):
+                            joining_validator.deploy(contract_path)
+                            joining_validator.propose()
+                        
+                        def condition_unbonded():
+                            expected_blocks_count = 2 * BONDED_VALIDATOR_BLOCKS + 2 * JOINING_VALIDATOR_BLOCKS + 1
+                            actual_blocks_count = ronode.get_blocks_count()
+                            if actual_blocks_count < expected_blocks_count:
+                                raise Exception("Expected {} blocks, got {}".format(expected_blocks_count, actual_blocks_count))
+                        wait_for(condition_unbonded, 600, "Unbonded validator did not receive any blocks")
+
+                        def condition_ronode2():
+                            expected_blocks_count = 2 * BONDED_VALIDATOR_BLOCKS + 2 * JOINING_VALIDATOR_BLOCKS + 1
+                            actual_blocks_count = ronode.get_blocks_count()
+                            if actual_blocks_count < expected_blocks_count:
+                                raise Exception("Expected {} blocks, got {}".format(expected_blocks_count, actual_blocks_count))
+                        wait_for(condition_ronode2, 600, "RO Node did not receive any blocks")
