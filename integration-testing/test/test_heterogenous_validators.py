@@ -114,8 +114,8 @@ def test_heterogenous_validators(custom_system):
     with start_bootstrap(custom_system.docker, custom_system.config.node_startup_timeout, custom_system.config.rnode_timeout, custom_system.validators_data) as bootstrap_node:
         with started_bonded_validator(custom_system, bootstrap_node) as bonded_validator:
             contract_path = '/opt/docker/examples/hello_world_again.rho'
-            bonded_validator.deploy(contract_path)
             for _ in range(BONDED_VALIDATOR_BLOCKS):
+                bonded_validator.deploy(contract_path)
                 bonded_validator.propose()
 
             with started_joining_validator(custom_system, bootstrap_node) as joining_validator:
@@ -127,8 +127,8 @@ def test_heterogenous_validators(custom_system):
                 bond_file = joining_validator.cat_bond_file(public_key=JOINING_VALIDATOR_KEYS.public_key)
                 bonded_validator.deploy_string(bond_file)
                 bonded_validator.propose()
-                joining_validator.deploy(contract_path)
                 for _ in range(JOINING_VALIDATOR_BLOCKS):
+                    joining_validator.deploy(contract_path)
                     joining_validator.propose()
 
                 with started_unbonded_validator(custom_system, bootstrap_node) as unbonded_validator:
