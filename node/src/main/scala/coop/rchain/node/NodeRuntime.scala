@@ -189,11 +189,9 @@ class NodeRuntime private[node] (
       jvmMetrics: JvmMetrics[Task]
   ): Effect[Unit] = {
 
-    val info: Effect[Unit] = for {
-      _ <- Log[Effect].info(VersionInfo.get)
-      _ <- if (conf.server.standalone) Log[Effect].info(s"Starting stand-alone node.")
-          else Log[Effect].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
-    } yield ()
+    val info: Effect[Unit] =
+      if (conf.server.standalone) Log[Effect].info(s"Starting stand-alone node.")
+      else Log[Effect].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
 
     val dynamicIpLoop: Task[Unit] =
       for {
