@@ -65,14 +65,6 @@ def wait_for_converged_network(timeout, network, peer_connections):
                  "The network did NOT converge. Check container logs for issues. One or more containers might have failed to start or connect.")
 
 
-def wait_for_approved_block_received_handler_state(bootstrap_node, node_startup_timeout):
-    wait_for(
-        approved_block_received_handler_state(bootstrap_node),
-        node_startup_timeout,
-        "Bootstrap node {} did not enter ApprovedBlockRecievedHandler state".format(bootstrap_node.name),
-    )
-
-
 def wait_for_approved_block_received(network, node_startup_timeout):
     for peer in network.peers:
         wait_for(
