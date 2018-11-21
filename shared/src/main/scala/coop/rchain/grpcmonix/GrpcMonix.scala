@@ -17,6 +17,8 @@ import monix.reactive.subjects.PublishSubject
 import org.reactivestreams.{Subscriber => SubscriberR}
 import scalapb.grpc.Grpc
 
+import coop.rchain.shared.Language.ignore
+
 object GrpcMonix {
 
   private val logger                        = Log.logId
@@ -41,7 +43,7 @@ object GrpcMonix {
     new StreamObserver[T] {
       override def onError(t: Throwable): Unit = subscriber.onError(t)
       override def onCompleted(): Unit         = subscriber.onComplete()
-      override def onNext(value: T): Unit      = subscriber.onNext(value)
+      override def onNext(value: T): Unit      = ignore(subscriber.onNext(value))
     }
 
   def reactiveSubscriberToGrpcObserver[T](subscriber: SubscriberR[_ >: T]): StreamObserver[T] =

@@ -25,11 +25,11 @@ class DefaultMultiLock[K] extends MultiLock[K] {
     try {
       thunk
     } finally {
-      for {
-        k         <- sortedKeys
-        semaphore = locks.getOrElse(k, throw new Exception(s"Couldn't find lock for channel $k"))
-        _         = semaphore.release()
-      } yield ()
+      sortedKeys.foreach { k =>
+        val semaphore =
+          locks.getOrElse(k, throw new Exception(s"Couldn't find lock for channel $k"))
+        semaphore.release()
+      }
     }
   }
 

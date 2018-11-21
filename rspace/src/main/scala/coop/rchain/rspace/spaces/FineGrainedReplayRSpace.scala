@@ -17,6 +17,8 @@ import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext
 import kamon._
 
+import coop.rchain.shared.Language.ignore
+
 class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
     implicit
     serializeC: Serialize[C],
@@ -370,10 +372,10 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
   private def removeBindingsFor(
       commRef: COMM
   ): Unit =
-    commRef.produces.foldLeft(replayData.removeBinding(commRef.consume, commRef)) {
+    ignore(commRef.produces.foldLeft(replayData.removeBinding(commRef.consume, commRef)) {
       case (updatedReplays, produceRef) =>
         updatedReplays.removeBinding(produceRef, commRef)
-    }
+    })
 
   def createCheckpoint(): F[Checkpoint] = syncF.delay {
     if (replayData.isEmpty) {

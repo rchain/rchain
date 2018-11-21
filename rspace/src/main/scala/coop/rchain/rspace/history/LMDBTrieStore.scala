@@ -16,6 +16,8 @@ import scodec.bits.{BitVector, ByteVector}
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
 
+import coop.rchain.shared.Language.ignore
+
 class LMDBTrieStore[K, V] private (
     val env: Env[ByteBuffer],
     protected[this] val databasePath: Path,
@@ -102,39 +104,44 @@ class LMDBTrieStore[K, V] private (
       txn: Txn[ByteBuffer],
       branch: Branch,
       hash: Blake2b256Hash
-  ): Unit =
-    getRoot(txn, branch)
-      .find(_ == hash)
-      .orElse {
-        getPastRootsInBranch(txn, branch)
-          .find(_ == hash)
-          .map { blake: Blake2b256Hash =>
-            putRoot(txn, branch, blake)
-            blake
-          }
-      }
-      .orElse {
-        getAllPastRoots(txn)
-          .find(_ == hash)
-          .map { blake: Blake2b256Hash =>
-            putRoot(txn, branch, blake)
-            blake
-          }
-      }
-      .getOrElse(throw new Exception(s"Unknown root."))
+  ): Unit = {
+    val root =
+      getRoot(txn, branch)
+        .find(_ == hash)
+        .orElse {
+          getPastRootsInBranch(txn, branch)
+            .find(_ == hash)
+            .map { blake: Blake2b256Hash =>
+              putRoot(txn, branch, blake)
+              blake
+            }
+        }
+        .orElse {
+          getAllPastRoots(txn)
+            .find(_ == hash)
+            .map { blake: Blake2b256Hash =>
+              putRoot(txn, branch, blake)
+              blake
+            }
+        }
 
+    if (root.isEmpty)
+      throw new Exception(s"Unknown root.")
+  }
   override private[rspace] def getEmptyRoot(txn: Txn[ByteBuffer]) =
     Option(_dbEmptyRoots.get(txn, LMDBTrieStore.emptyRootKey))
       .map(bytes => Codec[Blake2b256Hash].decode(BitVector(bytes)).map(_.value).get)
       .getOrElse(throw new Exception(s"Missing empty root."))
 
   override private[rspace] def putEmptyRoot(txn: Txn[ByteBuffer], hash: Blake2b256Hash): Unit =
-    _dbEmptyRoots
-      .put(
-        txn,
-        LMDBTrieStore.emptyRootKey,
-        Codec[Blake2b256Hash].encode(hash).map(_.bytes.toDirectByteBuffer).get
-      )
+    ignore(
+      _dbEmptyRoots
+        .put(
+          txn,
+          LMDBTrieStore.emptyRootKey,
+          Codec[Blake2b256Hash].encode(hash).map(_.bytes.toDirectByteBuffer).get
+        )
+    )
 }
 
 object LMDBTrieStore {

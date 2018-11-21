@@ -249,7 +249,7 @@ class LockFreeInMemoryStore[T, C, P, A, K](
   ): Unit = {
     val key  = hashChannels(channels)
     val gnat = GNAT[C, P, A, K](channels, Seq.empty, Seq(continuation))
-    stateGNAT.put(key, gnat)
+    ignore(stateGNAT.put(key, gnat))
   }
 }
 

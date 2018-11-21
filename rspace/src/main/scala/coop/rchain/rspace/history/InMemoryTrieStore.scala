@@ -90,26 +90,30 @@ class InMemoryTrieStore[K, V]
       txn: InMemTransaction[State[K, V]],
       branch: Branch,
       hash: Blake2b256Hash
-  ): Unit =
-    getRoot(txn, branch)
-      .find(_ == hash)
-      .orElse {
-        getPastRootsInBranch(txn, branch)
-          .find(_ == hash)
-          .map { blake: Blake2b256Hash =>
-            putRoot(txn, branch, blake)
-            blake
-          }
-      }
-      .orElse {
-        getAllPastRoots(txn)
-          .find(_ == hash)
-          .map { blake: Blake2b256Hash =>
-            putRoot(txn, branch, blake)
-            blake
-          }
-      }
-      .orElse(throw new Exception(s"Unknown root."))
+  ): Unit = {
+    val root =
+      getRoot(txn, branch)
+        .find(_ == hash)
+        .orElse {
+          getPastRootsInBranch(txn, branch)
+            .find(_ == hash)
+            .map { blake: Blake2b256Hash =>
+              putRoot(txn, branch, blake)
+              blake
+            }
+        }
+        .orElse {
+          getAllPastRoots(txn)
+            .find(_ == hash)
+            .map { blake: Blake2b256Hash =>
+              putRoot(txn, branch, blake)
+              blake
+            }
+        }
+
+    if (root.isEmpty)
+      throw new Exception(s"Unknown root.")
+  }
 
   override private[rspace] def put(
       txn: InMemTransaction[State[K, V]],
