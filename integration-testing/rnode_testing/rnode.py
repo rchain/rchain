@@ -15,10 +15,10 @@ DEFAULT_IMAGE = "rchain-integration-testing:latest"
 
 rnode_binary = '/opt/docker/bin/rnode'
 rnode_directory = "/var/lib/rnode"
-rnode_deploy_dir = f"{rnode_directory}/deploy"
-rnode_bonds_file = f'{rnode_directory}/genesis/bonds.txt'
-rnode_certificate = f'{rnode_directory}/node.certificate.pem'
-rnode_key = f'{rnode_directory}/node.key.pem'
+rnode_deploy_dir = "{rnode_directory}/deploy".format(rnode_directory=rnode_directory)
+rnode_bonds_file = '{rnode_directory}/genesis/bonds.txt'.format(rnode_directory=rnode_directory)
+rnode_certificate = '{rnode_directory}/node.certificate.pem'.format(rnode_directory=rnode_directory)
+rnode_key = '{rnode_directory}/node.key.pem'.format(rnode_directory=rnode_directory)
 
 
 class InterruptedException(Exception):
@@ -79,14 +79,16 @@ class Node:
 
     def get_rnode_address(self):
         log_content = self.logs()
-        m = re.search(f"Listening for traffic on (rnode://.+@{self.container.name}\\?protocol=\\d+&discovery=\\d+)\\.$", log_content, re.MULTILINE | re.DOTALL)
+        m = re.search("Listening for traffic on (rnode://.+@{name}\\?protocol=\\d+&discovery=\\d+)\\.$".format(name=self.container.name),
+                      log_content,
+                      re.MULTILINE | re.DOTALL)
         address = m[1]
 
-        logging.info(f"Bootstrap address: `{address}`")
+        logging.info("Bootstrap address: `{address}`".format(address=address))
         return address
 
     def get_metrics(self):
-        cmd = f'curl -s http://localhost:40403/metrics'
+        cmd = 'curl -s http://localhost:40403/metrics'
 
         return self.exec_run(cmd=cmd)
 
@@ -96,19 +98,23 @@ class Node:
         with open(log_file_path, "w") as f:
             f.write(self.logs())
 
-        logging.info(f"Remove container {self.container.name}. Logs have been written to {log_file_path}")
+        logging.info("Remove container {name}. Logs have been written to {path}".format(name=self.container.name, path=log_file_path))
 
         self.container.remove(force=True, v=True)
 
     def deploy_contract(self, contract):
-        cmd = f'{rnode_binary} deploy --from "0x1" --phlo-limit 1000000 --phlo-price 1 --nonce 0 {rnode_deploy_dir}/{contract}'
+        cmd = '{rnode_binary} deploy --from "0x1" --phlo-limit 1000000 --phlo-price 1 --nonce 0 {rnode_deploy_dir}/{contract}'.format(
+            rnode_binary=rnode_binary,
+            rnode_deploy_dir=rnode_deploy_dir,
+            contract=contract
+        )
         return self.exec_run(cmd)
 
     def propose_contract(self):
-        return self.exec_run(f'{rnode_binary} propose')
+        return self.exec_run('{rnode_binary} propose'.format(rnode_binary=rnode_binary))
 
     def show_blocks(self):
-        return self.exec_run(f'{rnode_binary} show-blocks')
+        return self.exec_run('{rnode_binary} show-blocks'.format(rnode_binary=rnode_binary))
 
     def get_blocks_count(self):
         show_blocks_output = self.call_rnode('show-blocks', stderr=False).strip()
@@ -123,13 +129,13 @@ class Node:
 
         process = Process(target=execution)
 
-        logging.info(f"{self.name}: Execute '{cmd}'. Timeout: {self.timeout}s")
+        logging.info("{name}: Execute '{cmd}'. Timeout: {timeout}s".format(name=self.name, cmd=cmd, timeout=self.timeout))
 
         process.start()
 
         try:
             exit_code, output = queue.get(self.timeout)
-            logging.info(f"Returning: {exit_code}, '{output}'")
+            logging.info("Returning: {exit_code}, '{output}'".format(exit_code=exit_code, output=output))
             return exit_code, output
         except Empty:
             process.terminate()
@@ -163,7 +169,11 @@ class Node:
 
     def repl(self, rholang_code, stderr=False):
         quoted_rholang_code = shlex.quote(rholang_code)
-        return self.shell_out('sh', '-c', f'echo {quoted_rholang_code} | {rnode_binary} repl', stderr=stderr)
+        return self.shell_out('sh',
+                              '-c',
+                              'echo {quoted_rholang_code} | {rnode_binary} repl'.format(quoted_rholang_code=quoted_rholang_code,
+                                                                                        rnode_binary=rnode_binary),
+                              stderr=stderr)
 
     def generate_faucet_bonding_deploys(self, bond_amount, private_key, public_key):
         return self.call_rnode('generateFaucetBondingDeploys',
@@ -180,7 +190,7 @@ class Node:
         return self.shell_out('cat', '/opt/docker/bond_{}.rho'.format(public_key))
 
     __timestamp_rx = "\\d\\d:\\d\\d:\\d\\d\\.\\d\\d\\d"
-    __log_message_rx = re.compile(f"^{__timestamp_rx} (.*?)(?={__timestamp_rx})", re.MULTILINE | re.DOTALL)
+    __log_message_rx = re.compile("^{timestamp_rx} (.*?)(?={timestamp_rx})".format(timestamp_rx=__timestamp_rx), re.MULTILINE | re.DOTALL)
 
     def log_lines(self):
         log_content = self.logs()
@@ -212,10 +222,10 @@ def create_node_container(
     deploy_dir = make_tempdir("rchain-integration-test")
 
     hosts_allow_file_content = \
-        "ALL:ALL" if allowed_peers is None else "\n".join(f"ALL: {peer}" for peer in allowed_peers)
+        "ALL:ALL" if allowed_peers is None else "\n".join("ALL: {peer}".format(peer=peer) for peer in allowed_peers)
 
-    hosts_allow_file = make_tempfile(f"hosts-allow-{name}", hosts_allow_file_content)
-    hosts_deny_file = make_tempfile(f"hosts-deny-{name}", "ALL: ALL")
+    hosts_allow_file = make_tempfile("hosts-allow-{name}".format(name=name), hosts_allow_file_content)
+    hosts_deny_file = make_tempfile("hosts-deny-{name}".format(name=name), "ALL: ALL")
 
     command = make_container_command(container_command, container_command_options)
 
@@ -226,10 +236,10 @@ def create_node_container(
     logging.info('Using _JAVA_OPTIONS: {}'.format(java_options))
 
     volumes = [
-        f"{hosts_allow_file}:/etc/hosts.allow",
-        f"{hosts_deny_file}:/etc/hosts.deny",
-        f"{bonds_file}:{rnode_bonds_file}",
-        f"{deploy_dir}:{rnode_deploy_dir}",
+        "{hosts_allow_file}:/etc/hosts.allow".format(hosts_allow_file=hosts_allow_file),
+        "{hosts_deny_file}:/etc/hosts.deny".format(hosts_deny_file=hosts_deny_file),
+        "{bonds_file}:{rnode_bonds_file}".format(bonds_file=bonds_file, rnode_bonds_file=rnode_bonds_file),
+        "{deploy_dir}:{rnode_deploy_dir}".format(deploy_dir=deploy_dir,rnode_deploy_dir=rnode_deploy_dir),
     ]
 
     container = docker_client.containers.run(
@@ -264,9 +274,9 @@ def create_bootstrap_node(
     key_file = resources.get_resource_path("bootstrap_certificate/node.key.pem")
     cert_file = resources.get_resource_path("bootstrap_certificate/node.certificate.pem")
 
-    logging.info(f"Using key_file={key_file} and cert_file={cert_file}")
+    logging.info("Using key_file={key_file} and cert_file={cert_file}".format(key_file=key_file, cert_file=cert_file))
 
-    name = f"bootstrap.{network}"
+    name = "bootstrap.{network}".format(network=network)
     container_command_options = {
         "--port":                   40400,
         "--standalone":             "",
@@ -276,8 +286,8 @@ def create_bootstrap_node(
     }
 
     volumes = [
-        f"{cert_file}:{rnode_certificate}",
-        f"{key_file}:{rnode_key}"
+        "{cert_file}:{rnode_certificate}".format(cert_file=cert_file, rnode_certificate=rnode_certificate),
+        "{key_file}:{rnode_key}".format(key_file=key_file, rnode_key=rnode_key)
     ]
 
     container = create_node_container(
@@ -297,7 +307,7 @@ def create_bootstrap_node(
 
 
 def make_peer_name(network, i):
-    return f"peer{i}.{network}"
+    return "peer{i}.{network}".format(i=i, network=network)
 
 
 def create_peer(
