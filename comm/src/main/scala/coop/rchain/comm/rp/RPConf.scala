@@ -6,7 +6,6 @@ import coop.rchain.comm.PeerNode
 
 case class RPConf(
     local: PeerNode,
-    dynamicLocal: PeerNode, // in case of a dynamic IP change
     bootstrap: Option[PeerNode],
     defaultTimeout: FiniteDuration,
     clearConnections: ClearConnetionsConf

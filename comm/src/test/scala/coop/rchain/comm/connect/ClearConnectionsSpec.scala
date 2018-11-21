@@ -129,9 +129,9 @@ class ClearConnectionsSpec
         // given
         implicit val connections = mkConnections(peer("A"), peer("B"))
         implicit val rpconf =
-          conf(maxNumOfConnections = 5, dynamicLocal = peer("src", host = "new"))
+          conf(maxNumOfConnections = 5)
         // when
-        Connect.clearConnections[Id]
+        Connect.resetConnections[Id]
         // then
         connections.read.size shouldBe 0
         transport.requests.size shouldBe 2
@@ -145,8 +145,6 @@ class ClearConnectionsSpec
     }
   }
 
-  private val local = peer("src")
-
   private def peer(name: String, host: String = "host"): PeerNode =
     PeerNode(NodeIdentifier(name.getBytes), Endpoint(host, 80, 80))
 
@@ -155,15 +153,13 @@ class ClearConnectionsSpec
 
   private def conf(
       maxNumOfConnections: Int,
-      numOfConnectionsPinged: Int = 5,
-      dynamicLocal: PeerNode = local
+      numOfConnectionsPinged: Int = 5
   ): RPConfAsk[Id] =
     new ConstApplicativeAsk(
       RPConf(
         clearConnections = ClearConnetionsConf(maxNumOfConnections, numOfConnectionsPinged),
         defaultTimeout = 1.milli,
-        local = local,
-        dynamicLocal = dynamicLocal,
+        local = peer("src"),
         bootstrap = None
       )
     )
