@@ -309,7 +309,7 @@ class NodeRuntime private[node] (
       conf.tls.certificate,
       conf.tls.key,
       conf.server.maxMessageSize,
-      conf.server.dataDir.resolve("comm-temporary/")
+      conf.server.dataDir.resolve("tmp").resolve("comm")
     )(grpcScheduler, log, tcpConnections)
     kademliaRPC = effects.kademliaRPC(kademliaPort, defaultTimeout)(
       grpcScheduler,
