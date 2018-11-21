@@ -58,7 +58,7 @@ def make_test_config(request):
 
     with log_box(logging.info):
         s = pprint.pformat(dict(config._asdict()), indent=4)
-        logging.info(f"Running with test configuration: {s}")
+        logging.info("Running with test configuration: {s}".format(s=s))
 
     return config
 
@@ -70,7 +70,7 @@ def temporary_bonds_file(validator_keys):
         with os.fdopen(fd, "w") as f:
             for pair in validator_keys:
                 bond = random.randint(1, 100)
-                f.write(f"{pair.public_key} {bond}\n")
+                f.write("{public_key} {bond}\n".format(public_key=pair.public_key, bond=bond))
         yield file
     finally:
         os.unlink(file)
