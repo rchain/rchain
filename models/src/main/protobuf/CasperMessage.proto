@@ -229,7 +229,7 @@ message ProcessedDeploy {
 }
 
 message Body {
-  RChainState              postState    = 1;
+  RChainState              state    = 1;
   repeated ProcessedDeploy deploys      = 2;
   bytes                    extraBytes   = 3;
 }
@@ -240,12 +240,13 @@ message Justification {
 }
 
 message RChainState {
-  bytes tuplespace = 1; //hash of the tuplespace contents
+  bytes preStateHash = 1; //hash of the tuplespace contents before new deploys
+  bytes postStateHash = 2; //hash of the tuplespace contents after new deploys
 
   //Internals of what will be the "blessed" PoS contract
   //(which will be part of the tuplespace in the real implementation).
-  repeated Bond bonds        = 2;
-  int64         blockNumber  = 3;
+  repeated Bond bonds        = 3;
+  int64         blockNumber  = 4;
 }
 
 message Deploy {

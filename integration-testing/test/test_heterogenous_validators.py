@@ -4,6 +4,9 @@ import contextlib
 
 from rnode_testing.rnode import start_bootstrap, create_peer
 from rnode_testing.wait import wait_for, node_started
+from rnode_testing.network import (
+    wait_for_approved_block_received_handler_state,
+)
 
 
 """
@@ -52,7 +55,7 @@ def started_bonded_validator(system, bootstrap_node):
     bonded_validator = create_peer(
         docker_client=system.docker,
         network=bootstrap_node.network,
-        name='bonded_validator',
+        name='bonded-validator',
         bonds_file=system.validators_data.bonds_file,
         rnode_timeout=system.config.rnode_timeout,
         bootstrap=bootstrap_node,
@@ -60,6 +63,7 @@ def started_bonded_validator(system, bootstrap_node):
     )
     try:
         wait_for(node_started(bonded_validator), system.config.node_startup_timeout, "Bonded validator node didn't start correctly")
+        wait_for_approved_block_received_handler_state(bonded_validator, system.config.node_startup_timeout)
         yield bonded_validator
     finally:
         bonded_validator.cleanup()
@@ -70,7 +74,7 @@ def started_joining_validator(system, bootstrap_node):
     joining_validator = create_peer(
         docker_client=system.docker,
         network=bootstrap_node.network,
-        name='joining_validator',
+        name='joining-validator',
         bonds_file=system.validators_data.bonds_file,
         rnode_timeout=system.config.rnode_timeout,
         bootstrap=bootstrap_node,
@@ -78,6 +82,7 @@ def started_joining_validator(system, bootstrap_node):
     )
     try:
         wait_for(node_started(joining_validator), system.config.node_startup_timeout, "Joining validator node didn't start correctly")
+        wait_for_approved_block_received_handler_state(joining_validator, system.config.node_startup_timeout)
         yield joining_validator
     finally:
         joining_validator.cleanup()
@@ -89,7 +94,7 @@ def started_unbonded_validator(system, bootstrap_node):
     unbonded_validator = create_peer(
         docker_client=system.docker,
         network=bootstrap_node.network,
-        name='unbonded_validator',
+        name='unbonded-validator',
         bonds_file=system.validators_data.bonds_file,
         rnode_timeout=system.config.rnode_timeout,
         bootstrap=bootstrap_node,
@@ -103,14 +108,15 @@ def started_unbonded_validator(system, bootstrap_node):
 
 
 
+@pytest.mark.skip(reason="https://rchain.atlassian.net/browse/CORE-1455")
 def test_heterogenous_validators(custom_system):
     BONDED_VALIDATOR_BLOCKS = 10
     JOINING_VALIDATOR_BLOCKS = 10
     with start_bootstrap(custom_system.docker, custom_system.config.node_startup_timeout, custom_system.config.rnode_timeout, custom_system.validators_data) as bootstrap_node:
         with started_bonded_validator(custom_system, bootstrap_node) as bonded_validator:
             contract_path = '/opt/docker/examples/hello_world_again.rho'
-            bonded_validator.deploy(contract_path)
             for _ in range(BONDED_VALIDATOR_BLOCKS):
+                bonded_validator.deploy(contract_path)
                 bonded_validator.propose()
 
             with started_joining_validator(custom_system, bootstrap_node) as joining_validator:
@@ -122,9 +128,14 @@ def test_heterogenous_validators(custom_system):
                 bond_file = joining_validator.cat_bond_file(public_key=JOINING_VALIDATOR_KEYS.public_key)
                 bonded_validator.deploy_string(bond_file)
                 bonded_validator.propose()
-                joining_validator.deploy(contract_path)
                 for _ in range(JOINING_VALIDATOR_BLOCKS):
+                    joining_validator.deploy(contract_path)
                     joining_validator.propose()
 
                 with started_unbonded_validator(custom_system, bootstrap_node) as unbonded_validator:
-                    wait_for(lambda: unbonded_validator.get_blocks_count() >= BONDED_VALIDATOR_BLOCKS+JOINING_VALIDATOR_BLOCKS, 600, "Unbonded validator did not receive any blocks")
+                    def condition():
+                        expected_blocks_count = BONDED_VALIDATOR_BLOCKS + JOINING_VALIDATOR_BLOCKS
+                        actual_blocks_count = unbonded_validator.get_blocks_count()
+                        if actual_blocks_count < expected_blocks_count:
+                            raise Exception("Expected {} blocks, got {}".format(expected_blocks_count, actual_blocks_count))
+                    wait_for(condition, 600, "Unbonded validator did not receive any blocks")

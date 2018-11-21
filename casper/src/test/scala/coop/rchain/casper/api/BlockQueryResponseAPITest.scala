@@ -33,7 +33,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
     val ps = RChainState()
       .withBlockNumber(blockNumber)
       .withBonds(Seq(Bond(ByteString.copyFromUtf8("random"), 1)))
-    val body   = Body().withPostState(ps)
+    val body   = Body().withState(ps)
     val header = ProtoUtil.blockHeader(body, Seq.empty[ByteString], version, timestamp)
     BlockMessage().withBlockHash(genesisHash).withHeader(header).withBody(body)
   }
@@ -47,7 +47,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
   val deployCount          = 10
   val randomDeploys =
     (0 until deployCount).map(ProtoUtil.basicProcessedDeploy[Id](_)(syncId, timeEff))
-  val body: Body                       = Body().withPostState(ps).withDeploys(randomDeploys)
+  val body: Body                       = Body().withState(ps).withDeploys(randomDeploys)
   val parentsString                    = List(genesisHashString, "0000000001")
   val parentsHashList: List[BlockHash] = parentsString.map(ProtoUtil.stringToByteString)
   val header: Header                   = ProtoUtil.blockHeader(body, parentsHashList, version, timestamp)

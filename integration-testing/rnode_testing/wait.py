@@ -14,8 +14,6 @@ def wait_for(condition, timeout, error_message):
     :return: true  if the condition was met in the given timeout
     """
 
-    __tracebackhide__ = True
-
     with log_box(logging.info, f"Waiting maximum timeout={timeout}. Patience please!", "."):
         logging.info(f"Wait condition is: `{condition.__doc__}`")
         elapsed = 0
@@ -114,3 +112,17 @@ def has_peers(bootstrap_node, expected_peers):
 def node_started(node):
     return string_contains(node_logs(node),
                            "coop.rchain.node.NodeRuntime - Listening for traffic on rnode")
+
+
+def approved_block_received_handler_state(bootstrap_node):
+    return string_contains(
+        node_logs(bootstrap_node),
+        "Making a transition to ApprovedBlockRecievedHandler state.",
+    )
+
+
+def approved_block_received(peer):
+    return string_contains(
+        node_logs(peer),
+        "Valid ApprovedBlock received!",
+    )

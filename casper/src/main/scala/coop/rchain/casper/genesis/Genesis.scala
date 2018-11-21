@@ -77,8 +77,8 @@ object Genesis {
 
     val stateWithContracts = for {
       bd <- initial.body
-      ps <- bd.postState
-    } yield ps.withTuplespace(stateHash)
+      ps <- bd.state
+    } yield ps.withPreStateHash(runtimeManager.emptyStateHash).withPostStateHash(stateHash)
     val version   = initial.header.get.version
     val timestamp = initial.header.get.timestamp
 
@@ -86,7 +86,7 @@ object Genesis {
       processedDeploys.filterNot(_.status.isFailed).map(ProcessedDeployUtil.fromInternal)
     val sortedDeploys = blockDeploys.map(d => d.copy(log = d.log.sortBy(_.toByteArray)))
 
-    val body = Body(postState = stateWithContracts, deploys = sortedDeploys)
+    val body = Body(state = stateWithContracts, deploys = sortedDeploys)
 
     val header = blockHeader(body, List.empty[ByteString], version, timestamp)
 
@@ -111,7 +111,7 @@ object Genesis {
       .withBlockNumber(0)
       .withBonds(bondsProto)
     val body = Body()
-      .withPostState(state)
+      .withState(state)
     val header = blockHeader(body, List.empty[ByteString], version, timestamp)
 
     unsignedBlockProto(body, header, List.empty[Justification], shardId)

@@ -83,7 +83,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                   )
         validatorId <- ValidatorIdentity.fromConfig[F](conf)
         bondedValidators = genesis.body
-          .flatMap(_.postState.map(_.bonds.map(_.validator).toSet))
+          .flatMap(_.state.map(_.bonds.map(_.validator).toSet))
           .getOrElse(Set.empty)
         abp <- ApproveBlockProtocol
                 .of[F](

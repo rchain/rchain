@@ -145,7 +145,7 @@ object Validate {
       for {
         _ <- Log[F].warn(ignore(b, s"block new code hash is empty."))
       } yield false
-    } else if (b.body.get.postState.isEmpty) {
+    } else if (b.body.get.state.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block post state is missing."))
       } yield false
@@ -399,7 +399,7 @@ object Validate {
       b.extraBytes
     )
     val deployHashComputed    = ProtoUtil.protoSeqHash(b.body.get.deploys)
-    val postStateHashComputed = ProtoUtil.protoHash(b.body.get.postState.get)
+    val postStateHashComputed = ProtoUtil.protoHash(b.body.get.state.get)
     if (b.blockHash == blockHashComputed &&
         b.header.get.deploysHash == deployHashComputed &&
         b.header.get.postStateHash == postStateHashComputed) {
