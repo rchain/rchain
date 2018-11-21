@@ -80,9 +80,11 @@ trait BlockGenerator {
       preStateHash: ByteString = ByteString.EMPTY
   ): F[BlockMessage] =
     for {
-      now           <- Time[F].currentMillis
-      postState     = RChainState().withPreStateHash(preStateHash)
-        .withPostStateHash(tsHash).withBonds(bonds)
+      now <- Time[F].currentMillis
+      postState = RChainState()
+        .withPreStateHash(preStateHash)
+        .withPostStateHash(tsHash)
+        .withBonds(bonds)
       postStateHash = Blake2b256.hash(postState.toByteArray)
       header = Header()
         .withPostStateHash(ByteString.copyFrom(postStateHash))

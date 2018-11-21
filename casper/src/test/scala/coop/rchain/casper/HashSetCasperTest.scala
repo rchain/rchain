@@ -140,8 +140,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       logMessages = List(
         "Received Deploy",
         "Attempting to add Block",
-        "Sent Block #1",
         "Added",
+        "Sent Block #1",
         "New fork-choice tip is block"
       )
       _      = logEff.warns.isEmpty should be(true)
@@ -877,16 +877,16 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _                     <- nodes(1).casperEff.addBlock(signedBlock4) // should succeed
       _                     <- nodes(0).receive() // still receive signedBlock4
 
-      _ <- nodes(1).casperEff
-            .contains(signedBlock4) shouldBeF true // Invalid blocks are still added
+      result <- nodes(1).casperEff
+                 .contains(signedBlock4) shouldBeF true // Invalid blocks are still added
+      // TODO: Fix with https://rchain.atlassian.net/browse/RHOL-1048
+      // nodes(0).casperEff.contains(signedBlock4) should be(false)
+      //
+      // nodes(0).logEff.warns
+      //   .count(_ contains "found deploy by the same (user, millisecond timestamp) produced") should be(
+      //   1
+      // )
       _ = nodes.foreach(_.tearDownNode())
-    // TODO: Fix with https://rchain.atlassian.net/browse/RHOL-1048
-    // nodes(0).casperEff.contains(signedBlock4) should be(false)
-    //
-    // nodes(0).logEff.warns
-    //   .count(_ contains "found deploy by the same (user, millisecond timestamp) produced") should be(
-    //   1
-    // )
 
       _ = nodes.toList.traverse_[Effect, Assertion] { node =>
         validateBlockStore(node) { blockStore =>
@@ -1006,11 +1006,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _ <- nodes(2).receive()
       _ <- nodes(1).transportLayerEff.clear(nodes(1).local) //nodes(1) misses this block
 
-      _ <- nodes(1).casperEff.contains(signedBlock1) should be(true)
-      _ <- nodes(2).casperEff.contains(signedBlock1) should be(false)
+      _ <- nodes(1).casperEff.contains(signedBlock1) shouldBeF true
+      _ <- nodes(2).casperEff.contains(signedBlock1) shouldBeF false
 
-      _ <- nodes(1).casperEff.contains(signedBlock1Prime) should be(false)
-      _ <- nodes(2).casperEff.contains(signedBlock1Prime) should be(true)
+      _ <- nodes(1).casperEff.contains(signedBlock1Prime) shouldBeF false
+      _ <- nodes(2).casperEff.contains(signedBlock1Prime) shouldBeF true
 
       createBlockResult2 <- nodes(1).casperEff
                              .deploy(deployDatas(2)) *> nodes(1).casperEff.createBlock
@@ -1022,16 +1022,17 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _ <- nodes(2).casperEff.addBlock(signedBlock3)
       _ <- nodes(1).casperEff.addBlock(signedBlock2)
       _ <- nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) ignores block2
-      _ <- nodes(1).receive()                               // receives block3; asks for block1'
-      _ <- nodes(2).receive()                               // receives request for block1'; sends block1'
-      _ <- nodes(1).receive()                               // receives block1'; adds both block3 and block1'
+      _ <- nodes(1).receive() // receives block3; asks for block1'
+      _ <- nodes(2).receive() // receives request for block1'; sends block1'
+      _ <- nodes(1).receive() // receives block1'; adds both block3 and block1'
 
       _ <- nodes(1).casperEff.contains(signedBlock3) shouldBeF true
       _ <- nodes(1).casperEff.contains(signedBlock1Prime) shouldBeF true
 
-      Created(signedBlock4) = nodes(1).casperEff
-        .deploy(deployDatas(4)) *> nodes(1).casperEff.createBlock
-      _ <- nodes(1).casperEff.addBlock(signedBlock4)
+      createBlockResult4 <- nodes(1).casperEff
+                             .deploy(deployDatas(4)) *> nodes(1).casperEff.createBlock
+      Created(signedBlock4) = createBlockResult4
+      _                     <- nodes(1).casperEff.addBlock(signedBlock4)
 
       // Node 1 should contain both blocks constituting the equivocation
       _ <- nodes(1).casperEff.contains(signedBlock1) shouldBeF true
@@ -1040,10 +1041,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _ <- nodes(1).casperEff
             .contains(signedBlock4) shouldBeF true // However, in invalidBlockTracker
 
-    _ <- nodes(1).logEff.infos.count(_ startsWith "Added admissible equivocation") should be(1)
-    _ <- nodes(2).logEff.warns.size should be(0)
-    _ <- nodes(1).logEff.warns.size should be(1)
-    _ <- nodes(0).logEff.warns.size should be(0)
+      _ = nodes(1).logEff.infos.count(_ startsWith "Added admissible equivocation") should be(1)
+      _ = nodes(2).logEff.warns.size should be(0)
+      _ = nodes(1).logEff.warns.size should be(1)
+      _ = nodes(0).logEff.warns.size should be(0)
 
       _ = nodes(1).casperEff.normalizedInitialFault(ProtoUtil.weightMap(genesis)) should be(
         1f / (1f + 3f + 5f + 7f)

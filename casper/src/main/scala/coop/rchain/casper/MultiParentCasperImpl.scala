@@ -241,7 +241,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     } yield result.toSeq
 
   private def createProposal(
-      dag: BlockDag,
+      dag: BlockDagRepresentation[F],
       p: Seq[BlockMessage],
       r: Seq[Deploy],
       justifications: Seq[Justification]
@@ -298,10 +298,6 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                      })
                }
     } yield result
-
-  def blockDag: F[BlockDag] = Capture[F].capture {
-    _blockDag.get
-  }
 
   def blockDag: F[BlockDagRepresentation[F]] =
     BlockDagStorage[F].getRepresentation
