@@ -9,7 +9,6 @@ import cats.effect.concurrent.Ref
 import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.functor._
-
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
 import coop.rchain.casper._
@@ -309,7 +308,8 @@ class NodeRuntime private[node] (
       port,
       conf.tls.certificate,
       conf.tls.key,
-      conf.server.maxMessageSize
+      conf.server.maxMessageSize,
+      conf.server.dataDir.resolve("tmp").resolve("comm")
     )(grpcScheduler, log, tcpConnections)
     kademliaRPC = effects.kademliaRPC(kademliaPort, defaultTimeout)(
       grpcScheduler,
