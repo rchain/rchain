@@ -64,7 +64,7 @@ def test_metrics_api_socket(complete_network):
 @profile
 def test_node_logs_for_errors(complete_network):
     for node in complete_network.nodes:
-        logging.info("Testing {name} node logs for errors.".format(node.name))
+        logging.info("Testing {name} node logs for errors.".format(name=node.name))
         logs = node.logs()
 
         if "ERROR" in logs:
