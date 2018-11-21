@@ -242,6 +242,9 @@ object ProtoUtil {
   def postStateHash(b: BlockMessage): ByteString =
     b.getBody.getState.postStateHash
 
+  def preStateHash(b: BlockMessage): ByteString =
+    b.getBody.getState.preStateHash
+
   def bonds(b: BlockMessage): Seq[Bond] =
     (for {
       bd <- b.body
