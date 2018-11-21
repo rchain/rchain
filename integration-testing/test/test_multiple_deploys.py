@@ -81,28 +81,25 @@ def test_multiple_deploys_at_once(custom_system):
             with started_bonded_validator(custom_system, bootstrap_node, 2, BONDED_VALIDATOR_KEY_2) as no2:
                 with started_bonded_validator(custom_system, bootstrap_node, 3, BONDED_VALIDATOR_KEY_3) as no3:
                     contract_path = '/opt/docker/examples/hello_world_again.rho'
-                    amount = 10
+                    amount = 5
                     deploy1 = deployThread("node1", no1, contract_path, amount)
                     deploy1.start()
 
-                    wait_for(setup_condition(no1, amount), 600, "Unbonded validator did not receive any blocks")
-                    wait_for(setup_condition(no2, amount), 100, "Unbonded validator did not receive any blocks")
-                    wait_for(setup_condition(no3, amount), 100, "Unbonded validator did not receive any blocks")
-                    wait_for(setup_condition(bootstrap_node, amount), 100, "Unbonded validator did not receive any blocks")
+                    wait_for(setup_condition(no1, amount), 180, "Unbonded validator did not receive any blocks")
+
+                    deploy2 = deployThread("node2", no2, contract_path, amount*2)
+                    deploy2.start()
+
+                    deploy3 = deployThread("node3", no3, contract_path, amount*2)
+                    deploy3.start()
 
                     deploy4 = deployThread("node1", no1, contract_path, amount)
                     deploy4.start()
 
-                    deploy2 = deployThread("node2", no2, contract_path, amount)
-                    deploy2.start()
-
-                    deploy3 = deployThread("node3", no3, contract_path, amount)
-                    deploy3.start()
-
-                    wait_for(setup_condition(no1, amount * 4), 600, "Unbonded validator did not receive any blocks")
-                    wait_for(setup_condition(no2, amount * 4), 100, "Unbonded validator did not receive any blocks")
-                    wait_for(setup_condition(no3, amount * 4), 100, "Unbonded validator did not receive any blocks")
-                    wait_for(setup_condition(bootstrap_node, amount * 4), 100, "Unbonded validator did not receive any blocks")
+                    wait_for(setup_condition(no3, amount * 6), 600, "Unbonded validator did not receive any blocks")
+                    wait_for(setup_condition(no1, amount * 6), 100, "Unbonded validator did not receive any blocks")
+                    wait_for(setup_condition(no2, amount * 6), 100, "Unbonded validator did not receive any blocks")
+                    wait_for(setup_condition(bootstrap_node, amount * 6), 100, "Unbonded validator did not receive any blocks")
 
                     deploy1.join()
                     deploy2.join()
@@ -124,4 +121,6 @@ class deployThread (threading.Thread):
             self.node.deploy(self.contract)
             logging.info(f"Deployed and will propose {self.contract} to node {self.name} ({i}).")
             self.node.propose()
+            logging.info(f"Proposed {self.contract} to node {self.name} ({i}). Showing blocks")
+            self.node.show_blocks()
             logging.info(f"Proposed {self.contract} to node {self.name} ({i}).")
