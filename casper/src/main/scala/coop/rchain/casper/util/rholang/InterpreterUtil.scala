@@ -206,8 +206,8 @@ object InterpreterUtil {
             deploys     = blocks.flatMap(_.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal))
           } yield
             runtimeManager
-            .replayComputeState(initStateHash, deploys, time)
-            .runSyncUnsafe(Duration.Inf) match {
+              .replayComputeState(initStateHash, deploys, time)
+              .runSyncUnsafe(Duration.Inf) match {
               case result @ Right(_) => result.leftCast[Throwable]
               case Left((_, status)) =>
                 val parentHashes = parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))

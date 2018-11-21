@@ -71,13 +71,14 @@ object IndexedBlockDagStorage {
 
   def create[F[_]: Concurrent](underlying: BlockDagStorage[F]): F[IndexedBlockDagStorage[F]] =
     for {
-      semaphore <- Semaphore[F](1)
+      semaphore  <- Semaphore[F](1)
       idToBlocks <- Ref.of[F, Map[Int, BlockMessage]](Map.empty)
-      currentId <- Ref.of[F, Int](-1)
-    } yield new IndexedBlockDagStorage[F](
-      semaphore,
-      underlying,
-      idToBlocks,
-      currentId
-    )
+      currentId  <- Ref.of[F, Int](-1)
+    } yield
+      new IndexedBlockDagStorage[F](
+        semaphore,
+        underlying,
+        idToBlocks,
+        currentId
+      )
 }

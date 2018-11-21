@@ -73,7 +73,7 @@ final class InMemBlockDagStorage[F[_]: Monad](
                 case (acc, p) =>
                   val currChildren = acc.getOrElse(p, HashSet.empty[BlockHash])
                   acc.updated(p, currChildren + block.blockHash)
-            }
+              }
           )
       _ <- topoSortRef.update(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
       _ <- latestMessagesRef.update(_.updated(block.sender, block.blockHash))

@@ -746,7 +746,8 @@ object BlockDagFileStorage {
                                             new FileOutputStream(
                                               config.latestMessagesLogPath.toFile,
                                               true
-                                            ))
+                                            )
+                                          )
       blockMetadataCrc      = Crc32.empty[F]()
       genesisByteString     = genesis.toByteString
       genesisData           = genesisByteString.size.toByteString.concat(genesisByteString).toByteArray
@@ -758,7 +759,8 @@ object BlockDagFileStorage {
                                            new FileOutputStream(
                                              config.blockMetadataLogPath.toFile,
                                              true
-                                           ))
+                                           )
+                                         )
       blockMetadataCrcRef <- Ref.of[F, Crc32[F]](blockMetadataCrc)
       checkPointsRef      <- Ref.of[F, List[Checkpoint]](List.empty)
       sortOffsetRef       <- Ref.of[F, Long](0L)
