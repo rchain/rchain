@@ -216,12 +216,12 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
               case Left(error) => log.error(s"Error while streaming packet, error: $error")
               case Right(_)    => Task.unit
             }
-            .flatMap(kp(Task.delay {
-              if (path.toFile.exists)
-                path.toFile.delete
-            }))
         case Left(error) => log.error(s"Error while streaming packet, error: $error")
-      }
+      } >>=
+        (kp(Task.delay {
+          if (path.toFile.exists)
+            path.toFile.delete
+        }))
   }
 
   private def initQueue(
