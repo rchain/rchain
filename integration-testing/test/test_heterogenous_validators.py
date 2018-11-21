@@ -108,6 +108,7 @@ def started_unbonded_validator(system, bootstrap_node):
 
 
 
+@pytest.mark.skip(reason="https://rchain.atlassian.net/browse/CORE-1455")
 def test_heterogenous_validators(custom_system):
     BONDED_VALIDATOR_BLOCKS = 10
     JOINING_VALIDATOR_BLOCKS = 10
