@@ -446,6 +446,10 @@ lazy val rspaceBench = (project in file("rspace-bench"))
   .enablePlugins(JmhPlugin)
   .dependsOn(rspace % "test->test", rholang, models % "test->test")
 
+lazy val rholang_parser = (project in file("rholang-parser"))
+  .settings(commonSettings: _*)
+  .settings(libraryDependencies ++= commonDependencies)
+
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)
   .aggregate(
@@ -461,5 +465,6 @@ lazy val rchain = (project in file("."))
     roscala,
     rspace,
     rspaceBench,
+    rholang_parser,
     shared
   )
