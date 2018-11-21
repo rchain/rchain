@@ -57,7 +57,8 @@ trait BlockGenerator {
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       tsHash: ByteString = ByteString.EMPTY,
-      shardId: String = "rchain"
+      shardId: String = "rchain",
+      preStateHash: ByteString = ByteString.EMPTY
   ): F[BlockMessage] =
     for {
       chain             <- blockDagState[F].get
@@ -65,6 +66,7 @@ trait BlockGenerator {
       nextId            = chain.currentId + 1
       nextCreatorSeqNum = chain.latestMessages.get(creator).fold(-1)(_.seqNum) + 1
       postState = RChainState()
+        .withPreStateHash(preStateHash)
         .withPostStateHash(tsHash)
         .withBonds(bonds)
         .withBlockNumber(nextId.toLong)
