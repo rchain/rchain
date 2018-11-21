@@ -94,6 +94,8 @@ object Main {
   }
 
   private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] =
+    log.info(VersionInfo.get)
+
     for {
       host   <- conf.fetchHost
       result <- new NodeRuntime(conf, host, scheduler).main.value
