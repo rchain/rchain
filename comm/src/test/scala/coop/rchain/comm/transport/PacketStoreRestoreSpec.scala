@@ -33,13 +33,14 @@ class PacketStoreRestoreSpec
     it("should store and restore to the original Packet") {
       forAll(contentGen) { content: Array[Byte] =>
         // given
+        val parent = tempFolder.resolve("inner").resolve("folder")
         val packet = Packet(BlockMessage.id, ByteString.copyFrom(content))
         // when
-        val storedIn = packet.store[Id](tempFolder).right.get
+        val storedIn = packet.store[Id](parent).right.get
         val restored = PacketOps.restore[Id](storedIn).right.get
         // then
         storedIn.toFile.exists() shouldBe (true)
-        storedIn.getParent shouldBe (tempFolder)
+        storedIn.getParent shouldBe (parent)
         packet shouldBe (restored)
       }
     }

@@ -28,6 +28,7 @@ object PacketOps {
   implicit class RichPacket(packet: Packet) {
     def store[F[_]: Sync](folder: Path): F[CommErr[Path]] =
       for {
+        _        <- Sync[F].delay(folder.toFile.mkdirs())
         fileName <- Sync[F].delay(UUID.randomUUID.toString + "_packet.bts")
         file     = folder.resolve(fileName)
         fos      <- Sync[F].delay(new FileOutputStream(file.toFile))
