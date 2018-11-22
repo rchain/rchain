@@ -157,7 +157,28 @@ class StackSafetySpec extends FlatSpec with TableDrivenPropertyChecks with Match
     Seq.fill(depth)(left).mkString + middle + Seq.fill(depth)(right).mkString
 
   private def checkAll(term: String): Unit = {
-    val rho = s"for (_ <- @0) { Nil } | @0!($term)"
+    val rho =
+      s"""
+         |  //send without reducing the term, testing serialization
+         |  @0!(@"dontReduceYet"!($term)) |
+         |
+         |  //duplicate the term
+         |  for (@x <- @0) { @1 ! (x) | @2 ! (x) } |
+         |
+         |  //receive both duplicated terms
+         |  for (@y <- @1; @z <- @2) {
+         |
+         |    //create a set to test term's hashCode
+         |    @3!(Set(y, z)) |
+         |
+         |    //compare the terms to test equals
+         |    @4!(y == z)
+         |  } |
+         |
+         |  //reduce the term
+         |  @5!($term)
+         |""".stripMargin
+
     isolateStackOverflow {
       val ast = Interpreter.buildNormalizedTerm(rho).value()
       PrettyPrinter().buildString(ast)
