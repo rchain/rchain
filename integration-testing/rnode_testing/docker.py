@@ -13,7 +13,7 @@ def run_cmd(docker_container, cmd):
 
 
 def list_containers(docker_client, network):
-    return docker_client.containers.list(all=True, filters={"name": ".{network}".format(network=network)})
+    return docker_client.containers.list(all=True, filters={"name": ".{}".format(network)})
 
 
 @contextmanager
