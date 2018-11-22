@@ -9,6 +9,7 @@ import kamon.metric.{MetricDistribution, MetricValue}
 import kamon.metric.MeasurementUnit
 import kamon.metric.MeasurementUnit.{information, none, time}
 import kamon.metric.MeasurementUnit.Dimension._
+import coop.rchain.shared.Language.ignore
 
 class ScrapeDataBuilder(
     prometheusConfig: NewPrometheusReporter.Configuration,
@@ -160,7 +161,7 @@ class ScrapeDataBuilder(
       tagCount += 1
     }
 
-    if (allTags.nonEmpty) append("}")
+    if (allTags.nonEmpty) ignore(append("}"))
   }
 
   private def normalizeMetricName(metricName: String, unit: MeasurementUnit): String = {

@@ -17,7 +17,7 @@ class SyncInstancesSpec extends FunSpec with Matchers {
   def mkEffect[A](t: Task[A]): Effect[A] = EitherT[Task, Throwable, A](t.attempt)
 
   implicit val sync: Sync[Effect] = syncEffect[Throwable](identity, identity)
-  
+
   describe("Sync[Effect].brackedCase") {
 
     it("should call release in case of error") {

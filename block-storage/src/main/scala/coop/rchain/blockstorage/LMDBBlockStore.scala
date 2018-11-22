@@ -16,6 +16,7 @@ import org.lmdbjava._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.Txn.NotReadyException
 import coop.rchain.shared.Resources.withResource
+import coop.rchain.shared.Language.ignore
 
 class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks: Dbi[ByteBuffer])(
     implicit
@@ -70,10 +71,12 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
       _ <- metricsF.incrementCounter(MetricNamePrefix + "put")
       ret <- withWriteTxn { txn =>
               val (blockHash, blockMessage) = f
-              blocks.put(
-                txn,
-                blockHash.toDirectByteBuffer,
-                blockMessage.toByteString.toDirectByteBuffer
+              ignore(
+                blocks.put(
+                  txn,
+                  blockHash.toDirectByteBuffer,
+                  blockMessage.toByteString.toDirectByteBuffer
+                )
               )
             }
     } yield ret

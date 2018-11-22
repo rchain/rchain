@@ -603,7 +603,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
           blockBuffer -= _._1
         }
       }
-      .as(Unit)
+      .as(())
 
   private def removeFromBlockBufferDependencyDag(
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash],

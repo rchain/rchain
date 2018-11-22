@@ -365,7 +365,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
               handleRemainder(remainderTargetsSorted, level, merger)
             }
           }
-    } yield Unit
+    } yield ()
   }
 
   private def guard(predicate: => Boolean): OptionalFreeMapWithCost[Unit] =
@@ -413,7 +413,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
       _ <- StateT.modify[OptionWithCost, FreeMap](
             (m: FreeMap) => m + (level -> remainderParUpdated)
           )
-    } yield Unit
+    } yield ()
 
   case class ParCount(
       sends: Int = 0,
@@ -539,7 +539,7 @@ trait SpatialMatcherInstances {
                       case (cost, None) =>
                         firstMatch(target, rem).run(s).value.run(cost)
                       case (cost, Some((_, _: Unit))) =>
-                        Right((cost, Some((s, Unit))))
+                        Right((cost, Some((s, ()))))
                     }
                   }))
                 })
@@ -550,7 +550,7 @@ trait SpatialMatcherInstances {
           OptionalFreeMapWithCost[Unit]((s: FreeMap) => {
             OptionT(StateT((c: Cost) => {
               spatialMatch(target, p).run(s).value.run(c).map {
-                case (cost, None)         => (cost, Some((s, Unit)))
+                case (cost, None)         => (cost, Some((s, ())))
                 case (cost, Some((_, _))) => (cost, None)
               }
             }))
@@ -695,7 +695,7 @@ trait SpatialMatcherInstances {
                 varLevel,
                 wildcard
               ).toNonDet()
-        } yield Unit
+        } yield ()
       }
   }
 
@@ -717,7 +717,7 @@ trait SpatialMatcherInstances {
         for {
           _ <- spatialMatch(target.chan, pattern.chan)
           _ <- foldMatch(target.data, pattern.data)
-        } yield Unit
+        } yield ()
   }
 
   implicit val receiveSpatialMatcherInstance: SpatialMatcher[Receive, Receive] =
@@ -728,7 +728,7 @@ trait SpatialMatcherInstances {
         for {
           _ <- listMatchSingle[ReceiveBind](target.binds, pattern.binds)
           _ <- spatialMatch(target.body, pattern.body)
-        } yield Unit
+        } yield ()
     }
 
   implicit val newSpatialMatcherInstance: SpatialMatcher[New, New] = fromFunction[New, New] {
@@ -750,10 +750,10 @@ trait SpatialMatcherInstances {
                     StateT.modify[OptionWithCost, FreeMap](m => m + (level -> EList(matchedRem)))
                   case _ => OptionalFreeMapWithCost.pure[Unit](())
                 }
-          } yield Unit
+          } yield ()
         }
         case (ETupleBody(ETuple(tlist, _, _)), ETupleBody(ETuple(plist, _, _))) => {
-          foldMatch(tlist, plist).map(_ => Unit)
+          foldMatch(tlist, plist).map(_ => ())
         }
         case (ESetBody(ParSet(tlist, _, _, _)), ESetBody(ParSet(plist, _, _, rem))) =>
           val isWildcard      = rem.collect { case Var(Wildcard(_)) => true }.isDefined
@@ -779,12 +779,12 @@ trait SpatialMatcherInstances {
           for {
             _ <- spatialMatch(t1, p1)
             _ <- spatialMatch(t2, p2)
-          } yield Unit
+          } yield ()
         case (EDivBody(EDiv(t1, t2)), EDivBody(EDiv(p1, p2))) =>
           for {
             _ <- spatialMatch(t1, p1)
             _ <- spatialMatch(t2, p2)
-          } yield Unit
+          } yield ()
         case (
             EPercentPercentBody(EPercentPercent(t1, t2)),
             EPercentPercentBody(EPercentPercent(p1, p2))
@@ -792,22 +792,22 @@ trait SpatialMatcherInstances {
           for {
             _ <- spatialMatch(t1, p1)
             _ <- spatialMatch(t2, p2)
-          } yield Unit
+          } yield ()
         case (EPlusBody(EPlus(t1, t2)), EPlusBody(EPlus(p1, p2))) =>
           for {
             _ <- spatialMatch(t1, p1)
             _ <- spatialMatch(t2, p2)
-          } yield Unit
+          } yield ()
         case (EPlusPlusBody(EPlusPlus(t1, t2)), EPlusPlusBody(EPlusPlus(p1, p2))) =>
           for {
             _ <- spatialMatch(t1, p1)
             _ <- spatialMatch(t2, p2)
-          } yield Unit
+          } yield ()
         case (EMinusMinusBody(EMinusMinus(t1, t2)), EMinusMinusBody(EMinusMinus(p1, p2))) =>
           for {
             _ <- spatialMatch(t1, p1)
             _ <- spatialMatch(t2, p2)
-          } yield Unit
+          } yield ()
         case _ => OptionalFreeMapWithCost.emptyMap[Unit]
       }
   }
@@ -817,7 +817,7 @@ trait SpatialMatcherInstances {
       for {
         _ <- spatialMatch(target.target, pattern.target)
         _ <- foldMatch(target.cases, pattern.cases)
-      } yield Unit
+      } yield ()
     }
 
   /**

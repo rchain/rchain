@@ -2,6 +2,7 @@ package coop.rchain.rspace
 
 import cats.Id
 import coop.rchain.rspace.internal._
+import monix.eval.Task
 
 import scala.collection.immutable.Seq
 
@@ -119,8 +120,4 @@ trait ISpace[F[_], C, P, E, A, R, K] {
   def close(): F[Unit]
 
   val store: IStore[C, P, A, K]
-}
-
-object ISpace {
-  type IdISpace[C, P, E, A, R, K] = ISpace[Id, C, P, E, A, R, K]
 }

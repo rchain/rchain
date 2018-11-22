@@ -74,14 +74,12 @@ private class HostnameTrustManager extends X509ExtendedTrustManager {
         val cert     = x509Certificates.head
         val peerHost = Option(sslSession.getPeerHost)
         checkIdentity(peerHost, cert, identityAlg)
-        CertificateHelper
-          .publicAddress(cert.getPublicKey)
-          .map(Base16.encode)
-          .filter(_ == peerHost.getOrElse(""))
-          .getOrElse(
-            throw new CertificateException(
-              s"Certificate's public address doesn't match the hostname"
-            )
+        if (!CertificateHelper
+              .publicAddress(cert.getPublicKey)
+              .map(Base16.encode)
+              .contains(peerHost.getOrElse("")))
+          throw new CertificateException(
+            s"Certificate's public address doesn't match the hostname"
           )
 
       case _ =>

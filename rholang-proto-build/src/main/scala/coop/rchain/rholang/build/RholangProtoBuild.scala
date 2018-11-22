@@ -6,6 +6,7 @@ import java.io.FileOutputStream
 import java.nio.file.{Path, Paths}
 
 import scala.io.Source
+import coop.rchain.shared.Language.ignore
 
 object RholangProtoBuild {
   val packageAnnotation: String = "scalapackage"
@@ -102,6 +103,6 @@ object RholangProtoBuild {
       if (!sourceManagedFile.exists) sourceManagedFile.mkdirs
       if (!resourcesFile.exists) resourcesFile.mkdirs
 
-      rhoArtifacts(baseDirectory, sourceManaged, resources)
+      ignore(rhoArtifacts(baseDirectory, sourceManaged, resources))
     }
 }

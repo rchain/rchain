@@ -8,6 +8,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.models.Par
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
+import coop.rchain.shared.Language.ignore
 
 trait DeployService[F[_]] {
   def deploy(d: DeployData): F[(Boolean, String)]
@@ -91,7 +92,7 @@ count: ${response.length}
       println(
         "warn: did not shutdown after 10 seconds, retrying with additional 10 seconds timeout"
       )
-      channel.awaitTermination(10, TimeUnit.SECONDS)
+      ignore(channel.awaitTermination(10, TimeUnit.SECONDS))
     }
   }
 }

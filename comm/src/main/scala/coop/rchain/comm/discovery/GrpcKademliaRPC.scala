@@ -14,6 +14,7 @@ import monix.eval._
 import monix.execution._
 
 import scala.concurrent.duration._
+import coop.rchain.shared.Language.ignore
 
 class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
     implicit
@@ -70,15 +71,17 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
       lookupHandler: (PeerNode, Array[Byte]) => Task[Seq[PeerNode]]
   ): Task[Unit] =
     Task.delay {
-      NettyServerBuilder
-        .forPort(port)
-        .executor(scheduler)
-        .addService(
-          KademliaGrpcMonix
-            .bindService(new SimpleKademliaRPCService(pingHandler, lookupHandler), scheduler)
-        )
-        .build
-        .start
+      ignore(
+        NettyServerBuilder
+          .forPort(port)
+          .executor(scheduler)
+          .addService(
+            KademliaGrpcMonix
+              .bindService(new SimpleKademliaRPCService(pingHandler, lookupHandler), scheduler)
+          )
+          .build
+          .start
+      )
     }
 
   private def clientChannel(peer: PeerNode): Task[ManagedChannel] =

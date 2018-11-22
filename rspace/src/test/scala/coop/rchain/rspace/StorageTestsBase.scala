@@ -7,13 +7,13 @@ import cats.implicits._
 import cats.effect._
 import com.typesafe.scalalogging.Logger
 import com.google.common.collect.HashMultiset
-import coop.rchain.rspace.ISpace.IdISpace
 
 import scala.collection.JavaConverters._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
+import coop.rchain.shared.Language
 import coop.rchain.shared.PathOps._
 import org.scalatest._
 
@@ -215,7 +215,7 @@ abstract class LMDBStoreTestsBase[F[_]]
   }
 
   override def afterAll(): Unit =
-    dbDir.recursivelyDelete
+    Language.ignore(dbDir.recursivelyDelete)
 }
 
 abstract class MixedStoreTestsBase[F[_]]

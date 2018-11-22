@@ -9,6 +9,7 @@ import coop.rchain.node.model.diagnostics._
 import com.google.protobuf.empty.Empty
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
+import coop.rchain.shared.Language.ignore
 
 trait DiagnosticsService[F[_]] {
   def listPeers: F[Seq[PeerNode]]
@@ -89,7 +90,7 @@ class GrpcDiagnosticsService(host: String, port: Int, maxMessageSize: Int)
       println(
         "warn: did not shutdown after 10 seconds, retrying with additional 10 seconds timeout"
       )
-      channel.awaitTermination(10, TimeUnit.SECONDS)
+      ignore(channel.awaitTermination(10, TimeUnit.SECONDS))
     }
   }
 

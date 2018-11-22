@@ -18,6 +18,7 @@ import monix.execution.Scheduler
 
 import scala.concurrent.ExecutionContext
 import scala.reflect.io.Directory
+import coop.rchain.shared.Language.ignore
 
 object Resources {
   val logger: Logger = Logger(this.getClass.getName.stripSuffix("$"))
@@ -32,7 +33,7 @@ object Resources {
                 s"Exception thrown while using the tempDir '$path'. Temporary dir NOT deleted.",
                 ex
               )
-          case _ => new Directory(new File(path.toString)).deleteRecursively()
+          case _ => ignore(new Directory(new File(path.toString)).deleteRecursively())
         })
     )
 

@@ -16,6 +16,7 @@ import cats.Parallel
 
 import scala.concurrent.ExecutionContext
 import scala.language.higherKinds
+import coop.rchain.shared.Language.ignore
 
 object BondingUtil {
   def bondingForwarderAddress(ethAddress: String): String = s"${ethAddress}_bondingForwarder"
@@ -169,7 +170,7 @@ object BondingUtil {
 
   def makeRuntimeDir[F[_]: Sync]: Resource[F, Path] =
     Resource.make[F, Path](Sync[F].delay { Files.createTempDirectory("casper-bonding-helper-") })(
-      runtimeDir => Sync[F].delay { runtimeDir.recursivelyDelete() }
+      runtimeDir => Sync[F].delay { ignore(runtimeDir.recursivelyDelete()) }
     )
 
   def makeRuntimeResource[M[_], F[_]](

@@ -13,6 +13,7 @@ import coop.rchain.shared.Resources
 
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
+import coop.rchain.shared.Language.ignore
 
 trait ReplClient[F[_]] {
   def run(line: String): F[Either[Throwable, String]]
@@ -70,7 +71,7 @@ class GrpcReplClient(host: String, port: Int, maxMessageSize: Int)
       println(
         "warn: did not shutdown after 10 seconds, retrying with additional 10 seconds timeout"
       )
-      channel.awaitTermination(10, TimeUnit.SECONDS)
+      ignore(channel.awaitTermination(10, TimeUnit.SECONDS))
     }
   }
 }

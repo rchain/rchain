@@ -4,7 +4,6 @@ import cats.Id
 import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.catscontrib._
-import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.Log

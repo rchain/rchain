@@ -39,6 +39,7 @@ import kamon.zipkin.ZipkinReporter
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.blaze._
+import coop.rchain.shared.Language.ignore
 
 class NodeRuntime private[node] (
     conf: Configuration,
@@ -158,8 +159,10 @@ class NodeRuntime private[node] (
   ): Task[Unit] =
     Task.delay {
       import scala.concurrent.duration._
-      loopScheduler.scheduleAtFixedRate(3.seconds, 3.second)(
-        JvmMetrics.report[Task].unsafeRunSync(scheduler)
+      ignore(
+        loopScheduler.scheduleAtFixedRate(3.seconds, 3.second)(
+          JvmMetrics.report[Task].unsafeRunSync(scheduler)
+        )
       )
     }
 

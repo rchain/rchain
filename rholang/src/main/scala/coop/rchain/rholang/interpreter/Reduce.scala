@@ -262,7 +262,7 @@ object Reduce {
           }
         }
         .parSequence
-        .as(Unit)
+        .as(())
     }
 
     override def inj(

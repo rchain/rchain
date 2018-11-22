@@ -1,8 +1,6 @@
 package coop.rchain.rspace.pure
 
-import cats.Id
 import cats.effect.Sync
-import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace._
 
 import scala.collection.immutable.Seq

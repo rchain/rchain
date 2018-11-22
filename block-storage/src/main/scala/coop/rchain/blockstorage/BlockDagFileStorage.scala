@@ -24,6 +24,7 @@ import scala.collection.immutable.HashSet
 import scala.ref.WeakReference
 import scala.util.matching.Regex
 import collection.JavaConverters._
+import coop.rchain.shared.Language.ignore
 
 final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private (
     lock: Semaphore[F],
@@ -209,10 +210,12 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
 
   private def replaceFile(newFile: Path, oldFile: Path): F[Unit] =
     Sync[F].delay {
-      Files.move(
-        newFile,
-        oldFile,
-        StandardCopyOption.REPLACE_EXISTING
+      ignore(
+        Files.move(
+          newFile,
+          oldFile,
+          StandardCopyOption.REPLACE_EXISTING
+        )
       )
     }
 

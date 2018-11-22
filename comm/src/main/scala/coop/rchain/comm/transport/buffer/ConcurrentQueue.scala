@@ -9,6 +9,7 @@ import monix.execution.internal.atomic.UnsafeAccess
 import org.jctools.queues._
 import org.jctools.queues.MessagePassingQueue.Consumer
 import org.jctools.queues.atomic.MpscAtomicArrayQueue
+import coop.rchain.shared.Language.ignore
 
 /**
   * This code has been copied from the Monix codebase because unfortunately
@@ -85,7 +86,7 @@ object ConcurrentQueue {
 
     def drain(buffer: mutable.Buffer[A], limit: Int): Unit = {
       val consumer: Consumer[A] = (e: A) => buffer += e
-      underlying.drain(consumer, limit)
+      ignore(underlying.drain(consumer, limit))
     }
   }
 }

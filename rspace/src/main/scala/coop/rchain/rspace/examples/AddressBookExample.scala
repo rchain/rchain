@@ -7,19 +7,21 @@ import cats.Id
 import cats.effect.{ContextShift, Sync}
 import cats.implicits._
 import coop.rchain.catscontrib.effect.implicits._
-import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Language.ignore
 import coop.rchain.rspace.util._
+import monix.eval.Task
+
 import scala.concurrent.ExecutionContext
 import scodec.bits.ByteVector
 
 import scala.collection.immutable.Seq
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
-
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
+import monix.execution.Scheduler.Implicits.global
 
 object AddressBookExample {
 
@@ -293,16 +295,17 @@ object AddressBookExample {
           new Printer,
           persist = false
         )
+        .runSyncUnsafe(10.seconds)
         .right
         .get
 
     assert(cres.isEmpty)
 
     println("Rollback example: And create a checkpoint...")
-    val checkpointHash = space.createCheckpoint().root
+    val checkpointHash = space.createCheckpoint().runSyncUnsafe(10.seconds).root
 
     def produceAlice(): Option[(Printer, Seq[Entry], Int)] =
-      space.produce(Channel("friends"), alice, persist = false).right.get
+      space.produce(Channel("friends"), alice, persist = false).runSyncUnsafe(10.seconds).right.get
 
     println("Rollback example: First produce result should return some data")
     assert(produceAlice.isDefined)
@@ -316,7 +319,7 @@ object AddressBookExample {
     println(
       "Rollback example: Let's reset RSpace to the state from before running the produce operations"
     )
-    space.reset(checkpointHash)
+    space.reset(checkpointHash).runSyncUnsafe(10.seconds)
 
     println("Rollback example: Again, first produce result should return some data")
     assert(produceAlice.isDefined)
@@ -324,22 +327,24 @@ object AddressBookExample {
     println("Rollback example: And again second produce result should be empty")
     assert(produceAlice.isEmpty)
 
-    space.close()
+    space.close().runSyncUnsafe(10.seconds)
   }
 
   private[this] def withSpace(
-      f: IdISpace[Channel, Pattern, Nothing, Entry, Entry, Printer] => Unit
+      f: ISpace[Task, Channel, Pattern, Nothing, Entry, Entry, Printer] => Unit
   ) = {
     // Here we define a temporary place to put the store's files
     val storePath = Files.createTempDirectory("rspace-address-book-example-")
     // Let's define our store
     val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
     val space =
-      RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
+      RSpace
+        .create[Task, Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
+        .runSyncUnsafe(10.seconds)
     try {
       f(space)
     } finally {
-      space.close()
+      space.close().runSyncUnsafe(10.seconds)
       context.close()
     }
 
