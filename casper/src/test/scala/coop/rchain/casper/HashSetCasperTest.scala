@@ -67,7 +67,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     node.tearDown()
   }
 
-  it should "not allow multiple threads to process the same block" in {
+  it should "not allow multiple threads to process the same block" ignore {
     val scheduler = Scheduler.fixedPool("three-threads", 3)
     val node      = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)(scheduler)
     val casper    = node.casperEff
@@ -127,7 +127,6 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     val logMessages = List(
       "Received Deploy",
-      "Block",
       "Attempting to add Block",
       "Sent Block #1",
       "Added",
