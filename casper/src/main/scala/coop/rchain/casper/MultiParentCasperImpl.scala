@@ -26,6 +26,7 @@ import coop.rchain.catscontrib.TaskContrib._
 
 import scala.collection.immutable.HashSet
 import scala.collection.mutable
+import scala.concurrent.SyncVar
 
 class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
     runtimeManager: RuntimeManager,
@@ -68,43 +69,27 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   private val faultToleranceThreshold         = 0f
   private val lastFinalizedBlockHashContainer = Ref.unsafe[F, BlockHash](genesis.blockHash)
 
-  private val processingBlocks = new AtomicSyncVar(Set.empty[BlockHash])
+  private val processingBlock          = new SyncVar[Unit]()
+  private val PROCESSING_BLOCK_TIMEOUT = 5 * 60 * 1000L
+  processingBlock.put(())
 
   def addBlock(b: BlockMessage): F[BlockStatus] =
     for {
-      acquire <- Capture[F].capture {
-                  processingBlocks.mapAndUpdate[(Set[BlockHash], Boolean)](
-                    blocks => {
-                      if (blocks.contains(b.blockHash)) blocks -> false
-                      else blocks                              -> true
-                    }, {
-                      case (blocks, false) => blocks
-                      case (blocks, true)  => blocks + b.blockHash
-                    }
-                  )
-                }
-      result <- acquire match {
-                 case Right((_, false)) =>
-                   Log[F]
-                     .info(
-                       s"Block ${PrettyPrinter.buildString(b.blockHash)} is already being processed by another thread."
-                     )
-                     .map(_ => BlockStatus.processing)
-                 case Right((_, true)) =>
-                   Log[F]
-                     .info(
-                       s"Block ${PrettyPrinter.buildString(b.blockHash)} is now processing."
-                     ) *> internalAddBlock(b).flatMap(
-                     status =>
-                       Capture[F].capture { processingBlocks.update(_ - b.blockHash); status }
+      _         <- Sync[F].delay(processingBlock.take(PROCESSING_BLOCK_TIMEOUT))
+      dag       = _blockDag.get
+      blockHash = b.blockHash
+      result <- if (dag.dataLookup.contains(blockHash) || blockBuffer.exists(
+                      _.blockHash == blockHash
+                    )) {
+                 Log[F]
+                   .info(
+                     s"Block ${PrettyPrinter.buildString(b.blockHash)} has already been processed by another thread."
                    )
-                 case Left(ex) =>
-                   Log[F]
-                     .warn(
-                       s"Block ${PrettyPrinter.buildString(b.blockHash)} encountered an exception during processing: ${ex.getMessage}"
-                     )
-                     .map(_ => BlockStatus.exception(ex))
+                   .map(_ => BlockStatus.processing)
+               } else {
+                 internalAddBlock(b)
                }
+      _ <- Sync[F].delay(processingBlock.put(()))
     } yield result
 
   def internalAddBlock(b: BlockMessage): F[BlockStatus] =

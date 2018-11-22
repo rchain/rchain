@@ -94,6 +94,8 @@ object Main {
   }
 
   private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
+    log.info(VersionInfo.get)
+
     val node =
       for {
         runtime <- NodeRuntime(conf)

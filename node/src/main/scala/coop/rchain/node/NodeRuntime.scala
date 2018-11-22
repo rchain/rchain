@@ -9,7 +9,6 @@ import cats.effect.concurrent.Ref
 import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.functor._
-
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
 import coop.rchain.casper._
@@ -190,11 +189,9 @@ class NodeRuntime private[node] (
       jvmMetrics: JvmMetrics[Task]
   ): Effect[Unit] = {
 
-    val info: Effect[Unit] = for {
-      _ <- Log[Effect].info(VersionInfo.get)
-      _ <- if (conf.server.standalone) Log[Effect].info(s"Starting stand-alone node.")
-          else Log[Effect].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
-    } yield ()
+    val info: Effect[Unit] =
+      if (conf.server.standalone) Log[Effect].info(s"Starting stand-alone node.")
+      else Log[Effect].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
 
     val dynamicIpLoop: Task[Unit] =
       for {
@@ -309,7 +306,8 @@ class NodeRuntime private[node] (
       port,
       conf.tls.certificate,
       conf.tls.key,
-      conf.server.maxMessageSize
+      conf.server.maxMessageSize,
+      conf.server.dataDir.resolve("tmp").resolve("comm")
     )(grpcScheduler, log, tcpConnections)
     kademliaRPC = effects.kademliaRPC(kademliaPort, defaultTimeout)(
       grpcScheduler,

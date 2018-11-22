@@ -57,7 +57,8 @@ package object effects {
       port: Int,
       certPath: Path,
       keyPath: Path,
-      maxMessageSize: Int
+      maxMessageSize: Int,
+      folder: Path
   )(
       implicit scheduler: Scheduler,
       log: Log[Task],
@@ -65,7 +66,7 @@ package object effects {
   ): TcpTransportLayer = {
     val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
     val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
-    new TcpTransportLayer(port, cert, key, maxMessageSize)
+    new TcpTransportLayer(port, cert, key, maxMessageSize, folder)
   }
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
