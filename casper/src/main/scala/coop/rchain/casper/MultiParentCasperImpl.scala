@@ -75,9 +75,21 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
 
   def addBlock(b: BlockMessage): F[BlockStatus] =
     for {
-      _      <- Sync[F].delay(processingBlock.take(PROCESSING_BLOCK_TIMEOUT))
-      result <- internalAddBlock(b)
-      _      <- Sync[F].delay(processingBlock.put(()))
+      _         <- Sync[F].delay(processingBlock.take(PROCESSING_BLOCK_TIMEOUT))
+      dag       = _blockDag.get
+      blockHash = b.blockHash
+      result <- if (dag.dataLookup.contains(blockHash) || blockBuffer.exists(
+                      _.blockHash == blockHash
+                    )) {
+                 Log[F]
+                   .info(
+                     s"Block ${PrettyPrinter.buildString(b.blockHash)} has already been processed by another thread."
+                   )
+                   .map(_ => BlockStatus.processing)
+               } else {
+                 internalAddBlock(b)
+               }
+      _ <- Sync[F].delay(processingBlock.put(()))
     } yield result
 
   def internalAddBlock(b: BlockMessage): F[BlockStatus] =
