@@ -161,7 +161,7 @@ class StackSafetySpec extends FlatSpec with TableDrivenPropertyChecks with Match
     isolateStackOverflow {
       val ast = Interpreter.buildNormalizedTerm(rho).value()
       PrettyPrinter().buildString(ast)
-      checkSuccess(rho) { rho =>
+      checkSuccess(rho) {
         mkRuntime(tmpPrefix, mapSize).use { runtime =>
           Interpreter.evaluate(runtime, ast)
         }
@@ -169,8 +169,8 @@ class StackSafetySpec extends FlatSpec with TableDrivenPropertyChecks with Match
     }
   }
 
-  private def checkSuccess(rho: String)(interpreter: String => Task[_]): Unit =
-    interpreter(rho).attempt
+  private def checkSuccess(rho: String)(task: => Task[_]): Unit =
+    task.attempt
       .runSyncUnsafe(maxDuration)
       .swap
       .foreach(error => fail(s"""Execution failed for: $rho
