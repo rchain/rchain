@@ -1,6 +1,7 @@
+import re
 import os
 import logging
-import re
+import threading
 from contextlib import contextmanager
 from rnode_testing.docker import docker_network
 import rnode_testing.resources as resources
@@ -43,12 +44,6 @@ class UnexpectedShowBlocksOutputFormatError(Exception):
         self.command = output
 
 
-def make_container_logs_path(container_name):
-    ci_logs_dir = os.environ.get('CI_LOGS_DIR')
-    dir = 'logs' if ci_logs_dir is None else ci_logs_dir
-    return os.path.join(dir, "{}.log".format(container_name))
-
-
 def extract_block_count_from_show_blocks(show_blocks_output):
     lines = show_blocks_output.splitlines()
     prefix = 'count: '
@@ -73,6 +68,13 @@ class Node:
         self.docker_client = docker_client
         self.timeout = timeout
         self.network = network
+        self.terminate_background_logging_event = threading.Event()
+        self.background_logging = LoggingThread(
+            container=container,
+            logger=logging.getLogger('peers'),
+            terminate_thread_event=self.terminate_background_logging_event,
+        )
+        self.background_logging.start()
 
     def logs(self):
         return self.container.logs().decode('utf-8')
@@ -93,14 +95,9 @@ class Node:
         return self.exec_run(cmd=cmd)
 
     def cleanup(self):
-        log_file_path = make_container_logs_path(self.container.name)
-
-        with open(log_file_path, "w") as f:
-            f.write(self.logs())
-
-        logging.info("Remove container {name}. Logs have been written to {path}".format(name=self.container.name, path=log_file_path))
-
         self.container.remove(force=True, v=True)
+        self.terminate_background_logging_event.set()
+        self.background_logging.join()
 
     def deploy_contract(self, contract):
         cmd = '{rnode_binary} deploy --from "0x1" --phlo-limit 1000000 --phlo-price 1 --nonce 0 {rnode_deploy_dir}/{contract}'.format(
@@ -195,6 +192,25 @@ class Node:
     def log_lines(self):
         log_content = self.logs()
         return Node.__log_message_rx.split(log_content)
+
+
+class LoggingThread(threading.Thread):
+    def __init__(self, terminate_thread_event, container, logger):
+        super().__init__()
+        self.terminate_thread_event = terminate_thread_event
+        self.container = container
+        self.logger = logger
+
+    def run(self):
+        containers_log_lines_generator = self.container.logs(stream=True, follow=True)
+        try:
+            while True:
+                if self.terminate_thread_event.is_set():
+                    break
+                line = next(containers_log_lines_generator)
+                self.logger.info('\t{}: {}'.format(self.container.name, line.decode('utf-8').rstrip()))
+        except StopIteration:
+            pass
 
 
 def make_container_command(container_command, container_command_options):
