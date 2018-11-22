@@ -123,26 +123,6 @@ class ClearConnectionsSpec
         cleared shouldBe 1
       }
     }
-
-    describe("if dynamic local host changes") {
-      it("should disconnect from all peers and clear connections") {
-        // given
-        implicit val connections = mkConnections(peer("A"), peer("B"))
-        implicit val rpconf =
-          conf(maxNumOfConnections = 5)
-        // when
-        Connect.resetConnections[Id]
-        // then
-        connections.read.size shouldBe 0
-        transport.requests.size shouldBe 2
-        transport.requests.map(_.peer) should contain(peer("A"))
-        transport.requests.map(_.peer) should contain(peer("B"))
-        transport.requests.forall(_.msg.message.isDisconnect) shouldEqual true
-        transport.disconnects.size shouldBe 2
-        transport.disconnects should contain(peer("A"))
-        transport.disconnects should contain(peer("B"))
-      }
-    }
   }
 
   private def peer(name: String, host: String = "host"): PeerNode =
