@@ -7,7 +7,7 @@ from shutil import copyfile
 
 
 def mk_expected_string(node, i, random_token):
-    return "<{node.container.name}:{i}:{random_token}>".format(name=node.container.name, i=i, random_token=random_token)
+    return "<{name}:{i}:{random_token}>".format(name=node.container.name, i=i, random_token=random_token)
 
 
 def deploy_block(i, node, expected_string, contract_name):
