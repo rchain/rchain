@@ -15,7 +15,7 @@ class RChain:
 
 @contextmanager
 def start_network(config, docker, bootstrap, validators_data, allowed_peers=None):
-    logging.debug("Docker network = {network}".format(network=bootstrap.network))
+    logging.debug("Docker network = {}".format(bootstrap.network))
 
     peers = create_peer_nodes(docker, bootstrap, bootstrap.network, validators_data.bonds_file, validators_data.peers_keys, config.rnode_timeout, allowed_peers)
 
@@ -28,7 +28,7 @@ def start_network(config, docker, bootstrap, validators_data, allowed_peers=None
 
 def wait_for_started_network(node_startup_timeout, network):
     for peer in network.peers:
-        wait_for(node_started(peer), node_startup_timeout, "Peer {name} did not start correctly.".format(name=peer.name))
+        wait_for(node_started(peer), node_startup_timeout, "Peer {} did not start correctly.".format(peer.name))
 
 
 def wait_for_converged_network(timeout, network, peer_connections):
@@ -46,7 +46,7 @@ def wait_for_approved_block_received_handler_state(bootstrap_node, node_startup_
     wait_for(
         approved_block_received_handler_state(bootstrap_node),
         node_startup_timeout,
-        "Bootstrap node {name} did not enter ApprovedBlockRecievedHandler state".format(name=bootstrap_node.name),
+        "Bootstrap node {} did not enter ApprovedBlockRecievedHandler state".format(bootstrap_node.name),
     )
 
 

@@ -18,7 +18,7 @@ def list_containers(docker_client, network):
 
 @contextmanager
 def docker_network(docker_client):
-    network_name = "rchain-{random_string}".format(random_string=rnode_testing.random.random_string(5).lower())
+    network_name = "rchain-{}".format(rnode_testing.random.random_string(5).lower())
 
     docker_client.networks.create(network_name, driver="bridge")
 
@@ -27,5 +27,5 @@ def docker_network(docker_client):
     finally:
         for network in docker_client.networks.list():
             if network_name == network.name:
-                logging.info("Removing docker network {name}".format(name=network.name))
+                logging.info("Removing docker network {}".format(network.name))
                 network.remove()

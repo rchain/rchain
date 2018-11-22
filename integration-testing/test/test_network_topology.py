@@ -54,7 +54,7 @@ def complete_network(system):
 @profile
 def test_metrics_api_socket(complete_network):
     for node  in complete_network.nodes:
-        logging.info("Test metrics api socket for {name}".format(name=node.name))
+        logging.info("Test metrics api socket for {}".format(node.name))
         exit_code, output = node.get_metrics()
         expect(exit_code == 0, "Could not get the metrics for node {node.name}")
 
@@ -64,13 +64,13 @@ def test_metrics_api_socket(complete_network):
 @profile
 def test_node_logs_for_errors(complete_network):
     for node in complete_network.nodes:
-        logging.info("Testing {name} node logs for errors.".format(name=node.name))
+        logging.info("Testing {} node logs for errors.".format(node.name))
         logs = node.logs()
 
         if "ERROR" in logs:
             for line in logs.splitlines():
                 if "ERROR" in line:
-                    logging.error("Error: {line}".format(line=line))
+                    logging.error("Error: {}".format(line))
             expect(not "ERROR" in line, "Node {name} error in log line: {line}".format(name=node.name, line=line))
 
     assert_expectations()
@@ -78,14 +78,14 @@ def test_node_logs_for_errors(complete_network):
 @profile
 def test_node_logs_for_RuntimeException(complete_network):
     for node in complete_network.nodes:
-        logging.info("Testing {name} node logs for \"java RuntimeException\".".format(name=node.name))
+        logging.info("Testing {} node logs for \"java RuntimeException\".".format(node.name))
         logs = node.logs()
 
 
         if "RuntimeException" in logs:
             for line in logs.splitlines():
                 if "RuntimeException" in line:
-                    logging.error("Error: {line}".format(line=line))
+                    logging.error("Error: {}".format(line))
             expect(not "RuntimeException" in line, "Node {name} error in log line: {line}".format(name=node.name, line=line))
 
     assert_expectations()

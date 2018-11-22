@@ -14,8 +14,8 @@ def wait_for(condition, timeout, error_message):
     :return: true  if the condition was met in the given timeout
     """
 
-    with log_box(logging.info, "Waiting maximum timeout={timeout}. Patience please!".format(timeout=timeout), "."):
-        logging.info("Wait condition is: `{condition}`".format(condition=condition.__doc__))
+    with log_box(logging.info, "Waiting maximum timeout={}. Patience please!".format(timeout), "."):
+        logging.info("Wait condition is: `{}`".format(condition.__doc__))
         elapsed = 0
         current_ex = None
         while elapsed < timeout:
@@ -49,7 +49,7 @@ def wait_for(condition, timeout, error_message):
                 time.sleep(iteration_duration)
                 elapsed = elapsed + iteration_duration
 
-        logging.warning("Giving up after {elapsed}s.".format(elapsed=elapsed))
+        logging.warning("Giving up after {}s.".format(elapsed))
         pytest.fail(error_message)
 
 
@@ -60,7 +60,7 @@ def wait_for(condition, timeout, error_message):
 
 def node_logs(node):
     def go(): return node.logs()
-    go.__doc__ = "node_logs({name})".format(name=node.name)
+    go.__doc__ = "node_logs({})".format(node.name)
     return go
 
 
@@ -73,7 +73,7 @@ def show_blocks(node):
 
         return output
 
-    go.__doc__ = "show_blocks({name})".format(name=node.name)
+    go.__doc__ = "show_blocks({})".format(node.name)
     return go
 
 

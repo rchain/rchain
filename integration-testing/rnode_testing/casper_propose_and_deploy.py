@@ -11,7 +11,7 @@ def mk_expected_string(node, i, random_token):
 
 
 def deploy_block(i, node, expected_string, contract_name):
-    logging.info("Expected string: {expected_string}".format(expected_string=expected_string))
+    logging.info("Expected string: {}".format(expected_string))
 
     copyfile(resources.file_path(contract_name, __name__), "{local_deploy_dir}/{contract_name}".format(local_deploy_dir=node.local_deploy_dir, contract_name=contract_name))
 
@@ -30,7 +30,7 @@ def deploy_block(i, node, expected_string, contract_name):
 
 
 def check_blocks(i, node, expected_string):
-    logging.info("Check all peer logs for blocks containing {expected_string}".format(expected_string=expected_string))
+    logging.info("Check all peer logs for blocks containing {}".format(expected_string))
 
     other_nodes = [n
                     for n in network.nodes
@@ -54,7 +54,7 @@ def run(config, network):
     contract_name = 'contract.rho'
 
     for node in network.nodes:
-        with log_box(logging.info, "Run test on node '{name}'".format(name=node.name)):
+        with log_box(logging.info, "Run test on node '{}'".format(node.name)):
             random_token = random_string(token_size)
 
             for i in range(0, config.blocks):

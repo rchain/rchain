@@ -15,10 +15,10 @@ DEFAULT_IMAGE = "rchain-integration-testing:latest"
 
 rnode_binary = '/opt/docker/bin/rnode'
 rnode_directory = "/var/lib/rnode"
-rnode_deploy_dir = "{rnode_directory}/deploy".format(rnode_directory=rnode_directory)
-rnode_bonds_file = '{rnode_directory}/genesis/bonds.txt'.format(rnode_directory=rnode_directory)
-rnode_certificate = '{rnode_directory}/node.certificate.pem'.format(rnode_directory=rnode_directory)
-rnode_key = '{rnode_directory}/node.key.pem'.format(rnode_directory=rnode_directory)
+rnode_deploy_dir = "{}/deploy".format(rnode_directory)
+rnode_bonds_file = '{}/genesis/bonds.txt'.format(rnode_directory)
+rnode_certificate = '{}/node.certificate.pem'.format(rnode_directory)
+rnode_key = '{}/node.key.pem'.format(rnode_directory)
 
 
 class InterruptedException(Exception):
@@ -84,7 +84,7 @@ class Node:
                       re.MULTILINE | re.DOTALL)
         address = m[1]
 
-        logging.info("Bootstrap address: `{address}`".format(address=address))
+        logging.info("Bootstrap address: `{}`".format(address))
         return address
 
     def get_metrics(self):
@@ -111,10 +111,10 @@ class Node:
         return self.exec_run(cmd)
 
     def propose_contract(self):
-        return self.exec_run('{rnode_binary} propose'.format(rnode_binary=rnode_binary))
+        return self.exec_run('{} propose'.format(rnode_binary))
 
     def show_blocks(self):
-        return self.exec_run('{rnode_binary} show-blocks'.format(rnode_binary=rnode_binary))
+        return self.exec_run('{} show-blocks'.format(rnode_binary))
 
     def get_blocks_count(self):
         show_blocks_output = self.call_rnode('show-blocks', stderr=False).strip()
@@ -222,10 +222,10 @@ def create_node_container(
     deploy_dir = make_tempdir("rchain-integration-test")
 
     hosts_allow_file_content = \
-        "ALL:ALL" if allowed_peers is None else "\n".join("ALL: {peer}".format(peer=peer) for peer in allowed_peers)
+        "ALL:ALL" if allowed_peers is None else "\n".join("ALL: {}".format(peer) for peer in allowed_peers)
 
-    hosts_allow_file = make_tempfile("hosts-allow-{name}".format(name=name), hosts_allow_file_content)
-    hosts_deny_file = make_tempfile("hosts-deny-{name}".format(name=name), "ALL: ALL")
+    hosts_allow_file = make_tempfile("hosts-allow-{}".format(name), hosts_allow_file_content)
+    hosts_deny_file = make_tempfile("hosts-deny-{}".format(name), "ALL: ALL")
 
     command = make_container_command(container_command, container_command_options)
 
@@ -236,10 +236,10 @@ def create_node_container(
     logging.info('Using _JAVA_OPTIONS: {}'.format(java_options))
 
     volumes = [
-        "{hosts_allow_file}:/etc/hosts.allow".format(hosts_allow_file=hosts_allow_file),
-        "{hosts_deny_file}:/etc/hosts.deny".format(hosts_deny_file=hosts_deny_file),
-        "{bonds_file}:{rnode_bonds_file}".format(bonds_file=bonds_file, rnode_bonds_file=rnode_bonds_file),
-        "{deploy_dir}:{rnode_deploy_dir}".format(deploy_dir=deploy_dir,rnode_deploy_dir=rnode_deploy_dir),
+        "{}:/etc/hosts.allow".format(hosts_allow_file),
+        "{}:/etc/hosts.deny".format(hosts_deny_file),
+        "{}:{}".format(bonds_file, rnode_bonds_file),
+        "{}:{}".format(deploy_dir, rnode_deploy_dir),
     ]
 
     container = docker_client.containers.run(
@@ -276,7 +276,7 @@ def create_bootstrap_node(
 
     logging.info("Using key_file={key_file} and cert_file={cert_file}".format(key_file=key_file, cert_file=cert_file))
 
-    name = "bootstrap.{network}".format(network=network)
+    name = "bootstrap.{}".format(network)
     container_command_options = {
         "--port":                   40400,
         "--standalone":             "",
@@ -286,8 +286,8 @@ def create_bootstrap_node(
     }
 
     volumes = [
-        "{cert_file}:{rnode_certificate}".format(cert_file=cert_file, rnode_certificate=rnode_certificate),
-        "{key_file}:{rnode_key}".format(key_file=key_file, rnode_key=rnode_key)
+        "{}:{}".format(cert_file, rnode_certificate),
+        "{}:{}".format(key_file, rnode_key)
     ]
 
     container = create_node_container(
