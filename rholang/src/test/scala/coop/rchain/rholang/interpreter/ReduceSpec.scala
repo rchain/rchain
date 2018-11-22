@@ -1284,6 +1284,51 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
+  "'abcabcac'.slice(2,1)" should "return empty string" in {
+    implicit val errorLog = new ErrorLog()
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env = Env.makeEnv[Par]()
+        val inspectTask = reducer.evalExpr(
+          EMethodBody(EMethod("slice", GString("abcabac"), List(GInt(2L), GInt(1L))))
+        )
+        Await.result(inspectTask.runToFuture, 3.seconds)
+    }
+    result.exprs should be(Seq(Expr(GString(""))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "'abcabcac'.slice(8,9)" should "return empty string" in {
+    implicit val errorLog = new ErrorLog()
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env = Env.makeEnv[Par]()
+        val inspectTask = reducer.evalExpr(
+          EMethodBody(EMethod("slice", GString("abcabac"), List(GInt(8L), GInt(9L))))
+        )
+        Await.result(inspectTask.runToFuture, 3.seconds)
+    }
+    result.exprs should be(Seq(Expr(GString(""))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "'abcabcac'.slice(-2,2)" should "return 'ab'" in {
+    implicit val errorLog = new ErrorLog()
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env = Env.makeEnv[Par]()
+        val inspectTask = reducer.evalExpr(
+          EMethodBody(EMethod("slice", GString("abcabac"), List(GInt(-2L), GInt(2L))))
+        )
+        Await.result(inspectTask.runToFuture, 3.seconds)
+    }
+    result.exprs should be(Seq(Expr(GString("ab"))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
   "'Hello, ${name}!' % {'name': 'Alice'}" should "return 'Hello, Alice!" in {
     implicit val errorLog = new ErrorLog()
 
@@ -1445,6 +1490,54 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(EListBody(EList(List(GInt(9L), GInt(4L)))))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "[3, 7, 2, 9, 4, 3, 7].slice(5, 4)" should "return []" in {
+    implicit val errorLog = new ErrorLog()
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env = Env.makeEnv[Par]()
+        val list         = EList(List(GInt(3L), GInt(7L), GInt(2L), GInt(9L), GInt(4L), GInt(3L), GInt(7L)))
+        val inspectTask = reducer.evalExpr(
+          EMethodBody(EMethod("slice", list, List(GInt(5L), GInt(4L))))
+        )
+        Await.result(inspectTask.runToFuture, 3.seconds)
+    }
+    result.exprs should be(Seq(Expr(EListBody(EList(List())))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "[3, 7, 2, 9, 4, 3, 7].slice(7, 8)" should "return []" in {
+    implicit val errorLog = new ErrorLog()
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env = Env.makeEnv[Par]()
+        val list         = EList(List(GInt(3L), GInt(7L), GInt(2L), GInt(9L), GInt(4L), GInt(3L), GInt(7L)))
+        val inspectTask = reducer.evalExpr(
+          EMethodBody(EMethod("slice", list, List(GInt(7L), GInt(8L))))
+        )
+        Await.result(inspectTask.runToFuture, 3.seconds)
+    }
+    result.exprs should be(Seq(Expr(EListBody(EList(List())))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "[3, 7, 2, 9, 4, 3, 7].slice(-2, 2)" should "return [3, 7]" in {
+    implicit val errorLog = new ErrorLog()
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env = Env.makeEnv[Par]()
+        val list         = EList(List(GInt(3L), GInt(7L), GInt(2L), GInt(9L), GInt(4L), GInt(3L), GInt(7L)))
+        val inspectTask = reducer.evalExpr(
+          EMethodBody(EMethod("slice", list, List(GInt(-2L), GInt(2L))))
+        )
+        Await.result(inspectTask.runToFuture, 3.seconds)
+    }
+    result.exprs should be(Seq(Expr(EListBody(EList(List(GInt(3L), GInt(7L)))))))
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 

@@ -83,7 +83,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                   )
         validatorId <- ValidatorIdentity.fromConfig[F](conf)
         bondedValidators = genesis.body
-          .flatMap(_.postState.map(_.bonds.map(_.validator).toSet))
+          .flatMap(_.state.map(_.bonds.map(_.validator).toSet))
           .getOrElse(Set.empty)
         abp <- ApproveBlockProtocol
                 .of[F](
@@ -380,10 +380,11 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         br: ApprovedBlockRequest
     ): F[Option[Packet]] =
       for {
-        _   <- Log[F].info(s"Received ApprovedBlockRequest from $peer")
-        msg = Blob(peer, Packet(transport.ApprovedBlock.id, approvedBlock.toByteString))
-        _   <- TransportLayer[F].stream(Seq(peer), msg)
-        _   <- Log[F].info(s"Sending ApprovedBlock to $peer")
+        local <- RPConfAsk[F].reader(_.local)
+        _     <- Log[F].info(s"Received ApprovedBlockRequest from $peer")
+        msg   = Blob(local, Packet(transport.ApprovedBlock.id, approvedBlock.toByteString))
+        _     <- TransportLayer[F].stream(Seq(peer), msg)
+        _     <- Log[F].info(s"Sending ApprovedBlock to $peer")
       } yield none[Packet]
 
     override def handleNoApprovedBlockAvailable(na: NoApprovedBlockAvailable): F[Option[Packet]] =

@@ -6,15 +6,26 @@ import coop.rchain.comm._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.util.{CertificateHelper, CertificatePrinter}
 import coop.rchain.shared.Log
-
+import java.nio.file._
 import monix.catnap.MVar
 import monix.eval.Task
 import monix.execution.Scheduler
+import org.scalatest._
 
-class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] {
+class TcpTransportLayerSpec
+    extends TransportLayerSpec[Task, TcpTlsEnvironment]
+    with BeforeAndAfterEach {
 
   implicit val log: Log[Task]       = new Log.NOPLog[Task]
   implicit val scheduler: Scheduler = Scheduler.Implicits.global
+
+  var tempFolder: Path = null
+
+  override def beforeEach(): Unit =
+    tempFolder = Files.createTempDirectory("rchain")
+
+  override def afterEach(): Unit =
+    tempFolder.toFile.delete()
 
   def createEnvironment(port: Int): Task[TcpTlsEnvironment] =
     Task.delay {
@@ -32,7 +43,7 @@ class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] 
 
   def createTransportLayer(env: TcpTlsEnvironment): Task[TransportLayer[Task]] =
     CachedConnections[Task, TcpConnTag].map { implicit cache =>
-      new TcpTransportLayer(env.port, env.cert, env.key, 4 * 1024 * 1024)
+      new TcpTransportLayer(env.port, env.cert, env.key, 4 * 1024 * 1024, tempFolder)
     }
 
   def extract[A](fa: Task[A]): A = fa.runSyncUnsafe(Duration.Inf)

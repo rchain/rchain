@@ -18,7 +18,7 @@ import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
 import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.shared._
 import coop.rchain.shared.Compression._
-
+import java.nio.file._
 import io.grpc._
 import io.grpc.netty._
 import io.netty.handler.ssl._
@@ -26,7 +26,7 @@ import monix.eval._
 import monix.execution._
 import monix.reactive._
 
-class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: Int)(
+class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: Int, tempFolder: Path)(
     implicit scheduler: Scheduler,
     log: Log[Task],
     connectionsCache: ConnectionsCache[Task, TcpConnTag]
@@ -40,7 +40,7 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
   private def certInputStream = new ByteArrayInputStream(cert.getBytes())
   private def keyInputStream  = new ByteArrayInputStream(key.getBytes())
 
-  private val streamObservable = new StreamObservable(100)
+  private val streamObservable = new StreamObservable(100, tempFolder)
 
   import connections.cell
 
@@ -205,13 +205,23 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
     innerBroadcast(peers, msg)
 
   def handleToStream: ToStream => Task[Unit] = {
-    case ToStream(peer, blob) =>
-      withClient(peer, enforce = false) { stub =>
-        stub.stream(Observable.fromIterator(chunkIt(blob)))
-      }.attempt.flatMap {
-        case Left(error) => log.debug(s"Error while streaming packet, error: $error")
-        case Right(_)    => Task.unit
-      }
+    case ToStream(peer, path, sender) =>
+      PacketOps.restore[Task](path) >>= {
+        case Right(packet) =>
+          withClient(peer, enforce = false) { stub =>
+            val blob = Blob(sender, packet)
+            stub.stream(Observable.fromIterator(chunkIt(blob)))
+          }.attempt
+            .flatMap {
+              case Left(error) => log.error(s"Error while streaming packet, error: $error")
+              case Right(_)    => Task.unit
+            }
+        case Left(error) => log.error(s"Error while streaming packet, error: $error")
+      } >>=
+        (kp(Task.delay {
+          if (path.toFile.exists)
+            path.toFile.delete
+        }))
   }
 
   private def initQueue(

@@ -108,6 +108,7 @@ def started_unbonded_validator(system, bootstrap_node,name='unbonded-validator')
 
 
 
+@pytest.mark.skip(reason="https://rchain.atlassian.net/browse/CORE-1455")
 def test_heterogenous_validators(custom_system):
     BONDED_VALIDATOR_BLOCKS = 10
     JOINING_VALIDATOR_BLOCKS = 10
@@ -140,7 +141,7 @@ def test_heterogenous_validators(custom_system):
                     wait_for(condition, 600, "Unbonded validator did not receive any blocks")
 
 
-def test_heterogenous_validators_with_ronodes(custom_system):
+def     (custom_system):
     BONDED_VALIDATOR_BLOCKS = 5
     JOINING_VALIDATOR_BLOCKS = 3
     with start_bootstrap(custom_system.docker, custom_system.config.node_startup_timeout, custom_system.config.rnode_timeout, custom_system.validators_data) as bootstrap_node:
@@ -184,7 +185,7 @@ def test_heterogenous_validators_with_ronodes(custom_system):
                         
                         def condition_unbonded():
                             expected_blocks_count = 2 * BONDED_VALIDATOR_BLOCKS + 2 * JOINING_VALIDATOR_BLOCKS + 1
-                            actual_blocks_count = ronode.get_blocks_count()
+                            actual_blocks_count = unbonded_validator.get_blocks_count()
                             if actual_blocks_count < expected_blocks_count:
                                 raise Exception("Expected {} blocks, got {}".format(expected_blocks_count, actual_blocks_count))
                         wait_for(condition_unbonded, 600, "Unbonded validator did not receive any blocks")

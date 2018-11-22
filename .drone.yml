@@ -33,6 +33,7 @@ clone:
           git fetch origin refs/pull/$DRONE_PULL_REQUEST/head
           EMAIL=ci git merge --no-edit FETCH_HEAD
       fi
+      git rev-parse HEAD
 
 pipeline:
 

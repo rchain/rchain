@@ -6,9 +6,9 @@ from pathlib import Path
 def file_path(path):
     frame = inspect.stack()[1]
     caller_module = inspect.getmodule(frame[0])
-    base_dir = os.path.realpath(__file__) + f'/../../'
+    base_dir = os.path.realpath(__file__) + '/../../'
     relative_to_base = caller_module.__file__[len(base_dir):]
-    return os.path.realpath(f"resources/{relative_to_base}/{path}")
+    return os.path.realpath("resources/{relative_to_base}/{path}".format(relative_to_base=relative_to_base, path=path))
 
 
 def get_resource_path(relative_path):

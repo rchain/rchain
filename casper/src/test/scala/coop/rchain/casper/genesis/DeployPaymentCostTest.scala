@@ -46,7 +46,7 @@ class DeployPaymentCostTest extends FlatSpec {
 
     val paymentDeployCost = deployCost(paymentBlock, user, timestamp)
 
-    assertSuccessfulTransfer(node, paymentBlock.getBody.getPostState.tuplespace, statusChannel)
+    assertSuccessfulTransfer(node, ProtoUtil.postStateHash(paymentBlock), statusChannel)
 
     println(s"Cost of deploying payment contract is at minimum: $paymentDeployCost")
   }
@@ -198,7 +198,7 @@ object DeployPaymentCostTest {
   def deployAndCapture(p: Par, retChannel: Par, rm: RuntimeManager)(
       implicit casper: MultiParentCasperImpl[Id]
   ): Par = {
-    val postDeployStateHash = deploy[Id](p).getBody.getPostState.tuplespace
+    val postDeployStateHash = ProtoUtil.postStateHash(deploy[Id](p))
     val data                = rm.getData(postDeployStateHash, retChannel)
     assert(data.size == 1)
     data.head

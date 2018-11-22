@@ -86,7 +86,7 @@ class HashSetCasperTestNode[F[_]](
     dataLookup = Map(genesis.blockHash -> BlockMetadata.fromBlock(genesis)),
     topoSort = Vector(Vector(genesis.blockHash))
   )
-  val postGenesisStateHash = genesis.body.get.postState.get.tuplespace
+  val postGenesisStateHash = ProtoUtil.postStateHash(genesis)
   implicit val casperEff = new MultiParentCasperImpl[F](
     runtimeManager,
     Some(validatorId),
