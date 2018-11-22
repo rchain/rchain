@@ -283,45 +283,22 @@ class InterpreterUtilTest
   val registry =
   """
     |new simpleInsertTest, simpleInsertTestReturnID, simpleLookupTest,
-    |    signedInsertTest, signedInsertTestReturnID, signedLookupTest,
     |    ri(`rho:registry:insertArbitrary`),
-    |    rl(`rho:registry:lookup`),
     |    stdout(`rho:io:stdout`),
     |    stdoutAck(`rho:io:stdoutAck`), ack in {
     |        simpleInsertTest!(*simpleInsertTestReturnID) |
-    |        for(@idFromTest1 <- simpleInsertTestReturnID) {
-    |            simpleLookupTest!(idFromTest1, *ack)
-    |        } |
-    |
     |        contract simpleInsertTest(registryIdentifier) = {
-    |            stdout!("REGISTRY_SIMPLE_INSERT_TEST: create arbitrary process X to store in the registry") |
     |            new X, Y, innerAck in {
     |                stdoutAck!(*X, *innerAck) |
     |                for(_ <- innerAck){
-    |                    stdout!("REGISTRY_SIMPLE_INSERT_TEST: adding X to the registry and getting back a new identifier") |
     |                    ri!(*X, *Y) |
     |                    for(@uri <- Y) {
-    |                        stdout!("REGISTRY_SIMPLE_INSERT_TEST: got an identifier for X from the registry") |
-    |                        stdout!(uri) |
     |                        registryIdentifier!(uri)
     |                    }
     |                }
     |            }
-    |        } |
-    |
-    |        contract simpleLookupTest(@uri, result) = {
-    |            stdout!("REGISTRY_SIMPLE_LOOKUP_TEST: looking up X in the registry using identifier") |
-    |            new lookupResponse in {
-    |                rl!(uri, *lookupResponse) |
-    |                for(@val <- lookupResponse) {
-    |                    stdout!("REGISTRY_SIMPLE_LOOKUP_TEST: got X from the registry using identifier") |
-    |                    stdoutAck!(val, *result)
-    |                }
-    |            }
     |        }
     |    }
-    |
-    |
   """.stripMargin
 
   val other =
@@ -352,10 +329,10 @@ class InterpreterUtilTest
 
     val contract = registry
 
-    val genesisDeploysWithCost = prepareDeploys(Vector("@1!(1)"), PCost(1))
+    val genesisDeploysWithCost = prepareDeploys(Vector("@1!(2)"), PCost(1))
     val b1DeploysWithCost = prepareDeploys(Vector(contract), PCost(2, 2L))
     val b2DeploysWithCost = prepareDeploys(Vector(contract), PCost(1, 1L))
-    val b3DeploysWithCost = prepareDeploys(Vector("@1!(1)"), PCost(5, 5L))
+    val b3DeploysWithCost = prepareDeploys(Vector("@1!(3)"), PCost(5, 5L))
 
     /*
      * DAG Looks like this:
