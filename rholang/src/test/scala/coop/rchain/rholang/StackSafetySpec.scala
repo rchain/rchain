@@ -169,18 +169,6 @@ class StackSafetySpec extends FlatSpec with TableDrivenPropertyChecks with Match
     }
   }
 
-  checkNormalize("Nil") //silence "unused" warnings
-
-  private def checkNormalize(rho: String): Unit =
-    isolateStackOverflow {
-      checkSuccess(rho) { rho =>
-        Task.coeval(
-          Interpreter
-            .buildNormalizedTerm(rho)
-        )
-      }
-    }
-
   private def checkSuccess(rho: String)(interpreter: String => Task[_]): Unit =
     interpreter(rho).attempt
       .runSyncUnsafe(maxDuration)
