@@ -272,10 +272,143 @@ class InterpreterUtilTest
         }
       }
       .runSyncUnsafe(10.seconds)
+    println(b3PostState)
 
     b3PostState.contains("@{1}!(15)") should be(true)
     b3PostState.contains("@{5}!(5)") should be(true)
     b3PostState.contains("@{6}!(6)") should be(true)
+  }
+
+
+  val contract =
+  """
+    |new simpleInsertTest, simpleInsertTestReturnID, simpleLookupTest,
+    |    signedInsertTest, signedInsertTestReturnID, signedLookupTest,
+    |    ri(`rho:registry:insertArbitrary`),
+    |    rl(`rho:registry:lookup`),
+    |    stdout(`rho:io:stdout`),
+    |    stdoutAck(`rho:io:stdoutAck`), ack in {
+    |        simpleInsertTest!(*simpleInsertTestReturnID) |
+    |        for(@idFromTest1 <- simpleInsertTestReturnID) {
+    |            simpleLookupTest!(idFromTest1, *ack)
+    |        } |
+    |
+    |        contract simpleInsertTest(registryIdentifier) = {
+    |            stdout!("REGISTRY_SIMPLE_INSERT_TEST: create arbitrary process X to store in the registry") |
+    |            new X, Y, innerAck in {
+    |                stdoutAck!(*X, *innerAck) |
+    |                for(_ <- innerAck){
+    |                    stdout!("REGISTRY_SIMPLE_INSERT_TEST: adding X to the registry and getting back a new identifier") |
+    |                    ri!(*X, *Y) |
+    |                    for(@uri <- Y) {
+    |                        stdout!("REGISTRY_SIMPLE_INSERT_TEST: got an identifier for X from the registry") |
+    |                        stdout!(uri) |
+    |                        registryIdentifier!(uri)
+    |                    }
+    |                }
+    |            }
+    |        } |
+    |
+    |        contract simpleLookupTest(@uri, result) = {
+    |            stdout!("REGISTRY_SIMPLE_LOOKUP_TEST: looking up X in the registry using identifier") |
+    |            new lookupResponse in {
+    |                rl!(uri, *lookupResponse) |
+    |                for(@val <- lookupResponse) {
+    |                    stdout!("REGISTRY_SIMPLE_LOOKUP_TEST: got X from the registry using identifier") |
+    |                    stdoutAck!(val, *result)
+    |                }
+    |            }
+    |        }
+    |    }
+    |
+    |
+  """.stripMargin
+
+  it should "merge histories in case of multiple parents (uneven histories)" in {
+    def prepareDeploys(v: Vector[String], c: PCost) = {
+      val genesisDeploys = v.flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
+      genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(c))
+    }
+
+    val genesisDeploysWithCost = prepareDeploys(Vector(contract), PCost(1))
+
+    val b1DeploysWithCost = prepareDeploys(Vector(contract), PCost(2, 2L))
+
+    val b2DeploysWithCost = prepareDeploys(Vector(contract), PCost(1, 1L))
+
+    val b3DeploysWithCost = prepareDeploys(Vector(contract), PCost(5, 5L))
+
+    val b4DeploysWithCost = prepareDeploys(Vector(contract), PCost(5, 5L))
+
+    val b5DeploysWithCost = prepareDeploys(Vector(contract), PCost(5, 5L))
+
+    /*
+     * DAG Looks like this:
+     *
+     *           b5
+     *          /  \
+     *         |    |
+     *         |    b4
+     *         |    |
+     *        b2    b3
+     *         \    /
+     *          \  /
+     *           |
+     *           b1
+     *           |
+     *         genesis
+     */
+    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] = {
+      import cats.implicits._
+
+      for {
+        genesis <- createBlock[F](Seq.empty, deploys = genesisDeploysWithCost)
+        b1      <- createBlock[F](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
+        b2      <- createBlock[F](Seq(b1.blockHash), deploys = b2DeploysWithCost)
+        b3      <- createBlock[F](Seq(b1.blockHash), deploys = b3DeploysWithCost)
+        b4      <- createBlock[F](Seq(b3.blockHash), deploys = b4DeploysWithCost)
+        b5      <- createBlock[F](Seq(b2.blockHash, b4.blockHash), deploys = b5DeploysWithCost)
+      } yield b5
+    }
+
+    val chain   = createChain[StateWithChain].runS(initState)
+    val genesis = chain.idToBlocks(0)
+
+    val postState = mkRuntimeManager("interpreter-util-test")
+      .use { runtimeManager =>
+        Task.delay {
+
+          def step(chain: IndexedBlockDag, index: Int, genesis: BlockMessage) = {
+            val b1 = chain.idToBlocks(index)
+            val (postB1StateHash, postB1ProcessedDeploys) =
+              computeBlockCheckpoint(
+                b1,
+                genesis,
+                chain,
+                runtimeManager
+              )
+            injectPostStateHash(chain, index, b1, postB1StateHash, postB1ProcessedDeploys)
+          }
+
+          val (postGenStateHash, postGenProcessedDeploys) =
+            computeBlockCheckpoint(genesis, genesis, chain, runtimeManager)
+          val chainWithUpdatedGen =
+            injectPostStateHash(chain, 0, genesis, postGenStateHash, postGenProcessedDeploys)
+
+          val chainWithUpdatedB1 = step(chainWithUpdatedGen, 1, genesis)
+
+          val chainWithUpdatedB2 = step(chainWithUpdatedB1, 2, genesis)
+
+          val chainWithUpdatedB3 = step(chainWithUpdatedB2, 3, genesis)
+
+          val chainWithUpdatedB4 = step(chainWithUpdatedB3, 4, genesis)
+
+          validateBlockCheckpoint[Id](chainWithUpdatedB4.idToBlocks(5), chain, runtimeManager)
+        }
+      }
+      .runSyncUnsafe(10.seconds)
+
+    postState shouldBe Right(None)
   }
 
   def computeSingleProcessedDeploy(
