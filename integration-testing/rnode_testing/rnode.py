@@ -117,6 +117,7 @@ class Node:
         show_blocks_output = self.call_rnode('show-blocks', stderr=False).strip()
         return extract_block_count_from_show_blocks(show_blocks_output)
 
+    # deprecated, don't use, why? ask @adaszko
     def exec_run(self, cmd, stderr=True):
         queue = Queue(1)
 
