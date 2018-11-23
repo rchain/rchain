@@ -21,9 +21,7 @@
 * `nodeA` transitions to `ApprovedBlockReceivedHandler`
 * `nodeA` sends `ApprovedBlock` to `nodeB` and `nodeC`
 * `nodeB` and `nodeC` transition to ApprovedBlockReceivedHandler
-* `show-blocks` on `nodeA` shows single block (genesis) where Bonds holds `nodeB` and `nodeC`
-* `show-blocks` on `nodeB` shows single block (genesis) where Bonds holds `nodeB` and `nodeC`
-* `show-blocks` on `nodeC` shows single block (genesis) where Bonds holds `nodeB` and `nodeC`
+* `nodeA`, `nodeB` and `nodeC` tip points to block (genesis) where it has no parent and Bonds holds `nodeB` and `nodeC`
 
 #### AC: A succesful genesis ceremony with read-only nodes joining 
 
@@ -39,9 +37,7 @@
 * `nodeA` transitions to `ApprovedBlockReceivedHandler`
 * `nodeA` sends `ApprovedBlock` to `nodeB` and `nodeC`
 * `nodeB` and `nodeC` transition to ApprovedBlockReceivedHandler
-* `show-blocks` on `nodeA` shows single block (genesis) where Bonds holds `nodeB` and `nodeC`
-* `show-blocks` on `nodeB` shows single block (genesis) where Bonds holds `nodeB` and `nodeC`
-* `show-blocks` on `nodeC` shows single block (genesis) where Bonds holds `nodeB` and `nodeC`
+* `nodeA`, `nodeB` and `nodeC` tip points to block (genesis) where it has no parent and Bonds holds `nodeB` and `nodeC`
 * `nodeD` **never** transitions to `ApprovedBlockReceivedHandler`
 
 
@@ -68,7 +64,7 @@
 * `nodeD` sends `ApprobedBlockRequest` to `nodeA`
 * `nodeA` sends `ApprovedBlock` to `nodeD`
 * `nodeD` transitions to `ApprovedBlockReceivedHandler`
-* `show-blocks` on `nodeD` shows single block (genesis) where Bonds holds `nodeB` and `nodeC`
+* `nodeD` tip points to block (genesis) where it has no parent and Bonds holds `nodeB` and `nodeC`
 
 ## Proof of stake consensus
 
