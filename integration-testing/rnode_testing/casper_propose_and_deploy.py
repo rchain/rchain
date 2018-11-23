@@ -7,28 +7,30 @@ from shutil import copyfile
 
 
 def mk_expected_string(node, i, random_token):
-    return f"<{node.container.name}:{i}:{random_token}>"
+    return "<{name}:{i}:{random_token}>".format(name=node.container.name, i=i, random_token=random_token)
 
 
 def deploy_block(i, node, expected_string, contract_name):
-    logging.info(f"Expected string: {expected_string}")
+    logging.info("Expected string: {}".format(expected_string))
 
-    copyfile(resources.file_path(contract_name, __name__), f"{node.local_deploy_dir}/{contract_name}")
+    copyfile(resources.file_path(contract_name, __name__), "{local_deploy_dir}/{contract_name}".format(local_deploy_dir=node.local_deploy_dir, contract_name=contract_name))
 
-    exit_code, output = node.exec_run(f"sed -i -e 's/@placeholder@/{expected_string}/g' {node.remote_deploy_dir}/{contract_name}")
-    logging.debug(f"Sed result: {exit_code}, output: {output}")
+    exit_code, output = node.exec_run(
+        "sed -i -e 's/@placeholder@/{expected_string}/g' {remote_deploy_dir}/{contract_name}".format(
+            expected_string=expected_string, remote_deploy_dir=node.remote_deploy_dir,contract_name=contract_name))
+    logging.debug("Sed result: {exit_code}, output: {output}".format(exit_code=exit_code, output=output))
 
     exit_code, output = node.deploy_contract(contract_name)
-    logging.debug(f"Deploy result: {exit_code}, output: {output}")
+    logging.debug("Deploy result: {exit_code}, output: {output}".format(exit_code=exit_code, output=output))
 
     logging.info("Propose to blockchain previously deployed smart contracts.")
 
     exit_code, output = node.propose_contract()
-    logging.debug(f"Propose result: {exit_code}, output: {output}")
+    logging.debug("Propose result: {exit_code}, output: {output}".format(exit_code=exit_code, output=output))
 
 
 def check_blocks(i, node, expected_string):
-    logging.info(f"Check all peer logs for blocks containing {expected_string}")
+    logging.info("Check all peer logs for blocks containing {}".format(expected_string))
 
     other_nodes = [n
                     for n in network.nodes
@@ -37,9 +39,9 @@ def check_blocks(i, node, expected_string):
     for node in other_nodes:
         wait_for(string_contains(show_blocks(node), expected_string),
                     config.receive_timeout,
-                    f"Container: {node.container.name}: String {expected_string} NOT found in blocks added.")
+                    "Container: {name}: String {expected_string} NOT found in blocks added.".format(name=node.container.name, expected_string=expected_string))
 
-        logging.info(f"Container: {node.container.name}: block {i} : SUCCESS!")
+        logging.info("Container: {name}: block {i} : SUCCESS!".format(name=node.container.name, i=i))
 
 
 def run(config, network):
@@ -52,7 +54,7 @@ def run(config, network):
     contract_name = 'contract.rho'
 
     for node in network.nodes:
-        with log_box(logging.info, f"Run test on node '{node.name}'"):
+        with log_box(logging.info, "Run test on node '{}'".format(node.name)):
             random_token = random_string(token_size)
 
             for i in range(0, config.blocks):

@@ -285,9 +285,7 @@ object HashSetCasperTestNode {
     def handleErrorWith[A](fa: Id[A])(f: (CommError) => Id[A]): Id[A] = fa
   }
 
-  implicit val syncEffectInstance = SyncInstances.syncEffect[CommError](commError => {
-    new Exception(s"CommError: $commError")
-  }, e => { UnknownCommError(e.getMessage) })
+  implicit val syncEffectInstance = cats.effect.Sync.catsEitherTSync[Task, CommError]
 
   val errorHandler = ApplicativeError_.applicativeError[Id, CommError](appErrId)
 

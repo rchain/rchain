@@ -262,9 +262,7 @@ class NodeRuntime private[node] (
         } *> exit0.as(Right(()))
     )
 
-  private val syncEffect = SyncInstances.syncEffect[CommError](commError => {
-    new Exception(s"CommError: $commError")
-  }, e => { UnknownCommError(e.getMessage) })
+  private def syncEffect = cats.effect.Sync.catsEitherTSync[Task, CommError]
 
   private val rpClearConnConf = ClearConnetionsConf(
     conf.server.maxNumOfConnections,
