@@ -80,7 +80,7 @@ def test_multiple_deploys_at_once(custom_system):
         with started_bonded_validator(custom_system, bootstrap_node, 1, BONDED_VALIDATOR_KEY_1) as no1:
             with started_bonded_validator(custom_system, bootstrap_node, 2, BONDED_VALIDATOR_KEY_2) as no2:
                 with started_bonded_validator(custom_system, bootstrap_node, 3, BONDED_VALIDATOR_KEY_3) as no3:
-                    contract_path = '/opt/docker/examples/hello_world_again.rho'
+                    contract_path = '/opt/docker/examples/tut-registry.rho'
                     amount = 5
                     deploy1 = deployThread("node1", no1, contract_path, amount)
                     deploy1.start()
