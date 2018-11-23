@@ -14,43 +14,43 @@ def wait_for(condition, timeout, error_message):
     :return: true  if the condition was met in the given timeout
     """
 
-    with log_box(logging.info, "Waiting maximum timeout={}. Patience please!".format(timeout), "."):
-        logging.info("Wait condition is: `{}`".format(condition.__doc__))
-        elapsed = 0
-        current_ex = None
-        while elapsed < timeout:
-            start_time = time.time()
+    logging.info("Waiting maximum timeout={}. Patience please!".format(timeout))
+    logging.info("Wait condition is: `{}`".format(condition.__doc__))
+    elapsed = 0
+    current_ex = None
+    while elapsed < timeout:
+        start_time = time.time()
 
-            try:
-                value = condition()
+        try:
+            value = condition()
 
-                logging.info("Condition satisfied after {elapsed}s. Returning {value}".format(elapsed=elapsed, value=value))
-                return value
+            logging.info("Condition satisfied after {elapsed}s. Returning {value}".format(elapsed=elapsed, value=value))
+            return value
 
-            except Exception as ex:
-                condition_evaluation_duration = time.time() - start_time
-                elapsed = int(elapsed + condition_evaluation_duration)
-                time_left = timeout - elapsed
+        except Exception as ex:
+            condition_evaluation_duration = time.time() - start_time
+            elapsed = int(elapsed + condition_evaluation_duration)
+            time_left = timeout - elapsed
 
-                # iteration duration is 15% of remaining timeout
-                # but no more than 10s and no less than 1s
-                iteration_duration = int(min(10, max(1, int(0.15 * time_left))))
+            # iteration duration is 15% of remaining timeout
+            # but no more than 10s and no less than 1s
+            iteration_duration = int(min(10, max(1, int(0.15 * time_left))))
 
-                if str(ex) == current_ex:
-                    details = "same as above"
-                else:
-                    details = str(ex)
-                    current_ex = str(ex)
+            if str(ex) == current_ex:
+                details = "same as above"
+            else:
+                details = str(ex)
+                current_ex = str(ex)
 
-                logging.info("Condition not satisfied yet ({details}). Time left: {time_left}s. Sleeping {iteration_duration}s...".format(
-                    details=details, time_left=time_left, iteration_duration=iteration_duration)
-                )
+            logging.info("Condition not satisfied yet ({details}). Time left: {time_left}s. Sleeping {iteration_duration}s...".format(
+                details=details, time_left=time_left, iteration_duration=iteration_duration)
+            )
 
-                time.sleep(iteration_duration)
-                elapsed = elapsed + iteration_duration
+            time.sleep(iteration_duration)
+            elapsed = elapsed + iteration_duration
 
-        logging.warning("Giving up after {}s.".format(elapsed))
-        pytest.fail(error_message)
+    logging.warning("Giving up after {}s.".format(elapsed))
+    pytest.fail(error_message)
 
 
 # Predicates
@@ -116,6 +116,13 @@ def has_peers(bootstrap_node, expected_peers):
 def node_started(node):
     return string_contains(node_logs(node),
                            "coop.rchain.node.NodeRuntime - Listening for traffic on rnode")
+
+
+def sent_unapproved_block():
+    return string_contains(
+        node_logs(node),
+        "Sent UnapprovedBlock",
+    )
 
 
 def approved_block_received_handler_state(bootstrap_node):

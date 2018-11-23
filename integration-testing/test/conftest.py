@@ -56,10 +56,6 @@ def make_test_config(request):
         blocks=blocks,
     )
 
-    with log_box(logging.info):
-        s = pprint.pformat(dict(config._asdict()), indent=4)
-        logging.info("Running with test configuration: {}".format(s))
-
     return config
 
 

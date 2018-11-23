@@ -1,6 +1,7 @@
+import re
 import os
 import logging
-import re
+import threading
 from contextlib import contextmanager
 from rnode_testing.docker import docker_network
 import rnode_testing.resources as resources
@@ -43,12 +44,6 @@ class UnexpectedShowBlocksOutputFormatError(Exception):
         self.command = output
 
 
-def make_container_logs_path(container_name):
-    ci_logs_dir = os.environ.get('CI_LOGS_DIR')
-    dir = 'logs' if ci_logs_dir is None else ci_logs_dir
-    return os.path.join(dir, "{}.log".format(container_name))
-
-
 def extract_block_count_from_show_blocks(show_blocks_output):
     lines = show_blocks_output.splitlines()
     prefix = 'count: '
@@ -73,6 +68,13 @@ class Node:
         self.docker_client = docker_client
         self.timeout = timeout
         self.network = network
+        self.terminate_background_logging_event = threading.Event()
+        self.background_logging = LoggingThread(
+            container=container,
+            logger=logging.getLogger('peers'),
+            terminate_thread_event=self.terminate_background_logging_event,
+        )
+        self.background_logging.start()
 
     def logs(self):
         return self.container.logs().decode('utf-8')
@@ -93,14 +95,9 @@ class Node:
         return self.exec_run(cmd=cmd)
 
     def cleanup(self):
-        log_file_path = make_container_logs_path(self.container.name)
-
-        with open(log_file_path, "w") as f:
-            f.write(self.logs())
-
-        logging.info("Remove container {name}. Logs have been written to {path}".format(name=self.container.name, path=log_file_path))
-
         self.container.remove(force=True, v=True)
+        self.terminate_background_logging_event.set()
+        self.background_logging.join()
 
     def deploy_contract(self, contract):
         cmd = '{rnode_binary} deploy --from "0x1" --phlo-limit 1000000 --phlo-price 1 --nonce 0 {rnode_deploy_dir}/{contract}'.format(
@@ -116,8 +113,11 @@ class Node:
     def show_blocks(self):
         return self.exec_run('{} show-blocks'.format(rnode_binary))
 
-    def get_blocks_count(self):
-        show_blocks_output = self.call_rnode('show-blocks', stderr=False).strip()
+    def show_blocks_with_depth(self, depth):
+        return self.exec_run(f'{rnode_binary} show-blocks --depth {depth}')
+
+    def get_blocks_count(self, depth):
+        _,show_blocks_output = self.show_blocks_with_depth(depth)
         return extract_block_count_from_show_blocks(show_blocks_output)
 
     def exec_run(self, cmd, stderr=True):
@@ -197,6 +197,25 @@ class Node:
         return Node.__log_message_rx.split(log_content)
 
 
+class LoggingThread(threading.Thread):
+    def __init__(self, terminate_thread_event, container, logger):
+        super().__init__()
+        self.terminate_thread_event = terminate_thread_event
+        self.container = container
+        self.logger = logger
+
+    def run(self):
+        containers_log_lines_generator = self.container.logs(stream=True, follow=True)
+        try:
+            while True:
+                if self.terminate_thread_event.is_set():
+                    break
+                line = next(containers_log_lines_generator)
+                self.logger.info('\t{}: {}'.format(self.container.name, line.decode('utf-8').rstrip()))
+        except StopIteration:
+            pass
+
+
 def make_container_command(container_command, container_command_options):
     opts = ['{} {}'.format(option, argument) for option, argument in container_command_options.items()]
     result = '{} {}'.format(container_command, ' '.join(opts))
@@ -259,7 +278,7 @@ def create_node_container(
     return Node(container, deploy_dir, docker_client, rnode_timeout, network)
 
 
-def create_bootstrap_node(
+def make_bootstrap_node(
     *,
     docker_client,
     network,
@@ -270,20 +289,29 @@ def create_bootstrap_node(
     image=DEFAULT_IMAGE,
     cpuset_cpus="0",
     mem_limit=None,
+    cli_options=None,
+    container_name=None,
 ):
     key_file = resources.get_resource_path("bootstrap_certificate/node.key.pem")
     cert_file = resources.get_resource_path("bootstrap_certificate/node.certificate.pem")
 
     logging.info("Using key_file={key_file} and cert_file={cert_file}".format(key_file=key_file, cert_file=cert_file))
 
-    name = "bootstrap.{}".format(network)
+    name = "{node_name}.{network_name}".format(
+        node_name='bootstrap' if container_name is None else container_name,
+        network_name=network,
+    )
     container_command_options = {
         "--port":                   40400,
         "--standalone":             "",
         "--validator-private-key":  key_pair.private_key,
         "--validator-public-key":   key_pair.public_key,
+        "--has-faucet":             "",
         "--host":                   name,
     }
+
+    if cli_options is not None:
+        container_command_options.update(cli_options)
 
     volumes = [
         "{}:{}".format(cert_file, rnode_certificate),
@@ -393,13 +421,14 @@ def create_peer_nodes(docker_client,
 
 
 @contextmanager
-def create_bootstrap(docker, docker_network, timeout, validators_data):
-    node = create_bootstrap_node(
+def bootstrap_node(docker, docker_network, timeout, validators_data, *, container_name=None, cli_options=None):
+    node = make_bootstrap_node(
         docker_client=docker,
         network=docker_network,
         bonds_file=validators_data.bonds_file,
         key_pair=validators_data.bootstrap_keys,
         rnode_timeout=timeout,
+        container_name=container_name,
     )
     try:
         yield node
@@ -408,8 +437,8 @@ def create_bootstrap(docker, docker_network, timeout, validators_data):
 
 
 @contextmanager
-def start_bootstrap(docker_client, node_start_timeout, node_cmd_timeout, validators_data):
+def start_bootstrap(docker_client, node_start_timeout, node_cmd_timeout, validators_data, *, container_name=None, cli_options=None):
     with docker_network(docker_client) as network:
-        with create_bootstrap(docker_client, network, node_cmd_timeout, validators_data) as node:
+        with bootstrap_node(docker_client, network, node_cmd_timeout, validators_data, container_name=container_name, cli_options=cli_options) as node:
             wait_for(node_started(node), node_start_timeout, "Bootstrap node didn't start correctly")
             yield node
