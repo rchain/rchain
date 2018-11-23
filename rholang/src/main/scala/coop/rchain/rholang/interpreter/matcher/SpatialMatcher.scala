@@ -340,7 +340,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
             //They match everything that's concrete though.
             guard(lf.locallyFree(t, 0).isEmpty).charge(COMPARISON_COST)
         }
-        isolateState(matchEffect).attemptOpt
+        isolateState[OptionalFreeMapWithCost, FreeMap](matchEffect).attemptOpt
       }
     val maximumBipartiteMatch = MaximumBipartiteMatch(memoizeInHashMap(matchFunction))
 
@@ -373,12 +373,12 @@ object SpatialMatcher extends SpatialMatcherInstances {
   private def guard(predicate: => Boolean): OptionalFreeMapWithCost[Unit] =
     if (predicate) OptionalFreeMapWithCost.pure(()) else OptionalFreeMapWithCost.emptyMap
 
-  private def isolateState[S, F[_]: Monad](f: StateT[F, S, _]): StateT[F, S, S] =
+  private def isolateState[F[_]: MonadState[?[_], S]: Monad, S](f: F[_]): F[S] =
     for {
-      initState   <- StateT.get[F, S]
+      initState   <- MonadState[F, S].get
       _           <- f
-      resultState <- StateT.get[F, S]
-      _           <- StateT.set[F, S](initState)
+      resultState <- MonadState[F, S].get
+      _           <- MonadState[F, S].set(initState)
     } yield resultState
 
   private def memoizeInHashMap[A, B, C](f: (A, B) => C): (A, B) => C = {
