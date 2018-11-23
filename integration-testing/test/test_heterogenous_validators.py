@@ -141,7 +141,6 @@ def test_heterogenous_validators(custom_system):
                     joining_validator.propose()
                     def condition():
                         expected_blocks_count = BONDED_VALIDATOR_BLOCKS + JOINING_VALIDATOR_BLOCKS
-                        import pdb; pdb.set_trace();
                         actual_blocks_count = unbonded_validator.get_blocks_count(30)
                         if actual_blocks_count < expected_blocks_count:
                             raise Exception("Expected {} blocks, got {}".format(expected_blocks_count, actual_blocks_count))
