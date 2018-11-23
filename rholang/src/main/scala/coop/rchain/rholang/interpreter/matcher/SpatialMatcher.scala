@@ -5,7 +5,7 @@ import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.MonadState
 import cats.mtl.implicits._
-import cats.{Monad, Eval => _}
+import cats.{Applicative, FunctorFilter, Monad, Eval => _}
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
@@ -331,14 +331,14 @@ object SpatialMatcher extends SpatialMatcherInstances {
           case Term(p) =>
             if (!lf.connectiveUsed(p)) {
               //match using `==` if pattern is a concrete term
-              guard(t == p).charge(COMPARISON_COST)
+              guardMatch(t == p).charge(COMPARISON_COST)
             } else {
               spatialMatch(t, p)
             }
           case Remainder(_) =>
             //Remainders can't match non-concrete terms, because they can't be captured.
             //They match everything that's concrete though.
-            guard(lf.locallyFree(t, 0).isEmpty).charge(COMPARISON_COST)
+            guardMatch(lf.locallyFree(t, 0).isEmpty).charge(COMPARISON_COST)
         }
         isolateState[OptionalFreeMapWithCost, FreeMap](matchEffect).attemptOpt
       }
@@ -370,8 +370,13 @@ object SpatialMatcher extends SpatialMatcherInstances {
     } yield Unit
   }
 
-  private def guard(predicate: => Boolean): OptionalFreeMapWithCost[Unit] =
-    if (predicate) OptionalFreeMapWithCost.pure(()) else OptionalFreeMapWithCost.emptyMap
+  private def guardMatch(predicate: => Boolean): OptionalFreeMapWithCost[Unit] =
+    StateT.liftF(guard[OptionWithCost](predicate))
+
+  private def guard[F[_]: FunctorFilter: Applicative](predicate: => Boolean): F[Unit] =
+    FunctorFilter[F].mapFilter(Applicative[F].unit) { _ =>
+      if (predicate) Some(()) else None
+    }
 
   private def isolateState[F[_]: MonadState[?[_], S]: Monad, S](f: F[_]): F[S] =
     for {
@@ -389,7 +394,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
   private def aggregateUpdates(freeMaps: Seq[FreeMap]): OptionalFreeMapWithCost[FreeMap] =
     for {
       currentFreeMap <- StateT.get[OptionWithCost, FreeMap]
-      _ <- guard {
+      _ <- guardMatch {
             //The correctness of isolating MBM from changing FreeMap relies
             //on our ability to aggregate the var assignments from subsequent matches.
             //This means all the variables populated by MBM must not duplicate each other.
