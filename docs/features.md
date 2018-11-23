@@ -13,32 +13,32 @@
 ##### test: [todo: requires integration test]
 ##### steps:
 
-* `nodeA`(ceremony-master) is instatantied with flags `--required-sigs 2 --duration 5min --interval 10sec --bonds-file <holds two nodes nodeB and nodeC`.
-* `nodeB`(validator) and `nodeC`(validator) joins p2p, both poining `nodeA` as bootstrap
-* `nodeA` sends `UnapprovedBlock` to `nodeB` and `nodeC`
-* `nodeB` and `nodeC` receives `UnapprovedBlock`
-* `nodeB` and `nodeC` send back `BlockApproval`
-* `nodeA` transitions to `ApprovedBlockReceivedHandler`
-* `nodeA` sends `ApprovedBlock` to `nodeB` and `nodeC`
-* `nodeB` and `nodeC` transition to ApprovedBlockReceivedHandler
-* `nodeA`, `nodeB` and `nodeC` tip points to block (genesis) where it has no parent and Bonds holds `nodeB` and `nodeC`
+* `ceremonyMaster` is instatantied with flags `--required-sigs 2 --duration 5min --interval 10sec --bonds-file <holds two nodes validatorA and validatorB`.
+* `validatorA` and `validatorB` joins p2p, both poining `ceremonyMaster` as bootstrap
+* `ceremonyMaster` sends `UnapprovedBlock` to `validatorA` and `validatorB`
+* `validatorA` and `validatorB` receives `UnapprovedBlock`
+* `validatorA` and `validatorB` send back `BlockApproval`
+* `ceremonyMaster` transitions to `ApprovedBlockReceivedHandler`
+* `ceremonyMaster` sends `ApprovedBlock` to `validatorA` and `validatorB`
+* `validatorA` and `validatorB` transition to ApprovedBlockReceivedHandler
+* `ceremonyMaster`, `validatorA` and `validatorB` tip points to block (genesis) where it has no parent and Bonds holds `validatorA` and `validatorB`
 
 #### AC: A succesful genesis ceremony with read-only nodes joining 
 
 ##### test: [todo: requires integration test]
 ##### steps:
 
-* `nodeA`(ceremony-master) is instatantied with flags `--required-sigs 2 --duration 5min --interval 10sec --bonds-file <holds two nodes nodeB and nodeC`.
-* `nodeB`(validator) and `nodeC`(validator) joins p2p, both poining `nodeA` as bootstrap
-* `nodeD`(read-only) joins p2p
-* `nodeA` sends `UnapprovedBlock` to `nodeB` and `nodeC`
-* `nodeB` and `nodeC` receives `UnapprovedBlock`
-* `nodeB` and `nodeC` send back `BlockApproval`
-* `nodeA` transitions to `ApprovedBlockReceivedHandler`
-* `nodeA` sends `ApprovedBlock` to `nodeB` and `nodeC`
-* `nodeB` and `nodeC` transition to ApprovedBlockReceivedHandler
-* `nodeA`, `nodeB` and `nodeC` tip points to block (genesis) where it has no parent and Bonds holds `nodeB` and `nodeC`
-* `nodeD` **never** transitions to `ApprovedBlockReceivedHandler`
+* `ceremonyMaster` is instatantied with flags `--required-sigs 2 --duration 5min --interval 10sec --bonds-file <holds two nodes validatorA and validatorB`.
+* `validatorA` and `validatorB` joins p2p, both poining `ceremonyMaster` as bootstrap
+* `readOnlyA`(read-only) joins p2p
+* `ceremonyMaster` sends `UnapprovedBlock` to `validatorA` and `validatorB`
+* `validatorA` and `validatorB` receives `UnapprovedBlock`
+* `validatorA` and `validatorB` send back `BlockApproval`
+* `ceremonyMaster` transitions to `ApprovedBlockReceivedHandler`
+* `ceremonyMaster` sends `ApprovedBlock` to `validatorA` and `validatorB`
+* `validatorA` and `validatorB` transition to ApprovedBlockReceivedHandler
+* `ceremonyMaster`, `validatorA` and `validatorB` tip points to block (genesis) where it has no parent and Bonds holds `validatorA` and `validatorB`
+* `readOnlyA` **never** transitions to `ApprovedBlockReceivedHandler`
 
 
 #### AC: A NOT succesful genesis ceremony (not enough sigs)
@@ -46,12 +46,12 @@
 ##### test: [todo: requires integration test]
 ##### steps:
 
-* `nodeA`(ceremony-master) is instatantied with flags `--required-sigs 3 --duration 5min --interval 10sec --bonds-file <holds two nodes nodeB and nodeC`.
-* `nodeB`(validator) and `nodeC`(validator) joins p2p, both poining `nodeA` as bootstrap
-* `nodeA` sends `UnapprovedBlock` to `nodeB` and `nodeC`
-* `nodeB` and `nodeC` receives `UnapprovedBlock`
-* `nodeB` and `nodeC` send back `BlockApproval`
-* `nodeA` logs an error about not getting enough signatures on time (`duration`)
+* `ceremonyMaster` is instatantied with flags `--required-sigs 3 --duration 5min --interval 10sec --bonds-file <holds two nodes validatorA and validatorB`.
+* `validatorA` and `validatorB` joins p2p, both poining `ceremonyMaster` as bootstrap
+* `ceremonyMaster` sends `UnapprovedBlock` to `validatorA` and `validatorB`
+* `validatorA` and `validatorB` receives `UnapprovedBlock`
+* `validatorA` and `validatorB` send back `BlockApproval`
+* `ceremonyMaster` logs an error about not getting enough signatures on time (`duration`)
 
 
 #### AC: A validator catching up after ceremony
@@ -60,11 +60,11 @@
 ##### steps:
 
 * genesis reach as described in [A succesful genesis ceremony](#user-content-ac-a-succesful-genesis-ceremony)
-* `nodeD`(validator) joins p2p, pointing on `nodeA` as bootstrap
-* `nodeD` sends `ApprobedBlockRequest` to `nodeA`
-* `nodeA` sends `ApprovedBlock` to `nodeD`
-* `nodeD` transitions to `ApprovedBlockReceivedHandler`
-* `nodeD` tip points to block (genesis) where it has no parent and Bonds holds `nodeB` and `nodeC`
+* `validatorC` joins p2p, pointing on `ceremonyMaster` as bootstrap
+* `validatorC` sends `ApprobedBlockRequest` to `ceremonyMaster`
+* `ceremonyMaster` sends `ApprovedBlock` to `validatorC`
+* `validatorC` transitions to `ApprovedBlockReceivedHandler`
+* `validatorC` tip points to block (genesis) where it has no parent and Bonds holds `validatorA` and `validatorB`
 
 ## Proof of stake consensus
 
@@ -76,8 +76,8 @@
 
 ##### steps:
 
-* instantiate p2p network with single `nodeA` that transitions to `ApprovedBlockReceivedhandler` (`--required-sig 0`)
-* call `rnode deploy` with `rholang/examples/tut-philosophers.rho` on `nodeA`
+* instantiate p2p network with single `ceremonyMaster` that transitions to `ApprovedBlockReceivedhandler` (`--required-sig 0`)
+* call `rnode deploy` with `rholang/examples/tut-philosophers.rho` on `ceremonyMaster`
 * assert a success on std out
 * `rnode deploy` exit code should be 0
 
@@ -87,7 +87,7 @@
 
 ##### steps:
 
-* instantiate p2p network with single `nodeA` that transitions to `ApprovedBlockReceivedhandler` (`--required-sig 0`)
-* call `rnode deploy` with invalid contract on `nodeA`
+* instantiate p2p network with single `ceremonyMaster` that transitions to `ApprovedBlockReceivedhandler` (`--required-sig 0`)
+* call `rnode deploy` with invalid contract on `ceremonyMaster`
 * assert a error logs on std out
 * `rnode deploy` exit code should be 1
