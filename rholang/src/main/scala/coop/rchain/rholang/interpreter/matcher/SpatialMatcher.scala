@@ -3,6 +3,8 @@ package coop.rchain.rholang.interpreter.matcher
 import cats.data.{OptionT, StateT}
 import cats.effect.Sync
 import cats.implicits._
+import cats.mtl.MonadState
+import cats.mtl.implicits._
 import cats.{Monad, Eval => _}
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
@@ -294,7 +296,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
       else if (plen == 0 && remainder.isDefined) {
         val matchResult =
           if (tlist.forall(lf.locallyFree(_, 0).isEmpty))
-            handleRemainder(tlist, remainder.get, merger)
+            handleRemainder[OptionalFreeMapWithCost, T](tlist, remainder.get, merger)
           else
             OptionalFreeMapWithCost.emptyMap[Unit]
         matchResult.charge(COMPARISON_COST * tlist.size)
@@ -362,7 +364,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
                 OptionalFreeMapWithCost.emptyMap
             // If there's a capture variable, we prefer to add things to that rather than throw them away.
             case Some(level) => {
-              handleRemainder(remainderTargetsSorted, level, merger)
+              handleRemainder[OptionalFreeMapWithCost, T](remainderTargetsSorted, level, merger)
             }
           }
     } yield Unit
@@ -399,18 +401,18 @@ object SpatialMatcher extends SpatialMatcherInstances {
       updatedFreeMap = freeMaps.fold(currentFreeMap)(_ ++ _)
     } yield updatedFreeMap
 
-  private def handleRemainder[T](
+  private def handleRemainder[F[_]: MonadState[?[_], FreeMap]: Monad, T](
       remainderTargets: Seq[T],
       level: Int,
       merger: (Par, Seq[T]) => Par
-  ): OptionalFreeMapWithCost[Unit] =
+  ): F[Unit] =
     for {
-      remainderPar <- StateT.inspect[OptionWithCost, FreeMap, Par](
+      remainderPar <- MonadState[F, FreeMap].inspect[Par](
                        (m: FreeMap) => m.getOrElse(level, VectorPar())
                      )
       //TODO: enforce sorted-ness of returned terms using types / by verifying the sorted-ness here
       remainderParUpdated = merger(remainderPar, remainderTargets)
-      _ <- StateT.modify[OptionWithCost, FreeMap](
+      _ <- MonadState[F, FreeMap].modify(
             (m: FreeMap) => m + (level -> remainderParUpdated)
           )
     } yield Unit
