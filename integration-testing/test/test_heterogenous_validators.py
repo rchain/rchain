@@ -147,7 +147,7 @@ def test_heterogenous_validators(custom_system):
                     wait_for(condition, 600, "Unbonded validator did not receive any blocks")
 
 
-@pytest.mark.skip(reason="Failes, needs work on the test platform.")
+@pytest.mark.skip(reason="Failes: 'Failure! Invalid block: InvalidUnslashableBlock'")
 def test_heterogenous_validators_with_ronodes(custom_system):
     BONDED_VALIDATOR_BLOCKS = 5
     JOINING_VALIDATOR_BLOCKS = 3
@@ -165,7 +165,7 @@ def test_heterogenous_validators_with_ronodes(custom_system):
 
                 def condition_ronode():
                     expected_blocks_count = 2 * BONDED_VALIDATOR_BLOCKS
-                    actual_blocks_count = ronode.get_blocks_count()
+                    actual_blocks_count = ronode.get_blocks_count(30)
                     if actual_blocks_count < expected_blocks_count:
                         raise Exception("Expected {} blocks, got {}".format(expected_blocks_count, actual_blocks_count))
                 
@@ -192,14 +192,14 @@ def test_heterogenous_validators_with_ronodes(custom_system):
                         
                         def condition_unbonded():
                             expected_blocks_count = 2 * BONDED_VALIDATOR_BLOCKS + 2 * JOINING_VALIDATOR_BLOCKS + 1
-                            actual_blocks_count = unbonded_validator.get_blocks_count()
+                            actual_blocks_count = unbonded_validator.get_blocks_count(30)
                             if actual_blocks_count < expected_blocks_count:
                                 raise Exception("Expected {} blocks, got {}".format(expected_blocks_count, actual_blocks_count))
                         wait_for(condition_unbonded, 600, "Unbonded validator did not receive any blocks")
 
                         def condition_ronode2():
                             expected_blocks_count = 2 * BONDED_VALIDATOR_BLOCKS + 2 * JOINING_VALIDATOR_BLOCKS + 1
-                            actual_blocks_count = ronode.get_blocks_count()
+                            actual_blocks_count = ronode.get_blocks_count(30)
                             if actual_blocks_count < expected_blocks_count:
                                 raise Exception("Expected {} blocks, got {}".format(expected_blocks_count, actual_blocks_count))
                         wait_for(condition_ronode2, 600, "RO Node did not receive any blocks")
