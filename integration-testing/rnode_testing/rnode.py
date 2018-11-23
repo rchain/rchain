@@ -120,10 +120,6 @@ class Node:
         _,show_blocks_output = self.show_blocks_with_depth(depth)
         return extract_block_count_from_show_blocks(show_blocks_output)
 
-    def get_blocks_no(self):
-        show_blocks_output = self.call_rnode('show-blocks', stderr=False).strip()
-        return extract_block_no_from_show_blocks(show_blocks_output)
-
     def exec_run(self, cmd, stderr=True):
         queue = Queue(1)
 
