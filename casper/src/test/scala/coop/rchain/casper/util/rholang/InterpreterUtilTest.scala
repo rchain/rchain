@@ -312,7 +312,7 @@ class InterpreterUtilTest
     genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(c))
   }
 
-  it should "merge histories in case of multiple parents with complex contract" in {
+  it should "merge histories in case of multiple parents with complex contract" ignore {
 
     val contract = registry
 
@@ -371,7 +371,7 @@ class InterpreterUtilTest
     postState shouldBe Right(None)
   }
 
-  it should "merge histories in case of multiple parents (uneven histories)" in {
+  it should "merge histories in case of multiple parents (uneven histories)" ignore {
     val contract = registry
 
     val genesisDeploysWithCost = prepareDeploys(Vector(contract), PCost(1))

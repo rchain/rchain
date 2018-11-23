@@ -202,7 +202,6 @@ object InterpreterUtil {
           _           = assert(maybeBlocks.forall(_.isDefined))
           blocks      = maybeBlocks.flatten
           deploys     = blocks.flatMap(_.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal))
-        _ = println(deploys)
         } yield
           runtimeManager
             .replayComputeState(initStateHash, deploys, time)
