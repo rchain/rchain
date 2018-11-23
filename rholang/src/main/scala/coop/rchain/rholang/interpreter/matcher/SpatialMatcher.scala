@@ -409,10 +409,13 @@ object SpatialMatcher extends SpatialMatcherInstances {
       updatedFreeMap = freeMaps.fold(currentFreeMap)(_ ++ _)
     } yield updatedFreeMap
 
-  private def aggregateUpdates2[F[_]: MonadState[?[_], FreeMap]: MonadError[?[_], String]: Monad](freeMaps: Seq[FreeMap]): F[FreeMap] =
+  private def aggregateUpdates2[F[_]: Monad](freeMaps: Seq[FreeMap])(
+      implicit monadState: MonadState[F, FreeMap],
+      monadError: MonadError[F, String]
+  ): F[FreeMap] =
     for {
-      currentFreeMap <- MonadState[F, FreeMap].get
-      _ <- MonadError[F, String].ensure(Monad[F].unit)("Vars distinct") { _ =>
+      currentFreeMap <- monadState.get
+      _ <- monadError.ensure(Monad[F].unit)("Vars distinct") { _ =>
         //The correctness of isolating MBM from changing FreeMap relies
         //on our ability to aggregate the var assignments from subsequent matches.
         //This means all the variables populated by MBM must not duplicate each other.
