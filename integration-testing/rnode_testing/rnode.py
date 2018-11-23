@@ -113,8 +113,11 @@ class Node:
     def show_blocks(self):
         return self.exec_run('{} show-blocks'.format(rnode_binary))
 
-    def get_blocks_count(self):
-        show_blocks_output = self.call_rnode('show-blocks', stderr=False).strip()
+    def show_blocks_with_depth(self, depth):
+        return self.exec_run(f'{rnode_binary} show-blocks --depth {depth}')
+
+    def get_blocks_count(self, depth):
+        _,show_blocks_output = self.show_blocks_with_depth(depth)
         return extract_block_count_from_show_blocks(show_blocks_output)
 
     def exec_run(self, cmd, stderr=True):
@@ -303,6 +306,7 @@ def make_bootstrap_node(
         "--standalone":             "",
         "--validator-private-key":  key_pair.private_key,
         "--validator-public-key":   key_pair.public_key,
+        "--has-faucet":             "",
         "--host":                   name,
     }
 
