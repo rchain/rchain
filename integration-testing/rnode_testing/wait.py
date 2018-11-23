@@ -64,6 +64,15 @@ def node_logs(node):
     return go
 
 
+def get_block(node, block_hash):
+    def go():
+        block_contents = node.get_block(block_hash)
+        return block_contents
+
+    go.__doc__ = 'get_block({})'.format(repr(block_hash))
+    return go
+
+
 def show_blocks(node):
     def go():
         exit_code, output = node.show_blocks()

@@ -3,7 +3,13 @@ import pytest
 from delayed_assert import expect, assert_expectations
 from rnode_testing.profiling import profile
 import rnode_testing.casper_propose_and_deploy
-from rnode_testing.network import start_network, wait_for_started_network, wait_for_converged_network
+from rnode_testing.network import (
+    start_network,
+    wait_for_started_network,
+    wait_for_converged_network,
+    wait_for_approved_block_received_handler_state,
+    wait_for_approved_block_received,
+)
 from rnode_testing.rnode import start_bootstrap
 
 @pytest.fixture(scope="module")
@@ -25,13 +31,6 @@ def star_network(system):
 
             yield network
 
-def test_convergence(star_network):
-    logging.info("Star network converged successfully.")
-
-@pytest.mark.skip(reason="This doesn't work since the show-blocks functionality was removed")
-def test_casper_propose_and_deploy(star_network):
-    rnode_testing.casper_propose_and_deploy.run(star_network)
-
 
 @pytest.fixture(scope="module")
 def complete_network(system):
@@ -39,6 +38,8 @@ def complete_network(system):
                          system.config.node_startup_timeout,
                          system.config.rnode_timeout,
                          system.validators_data) as bootstrap_node:
+
+        wait_for_approved_block_received_handler_state(bootstrap_node, system.config.node_startup_timeout)
 
         with start_network(system.config,
                            system.docker,
@@ -48,6 +49,8 @@ def complete_network(system):
             wait_for_started_network(system.config.node_startup_timeout, network)
 
             wait_for_converged_network(system.config.network_converge_timeout, network, len(network.peers))
+
+            wait_for_approved_block_received(network, system.config.node_startup_timeout)
 
             yield network
 
@@ -90,10 +93,9 @@ def test_node_logs_for_RuntimeException(complete_network):
 
     assert_expectations()
 
-@pytest.mark.skip(reason="This doesn't work since the show-blocks functionality was removed")
 @profile
-def test_casper_propose_and_deploy(config, complete_network):
-    rnode_testing.casper_propose_and_deploy.run(config, complete_network)
+def test_casper_propose_and_deploy(system, complete_network):
+    rnode_testing.casper_propose_and_deploy.run(system.config, complete_network)
 
 def test_convergence(complete_network):
     logging.info("Complete network converged successfully.")
