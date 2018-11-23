@@ -147,7 +147,7 @@ def test_heterogenous_validators(custom_system):
                     wait_for(condition, 600, "Unbonded validator did not receive any blocks")
 
 
-def     (custom_system):
+def test_heterogenous_validators_with_ronodes(custom_system):
     BONDED_VALIDATOR_BLOCKS = 5
     JOINING_VALIDATOR_BLOCKS = 3
     with start_bootstrap(custom_system.docker, custom_system.config.node_startup_timeout, custom_system.config.rnode_timeout, custom_system.validators_data) as bootstrap_node:
