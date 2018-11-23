@@ -272,7 +272,6 @@ class InterpreterUtilTest
         }
       }
       .runSyncUnsafe(10.seconds)
-    println(b3PostState)
 
     b3PostState.contains("@{1}!(15)") should be(true)
     b3PostState.contains("@{5}!(5)") should be(true)
@@ -282,23 +281,11 @@ class InterpreterUtilTest
 
   val registry =
   """
-    |new simpleInsertTest, simpleInsertTestReturnID, simpleLookupTest,
-    |    ri(`rho:registry:insertArbitrary`),
-    |    stdout(`rho:io:stdout`),
-    |    stdoutAck(`rho:io:stdoutAck`), ack in {
-    |        simpleInsertTest!(*simpleInsertTestReturnID) |
-    |        contract simpleInsertTest(registryIdentifier) = {
-    |            new X, Y, innerAck in {
-    |                stdoutAck!(*X, *innerAck) |
-    |                for(_ <- innerAck){
-    |                    ri!(*X, *Y) |
-    |                    for(@uri <- Y) {
-    |                        registryIdentifier!(uri)
-    |                    }
-    |                }
-    |            }
-    |        }
-    |    }
+    |new ri(`rho:registry:insertArbitrary`) in {
+    |  new X, Y in {
+    |    ri!(*X, *Y)
+    |  }
+    |}
   """.stripMargin
 
   val other =
@@ -329,10 +316,10 @@ class InterpreterUtilTest
 
     val contract = registry
 
-    val genesisDeploysWithCost = prepareDeploys(Vector("@1!(2)"), PCost(1))
+    val genesisDeploysWithCost = prepareDeploys(Vector.empty, PCost(1))
     val b1DeploysWithCost = prepareDeploys(Vector(contract), PCost(2, 2L))
     val b2DeploysWithCost = prepareDeploys(Vector(contract), PCost(1, 1L))
-    val b3DeploysWithCost = prepareDeploys(Vector("@1!(3)"), PCost(5, 5L))
+    val b3DeploysWithCost = prepareDeploys(Vector.empty, PCost(5, 5L))
 
     /*
      * DAG Looks like this:

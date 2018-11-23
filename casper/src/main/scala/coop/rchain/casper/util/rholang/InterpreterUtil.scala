@@ -3,7 +3,7 @@ package coop.rchain.casper.util.rholang
 import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.{BlockMetadata, BlockStore}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
@@ -185,7 +185,7 @@ object InterpreterUtil {
       //merged. This is done by computing uncommon ancestors
       //and applying the deploys in those blocks.
       case (initParent, initStateHash) +: _ =>
-        implicit val ordering = BlockDag.deriveOrdering(dag)
+        implicit val ordering: Ordering[BlockMetadata] = BlockDag.deriveOrdering(dag)
         val indexedParents    = parents.toVector.map(b => dag.dataLookup(b.blockHash))
         val uncommonAncestors = DagOperations.uncommonAncestors(indexedParents, dag.dataLookup)
 
@@ -202,6 +202,7 @@ object InterpreterUtil {
           _           = assert(maybeBlocks.forall(_.isDefined))
           blocks      = maybeBlocks.flatten
           deploys     = blocks.flatMap(_.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal))
+        _ = println(deploys)
         } yield
           runtimeManager
             .replayComputeState(initStateHash, deploys, time)
