@@ -275,7 +275,7 @@ def create_node_container(
     return Node(container, deploy_dir, docker_client, rnode_timeout, network)
 
 
-def create_bootstrap_node(
+def make_bootstrap_node(
     *,
     docker_client,
     network,
@@ -286,13 +286,18 @@ def create_bootstrap_node(
     image=DEFAULT_IMAGE,
     cpuset_cpus="0",
     mem_limit=None,
+    cli_options=None,
+    container_name=None,
 ):
     key_file = resources.get_resource_path("bootstrap_certificate/node.key.pem")
     cert_file = resources.get_resource_path("bootstrap_certificate/node.certificate.pem")
 
     logging.info("Using key_file={key_file} and cert_file={cert_file}".format(key_file=key_file, cert_file=cert_file))
 
-    name = "bootstrap.{}".format(network)
+    name = "{node_name}.{network_name}".format(
+        node_name='bootstrap' if container_name is None else container_name,
+        network_name=network,
+    )
     container_command_options = {
         "--port":                   40400,
         "--standalone":             "",
@@ -300,6 +305,9 @@ def create_bootstrap_node(
         "--validator-public-key":   key_pair.public_key,
         "--host":                   name,
     }
+
+    if cli_options is not None:
+        container_command_options.update(cli_options)
 
     volumes = [
         "{}:{}".format(cert_file, rnode_certificate),
@@ -409,13 +417,14 @@ def create_peer_nodes(docker_client,
 
 
 @contextmanager
-def create_bootstrap(docker, docker_network, timeout, validators_data):
-    node = create_bootstrap_node(
+def bootstrap_node(docker, docker_network, timeout, validators_data, *, container_name=None, cli_options=None):
+    node = make_bootstrap_node(
         docker_client=docker,
         network=docker_network,
         bonds_file=validators_data.bonds_file,
         key_pair=validators_data.bootstrap_keys,
         rnode_timeout=timeout,
+        container_name=container_name,
     )
     try:
         yield node
@@ -424,8 +433,8 @@ def create_bootstrap(docker, docker_network, timeout, validators_data):
 
 
 @contextmanager
-def start_bootstrap(docker_client, node_start_timeout, node_cmd_timeout, validators_data):
+def start_bootstrap(docker_client, node_start_timeout, node_cmd_timeout, validators_data, *, container_name=None, cli_options=None):
     with docker_network(docker_client) as network:
-        with create_bootstrap(docker_client, network, node_cmd_timeout, validators_data) as node:
+        with bootstrap_node(docker_client, network, node_cmd_timeout, validators_data, container_name=container_name, cli_options=cli_options) as node:
             wait_for(node_started(node), node_start_timeout, "Bootstrap node didn't start correctly")
             yield node
