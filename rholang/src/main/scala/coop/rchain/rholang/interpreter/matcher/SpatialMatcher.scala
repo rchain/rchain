@@ -1,11 +1,11 @@
 package coop.rchain.rholang.interpreter.matcher
 
-import cats.data.{OptionT, StateT}
+import cats.data.{EitherT, OptionT, StateT}
 import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.MonadState
 import cats.mtl.implicits._
-import cats.{Applicative, FunctorFilter, Monad, Eval => _}
+import cats.{Applicative, FunctorFilter, Monad, MonadError, Eval => _}
 import coop.rchain.catscontrib._
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
@@ -400,10 +400,27 @@ object SpatialMatcher extends SpatialMatcherInstances {
             //on our ability to aggregate the var assignments from subsequent matches.
             //This means all the variables populated by MBM must not duplicate each other.
             //TODO start using MonadError in the interpreter and raise errors for violated assertions
+            val z = aggregateUpdates2[EitherT[OptionalFreeMapWithCost, String, ?]](Seq())
+            println(z)
             val currentVars = currentFreeMap.keys.toSet
             val addedVars   = freeMaps.flatMap(_.keys.filterNot(currentVars.contains))
             addedVars.size == addedVars.distinct.size
           }
+      updatedFreeMap = freeMaps.fold(currentFreeMap)(_ ++ _)
+    } yield updatedFreeMap
+
+  private def aggregateUpdates2[F[_]: MonadState[?[_], FreeMap]: MonadError[?[_], String]: Monad](freeMaps: Seq[FreeMap]): F[FreeMap] =
+    for {
+      currentFreeMap <- MonadState[F, FreeMap].get
+      _ <- MonadError[F, String].ensure(Monad[F].unit)("Vars distinct") { _ =>
+        //The correctness of isolating MBM from changing FreeMap relies
+        //on our ability to aggregate the var assignments from subsequent matches.
+        //This means all the variables populated by MBM must not duplicate each other.
+        //TODO start using MonadError in the interpreter and raise errors for violated assertions
+        val currentVars = currentFreeMap.keys.toSet
+        val addedVars   = freeMaps.flatMap(_.keys.filterNot(currentVars.contains))
+        addedVars.size == addedVars.distinct.size
+      }
       updatedFreeMap = freeMaps.fold(currentFreeMap)(_ ++ _)
     } yield updatedFreeMap
 
