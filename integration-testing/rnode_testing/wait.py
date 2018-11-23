@@ -118,6 +118,13 @@ def node_started(node):
                            "coop.rchain.node.NodeRuntime - Listening for traffic on rnode")
 
 
+def sent_unapproved_block():
+    return string_contains(
+        node_logs(node),
+        "Sent UnapprovedBlock",
+    )
+
+
 def approved_block_received_handler_state(bootstrap_node):
     return string_contains(
         node_logs(bootstrap_node),
