@@ -7,7 +7,7 @@ def without_banner_and_prompt(input, output):
     banner_and_prompt = '\x1b[31m\n  ╦═╗┌─┐┬ ┬┌─┐┬┌┐┌  ╔╗╔┌─┐┌┬┐┌─┐  ╦═╗╔═╗╔═╗╦  \n  ╠╦╝│  ├─┤├─┤││││  ║║║│ │ ││├┤   ╠╦╝║╣ ╠═╝║  \n  ╩╚═└─┘┴ ┴┴ ┴┴┘└┘  ╝╚╝└─┘─┴┘└─┘  ╩╚═╚═╝╩  ╩═╝\n    \x1b[0m\n\x1b[32mrholang $ '
     assert output.startswith(banner_and_prompt)
     without_banner_and_prompt = output[len(banner_and_prompt):]
-    colored_input = f'\x1b[0m{input}\n'
+    colored_input = '\x1b[0m{}\n'.format(input)
     assert without_banner_and_prompt.startswith(colored_input)
     return without_banner_and_prompt[len(colored_input):]
 
