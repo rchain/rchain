@@ -102,13 +102,13 @@ def started_unbonded_validator(system, bootstrap_node):
     )
     try:
         wait_for(node_started(unbonded_validator), system.config.node_startup_timeout, "Unbonded validator node didn't start correctly")
+        wait_for_approved_block_received_handler_state(unbonded_validator, system.config.node_startup_timeout)
         yield unbonded_validator
     finally:
         unbonded_validator.cleanup()
 
 
 
-@pytest.mark.skip(reason="https://rchain.atlassian.net/browse/CORE-1455")
 def test_heterogenous_validators(custom_system):
     BONDED_VALIDATOR_BLOCKS = 10
     JOINING_VALIDATOR_BLOCKS = 10
@@ -125,7 +125,10 @@ def test_heterogenous_validators(custom_system):
                     private_key=JOINING_VALIDATOR_KEYS.private_key,
                     public_key=JOINING_VALIDATOR_KEYS.public_key,
                 )
+                forward_file = joining_validator.cat_forward_file(public_key=JOINING_VALIDATOR_KEYS.public_key)
                 bond_file = joining_validator.cat_bond_file(public_key=JOINING_VALIDATOR_KEYS.public_key)
+                bonded_validator.deploy_string(forward_file)
+                bonded_validator.propose()
                 bonded_validator.deploy_string(bond_file)
                 bonded_validator.propose()
                 for _ in range(JOINING_VALIDATOR_BLOCKS):
@@ -133,9 +136,13 @@ def test_heterogenous_validators(custom_system):
                     joining_validator.propose()
 
                 with started_unbonded_validator(custom_system, bootstrap_node) as unbonded_validator:
+                    # Force sync with the network
+                    joining_validator.deploy(contract_path)
+                    joining_validator.propose()
                     def condition():
                         expected_blocks_count = BONDED_VALIDATOR_BLOCKS + JOINING_VALIDATOR_BLOCKS
-                        actual_blocks_count = unbonded_validator.get_blocks_count()
+                        import pdb; pdb.set_trace();
+                        actual_blocks_count = unbonded_validator.get_blocks_count(30)
                         if actual_blocks_count < expected_blocks_count:
                             raise Exception("Expected {} blocks, got {}".format(expected_blocks_count, actual_blocks_count))
                     wait_for(condition, 600, "Unbonded validator did not receive any blocks")
