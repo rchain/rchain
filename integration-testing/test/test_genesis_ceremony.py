@@ -35,6 +35,7 @@ def test_successful_genesis_ceremony(request, docker_client_session):
             system.config.node_startup_timeout,
             system.config.rnode_timeout,
             system.validators_data,
+            container_name='ceremony-master',
             cli_options=cli_options,
         ) as bootstrap:
             assert False

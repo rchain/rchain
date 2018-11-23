@@ -287,13 +287,17 @@ def make_bootstrap_node(
     cpuset_cpus="0",
     mem_limit=None,
     cli_options=None,
+    container_name=None,
 ):
     key_file = resources.get_resource_path("bootstrap_certificate/node.key.pem")
     cert_file = resources.get_resource_path("bootstrap_certificate/node.certificate.pem")
 
     logging.info("Using key_file={key_file} and cert_file={cert_file}".format(key_file=key_file, cert_file=cert_file))
 
-    name = "bootstrap.{}".format(network)
+    name = "{node_name}.{network_name}".format(
+        node_name='bootstrap' if container_name is None else container_name,
+        network_name=network,
+    )
     container_command_options = {
         "--port":                   40400,
         "--standalone":             "",
@@ -413,13 +417,14 @@ def create_peer_nodes(docker_client,
 
 
 @contextmanager
-def bootstrap_node(docker, docker_network, timeout, validators_data, *, cli_options=None):
+def bootstrap_node(docker, docker_network, timeout, validators_data, *, container_name=None, cli_options=None):
     node = make_bootstrap_node(
         docker_client=docker,
         network=docker_network,
         bonds_file=validators_data.bonds_file,
         key_pair=validators_data.bootstrap_keys,
         rnode_timeout=timeout,
+        container_name=container_name,
     )
     try:
         yield node
@@ -428,8 +433,8 @@ def bootstrap_node(docker, docker_network, timeout, validators_data, *, cli_opti
 
 
 @contextmanager
-def start_bootstrap(docker_client, node_start_timeout, node_cmd_timeout, validators_data, *, cli_options=None):
+def start_bootstrap(docker_client, node_start_timeout, node_cmd_timeout, validators_data, *, container_name=None, cli_options=None):
     with docker_network(docker_client) as network:
-        with bootstrap_node(docker_client, network, node_cmd_timeout, validators_data, cli_options=cli_options) as node:
+        with bootstrap_node(docker_client, network, node_cmd_timeout, validators_data, container_name=container_name, cli_options=cli_options) as node:
             wait_for(node_started(node), node_start_timeout, "Bootstrap node didn't start correctly")
             yield node
