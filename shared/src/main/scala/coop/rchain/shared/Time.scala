@@ -27,10 +27,5 @@ sealed abstract class TimeInstances {
     Time.forTrans[F, EitherT[?[_], E, ?]]
 
   implicit def stateTTime[S, F[_]: Monad: Time[?[_]]]: Time[StateT[F, S, ?]] =
-    new Time[StateT[F, S, ?]] {
-      override def currentMillis: StateT[F, S, Long] = StateT.liftF(Time[F].currentMillis)
-      override def nanoTime: StateT[F, S, Long]      = StateT.liftF(Time[F].nanoTime)
-      override def sleep(duration: FiniteDuration): StateT[F, S, Unit] =
-        StateT.liftF(Time[F].sleep(duration))
-    }
+    Time.forTrans[F, StateT[?[_], S, ?]]
 }
