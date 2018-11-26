@@ -59,7 +59,7 @@
 ##### test: [todo: requires integration test]
 ##### steps:
 
-* genesis reach as described in [A succesful genesis ceremony](#user-content-ac-a-succesful-genesis-ceremony)
+* genesis reached as described in [A succesful genesis ceremony](#user-content-ac-a-succesful-genesis-ceremony)
 * `validatorC` joins p2p, pointing on `ceremonyMaster` as bootstrap
 * `validatorC` sends `ApprovedBlockRequest` to `ceremonyMaster`
 * `ceremonyMaster` sends `ApprovedBlock` to `validatorC`
