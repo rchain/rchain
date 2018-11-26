@@ -37,7 +37,7 @@ class NonZeroExitCodeError(Exception):
     def __repr__(self):
         return '{}({}, {}, {})'.format(
             self.__class__.__name__,
-            self.command,
+            repr(self.command),
             self.exit_code,
             repr(self.output),
         )
@@ -261,7 +261,8 @@ def make_container_command(container_command, container_command_options):
 def create_node_container(
     *,
     docker_client,
-    name, network,
+    name,
+    network,
     bonds_file,
     container_command,
     container_command_options,
@@ -311,7 +312,15 @@ def create_node_container(
         environment=env,
     )
 
-    return Node(container, deploy_dir, docker_client, rnode_timeout, network)
+    node = Node(
+        container,
+        deploy_dir,
+        docker_client,
+        rnode_timeout,
+        network,
+    )
+
+    return node
 
 
 def make_bootstrap_node(
@@ -417,16 +426,19 @@ def create_peer(
     return container
 
 
-def create_peer_nodes(docker_client,
-                      bootstrap,
-                      network,
-                      bonds_file,
-                      key_pairs,
-                      rnode_timeout,
-                      allowed_peers=None,
-                      image=DEFAULT_IMAGE,
-                      mem_limit=None,
-                      cpuset_cpus="0"):
+def create_peer_nodes(
+    *,
+    docker_client,
+    bootstrap,
+    network,
+    bonds_file,
+    key_pairs,
+    rnode_timeout,
+    allowed_peers=None,
+    image=DEFAULT_IMAGE,
+    memory="1024m",
+    cpuset_cpus="0",
+):
     assert len(set(key_pairs)) == len(key_pairs), "There shouldn't be any duplicates in the key pairs"
 
     if allowed_peers is None:

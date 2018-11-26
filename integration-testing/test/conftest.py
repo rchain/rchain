@@ -37,6 +37,19 @@ KeyPair = collections.namedtuple("KeyPair", ["private_key", "public_key"])
 ValidatorsData = collections.namedtuple("ValidatorsData", ["bonds_file", "bootstrap_keys", "peers_keys"])
 
 
+def pytest_addoption(parser):
+    parser.addoption("--peer-count", action="store", default="2", help="number of peers in the network (excluding bootstrap node)")
+    parser.addoption("--start-timeout", action="store", default="0", help="timeout in seconds for starting a node. Defaults to 30 + peer_count * 10")
+    parser.addoption("--converge-timeout", action="store", default="0", help="timeout in seconds for network converge. Defaults to 200 + peer_count * 10")
+    parser.addoption("--receive-timeout", action="store", default="0", help="timeout in seconds for receiving a message. Defaults to 10 + peer_count * 10")
+    parser.addoption("--rnode-timeout", action="store", default="10", help="timeout in seconds for executing an rnode call (Examples: propose, show-logs etc.). Defaults to 10s")
+    parser.addoption("--blocks", action="store", default="1", help="the number of deploys per test deploy")
+
+
+def make_timeout(peer_count, value, base, peer_factor=10):
+    return value if value > 0 else base + peer_count * peer_factor
+
+
 def make_test_config(request):
     peer_count = int(request.config.getoption("--peer-count"))
     start_timeout = int(request.config.getoption("--start-timeout"))
@@ -45,13 +58,11 @@ def make_test_config(request):
     rnode_timeout = int(request.config.getoption("--rnode-timeout"))
     blocks = int(request.config.getoption("--blocks"))
 
-    def make_timeout(value, base, peer_factor=10): return value if value > 0 else base + peer_count * peer_factor
-
     config = TestConfig(
         peer_count=peer_count,
-        node_startup_timeout=make_timeout(start_timeout, 30, 10),
-        network_converge_timeout=make_timeout(converge_timeout, 200, 10),
-        receive_timeout=make_timeout(receive_timeout, 10, 10),
+        node_startup_timeout=make_timeout(peer_count, start_timeout, 30, 10),
+        network_converge_timeout=make_timeout(peer_count, converge_timeout, 200, 10),
+        receive_timeout=make_timeout(peer_count, receive_timeout, 10, 10),
         rnode_timeout=rnode_timeout,
         blocks=blocks,
     )
@@ -81,27 +92,6 @@ def validators_data(config):
     validator_keys = [KeyPair(*line.split()) for line in lines[0:config.peer_count+1]]
     with temporary_bonds_file(validator_keys) as f:
         yield ValidatorsData(bonds_file=f, bootstrap_keys=validator_keys[0], peers_keys=validator_keys[1:])
-
-
-def pytest_addoption(parser):
-    parser.addoption(
-        "--peer-count", action="store", default="2", help="number of peers in the network (excluding bootstrap node)"
-    )
-    parser.addoption(
-        "--start-timeout", action="store", default="0", help="timeout in seconds for starting a node. Defaults to 30 + peer_count * 10"
-    )
-    parser.addoption(
-        "--converge-timeout", action="store", default="0", help="timeout in seconds for network converge. Defaults to 200 + peer_count * 10"
-    )
-    parser.addoption(
-        "--receive-timeout", action="store", default="0", help="timeout in seconds for receiving a message. Defaults to 10 + peer_count * 10"
-    )
-    parser.addoption(
-        "--rnode-timeout", action="store", default="10", help="timeout in seconds for executing an rnode call (Examples: propose, show-logs etc.). Defaults to 10s"
-    )
-    parser.addoption(
-        "--blocks", action="store", default="1", help="The number of deploys per test deploy"
-    )
 
 
 @pytest.yield_fixture(scope='session')
