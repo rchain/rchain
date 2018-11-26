@@ -29,7 +29,8 @@ object Main {
 
     implicit val scheduler: Scheduler = Scheduler.computation(
       Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
-      "node-runner"
+      "node-runner",
+      reporter = UncaughtExceptionLogger
     )
 
     val exec: Task[Unit] =
