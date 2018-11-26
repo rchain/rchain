@@ -88,7 +88,6 @@ def validators_data(config):
     # Using pre-generated validator key pairs by rnode. We do this because warning below  with python generated keys
     # WARN  coop.rchain.casper.Validate$ - CASPER: Ignoring block 2cb8fcc56e... because block creator 3641880481... has 0 weight
     lines = resources.file_content('pregenerated-validator-private-public-key-pairs.txt').splitlines()
-    random.shuffle(lines)
     validator_keys = [KeyPair(*line.split()) for line in lines[0:config.peer_count+1]]
     with temporary_bonds_file(validator_keys) as f:
         yield ValidatorsData(bonds_file=f, bootstrap_keys=validator_keys[0], peers_keys=validator_keys[1:])
