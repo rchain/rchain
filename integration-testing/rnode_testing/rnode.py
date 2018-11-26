@@ -336,9 +336,10 @@ def make_bootstrap_node(
     mem_limit=None,
     cli_options=None,
     container_name=None,
+    mount_dir=None,
 ):
-    key_file = resources.get_absolute_path_for_mounting("bootstrap_certificate/node.key.pem")
-    cert_file = resources.get_absolute_path_for_mounting("bootstrap_certificate/node.certificate.pem")
+    key_file = resources.get_absolute_path_for_mounting("bootstrap_certificate/node.key.pem", mount_dir=mount_dir)
+    cert_file = resources.get_absolute_path_for_mounting("bootstrap_certificate/node.certificate.pem", mount_dir=mount_dir)
 
     logging.info("Using key_file={key_file} and cert_file={cert_file}".format(key_file=key_file, cert_file=cert_file))
 
@@ -436,7 +437,7 @@ def create_peer_nodes(
     rnode_timeout,
     allowed_peers=None,
     image=DEFAULT_IMAGE,
-    memory="1024m",
+    mem_limit=None,
     cpuset_cpus="0",
 ):
     assert len(set(key_pairs)) == len(key_pairs), "There shouldn't be any duplicates in the key pairs"
@@ -469,7 +470,7 @@ def create_peer_nodes(
 
 
 @contextmanager
-def bootstrap_node(docker, docker_network, timeout, validators_data, *, container_name=None, cli_options=None):
+def bootstrap_node(docker, docker_network, timeout, validators_data, *, container_name=None, cli_options=None, mount_dir=None):
     node = make_bootstrap_node(
         docker_client=docker,
         network=docker_network,
@@ -477,6 +478,7 @@ def bootstrap_node(docker, docker_network, timeout, validators_data, *, containe
         key_pair=validators_data.bootstrap_keys,
         rnode_timeout=timeout,
         container_name=container_name,
+        mount_dir=mount_dir,
     )
     try:
         yield node
@@ -485,8 +487,8 @@ def bootstrap_node(docker, docker_network, timeout, validators_data, *, containe
 
 
 @contextmanager
-def start_bootstrap(docker_client, node_start_timeout, node_cmd_timeout, validators_data, *, container_name=None, cli_options=None):
+def start_bootstrap(docker_client, node_start_timeout, node_cmd_timeout, validators_data, *, container_name=None, cli_options=None, mount_dir=None):
     with docker_network(docker_client) as network:
-        with bootstrap_node(docker_client, network, node_cmd_timeout, validators_data, container_name=container_name, cli_options=cli_options) as node:
+        with bootstrap_node(docker_client, network, node_cmd_timeout, validators_data, container_name=container_name, cli_options=cli_options, mount_dir=mount_dir) as node:
             wait_for(node_started(node), node_start_timeout, "Bootstrap node didn't start correctly")
             yield node

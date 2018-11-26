@@ -17,7 +17,8 @@ def star_network(system):
     with start_bootstrap(system.docker,
                          system.config.node_startup_timeout,
                          system.config.rnode_timeout,
-                         system.validators_data) as bootstrap_node:
+                         system.validators_data,
+                         mount_dir=system.config.mount_dir) as bootstrap_node:
 
         with start_network(system.config,
                            system.docker,
@@ -37,7 +38,9 @@ def complete_network(system):
     with start_bootstrap(system.docker,
                          system.config.node_startup_timeout,
                          system.config.rnode_timeout,
-                         system.validators_data) as bootstrap_node:
+                         system.validators_data,
+                         mount_dir=system.config.mount_dir,
+        ) as bootstrap_node:
 
         wait_for_approved_block_received_handler_state(bootstrap_node, system.config.node_startup_timeout)
 

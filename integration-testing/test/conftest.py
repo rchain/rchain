@@ -28,6 +28,7 @@ TestConfig = collections.namedtuple("TestConfig", [
     "receive_timeout",
     "rnode_timeout",
     "blocks",
+    "mount_dir",
 ])
 
 
@@ -44,6 +45,7 @@ def pytest_addoption(parser):
     parser.addoption("--receive-timeout", action="store", default="0", help="timeout in seconds for receiving a message. Defaults to 10 + peer_count * 10")
     parser.addoption("--rnode-timeout", action="store", default="10", help="timeout in seconds for executing an rnode call (Examples: propose, show-logs etc.). Defaults to 10s")
     parser.addoption("--blocks", action="store", default="1", help="the number of deploys per test deploy")
+    parser.addoption("--mount-dir", action="store", default=None, help="globally accesible directory for mounting between containers")
 
 
 def make_timeout(peer_count, value, base, peer_factor=10):
@@ -57,6 +59,7 @@ def make_test_config(request):
     receive_timeout = int(request.config.getoption("--receive-timeout"))
     rnode_timeout = int(request.config.getoption("--rnode-timeout"))
     blocks = int(request.config.getoption("--blocks"))
+    mount_dir = request.config.getoption("--mount-dir")
 
     config = TestConfig(
         peer_count=peer_count,
@@ -65,6 +68,7 @@ def make_test_config(request):
         receive_timeout=make_timeout(peer_count, receive_timeout, 10, 10),
         rnode_timeout=rnode_timeout,
         blocks=blocks,
+        mount_dir=mount_dir,
     )
 
     return config
@@ -120,5 +124,6 @@ def bootstrap_node(system):
     with start_bootstrap(system.docker,
                          system.config.node_startup_timeout,
                          system.config.rnode_timeout,
-                         system.validators_data) as node:
+                         system.validators_data,
+                         mount_dir=system.config.mount_dir) as node:
         yield node
