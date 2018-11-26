@@ -4,6 +4,7 @@ sys.path.insert(0, '.')
 import os
 import pprint
 import random
+import pathlib
 import logging
 import tempfile
 import contextlib
@@ -15,7 +16,6 @@ import docker as docker_py
 from rnode_testing.util import log_box
 from rnode_testing.profiling import log_prof_data
 from rnode_testing.rnode import start_bootstrap
-import rnode_testing.resources as resources
 
 
 System = collections.namedtuple("System", ["config", "docker", "validators_data"])
@@ -87,7 +87,8 @@ def temporary_bonds_file(validator_keys):
 def validators_data(config):
     # Using pre-generated validator key pairs by rnode. We do this because warning below  with python generated keys
     # WARN  coop.rchain.casper.Validate$ - CASPER: Ignoring block 2cb8fcc56e... because block creator 3641880481... has 0 weight
-    lines = resources.file_content('pregenerated-validator-private-public-key-pairs.txt').splitlines()
+    keys_file_path = os.path.join('resources/pregenerated-validator-private-public-key-pairs.txt')
+    lines = pathlib.Path(keys_file_path).read_text().splitlines()
     validator_keys = [KeyPair(*line.split()) for line in lines[0:config.peer_count+1]]
     with temporary_bonds_file(validator_keys) as f:
         yield ValidatorsData(bonds_file=f, bootstrap_keys=validator_keys[0], peers_keys=validator_keys[1:])
