@@ -61,7 +61,7 @@
 
 * genesis reach as described in [A succesful genesis ceremony](#user-content-ac-a-succesful-genesis-ceremony)
 * `validatorC` joins p2p, pointing on `ceremonyMaster` as bootstrap
-* `validatorC` sends `ApprobedBlockRequest` to `ceremonyMaster`
+* `validatorC` sends `ApprovedBlockRequest` to `ceremonyMaster`
 * `ceremonyMaster` sends `ApprovedBlock` to `validatorC`
 * `validatorC` transitions to `ApprovedBlockReceivedHandler`
 * `validatorC` tip points to block (genesis) where it has no parent and Bonds holds `validatorA` and `validatorB`
