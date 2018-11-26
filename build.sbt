@@ -201,7 +201,12 @@ lazy val node = (project in file("node"))
     },
     /* Dockerization */
     dockerUsername := Some(organization.value),
-    dockerUpdateLatest := true,
+    version in Docker := version.value +
+      git.gitHeadCommit.value.map("-git" + _.take(8)).getOrElse(""),
+    dockerAliases ++=
+      sys.env.get("DRONE_BUILD_NUMBER")
+        .toSeq.map(num => dockerAlias.value.withTag(Some(s"DRONE-${num}"))),
+    dockerUpdateLatest := sys.env.get("DRONE").isEmpty,
     dockerBaseImage := "openjdk:11-jre-slim",
     dockerCommands := {
       val daemon = (daemonUser in Docker).value

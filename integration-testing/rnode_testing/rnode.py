@@ -12,7 +12,9 @@ from rnode_testing.wait import wait_for, node_started
 from multiprocessing import Queue, Process
 from queue import Empty
 
-DEFAULT_IMAGE = "rchain-integration-testing:latest"
+DEFAULT_IMAGE = os.environ.get(
+        "DEFAULT_IMAGE",
+        "rchain-integration-testing:latest")
 
 rnode_binary = '/opt/docker/bin/rnode'
 rnode_directory = "/var/lib/rnode"
