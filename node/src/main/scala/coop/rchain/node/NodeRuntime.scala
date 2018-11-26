@@ -210,11 +210,9 @@ class NodeRuntime private[node] (
 
     val casperLoop: Effect[Unit] =
       for {
-        _ <- casperConstructor.get.map {
-              case Some(casper) => casper.fetchDependencies
-              case None         => ().pure[Effect]
-            }
-        _ <- time.sleep(30.seconds).toEffect
+        casper <- casperConstructor.get
+        _      <- casper.fold(().pure[Effect])(_.fetchDependencies)
+        _      <- time.sleep(30.seconds).toEffect
       } yield ()
 
     for {
