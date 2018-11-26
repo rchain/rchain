@@ -337,8 +337,8 @@ def make_bootstrap_node(
     cli_options=None,
     container_name=None,
 ):
-    key_file = resources.get_resource_path("bootstrap_certificate/node.key.pem")
-    cert_file = resources.get_resource_path("bootstrap_certificate/node.certificate.pem")
+    key_file = resources.get_absolute_path_for_mounting("bootstrap_certificate/node.key.pem")
+    cert_file = resources.get_absolute_path_for_mounting("bootstrap_certificate/node.certificate.pem")
 
     logging.info("Using key_file={key_file} and cert_file={cert_file}".format(key_file=key_file, cert_file=cert_file))
 
