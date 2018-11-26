@@ -152,6 +152,7 @@ class Node:
     def get_block(self, block_hash):
         return self.call_rnode('show-block', block_hash, stderr=False)
 
+    # deprecated, don't use, why? ask @adaszko
     def exec_run(self, cmd, stderr=True):
         queue = Queue(1)
 
