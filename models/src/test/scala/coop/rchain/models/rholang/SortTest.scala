@@ -586,4 +586,23 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
     val result = sort(parExpr)
     result.term should be(sortedParExpr)
   }
+
+  it should "sort based on the connectiveUsed flag" in {
+    val expr = Expr(
+      EMapBody(
+        ParMap(
+          SortedParMap(
+            Map(
+              Par() -> Par(
+                exprs = Seq()
+              ),
+              Par(connectiveUsed = true) -> Par(exprs = Seq())
+            )
+          )
+        )
+      )
+    )
+    val result = sort(expr)
+    result.term should be(expr)
+  }
 }
