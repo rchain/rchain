@@ -14,7 +14,7 @@
 ##### steps:
 
 * `ceremonyMaster` is instatantied with flags `--required-sigs 2 --duration 5min --interval 10sec --bonds-file <holds two nodes validatorA and validatorB`.
-* `validatorA` and `validatorB` joins p2p, both poining `ceremonyMaster` as bootstrap
+* `validatorA` and `validatorB` joins p2p, both pointing to `ceremonyMaster` as bootstrap
 * `ceremonyMaster` sends `UnapprovedBlock` to `validatorA` and `validatorB`
 * `validatorA` and `validatorB` receives `UnapprovedBlock`
 * `validatorA` and `validatorB` send back `BlockApproval`
@@ -29,7 +29,7 @@
 ##### steps:
 
 * `ceremonyMaster` is instatantied with flags `--required-sigs 2 --duration 5min --interval 10sec --bonds-file <holds two nodes validatorA and validatorB`.
-* `validatorA` and `validatorB` joins p2p, both poining `ceremonyMaster` as bootstrap
+* `validatorA` and `validatorB` joins p2p, both pointing to `ceremonyMaster` as bootstrap
 * `readOnlyA`(read-only) joins p2p
 * `ceremonyMaster` sends `UnapprovedBlock` to `validatorA` and `validatorB`
 * `validatorA` and `validatorB` receives `UnapprovedBlock`
@@ -47,7 +47,7 @@
 ##### steps:
 
 * `ceremonyMaster` is instatantied with flags `--required-sigs 3 --duration 5min --interval 10sec --bonds-file <holds two nodes validatorA and validatorB`.
-* `validatorA` and `validatorB` joins p2p, both poining `ceremonyMaster` as bootstrap
+* `validatorA` and `validatorB` joins p2p, both pointing to `ceremonyMaster` as bootstrap
 * `ceremonyMaster` sends `UnapprovedBlock` to `validatorA` and `validatorB`
 * `validatorA` and `validatorB` receives `UnapprovedBlock`
 * `validatorA` and `validatorB` send back `BlockApproval`
