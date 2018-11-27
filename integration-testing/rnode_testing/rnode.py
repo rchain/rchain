@@ -4,10 +4,12 @@ import shlex
 import logging
 import threading
 import contextlib
-import rnode_testing.resources as resources
-from rnode_testing.util import log_box, make_tempfile, make_tempdir
+from rnode_testing.common import (
+    random_string,
+    make_tempfile,
+    make_tempdir,
+)
 from rnode_testing.wait import wait_for, node_started
-from rnode_testing.common import random_string
 
 from multiprocessing import Queue, Process
 from queue import Empty

@@ -13,7 +13,6 @@ import collections
 import pytest
 import docker as docker_py
 
-from rnode_testing.util import log_box
 from rnode_testing.rnode import start_bootstrap
 
 
