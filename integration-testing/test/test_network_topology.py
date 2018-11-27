@@ -115,7 +115,7 @@ def deploy_block(node, expected_string, contract_name):
 
 
 def check_blocks(node, expected_string, network, config, block_hash):
-    logging.info(f"Check all peer logs for blocks containing {expected_string}")
+    logging.info("Check all peer logs for blocks containing {}".format(expected_string))
 
     other_nodes = [n for n in network.nodes if n.container.name != node.container.name]
 
@@ -123,10 +123,10 @@ def check_blocks(node, expected_string, network, config, block_hash):
         wait_for(
             string_contains(get_block(node, block_hash), expected_string),
             config.receive_timeout,
-            f"Container: {node.container.name}: String {expected_string} NOT found in blocks added.",
+            "Container: {}: String {} NOT found in blocks added.".format(node.container.name, expected_string),
         )
 
-        logging.info(f"Container: {node.container.name}: SUCCESS!")
+        logging.info("Container: {}: SUCCESS!".format(node.container.name))
 
 
 def mk_expected_string(node, random_token):

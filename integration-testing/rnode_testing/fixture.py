@@ -1,5 +1,5 @@
-import pytest
 import inspect
+import pytest
 
 
 def make_wrapper(fn, fixtures):
