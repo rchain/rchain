@@ -1,21 +1,23 @@
+import os
+import shutil
 import logging
+
 from rnode_testing.wait import wait_for, string_contains, get_block
 from rnode_testing.util import log_box
 from rnode_testing.random import random_string
-import rnode_testing.resources as resources
-from shutil import copyfile
 
 
 def deploy_block(node, expected_string, contract_name):
-    copyfile(resources.file_path(contract_name), f"{node.local_deploy_dir}/{contract_name}")
-    contract_file_path = '{}/{}'.format(node.remote_deploy_dir, contract_name)
+    local_contract_file_path = os.path.join('resources', contract_name)
+    shutil.copyfile(local_contract_file_path, f"{node.local_deploy_dir}/{contract_name}")
+    container_contract_file_path = '{}/{}'.format(node.remote_deploy_dir, contract_name)
     node.shell_out(
         'sed',
         '-i',
         '-e', 's/@placeholder@/{}/g'.format(expected_string),
-        contract_file_path,
+        container_contract_file_path,
     )
-    node.deploy(contract_file_path)
+    node.deploy(container_contract_file_path)
     block_hash = node.propose()
     return block_hash
 

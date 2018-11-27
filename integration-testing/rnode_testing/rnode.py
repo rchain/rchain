@@ -37,7 +37,7 @@ class NonZeroExitCodeError(Exception):
     def __repr__(self):
         return '{}({}, {}, {})'.format(
             self.__class__.__name__,
-            self.command,
+            repr(self.command),
             self.exit_code,
             repr(self.output),
         )
@@ -261,7 +261,8 @@ def make_container_command(container_command, container_command_options):
 def create_node_container(
     *,
     docker_client,
-    name, network,
+    name,
+    network,
     bonds_file,
     container_command,
     container_command_options,
@@ -311,7 +312,15 @@ def create_node_container(
         environment=env,
     )
 
-    return Node(container, deploy_dir, docker_client, rnode_timeout, network)
+    node = Node(
+        container,
+        deploy_dir,
+        docker_client,
+        rnode_timeout,
+        network,
+    )
+
+    return node
 
 
 def make_bootstrap_node(
@@ -327,9 +336,10 @@ def make_bootstrap_node(
     mem_limit=None,
     cli_options=None,
     container_name=None,
+    mount_dir=None,
 ):
-    key_file = resources.get_resource_path("bootstrap_certificate/node.key.pem")
-    cert_file = resources.get_resource_path("bootstrap_certificate/node.certificate.pem")
+    key_file = resources.get_absolute_path_for_mounting("bootstrap_certificate/node.key.pem", mount_dir=mount_dir)
+    cert_file = resources.get_absolute_path_for_mounting("bootstrap_certificate/node.certificate.pem", mount_dir=mount_dir)
 
     logging.info("Using key_file={key_file} and cert_file={cert_file}".format(key_file=key_file, cert_file=cert_file))
 
@@ -417,16 +427,19 @@ def create_peer(
     return container
 
 
-def create_peer_nodes(docker_client,
-                      bootstrap,
-                      network,
-                      bonds_file,
-                      key_pairs,
-                      rnode_timeout,
-                      allowed_peers=None,
-                      image=DEFAULT_IMAGE,
-                      mem_limit=None,
-                      cpuset_cpus="0"):
+def create_peer_nodes(
+    *,
+    docker_client,
+    bootstrap,
+    network,
+    bonds_file,
+    key_pairs,
+    rnode_timeout,
+    allowed_peers=None,
+    image=DEFAULT_IMAGE,
+    mem_limit=None,
+    cpuset_cpus="0",
+):
     assert len(set(key_pairs)) == len(key_pairs), "There shouldn't be any duplicates in the key pairs"
 
     if allowed_peers is None:
@@ -457,7 +470,7 @@ def create_peer_nodes(docker_client,
 
 
 @contextmanager
-def bootstrap_node(docker, docker_network, timeout, validators_data, *, container_name=None, cli_options=None):
+def bootstrap_node(docker, docker_network, timeout, validators_data, *, container_name=None, cli_options=None, mount_dir=None):
     node = make_bootstrap_node(
         docker_client=docker,
         network=docker_network,
@@ -465,6 +478,7 @@ def bootstrap_node(docker, docker_network, timeout, validators_data, *, containe
         key_pair=validators_data.bootstrap_keys,
         rnode_timeout=timeout,
         container_name=container_name,
+        mount_dir=mount_dir,
     )
     try:
         yield node
@@ -473,8 +487,8 @@ def bootstrap_node(docker, docker_network, timeout, validators_data, *, containe
 
 
 @contextmanager
-def start_bootstrap(docker_client, node_start_timeout, node_cmd_timeout, validators_data, *, container_name=None, cli_options=None):
+def start_bootstrap(docker_client, node_start_timeout, node_cmd_timeout, validators_data, *, container_name=None, cli_options=None, mount_dir=None):
     with docker_network(docker_client) as network:
-        with bootstrap_node(docker_client, network, node_cmd_timeout, validators_data, container_name=container_name, cli_options=cli_options) as node:
+        with bootstrap_node(docker_client, network, node_cmd_timeout, validators_data, container_name=container_name, cli_options=cli_options, mount_dir=mount_dir) as node:
             wait_for(node_started(node), node_start_timeout, "Bootstrap node didn't start correctly")
             yield node
