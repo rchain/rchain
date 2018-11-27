@@ -9,5 +9,6 @@ pytest = "*"
 delayed-assert = "*"
 pytest-json = "*"
 pytest-mypy = "*"
+pytest-pylint = "*"
 
 [dev-packages]
