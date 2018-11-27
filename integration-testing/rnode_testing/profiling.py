@@ -2,8 +2,9 @@ import time
 from functools import wraps
 import logging
 from rnode_testing.util import log_box
+from typing import Dict, List
 
-PROF_DATA = {}
+PROF_DATA:Dict[str, List] = {}
 
 
 def profile(fn):
