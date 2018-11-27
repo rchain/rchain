@@ -20,6 +20,7 @@ import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
+import coop.rchain.shared.Language
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertion, FlatSpec, Matchers}
@@ -53,9 +54,9 @@ trait PersistentStoreTester {
     try {
       f(TestFixture(space, reducer))
     } finally {
-      space.close()
+      space.close().runSyncUnsafe(10.seconds)
       context.close()
-      dbDir.recursivelyDelete()
+      Language.ignore(dbDir.recursivelyDelete())
     }
   }
 }

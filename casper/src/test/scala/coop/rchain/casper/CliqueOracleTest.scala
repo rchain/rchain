@@ -94,7 +94,7 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator with B
 
     implicit val turanOracleEffect = SafetyOracle.turanOracle[Task]
 
-    def runSafetyOracle[F[_]: Monad: SafetyOracle]: Unit = {
+    def runSafetyOracle[F[_]: Monad: SafetyOracle] = {
       val genesisFaultTolerance =
         SafetyOracle[F].normalizedFaultTolerance(chain, genesis.blockHash)
       assert(genesisFaultTolerance == 1)
@@ -176,7 +176,7 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator with B
 
       implicit val turanOracleEffect = SafetyOracle.turanOracle[Task]
 
-      def runSafetyOracle[F[_]: Monad: SafetyOracle]: Unit = {
+      def runSafetyOracle[F[_]: Monad: SafetyOracle] = {
         val genesisFaultTolerance =
           SafetyOracle[F].normalizedFaultTolerance(chain, genesisBlockHash)
         assert(genesisFaultTolerance == 1)

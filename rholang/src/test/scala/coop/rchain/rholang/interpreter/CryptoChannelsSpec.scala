@@ -17,6 +17,7 @@ import coop.rchain.models.testImplicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoIStore
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rspace.Serialize
+import coop.rchain.shared.Language
 import coop.rchain.shared.PathOps._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -59,7 +60,7 @@ class CryptoChannelsSpec
       Seq(ReceiveBind(Seq(EVar(Var(Wildcard(WildcardMsg())))), ackChannel)),
       Par()
     )
-    Await.ready(reduce.eval(consume).runToFuture, 3.seconds)
+    Language.ignore(Await.ready(reduce.eval(consume).runToFuture, 3.seconds))
   }
 
   def assertStoreContains(
@@ -218,7 +219,7 @@ class CryptoChannelsSpec
       test((runtime.reducer, runtime.space.store))
     } finally {
       runtime.close().unsafeRunSync
-      dbDir.recursivelyDelete
+      Language.ignore(dbDir.recursivelyDelete)
     }
   }
 

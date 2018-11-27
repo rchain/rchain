@@ -262,5 +262,5 @@ abstract class MixedStoreTestsBase[F[_]]
   }
 
   override def afterAll(): Unit =
-    dbDir.recursivelyDelete
+    Language.ignore(dbDir.recursivelyDelete)
 }

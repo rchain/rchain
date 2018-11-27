@@ -296,7 +296,7 @@ object HashSetCasperTestNode {
       storageSize: Long = 1024L * 1024 * 10
   )(implicit scheduler: Scheduler): IndexedSeq[HashSetCasperTestNode[Task]] = {
     implicit val errorHandlerEff = errorHandler
-    networkF[Task, Task.Par](sks, genesis, storageSize).runSyncUnsafe(10.seconds)
+    networkF[Task, Task.Par](sks, genesis, storageSize).runSyncUnsafe(30.seconds)
   }
   def networkEff(
       sks: IndexedSeq[Array[Byte]],

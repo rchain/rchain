@@ -45,7 +45,7 @@ object NoOpsCasperEffect {
       blockDagFunc: BlockDag = BlockDag.empty
   ): F[NoOpsCasperEffect[F]] =
     for {
-      _ <- Sync[F].delay { blockStore.map((BlockStore[F].put _).tupled) }
+      _ <- blockStore.toStream.traverse_((BlockStore[F].put _).tupled)
     } yield new NoOpsCasperEffect[F](MutableMap(blockStore.toSeq: _*), estimatorFunc, blockDagFunc)
   def apply[F[_]: Sync: BlockStore](): F[NoOpsCasperEffect[F]] =
     apply(Map.empty, Vector(BlockMessage()), BlockDag.empty)

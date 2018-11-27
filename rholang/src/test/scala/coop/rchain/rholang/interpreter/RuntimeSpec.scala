@@ -44,7 +44,7 @@ class RuntimeSpec extends FlatSpec with Matchers {
     )
   }
 
-  private def checkError(rho: String, error: String): Unit =
+  private def checkError(rho: String, error: String) =
     failure(rho).getMessage.stripLineEnd should endWith(error)
 
   private def failure(rho: String): Throwable =

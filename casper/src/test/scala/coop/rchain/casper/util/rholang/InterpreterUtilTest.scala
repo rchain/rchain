@@ -178,7 +178,7 @@ class InterpreterUtilTest
     val updatedBlockBody =
       b.body.get.withPostState(updatedBlockPostState).withDeploys(processedDeploys)
     val updatedBlock = b.withBody(updatedBlockBody)
-    BlockStore[Task].put(b.blockHash, updatedBlock)
+    BlockStore[Task].put(b.blockHash, updatedBlock).runSyncUnsafe(10.seconds)
     chain.copy(idToBlocks = chain.idToBlocks.updated(id, updatedBlock))
   }
 

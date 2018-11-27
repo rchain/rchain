@@ -23,6 +23,7 @@ import java.nio.file.Path
 
 import cats.effect.ContextShift
 import coop.rchain.metrics.Metrics.MetricsNOP
+import coop.rchain.shared.Language
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 
@@ -166,6 +167,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {
             blockDag,
             runtimeManager
           )
+          .runSyncUnsafe(10.seconds)
 
         maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
     }
@@ -257,8 +259,8 @@ object GenesisTest {
     body(runtime, genesisPath, log, time)
 
     runtime.close().runSyncUnsafe(10.seconds)
-    storePath.recursivelyDelete()
-    gp.recursivelyDelete()
+    Language.ignore(storePath.recursivelyDelete())
+    Language.ignore(gp.recursivelyDelete())
   }
 
   def withGenResources(

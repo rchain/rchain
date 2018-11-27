@@ -200,7 +200,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
     implicit val logEff = new LogStub[Task]()
     implicit val casperRef = {
       val tmp = MultiParentCasperRef.of[Task].runSyncUnsafe(10.seconds)
-      tmp.set(casperEffect)
+      tmp.set(casperEffect).runSyncUnsafe(10.seconds)
       tmp
     }
     implicit val turanOracleEffect: SafetyOracle[Task] =
@@ -220,7 +220,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
     implicit val logEff = new LogStub[Task]()(Sync[Task])
     implicit val casperRef = {
       val tmp = MultiParentCasperRef.of[Task].runSyncUnsafe(10.seconds)
-      tmp.set(casperEffect)
+      tmp.set(casperEffect).runSyncUnsafe(10.seconds)
       tmp
     }
     implicit val turanOracleEffect: SafetyOracle[Task] =

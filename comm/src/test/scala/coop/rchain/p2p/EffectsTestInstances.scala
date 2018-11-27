@@ -1,10 +1,9 @@
 package coop.rchain.p2p
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
-
 import cats._
+import cats.effect.Sync
 import cats.implicits._
-
 import coop.rchain.comm.rp._
 import coop.rchain.catscontrib._
 import coop.rchain.comm.CommError._
@@ -16,6 +15,12 @@ import coop.rchain.comm.protocol.routing._
 
 /** Eagerly evaluated instances to do reasoning about applied effects */
 object EffectsTestInstances {
+
+  class FreezedTime[F[_]: Sync](currentTime: Long = 0) extends Time[F] {
+    override def currentMillis: F[Long]                   = Sync[F].delay(0)
+    override def nanoTime: F[Long]                        = Sync[F].delay(0)
+    override def sleep(duration: FiniteDuration): F[Unit] = Sync[F].unit
+  }
 
   class LogicalTime[F[_]: Capture] extends Time[F] {
     var clock: Long = 0

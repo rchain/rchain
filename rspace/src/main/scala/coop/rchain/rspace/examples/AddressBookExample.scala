@@ -3,7 +3,6 @@ package coop.rchain.rspace.examples
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
 import java.nio.file.{Files, Path}
 
-import cats.Id
 import cats.effect.{ContextShift, Sync}
 import cats.implicits._
 import coop.rchain.catscontrib.effect.implicits._
@@ -12,6 +11,7 @@ import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Language.ignore
 import coop.rchain.rspace.util._
 import monix.eval.Task
+import monix.execution.Scheduler
 
 import scala.concurrent.ExecutionContext
 import scodec.bits.ByteVector
@@ -24,6 +24,7 @@ import scala.concurrent.duration._
 import monix.execution.Scheduler.Implicits.global
 
 object AddressBookExample {
+  implicit val scheduler = Scheduler.fixedPool("loop", 4)
 
   /* Here we define a type for channels */
 
@@ -85,15 +86,6 @@ object AddressBookExample {
   }
 
   object implicits {
-
-    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
-
-    implicit val contextShiftId: ContextShift[Id] =
-      new ContextShift[Id] {
-        def shift: Id[Unit]                                   = ???
-        def evalOn[A](ec: ExecutionContext)(fa: Id[A]): Id[A] = fa
-      }
-
     /* Now I will troll Greg... */
 
     /* Serialize instances */
@@ -207,7 +199,9 @@ object AddressBookExample {
     val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
     val space =
-      RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
+      RSpace
+        .create[Task, Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
+        .runSyncUnsafe(10.seconds)
 
     Console.printf("\nExample One: Let's consume and then produce...\n")
 
@@ -219,14 +213,18 @@ object AddressBookExample {
           new Printer,
           persist = true
         )
+        .runSyncUnsafe(10.seconds)
         .right
         .get // it should be fine to do that -- type of left side is Nothing (no invalid states)
 
     assert(cres.isEmpty)
 
-    val pres1 = space.produce(Channel("friends"), alice, persist = false).right.get
-    val pres2 = space.produce(Channel("friends"), bob, persist = false).right.get
-    val pres3 = space.produce(Channel("friends"), carol, persist = false).right.get
+    val pres1 =
+      space.produce(Channel("friends"), alice, persist = false).runSyncUnsafe(10.seconds).right.get
+    val pres2 =
+      space.produce(Channel("friends"), bob, persist = false).runSyncUnsafe(10.seconds).right.get
+    val pres3 =
+      space.produce(Channel("friends"), carol, persist = false).runSyncUnsafe(10.seconds).right.get
 
     assert(pres1.nonEmpty)
     assert(pres2.nonEmpty)
@@ -246,13 +244,18 @@ object AddressBookExample {
     val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
     val space =
-      RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
+      RSpace
+        .create[Task, Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
+        .runSyncUnsafe(10.seconds)
 
     Console.printf("\nExample Two: Let's produce and then consume...\n")
 
-    val pres1 = space.produce(Channel("friends"), alice, persist = false).right.get
-    val pres2 = space.produce(Channel("friends"), bob, persist = false).right.get
-    val pres3 = space.produce(Channel("friends"), carol, persist = false).right.get
+    val pres1 =
+      space.produce(Channel("friends"), alice, persist = false).runSyncUnsafe(10.seconds).right.get
+    val pres2 =
+      space.produce(Channel("friends"), bob, persist = false).runSyncUnsafe(10.seconds).right.get
+    val pres3 =
+      space.produce(Channel("friends"), carol, persist = false).runSyncUnsafe(10.seconds).right.get
 
     assert(pres1.isEmpty)
     assert(pres2.isEmpty)
@@ -266,6 +269,7 @@ object AddressBookExample {
           new Printer,
           persist = false
         )
+        .runSyncUnsafe(10.seconds)
         .right
         .get
 

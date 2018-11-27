@@ -175,7 +175,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       s: String,
       expected: Par,
       rand: Blake2b512Random
-  ): Unit = {
+  ) = {
     val resultRow      = result.get(List[Par](GString(s)))
     val sequenceNumber = resultSequenceNumber(resultRow)
     resultRow should be(

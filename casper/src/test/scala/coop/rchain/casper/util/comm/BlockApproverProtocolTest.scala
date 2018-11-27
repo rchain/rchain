@@ -27,7 +27,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
     val unapproved                 = createUnapproved(n, node.genesis)
     import node._
 
-    approver.unapprovedBlockPacketHandler(node.local, unapproved)
+    approver.unapprovedBlockPacketHandler(node.local, unapproved).runSyncUnsafe(10.seconds)
 
     node.logEff.infos.exists(_.contains("Approval sent in response")) should be(true)
     node.logEff.warns.isEmpty should be(true)
@@ -44,8 +44,12 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
     val differentUnapproved2       = createUnapproved(n, BlockMessage.defaultInstance) //wrong block
     import node._
 
-    approver.unapprovedBlockPacketHandler(node.local, differentUnapproved1)
-    approver.unapprovedBlockPacketHandler(node.local, differentUnapproved2)
+    approver
+      .unapprovedBlockPacketHandler(node.local, differentUnapproved1)
+      .runSyncUnsafe(10.seconds)
+    approver
+      .unapprovedBlockPacketHandler(node.local, differentUnapproved2)
+      .runSyncUnsafe(10.seconds)
 
     node.logEff.warns.count(_.contains("Received unexpected candidate")) should be(2)
 

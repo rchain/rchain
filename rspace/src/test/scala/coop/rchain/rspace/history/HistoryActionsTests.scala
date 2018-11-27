@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 
 import coop.rchain.rspace.{Context, InMemTransaction}
 import coop.rchain.rspace.test._
+import coop.rchain.shared.Language
 import coop.rchain.shared.PathOps._
 import org.lmdbjava.{Env, Txn}
 import org.scalacheck.Arbitrary
@@ -455,7 +456,7 @@ trait LMDBWithTestTrieStore[K]
   }
 
   override def afterAll(): Unit =
-    dbDir.recursivelyDelete
+    Language.ignore(dbDir.recursivelyDelete)
 }
 
 trait InMemoryWithTestTrieStore[K]

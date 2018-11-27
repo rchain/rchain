@@ -39,7 +39,7 @@ object BlockGenerator {
         Monad[F].pure(idBs.asMap().runSyncUnsafe(1.second))
 
       override def put(f: => (BlockHash, BlockMessage)): F[Unit] =
-        Monad[F].pure(idBs.put(f))
+        Monad[F].pure(idBs.put(f).runSyncUnsafe(10.seconds))
 
       override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
         Monad[F].pure(idBs.find(p).runSyncUnsafe(1.second))

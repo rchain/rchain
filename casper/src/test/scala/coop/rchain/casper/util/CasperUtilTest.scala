@@ -9,7 +9,7 @@ import coop.rchain.catscontrib._
 import Catscontrib._
 import cats.Monad
 import cats.data._
-import cats.effect.Bracket
+import cats.effect.{Bracket, Sync}
 import cats.implicits._
 import cats.mtl.MonadState
 import cats.mtl.implicits._
@@ -19,6 +19,7 @@ import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture, IndexedBlockDag}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.metrics.Metrics.MetricsNOP
+import coop.rchain.p2p.EffectsTestInstances.FreezedTime
 import coop.rchain.shared.Time
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -129,32 +130,35 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
    */
   "Blocks" should "conflict if they use the same deploys in different histories" in withStore {
     implicit blockStore =>
+      implicit val timeEffect: Time[Task] = new FreezedTime
+
       implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
-      val deploys                  = (0 until 6).map(basicProcessedDeploy[Task])
+      val deploys =
+        Stream.range(0, 6).traverse(basicProcessedDeploy[Task]).runSyncUnsafe(10.seconds)
 
       def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
         for {
           genesis <- createBlock[F](Seq())
           b2 <- createBlock[F](
                  Seq(genesis.blockHash),
-                 deploys = Seq(deploys(0).runSyncUnsafe(1.second))
+                 deploys = Seq(deploys(0))
                )
           b3 <- createBlock[F](
                  Seq(genesis.blockHash),
-                 deploys = Seq(deploys(1).runSyncUnsafe(1.second))
+                 deploys = Seq(deploys(1))
                )
-          b4 <- createBlock[F](Seq(b2.blockHash), deploys = Seq(deploys(2).runSyncUnsafe(1.second)))
-          b5 <- createBlock[F](Seq(b3.blockHash), deploys = Seq(deploys(2).runSyncUnsafe(1.second)))
+          b4 <- createBlock[F](Seq(b2.blockHash), deploys = Seq(deploys(2)))
+          b5 <- createBlock[F](Seq(b3.blockHash), deploys = Seq(deploys(2)))
           b6 <- createBlock[F](
                  Seq(b2.blockHash, b3.blockHash),
-                 deploys = Seq(deploys(2).runSyncUnsafe(1.second))
+                 deploys = Seq(deploys(2))
                )
-          b7 <- createBlock[F](Seq(b6.blockHash), deploys = Seq(deploys(3).runSyncUnsafe(1.second)))
-          b8 <- createBlock[F](Seq(b6.blockHash), deploys = Seq(deploys(5).runSyncUnsafe(1.second)))
-          b9 <- createBlock[F](Seq(b7.blockHash), deploys = Seq(deploys(5).runSyncUnsafe(1.second)))
+          b7 <- createBlock[F](Seq(b6.blockHash), deploys = Seq(deploys(3)))
+          b8 <- createBlock[F](Seq(b6.blockHash), deploys = Seq(deploys(5)))
+          b9 <- createBlock[F](Seq(b7.blockHash), deploys = Seq(deploys(5)))
           b10 <- createBlock[F](
                   Seq(b8.blockHash),
-                  deploys = Seq(deploys(4).runSyncUnsafe(1.second))
+                  deploys = Seq(deploys(4))
                 )
         } yield b10
 

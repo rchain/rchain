@@ -248,7 +248,7 @@ class ValidateTest
         val hash            = ProtoUtil.hashUnsignedBlock(header, Nil)
         val block           = blockWithNumber.withHeader(header).withBlockHash(hash)
 
-        blockStore.put(hash, block)
+        blockStore.put(hash, block).runSyncUnsafe(10.seconds)
         block
       }
       val b1 = createBlockWithNumber(3)

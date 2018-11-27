@@ -10,6 +10,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoIStore
 import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.shared.Language
 import coop.rchain.shared.PathOps._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -30,7 +31,7 @@ class DeployParamsSpec extends fixture.FlatSpec with Matchers {
       test(runtime)
     } finally {
       runtime.close().unsafeRunSync
-      dbDir.recursivelyDelete
+      Language.ignore(dbDir.recursivelyDelete)
     }
   }
 

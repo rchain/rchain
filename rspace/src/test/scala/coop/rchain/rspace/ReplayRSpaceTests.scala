@@ -11,8 +11,10 @@ import coop.rchain.rspace.history.{Branch, InMemoryTrieStore}
 import coop.rchain.rspace.internal.GNAT
 import coop.rchain.rspace.spaces._
 import coop.rchain.rspace.trace.{COMM, Consume, IOEvent, Produce}
+import coop.rchain.shared.Language
 import coop.rchain.shared.PathOps._
 import monix.eval.Task
+import monix.execution.Scheduler
 import org.scalatest._
 
 import scala.Function.const
@@ -21,12 +23,12 @@ import scala.collection.{immutable, mutable}
 import scala.util.{Random, Right}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
-import monix.execution.Scheduler.Implicits.global
 
 //noinspection ZeroIndexToHead,NameBooleanParameters
 trait ReplayRSpaceTests
     extends ReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
     with TestImplicitHelpers {
+  import monix.execution.Scheduler.Implicits.global
 
   def consumeMany[C, P, A, R, K](
       space: ISpace[Task, C, P, Nothing, A, R, K],
@@ -44,7 +46,7 @@ trait ReplayRSpaceTests
       val res =
         space
           .consume(channelsCreator(i), patterns, continuationCreator(i), persist)
-          .runSyncUnsafe(10.seconds)
+          .runSyncUnsafe(30.seconds)
           .right
           .get
       logger.debug("Finished consume {}", i)
@@ -80,7 +82,7 @@ trait ReplayRSpaceTests
       space.produce("ch1", "datum1", false)
       val root1 = space.createCheckpoint().runSyncUnsafe(10.seconds).root
 
-      replaySpace.reset(root1)
+      replaySpace.reset(root1).runSyncUnsafe(10.seconds)
       replaySpace.store.isEmpty shouldBe false
 
       space.reset(root0)
@@ -284,11 +286,13 @@ trait ReplayRSpaceTests
         continuationCreator = i => s"continuation$i",
         persist = false
       )
-      val result = space.produce(
-        channel = "ch1",
-        data = "datum1",
-        persist = false
-      )
+      val result = space
+        .produce(
+          channel = "ch1",
+          data = "datum1",
+          persist = false
+        )
+        .runSyncUnsafe(10.seconds)
       val rigPoint = space.createCheckpoint().runSyncUnsafe(10.seconds)
 
       replaySpace.rig(emptyPoint.root, rigPoint.log).runSyncUnsafe(10.seconds)
@@ -302,11 +306,13 @@ trait ReplayRSpaceTests
         continuationCreator = i => s"continuation$i",
         persist = false
       )
-      val replayResult = replaySpace.produce(
-        channel = "ch1",
-        data = "datum1",
-        persist = false
-      )
+      val replayResult = replaySpace
+        .produce(
+          channel = "ch1",
+          data = "datum1",
+          persist = false
+        )
+        .runSyncUnsafe(10.seconds)
       val finalPoint = replaySpace.createCheckpoint().runSyncUnsafe(10.seconds)
 
       replayResult shouldBe result
@@ -919,6 +925,8 @@ trait ReplayRSpaceTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with O
 }
 
 trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
+  import monix.execution.Scheduler.Implicits.global
+
   override def withTestSpaces[S](
       f: (ISpace[Task, C, P, E, A, A, K], IReplaySpace[Task, C, P, E, A, A, K]) => S
   )(
@@ -943,12 +951,14 @@ trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, 
       space.close().runSyncUnsafe(10.seconds)
       replaySpace.close().runSyncUnsafe(10.seconds)
       context.close()
-      dbDir.recursivelyDelete()
+      Language.ignore(dbDir.recursivelyDelete())
     }
   }
 }
 
 trait MixedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
+  import monix.execution.Scheduler.Implicits.global
+
   override def withTestSpaces[S](
       f: (ISpace[Task, C, P, E, A, A, K], IReplaySpace[Task, C, P, E, A, A, K]) => S
   )(
@@ -973,12 +983,14 @@ trait MixedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C,
       space.close().runSyncUnsafe(10.seconds)
       replaySpace.close().runSyncUnsafe(10.seconds)
       context.close()
-      dbDir.recursivelyDelete()
+      Language.ignore(dbDir.recursivelyDelete())
     }
   }
 }
 
 trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
+  import monix.execution.Scheduler.Implicits.global
+
   override def withTestSpaces[S](
       f: (ISpace[Task, C, P, E, A, A, K], IReplaySpace[Task, C, P, E, A, A, K]) => S
   )(
@@ -1005,6 +1017,8 @@ trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase
 }
 
 trait FaultyStoreReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
+  import monix.execution.Scheduler.Implicits.global
+
   override def withTestSpaces[S](
       f: (ISpace[Task, C, P, E, A, A, K], IReplaySpace[Task, C, P, E, A, A, K]) => S
   )(
@@ -1038,8 +1052,8 @@ trait FaultyStoreReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsB
     try {
       f(space, replaySpace)
     } finally {
-      space.close()
-      replaySpace.close()
+      space.close().runSyncUnsafe(10.seconds)
+      replaySpace.close().runSyncUnsafe(10.seconds)
     }
   }
 

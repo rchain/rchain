@@ -22,6 +22,7 @@ import coop.rchain.rholang.interpreter.accounting.Chargeable._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Context, ISpace, RSpace}
+import coop.rchain.shared.Language
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.prop.TableFor1
 
@@ -825,9 +826,9 @@ class RholangMethodsCostsSpec
 
   override protected def afterAll(): Unit = {
     import coop.rchain.shared.PathOps._
-    space.close()
+    space.close().runSyncUnsafe(10.seconds)
     context.close()
-    dbDir.recursivelyDelete()
+    Language.ignore(dbDir.recursivelyDelete())
   }
 
 }

@@ -289,7 +289,7 @@ object DeployPaymentCostTest {
       node: HashSetCasperTestNode[Task],
       tuplespaceHash: ByteString,
       statusChannel: GPrivate
-  ): Unit = {
+  ) = {
     val transferStatus = node.runtimeManager
       .getData(
         tuplespaceHash,
