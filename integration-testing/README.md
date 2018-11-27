@@ -110,17 +110,17 @@ $ ./run_tests.sh --collect-only
 $ ./run_tests.sh --collect-only  test/test_star_connected.py
 ```
 
-The test runs the [mypy](https://pypi.org/project/pytest-mypy/) static type checker on your source files as part of your Pytest test runs now.
+The test can runs the [mypy](https://pypi.org/project/pytest-mypy/) static type checker on your source files as part of 
+your Pytest test runs now. It is not enabled by default now. You can run the static type checker test by the command below.
+
+```bash
+$ ./run_tests.sh --mypy
+```
 
 If you want to restrict your test run to only perform mypy checks and not any other tests by using the `-m` option.
 
-Examples
 ```bash
-$ ./run_tests.sh -m mypy
-```
-
-```bash
-$ ./run_tests.sh -m mypy test/test_eval.py
+$ ./run_tests.sh --mypy -m mypy 
 ```
 
 # Writing your own tests

@@ -11,4 +11,4 @@ export DEFAULT_IMAGE=rchain-integration-testing:$tag
 sed "s/rnode:latest/rnode:$tag/" Dockerfile |\
 	docker build -t $DEFAULT_IMAGE -f - .
 
-pipenv run py.test -v --mypy "$@"
+pipenv run py.test -v "$@"

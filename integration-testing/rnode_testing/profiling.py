@@ -4,7 +4,7 @@ import logging
 from rnode_testing.util import log_box
 from typing import Dict, List
 
-PROF_DATA:Dict[str, List] = {}
+PROF_DATA: Dict[str, List] = {}
 
 
 def profile(fn):
