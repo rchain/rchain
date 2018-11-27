@@ -1,7 +1,6 @@
 import logging
 import pytest
 from delayed_assert import expect, assert_expectations
-from rnode_testing.profiling import profile
 import rnode_testing.casper_propose_and_deploy
 from rnode_testing.network import (
     start_network,
@@ -57,7 +56,6 @@ def complete_network(system):
 
             yield network
 
-@profile
 def test_metrics_api_socket(complete_network):
     for node  in complete_network.nodes:
         logging.info("Test metrics api socket for {}".format(node.name))
@@ -67,7 +65,6 @@ def test_metrics_api_socket(complete_network):
     assert_expectations()
 
 
-@profile
 def test_node_logs_for_errors(complete_network):
     for node in complete_network.nodes:
         logging.info("Testing {} node logs for errors.".format(node.name))
@@ -81,7 +78,6 @@ def test_node_logs_for_errors(complete_network):
 
     assert_expectations()
 
-@profile
 def test_node_logs_for_RuntimeException(complete_network):
     for node in complete_network.nodes:
         logging.info("Testing {} node logs for \"java RuntimeException\".".format(node.name))
@@ -96,7 +92,6 @@ def test_node_logs_for_RuntimeException(complete_network):
 
     assert_expectations()
 
-@profile
 def test_casper_propose_and_deploy(system, complete_network):
     rnode_testing.casper_propose_and_deploy.run(system.config, complete_network)
 

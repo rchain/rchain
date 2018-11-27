@@ -14,7 +14,6 @@ import pytest
 import docker as docker_py
 
 from rnode_testing.util import log_box
-from rnode_testing.profiling import log_prof_data
 from rnode_testing.rnode import start_bootstrap
 
 
@@ -113,10 +112,7 @@ def docker_client_session():
 def system(request, docker_client_session):
     cfg = make_test_config(request)
     with validators_data(cfg) as vd:
-        try:
-            yield System(cfg, docker_client_session, vd)
-        finally:
-            log_prof_data()
+        yield System(cfg, docker_client_session, vd)
 
 
 @pytest.yield_fixture(scope="module")
