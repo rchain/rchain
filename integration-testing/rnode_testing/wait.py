@@ -14,8 +14,7 @@ def wait_for(condition, timeout, error_message):
     :return: true  if the condition was met in the given timeout
     """
 
-    logging.info("Waiting maximum timeout={}. Patience please!".format(timeout))
-    logging.info("Wait condition is: `{}`".format(condition.__doc__))
+    logging.info("Waiting on: `{}`".format(condition.__doc__))
     elapsed = 0
     current_ex = None
     while elapsed < timeout:
@@ -23,10 +22,8 @@ def wait_for(condition, timeout, error_message):
 
         try:
             value = condition()
-
             logging.info("Condition satisfied after {elapsed}s. Returning {value}".format(elapsed=elapsed, value=value))
             return value
-
         except Exception as ex:
             condition_evaluation_duration = time.time() - start_time
             elapsed = int(elapsed + condition_evaluation_duration)
