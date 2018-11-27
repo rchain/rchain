@@ -7,7 +7,7 @@ from rnode_testing.network import (
     start_network,
 )
 from rnode_testing.rnode import start_bootstrap
-from rnode_testing.random import random_string
+from rnode_testing.common import random_string
 from rnode_testing.wait import (
     wait_for,
     string_contains,

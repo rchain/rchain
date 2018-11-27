@@ -107,7 +107,6 @@ def docker_client_session():
         docker_client.networks.prune()
 
 
-
 @pytest.yield_fixture(scope="session")
 def system(request, docker_client_session):
     cfg = make_test_config(request)

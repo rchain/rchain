@@ -3,11 +3,11 @@ import os
 import shlex
 import logging
 import threading
-from contextlib import contextmanager
-from rnode_testing.docker import docker_network
+import contextlib
 import rnode_testing.resources as resources
 from rnode_testing.util import log_box, make_tempfile, make_tempdir
 from rnode_testing.wait import wait_for, node_started
+from rnode_testing.common import random_string
 
 from multiprocessing import Queue, Process
 from queue import Empty
@@ -469,7 +469,22 @@ def create_peer_nodes(
     return result
 
 
-@contextmanager
+@contextlib.contextmanager
+def docker_network(docker_client):
+    network_name = "rchain-{}".format(random_string(5).lower())
+
+    docker_client.networks.create(network_name, driver="bridge")
+
+    try:
+        yield network_name
+    finally:
+        for network in docker_client.networks.list():
+            if network_name == network.name:
+                logging.info("Removing docker network {}".format(network.name))
+                network.remove()
+
+
+@contextlib.contextmanager
 def bootstrap_node(docker, docker_network, timeout, validators_data, *, container_name=None, cli_options=None, mount_dir=None):
     node = make_bootstrap_node(
         docker_client=docker,
@@ -486,7 +501,7 @@ def bootstrap_node(docker, docker_network, timeout, validators_data, *, containe
         node.cleanup()
 
 
-@contextmanager
+@contextlib.contextmanager
 def start_bootstrap(docker_client, node_start_timeout, node_cmd_timeout, validators_data, *, container_name=None, cli_options=None, mount_dir=None):
     with docker_network(docker_client) as network:
         with bootstrap_node(docker_client, network, node_cmd_timeout, validators_data, container_name=container_name, cli_options=cli_options, mount_dir=mount_dir) as node:
