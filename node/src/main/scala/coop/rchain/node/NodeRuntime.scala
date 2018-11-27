@@ -239,10 +239,10 @@ class NodeRuntime private[node] (
       _ <- if (conf.server.dynamicHostAddress)
             dynamicIpLoop.forever.executeOn(loopScheduler).start.toEffect
           else Task.unit.toEffect
+      _       <- Task.defer(casperLoop.forever.value).executeOn(loopScheduler).start.toEffect
       address = s"rnode://$id@$host?protocol=$port&discovery=$kademliaPort"
       _       <- Log[Effect].info(s"Listening for traffic on $address.")
       _       <- EitherT(Task.defer(loop.forever.value).executeOn(loopScheduler))
-      _       <- EitherT(Task.defer(casperLoop.forever.value).executeOn(loopScheduler))
     } yield ()
   }
 
