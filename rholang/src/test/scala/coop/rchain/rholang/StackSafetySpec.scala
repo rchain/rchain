@@ -1,16 +1,16 @@
 package coop.rchain.rholang
 
-import java.io.StringReader
-
 import coop.rchain.models.Connective.ConnectiveInstance.ConnNotBody
 import coop.rchain.models.Expr.ExprInstance.GInt
-import coop.rchain.models.{Connective, Par, ProtoM}
+import coop.rchain.models._
+import coop.rchain.models.serialization.implicits._
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.StackSafetySpec.findMaxRecursionDepth
 import coop.rchain.rholang.interpreter.{Interpreter, PrettyPrinter}
 import coop.rchain.rspace.Serialize
-import monix.eval.Task
+import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
+import org.scalatest.prop.TableDrivenPropertyChecks
 import org.scalatest.{Assertions, FlatSpec, Matchers}
 
 import scala.annotation.tailrec
@@ -45,14 +45,13 @@ object StackSafetySpec extends Assertions {
 
 }
 
-class StackSafetySpec extends FlatSpec with Matchers {
+class StackSafetySpec extends FlatSpec with TableDrivenPropertyChecks with Matchers {
   import StackSafetySpec._
 
   val mapSize     = 10L * 1024L * 1024L
   val tmpPrefix   = "rspace-store-"
   val maxDuration = 20.seconds
-
-  val depth: Int = findMaxRecursionDepth()
+  val depth       = findMaxRecursionDepth()
 
   //FIXME make all the test cases work with checkAll.
   //To make this happen, we're going to have to change how AST hashCode and serialization work.
@@ -106,7 +105,11 @@ class StackSafetySpec extends FlatSpec with Matchers {
   }
 
   it should "handle a huge nested name" in {
-    checkAll(("*@{" * depth) + "1" + ("}" * depth))
+    checkAll(hugeNested("*@{", "1", "}"))
+  }
+
+  it should "handle a non-trivial huge nested name" in {
+    checkAll(hugeNested("*@(1, ", "*@0", ")"))
   }
 
   it should "handle a huge train wreck of method calls" in {
@@ -153,44 +156,42 @@ class StackSafetySpec extends FlatSpec with Matchers {
   private def hugeNested(left: String, middle: String, right: String): String =
     Seq.fill(depth)(left).mkString + middle + Seq.fill(depth)(right).mkString
 
-  private def checkAll(rho: String): Unit = {
+  private def checkAll(term: String): Unit = {
+    val rho =
+      s"""
+         |  //send without reducing the term, testing serialization
+         |  @0!(@"dontReduceYet"!($term)) |
+         |
+         |  //duplicate the term
+         |  for (@x <- @0) { @1 ! (x) | @2 ! (x) } |
+         |
+         |  //receive both duplicated terms
+         |  for (@y <- @1; @z <- @2) {
+         |
+         |    //create a set to test term's hashCode
+         |    @3!(Set(y, z)) |
+         |
+         |    //compare the terms to test equals
+         |    @4!(y == z)
+         |  } |
+         |
+         |  //reduce the term
+         |  @5!($term)
+         |""".stripMargin
+
     isolateStackOverflow {
       val ast = Interpreter.buildNormalizedTerm(rho).value()
       PrettyPrinter().buildString(ast)
+      checkSuccess(rho) {
+        mkRuntime(tmpPrefix, mapSize).use { runtime =>
+          Interpreter.evaluate(runtime, ast)
+        }
+      }
     }
-    checkReduce(rho)
   }
 
-  private def checkReduce(rho: String): Unit =
-    isolateStackOverflow {
-      //FIXME make this pass:
-      //val reduceRho = s"@0!($rho) | for (@x <- @0) { @1 ! (x) | @2 ! (x)  } | for (@y <- @1; @z <- @2) { @0!(Set(y, z)) }"
-      //val reduceRho = s"""@0!( { @"serializeMe"!($rho) } )"""
-      //val reduceRho = s"""for (_ <- @0) { Nil } | @0!( { @"serializeMe"!($rho) } )"""
-      //val reduceRho = s"@0!($rho)"
-      val reduceRho = s"for (_ <- @0) { Nil } | @0!($rho)"
-      checkSuccess(reduceRho) { rho =>
-        mkRuntime(tmpPrefix, mapSize)
-          .use { runtime =>
-            Interpreter.execute(runtime, new StringReader(rho))
-          }
-      }
-    }
-
-  checkNormalize("Nil") //silence "unused" warnings
-
-  private def checkNormalize(rho: String): Unit =
-    isolateStackOverflow {
-      checkSuccess(rho) { rho =>
-        Task.coeval(
-          Interpreter
-            .buildNormalizedTerm(rho)
-        )
-      }
-    }
-
-  private def checkSuccess(rho: String)(interpreter: String => Task[_]): Unit =
-    interpreter(rho).attempt
+  private def checkSuccess(rho: String)(task: => Task[_]): Unit =
+    task.attempt
       .runSyncUnsafe(maxDuration)
       .swap
       .foreach(error => fail(s"""Execution failed for: $rho
@@ -199,29 +200,36 @@ class StackSafetySpec extends FlatSpec with Matchers {
 
 }
 
-class SerializationStackSafetySpec extends FlatSpec with Matchers {
+class AstTypeclassesStackSafetySpec extends FlatSpec with Matchers {
 
-  behavior of "Serialize"
+  behavior of "AST typeclasses"
 
   import coop.rchain.models.rholang.implicits._
 
-  val maxRecursionDepth: Int = findMaxRecursionDepth()
+  val maxRecursionDepth = findMaxRecursionDepth()
 
-  it should "do a round trip of a huge structure" in {
+  it should "not blow up on a huge structure" in {
 
     @tailrec
     def hugePar(n: Int, par: Par = Par(exprs = Seq(GInt(0)))): Par =
       if (n == 0) par
       else hugePar(n - 1, Par(connectives = Seq(Connective(ConnNotBody(par)))))
 
-    val par = hugePar(maxRecursionDepth)
+    val par        = hugePar(maxRecursionDepth)
+    val anotherPar = hugePar(maxRecursionDepth)
 
     noException shouldBe thrownBy {
       ProtoM.serializedSize(par).value
 
-      import coop.rchain.models.serialization.implicits._
       val encoded = Serialize[Par].encode(par)
       Serialize[Par].decode(encoded)
+
+      HashM[Par].hash[Coeval](par).value
+      par.hashCode()
+
+      EqualM[Par].equal[Coeval](par, anotherPar).value
+      par == anotherPar
+
     }
   }
 
