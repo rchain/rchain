@@ -63,7 +63,7 @@ def make_test_config(request):
 
     config = TestConfig(
         peer_count=peer_count,
-        node_startup_timeout=make_timeout(peer_count, start_timeout, 30, 10),
+        node_startup_timeout=180,
         network_converge_timeout=make_timeout(peer_count, converge_timeout, 200, 10),
         receive_timeout=make_timeout(peer_count, receive_timeout, 10, 10),
         rnode_timeout=rnode_timeout,
