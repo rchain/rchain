@@ -94,10 +94,9 @@ object Main {
   }
 
   private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
-    log.info(VersionInfo.get)
-
     val node =
       for {
+        _       <- log.info(VersionInfo.get).toEffect
         runtime <- NodeRuntime(conf)
         _       <- runtime.main
       } yield ()
