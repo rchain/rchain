@@ -7,8 +7,11 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.SortTest.sort
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.rholang.sorter._
+import coop.rchain.models.testImplicits._
 import monix.eval.Coeval
+import org.scalacheck.Arbitrary
 import org.scalatest._
+import org.scalatest.prop.PropertyChecks
 
 import scala.collection.immutable.BitSet
 
@@ -16,7 +19,7 @@ object SortTest {
   def sort[T: Sortable](t: T) = Sortable[T].sortMatch[Coeval](t).value
 }
 
-class ScoredTermSpec extends FlatSpec with Matchers {
+class ScoredTermSpec extends FlatSpec with PropertyChecks with Matchers {
 
   behavior of "ScoredTerm"
 
@@ -46,6 +49,23 @@ class ScoredTermSpec extends FlatSpec with Matchers {
       ScoredTerm("foo", Node(Seq(Leaves(1, 2), Leaves(2, 2))))
     )
     unsortedTerms.sorted should be(sortedTerms)
+  }
+  it should "sort so that unequal terms have unequal scores and the other way around" in {
+    def checkScoreEquality[T: Sortable: Arbitrary]: Assertion = forAll { (a: T, b: T) =>
+      if (a != b)
+        assert(sort(a).score != sort(b).score)
+      else
+        assert(sort(a).score == sort(b).score)
+    }
+    checkScoreEquality[Bundle]
+    checkScoreEquality[Connective]
+    checkScoreEquality[Expr]
+    checkScoreEquality[Match]
+    checkScoreEquality[New]
+    checkScoreEquality[Par]
+    checkScoreEquality[Receive]
+    checkScoreEquality[Send]
+    checkScoreEquality[Var]
   }
 }
 
