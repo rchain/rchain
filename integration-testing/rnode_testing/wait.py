@@ -143,3 +143,36 @@ def approved_block_received(peer):
         node_logs(peer),
         "Valid ApprovedBlock received!",
     )
+
+
+def wait_for_approved_block_received_handler_state(bootstrap_node, node_startup_timeout):
+    wait_for(
+        approved_block_received_handler_state(bootstrap_node),
+        node_startup_timeout,
+        "Bootstrap node {} did not enter ApprovedBlockRecievedHandler state".format(bootstrap_node.name),
+    )
+
+
+def wait_for_approved_block_received(network, node_startup_timeout):
+    for peer in network.peers:
+        wait_for(
+            approved_block_received(peer),
+            node_startup_timeout,
+            "Peer {} did not receive the approved block",
+        )
+
+
+def wait_for_started_network(node_startup_timeout, network):
+    for peer in network.peers:
+        wait_for(node_started(peer), node_startup_timeout, "Peer {} did not start correctly.".format(peer.name))
+
+
+def wait_for_converged_network(timeout, network, peer_connections):
+    wait_for(has_peers(network.bootstrap, len(network.peers)),
+             timeout,
+             "The network did NOT converge. Check container logs for issues. One or more containers might have failed to start or connect.")
+
+    for node in network.peers:
+        wait_for(has_peers(node, peer_connections),
+                 timeout,
+                 "The network did NOT converge. Check container logs for issues. One or more containers might have failed to start or connect.")

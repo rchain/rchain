@@ -5,14 +5,19 @@ from delayed_assert import expect, assert_expectations
 
 from rnode_testing.network import (
     start_network,
-    wait_for_started_network,
-    wait_for_converged_network,
-    wait_for_approved_block_received_handler_state,
-    wait_for_approved_block_received,
 )
 from rnode_testing.rnode import start_bootstrap
 from rnode_testing.random import random_string
-from rnode_testing.wait import wait_for, string_contains, get_block
+from rnode_testing.wait import (
+    wait_for,
+    string_contains,
+    get_block,
+    wait_for_approved_block_received_handler_state,
+    wait_for_started_network,
+    wait_for_converged_network,
+    wait_for_approved_block_received,
+)
+
 
 
 @pytest.fixture(scope="module")
