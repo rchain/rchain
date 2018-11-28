@@ -55,7 +55,7 @@ class NonZeroExitCodeError(Exception):
 
 
 class TimeoutError(Exception):
-    def __init__(self, command: Iterator, timeout: int) -> None:
+    def __init__(self, command: Union[Tuple[str, ...], str], timeout: int) -> None:
         self.command = command
         self.timeout = timeout
 
@@ -165,7 +165,7 @@ class Node:
         return self.call_rnode('show-block', block_hash, stderr=False)
 
     # deprecated, don't use, why? ask @adaszko
-    def exec_run(self, cmd: Any, stderr=True) -> Tuple[int, str]:
+    def exec_run(self, cmd: Union[Tuple[str, ...], str], stderr=True) -> Tuple[int, str]:
         queue: Queue = Queue(1)
 
         def execution():
@@ -188,13 +188,13 @@ class Node:
             process.join()
             raise TimeoutError(cmd, self.timeout)
 
-    def shell_out(self, *cmd: Union[str, int], stderr=True) -> str:
+    def shell_out(self, *cmd: str, stderr=True) -> str:
         exit_code, output = self.exec_run(cmd, stderr=stderr)
         if exit_code != 0:
             raise NonZeroExitCodeError(command=cmd, exit_code=exit_code, output=output)
         return output
 
-    def call_rnode(self, *node_args: Union[str, int], stderr: bool = True) -> str:
+    def call_rnode(self, *node_args: str, stderr: bool = True) -> str:
         return self.shell_out(rnode_binary, *node_args, stderr=stderr)
 
     def eval(self, rho_file_path: str) -> str:
