@@ -563,12 +563,6 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
               )
             )
           ),
-          Connective(VarRefBody(VarRef(0, 2))),
-          Connective(ConnInt(true)),
-          Connective(ConnBool(true)),
-          Connective(ConnString(true)),
-          Connective(ConnByteArray(true)),
-          Connective(ConnUri(true)),
           Connective(ConnNotBody(Par()))
         ),
         connectiveUsed = true
@@ -576,11 +570,6 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
     val sortedParExpr: Par =
       Par(
         connectives = List(
-          Connective(ConnBool(true)),
-          Connective(ConnInt(true)),
-          Connective(ConnString(true)),
-          Connective(ConnUri(true)),
-          Connective(ConnByteArray(true)),
           Connective(ConnNotBody(Par())),
           Connective(
             ConnAndBody(
@@ -598,8 +587,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
                 )
               )
             )
-          ),
-          Connective(VarRefBody(VarRef(0, 2)))
+          )
         ),
         connectiveUsed = true
       )
