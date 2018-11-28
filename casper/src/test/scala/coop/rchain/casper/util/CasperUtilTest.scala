@@ -15,6 +15,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture, IndexedBlockDag}
 import coop.rchain.casper.helper.BlockGenerator._
+import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.scalatestcontrib._
 import monix.eval.Task
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
@@ -69,8 +70,8 @@ class CasperUtilTest
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   "isInMainChain" should "classify complicated chains appropriately" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val v1 = ByteString.copyFromUtf8("Validator One")
-      val v2 = ByteString.copyFromUtf8("Validator Two")
+      val v1 = generateValidator("Validator One")
+      val v2 = generateValidator("Validator Two")
 
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY)

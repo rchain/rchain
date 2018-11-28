@@ -9,6 +9,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.{genesis, _}
 import coop.rchain.casper.helper._
 import coop.rchain.casper.helper.BlockGenerator._
+import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
@@ -22,9 +23,9 @@ class BlocksResponseAPITest
     with BlockGenerator
     with BlockDagStorageFixture {
 
-  val v1     = ByteString.copyFromUtf8("Validator One")
-  val v2     = ByteString.copyFromUtf8("Validator Two")
-  val v3     = ByteString.copyFromUtf8("Validator Three")
+  val v1     = generateValidator("Validator One")
+  val v2     = generateValidator("Validator Two")
+  val v3     = generateValidator("Validator Three")
   val v1Bond = Bond(v1, 25)
   val v2Bond = Bond(v2, 20)
   val v3Bond = Bond(v3, 15)

@@ -5,6 +5,7 @@ import coop.rchain.casper.protocol.Bond
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.helper.BlockGenerator._
+import coop.rchain.casper.helper.BlockUtil.generateValidator
 import monix.eval.Task
 
 import scala.collection.immutable.{HashMap, HashSet}
@@ -18,8 +19,8 @@ class CliqueOracleTest
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   "Turan Oracle" should "detect finality as appropriate" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val v1     = ByteString.copyFromUtf8("Validator One")
-      val v2     = ByteString.copyFromUtf8("Validator Two")
+      val v1     = generateValidator("Validator One")
+      val v2     = generateValidator("Validator Two")
       val v1Bond = Bond(v1, 2)
       val v2Bond = Bond(v2, 3)
       val bonds  = Seq(v1Bond, v2Bond)
@@ -85,9 +86,9 @@ class CliqueOracleTest
   // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
   "Turan Oracle" should "detect possible disagreements appropriately" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val v1     = ByteString.copyFromUtf8("Validator One")
-      val v2     = ByteString.copyFromUtf8("Validator Two")
-      val v3     = ByteString.copyFromUtf8("Validator Three")
+      val v1     = generateValidator("Validator One")
+      val v2     = generateValidator("Validator Two")
+      val v3     = generateValidator("Validator Three")
       val v1Bond = Bond(v1, 25)
       val v2Bond = Bond(v2, 20)
       val v3Bond = Bond(v3, 15)

@@ -18,9 +18,9 @@ import coop.rchain.blockstorage.util.BlockMessageUtil.{blockNumber, bonds, paren
 import coop.rchain.blockstorage.util.{BlockMessageUtil, Crc32, TopologicalSortUtil}
 import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.shared.{Log, LogSource}
 
-import scala.collection.immutable.HashSet
 import scala.ref.WeakReference
 import scala.util.matching.Regex
 import collection.JavaConverters._
@@ -253,6 +253,17 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
       _ <- latestMessagesLogSizeRef.set(0)
     } yield ()
 
+  private def squashLatestMessagesDataFileIfNeeded(): F[Unit] =
+    for {
+      latestMessages        <- latestMessagesRef.get
+      latestMessagesLogSize <- latestMessagesLogSizeRef.get
+      result <- if (latestMessagesLogSize > latestMessages.size * latestMessagesLogMaxSizeFactor) {
+                 squashLatestMessagesDataFile()
+               } else {
+                 ().pure[F]
+               }
+    } yield result
+
   private def updateDataLookupFile(blockMetadata: BlockMetadata): F[Unit] =
     for {
       dataLookupCrc          <- blockMetadataCrcRef.get
@@ -288,15 +299,10 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
 
   def insert(block: BlockMessage): F[Unit] =
     for {
-      _                     <- lock.acquire
-      latestMessages        <- latestMessagesRef.get
-      latestMessagesLogSize <- latestMessagesLogSizeRef.get
-      _ <- if (latestMessagesLogSize > latestMessages.size * latestMessagesLogMaxSizeFactor) {
-            squashLatestMessagesDataFile()
-          } else {
-            ().pure[F]
-          }
+      _             <- lock.acquire
+      _             <- squashLatestMessagesDataFileIfNeeded()
       blockMetadata = BlockMetadata.fromBlock(block)
+      _             = assert(block.blockHash.size == 32)
       _             <- dataLookupRef.update(_.updated(block.blockHash, blockMetadata))
       _ <- childMapRef.update(
             childMap =>
@@ -315,11 +321,18 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
         .map(_.validator)
         .toSet
         .diff(block.justifications.map(_.validator).toSet)
+      newValidatorsWithSender <- if (block.sender.isEmpty) {
+                                  // Ignore empty sender for special cases such as genesis block
+                                  Log[F].warn(
+                                    s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
+                                  ) *> newValidators.pure[F]
+                                } else if (block.sender.size() == 32) {
+                                  (newValidators + block.sender).pure[F]
+                                } else {
+                                  Sync[F].raiseError[Set[ByteString]](BlockSenderIsMalformed(block))
+                                }
       _ <- latestMessagesRef.update { latestMessages =>
-            newValidators.foldLeft(
-              //update creator of the block
-              latestMessages.updated(block.sender, block.blockHash)
-            ) {
+            newValidatorsWithSender.foldLeft(latestMessages) {
               //Update new validators with block in which
               //they were bonded (i.e. this block)
               case (acc, v) => acc.updated(v, block.blockHash)

@@ -25,7 +25,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
   val secondBlockQuery = "1234"
   val badTestHashQuery = "No such a hash"
 
-  val genesisHashString = "00000000"
+  val genesisHashString = "0000000000000000000000000000000000000000000000000000000000000000"
   val version           = 1L
 
   def genesisBlock(genesisHashString: String, version: Long): BlockMessage = {
@@ -41,7 +41,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
   }
   val genesisBlock: BlockMessage = genesisBlock(genesisHashString, version)
 
-  val secondHashString     = "123456789101112131415161718192"
+  val secondHashString     = "1234567891011121314151617181921234567891011121314151617181928192"
   val blockHash: BlockHash = ProtoUtil.stringToByteString(secondHashString)
   val blockNumber          = 1L
   val timestamp            = 1527191665L
@@ -55,9 +55,10 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
   val parentsString                    = List(genesisHashString, "0000000001")
   val parentsHashList: List[BlockHash] = parentsString.map(ProtoUtil.stringToByteString)
   val header: Header                   = ProtoUtil.blockHeader(body, parentsHashList, version, timestamp)
-  val secondBlockSenderString: String  = "3456789101112131415161718192"
-  val secondBlockSender: ByteString    = ProtoUtil.stringToByteString(secondBlockSenderString)
-  val shardId: String                  = "abcdefgh"
+  val secondBlockSenderString: String =
+    "3456789101112131415161718192345678910111213141516171819261718192"
+  val secondBlockSender: ByteString = ProtoUtil.stringToByteString(secondBlockSenderString)
+  val shardId: String               = "abcdefgh"
   val secondBlock: BlockMessage =
     BlockMessage()
       .withBlockHash(blockHash)

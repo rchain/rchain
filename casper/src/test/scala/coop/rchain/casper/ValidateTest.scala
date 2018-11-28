@@ -9,6 +9,7 @@ import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.helper.BlockGenerator._
+import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
@@ -57,6 +58,7 @@ class ValidateTest
       validatorLength: Int
   ): F[BlockMessage] = {
     val validatorRoundRobinCycle = Stream.continually(0 until validatorLength).flatten
+    val validators               = List.fill(validatorLength)(generateValidator())
     (0 until length).toList
       .zip(validatorRoundRobinCycle)
       .foldLeft(
@@ -66,7 +68,7 @@ class ValidateTest
         } yield (genesis, emptyLatestMessages)
       ) {
         case (acc, (_, validatorNum)) =>
-          val creator = ByteString.copyFrom(validatorNum.toString.getBytes)
+          val creator = validators(validatorNum)
           for {
             unwrappedAcc            <- acc
             (block, latestMessages) = unwrappedAcc
@@ -317,8 +319,8 @@ class ValidateTest
 
   "Sender validation" should "return true for genesis and blocks from bonded validators and false otherwise" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val validator = ByteString.copyFromUtf8("Validator")
-      val impostor  = ByteString.copyFromUtf8("Impostor")
+      val validator = generateValidator("Validator")
+      val impostor  = generateValidator("Impostor")
       for {
         _            <- createChain[Task](3, List(Bond(validator, 1)))
         genesis      <- blockDagStorage.lookupByIdUnsafe(0)
@@ -334,9 +336,9 @@ class ValidateTest
   "Parent validation" should "return true for proper justifications and false otherwise" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val validators = Vector(
-        ByteString.copyFromUtf8("Validator 1"),
-        ByteString.copyFromUtf8("Validator 2"),
-        ByteString.copyFromUtf8("Validator 3")
+        generateValidator("Validator 1"),
+        generateValidator("Validator 2"),
+        generateValidator("Validator 3")
       )
       val bonds = validators.zipWithIndex.map {
         case (v, i) => Bond(v, 2L * i.toLong + 1L)
@@ -448,8 +450,8 @@ class ValidateTest
 
   "Justification follow validation" should "return valid for proper justifications and failed otherwise" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val v1     = ByteString.copyFromUtf8("Validator One")
-      val v2     = ByteString.copyFromUtf8("Validator Two")
+      val v1     = generateValidator("Validator One")
+      val v2     = generateValidator("Validator Two")
       val v1Bond = Bond(v1, 2)
       val v2Bond = Bond(v2, 3)
       val bonds  = Seq(v1Bond, v2Bond)
@@ -525,8 +527,8 @@ class ValidateTest
   "Justification regression validation" should "return valid for proper justifications and justification regression detected otherwise" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val validators = Vector(
-        ByteString.copyFromUtf8("Validator 1"),
-        ByteString.copyFromUtf8("Validator 2")
+        generateValidator("Validator 1"),
+        generateValidator("Valdiator 2")
       )
       val bonds = validators.zipWithIndex.map {
         case (v, i) => Bond(v, 2L * i.toLong + 1L)

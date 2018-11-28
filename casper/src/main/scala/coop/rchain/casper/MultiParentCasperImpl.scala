@@ -72,10 +72,11 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
 
   def addBlock(b: BlockMessage): F[BlockStatus] =
     for {
-      _         <- Sync[F].delay(processingBlock.take(PROCESSING_BLOCK_TIMEOUT))
-      dag       = _blockDag.get
-      blockHash = b.blockHash
-      result <- if (dag.dataLookup.contains(blockHash) || blockBuffer.exists(
+      _              <- Sync[F].delay(processingBlock.take(PROCESSING_BLOCK_TIMEOUT))
+      dag            <- blockDag
+      blockHash      = b.blockHash
+      containsResult <- dag.contains(blockHash)
+      result <- if (containsResult || blockBuffer.exists(
                       _.blockHash == blockHash
                     )) {
                  Log[F]

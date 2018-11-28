@@ -309,8 +309,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       Created(signedBlock) = createBlockResult
       _                    <- nodes(0).casperEff.addBlock(signedBlock)
       _                    <- nodes(1).receive()
-      received             <- nodes(1).casperEff.contains(signedBlock)
-      result               = received should be(true)
+      result               <- nodes(1).casperEff.contains(signedBlock) shouldBeF true
       _                    = nodes.foreach(_.tearDownNode())
       _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
             validateBlockStore(node) { blockStore =>
@@ -320,7 +319,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  it should "add a valid block from peer" in {
+  it should "add a valid block from peer" in effect {
     for {
       nodes                      <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
       deployData                 <- ProtoUtil.basicDeployData[Effect](1)
