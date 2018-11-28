@@ -73,7 +73,7 @@ research/sharding/ve
 *.pyc
 integration-testing/.pytest_cache
 integration-testing/.mypy_cache
-integration-testing/.virtualenv
+integration-testing/report.json
 integration-testing.log
 *.log
 .virtualenv

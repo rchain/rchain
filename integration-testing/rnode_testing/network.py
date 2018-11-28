@@ -1,13 +1,57 @@
+import inspect
 import logging
-from contextlib import contextmanager
-from rnode_testing.wait import (
-    wait_for,
-    has_peers,
-    node_started,
-    approved_block_received_handler_state,
-    approved_block_received,
-)
+import contextlib
+
+import pytest
+
 from rnode_testing.rnode import create_peer_nodes
+
+
+def make_wrapper(fn, fixtures):
+    parameter_names = inspect.signature(fn).parameters.keys()
+    parameter_list = ",".join(p for p in parameter_names if p != 'request')
+    parameter_name_list = ",".join("('{p}', {p})".format(p=p) for p in parameter_names)
+    namespace = {"fn": fn, "fixtures": fixtures}
+
+    wrapper_code = """
+def {fn_name}(request, {parameter_list}):
+    # import logging
+    # logging.info("fixtures:" + str(fixtures))
+    def get_value(p_name, p_value):
+        if p_name in fixtures:
+            v = request.getfixturevalue(p_value.__name__)
+            # logging.info("Get_value from fixtures: " + p_name + " : " + str(v))
+            return v
+        else:
+            # logging.info("Get_value returns the object: " + p_name + " : " + str(p_value))
+            return p_value
+    param_values = [get_value(p_name, p_value) for p_name, p_value in [{parameter_name_list}]]
+    return fn(*param_values)
+""".format(fn_name=fn.__name__, parameter_list=parameter_list, parameter_name_list=parameter_name_list)
+
+    exec(wrapper_code, locals(), namespace)
+    return namespace[fn.__name__]
+
+
+class parametrize:
+    @staticmethod
+    def fixed(arg_names, arg_values):
+        def decorator(fn):
+            fixtures = arg_names.split(',')
+            wrapper = make_wrapper(fn, fixtures)
+            return pytest.mark.parametrize(arg_names, arg_values)(wrapper)
+        return decorator
+
+    @staticmethod
+    def cartesian(**kwargs):
+        def decorator(fn):
+            fixtures = kwargs.keys()
+
+            result_fn = make_wrapper(fn, fixtures)
+            for arg in kwargs.keys():
+                result_fn = pytest.mark.parametrize(arg, kwargs[arg])(result_fn)
+            return result_fn
+        return decorator
 
 
 
@@ -19,7 +63,7 @@ class RChain:
         self.nodes = [bootstrap] + peers
 
 
-@contextmanager
+@contextlib.contextmanager
 def start_network(config, docker, bootstrap, validators_data, allowed_peers=None):
     logging.debug("Docker network = {}".format(bootstrap.network))
 
@@ -38,36 +82,3 @@ def start_network(config, docker, bootstrap, validators_data, allowed_peers=None
     finally:
         for peer in peers:
             peer.cleanup()
-
-
-def wait_for_approved_block_received_handler_state(bootstrap_node, node_startup_timeout):
-    wait_for(
-        approved_block_received_handler_state(bootstrap_node),
-        node_startup_timeout,
-        "Bootstrap node {} did not enter ApprovedBlockRecievedHandler state".format(bootstrap_node.name),
-    )
-
-
-def wait_for_approved_block_received(network, node_startup_timeout):
-    for peer in network.peers:
-        wait_for(
-            approved_block_received(peer),
-            node_startup_timeout,
-            "Peer {} did not receive the approved block",
-        )
-
-
-def wait_for_started_network(node_startup_timeout, network):
-    for peer in network.peers:
-        wait_for(node_started(peer), node_startup_timeout, "Peer {} did not start correctly.".format(peer.name))
-
-
-def wait_for_converged_network(timeout, network, peer_connections):
-    wait_for(has_peers(network.bootstrap, len(network.peers)),
-             timeout,
-             "The network did NOT converge. Check container logs for issues. One or more containers might have failed to start or connect.")
-
-    for node in network.peers:
-        wait_for(has_peers(node, peer_connections),
-                 timeout,
-                 "The network did NOT converge. Check container logs for issues. One or more containers might have failed to start or connect.")

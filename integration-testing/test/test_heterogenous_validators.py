@@ -3,8 +3,9 @@ import conftest
 import contextlib
 
 from rnode_testing.rnode import start_bootstrap, create_peer
-from rnode_testing.wait import wait_for, node_started
-from rnode_testing.network import (
+from rnode_testing.wait import (
+    wait_for,
+    node_started,
     wait_for_approved_block_received_handler_state,
 )
 
@@ -109,6 +110,7 @@ def started_unbonded_validator(system, bootstrap_node):
 
 
 
+@pytest.mark.xfail
 def test_heterogenous_validators(custom_system):
     BONDED_VALIDATOR_BLOCKS = 10
     JOINING_VALIDATOR_BLOCKS = 10
