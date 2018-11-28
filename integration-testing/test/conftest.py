@@ -95,7 +95,7 @@ def temporary_bonds_file(validator_keys: List[KeyPair]) -> Iterator[str]:
 
 
 @contextlib.contextmanager
-def validators_data(config: TestConfig) -> Iterator[ValidatorsData]:
+def validators_data(config: TestConfig) -> Iterator["ValidatorsData"]:
     # Using pre-generated validator key pairs by rnode. We do this because warning below  with python generated keys
     # WARN  coop.rchain.casper.Validate$ - CASPER: Ignoring block 2cb8fcc56e... because block creator 3641880481... has 0 weight
     keys_file_path = os.path.join('resources/pregenerated-validator-private-public-key-pairs.txt')
@@ -117,7 +117,7 @@ def docker_client_session() -> Iterator["DockerClient"]:
 
 
 @pytest.yield_fixture(scope="session")
-def system(request: "SubRequest", docker_client_session: "DockerClient") -> Iterator[System]:
+def system(request: "SubRequest", docker_client_session: "DockerClient") -> Iterator["System"]:
     cfg = make_test_config(request)
     with validators_data(cfg) as vd:
         try:
