@@ -104,8 +104,7 @@ def string_contains(string_factory: Callable, regex_str: str, flags: int = 0) ->
                 string_factory=string_factory.__doc__, regex_str=regex_str)
             )
 
-    go.__doc__ = "{string_factory} contains regex '{regex_str}'".format(string_factory=string_factory.__doc__,
-                                                                        regex_str=regex_str)
+    go.__doc__ = "{string_factory} contains regex '{regex_str}'".format(string_factory=string_factory.__doc__, regex_str=regex_str)
     return go
 
 
