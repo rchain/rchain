@@ -1,8 +1,7 @@
 import contextlib
 import pytest
 import conftest
-from rnode_testing.rnode import start_bootstrap, create_peer
-from rnode_testing.wait import sent_unapproved_block
+from rnode_testing.rnode import start_bootstrap
 
 from typing import Iterator, List, TYPE_CHECKING
 if TYPE_CHECKING:

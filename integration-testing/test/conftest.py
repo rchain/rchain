@@ -3,10 +3,8 @@ import sys
 sys.path.insert(0, '.')
 
 import os
-import pprint
 import random
 import pathlib
-import logging
 import tempfile
 import contextlib
 import collections

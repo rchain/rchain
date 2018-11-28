@@ -14,7 +14,7 @@ from rnode_testing.wait import wait_for, node_started
 from multiprocessing import Queue, Process
 from queue import Empty
 
-from typing import Any, Dict, Iterator, List, Tuple, Union, TYPE_CHECKING, Optional, Generator
+from typing import Dict, Iterator, List, Tuple, Union, TYPE_CHECKING, Optional, Generator
 
 if TYPE_CHECKING:
     from conftest import ValidatorsData, KeyPair
