@@ -1,7 +1,6 @@
 package coop.rchain.casper.util.rholang
 
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
@@ -11,20 +10,19 @@ import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rholang.interpreter.{ChargingReducer, ErrorLog, Runtime, accounting}
+import coop.rchain.rholang.interpreter.{accounting, ChargingReducer, ErrorLog, Runtime}
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 
 import scala.collection.immutable
 import scala.concurrent.SyncVar
 import scala.language.higherKinds
 import scala.util.{Failure, Success, Try}
-import scala.concurrent.duration._
 
 //runtime is a SyncVar for thread-safety, as all checkpoints share the same "hot store"
 
 class RuntimeManager[F[_]: Sync] private (
     val emptyStateHash: ByteString,
-    runtimeContainer: Ref[F, Runtime[F]]
+    runtimeContainer: SyncVar[Runtime[F]]
 ) {
   import RuntimeManager.StateHash
 
@@ -33,7 +31,7 @@ class RuntimeManager[F[_]: Sync] private (
 
   def captureResults(start: StateHash, deploy: Deploy, name: Par): F[Seq[Par]] =
     for {
-      runtime    <- runtimeContainer.get
+      runtime    <- Sync[F].delay { runtimeContainer.take() }
       evalResult <- newEval(deploy :: Nil, runtime, start)
 
       (_, Seq(processedDeploy)) = evalResult
@@ -45,7 +43,7 @@ class RuntimeManager[F[_]: Sync] private (
 
       result <- runtime.space.getData(name)
 
-      _ <- runtimeContainer.set(runtime)
+      _ <- Sync[F].delay { runtimeContainer.put(runtime) }
     } yield result.flatMap(_.a.pars)
 
   def replayComputeState(
@@ -54,10 +52,10 @@ class RuntimeManager[F[_]: Sync] private (
       time: Option[Long] = None
   ): F[Either[(Option[Deploy], Failed), StateHash]] =
     for {
-      runtime <- runtimeContainer.get
+      runtime <- Sync[F].delay { runtimeContainer.take() }
       _       <- setTimestamp(time, runtime)
       result  <- replayEval(terms, runtime, hash)
-      _       <- runtimeContainer.set(runtime)
+      _       <- Sync[F].delay { runtimeContainer.put(runtime) }
     } yield result
 
   def computeState(
@@ -66,10 +64,10 @@ class RuntimeManager[F[_]: Sync] private (
       time: Option[Long] = None
   ): F[(StateHash, Seq[InternalProcessedDeploy])] =
     for {
-      runtime <- runtimeContainer.get
+      runtime <- Sync[F].delay { runtimeContainer.take() }
       _       <- setTimestamp(time, runtime)
       result  <- newEval(terms, runtime, hash)
-      _       <- runtimeContainer.set(runtime)
+      _       <- Sync[F].delay { runtimeContainer.put(runtime) }
     } yield result
 
   private def setTimestamp(time: Option[Long], runtime: Runtime[F]): F[Unit] =
@@ -110,12 +108,12 @@ class RuntimeManager[F[_]: Sync] private (
       }
   }
 
-  private def getResetRuntime(hash: StateHash): F[Runtime[F]] = {
-    val runtime   = runtimeContainer.take(10.seconds.toMillis)
+  private def getResetRuntime(hash: StateHash) = {
+    val runtime   = runtimeContainer.take()
     val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
-    runtime.space.reset(blakeHash).attempt.map {
-      case Right(_) => runtime
-      case Left(ex) =>
+    Try(runtime.space.reset(blakeHash)) match {
+      case Success(_) => runtime
+      case Failure(ex) =>
         runtimeContainer.put(runtime)
         throw ex
     }
@@ -144,7 +142,7 @@ class RuntimeManager[F[_]: Sync] private (
 
   def getData(hash: ByteString, channel: Par): F[Seq[Par]] =
     for {
-      resetRuntime <- getResetRuntime(hash)
+      resetRuntime <- Sync[F].delay { getResetRuntime(hash) }
       data         <- resetRuntime.space.getData(channel)
       _            <- Sync[F].delay { runtimeContainer.put(resetRuntime) }
     } yield data.flatMap(_.a.pars)
@@ -154,7 +152,7 @@ class RuntimeManager[F[_]: Sync] private (
       channels: immutable.Seq[Par]
   ): F[Seq[(Seq[BindPattern], Par)]] =
     for {
-      resetRuntime  <- getResetRuntime(hash)
+      resetRuntime  <- Sync[F].delay { getResetRuntime(hash) }
       continuations <- resetRuntime.space.getWaitingContinuations(channels)
       _             <- Sync[F].delay { runtimeContainer.put(resetRuntime) }
     } yield
@@ -290,6 +288,7 @@ object RuntimeManager {
       hash             = ByteString.copyFrom(checkpoint.root.bytes.toArray)
       replayHash       = ByteString.copyFrom(replayCheckpoint.root.bytes.toArray)
       _                = assert(hash == replayHash)
-      runtime          <- Ref.of[F,Runtime[F]](active)
+      runtime          = new SyncVar[Runtime[F]]()
+      _                = runtime.put(active)
     } yield new RuntimeManager(hash, runtime)
 }
