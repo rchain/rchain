@@ -65,9 +65,10 @@ sealed abstract class MultiParentCasperInstances {
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       shardId: String
-  )(implicit scheduler: Scheduler): F[MultiParentCasper[F]] = {
-    val genesisBonds = ProtoUtil.bonds(genesis)
+  )(implicit scheduler: Scheduler): F[MultiParentCasper[F]] =
     for {
+      // Initialize DAG storage with genesis block in case it is empty
+      _   <- BlockDagStorage[F].insert(genesis)
       dag <- BlockDagStorage[F].getRepresentation
       maybePostGenesisStateHash <- InterpreterUtil
                                     .validateBlockCheckpoint[F](
@@ -91,5 +92,4 @@ sealed abstract class MultiParentCasperInstances {
         postGenesisStateHash,
         shardId
       )
-  }
 }

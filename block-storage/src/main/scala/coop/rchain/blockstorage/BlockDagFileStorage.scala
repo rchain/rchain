@@ -300,46 +300,55 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
   def insert(block: BlockMessage): F[Unit] =
     for {
       _             <- lock.acquire
-      _             <- squashLatestMessagesDataFileIfNeeded()
-      blockMetadata = BlockMetadata.fromBlock(block)
-      _             = assert(block.blockHash.size == 32)
-      _             <- dataLookupRef.update(_.updated(block.blockHash, blockMetadata))
-      _ <- childMapRef.update(
-            childMap =>
-              parentHashes(block)
-                .foldLeft(childMap) {
-                  case (acc, p) =>
-                    val currChildren = acc.getOrElse(p, Set.empty[BlockHash])
-                    acc.updated(p, currChildren + block.blockHash)
-                }
-                .updated(block.blockHash, Set.empty[BlockHash])
-          )
-      _ <- topoSortRef.update(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
-      //Block which contains newly bonded validators will not
-      //have those validators in its justification
-      newValidators = bonds(block)
-        .map(_.validator)
-        .toSet
-        .diff(block.justifications.map(_.validator).toSet)
-      newValidatorsWithSender <- if (block.sender.isEmpty) {
-                                  // Ignore empty sender for special cases such as genesis block
-                                  Log[F].warn(
-                                    s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
-                                  ) *> newValidators.pure[F]
-                                } else if (block.sender.size() == 32) {
-                                  (newValidators + block.sender).pure[F]
-                                } else {
-                                  Sync[F].raiseError[Set[ByteString]](BlockSenderIsMalformed(block))
-                                }
-      _ <- latestMessagesRef.update { latestMessages =>
-            newValidatorsWithSender.foldLeft(latestMessages) {
-              //Update new validators with block in which
-              //they were bonded (i.e. this block)
-              case (acc, v) => acc.updated(v, block.blockHash)
-            }
+      alreadyStored <- dataLookupRef.get.map(_.contains(block.blockHash))
+      _ <- if (alreadyStored) {
+            Log[F].warn(s"Block ${Base16.encode(block.blockHash.toByteArray)} is already stored")
+          } else {
+            for {
+              _             <- squashLatestMessagesDataFileIfNeeded()
+              blockMetadata = BlockMetadata.fromBlock(block)
+              _             = assert(block.blockHash.size == 32)
+              _             <- dataLookupRef.update(_.updated(block.blockHash, blockMetadata))
+              _ <- childMapRef.update(
+                    childMap =>
+                      parentHashes(block)
+                        .foldLeft(childMap) {
+                          case (acc, p) =>
+                            val currChildren = acc.getOrElse(p, Set.empty[BlockHash])
+                            acc.updated(p, currChildren + block.blockHash)
+                        }
+                        .updated(block.blockHash, Set.empty[BlockHash])
+                  )
+              _ <- topoSortRef.update(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
+              //Block which contains newly bonded validators will not
+              //have those validators in its justification
+              newValidators = bonds(block)
+                .map(_.validator)
+                .toSet
+                .diff(block.justifications.map(_.validator).toSet)
+              newValidatorsWithSender <- if (block.sender.isEmpty) {
+                                          // Ignore empty sender for special cases such as genesis block
+                                          Log[F].warn(
+                                            s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
+                                          ) *> newValidators.pure[F]
+                                        } else if (block.sender.size() == 32) {
+                                          (newValidators + block.sender).pure[F]
+                                        } else {
+                                          Sync[F].raiseError[Set[ByteString]](
+                                            BlockSenderIsMalformed(block)
+                                          )
+                                        }
+              _ <- latestMessagesRef.update { latestMessages =>
+                    newValidatorsWithSender.foldLeft(latestMessages) {
+                      //Update new validators with block in which
+                      //they were bonded (i.e. this block)
+                      case (acc, v) => acc.updated(v, block.blockHash)
+                    }
+                  }
+              _ <- updateLatestMessagesFile((newValidators + block.sender).toList, block.blockHash)
+              _ <- updateDataLookupFile(blockMetadata)
+            } yield ()
           }
-      _ <- updateLatestMessagesFile((newValidators + block.sender).toList, block.blockHash)
-      _ <- updateDataLookupFile(blockMetadata)
       _ <- lock.release
     } yield ()
 
