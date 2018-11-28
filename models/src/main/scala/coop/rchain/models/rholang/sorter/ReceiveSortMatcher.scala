@@ -46,9 +46,8 @@ object ReceiveSortMatcher extends Sortable[Receive] {
         ),
         Node(
           Score.RECEIVE,
-          Seq(Leaf(persistentScore)) ++ sortedBinds.map(_.score) ++ Seq(sortedBody.score) ++ Seq(
-            Leaf(connectiveUsedScore)
-          ): _*
+          Seq(Leaf(persistentScore)) ++ sortedBinds.map(_.score) ++ Seq(sortedBody.score)
+            ++ Seq(Leaf(r.bindCount)) ++ Seq(Leaf(connectiveUsedScore)): _*
         )
       )
 }
