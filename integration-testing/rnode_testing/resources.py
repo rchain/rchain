@@ -1,7 +1,7 @@
 import os
 
 
-def get_absolute_path_for_mounting(relative_path, mount_dir=None):
+def get_absolute_path_for_mounting(relative_path: str, mount_dir: str = None) -> str:
     """Drone runs each job in a new Docker container FOO. That Docker
     container has a new filesystem. Anything in that container can read
     anything in that filesystem. To read files from HOST, it has to be shared

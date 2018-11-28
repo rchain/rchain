@@ -2,9 +2,11 @@ import logging
 from contextlib import contextmanager
 import rnode_testing.random
 
+from docker.client import DockerClient
+from typing import Generator
 
 @contextmanager
-def docker_network(docker_client):
+def docker_network(docker_client: DockerClient) -> Generator[str, None, None]:
     network_name = "rchain-{}".format(rnode_testing.random.random_string(5).lower())
 
     docker_client.networks.create(network_name, driver="bridge")

@@ -4,10 +4,12 @@ import logging
 from rnode_testing.util import log_box
 from typing import Dict, List
 
+from typing import Callable
+
 PROF_DATA: Dict[str, List] = {}
 
 
-def profile(fn):
+def profile(fn: Callable) -> Callable:
     @wraps(fn)
     def with_profiling(*args, **kwargs):
         start_time = time.time()
@@ -26,9 +28,10 @@ def profile(fn):
     return with_profiling
 
 
-def log_prof_data():
+def log_prof_data() -> None:
     with log_box(logging.info, "Profiling information:"):
         for fname, (count, calls) in PROF_DATA.items():
             max_time = max(calls)
             avg_time = sum(calls) / len(calls)
-            logging.info("Function %s called %d times. Execution time max: %.3fs, average: %.3fs", fname, count, max_time, avg_time)
+            logging.info("Function %s called %d times. Execution time max: %.3fs, average: %.3fs", fname, count,
+                         max_time, avg_time)

@@ -9,10 +9,16 @@ from rnode_testing.wait import (
 )
 from rnode_testing.rnode import create_peer_nodes
 
+from typing import Iterator, List, TYPE_CHECKING, Generator, Optional
+
+if TYPE_CHECKING:
+    from conftest import TestConfig, ValidatorsData
+    from docker.client import DockerClient
+    from rnode_testing.rnode import Node
 
 
 class RChain:
-    def __init__(self, network, bootstrap, peers):
+    def __init__(self, network: str, bootstrap: "Node", peers: List["Node"]) -> None:
         self.network = network
         self.bootstrap = bootstrap
         self.peers = peers
@@ -20,7 +26,7 @@ class RChain:
 
 
 @contextmanager
-def start_network(config, docker, bootstrap, validators_data, allowed_peers=None):
+def start_network(config: "TestConfig", docker: "DockerClient", bootstrap: "Node", validators_data: "ValidatorsData", allowed_peers: Optional[List[str]] = None) -> Generator[RChain, None, None]:
     logging.debug("Docker network = {}".format(bootstrap.network))
 
     peers = create_peer_nodes(
@@ -40,7 +46,7 @@ def start_network(config, docker, bootstrap, validators_data, allowed_peers=None
             peer.cleanup()
 
 
-def wait_for_approved_block_received_handler_state(bootstrap_node, node_startup_timeout):
+def wait_for_approved_block_received_handler_state(bootstrap_node: "Node", node_startup_timeout: int) -> None:
     wait_for(
         approved_block_received_handler_state(bootstrap_node),
         node_startup_timeout,
@@ -48,7 +54,7 @@ def wait_for_approved_block_received_handler_state(bootstrap_node, node_startup_
     )
 
 
-def wait_for_approved_block_received(network, node_startup_timeout):
+def wait_for_approved_block_received(network: RChain, node_startup_timeout: int) -> None:
     for peer in network.peers:
         wait_for(
             approved_block_received(peer),
@@ -57,12 +63,12 @@ def wait_for_approved_block_received(network, node_startup_timeout):
         )
 
 
-def wait_for_started_network(node_startup_timeout, network):
+def wait_for_started_network(node_startup_timeout: int, network: RChain) -> None:
     for peer in network.peers:
         wait_for(node_started(peer), node_startup_timeout, "Peer {} did not start correctly.".format(peer.name))
 
 
-def wait_for_converged_network(timeout, network, peer_connections):
+def wait_for_converged_network(timeout: int, network: RChain, peer_connections: int) -> None:
     wait_for(has_peers(network.bootstrap, len(network.peers)),
              timeout,
              "The network did NOT converge. Check container logs for issues. One or more containers might have failed to start or connect.")

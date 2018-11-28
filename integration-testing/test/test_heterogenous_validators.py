@@ -8,6 +8,12 @@ from rnode_testing.network import (
     wait_for_approved_block_received_handler_state,
 )
 
+from typing import Iterator, TYPE_CHECKING
+if TYPE_CHECKING:
+    from _pytest.fixtures import SubRequest
+    from conftest import System, ValidatorsData
+    from docker.client import DockerClient
+    from rnode_testing.rnode import Node
 
 """
 First approximation:
@@ -38,20 +44,20 @@ UNBONDED_VALIDATOR_KEYS = conftest.KeyPair(private_key='2bdedd2e4dd2e7b5f176b7a5
 
 
 @pytest.yield_fixture(scope='session')
-def validators_config():
+def validators_config() -> Iterator["ValidatorsData"]:
     validator_keys = [BONDED_VALIDATOR_KEYS]
     with conftest.temporary_bonds_file(validator_keys) as f:
         yield conftest.ValidatorsData(bonds_file=f, bootstrap_keys=BOOTSTRAP_NODE_KEYS, peers_keys=validator_keys)
 
 
 @pytest.yield_fixture(scope="session")
-def custom_system(request, validators_config, docker_client_session):
+def custom_system(request: "SubRequest", validators_config: "ValidatorsData", docker_client_session: "DockerClient") -> Iterator["System"]:
     test_config = conftest.make_test_config(request)
     yield conftest.System(test_config, docker_client_session, validators_config)
 
 
 @contextlib.contextmanager
-def started_bonded_validator(system, bootstrap_node):
+def started_bonded_validator(system: "System", bootstrap_node: "Node") -> Iterator["Node"]:
     bonded_validator = create_peer(
         docker_client=system.docker,
         network=bootstrap_node.network,
@@ -70,7 +76,7 @@ def started_bonded_validator(system, bootstrap_node):
 
 
 @contextlib.contextmanager
-def started_joining_validator(system, bootstrap_node):
+def started_joining_validator(system: "System", bootstrap_node: "Node") -> Iterator["Node"]:
     joining_validator = create_peer(
         docker_client=system.docker,
         network=bootstrap_node.network,
@@ -90,7 +96,7 @@ def started_joining_validator(system, bootstrap_node):
 
 
 @contextlib.contextmanager
-def started_unbonded_validator(system, bootstrap_node):
+def started_unbonded_validator(system: "System", bootstrap_node: "Node") -> Iterator["Node"]:
     unbonded_validator = create_peer(
         docker_client=system.docker,
         network=bootstrap_node.network,
@@ -109,7 +115,7 @@ def started_unbonded_validator(system, bootstrap_node):
 
 
 
-def test_heterogenous_validators(custom_system):
+def test_heterogenous_validators(custom_system : "System") -> None:
     BONDED_VALIDATOR_BLOCKS = 10
     JOINING_VALIDATOR_BLOCKS = 10
     with start_bootstrap(custom_system.docker, custom_system.config.node_startup_timeout, custom_system.config.rnode_timeout, custom_system.validators_data, mount_dir=custom_system.config.mount_dir) as bootstrap_node:

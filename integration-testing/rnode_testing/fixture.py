@@ -1,8 +1,9 @@
 import pytest
 import inspect
 
+from typing import Callable, Dict, Iterator, List, Any
 
-def make_wrapper(fn, fixtures):
+def make_wrapper(fn: Callable, fixtures: Any):
     parameter_names = inspect.signature(fn).parameters.keys()
     parameter_list = ",".join(p for p in parameter_names if p != 'request')
     parameter_name_list = ",".join("('{p}', {p})".format(p=p) for p in parameter_names)
@@ -30,8 +31,8 @@ def {fn_name}(request, {parameter_list}):
 
 class parametrize:
     @staticmethod
-    def fixed(arg_names, arg_values):
-        def decorator(fn):
+    def fixed(arg_names: str, arg_values: List):
+        def decorator(fn: Callable):
             fixtures = arg_names.split(',')
             wrapper = make_wrapper(fn, fixtures)
             return pytest.mark.parametrize(arg_names, arg_values)(wrapper)
@@ -39,7 +40,7 @@ class parametrize:
 
     @staticmethod
     def cartesian(**kwargs):
-        def decorator(fn):
+        def decorator(fn: Callable) -> Callable:
             fixtures = kwargs.keys()
 
             result_fn = make_wrapper(fn, fixtures)

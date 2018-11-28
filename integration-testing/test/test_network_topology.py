@@ -12,8 +12,14 @@ from rnode_testing.network import (
 )
 from rnode_testing.rnode import start_bootstrap
 
+from typing import TYPE_CHECKING, Iterator
+if TYPE_CHECKING:
+    from conftest import System
+    from rnode_testing.network import RChain
+
+
 @pytest.fixture(scope="module")
-def star_network(system):
+def star_network(system: "System") -> Iterator["RChain"]:
     with start_bootstrap(system.docker,
                          system.config.node_startup_timeout,
                          system.config.rnode_timeout,
@@ -34,7 +40,7 @@ def star_network(system):
 
 
 @pytest.fixture(scope="module")
-def complete_network(system):
+def complete_network(system: "System") -> Iterator["RChain"]:
     with start_bootstrap(system.docker,
                          system.config.node_startup_timeout,
                          system.config.rnode_timeout,
@@ -58,7 +64,7 @@ def complete_network(system):
             yield network
 
 @profile
-def test_metrics_api_socket(complete_network):
+def test_metrics_api_socket(complete_network: "RChain") -> None:
     for node  in complete_network.nodes:
         logging.info("Test metrics api socket for {}".format(node.name))
         exit_code, output = node.get_metrics()
@@ -68,7 +74,7 @@ def test_metrics_api_socket(complete_network):
 
 
 @profile
-def test_node_logs_for_errors(complete_network):
+def test_node_logs_for_errors(complete_network: "RChain") -> None:
     for node in complete_network.nodes:
         logging.info("Testing {} node logs for errors.".format(node.name))
         logs = node.logs()
@@ -82,7 +88,7 @@ def test_node_logs_for_errors(complete_network):
     assert_expectations()
 
 @profile
-def test_node_logs_for_RuntimeException(complete_network):
+def test_node_logs_for_RuntimeException(complete_network: "RChain") -> None:
     for node in complete_network.nodes:
         logging.info("Testing {} node logs for \"java RuntimeException\".".format(node.name))
         logs = node.logs()
@@ -97,8 +103,8 @@ def test_node_logs_for_RuntimeException(complete_network):
     assert_expectations()
 
 @profile
-def test_casper_propose_and_deploy(system, complete_network):
+def test_casper_propose_and_deploy(system: "System", complete_network: "RChain") -> None:
     rnode_testing.casper_propose_and_deploy.run(system.config, complete_network)
 
-def test_convergence(complete_network):
+def test_convergence(complete_network: "RChain") -> None:
     logging.info("Complete network converged successfully.")

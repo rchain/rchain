@@ -4,8 +4,13 @@ import pytest
 import time
 from rnode_testing.util import log_box
 
+from typing import Callable, TYPE_CHECKING
 
-def wait_for(condition, timeout, error_message):
+if TYPE_CHECKING:
+    from rnode_testing.rnode import Node
+
+
+def wait_for(condition: Callable, timeout: int, error_message: str) -> None:
     """
     Waits for a condition to be fulfilled. It retries until the timeout expires.
 
@@ -39,8 +44,9 @@ def wait_for(condition, timeout, error_message):
                 details = str(ex)
                 current_ex = str(ex)
 
-            logging.info("Condition not satisfied yet ({details}). Time left: {time_left}s. Sleeping {iteration_duration}s...".format(
-                details=details, time_left=time_left, iteration_duration=iteration_duration)
+            logging.info(
+                "Condition not satisfied yet ({details}). Time left: {time_left}s. Sleeping {iteration_duration}s...".format(
+                    details=details, time_left=time_left, iteration_duration=iteration_duration)
             )
 
             time.sleep(iteration_duration)
@@ -55,13 +61,14 @@ def wait_for(condition, timeout, error_message):
 # Warning: The __doc__ has to be explicitly assigned as seen below if it's a formatted string, otherwise it will be None.
 
 
-def node_logs(node):
+def node_logs(node: "Node") -> Callable:
     def go(): return node.logs()
+
     go.__doc__ = "node_logs({})".format(node.name)
     return go
 
 
-def get_block(node, block_hash):
+def get_block(node: "Node", block_hash: str) -> Callable:
     def go():
         block_contents = node.get_block(block_hash)
         return block_contents
@@ -70,7 +77,7 @@ def get_block(node, block_hash):
     return go
 
 
-def show_blocks(node):
+def show_blocks(node: "Node") -> Callable:
     def go():
         exit_code, output = node.show_blocks()
 
@@ -83,7 +90,7 @@ def show_blocks(node):
     return go
 
 
-def string_contains(string_factory, regex_str, flags=0):
+def string_contains(string_factory: Callable, regex_str: str, flags: int = 0) -> Callable:
     rx = re.compile(regex_str, flags)
 
     def go():
@@ -97,11 +104,12 @@ def string_contains(string_factory, regex_str, flags=0):
                 string_factory=string_factory.__doc__, regex_str=regex_str)
             )
 
-    go.__doc__ = "{string_factory} contains regex '{regex_str}'".format(string_factory=string_factory.__doc__, regex_str=regex_str)
+    go.__doc__ = "{string_factory} contains regex '{regex_str}'".format(string_factory=string_factory.__doc__,
+                                                                        regex_str=regex_str)
     return go
 
 
-def has_peers(bootstrap_node, expected_peers):
+def has_peers(bootstrap_node: "Node", expected_peers: int) -> Callable:
     rx = re.compile(r"^peers (\d+).0\s*$", re.MULTILINE | re.DOTALL)
 
     def go():
@@ -119,7 +127,7 @@ def has_peers(bootstrap_node, expected_peers):
     return go
 
 
-def node_started(node):
+def node_started(node: "Node") -> Callable:
     return string_contains(node_logs(node),
                            "coop.rchain.node.NodeRuntime - Listening for traffic on rnode")
 
@@ -131,14 +139,14 @@ def sent_unapproved_block():
     )
 
 
-def approved_block_received_handler_state(bootstrap_node):
+def approved_block_received_handler_state(bootstrap_node: "Node") -> Callable:
     return string_contains(
         node_logs(bootstrap_node),
         "Making a transition to ApprovedBlockRecievedHandler state.",
     )
 
 
-def approved_block_received(peer):
+def approved_block_received(peer: "Node") -> Callable:
     return string_contains(
         node_logs(peer),
         "Valid ApprovedBlock received!",
