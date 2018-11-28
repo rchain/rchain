@@ -127,7 +127,6 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     val logMessages = List(
       "Received Deploy",
-      "Block",
       "Attempting to add Block",
       "Sent Block #1",
       "Added",
@@ -161,7 +160,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val blockStatus    = casperEff.addBlock(block)
 
     val id: String = casperEff
-      .storageContents(block.getBody.getPostState.tuplespace)
+      .storageContents(ProtoUtil.postStateHash(block))
       .split('|')
       .find(
         _.contains(
@@ -187,7 +186,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     blockStatus shouldBe Valid
     block2Status shouldBe Valid
     casperEff
-      .storageContents(block2.getBody.getPostState.tuplespace)
+      .storageContents(ProtoUtil.postStateHash(block2))
       .contains("Hello, World!") shouldBe true
 
     node.tearDown()
@@ -352,7 +351,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(1).casperEff.contains(multiparentBlock) shouldBe true
 
     val finalTuplespace =
-      nodes(0).casperEff.storageContents(multiparentBlock.getBody.getPostState.tuplespace)
+      nodes(0).casperEff.storageContents(ProtoUtil.postStateHash(multiparentBlock))
     finalTuplespace.contains("@{0}!(0)") shouldBe true
     finalTuplespace.contains("@{1}!(1)") shouldBe true
     finalTuplespace.contains("@{2}!(2)") shouldBe true
@@ -451,7 +450,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     )
     val validatorBondsAndRanks: Seq[(ByteString, Long, Int)] = runtimeManager
       .captureResults(
-        block1.getBody.getPostState.tuplespace,
+        ProtoUtil.postStateHash(block1),
         ProtoUtil.deployDataToDeploy(rankedValidatorQuery)
       )
       .head
@@ -482,7 +481,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       wallets.head.initRevBalance.toLong - joiningFee
     )
 
-    val newBonds = block2.getBody.getPostState.bonds
+    val newBonds = block2.getBody.getState.bonds
     newBonds.toSet shouldBe correctBonds
 
     nodes.foreach(_.tearDown())
@@ -539,7 +538,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     )
     val newWalletBalance =
       node.runtimeManager.captureResults(
-        block.getBody.getPostState.tuplespace,
+        ProtoUtil.postStateHash(block),
         ProtoUtil.deployDataToDeploy(balanceQuery)
       )
 
@@ -569,8 +568,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val Created(block2) = casperEff.deploy(bondingDeploy) *> casperEff.createBlock
     val block2Status    = casperEff.addBlock(block2)
 
-    val oldBonds = block1.getBody.getPostState.bonds
-    val newBonds = block2.getBody.getPostState.bonds
+    val oldBonds = block1.getBody.getState.bonds
+    val newBonds = block2.getBody.getState.bonds
 
     block1Status shouldBe Valid
     block2Status shouldBe Valid
@@ -659,7 +658,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       .withUser(user)
     val sigData = node.runtimeManager
       .captureResults(
-        genesis.getBody.getPostState.tuplespace,
+        ProtoUtil.postStateHash(genesis),
         ProtoUtil.deployDataToDeploy(sigDeployData)
       )
       .head
@@ -1079,7 +1078,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       .withParentsHashList(Seq(signedInvalidBlock.blockHash))
       .withDeploysHash(ProtoUtil.protoSeqHash(deploys))
     val blockHash = Blake2b256.hash(header.toByteArray)
-    val body      = Body().withPostState(postState).withDeploys(deploys)
+    val body      = Body().withState(postState).withDeploys(deploys)
     val serializedJustifications =
       Seq(Justification(signedInvalidBlock.sender, signedInvalidBlock.blockHash))
     val serializedBlockHash = ByteString.copyFrom(blockHash)
@@ -1107,7 +1106,7 @@ object HashSetCasperTest {
   def blockTuplespaceContents(
       block: BlockMessage
   )(implicit casper: MultiParentCasper[Id]): String = {
-    val tsHash = block.body.get.postState.get.tuplespace
+    val tsHash = ProtoUtil.postStateHash(block)
     MultiParentCasper[Id].storageContents(tsHash)
   }
 
@@ -1120,7 +1119,7 @@ object HashSetCasperTest {
     val blockStatus    = node.casperEff.addBlock(block)
     val queryResult = node.runtimeManager
       .captureResults(
-        block.getBody.getPostState.tuplespace,
+        ProtoUtil.postStateHash(block),
         query
       )
 

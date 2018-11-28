@@ -9,7 +9,6 @@ import cats.effect.concurrent.Ref
 import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.functor._
-
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
 import coop.rchain.casper._
@@ -191,11 +190,9 @@ class NodeRuntime private[node] (
       jvmMetrics: JvmMetrics[Task]
   ): Effect[Unit] = {
 
-    val info: Effect[Unit] = for {
-      _ <- Log[Effect].info(VersionInfo.get)
-      _ <- if (conf.server.standalone) Log[Effect].info(s"Starting stand-alone node.")
-          else Log[Effect].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
-    } yield ()
+    val info: Effect[Unit] =
+      if (conf.server.standalone) Log[Effect].info(s"Starting stand-alone node.")
+      else Log[Effect].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
 
     val dynamicIpCheck: Task[Unit] =
       if (conf.server.dynamicHostAddress)
@@ -218,11 +215,9 @@ class NodeRuntime private[node] (
 
     val casperLoop: Effect[Unit] =
       for {
-        _ <- casperConstructor.get.map {
-              case Some(casper) => casper.fetchDependencies
-              case None         => ().pure[Effect]
-            }
-        _ <- time.sleep(30.seconds).toEffect
+        casper <- casperConstructor.get
+        _      <- casper.fold(().pure[Effect])(_.fetchDependencies)
+        _      <- time.sleep(30.seconds).toEffect
       } yield ()
 
     for {
@@ -246,10 +241,10 @@ class NodeRuntime private[node] (
             blob => packetHandler.handlePacket(blob.sender, blob.packet).as(())
           )
       _       <- NodeDiscovery[Task].discover.executeOn(loopScheduler).start.toEffect
+      _       <- Task.defer(casperLoop.forever.value).executeOn(loopScheduler).start.toEffect
       address = s"rnode://$id@$host?protocol=$port&discovery=$kademliaPort"
       _       <- Log[Effect].info(s"Listening for traffic on $address.")
       _       <- EitherT(Task.defer(loop.forever.value).executeOn(loopScheduler))
-      _       <- EitherT(Task.defer(casperLoop.forever.value).executeOn(loopScheduler))
     } yield ()
   }
 
@@ -267,9 +262,7 @@ class NodeRuntime private[node] (
         } *> exit0.as(Right(()))
     )
 
-  private val syncEffect = SyncInstances.syncEffect[CommError](commError => {
-    new Exception(s"CommError: $commError")
-  }, e => { UnknownCommError(e.getMessage) })
+  private def syncEffect = cats.effect.Sync.catsEitherTSync[Task, CommError]
 
   private val rpClearConnConf = ClearConnetionsConf(
     conf.server.maxNumOfConnections,
@@ -311,7 +304,8 @@ class NodeRuntime private[node] (
       port,
       conf.tls.certificate,
       conf.tls.key,
-      conf.server.maxMessageSize
+      conf.server.maxMessageSize,
+      conf.server.dataDir.resolve("tmp").resolve("comm")
     )(grpcScheduler, log, tcpConnections)
     kademliaRPC = effects.kademliaRPC(kademliaPort, defaultTimeout)(
       grpcScheduler,

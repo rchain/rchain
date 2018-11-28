@@ -44,8 +44,10 @@ $ pipenv sync
 
 ## Step 4: Create the rnode docker image
 
-The tests use the docker image `coop.rchain/rnode:latest` as a base image for
-the docker containers. Docker has to be able to get this image. 
+Tests use RNode Docker image. If environment variable `${DRONE_BUILD_NUMBER}` is
+defined, then `coop.rchain/rnode:DRONE-${DRONE_BUILD_NUMBER}` image is used.
+These are created on Drone CI in order to use have image per build. If the
+variable is undefined, `coop.rchain/rnode:latest` is used.
  
 When the tests are run against the current source code one should build the
 docker image and publish it locally. For details see [the developer
@@ -108,6 +110,18 @@ $ ./run_tests.sh --collect-only
 $ ./run_tests.sh --collect-only  test/test_star_connected.py
 ```
 
+The test can runs the [mypy](https://pypi.org/project/pytest-mypy/) static type checker on your source files as part of 
+your Pytest test runs now. It is not enabled by default now. You can run the static type checker test by the command below.
+
+```bash
+$ ./run_tests.sh --mypy
+```
+
+If you want to restrict your test run to only perform mypy checks and not any other tests by using the `-m` option.
+
+```bash
+$ ./run_tests.sh --mypy -m mypy 
+```
 
 # Writing your own tests
 ## Pytest basics

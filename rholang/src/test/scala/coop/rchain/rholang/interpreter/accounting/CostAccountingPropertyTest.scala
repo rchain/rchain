@@ -11,7 +11,7 @@ import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{PPar, Proc}
 import coop.rchain.rholang.syntax.rholang_mercury.PrettyPrinter
-import coop.rchain.rholang.{GenTools, PrettyPrinted, ProcGen}
+import coop.rchain.rholang.{GenTools, ProcGen}
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Context, RSpace}
 import monix.eval.Task

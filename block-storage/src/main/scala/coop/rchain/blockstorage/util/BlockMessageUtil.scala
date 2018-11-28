@@ -8,13 +8,13 @@ object BlockMessageUtil {
   def blockNumber(b: BlockMessage): Long =
     (for {
       bd <- b.body
-      ps <- bd.postState
+      ps <- bd.state
     } yield ps.blockNumber).getOrElse(0L)
 
   def bonds(b: BlockMessage): Seq[Bond] =
     (for {
       bd <- b.body
-      ps <- bd.postState
+      ps <- bd.state
     } yield ps.bonds).getOrElse(List.empty[Bond])
 
   def parentHashes(b: BlockMessage): Seq[ByteString] =
@@ -23,7 +23,7 @@ object BlockMessageUtil {
   def weightMap(blockMessage: BlockMessage): Map[ByteString, Long] =
     blockMessage.body match {
       case Some(block) =>
-        block.postState match {
+        block.state match {
           case Some(state) => weightMap(state)
           case None        => Map.empty[ByteString, Long]
         }

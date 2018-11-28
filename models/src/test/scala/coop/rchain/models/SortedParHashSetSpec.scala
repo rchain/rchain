@@ -1,27 +1,23 @@
 package coop.rchain.models
 
-import java.io.ByteArrayOutputStream
 import java.util
 
-import com.google.protobuf.CodedInputStream
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.Blake2b256
+import com.google.protobuf.ByteString
+import coop.rchain.models.Assertions.assertEqual
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance.BoundVar
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.models.rholang.sorter.ordering._
+import coop.rchain.models.testImplicits._
+import coop.rchain.models.testUtils.TestUtils.sort
+import monix.eval.Coeval
+import org.scalatest.prop.PropertyChecks
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
 
-class SortedParHashSetSpec extends FlatSpec with Matchers {
-
-  // toByteArray method is using the same method calls as real protobuf's serialization
-  private[this] def serializeESet(parTreeSet: SortedParHashSet): Array[Byte] =
-    ESet(ps = parTreeSet.sortedPars).toByteArray
-
-  private[this] def roundtripTest(parTreeSet: SortedParHashSet): Assertion =
-    ESet.parseFrom(serializeESet(parTreeSet)) should ===(ESet(ps = parTreeSet.sortedPars))
+class SortedParHashSetSpec extends FlatSpec with PropertyChecks with Matchers {
 
   val pars: Seq[Par] = {
     val parGround =
@@ -42,6 +38,13 @@ class SortedParHashSetSpec extends FlatSpec with Matchers {
 
   //TODO(mateusz.gorski): Once we handle `Empty` cases from scalapb use scalacheck generators
   def sample = SortedParHashSet(pars)
+
+  private[this] def roundtripTest(parTreeSet: SortedParHashSet): Assertion =
+    ESet.parseFrom(serializeESet(parTreeSet)) should ===(ESet(ps = parTreeSet.sortedPars))
+
+  // toByteArray method is using the same method calls as real protobuf's serialization
+  private[this] def serializeESet(parTreeSet: SortedParHashSet): Array[Byte] =
+    ESet(ps = parTreeSet.sortedPars).toByteArray
 
   "SortedParHashSet" should "preserve structure during round trip protobuf serialization" in {
     roundtripTest(sample)
@@ -79,7 +82,64 @@ class SortedParHashSetSpec extends FlatSpec with Matchers {
 
     val shs = SortedParHashSet(elements)
 
-    shs.sortedPars should contain theSameElementsAs (expected)
+    shs.sortedPars should contain theSameElementsAs expected
   }
 
+  it should "be equal when it is equal" in {
+    val elements: Seq[Par] = Seq(
+      Par(
+        ids = Seq(
+          GPrivate(
+            ByteString.copyFrom(
+              Array[Byte](
+                0
+              )
+            )
+          ),
+          GPrivate()
+        ),
+        connectiveUsed = true
+      )
+    )
+    assertEqual(SortedParHashSet(elements), SortedParHashSet(elements))
+  }
+
+  it should "sort all input" in {
+    forAll { pars: Seq[Par] =>
+      val set = SortedParHashSet(pars)
+
+      pars.headOption.foreach((unsorted: Par) => {
+        val sorted = sort(unsorted)
+        checkSortedInput(set.+, unsorted, sorted)
+        checkSortedInput(set.-, unsorted, sorted)
+        checkSortedInput(set.contains, unsorted, sorted)
+        checkSortedInput(set.union, pars.toSet, pars.toList.sort.toSet)
+      })
+    }
+  }
+
+  it should "preserve sortedness of all elements and the whole map for all its operations" in {
+    forAll { pars: Seq[Par] =>
+      val set = SortedParHashSet(pars)
+      checkSorted(set)
+
+      set.headOption.foreach(par => {
+        checkSorted(set + par)
+        checkSorted(set - par)
+        checkSorted(set.union(Set(par)))
+      })
+    }
+  }
+
+  private def checkSorted(iterable: Iterable[Par]) = {
+    import coop.rchain.models.rholang.sorter.ordering._
+    iterable.foreach(p => assert(isSorted(p)))
+    assert(iterable.toList == iterable.toList.sort)
+  }
+
+  def isSorted[A: Sortable](a: A): Boolean =
+    a == Sortable[A].sortMatch[Coeval](a).value().term
+
+  private def checkSortedInput[A, B](f: A => B, unsorted: A, sorted: A): Assertion =
+    assert(f(sorted) == f(unsorted))
 }

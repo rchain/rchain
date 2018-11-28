@@ -5,11 +5,11 @@ import inspect
 def make_wrapper(fn, fixtures):
     parameter_names = inspect.signature(fn).parameters.keys()
     parameter_list = ",".join(p for p in parameter_names if p != 'request')
-    parameter_name_list = ",".join(f"('{p}', {p})" for p in parameter_names)
+    parameter_name_list = ",".join("('{p}', {p})".format(p=p) for p in parameter_names)
     namespace = {"fn": fn, "fixtures": fixtures}
 
-    wrapper_code = f"""
-def {fn.__name__}(request, {parameter_list}):
+    wrapper_code = """
+def {fn_name}(request, {parameter_list}):
     # import logging
     # logging.info("fixtures:" + str(fixtures))
     def get_value(p_name, p_value):
@@ -22,7 +22,7 @@ def {fn.__name__}(request, {parameter_list}):
             return p_value
     param_values = [get_value(p_name, p_value) for p_name, p_value in [{parameter_name_list}]]
     return fn(*param_values)
-"""
+""".format(fn_name=fn.__name__, parameter_list=parameter_list, parameter_name_list=parameter_name_list)
 
     exec(wrapper_code, locals(), namespace)
     return namespace[fn.__name__]

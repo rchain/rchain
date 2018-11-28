@@ -7,5 +7,7 @@ name = "pypi"
 docker = "*"
 pytest = "*"
 delayed-assert = "*"
+pytest-json = "*"
+pytest-mypy = "*"
 
 [dev-packages]

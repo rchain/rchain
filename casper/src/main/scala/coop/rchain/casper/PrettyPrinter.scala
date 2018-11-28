@@ -25,7 +25,7 @@ object PrettyPrinter {
       header     <- b.header
       mainParent <- header.parentsHashList.headOption
       body       <- b.body
-      postState  <- body.postState
+      postState  <- body.state
     } yield
       s"Block #${postState.blockNumber} (${buildString(b.blockHash)}) " +
         s"-- Sender ID ${buildString(b.sender)} " +
@@ -55,5 +55,5 @@ object PrettyPrinter {
     s"Deploy #${d.raw.fold(0L)(_.timestamp)} -- ${buildString(d.term)}"
 
   private def buildString(r: RChainState): String =
-    buildString(r.tuplespace)
+    buildString(r.postStateHash)
 }

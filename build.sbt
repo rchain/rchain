@@ -199,9 +199,42 @@ lazy val node = (project in file("node"))
         val oldStrategy = (assemblyMergeStrategy in assembly).value
         oldStrategy(x)
     },
+    /*
+     * This monstrosity exists because
+     * a) we want to get rid of annoying JVM >= 9 warnings,
+     * b) we must support Java 8 for RedHat (see below) and
+     * c) sbt-native-packager puts bashScriptExtraDefines before it
+     *    initializes all useful variables (like $java_version).
+     *
+     * This won't work if someone passes -no-version-check command line
+     * argument to rnode. They most probably know what they're doing.
+     *
+     * https://unix.stackexchange.com/a/29742/124070
+     * Thanks Gilles!
+     */
+    bashScriptExtraDefines += """
+      eval "original_$(declare -f java_version_check)"
+      java_version_check() {
+        original_java_version_check
+        if [[ ${java_version%%.*} -ge 9 ]]; then
+          java_args+=(
+            --illegal-access=warn # set to deny if you feel brave
+            --add-opens=java.base/java.nio=ALL-UNNAMED
+            --add-opens=java.base/sun.nio.ch=ALL-UNNAMED
+            --add-opens=java.base/sun.security.util=ALL-UNNAMED
+            --add-opens=java.base/sun.security.x509=ALL-UNNAMED
+          )
+        fi
+      }
+    """,
     /* Dockerization */
     dockerUsername := Some(organization.value),
-    dockerUpdateLatest := true,
+    version in Docker := version.value +
+      git.gitHeadCommit.value.map("-git" + _.take(8)).getOrElse(""),
+    dockerAliases ++=
+      sys.env.get("DRONE_BUILD_NUMBER")
+        .toSeq.map(num => dockerAlias.value.withTag(Some(s"DRONE-${num}"))),
+    dockerUpdateLatest := sys.env.get("DRONE").isEmpty,
     dockerBaseImage := "openjdk:11-jre-slim",
     dockerCommands := {
       val daemon = (daemonUser in Docker).value
