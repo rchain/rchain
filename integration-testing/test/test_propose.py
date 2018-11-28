@@ -1,6 +1,6 @@
 import os
 import pytest
-from rnode_testing.network import (
+from rnode_testing.wait import (
     wait_for_approved_block_received_handler_state,
 )
 

@@ -14,8 +14,6 @@ import collections
 import pytest
 import docker as docker_py
 
-from rnode_testing.util import log_box
-from rnode_testing.profiling import log_prof_data
 from rnode_testing.rnode import start_bootstrap
 
 from typing import Iterator, List, TYPE_CHECKING
@@ -115,15 +113,11 @@ def docker_client_session() -> Iterator["DockerClient"]:
         docker_client.networks.prune()
 
 
-
 @pytest.yield_fixture(scope="session")
 def system(request: "SubRequest", docker_client_session: "DockerClient") -> Iterator["System"]:
     cfg = make_test_config(request)
     with validators_data(cfg) as vd:
-        try:
-            yield System(cfg, docker_client_session, vd)
-        finally:
-            log_prof_data()
+        yield System(cfg, docker_client_session, vd)
 
 
 @pytest.yield_fixture(scope="module")

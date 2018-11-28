@@ -3,10 +3,12 @@ import os
 import shlex
 import logging
 import threading
-from contextlib import contextmanager
-from rnode_testing.docker import docker_network
-import rnode_testing.resources as resources
-from rnode_testing.util import log_box, make_tempfile, make_tempdir
+import contextlib
+from rnode_testing.common import (
+    random_string,
+    make_tempfile,
+    make_tempdir,
+)
 from rnode_testing.wait import wait_for, node_started
 
 from multiprocessing import Queue, Process
@@ -22,8 +24,8 @@ if TYPE_CHECKING:
     from threading import Event
 
 DEFAULT_IMAGE = os.environ.get(
-    "DEFAULT_IMAGE",
-    "rchain-integration-testing:latest")
+        "DEFAULT_IMAGE",
+        "rchain-integration-testing:latest")
 
 rnode_binary = '/opt/docker/bin/rnode'
 rnode_directory = "/var/lib/rnode"
@@ -333,6 +335,25 @@ def create_node_container(
     return node
 
 
+def get_absolute_path_for_mounting(relative_path: str, mount_dir: Optional[str]=None)-> str:
+    """Drone runs each job in a new Docker container FOO. That Docker
+    container has a new filesystem. Anything in that container can read
+    anything in that filesystem. To read files from HOST, it has to be shared
+    though, so let's share /tmp:/tmp. You also want to start new Docker
+    containers, so you share /var/run/docker.sock:/var/run/docker.sock. When
+    you start a new Docker container from FOO, it's not in any way nested. You
+    just contact the Docker daemon running on HOST via the shared docker.sock.
+    So when you start a new image from FOO, the HOST creates a new Docker
+    container BAR with brand new filesystem. So if you tell Docker from FOO to
+    mount /MOUNT_DIR:/MOUNT_DIR from FOO to BAR, the Docker daemon will actually mount
+    /MOUNT_DIR from HOST to BAR, and not from FOO to BAR.
+    """
+
+    if mount_dir is not None:
+        return os.path.join(mount_dir, relative_path)
+    return os.path.abspath(os.path.join('resources', relative_path))
+
+
 def make_bootstrap_node(
     *,
     docker_client: "DockerClient",
@@ -348,8 +369,8 @@ def make_bootstrap_node(
     container_name: str = None,
     mount_dir: str = None,
 ) -> Node:
-    key_file = resources.get_absolute_path_for_mounting("bootstrap_certificate/node.key.pem", mount_dir=mount_dir)
-    cert_file = resources.get_absolute_path_for_mounting("bootstrap_certificate/node.certificate.pem", mount_dir=mount_dir)
+    key_file = get_absolute_path_for_mounting("bootstrap_certificate/node.key.pem", mount_dir=mount_dir)
+    cert_file = get_absolute_path_for_mounting("bootstrap_certificate/node.certificate.pem", mount_dir=mount_dir)
 
     logging.info("Using key_file={key_file} and cert_file={cert_file}".format(key_file=key_file, cert_file=cert_file))
 
@@ -479,7 +500,22 @@ def create_peer_nodes(
     return result
 
 
-@contextmanager
+@contextlib.contextmanager
+def docker_network(docker_client: "DockerClient") -> Iterator[str]:
+    network_name = "rchain-{}".format(random_string(5).lower())
+
+    docker_client.networks.create(network_name, driver="bridge")
+
+    try:
+        yield network_name
+    finally:
+        for network in docker_client.networks.list():
+            if network_name == network.name:
+                logging.info("Removing docker network {}".format(network.name))
+                network.remove()
+
+
+@contextlib.contextmanager
 def bootstrap_node(docker: "DockerClient", docker_network: str, timeout: int, validators_data: "ValidatorsData", *, container_name: str = None, cli_options=None, mount_dir: str = None) -> Generator[Node, None, None]:
     node = make_bootstrap_node(
         docker_client=docker,
@@ -496,7 +532,7 @@ def bootstrap_node(docker: "DockerClient", docker_network: str, timeout: int, va
         node.cleanup()
 
 
-@contextmanager
+@contextlib.contextmanager
 def start_bootstrap(docker_client: "DockerClient", node_start_timeout: int, node_cmd_timeout: int, validators_data: "ValidatorsData", *, container_name: str = None, cli_options=None, mount_dir: str = None) -> Generator[Node, None, None]:
     with docker_network(docker_client) as network:
         with bootstrap_node(docker_client, network, node_cmd_timeout, validators_data, container_name=container_name, cli_options=cli_options, mount_dir=mount_dir) as node:

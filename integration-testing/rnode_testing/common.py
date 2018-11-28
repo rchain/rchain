@@ -1,10 +1,15 @@
 import os
-import logging
+import random
+import string
 import tempfile
 import contextlib
-import collections
 
 from typing import Callable, Iterator
+
+
+
+def random_string(length: int) -> str:
+    return ''.join(random.choice(string.ascii_letters) for m in range(length))
 
 
 @contextlib.contextmanager

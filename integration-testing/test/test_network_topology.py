@@ -1,22 +1,32 @@
+import os
+import shutil
 import logging
+
 import pytest
 from delayed_assert import expect, assert_expectations
-from rnode_testing.profiling import profile
-import rnode_testing.casper_propose_and_deploy
+
 from rnode_testing.network import (
     start_network,
-    wait_for_started_network,
-    wait_for_converged_network,
-    wait_for_approved_block_received_handler_state,
-    wait_for_approved_block_received,
 )
 from rnode_testing.rnode import start_bootstrap
+from rnode_testing.common import random_string
+from rnode_testing.wait import (
+    wait_for,
+    string_contains,
+    get_block,
+    wait_for_approved_block_received_handler_state,
+    wait_for_started_network,
+    wait_for_converged_network,
+    wait_for_approved_block_received,
+)
+
+
 
 from typing import TYPE_CHECKING, Iterator
 if TYPE_CHECKING:
-    from conftest import System
+    from conftest import System, TestConfig
     from rnode_testing.network import RChain
-
+    from rnode_testing.rnode import Node
 
 @pytest.fixture(scope="module")
 def star_network(system: "System") -> Iterator["RChain"]:
@@ -63,7 +73,7 @@ def complete_network(system: "System") -> Iterator["RChain"]:
 
             yield network
 
-@profile
+
 def test_metrics_api_socket(complete_network: "RChain") -> None:
     for node  in complete_network.nodes:
         logging.info("Test metrics api socket for {}".format(node.name))
@@ -73,7 +83,6 @@ def test_metrics_api_socket(complete_network: "RChain") -> None:
     assert_expectations()
 
 
-@profile
 def test_node_logs_for_errors(complete_network: "RChain") -> None:
     for node in complete_network.nodes:
         logging.info("Testing {} node logs for errors.".format(node.name))
@@ -87,7 +96,6 @@ def test_node_logs_for_errors(complete_network: "RChain") -> None:
 
     assert_expectations()
 
-@profile
 def test_node_logs_for_RuntimeException(complete_network: "RChain") -> None:
     for node in complete_network.nodes:
         logging.info("Testing {} node logs for \"java RuntimeException\".".format(node.name))
@@ -102,9 +110,61 @@ def test_node_logs_for_RuntimeException(complete_network: "RChain") -> None:
 
     assert_expectations()
 
-@profile
+def deploy_block(node: "Node", expected_string: str, contract_name: str) -> str:
+    local_contract_file_path = os.path.join('resources', contract_name)
+    shutil.copyfile(local_contract_file_path, f"{node.local_deploy_dir}/{contract_name}")
+    container_contract_file_path = '{}/{}'.format(node.remote_deploy_dir, contract_name)
+    node.shell_out(
+        'sed',
+        '-i',
+        '-e', 's/@placeholder@/{}/g'.format(expected_string),
+        container_contract_file_path,
+    )
+    node.deploy(container_contract_file_path)
+    block_hash = node.propose()
+    return block_hash
+
+
+def check_blocks(node: "Node", expected_string: str, network: "RChain", config: "TestConfig", block_hash: str) -> None:
+    logging.info(f"Check all peer logs for blocks containing {expected_string}")
+
+    other_nodes = [n for n in network.nodes if n.container.name != node.container.name]
+
+    for node in other_nodes:
+        wait_for(
+            string_contains(get_block(node, block_hash), expected_string),
+            config.receive_timeout,
+            f"Container: {node.container.name}: String {expected_string} NOT found in blocks added.",
+        )
+
+        logging.info(f"Container: {node.container.name}: SUCCESS!")
+
+
+def mk_expected_string(node: "Node", random_token: str) -> str:
+    return "<{name}:{random_token}>".format(name=node.container.name, random_token=random_token)
+
+
+def casper_propose_and_deploy(config: "TestConfig", network: "RChain") -> None:
+    """Deploy a contract and then checks if all the nodes have received the block
+    containing the contract.
+    """
+
+    token_size = 20
+
+    contract_name = 'contract.rho'
+
+    for node in network.nodes:
+        random_token = random_string(token_size)
+
+        expected_string = mk_expected_string(node, random_token)
+        block_hash = deploy_block(node, expected_string, contract_name)
+
+        expected_string = mk_expected_string(node, random_token)
+        check_blocks(node, expected_string, network, config, block_hash)
+
 def test_casper_propose_and_deploy(system: "System", complete_network: "RChain") -> None:
-    rnode_testing.casper_propose_and_deploy.run(system.config, complete_network)
+    casper_propose_and_deploy(system.config, complete_network)
 
 def test_convergence(complete_network: "RChain") -> None:
-    logging.info("Complete network converged successfully.")
+    # complete_network fixture does the job
+    pass

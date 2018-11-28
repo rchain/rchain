@@ -189,7 +189,6 @@ and contains the elements needed for most tests:
 When this fixture is destroyed it:
 1. removes all the docker unused networks and volumes 
 2. removes the validator_data file
-logs the profiling information for all the fucntions decorated with @profile
 
 
 #### Package fixtures
@@ -218,10 +217,6 @@ needs access to these resources can access them using the utilities found in  `r
 
 ### RNode interface
 The file `rnode_testing/rnode.py` contains utilities for working with node.
-
-### Profiling tests
-The file `rnode_testing/profiling.py` contains the `profile` decorator which can be used to collect profiling information.
-The profiling information is printed in the log file at the end of the test execution.
 
 ### Mixing fixtures
 The file `rnode_testing/fixture.py` contains tools for parameterizing tests with different fixtures.
