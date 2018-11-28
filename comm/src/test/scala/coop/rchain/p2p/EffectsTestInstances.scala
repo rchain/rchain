@@ -129,6 +129,10 @@ object EffectsTestInstances {
       errors = errors :+ msg
       ().pure[F]
     }
+    def error(msg: String, cause: scala.Throwable)(implicit ev: LogSource): F[Unit] = {
+      errors = errors :+ msg
+      ().pure[F]
+    }
   }
 
 }
