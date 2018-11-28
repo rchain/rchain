@@ -973,7 +973,7 @@ object ProcNormalizeMatcher {
           }
           sync.raiseError(
             UnexpectedBundleContent(
-              s"Bundle's content shouldn't have free variables or wildcards.$errMsg"
+              s"Bundle's content must not have free variables or wildcards.$errMsg"
             )
           )
         }
