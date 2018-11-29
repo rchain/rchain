@@ -1,49 +1,97 @@
-import logging
 import re
-import pytest
+import sys
 import time
+import logging
+
+import pytest
+import psutil
+import docker
+import typing_extensions
 
 
-def wait_for(condition, timeout, error_message):
+class WaitPredicate(typing_extensions.Protocol):
+    def __str__(self) -> str:
+        ...
+
+    def is_satisfied(self, node: 'Node') -> bool:
+        ...
+
+
+class LogsContainMessage:
+    def __init__(self, message: str) -> None:
+        self.message = message
+
+    def __str__(self):
+        return '{}({})'.format(self.__class__.__name__, repr(self.message))
+
+    def is_satisfied(self, node: 'Node') -> bool:
+        return self.message in node.logs()
+
+
+class NodeStarted(LogsContainMessage):
+    def __init__(self):
+        super().__init__('coop.rchain.node.NodeRuntime - Listening for traffic on rnode')
+
+
+class ApprovedBlockReceivedHandlerStateEntered(LogsContainMessage):
+    def __init__(self):
+        super().__init__('Making a transition to ApprovedBlockRecievedHandler state.')
+
+
+def wait_for_node(node: 'Node', predicate: WaitPredicate, timeout: int, timeout_message: str) -> None:
+    # It is easy to precisely measure the time spent in user mode only on
+    # Linux for a dockerized process; on other platforms we fall back on
+    # measuring wall-clock time as an approximation.
+    if sys.platform != 'linux':
+        def shim():
+            return predicate.is_satisfied(node)
+        shim.__doc__ = str(predicate)
+        return wait_for(shim, timeout, timeout_message)
+
+    container_data = node.docker_client.api.inspect_container(node.name)
+    container_pid = container_data['State']['Pid']
+    process = psutil.Process(container_pid)
+
+    while True:
+        if predicate.is_satisfied(node):
+            return
+
+        node_user_time_consumed = process.cpu_times().user
+        if node_user_time_consumed >= timeout:
+            pytest.fail(timeout_message)
+
+        time.sleep(1)
+
+
+def wait_for(wait_condition, timeout, error_message):
     """
-    Waits for a condition to be fulfilled. It retries until the timeout expires.
+    Waits for a wait_condition to be satisfied. It retries until the timeout expires.
 
-    :param condition: the condition. Has to be a function 'Unit -> Boolean'
+    :param wait_condition: the wait_condition. Has to be a function 'Unit -> Boolean'
     :param timeout: the total time to wait
-    :return: true  if the condition was met in the given timeout
+    :return: true  if the wait_condition was met in the given timeout
     """
 
-    logging.info("Waiting on: `{}`".format(condition.__doc__))
+    logging.info("Waiting on: {}".format(repr(wait_condition.__doc__)))
     elapsed = 0
     current_ex = None
     while elapsed < timeout:
         start_time = time.time()
 
-        try:
-            value = condition()
-            logging.info("Condition satisfied after {elapsed}s. Returning {value}".format(elapsed=elapsed, value=value))
-            return value
-        except Exception as ex:
-            condition_evaluation_duration = time.time() - start_time
-            elapsed = int(elapsed + condition_evaluation_duration)
-            time_left = timeout - elapsed
+        is_satisfied = wait_condition()
+        if is_satisfied:
+            return
 
-            # iteration duration is 15% of remaining timeout
-            # but no more than 10s and no less than 1s
-            iteration_duration = int(min(10, max(1, int(0.15 * time_left))))
+        condition_evaluation_duration = time.time() - start_time
+        elapsed = int(elapsed + condition_evaluation_duration)
+        time_left = timeout - elapsed
 
-            if str(ex) == current_ex:
-                details = "same as above"
-            else:
-                details = str(ex)
-                current_ex = str(ex)
+        # iteration duration is 15% of remaining timeout
+        # but no more than 10s and no less than 1s
+        iteration_duration = int(min(10, max(1, int(0.15 * time_left))))
 
-            logging.info("Condition not satisfied yet ({details}). Time left: {time_left}s. Sleeping {iteration_duration}s...".format(
-                details=details, time_left=time_left, iteration_duration=iteration_duration)
-            )
-
-            time.sleep(iteration_duration)
-            elapsed = elapsed + iteration_duration
+        time.sleep(iteration_duration)
+        elapsed = elapsed + iteration_duration
 
     logging.warning("Giving up after {}s.".format(elapsed))
     pytest.fail(error_message)
@@ -71,12 +119,12 @@ def get_block(node, block_hash):
 
 def show_blocks(node):
     def go():
-        exit_code, output = node.show_blocks()
+        exit_code, _ = node.show_blocks()
 
         if exit_code != 0:
-            raise Exception("Show-blocks failed")
+            return False
 
-        return output
+        return True
 
     go.__doc__ = "show_blocks({})".format(node.name)
     return go
@@ -90,11 +138,9 @@ def string_contains(string_factory, regex_str, flags=0):
 
         m = rx.search(s)
         if m:
-            return m
+            return True
         else:
-            raise Exception("{string_factory} doesn't contain regex '{regex_str}'".format(
-                string_factory=string_factory.__doc__, regex_str=regex_str)
-            )
+            return False
 
     go.__doc__ = "{string_factory} contains regex '{regex_str}'".format(string_factory=string_factory.__doc__, regex_str=regex_str)
     return go
@@ -111,7 +157,9 @@ def has_peers(bootstrap_node, expected_peers):
         peers = int(m[1]) if m else 0
 
         if peers < expected_peers:
-            raise Exception("Expected peers: {expected_peers}. Actual peers: {peers}".format(expected_peers=expected_peers, peers=peers))
+            return False
+
+        return True
 
     go.__doc__ = "Node {name} is connected to {expected_peers} peers.".format(name=bootstrap_node.name, expected_peers=expected_peers)
 
