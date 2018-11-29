@@ -2,7 +2,6 @@ import contextlib
 import pytest
 import conftest
 from rnode_testing.rnode import start_bootstrap, create_peer
-from rnode_testing.wait import sent_unapproved_block
 
 
 CEREMONY_MASTER_NODE_KEYS = conftest.KeyPair(private_key='80366db5fbb8dad7946f27037422715e4176dda41d582224db87b6c3b783d709', public_key='1cd8bf79a2c1bd0afa160f6cdfeb8597257e48135c9bf5e4823f2875a1492c97')

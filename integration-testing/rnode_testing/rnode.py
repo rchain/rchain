@@ -11,7 +11,6 @@ from rnode_testing.common import (
     make_tempdir,
 )
 from rnode_testing.wait import (
-    wait_for,
     wait_for_node_started,
 )
 
