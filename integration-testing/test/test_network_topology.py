@@ -11,9 +11,7 @@ from rnode_testing.network import (
 from rnode_testing.rnode import start_bootstrap
 from rnode_testing.common import random_string
 from rnode_testing.wait import (
-    wait_for,
-    string_contains,
-    get_block,
+    wait_for_block_contains,
     wait_for_approved_block_received_handler_state,
     wait_for_started_network,
     wait_for_converged_network,
@@ -127,13 +125,7 @@ def check_blocks(node, expected_string, network, config, block_hash):
     other_nodes = [n for n in network.nodes if n.container.name != node.container.name]
 
     for node in other_nodes:
-        wait_for(
-            string_contains(get_block(node, block_hash), expected_string),
-            config.receive_timeout,
-            "Container: {}: String {} NOT found in blocks added.".format(node.container.name, expected_string),
-        )
-
-        logging.info("Container: {}: SUCCESS!".format(node.container.name))
+        wait_for_block_contains(node, block_hash, expected_string, config.receive_timeout)
 
 
 def mk_expected_string(node, random_token):

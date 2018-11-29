@@ -202,14 +202,8 @@ Because simple `sleep`s are unreliable *all* waiting for various conditions is d
 
 The wait utilities are defined in `rnode_testing/wait.py`.
 
-The key function is `wait_for` which waits for a given condition a certain number of seconds. This function checks 
-periodically the condition to see if it is fullfilled.
-
 There are also a predicates which can be used to define various conditions. One can write custom predicates
 based on these examples. 
-
-Please note that the predicates should have a readable `__doc__` attribute. 
-They `__doc__` is important for debugging the tests because it's printed in the log files during the waiting. 
 
 ### File resources
 The resources like contracts to be deployed, certificates etc. are stored in the `resources` directory. The code that 
