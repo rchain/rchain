@@ -122,7 +122,7 @@ class Node:
                       re.MULTILINE | re.DOTALL)
         address = m[1]
 
-        logging.info("Bootstrap address: `{}`".format(address))
+        logging.info("Bootstrap address: {}".format(repr(address)))
         return address
 
     def get_metrics(self):
@@ -169,13 +169,13 @@ class Node:
 
         process = Process(target=execution)
 
-        logging.info("container={} command={}".format(self.name, cmd))
+        logging.info("{}: {}".format(self.name, cmd))
 
         process.start()
 
         try:
             exit_code, output = queue.get(self.timeout)
-            logging.info("exit_code={}".format(exit_code))
+            logging.info("{}: {} exited with {}".format(self.name, cmd, exit_code))
             logging.debug('output={}'.format(repr(output)))
             return exit_code, output
         except Empty:
@@ -296,7 +296,7 @@ def create_node_container(
     java_options = os.environ.get('_JAVA_OPTIONS')
     if java_options is not None:
         env['_JAVA_OPTIONS'] = java_options
-    logging.info('Using _JAVA_OPTIONS: {}'.format(java_options))
+    logging.debug('Using _JAVA_OPTIONS: {}'.format(java_options))
 
     volumes = [
         "{}:/etc/hosts.allow".format(hosts_allow_file),
