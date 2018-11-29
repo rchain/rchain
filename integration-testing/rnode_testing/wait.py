@@ -192,19 +192,29 @@ def approved_block_received(peer):
     )
 
 
-def wait_for_approved_block_received_handler_state(bootstrap_node, node_startup_timeout):
-    wait_for(
-        approved_block_received_handler_state(bootstrap_node),
-        node_startup_timeout,
-        "Bootstrap node {} did not enter ApprovedBlockRecievedHandler state".format(bootstrap_node.name),
+def wait_for_node_started(node: 'Node', startup_timeout: int):
+    wait_for_node(
+        node,
+        NodeStarted(),
+        startup_timeout,
+        'Node {} did not start within {}s'.format(node.name, startup_timeout),
     )
 
 
-def wait_for_approved_block_received(network, node_startup_timeout):
+def wait_for_approved_block_received_handler_state(node: 'Node', timeout: int):
+    wait_for_node(
+        node,
+        ApprovedBlockReceivedHandlerStateEntered(),
+        timeout,
+        "Node {} did not enter ApprovedBlockRecievedHandler state".format(node.name),
+    )
+
+
+def wait_for_approved_block_received(network, timeout: int):
     for peer in network.peers:
         wait_for(
             approved_block_received(peer),
-            node_startup_timeout,
+            timeout,
             "Peer {} did not receive the approved block",
         )
 

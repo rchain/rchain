@@ -4,12 +4,17 @@ import shlex
 import logging
 import threading
 import contextlib
+
 from rnode_testing.common import (
     random_string,
     make_tempfile,
     make_tempdir,
 )
-from rnode_testing.wait import wait_for, node_started
+from rnode_testing.wait import (
+    wait_for,
+    node_started,
+    wait_for_node_started,
+)
 
 from multiprocessing import Queue, Process
 from queue import Empty
@@ -448,6 +453,16 @@ def create_peer(
     return container
 
 
+@contextlib.contextmanager
+def started_peer(startup_timeout, **kwargs):
+    peer = create_peer(**kwargs)
+    try:
+        wait_for_node_started(peer, startup_timeout)
+        yield peer
+    finally:
+        peer.cleanup()
+
+
 def create_peer_nodes(
     *,
     docker_client,
@@ -526,5 +541,5 @@ def bootstrap_node(docker, docker_network, timeout, validators_data, *, containe
 def start_bootstrap(docker_client, node_start_timeout, node_cmd_timeout, validators_data, *, container_name=None, cli_options=None, mount_dir=None):
     with docker_network(docker_client) as network:
         with bootstrap_node(docker_client, network, node_cmd_timeout, validators_data, container_name=container_name, cli_options=cli_options, mount_dir=mount_dir) as node:
-            wait_for(node_started(node), node_start_timeout, "Bootstrap node didn't start correctly")
+            wait_for_node_started(node, node_start_timeout)
             yield node
