@@ -9,7 +9,7 @@ from rnode_testing.wait import (
     wait_for_approved_block_received_handler_state,
 )
 
-from typing import Iterator, TYPE_CHECKING
+from typing import Generator, TYPE_CHECKING
 if TYPE_CHECKING:
     from _pytest.fixtures import SubRequest
     from conftest import System, ValidatorsData
@@ -45,20 +45,20 @@ UNBONDED_VALIDATOR_KEYS = conftest.KeyPair(private_key='2bdedd2e4dd2e7b5f176b7a5
 
 
 @pytest.yield_fixture(scope='session')
-def validators_config() -> Iterator["ValidatorsData"]:
+def validators_config() -> Generator["ValidatorsData", None, None]:
     validator_keys = [BONDED_VALIDATOR_KEYS]
     with conftest.temporary_bonds_file(validator_keys) as f:
         yield conftest.ValidatorsData(bonds_file=f, bootstrap_keys=BOOTSTRAP_NODE_KEYS, peers_keys=validator_keys)
 
 
 @pytest.yield_fixture(scope="session")
-def custom_system(request: "SubRequest", validators_config: "ValidatorsData", docker_client_session: "DockerClient") -> Iterator["System"]:
+def custom_system(request: "SubRequest", validators_config: "ValidatorsData", docker_client_session: "DockerClient") -> Generator["System", None, None]:
     test_config = conftest.make_test_config(request)
     yield conftest.System(test_config, docker_client_session, validators_config)
 
 
 @contextlib.contextmanager
-def started_bonded_validator(system: "System", bootstrap_node: "Node") -> Iterator["Node"]:
+def started_bonded_validator(system: "System", bootstrap_node: "Node") -> Generator["Node", None, None]:
     bonded_validator = create_peer(
         docker_client=system.docker,
         network=bootstrap_node.network,
@@ -77,7 +77,7 @@ def started_bonded_validator(system: "System", bootstrap_node: "Node") -> Iterat
 
 
 @contextlib.contextmanager
-def started_joining_validator(system: "System", bootstrap_node: "Node") -> Iterator["Node"]:
+def started_joining_validator(system: "System", bootstrap_node: "Node") -> Generator["Node", None, None]:
     joining_validator = create_peer(
         docker_client=system.docker,
         network=bootstrap_node.network,
@@ -97,7 +97,7 @@ def started_joining_validator(system: "System", bootstrap_node: "Node") -> Itera
 
 
 @contextlib.contextmanager
-def started_unbonded_validator(system: "System", bootstrap_node: "Node") -> Iterator["Node"]:
+def started_unbonded_validator(system: "System", bootstrap_node: "Node") -> Generator["Node", None, None]:
     unbonded_validator = create_peer(
         docker_client=system.docker,
         network=bootstrap_node.network,

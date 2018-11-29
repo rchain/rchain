@@ -4,7 +4,7 @@ import string
 import tempfile
 import contextlib
 
-from typing import Callable, Iterator
+from typing import Callable, Generator
 
 
 
@@ -13,7 +13,7 @@ def random_string(length: int) -> str:
 
 
 @contextlib.contextmanager
-def log_box(log_function: Callable, title: str = "", char: str = "*", length: int = 150) -> Iterator[None]:
+def log_box(log_function: Callable, title: str = "", char: str = "*", length: int = 150) -> Generator[None, None, None]:
     full_title = " {} ".format(title) if title else ""
     title_stars_len = int((length - len(full_title)) / 2)
     title_stars = char * title_stars_len

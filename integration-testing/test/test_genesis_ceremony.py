@@ -3,7 +3,7 @@ import pytest
 import conftest
 from rnode_testing.rnode import start_bootstrap
 
-from typing import Iterator, List, TYPE_CHECKING
+from typing import Generator, List, TYPE_CHECKING
 if TYPE_CHECKING:
     from _pytest.fixtures import FixtureRequest
     from conftest import (
@@ -20,13 +20,13 @@ VALIDATOR_B_KEYS = conftest.KeyPair(private_key='1f52d0bce0a92f5c79f2a88aae6d391
 
 
 @contextlib.contextmanager
-def validators_config(validator_keys: List["KeyPair"]) -> Iterator["ValidatorsData"]:
+def validators_config(validator_keys: List["KeyPair"]) -> Generator["ValidatorsData", None, None]:
     with conftest.temporary_bonds_file(validator_keys) as f:
         yield conftest.ValidatorsData(bonds_file=f, bootstrap_keys=CEREMONY_MASTER_NODE_KEYS, peers_keys=validator_keys)
 
 
 @contextlib.contextmanager
-def custom_system(request: "FixtureRequest", docker_client_session: "DockerClient", validator_keys: List["KeyPair"]) -> Iterator["System"]:
+def custom_system(request: "FixtureRequest", docker_client_session: "DockerClient", validator_keys: List["KeyPair"]) -> Generator["System", None, None]:
     with validators_config(validator_keys) as config:
         test_config = conftest.make_test_config(request)
         yield conftest.System(test_config, docker_client_session, config)

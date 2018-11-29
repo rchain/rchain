@@ -22,14 +22,14 @@ from rnode_testing.wait import (
 
 
 
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING, Generator
 if TYPE_CHECKING:
     from conftest import System, TestConfig
     from rnode_testing.network import RChain
     from rnode_testing.rnode import Node
 
 @pytest.fixture(scope="module")
-def star_network(system: "System") -> Iterator["RChain"]:
+def star_network(system: "System") -> Generator["RChain", None, None]:
     with start_bootstrap(system.docker,
                          system.config.node_startup_timeout,
                          system.config.rnode_timeout,
@@ -50,7 +50,7 @@ def star_network(system: "System") -> Iterator["RChain"]:
 
 
 @pytest.fixture(scope="module")
-def complete_network(system: "System") -> Iterator["RChain"]:
+def complete_network(system: "System") -> Generator["RChain", None, None]:
     with start_bootstrap(system.docker,
                          system.config.node_startup_timeout,
                          system.config.rnode_timeout,

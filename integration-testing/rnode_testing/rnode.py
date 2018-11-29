@@ -14,7 +14,7 @@ from rnode_testing.wait import wait_for, node_started
 from multiprocessing import Queue, Process
 from queue import Empty
 
-from typing import Dict, Iterator, List, Tuple, Union, TYPE_CHECKING, Optional, Generator
+from typing import Dict, List, Tuple, Union, TYPE_CHECKING, Optional, Generator
 
 if TYPE_CHECKING:
     from conftest import ValidatorsData, KeyPair
@@ -39,7 +39,7 @@ class InterruptedException(Exception):
     pass
 
 
-class NoMatchException(Exception):
+class RNodeAddressNotFoundError(Exception):
     pass
 
 
@@ -130,7 +130,7 @@ class Node:
                       log_content,
                       re.MULTILINE | re.DOTALL)
         if m is None:
-            raise NoMatchException()
+            raise RNodeAddressNotFoundError()
         address = m.group(1)
 
         logging.info("Bootstrap address: `{}`".format(address))
@@ -470,7 +470,7 @@ def create_peer_nodes(
     bootstrap: Node,
     network: str,
     bonds_file: str,
-    key_pairs: "KeyPair",
+    key_pairs: List["KeyPair"],
     rnode_timeout: int,
     allowed_peers: Optional[List[str]] = None,
     image: str = DEFAULT_IMAGE,
@@ -507,7 +507,7 @@ def create_peer_nodes(
 
 
 @contextlib.contextmanager
-def docker_network(docker_client: "DockerClient") -> Iterator[str]:
+def docker_network(docker_client: "DockerClient") -> Generator[str, None, None]:
     network_name = "rchain-{}".format(random_string(5).lower())
 
     docker_client.networks.create(network_name, driver="bridge")
