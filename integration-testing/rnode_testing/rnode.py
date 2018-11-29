@@ -1,17 +1,22 @@
-import os
-import logging
 import re
-from contextlib import contextmanager
-from rnode_testing.docker import docker_network
-import rnode_testing.resources as resources
-from rnode_testing.util import log_box, make_tempfile, make_tempdir
-from rnode_testing.wait import wait_for, node_started
+import os
 import shlex
+import logging
+import threading
+import contextlib
+from rnode_testing.common import (
+    random_string,
+    make_tempfile,
+    make_tempdir,
+)
+from rnode_testing.wait import wait_for, node_started
 
 from multiprocessing import Queue, Process
 from queue import Empty
 
-DEFAULT_IMAGE = "rchain-integration-testing:latest"
+DEFAULT_IMAGE = os.environ.get(
+        "DEFAULT_IMAGE",
+        "rchain-integration-testing:latest")
 
 rnode_binary = '/opt/docker/bin/rnode'
 rnode_directory = "/var/lib/rnode"
@@ -31,6 +36,14 @@ class NonZeroExitCodeError(Exception):
         self.exit_code = exit_code
         self.output = output
 
+    def __repr__(self):
+        return '{}({}, {}, {})'.format(
+            self.__class__.__name__,
+            repr(self.command),
+            self.exit_code,
+            repr(self.output),
+        )
+
 
 class TimeoutError(Exception):
     def __init__(self, command, timeout):
@@ -40,13 +53,12 @@ class TimeoutError(Exception):
 
 class UnexpectedShowBlocksOutputFormatError(Exception):
     def __init__(self, output):
-        self.command = output
+        self.output = output
 
 
-def make_container_logs_path(container_name):
-    ci_logs_dir = os.environ.get('CI_LOGS_DIR')
-    dir = 'logs' if ci_logs_dir is None else ci_logs_dir
-    return os.path.join(dir, "{}.log".format(container_name))
+class UnexpectedProposeOutputFormatError(Exception):
+    def __init__(self, output):
+        self.output = output
 
 
 def extract_block_count_from_show_blocks(show_blocks_output):
@@ -64,6 +76,17 @@ def extract_block_count_from_show_blocks(show_blocks_output):
     return result
 
 
+def extract_block_hash_from_propose_output(propose_output):
+    """We're getting back something along the lines of:
+
+    Response: Success! Block a91208047c... created and added.\n
+    """
+    match = re.match(r'Response: Success! Block ([0-9a-f]+)\.\.\. created and added.', propose_output.strip())
+    if match is None:
+        raise UnexpectedProposeOutputFormatError(propose_output)
+    return match.group(1)
+
+
 class Node:
     def __init__(self, container, deploy_dir, docker_client, timeout, network):
         self.container = container
@@ -73,6 +96,16 @@ class Node:
         self.docker_client = docker_client
         self.timeout = timeout
         self.network = network
+        self.terminate_background_logging_event = threading.Event()
+        self.background_logging = LoggingThread(
+            container=container,
+            logger=logging.getLogger('peers'),
+            terminate_thread_event=self.terminate_background_logging_event,
+        )
+        self.background_logging.start()
+
+    def __repr__(self):
+        return '<Node(name={})>'.format(repr(self.name))
 
     def logs(self):
         return self.container.logs().decode('utf-8')
@@ -93,14 +126,9 @@ class Node:
         return self.exec_run(cmd=cmd)
 
     def cleanup(self):
-        log_file_path = make_container_logs_path(self.container.name)
-
-        with open(log_file_path, "w") as f:
-            f.write(self.logs())
-
-        logging.info("Remove container {name}. Logs have been written to {path}".format(name=self.container.name, path=log_file_path))
-
         self.container.remove(force=True, v=True)
+        self.terminate_background_logging_event.set()
+        self.background_logging.join()
 
     def deploy_contract(self, contract):
         cmd = '{rnode_binary} deploy --from "0x1" --phlo-limit 1000000 --phlo-price 1 --nonce 0 {rnode_deploy_dir}/{contract}'.format(
@@ -116,10 +144,17 @@ class Node:
     def show_blocks(self):
         return self.exec_run('{} show-blocks'.format(rnode_binary))
 
-    def get_blocks_count(self):
-        show_blocks_output = self.call_rnode('show-blocks', stderr=False).strip()
+    def show_blocks_with_depth(self, depth):
+        return self.exec_run(f'{rnode_binary} show-blocks --depth {depth}')
+
+    def get_blocks_count(self, depth):
+        _, show_blocks_output = self.show_blocks_with_depth(depth)
         return extract_block_count_from_show_blocks(show_blocks_output)
 
+    def get_block(self, block_hash):
+        return self.call_rnode('show-block', block_hash, stderr=False)
+
+    # deprecated, don't use, why? ask @adaszko
     def exec_run(self, cmd, stderr=True):
         queue = Queue(1)
 
@@ -129,13 +164,14 @@ class Node:
 
         process = Process(target=execution)
 
-        logging.info("{name}: Execute '{cmd}'. Timeout: {timeout}s".format(name=self.name, cmd=cmd, timeout=self.timeout))
+        logging.info("container={} command={}".format(self.name, cmd))
 
         process.start()
 
         try:
             exit_code, output = queue.get(self.timeout)
-            logging.info("Returning: {exit_code}, '{output}'".format(exit_code=exit_code, output=output))
+            logging.info("exit_code={}".format(exit_code))
+            logging.debug('output={}'.format(repr(output)))
             return exit_code, output
         except Empty:
             process.terminate()
@@ -165,7 +201,9 @@ class Node:
         ))
 
     def propose(self):
-        return self.call_rnode('propose')
+        output = self.call_rnode('propose', stderr=False)
+        block_hash = extract_block_hash_from_propose_output(output)
+        return block_hash
 
     def repl(self, rholang_code, stderr=False):
         quoted_rholang_code = shlex.quote(rholang_code)
@@ -197,6 +235,25 @@ class Node:
         return Node.__log_message_rx.split(log_content)
 
 
+class LoggingThread(threading.Thread):
+    def __init__(self, terminate_thread_event, container, logger):
+        super().__init__()
+        self.terminate_thread_event = terminate_thread_event
+        self.container = container
+        self.logger = logger
+
+    def run(self):
+        containers_log_lines_generator = self.container.logs(stream=True, follow=True)
+        try:
+            while True:
+                if self.terminate_thread_event.is_set():
+                    break
+                line = next(containers_log_lines_generator)
+                self.logger.info('\t{}: {}'.format(self.container.name, line.decode('utf-8').rstrip()))
+        except StopIteration:
+            pass
+
+
 def make_container_command(container_command, container_command_options):
     opts = ['{} {}'.format(option, argument) for option, argument in container_command_options.items()]
     result = '{} {}'.format(container_command, ' '.join(opts))
@@ -206,7 +263,8 @@ def make_container_command(container_command, container_command_options):
 def create_node_container(
     *,
     docker_client,
-    name, network,
+    name,
+    network,
     bonds_file,
     container_command,
     container_command_options,
@@ -256,10 +314,37 @@ def create_node_container(
         environment=env,
     )
 
-    return Node(container, deploy_dir, docker_client, rnode_timeout, network)
+    node = Node(
+        container,
+        deploy_dir,
+        docker_client,
+        rnode_timeout,
+        network,
+    )
+
+    return node
 
 
-def create_bootstrap_node(
+def get_absolute_path_for_mounting(relative_path, mount_dir=None):
+    """Drone runs each job in a new Docker container FOO. That Docker
+    container has a new filesystem. Anything in that container can read
+    anything in that filesystem. To read files from HOST, it has to be shared
+    though, so let's share /tmp:/tmp. You also want to start new Docker
+    containers, so you share /var/run/docker.sock:/var/run/docker.sock. When
+    you start a new Docker container from FOO, it's not in any way nested. You
+    just contact the Docker daemon running on HOST via the shared docker.sock.
+    So when you start a new image from FOO, the HOST creates a new Docker
+    container BAR with brand new filesystem. So if you tell Docker from FOO to
+    mount /MOUNT_DIR:/MOUNT_DIR from FOO to BAR, the Docker daemon will actually mount
+    /MOUNT_DIR from HOST to BAR, and not from FOO to BAR.
+    """
+
+    if mount_dir is not None:
+        return os.path.join(mount_dir, relative_path)
+    return os.path.abspath(os.path.join('resources', relative_path))
+
+
+def make_bootstrap_node(
     *,
     docker_client,
     network,
@@ -270,20 +355,30 @@ def create_bootstrap_node(
     image=DEFAULT_IMAGE,
     cpuset_cpus="0",
     mem_limit=None,
+    cli_options=None,
+    container_name=None,
+    mount_dir=None,
 ):
-    key_file = resources.get_resource_path("bootstrap_certificate/node.key.pem")
-    cert_file = resources.get_resource_path("bootstrap_certificate/node.certificate.pem")
+    key_file = get_absolute_path_for_mounting("bootstrap_certificate/node.key.pem", mount_dir=mount_dir)
+    cert_file = get_absolute_path_for_mounting("bootstrap_certificate/node.certificate.pem", mount_dir=mount_dir)
 
     logging.info("Using key_file={key_file} and cert_file={cert_file}".format(key_file=key_file, cert_file=cert_file))
 
-    name = "bootstrap.{}".format(network)
+    name = "{node_name}.{network_name}".format(
+        node_name='bootstrap' if container_name is None else container_name,
+        network_name=network,
+    )
     container_command_options = {
         "--port":                   40400,
         "--standalone":             "",
         "--validator-private-key":  key_pair.private_key,
         "--validator-public-key":   key_pair.public_key,
+        "--has-faucet":             "",
         "--host":                   name,
     }
+
+    if cli_options is not None:
+        container_command_options.update(cli_options)
 
     volumes = [
         "{}:{}".format(cert_file, rnode_certificate),
@@ -353,16 +448,19 @@ def create_peer(
     return container
 
 
-def create_peer_nodes(docker_client,
-                      bootstrap,
-                      network,
-                      bonds_file,
-                      key_pairs,
-                      rnode_timeout,
-                      allowed_peers=None,
-                      image=DEFAULT_IMAGE,
-                      mem_limit=None,
-                      cpuset_cpus="0"):
+def create_peer_nodes(
+    *,
+    docker_client,
+    bootstrap,
+    network,
+    bonds_file,
+    key_pairs,
+    rnode_timeout,
+    allowed_peers=None,
+    image=DEFAULT_IMAGE,
+    mem_limit=None,
+    cpuset_cpus="0",
+):
     assert len(set(key_pairs)) == len(key_pairs), "There shouldn't be any duplicates in the key pairs"
 
     if allowed_peers is None:
@@ -392,14 +490,31 @@ def create_peer_nodes(docker_client,
     return result
 
 
-@contextmanager
-def create_bootstrap(docker, docker_network, timeout, validators_data):
-    node = create_bootstrap_node(
+@contextlib.contextmanager
+def docker_network(docker_client):
+    network_name = "rchain-{}".format(random_string(5).lower())
+
+    docker_client.networks.create(network_name, driver="bridge")
+
+    try:
+        yield network_name
+    finally:
+        for network in docker_client.networks.list():
+            if network_name == network.name:
+                logging.info("Removing docker network {}".format(network.name))
+                network.remove()
+
+
+@contextlib.contextmanager
+def bootstrap_node(docker, docker_network, timeout, validators_data, *, container_name=None, cli_options=None, mount_dir=None):
+    node = make_bootstrap_node(
         docker_client=docker,
         network=docker_network,
         bonds_file=validators_data.bonds_file,
         key_pair=validators_data.bootstrap_keys,
         rnode_timeout=timeout,
+        container_name=container_name,
+        mount_dir=mount_dir,
     )
     try:
         yield node
@@ -407,9 +522,9 @@ def create_bootstrap(docker, docker_network, timeout, validators_data):
         node.cleanup()
 
 
-@contextmanager
-def start_bootstrap(docker_client, node_start_timeout, node_cmd_timeout, validators_data):
+@contextlib.contextmanager
+def start_bootstrap(docker_client, node_start_timeout, node_cmd_timeout, validators_data, *, container_name=None, cli_options=None, mount_dir=None):
     with docker_network(docker_client) as network:
-        with create_bootstrap(docker_client, network, node_cmd_timeout, validators_data) as node:
+        with bootstrap_node(docker_client, network, node_cmd_timeout, validators_data, container_name=container_name, cli_options=cli_options, mount_dir=mount_dir) as node:
             wait_for(node_started(node), node_start_timeout, "Bootstrap node didn't start correctly")
             yield node
