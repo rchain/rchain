@@ -40,5 +40,4 @@ def test_successful_genesis_ceremony(request, docker_client_session):
             cli_options=cli_options,
             mount_dir=system.config.mount_dir,
         ) as bootstrap:
-            # wait_for(sent_unapproved_block, ...
             assert False

@@ -8,7 +8,7 @@ from rnode_testing.rnode import (
     started_peer,
 )
 from rnode_testing.wait import (
-    wait_for,
+    wait_for_blocks_count_at_least,
     wait_for_approved_block_received_handler_state,
 )
 
@@ -135,9 +135,11 @@ def test_heterogenous_validators(custom_system):
                     # Force sync with the network
                     joining_validator.deploy(contract_path)
                     joining_validator.propose()
-                    def condition():
-                        expected_blocks_count = BONDED_VALIDATOR_BLOCKS + JOINING_VALIDATOR_BLOCKS
-                        actual_blocks_count = readonly_peer.get_blocks_count(30)
-                        if actual_blocks_count < expected_blocks_count:
-                            raise Exception("Expected {} blocks, got {}".format(expected_blocks_count, actual_blocks_count))
-                    wait_for(condition, 600, "Unbonded validator did not receive any blocks")
+                    expected_blocks_count = BONDED_VALIDATOR_BLOCKS + JOINING_VALIDATOR_BLOCKS
+                    max_retrieved_blocks = 30
+                    wait_for_blocks_count_at_least(
+                        readonly_peer,
+                        expected_blocks_count,
+                        max_retrieved_blocks,
+                        expected_blocks_count * 10,
+                    )

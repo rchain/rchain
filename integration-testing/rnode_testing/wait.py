@@ -5,8 +5,12 @@ import logging
 
 import pytest
 import psutil
-import docker
 import typing_extensions
+
+
+class UnexpectedMetricsOutputFormatError(Exception):
+    pass
+
 
 
 class WaitPredicate(typing_extensions.Protocol):
@@ -36,6 +40,54 @@ class NodeStarted(LogsContainMessage):
 class ApprovedBlockReceivedHandlerStateEntered(LogsContainMessage):
     def __init__(self):
         super().__init__('Making a transition to ApprovedBlockRecievedHandler state.')
+
+
+class ApprovedBlockReceived(LogsContainMessage):
+    def __init__(self):
+        super().__init__('Valid ApprovedBlock received!')
+
+
+class HasAtLeastPeers:
+    def __init__(self, minimum_peers_number):
+        self.minimum_peers_number = minimum_peers_number
+        self.metric_regex = re.compile(r"^peers (\d+).0\s*$", re.MULTILINE | re.DOTALL)
+
+    def __str__(self):
+        return '{}({})'.format(self.__class__.__name__, repr(self.minimum_peers_number))
+
+    def is_satisfied(self, node):
+        output = node.get_metrics_strict()
+        match = self.metric_regex.search(output)
+        if match is None:
+            raise UnexpectedMetricsOutputFormatError(output)
+        peers = int(match[1])
+        return peers >= self.minimum_peers_number
+
+
+class BlockContainsString:
+    def __init__(self, block_hash, expected_string):
+        self.block_hash = block_hash
+        self.expected_string = expected_string
+
+    def __str__(self):
+        return '{}({})'.format(self.__class__.__name__, repr(self.block_hash, self.expected_string))
+
+    def is_satisfied(self, node):
+        block = node.get_block(self.block_hash)
+        return self.expected_string in block
+
+
+class BlocksCountAtLeast:
+    def __init__(self, blocks_count, max_retrieved_blocks):
+        self.blocks_count = blocks_count
+        self.max_retrieved_blocks = max_retrieved_blocks
+
+    def __str__(self):
+        return '{}({})'.format(self.__class__.__name__, repr(self.blocks_count, self.max_retrieved_blocks))
+
+    def is_satisfied(self, node):
+        actual_blocks_count = node.get_blocks_count(self.max_retrieved_blocks)
+        return actual_blocks_count >= expected_blocks_count
 
 
 def wait_for_node(node: 'Node', predicate: WaitPredicate, timeout: int, timeout_message: str) -> None:
@@ -93,102 +145,27 @@ def wait_for(wait_condition, timeout, error_message):
         time.sleep(iteration_duration)
         elapsed = elapsed + iteration_duration
 
-    logging.warning("Giving up after {}s.".format(elapsed))
+    logging.warning("Giving up on {} after {}s".format(repr(wait_condition.__doc__), elapsed))
     pytest.fail(error_message)
 
 
-# Predicates
-# For each predicate please provide a nicely formatted __doc__ because it is used in wait_for to display a nice message
-# Warning: The __doc__ has to be explicitly assigned as seen below if it's a formatted string, otherwise it will be None.
-
-
-def node_logs(node):
-    def go(): return node.logs()
-    go.__doc__ = "node_logs({})".format(node.name)
-    return go
-
-
-def get_block(node, block_hash):
-    def go():
-        block_contents = node.get_block(block_hash)
-        return block_contents
-
-    go.__doc__ = 'get_block({})'.format(repr(block_hash))
-    return go
-
-
-def show_blocks(node):
-    def go():
-        exit_code, _ = node.show_blocks()
-
-        if exit_code != 0:
-            return False
-
-        return True
-
-    go.__doc__ = "show_blocks({})".format(node.name)
-    return go
-
-
-def string_contains(string_factory, regex_str, flags=0):
-    rx = re.compile(regex_str, flags)
-
-    def go():
-        s = string_factory()
-
-        m = rx.search(s)
-        if m:
-            return True
-        else:
-            return False
-
-    go.__doc__ = "{string_factory} contains regex '{regex_str}'".format(string_factory=string_factory.__doc__, regex_str=regex_str)
-    return go
-
-
-def has_peers(bootstrap_node, expected_peers):
-    rx = re.compile(r"^peers (\d+).0\s*$", re.MULTILINE | re.DOTALL)
-
-    def go():
-        exit_code, output = bootstrap_node.get_metrics()
-
-        m = rx.search(output)
-
-        peers = int(m[1]) if m else 0
-
-        if peers < expected_peers:
-            return False
-
-        return True
-
-    go.__doc__ = "Node {name} is connected to {expected_peers} peers.".format(name=bootstrap_node.name, expected_peers=expected_peers)
-
-    return go
-
-
-def node_started(node):
-    return string_contains(node_logs(node),
-                           "coop.rchain.node.NodeRuntime - Listening for traffic on rnode")
-
-
-def sent_unapproved_block():
-    return string_contains(
-        node_logs(node),
-        "Sent UnapprovedBlock",
+def wait_for_block_contains(node, block_hash, expected_string, timeout):
+    predicate = BlockContainsString(block_hash, expected_string)
+    wait_for_node(
+        node,
+        predicate,
+        timeout,
+        'Node {} failed to satisfy {}'.format(node, predicate),
     )
 
 
-def approved_block_received_handler_state(bootstrap_node):
-    return string_contains(
-        node_logs(bootstrap_node),
-        "Making a transition to ApprovedBlockRecievedHandler state.",
-    )
-
-
-def approved_block_received(peer):
-    return string_contains(
-        node_logs(peer),
-        "Valid ApprovedBlock received!",
+def wait_for_blocks_count_at_least(node, expected_blocks_count, max_retrieved_blocks, timeout):
+    predicate = BlocksCountAtLeast(expected_blocks_count, max_retrieved_blocks)
+    wait_for_node(
+        node,
+        predicate,
+        timeout,
+        'Node {} failed to satisfy {}'.format(node, predicate),
     )
 
 
@@ -210,26 +187,36 @@ def wait_for_approved_block_received_handler_state(node: 'Node', timeout: int):
     )
 
 
-def wait_for_approved_block_received(network, timeout: int):
+def wait_for_approved_block_received(network: 'Network', timeout: int):
+    predicate = ApprovedBlockReceived()
     for peer in network.peers:
-        wait_for(
-            approved_block_received(peer),
+        wait_for_node(
+            peer,
+            predicate,
             timeout,
-            "Peer {} did not receive the approved block",
+            "Peer {} failed to satisfy {}".format(peer.name, predicate),
         )
 
 
-def wait_for_started_network(node_startup_timeout, network):
+def wait_for_started_network(node_startup_timeout: int, network: 'Network'):
     for peer in network.peers:
-        wait_for(node_started(peer), node_startup_timeout, "Peer {} did not start correctly.".format(peer.name))
+        wait_for_node_started(peer, node_start_timeout)
 
 
-def wait_for_converged_network(timeout, network, peer_connections):
-    wait_for(has_peers(network.bootstrap, len(network.peers)),
-             timeout,
-             "The network did NOT converge. Check container logs for issues. One or more containers might have failed to start or connect.")
+def wait_for_converged_network(timeout: int, network: 'Network', peer_connections: int):
+    bootstrap_predicate = HasAtLeastPeers(len(network.peers))
+    wait_for_node(
+        network.bootstrap,
+        bootstrap_predicate,
+        timeout,
+        "Node {} failed to satisfy {}".format(network.bootstrap, bootstrap_predicate),
+    )
 
+    peer_predicate = HasAtLeastPeers(peer_connections)
     for node in network.peers:
-        wait_for(has_peers(node, peer_connections),
-                 timeout,
-                 "The network did NOT converge. Check container logs for issues. One or more containers might have failed to start or connect.")
+        wait_for_node(
+            node,
+            peer_predicate,
+            timeout,
+            "Node {} failed to satisfy {}".format(node.name, peer_predicate),
+        )

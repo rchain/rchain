@@ -12,7 +12,6 @@ from rnode_testing.common import (
 )
 from rnode_testing.wait import (
     wait_for,
-    node_started,
     wait_for_node_started,
 )
 
@@ -127,8 +126,10 @@ class Node:
 
     def get_metrics(self):
         cmd = 'curl -s http://localhost:40403/metrics'
-
         return self.exec_run(cmd=cmd)
+
+    def get_metrics_strict(self):
+        return self.shell_out('curl', '-s', 'http://localhost:40403/metrics')
 
     def cleanup(self):
         self.container.remove(force=True, v=True)
@@ -145,9 +146,6 @@ class Node:
 
     def propose_contract(self):
         return self.exec_run('{} propose'.format(rnode_binary))
-
-    def show_blocks(self):
-        return self.exec_run('{} show-blocks'.format(rnode_binary))
 
     def show_blocks_with_depth(self, depth):
         return self.exec_run(f'{rnode_binary} show-blocks --depth {depth}')
