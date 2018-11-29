@@ -4,7 +4,6 @@ import time
 import logging
 
 import pytest
-import psutil
 import typing_extensions
 
 
