@@ -41,7 +41,7 @@ class BasicBench {
       val c1 = space
         .consume(
           state.channels(i) :: Nil,
-          state.data(i)._2 :: Nil,
+          state.patterns(i) :: Nil,
           state.tc.head,
           false
         )(state.matcher)
@@ -51,10 +51,13 @@ class BasicBench {
       bh.consume(c1)
 
       val r2 =
-        space.produce(state.channels(i), state.data(i)._1, false)(state.matcher).unsafeRunSync
+        space.produce(state.channels(i), state.data(i), false)(state.matcher).unsafeRunSync
 
       assert(r2.right.get.nonEmpty)
       bh.consume(r2)
+      if (state.debug) {
+        assert(space.store.isEmpty)
+      }
     }
     if (state.debug) {
       assert(space.createCheckpoint().unsafeRunSync.log.size == 303)
@@ -67,7 +70,7 @@ class BasicBench {
     val space = state.testSpace
     for (i <- 0 to 100) {
       val r2 =
-        space.produce(state.channels(i), state.data(i)._1, false)(state.matcher).unsafeRunSync
+        space.produce(state.channels(i), state.data(i), false)(state.matcher).unsafeRunSync
 
       assert(r2.right.get.isEmpty)
       bh.consume(r2)
@@ -75,7 +78,7 @@ class BasicBench {
       val c1 = space
         .consume(
           state.channels(i) :: Nil,
-          state.data(i)._2 :: Nil,
+          state.patterns(i) :: Nil,
           state.tc.head,
           false
         )(state.matcher)
@@ -83,6 +86,9 @@ class BasicBench {
 
       assert(c1.right.get.nonEmpty)
       bh.consume(c1)
+      if (state.debug) {
+        assert(space.store.isEmpty)
+      }
     }
     if (state.debug) {
       assert(space.createCheckpoint().unsafeRunSync.log.size == 303)
@@ -253,10 +259,11 @@ object BasicBench {
           )
       )
 
-    val channels: Seq[Par] = generate[Par](1000)(arbitraryChannel).toList
-    val data: Seq[(ListParWithRandom, BindPattern)] =
-      generate[(ListParWithRandom, BindPattern)](1000)(arbitraryDataAndPattern).toList
-    val tc: Seq[TaggedContinuation] = generate[TaggedContinuation]()(arbitraryContinuation).toList
+    val channels: Vector[Par] = generate[Par](1000)(arbitraryChannel).toVector
+    val (data, patterns): (Vector[ListParWithRandom], Vector[BindPattern]) =
+      generate[(ListParWithRandom, BindPattern)](1000)(arbitraryDataAndPattern).toVector.unzip
+    val tc: Vector[TaggedContinuation] =
+      generate[TaggedContinuation]()(arbitraryContinuation).toVector
 
     @TearDown
     def tearDown(): Unit = {
