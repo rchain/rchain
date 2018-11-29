@@ -39,6 +39,10 @@ class InterruptedException(Exception):
     pass
 
 
+class NoMatchException(Exception):
+    pass
+
+
 class NonZeroExitCodeError(Exception):
     def __init__(self, command: Tuple[Union[int, str], ...], exit_code: int, output: str):
         self.command = command
@@ -98,7 +102,7 @@ def extract_block_hash_from_propose_output(propose_output: str):
 
 class Node:
     def __init__(self, container: "Container", deploy_dir: str, docker_client: "DockerClient", timeout: int,
-                 network) -> None:
+                 network: str) -> None:
         self.container = container
         self.local_deploy_dir = deploy_dir
         self.remote_deploy_dir = rnode_deploy_dir
@@ -125,7 +129,9 @@ class Node:
         m = re.search("Listening for traffic on (rnode://.+@{name}\\?protocol=\\d+&discovery=\\d+)\\.$".format(name=self.container.name),
                       log_content,
                       re.MULTILINE | re.DOTALL)
-        address = m[1]
+        if m is None:
+            raise NoMatchException()
+        address = m.group(1)
 
         logging.info("Bootstrap address: `{}`".format(address))
         return address
