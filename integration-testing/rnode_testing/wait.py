@@ -57,8 +57,8 @@ class HasAtLeastPeers:
         self.metric_regex = re.compile(r"^peers (\d+).0\s*$", re.MULTILINE | re.DOTALL)
 
     def __str__(self) -> str:
-        args = ', '.join(repr(a) for a in (self.node, self.minimum_peers_number))
-        return '{}({})'.format(self.__class__.__name__, args)
+        args = ', '.join(repr(a) for a in (self.node.name, self.minimum_peers_number))
+        return '<{}({})>'.format(self.__class__.__name__, args)
 
     def is_satisfied(self) -> bool:
         output = self.node.get_metrics_strict()
@@ -76,8 +76,8 @@ class BlockContainsString:
         self.expected_string = expected_string
 
     def __str__(self) -> str:
-        args = ', '.join(repr(a) for a in (self.node, self.block_hash, self.expected_string))
-        return '{}({})'.format(self.__class__.__name__, args)
+        args = ', '.join(repr(a) for a in (self.node.name, self.block_hash, self.expected_string))
+        return '<{}({})>'.format(self.__class__.__name__, args)
 
     def is_satisfied(self) -> bool:
         block = self.node.get_block(self.block_hash)
@@ -91,8 +91,8 @@ class BlocksCountAtLeast:
         self.max_retrieved_blocks = max_retrieved_blocks
 
     def __str__(self) -> str:
-        args = ', '.join(repr(a) for a in (self.node, self.blocks_count, self.max_retrieved_blocks))
-        return '{}({})'.format(self.__class__.__name__, args)
+        args = ', '.join(repr(a) for a in (self.node.name, self.blocks_count, self.max_retrieved_blocks))
+        return '<{}({})>'.format(self.__class__.__name__, args)
 
     def is_satisfied(self) -> bool:
         actual_blocks_count = self.node.get_blocks_count(self.max_retrieved_blocks)

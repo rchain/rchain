@@ -172,7 +172,8 @@ class Node:
 
         try:
             exit_code, output = queue.get(self.timeout)
-            logging.info("{}: {} exited with {}".format(self.name, cmd, exit_code))
+            if exit_code != 0:
+                logging.warning("{}: {} exited with {}".format(self.name, cmd, exit_code))
             logging.debug('output={}'.format(repr(output)))
             return exit_code, output
         except Empty:
@@ -363,8 +364,6 @@ def make_bootstrap_node(
 ):
     key_file = get_absolute_path_for_mounting("bootstrap_certificate/node.key.pem", mount_dir=mount_dir)
     cert_file = get_absolute_path_for_mounting("bootstrap_certificate/node.certificate.pem", mount_dir=mount_dir)
-
-    logging.info("Using key_file={key_file} and cert_file={cert_file}".format(key_file=key_file, cert_file=cert_file))
 
     name = "{node_name}.{network_name}".format(
         node_name='bootstrap' if container_name is None else container_name,
