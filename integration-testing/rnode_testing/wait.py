@@ -13,7 +13,7 @@ class UnexpectedMetricsOutputFormatError(Exception):
 
 
 
-class WaitPredicate(typing_extensions.Protocol):
+class PredicateProtocol(typing_extensions.Protocol):
     def __str__(self) -> str:
         ...
 
@@ -90,7 +90,7 @@ class BlocksCountAtLeast:
         return actual_blocks_count >= expected_blocks_count
 
 
-def wait_for_node(node: 'Node', predicate: WaitPredicate, timeout: int, timeout_message: str) -> None:
+def wait_for_node(node: 'Node', predicate: PredicateProtocol, timeout: int, timeout_message: str) -> None:
     # It is easy to precisely measure the time spent in user mode only on
     # Linux for a dockerized process; on other platforms we fall back on
     # measuring wall-clock time as an approximation.
@@ -115,22 +115,14 @@ def wait_for_node(node: 'Node', predicate: WaitPredicate, timeout: int, timeout_
         time.sleep(1)
 
 
-def wait_for(wait_condition, timeout, error_message):
-    """
-    Waits for a wait_condition to be satisfied. It retries until the timeout expires.
-
-    :param wait_condition: the wait_condition. Has to be a function 'Unit -> Boolean'
-    :param timeout: the total time to wait
-    :return: true  if the wait_condition was met in the given timeout
-    """
-
-    logging.info("Waiting on: {}".format(repr(wait_condition.__doc__)))
+def wait_for(predicate: PredicateProtocol, timeout: int, error_message: str):
+    logging.info("Waiting on: {}".format(predicate)))
     elapsed = 0
     current_ex = None
     while elapsed < timeout:
         start_time = time.time()
 
-        is_satisfied = wait_condition()
+        is_satisfied = predicate.is_satisfied()
         if is_satisfied:
             return
 
@@ -145,7 +137,7 @@ def wait_for(wait_condition, timeout, error_message):
         time.sleep(iteration_duration)
         elapsed = elapsed + iteration_duration
 
-    logging.warning("Giving up on {} after {}s".format(repr(wait_condition.__doc__), elapsed))
+    logging.warning("Giving up on {} after {}s".format(predicate, elapsed))
     pytest.fail(error_message)
 
 
