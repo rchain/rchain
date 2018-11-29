@@ -165,7 +165,7 @@ message ApprovedBlockCandidate {
 }
 
 message UnapprovedBlock {
-  ApprovedBlockCandidate candidate = 1; 
+  ApprovedBlockCandidate candidate = 1;
   int64                  timestamp = 2;
   int64                  duration  = 3;
 }
@@ -177,12 +177,12 @@ message Signature {
 }
 
 message BlockApproval {
-  ApprovedBlockCandidate candidate = 1; 
+  ApprovedBlockCandidate candidate = 1;
   Signature              sig       = 2;
 }
 
 message ApprovedBlock  {
-  ApprovedBlockCandidate candidate = 1; 
+  ApprovedBlockCandidate candidate = 1;
   repeated Signature     sigs      = 2;
 }
 
@@ -269,7 +269,7 @@ message ProduceEvent {
 }
 
 message ConsumeEvent {
-  bytes channelsHash = 1;
+  repeated bytes channelsHashes = 1;
   bytes hash = 2;
   int32 sequenceNumber = 3;
 }
@@ -284,5 +284,3 @@ message Bond {
   int64 stake     = 2;
 }
 // --------- End Core Protocol  --------
-
-

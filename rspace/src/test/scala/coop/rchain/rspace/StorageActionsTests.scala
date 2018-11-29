@@ -1259,7 +1259,7 @@ trait StorageActionsTests[F[_]]
       _                <- space.produce(channels(0), data(0), false)
       _                <- space.produce(channels(1), data(1), false)
       expectedConsume  = Consume.create(channels, patterns, k, false)
-      _                = expectedConsume.channelsHash shouldBe StableHashProvider.hash(channels)
+      _                = expectedConsume.channelsHashes shouldBe channels.map(StableHashProvider.hash(_))
       expectedProduce1 = Produce.create(channels(0), data(0), false)
       _                = expectedProduce1.channelsHash shouldBe StableHashProvider.hash(Seq(channels(0)))
       expectedProduce2 = Produce.create(channels(1), data(1), false)
@@ -1280,13 +1280,13 @@ trait StorageActionsTests[F[_]]
               (chkCommProduce1: Produce) :: (chkCommProduce2: Produce) :: Nil
             )
               :: (chkProduce2: Produce) :: (chkProduce1: Produce) :: (chkConsume: Consume) :: Nil =>
-          chkCommConsume1.channelsHash shouldBe expectedConsume.channelsHash
+          chkCommConsume1.channelsHashes shouldBe expectedConsume.channelsHashes
           chkCommProduce1.channelsHash shouldBe expectedProduce1.channelsHash
           chkCommProduce2.channelsHash shouldBe expectedProduce2.channelsHash
 
           chkProduce2.channelsHash shouldBe expectedProduce2.channelsHash
           chkProduce1.channelsHash shouldBe expectedProduce1.channelsHash
-          chkConsume.channelsHash shouldBe expectedConsume.channelsHash
+          chkConsume.channelsHashes shouldBe expectedConsume.channelsHashes
 
         case _ => fail("unexpected trace log")
       })
