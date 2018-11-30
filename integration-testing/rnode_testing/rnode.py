@@ -295,7 +295,7 @@ def create_node_container(
     allowed_peers: Optional[List[str]],
     cpuset_cpus: str,
     image: str = DEFAULT_IMAGE,
-    mem_limit: str = None,
+    mem_limit: Optional[str] = None,
 ) -> Node:
     assert isinstance(name, str)
     assert '_' not in name, 'Underscore is not allowed in host name'
@@ -376,10 +376,10 @@ def make_bootstrap_node(
     allowed_peers: Optional[List[str]] = None,
     image: str = DEFAULT_IMAGE,
     cpuset_cpus: str = "0",
-    mem_limit: str = None,
-    cli_options: Dict = None,
-    container_name: str = None,
-    mount_dir: str = None,
+    mem_limit: Optional[str] = None,
+    cli_options: Optional[Dict] = None,
+    container_name: Optional[str] = None,
+    mount_dir: Optional[str] = None,
 ) -> Node:
     key_file = get_absolute_path_for_mounting("bootstrap_certificate/node.key.pem", mount_dir=mount_dir)
     cert_file = get_absolute_path_for_mounting("bootstrap_certificate/node.certificate.pem", mount_dir=mount_dir)
@@ -437,7 +437,7 @@ def create_peer(
     allowed_peers: Optional[List[str]] = None,
     image: str = DEFAULT_IMAGE,
     cpuset_cpus: str = "0",
-    mem_limit: str = None,
+    mem_limit: Optional[str] = None,
 ) -> Node:
     assert isinstance(name, str)
     assert '_' not in name, 'Underscore is not allowed in host name'
@@ -469,7 +469,7 @@ def create_peer(
 
 
 @contextlib.contextmanager
-def started_peer(startup_timeout, **kwargs):
+def started_peer(startup_timeout: int, **kwargs) -> Generator['Node', None, None]:
     peer = create_peer(**kwargs)
     try:
         wait_for_node_started(peer, startup_timeout)
@@ -488,7 +488,7 @@ def create_peer_nodes(
     rnode_timeout: int,
     allowed_peers: Optional[List[str]] = None,
     image: str = DEFAULT_IMAGE,
-    mem_limit: str = None,
+    mem_limit: Optional[str] = None,
     cpuset_cpus: str = "0",
 ) -> List[Node]:
     assert len(set(key_pairs)) == len(key_pairs), "There shouldn't be any duplicates in the key pairs"
@@ -536,7 +536,7 @@ def docker_network(docker_client: "DockerClient") -> Generator[str, None, None]:
 
 
 @contextlib.contextmanager
-def bootstrap_node(docker: "DockerClient", docker_network: str, timeout: int, validators_data: "ValidatorsData", *, container_name: str = None, cli_options=None, mount_dir: str = None) -> Generator[Node, None, None]:
+def bootstrap_node(docker: "DockerClient", docker_network: str, timeout: int, validators_data: "ValidatorsData", *, container_name: Optional[str] = None, cli_options: Optional[Dict] = None, mount_dir: Optional[str] = None) -> Generator[Node, None, None]:
     node = make_bootstrap_node(
         docker_client=docker,
         network=docker_network,
@@ -553,7 +553,7 @@ def bootstrap_node(docker: "DockerClient", docker_network: str, timeout: int, va
 
 
 @contextlib.contextmanager
-def start_bootstrap(docker_client: "DockerClient", node_start_timeout: int, node_cmd_timeout: int, validators_data: "ValidatorsData", *, container_name: str = None, cli_options=None, mount_dir: str = None) -> Generator[Node, None, None]:
+def start_bootstrap(docker_client: "DockerClient", node_start_timeout: int, node_cmd_timeout: int, validators_data: "ValidatorsData", *, container_name: Optional[str] = None, cli_options:Optional[Dict] = None, mount_dir: Optional[str] = None) -> Generator[Node, None, None]:
     with docker_network(docker_client) as network:
         with bootstrap_node(docker_client, network, node_cmd_timeout, validators_data, container_name=container_name, cli_options=cli_options, mount_dir=mount_dir) as node:
             wait_for_node_started(node, node_start_timeout)

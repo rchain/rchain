@@ -1,12 +1,11 @@
 import re
-import sys
 import time
 import logging
 
 import pytest
 import typing_extensions
 
-from typing import Callable, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from rnode_testing.rnode import Node
