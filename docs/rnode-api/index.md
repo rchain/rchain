@@ -1,0 +1,1956 @@
+# Protocol Documentation
+<a name="top"/>
+
+## Table of Contents
+
+- [CasperMessage.proto](#CasperMessage.proto)
+    - [ApprovedBlock](#coop.rchain.casper.protocol.ApprovedBlock)
+    - [ApprovedBlockCandidate](#coop.rchain.casper.protocol.ApprovedBlockCandidate)
+    - [ApprovedBlockRequest](#coop.rchain.casper.protocol.ApprovedBlockRequest)
+    - [BlockApproval](#coop.rchain.casper.protocol.BlockApproval)
+    - [BlockInfo](#coop.rchain.casper.protocol.BlockInfo)
+    - [BlockInfoWithoutTuplespace](#coop.rchain.casper.protocol.BlockInfoWithoutTuplespace)
+    - [BlockMessage](#coop.rchain.casper.protocol.BlockMessage)
+    - [BlockQuery](#coop.rchain.casper.protocol.BlockQuery)
+    - [BlockQueryResponse](#coop.rchain.casper.protocol.BlockQueryResponse)
+    - [BlockRequest](#coop.rchain.casper.protocol.BlockRequest)
+    - [BlocksQuery](#coop.rchain.casper.protocol.BlocksQuery)
+    - [Body](#coop.rchain.casper.protocol.Body)
+    - [Bond](#coop.rchain.casper.protocol.Bond)
+    - [CommEvent](#coop.rchain.casper.protocol.CommEvent)
+    - [ConsumeEvent](#coop.rchain.casper.protocol.ConsumeEvent)
+    - [ContinuationAtNameQuery](#coop.rchain.casper.protocol.ContinuationAtNameQuery)
+    - [ContinuationsWithBlockInfo](#coop.rchain.casper.protocol.ContinuationsWithBlockInfo)
+    - [DataAtNameQuery](#coop.rchain.casper.protocol.DataAtNameQuery)
+    - [DataWithBlockInfo](#coop.rchain.casper.protocol.DataWithBlockInfo)
+    - [Deploy](#coop.rchain.casper.protocol.Deploy)
+    - [DeployData](#coop.rchain.casper.protocol.DeployData)
+    - [DeployServiceResponse](#coop.rchain.casper.protocol.DeployServiceResponse)
+    - [Event](#coop.rchain.casper.protocol.Event)
+    - [FindDeployInBlockQuery](#coop.rchain.casper.protocol.FindDeployInBlockQuery)
+    - [Header](#coop.rchain.casper.protocol.Header)
+    - [Justification](#coop.rchain.casper.protocol.Justification)
+    - [ListeningNameContinuationResponse](#coop.rchain.casper.protocol.ListeningNameContinuationResponse)
+    - [ListeningNameDataResponse](#coop.rchain.casper.protocol.ListeningNameDataResponse)
+    - [MaybeBlockMessage](#coop.rchain.casper.protocol.MaybeBlockMessage)
+    - [NoApprovedBlockAvailable](#coop.rchain.casper.protocol.NoApprovedBlockAvailable)
+    - [PrivateNamePreviewQuery](#coop.rchain.casper.protocol.PrivateNamePreviewQuery)
+    - [PrivateNamePreviewResponse](#coop.rchain.casper.protocol.PrivateNamePreviewResponse)
+    - [ProcessedDeploy](#coop.rchain.casper.protocol.ProcessedDeploy)
+    - [ProduceEvent](#coop.rchain.casper.protocol.ProduceEvent)
+    - [RChainState](#coop.rchain.casper.protocol.RChainState)
+    - [Signature](#coop.rchain.casper.protocol.Signature)
+    - [UnapprovedBlock](#coop.rchain.casper.protocol.UnapprovedBlock)
+    - [WaitingContinuationInfo](#coop.rchain.casper.protocol.WaitingContinuationInfo)
+  
+  
+  
+    - [DeployService](#coop.rchain.casper.protocol.DeployService)
+  
+
+- [RhoTypes.proto](#RhoTypes.proto)
+    - [BindPattern](#.BindPattern)
+    - [Bundle](#.Bundle)
+    - [Connective](#.Connective)
+    - [ConnectiveBody](#.ConnectiveBody)
+    - [EAnd](#.EAnd)
+    - [EDiv](#.EDiv)
+    - [EEq](#.EEq)
+    - [EGt](#.EGt)
+    - [EGte](#.EGte)
+    - [EList](#.EList)
+    - [ELt](#.ELt)
+    - [ELte](#.ELte)
+    - [EMap](#.EMap)
+    - [EMatches](#.EMatches)
+    - [EMethod](#.EMethod)
+    - [EMinus](#.EMinus)
+    - [EMinusMinus](#.EMinusMinus)
+    - [EMult](#.EMult)
+    - [ENeg](#.ENeg)
+    - [ENeq](#.ENeq)
+    - [ENot](#.ENot)
+    - [EOr](#.EOr)
+    - [EPercentPercent](#.EPercentPercent)
+    - [EPlus](#.EPlus)
+    - [EPlusPlus](#.EPlusPlus)
+    - [ESet](#.ESet)
+    - [ETuple](#.ETuple)
+    - [EVar](#.EVar)
+    - [Expr](#.Expr)
+    - [GPrivate](#.GPrivate)
+    - [KeyValuePair](#.KeyValuePair)
+    - [ListBindPatterns](#.ListBindPatterns)
+    - [ListParWithRandom](#.ListParWithRandom)
+    - [ListParWithRandomAndPhlos](#.ListParWithRandomAndPhlos)
+    - [Match](#.Match)
+    - [MatchCase](#.MatchCase)
+    - [New](#.New)
+    - [PCost](#.PCost)
+    - [Par](#.Par)
+    - [ParWithRandom](#.ParWithRandom)
+    - [Receive](#.Receive)
+    - [ReceiveBind](#.ReceiveBind)
+    - [Send](#.Send)
+    - [TaggedContinuation](#.TaggedContinuation)
+    - [Var](#.Var)
+    - [Var.WildcardMsg](#.Var.WildcardMsg)
+    - [VarRef](#.VarRef)
+  
+  
+  
+  
+
+- [routing.proto](#routing.proto)
+    - [Chunk](#coop.rchain.comm.protocol.routing.Chunk)
+    - [ChunkData](#coop.rchain.comm.protocol.routing.ChunkData)
+    - [ChunkHeader](#coop.rchain.comm.protocol.routing.ChunkHeader)
+    - [ChunkResponse](#coop.rchain.comm.protocol.routing.ChunkResponse)
+    - [Disconnect](#coop.rchain.comm.protocol.routing.Disconnect)
+    - [Header](#coop.rchain.comm.protocol.routing.Header)
+    - [Heartbeat](#coop.rchain.comm.protocol.routing.Heartbeat)
+    - [HeartbeatResponse](#coop.rchain.comm.protocol.routing.HeartbeatResponse)
+    - [InternalServerError](#coop.rchain.comm.protocol.routing.InternalServerError)
+    - [NoResponse](#coop.rchain.comm.protocol.routing.NoResponse)
+    - [Node](#coop.rchain.comm.protocol.routing.Node)
+    - [Packet](#coop.rchain.comm.protocol.routing.Packet)
+    - [Protocol](#coop.rchain.comm.protocol.routing.Protocol)
+    - [ProtocolHandshake](#coop.rchain.comm.protocol.routing.ProtocolHandshake)
+    - [ProtocolHandshakeResponse](#coop.rchain.comm.protocol.routing.ProtocolHandshakeResponse)
+    - [TLRequest](#coop.rchain.comm.protocol.routing.TLRequest)
+    - [TLResponse](#coop.rchain.comm.protocol.routing.TLResponse)
+  
+  
+  
+    - [TransportLayer](#coop.rchain.comm.protocol.routing.TransportLayer)
+  
+
+- [Scalar Value Types](#scalar-value-types)
+
+
+
+<a name="CasperMessage.proto"/>
+<p align="right"><a href="#top">Top</a></p>
+
+## CasperMessage.proto
+
+
+
+<a name="coop.rchain.casper.protocol.ApprovedBlock"/>
+
+### ApprovedBlock
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| candidate | [ApprovedBlockCandidate](#coop.rchain.casper.protocol.ApprovedBlockCandidate) |  |  |
+| sigs | [Signature](#coop.rchain.casper.protocol.Signature) | repeated |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.ApprovedBlockCandidate"/>
+
+### ApprovedBlockCandidate
+---------- Signing Protocol ---------
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| block | [BlockMessage](#coop.rchain.casper.protocol.BlockMessage) |  |  |
+| requiredSigs | [int32](#int32) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.ApprovedBlockRequest"/>
+
+### ApprovedBlockRequest
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| identifier | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.BlockApproval"/>
+
+### BlockApproval
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| candidate | [ApprovedBlockCandidate](#coop.rchain.casper.protocol.ApprovedBlockCandidate) |  |  |
+| sig | [Signature](#coop.rchain.casper.protocol.Signature) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.BlockInfo"/>
+
+### BlockInfo
+For node clients, see BlockMessage for actual Casper protocol Block representation
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| blockHash | [string](#string) |  |  |
+| blockSize | [string](#string) |  |  |
+| blockNumber | [int64](#int64) |  |  |
+| version | [int64](#int64) |  |  |
+| deployCount | [int32](#int32) |  |  |
+| tupleSpaceHash | [string](#string) |  | Same as postStateHash of BlockMessage |
+| tupleSpaceDump | [string](#string) |  |  |
+| timestamp | [int64](#int64) |  |  |
+| faultTolerance | [float](#float) |  |  |
+| mainParentHash | [string](#string) |  |  |
+| parentsHashList | [string](#string) | repeated |  |
+| sender | [string](#string) |  |  |
+| shardId | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.BlockInfoWithoutTuplespace"/>
+
+### BlockInfoWithoutTuplespace
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| blockHash | [string](#string) |  |  |
+| blockSize | [string](#string) |  |  |
+| blockNumber | [int64](#int64) |  |  |
+| version | [int64](#int64) |  |  |
+| deployCount | [int32](#int32) |  |  |
+| tupleSpaceHash | [string](#string) |  | Same as postStateHash of BlockMessage |
+| timestamp | [int64](#int64) |  |  |
+| faultTolerance | [float](#float) |  |  |
+| mainParentHash | [string](#string) |  |  |
+| parentsHashList | [string](#string) | repeated |  |
+| sender | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.BlockMessage"/>
+
+### BlockMessage
+--------- Core Protocol  --------
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| blockHash | [bytes](#bytes) |  | obtained by hashing the information in the header |
+| header | [Header](#coop.rchain.casper.protocol.Header) |  |  |
+| body | [Body](#coop.rchain.casper.protocol.Body) |  |  |
+| justifications | [Justification](#coop.rchain.casper.protocol.Justification) | repeated | map of all validators to latest blocks based on current view |
+| sender | [bytes](#bytes) |  | public key of the validator that created the block |
+| seqNum | [int32](#int32) |  | number of blocks created by the validator |
+| sig | [bytes](#bytes) |  | signature generated by signing `hash(hash(justification) concat blockHash)`. |
+| sigAlgorithm | [string](#string) |  | name of the algorithm used to sign |
+| shardId | [string](#string) |  | identifier of the shard where the block was created |
+| extraBytes | [bytes](#bytes) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.BlockQuery"/>
+
+### BlockQuery
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| hash | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.BlockQueryResponse"/>
+
+### BlockQueryResponse
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| status | [string](#string) |  |  |
+| blockInfo | [BlockInfo](#coop.rchain.casper.protocol.BlockInfo) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.BlockRequest"/>
+
+### BlockRequest
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| base16Hash | [string](#string) |  | Fields are redundant to allow for validity check. Such a check can definitively distinguish this from other message types with similar serializations. |
+| hash | [bytes](#bytes) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.BlocksQuery"/>
+
+### BlocksQuery
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| depth | [int32](#int32) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.Body"/>
+
+### Body
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| state | [RChainState](#coop.rchain.casper.protocol.RChainState) |  |  |
+| deploys | [ProcessedDeploy](#coop.rchain.casper.protocol.ProcessedDeploy) | repeated |  |
+| extraBytes | [bytes](#bytes) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.Bond"/>
+
+### Bond
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| validator | [bytes](#bytes) |  |  |
+| stake | [int64](#int64) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.CommEvent"/>
+
+### CommEvent
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| consume | [ConsumeEvent](#coop.rchain.casper.protocol.ConsumeEvent) |  |  |
+| produces | [ProduceEvent](#coop.rchain.casper.protocol.ProduceEvent) | repeated |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.ConsumeEvent"/>
+
+### ConsumeEvent
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| channelsHash | [bytes](#bytes) |  |  |
+| hash | [bytes](#bytes) |  |  |
+| sequenceNumber | [int32](#int32) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.ContinuationAtNameQuery"/>
+
+### ContinuationAtNameQuery
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| depth | [int32](#int32) |  |  |
+| names | [Par](#Par) | repeated |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.ContinuationsWithBlockInfo"/>
+
+### ContinuationsWithBlockInfo
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| postBlockContinuations | [WaitingContinuationInfo](#coop.rchain.casper.protocol.WaitingContinuationInfo) | repeated |  |
+| block | [BlockInfoWithoutTuplespace](#coop.rchain.casper.protocol.BlockInfoWithoutTuplespace) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.DataAtNameQuery"/>
+
+### DataAtNameQuery
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| depth | [int32](#int32) |  |  |
+| name | [Par](#Par) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.DataWithBlockInfo"/>
+
+### DataWithBlockInfo
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| postBlockData | [Par](#Par) | repeated |  |
+| block | [BlockInfoWithoutTuplespace](#coop.rchain.casper.protocol.BlockInfoWithoutTuplespace) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.Deploy"/>
+
+### Deploy
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| term | [Par](#Par) |  | rholang term to deploy |
+| raw | [DeployData](#coop.rchain.casper.protocol.DeployData) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.DeployData"/>
+
+### DeployData
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| user | [bytes](#bytes) |  | public key |
+| term | [string](#string) |  | rholang source code to deploy (will be parsed into `Par`) |
+| timestamp | [int64](#int64) |  | millisecond timestamp |
+| sig | [bytes](#bytes) |  | signature of (hash(term) &#43; timestamp) using private key |
+| sigAlgorithm | [string](#string) |  | name of the algorithm used to sign |
+| from | [string](#string) |  | wallet address which will be used to pay for the deployment |
+| phloPrice | [int64](#int64) |  | phlo price |
+| phloLimit | [int64](#int64) |  | phlo limit for the deployment |
+| nonce | [int32](#int32) |  | nonce for transaction made against `from` wallet |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.DeployServiceResponse"/>
+
+### DeployServiceResponse
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| success | [bool](#bool) |  |  |
+| message | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.Event"/>
+
+### Event
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| produce | [ProduceEvent](#coop.rchain.casper.protocol.ProduceEvent) |  |  |
+| consume | [ConsumeEvent](#coop.rchain.casper.protocol.ConsumeEvent) |  |  |
+| comm | [CommEvent](#coop.rchain.casper.protocol.CommEvent) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.FindDeployInBlockQuery"/>
+
+### FindDeployInBlockQuery
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| user | [bytes](#bytes) |  |  |
+| timestamp | [int64](#int64) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.Header"/>
+
+### Header
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| parentsHashList | [bytes](#bytes) | repeated | list of parent block hashes |
+| postStateHash | [bytes](#bytes) |  |  |
+| deploysHash | [bytes](#bytes) |  |  |
+| timestamp | [int64](#int64) |  |  |
+| version | [int64](#int64) |  |  |
+| deployCount | [int32](#int32) |  |  |
+| extraBytes | [bytes](#bytes) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.Justification"/>
+
+### Justification
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| validator | [bytes](#bytes) |  |  |
+| latestBlockHash | [bytes](#bytes) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.ListeningNameContinuationResponse"/>
+
+### ListeningNameContinuationResponse
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| status | [string](#string) |  |  |
+| blockResults | [ContinuationsWithBlockInfo](#coop.rchain.casper.protocol.ContinuationsWithBlockInfo) | repeated |  |
+| length | [int32](#int32) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.ListeningNameDataResponse"/>
+
+### ListeningNameDataResponse
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| status | [string](#string) |  |  |
+| blockResults | [DataWithBlockInfo](#coop.rchain.casper.protocol.DataWithBlockInfo) | repeated |  |
+| length | [int32](#int32) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.MaybeBlockMessage"/>
+
+### MaybeBlockMessage
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| block | [BlockMessage](#coop.rchain.casper.protocol.BlockMessage) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.NoApprovedBlockAvailable"/>
+
+### NoApprovedBlockAvailable
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| identifier | [string](#string) |  |  |
+| nodeIdentifer | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.PrivateNamePreviewQuery"/>
+
+### PrivateNamePreviewQuery
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| user | [bytes](#bytes) |  | public key a la DeployData |
+| timestamp | [int64](#int64) |  | millisecond timestamp |
+| nameQty | [int32](#int32) |  | how many names to preview? (max: 1024) |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.PrivateNamePreviewResponse"/>
+
+### PrivateNamePreviewResponse
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| ids | [bytes](#bytes) | repeated | a la GPrivate |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.ProcessedDeploy"/>
+
+### ProcessedDeploy
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| deploy | [Deploy](#coop.rchain.casper.protocol.Deploy) |  |  |
+| cost | [PCost](#PCost) |  |  |
+| log | [Event](#coop.rchain.casper.protocol.Event) | repeated | the new terms and comm. rule reductions from this deploy |
+| errored | [bool](#bool) |  | true if deploy encountered a user error |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.ProduceEvent"/>
+
+### ProduceEvent
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| channelsHash | [bytes](#bytes) |  |  |
+| hash | [bytes](#bytes) |  |  |
+| sequenceNumber | [int32](#int32) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.RChainState"/>
+
+### RChainState
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| preStateHash | [bytes](#bytes) |  | hash of the tuplespace contents before new deploys |
+| postStateHash | [bytes](#bytes) |  | hash of the tuplespace contents after new deploys |
+| bonds | [Bond](#coop.rchain.casper.protocol.Bond) | repeated | Internals of what will be the &#34;blessed&#34; PoS contract (which will be part of the tuplespace in the real implementation). |
+| blockNumber | [int64](#int64) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.Signature"/>
+
+### Signature
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| publicKey | [bytes](#bytes) |  |  |
+| algorithm | [string](#string) |  |  |
+| sig | [bytes](#bytes) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.UnapprovedBlock"/>
+
+### UnapprovedBlock
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| candidate | [ApprovedBlockCandidate](#coop.rchain.casper.protocol.ApprovedBlockCandidate) |  |  |
+| timestamp | [int64](#int64) |  |  |
+| duration | [int64](#int64) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.casper.protocol.WaitingContinuationInfo"/>
+
+### WaitingContinuationInfo
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| postBlockPatterns | [BindPattern](#BindPattern) | repeated |  |
+| postBlockContinuation | [Par](#Par) |  |  |
+
+
+
+
+
+ 
+
+ 
+
+ 
+
+
+<a name="coop.rchain.casper.protocol.DeployService"/>
+
+### DeployService
+--------- DeployService  --------
+
+| Method Name | Request Type | Response Type | Description |
+| ----------- | ------------ | ------------- | ------------|
+| DoDeploy | [DeployData](#coop.rchain.casper.protocol.DeployData) | [DeployServiceResponse](#coop.rchain.casper.protocol.DeployData) |  |
+| addBlock | [BlockMessage](#coop.rchain.casper.protocol.BlockMessage) | [DeployServiceResponse](#coop.rchain.casper.protocol.BlockMessage) |  |
+| createBlock | [.google.protobuf.Empty](#google.protobuf.Empty) | [DeployServiceResponse](#google.protobuf.Empty) |  |
+| showBlock | [BlockQuery](#coop.rchain.casper.protocol.BlockQuery) | [BlockQueryResponse](#coop.rchain.casper.protocol.BlockQuery) |  |
+| showMainChain | [BlocksQuery](#coop.rchain.casper.protocol.BlocksQuery) | [BlockInfoWithoutTuplespace](#coop.rchain.casper.protocol.BlocksQuery) |  |
+| showBlocks | [BlocksQuery](#coop.rchain.casper.protocol.BlocksQuery) | [BlockInfoWithoutTuplespace](#coop.rchain.casper.protocol.BlocksQuery) |  |
+| listenForDataAtName | [DataAtNameQuery](#coop.rchain.casper.protocol.DataAtNameQuery) | [ListeningNameDataResponse](#coop.rchain.casper.protocol.DataAtNameQuery) |  |
+| listenForContinuationAtName | [ContinuationAtNameQuery](#coop.rchain.casper.protocol.ContinuationAtNameQuery) | [ListeningNameContinuationResponse](#coop.rchain.casper.protocol.ContinuationAtNameQuery) |  |
+| findBlockWithDeploy | [FindDeployInBlockQuery](#coop.rchain.casper.protocol.FindDeployInBlockQuery) | [BlockQueryResponse](#coop.rchain.casper.protocol.FindDeployInBlockQuery) |  |
+| previewPrivateNames | [PrivateNamePreviewQuery](#coop.rchain.casper.protocol.PrivateNamePreviewQuery) | [PrivateNamePreviewResponse](#coop.rchain.casper.protocol.PrivateNamePreviewQuery) |  |
+
+ 
+
+
+
+<a name="RhoTypes.proto"/>
+<p align="right"><a href="#top">Top</a></p>
+
+## RhoTypes.proto
+
+
+
+<a name=".BindPattern"/>
+
+### BindPattern
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| patterns | [Par](#Par) | repeated |  |
+| remainder | [Var](#Var) |  |  |
+| freeCount | [int32](#int32) |  |  |
+
+
+
+
+
+
+<a name=".Bundle"/>
+
+### Bundle
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| body | [Par](#Par) |  |  |
+| writeFlag | [bool](#bool) |  | flag indicating whether bundle is writeable |
+| readFlag | [bool](#bool) |  | flag indicating whether bundle is readable |
+
+
+
+
+
+
+<a name=".Connective"/>
+
+### Connective
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| conn_and_body | [ConnectiveBody](#ConnectiveBody) |  |  |
+| conn_or_body | [ConnectiveBody](#ConnectiveBody) |  |  |
+| conn_not_body | [Par](#Par) |  |  |
+| var_ref_body | [VarRef](#VarRef) |  |  |
+| conn_bool | [bool](#bool) |  |  |
+| conn_int | [bool](#bool) |  |  |
+| conn_string | [bool](#bool) |  |  |
+| conn_uri | [bool](#bool) |  |  |
+| conn_byte_array | [bool](#bool) |  |  |
+
+
+
+
+
+
+<a name=".ConnectiveBody"/>
+
+### ConnectiveBody
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| ps | [Par](#Par) | repeated |  |
+
+
+
+
+
+
+<a name=".EAnd"/>
+
+### EAnd
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| p1 | [Par](#Par) |  |  |
+| p2 | [Par](#Par) |  |  |
+
+
+
+
+
+
+<a name=".EDiv"/>
+
+### EDiv
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| p1 | [Par](#Par) |  |  |
+| p2 | [Par](#Par) |  |  |
+
+
+
+
+
+
+<a name=".EEq"/>
+
+### EEq
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| p1 | [Par](#Par) |  |  |
+| p2 | [Par](#Par) |  |  |
+
+
+
+
+
+
+<a name=".EGt"/>
+
+### EGt
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| p1 | [Par](#Par) |  |  |
+| p2 | [Par](#Par) |  |  |
+
+
+
+
+
+
+<a name=".EGte"/>
+
+### EGte
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| p1 | [Par](#Par) |  |  |
+| p2 | [Par](#Par) |  |  |
+
+
+
+
+
+
+<a name=".EList"/>
+
+### EList
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| ps | [Par](#Par) | repeated |  |
+| locallyFree | [bytes](#bytes) |  |  |
+| connective_used | [bool](#bool) |  |  |
+| remainder | [Var](#Var) |  |  |
+
+
+
+
+
+
+<a name=".ELt"/>
+
+### ELt
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| p1 | [Par](#Par) |  |  |
+| p2 | [Par](#Par) |  |  |
+
+
+
+
+
+
+<a name=".ELte"/>
+
+### ELte
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| p1 | [Par](#Par) |  |  |
+| p2 | [Par](#Par) |  |  |
+
+
+
+
+
+
+<a name=".EMap"/>
+
+### EMap
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| kvs | [KeyValuePair](#KeyValuePair) | repeated |  |
+| locallyFree | [bytes](#bytes) |  |  |
+| connective_used | [bool](#bool) |  |  |
+| remainder | [Var](#Var) |  |  |
+
+
+
+
+
+
+<a name=".EMatches"/>
+
+### EMatches
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| target | [Par](#Par) |  |  |
+| pattern | [Par](#Par) |  |  |
+
+
+
+
+
+
+<a name=".EMethod"/>
+
+### EMethod
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| methodName | [string](#string) |  |  |
+| target | [Par](#Par) |  |  |
+| arguments | [Par](#Par) | repeated |  |
+| locallyFree | [bytes](#bytes) |  |  |
+| connective_used | [bool](#bool) |  |  |
+
+
+
+
+
+
+<a name=".EMinus"/>
+
+### EMinus
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| p1 | [Par](#Par) |  |  |
+| p2 | [Par](#Par) |  |  |
+
+
+
+
+
+
+<a name=".EMinusMinus"/>
+
+### EMinusMinus
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| p1 | [Par](#Par) |  |  |
+| p2 | [Par](#Par) |  |  |
+
+
+
+
+
+
+<a name=".EMult"/>
+
+### EMult
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| p1 | [Par](#Par) |  |  |
+| p2 | [Par](#Par) |  |  |
+
+
+
+
+
+
+<a name=".ENeg"/>
+
+### ENeg
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| p | [Par](#Par) |  |  |
+
+
+
+
+
+
+<a name=".ENeq"/>
+
+### ENeq
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| p1 | [Par](#Par) |  |  |
+| p2 | [Par](#Par) |  |  |
+
+
+
+
+
+
+<a name=".ENot"/>
+
+### ENot
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| p | [Par](#Par) |  |  |
+
+
+
+
+
+
+<a name=".EOr"/>
+
+### EOr
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| p1 | [Par](#Par) |  |  |
+| p2 | [Par](#Par) |  |  |
+
+
+
+
+
+
+<a name=".EPercentPercent"/>
+
+### EPercentPercent
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| p1 | [Par](#Par) |  |  |
+| p2 | [Par](#Par) |  |  |
+
+
+
+
+
+
+<a name=".EPlus"/>
+
+### EPlus
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| p1 | [Par](#Par) |  |  |
+| p2 | [Par](#Par) |  |  |
+
+
+
+
+
+
+<a name=".EPlusPlus"/>
+
+### EPlusPlus
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| p1 | [Par](#Par) |  |  |
+| p2 | [Par](#Par) |  |  |
+
+
+
+
+
+
+<a name=".ESet"/>
+
+### ESet
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| ps | [Par](#Par) | repeated |  |
+| locallyFree | [bytes](#bytes) |  |  |
+| connective_used | [bool](#bool) |  |  |
+| remainder | [Var](#Var) |  |  |
+
+
+
+
+
+
+<a name=".ETuple"/>
+
+### ETuple
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| ps | [Par](#Par) | repeated |  |
+| locallyFree | [bytes](#bytes) |  |  |
+| connective_used | [bool](#bool) |  |  |
+
+
+
+
+
+
+<a name=".EVar"/>
+
+### EVar
+A variable used as a var should be bound in a process context, not a name
+context. For example:
+for (@x &lt;- c1; @y &lt;- c2) { z!(x &#43; y) } is fine, but
+for (x &lt;- c1; y &lt;- c2) { z!(x &#43; y) } should raise an error.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| v | [Var](#Var) |  |  |
+
+
+
+
+
+
+<a name=".Expr"/>
+
+### Expr
+Any process may be an operand to an expression.
+Only processes equivalent to a ground process of compatible type will reduce.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| g_bool | [bool](#bool) |  |  |
+| g_int | [sint64](#sint64) |  |  |
+| g_string | [string](#string) |  |  |
+| g_uri | [string](#string) |  |  |
+| g_byte_array | [bytes](#bytes) |  |  |
+| e_not_body | [ENot](#ENot) |  |  |
+| e_neg_body | [ENeg](#ENeg) |  |  |
+| e_mult_body | [EMult](#EMult) |  |  |
+| e_div_body | [EDiv](#EDiv) |  |  |
+| e_plus_body | [EPlus](#EPlus) |  |  |
+| e_minus_body | [EMinus](#EMinus) |  |  |
+| e_lt_body | [ELt](#ELt) |  |  |
+| e_lte_body | [ELte](#ELte) |  |  |
+| e_gt_body | [EGt](#EGt) |  |  |
+| e_gte_body | [EGte](#EGte) |  |  |
+| e_eq_body | [EEq](#EEq) |  |  |
+| e_neq_body | [ENeq](#ENeq) |  |  |
+| e_and_body | [EAnd](#EAnd) |  |  |
+| e_or_body | [EOr](#EOr) |  |  |
+| e_var_body | [EVar](#EVar) |  |  |
+| e_list_body | [EList](#EList) |  |  |
+| e_tuple_body | [ETuple](#ETuple) |  |  |
+| e_set_body | [ESet](#ESet) |  |  |
+| e_map_body | [EMap](#EMap) |  |  |
+| e_method_body | [EMethod](#EMethod) |  |  |
+| e_matches_body | [EMatches](#EMatches) |  |  |
+| e_percent_percent_body | [EPercentPercent](#EPercentPercent) |  |  |
+| e_plus_plus_body | [EPlusPlus](#EPlusPlus) |  |  |
+| e_minus_minus_body | [EMinusMinus](#EMinusMinus) |  |  |
+
+
+
+
+
+
+<a name=".GPrivate"/>
+
+### GPrivate
+These should only occur as the program is being evaluated. There is no way in
+the grammar to construct them.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| id | [bytes](#bytes) |  |  |
+
+
+
+
+
+
+<a name=".KeyValuePair"/>
+
+### KeyValuePair
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| key | [Par](#Par) |  |  |
+| value | [Par](#Par) |  |  |
+
+
+
+
+
+
+<a name=".ListBindPatterns"/>
+
+### ListBindPatterns
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| patterns | [BindPattern](#BindPattern) | repeated |  |
+
+
+
+
+
+
+<a name=".ListParWithRandom"/>
+
+### ListParWithRandom
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| pars | [Par](#Par) | repeated |  |
+| randomState | [bytes](#bytes) |  |  |
+
+
+
+
+
+
+<a name=".ListParWithRandomAndPhlos"/>
+
+### ListParWithRandomAndPhlos
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| pars | [Par](#Par) | repeated |  |
+| randomState | [bytes](#bytes) |  |  |
+| cost | [uint64](#uint64) |  | cost of performing the spatial match |
+
+
+
+
+
+
+<a name=".Match"/>
+
+### Match
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| target | [Par](#Par) |  |  |
+| cases | [MatchCase](#MatchCase) | repeated |  |
+| locallyFree | [bytes](#bytes) |  |  |
+| connective_used | [bool](#bool) |  |  |
+
+
+
+
+
+
+<a name=".MatchCase"/>
+
+### MatchCase
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| pattern | [Par](#Par) |  |  |
+| source | [Par](#Par) |  |  |
+| freeCount | [int32](#int32) |  |  |
+
+
+
+
+
+
+<a name=".New"/>
+
+### New
+Number of variables bound in the new statement.
+For normalized form, p should not contain solely another new.
+Also for normalized form, the first use should be level&#43;0, next use level&#43;1
+up to level&#43;count for the last used variable.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| bindCount | [sint32](#sint32) |  | Includes any uris listed below. This makes it easier to substitute or walk a term. |
+| p | [Par](#Par) |  |  |
+| uri | [string](#string) | repeated | For normalization, uri-referenced variables come at the end, and in lexicographical order. |
+| locallyFree | [bytes](#bytes) |  |  |
+
+
+
+
+
+
+<a name=".PCost"/>
+
+### PCost
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| iterations | [int32](#int32) |  |  |
+| cost | [uint64](#uint64) |  |  |
+
+
+
+
+
+
+<a name=".Par"/>
+
+### Par
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| sends | [Send](#Send) | repeated |  |
+| receives | [Receive](#Receive) | repeated |  |
+| news | [New](#New) | repeated |  |
+| exprs | [Expr](#Expr) | repeated |  |
+| matches | [Match](#Match) | repeated |  |
+| ids | [GPrivate](#GPrivate) | repeated |  |
+| bundles | [Bundle](#Bundle) | repeated |  |
+| connectives | [Connective](#Connective) | repeated |  |
+| locallyFree | [bytes](#bytes) |  |  |
+| connective_used | [bool](#bool) |  |  |
+
+
+
+
+
+
+<a name=".ParWithRandom"/>
+
+### ParWithRandom
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| body | [Par](#Par) |  |  |
+| randomState | [bytes](#bytes) |  |  |
+
+
+
+
+
+
+<a name=".Receive"/>
+
+### Receive
+[Par] is an n-arity Pattern.
+It&#39;s an error for free Variable to occur more than once in a pattern.
+Don&#39;t currently support conditional receive
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| binds | [ReceiveBind](#ReceiveBind) | repeated |  |
+| body | [Par](#Par) |  |  |
+| persistent | [bool](#bool) |  |  |
+| bindCount | [int32](#int32) |  |  |
+| locallyFree | [bytes](#bytes) |  |  |
+| connective_used | [bool](#bool) |  |  |
+
+
+
+
+
+
+<a name=".ReceiveBind"/>
+
+### ReceiveBind
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| patterns | [Par](#Par) | repeated |  |
+| source | [Par](#Par) |  |  |
+| remainder | [Var](#Var) |  |  |
+| freeCount | [int32](#int32) |  |  |
+
+
+
+
+
+
+<a name=".Send"/>
+
+### Send
+Upon send, all free variables in data are substituted with their values.
+also if a process is sent, it is auto-quoted.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| chan | [Par](#Par) |  |  |
+| data | [Par](#Par) | repeated |  |
+| persistent | [bool](#bool) |  |  |
+| locallyFree | [bytes](#bytes) |  |  |
+| connective_used | [bool](#bool) |  |  |
+
+
+
+
+
+
+<a name=".TaggedContinuation"/>
+
+### TaggedContinuation
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| par_body | [ParWithRandom](#ParWithRandom) |  |  |
+| scala_body_ref | [int64](#int64) |  |  |
+
+
+
+
+
+
+<a name=".Var"/>
+
+### Var
+While we use vars in both positions, when producing the normalized
+representation we need a discipline to track whether a var is a name or a
+process.
+These are DeBruijn levels
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| bound_var | [sint32](#sint32) |  |  |
+| free_var | [sint32](#sint32) |  |  |
+| wildcard | [Var.WildcardMsg](#Var.WildcardMsg) |  |  |
+
+
+
+
+
+
+<a name=".Var.WildcardMsg"/>
+
+### Var.WildcardMsg
+
+
+
+
+
+
+
+<a name=".VarRef"/>
+
+### VarRef
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| index | [sint32](#sint32) |  |  |
+| depth | [sint32](#sint32) |  |  |
+
+
+
+
+
+ 
+
+ 
+
+ 
+
+ 
+
+
+
+<a name="routing.proto"/>
+<p align="right"><a href="#top">Top</a></p>
+
+## routing.proto
+
+
+
+<a name="coop.rchain.comm.protocol.routing.Chunk"/>
+
+### Chunk
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| header | [ChunkHeader](#coop.rchain.comm.protocol.routing.ChunkHeader) |  |  |
+| data | [ChunkData](#coop.rchain.comm.protocol.routing.ChunkData) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.comm.protocol.routing.ChunkData"/>
+
+### ChunkData
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| contentData | [bytes](#bytes) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.comm.protocol.routing.ChunkHeader"/>
+
+### ChunkHeader
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| sender | [Node](#coop.rchain.comm.protocol.routing.Node) |  |  |
+| typeId | [string](#string) |  |  |
+| compressed | [bool](#bool) |  |  |
+| contentLength | [int32](#int32) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.comm.protocol.routing.ChunkResponse"/>
+
+### ChunkResponse
+
+
+
+
+
+
+
+<a name="coop.rchain.comm.protocol.routing.Disconnect"/>
+
+### Disconnect
+
+
+
+
+
+
+
+<a name="coop.rchain.comm.protocol.routing.Header"/>
+
+### Header
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| sender | [Node](#coop.rchain.comm.protocol.routing.Node) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.comm.protocol.routing.Heartbeat"/>
+
+### Heartbeat
+
+
+
+
+
+
+
+<a name="coop.rchain.comm.protocol.routing.HeartbeatResponse"/>
+
+### HeartbeatResponse
+
+
+
+
+
+
+
+<a name="coop.rchain.comm.protocol.routing.InternalServerError"/>
+
+### InternalServerError
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| error | [bytes](#bytes) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.comm.protocol.routing.NoResponse"/>
+
+### NoResponse
+
+
+
+
+
+
+
+<a name="coop.rchain.comm.protocol.routing.Node"/>
+
+### Node
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| id | [bytes](#bytes) |  |  |
+| host | [bytes](#bytes) |  |  |
+| tcp_port | [uint32](#uint32) |  |  |
+| udp_port | [uint32](#uint32) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.comm.protocol.routing.Packet"/>
+
+### Packet
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| typeId | [string](#string) |  |  |
+| content | [bytes](#bytes) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.comm.protocol.routing.Protocol"/>
+
+### Protocol
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| header | [Header](#coop.rchain.comm.protocol.routing.Header) |  |  |
+| heartbeat | [Heartbeat](#coop.rchain.comm.protocol.routing.Heartbeat) |  |  |
+| heartbeat_response | [HeartbeatResponse](#coop.rchain.comm.protocol.routing.HeartbeatResponse) |  |  |
+| protocol_handshake | [ProtocolHandshake](#coop.rchain.comm.protocol.routing.ProtocolHandshake) |  |  |
+| protocol_handshake_response | [ProtocolHandshakeResponse](#coop.rchain.comm.protocol.routing.ProtocolHandshakeResponse) |  |  |
+| packet | [Packet](#coop.rchain.comm.protocol.routing.Packet) |  |  |
+| disconnect | [Disconnect](#coop.rchain.comm.protocol.routing.Disconnect) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.comm.protocol.routing.ProtocolHandshake"/>
+
+### ProtocolHandshake
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| nonce | [bytes](#bytes) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.comm.protocol.routing.ProtocolHandshakeResponse"/>
+
+### ProtocolHandshakeResponse
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| nonce | [bytes](#bytes) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.comm.protocol.routing.TLRequest"/>
+
+### TLRequest
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| protocol | [Protocol](#coop.rchain.comm.protocol.routing.Protocol) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.comm.protocol.routing.TLResponse"/>
+
+### TLResponse
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| protocol | [Protocol](#coop.rchain.comm.protocol.routing.Protocol) |  |  |
+| noResponse | [NoResponse](#coop.rchain.comm.protocol.routing.NoResponse) |  |  |
+| internalServerError | [InternalServerError](#coop.rchain.comm.protocol.routing.InternalServerError) |  |  |
+
+
+
+
+
+ 
+
+ 
+
+ 
+
+
+<a name="coop.rchain.comm.protocol.routing.TransportLayer"/>
+
+### TransportLayer
+
+
+| Method Name | Request Type | Response Type | Description |
+| ----------- | ------------ | ------------- | ------------|
+| Tell | [TLRequest](#coop.rchain.comm.protocol.routing.TLRequest) | [TLResponse](#coop.rchain.comm.protocol.routing.TLRequest) |  |
+| Ask | [TLRequest](#coop.rchain.comm.protocol.routing.TLRequest) | [TLResponse](#coop.rchain.comm.protocol.routing.TLRequest) |  |
+| Stream | [Chunk](#coop.rchain.comm.protocol.routing.Chunk) | [ChunkResponse](#coop.rchain.comm.protocol.routing.Chunk) | this eventually will become streamed API, for now regular call |
+
+ 
+
+
+
+## Scalar Value Types
+
+| .proto Type | Notes | C++ Type | Java Type | Python Type |
+| ----------- | ----- | -------- | --------- | ----------- |
+| <a name="double" /> double |  | double | double | float |
+| <a name="float" /> float |  | float | float | float |
+| <a name="int32" /> int32 | Uses variable-length encoding. Inefficient for encoding negative numbers – if your field is likely to have negative values, use sint32 instead. | int32 | int | int |
+| <a name="int64" /> int64 | Uses variable-length encoding. Inefficient for encoding negative numbers – if your field is likely to have negative values, use sint64 instead. | int64 | long | int/long |
+| <a name="uint32" /> uint32 | Uses variable-length encoding. | uint32 | int | int/long |
+| <a name="uint64" /> uint64 | Uses variable-length encoding. | uint64 | long | int/long |
+| <a name="sint32" /> sint32 | Uses variable-length encoding. Signed int value. These more efficiently encode negative numbers than regular int32s. | int32 | int | int |
+| <a name="sint64" /> sint64 | Uses variable-length encoding. Signed int value. These more efficiently encode negative numbers than regular int64s. | int64 | long | int/long |
+| <a name="fixed32" /> fixed32 | Always four bytes. More efficient than uint32 if values are often greater than 2^28. | uint32 | int | int |
+| <a name="fixed64" /> fixed64 | Always eight bytes. More efficient than uint64 if values are often greater than 2^56. | uint64 | long | int/long |
+| <a name="sfixed32" /> sfixed32 | Always four bytes. | int32 | int | int |
+| <a name="sfixed64" /> sfixed64 | Always eight bytes. | int64 | long | int/long |
+| <a name="bool" /> bool |  | bool | boolean | boolean |
+| <a name="string" /> string | A string must always contain UTF-8 encoded or 7-bit ASCII text. | string | String | str/unicode |
+| <a name="bytes" /> bytes | May contain any arbitrary sequence of bytes. | string | ByteString | str |
+
