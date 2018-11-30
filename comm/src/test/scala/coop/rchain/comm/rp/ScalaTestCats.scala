@@ -1,7 +1,7 @@
 package coop.rchain.comm.rp
 
-import cats._, cats.data._, cats.implicits._
-import org.scalatest._
+import cats.Id
+
 import org.scalatest.enablers.Containing
 
 object ScalaTestCats {

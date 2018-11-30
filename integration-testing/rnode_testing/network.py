@@ -1,7 +1,7 @@
-import inspect
 import logging
 import pytest
 import contextlib
+
 from rnode_testing.rnode import create_peer_nodes
 
 from typing import List, TYPE_CHECKING, Callable, Any, Optional, Generator
@@ -58,7 +58,7 @@ class parametrize:
         return decorator
 
 
-class RChain:
+class Network:
     def __init__(self, network: str, bootstrap: "Node", peers: List["Node"]) -> None:
         self.network = network
         self.bootstrap = bootstrap
@@ -81,7 +81,7 @@ def start_network(config: "TestConfig", docker: "DockerClient", bootstrap: "Node
     )
 
     try:
-        yield RChain(network=bootstrap.network, bootstrap=bootstrap, peers=peers)
+        yield Network(network=bootstrap.network, bootstrap=bootstrap, peers=peers)
     finally:
         for peer in peers:
             peer.cleanup()

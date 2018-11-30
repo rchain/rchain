@@ -4,12 +4,15 @@ import shlex
 import logging
 import threading
 import contextlib
+
 from rnode_testing.common import (
     random_string,
     make_tempfile,
     make_tempdir,
 )
-from rnode_testing.wait import wait_for, node_started
+from rnode_testing.wait import (
+    wait_for_node_started,
+)
 
 from multiprocessing import Queue, Process
 from queue import Empty
@@ -133,13 +136,15 @@ class Node:
             raise RNodeAddressNotFoundError()
         address = m.group(1)
 
-        logging.info("Bootstrap address: `{}`".format(address))
+        logging.info("Bootstrap address: {}".format(repr(address)))
         return address
 
     def get_metrics(self) -> Tuple[int, str]:
         cmd = 'curl -s http://localhost:40403/metrics'
-
         return self.exec_run(cmd=cmd)
+
+    def get_metrics_strict(self):
+        return self.shell_out('curl', '-s', 'http://localhost:40403/metrics')
 
     def cleanup(self) -> None:
         self.container.remove(force=True, v=True)
@@ -180,13 +185,14 @@ class Node:
 
         process = Process(target=execution)
 
-        logging.info("container={} command={}".format(self.name, cmd))
+        logging.info("{}: {}".format(self.name, cmd))
 
         process.start()
 
         try:
             exit_code, output = queue.get(timeout=self.timeout)
-            logging.info("exit_code={}".format(exit_code))
+            if exit_code != 0:
+                logging.warning("{}: {} exited with {}".format(self.name, cmd, exit_code))
             logging.debug('output={}'.format(repr(output)))
             return exit_code, output
         except Empty:
@@ -307,7 +313,7 @@ def create_node_container(
     java_options = os.environ.get('_JAVA_OPTIONS')
     if java_options is not None:
         env['_JAVA_OPTIONS'] = java_options
-    logging.info('Using _JAVA_OPTIONS: {}'.format(java_options))
+    logging.debug('Using _JAVA_OPTIONS: {}'.format(java_options))
 
     volumes = [
         "{}:/etc/hosts.allow".format(hosts_allow_file),
@@ -377,8 +383,6 @@ def make_bootstrap_node(
 ) -> Node:
     key_file = get_absolute_path_for_mounting("bootstrap_certificate/node.key.pem", mount_dir=mount_dir)
     cert_file = get_absolute_path_for_mounting("bootstrap_certificate/node.certificate.pem", mount_dir=mount_dir)
-
-    logging.info("Using key_file={key_file} and cert_file={cert_file}".format(key_file=key_file, cert_file=cert_file))
 
     name = "{node_name}.{network_name}".format(
         node_name='bootstrap' if container_name is None else container_name,
@@ -464,6 +468,16 @@ def create_peer(
     return container
 
 
+@contextlib.contextmanager
+def started_peer(startup_timeout, **kwargs):
+    peer = create_peer(**kwargs)
+    try:
+        wait_for_node_started(peer, startup_timeout)
+        yield peer
+    finally:
+        peer.cleanup()
+
+
 def create_peer_nodes(
     *,
     docker_client: "DockerClient",
@@ -542,5 +556,5 @@ def bootstrap_node(docker: "DockerClient", docker_network: str, timeout: int, va
 def start_bootstrap(docker_client: "DockerClient", node_start_timeout: int, node_cmd_timeout: int, validators_data: "ValidatorsData", *, container_name: str = None, cli_options=None, mount_dir: str = None) -> Generator[Node, None, None]:
     with docker_network(docker_client) as network:
         with bootstrap_node(docker_client, network, node_cmd_timeout, validators_data, container_name=container_name, cli_options=cli_options, mount_dir=mount_dir) as node:
-            wait_for(node_started(node), node_start_timeout, "Bootstrap node didn't start correctly")
+            wait_for_node_started(node, node_start_timeout)
             yield node

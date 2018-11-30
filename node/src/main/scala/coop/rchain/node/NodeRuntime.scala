@@ -19,6 +19,7 @@ import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.discovery._
@@ -196,19 +197,23 @@ class NodeRuntime private[node] (
       if (conf.server.standalone) Log[Effect].info(s"Starting stand-alone node.")
       else Log[Effect].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
 
-    val dynamicIpLoop: Task[Unit] =
-      for {
-        _        <- time.sleep(1.minute)
-        local    <- peerNodeAsk.ask
-        newLocal <- conf.checkLocalPeerNode(local)
-        _        <- newLocal.fold(Task.unit)(pn => rpConfState.modify(_.copy(local = pn)))
-      } yield ()
+    val dynamicIpCheck: Task[Unit] =
+      if (conf.server.dynamicHostAddress)
+        for {
+          local    <- peerNodeAsk.ask
+          newLocal <- conf.checkLocalPeerNode(local)
+          _ <- newLocal.fold(Task.unit) { pn =>
+                Connect.resetConnections[Task].flatMap(kp(rpConfState.modify(_.copy(local = pn))))
+              }
+        } yield ()
+      else Task.unit
 
     val loop: Effect[Unit] =
       for {
+        _ <- time.sleep(1.minute).toEffect
+        _ <- dynamicIpCheck.toEffect
         _ <- Connect.clearConnections[Effect]
         _ <- Connect.findAndConnect[Effect](Connect.connect[Effect])
-        _ <- time.sleep(5.seconds).toEffect
       } yield ()
 
     val casperLoop: Effect[Unit] =
@@ -238,10 +243,7 @@ class NodeRuntime private[node] (
             pm => HandleMessages.handle[Effect](pm, defaultTimeout),
             blob => packetHandler.handlePacket(blob.sender, blob.packet).as(())
           )
-      _ <- NodeDiscovery[Task].discover.executeOn(loopScheduler).start.toEffect
-      _ <- if (conf.server.dynamicHostAddress)
-            dynamicIpLoop.forever.executeOn(loopScheduler).start.toEffect
-          else Task.unit.toEffect
+      _       <- NodeDiscovery[Task].discover.executeOn(loopScheduler).start.toEffect
       _       <- Task.defer(casperLoop.forever.value).executeOn(loopScheduler).start.toEffect
       address = s"rnode://$id@$host?protocol=$port&discovery=$kademliaPort"
       _       <- Log[Effect].info(s"Listening for traffic on $address.")

@@ -11,9 +11,7 @@ from rnode_testing.network import (
 from rnode_testing.rnode import start_bootstrap
 from rnode_testing.common import random_string
 from rnode_testing.wait import (
-    wait_for,
-    string_contains,
-    get_block,
+    wait_for_block_contains,
     wait_for_approved_block_received_handler_state,
     wait_for_started_network,
     wait_for_converged_network,
@@ -96,6 +94,7 @@ def test_node_logs_for_errors(complete_network: "RChain") -> None:
 
     assert_expectations()
 
+
 def test_node_logs_for_RuntimeException(complete_network: "RChain") -> None:
     for node in complete_network.nodes:
         logging.info("Testing {} node logs for \"java RuntimeException\".".format(node.name))
@@ -109,6 +108,7 @@ def test_node_logs_for_RuntimeException(complete_network: "RChain") -> None:
             expect(not "RuntimeException" in line, "Node {name} error in log line: {line}".format(name=node.name, line=line))
 
     assert_expectations()
+
 
 def deploy_block(node: "Node", expected_string: str, contract_name: str) -> str:
     local_contract_file_path = os.path.join('resources', contract_name)
@@ -126,18 +126,12 @@ def deploy_block(node: "Node", expected_string: str, contract_name: str) -> str:
 
 
 def check_blocks(node: "Node", expected_string: str, network: "RChain", config: "TestConfig", block_hash: str) -> None:
-    logging.info(f"Check all peer logs for blocks containing {expected_string}")
+    logging.info("Check all peer logs for blocks containing {}".format(expected_string))
 
     other_nodes = [n for n in network.nodes if n.container.name != node.container.name]
 
     for node in other_nodes:
-        wait_for(
-            string_contains(get_block(node, block_hash), expected_string),
-            config.receive_timeout,
-            f"Container: {node.container.name}: String {expected_string} NOT found in blocks added.",
-        )
-
-        logging.info(f"Container: {node.container.name}: SUCCESS!")
+        wait_for_block_contains(node, block_hash, expected_string, config.receive_timeout)
 
 
 def mk_expected_string(node: "Node", random_token: str) -> str:
@@ -150,10 +144,10 @@ def casper_propose_and_deploy(config: "TestConfig", network: "RChain") -> None:
     """
 
     token_size = 20
-
     contract_name = 'contract.rho'
-
     for node in network.nodes:
+        logging.info("Run test on node '{}'".format(node.name))
+
         random_token = random_string(token_size)
 
         expected_string = mk_expected_string(node, random_token)
