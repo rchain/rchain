@@ -190,7 +190,7 @@ class Node:
         process.start()
 
         try:
-            exit_code, output = queue.get(timeout=self.timeout)
+            exit_code, output = queue.get(self.timeout)
             if exit_code != 0:
                 logging.warning("{}: {} exited with {}".format(self.name, cmd, exit_code))
             logging.debug('output={}'.format(repr(output)))
