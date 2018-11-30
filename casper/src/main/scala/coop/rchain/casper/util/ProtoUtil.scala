@@ -303,9 +303,9 @@ object ProtoUtil {
         case Event(Produce(produce: ProduceEvent)) =>
           Set(produce.channelsHash)
         case Event(Consume(consume: ConsumeEvent)) =>
-          Set(consume.channelsHash)
+          consume.channelsHashes.toSet
         case Event(Comm(CommEvent(Some(consume: ConsumeEvent), produces))) =>
-          Set(consume.channelsHash) ++ produces.map(_.channelsHash).toSet
+          consume.channelsHashes.toSet ++ produces.map(_.channelsHash).toSet
       }.toSet
     } yield ancestorChannels
 

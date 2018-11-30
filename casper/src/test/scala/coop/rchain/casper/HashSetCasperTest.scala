@@ -398,7 +398,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes.foreach(_.tearDown())
   }
 
-  it should "not merge blocks that touch the same channel involving joins" ignore {
+  it should "not merge blocks that touch the same channel involving joins" in {
     val nodes = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
     val deploys = Vector(
       ProtoUtil.sourceDeploy(
