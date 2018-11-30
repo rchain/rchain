@@ -18,9 +18,8 @@ from rnode_testing.wait import (
     wait_for_approved_block_received,
 )
 
-
-
 from typing import TYPE_CHECKING, Generator
+
 if TYPE_CHECKING:
     from conftest import System, TestConfig
     from rnode_testing.network import Network

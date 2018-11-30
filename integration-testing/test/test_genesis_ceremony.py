@@ -4,6 +4,7 @@ import conftest
 from rnode_testing.rnode import start_bootstrap
 
 from typing import Generator, List, TYPE_CHECKING
+
 if TYPE_CHECKING:
     from _pytest.fixtures import FixtureRequest
     from conftest import (

@@ -1,8 +1,10 @@
 import os
 
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from rnode_testing.rnode import Node
+
 
 def test_eval(bootstrap_node: "Node") -> None:
     relative_paths = bootstrap_node.shell_out('sh', '-c', 'ls /opt/docker/examples/*.rho').splitlines()

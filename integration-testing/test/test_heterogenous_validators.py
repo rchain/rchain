@@ -13,6 +13,7 @@ from rnode_testing.wait import (
 )
 
 from typing import Generator, TYPE_CHECKING
+
 if TYPE_CHECKING:
     from _pytest.fixtures import SubRequest
     from conftest import System, ValidatorsData

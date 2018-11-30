@@ -4,6 +4,7 @@ from rnode_testing.wait import (
 )
 
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from conftest import System
     from rnode_testing.rnode import Node

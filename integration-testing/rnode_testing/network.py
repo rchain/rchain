@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from docker.client import DockerClient
     from rnode_testing.rnode import Node
 
+
 class Network:
     def __init__(self, network: str, bootstrap: "Node", peers: List["Node"]) -> None:
         self.network = network
