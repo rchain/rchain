@@ -3,7 +3,7 @@ import contextlib
 import pytest
 
 import conftest
-from rnode_testing.rnode import start_bootstrap
+from rnode_testing.rnode import docker_network_with_started_bootstrap
 
 from typing import Generator, List, TYPE_CHECKING
 
@@ -43,7 +43,7 @@ def test_successful_genesis_ceremony(request: "FixtureRequest", docker_client_se
         '--interval':       '10 sec',
     }
     with custom_system(request, docker_client_session, validator_keys=[VALIDATOR_A_KEYS, VALIDATOR_B_KEYS]) as system:
-        with start_bootstrap(
+        with docker_network_with_started_bootstrap(
             system.docker,
             system.config.node_startup_timeout,
             system.config.rnode_timeout,

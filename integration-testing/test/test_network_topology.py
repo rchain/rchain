@@ -8,7 +8,7 @@ from delayed_assert import expect, assert_expectations
 from rnode_testing.network import (
     start_network,
 )
-from rnode_testing.rnode import start_bootstrap
+from rnode_testing.rnode import docker_network_with_started_bootstrap
 from rnode_testing.common import random_string
 from rnode_testing.wait import (
     wait_for_block_contains,
@@ -26,8 +26,8 @@ if TYPE_CHECKING:
     from rnode_testing.rnode import Node
 
 @pytest.fixture(scope="module")
-def star_network(system: "System") -> Generator["Network", None, None]:
-    with start_bootstrap(system.docker,
+def star_network(system):
+    with docker_network_with_started_bootstrap(system.docker,
                          system.config.node_startup_timeout,
                          system.config.rnode_timeout,
                          system.validators_data,
@@ -47,8 +47,8 @@ def star_network(system: "System") -> Generator["Network", None, None]:
 
 
 @pytest.fixture(scope="module")
-def complete_network(system: "System") -> Generator["Network", None, None]:
-    with start_bootstrap(system.docker,
+def complete_network(system):
+    with docker_network_with_started_bootstrap(system.docker,
                          system.config.node_startup_timeout,
                          system.config.rnode_timeout,
                          system.validators_data,
