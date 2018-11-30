@@ -67,7 +67,7 @@ class Network:
 
 
 @contextlib.contextmanager
-def start_network(config: "TestConfig", docker: "DockerClient", bootstrap: "Node", validators_data: "ValidatorsData", allowed_peers: Optional[List[str]] = None) -> Generator[RChain, None, None]:
+def start_network(config: "TestConfig", docker: "DockerClient", bootstrap: "Node", validators_data: "ValidatorsData", allowed_peers: Optional[List[str]] = None) -> Generator["Network", None, None]:
     logging.debug("Docker network = {}".format(bootstrap.network))
 
     peers = create_peer_nodes(

@@ -77,7 +77,7 @@ class UnexpectedProposeOutputFormatError(Exception):
         self.output = output
 
 
-def extract_block_count_from_show_blocks(show_blocks_output: str):
+def extract_block_count_from_show_blocks(show_blocks_output: str) -> int:
     lines = show_blocks_output.splitlines()
     prefix = 'count: '
     interesting_lines = [l for l in lines if l.startswith(prefix)]
