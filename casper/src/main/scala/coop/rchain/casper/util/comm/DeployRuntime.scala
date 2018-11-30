@@ -100,8 +100,8 @@ object DeployRuntime {
 
   private def gracefulExit[F[_]: Monad: Sync, A](program: F[Either[Throwable, String]]): F[Unit] =
     for {
-      result <- program
-      _ <- result match {
+      result <- Sync[F].attempt(program)
+      _ <- result.joinRight match {
             case Left(ex) =>
               Sync[F].delay {
                 println(processError(ex).getMessage)
