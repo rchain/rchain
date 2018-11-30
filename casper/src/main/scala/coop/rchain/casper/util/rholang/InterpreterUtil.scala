@@ -186,8 +186,8 @@ object InterpreterUtil {
       //and applying the deploys in those blocks.
       case (initParent, initStateHash) +: _ =>
         implicit val ordering: Ordering[BlockMetadata] = BlockDag.deriveOrdering(dag)
-        val indexedParents    = parents.toVector.map(b => dag.dataLookup(b.blockHash))
-        val uncommonAncestors = DagOperations.uncommonAncestors(indexedParents, dag.dataLookup)
+        val indexedParents                             = parents.toVector.map(b => dag.dataLookup(b.blockHash))
+        val uncommonAncestors                          = DagOperations.uncommonAncestors(indexedParents, dag.dataLookup)
 
         val initIndex = indexedParents.indexOf(dag.dataLookup(initParent.blockHash))
         //filter out blocks that already included by starting from the chosen initParent

@@ -278,9 +278,8 @@ class InterpreterUtilTest
     b3PostState.contains("@{6}!(6)") should be(true)
   }
 
-
   val registry =
-  """
+    """
     |new ri(`rho:registry:insertArbitrary`) in {
     |  new X, Y in {
     |    ri!(*X, *Y)
@@ -289,7 +288,7 @@ class InterpreterUtilTest
   """.stripMargin
 
   val other =
-  """
+    """
     |new helloWorld, stdout(`rho:io:stdout`), stdoutAck(`rho:io:stdoutAck`) in {
     |  contract helloWorld(@name) = {
     |    new ack in {
@@ -317,9 +316,9 @@ class InterpreterUtilTest
     val contract = registry
 
     val genesisDeploysWithCost = prepareDeploys(Vector.empty, PCost(1))
-    val b1DeploysWithCost = prepareDeploys(Vector(contract), PCost(2, 2L))
-    val b2DeploysWithCost = prepareDeploys(Vector(contract), PCost(1, 1L))
-    val b3DeploysWithCost = prepareDeploys(Vector.empty, PCost(5, 5L))
+    val b1DeploysWithCost      = prepareDeploys(Vector(contract), PCost(2, 2L))
+    val b2DeploysWithCost      = prepareDeploys(Vector(contract), PCost(1, 1L))
+    val b3DeploysWithCost      = prepareDeploys(Vector.empty, PCost(5, 5L))
 
     /*
      * DAG Looks like this:
@@ -360,9 +359,9 @@ class InterpreterUtilTest
           }
 
           val chainWithUpdatedGen = step(chain, 0, genesis)
-          val chainWithUpdatedB1 = step(chainWithUpdatedGen, 1, genesis)
-          val chainWithUpdatedB2 = step(chainWithUpdatedB1, 2, genesis)
-          val b3             = chainWithUpdatedB2.idToBlocks(3)
+          val chainWithUpdatedB1  = step(chainWithUpdatedGen, 1, genesis)
+          val chainWithUpdatedB2  = step(chainWithUpdatedB1, 2, genesis)
+          val b3                  = chainWithUpdatedB2.idToBlocks(3)
           validateBlockCheckpoint[Id](b3, chain, runtimeManager)
         }
       }
