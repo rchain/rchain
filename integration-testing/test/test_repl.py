@@ -1,9 +1,10 @@
-import os
-import pytest
-import logging
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from rnode_testing.rnode import Node
 
 
-def without_banner_and_prompt(input, output):
+def without_banner_and_prompt(input: str, output: str) -> str:
     banner_and_prompt = '\x1b[31m\n  ╦═╗┌─┐┬ ┬┌─┐┬┌┐┌  ╔╗╔┌─┐┌┬┐┌─┐  ╦═╗╔═╗╔═╗╦  \n  ╠╦╝│  ├─┤├─┤││││  ║║║│ │ ││├┤   ╠╦╝║╣ ╠═╝║  \n  ╩╚═└─┘┴ ┴┴ ┴┴┘└┘  ╝╚╝└─┘─┴┘└─┘  ╩╚═╚═╝╩  ╩═╝\n    \x1b[0m\n\x1b[32mrholang $ '
     assert output.startswith(banner_and_prompt)
     without_banner_and_prompt = output[len(banner_and_prompt):]
@@ -12,7 +13,7 @@ def without_banner_and_prompt(input, output):
     return without_banner_and_prompt[len(colored_input):]
 
 
-def test_repl(bootstrap_node):
+def test_repl(bootstrap_node: "Node") -> None:
     repl_commands = [
         '5',
         'new s(`rho:io:stdout`) in { s!("foo") }',
@@ -22,7 +23,7 @@ def test_repl(bootstrap_node):
         bootstrap_node.repl(repl_cmd)
 
 
-def test_repl_detects_invalid_rholang(bootstrap_node):
+def test_repl_detects_invalid_rholang(bootstrap_node: "Node") -> None:
     input = 'foo'
     output = bootstrap_node.repl(input, stderr=False)
     without_prologue = without_banner_and_prompt(input, output)

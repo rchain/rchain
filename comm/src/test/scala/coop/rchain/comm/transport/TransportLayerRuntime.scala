@@ -4,6 +4,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.mutable
 import scala.concurrent.duration._
+import scala.util.Random
 
 import cats._
 import cats.effect.Timer
@@ -26,7 +27,7 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
 
   def extract[A](fa: F[A]): A
 
-  private val nextPort = new AtomicInteger(41000)
+  private val nextPort = new AtomicInteger((Random.nextInt(100) + 400 + 1) * 100)
 
   def twoNodesEnvironment[A](block: (E, E) => F[A]): F[A] =
     for {

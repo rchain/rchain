@@ -86,8 +86,11 @@ object Produce {
     (Codec[Blake2b256Hash] :: Codec[Blake2b256Hash] :: int32).as[Produce]
 }
 
-case class Consume private (channelsHash: Blake2b256Hash, hash: Blake2b256Hash, sequenceNumber: Int)
-    extends IOEvent {
+case class Consume private (
+    channelsHashes: Seq[Blake2b256Hash],
+    hash: Blake2b256Hash,
+    sequenceNumber: Int
+) extends IOEvent {
 
   override def equals(obj: scala.Any): Boolean = obj match {
     case consume: Consume => consume.hash == hash && consume.sequenceNumber == sequenceNumber
@@ -97,13 +100,13 @@ case class Consume private (channelsHash: Blake2b256Hash, hash: Blake2b256Hash, 
   override def hashCode(): Int = hash.hashCode() * 47 + sequenceNumber.hashCode()
 
   override def toString: String =
-    s"Consume(channels: ${channelsHash.toString}, hash: ${hash.toString})"
+    s"Consume(channels: ${channelsHashes.toString}, hash: ${hash.toString})"
 }
 
 object Consume {
 
-  def unapply(arg: Consume): Option[(Blake2b256Hash, Blake2b256Hash, Int)] =
-    Some((arg.channelsHash, arg.hash, arg.sequenceNumber))
+  def unapply(arg: Consume): Option[(Seq[Blake2b256Hash], Blake2b256Hash, Int)] =
+    Some((arg.channelsHashes, arg.hash, arg.sequenceNumber))
 
   def create[C, P, K](
       channels: Seq[C],
@@ -118,14 +121,18 @@ object Consume {
       serializeK: Serialize[K]
   ): Consume =
     new Consume(
-      StableHashProvider.hash(channels)(serializeC.toCodec),
+      channels.map(StableHashProvider.hash(_)(serializeC.toCodec)),
       StableHashProvider.hash(channels, patterns, continuation, persist),
       sequenceNumber
     )
 
-  def fromHash(channelsHash: Blake2b256Hash, hash: Blake2b256Hash, sequenceNumber: Int): Consume =
-    new Consume(channelsHash, hash, sequenceNumber)
+  def fromHash(
+      channelsHashes: Seq[Blake2b256Hash],
+      hash: Blake2b256Hash,
+      sequenceNumber: Int
+  ): Consume =
+    new Consume(channelsHashes, hash, sequenceNumber)
 
   implicit val codecConsume: Codec[Consume] =
-    (Codec[Blake2b256Hash] :: Codec[Blake2b256Hash] :: int32).as[Consume]
+    (Codec[Seq[Blake2b256Hash]] :: Codec[Blake2b256Hash] :: int32).as[Consume]
 }

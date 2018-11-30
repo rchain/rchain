@@ -1,11 +1,16 @@
 import os
-import pytest
-from rnode_testing.network import (
+from rnode_testing.wait import (
     wait_for_approved_block_received_handler_state,
 )
 
+from typing import TYPE_CHECKING
 
-def test_propose(system, bootstrap_node):
+if TYPE_CHECKING:
+    from conftest import System
+    from rnode_testing.rnode import Node
+
+
+def test_propose(system: "System", bootstrap_node: "Node") -> None:
     wait_for_approved_block_received_handler_state(bootstrap_node, system.config.node_startup_timeout)
     relative_paths = bootstrap_node.shell_out('sh', '-c', 'ls /opt/docker/examples/*.rho').splitlines()
     for relative_path in relative_paths:

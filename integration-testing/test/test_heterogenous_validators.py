@@ -1,13 +1,24 @@
-import pytest
-import conftest
 import contextlib
 
-from rnode_testing.rnode import start_bootstrap, create_peer
-from rnode_testing.wait import wait_for, node_started
-from rnode_testing.network import (
+import pytest
+import conftest
+
+from rnode_testing.rnode import (
+    start_bootstrap,
+    started_peer,
+)
+from rnode_testing.wait import (
+    wait_for_blocks_count_at_least,
     wait_for_approved_block_received_handler_state,
 )
 
+from typing import Generator, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from _pytest.fixtures import SubRequest
+    from conftest import System, ValidatorsData
+    from docker.client import DockerClient
+    from rnode_testing.rnode import Node
 
 """
 First approximation:
@@ -38,21 +49,22 @@ UNBONDED_VALIDATOR_KEYS = conftest.KeyPair(private_key='2bdedd2e4dd2e7b5f176b7a5
 
 
 @pytest.yield_fixture(scope='session')
-def validators_config():
+def validators_config() -> Generator["ValidatorsData", None, None]:
     validator_keys = [BONDED_VALIDATOR_KEYS]
     with conftest.temporary_bonds_file(validator_keys) as f:
         yield conftest.ValidatorsData(bonds_file=f, bootstrap_keys=BOOTSTRAP_NODE_KEYS, peers_keys=validator_keys)
 
 
 @pytest.yield_fixture(scope="session")
-def custom_system(request, validators_config, docker_client_session):
+def custom_system(request: "SubRequest", validators_config: "ValidatorsData", docker_client_session: "DockerClient") -> Generator["System", None, None]:
     test_config = conftest.make_test_config(request)
     yield conftest.System(test_config, docker_client_session, validators_config)
 
 
 @contextlib.contextmanager
-def started_bonded_validator(system, bootstrap_node):
-    bonded_validator = create_peer(
+def started_bonded_validator(system: "System", bootstrap_node: "Node") -> Generator["Node", None, None]:
+    with started_peer(
+        system.config.node_startup_timeout,
         docker_client=system.docker,
         network=bootstrap_node.network,
         name='bonded-validator',
@@ -60,18 +72,15 @@ def started_bonded_validator(system, bootstrap_node):
         rnode_timeout=system.config.rnode_timeout,
         bootstrap=bootstrap_node,
         key_pair=BONDED_VALIDATOR_KEYS,
-    )
-    try:
-        wait_for(node_started(bonded_validator), system.config.node_startup_timeout, "Bonded validator node didn't start correctly")
+    ) as bonded_validator:
         wait_for_approved_block_received_handler_state(bonded_validator, system.config.node_startup_timeout)
         yield bonded_validator
-    finally:
-        bonded_validator.cleanup()
 
 
 @contextlib.contextmanager
-def started_joining_validator(system, bootstrap_node):
-    joining_validator = create_peer(
+def started_joining_validator(system: "System", bootstrap_node: "Node") -> Generator["Node", None, None]:
+    with started_peer(
+        system.config.node_startup_timeout,
         docker_client=system.docker,
         network=bootstrap_node.network,
         name='joining-validator',
@@ -79,19 +88,16 @@ def started_joining_validator(system, bootstrap_node):
         rnode_timeout=system.config.rnode_timeout,
         bootstrap=bootstrap_node,
         key_pair=JOINING_VALIDATOR_KEYS,
-    )
-    try:
-        wait_for(node_started(joining_validator), system.config.node_startup_timeout, "Joining validator node didn't start correctly")
+    ) as joining_validator:
         wait_for_approved_block_received_handler_state(joining_validator, system.config.node_startup_timeout)
         yield joining_validator
-    finally:
-        joining_validator.cleanup()
 
 
 
 @contextlib.contextmanager
-def started_unbonded_validator(system, bootstrap_node):
-    unbonded_validator = create_peer(
+def started_readonly_peer(system: "System", bootstrap_node: "Node") -> Generator["Node", None, None]:
+    with started_peer(
+        system.config.node_startup_timeout,
         docker_client=system.docker,
         network=bootstrap_node.network,
         name='unbonded-validator',
@@ -99,17 +105,14 @@ def started_unbonded_validator(system, bootstrap_node):
         rnode_timeout=system.config.rnode_timeout,
         bootstrap=bootstrap_node,
         key_pair=UNBONDED_VALIDATOR_KEYS,
-    )
-    try:
-        wait_for(node_started(unbonded_validator), system.config.node_startup_timeout, "Unbonded validator node didn't start correctly")
-        wait_for_approved_block_received_handler_state(unbonded_validator, system.config.node_startup_timeout)
-        yield unbonded_validator
-    finally:
-        unbonded_validator.cleanup()
+    ) as readonly_peer:
+        wait_for_approved_block_received_handler_state(readonly_peer, system.config.node_startup_timeout)
+        yield readonly_peer
 
 
 
-def test_heterogenous_validators(custom_system):
+@pytest.mark.xfail
+def test_heterogenous_validators(custom_system : "System") -> None:
     BONDED_VALIDATOR_BLOCKS = 10
     JOINING_VALIDATOR_BLOCKS = 10
     with start_bootstrap(custom_system.docker, custom_system.config.node_startup_timeout, custom_system.config.rnode_timeout, custom_system.validators_data, mount_dir=custom_system.config.mount_dir) as bootstrap_node:
@@ -135,13 +138,15 @@ def test_heterogenous_validators(custom_system):
                     joining_validator.deploy(contract_path)
                     joining_validator.propose()
 
-                with started_unbonded_validator(custom_system, bootstrap_node) as unbonded_validator:
+                with started_readonly_peer(custom_system, bootstrap_node) as readonly_peer:
                     # Force sync with the network
                     joining_validator.deploy(contract_path)
                     joining_validator.propose()
-                    def condition():
-                        expected_blocks_count = BONDED_VALIDATOR_BLOCKS + JOINING_VALIDATOR_BLOCKS
-                        actual_blocks_count = unbonded_validator.get_blocks_count(30)
-                        if actual_blocks_count < expected_blocks_count:
-                            raise Exception("Expected {} blocks, got {}".format(expected_blocks_count, actual_blocks_count))
-                    wait_for(condition, 600, "Unbonded validator did not receive any blocks")
+                    expected_blocks_count = BONDED_VALIDATOR_BLOCKS + JOINING_VALIDATOR_BLOCKS
+                    max_retrieved_blocks = 30
+                    wait_for_blocks_count_at_least(
+                        readonly_peer,
+                        expected_blocks_count,
+                        max_retrieved_blocks,
+                        expected_blocks_count * 10,
+                    )

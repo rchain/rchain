@@ -189,7 +189,6 @@ and contains the elements needed for most tests:
 When this fixture is destroyed it:
 1. removes all the docker unused networks and volumes 
 2. removes the validator_data file
-logs the profiling information for all the fucntions decorated with @profile
 
 
 #### Package fixtures
@@ -203,14 +202,8 @@ Because simple `sleep`s are unreliable *all* waiting for various conditions is d
 
 The wait utilities are defined in `rnode_testing/wait.py`.
 
-The key function is `wait_for` which waits for a given condition a certain number of seconds. This function checks 
-periodically the condition to see if it is fullfilled.
-
 There are also a predicates which can be used to define various conditions. One can write custom predicates
 based on these examples. 
-
-Please note that the predicates should have a readable `__doc__` attribute. 
-They `__doc__` is important for debugging the tests because it's printed in the log files during the waiting. 
 
 ### File resources
 The resources like contracts to be deployed, certificates etc. are stored in the `resources` directory. The code that 
@@ -218,10 +211,6 @@ needs access to these resources can access them using the utilities found in  `r
 
 ### RNode interface
 The file `rnode_testing/rnode.py` contains utilities for working with node.
-
-### Profiling tests
-The file `rnode_testing/profiling.py` contains the `profile` decorator which can be used to collect profiling information.
-The profiling information is printed in the log file at the end of the test execution.
 
 ### Mixing fixtures
 The file `rnode_testing/fixture.py` contains tools for parameterizing tests with different fixtures.

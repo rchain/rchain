@@ -3,18 +3,20 @@ package coop.rchain.casper.util.comm
 import java.io.Closeable
 import java.util.concurrent.TimeUnit
 
-import com.google.protobuf.empty.Empty
+import scala.util.Either
+
 import coop.rchain.casper.protocol._
-import coop.rchain.models.Par
+
+import com.google.protobuf.empty.Empty
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
 
 trait DeployService[F[_]] {
-  def deploy(d: DeployData): F[(Boolean, String)]
-  def createBlock(): F[(Boolean, String)] //create block and add to Casper internal state
-  def showBlock(q: BlockQuery): F[String]
-  def showBlocks(q: BlocksQuery): F[String]
-  def addBlock(b: BlockMessage): F[(Boolean, String)]
+  def deploy(d: DeployData): F[Either[Throwable, String]]
+  def createBlock(): F[Either[Throwable, String]] //create block and add to Casper internal state
+  def showBlock(q: BlockQuery): F[Either[Throwable, String]]
+  def showBlocks(q: BlocksQuery): F[Either[Throwable, String]]
+  def addBlock(b: BlockMessage): F[Either[Throwable, String]]
   def listenForDataAtName(request: DataAtNameQuery): F[ListeningNameDataResponse]
   def listenForContinuationAtName(
       request: ContinuationAtNameQuery
@@ -35,55 +37,58 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
       .maxInboundMessageSize(maxMessageSize)
       .usePlaintext()
       .build
-  private val blockingStub = DeployServiceGrpc.blockingStub(channel)
 
-  def deploy(d: DeployData): Task[(Boolean, String)] = Task.delay {
-    val response = blockingStub.doDeploy(d)
-    (response.success, response.message)
-  }
+  private val stub = CasperMessageGrpcMonix.stub(channel)
 
-  def createBlock(): Task[(Boolean, String)] =
-    Task.delay {
-      val response = blockingStub.createBlock(Empty())
-      (response.success, response.message)
+  def deploy(d: DeployData): Task[Either[Throwable, String]] =
+    stub.doDeploy(d).map { response =>
+      if (response.success) Right(response.message)
+      else Left(new RuntimeException(response.message))
     }
 
-  def showBlock(q: BlockQuery): Task[String] = Task.delay {
-    val response = blockingStub.showBlock(q)
-    response.toProtoString
-  }
+  def createBlock(): Task[Either[Throwable, String]] =
+    stub.createBlock(Empty()).map { response =>
+      if (response.success) Right(response.message)
+      else Left(new RuntimeException(response.message))
+    }
 
-  def showBlocks(q: BlocksQuery): Task[String] = Task.delay {
-    val response = blockingStub.showBlocks(q).toList
+  def showBlock(q: BlockQuery): Task[Either[Throwable, String]] =
+    stub.showBlock(q).map { response =>
+      if (response.status == "Sucess") Right(response.toProtoString)
+      else Left(new RuntimeException(response.status))
+    }
 
-    val showResponses = response.map(bi => s"""
-------------- block ${bi.blockNumber} ---------------
-${bi.toProtoString}
------------------------------------------------------
-""").mkString("\n")
+  def showBlocks(q: BlocksQuery): Task[Either[Throwable, String]] =
+    stub.showBlocks(q).toListL.map { response =>
+      val showResponses = response
+        .map(bi => s"""
+           |------------- block ${bi.blockNumber} ---------------
+           |${bi.toProtoString}
+           |-----------------------------------------------------
+           |""".stripMargin)
+        .mkString("\n")
 
-    val showLength =
-      s"""
-count: ${response.length}
-"""
-    showResponses + "\n" + showLength
-  }
+      val showLength =
+        s"""
+           |count: ${response.length}
+           |""".stripMargin
 
-  def addBlock(b: BlockMessage): Task[(Boolean, String)] = Task.delay {
-    val response = blockingStub.addBlock(b)
-    (response.success, response.message)
-  }
+      Right(showResponses + "\n" + showLength)
+    }
 
-  def listenForDataAtName(request: DataAtNameQuery): Task[ListeningNameDataResponse] = Task.delay {
-    blockingStub.listenForDataAtName(request)
-  }
+  def addBlock(b: BlockMessage): Task[Either[Throwable, String]] =
+    stub.addBlock(b).map { response =>
+      if (response.success) Right(response.message)
+      else Left(new RuntimeException(response.message))
+    }
+
+  def listenForDataAtName(request: DataAtNameQuery): Task[ListeningNameDataResponse] =
+    stub.listenForDataAtName(request)
 
   def listenForContinuationAtName(
       request: ContinuationAtNameQuery
   ): Task[ListeningNameContinuationResponse] =
-    Task.delay {
-      blockingStub.listenForContinuationAtName(request)
-    }
+    stub.listenForContinuationAtName(request)
 
   override def close(): Unit = {
     val terminated = channel.shutdown().awaitTermination(10, TimeUnit.SECONDS)
