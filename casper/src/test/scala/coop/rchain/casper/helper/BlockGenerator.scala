@@ -11,10 +11,13 @@ import coop.rchain.casper.BlockDag
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.rholang.{InterpreterUtil, ProcessedDeployUtil, RuntimeManager}
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Time
+import monix.execution.Scheduler.Implicits.global
 
 import scala.collection.immutable.{HashMap, HashSet}
 import scala.language.higherKinds
@@ -45,6 +48,52 @@ object BlockGenerator {
       override def clear(): F[Unit] = Monad[F].pure(idBs.clear())
       override def close(): F[Unit] = Monad[F].pure(idBs.close())
     }
+
+  def updateChainWithBlockStateUpdate(
+      id: Int,
+      genesis: BlockMessage,
+      runtimeManager: RuntimeManager,
+      chain: IndexedBlockDag
+  )(implicit blockStore: BlockStore[Id]): (BlockMessage, IndexedBlockDag) = {
+    val b = chain.idToBlocks(id)
+    val (postStateHash, processedDeploys) =
+      computeBlockCheckpoint(
+        b,
+        genesis,
+        chain,
+        runtimeManager
+      )
+    val updatedChain = injectPostStateHash(chain, id, b, postStateHash, processedDeploys)
+    (b, updatedChain)
+  }
+
+  def computeBlockCheckpoint(
+      b: BlockMessage,
+      genesis: BlockMessage,
+      dag: BlockDag,
+      runtimeManager: RuntimeManager
+  )(implicit blockStore: BlockStore[Id]): (StateHash, Seq[ProcessedDeploy]) = {
+    val Right((preStateHash, postStateHash, processedDeploys)) =
+      InterpreterUtil
+        .computeBlockCheckpointFromDeploys[Id](b, genesis, dag, runtimeManager)
+
+    (postStateHash, processedDeploys.map(ProcessedDeployUtil.fromInternal))
+  }
+
+  def injectPostStateHash(
+      chain: IndexedBlockDag,
+      id: Int,
+      b: BlockMessage,
+      postGenStateHash: StateHash,
+      processedDeploys: Seq[ProcessedDeploy]
+  )(implicit blockStore: BlockStore[Id]): IndexedBlockDag = {
+    val updatedBlockPostState = b.getBody.getState.withPostStateHash(postGenStateHash)
+    val updatedBlockBody =
+      b.getBody.withState(updatedBlockPostState).withDeploys(processedDeploys)
+    val updatedBlock = b.withBody(updatedBlockBody)
+    blockStore.put(b.blockHash, updatedBlock)
+    chain.copy(idToBlocks = chain.idToBlocks.updated(id, updatedBlock))
+  }
 }
 
 trait BlockGenerator {

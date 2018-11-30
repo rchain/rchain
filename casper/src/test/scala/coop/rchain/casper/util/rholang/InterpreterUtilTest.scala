@@ -31,19 +31,6 @@ class InterpreterUtilTest
 
   implicit val logEff: LogStub[Id] = new LogStub[Id]
 
-  private def computeBlockCheckpoint(
-      b: BlockMessage,
-      genesis: BlockMessage,
-      dag: BlockDag,
-      runtimeManager: RuntimeManager
-  ): (StateHash, Seq[ProcessedDeploy]) = {
-    val Right((preStateHash, postStateHash, processedDeploys)) =
-      InterpreterUtil
-        .computeBlockCheckpointFromDeploys[Id](b, genesis, dag, runtimeManager)
-
-    (postStateHash, processedDeploys.map(ProcessedDeployUtil.fromInternal))
-  }
-
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in {
     val genesisDeploys = Vector(
       "@1!(1)",
@@ -164,21 +151,6 @@ class InterpreterUtilTest
     b3PostState.contains("@{1}!(1)") should be(true)
     b3PostState.contains("@{1}!(15)") should be(true)
     b3PostState.contains("@{7}!(7)") should be(true)
-  }
-
-  private def injectPostStateHash(
-      chain: IndexedBlockDag,
-      id: Int,
-      b: BlockMessage,
-      postGenStateHash: StateHash,
-      processedDeploys: Seq[ProcessedDeploy]
-  ) = {
-    val updatedBlockPostState = b.getBody.getState.withPostStateHash(postGenStateHash)
-    val updatedBlockBody =
-      b.getBody.withState(updatedBlockPostState).withDeploys(processedDeploys)
-    val updatedBlock = b.withBody(updatedBlockBody)
-    BlockStore[Id].put(b.blockHash, updatedBlock)
-    chain.copy(idToBlocks = chain.idToBlocks.updated(id, updatedBlock))
   }
 
   it should "merge histories in case of multiple parents" in {

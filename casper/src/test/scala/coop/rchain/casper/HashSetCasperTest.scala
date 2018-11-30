@@ -359,6 +359,84 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes.foreach(_.tearDown())
   }
 
+  it should "not merge blocks that touch the same channel" in {
+    val nodes = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
+    val deploys = Vector(
+      ProtoUtil.sourceDeploy(
+        "@1!(47)",
+        timeEff.currentMillis,
+        accounting.MAX_VALUE
+      ),
+      ProtoUtil.sourceDeploy(
+        "for(@x <- @1){ @1!(x) }",
+        timeEff.currentMillis,
+        accounting.MAX_VALUE
+      ),
+      ProtoUtil.basicDeployData[Id](2)
+    )
+
+    val Created(block0) = nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
+    val Created(block1) = nodes(1).casperEff.deploy(deploys(1)) *> nodes(1).casperEff.createBlock
+    nodes(0).casperEff.addBlock(block0)
+    nodes(1).casperEff.addBlock(block1)
+    nodes(0).receive()
+    nodes(1).receive()
+    nodes(0).receive()
+    nodes(1).receive()
+
+    val Created(singleParentBlock) = nodes(0).casperEff
+      .deploy(deploys(2)) *> nodes(0).casperEff.createBlock
+    nodes(0).casperEff.addBlock(singleParentBlock)
+    nodes(1).receive()
+
+    nodes(0).logEff.warns.isEmpty shouldBe true
+    nodes(1).logEff.warns.isEmpty shouldBe true
+    singleParentBlock.header.get.parentsHashList.size shouldBe 1
+    nodes(0).casperEff.contains(singleParentBlock) shouldBe true
+    nodes(1).casperEff.contains(singleParentBlock) shouldBe true
+
+    nodes.foreach(_.tearDown())
+  }
+
+  it should "not merge blocks that touch the same channel involving joins" ignore {
+    val nodes = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
+    val deploys = Vector(
+      ProtoUtil.sourceDeploy(
+        "@1!(47)",
+        timeEff.currentMillis,
+        accounting.MAX_VALUE
+      ),
+      ProtoUtil.sourceDeploy(
+        "for(@x <- @1; @y <- @2){ @1!(x) }",
+        timeEff.currentMillis,
+        accounting.MAX_VALUE
+      ),
+      ProtoUtil.basicDeployData[Id](2)
+    )
+
+    val Created(block0) = nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
+    val Created(block1) = nodes(1).casperEff.deploy(deploys(1)) *> nodes(1).casperEff.createBlock
+    nodes(0).casperEff.addBlock(block0)
+    nodes(1).casperEff.addBlock(block1)
+    nodes(0).receive()
+    nodes(1).receive()
+    nodes(0).receive()
+    nodes(1).receive()
+
+    val Created(singleParentBlock) = nodes(0).casperEff
+      .deploy(deploys(2)) *> nodes(0).casperEff.createBlock
+    nodes(0).casperEff.addBlock(singleParentBlock)
+    nodes(1).receive()
+
+    nodes(0).logEff.warns.isEmpty shouldBe true
+    nodes(1).logEff.warns.isEmpty shouldBe true
+    singleParentBlock.header.get.parentsHashList.size shouldBe 1
+    nodes(0).casperEff.contains(singleParentBlock) shouldBe true
+    nodes(1).casperEff.contains(singleParentBlock) shouldBe true
+
+    nodes.foreach(_.tearDown())
+  }
+
   it should "allow bonding and distribute the joining fee" in {
     val nodes =
       HashSetCasperTestNode.network(
