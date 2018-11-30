@@ -1,5 +1,7 @@
 import contextlib
+
 import pytest
+
 import conftest
 from rnode_testing.rnode import start_bootstrap
 
