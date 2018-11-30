@@ -8,41 +8,44 @@ import pathlib
 import tempfile
 import contextlib
 import collections
+import dataclasses
+from typing import List, TYPE_CHECKING, Generator
 
 import pytest
 import docker as docker_py
 
 from rnode_testing.common import KeyPair
 from rnode_testing.rnode import start_bootstrap
-from rnode_testing.pregenerated_keypairs import KEYPAIRS
-
-from typing import List, TYPE_CHECKING, Generator, NamedTuple
-from docker.client import DockerClient
+from rnode_testing.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 
 if TYPE_CHECKING:
-    from _pytest.config.argparsing import Parser
-    from _pytest.fixtures import FixtureRequest, SubRequest
-    from rnode_testing.rnode import Node
+    from docker.client import DockerClient
 
 
+@dataclasses.dataclass
+class CommandLineOptions:
+    peer_count: int
+    node_startup_timeout: int
+    network_converge_timeout: int
+    receive_timeout: int
+    rnode_timeout: int
+    blocks: int
+    mount_dir: str
 
-TestConfig = NamedTuple("TestConfig", [
-    ("peer_count", int),
-    ("node_startup_timeout", int),
-    ("network_converge_timeout", int),
-    ("receive_timeout", int),
-    ("rnode_timeout", int),
-    ("blocks", int),
-    ("mount_dir", str),
-])
 
-KeyPair = NamedTuple("KeyPair", [("private_key", str), ("public_key", str)])
-
-ValidatorsData = NamedTuple("ValidatorsData", [("bonds_file", str), ("bootstrap_keys", KeyPair), ("peers_keys", List[KeyPair])])
-
-System = NamedTuple("System", [("config", TestConfig),
-                               ("docker", DockerClient),
-                               ("validators_data", ValidatorsData)])
+@dataclasses.dataclass
+class TestingContext:
+    peer_count: int
+    node_startup_timeout: int
+    network_converge_timeout: int
+    receive_timeout: int
+    rnode_timeout: int
+    blocks: int
+    mount_dir: str
+    bonds_file: str
+    bootstrap_keypair: str
+    peers_keypairs: str
+    docker: 'DockerClient'
 
 
 def pytest_addoption(parser: "Parser") -> None:
@@ -55,11 +58,14 @@ def pytest_addoption(parser: "Parser") -> None:
     parser.addoption("--mount-dir", action="store", default=None, help="globally accesible directory for mounting between containers")
 
 
-def make_timeout(peer_count: int, value: int, base: int, peer_factor: int = 10) -> int:
-    return value if value > 0 else base + peer_count * peer_factor
+def make_timeout(peer_count, value, base, peer_factor=10):
+    if value > 0:
+        return value
+    return base + peer_count * peer_factor
 
 
-def make_test_config(request: "FixtureRequest") -> TestConfig:
+@pytest.yield_fixture(scope='session')
+def command_line_options(request):
     peer_count = int(request.config.getoption("--peer-count"))
     start_timeout = int(request.config.getoption("--start-timeout"))
     converge_timeout = int(request.config.getoption("--converge-timeout"))
@@ -68,7 +74,7 @@ def make_test_config(request: "FixtureRequest") -> TestConfig:
     blocks = int(request.config.getoption("--blocks"))
     mount_dir = request.config.getoption("--mount-dir")
 
-    config = TestConfig(
+    command_line_options = CommandLineOptions(
         peer_count=peer_count,
         node_startup_timeout=180,
         network_converge_timeout=make_timeout(peer_count, converge_timeout, 200, 10),
@@ -78,12 +84,13 @@ def make_test_config(request: "FixtureRequest") -> TestConfig:
         mount_dir=mount_dir,
     )
 
-    return config
+    yield command_line_options
+
 
 
 @contextlib.contextmanager
-def temporary_bonds_file(validator_keys: List[KeyPair]) -> Generator[str, None, None]:
-    (fd, file) = tempfile.mkstemp(prefix="rchain-bonds-file-", suffix=".txt", dir="/tmp")
+def temporary_bonds_txt_file(validator_keys: List[KeyPair]) -> Generator[str, None, None]:
+    (fd, file) = tempfile.mkstemp(prefix="rchain-bonds-file-", suffix=".txt")
     try:
         with os.fdopen(fd, "w") as f:
             for pair in validator_keys:
@@ -94,17 +101,8 @@ def temporary_bonds_file(validator_keys: List[KeyPair]) -> Generator[str, None, 
         os.unlink(file)
 
 
-@contextlib.contextmanager
-def validators_data(config: TestConfig) -> Generator["ValidatorsData", None, None]:
-    # Using pre-generated validator key pairs by rnode. We do this because warning below  with python generated keys
-    # WARN  coop.rchain.casper.Validate$ - CASPER: Ignoring block 2cb8fcc56e... because block creator 3641880481... has 0 weight
-    validator_keys = [kp for kp in KEYPAIRS[0:config.peer_count+1]]
-    with temporary_bonds_file(validator_keys) as f:
-        yield ValidatorsData(bonds_file=f, bootstrap_keys=validator_keys[0], peers_keys=validator_keys[1:])
-
-
 @pytest.yield_fixture(scope='session')
-def docker_client_session() -> Generator["DockerClient", None, None]:
+def docker_client() -> Generator["DockerClient", None, None]:
     docker_client = docker_py.from_env()
     try:
         yield docker_client
@@ -113,18 +111,21 @@ def docker_client_session() -> Generator["DockerClient", None, None]:
         docker_client.networks.prune()
 
 
-@pytest.yield_fixture(scope="session")
-def system(request: "SubRequest", docker_client_session: "DockerClient") -> Generator["System", None, None]:
-    cfg = make_test_config(request)
-    with validators_data(cfg) as vd:
-        yield System(cfg, docker_client_session, vd)
+@contextlib.contextmanager
+def testing_context(command_line_options, docker_client):
+    # Using pre-generated validator key pairs by rnode. We do this because warning below  with python generated keys
+    # WARN  coop.rchain.casper.Validate$ - CASPER: Ignoring block 2cb8fcc56e... because block creator 3641880481... has 0 weight
+    validator_keys = [kp for kp in PREGENERATED_KEYPAIRS[0:context.peer_count+1]]
+    with temporary_bonds_txt_file(validator_keys) as bonds_file:
+        bootstrap_keypair = validator_keys[0]
+        peers_keypairs=validator_keys[1:]
 
+        context = TestingContext(
+            bonds_file=bonds_file,
+            bootstrap_keypair=bootstrap_keypair,
+            peers_keypairs=peers_keypairs,
+            docker=docker_client,
+            **command_line_options,
+        )
 
-@pytest.yield_fixture(scope="module")
-def bootstrap_node(system: System) -> Generator["Node", None, None]:
-    with start_bootstrap(system.docker,
-                         system.config.node_startup_timeout,
-                         system.config.rnode_timeout,
-                         system.validators_data,
-                         mount_dir=system.config.mount_dir) as node:
-        yield node
+        yield context

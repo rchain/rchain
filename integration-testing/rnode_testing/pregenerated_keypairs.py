@@ -1,7 +1,7 @@
 from rnode_testing.common import KeyPair
 
 
-KEYPAIRS = [
+PREGENERATED_KEYPAIRS = [
     KeyPair(private_key='901b1f0837b7e891d7c2ea0047f502fd95637e450b0226c39a97d68dd951c8a7', public_key='00322ba649cebf90d8bd0eeb0658ea7957bcc59ecee0676c86f4fec517c06251'),
     KeyPair(private_key='f7bfb2b3f2be909dd50beac05bece5940b1e7266816d7294291a2ff66a5d660b', public_key='00be417b7d7032bf742dac491ea3318a757e7420ca313afa2862147ac41f8df9'),
     KeyPair(private_key='2b173084083291ac6850cb734dffb69dfcb280aeb152f0d5be979bea7827c03a', public_key='017f286d499ab1d4a43a0b2efed6f12935e273fb6027daefa1959a8953354d77'),
