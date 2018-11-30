@@ -2,6 +2,14 @@ import os
 import random
 import string
 import tempfile
+import dataclasses
+
+
+
+@dataclasses.dataclass
+class KeyPair:
+    private_key: str
+    public_key: str
 
 
 def random_string(length: int) -> str:

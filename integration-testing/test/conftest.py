@@ -12,7 +12,9 @@ import collections
 import pytest
 import docker as docker_py
 
+from rnode_testing.common import KeyPair
 from rnode_testing.rnode import start_bootstrap
+from rnode_testing.pregenerated_keypairs import KEYPAIRS
 
 from typing import List, TYPE_CHECKING, Generator, NamedTuple
 from docker.client import DockerClient
@@ -96,9 +98,7 @@ def temporary_bonds_file(validator_keys: List[KeyPair]) -> Generator[str, None, 
 def validators_data(config: TestConfig) -> Generator["ValidatorsData", None, None]:
     # Using pre-generated validator key pairs by rnode. We do this because warning below  with python generated keys
     # WARN  coop.rchain.casper.Validate$ - CASPER: Ignoring block 2cb8fcc56e... because block creator 3641880481... has 0 weight
-    keys_file_path = os.path.join('resources/pregenerated-validator-private-public-key-pairs.txt')
-    lines = pathlib.Path(keys_file_path).read_text().splitlines()
-    validator_keys = [KeyPair(*line.split()) for line in lines[0:config.peer_count+1]]
+    validator_keys = [kp for kp in KEYPAIRS[0:config.peer_count+1]]
     with temporary_bonds_file(validator_keys) as f:
         yield ValidatorsData(bonds_file=f, bootstrap_keys=validator_keys[0], peers_keys=validator_keys[1:])
 
