@@ -1,37 +1,37 @@
 package coop.rchain.casper.util.comm
 
-import cats.{Id, Monad, MonadError}
-import cats.effect.Sync
-import cats.implicits._
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.comm.ListenAtName._
-import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.catscontrib._
-import coop.rchain.models.Par
+import scala.concurrent.duration._
 import scala.io.Source
 import scala.language.higherKinds
 import scala.util._
 
+import cats.{Id, Monad}
+import cats.effect.Sync
+import cats.implicits._
+
+import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.comm.ListenAtName._
+import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.Catscontrib._
+import coop.rchain.catscontrib.ski._
+import coop.rchain.models.Par
 import coop.rchain.shared.Time
 
 object DeployRuntime {
 
-  type ErrorHandler[F[_]] = ApplicativeError_[F, Throwable]
-
-  def propose[F[_]: Monad: ErrorHandler: Capture: DeployService](): F[Unit] =
+  def propose[F[_]: Monad: Sync: DeployService](): F[Unit] =
     gracefulExit(
       for {
         response <- DeployService[F].createBlock()
-        _        <- Capture[F].capture { println(s"Response: ${response._2}") }
-      } yield ()
+      } yield response.map(r => s"Response: $r")
     )
 
-  def showBlock[F[_]: Monad: ErrorHandler: Capture: DeployService](hash: String): F[Unit] =
-    gracefulExit(DeployService[F].showBlock(BlockQuery(hash)).map(println(_)))
+  def showBlock[F[_]: Monad: Sync: DeployService](hash: String): F[Unit] =
+    gracefulExit(DeployService[F].showBlock(BlockQuery(hash)))
 
-  def showBlocks[F[_]: Monad: ErrorHandler: Capture: DeployService](depth: Int): F[Unit] =
-    gracefulExit(DeployService[F].showBlocks(BlocksQuery(depth)).map(println(_)))
+  def showBlocks[F[_]: Monad: Sync: DeployService](depth: Int): F[Unit] =
+    gracefulExit(DeployService[F].showBlocks(BlocksQuery(depth)))
 
   def listenForDataAtName[F[_]: Sync: DeployService: Time: Capture](
       name: Id[Name]
@@ -40,7 +40,7 @@ object DeployRuntime {
       listenAtNameUntilChanges(name) { par: Par =>
         val request = DataAtNameQuery(Int.MaxValue, Some(par))
         DeployService[F].listenForDataAtName(request) map (_.blockResults)
-      }
+      }.map(kp(Right("")))
     }
 
   def listenForContinuationAtName[F[_]: Sync: Time: DeployService: Capture](
@@ -50,22 +50,24 @@ object DeployRuntime {
       listenAtNameUntilChanges(names) { pars: List[Par] =>
         val request = ContinuationAtNameQuery(Int.MaxValue, pars)
         DeployService[F].listenForContinuationAtName(request) map (_.blockResults)
-      }
+      }.map(kp(Right("")))
     }
 
   //Accepts a Rholang source file and deploys it to Casper
-  def deployFileProgram[F[_]: Monad: ErrorHandler: Capture: DeployService](
+  def deployFileProgram[F[_]: Monad: Sync: DeployService](
       purseAddress: String,
       phloLimit: Long,
       phloPrice: Long,
       nonce: Int,
       file: String
   ): F[Unit] =
-    Try(Source.fromFile(file).mkString) match {
-      case Success(code) =>
-        gracefulExit(
+    gracefulExit(
+      Sync[F].delay(Try(Source.fromFile(file).mkString).toEither).flatMap {
+        case Left(ex) =>
+          Sync[F].delay(Left(new RuntimeException(s"Error with given file: \n${ex.getMessage}")))
+        case Right(code) =>
           for {
-            timestamp <- Capture[F].capture { System.currentTimeMillis() }
+            timestamp <- Sync[F].delay(System.currentTimeMillis())
             //TODO: allow user to specify their public key
             d = DeployData()
               .withTimestamp(timestamp)
@@ -75,44 +77,37 @@ object DeployRuntime {
               .withPhloPrice(phloPrice)
               .withNonce(nonce)
             response <- DeployService[F].deploy(d)
-            _ <- Capture[F].capture {
-                  println(s"Response: ${response._2}")
-                }
-          } yield ()
-        )
-
-      case Failure(ex) =>
-        Capture[F].capture { println(s"Error with given file: \n${ex.getMessage()}") }
-    }
+          } yield response.map(r => s"Response: $r")
+      }
+    )
 
   //Simulates user requests by randomly deploying things to Casper.
-  def deployDemoProgram[F[_]: Monad: Time: ErrorHandler: Capture: DeployService]: F[Unit] =
-    gracefulExit(MonadOps.forever(singleDeploy[F]))
+  def deployDemoProgram[F[_]: Monad: Sync: Time: DeployService]: F[Unit] =
+    singleDeploy[F].forever
 
-  private def singleDeploy[F[_]: Monad: Time: Capture: DeployService]: F[Unit] =
+  private def singleDeploy[F[_]: Monad: Time: Sync: DeployService]: F[Unit] =
     for {
-      id <- Capture[F].capture { scala.util.Random.nextInt(100) }
+      id <- Sync[F].delay { scala.util.Random.nextInt(100) }
       d  <- ProtoUtil.basicDeployData[F](id)
-      _ <- Capture[F].capture {
+      _ <- Sync[F].delay {
             println(s"Sending the following to Casper: ${d.term}")
           }
       response <- DeployService[F].deploy(d)
-      _ <- Capture[F].capture {
-            println(s"Response: ${response._2}")
-          }
-      _ <- IOUtil.sleep[F](4000L)
+      msg      = response.fold(processError(_).getMessage, "Response: " + _)
+      _        <- Sync[F].delay(println(msg))
+      _        <- Time[F].sleep(4.seconds)
     } yield ()
 
-  private def gracefulExit[F[_]: Monad: ErrorHandler: Capture, A](program: F[A]): F[Unit] =
+  private def gracefulExit[F[_]: Monad: Sync, A](program: F[Either[Throwable, String]]): F[Unit] =
     for {
-      result <- program.attempt
-      _ <- result match {
+      result <- Sync[F].attempt(program)
+      _ <- result.joinRight match {
             case Left(ex) =>
-              Capture[F].capture {
-                println(s"Error: ${processError(ex).getMessage}")
+              Sync[F].delay {
+                println(processError(ex).getMessage)
                 System.exit(1)
               }
-            case _ => ().pure[F]
+            case Right(msg) => Sync[F].delay(println(msg))
           }
     } yield ()
 
