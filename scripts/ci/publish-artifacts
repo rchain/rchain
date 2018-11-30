@@ -28,10 +28,18 @@ rsync -avrz --delete -e "ssh -p 22 -o StrictHostKeyChecking=no -o UserKnownHosts
 
 # Upload Docker image
 
+set +x
 builtin echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
-docker tag coop.rchain/rnode:latest rchain/rnode:$REF
+
+# There's a slight race condition between tag and push. Tag is fast, but what
+# can happen if some other jobs tags with latest while push is in progress?
+
+set -x
+
+docker tag coop.rchain/rnode:DRONE-$DRONE_BUILD_NUMBER rchain/rnode:$REF
 docker push rchain/rnode:$REF
+
 if [[ $TAG == 1 ]]; then
-	docker tag coop.rchain/rnode:latest rchain/rnode:latest
+	docker tag coop.rchain/rnode:DRONE-$DRONE_BUILD_NUMBER rchain/rnode:latest
 	docker push rchain/rnode:latest
 fi

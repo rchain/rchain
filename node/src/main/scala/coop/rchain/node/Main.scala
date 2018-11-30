@@ -29,7 +29,8 @@ object Main {
 
     implicit val scheduler: Scheduler = Scheduler.computation(
       Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
-      "node-runner"
+      "node-runner",
+      reporter = UncaughtExceptionLogger
     )
 
     val exec: Task[Unit] =
@@ -94,10 +95,9 @@ object Main {
   }
 
   private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
-    log.info(VersionInfo.get)
-
     val node =
       for {
+        _       <- log.info(VersionInfo.get).toEffect
         runtime <- NodeRuntime(conf)
         _       <- runtime.main
       } yield ()

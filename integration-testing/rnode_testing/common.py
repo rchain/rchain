@@ -1,8 +1,15 @@
 import os
+import random
+import string
 import logging
 import tempfile
 import contextlib
 import collections
+
+
+def random_string(length):
+    return ''.join(random.choice(string.ascii_letters) for m in range(length))
+
 
 @contextlib.contextmanager
 def log_box(log_function, title="", char="*", length=150):

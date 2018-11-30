@@ -8,5 +8,8 @@ docker = "*"
 pytest = "*"
 delayed-assert = "*"
 pytest-json = "*"
+pytest-mypy = "*"
+pytest-pylint = "*"
+typing-extensions = "*"
 
 [dev-packages]

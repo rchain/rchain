@@ -1,8 +1,3 @@
-import os
-import pytest
-import logging
-
-
 def without_banner_and_prompt(input, output):
     banner_and_prompt = '\x1b[31m\n  ╦═╗┌─┐┬ ┬┌─┐┬┌┐┌  ╔╗╔┌─┐┌┬┐┌─┐  ╦═╗╔═╗╔═╗╦  \n  ╠╦╝│  ├─┤├─┤││││  ║║║│ │ ││├┤   ╠╦╝║╣ ╠═╝║  \n  ╩╚═└─┘┴ ┴┴ ┴┴┘└┘  ╝╚╝└─┘─┴┘└─┘  ╩╚═╚═╝╩  ╩═╝\n    \x1b[0m\n\x1b[32mrholang $ '
     assert output.startswith(banner_and_prompt)

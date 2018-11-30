@@ -44,8 +44,10 @@ $ pipenv sync
 
 ## Step 4: Create the rnode docker image
 
-The tests use the docker image `coop.rchain/rnode:latest` as a base image for
-the docker containers. Docker has to be able to get this image. 
+Tests use RNode Docker image. If environment variable `${DRONE_BUILD_NUMBER}` is
+defined, then `coop.rchain/rnode:DRONE-${DRONE_BUILD_NUMBER}` image is used.
+These are created on Drone CI in order to use have image per build. If the
+variable is undefined, `coop.rchain/rnode:latest` is used.
  
 When the tests are run against the current source code one should build the
 docker image and publish it locally. For details see [the developer
@@ -108,6 +110,18 @@ $ ./run_tests.sh --collect-only
 $ ./run_tests.sh --collect-only  test/test_star_connected.py
 ```
 
+The test can runs the [mypy](https://pypi.org/project/pytest-mypy/) static type checker on your source files as part of 
+your Pytest test runs now. It is not enabled by default now. You can run the static type checker test by the command below.
+
+```bash
+$ ./run_tests.sh --mypy
+```
+
+If you want to restrict your test run to only perform mypy checks and not any other tests by using the `-m` option.
+
+```bash
+$ ./run_tests.sh --mypy -m mypy 
+```
 
 # Writing your own tests
 ## Pytest basics
@@ -175,7 +189,6 @@ and contains the elements needed for most tests:
 When this fixture is destroyed it:
 1. removes all the docker unused networks and volumes 
 2. removes the validator_data file
-logs the profiling information for all the fucntions decorated with @profile
 
 
 #### Package fixtures
@@ -189,14 +202,8 @@ Because simple `sleep`s are unreliable *all* waiting for various conditions is d
 
 The wait utilities are defined in `rnode_testing/wait.py`.
 
-The key function is `wait_for` which waits for a given condition a certain number of seconds. This function checks 
-periodically the condition to see if it is fullfilled.
-
 There are also a predicates which can be used to define various conditions. One can write custom predicates
 based on these examples. 
-
-Please note that the predicates should have a readable `__doc__` attribute. 
-They `__doc__` is important for debugging the tests because it's printed in the log files during the waiting. 
 
 ### File resources
 The resources like contracts to be deployed, certificates etc. are stored in the `resources` directory. The code that 
@@ -204,10 +211,6 @@ needs access to these resources can access them using the utilities found in  `r
 
 ### RNode interface
 The file `rnode_testing/rnode.py` contains utilities for working with node.
-
-### Profiling tests
-The file `rnode_testing/profiling.py` contains the `profile` decorator which can be used to collect profiling information.
-The profiling information is printed in the log file at the end of the test execution.
 
 ### Mixing fixtures
 The file `rnode_testing/fixture.py` contains tools for parameterizing tests with different fixtures.

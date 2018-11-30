@@ -52,13 +52,16 @@ object EffectsTestInstances {
       defaultTimeout: FiniteDuration = FiniteDuration(1, MILLISECONDS),
       clearConnections: ClearConnetionsConf = ClearConnetionsConf(1, 1)
   ) =
-    new ConstApplicativeAsk[F, RPConf](RPConf(local, Some(local), defaultTimeout, clearConnections))
+    new ConstApplicativeAsk[F, RPConf](
+      RPConf(local, Some(local), defaultTimeout, clearConnections)
+    )
 
   class TransportLayerStub[F[_]: Capture: Applicative] extends TransportLayer[F] {
     case class Request(peer: PeerNode, msg: Protocol)
     type Responses = PeerNode => Protocol => CommErr[Protocol]
-    var reqresp: Option[Responses] = None
-    var requests: List[Request]    = List.empty[Request]
+    var reqresp: Option[Responses]  = None
+    var requests: List[Request]     = List.empty[Request]
+    var disconnects: List[PeerNode] = List.empty[PeerNode]
 
     def setResponses(responses: Responses): Unit =
       reqresp = Some(responses)
@@ -66,6 +69,7 @@ object EffectsTestInstances {
     def reset(): Unit = {
       reqresp = None
       requests = List.empty[Request]
+      disconnects = List.empty[PeerNode]
     }
 
     def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): F[CommErr[Protocol]] =
@@ -82,7 +86,7 @@ object EffectsTestInstances {
 
     def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]] = Capture[F].capture {
       requests = requests ++ peers.map(peer => Request(peer, msg))
-      Seq()
+      peers.map(_ => Right(()))
     }
 
     def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] =
@@ -93,7 +97,10 @@ object EffectsTestInstances {
         handleStreamed: Blob => F[Unit]
     ): F[Unit] = ???
 
-    def disconnect(peer: PeerNode): F[Unit] = ???
+    def disconnect(peer: PeerNode): F[Unit] =
+      Capture[F].capture {
+        disconnects = disconnects :+ peer
+      }
 
     def shutdown(msg: Protocol): F[Unit] = ???
   }
@@ -126,6 +133,10 @@ object EffectsTestInstances {
       ().pure[F]
     }
     def error(msg: String)(implicit ev: LogSource): F[Unit] = {
+      errors = errors :+ msg
+      ().pure[F]
+    }
+    def error(msg: String, cause: scala.Throwable)(implicit ev: LogSource): F[Unit] = {
       errors = errors :+ msg
       ().pure[F]
     }

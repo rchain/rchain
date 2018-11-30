@@ -1,7 +1,5 @@
 package coop.rchain.comm.transport
 
-import cats.Id
-import coop.rchain.catscontrib._
 import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.crypto.util.CertificateHelper
@@ -18,7 +16,7 @@ class SslSessionServerInterceptor() extends ServerInterceptor {
   ): ServerCall.Listener[ReqT] = new InterceptionListener(next.startCall(call, headers), call)
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
-  private val log                           = Log.log[Id]
+  private val log                           = Log.logId
 
   private class InterceptionListener[ReqT, RespT](
       next: ServerCall.Listener[ReqT],
