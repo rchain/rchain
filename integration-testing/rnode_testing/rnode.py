@@ -6,8 +6,10 @@ import threading
 import contextlib
 from typing import Generator
 
+import pytest
 from docker.client import DockerClient
 
+import conftest
 from rnode_testing.common import (
     random_string,
     make_tempfile,
@@ -566,3 +568,10 @@ def docker_network_with_started_bootstrap(context, *, container_name=None, cli_o
     with docker_network(context.docker) as network:
         with started_bootstrap_node(context=context, network=network, container_name=container_name, cli_options=cli_options, mount_dir=context.mount_dir) as node:
             yield node
+
+
+@pytest.yield_fixture(scope='module')
+def started_standalone_bootstrap_node(command_line_options_fixture, docker_client_fixture):
+    with conftest.testing_context(command_line_options_fixture, docker_client_fixture) as context:
+        with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
+            yield bootstrap_node
