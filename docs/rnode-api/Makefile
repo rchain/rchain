@@ -7,20 +7,21 @@ PROTOC=protoc
 PGENDOC=$(HOME)/golang/src/protoc-gen-doc/protoc-gen-doc
 
 MODELS=../../models
-PROTOS=$(MODELS)/src/main/protobuf
+DEPLOY_PROTOS=$(MODELS)/src/main/protobuf
+DIAG_PROTOS=../../node/src/main/protobuf
+
 EXTERNAL=$(MODELS)/target/protobuf_external
 
-index.md: $(PROTOS)/*.proto
-	$(PROTOC) -I$(PROTOS) -I$(EXTERNAL) \
-		--plugin=$(PGENDOC) --doc_out=. \
-		--doc_opt=markdown,index.md:scalapb/* \
-		$(PROTOS)/*.proto
+index.md: $(DEPLOY_PROTOS)/CasperMessage.proto $(DEPLOY_PROTOS)/RhoTypes.proto \
+		$(DIAG_PROTOS)/diagnostics.proto
+	$(PROTOC) -I$(EXTERNAL) -I$(DIAG_PROTOS) -I$(DEPLOY_PROTOS) --plugin=$(PGENDOC) \
+		--doc_out=. --doc_opt=markdown,index.md:scalapb/* \
+		$(DEPLOY_PROTOS)/CasperMessage.proto $(DEPLOY_PROTOS)/RhoTypes.proto \
+			$(DIAG_PROTOS)/diagnostics.proto
 
-index.html: $(PROTOS)/*.proto
-	$(PROTOC) -I$(PROTOS) -I$(EXTERNAL) \
-		--plugin=$(PGENDOC) --doc_out=. \
-		--doc_opt=html,index.html:scalapb/* \
-		$(PROTOS)/*.proto
+
+index.html: index.md
+	markdown index.md >index.html
 
 clean:
-	rm -f grpc.md index.html
+	rm -f index.md index.html

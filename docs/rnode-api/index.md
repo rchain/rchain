@@ -101,28 +101,22 @@
   
   
 
-- [routing.proto](#routing.proto)
-    - [Chunk](#coop.rchain.comm.protocol.routing.Chunk)
-    - [ChunkData](#coop.rchain.comm.protocol.routing.ChunkData)
-    - [ChunkHeader](#coop.rchain.comm.protocol.routing.ChunkHeader)
-    - [ChunkResponse](#coop.rchain.comm.protocol.routing.ChunkResponse)
-    - [Disconnect](#coop.rchain.comm.protocol.routing.Disconnect)
-    - [Header](#coop.rchain.comm.protocol.routing.Header)
-    - [Heartbeat](#coop.rchain.comm.protocol.routing.Heartbeat)
-    - [HeartbeatResponse](#coop.rchain.comm.protocol.routing.HeartbeatResponse)
-    - [InternalServerError](#coop.rchain.comm.protocol.routing.InternalServerError)
-    - [NoResponse](#coop.rchain.comm.protocol.routing.NoResponse)
-    - [Node](#coop.rchain.comm.protocol.routing.Node)
-    - [Packet](#coop.rchain.comm.protocol.routing.Packet)
-    - [Protocol](#coop.rchain.comm.protocol.routing.Protocol)
-    - [ProtocolHandshake](#coop.rchain.comm.protocol.routing.ProtocolHandshake)
-    - [ProtocolHandshakeResponse](#coop.rchain.comm.protocol.routing.ProtocolHandshakeResponse)
-    - [TLRequest](#coop.rchain.comm.protocol.routing.TLRequest)
-    - [TLResponse](#coop.rchain.comm.protocol.routing.TLResponse)
+- [diagnostics.proto](#diagnostics.proto)
+    - [GarbageCollector](#coop.rchain.node.model.GarbageCollector)
+    - [GarbageCollectors](#coop.rchain.node.model.GarbageCollectors)
+    - [Memory](#coop.rchain.node.model.Memory)
+    - [MemoryPool](#coop.rchain.node.model.MemoryPool)
+    - [MemoryPools](#coop.rchain.node.model.MemoryPools)
+    - [MemoryUsage](#coop.rchain.node.model.MemoryUsage)
+    - [NodeCoreMetrics](#coop.rchain.node.model.NodeCoreMetrics)
+    - [Peer](#coop.rchain.node.model.Peer)
+    - [Peers](#coop.rchain.node.model.Peers)
+    - [ProcessCpu](#coop.rchain.node.model.ProcessCpu)
+    - [Threads](#coop.rchain.node.model.Threads)
   
   
   
-    - [TransportLayer](#coop.rchain.comm.protocol.routing.TransportLayer)
+    - [Diagnostics](#coop.rchain.node.model.Diagnostics)
   
 
 - [Scalar Value Types](#scalar-value-types)
@@ -394,7 +388,7 @@ For node clients, see BlockMessage for actual Casper protocol Block representati
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| channelsHash | [bytes](#bytes) |  |  |
+| channelsHashes | [bytes](#bytes) | repeated |  |
 | hash | [bytes](#bytes) |  |  |
 | sequenceNumber | [int32](#int32) |  |  |
 
@@ -1660,253 +1654,198 @@ These are DeBruijn levels
 
 
 
-<a name="routing.proto"/>
+<a name="diagnostics.proto"/>
 <p align="right"><a href="#top">Top</a></p>
 
-## routing.proto
+## diagnostics.proto
 
 
 
-<a name="coop.rchain.comm.protocol.routing.Chunk"/>
+<a name="coop.rchain.node.model.GarbageCollector"/>
 
-### Chunk
-
-
-
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| header | [ChunkHeader](#coop.rchain.comm.protocol.routing.ChunkHeader) |  |  |
-| data | [ChunkData](#coop.rchain.comm.protocol.routing.ChunkData) |  |  |
-
-
-
-
-
-
-<a name="coop.rchain.comm.protocol.routing.ChunkData"/>
-
-### ChunkData
+### GarbageCollector
 
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| contentData | [bytes](#bytes) |  |  |
+| name | [string](#string) |  | name representing this memory manager |
+| totalCollections | [int64](#int64) |  | total number of collections that have occurred |
+| totalCollectionTime | [int64](#int64) |  | accumulated collection time in ms |
+| startTime | [google.protobuf.Int64Value](#google.protobuf.Int64Value) |  | start time of last GC since the JVM was started in ms |
+| endTime | [google.protobuf.Int64Value](#google.protobuf.Int64Value) |  | end time of last GC since the JVM was started |
+| duration | [google.protobuf.Int64Value](#google.protobuf.Int64Value) |  | elapsed time of last GC in ms |
 
 
 
 
 
 
-<a name="coop.rchain.comm.protocol.routing.ChunkHeader"/>
+<a name="coop.rchain.node.model.GarbageCollectors"/>
 
-### ChunkHeader
-
-
-
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| sender | [Node](#coop.rchain.comm.protocol.routing.Node) |  |  |
-| typeId | [string](#string) |  |  |
-| compressed | [bool](#bool) |  |  |
-| contentLength | [int32](#int32) |  |  |
-
-
-
-
-
-
-<a name="coop.rchain.comm.protocol.routing.ChunkResponse"/>
-
-### ChunkResponse
-
-
-
-
-
-
-
-<a name="coop.rchain.comm.protocol.routing.Disconnect"/>
-
-### Disconnect
-
-
-
-
-
-
-
-<a name="coop.rchain.comm.protocol.routing.Header"/>
-
-### Header
+### GarbageCollectors
 
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| sender | [Node](#coop.rchain.comm.protocol.routing.Node) |  |  |
+| garbageCollectors | [GarbageCollector](#coop.rchain.node.model.GarbageCollector) | repeated |  |
 
 
 
 
 
 
-<a name="coop.rchain.comm.protocol.routing.Heartbeat"/>
+<a name="coop.rchain.node.model.Memory"/>
 
-### Heartbeat
-
-
-
-
-
-
-
-<a name="coop.rchain.comm.protocol.routing.HeartbeatResponse"/>
-
-### HeartbeatResponse
-
-
-
-
-
-
-
-<a name="coop.rchain.comm.protocol.routing.InternalServerError"/>
-
-### InternalServerError
+### Memory
 
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| error | [bytes](#bytes) |  |  |
+| committed | [int64](#int64) |  | amount of memory committed in bytes |
+| init | [int64](#int64) |  | amount of memory that the JVM initially requested in bytes |
+| max | [google.protobuf.Int64Value](#google.protobuf.Int64Value) |  | maximum amount of memory possible in bytes |
+| used | [int64](#int64) |  | amount of used memory in bytes |
 
 
 
 
 
 
-<a name="coop.rchain.comm.protocol.routing.NoResponse"/>
+<a name="coop.rchain.node.model.MemoryPool"/>
 
-### NoResponse
-
-
-
-
-
-
-
-<a name="coop.rchain.comm.protocol.routing.Node"/>
-
-### Node
+### MemoryPool
 
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| id | [bytes](#bytes) |  |  |
-| host | [bytes](#bytes) |  |  |
-| tcp_port | [uint32](#uint32) |  |  |
-| udp_port | [uint32](#uint32) |  |  |
+| name | [string](#string) |  | name representing this memory pool |
+| poolType | [string](#string) |  | type of this memory pool |
+| usage | [Memory](#coop.rchain.node.model.Memory) |  | memory pool usage |
+| peakUsage | [Memory](#coop.rchain.node.model.Memory) |  | peak memory usage |
 
 
 
 
 
 
-<a name="coop.rchain.comm.protocol.routing.Packet"/>
+<a name="coop.rchain.node.model.MemoryPools"/>
 
-### Packet
-
-
-
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| typeId | [string](#string) |  |  |
-| content | [bytes](#bytes) |  |  |
-
-
-
-
-
-
-<a name="coop.rchain.comm.protocol.routing.Protocol"/>
-
-### Protocol
+### MemoryPools
 
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| header | [Header](#coop.rchain.comm.protocol.routing.Header) |  |  |
-| heartbeat | [Heartbeat](#coop.rchain.comm.protocol.routing.Heartbeat) |  |  |
-| heartbeat_response | [HeartbeatResponse](#coop.rchain.comm.protocol.routing.HeartbeatResponse) |  |  |
-| protocol_handshake | [ProtocolHandshake](#coop.rchain.comm.protocol.routing.ProtocolHandshake) |  |  |
-| protocol_handshake_response | [ProtocolHandshakeResponse](#coop.rchain.comm.protocol.routing.ProtocolHandshakeResponse) |  |  |
-| packet | [Packet](#coop.rchain.comm.protocol.routing.Packet) |  |  |
-| disconnect | [Disconnect](#coop.rchain.comm.protocol.routing.Disconnect) |  |  |
+| memoryPools | [MemoryPool](#coop.rchain.node.model.MemoryPool) | repeated |  |
 
 
 
 
 
 
-<a name="coop.rchain.comm.protocol.routing.ProtocolHandshake"/>
+<a name="coop.rchain.node.model.MemoryUsage"/>
 
-### ProtocolHandshake
+### MemoryUsage
 
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| nonce | [bytes](#bytes) |  |  |
+| heap | [Memory](#coop.rchain.node.model.Memory) |  | memory currently used by the Java heap for object allocation |
+| nonHeap | [Memory](#coop.rchain.node.model.Memory) |  | current non-heap memory usage of the JVM |
 
 
 
 
 
 
-<a name="coop.rchain.comm.protocol.routing.ProtocolHandshakeResponse"/>
+<a name="coop.rchain.node.model.NodeCoreMetrics"/>
 
-### ProtocolHandshakeResponse
-
-
-
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| nonce | [bytes](#bytes) |  |  |
-
-
-
-
-
-
-<a name="coop.rchain.comm.protocol.routing.TLRequest"/>
-
-### TLRequest
+### NodeCoreMetrics
 
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| protocol | [Protocol](#coop.rchain.comm.protocol.routing.Protocol) |  |  |
+| pingReceiverCount | [int64](#int64) |  |  |
+| lookupReceiverCount | [int64](#int64) |  |  |
+| disconnectReceiverCount | [int64](#int64) |  |  |
+| connects | [int64](#int64) |  |  |
+| p2pEncryptionHandshakeReceiverCount | [int64](#int64) |  |  |
+| p2pProtocolHandshakeReceiverCount | [int64](#int64) |  |  |
+| peers | [int64](#int64) |  |  |
+| from | [int64](#int64) |  |  |
+| to | [int64](#int64) |  |  |
 
 
 
 
 
 
-<a name="coop.rchain.comm.protocol.routing.TLResponse"/>
+<a name="coop.rchain.node.model.Peer"/>
 
-### TLResponse
+### Peer
 
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| protocol | [Protocol](#coop.rchain.comm.protocol.routing.Protocol) |  |  |
-| noResponse | [NoResponse](#coop.rchain.comm.protocol.routing.NoResponse) |  |  |
-| internalServerError | [InternalServerError](#coop.rchain.comm.protocol.routing.InternalServerError) |  |  |
+| host | [string](#string) |  |  |
+| port | [int32](#int32) |  |  |
+| key | [bytes](#bytes) |  |  |
+
+
+
+
+
+
+<a name="coop.rchain.node.model.Peers"/>
+
+### Peers
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| peers | [Peer](#coop.rchain.node.model.Peer) | repeated |  |
+
+
+
+
+
+
+<a name="coop.rchain.node.model.ProcessCpu"/>
+
+### ProcessCpu
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| load | [google.protobuf.DoubleValue](#google.protobuf.DoubleValue) |  | amount of CPU load, as a value between 0.0 and 1.0 |
+| time | [google.protobuf.Int64Value](#google.protobuf.Int64Value) |  | CPU time used by the process on which the JVM is running in nanoseconds |
+
+
+
+
+
+
+<a name="coop.rchain.node.model.Threads"/>
+
+### Threads
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| threadCount | [int32](#int32) |  | current number of live threads including both daemon and non-daemon threads |
+| daemonThreadCount | [int32](#int32) |  | current number of live daemon threads. |
+| peakThreadCount | [int32](#int32) |  | peak live thread count since the JVM started |
+| totalStartedThreadCount | [int64](#int64) |  | total number of threads created and also started since the JVM started |
 
 
 
@@ -1919,16 +1858,21 @@ These are DeBruijn levels
  
 
 
-<a name="coop.rchain.comm.protocol.routing.TransportLayer"/>
+<a name="coop.rchain.node.model.Diagnostics"/>
 
-### TransportLayer
+### Diagnostics
 
 
 | Method Name | Request Type | Response Type | Description |
 | ----------- | ------------ | ------------- | ------------|
-| Tell | [TLRequest](#coop.rchain.comm.protocol.routing.TLRequest) | [TLResponse](#coop.rchain.comm.protocol.routing.TLRequest) |  |
-| Ask | [TLRequest](#coop.rchain.comm.protocol.routing.TLRequest) | [TLResponse](#coop.rchain.comm.protocol.routing.TLRequest) |  |
-| Stream | [Chunk](#coop.rchain.comm.protocol.routing.Chunk) | [ChunkResponse](#coop.rchain.comm.protocol.routing.Chunk) | this eventually will become streamed API, for now regular call |
+| ListPeers | [.google.protobuf.Empty](#google.protobuf.Empty) | [Peers](#google.protobuf.Empty) |  |
+| ListDiscoveredPeers | [.google.protobuf.Empty](#google.protobuf.Empty) | [Peers](#google.protobuf.Empty) |  |
+| GetProcessCpu | [.google.protobuf.Empty](#google.protobuf.Empty) | [ProcessCpu](#google.protobuf.Empty) |  |
+| GetMemoryUsage | [.google.protobuf.Empty](#google.protobuf.Empty) | [MemoryUsage](#google.protobuf.Empty) |  |
+| GetGarbageCollectors | [.google.protobuf.Empty](#google.protobuf.Empty) | [GarbageCollectors](#google.protobuf.Empty) |  |
+| GetMemoryPools | [.google.protobuf.Empty](#google.protobuf.Empty) | [MemoryPools](#google.protobuf.Empty) |  |
+| GetThreads | [.google.protobuf.Empty](#google.protobuf.Empty) | [Threads](#google.protobuf.Empty) |  |
+| GetNodeCoreMetrics | [.google.protobuf.Empty](#google.protobuf.Empty) | [NodeCoreMetrics](#google.protobuf.Empty) |  |
 
  
 
