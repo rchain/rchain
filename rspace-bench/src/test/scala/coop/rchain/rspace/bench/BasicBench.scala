@@ -100,7 +100,7 @@ object BasicBench {
 
   @org.openjdk.jmh.annotations.State(Scope.Benchmark)
   class BenchState {
-    val debug: Boolean = true
+    val debug: Boolean = false
 
     import coop.rchain.rholang.interpreter.storage.implicits._
 
