@@ -1,13 +1,12 @@
 """Tests for the testing code itself."""
 
-
 from rnode_testing.rnode import (
     extract_block_hash_from_propose_output,
     extract_block_count_from_show_blocks,
 )
 
 
-def test_blocks_count_from_show_blocks():
+def test_blocks_count_from_show_blocks() -> None:
     show_blocks_output = '''
 ------------- block 0 ---------------
 blockHash: "630c5372c67cc5400a9eb11459bb240226273a693bbb018df829a3119b26bbf0"
@@ -31,6 +30,6 @@ count: 123
     assert extract_block_count_from_show_blocks(show_blocks_output) == 123
 
 
-def test_extract_block_hash_from_propose_output():
+def test_extract_block_hash_from_propose_output() -> None:
     response = "Response: Success! Block a91208047c... created and added.\n"
     assert extract_block_hash_from_propose_output(response) == "a91208047c"

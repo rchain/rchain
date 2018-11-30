@@ -3,9 +3,16 @@ import contextlib
 
 from rnode_testing.rnode import create_peer_nodes
 
+from typing import List, TYPE_CHECKING, Optional, Generator
+
+if TYPE_CHECKING:
+    from conftest import TestConfig, ValidatorsData
+    from docker.client import DockerClient
+    from rnode_testing.rnode import Node
+
 
 class Network:
-    def __init__(self, network, bootstrap, peers):
+    def __init__(self, network: str, bootstrap: "Node", peers: List["Node"]) -> None:
         self.network = network
         self.bootstrap = bootstrap
         self.peers = peers
@@ -13,7 +20,7 @@ class Network:
 
 
 @contextlib.contextmanager
-def start_network(config, docker, bootstrap, validators_data, allowed_peers=None):
+def start_network(config: "TestConfig", docker: "DockerClient", bootstrap: "Node", validators_data: "ValidatorsData", allowed_peers: Optional[List[str]] = None) -> Generator["Network", None, None]:
     logging.debug("Docker network = {}".format(bootstrap.network))
 
     peers = create_peer_nodes(

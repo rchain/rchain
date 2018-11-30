@@ -1,13 +1,12 @@
 import re
-import sys
 import time
 import logging
 
 import pytest
 import typing_extensions
 
-
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from rnode_testing.rnode import Node
     from rnode_testing.network import Network
@@ -84,7 +83,7 @@ class BlockContainsString:
 
 
 class BlocksCountAtLeast:
-    def __init__(self, node: 'Node', blocks_count: str, max_retrieved_blocks: int) -> None:
+    def __init__(self, node: 'Node', blocks_count: int, max_retrieved_blocks: int) -> None:
         self.node = node
         self.blocks_count = blocks_count
         self.max_retrieved_blocks = max_retrieved_blocks
@@ -123,12 +122,12 @@ def wait_on_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) ->
     pytest.fail('Failed to satisfy {} after {}s'.format(predicate, elapsed))
 
 
-def wait_for_block_contains(node, block_hash, expected_string, timeout):
+def wait_for_block_contains(node: 'Node', block_hash: str, expected_string: str, timeout: int):
     predicate = BlockContainsString(node, block_hash, expected_string)
     wait_on_using_wall_clock_time(predicate, timeout)
 
 
-def wait_for_blocks_count_at_least(node, expected_blocks_count, max_retrieved_blocks, timeout):
+def wait_for_blocks_count_at_least(node: 'Node', expected_blocks_count: int, max_retrieved_blocks: int, timeout: int):
     predicate = BlocksCountAtLeast(node, expected_blocks_count, max_retrieved_blocks)
     wait_on_using_wall_clock_time(predicate, timeout)
 
