@@ -293,7 +293,6 @@ def create_node_container(
     rnode_timeout: int,
     extra_volumes: List[str],
     allowed_peers: Optional[List[str]],
-    cpuset_cpus: str,
     image: str = DEFAULT_IMAGE,
     mem_limit: Optional[str] = None,
 ) -> Node:
@@ -327,7 +326,6 @@ def create_node_container(
         name=name,
         user='root',
         detach=True,
-        cpuset_cpus=cpuset_cpus,
         mem_limit=mem_limit,
         network=network,
         volumes=volumes + extra_volumes,
@@ -375,7 +373,6 @@ def make_bootstrap_node(
     rnode_timeout: int,
     allowed_peers: Optional[List[str]] = None,
     image: str = DEFAULT_IMAGE,
-    cpuset_cpus: str = "0",
     mem_limit: Optional[str] = None,
     cli_options: Optional[Dict] = None,
     container_name: Optional[str] = None,
@@ -416,7 +413,6 @@ def make_bootstrap_node(
         extra_volumes=volumes,
         allowed_peers=allowed_peers,
         mem_limit=mem_limit if mem_limit is not None else '4G',
-        cpuset_cpus=cpuset_cpus,
     )
     return container
 
@@ -436,7 +432,6 @@ def create_peer(
     key_pair: "KeyPair",
     allowed_peers: Optional[List[str]] = None,
     image: str = DEFAULT_IMAGE,
-    cpuset_cpus: str = "0",
     mem_limit: Optional[str] = None,
 ) -> Node:
     assert isinstance(name, str)
@@ -463,7 +458,6 @@ def create_peer(
         extra_volumes=[],
         allowed_peers=allowed_peers,
         mem_limit=mem_limit if not None else '4G',
-        cpuset_cpus=cpuset_cpus,
     )
     return container
 
@@ -489,7 +483,6 @@ def create_peer_nodes(
     allowed_peers: Optional[List[str]] = None,
     image: str = DEFAULT_IMAGE,
     mem_limit: Optional[str] = None,
-    cpuset_cpus: str = "0",
 ) -> List[Node]:
     assert len(set(key_pairs)) == len(key_pairs), "There shouldn't be any duplicates in the key pairs"
 
@@ -510,7 +503,6 @@ def create_peer_nodes(
                 allowed_peers=allowed_peers,
                 image=image,
                 mem_limit=mem_limit if mem_limit is not None else '4G',
-                cpuset_cpus=cpuset_cpus,
             )
             result.append(peer_node)
     except:
