@@ -212,7 +212,7 @@ object BlockAPI {
       event <- pd.log
     } yield event
     val log =
-      serializedLog.map(EventConverter.toRspaceEvent).toList
+      serializedLog.map(EventConverter.toRspaceEvent)
     log.exists {
       case Produce(channelHash, _, _) =>
         channelHash == StableHashProvider.hash(sortedListeningName)
