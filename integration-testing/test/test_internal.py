@@ -1,7 +1,6 @@
 """Tests for the testing code itself."""
 
 
-import pytest
 from rnode_testing.rnode import (
     extract_block_hash_from_propose_output,
     extract_block_count_from_show_blocks,
