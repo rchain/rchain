@@ -127,7 +127,7 @@
 <p align="right"><a href="#top">Top</a></p>
 
 ## CasperMessage.proto
-
+DeployService is the main API.
 
 
 <a name="coop.rchain.casper.protocol.ApprovedBlock"/>
@@ -795,20 +795,24 @@ For node clients, see BlockMessage for actual Casper protocol Block representati
 <a name="coop.rchain.casper.protocol.DeployService"/>
 
 ### DeployService
---------- DeployService  --------
+Use `DoDeploy` to queue deployments of Rholang code and then
+`addBlock` to make a new block with the results of running them
+all.
+
+To get results back, use `listenForDataAtName`.
 
 | Method Name | Request Type | Response Type | Description |
 | ----------- | ------------ | ------------- | ------------|
-| DoDeploy | [DeployData](#coop.rchain.casper.protocol.DeployData) | [DeployServiceResponse](#coop.rchain.casper.protocol.DeployData) |  |
-| addBlock | [BlockMessage](#coop.rchain.casper.protocol.BlockMessage) | [DeployServiceResponse](#coop.rchain.casper.protocol.BlockMessage) |  |
-| createBlock | [.google.protobuf.Empty](#google.protobuf.Empty) | [DeployServiceResponse](#google.protobuf.Empty) |  |
-| showBlock | [BlockQuery](#coop.rchain.casper.protocol.BlockQuery) | [BlockQueryResponse](#coop.rchain.casper.protocol.BlockQuery) |  |
+| DoDeploy | [DeployData](#coop.rchain.casper.protocol.DeployData) | [DeployServiceResponse](#coop.rchain.casper.protocol.DeployData) | Queue deployment of Rholang code. |
+| addBlock | [BlockMessage](#coop.rchain.casper.protocol.BlockMessage) | [DeployServiceResponse](#coop.rchain.casper.protocol.BlockMessage) | Add a signed block, after validating it. (Typically used in node-to-node interactions rather than by dApps.) |
+| createBlock | [.google.protobuf.Empty](#google.protobuf.Empty) | [DeployServiceResponse](#google.protobuf.Empty) | Add a block including all pending deploys. |
+| showBlock | [BlockQuery](#coop.rchain.casper.protocol.BlockQuery) | [BlockQueryResponse](#coop.rchain.casper.protocol.BlockQuery) | Get details about a particular block. |
 | showMainChain | [BlocksQuery](#coop.rchain.casper.protocol.BlocksQuery) | [BlockInfoWithoutTuplespace](#coop.rchain.casper.protocol.BlocksQuery) |  |
-| showBlocks | [BlocksQuery](#coop.rchain.casper.protocol.BlocksQuery) | [BlockInfoWithoutTuplespace](#coop.rchain.casper.protocol.BlocksQuery) |  |
-| listenForDataAtName | [DataAtNameQuery](#coop.rchain.casper.protocol.DataAtNameQuery) | [ListeningNameDataResponse](#coop.rchain.casper.protocol.DataAtNameQuery) |  |
-| listenForContinuationAtName | [ContinuationAtNameQuery](#coop.rchain.casper.protocol.ContinuationAtNameQuery) | [ListeningNameContinuationResponse](#coop.rchain.casper.protocol.ContinuationAtNameQuery) |  |
-| findBlockWithDeploy | [FindDeployInBlockQuery](#coop.rchain.casper.protocol.FindDeployInBlockQuery) | [BlockQueryResponse](#coop.rchain.casper.protocol.FindDeployInBlockQuery) |  |
-| previewPrivateNames | [PrivateNamePreviewQuery](#coop.rchain.casper.protocol.PrivateNamePreviewQuery) | [PrivateNamePreviewResponse](#coop.rchain.casper.protocol.PrivateNamePreviewQuery) |  |
+| showBlocks | [BlocksQuery](#coop.rchain.casper.protocol.BlocksQuery) | [BlockInfoWithoutTuplespace](#coop.rchain.casper.protocol.BlocksQuery) | Get a summary of blocks on the blockchain. |
+| listenForDataAtName | [DataAtNameQuery](#coop.rchain.casper.protocol.DataAtNameQuery) | [ListeningNameDataResponse](#coop.rchain.casper.protocol.DataAtNameQuery) | Find data sent to a name. |
+| listenForContinuationAtName | [ContinuationAtNameQuery](#coop.rchain.casper.protocol.ContinuationAtNameQuery) | [ListeningNameContinuationResponse](#coop.rchain.casper.protocol.ContinuationAtNameQuery) | Find processes receiving on a name. |
+| findBlockWithDeploy | [FindDeployInBlockQuery](#coop.rchain.casper.protocol.FindDeployInBlockQuery) | [BlockQueryResponse](#coop.rchain.casper.protocol.FindDeployInBlockQuery) | Find block from a deploy. |
+| previewPrivateNames | [PrivateNamePreviewQuery](#coop.rchain.casper.protocol.PrivateNamePreviewQuery) | [PrivateNamePreviewResponse](#coop.rchain.casper.protocol.PrivateNamePreviewQuery) | Preview new top-level unforgeable names (for example, to compute signatures over them). |
 
  
 
