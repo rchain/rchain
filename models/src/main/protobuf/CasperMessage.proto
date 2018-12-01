@@ -1,5 +1,5 @@
 /**
- * DeployService is the main API.
+ * The main API is `DeployService`.
  */
 syntax = "proto3";
 package coop.rchain.casper.protocol;
@@ -27,7 +27,7 @@ option (scalapb.options) = {
 //
 // To get results back, use `listenForDataAtName`.
 service DeployService {
-  // Queue deployment of Rholang code.
+  // Queue deployment of Rholang code (or fail to parse).
   rpc DoDeploy(DeployData) returns (DeployServiceResponse) {}
   // Add a signed block, after validating it. (Typically used
   // in node-to-node interactions rather than by dApps.)
@@ -49,6 +49,12 @@ service DeployService {
   rpc previewPrivateNames(PrivateNamePreviewQuery) returns (PrivateNamePreviewResponse) {}
 }
 
+
+/**
+ * Note: deploys are uniquely keyed by `user`, `timestamp`.
+ *
+ * **TODO**: details of signatures and payment. See RHOL-781
+ */
 message DeployData {
   bytes  user         = 1; //public key
   string term         = 2; //rholang source code to deploy (will be parsed into `Par`)

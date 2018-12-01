@@ -127,7 +127,7 @@
 <p align="right"><a href="#top">Top</a></p>
 
 ## CasperMessage.proto
-DeployService is the main API.
+The main API is `DeployService`.
 
 
 <a name="coop.rchain.casper.protocol.ApprovedBlock"/>
@@ -480,7 +480,9 @@ For node clients, see BlockMessage for actual Casper protocol Block representati
 <a name="coop.rchain.casper.protocol.DeployData"/>
 
 ### DeployData
+Note: deploys are uniquely keyed by `user`, `timestamp`.
 
+**TODO**: details of signatures and payment. See RHOL-781
 
 
 | Field | Type | Label | Description |
@@ -803,7 +805,7 @@ To get results back, use `listenForDataAtName`.
 
 | Method Name | Request Type | Response Type | Description |
 | ----------- | ------------ | ------------- | ------------|
-| DoDeploy | [DeployData](#coop.rchain.casper.protocol.DeployData) | [DeployServiceResponse](#coop.rchain.casper.protocol.DeployData) | Queue deployment of Rholang code. |
+| DoDeploy | [DeployData](#coop.rchain.casper.protocol.DeployData) | [DeployServiceResponse](#coop.rchain.casper.protocol.DeployData) | Queue deployment of Rholang code (or fail to parse). |
 | addBlock | [BlockMessage](#coop.rchain.casper.protocol.BlockMessage) | [DeployServiceResponse](#coop.rchain.casper.protocol.BlockMessage) | Add a signed block, after validating it. (Typically used in node-to-node interactions rather than by dApps.) |
 | createBlock | [.google.protobuf.Empty](#google.protobuf.Empty) | [DeployServiceResponse](#google.protobuf.Empty) | Add a block including all pending deploys. |
 | showBlock | [BlockQuery](#coop.rchain.casper.protocol.BlockQuery) | [BlockQueryResponse](#coop.rchain.casper.protocol.BlockQuery) | Get details about a particular block. |
@@ -822,7 +824,9 @@ To get results back, use `listenForDataAtName`.
 <p align="right"><a href="#top">Top</a></p>
 
 ## RhoTypes.proto
+Rholang Term Structure
 
+The top level is `Par`.
 
 
 <a name=".BindPattern"/>
@@ -845,7 +849,10 @@ To get results back, use `listenForDataAtName`.
 <a name=".Bundle"/>
 
 ### Bundle
+Nothing can be received from a (quoted) bundle with `readFlag = false`.
+Likeise nothing can be sent to a (quoted) bundle with `writeFlag = false`.
 
+If both flags are set to false, bundle allows only for equivalance check.
 
 
 | Field | Type | Label | Description |
@@ -1064,7 +1071,7 @@ To get results back, use `listenForDataAtName`.
 <a name=".EMethod"/>
 
 ### EMethod
-
+`target.method(arguments)`
 
 
 | Field | Type | Label | Description |
@@ -1099,7 +1106,7 @@ To get results back, use `listenForDataAtName`.
 <a name=".EMinusMinus"/>
 
 ### EMinusMinus
-
+Set difference
 
 
 | Field | Type | Label | Description |
@@ -1193,7 +1200,9 @@ To get results back, use `listenForDataAtName`.
 <a name=".EPercentPercent"/>
 
 ### EPercentPercent
+String interpolation
 
+`&#34;Hello, {name}&#34; %% {&#34;name&#34;: &#34;Bob&#34;}` denotes `&#34;Hello, Bob&#34;`
 
 
 | Field | Type | Label | Description |
@@ -1225,7 +1234,7 @@ To get results back, use `listenForDataAtName`.
 <a name=".EPlusPlus"/>
 
 ### EPlusPlus
-
+Concatenation
 
 
 | Field | Type | Label | Description |
@@ -1278,8 +1287,8 @@ To get results back, use `listenForDataAtName`.
 ### EVar
 A variable used as a var should be bound in a process context, not a name
 context. For example:
-for (@x &lt;- c1; @y &lt;- c2) { z!(x &#43; y) } is fine, but
-for (x &lt;- c1; y &lt;- c2) { z!(x &#43; y) } should raise an error.
+`for (@x &lt;- c1; @y &lt;- c2) { z!(x &#43; y) }` is fine, but
+`for (x &lt;- c1; y &lt;- c2) { z!(x &#43; y) }` should raise an error.
 
 
 | Field | Type | Label | Description |
@@ -1326,9 +1335,9 @@ Only processes equivalent to a ground process of compatible type will reduce.
 | e_map_body | [EMap](#EMap) |  |  |
 | e_method_body | [EMethod](#EMethod) |  |  |
 | e_matches_body | [EMatches](#EMatches) |  |  |
-| e_percent_percent_body | [EPercentPercent](#EPercentPercent) |  |  |
-| e_plus_plus_body | [EPlusPlus](#EPlusPlus) |  |  |
-| e_minus_minus_body | [EMinusMinus](#EMinusMinus) |  |  |
+| e_percent_percent_body | [EPercentPercent](#EPercentPercent) |  | string interpolation |
+| e_plus_plus_body | [EPlusPlus](#EPlusPlus) |  | concatenation |
+| e_minus_minus_body | [EMinusMinus](#EMinusMinus) |  | set difference |
 
 
 
@@ -1338,6 +1347,7 @@ Only processes equivalent to a ground process of compatible type will reduce.
 <a name=".GPrivate"/>
 
 ### GPrivate
+Unforgeable names resulting from `new x { ... }`
 These should only occur as the program is being evaluated. There is no way in
 the grammar to construct them.
 
@@ -1474,7 +1484,8 @@ up to level&#43;count for the last used variable.
 <a name=".PCost"/>
 
 ### PCost
-
+A measure of processing cost: a number of iterations and the sum
+cost of the iterations.
 
 
 | Field | Type | Label | Description |
@@ -1490,7 +1501,12 @@ up to level&#43;count for the last used variable.
 <a name=".Par"/>
 
 ### Par
+Rholang process
 
+For example, `@0!(1) | @2!(3) | for(x &lt;- @0) { Nil }` has two sends
+and one receive.
+
+The Nil process is a `Par` with no sends, receives, etc.
 
 
 | Field | Type | Label | Description |
@@ -1500,7 +1516,7 @@ up to level&#43;count for the last used variable.
 | news | [New](#New) | repeated |  |
 | exprs | [Expr](#Expr) | repeated |  |
 | matches | [Match](#Match) | repeated |  |
-| ids | [GPrivate](#GPrivate) | repeated |  |
+| ids | [GPrivate](#GPrivate) | repeated | unforgeable names |
 | bundles | [Bundle](#Bundle) | repeated |  |
 | connectives | [Connective](#Connective) | repeated |  |
 | locallyFree | [bytes](#bytes) |  |  |
@@ -1514,7 +1530,8 @@ up to level&#43;count for the last used variable.
 <a name=".ParWithRandom"/>
 
 ### ParWithRandom
-
+Rholang code along with the state of a split random number
+generator for generating new unforgeable names.
 
 
 | Field | Type | Label | Description |
@@ -1530,9 +1547,11 @@ up to level&#43;count for the last used variable.
 <a name=".Receive"/>
 
 ### Receive
-[Par] is an n-arity Pattern.
+A receive is written `for(binds) { body }`
+i.e. `for(patterns &lt;- source) { body }`
+or for a persistent recieve: `for(patterns &lt;= source) { body }`.
+
 It&#39;s an error for free Variable to occur more than once in a pattern.
-Don&#39;t currently support conditional receive
 
 
 | Field | Type | Label | Description |
@@ -1570,8 +1589,9 @@ Don&#39;t currently support conditional receive
 <a name=".Send"/>
 
 ### Send
+A send is written `chan!(data)` or `chan!!(data)` for a persistent send.
+
 Upon send, all free variables in data are substituted with their values.
-also if a process is sent, it is auto-quoted.
 
 
 | Field | Type | Label | Description |
@@ -1590,7 +1610,7 @@ also if a process is sent, it is auto-quoted.
 <a name=".TaggedContinuation"/>
 
 ### TaggedContinuation
-
+Either rholang code or code built in to the interpreter.
 
 
 | Field | Type | Label | Description |
