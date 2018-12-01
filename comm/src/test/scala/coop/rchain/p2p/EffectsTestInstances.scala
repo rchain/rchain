@@ -16,9 +16,9 @@ import coop.rchain.comm.protocol.routing._
 /** Eagerly evaluated instances to do reasoning about applied effects */
 object EffectsTestInstances {
 
-  class FreezedTime[F[_]: Sync](currentTime: Long = 0) extends Time[F] {
-    override def currentMillis: F[Long]                   = Sync[F].delay(0)
-    override def nanoTime: F[Long]                        = Sync[F].delay(0)
+  class FreezedTime[F[_]: Sync](milliseconds: Long = 0) extends Time[F] {
+    override def currentMillis: F[Long]                   = Sync[F].delay(milliseconds)
+    override def nanoTime: F[Long]                        = Sync[F].delay(milliseconds * 1000)
     override def sleep(duration: FiniteDuration): F[Unit] = Sync[F].unit
   }
 

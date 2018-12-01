@@ -26,7 +26,7 @@ class DagOperationsTest
 
   "bfTraverseF" should "lazily breadth-first traverse a DAG with effectful neighbours" in {
     val stream = DagOperations.bfTraverseF[Task, Int](List(1))(i => Task.delay(List(i * 2, i * 3)))
-    stream.take(10).toList shouldBe List(1, 2, 3, 4, 6, 9, 8, 12, 18, 27)
+    stream.take(10).toList.runSyncUnsafe(10.seconds) shouldBe List(1, 2, 3, 4, 6, 9, 8, 12, 18, 27)
   }
 
   "Greatest common ancestor" should "be computed properly" in {

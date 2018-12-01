@@ -10,12 +10,13 @@ import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models._
-import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.p2p.EffectsTestInstances.{FreezedTime, LogicalTime}
 import coop.rchain.rholang.interpreter.accounting
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.catscontrib.Capture._
 import monix.eval.Task
+
 import scala.concurrent.duration._
 
 class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture {
@@ -66,7 +67,8 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     implicit val nodeZeroBlockStoreEffect   = nodes(0).blockStore
 
     implicit val timeEff = new LogicalTime[Task]
-    val deployDatas      = (0 to 7).map(_ => ProtoUtil.basicDeployData[Task](0).runSyncUnsafe(1.second))
+    val deployDatas =
+      Stream.range(0, 7).traverse(ProtoUtil.basicDeployData[Task](_)).runSyncUnsafe(1.second)
 
     val Created(block1) = (nodes(0).casperEff
       .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock).runSyncUnsafe(10.seconds)

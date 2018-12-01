@@ -46,7 +46,7 @@ trait ReplayRSpaceTests
       val res =
         space
           .consume(channelsCreator(i), patterns, continuationCreator(i), persist)
-          .runSyncUnsafe(30.seconds)
+          .runSyncUnsafe(50.seconds)
           .right
           .get
       logger.debug("Finished consume {}", i)
@@ -67,7 +67,7 @@ trait ReplayRSpaceTests
       logger.debug("Started produce {}", i)
       val res = space
         .produce(channelCreator(i), datumCreator(i), persist)
-        .runSyncUnsafe(10.seconds)
+        .runSyncUnsafe(50.seconds)
         .right
         .get
       logger.debug("Finished produce {}", i)
@@ -79,13 +79,13 @@ trait ReplayRSpaceTests
       val root0 = replaySpace.createCheckpoint().runSyncUnsafe(10.seconds).root
       replaySpace.store.isEmpty shouldBe true
 
-      space.produce("ch1", "datum1", false)
+      space.produce("ch1", "datum1", false).runSyncUnsafe(10.seconds)
       val root1 = space.createCheckpoint().runSyncUnsafe(10.seconds).root
 
       replaySpace.reset(root1).runSyncUnsafe(10.seconds)
       replaySpace.store.isEmpty shouldBe false
 
-      space.reset(root0)
+      space.reset(root0).runSyncUnsafe(10.seconds)
       space.store.isEmpty shouldBe true
   }
 
@@ -245,7 +245,7 @@ trait ReplayRSpaceTests
       )
       val rigPoint = space.createCheckpoint().runSyncUnsafe(10.seconds)
 
-      replaySpace.rig(emptyPoint.root, rigPoint.log)
+      replaySpace.rig(emptyPoint.root, rigPoint.log).runSyncUnsafe(10.seconds)
 
       produceMany(
         replaySpace,
@@ -1069,6 +1069,7 @@ class InMemoryReplayRSpaceTests
 
 class FaultyReplayRSpaceTests
     extends FaultyStoreReplayRSpaceTestsBase[String, Pattern, Nothing, String, String] {
+  import monix.execution.Scheduler.Implicits.global
 
   "an exception thrown inside a consume" should "not make replay rspace unresponsive" in
     withTestSpaces { (space, replaySpace) =>
@@ -1078,13 +1079,15 @@ class FaultyReplayRSpaceTests
       val continuation = "continuation"
 
       the[RuntimeException] thrownBy (
-        replaySpace.consume(
-          key,
-          patterns,
-          continuation,
-          false
-        )
-      ) should have message "Couldn't write to underlying store"
+        replaySpace
+          .consume(
+            key,
+            patterns,
+            continuation,
+            false
+          )
+          .runSyncUnsafe(30.seconds)
+        ) should have message "Couldn't write to underlying store"
     }
 
   "an exception thrown inside a produce" should "not make replay rspace unresponsive" in
@@ -1093,11 +1096,13 @@ class FaultyReplayRSpaceTests
       val data    = "datum1"
 
       the[RuntimeException] thrownBy (
-        replaySpace.produce(
-          channel,
-          data,
-          false
-        )
-      ) should have message "Couldn't write to underlying store"
+        replaySpace
+          .produce(
+            channel,
+            data,
+            false
+          )
+          .runSyncUnsafe(30.seconds)
+        ) should have message "Couldn't write to underlying store"
     }
 }

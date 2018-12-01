@@ -130,8 +130,6 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
    */
   "Blocks" should "conflict if they use the same deploys in different histories" in withStore {
     implicit blockStore =>
-      implicit val timeEffect: Time[Task] = new FreezedTime
-
       implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
       val deploys =
         Stream.range(0, 6).traverse(basicProcessedDeploy[Task]).runSyncUnsafe(10.seconds)

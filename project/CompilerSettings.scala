@@ -21,7 +21,6 @@ object CompilerSettings {
       "-Ypartial-unification",
       "-Ywarn-dead-code",
       "-Ywarn-numeric-widen",
-      "-Ywarn-value-discard",
       "-deprecation",
       "-encoding", "UTF-8",
       "-feature",
@@ -62,7 +61,8 @@ object CompilerSettings {
         Set(
           "-Xfatal-warnings",
           "-Ywarn-unused-import",
-          "-Ywarn-unused:imports"
+          "-Ywarn-unused:imports",
+          "-Ywarn-value-discard"
         )
       )
     },

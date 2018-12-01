@@ -49,7 +49,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
     storage.contains("!([4, 6, 10, 14])") should be(true)
     storage.contains("!(\"The timestamp is 2\")") should be(true)
 
-    node.tearDown()
+    node.tearDown().runSyncUnsafe(10.seconds)
   }
 
 }

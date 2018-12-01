@@ -23,7 +23,8 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.{ApplicativeError_, Capture}
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
-import coop.rchain.comm.rp.ProtocolHelper, ProtocolHelper._
+import coop.rchain.comm.rp.ProtocolHelper
+import ProtocolHelper._
 import coop.rchain.comm.{transport, _}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
@@ -32,13 +33,14 @@ import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.shared.Cell
+import coop.rchain.shared.{Cell, Language}
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.schedulers.TestScheduler
 import org.scalatest.WordSpec
 import coop.rchain.casper.util.TestTime
 
+import scala.concurrent.Await
 import scala.concurrent.duration._
 
 class CasperPacketHandlerSpec extends WordSpec {
@@ -102,8 +104,8 @@ class CasperPacketHandlerSpec extends WordSpec {
     "in GenesisValidator state" should {
 
       "respond on UnapprovedBlock messages with BlockApproval" in {
-        implicit val ctx = TestScheduler()
-        val fixture      = setup()
+        import monix.execution.Scheduler.Implicits.global
+        val fixture = setup()
         import fixture._
 
         val ref =
@@ -129,13 +131,12 @@ class CasperPacketHandlerSpec extends WordSpec {
             assert(lastMessage.peer == local && lastMessage.msg == expectedPacket)
           }
         } yield ()
-        test.unsafeRunSync(ctx)
-        ctx.tick()
+        test.runSyncUnsafe(10.seconds)
       }
 
       "should not respond to any other message" in {
-        implicit val ctx = TestScheduler()
-        val fixture      = setup()
+        import monix.execution.Scheduler.Implicits.global
+        val fixture = setup()
         import fixture._
 
         val ref =
@@ -164,8 +165,7 @@ class CasperPacketHandlerSpec extends WordSpec {
           _               = assert(packetResponse2.isEmpty)
           _               = assert(transportLayer.requests.isEmpty)
         } yield ()
-        test.unsafeRunSync(ctx)
-        ctx.tick()
+        test.runSyncUnsafe(10.seconds)
       }
     }
 
