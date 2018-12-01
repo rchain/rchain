@@ -54,7 +54,7 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
 
   def showBlock(q: BlockQuery): Task[Either[Throwable, String]] =
     stub.showBlock(q).map { response =>
-      if (response.status == "Sucess") Right(response.toProtoString)
+      if (response.status == "Success") Right(response.toProtoString)
       else Left(new RuntimeException(response.status))
     }
 
