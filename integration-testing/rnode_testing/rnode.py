@@ -26,7 +26,7 @@ from queue import Empty
 from typing import Dict, List, Tuple, Union, TYPE_CHECKING, Optional, Generator
 
 if TYPE_CHECKING:
-    from conftest import ValidatorsData, KeyPair
+    from conftest import KeyPair
     from docker.client import DockerClient
     from docker.models.containers import Container
     from logging import Logger
@@ -194,7 +194,7 @@ class Node:
         process.start()
 
         try:
-            exit_code, output = queue.get(self.timeout)
+            exit_code, output = queue.get(True, None)
             if exit_code != 0:
                 logging.warning("EXITED {} {} {}".format(self.name, cmd, exit_code))
             logging.debug('OUTPUT {}'.format(repr(output)))
@@ -294,7 +294,7 @@ def make_node(
     bonds_file: str,
     container_command: str,
     container_command_options: Dict,
-    rnode_timeout: int,
+    command_timeout: int,
     extra_volumes: List[str],
     allowed_peers: Optional[List[str]],
     image: str = DEFAULT_IMAGE,
@@ -374,7 +374,7 @@ def make_bootstrap_node(
     network: str,
     bonds_file: str,
     key_pair: "KeyPair",
-    rnode_timeout: int,
+    command_timeout: int,
     allowed_peers: Optional[List[str]] = None,
     image: str = DEFAULT_IMAGE,
     mem_limit: Optional[str] = None,
@@ -431,7 +431,7 @@ def make_peer(
     network: str,
     name: str,
     bonds_file: str,
-    rnode_timeout: int,
+    command_timeout: int,
     bootstrap: Node,
     key_pair: "KeyPair",
     allowed_peers: Optional[List[str]] = None,
@@ -498,7 +498,7 @@ def create_peer_nodes(
     network: str,
     bonds_file: str,
     key_pairs: List["KeyPair"],
-    rnode_timeout: int,
+    command_timeout: int,
     allowed_peers: Optional[List[str]] = None,
     image: str = DEFAULT_IMAGE,
     mem_limit: Optional[str] = None,

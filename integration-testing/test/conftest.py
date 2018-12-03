@@ -27,6 +27,7 @@ from rnode_testing.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 
 if TYPE_CHECKING:
     from docker.client import DockerClient
+    from _pytest.config.argparsing import Parser
 
 
 @dataclasses.dataclass
@@ -38,21 +39,6 @@ class CommandLineOptions:
     command_timeout: int
     blocks: int
     mount_dir: str
-
-
-@dataclasses.dataclass
-class TestingContext:
-    peer_count: int
-    node_startup_timeout: int
-    network_converge_timeout: int
-    receive_timeout: int
-    rnode_timeout: int
-    blocks: int
-    mount_dir: str
-    bonds_file: str
-    bootstrap_keypair: str
-    peers_keypairs: str
-    docker: 'DockerClient'
 
 
 def pytest_addoption(parser: "Parser") -> None:
