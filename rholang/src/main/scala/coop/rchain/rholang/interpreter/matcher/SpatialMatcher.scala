@@ -230,11 +230,11 @@ object SpatialMatcher extends SpatialMatcherInstances {
     (tlist, plist) match {
       case (Nil, Nil) => OptionalFreeMapWithCost.pure(Nil)
       case (Nil, _) =>
-        OptionalFreeMapWithCost.emptyMap[Seq[T]]
+        OptionalFreeMapWithCost.empty[Seq[T]]
       case (trem, Nil) =>
         remainder match {
           case None =>
-            OptionalFreeMapWithCost.emptyMap[Seq[T]]
+            OptionalFreeMapWithCost.empty[Seq[T]]
           case Some(Var(FreeVar(level))) => {
             def freeCheck(trem: Seq[T], level: Int, acc: Seq[T]): OptionalFreeMapWithCost[Seq[T]] =
               trem match {
@@ -243,12 +243,12 @@ object SpatialMatcher extends SpatialMatcherInstances {
                   if (lft.locallyFree(item, 0).isEmpty)
                     freeCheck(rem, level, acc :+ item)
                   else
-                    OptionalFreeMapWithCost.emptyMap[Seq[T]]
+                    OptionalFreeMapWithCost.empty[Seq[T]]
               }
             freeCheck(trem, level, Vector.empty[T])
           }
           case Some(Var(Wildcard(_))) => OptionalFreeMapWithCost.pure(Nil)
-          case _                      => OptionalFreeMapWithCost.emptyMap[Seq[T]]
+          case _                      => OptionalFreeMapWithCost.empty[Seq[T]]
         }
       case (t +: trem, p +: prem) =>
         spatialMatch(t, p).flatMap(_ => foldMatch(trem, prem, remainder))
@@ -289,9 +289,9 @@ object SpatialMatcher extends SpatialMatcherInstances {
 
     val result: OptionalFreeMapWithCost[Unit] =
       if (exactMatch && plen != tlen)
-        OptionalFreeMapWithCost.emptyMap[Unit].charge(COMPARISON_COST)
+        OptionalFreeMapWithCost.empty[Unit].charge(COMPARISON_COST)
       else if (plen > tlen)
-        OptionalFreeMapWithCost.emptyMap[Unit].charge(COMPARISON_COST)
+        OptionalFreeMapWithCost.empty[Unit].charge(COMPARISON_COST)
       else if (plen == 0 && tlen == 0 && remainder.isEmpty)
         OptionalFreeMapWithCost.pure(())
       else if (plen == 0 && remainder.isDefined) {
@@ -299,7 +299,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
           if (tlist.forall(lf.locallyFree(_, 0).isEmpty))
             handleRemainder[OptionalFreeMapWithCost, T](tlist, remainder.get, merger)
           else
-            OptionalFreeMapWithCost.emptyMap[Unit]
+            OptionalFreeMapWithCost.empty[Unit]
         matchResult.charge(COMPARISON_COST * tlist.size)
       } else
         listMatch(tlist, plist, merger, remainder, wildcard)
@@ -362,7 +362,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
                 OptionalFreeMapWithCost.pure(())
               else
                 // This should be prevented by the length checks.
-                OptionalFreeMapWithCost.emptyMap
+                OptionalFreeMapWithCost.empty
             // If there's a capture variable, we prefer to add things to that rather than throw them away.
             case Some(level) => {
               handleRemainder[OptionalFreeMapWithCost, T](remainderTargetsSorted, level, merger)
@@ -539,7 +539,7 @@ trait SpatialMatcherInstances {
         case ConnOrBody(ConnectiveBody(ps)) => {
           def firstMatch(target: Par, patterns: Seq[Par]): OptionalFreeMapWithCost[Unit] =
             patterns match {
-              case Nil => OptionalFreeMapWithCost.emptyMap
+              case Nil => OptionalFreeMapWithCost.empty
               case p +: rem =>
                 OptionalFreeMapWithCost[Unit]((s: FreeMap) => {
                   OptionT(StateT((c: Cost) => {
@@ -565,45 +565,45 @@ trait SpatialMatcherInstances {
           })
         case _: VarRefBody =>
           // this should never happen because variable references should be substituted
-          OptionalFreeMapWithCost.emptyMap[Unit]
+          OptionalFreeMapWithCost.empty[Unit]
 
         case _: ConnBool =>
           target.singleExpr match {
             case Some(Expr(GBool(_))) =>
               OptionalFreeMapWithCost.pure(())
-            case _ => OptionalFreeMapWithCost.emptyMap[Unit]
+            case _ => OptionalFreeMapWithCost.empty[Unit]
           }
 
         case _: ConnInt =>
           target.singleExpr match {
             case Some(Expr(GInt(_))) =>
               OptionalFreeMapWithCost.pure(())
-            case _ => OptionalFreeMapWithCost.emptyMap[Unit]
+            case _ => OptionalFreeMapWithCost.empty[Unit]
           }
 
         case _: ConnString =>
           target.singleExpr match {
             case Some(Expr(GString(_))) =>
               OptionalFreeMapWithCost.pure(())
-            case _ => OptionalFreeMapWithCost.emptyMap[Unit]
+            case _ => OptionalFreeMapWithCost.empty[Unit]
           }
 
         case _: ConnUri =>
           target.singleExpr match {
             case Some(Expr(GUri(_))) =>
               OptionalFreeMapWithCost.pure(())
-            case _ => OptionalFreeMapWithCost.emptyMap[Unit]
+            case _ => OptionalFreeMapWithCost.empty[Unit]
           }
 
         case _: ConnByteArray =>
           target.singleExpr match {
             case Some(Expr(GByteArray(_))) =>
               OptionalFreeMapWithCost.pure(())
-            case _ => OptionalFreeMapWithCost.emptyMap[Unit]
+            case _ => OptionalFreeMapWithCost.empty[Unit]
           }
 
         case ConnectiveInstance.Empty =>
-          OptionalFreeMapWithCost.emptyMap[Unit]
+          OptionalFreeMapWithCost.empty[Unit]
       }
     }
 
@@ -614,7 +614,7 @@ trait SpatialMatcherInstances {
         if (pattern == target)
           NonDetFreeMapWithCost.pure(()).charge(cost)
         else {
-          NonDetFreeMapWithCost.emptyMap[Unit].charge(cost)
+          NonDetFreeMapWithCost.empty[Unit].charge(cost)
         }
       } else {
 
@@ -713,14 +713,14 @@ trait SpatialMatcherInstances {
       if (pattern == target)
         OptionalFreeMapWithCost.pure(()).charge(cost)
       else {
-        OptionalFreeMapWithCost.emptyMap[Unit].charge(cost)
+        OptionalFreeMapWithCost.empty[Unit].charge(cost)
       }
     }
 
   implicit val sendSpatialMatcherInstance: SpatialMatcher[Send, Send] = fromFunction[Send, Send] {
     (target, pattern) =>
       if (target.persistent != pattern.persistent)
-        OptionalFreeMapWithCost.emptyMap[Unit].charge(COMPARISON_COST)
+        OptionalFreeMapWithCost.empty[Unit].charge(COMPARISON_COST)
       else
         for {
           _ <- spatialMatch(target.chan, pattern.chan)
@@ -731,7 +731,7 @@ trait SpatialMatcherInstances {
   implicit val receiveSpatialMatcherInstance: SpatialMatcher[Receive, Receive] =
     fromFunction[Receive, Receive] { (target, pattern) =>
       if (target.persistent != pattern.persistent)
-        OptionalFreeMapWithCost.emptyMap[Unit].charge(COMPARISON_COST)
+        OptionalFreeMapWithCost.empty[Unit].charge(COMPARISON_COST)
       else
         for {
           _ <- listMatchSingle[ReceiveBind](target.binds, pattern.binds)
@@ -744,7 +744,7 @@ trait SpatialMatcherInstances {
       if (target.bindCount == pattern.bindCount)
         spatialMatch(target.p, pattern.p).charge(COMPARISON_COST)
       else
-        OptionalFreeMapWithCost.emptyMap[Unit].charge(COMPARISON_COST)
+        OptionalFreeMapWithCost.empty[Unit].charge(COMPARISON_COST)
   }
 
   implicit val exprSpatialMatcherInstance: SpatialMatcher[Expr, Expr] = fromFunction[Expr, Expr] {
@@ -780,7 +780,7 @@ trait SpatialMatcherInstances {
           if (vp == vt)
             OptionalFreeMapWithCost.pure(()).charge(cost)
           else
-            OptionalFreeMapWithCost.emptyMap[Unit].charge(cost)
+            OptionalFreeMapWithCost.empty[Unit].charge(cost)
         case (ENotBody(ENot(t)), ENotBody(ENot(p))) => spatialMatch(t, p)
         case (ENegBody(ENeg(t)), ENegBody(ENeg(p))) => spatialMatch(t, p)
         case (EMultBody(EMult(t1, t2)), EMultBody(EMult(p1, p2))) =>
@@ -816,7 +816,7 @@ trait SpatialMatcherInstances {
             _ <- spatialMatch(t1, p1)
             _ <- spatialMatch(t2, p2)
           } yield Unit
-        case _ => OptionalFreeMapWithCost.emptyMap[Unit]
+        case _ => OptionalFreeMapWithCost.empty[Unit]
       }
   }
 
@@ -839,7 +839,7 @@ trait SpatialMatcherInstances {
         val cost = equalityCheckCost(target, pattern)
         OptionalFreeMapWithCost.pure(()).charge(cost)
       } else
-        OptionalFreeMapWithCost.emptyMap
+        OptionalFreeMapWithCost.empty
     }
 
   implicit val receiveBindSpatialMatcherInstance: SpatialMatcher[ReceiveBind, ReceiveBind] =
@@ -850,7 +850,7 @@ trait SpatialMatcherInstances {
             .zip(pattern.patterns)
             .map(x => equalityCheckCost(x._1, x._2))
             .foldLeft(Cost(0))(_ + _)
-        OptionalFreeMapWithCost.emptyMap.charge(cost)
+        OptionalFreeMapWithCost.empty.charge(cost)
       } else
         spatialMatch(target.source, pattern.source)
     }
@@ -859,7 +859,7 @@ trait SpatialMatcherInstances {
     fromFunction[MatchCase, MatchCase] { (target, pattern) =>
       if (target.pattern != pattern.pattern) {
         val cost: Cost = equalityCheckCost(target.pattern, pattern.pattern)
-        OptionalFreeMapWithCost.emptyMap.charge(cost)
+        OptionalFreeMapWithCost.empty.charge(cost)
       } else
         spatialMatch(target.source, pattern.source)
     }
