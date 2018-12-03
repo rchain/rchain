@@ -311,7 +311,7 @@ object ProtoUtil {
       dag: BlockDag
   ): F[Seq[BlockMessage]] = {
     def nonConflicting(b: BlockMessage): BlockMessage => F[Boolean] =
-      conflicts[F](_, b, genesis, dag).map(b => !b)
+      conflicts[F](_, b, dag).map(b => !b)
 
     blocks.toList
       .foldM(List.empty[BlockMessage]) {
