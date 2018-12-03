@@ -1,13 +1,11 @@
 import os
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from rnode_testing.rnode import Node
+import conftest
+from rnode_testing.rnode import started_standalone_bootstrap_node
 
 
-def test_eval(bootstrap_node: "Node") -> None:
-    relative_paths = bootstrap_node.shell_out('sh', '-c', 'ls /opt/docker/examples/*.rho').splitlines()
+def test_eval(started_standalone_bootstrap_node):
+    relative_paths = started_standalone_bootstrap_node.shell_out('sh', '-c', 'ls /opt/docker/examples/*.rho').splitlines()
     for relative_path in relative_paths:
         full_path = os.path.join('/opt/docker/examples', relative_path)
-        bootstrap_node.eval(full_path)
+        started_standalone_bootstrap_node.eval(full_path)
