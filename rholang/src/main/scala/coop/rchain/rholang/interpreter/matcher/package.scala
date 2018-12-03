@@ -82,7 +82,7 @@ package object matcher {
     def pure[A](value: A): OptionalFreeMapWithCost[A] =
       StateT.liftF(OptionT.liftF(StateT.liftF(Right(value))))
 
-    def liftF[A](option: Option[A]): OptionalFreeMapWithCost[A] =
+    def fromOption[A](option: Option[A]): OptionalFreeMapWithCost[A] =
       StateT.liftF(OptionT.fromOption(option))
   }
 

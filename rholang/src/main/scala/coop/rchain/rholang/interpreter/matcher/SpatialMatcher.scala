@@ -347,7 +347,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
 
     for {
       matchesOpt             <- maximumBipartiteMatch.findMatches(allPatterns, targets)
-      matches                <- OptionalFreeMapWithCost.liftF(matchesOpt)
+      matches                <- OptionalFreeMapWithCost.fromOption(matchesOpt)
       freeMaps               = matches.map(_._3)
       updatedFreeMap         <- aggregateUpdates(freeMaps)
       _                      <- StateT.set[OptionWithCost, FreeMap](updatedFreeMap)
