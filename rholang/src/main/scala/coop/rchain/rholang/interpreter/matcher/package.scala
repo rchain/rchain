@@ -117,9 +117,6 @@ package object matcher {
     implicit def toNonDetFreeMapWithCostOps[A](s: NonDetFreeMapWithCost[A]) =
       new NonDetFreeMapWithCostOps[A](s)
 
-    def apply[A](f: FreeMap => StreamWithCost[(FreeMap, A)]): NonDetFreeMapWithCost[A] =
-      StateT((m: FreeMap) => f(m))
-
     def empty[A]: NonDetFreeMapWithCost[A] =
       StateT.liftF(StreamT.empty)
 
