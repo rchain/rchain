@@ -77,29 +77,13 @@ package object matcher {
       })
 
     def empty[A]: OptionalFreeMapWithCost[A] =
-      StateT((m: FreeMap) => {
-        OptionT(
-          StateT((c: Cost) => {
-            Right((c, None))
-          })
-        )
-      })
+      StateT.liftF(OptionT.fromOption(None))
 
     def pure[A](value: A): OptionalFreeMapWithCost[A] =
-      StateT((m: FreeMap) => {
-        OptionT(
-          StateT((c: Cost) => {
-            Right((c, Some((m, value))))
-          })
-        )
-      })
+      StateT.liftF(OptionT.liftF(StateT.liftF(Right(value))))
 
     def liftF[A](option: Option[A]): OptionalFreeMapWithCost[A] =
-      StateT((m: FreeMap) => {
-        OptionT(StateT((c: Cost) => {
-          Right((c, option.map(m -> _)))
-        }))
-      })
+      StateT.liftF(OptionT.fromOption(option))
   }
 
   object NonDetFreeMapWithCost {
