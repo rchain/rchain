@@ -806,10 +806,4 @@ object BlockDagFileStorage {
         config.blockMetadataLogPath,
         config.blockMetadataCrcPath
       )
-
-  def createWithId(config: Config)(implicit blockStore: BlockStore[Id]): BlockDagFileStorage[Id] = {
-    import coop.rchain.catscontrib.effect.implicits._
-    implicit val log = new Log.NOPLog[Id]()
-    BlockDagFileStorage.create[Id](config)
-  }
 }
