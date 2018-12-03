@@ -646,7 +646,7 @@ trait SpatialMatcherInstances {
         ): NonDetFreeMapWithCost[Par] = {
           val (con, bounds, remainders) = labeledConnective
           for {
-            sp <- NonDetFreeMapWithCost.liftF(
+            sp <- NonDetFreeMapWithCost.fromStream(
                    subPars(target, bounds._1, bounds._2, remainders._1, remainders._2)
                  )
             _ <- nonDetMatch(sp._1, con)
