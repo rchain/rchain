@@ -9,7 +9,8 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.rholang.sorter._
 import coop.rchain.models.testImplicits._
 import monix.eval.Coeval
-import org.scalacheck.Arbitrary
+import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest._
 import org.scalatest.prop.PropertyChecks
 
@@ -51,11 +52,17 @@ class ScoredTermSpec extends FlatSpec with PropertyChecks with Matchers {
     unsortedTerms.sorted should be(sortedTerms)
   }
   it should "sort so that unequal terms have unequal scores and the other way around" in {
-    def checkScoreEquality[T: Sortable: Arbitrary]: Assertion = forAll { (a: T, b: T) =>
-      if (a != b)
-        assert(sort(a).score != sort(b).score)
-      else
-        assert(sort(a).score == sort(b).score)
+    def checkScoreEquality[A: Sortable: Arbitrary]: Unit = {
+      // ScalaCheck generates similar A-s in subsequent calls which
+      // we need to hit the case where `x == y` more often
+      forAll(Gen.listOfN(5, arbitrary[A])) { as: List[A] =>
+        for (x :: y :: Nil <- as.combinations(2)) {
+          if (x != y)
+            assert(sort(x).score != sort(y).score)
+          else
+            assert(sort(x).score == sort(y).score)
+        }
+      }
     }
     checkScoreEquality[Bundle]
     checkScoreEquality[Connective]
