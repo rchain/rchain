@@ -141,8 +141,6 @@ class Node:
         if m is None:
             raise RNodeAddressNotFoundError()
         address = m.group(1)
-
-        logging.info("Bootstrap address: {}".format(repr(address)))
         return address
 
     def get_metrics(self) -> Tuple[int, str]:
@@ -191,15 +189,15 @@ class Node:
 
         process = Process(target=execution)
 
-        logging.info("{}: {}".format(self.name, cmd))
+        logging.info("COMMAND {} {}".format(self.name, cmd))
 
         process.start()
 
         try:
             exit_code, output = queue.get(self.timeout)
             if exit_code != 0:
-                logging.warning("{}: {} exited with {}".format(self.name, cmd, exit_code))
-            logging.debug('output={}'.format(repr(output)))
+                logging.warning("EXITED {} {} {}".format(self.name, cmd, exit_code))
+            logging.debug('OUTPUT {}'.format(repr(output)))
             return exit_code, output
         except Empty:
             process.terminate()
