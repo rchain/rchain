@@ -45,48 +45,6 @@ package object implicits {
       def suspend[A](thunk: => A): A = thunk
     }
 
-  implicit val concurrentId: Concurrent[Id] =
-    new Concurrent[Id] {
-      private def idFiber[A](x: A): Fiber[Id, A] = new Fiber[Id, A] {
-        override def cancel: CancelToken[Id] = ()
-        override def join: Id[A]             = x
-      }
-
-      override def start[A](fa: Id[A]): Id[Fiber[Id, A]] = idFiber(fa)
-      override def racePair[A, B](
-          fa: Id[A],
-          fb: Id[B]
-      ): Id[Either[(A, Fiber[Id, B]), (Fiber[Id, A], B)]] =
-        Left((fa, idFiber(fb)))
-
-      override def async[A](k: (Either[Throwable, A] => Unit) => Unit): Id[A] = {
-        val result: Promise[Either[Throwable, A]] = Promise()
-        k(either => result.success(either))
-        Await.result(result.future, Duration.Inf) match {
-          case Left(throwable) => throw throwable
-          case Right(x)        => x
-        }
-      }
-
-      override def asyncF[A](k: (Either[Throwable, A] => Unit) => Id[Unit]): Id[A] =
-        async(k)
-      override def suspend[A](thunk: => Id[A]): Id[A] =
-        syncId.suspend(thunk)
-      override def bracketCase[A, B](
-          acquire: Id[A]
-      )(use: A => Id[B])(release: (A, ExitCase[Throwable]) => Id[Unit]): Id[B] =
-        syncId.bracketCase(acquire)(use)(release)
-      override def flatMap[A, B](fa: Id[A])(f: A => Id[B]): Id[B] =
-        syncId.flatMap(fa)(f)
-      override def tailRecM[A, B](a: A)(f: A => Id[Either[A, B]]): Id[B] =
-        syncId.tailRecM(a)(f)
-      override def raiseError[A](e: Throwable): Id[A] =
-        syncId.raiseError(e)
-      override def handleErrorWith[A](fa: Id[A])(f: Throwable => Id[A]): Id[A] =
-        syncId.handleErrorWith(fa)(f)
-      override def pure[A](x: A): Id[A] = x
-    }
-
   implicit val bracketTry: Bracket[Try, Throwable] = new Bracket[Try, Throwable] {
     private val trySyntax = cats.implicits.catsStdInstancesForTry
 
