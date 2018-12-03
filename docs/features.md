@@ -56,7 +56,7 @@
 * `validatorA` and `validatorB` send back `BlockApproval`
 * `ceremonyMaster` logs an error about not getting enough signatures on time (`duration`)
 
-### As a Node operator I want to join network after genesis ceremony
+### As a Node operator I want to join the network after genesis ceremony
 #### A validator catching up after genesis ceremony
 ##### test: not available
 ##### steps:
