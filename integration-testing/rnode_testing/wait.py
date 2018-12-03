@@ -8,8 +8,8 @@ import typing_extensions
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from rnode_testing.common import Network
     from rnode_testing.rnode import Node
-    from rnode_testing.network import Network
 
 
 class PredicateProtocol(typing_extensions.Protocol):
@@ -98,7 +98,7 @@ class BlocksCountAtLeast:
 
 
 def wait_on_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) -> None:
-    logging.info("Waiting on: {}".format(predicate))
+    logging.info("AWAITING {}".format(predicate))
 
     elapsed = 0
     while elapsed < timeout:
@@ -106,6 +106,7 @@ def wait_on_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) ->
 
         is_satisfied = predicate.is_satisfied()
         if is_satisfied:
+            logging.info("SATISFIED {}".format(predicate))
             return
 
         condition_evaluation_duration = time.time() - start_time
