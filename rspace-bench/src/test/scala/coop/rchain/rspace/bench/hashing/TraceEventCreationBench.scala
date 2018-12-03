@@ -8,20 +8,19 @@ import coop.rchain.models._
 import coop.rchain.models.testImplicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
-import coop.rchain.rspace.bench.serialization.ModelSerializerBenchState
-import coop.rchain.rspace.internal._
+import coop.rchain.rspace.bench._
 import coop.rchain.rspace.trace.Consume
 import org.openjdk.jmh.annotations.{State => BenchState, _}
 import org.openjdk.jmh.infra.Blackhole
-import org.scalacheck.Arbitrary._
 import org.scalacheck.{Arbitrary, Gen}
+import org.scalacheck.Arbitrary._
 
 @Fork(value = 1)
 @Warmup(iterations = 1)
 @Measurement(iterations = 10)
 @OperationsPerInvocation(value = 100)
 @BenchState(Scope.Benchmark)
-class TraceEventCreationBench extends ModelSerializerBenchState {
+class TraceEventCreationBench {
 
   def arbitraryConsumeData[C, P, K](
       implicit
@@ -39,15 +38,15 @@ class TraceEventCreationBench extends ModelSerializerBenchState {
     })
 
   val light =
-    generate[(Seq[Par], Seq[BindPattern], ListParWithRandom)](1)(
+    generateSeq[(Seq[Par], Seq[BindPattern], ListParWithRandom)](1)(
       arbitraryConsumeData[Par, BindPattern, ListParWithRandom]
     )
   val medium =
-    generate[(Seq[Par], Seq[BindPattern], ListParWithRandom)](5)(
+    generateSeq[(Seq[Par], Seq[BindPattern], ListParWithRandom)](5)(
       arbitraryConsumeData[Par, BindPattern, ListParWithRandom]
     )
   val heavy =
-    generate[(Seq[Par], Seq[BindPattern], ListParWithRandom)](10)(
+    generateSeq[(Seq[Par], Seq[BindPattern], ListParWithRandom)](10)(
       arbitraryConsumeData[Par, BindPattern, ListParWithRandom]
     )
 
