@@ -1,17 +1,14 @@
 package coop.rchain.rspace.bench.serialization
 
-import java.util.concurrent.TimeUnit
 import java.nio.ByteBuffer
+import java.util.concurrent.TimeUnit
 
 import coop.rchain.models._
 import coop.rchain.models.testImplicits._
-import coop.rchain.rspace.bench._
-import coop.rchain.rspace.internal._
 import coop.rchain.rspace.Serialize
-import org.scalacheck.Gen.Parameters
-import org.scalacheck.rng.Seed
+import coop.rchain.rspace.bench._
 import coop.rchain.rspace.bench.serialization._
-
+import coop.rchain.rspace.internal._
 import org.openjdk.jmh.annotations.{State => BenchState, _}
 import org.openjdk.jmh.infra.Blackhole
 
@@ -141,8 +138,6 @@ abstract class ModelSerializerBenchState {
 
   import org.scalacheck._
   import org.scalacheck.Arbitrary._
-
-  import coop.rchain.rspace.Serialize
 
   implicit def arbitraryDatum[C, T](chan: C)(
       implicit
