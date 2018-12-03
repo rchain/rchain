@@ -13,7 +13,7 @@
 ### As a Node operator, I want to know how many peers I am connected to
 ## Network Launch
 ### As a Coop SRE I want to launch a network
-#### A succesful genesis ceremony 
+#### A successful genesis ceremony 
 
 ##### test: test/test_genesis_ceremony.py::test_successful_genesis_ceremony 
 ##### steps:
@@ -28,7 +28,7 @@
 * `validatorA` and `validatorB` transition to ApprovedBlockReceivedHandler
 * `ceremonyMaster`, `validatorA` and `validatorB` tip points to block (genesis) where it has no parent and Bonds holds `validatorA` and `validatorB`
 
-#### A succesful genesis ceremony with read-only nodes joining 
+#### A successful genesis ceremony with read-only nodes joining 
 ##### test: not available
 ##### steps:
 
@@ -45,7 +45,7 @@
 * `readOnlyA` **never** transitions to `ApprovedBlockReceivedHandler`
 
 
-#### A NOT succesful genesis ceremony (not enough sigs)
+#### A NOT successful genesis ceremony (not enough sigs)
 ##### test: not available
 ##### steps:
 
@@ -61,7 +61,7 @@
 ##### test: not available
 ##### steps:
 
-* genesis reached as described in "A succesful genesis ceremony"
+* genesis reached as described in "A successful genesis ceremony"
 * `validatorC` joins p2p, pointing on `ceremonyMaster` as bootstrap
 * `validatorC` sends `ApprovedBlockRequest` to `ceremonyMaster`
 * `ceremonyMaster` sends `ApprovedBlock` to `validatorC`
