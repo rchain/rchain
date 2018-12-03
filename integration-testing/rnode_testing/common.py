@@ -9,7 +9,7 @@ from docker.client import DockerClient
 
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=True, frozen=True)
 class KeyPair:
     private_key: str
     public_key: str
@@ -45,3 +45,12 @@ def make_tempfile(prefix: str, content: str) -> str:
 
 def make_tempdir(prefix: str) -> str:
     return tempfile.mkdtemp(dir="/tmp", prefix=prefix)
+
+
+
+class Network:
+    def __init__(self, network, bootstrap, peers):
+        self.network = network
+        self.bootstrap = bootstrap
+        self.peers = peers
+        self.nodes = [bootstrap] + peers
