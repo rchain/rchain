@@ -178,13 +178,13 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
             val (b10: BlockMessage, chainWithUpdatedB10: IndexedBlockDag) =
               updateChainWithBlockStateUpdate(10, genesis, runtimeManager, chainWithUpdatedB9)
 
-            conflicts[Id](b2, b3, genesis, chain) should be(false)
-            conflicts[Id](b4, b5, genesis, chain) should be(true)
-            conflicts[Id](b6, b6, genesis, chain) should be(false)
-            conflicts[Id](b6, b9, genesis, chain) should be(false)
-            conflicts[Id](b7, b8, genesis, chain) should be(false)
-            conflicts[Id](b7, b10, genesis, chain) should be(false)
-            conflicts[Id](b9, b10, genesis, chain) should be(true)
+            conflicts[Id](b2, b3, chain) should be(false)
+            conflicts[Id](b4, b5, chain) should be(true)
+            conflicts[Id](b6, b6, chain) should be(false)
+            conflicts[Id](b6, b9, chain) should be(false)
+            conflicts[Id](b7, b8, chain) should be(false)
+            conflicts[Id](b7, b10, chain) should be(false)
+            conflicts[Id](b9, b10, chain) should be(true)
           }
         }
         .runSyncUnsafe(10.seconds)
