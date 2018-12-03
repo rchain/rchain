@@ -973,7 +973,7 @@ object ProcNormalizeMatcher {
           }
           sync.raiseError(
             UnexpectedBundleContent(
-              s"Bundle's content shouldn't have free variables or wildcards.$errMsg"
+              s"Bundle's content must not have free variables or wildcards.$errMsg"
             )
           )
         }
@@ -987,7 +987,13 @@ object ProcNormalizeMatcher {
             case _: BundleWrite     => Bundle(targetResult.par, writeFlag = true, readFlag = false)
             case _: BundleEquiv     => Bundle(targetResult.par, writeFlag = false, readFlag = false)
           }
-          res <- if (targetResult.par.connectiveUsed) {
+          res <- if (targetResult.par.connectives.nonEmpty) {
+                  sync.raiseError(
+                    UnexpectedBundleContent(
+                      s"Illegal top level connective in bundle at position: line: ${b.line_num}, column: ${b.col_num}."
+                    )
+                  )
+                } else if (targetResult.knownFree.wildcards.nonEmpty || targetResult.knownFree.env.nonEmpty) {
                   error(targetResult)
                 } else {
                   val newBundle: Bundle = targetResult.par.singleBundle() match {
