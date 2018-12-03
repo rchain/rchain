@@ -336,8 +336,9 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   def storageContents(hash: StateHash): F[String] =
     runtimeManager
       .storageRepr(hash)
-      .getOrElse(s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!")
-      .pure[F]
+      .map { contents =>
+        contents.getOrElse(s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!")
+      }
 
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     (equivocationsTracker

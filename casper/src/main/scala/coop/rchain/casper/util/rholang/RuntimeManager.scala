@@ -12,6 +12,7 @@ import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{accounting, ChargingReducer, ErrorLog, Runtime}
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
+import scala.concurrent.duration._
 
 import scala.collection.immutable
 import scala.concurrent.SyncVar
@@ -31,7 +32,7 @@ class RuntimeManager[F[_]: Sync] private (
 
   def captureResults(start: StateHash, deploy: Deploy, name: Par): F[Seq[Par]] =
     for {
-      runtime    <- Sync[F].delay { runtimeContainer.take() }
+      runtime    <- Sync[F].delay { runtimeContainer.take(1.minute.toMillis) }
       evalResult <- newEval(deploy :: Nil, runtime, start)
 
       (_, Seq(processedDeploy)) = evalResult
@@ -52,7 +53,7 @@ class RuntimeManager[F[_]: Sync] private (
       time: Option[Long] = None
   ): F[Either[(Option[Deploy], Failed), StateHash]] =
     for {
-      runtime <- Sync[F].delay { runtimeContainer.take() }
+      runtime <- Sync[F].delay { runtimeContainer.take(1.minute.toMillis) }
       _       <- setTimestamp(time, runtime)
       result  <- replayEval(terms, runtime, hash)
       _       <- Sync[F].delay { runtimeContainer.put(runtime) }
@@ -64,7 +65,7 @@ class RuntimeManager[F[_]: Sync] private (
       time: Option[Long] = None
   ): F[(StateHash, Seq[InternalProcessedDeploy])] =
     for {
-      runtime <- Sync[F].delay { runtimeContainer.take() }
+      runtime <- Sync[F].delay { runtimeContainer.take(1.minute.toMillis) }
       _       <- setTimestamp(time, runtime)
       result  <- newEval(terms, runtime, hash)
       _       <- Sync[F].delay { runtimeContainer.put(runtime) }
@@ -78,12 +79,15 @@ class RuntimeManager[F[_]: Sync] private (
       case None => Sync[F].pure(())
     }
 
-  def storageRepr(hash: StateHash): Option[String] =
-    getResetRuntimeOpt(hash).map { resetRuntime =>
-      val result = StoragePrinter.prettyPrint(resetRuntime.space.store)
-      runtimeContainer.put(resetRuntime)
-      result
-    }
+  def storageRepr(hash: StateHash): F[Option[String]] =
+    for {
+      resetRuntimeOpt <- getResetRuntimeOpt(hash)
+      result = resetRuntimeOpt.map { resetRuntime =>
+        val result = StoragePrinter.prettyPrint(resetRuntime.space.store)
+        runtimeContainer.put(resetRuntime)
+        result
+      }
+    } yield result
 
   def computeBonds(hash: StateHash): F[Seq[Bond]] = {
     val bondsQuery =
@@ -108,27 +112,31 @@ class RuntimeManager[F[_]: Sync] private (
       }
   }
 
-  private def getResetRuntime(hash: StateHash) = {
-    val runtime   = runtimeContainer.take()
-    val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
-    Try(runtime.space.reset(blakeHash)) match {
-      case Success(_) => runtime
-      case Failure(ex) =>
-        runtimeContainer.put(runtime)
-        throw ex
-    }
-  }
+  private def getResetRuntime(hash: StateHash): F[Runtime[F]] =
+    for {
+      runtime   <- Sync[F].delay { runtimeContainer.take(1.minute.toMillis) }
+      blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
+      result    <- runtime.space.reset(blakeHash).attempt
+    } yield
+      result match {
+        case Right(_) => runtime
+        case Left(ex) =>
+          runtimeContainer.put(runtime)
+          throw ex
+      }
 
-  private def getResetRuntimeOpt(hash: StateHash) = {
-    val runtime   = runtimeContainer.take()
-    val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
-    Try(runtime.space.reset(blakeHash)) match {
-      case Success(_) => Some(runtime)
-      case Failure(_) =>
-        runtimeContainer.put(runtime)
-        None
-    }
-  }
+  private def getResetRuntimeOpt(hash: StateHash): F[Option[Runtime[F]]] =
+    for {
+      runtime   <- Sync[F].delay { runtimeContainer.take(1.minute.toMillis) }
+      blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
+      result    <- runtime.space.reset(blakeHash).attempt
+    } yield
+      result match {
+        case Right(_) => Some(runtime)
+        case Left(ex) =>
+          runtimeContainer.put(runtime)
+          None
+      }
 
   private def toBondSeq(bondsMap: Par): Seq[Bond] =
     bondsMap.exprs.head.getEMapBody.ps.map {
@@ -142,7 +150,7 @@ class RuntimeManager[F[_]: Sync] private (
 
   def getData(hash: ByteString, channel: Par): F[Seq[Par]] =
     for {
-      resetRuntime <- Sync[F].delay { getResetRuntime(hash) }
+      resetRuntime <- getResetRuntime(hash)
       data         <- resetRuntime.space.getData(channel)
       _            <- Sync[F].delay { runtimeContainer.put(resetRuntime) }
     } yield data.flatMap(_.a.pars)
@@ -152,7 +160,7 @@ class RuntimeManager[F[_]: Sync] private (
       channels: immutable.Seq[Par]
   ): F[Seq[(Seq[BindPattern], Par)]] =
     for {
-      resetRuntime  <- Sync[F].delay { getResetRuntime(hash) }
+      resetRuntime  <- getResetRuntime(hash)
       continuations <- resetRuntime.space.getWaitingContinuations(channels)
       _             <- Sync[F].delay { runtimeContainer.put(resetRuntime) }
     } yield

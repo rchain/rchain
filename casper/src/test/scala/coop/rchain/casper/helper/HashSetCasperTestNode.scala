@@ -214,7 +214,7 @@ object HashSetCasperTestNode {
       implicit scheduler: Scheduler
   ): HashSetCasperTestNode[Task] = {
     implicit val errorHandlerEff = errorHandler
-    standaloneF[Task, Task.Par](genesis, sk, storageSize).runSyncUnsafe(10.seconds)
+    standaloneF[Task, Task.Par](genesis, sk, storageSize).runSyncUnsafe(60.seconds)
   }
   def standaloneEff(genesis: BlockMessage, sk: Array[Byte], storageSize: Long = 1024L * 1024 * 10)(
       implicit scheduler: Scheduler

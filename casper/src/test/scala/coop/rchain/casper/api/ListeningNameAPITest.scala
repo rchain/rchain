@@ -67,11 +67,11 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     implicit val nodeZeroBlockStoreEffect   = nodes(0).blockStore
 
     implicit val timeEff = new LogicalTime[Task]
-    val deployDatas =
-      Stream.range(0, 7).traverse(ProtoUtil.basicDeployData[Task](_)).runSyncUnsafe(1.second)
+    val deployDatas      = (0 to 7).map(_ => ProtoUtil.basicDeployData[Task](0).runSyncUnsafe(1.second))
 
-    val Created(block1) = (nodes(0).casperEff
-      .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock).runSyncUnsafe(10.seconds)
+    val Created(block1) =
+      (nodes(0).casperEff.deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock)
+        .runSyncUnsafe(10.seconds)
     nodes(0).casperEff.addBlock(block1).runSyncUnsafe(10.seconds)
     nodes(1).receive().runSyncUnsafe(10.seconds)
     nodes(2).receive().runSyncUnsafe(10.seconds)

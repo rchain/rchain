@@ -136,7 +136,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     )
 
     logEff.warns.isEmpty should be(true)
-    logEff.infos.zip(logMessages).forall { case (a, b) => a.startsWith(b) } should be(true)
+    logEff.infos.sorted.zip(logMessages.sorted).forall { case (a, b) => a.startsWith(b) } should be(
+      true
+    )
     val dag = MultiParentCasper[Task].blockDag.runSyncUnsafe(10.seconds)
     MultiParentCasper[Task].estimator(dag).runSyncUnsafe(10.seconds) should be(
       IndexedSeq(signedBlock)
@@ -1256,7 +1258,7 @@ object HashSetCasperTest {
         runtimeManager,
         deployTimestamp
       )
-      .runSyncUnsafe(10.seconds)
+      .runSyncUnsafe(60.seconds)
 
     activeRuntime.close().unsafeRunSync
     genesis

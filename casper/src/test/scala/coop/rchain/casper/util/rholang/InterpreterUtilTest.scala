@@ -103,7 +103,8 @@ class InterpreterUtilTest
               computeBlockCheckpoint(genesis, genesis, chain, runtimeManager)
             val chainWithUpdatedGen =
               injectPostStateHash(chain, 0, genesis, postGenStateHash, postGenProcessedDeploys)
-            val genPostState = runtimeManager.storageRepr(postGenStateHash).get
+            val genPostState =
+              runtimeManager.storageRepr(postGenStateHash).runSyncUnsafe(10.seconds).get
 
             val b1 = chainWithUpdatedGen.idToBlocks(1)
             val (postB1StateHash, postB1ProcessedDeploys) =
@@ -121,7 +122,8 @@ class InterpreterUtilTest
                 postB1StateHash,
                 postB1ProcessedDeploys
               )
-            val b1PostState = runtimeManager.storageRepr(postB1StateHash).get
+            val b1PostState =
+              runtimeManager.storageRepr(postB1StateHash).runSyncUnsafe(10.seconds).get
 
             val b2 = chainWithUpdatedB1.idToBlocks(2)
             val (postB2StateHash, postB2ProcessedDeploys) =
@@ -148,7 +150,8 @@ class InterpreterUtilTest
                 chainWithUpdatedB2,
                 runtimeManager
               )
-            val b3PostState = runtimeManager.storageRepr(postb3StateHash).get
+            val b3PostState =
+              runtimeManager.storageRepr(postb3StateHash).runSyncUnsafe(10.seconds).get
 
             (genPostState, b1PostState, b3PostState)
           }
@@ -269,7 +272,7 @@ class InterpreterUtilTest
               chainWithUpdatedB2,
               runtimeManager
             )
-          runtimeManager.storageRepr(postb3StateHash).get
+          runtimeManager.storageRepr(postb3StateHash).runSyncUnsafe(10.seconds).get
         }
       }
       .runSyncUnsafe(10.seconds)
