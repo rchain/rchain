@@ -203,6 +203,7 @@ class Node:
     def shell_out(self, *cmd: str, stderr=True) -> str:
         exit_code, output = self.exec_run(cmd, stderr=stderr)
         if exit_code != 0:
+            logging.warning("{}: {} exited with {}".format(self.name, cmd, exit_code))
             raise NonZeroExitCodeError(command=cmd, exit_code=exit_code, output=output)
         return output
 
