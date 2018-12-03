@@ -267,27 +267,23 @@ object ProtoUtil {
   def conflicts[F[_]: Monad: BlockStore](
       b1: BlockMessage,
       b2: BlockMessage,
-      genesis: BlockMessage,
       dag: BlockDag
   ): F[Boolean] = {
-    val b1MetaData       = dag.dataLookup.get(b1.blockHash)
-    val b2MetaData       = dag.dataLookup.get(b2.blockHash)
-    val blockMetaDataSeq = Vector(b1MetaData, b2MetaData).flatten
-    if (blockMetaDataSeq.size == 2) {
-      implicit val ordering    = BlockDag.deriveOrdering(dag)
-      val uncommonAncestorsMap = DagOperations.uncommonAncestors(blockMetaDataSeq, dag.dataLookup)
-      val (b1AncestorsMap, b2AncestorsMap) = uncommonAncestorsMap.partition {
-        case (_, bitSet) => bitSet == BitSet(0)
-      }
-      val b1AncestorsMeta = b1AncestorsMap.keys
-      val b2AncestorsMeta = b2AncestorsMap.keys
-      for {
-        b1AncestorChannels <- buildBlockAncestorChannels[F](b1AncestorsMeta.toList)
-        b2AncestorChannels <- buildBlockAncestorChannels[F](b2AncestorsMeta.toList)
-      } yield b1AncestorChannels.intersect(b2AncestorChannels).nonEmpty
-    } else {
-      false.pure[F]
+    implicit val ordering = BlockDag.deriveOrdering(dag)
+
+    val b1MetaData           = dag.dataLookup(b1.blockHash)
+    val b2MetaData           = dag.dataLookup(b2.blockHash)
+    val blockMetaDataSeq     = Vector(b1MetaData, b2MetaData)
+    val uncommonAncestorsMap = DagOperations.uncommonAncestors(blockMetaDataSeq, dag.dataLookup)
+    val (b1AncestorsMap, b2AncestorsMap) = uncommonAncestorsMap.partition {
+      case (_, bitSet) => bitSet == BitSet(0)
     }
+    val b1AncestorsMeta = b1AncestorsMap.keys
+    val b2AncestorsMeta = b2AncestorsMap.keys
+    for {
+      b1AncestorChannels <- buildBlockAncestorChannels[F](b1AncestorsMeta.toList)
+      b2AncestorChannels <- buildBlockAncestorChannels[F](b2AncestorsMeta.toList)
+    } yield b1AncestorChannels.intersect(b2AncestorChannels).nonEmpty
   }
 
   private def buildBlockAncestorChannels[F[_]: Monad: BlockStore](
