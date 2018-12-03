@@ -58,8 +58,8 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
       else Left(new RuntimeException(response.status))
     }
 
-  def showBlocks(q: BlocksQuery): Task[Either[Throwable, String]] = {
-    val blocks = stub
+  def showBlocks(q: BlocksQuery): Task[Either[Throwable, String]] =
+    stub
       .showBlocks(q)
       .map { bi =>
         s"""
@@ -69,16 +69,14 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
          |""".stripMargin
       }
       .toListL
-
-    blocks.map { bs =>
-      val showLength =
-        s"""
+      .map { bs =>
+        val showLength =
+          s"""
            |count: ${bs.length}
            |""".stripMargin
 
-      Right(bs.mkString("\n") + "\n" + showLength)
-    }
-  }
+        Right(bs.mkString("\n") + "\n" + showLength)
+      }
 
   def addBlock(b: BlockMessage): Task[Either[Throwable, String]] =
     stub.addBlock(b).map { response =>
