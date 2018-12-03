@@ -6,7 +6,6 @@ name = "pypi"
 [packages]
 docker = "*"
 pytest = "*"
-delayed-assert = "*"
 pytest-json = "*"
 pytest-mypy = "*"
 pytest-pylint = "*"
