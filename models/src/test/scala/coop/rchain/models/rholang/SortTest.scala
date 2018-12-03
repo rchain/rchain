@@ -595,6 +595,39 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
     result.term should be(sortedParExpr)
   }
 
+  it should "sort logical connectives in \"varref\", \"bool\", \"int\", \"string\", \"uri\", \"bytearray\" order" in {
+    val parExpr =
+      Par(
+        connectives = List(
+          Connective(ConnByteArray(true)),
+          Connective(ConnUri(true)),
+          Connective(ConnString(true)),
+          Connective(ConnInt(true)),
+          Connective(ConnBool(true)),
+          Connective(
+            VarRefBody(VarRef())
+          )
+        ),
+        connectiveUsed = true
+      )
+    val sortedParExpr: Par =
+      Par(
+        connectives = List(
+          Connective(
+            VarRefBody(VarRef())
+          ),
+          Connective(ConnBool(true)),
+          Connective(ConnInt(true)),
+          Connective(ConnString(true)),
+          Connective(ConnUri(true)),
+          Connective(ConnByteArray(true))
+        ),
+        connectiveUsed = true
+      )
+    val result = sort(parExpr)
+    result.term should be(sortedParExpr)
+  }
+
   it should "sort based on the connectiveUsed flag" in {
     val expr = Expr(
       EMapBody(
