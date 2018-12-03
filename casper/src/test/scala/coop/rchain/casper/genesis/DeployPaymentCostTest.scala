@@ -18,37 +18,34 @@ import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.{accounting, InterpolateRholang}
+import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.rspace.Serialize
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
-import Matchers._
+import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
+
 import scala.collection.immutable.BitSet
 
 class DeployPaymentCostTest extends FlatSpec {
 
-  "DeployPaymentCost" should "estimate cost of deploying payment code" in {
-    val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
+  "DeployPaymentCost" should "estimate cost of deploying payment code" in effectTest {
+    val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
     import node.casperEff
 
     val secKey = Base16.decode(secKeyString)
     val pubKey = Base16.decode(pubKeyString)
+    for {
+      walletAddress   <- createWallet(node.runtimeManager)
+      walletUriString <- registerWallet(walletAddress, secKey, pubKey, node.runtimeManager)
 
-    val walletAddress = createWallet(node.runtimeManager)
-
-    val walletUriString = registerWallet(walletAddress, secKey, pubKey, node.runtimeManager)
-
-    val statusChannel = GPrivateBuilder()
-    val paymentPar    = makePayment(0L, 10L, secKey, walletUriString, statusChannel)
-    val user          = ByteString.copyFrom(pubKey)
-    val timestamp     = System.currentTimeMillis()
-
-    val paymentBlock = paymentDeploy(paymentPar, user, timestamp)
-
-    val paymentDeployCost = deployCost(paymentBlock, user, timestamp)
-
-    assertSuccessfulTransfer(node, ProtoUtil.postStateHash(paymentBlock), statusChannel)
-
-    println(s"Cost of deploying payment contract is at minimum: $paymentDeployCost")
+      statusChannel     = GPrivateBuilder()
+      paymentPar        = makePayment(0L, 10L, secKey, walletUriString, statusChannel)
+      user              = ByteString.copyFrom(pubKey)
+      timestamp         = System.currentTimeMillis()
+      paymentBlock      <- paymentDeploy(paymentPar, user, timestamp)
+      paymentDeployCost = deployCost(paymentBlock, user, timestamp)
+      _                 = assertSuccessfulTransfer(node, ProtoUtil.postStateHash(paymentBlock), statusChannel)
+    } yield println(s"Cost of deploying payment contract is at minimum: $paymentDeployCost")
   }
 
 }
@@ -179,30 +176,33 @@ object DeployPaymentCostTest {
       .value()
   }
 
-  def createWallet(rm: RuntimeManager)(implicit casper: MultiParentCasperImpl[Id]): Par = {
+  def createWallet(
+      rm: RuntimeManager
+  )(implicit casper: MultiParentCasperImpl[Effect]): Effect[Par] = {
     // Create new wallet
     val walletRetCh = GPrivateBuilder()
-    val newWalletName = deployAndCapture(
-      createWalletPar(pubKeyString, walletRetCh),
-      walletRetCh,
-      rm
-    )
-
-    GPrivateBuilder(
-      ByteString.copyFrom(
-        newWalletName.exprs.head.getEListBody.ps.head.bundles.head.body.ids.head.id.toByteArray
+    for {
+      newWalletName <- deployAndCapture(
+                        createWalletPar(pubKeyString, walletRetCh),
+                        walletRetCh,
+                        rm
+                      )
+    } yield
+      GPrivateBuilder(
+        ByteString.copyFrom(
+          newWalletName.exprs.head.getEListBody.ps.head.bundles.head.body.ids.head.id.toByteArray
+        )
       )
-    )
   }
 
   def deployAndCapture(p: Par, retChannel: Par, rm: RuntimeManager)(
-      implicit casper: MultiParentCasperImpl[Id]
-  ): Par = {
-    val postDeployStateHash = ProtoUtil.postStateHash(deploy[Id](p))
-    val data                = rm.getData(postDeployStateHash, retChannel)
-    assert(data.size == 1)
-    data.head
-  }
+      implicit casper: MultiParentCasperImpl[Effect]
+  ): Effect[Par] =
+    for {
+      postDeployStateHash <- deploy[Effect](p).map(ProtoUtil.postStateHash)
+      data                = rm.getData(postDeployStateHash, retChannel)
+      _                   = assert(data.size == 1)
+    } yield data.head
 
   def deploy[F[_]: Monad](par: Par)(implicit casperEff: MultiParentCasperImpl[F]): F[BlockMessage] =
     for {
@@ -257,7 +257,7 @@ object DeployPaymentCostTest {
       secKey: Array[Byte],
       pubKey: Array[Byte],
       rm: RuntimeManager
-  )(implicit casper: MultiParentCasperImpl[Id]): String = {
+  )(implicit casper: MultiParentCasperImpl[Effect]): Effect[String] = {
     val registerWalletTuple: Par = ETuple(Seq(GInt(1), walletAddress))
     val registrySig              = Ed25519.sign(registerWalletTuple.toByteArray, secKey)
     assert(Ed25519.verify(registerWalletTuple.toByteArray, registrySig, pubKey))
@@ -277,9 +277,7 @@ object DeployPaymentCostTest {
       )
       .value
 
-    val walletUri = deployAndCapture(par, walletUriRet, rm)
-
-    walletUri.exprs.head.getGUri
+    deployAndCapture(par, walletUriRet, rm).map(walletUri => walletUri.exprs.head.getGUri)
   }
 
   def assertSuccessfulTransfer[F[_]](

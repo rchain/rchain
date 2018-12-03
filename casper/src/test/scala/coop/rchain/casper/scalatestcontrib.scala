@@ -2,6 +2,9 @@ package coop.rchain.casper
 
 import cats.Monad
 import cats.syntax.functor._
+import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
+import coop.rchain.catscontrib.TaskContrib.TaskOps
+import monix.execution.Scheduler
 import org.scalatest.{Assertion, Matchers}
 
 object scalatestcontrib extends Matchers {
@@ -9,4 +12,7 @@ object scalatestcontrib extends Matchers {
     def shouldBeF(value: T): F[Assertion] =
       leftSideValue.map(_ shouldBe value)
   }
+
+  def effectTest[T](f: Effect[T])(implicit scheduler: Scheduler): T =
+    f.value.unsafeRunSync(scheduler).right.get
 }

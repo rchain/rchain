@@ -183,12 +183,6 @@ object HashSetCasperTestNode {
       result <- node.initialize.map(_ => node)
     } yield result
   }
-  def standalone(genesis: BlockMessage, sk: Array[Byte], storageSize: Long = 1024L * 1024 * 10)(
-      implicit scheduler: Scheduler
-  ): HashSetCasperTestNode[Id] = {
-    implicit val errorHandlerEff = errorHandler
-    standaloneF[Id](genesis, sk, storageSize)
-  }
   def standaloneEff(genesis: BlockMessage, sk: Array[Byte], storageSize: Long = 1024L * 1024 * 10)(
       implicit scheduler: Scheduler
   ): HashSetCasperTestNode[Effect] =
@@ -283,14 +277,6 @@ object HashSetCasperTestNode {
               )
           }
     } yield nodes
-  }
-  def network(
-      sks: IndexedSeq[Array[Byte]],
-      genesis: BlockMessage,
-      storageSize: Long = 1024L * 1024 * 10
-  )(implicit scheduler: Scheduler): IndexedSeq[HashSetCasperTestNode[Id]] = {
-    implicit val errorHandlerEff = errorHandler
-    networkF[Id](sks, genesis, storageSize)
   }
   def networkEff(
       sks: IndexedSeq[Array[Byte]],
