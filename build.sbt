@@ -76,7 +76,9 @@ lazy val shared = (project in file("shared"))
       monix,
       scodecCore,
       scodecBits,
-      scalapbRuntimegGrpc
+      scalapbRuntimegGrpc,
+      catsLawsTest,
+      catsLawsTestkitTest
     )
   )
 
