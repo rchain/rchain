@@ -1,10 +1,10 @@
 import re
 import os
+import queue
 import shlex
 import logging
 import threading
 import contextlib
-from queue import Empty
 from multiprocessing import Queue, Process
 from typing import (
     Dict,
@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from logging import Logger
     from threading import Event
     from docker.client import DockerClient
+    from docker.models.containers import ExecResult
 
 
 DEFAULT_IMAGE = os.environ.get("DEFAULT_IMAGE", "rchain-integration-testing:latest")
@@ -158,25 +159,22 @@ class Node:
 
     # Too low level -- do not use directly.  Prefer shell_out() instead.
     def _exec_run_with_timeout(self, cmd: Tuple[str, ...], stderr=True) -> Tuple[int, str]:
-        queue: Queue = Queue(1)
+        control_queue: queue.Queue = Queue(1)
 
-        def execution():
-            r = self.container.exec_run(cmd, stderr=stderr)
-            queue.put((r.exit_code, r.output.decode('utf-8')))
+        def command_process():
+            exec_result: ExecResult = self.container.exec_run(cmd, stderr=stderr)
+            control_queue.put((exec_result.exit_code, exec_result.output.decode('utf-8')))
 
-        process = Process(target=execution)
-
+        process = Process(target=command_process)
         logging.info("COMMAND {} {}".format(self.name, cmd))
-
         process.start()
-
         try:
-            exit_code, output = queue.get(True, self.command_timeout)
-            if exit_code != 0:
-                logging.warning("EXITED {} {} {}".format(self.name, cmd, exit_code))
+            exit_code, output = control_queue.get(True, self.command_timeout)
             logging.debug('OUTPUT {}'.format(repr(output)))
+            if exit_code != 0:
+                logging.warning("EXITED {} {} {} {}".format(self.name, cmd, exit_code, repr(output)))
             return exit_code, output
-        except Empty:
+        except queue.Empty:
             process.terminate()
             process.join()
             raise CommandTimeoutError(cmd, self.command_timeout)
