@@ -143,10 +143,6 @@ class Node:
         address = m.group(1)
         return address
 
-    def get_metrics(self) -> Tuple[int, str]:
-        cmd = 'curl -s http://localhost:40403/metrics'
-        return self.exec_run(cmd=cmd)
-
     def get_metrics_strict(self):
         return self.shell_out('curl', '-s', 'http://localhost:40403/metrics')
 
