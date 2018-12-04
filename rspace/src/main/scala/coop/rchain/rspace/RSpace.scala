@@ -17,7 +17,7 @@ import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext
 import scala.util.Random
 
-class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
+class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
     store: IStore[C, P, A, K],
     branch: Branch
 )(
@@ -360,7 +360,7 @@ object RSpace {
     implicit val codecK: Codec[K] = sk.toCodec
 
     val space: ISpace[F, C, P, E, A, R, K] =
-      new FineGrainedRSpace[F, C, P, E, A, R, K](store, branch)
+      new RSpace[F, C, P, E, A, R, K](store, branch)
 
     /*
      * history.initialize returns true if the history trie contains no root (i.e. is empty).
