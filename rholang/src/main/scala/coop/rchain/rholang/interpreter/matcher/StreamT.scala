@@ -5,6 +5,7 @@ import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, SNil, Step}
 
 import scala.collection.immutable.Stream
+import scala.collection.immutable.Stream.Cons
 import scala.util.{Left, Right}
 
 /**
@@ -42,12 +43,17 @@ object StreamT extends StreamTInstances0 {
 
     def next(curr: Stream[A]): Step[F, A] =
       curr match {
-        case Stream.Empty => SNil()
-        case h #:: t      => SCons(h, StreamT[F, A](Monad[F].pure(next(t))))
+        case Stream.Empty  => SNil()
+        case cons: Cons[A] => SCons(cons.head, StreamT(delay[F, Step[F, A]](next(cons.tail))))
       }
 
     StreamT[F, A](fs.map(next))
   }
+
+  //This should delay the computation for most stacksafe monads
+  //TODO consider doing the delay only for `F: Defer` to avoid the useless map
+  private def delay[F[_]: Monad, A](a: => A): F[A] =
+    Monad[F].unit.map(_ => a)
 
   def run[F[_]: Monad, A](s: StreamT[F, A]): F[Stream[A]] =
     s.next.flatMap {

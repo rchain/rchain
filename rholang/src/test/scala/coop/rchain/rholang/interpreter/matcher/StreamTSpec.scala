@@ -1,9 +1,10 @@
 package coop.rchain.rholang.interpreter.matcher
 
-import cats.{Eq, Id}
+import cats.Eq
 import cats.data.WriterT
 import cats.laws.discipline.{MonadTests, MonoidKTests}
 import cats.tests.CatsSuite
+import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, Step}
 import monix.eval.Coeval
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.{FlatSpec, Matchers}
@@ -14,19 +15,20 @@ class StreamTSpec extends FlatSpec with Matchers {
 
   it must "not trigger spurious evaluation of underlying stream for a lazy monad" in {
     val stream: Stream[Int] = Stream.cons(1, ???)
-    var wrapped: StreamT[Coeval, Int] = null
+
+    var step2: Coeval[Step[Coeval, Int]] = null
 
     noException shouldBe thrownBy {
       stream.head
-      wrapped = StreamT.fromStream[Coeval, Int](Coeval.now(stream))
+      val wrappedStep1 = StreamT.fromStream(Coeval.now(stream))
+      val step1 = wrappedStep1.next.value().asInstanceOf[SCons[Coeval, Int]]
+      assert(step1.head == 1)
+      val wrappedStep2 = step1.tail
+      step2 = wrappedStep2.next
     }
 
-    val next = wrapped.next
-
     assertThrows[NotImplementedError] {
-      next.value() //would be equal to SCons(1, StreamT(Monad[F].pure(SCons(???, empty))))
-      //FIXME make the stream not evaluate the next element until absolutely needed
-      // by requiring [F: Defer]
+      step2.value()
     }
   }
 
