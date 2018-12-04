@@ -3,7 +3,7 @@ package coop.rchain.casper.util
 import cats.Monad
 import cats.implicits._
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.{BlockMetadata, BlockStore}
 import coop.rchain.casper.{BlockDag, PrettyPrinter}
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
@@ -19,7 +19,9 @@ import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.Time
 import java.nio.charset.StandardCharsets
 
-import scala.collection.immutable
+import coop.rchain.casper.protocol.Event.EventInstance.{Comm, Consume, Produce}
+
+import scala.collection.{immutable, BitSet}
 
 object ProtoUtil {
   /*
@@ -258,43 +260,50 @@ object ProtoUtil {
     } yield ps.blockNumber).getOrElse(0L)
 
   /*
-   * Two blocks conflict if they both use the same deploy in different histories
-   *
-   * TODO: Update the logic of this function to make use of the trace logs and
-   * say that two blocks don't conflict if they act on disjoint sets of channels
+   * Block b1 conflicts with b2 if any of b1's ancestors contains a replay log entry that
+   * touches a channel that any of b2's ancestors' (that are not common with b1's ancestors)
+   * replay log entries touch.
    */
   def conflicts[F[_]: Monad: BlockStore](
       b1: BlockMessage,
       b2: BlockMessage,
-      genesis: BlockMessage,
       dag: BlockDag
-  ): F[Boolean] =
+  ): F[Boolean] = {
+    implicit val ordering = BlockDag.deriveOrdering(dag)
+
+    val b1MetaData           = dag.dataLookup(b1.blockHash)
+    val b2MetaData           = dag.dataLookup(b2.blockHash)
+    val blockMetaDataSeq     = Vector(b1MetaData, b2MetaData)
+    val uncommonAncestorsMap = DagOperations.uncommonAncestors(blockMetaDataSeq, dag.dataLookup)
+    val (b1AncestorsMap, b2AncestorsMap) = uncommonAncestorsMap.partition {
+      case (_, bitSet) => bitSet == BitSet(0)
+    }
+    val b1AncestorsMeta = b1AncestorsMap.keys
+    val b2AncestorsMeta = b2AncestorsMap.keys
     for {
-      gca <- DagOperations.greatestCommonAncestorF[F](b1, b2, genesis, dag)
-      result <- if (gca == b1 || gca == b2) {
-                 //blocks which already exist in each other's chains do not conflict
-                 false.pure[F]
-               } else {
-                 def getDeploys(b: BlockMessage) =
-                   for {
-                     bAncestors <- DagOperations
-                                    .bfTraverseF[F, BlockMessage](List(b))(
-                                      ProtoUtil.unsafeGetParents[F]
-                                    )
-                                    .takeWhile(_ != gca)
-                                    .toList
-                     deploys = bAncestors
-                       .flatMap(b => {
-                         b.body.map(_.deploys.flatMap(_.deploy)).getOrElse(List.empty[Deploy])
-                       })
-                       .toSet
-                   } yield deploys
-                 for {
-                   b1Deploys <- getDeploys(b1)
-                   b2Deploys <- getDeploys(b2)
-                 } yield b1Deploys.intersect(b2Deploys).nonEmpty
-               }
-    } yield result
+      b1AncestorChannels <- buildBlockAncestorChannels[F](b1AncestorsMeta.toList)
+      b2AncestorChannels <- buildBlockAncestorChannels[F](b2AncestorsMeta.toList)
+    } yield b1AncestorChannels.intersect(b2AncestorChannels).nonEmpty
+  }
+
+  private def buildBlockAncestorChannels[F[_]: Monad: BlockStore](
+      blockAncestorsMeta: List[BlockMetadata]
+  ): F[Set[BlockHash]] =
+    for {
+      maybeAncestors <- blockAncestorsMeta.traverse(
+                         blockAncestorMeta => BlockStore[F].get(blockAncestorMeta.blockHash)
+                       )
+      ancestors      = maybeAncestors.flatten
+      ancestorEvents = ancestors.flatMap(_.getBody.deploys.flatMap(_.log))
+      ancestorChannels = ancestorEvents.flatMap {
+        case Event(Produce(produce: ProduceEvent)) =>
+          Set(produce.channelsHash)
+        case Event(Consume(consume: ConsumeEvent)) =>
+          consume.channelsHashes.toSet
+        case Event(Comm(CommEvent(Some(consume: ConsumeEvent), produces))) =>
+          consume.channelsHashes.toSet ++ produces.map(_.channelsHash).toSet
+      }.toSet
+    } yield ancestorChannels
 
   def chooseNonConflicting[F[_]: Monad: BlockStore](
       blocks: Seq[BlockMessage],
@@ -302,7 +311,7 @@ object ProtoUtil {
       dag: BlockDag
   ): F[Seq[BlockMessage]] = {
     def nonConflicting(b: BlockMessage): BlockMessage => F[Boolean] =
-      conflicts[F](_, b, genesis, dag).map(b => !b)
+      conflicts[F](_, b, dag).map(b => !b)
 
     blocks.toList
       .foldM(List.empty[BlockMessage]) {

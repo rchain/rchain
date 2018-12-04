@@ -4,11 +4,17 @@ import shlex
 import logging
 import threading
 import contextlib
+from typing import Generator
 
+import pytest
+from docker.client import DockerClient
+
+import conftest
 from rnode_testing.common import (
     random_string,
     make_tempfile,
     make_tempdir,
+    TestingContext,
 )
 from rnode_testing.wait import (
     wait_for_node_started,
@@ -20,7 +26,7 @@ from queue import Empty
 from typing import Dict, List, Tuple, Union, TYPE_CHECKING, Optional, Generator
 
 if TYPE_CHECKING:
-    from conftest import ValidatorsData, KeyPair
+    from conftest import KeyPair
     from docker.client import DockerClient
     from docker.models.containers import Container
     from logging import Logger
@@ -135,8 +141,6 @@ class Node:
         if m is None:
             raise RNodeAddressNotFoundError()
         address = m.group(1)
-
-        logging.info("Bootstrap address: {}".format(repr(address)))
         return address
 
     def get_metrics(self) -> Tuple[int, str]:
@@ -185,15 +189,15 @@ class Node:
 
         process = Process(target=execution)
 
-        logging.info("{}: {}".format(self.name, cmd))
+        logging.info("COMMAND {} {}".format(self.name, cmd))
 
         process.start()
 
         try:
-            exit_code, output = queue.get(self.timeout)
+            exit_code, output = queue.get(True, None)
             if exit_code != 0:
-                logging.warning("{}: {} exited with {}".format(self.name, cmd, exit_code))
-            logging.debug('output={}'.format(repr(output)))
+                logging.warning("EXITED {} {} {}".format(self.name, cmd, exit_code))
+            logging.debug('OUTPUT {}'.format(repr(output)))
             return exit_code, output
         except Empty:
             process.terminate()
@@ -282,7 +286,7 @@ def make_container_command(container_command: str, container_command_options: Di
     return result
 
 
-def create_node_container(
+def make_node(
     *,
     docker_client: "DockerClient",
     name: str,
@@ -290,10 +294,9 @@ def create_node_container(
     bonds_file: str,
     container_command: str,
     container_command_options: Dict,
-    rnode_timeout: int,
+    command_timeout: int,
     extra_volumes: List[str],
     allowed_peers: Optional[List[str]],
-    cpuset_cpus: str,
     image: str = DEFAULT_IMAGE,
     mem_limit: Optional[str] = None,
 ) -> Node:
@@ -327,7 +330,6 @@ def create_node_container(
         name=name,
         user='root',
         detach=True,
-        cpuset_cpus=cpuset_cpus,
         mem_limit=mem_limit,
         network=network,
         volumes=volumes + extra_volumes,
@@ -340,7 +342,7 @@ def create_node_container(
         container,
         deploy_dir,
         docker_client,
-        rnode_timeout,
+        command_timeout,
         network,
     )
 
@@ -372,10 +374,9 @@ def make_bootstrap_node(
     network: str,
     bonds_file: str,
     key_pair: "KeyPair",
-    rnode_timeout: int,
+    command_timeout: int,
     allowed_peers: Optional[List[str]] = None,
     image: str = DEFAULT_IMAGE,
-    cpuset_cpus: str = "0",
     mem_limit: Optional[str] = None,
     cli_options: Optional[Dict] = None,
     container_name: Optional[str] = None,
@@ -405,18 +406,17 @@ def make_bootstrap_node(
         "{}:{}".format(key_file, rnode_key)
     ]
 
-    container = create_node_container(
+    container = make_node(
         docker_client=docker_client,
         name=name,
         network=network,
         bonds_file=bonds_file,
         container_command='run',
         container_command_options=container_command_options,
-        rnode_timeout=rnode_timeout,
+        command_timeout=command_timeout,
         extra_volumes=volumes,
         allowed_peers=allowed_peers,
         mem_limit=mem_limit if mem_limit is not None else '4G',
-        cpuset_cpus=cpuset_cpus,
     )
     return container
 
@@ -425,18 +425,17 @@ def make_peer_name(network: str, i: Union[int, str]) -> str:
     return "peer{i}.{network}".format(i=i, network=network)
 
 
-def create_peer(
+def make_peer(
     *,
     docker_client: "DockerClient",
     network: str,
     name: str,
     bonds_file: str,
-    rnode_timeout: int,
+    command_timeout: int,
     bootstrap: Node,
     key_pair: "KeyPair",
     allowed_peers: Optional[List[str]] = None,
     image: str = DEFAULT_IMAGE,
-    cpuset_cpus: str = "0",
     mem_limit: Optional[str] = None,
 ) -> Node:
     assert isinstance(name, str)
@@ -452,27 +451,41 @@ def create_peer(
         "--host":                   name,
     }
 
-    container = create_node_container(
+    container = make_node(
         docker_client=docker_client,
         name=name,
         network=network,
         bonds_file=bonds_file,
         container_command='run',
         container_command_options=container_command_options,
-        rnode_timeout=rnode_timeout,
+        command_timeout=command_timeout,
         extra_volumes=[],
         allowed_peers=allowed_peers,
         mem_limit=mem_limit if not None else '4G',
-        cpuset_cpus=cpuset_cpus,
     )
     return container
 
 
 @contextlib.contextmanager
-def started_peer(startup_timeout: int, **kwargs) -> Generator['Node', None, None]:
-    peer = create_peer(**kwargs)
+def started_peer(
+    *,
+    context,
+    network,
+    name,
+    bootstrap,
+    key_pair,
+):
+    peer = make_peer(
+        docker_client=context.docker,
+        network=network,
+        name=name,
+        bonds_file=context.bonds_file,
+        bootstrap=bootstrap,
+        key_pair=key_pair,
+        command_timeout=context.command_timeout,
+    )
     try:
-        wait_for_node_started(peer, startup_timeout)
+        wait_for_node_started(peer, context.node_startup_timeout)
         yield peer
     finally:
         peer.cleanup()
@@ -485,11 +498,10 @@ def create_peer_nodes(
     network: str,
     bonds_file: str,
     key_pairs: List["KeyPair"],
-    rnode_timeout: int,
+    command_timeout: int,
     allowed_peers: Optional[List[str]] = None,
     image: str = DEFAULT_IMAGE,
     mem_limit: Optional[str] = None,
-    cpuset_cpus: str = "0",
 ) -> List[Node]:
     assert len(set(key_pairs)) == len(key_pairs), "There shouldn't be any duplicates in the key pairs"
 
@@ -499,18 +511,17 @@ def create_peer_nodes(
     result = []
     try:
         for i, key_pair in enumerate(key_pairs):
-            peer_node = create_peer(
+            peer_node = make_peer(
                 docker_client=docker_client,
                 network=network,
                 name=str(i),
                 bonds_file=bonds_file,
-                rnode_timeout=rnode_timeout,
+                command_timeout=command_timeout,
                 bootstrap=bootstrap,
                 key_pair=key_pair,
                 allowed_peers=allowed_peers,
                 image=image,
                 mem_limit=mem_limit if mem_limit is not None else '4G',
-                cpuset_cpus=cpuset_cpus,
             )
             result.append(peer_node)
     except:
@@ -523,38 +534,42 @@ def create_peer_nodes(
 @contextlib.contextmanager
 def docker_network(docker_client: "DockerClient") -> Generator[str, None, None]:
     network_name = "rchain-{}".format(random_string(5).lower())
-
     docker_client.networks.create(network_name, driver="bridge")
-
     try:
         yield network_name
     finally:
         for network in docker_client.networks.list():
             if network_name == network.name:
-                logging.info("Removing docker network {}".format(network.name))
                 network.remove()
 
 
 @contextlib.contextmanager
-def bootstrap_node(docker: "DockerClient", docker_network: str, timeout: int, validators_data: "ValidatorsData", *, container_name: Optional[str] = None, cli_options: Optional[Dict] = None, mount_dir: Optional[str] = None) -> Generator[Node, None, None]:
-    node = make_bootstrap_node(
-        docker_client=docker,
-        network=docker_network,
-        bonds_file=validators_data.bonds_file,
-        key_pair=validators_data.bootstrap_keys,
-        rnode_timeout=timeout,
+def started_bootstrap_node(*, context: TestingContext, network, container_name: str = None, cli_options=None, mount_dir: str = None) -> Generator[Node, None, None]:
+    bootstrap_node = make_bootstrap_node(
+        docker_client=context.docker,
+        network=network,
+        bonds_file=context.bonds_file,
+        key_pair=context.bootstrap_keypair,
+        command_timeout=context.command_timeout,
         container_name=container_name,
         mount_dir=mount_dir,
     )
     try:
-        yield node
+        wait_for_node_started(bootstrap_node, context.node_startup_timeout)
+        yield bootstrap_node
     finally:
-        node.cleanup()
+        bootstrap_node.cleanup()
 
 
 @contextlib.contextmanager
-def start_bootstrap(docker_client: "DockerClient", node_start_timeout: int, node_cmd_timeout: int, validators_data: "ValidatorsData", *, container_name: Optional[str] = None, cli_options:Optional[Dict] = None, mount_dir: Optional[str] = None) -> Generator[Node, None, None]:
-    with docker_network(docker_client) as network:
-        with bootstrap_node(docker_client, network, node_cmd_timeout, validators_data, container_name=container_name, cli_options=cli_options, mount_dir=mount_dir) as node:
-            wait_for_node_started(node, node_start_timeout)
+def docker_network_with_started_bootstrap(context, *, container_name=None, cli_options=None):
+    with docker_network(context.docker) as network:
+        with started_bootstrap_node(context=context, network=network, container_name=container_name, cli_options=cli_options, mount_dir=context.mount_dir) as node:
             yield node
+
+
+@pytest.yield_fixture(scope='module')
+def started_standalone_bootstrap_node(command_line_options_fixture, docker_client_fixture):
+    with conftest.testing_context(command_line_options_fixture, docker_client_fixture) as context:
+        with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
+            yield bootstrap_node

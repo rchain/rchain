@@ -14,11 +14,16 @@ import cats.implicits._
 import cats.mtl.MonadState
 import cats.mtl.implicits._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture, IndexedBlockDag}
 import coop.rchain.casper.helper.BlockGenerator._
+import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
+import coop.rchain.casper.util.rholang.{InterpreterUtil, ProcessedDeployUtil, RuntimeManager}
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.shared.Time
+import monix.eval.Task
+import scala.concurrent.duration._
+import monix.execution.Scheduler.Implicits.global
 
 import scala.collection.immutable.{HashMap, HashSet}
 
@@ -144,22 +149,44 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
       val chain   = createChain[StateWithChain].runS(initState)
       val genesis = chain.idToBlocks(1)
 
-      val b2  = chain.idToBlocks(2)
-      val b3  = chain.idToBlocks(3)
-      val b4  = chain.idToBlocks(4)
-      val b5  = chain.idToBlocks(5)
-      val b6  = chain.idToBlocks(6)
-      val b7  = chain.idToBlocks(7)
-      val b8  = chain.idToBlocks(8)
-      val b9  = chain.idToBlocks(9)
-      val b10 = chain.idToBlocks(10)
+      mkRuntimeManager("casper-util-test")
+        .use { runtimeManager =>
+          Task.delay {
+            val (postGenStateHash, postGenProcessedDeploys) =
+              computeBlockCheckpoint(genesis, genesis, chain, runtimeManager)
+            val chainWithUpdatedGen =
+              injectPostStateHash(chain, 0, genesis, postGenStateHash, postGenProcessedDeploys)
 
-      conflicts[Id](b2, b3, genesis, chain) should be(false)
-      conflicts[Id](b4, b5, genesis, chain) should be(true)
-      conflicts[Id](b6, b6, genesis, chain) should be(false)
-      conflicts[Id](b6, b9, genesis, chain) should be(false)
-      conflicts[Id](b7, b8, genesis, chain) should be(false)
-      conflicts[Id](b7, b10, genesis, chain) should be(false)
-      conflicts[Id](b9, b10, genesis, chain) should be(true)
+            val (b1: BlockMessage, chainWithUpdatedB1: IndexedBlockDag) =
+              updateChainWithBlockStateUpdate(1, genesis, runtimeManager, chainWithUpdatedGen)
+            val (b2: BlockMessage, chainWithUpdatedB2: IndexedBlockDag) =
+              updateChainWithBlockStateUpdate(2, genesis, runtimeManager, chainWithUpdatedB1)
+            val (b3: BlockMessage, chainWithUpdatedB3: IndexedBlockDag) =
+              updateChainWithBlockStateUpdate(3, genesis, runtimeManager, chainWithUpdatedB2)
+            val (b4: BlockMessage, chainWithUpdatedB4: IndexedBlockDag) =
+              updateChainWithBlockStateUpdate(4, genesis, runtimeManager, chainWithUpdatedB3)
+            val (b5: BlockMessage, chainWithUpdatedB5: IndexedBlockDag) =
+              updateChainWithBlockStateUpdate(5, genesis, runtimeManager, chainWithUpdatedB4)
+            val (b6: BlockMessage, chainWithUpdatedB6: IndexedBlockDag) =
+              updateChainWithBlockStateUpdate(6, genesis, runtimeManager, chainWithUpdatedB5)
+            val (b7: BlockMessage, chainWithUpdatedB7: IndexedBlockDag) =
+              updateChainWithBlockStateUpdate(7, genesis, runtimeManager, chainWithUpdatedB6)
+            val (b8: BlockMessage, chainWithUpdatedB8: IndexedBlockDag) =
+              updateChainWithBlockStateUpdate(8, genesis, runtimeManager, chainWithUpdatedB7)
+            val (b9: BlockMessage, chainWithUpdatedB9: IndexedBlockDag) =
+              updateChainWithBlockStateUpdate(9, genesis, runtimeManager, chainWithUpdatedB8)
+            val (b10: BlockMessage, chainWithUpdatedB10: IndexedBlockDag) =
+              updateChainWithBlockStateUpdate(10, genesis, runtimeManager, chainWithUpdatedB9)
+
+            conflicts[Id](b2, b3, chain) should be(false)
+            conflicts[Id](b4, b5, chain) should be(true)
+            conflicts[Id](b6, b6, chain) should be(false)
+            conflicts[Id](b6, b9, chain) should be(false)
+            conflicts[Id](b7, b8, chain) should be(false)
+            conflicts[Id](b7, b10, chain) should be(false)
+            conflicts[Id](b9, b10, chain) should be(true)
+          }
+        }
+        .runSyncUnsafe(10.seconds)
   }
 }

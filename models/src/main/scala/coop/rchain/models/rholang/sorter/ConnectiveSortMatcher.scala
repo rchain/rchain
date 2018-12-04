@@ -35,16 +35,16 @@ private[sorter] object ConnectiveSortMatcher extends Sortable[Connective] {
           )
       case v @ VarRefBody(VarRef(index, depth)) =>
         ScoredTerm(Connective(v), Leaves(Score.CONNECTIVE_VARREF, index, depth)).pure[F]
-      case v @ ConnBool(_) =>
-        ScoredTerm(Connective(v), Leaf(Score.CONNECTIVE_BOOL)).pure[F]
-      case v @ ConnInt(_) =>
-        ScoredTerm(Connective(v), Leaf(Score.CONNECTIVE_INT)).pure[F]
-      case v @ ConnString(_) =>
-        ScoredTerm(Connective(v), Leaf(Score.CONNECTIVE_STRING)).pure[F]
-      case v @ ConnUri(_) =>
-        ScoredTerm(Connective(v), Leaf(Score.CONNECTIVE_URI)).pure[F]
-      case v @ ConnByteArray(_) =>
-        ScoredTerm(Connective(v), Leaf(Score.CONNECTIVE_BYTEARRAY)).pure[F]
+      case v @ ConnBool(b) =>
+        ScoredTerm(Connective(v), Leaves(Score.CONNECTIVE_BOOL, if (b) 1 else 0)).pure[F]
+      case v @ ConnInt(b) =>
+        ScoredTerm(Connective(v), Leaves(Score.CONNECTIVE_INT, if (b) 1 else 0)).pure[F]
+      case v @ ConnString(b) =>
+        ScoredTerm(Connective(v), Leaves(Score.CONNECTIVE_STRING, if (b) 1 else 0)).pure[F]
+      case v @ ConnUri(b) =>
+        ScoredTerm(Connective(v), Leaves(Score.CONNECTIVE_URI, if (b) 1 else 0)).pure[F]
+      case v @ ConnByteArray(b) =>
+        ScoredTerm(Connective(v), Leaves(Score.CONNECTIVE_BYTEARRAY, if (b) 1 else 0)).pure[F]
       case Empty =>
         ScoredTerm(Connective(Empty), Leaf(Score.ABSENT)).pure[F]
     }
