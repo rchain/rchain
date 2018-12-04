@@ -17,12 +17,16 @@ private[sorter] object MatchSortMatcher extends Sortable[Match] {
           Node(Seq(sortedPattern.score) ++ Seq(sortedBody.score))
         )
     for {
-      sortedValue <- Sortable.sortMatch(m.target)
-      scoredCases <- m.cases.toList.traverse(sortCase)
+      sortedValue         <- Sortable.sortMatch(m.target)
+      scoredCases         <- m.cases.toList.traverse(sortCase)
+      connectiveUsedScore = if (m.connectiveUsed) 1 else 0
     } yield
       ScoredTerm(
         Match(sortedValue.term, scoredCases.map(_.term), m.locallyFree, m.connectiveUsed),
-        Node(Score.MATCH, Seq(sortedValue.score) ++ scoredCases.map(_.score): _*)
+        Node(
+          Score.MATCH,
+          Seq(sortedValue.score) ++ scoredCases.map(_.score) ++ Seq(Leaf(connectiveUsedScore)): _*
+        )
       )
   }
 }

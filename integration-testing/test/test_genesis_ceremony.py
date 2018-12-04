@@ -1,16 +1,19 @@
 import contextlib
-import pytest
-import conftest
-from rnode_testing.rnode import start_bootstrap
+from typing import (
+    Generator,
+    List,
+    TYPE_CHECKING,
+)
 
-from typing import Generator, List, TYPE_CHECKING
+import pytest
+
+import conftest
+from rnode_testing.rnode import docker_network_with_started_bootstrap
 
 if TYPE_CHECKING:
     from _pytest.fixtures import FixtureRequest
     from conftest import (
         KeyPair,
-        System,
-        ValidatorsData,
     )
     from docker.client import DockerClient
 
@@ -20,34 +23,6 @@ VALIDATOR_A_KEYS = conftest.KeyPair(private_key='120d42175739387af0264921bb117e4
 VALIDATOR_B_KEYS = conftest.KeyPair(private_key='1f52d0bce0a92f5c79f2a88aae6d391ddf853e2eb8e688c5aa68002205f92dad', public_key='043c56051a613623cd024976427c073fe9c198ac2b98315a4baff9d333fbb42e')
 
 
-@contextlib.contextmanager
-def validators_config(validator_keys: List["KeyPair"]) -> Generator["ValidatorsData", None, None]:
-    with conftest.temporary_bonds_file(validator_keys) as f:
-        yield conftest.ValidatorsData(bonds_file=f, bootstrap_keys=CEREMONY_MASTER_NODE_KEYS, peers_keys=validator_keys)
-
-
-@contextlib.contextmanager
-def custom_system(request: "FixtureRequest", docker_client_session: "DockerClient", validator_keys: List["KeyPair"]) -> Generator["System", None, None]:
-    with validators_config(validator_keys) as config:
-        test_config = conftest.make_test_config(request)
-        yield conftest.System(test_config, docker_client_session, config)
-
-
 @pytest.mark.xfail
-def test_successful_genesis_ceremony(request: "FixtureRequest", docker_client_session: "DockerClient") -> None:
-    cli_options = {
-        '--required-sigs':  2,
-        '--duration':       '5 min',
-        '--interval':       '10 sec',
-    }
-    with custom_system(request, docker_client_session, validator_keys=[VALIDATOR_A_KEYS, VALIDATOR_B_KEYS]) as system:
-        with start_bootstrap(
-            system.docker,
-            system.config.node_startup_timeout,
-            system.config.rnode_timeout,
-            system.validators_data,
-            container_name='ceremony-master',
-            cli_options=cli_options,
-            mount_dir=system.config.mount_dir,
-        ) as bootstrap:
-            assert False
+def test_successful_genesis_ceremony(docker_client_session: "DockerClient") -> None:
+    assert False
