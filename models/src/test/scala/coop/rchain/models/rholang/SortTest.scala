@@ -52,7 +52,7 @@ class ScoredTermSpec extends FlatSpec with PropertyChecks with Matchers {
     unsortedTerms.sorted should be(sortedTerms)
   }
   it should "sort so that unequal terms have unequal scores and the other way around" in {
-    def checkScoreEquality[A: Sortable: Arbitrary]: Unit = {
+    def checkScoreEquality[A: Sortable: Arbitrary]: Unit =
       // ScalaCheck generates similar A-s in subsequent calls which
       // we need to hit the case where `x == y` more often
       forAll(Gen.listOfN(5, arbitrary[A])) { as: List[A] =>
@@ -63,7 +63,6 @@ class ScoredTermSpec extends FlatSpec with PropertyChecks with Matchers {
             assert(sort(x).score == sort(y).score)
         }
       }
-    }
     checkScoreEquality[Bundle]
     checkScoreEquality[Connective]
     checkScoreEquality[Expr]
@@ -73,6 +72,14 @@ class ScoredTermSpec extends FlatSpec with PropertyChecks with Matchers {
     checkScoreEquality[Receive]
     checkScoreEquality[Send]
     checkScoreEquality[Var]
+  }
+  it should "sort so that unequal ParMap have unequal scores" in {
+    val map1 = Expr(EMapBody(ParMap(Seq.empty, connectiveUsed = true, BitSet(), None)))
+    val map2 = Expr(EMapBody(ParMap(Seq.empty, connectiveUsed = false, BitSet(), None)))
+    assert(sort(map1).score != sort(map2).score)
+    val map3 = Expr(EMapBody(ParMap(Seq.empty, connectiveUsed = true, BitSet(), None)))
+    val map4 = Expr(EMapBody(ParMap(Seq.empty, connectiveUsed = true, BitSet(), Some(Var()))))
+    assert(sort(map3).score != sort(map4).score)
   }
 }
 

@@ -171,6 +171,23 @@ private[sorter] object ExprSortMatcher extends Sortable[Expr] {
             EMinusMinusBody(EMinusMinus(sortedPar1.term, sortedPar2.term)),
             Node(Score.EMINUSMINUS, sortedPar1.score, sortedPar2.score)
           )
+      case EMapBody(parMap) =>
+        for {
+          sortedPars <- parMap.ps.sortedList
+                         .flatMap(t => List(t._1, t._2))
+                         .traverse(Sortable[Par].sortMatch[F])
+          remainderScore <- parMap.remainder match {
+                             case Some(_var) => Sortable[Var].sortMatch[F](_var).map(_.score)
+                             case None       => Sync[F].pure(Leaf(-1))
+                           }
+          connectiveUsedScore = if (parMap.connectiveUsed) 1 else 0
+        } yield
+          constructExpr(
+            EMapBody(parMap),
+            Node(
+              Seq(Leaf(Score.EMAP), remainderScore) ++ sortedPars.map(_.score) ++ Seq(Leaf(connectiveUsedScore))
+            )
+          )
       case EMethodBody(em) =>
         for {
           args         <- em.arguments.toList.traverse(Sortable[Par].sortMatch[F])
