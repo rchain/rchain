@@ -44,16 +44,15 @@ rnode_certificate = '{}/node.certificate.pem'.format(rnode_directory)
 rnode_key = '{}/node.key.pem'.format(rnode_directory)
 
 
-class InterruptedException(Exception):
-    pass
-
-
 class RNodeAddressNotFoundError(Exception):
-    pass
+    def __init__(self, regex):
+        super().__init__()
+        self.regex = regex
 
 
 class NonZeroExitCodeError(Exception):
     def __init__(self, command: Tuple[Union[int, str], ...], exit_code: int, output: str):
+        super().__init__()
         self.command = command
         self.exit_code = exit_code
         self.output = output
@@ -67,19 +66,22 @@ class NonZeroExitCodeError(Exception):
         )
 
 
-class TimeoutError(Exception):
-    def __init__(self, command: Union[Tuple[str, ...], str], timeout: int) -> None:
+class CommandTimeoutError(Exception):
+    def __init__(self, command: Tuple[str, ...], timeout: int) -> None:
+        super().__init__()
         self.command = command
         self.timeout = timeout
 
 
 class UnexpectedShowBlocksOutputFormatError(Exception):
     def __init__(self, output: str) -> None:
+        super().__init__()
         self.output = output
 
 
 class UnexpectedProposeOutputFormatError(Exception):
     def __init__(self, output: str) -> None:
+        super().__init__()
         self.output = output
 
 
@@ -110,12 +112,11 @@ def extract_block_hash_from_propose_output(propose_output: str):
 
 
 class Node:
-    def __init__(self, container: "Container", deploy_dir: str, docker_client: "DockerClient", command_timeout: int, network: str) -> None:
+    def __init__(self, container: "Container", deploy_dir: str, command_timeout: int, network: str) -> None:
         self.container = container
         self.local_deploy_dir = deploy_dir
         self.remote_deploy_dir = rnode_deploy_dir
         self.name = container.name
-        self.docker_client = docker_client
         self.command_timeout = command_timeout
         self.network = network
         self.terminate_background_logging_event = threading.Event()
@@ -134,12 +135,11 @@ class Node:
 
     def get_rnode_address(self) -> str:
         log_content = self.logs()
-        m = re.search("Listening for traffic on (rnode://.+@{name}\\?protocol=\\d+&discovery=\\d+)\\.$".format(name=self.container.name),
-                      log_content,
-                      re.MULTILINE | re.DOTALL)
-        if m is None:
-            raise RNodeAddressNotFoundError()
-        address = m.group(1)
+        regex = "Listening for traffic on (rnode://.+@{name}\\?protocol=\\d+&discovery=\\d+)\\.$".format(name=self.container.name)
+        match = re.search(regex, log_content, re.MULTILINE | re.DOTALL)
+        if match is None:
+            raise RNodeAddressNotFoundError(regex)
+        address = match.group(1)
         return address
 
     def get_metrics(self):
@@ -182,7 +182,7 @@ class Node:
         except Empty:
             process.terminate()
             process.join()
-            raise TimeoutError(cmd, self.command_timeout)
+            raise CommandTimeoutError(cmd, self.command_timeout)
 
     def shell_out(self, *cmd: str, stderr=True) -> str:
         exit_code, output = self._exec_run_with_timeout(cmd, stderr=stderr)
