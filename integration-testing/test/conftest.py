@@ -37,17 +37,15 @@ class CommandLineOptions:
     network_converge_timeout: int
     receive_timeout: int
     command_timeout: int
-    blocks: int
     mount_dir: str
 
 
 def pytest_addoption(parser: "Parser") -> None:
     parser.addoption("--peer-count", action="store", default="2", help="number of peers in the network (excluding bootstrap node)")
-    parser.addoption("--start-timeout", action="store", default="0", help="timeout in seconds for starting a node. Defaults to 30 + peer_count * 10")
-    parser.addoption("--converge-timeout", action="store", default="0", help="timeout in seconds for network converge. Defaults to 200 + peer_count * 10")
-    parser.addoption("--receive-timeout", action="store", default="0", help="timeout in seconds for receiving a message. Defaults to 10 + peer_count * 10")
-    parser.addoption("--command-timeout", action="store", default="10", help="timeout in seconds for executing an rnode call (Examples: propose, show-logs etc.). Defaults to 10s")
-    parser.addoption("--blocks", action="store", default="1", help="the number of deploys per test deploy")
+    parser.addoption("--start-timeout", action="store", default="0", help="timeout in seconds for starting a node")
+    parser.addoption("--converge-timeout", action="store", default="0", help="timeout in seconds for network converge")
+    parser.addoption("--receive-timeout", action="store", default="0", help="timeout in seconds for receiving a message")
+    parser.addoption("--command-timeout", action="store", default="60", help="timeout in seconds for executing a rnode call")
     parser.addoption("--mount-dir", action="store", default=None, help="globally accesible directory for mounting between containers")
 
 
@@ -64,7 +62,6 @@ def command_line_options_fixture(request):
     converge_timeout = int(request.config.getoption("--converge-timeout"))
     receive_timeout = int(request.config.getoption("--receive-timeout"))
     command_timeout = int(request.config.getoption("--command-timeout"))
-    blocks = int(request.config.getoption("--blocks"))
     mount_dir = request.config.getoption("--mount-dir")
 
     command_line_options = CommandLineOptions(
@@ -73,7 +70,6 @@ def command_line_options_fixture(request):
         network_converge_timeout=make_timeout(peer_count, converge_timeout, 200, 10),
         receive_timeout=make_timeout(peer_count, receive_timeout, 10, 10),
         command_timeout=command_timeout,
-        blocks=blocks,
         mount_dir=mount_dir,
     )
 
