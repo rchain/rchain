@@ -1,6 +1,6 @@
 package coop.rchain.rspace.trace
 
-import coop.rchain.rspace.StableHashProvider
+import coop.rchain.rspace.StableHashProvider._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util._
 import cats.implicits._
@@ -77,8 +77,8 @@ object Produce {
       serializeA: Serialize[A]
   ): Produce =
     new Produce(
-      StableHashProvider.hash(channel)(serializeC),
-      StableHashProvider.hash(channel, datum, persist),
+      hash(channel)(serializeC),
+      hash(channel, datum, persist),
       sequenceNumber
     )
 
@@ -123,14 +123,10 @@ object Consume {
       serializeP: Serialize[P],
       serializeK: Serialize[K]
   ): Consume = {
-
-    val channelsByteVectors: Seq[ByteVector] = channels
-      .map(c => serializeC.encode(c))
-      .sorted(ordByteVector)
-
+    val channelsByteVectors: Seq[ByteVector] = toOrderedByteVectors(channels)
     new Consume(
-      channelsByteVectors.map(bv => Blake2b256Hash.create(bv)),
-      StableHashProvider.hash(channelsByteVectors, patterns, continuation, persist),
+      channelsByteVectors.map(Blake2b256Hash.create),
+      hash(channelsByteVectors, patterns, continuation, persist),
       sequenceNumber
     )
   }

@@ -10,6 +10,7 @@ import scodec.codecs._
 import scodec.interop.cats._
 
 object StableHashProvider {
+
   def hash[C](channel: C)(implicit serializeC: Serialize[C]): Blake2b256Hash =
     Blake2b256Hash.create(serializeC.encode(channel))
 
@@ -19,6 +20,9 @@ object StableHashProvider {
         .map(c => serializeC.encode(c))
         .sorted(util.ordByteVector)
     )
+
+  def hashMany[C](channels: Seq[C])(implicit serializeC: Serialize[C]): Seq[Blake2b256Hash] =
+    toOrderedByteVectors(channels).map(Blake2b256Hash.create)
 
   def hash[C, P, K](
       encodedChannels: Seq[ByteVector],
