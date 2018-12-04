@@ -20,7 +20,6 @@ class TestingContext:
     # Tell pytest to ignore this class (produces warnings otherwise)
     __test__ = False
 
-    peer_count: int
     node_startup_timeout: int
     network_converge_timeout: int
     receive_timeout: int

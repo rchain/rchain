@@ -32,7 +32,6 @@ if TYPE_CHECKING:
 
 @dataclasses.dataclass
 class CommandLineOptions:
-    peer_count: int
     node_startup_timeout: int
     network_converge_timeout: int
     receive_timeout: int
@@ -41,34 +40,25 @@ class CommandLineOptions:
 
 
 def pytest_addoption(parser: "Parser") -> None:
-    parser.addoption("--peer-count", action="store", default="2", help="number of peers in the network (excluding bootstrap node)")
-    parser.addoption("--start-timeout", action="store", default="0", help="timeout in seconds for starting a node")
-    parser.addoption("--converge-timeout", action="store", default="0", help="timeout in seconds for network converge")
-    parser.addoption("--receive-timeout", action="store", default="0", help="timeout in seconds for receiving a message")
-    parser.addoption("--command-timeout", action="store", default="60", help="timeout in seconds for executing a rnode call")
+    parser.addoption("--startup-timeout", type=int, action="store", default=60 * 30, help="timeout in seconds for starting a node")
+    parser.addoption("--converge-timeout", type=int, action="store", default=60 * 30, help="timeout in seconds for network converge")
+    parser.addoption("--receive-timeout", type=int, action="store", default=60 * 30, help="timeout in seconds for receiving a message")
+    parser.addoption("--command-timeout", type=int, action="store", default=60 * 30, help="timeout in seconds for executing a rnode call")
     parser.addoption("--mount-dir", action="store", default=None, help="globally accesible directory for mounting between containers")
-
-
-def make_timeout(peer_count: int, value: int, base: int, peer_factor: int = 10) -> int:
-    if value > 0:
-        return value
-    return base + peer_count * peer_factor
 
 
 @pytest.yield_fixture(scope='session')
 def command_line_options_fixture(request):
-    peer_count = int(request.config.getoption("--peer-count"))
-    start_timeout = int(request.config.getoption("--start-timeout"))
+    startup_timeout = int(request.config.getoption("--startup-timeout"))
     converge_timeout = int(request.config.getoption("--converge-timeout"))
     receive_timeout = int(request.config.getoption("--receive-timeout"))
     command_timeout = int(request.config.getoption("--command-timeout"))
     mount_dir = request.config.getoption("--mount-dir")
 
     command_line_options = CommandLineOptions(
-        peer_count=peer_count,
-        node_startup_timeout=180,
-        network_converge_timeout=make_timeout(peer_count, converge_timeout, 200, 10),
-        receive_timeout=make_timeout(peer_count, receive_timeout, 10, 10),
+        node_startup_timeout=startup_timeout,
+        network_converge_timeout=converge_timeout,
+        receive_timeout=receive_timeout,
         command_timeout=command_timeout,
         mount_dir=mount_dir,
     )
@@ -107,17 +97,11 @@ def testing_context(command_line_options_fixture, docker_client_fixture, bootstr
     if peers_keypairs is None:
         peers_keypairs = PREGENERATED_KEYPAIRS[1:]
 
-    # Using pre-generated validator key pairs by rnode. We do this because warning below  with python generated keys
-    # WARN  coop.rchain.casper.Validate$ - CASPER: Ignoring block 2cb8fcc56e... because block creator 3641880481... has 0 weight
-    validator_keys = [kp for kp in peers_keypairs[0:command_line_options_fixture.peer_count+1]]
-    with temporary_bonds_txt_file(validator_keys) as bonds_file:
-        bootstrap_keypair = validator_keys[0]
-        peers_keypairs=validator_keys[1:]
-
+    with temporary_bonds_txt_file(peers_keypairs) as bonds_file:
         context = TestingContext(
             bonds_file=bonds_file,
             bootstrap_keypair=bootstrap_keypair,
-            peers_keypairs=peers_keypairs,
+            peers_keypairs=peers_keypairs[1:],
             docker=docker_client_fixture,
             **dataclasses.asdict(command_line_options_fixture),
         )
