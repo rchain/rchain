@@ -110,8 +110,7 @@ def extract_block_hash_from_propose_output(propose_output: str):
 
 
 class Node:
-    def __init__(self, container: "Container", deploy_dir: str, docker_client: "DockerClient", timeout: int,
-                 network: str) -> None:
+    def __init__(self, container: "Container", deploy_dir: str, docker_client: "DockerClient", timeout: int, network: str) -> None:
         self.container = container
         self.local_deploy_dir = deploy_dir
         self.remote_deploy_dir = rnode_deploy_dir
@@ -150,20 +149,6 @@ class Node:
         self.container.remove(force=True, v=True)
         self.terminate_background_logging_event.set()
         self.background_logging.join()
-
-    def deploy_contract(self, contract: str) -> Tuple[int, str]:
-        cmd = '{rnode_binary} deploy --from "0x1" --phlo-limit 1000000 --phlo-price 1 --nonce 0 {rnode_deploy_dir}/{contract}'.format(
-            rnode_binary=rnode_binary,
-            rnode_deploy_dir=rnode_deploy_dir,
-            contract=contract
-        )
-        return self.exec_run(cmd)
-
-    def propose_contract(self) -> Tuple[int, str]:
-        return self.exec_run('{} propose'.format(rnode_binary))
-
-    def show_blocks(self) -> Tuple[int, str]:
-        return self.exec_run('{} show-blocks'.format(rnode_binary))
 
     def show_blocks_with_depth(self, depth: int) -> Tuple[int, str]:
         return self.exec_run(f'{rnode_binary} show-blocks --depth {depth}')
