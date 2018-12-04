@@ -348,7 +348,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
 
     for {
       matchesOpt             <- maximumBipartiteMatch.findMatches(allPatterns, targets)
-      matches                <- OptionalFreeMapWithCost.liftF(matchesOpt)
+      matches                <- OptionalFreeMapWithCost.fromOption(matchesOpt)
       freeMaps               = matches.map(_._3)
       updatedFreeMap         <- aggregateUpdates(freeMaps)
       _                      <- StateT.set[OptionWithCost, FreeMap](updatedFreeMap)
@@ -649,7 +649,7 @@ trait SpatialMatcherInstances {
         ): NonDetFreeMapWithCost[Par] = {
           val (con, bounds, remainders) = labeledConnective
           for {
-            sp <- NonDetFreeMapWithCost.liftF(
+            sp <- NonDetFreeMapWithCost.fromStream(
                    subPars(target, bounds._1, bounds._2, remainders._1, remainders._2)
                  )
             _ <- nonDetMatch(sp._1, con)
