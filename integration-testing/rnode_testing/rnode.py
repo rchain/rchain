@@ -170,9 +170,14 @@ class Node:
         process.start()
         try:
             exit_code, output = control_queue.get(True, self.command_timeout)
-            logging.debug('OUTPUT {}'.format(repr(output)))
             if exit_code != 0:
-                logging.warning("EXITED {} {} {} {}".format(self.name, cmd, exit_code, repr(output)))
+                for line in output.splitlines():
+                    logging.info('\t{}: {}'.format(self.name, line))
+                logging.warning("EXITED {} {} {}".format(self.name, cmd, exit_code))
+            else:
+                for line in output.splitlines():
+                    logging.debug('\t{}: {}'.format(self.name, line))
+                logging.debug("EXITED {} {} {}".format(self.name, cmd, exit_code))
             return exit_code, output
         except queue.Empty:
             process.terminate()

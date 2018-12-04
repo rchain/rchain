@@ -6,6 +6,7 @@ import os
 import random
 import pathlib
 import tempfile
+import logging
 import contextlib
 import collections
 import dataclasses
@@ -28,6 +29,14 @@ from rnode_testing.pregenerated_keypairs import PREGENERATED_KEYPAIRS
 if TYPE_CHECKING:
     from docker.client import DockerClient
     from _pytest.config.argparsing import Parser
+
+
+# Silence unwanted noise in logs produced at the DEBUG level
+logging.getLogger('urllib3.connectionpool').setLevel(logging.WARNING)
+logging.getLogger('connectionpool.py').setLevel(logging.WARNING)
+logging.getLogger('docker.utils.config').setLevel(logging.WARNING)
+logging.getLogger('docker.auth').setLevel(logging.WARNING)
+
 
 
 @dataclasses.dataclass
