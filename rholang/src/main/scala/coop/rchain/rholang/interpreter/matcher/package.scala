@@ -75,7 +75,7 @@ package object matcher {
         f(m)
       })
 
-    def emptyMap[A]: OptionalFreeMapWithCost[A] =
+    def empty[A]: OptionalFreeMapWithCost[A] =
       StateT((m: FreeMap) => {
         OptionT(
           StateT((c: Cost) => {
@@ -135,7 +135,7 @@ package object matcher {
     def apply[A](f: FreeMap => StreamWithCost[(FreeMap, A)]): NonDetFreeMapWithCost[A] =
       StateT((m: FreeMap) => f(m))
 
-    def emptyMap[A]: NonDetFreeMapWithCost[A] =
+    def empty[A]: NonDetFreeMapWithCost[A] =
       StateT((m: FreeMap) => {
         StreamT(StateT((c: Cost) => {
           Right((c, Stream.empty))
