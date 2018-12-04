@@ -4,10 +4,19 @@ import shlex
 import logging
 import threading
 import contextlib
-from typing import Generator
+from queue import Empty
+from multiprocessing import Queue, Process
+from typing import (
+    Dict,
+    List,
+    Tuple,
+    Union,
+    TYPE_CHECKING,
+    Optional,
+    Generator,
+)
 
 import pytest
-from docker.client import DockerClient
 
 import conftest
 from rnode_testing.common import (
@@ -20,17 +29,13 @@ from rnode_testing.wait import (
     wait_for_node_started,
 )
 
-from multiprocessing import Queue, Process
-from queue import Empty
-
-from typing import Dict, List, Tuple, Union, TYPE_CHECKING, Optional, Generator
 
 if TYPE_CHECKING:
     from conftest import KeyPair
-    from docker.client import DockerClient
     from docker.models.containers import Container
     from logging import Logger
     from threading import Event
+    from docker.client import DockerClient
 
 DEFAULT_IMAGE = os.environ.get(
         "DEFAULT_IMAGE",
