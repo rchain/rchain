@@ -77,7 +77,7 @@ object Produce {
       serializeA: Serialize[A]
   ): Produce =
     new Produce(
-      StableHashProvider.hash(Seq(channel))(serializeC),
+      StableHashProvider.hash(channel)(serializeC),
       StableHashProvider.hash(channel, datum, persist),
       sequenceNumber
     )
