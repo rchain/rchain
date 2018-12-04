@@ -1,11 +1,14 @@
 package coop.rchain.rspace.trace
 
 import coop.rchain.rspace.StableHashProvider
+import coop.rchain.rspace.internal._
+import coop.rchain.rspace.util._
 import cats.implicits._
 import coop.rchain.rspace.{Blake2b256Hash, Serialize}
 import coop.rchain.rspace.internal.codecSeq
 import scala.collection.immutable.Seq
 import scodec.Codec
+import scodec.bits.ByteVector
 import scodec.codecs._
 
 /**
@@ -119,12 +122,18 @@ object Consume {
       serializeC: Serialize[C],
       serializeP: Serialize[P],
       serializeK: Serialize[K]
-  ): Consume =
+  ): Consume = {
+
+    val channelsByteVectors: Seq[ByteVector] = channels
+      .map(c => serializeC.encode(c))
+      .sorted(ordByteVector)
+
     new Consume(
-      channels.map(StableHashProvider.hash(_)(serializeC.toCodec)),
-      StableHashProvider.hash(channels, patterns, continuation, persist),
+      channelsByteVectors.map(bv => Blake2b256Hash.create(bv)),
+      StableHashProvider.hash(channelsByteVectors, patterns, continuation, persist),
       sequenceNumber
     )
+  }
 
   def fromHash(
       channelsHashes: Seq[Blake2b256Hash],

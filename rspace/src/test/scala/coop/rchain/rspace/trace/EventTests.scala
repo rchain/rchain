@@ -1,6 +1,7 @@
 package coop.rchain.rspace.trace
 
 import cats.implicits._
+import coop.rchain.rspace.StableHashProvider
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.examples.StringExamples.{Pattern, StringsCaptor}
 import coop.rchain.rspace.internal._
@@ -31,6 +32,7 @@ class EventTests extends FlatSpec with Matchers with GeneratorDrivenPropertyChec
           )
         )
 
+      actual.channelsHash shouldBe StableHashProvider.hash(Seq(channel))(Serialize[String].toCodec)
       actual.hash shouldBe expectedHash
     }
   }
@@ -43,14 +45,16 @@ class EventTests extends FlatSpec with Matchers with GeneratorDrivenPropertyChec
 
       val actual = Consume.create(channels, patterns, continuation, persist)
 
-      val (encodedChannels, encodedPatterns) =
-        channelPatterns
+      val encodedChannels =
+        channels
           .map {
-            case (channel, pattern) =>
-              (Serialize[String].encode(channel), Serialize[Pattern].encode(pattern))
+            Serialize[String].encode(_)
           }
-          .sorted(util.ordByteVectorPair)
-          .unzip
+          .sorted(util.ordByteVector)
+
+      val encodedPatterns = patterns
+        .map(Serialize[Pattern].encode(_))
+        .sorted(util.ordByteVector)
 
       val expectedHash =
         Blake2b256Hash.create(
@@ -61,6 +65,7 @@ class EventTests extends FlatSpec with Matchers with GeneratorDrivenPropertyChec
             )
         )
 
+      actual.channelsHashes shouldBe encodedChannels.map(bv => Blake2b256Hash.create(bv))
       actual.hash shouldBe expectedHash
     }
   }

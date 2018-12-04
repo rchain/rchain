@@ -52,7 +52,10 @@ object Blake2b256Hash {
     * @return The hash
     */
   def create(byteVectors: Seq[ByteVector]): Blake2b256Hash =
-    new Blake2b256Hash(ByteVector(Blake2b256.hash(byteVectors)))
+    new Blake2b256Hash(ByteVector(Blake2b256.hash(byteVectors: _*)))
+
+  def create(byteVector: ByteVector): Blake2b256Hash =
+    new Blake2b256Hash(ByteVector(Blake2b256.hash(byteVector)))
 
   def fromHex(string: String): Blake2b256Hash =
     new Blake2b256Hash(ByteVector(Base16.decode(string)))

@@ -1255,11 +1255,16 @@ trait StorageActionsTests[F[_]]
     val data     = List("datum1", "datum2")
 
     for {
-      _                <- space.consume(channels, patterns, k, false)
-      _                <- space.produce(channels(0), data(0), false)
-      _                <- space.produce(channels(1), data(1), false)
-      expectedConsume  = Consume.create(channels, patterns, k, false)
-      _                = expectedConsume.channelsHashes shouldBe channels.map(StableHashProvider.hash(_))
+      _               <- space.consume(channels, patterns, k, false)
+      _               <- space.produce(channels(0), data(0), false)
+      _               <- space.produce(channels(1), data(1), false)
+      expectedConsume = Consume.create(channels, patterns, k, false)
+      _ = expectedConsume.channelsHashes shouldBe channels
+        .map { c =>
+          Serialize[String].encode(c)
+        }
+        .sorted(util.ordByteVector)
+        .map(Blake2b256Hash.create(_))
       expectedProduce1 = Produce.create(channels(0), data(0), false)
       _                = expectedProduce1.channelsHash shouldBe StableHashProvider.hash(Seq(channels(0)))
       expectedProduce2 = Produce.create(channels(1), data(1), false)
