@@ -61,14 +61,6 @@ class NonZeroExitCodeError(Exception):
         self.exit_code = exit_code
         self.output = output
 
-    def __repr__(self) -> str:
-        return '{}({}, {}, {})'.format(
-            self.__class__.__name__,
-            repr(self.command),
-            self.exit_code,
-            repr(self.output),
-        )
-
 
 class CommandTimeoutError(Exception):
     def __init__(self, command: Tuple[str, ...], timeout: int) -> None:
