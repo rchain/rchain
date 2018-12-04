@@ -17,7 +17,7 @@ package object matcher {
   type OptionalFreeMapWithCost[A] = StateT[OptionWithCost, FreeMap, A]
   type OptionWithCost[A]          = OptionT[ErroredOrCostA, A]
 
-  type OOPE[A] = Either[OutOfPhlogistonsError.type, A]
+  type OOPE[A]           = Either[OutOfPhlogistonsError.type, A]
   type ErroredOrCostA[A] = StateT[OOPE, Cost, A]
 
   //FreeMap => Cost => Either[OOPE, (Cost, Stream[(FreeMap, A)])]

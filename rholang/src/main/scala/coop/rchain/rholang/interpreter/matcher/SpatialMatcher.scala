@@ -339,7 +339,8 @@ object SpatialMatcher extends SpatialMatcherInstances {
           case Remainder(_) =>
             //Remainders can't match non-concrete terms, because they can't be captured.
             //They match everything that's concrete though.
-            guardMatch[StateT[?[_], FreeMap, ?], OptionWithCost](lf.locallyFree(t, 0).isEmpty).charge(COMPARISON_COST)
+            guardMatch[StateT[?[_], FreeMap, ?], OptionWithCost](lf.locallyFree(t, 0).isEmpty)
+              .charge(COMPARISON_COST)
         }
         isolateState[OptionalFreeMapWithCost, FreeMap](matchEffect).attemptOpt
       }
@@ -371,7 +372,9 @@ object SpatialMatcher extends SpatialMatcherInstances {
     } yield Unit
   }
 
-  private def guardMatch[F[_[_], _]: MonadTrans, G[_]: Monad: FunctorFilter](predicate: => Boolean): F[G, Unit] =
+  private def guardMatch[F[_[_], _]: MonadTrans, G[_]: Monad: FunctorFilter](
+      predicate: => Boolean
+  ): F[G, Unit] =
     MonadTrans[F].liftM(guard[G](predicate))
 
   private def guard[F[_]: FunctorFilter: Applicative](predicate: => Boolean): F[Unit] =
