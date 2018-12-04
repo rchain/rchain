@@ -7,11 +7,14 @@ object Dependencies {
   val circeVersion  = "0.10.0"
   val http4sVersion = "0.19.0"
   val kamonVersion  = "1.1.0"
+  val catsVersion   = "1.4.0" 
 
   // format: off
   val bitcoinjCore        = "org.bitcoinj"                % "bitcoinj-core"             % "0.14.6"
   val bouncyCastle        = "org.bouncycastle"            % "bcprov-jdk15on"            % "1.60"
-  val catsCore            = "org.typelevel"              %% "cats-core"                 % "1.4.0"
+  val catsCore            = "org.typelevel"              %% "cats-core"                 % catsVersion
+  val catsLawsTest        = "org.typelevel"              %% "cats-laws"                 % catsVersion % "test"
+  val catsLawsTestkitTest = "org.typelevel"              %% "cats-testkit"              % catsVersion % "test"
   val catsEffect          = "org.typelevel"              %% "cats-effect"               % "1.0.0"
   val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % "0.4.0"
   val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion
