@@ -1,15 +1,19 @@
 package coop.rchain.rholang.interpreter.matcher
 
-import cats.Eq
 import cats.data.WriterT
+import cats.implicits._
 import cats.laws.discipline.{MonadTests, MonoidKTests}
 import cats.tests.CatsSuite
+import cats.{Eq, Monad}
+import coop.rchain.rholang.StackSafetySpec
 import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, Step}
 import monix.eval.Coeval
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.{FlatSpec, Matchers}
 
 class StreamTSpec extends FlatSpec with Matchers {
+
+  val maxDepth = StackSafetySpec.findMaxRecursionDepth()
 
   behavior of "StreamT"
 
@@ -32,6 +36,47 @@ class StreamTSpec extends FlatSpec with Matchers {
     }
   }
 
+  private def hugeStream[F[_]: Monad](n: Int, acc: StreamT[F, Int]): StreamT[F, Int] = n match {
+    case 0 => acc
+    case _ => hugeStream(n - 1, StreamT[F, Int](Monad[F].pure(SCons(n, acc))))
+  }
+
+  it must "be stacksafe for a stacksafe F when calling StreamT.run[F]" in {
+    val huge = hugeStream[Coeval](maxDepth - 1, StreamT.pure(maxDepth))
+
+    assert(StreamT.run(huge).value() == Stream.range(1, maxDepth + 1))
+  }
+
+  it must "be stacksafe for a stacksafe F when calling StreamT.fromStream[F]" in {
+    val reference = Stream.range(0, maxDepth)
+
+    val huge = StreamT.fromStream(Coeval.now(reference))
+
+    assert(StreamT.run(huge).value() == reference)
+  }
+
+  it must "be stacksafe for a stacksafe F when calling Monad[StreamT[F, ?]].flatMap" in {
+
+    def hugeFlatMap[F[_]: Monad](n: Int): F[Int] = n match {
+      case 0 => n.pure[F]
+      case _ => n.pure[F].flatMap(x => hugeFlatMap[F](x - 1))
+    }
+
+    val huge = hugeFlatMap[StreamT[Coeval, ?]](maxDepth)
+
+    assert(StreamT.run(huge).value() == Stream(0))
+  }
+
+  it must "be stacksafe for a stacksafe F when calling MonoidK[StreamT[F, ?]].combineK" in {
+    type StreamTCoeval[A] = StreamT[Coeval, A]
+
+    val huge: StreamTCoeval[Int] = hugeStream(maxDepth - 1, StreamT.pure(maxDepth))
+    val reference                = Stream.range(1, maxDepth + 1)
+
+    val combined = huge.combineK(huge)
+
+    assert(StreamT.run(combined).value() == (reference ++ reference))
+  }
 }
 
 class StreamTLawsSpec extends CatsSuite {
