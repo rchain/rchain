@@ -110,13 +110,13 @@ def extract_block_hash_from_propose_output(propose_output: str):
 
 
 class Node:
-    def __init__(self, container: "Container", deploy_dir: str, docker_client: "DockerClient", timeout: int, network: str) -> None:
+    def __init__(self, container: "Container", deploy_dir: str, docker_client: "DockerClient", command_timeout: int, network: str) -> None:
         self.container = container
         self.local_deploy_dir = deploy_dir
         self.remote_deploy_dir = rnode_deploy_dir
         self.name = container.name
         self.docker_client = docker_client
-        self.timeout = timeout
+        self.command_timeout = command_timeout
         self.network = network
         self.terminate_background_logging_event = threading.Event()
         self.background_logging = LoggingThread(
@@ -158,7 +158,7 @@ class Node:
         return extract_block_count_from_show_blocks(show_blocks_output)
 
     def get_block(self, block_hash: str) -> str:
-        return self.call_rnode('show-block', block_hash, stderr=False)
+        return self.rnode_command('show-block', block_hash, stderr=False)
 
     def _exec_run_with_timeout(self, cmd: Union[Tuple[str, ...], str], stderr=True) -> Tuple[int, str]:
         queue: Queue = Queue(1)
@@ -182,7 +182,7 @@ class Node:
         except Empty:
             process.terminate()
             process.join()
-            raise TimeoutError(cmd, self.timeout)
+            raise TimeoutError(cmd, self.command_timeout)
 
     def shell_out(self, *cmd: str, stderr=True) -> str:
         exit_code, output = self._exec_run_with_timeout(cmd, stderr=stderr)
@@ -190,15 +190,14 @@ class Node:
             raise NonZeroExitCodeError(command=cmd, exit_code=exit_code, output=output)
         return output
 
-    def call_rnode(self, *node_args: str, stderr: bool = True) -> str:
+    def rnode_command(self, *node_args: str, stderr: bool = True) -> str:
         return self.shell_out(rnode_binary, *node_args, stderr=stderr)
 
     def eval(self, rho_file_path: str) -> str:
-        return self.call_rnode('eval', rho_file_path)
+        return self.rnode_command('eval', rho_file_path)
 
     def deploy(self, rho_file_path: str) -> str:
-        return self.call_rnode('deploy', '--from=0x1', '--phlo-limit=1000000', '--phlo-price=1', '--nonce=0',
-                               rho_file_path)
+        return self.rnode_command('deploy', '--from=0x1', '--phlo-limit=1000000', '--phlo-price=1', '--nonce=0', rho_file_path)
 
     def deploy_string(self, rholang_code: str) -> str:
         quoted_rholang = shlex.quote(rholang_code)
@@ -208,19 +207,22 @@ class Node:
         ))
 
     def propose(self) -> str:
-        output = self.call_rnode('propose', stderr=False)
+        output = self.rnode_command('propose', stderr=False)
         block_hash = extract_block_hash_from_propose_output(output)
         return block_hash
 
     def repl(self, rholang_code: str, stderr: bool = False) -> str:
         quoted_rholang_code = shlex.quote(rholang_code)
-        return self.shell_out('sh',
-                              '-c',
-                              'echo {quoted_rholang_code} | {rnode_binary} repl'.format(quoted_rholang_code=quoted_rholang_code,rnode_binary=rnode_binary),
-                              stderr=stderr)
+        output = self.shell_out(
+            'sh',
+            '-c',
+            'echo {quoted_rholang_code} | {rnode_binary} repl'.format(quoted_rholang_code=quoted_rholang_code,rnode_binary=rnode_binary),
+            stderr=stderr,
+        )
+        return output
 
     def generate_faucet_bonding_deploys(self, bond_amount: int, private_key: str, public_key: str) -> str:
-        return self.call_rnode('generateFaucetBondingDeploys',
+        return self.rnode_command('generateFaucetBondingDeploys',
             '--amount={}'.format(bond_amount),
             '--private-key={}'.format(private_key),
             '--public-key={}'.format(public_key),
