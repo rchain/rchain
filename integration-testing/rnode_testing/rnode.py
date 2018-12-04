@@ -10,7 +10,6 @@ from typing import (
     Dict,
     List,
     Tuple,
-    Union,
     TYPE_CHECKING,
     Optional,
     Generator,
@@ -56,7 +55,7 @@ class RNodeAddressNotFoundError(Exception):
 
 
 class NonZeroExitCodeError(Exception):
-    def __init__(self, command: Tuple[Union[int, str], ...], exit_code: int, output: str):
+    def __init__(self, command: Tuple[str, ...], exit_code: int, output: str):
         super().__init__()
         self.command = command
         self.exit_code = exit_code
@@ -72,7 +71,7 @@ class NonZeroExitCodeError(Exception):
 
 
 class CommandTimeoutError(Exception):
-    def __init__(self, command: Union[Tuple[str, ...], str], timeout: int) -> None:
+    def __init__(self, command: Tuple[str, ...], timeout: int) -> None:
         super().__init__()
         self.command = command
         self.timeout = timeout
@@ -155,21 +154,22 @@ class Node:
         self.terminate_background_logging_event.set()
         self.background_logging.join()
 
-    def show_blocks_with_depth(self, depth: int) -> Tuple[int, str]:
-        return self._exec_run_with_timeout(f'{rnode_binary} show-blocks --depth {depth}')
+    def show_blocks_with_depth(self, depth: int) -> str:
+        return self.rnode_command('show-blocks', '--depth', str(depth))
 
     def get_blocks_count(self, depth: int) -> int:
-        _, show_blocks_output = self.show_blocks_with_depth(depth)
+        show_blocks_output = self.show_blocks_with_depth(depth)
         return extract_block_count_from_show_blocks(show_blocks_output)
 
     def get_block(self, block_hash: str) -> str:
         return self.rnode_command('show-block', block_hash, stderr=False)
 
-    def _exec_run_with_timeout(self, cmd: Union[Tuple[str, ...], str], stderr=True) -> Tuple[int, str]:
+    # Too low level -- do not use directly.  Prefer shell_out() instead.
+    def _exec_run_with_timeout(self, cmd: Tuple[str, ...], stderr=True) -> Tuple[int, str]:
         queue: Queue = Queue(1)
 
         def execution():
-            r = self.container._exec_run_with_timeout(cmd, stderr=stderr)
+            r = self.container.exec_run(cmd, stderr=stderr)
             queue.put((r.exit_code, r.output.decode('utf-8')))
 
         process = Process(target=execution)
@@ -267,7 +267,7 @@ class LoggingThread(threading.Thread):
             pass
 
 
-def make_container_command(container_command: str, container_command_options: Dict):
+def make_container_command(container_command: str, container_command_options: Dict) -> str:
     opts = ['{} {}'.format(option, argument) for option, argument in container_command_options.items()]
     result = '{} {}'.format(container_command, ' '.join(opts))
     return result
@@ -406,7 +406,7 @@ def make_bootstrap_node(
     return container
 
 
-def make_peer_name(network: str, i: Union[int, str]) -> str:
+def make_peer_name(network: str, i: str) -> str:
     return "peer{i}.{network}".format(i=i, network=network)
 
 
@@ -489,7 +489,7 @@ def create_peer_nodes(
     assert len(set(key_pairs)) == len(key_pairs), "There shouldn't be any duplicates in the key pairs"
 
     if allowed_peers is None:
-        allowed_peers = [bootstrap.name] + [make_peer_name(network, i) for i in range(0, len(key_pairs))]
+        allowed_peers = [bootstrap.name] + [make_peer_name(network, str(i)) for i in range(0, len(key_pairs))]
 
     result = []
     try:
@@ -544,7 +544,7 @@ def started_bootstrap_node(*, context: TestingContext, network, container_name: 
 
 
 @contextlib.contextmanager
-def docker_network_with_started_bootstrap(context, *, container_name=None, cli_options=None):
+def docker_network_with_started_bootstrap(context, *, container_name=None):
     with docker_network(context.docker) as network:
         with started_bootstrap_node(context=context, network=network, container_name=container_name, mount_dir=context.mount_dir) as node:
             yield node
