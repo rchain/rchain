@@ -37,9 +37,9 @@ if TYPE_CHECKING:
     from threading import Event
     from docker.client import DockerClient
 
-DEFAULT_IMAGE = os.environ.get(
-        "DEFAULT_IMAGE",
-        "rchain-integration-testing:latest")
+
+DEFAULT_IMAGE = os.environ.get("DEFAULT_IMAGE", "rchain-integration-testing:latest")
+
 
 rnode_binary = '/opt/docker/bin/rnode'
 rnode_directory = "/var/lib/rnode"
@@ -72,7 +72,7 @@ class NonZeroExitCodeError(Exception):
 
 
 class CommandTimeoutError(Exception):
-    def __init__(self, command: Tuple[str, ...], timeout: int) -> None:
+    def __init__(self, command: Union[Tuple[str, ...], str], timeout: int) -> None:
         super().__init__()
         self.command = command
         self.timeout = timeout
@@ -117,7 +117,7 @@ def extract_block_hash_from_propose_output(propose_output: str):
 
 
 class Node:
-    def __init__(self, container: "Container", deploy_dir: str, command_timeout: int, network: str) -> None:
+    def __init__(self, *, container: "Container", deploy_dir: str, command_timeout: int, network: str) -> None:
         self.container = container
         self.local_deploy_dir = deploy_dir
         self.remote_deploy_dir = rnode_deploy_dir
@@ -326,11 +326,10 @@ def make_node(
     )
 
     node = Node(
-        container,
-        deploy_dir,
-        docker_client,
-        command_timeout,
-        network,
+        container=container,
+        deploy_dir=deploy_dir,
+        command_timeout=command_timeout,
+        network=network,
     )
 
     return node
@@ -363,7 +362,6 @@ def make_bootstrap_node(
     key_pair: "KeyPair",
     command_timeout: int,
     allowed_peers: Optional[List[str]] = None,
-    image: str = DEFAULT_IMAGE,
     mem_limit: Optional[str] = None,
     cli_options: Optional[Dict] = None,
     container_name: Optional[str] = None,
@@ -422,7 +420,6 @@ def make_peer(
     bootstrap: Node,
     key_pair: "KeyPair",
     allowed_peers: Optional[List[str]] = None,
-    image: str = DEFAULT_IMAGE,
     mem_limit: Optional[str] = None,
 ) -> Node:
     assert isinstance(name, str)
@@ -487,7 +484,6 @@ def create_peer_nodes(
     key_pairs: List["KeyPair"],
     command_timeout: int,
     allowed_peers: Optional[List[str]] = None,
-    image: str = DEFAULT_IMAGE,
     mem_limit: Optional[str] = None,
 ) -> List[Node]:
     assert len(set(key_pairs)) == len(key_pairs), "There shouldn't be any duplicates in the key pairs"
@@ -507,7 +503,6 @@ def create_peer_nodes(
                 bootstrap=bootstrap,
                 key_pair=key_pair,
                 allowed_peers=allowed_peers,
-                image=image,
                 mem_limit=mem_limit if mem_limit is not None else '4G',
             )
             result.append(peer_node)
@@ -531,7 +526,7 @@ def docker_network(docker_client: "DockerClient") -> Generator[str, None, None]:
 
 
 @contextlib.contextmanager
-def started_bootstrap_node(*, context: TestingContext, network, container_name: str = None, cli_options=None, mount_dir: str = None) -> Generator[Node, None, None]:
+def started_bootstrap_node(*, context: TestingContext, network, container_name: str = None, mount_dir: str = None) -> Generator[Node, None, None]:
     bootstrap_node = make_bootstrap_node(
         docker_client=context.docker,
         network=network,
@@ -551,7 +546,7 @@ def started_bootstrap_node(*, context: TestingContext, network, container_name: 
 @contextlib.contextmanager
 def docker_network_with_started_bootstrap(context, *, container_name=None, cli_options=None):
     with docker_network(context.docker) as network:
-        with started_bootstrap_node(context=context, network=network, container_name=container_name, cli_options=cli_options, mount_dir=context.mount_dir) as node:
+        with started_bootstrap_node(context=context, network=network, container_name=container_name, mount_dir=context.mount_dir) as node:
             yield node
 
 
