@@ -32,7 +32,7 @@ class EventTests extends FlatSpec with Matchers with GeneratorDrivenPropertyChec
           )
         )
 
-      actual.channelsHash shouldBe hash(Seq(channel))(Serialize[String])
+      actual.channelsHash shouldBe hash(channel)
       actual.hash shouldBe expectedHash
     }
   }
@@ -57,7 +57,7 @@ class EventTests extends FlatSpec with Matchers with GeneratorDrivenPropertyChec
             )
         )
 
-      actual.channelsHashes shouldBe encodedChannels.map(bv => Blake2b256Hash.create(bv))
+      actual.channelsHashes shouldBe encodedChannels.map(Blake2b256Hash.create)
       actual.hash shouldBe expectedHash
     }
   }
