@@ -5,6 +5,7 @@ import cats.implicits._
 import cats.laws.discipline.{MonadTests, MonoidKTests}
 import cats.tests.CatsSuite
 import cats.{Eq, Monad}
+import coop.rchain.catscontrib.laws.discipline.MonadTransTests
 import coop.rchain.rholang.StackSafetySpec
 import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, Step}
 import monix.eval.Coeval
@@ -110,5 +111,6 @@ class StreamTLawsSpec extends CatsSuite {
 
   checkAll("StreamT.MonadLaws", MonadTests[StreamTEffect].monad[Int, Int, String])
   checkAll("StreamT.MonoidKLaws", MonoidKTests[StreamTEffect].monoidK[Int])
+  checkAll("StreamT.MonadTransLaws", MonadTransTests[StreamT].monadTrans[Effect, Int, String])
 
 }

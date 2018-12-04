@@ -332,7 +332,12 @@ lazy val rholang = (project in file("rholang"))
     //constrain the resource usage so that we hit SOE-s and OOME-s more quickly should they happen
     javaOptions in Test ++= Seq("-Xss240k", "-XX:MaxJavaStackTraceDepth=10000", "-Xmx128m")
   )
-  .dependsOn(models % "compile->compile;test->test", rspace % "compile->compile;test->test", crypto)
+  .dependsOn(
+    models % "compile->compile;test->test",
+    rspace % "compile->compile;test->test",
+    shared % "compile->compile;test->test",
+    crypto
+  )
 
 lazy val rholangCLI = (project in file("rholang-cli"))
   .settings(commonSettings: _*)
