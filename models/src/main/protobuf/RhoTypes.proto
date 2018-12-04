@@ -1,3 +1,8 @@
+/**
+ * Rholang Term Structure
+ *
+ * The top level is `Par`.
+ */
 syntax = "proto3";
 
 // See CapserMessage.proto if this is causing problems
@@ -11,19 +16,30 @@ option (scalapb.options) = {
   import: "coop.rchain.models.ParMapTypeMapper.parMapEMapTypeMapper"
 };
 
+/**
+ * Rholang process
+ *
+ * For example, `@0!(1) | @2!(3) | for(x <- @0) { Nil }` has two sends
+ * and one receive.
+ *
+ * The Nil process is a `Par` with no sends, receives, etc.
+ */
 message Par {
     repeated Send sends = 1;
     repeated Receive receives = 2;
     repeated New news = 4;
     repeated Expr exprs = 5;
     repeated Match matches = 6;
-    repeated GPrivate ids = 7;
+    repeated GPrivate ids = 7;  // unforgeable names
     repeated Bundle bundles = 11;
     repeated Connective connectives = 8;
     bytes locallyFree = 9 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
     bool connective_used = 10;
 }
 
+/**
+ * Either rholang code or code built in to the interpreter.
+ */
 message TaggedContinuation {
     oneof tagged_cont {
         ParWithRandom par_body = 1;
@@ -31,11 +47,19 @@ message TaggedContinuation {
     }
 }
 
+/**
+ * Rholang code along with the state of a split random number
+ * generator for generating new unforgeable names.
+ */
 message ParWithRandom {
     Par body = 1 [(scalapb.field).no_box = true];
     bytes randomState = 2 [(scalapb.field).type = "coop.rchain.crypto.hash.Blake2b512Random"];
 }
 
+/**
+ * A measure of processing cost: a number of iterations and the sum
+ * cost of the iterations.
+ */
 message PCost {
     int32 iterations = 1;
     uint64 cost = 2;
@@ -66,15 +90,23 @@ message Var {
     }
 }
 
+/**
+ * Nothing can be received from a (quoted) bundle with `readFlag = false`.
+ * Likeise nothing can be sent to a (quoted) bundle with `writeFlag = false`.
+ *
+ * If both flags are set to false, bundle allows only for equivalance check.
+ */
 message Bundle {
     Par body = 1 [(scalapb.field).no_box = true];
     bool writeFlag = 2; // flag indicating whether bundle is writeable
     bool readFlag = 3; // flag indicating whether bundle is readable
-//     if both flags are set to false bundle allows only for equivalance check
 }
 
-// Upon send, all free variables in data are substituted with their values.
-// also if a process is sent, it is auto-quoted.
+/**
+ * A send is written `chan!(data)` or `chan!!(data)` for a persistent send.
+ *
+ * Upon send, all free variables in data are substituted with their values.
+ */
 message Send {
     Par chan = 1 [(scalapb.field).no_box = true];
     repeated Par data = 2;
@@ -100,9 +132,13 @@ message ListBindPatterns {
     repeated BindPattern patterns = 1;
 }
 
-// [Par] is an n-arity Pattern.
-// It's an error for free Variable to occur more than once in a pattern.
-// Don't currently support conditional receive
+/**
+ * A receive is written `for(binds) { body }`
+ * i.e. `for(patterns <- source) { body }`
+ * or for a persistent recieve: `for(patterns <= source) { body }`.
+ *
+ * It's an error for free Variable to occur more than once in a pattern.
+ */
 message Receive {
     repeated ReceiveBind binds = 1;
     Par body = 2 [(scalapb.field).no_box = true];
@@ -171,9 +207,9 @@ message Expr {
         EMethod e_method_body = 24;
 
         EMatches e_matches_body = 27;
-        EPercentPercent e_percent_percent_body = 28;
-        EPlusPlus e_plus_plus_body = 29;
-        EMinusMinus e_minus_minus_body = 30;
+        EPercentPercent e_percent_percent_body = 28; // string interpolation
+        EPlusPlus e_plus_plus_body = 29; // concatenation
+        EMinusMinus e_minus_minus_body = 30;  // set difference
     }
 }
 
@@ -204,6 +240,9 @@ message EMap {
     Var remainder = 5;
 }
 
+/**
+ * `target.method(arguments)`
+ */
 message EMethod {
     string methodName = 1;
     Par target = 2 [(scalapb.field).no_box = true];
@@ -219,8 +258,8 @@ message KeyValuePair {
 
 // A variable used as a var should be bound in a process context, not a name
 // context. For example:
-// for (@x <- c1; @y <- c2) { z!(x + y) } is fine, but
-// for (x <- c1; y <- c2) { z!(x + y) } should raise an error.
+// `for (@x <- c1; @y <- c2) { z!(x + y) }` is fine, but
+// `for (x <- c1; y <- c2) { z!(x + y) }` should raise an error.
 message EVar {
     Var v = 1 [(scalapb.field).no_box = true];
 }
@@ -298,16 +337,23 @@ message EMatches {
     Par pattern = 2 [(scalapb.field).no_box = true];
 }
 
+/**
+ * String interpolation
+ *
+ * `"Hello, {name}" %% {"name": "Bob"}` denotes `"Hello, Bob"`
+ */
 message EPercentPercent {
     Par p1 = 1 [(scalapb.field).no_box = true];
     Par p2 = 2 [(scalapb.field).no_box = true];
 }
 
+// Concatenation
 message EPlusPlus {
     Par p1 = 1 [(scalapb.field).no_box = true];
     Par p2 = 2 [(scalapb.field).no_box = true];
 }
 
+// Set difference
 message EMinusMinus {
     Par p1 = 1 [(scalapb.field).no_box = true];
     Par p2 = 2 [(scalapb.field).no_box = true];
@@ -336,6 +382,7 @@ message ConnectiveBody {
     repeated Par ps = 1;
 }
 
+// Unforgeable names resulting from `new x { ... }`
 // These should only occur as the program is being evaluated. There is no way in
 // the grammar to construct them.
 message GPrivate {
