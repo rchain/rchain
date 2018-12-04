@@ -32,7 +32,7 @@ class EventTests extends FlatSpec with Matchers with GeneratorDrivenPropertyChec
           )
         )
 
-      actual.channelsHash shouldBe StableHashProvider.hash(Seq(channel))(Serialize[String].toCodec)
+      actual.channelsHash shouldBe StableHashProvider.hash(Seq(channel))(Serialize[String])
       actual.hash shouldBe expectedHash
     }
   }

@@ -7,6 +7,7 @@ import internal._
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.canonicalize
+import coop.rchain.rspace.Serialize._
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.Resources.withResource
@@ -86,7 +87,7 @@ class LMDBStore[C, P, A, K] private[rspace] (
     _dbJoins.put(txn, joinedChannelHash, joins)(joinCodec)
 
   private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash =
-    StableHashProvider.hash(channels)
+    StableHashProvider.hash(channels)(fromCodec(codecC))
 
   /* Channels */
 

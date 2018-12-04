@@ -22,6 +22,11 @@ object Serialize {
 
   def apply[A](implicit ev: Serialize[A]): Serialize[A] = ev
 
+  implicit def fromCodec[A](codec: Codec[A]): Serialize[A] = new Serialize[A] {
+    def encode(a: A): ByteVector                        = codec.encode(a).require.bytes
+    def decode(bytes: ByteVector): Either[Throwable, A] = codec.decode(bytes)
+  }
+
   implicit class RichSerialize[A](instance: Serialize[A]) {
 
     def toCodec: Codec[A] = new Codec[A] {
