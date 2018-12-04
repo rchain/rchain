@@ -151,7 +151,7 @@ class Node:
         self.background_logging.join()
 
     def show_blocks_with_depth(self, depth: int) -> Tuple[int, str]:
-        return self.exec_run(f'{rnode_binary} show-blocks --depth {depth}')
+        return self._exec_run_with_timeout(f'{rnode_binary} show-blocks --depth {depth}')
 
     def get_blocks_count(self, depth: int) -> int:
         _, show_blocks_output = self.show_blocks_with_depth(depth)
@@ -160,12 +160,11 @@ class Node:
     def get_block(self, block_hash: str) -> str:
         return self.call_rnode('show-block', block_hash, stderr=False)
 
-    # deprecated, don't use, why? ask @adaszko
-    def exec_run(self, cmd: Union[Tuple[str, ...], str], stderr=True) -> Tuple[int, str]:
+    def _exec_run_with_timeout(self, cmd: Union[Tuple[str, ...], str], stderr=True) -> Tuple[int, str]:
         queue: Queue = Queue(1)
 
         def execution():
-            r = self.container.exec_run(cmd, stderr=stderr)
+            r = self.container._exec_run_with_timeout(cmd, stderr=stderr)
             queue.put((r.exit_code, r.output.decode('utf-8')))
 
         process = Process(target=execution)
@@ -186,7 +185,7 @@ class Node:
             raise TimeoutError(cmd, self.timeout)
 
     def shell_out(self, *cmd: str, stderr=True) -> str:
-        exit_code, output = self.exec_run(cmd, stderr=stderr)
+        exit_code, output = self._exec_run_with_timeout(cmd, stderr=stderr)
         if exit_code != 0:
             raise NonZeroExitCodeError(command=cmd, exit_code=exit_code, output=output)
         return output
