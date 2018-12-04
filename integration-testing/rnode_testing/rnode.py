@@ -143,7 +143,7 @@ class Node:
         address = m.group(1)
         return address
 
-    def get_metrics_strict(self):
+    def get_metrics(self):
         return self.shell_out('curl', '-s', 'http://localhost:40403/metrics')
 
     def cleanup(self) -> None:
