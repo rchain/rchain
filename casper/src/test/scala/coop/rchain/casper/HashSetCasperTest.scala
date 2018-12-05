@@ -421,8 +421,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _      = nodes(0).logEff.warns.isEmpty shouldBe true
       _      = nodes(1).logEff.warns.isEmpty shouldBe true
       _      = singleParentBlock.header.get.parentsHashList.size shouldBe 1
-      _      = nodes(0).casperEff.contains(singleParentBlock) shouldBe true
-      result = nodes(1).casperEff.contains(singleParentBlock) shouldBe true
+      _      <- nodes(0).casperEff.contains(singleParentBlock) shouldBeF true
+      result <- nodes(1).casperEff.contains(singleParentBlock) shouldBeF true
 
       _ = nodes.foreach(_.tearDown())
     } yield result
@@ -470,8 +470,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _      = nodes(0).logEff.warns.isEmpty shouldBe true
       _      = nodes(1).logEff.warns.isEmpty shouldBe true
       _      = singleParentBlock.header.get.parentsHashList.size shouldBe 1
-      _      = nodes(0).casperEff.contains(singleParentBlock) shouldBe true
-      result = nodes(1).casperEff.contains(singleParentBlock) shouldBe true
+      _      <- nodes(0).casperEff.contains(singleParentBlock) shouldBeF true
+      result <- nodes(1).casperEff.contains(singleParentBlock) shouldBeF true
 
       _ = nodes.foreach(_.tearDown())
     } yield result
@@ -520,7 +520,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       createBlock2Result <- nodes(1).casperEff
                              .deploy(bondingTransferDeploy) *> nodes(1).casperEff.createBlock
       Created(block2) = createBlock2Result
-      block2Status    = nodes(1).casperEff.addBlock(block2)
+      block2Status    <- nodes(1).casperEff.addBlock(block2)
       _               <- nodes.toList.traverse_(_.receive())
 
       helloWorldDeploy = ProtoUtil.sourceDeploy(
@@ -532,7 +532,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       createBlock3Result <- nodes.last.casperEff
                              .deploy(helloWorldDeploy) *> nodes.last.casperEff.createBlock
       Created(block3) = createBlock3Result
-      block3Status    = nodes.last.casperEff.addBlock(block3)
+      block3Status    <- nodes.last.casperEff.addBlock(block3)
 
       //previous validator does deploy/propose
       createBlock3PrimeResult <- nodes.head.casperEff
