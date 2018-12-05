@@ -1,10 +1,8 @@
 package coop.rchain.rspace
 
-import cats.Id
 import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.catscontrib._
-import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.Log
@@ -53,8 +51,7 @@ private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, 
       prefix: Seq[(Datum[A], Int)]
   )(implicit m: Match[P, E, A, R]): Either[E, Option[(DataCandidate[C, R], Seq[(Datum[A], Int)])]] =
     data match {
-      case Nil => Right(None)
-      case (indexedDatum @ (Datum(matchCandidate, persist, produceRef), dataIndex)) :: remaining =>
+      case (indexedDatum @ (Datum(matchCandidate, persist, produceRef), dataIndex)) +: remaining =>
         m.get(pattern, matchCandidate) match {
           case Left(ex) =>
             Left(ex)
@@ -72,6 +69,7 @@ private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, 
               )
             )
         }
+      case _ => Right(None)
     }
 
   def getData(channel: C): F[Seq[Datum[A]]] =
@@ -103,9 +101,7 @@ private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, 
       acc: Seq[Either[E, Option[DataCandidate[C, R]]]]
   )(implicit m: Match[P, E, A, R]): Seq[Either[E, Option[DataCandidate[C, R]]]] =
     channelPatternPairs match {
-      case Nil =>
-        acc.reverse
-      case (channel, pattern) :: tail =>
+      case (channel, pattern) +: tail =>
         val maybeTuple: Either[E, Option[(DataCandidate[C, R], Seq[(Datum[A], Int)])]] =
           channelToIndexedData.get(channel) match {
             case Some(indexedData) =>
@@ -126,6 +122,7 @@ private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, 
           case Right(None) =>
             extractDataCandidates(tail, channelToIndexedData, Right(None) +: acc)
         }
+      case _ => acc.reverse
     }
 
   /* Produce */
@@ -137,9 +134,7 @@ private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, 
       channelToIndexedData: Map[C, Seq[(Datum[A], Int)]]
   )(implicit m: Match[P, E, A, R]): Either[E, Option[ProduceCandidate[C, P, R, K]]] =
     matchCandidates match {
-      case Nil =>
-        Right(None)
-      case (p @ WaitingContinuation(patterns, _, _, _), index) :: remaining =>
+      case (p @ WaitingContinuation(patterns, _, _, _), index) +: remaining =>
         val maybeDataCandidates: Either[E, Option[Seq[DataCandidate[C, R]]]] =
           extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).sequence
             .map(_.sequence)
@@ -150,6 +145,7 @@ private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, 
           case Right(Some(dataCandidates)) =>
             Right(Some(ProduceCandidate(channels, p, index, dataCandidates)))
         }
+      case _ => Right(None)
     }
 
   override def close(): F[Unit] = syncF.delay { store.close() }
