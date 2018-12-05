@@ -1,10 +1,12 @@
 package coop.rchain.rholang.interpreter.matcher
 
+import cats.arrow.FunctionK
 import cats.data.{EitherT, WriterT}
 import cats.implicits._
 import cats.laws.discipline.{MonadErrorTests, MonadTests, MonoidKTests}
+import cats.mtl.laws.discipline.{FunctorListenTests, MonadLayerControlTests}
 import cats.tests.CatsSuite
-import cats.{Eq, Monad}
+import cats.{Eq, Monad, ~>}
 import coop.rchain.catscontrib.laws.discipline.MonadTransTests
 import coop.rchain.rholang.StackSafetySpec
 import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, Step}
@@ -80,7 +82,7 @@ class StreamTSpec extends FlatSpec with Matchers {
   }
 }
 
-class StreamTLawsSpec extends CatsSuite {
+class StreamTLawsSpec extends CatsSuite with LowPriorityDerivations {
 
   type Safe[A]          = Coeval[A]
   type Err[A]           = EitherT[Safe, String, A]
@@ -107,6 +109,15 @@ class StreamTLawsSpec extends CatsSuite {
       )
     )
 
+  implicit val arbFunctionKStream: Arbitrary[Stream ~> Stream] =
+    Arbitrary(
+      Gen.oneOf(
+        new (Stream ~> Stream) {
+          def apply[A](fa: Stream[A]): Stream[A] = Stream.Empty
+        },
+        FunctionK.id[Stream]
+      ))
+
   implicit def eqEff[A: Eq]: Eq[Effect[A]]       = Eq.by(x => x.value.value.value())
   implicit def eqFA[A: Eq]: Eq[StreamTEffect[A]] = Eq.by(StreamT.run[Effect, A])
 
@@ -123,8 +134,19 @@ class StreamTLawsSpec extends CatsSuite {
     MonadTransTests[StreamT].monadTrans[Effect, Int, String]
   )
   checkAll(
+    "StreamT.MonadLayerControlLaws",
+    MonadLayerControlTests[StreamTEffect, Effect, Stream].monadLayerControl[Int, String]
+  )
+  checkAll(
     "StreamT.MonadErrorLaws",
     MonadErrorTests[StreamTEffect, String].monadError[Int, Int, String]
   )
+
+}
+
+trait LowPriorityDerivations {
+
+  implicit def arbFunctionK[K[_]]: Arbitrary[K ~> K] =
+    Arbitrary(Gen.const(FunctionK.id[K]))
 
 }

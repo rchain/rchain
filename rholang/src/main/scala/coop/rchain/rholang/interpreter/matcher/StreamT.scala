@@ -120,7 +120,7 @@ private trait StreamTMonad[F[_]] extends Monad[StreamT[F, ?]] {
 
 }
 
-trait StreamTInstances1 {
+trait StreamTInstances1 extends StreamTInstances2 {
 
   implicit def catsDataMonadErrorForStreamT[F[_], E](
       implicit F0: MonadError[F, E]
@@ -139,4 +139,35 @@ private trait StreamTMonadError[F[_], E] extends MonadError[StreamT[F, ?], E] wi
   override def handleErrorWith[A](fa: StreamT[F, A])(f: E => StreamT[F, A]): StreamT[F, A] =
     StreamT(F.handleErrorWith(fa.next)(f(_).next))
 
+}
+
+trait StreamTInstances2 {
+  private[matcher] type of[F[_], G[_]] = { type l[A] = F[G[A]] }
+  private[matcher] type StreamTC[M[_]] = { type l[A] = StreamT[M, A] }
+
+  implicit final def streamMonadLayerControl[M[_]](
+      implicit M: Monad[M]
+  ): MonadLayerControl.Aux[StreamTC[M]#l, M, Stream] =
+    new MonadLayerControl[StreamTC[M]#l, M] {
+      type State[A] = Stream[A]
+
+      val outerInstance: Monad[StreamTC[M]#l] =
+        StreamT.streamTMonad
+
+      val innerInstance: Monad[M] = M
+
+      def layerMapK[A](ma: StreamT[M, A])(trans: M ~> M): StreamT[M, A] = StreamT(trans(ma.next))
+
+      def layer[A](inner: M[A]): StreamT[M, A] = StreamT.liftF(inner)
+
+      def restore[A](state: Stream[A]): StreamT[M, A] =
+        StreamT.fromStream[M, A](Monad[M].pure(state))
+
+      def layerControl[A](cps: (StreamTC[M]#l ~> (M of Stream)#l) => M[A]): StreamT[M, A] =
+        StreamT.liftF(cps(new (StreamTC[M]#l ~> (M of Stream)#l) {
+          def apply[X](fa: StreamT[M, X]): M[Stream[X]] = StreamT.run(fa)
+        }))
+
+      def zero[A](state: Stream[A]): Boolean = state.isEmpty
+    }
 }
