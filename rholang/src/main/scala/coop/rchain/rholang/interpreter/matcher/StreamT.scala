@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter.matcher
 import cats.implicits._
-import cats.{Monad, MonoidK}
+import cats.mtl.lifting.MonadLayerControl
+import cats.{~>, Monad, MonadError, MonoidK}
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, SNil, Step}
 
@@ -86,27 +87,35 @@ trait StreamTInstances0 {
 
   }
 
-  implicit def streamTMonad[F[_]: Monad]: Monad[StreamT[F, ?]] = new Monad[StreamT[F, ?]] {
-
-    override def pure[A](x: A): StreamT[F, A] =
-      StreamT.pure(x)
-
-    override def flatMap[A, B](fa: StreamT[F, A])(f: A => StreamT[F, B]): StreamT[F, B] = {
-      val next: F[Step[F, B]] = fa.next.flatMap {
-        case SNil() => Monad[F].pure[Step[F, B]](SNil())
-        case SCons(head, tail) =>
-          val effectMonoid          = MonoidK[StreamT[F, ?]]
-          val result: StreamT[F, B] = effectMonoid.combineK(f(head), tail.flatMap(f))
-          result.next
-      }
-      StreamT(next)
+  implicit def streamTMonad[F[_]](implicit F0: Monad[F]): Monad[StreamT[F, ?]] =
+    new StreamTMonad[F]() {
+      implicit val F = F0
     }
 
-    override def tailRecM[A, B](a: A)(f: A => StreamT[F, Either[A, B]]): StreamT[F, B] =
-      flatMap(f(a)) {
-        case Left(a)  => tailRecM(a)(f)
-        case Right(b) => pure(b)
-      }
+}
 
+private trait StreamTMonad[F[_]] extends Monad[StreamT[F, ?]] {
+
+  implicit def F: Monad[F]
+
+  override def pure[A](x: A): StreamT[F, A] =
+    StreamT.pure[F, A](x)
+
+  override def flatMap[A, B](fa: StreamT[F, A])(f: A => StreamT[F, B]): StreamT[F, B] = {
+    val next: F[Step[F, B]] = fa.next.flatMap {
+      case SNil() => Monad[F].pure[Step[F, B]](SNil())
+      case SCons(head, tail) =>
+        val effectMonoid          = MonoidK[StreamT[F, ?]]
+        val result: StreamT[F, B] = effectMonoid.combineK(f(head), tail.flatMap(f))
+        result.next
+    }
+    StreamT(next)
   }
+
+  override def tailRecM[A, B](a: A)(f: A => StreamT[F, Either[A, B]]): StreamT[F, B] =
+    flatMap(f(a)) {
+      case Left(a)  => tailRecM(a)(f)
+      case Right(b) => pure(b)
+    }
+
 }
