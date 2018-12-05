@@ -5,7 +5,7 @@ import java.nio.file.Files
 import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
+import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore, IndexedBlockDagStorage}
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.helper.BlockGenerator._
@@ -14,6 +14,7 @@ import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.p2p.EffectsTestInstances.LogStub
@@ -23,8 +24,8 @@ import coop.rchain.casper.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertion, BeforeAndAfterEach, FlatSpec, Matchers}
-import scala.concurrent.duration._
 
+import scala.concurrent.duration._
 import scala.collection.immutable.HashMap
 
 class ValidateTest
@@ -347,79 +348,72 @@ class ValidateTest
       def latestMessages(messages: Seq[BlockMessage]): Map[Validator, BlockHash] =
         messages.map(b => b.sender -> b.blockHash).toMap
 
-        def createValidatorBlock[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
-            parents: Seq[BlockMessage],
-            justifications: Seq[BlockMessage],
-            validator: Int
-        ): F[BlockMessage] =
-          createBlock[F](
-            parents.map(_.blockHash),
-            creator = validators(validator),
-            bonds = bonds,
-            deploys = Seq(ProtoUtil.basicProcessedDeploy[Id](timeEff.currentMillis.toInt)),
-            justifications = latestMessages(justifications)
-          )
+      def createValidatorBlock[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
+          parents: Seq[BlockMessage],
+          justifications: Seq[BlockMessage],
+          validator: Int
+      ): F[BlockMessage] =
+        for {
+          current <- Time[F].currentMillis
+          deploy  <- ProtoUtil.basicProcessedDeploy[F](current.toInt)
+          block <- createBlock[F](
+                    parents.map(_.blockHash),
+                    creator = validators(validator),
+                    bonds = bonds,
+                    deploys = Seq(deploy),
+                    justifications = latestMessages(justifications)
+                  )
+        } yield block
 
-        val b0 = createBlock[Id](Seq.empty, bonds = bonds)
-        val b1 = createValidatorBlock[Id](Seq(b0), Seq.empty, 0)
-        val b2 = createValidatorBlock[Id](Seq(b0), Seq.empty, 1)
-        val b3 = createValidatorBlock[Id](Seq(b0), Seq.empty, 2)
-        val b4 = createValidatorBlock[Id](Seq(b1), Seq(b1), 0)
-        val b5 = createValidatorBlock[Id](Seq(b3, b2, b1), Seq(b1, b2, b3), 1)
-        val b6 = createValidatorBlock[Id](Seq(b5, b4), Seq(b1, b4, b5), 0)
-        val b7 = createValidatorBlock[Id](Seq(b4), Seq(b1, b4, b5), 1) //not highest score parent
-        val b8 = createValidatorBlock[Id](Seq(b1, b2, b3), Seq(b1, b2, b3), 2) //parents wrong order
-        val b9 = createValidatorBlock[Id](Seq(b6), Seq.empty, 0) //empty justification
+      for {
+        b0 <- createBlock[Task](Seq.empty, bonds = bonds)
+        b1 <- createValidatorBlock[Task](Seq(b0), Seq.empty, 0)
+        b2 <- createValidatorBlock[Task](Seq(b0), Seq.empty, 1)
+        b3 <- createValidatorBlock[Task](Seq(b0), Seq.empty, 2)
+        b4 <- createValidatorBlock[Task](Seq(b1), Seq(b1), 0)
+        b5 <- createValidatorBlock[Task](Seq(b3, b2, b1), Seq(b1, b2, b3), 1)
+        b6 <- createValidatorBlock[Task](Seq(b5, b4), Seq(b1, b4, b5), 0)
+        b7 <- createValidatorBlock[Task](Seq(b4), Seq(b1, b4, b5), 1) //not highest score parent
+        b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), Seq(b1, b2, b3), 2) //parents wrong order
+        b9 <- createValidatorBlock[Task](Seq(b6), Seq.empty, 0) //empty justification
+        result <- mkRuntimeManager("casper-util-test")
+                   .use { runtimeManager =>
+                     for {
+                       _   <- updateChainWithBlockStateUpdate[Task](0, b0, runtimeManager)
+                       _   <- updateChainWithBlockStateUpdate[Task](1, b0, runtimeManager)
+                       _   <- updateChainWithBlockStateUpdate[Task](2, b0, runtimeManager)
+                       _   <- updateChainWithBlockStateUpdate[Task](3, b0, runtimeManager)
+                       _   <- updateChainWithBlockStateUpdate[Task](4, b0, runtimeManager)
+                       _   <- updateChainWithBlockStateUpdate[Task](5, b0, runtimeManager)
+                       _   <- updateChainWithBlockStateUpdate[Task](6, b0, runtimeManager)
+                       _   <- updateChainWithBlockStateUpdate[Task](7, b0, runtimeManager)
+                       _   <- updateChainWithBlockStateUpdate[Task](8, b0, runtimeManager)
+                       _   <- updateChainWithBlockStateUpdate[Task](9, b0, runtimeManager)
+                       dag <- blockDagStorage.getRepresentation
 
-      val chain   = createChainWithValidators[StateWithChain].runS(initState)
-      val genesis = chain.idToBlocks(0)
+                       // Valid
+                       _ <- Validate.parents[Task](b0, b0, dag)
+                       _ <- Validate.parents[Task](b1, b0, dag)
+                       _ <- Validate.parents[Task](b2, b0, dag)
+                       _ <- Validate.parents[Task](b3, b0, dag)
+                       _ <- Validate.parents[Task](b4, b0, dag)
+                       _ <- Validate.parents[Task](b5, b0, dag)
+                       _ <- Validate.parents[Task](b6, b0, dag)
 
-      mkRuntimeManager("casper-util-test")
-        .use { runtimeManager =>
-          Task.delay {
-            val (b0: BlockMessage, chainWithUpdatedB0: IndexedBlockDag) =
-              updateChainWithBlockStateUpdate(0, genesis, runtimeManager, chain)
-            val (b1: BlockMessage, chainWithUpdatedB1: IndexedBlockDag) =
-              updateChainWithBlockStateUpdate(1, genesis, runtimeManager, chainWithUpdatedB0)
-            val (b2: BlockMessage, chainWithUpdatedB2: IndexedBlockDag) =
-              updateChainWithBlockStateUpdate(2, genesis, runtimeManager, chainWithUpdatedB1)
-            val (b3: BlockMessage, chainWithUpdatedB3: IndexedBlockDag) =
-              updateChainWithBlockStateUpdate(3, genesis, runtimeManager, chainWithUpdatedB2)
-            val (b4: BlockMessage, chainWithUpdatedB4: IndexedBlockDag) =
-              updateChainWithBlockStateUpdate(4, genesis, runtimeManager, chainWithUpdatedB3)
-            val (b5: BlockMessage, chainWithUpdatedB5: IndexedBlockDag) =
-              updateChainWithBlockStateUpdate(5, genesis, runtimeManager, chainWithUpdatedB4)
-            val (b6: BlockMessage, chainWithUpdatedB6: IndexedBlockDag) =
-              updateChainWithBlockStateUpdate(6, genesis, runtimeManager, chainWithUpdatedB5)
-            val (b7: BlockMessage, chainWithUpdatedB7: IndexedBlockDag) =
-              updateChainWithBlockStateUpdate(7, genesis, runtimeManager, chainWithUpdatedB6)
-            val (b8: BlockMessage, chainWithUpdatedB8: IndexedBlockDag) =
-              updateChainWithBlockStateUpdate(8, genesis, runtimeManager, chainWithUpdatedB7)
-            val (b9: BlockMessage, chainWithUpdatedB9: IndexedBlockDag) =
-              updateChainWithBlockStateUpdate(9, genesis, runtimeManager, chainWithUpdatedB8)
+                       // Not valid
+                       _ <- Validate.parents[Task](b7, b0, dag)
+                       _ <- Validate.parents[Task](b8, b0, dag)
+                       _ <- Validate.parents[Task](b9, b0, dag)
 
-            // Valid
-            Validate.parents[Id](chainWithUpdatedB0.idToBlocks(0), b0, chainWithUpdatedB0)
-            Validate.parents[Id](chainWithUpdatedB1.idToBlocks(1), b0, chainWithUpdatedB1)
-            Validate.parents[Id](chainWithUpdatedB2.idToBlocks(2), b0, chainWithUpdatedB2)
-            Validate.parents[Id](chainWithUpdatedB3.idToBlocks(3), b0, chainWithUpdatedB3)
-            Validate.parents[Id](chainWithUpdatedB4.idToBlocks(4), b0, chainWithUpdatedB4)
-            Validate.parents[Id](chainWithUpdatedB5.idToBlocks(5), b0, chainWithUpdatedB5)
-            Validate.parents[Id](chainWithUpdatedB6.idToBlocks(6), b0, chainWithUpdatedB6)
-
-            // Not valid
-            Validate.parents[Id](chainWithUpdatedB7.idToBlocks(7), b0, chainWithUpdatedB7)
-            Validate.parents[Id](chainWithUpdatedB8.idToBlocks(8), b0, chainWithUpdatedB8)
-            Validate.parents[Id](chainWithUpdatedB9.idToBlocks(9), b0, chainWithUpdatedB9)
-
-            log.warns.size should be(3)
-            log.warns.forall(
-          _.contains("block parents did not match estimate based on justification")
-        ) should be(
-          true
-        )
-      } }
-        .runSyncUnsafe(10.seconds)
+                       _ = log.warns.size should be(3)
+                       result = log.warns.forall(
+                         _.contains("block parents did not match estimate based on justification")
+                       ) should be(
+                         true
+                       )
+                     } yield result
+                   }
+      } yield result
   }
 
   // Creates a block with an invalid block number and sequence number

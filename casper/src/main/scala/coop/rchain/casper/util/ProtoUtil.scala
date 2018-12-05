@@ -293,23 +293,23 @@ object ProtoUtil {
       b1: BlockMessage,
       b2: BlockMessage,
       dag: BlockDagRepresentation[F]
-  ): F[Boolean] = {
-    implicit val ordering = BlockDag.deriveOrdering(dag)
-
-    val b1MetaData           = dag.dataLookup(b1.blockHash)
-    val b2MetaData           = dag.dataLookup(b2.blockHash)
-    val blockMetaDataSeq     = Vector(b1MetaData, b2MetaData)
-    val uncommonAncestorsMap = DagOperations.uncommonAncestors(blockMetaDataSeq, dag.dataLookup)
-    val (b1AncestorsMap, b2AncestorsMap) = uncommonAncestorsMap.partition {
-      case (_, bitSet) => bitSet == BitSet(0)
+  ): F[Boolean] =
+    dag.deriveOrdering(0L).flatMap { // TODO: Replace with something meaningful
+      implicit ordering =>
+        for {
+          b1MetaDataOpt        <- dag.lookup(b1.blockHash)
+          b2MetaDataOpt        <- dag.lookup(b2.blockHash)
+          blockMetaDataSeq     = Vector(b1MetaDataOpt.get, b2MetaDataOpt.get)
+          uncommonAncestorsMap <- DagOperations.uncommonAncestors(blockMetaDataSeq, dag)
+          (b1AncestorsMap, b2AncestorsMap) = uncommonAncestorsMap.partition {
+            case (_, bitSet) => bitSet == BitSet(0)
+          }
+          b1AncestorsMeta    = b1AncestorsMap.keys
+          b2AncestorsMeta    = b2AncestorsMap.keys
+          b1AncestorChannels <- buildBlockAncestorChannels[F](b1AncestorsMeta.toList)
+          b2AncestorChannels <- buildBlockAncestorChannels[F](b2AncestorsMeta.toList)
+        } yield b1AncestorChannels.intersect(b2AncestorChannels).nonEmpty
     }
-    val b1AncestorsMeta = b1AncestorsMap.keys
-    val b2AncestorsMeta = b2AncestorsMap.keys
-    for {
-      b1AncestorChannels <- buildBlockAncestorChannels[F](b1AncestorsMeta.toList)
-      b2AncestorChannels <- buildBlockAncestorChannels[F](b2AncestorsMeta.toList)
-    } yield b1AncestorChannels.intersect(b2AncestorChannels).nonEmpty
-  }
 
   private def buildBlockAncestorChannels[F[_]: Monad: BlockStore](
       blockAncestorsMeta: List[BlockMetadata]

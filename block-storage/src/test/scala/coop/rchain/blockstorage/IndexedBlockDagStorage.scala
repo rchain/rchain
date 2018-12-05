@@ -46,6 +46,13 @@ final class IndexedBlockDagStorage[F[_]: Monad](
       _ <- currentIdRef.set(nextId)
       _ <- lock.release
     } yield modifiedBlock
+  def inject(index: Int, block: BlockMessage): F[Unit] =
+    for {
+      _ <- lock.acquire
+      _ <- idToBlocksRef.update(_.updated(index, block))
+      _ <- underlying.insert(block)
+      _ <- lock.release
+    } yield ()
   def checkpoint(): F[Unit] = underlying.checkpoint()
   def clear(): F[Unit] =
     for {

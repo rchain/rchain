@@ -380,85 +380,104 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  it should "not merge blocks that touch the same channel" in {
-    val nodes = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
-    val deploys = Vector(
-      ProtoUtil.sourceDeploy(
+  it should "not merge blocks that touch the same channel" in effectTest {
+    for {
+      nodes    <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
+      current0 <- timeEff.currentMillis
+      deploy0 = ProtoUtil.sourceDeploy(
         "@1!(47)",
-        timeEff.currentMillis,
+        current0,
         accounting.MAX_VALUE
-      ),
-      ProtoUtil.sourceDeploy(
+      )
+      current1 <- timeEff.currentMillis
+      deploy1 = ProtoUtil.sourceDeploy(
         "for(@x <- @1){ @1!(x) }",
-        timeEff.currentMillis,
+        current1,
         accounting.MAX_VALUE
-      ),
-      ProtoUtil.basicDeployData[Id](2)
-    )
+      )
+      deploy2 <- ProtoUtil.basicDeployData[Effect](2)
+      deploys = Vector(
+        deploy0,
+        deploy1,
+        deploy2
+      )
+      createBlock0Result <- nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
+      Created(block0)    = createBlock0Result
+      createBlock1Result <- nodes(1).casperEff.deploy(deploys(1)) *> nodes(1).casperEff.createBlock
+      Created(block1)    = createBlock1Result
+      _                  <- nodes(0).casperEff.addBlock(block0)
+      _                  <- nodes(1).casperEff.addBlock(block1)
+      _                  <- nodes(0).receive()
+      _                  <- nodes(1).receive()
+      _                  <- nodes(0).receive()
+      _                  <- nodes(1).receive()
 
-    val Created(block0) = nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
-    val Created(block1) = nodes(1).casperEff.deploy(deploys(1)) *> nodes(1).casperEff.createBlock
-    nodes(0).casperEff.addBlock(block0)
-    nodes(1).casperEff.addBlock(block1)
-    nodes(0).receive()
-    nodes(1).receive()
-    nodes(0).receive()
-    nodes(1).receive()
+      createSingleParentBlockResult <- nodes(0).casperEff
+                                        .deploy(deploys(2)) *> nodes(0).casperEff.createBlock
+      Created(singleParentBlock) = createSingleParentBlockResult
+      _                          <- nodes(0).casperEff.addBlock(singleParentBlock)
+      _                          <- nodes(1).receive()
 
-    val Created(singleParentBlock) = nodes(0).casperEff
-      .deploy(deploys(2)) *> nodes(0).casperEff.createBlock
-    nodes(0).casperEff.addBlock(singleParentBlock)
-    nodes(1).receive()
+      _      = nodes(0).logEff.warns.isEmpty shouldBe true
+      _      = nodes(1).logEff.warns.isEmpty shouldBe true
+      _      = singleParentBlock.header.get.parentsHashList.size shouldBe 1
+      _      = nodes(0).casperEff.contains(singleParentBlock) shouldBe true
+      result = nodes(1).casperEff.contains(singleParentBlock) shouldBe true
 
-    nodes(0).logEff.warns.isEmpty shouldBe true
-    nodes(1).logEff.warns.isEmpty shouldBe true
-    singleParentBlock.header.get.parentsHashList.size shouldBe 1
-    nodes(0).casperEff.contains(singleParentBlock) shouldBe true
-    nodes(1).casperEff.contains(singleParentBlock) shouldBe true
-
-    nodes.foreach(_.tearDown())
+      _ = nodes.foreach(_.tearDown())
+    } yield result
   }
 
-  it should "not merge blocks that touch the same channel involving joins" in {
-    val nodes = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
-    val deploys = Vector(
-      ProtoUtil.sourceDeploy(
+  it should "not merge blocks that touch the same channel involving joins" in effectTest {
+    for {
+      nodes    <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
+      current0 <- timeEff.currentMillis
+      deploy0 = ProtoUtil.sourceDeploy(
         "@1!(47)",
-        timeEff.currentMillis,
+        current0,
         accounting.MAX_VALUE
-      ),
-      ProtoUtil.sourceDeploy(
+      )
+      current1 <- timeEff.currentMillis
+      deploy1 = ProtoUtil.sourceDeploy(
         "for(@x <- @1; @y <- @2){ @1!(x) }",
-        timeEff.currentMillis,
+        current1,
         accounting.MAX_VALUE
-      ),
-      ProtoUtil.basicDeployData[Id](2)
-    )
+      )
+      deploy2 <- ProtoUtil.basicDeployData[Effect](2)
+      deploys = Vector(
+        deploy0,
+        deploy1,
+        deploy2
+      )
 
-    val Created(block0) = nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
-    val Created(block1) = nodes(1).casperEff.deploy(deploys(1)) *> nodes(1).casperEff.createBlock
-    nodes(0).casperEff.addBlock(block0)
-    nodes(1).casperEff.addBlock(block1)
-    nodes(0).receive()
-    nodes(1).receive()
-    nodes(0).receive()
-    nodes(1).receive()
+      createBlock0Result <- nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
+      Created(block0)    = createBlock0Result
+      createBlock1Result <- nodes(1).casperEff.deploy(deploys(1)) *> nodes(1).casperEff.createBlock
+      Created(block1)    = createBlock1Result
+      _                  <- nodes(0).casperEff.addBlock(block0)
+      _                  <- nodes(1).casperEff.addBlock(block1)
+      _                  <- nodes(0).receive()
+      _                  <- nodes(1).receive()
+      _                  <- nodes(0).receive()
+      _                  <- nodes(1).receive()
 
-    val Created(singleParentBlock) = nodes(0).casperEff
-      .deploy(deploys(2)) *> nodes(0).casperEff.createBlock
-    nodes(0).casperEff.addBlock(singleParentBlock)
-    nodes(1).receive()
+      createSingleParentBlockResult <- nodes(0).casperEff
+                                        .deploy(deploys(2)) *> nodes(0).casperEff.createBlock
+      Created(singleParentBlock) = createSingleParentBlockResult
+      _                          <- nodes(0).casperEff.addBlock(singleParentBlock)
+      _                          <- nodes(1).receive()
 
-    nodes(0).logEff.warns.isEmpty shouldBe true
-    nodes(1).logEff.warns.isEmpty shouldBe true
-    singleParentBlock.header.get.parentsHashList.size shouldBe 1
-    nodes(0).casperEff.contains(singleParentBlock) shouldBe true
-    nodes(1).casperEff.contains(singleParentBlock) shouldBe true
+      _      = nodes(0).logEff.warns.isEmpty shouldBe true
+      _      = nodes(1).logEff.warns.isEmpty shouldBe true
+      _      = singleParentBlock.header.get.parentsHashList.size shouldBe 1
+      _      = nodes(0).casperEff.contains(singleParentBlock) shouldBe true
+      result = nodes(1).casperEff.contains(singleParentBlock) shouldBe true
 
-    nodes.foreach(_.tearDown())
+      _ = nodes.foreach(_.tearDown())
+    } yield result
   }
 
-  it should "allow bonding and distribute the joining fee" in {
+  it should "allow bonding and distribute the joining fee" in effectTest {
     for {
       nodes <- HashSetCasperTestNode.networkEff(
                 validatorKeys :+ otherSk,

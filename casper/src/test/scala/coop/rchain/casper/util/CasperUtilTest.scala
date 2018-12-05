@@ -13,7 +13,7 @@ import cats.mtl.MonadState
 import cats.mtl.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
-import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture, IndexedBlockDag}
+import coop.rchain.casper.helper.BlockGenerator
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.scalatestcontrib._
@@ -129,22 +129,17 @@ class CasperUtilTest
         b10     <- createBlock[Task](Seq(b8.blockHash), deploys = Seq(deploys(4)))
 
         dag <- blockDagStorage.getRepresentation
-        mkRuntimeManager("casper-util-test").use { runtimeManager =>
-          _
-          <- conflicts[Task](b2, b3, genesis, dag) shouldBeF false
-          _
-          <- conflicts[Task](b4, b5, genesis, dag) shouldBeF true
-          _
-          <- conflicts[Task](b6, b6, genesis, dag) shouldBeF false
-          _
-          <- conflicts[Task](b6, b9, genesis, dag) shouldBeF false
-          _
-          <- conflicts[Task](b7, b8, genesis, dag) shouldBeF false
-          _
-          <- conflicts[Task](b7, b10, genesis, dag) shouldBeF false
-          result
-          <- conflicts[Task](b9, b10, genesis, dag) shouldBeF true
-        }
+        result <- mkRuntimeManager("casper-util-test").use { runtimeManager =>
+                   for {
+                     _      <- conflicts[Task](b2, b3, dag) shouldBeF false
+                     _      <- conflicts[Task](b4, b5, dag) shouldBeF true
+                     _      <- conflicts[Task](b6, b6, dag) shouldBeF false
+                     _      <- conflicts[Task](b6, b9, dag) shouldBeF false
+                     _      <- conflicts[Task](b7, b8, dag) shouldBeF false
+                     _      <- conflicts[Task](b7, b10, dag) shouldBeF false
+                     result <- conflicts[Task](b9, b10, dag) shouldBeF true
+                   } yield result
+                 }
       } yield result
   }
 }

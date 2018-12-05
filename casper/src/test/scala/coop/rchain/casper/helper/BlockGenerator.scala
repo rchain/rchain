@@ -3,7 +3,7 @@ package coop.rchain.casper.helper
 import cats._
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{BlockDagStorage, BlockStore, IndexedBlockDagStorage}
+import coop.rchain.blockstorage._
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
@@ -13,58 +13,57 @@ import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Time
+import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 
 import scala.collection.immutable.HashMap
 import scala.language.higherKinds
 
 object BlockGenerator {
-  implicit val timeEff
+  implicit val timeEff = new LogicalTime[Task]()(Capture.taskCapture)
 
-  def updateChainWithBlockStateUpdate(
+  def updateChainWithBlockStateUpdate[F[_]: Monad: BlockStore: IndexedBlockDagStorage](
       id: Int,
       genesis: BlockMessage,
-      runtimeManager: RuntimeManager,
-      chain: IndexedBlockDag
-  )(implicit blockStore: BlockStore[Id]): (BlockMessage, IndexedBlockDag) = {
-    val b = chain.idToBlocks(id)
-    val (postStateHash, processedDeploys) =
-      computeBlockCheckpoint(
-        b,
-        genesis,
-        chain,
-        runtimeManager
-      )
-    val updatedChain = injectPostStateHash(chain, id, b, postStateHash, processedDeploys)
-    (b, updatedChain)
-  }
+      runtimeManager: RuntimeManager
+  ): F[BlockMessage] =
+    for {
+      b   <- IndexedBlockDagStorage[F].lookupByIdUnsafe(id)
+      dag <- IndexedBlockDagStorage[F].getRepresentation
+      computeBlockCheckpointResult <- computeBlockCheckpoint[F](
+                                       b,
+                                       genesis,
+                                       dag,
+                                       runtimeManager
+                                     )
+      (postStateHash, processedDeploys) = computeBlockCheckpointResult
+      _                                 <- injectPostStateHash[F](id, b, postStateHash, processedDeploys)
+    } yield b
 
-  def computeBlockCheckpoint(
+  def computeBlockCheckpoint[F[_]: Monad: BlockStore](
       b: BlockMessage,
       genesis: BlockMessage,
-      dag: BlockDag,
+      dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager
-  )(implicit blockStore: BlockStore[Id]): (StateHash, Seq[ProcessedDeploy]) = {
-    val Right((preStateHash, postStateHash, processedDeploys)) =
-      InterpreterUtil
-        .computeBlockCheckpointFromDeploys[Id](b, genesis, dag, runtimeManager)
+  ): F[(StateHash, Seq[ProcessedDeploy])] =
+    for {
+      result <- InterpreterUtil
+                 .computeBlockCheckpointFromDeploys[F](b, genesis, dag, runtimeManager)
+      Right((preStateHash, postStateHash, processedDeploys)) = result
+    } yield (postStateHash, processedDeploys.map(ProcessedDeployUtil.fromInternal))
 
-    (postStateHash, processedDeploys.map(ProcessedDeployUtil.fromInternal))
-  }
-
-  def injectPostStateHash(
-      chain: IndexedBlockDag,
+  def injectPostStateHash[F[_]: Monad: BlockStore: IndexedBlockDagStorage](
       id: Int,
       b: BlockMessage,
       postGenStateHash: StateHash,
       processedDeploys: Seq[ProcessedDeploy]
-  )(implicit blockStore: BlockStore[Id]): IndexedBlockDag = {
+  ): F[Unit] = {
     val updatedBlockPostState = b.getBody.getState.withPostStateHash(postGenStateHash)
     val updatedBlockBody =
       b.getBody.withState(updatedBlockPostState).withDeploys(processedDeploys)
     val updatedBlock = b.withBody(updatedBlockBody)
-    blockStore.put(b.blockHash, updatedBlock)
-    chain.copy(idToBlocks = chain.idToBlocks.updated(id, updatedBlock))
+    BlockStore[F].put(b.blockHash, updatedBlock) *>
+      IndexedBlockDagStorage[F].inject(id, updatedBlock)
   }
 }
 
