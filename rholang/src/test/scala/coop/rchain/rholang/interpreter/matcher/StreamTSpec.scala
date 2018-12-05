@@ -110,9 +110,21 @@ class StreamTLawsSpec extends CatsSuite {
   implicit def eqEff[A: Eq]: Eq[Effect[A]]       = Eq.by(x => x.value.value.value())
   implicit def eqFA[A: Eq]: Eq[StreamTEffect[A]] = Eq.by(StreamT.run[Effect, A])
 
-  checkAll("StreamT.MonadLaws", MonadTests[StreamTEffect].monad[Int, Int, String])
-  checkAll("StreamT.MonoidKLaws", MonoidKTests[StreamTEffect].monoidK[Int])
-  checkAll("StreamT.MonadTransLaws", MonadTransTests[StreamT].monadTrans[Effect, Int, String])
-  checkAll("StreamT.MonadErrorLaws", MonadErrorTests[StreamTEffect, String].monadError[Int, Int, String])
+  checkAll(
+    "StreamT.MonadLaws",
+    MonadTests[StreamTEffect].monad[Int, Int, String]
+  )
+  checkAll(
+    "StreamT.MonoidKLaws",
+    MonoidKTests[StreamTEffect].monoidK[Int]
+  )
+  checkAll(
+    "StreamT.MonadTransLaws",
+    MonadTransTests[StreamT].monadTrans[Effect, Int, String]
+  )
+  checkAll(
+    "StreamT.MonadErrorLaws",
+    MonadErrorTests[StreamTEffect, String].monadError[Int, Int, String]
+  )
 
 }
