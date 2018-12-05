@@ -185,7 +185,25 @@ private[sorter] object ExprSortMatcher extends Sortable[Expr] {
           constructExpr(
             EMapBody(parMap),
             Node(
-              Seq(Leaf(Score.EMAP), remainderScore) ++ sortedPars.map(_.score) ++ Seq(Leaf(connectiveUsedScore))
+              Seq(Leaf(Score.EMAP), remainderScore) ++ sortedPars.map(_.score) ++ Seq(
+                Leaf(connectiveUsedScore)
+              )
+            )
+          )
+      case ESetBody(parSet) =>
+        for {
+          sortedPars <- parSet.ps.sortedPars.traverse(Sortable[Par].sortMatch[F])
+          remainderScore <- parSet.remainder match {
+                             case Some(_var) => Sortable[Var].sortMatch[F](_var).map(_.score)
+                             case None       => Sync[F].pure(Leaf(-1))
+                           }
+          connectiveUsedScore = if (parSet.connectiveUsed) 1 else 0
+        } yield
+          constructExpr(
+            ESetBody(parSet),
+            Node(
+              Seq(Leaf(Score.ESET), remainderScore) ++ sortedPars
+                .map(_.score) ++ Seq(Leaf(connectiveUsedScore))
             )
           )
       case EMethodBody(em) =>
