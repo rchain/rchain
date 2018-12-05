@@ -69,13 +69,12 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   private val faultToleranceThreshold         = 0f
   private val lastFinalizedBlockHashContainer = Ref.unsafe[F, BlockHash](genesis.blockHash)
 
-  private val processingBlock          = new SyncVar[Unit]()
-  private val PROCESSING_BLOCK_TIMEOUT = 5 * 60 * 1000L
+  private val processingBlock = new SyncVar[Unit]()
   processingBlock.put(())
 
   def addBlock(b: BlockMessage): F[BlockStatus] =
     for {
-      _         <- Sync[F].delay(processingBlock.take(PROCESSING_BLOCK_TIMEOUT))
+      _         <- Sync[F].delay(processingBlock.take())
       dag       = _blockDag.get
       blockHash = b.blockHash
       result <- if (dag.dataLookup.contains(blockHash) || blockBuffer.exists(
