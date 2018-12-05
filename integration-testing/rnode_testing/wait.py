@@ -116,7 +116,7 @@ def wait_on_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) ->
         # iteration duration is 15% of remaining timeout
         # but no more than 10s and no less than 1s
         iteration_duration = int(min(10, max(1, int(0.15 * time_left))))
-
+        logging.info("!!")
         time.sleep(iteration_duration)
         elapsed = elapsed + iteration_duration
 

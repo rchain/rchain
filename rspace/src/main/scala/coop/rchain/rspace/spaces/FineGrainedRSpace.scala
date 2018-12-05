@@ -45,8 +45,9 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
-      sequenceNumber: Int
-  )(
+      sequenceNumber: Int,
+      peek: Option[Seq[Boolean]]
+                      )(
       implicit m: Match[P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     contextShift.evalOn(scheduler) {
