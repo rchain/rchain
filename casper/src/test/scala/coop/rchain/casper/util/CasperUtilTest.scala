@@ -131,16 +131,24 @@ class CasperUtilTest
         dag <- blockDagStorage.getRepresentation
         result <- mkRuntimeManager("casper-util-test").use { runtimeManager =>
                    for {
-                     _ <- updateChainWithBlockStateUpdate(1, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate(2, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate(3, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate(4, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate(5, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate(6, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate(7, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate(8, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate(9, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate(10, genesis, runtimeManager)
+                     computeBlockCheckpointResult <- computeBlockCheckpoint(genesis,
+                                                                            genesis,
+                                                                            dag,
+                                                                            runtimeManager)
+                     (postGenStateHash, postGenProcessedDeploys) = computeBlockCheckpointResult
+                     _ <- injectPostStateHash[Task](0,
+                                                    genesis,
+                                                    postGenStateHash,
+                                                    postGenProcessedDeploys)
+                     _ <- updateChainWithBlockStateUpdate[Task](1, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](2, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](3, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](4, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](5, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](6, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](7, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](8, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](9, genesis, runtimeManager)
 
                      _      <- conflicts[Task](b2, b3, dag) shouldBeF false
                      _      <- conflicts[Task](b4, b5, dag) shouldBeF true

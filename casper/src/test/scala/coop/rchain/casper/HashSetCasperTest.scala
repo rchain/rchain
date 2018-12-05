@@ -538,7 +538,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       createBlock3PrimeResult <- nodes.head.casperEff
                                   .deploy(helloWorldDeploy) *> nodes.head.casperEff.createBlock
       Created(block3Prime) = createBlock3PrimeResult
-      block3PrimeStatus    = nodes.head.casperEff.addBlock(block3Prime)
+      block3PrimeStatus    <- nodes.head.casperEff.addBlock(block3Prime)
 
       _ <- nodes.toList.traverse_(_.receive()) //all nodes get the blocks
 
@@ -713,7 +713,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  it should "not fail if the forkchoice changes after a bonding event" in {
+  it should "not fail if the forkchoice changes after a bonding event" in effectTest {
     val localValidators = validatorKeys.take(3)
     val localBonds      = localValidators.map(Ed25519.toPublic).zip(List(10L, 30L, 5000L)).toMap
     val localGenesis =
@@ -746,7 +746,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       createBlockResult1   <- nodes.head.casperEff.createBlock
       Created(bondedBlock) = createBlockResult1
 
-      bondedBlockStatus = nodes.head.casperEff.addBlock(bondedBlock)
+      bondedBlockStatus <- nodes.head.casperEff.addBlock(bondedBlock)
       _                 <- nodes(1).receive()
       _                 <- nodes.head.receive()
       _                 <- nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) misses bonding
@@ -793,7 +793,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  it should "allow paying for deploys" in {
+  it should "allow paying for deploys" in effectTest {
     val node      = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
     val (sk, pk)  = Ed25519.newKeyPair
     val user      = ByteString.copyFrom(pk)
@@ -932,7 +932,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  it should "ask peers for blocks it is missing" in {
+  it should "ask peers for blocks it is missing" in effectTest {
     for {
       nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
       deployDatas = Vector(
@@ -982,7 +982,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  it should "ignore adding equivocation blocks" in {
+  it should "ignore adding equivocation blocks" in effectTest {
     for {
       nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
 
@@ -1017,7 +1017,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   // See [[/docs/casper/images/minimal_equivocation_neglect.png]] but cross out genesis block
-  it should "not ignore equivocation blocks that are required for parents of proper nodes" in {
+  it should "not ignore equivocation blocks that are required for parents of proper nodes" in effectTest {
     for {
       nodes       <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
       deployDatas <- (0 to 5).toList.traverse[Effect, DeployData](ProtoUtil.basicDeployData[Effect])
@@ -1078,9 +1078,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _ = nodes(1).logEff.warns.size should be(1)
       _ = nodes(0).logEff.warns.size should be(0)
 
-      _ = nodes(1).casperEff.normalizedInitialFault(ProtoUtil.weightMap(genesis)) should be(
-        1f / (1f + 3f + 5f + 7f)
-      )
+      _ <- nodes(1).casperEff.normalizedInitialFault(ProtoUtil.weightMap(genesis)) shouldBeF 1f / (1f + 3f + 5f + 7f)
       _ = nodes.foreach(_.tearDownNode())
 
       _ <- validateBlockStore(nodes(0)) { blockStore =>
@@ -1268,7 +1266,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  it should "fail when deploying with insufficient phlos" in {
+  it should "fail when deploying with insufficient phlos" in effectTest {
     val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
     import node._
     implicit val timeEff = new LogicalTime[Effect]
@@ -1281,7 +1279,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield assert(block.body.get.deploys.head.errored)
   }
 
-  it should "succeed if given enough phlos for deploy" in {
+  it should "succeed if given enough phlos for deploy" in effectTest {
     val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
     import node._
     implicit val timeEff = new LogicalTime[Effect]
