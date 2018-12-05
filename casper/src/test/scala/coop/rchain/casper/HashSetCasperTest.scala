@@ -1078,7 +1078,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _ = nodes(1).logEff.warns.size should be(1)
       _ = nodes(0).logEff.warns.size should be(0)
 
-      _ <- nodes(1).casperEff.normalizedInitialFault(ProtoUtil.weightMap(genesis)) shouldBeF 1f / (1f + 3f + 5f + 7f)
+      _ <- nodes(1).casperEff
+            .normalizedInitialFault(ProtoUtil.weightMap(genesis)) shouldBeF 1f / (1f + 3f + 5f + 7f)
       _ = nodes.foreach(_.tearDownNode())
 
       _ <- validateBlockStore(nodes(0)) { blockStore =>

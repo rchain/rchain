@@ -131,15 +131,19 @@ class CasperUtilTest
         dag <- blockDagStorage.getRepresentation
         result <- mkRuntimeManager("casper-util-test").use { runtimeManager =>
                    for {
-                     computeBlockCheckpointResult <- computeBlockCheckpoint(genesis,
-                                                                            genesis,
-                                                                            dag,
-                                                                            runtimeManager)
+                     computeBlockCheckpointResult <- computeBlockCheckpoint(
+                                                      genesis,
+                                                      genesis,
+                                                      dag,
+                                                      runtimeManager
+                                                    )
                      (postGenStateHash, postGenProcessedDeploys) = computeBlockCheckpointResult
-                     _ <- injectPostStateHash[Task](0,
-                                                    genesis,
-                                                    postGenStateHash,
-                                                    postGenProcessedDeploys)
+                     _ <- injectPostStateHash[Task](
+                           0,
+                           genesis,
+                           postGenStateHash,
+                           postGenProcessedDeploys
+                         )
                      _ <- updateChainWithBlockStateUpdate[Task](1, genesis, runtimeManager)
                      _ <- updateChainWithBlockStateUpdate[Task](2, genesis, runtimeManager)
                      _ <- updateChainWithBlockStateUpdate[Task](3, genesis, runtimeManager)
