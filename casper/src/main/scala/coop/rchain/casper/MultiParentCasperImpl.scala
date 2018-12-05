@@ -5,7 +5,7 @@ import cats.effect.concurrent.Ref
 import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{BlockMetadata, BlockStore}
+import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockMetadata, BlockStore}
 import coop.rchain.blockstorage.util.TopologicalSortUtil
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil._
@@ -28,11 +28,10 @@ import scala.collection.immutable.HashSet
 import scala.collection.mutable
 import scala.concurrent.SyncVar
 
-class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
+class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage](
     runtimeManager: RuntimeManager,
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
-    initialDag: BlockDag,
     postGenesisStateHash: StateHash,
     shardId: String
 )(implicit scheduler: Scheduler)
@@ -45,8 +44,6 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
 
   //TODO: Extract hardcoded version
   private val version = 1L
-
-  private val _blockDag: AtomicSyncVar[BlockDag] = new AtomicSyncVar(initialDag)
 
   private val emptyStateHash = runtimeManager.emptyStateHash
 
@@ -75,10 +72,11 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
 
   def addBlock(b: BlockMessage): F[BlockStatus] =
     for {
-      _         <- Sync[F].delay(processingBlock.take(PROCESSING_BLOCK_TIMEOUT))
-      dag       = _blockDag.get
-      blockHash = b.blockHash
-      result <- if (dag.dataLookup.contains(blockHash) || blockBuffer.exists(
+      _              <- Sync[F].delay(processingBlock.take(PROCESSING_BLOCK_TIMEOUT))
+      dag            <- blockDag
+      blockHash      = b.blockHash
+      containsResult <- dag.contains(blockHash)
+      result <- if (containsResult || blockBuffer.exists(
                       _.blockHash == blockHash
                     )) {
                  Log[F]
@@ -128,14 +126,13 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     } yield attempt
 
   private def updateLastFinalizedBlock(
-      dag: BlockDag,
+      dag: BlockDagRepresentation[F],
       lastFinalizedBlockHash: BlockHash
   ): F[BlockHash] =
     for {
-      childrenHashes <- dag.childMap
-                         .getOrElse(lastFinalizedBlockHash, Set.empty[BlockHash])
-                         .toList
-                         .pure[F]
+      childrenHashes <- dag
+                         .children(lastFinalizedBlockHash)
+                         .map(_.getOrElse(Set.empty[BlockHash]).toList)
       maybeFinalizedChild <- ListContrib.findM(
                               childrenHashes,
                               (blockHash: BlockHash) =>
@@ -149,10 +146,10 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     } yield newFinalizedBlock
 
   private def isGreaterThanFaultToleranceThreshold(
-      dag: BlockDag,
+      dag: BlockDagRepresentation[F],
       blockHash: BlockHash
   ): F[Boolean] =
-    (SafetyOracle[F].normalizedFaultTolerance(dag, blockHash) > faultToleranceThreshold).pure[F]
+    SafetyOracle[F].normalizedFaultTolerance(dag, blockHash).map(_ > faultToleranceThreshold)
 
   def contains(b: BlockMessage): F[Boolean] =
     BlockStore[F].contains(b.blockHash).map(_ || blockBuffer.contains(b))
@@ -179,7 +176,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
         Applicative[F].pure(Left(new Exception(s"Error in parsing term: \n$err")))
     }
 
-  def estimator(dag: BlockDag): F[IndexedSeq[BlockMessage]] =
+  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockMessage]] =
     for {
       lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
       rankedEstimates        <- Estimator.tips[F](dag, lastFinalizedBlockHash)
@@ -209,16 +206,17 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
         //which are bonded validators in the chosen parent. This is safe because
         //any latest message not from a bonded validator will not change the
         //final fork-choice.
-        justifications = toJustification(dag.latestMessages)
+        latestMessages <- dag.latestMessages
+        justifications = toJustification(latestMessages)
           .filter(j => bondedValidators.contains(j.validator))
         proposal <- if (r.nonEmpty || p.length > 1) {
                      createProposal(dag, p, r, justifications)
                    } else {
                      CreateBlockStatus.noNewDeploys.pure[F]
                    }
-        signedBlock = proposal.map(
-          signBlock(_, dag, publicKey, privateKey, sigAlgorithm, shardId)
-        )
+        signedBlock <- proposal.mapF(
+                        signBlock(_, dag, publicKey, privateKey, sigAlgorithm, shardId)
+                      )
       } yield signedBlock
     case None => CreateBlockStatus.readOnlyMode.pure[F]
   }
@@ -230,7 +228,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     } yield blockMessage
 
   // TODO: Optimize for large number of deploys accumulated over history
-  private def remDeploys(dag: BlockDag, p: Seq[BlockMessage]): F[Seq[Deploy]] =
+  private def remDeploys(dag: BlockDagRepresentation[F], p: Seq[BlockMessage]): F[Seq[Deploy]] =
     for {
       result <- Capture[F].capture { deployHist.clone() }
       _ <- DagOperations
@@ -244,7 +242,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     } yield result.toSeq
 
   private def createProposal(
-      dag: BlockDag,
+      dag: BlockDagRepresentation[F],
       p: Seq[BlockMessage],
       r: Seq[Deploy],
       justifications: Seq[Justification]
@@ -302,9 +300,8 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                }
     } yield result
 
-  def blockDag: F[BlockDag] = Capture[F].capture {
-    _blockDag.get
-  }
+  def blockDag: F[BlockDagRepresentation[F]] =
+    BlockDagStorage[F].getRepresentation
 
   def storageContents(hash: StateHash): F[String] =
     runtimeManager
@@ -331,7 +328,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   private def attemptAdd(b: BlockMessage): F[BlockStatus] =
     for {
       _                    <- Log[F].info(s"Attempting to add Block ${PrettyPrinter.buildString(b.blockHash)} to DAG.")
-      dag                  <- Capture[F].capture { _blockDag.get }
+      dag                  <- blockDag
       postValidationStatus <- Validate.blockSummary[F](b, genesis, dag, shardId)
       postTransactionsCheckStatus <- postValidationStatus.traverse(
                                       _ =>
@@ -453,10 +450,12 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
         .map(_.latestBlockHash)
         .toSet
       allDependencies = (missingParents union missingJustifications).toList
-      missingDependencies = allDependencies.filterNot(
-        blockHash =>
-          dag.dataLookup.contains(blockHash) || blockBuffer.exists(_.blockHash == blockHash)
-      )
+      missingDependencies <- allDependencies.filterA(
+                              blockHash =>
+                                dag
+                                  .lookup(blockHash)
+                                  .map(_.isEmpty && !blockBuffer.exists(_.blockHash == blockHash))
+                            )
       _ <- missingDependencies.traverse(hash => handleMissingDependency(hash, b))
     } yield ()
 
@@ -480,57 +479,10 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     } yield ()
 
   private def addToState(block: BlockMessage): F[Unit] =
-    BlockStore[F].put {
-      _blockDag.update(bd => {
-        val hash = block.blockHash
-
-        val updatedSort   = TopologicalSortUtil.update(bd.topoSort, bd.sortOffset, block)
-        val updatedLookup = bd.dataLookup.updated(block.blockHash, BlockMetadata.fromBlock(block))
-
-        //add current block as new child to each of its parents
-        val newChildMap = parentHashes(block).foldLeft(bd.childMap) {
-          case (acc, p) =>
-            val currChildren = acc.getOrElse(p, HashSet.empty[BlockHash])
-            acc.updated(p, currChildren + hash)
-        }
-
-        //Block which contains newly bonded validators will not
-        //have those validators in its justification
-        val newValidators =
-          bonds(block).map(_.validator).toSet.diff(block.justifications.map(_.validator).toSet)
-        val newLatestMessages = newValidators.foldLeft(
-          //update creator of the block
-          bd.latestMessages.updated(block.sender, block)
-        ) {
-          //Update new validators with block in which
-          //they were bonded (i.e. this block)
-          case (acc, v) => acc.updated(v, block)
-        }
-
-        val lmJustifications = toLatestMessageHashes(block.justifications)
-        //ditto for latestMessagesOfLatestMessages
-        val newLatestLatestMessages = newValidators.foldLeft(
-          bd.latestMessagesOfLatestMessages.updated(block.sender, lmJustifications)
-        ) {
-          case (acc, v) => acc.updated(v, lmJustifications)
-        }
-
-        bd.copy(
-          //Assume that a non-equivocating validator must include
-          //its own latest message in the justification. Therefore,
-          //for a given validator the blocks are guaranteed to arrive in causal order.
-          // Even for a equivocating validator, we just update its latest message
-          // to whatever block we have fetched latest among the blocks that
-          // constitute the equivocation.
-          latestMessages = newLatestMessages,
-          latestMessagesOfLatestMessages = newLatestLatestMessages,
-          childMap = newChildMap,
-          dataLookup = updatedLookup,
-          topoSort = updatedSort
-        )
-      })
-      (block.blockHash, block)
-    }
+    for {
+      _ <- BlockStore[F].put(block.blockHash, block)
+      _ <- BlockDagStorage[F].insert(block)
+    } yield ()
 
   private def reAttemptBuffer: F[Unit] =
     for {

@@ -349,7 +349,7 @@ object ApproveBlockProtocolTest {
     val sigs       = Ref.unsafe[Task, Set[Signature]](Set.empty)
     val startTime  = System.currentTimeMillis()
 
-    val node = HashSetCasperTestNode.standalone(genesis, sk)
+    val node = HashSetCasperTestNode.standaloneEff(genesis, sk)
     val protocol = ApproveBlockProtocol
       .unsafe[Task](genesis, validators, requiredSigs, duration, interval, sigs, startTime)
 
