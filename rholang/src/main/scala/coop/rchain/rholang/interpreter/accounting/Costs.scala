@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter.accounting
 
+import cats.Monoid
 import com.google.protobuf.ByteString
 import coop.rchain.models.{Par, ProtoM, StacksafeMessage}
 
@@ -14,6 +15,11 @@ object Cost {
   def apply[A](term: A)(implicit chargeable: Chargeable[A]): Cost =
     Cost(chargeable.cost(term))
   def apply(value: Int): Cost = Cost(value.toLong)
+
+  implicit val CostMonoid: Monoid[Cost] = new Monoid[Cost] {
+    override def empty: Cost                     = Cost(0)
+    override def combine(x: Cost, y: Cost): Cost = x + y
+  }
 }
 
 trait Costs {
