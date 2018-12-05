@@ -186,7 +186,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
             span.mark("grouped-channels")
             logger.debug(
               s"""|produce: searching for matching continuations
-                             |at <groupedChannels: $groupedChannels>""".stripMargin
+                  |at <groupedChannels: $groupedChannels>""".stripMargin
                 .replace('\n', ' ')
             )
             span.mark("before-event-log-lock-acquired")

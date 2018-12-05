@@ -81,7 +81,7 @@ abstract class RSpaceOps[F[_], C, P, E, A, R, K](
       throw new IllegalArgumentException(msg)
     }
     logger.debug(s"""|install: searching for data matching <patterns: $patterns>
-                       |at <channels: $channels>""".stripMargin.replace('\n', ' '))
+                     |at <channels: $channels>""".stripMargin.replace('\n', ' '))
 
     val consumeRef = Consume.create(channels, patterns, continuation, true, 0)
 
@@ -114,7 +114,7 @@ abstract class RSpaceOps[F[_], C, P, E, A, R, K](
         )
         for (channel <- channels) store.addJoin(txn, channel, channels)
         logger.debug(s"""|storing <(patterns, continuation): ($patterns, $continuation)>
-                           |at <channels: $channels>""".stripMargin.replace('\n', ' '))
+                         |at <channels: $channels>""".stripMargin.replace('\n', ' '))
         None
       case Right(Some(_)) =>
         throw new RuntimeException("Installing can be done only on startup")
