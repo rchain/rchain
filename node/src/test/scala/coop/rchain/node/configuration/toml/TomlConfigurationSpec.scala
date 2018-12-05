@@ -48,6 +48,16 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
       |approve-genesis-duration = "30min"
       |approve-genesis-interval = "1min"
       |deploy-timestamp = 1
+      |
+      |[kamon]
+      |prometheus = false
+      |influx-db = true
+      |
+      |[influx-db]
+      |hostname = "0.0.0.0"
+      |port = 14
+      |database = "test"
+      |
       |""".stripMargin
 
   test("Parse TOML configuration string") {
@@ -98,6 +108,15 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
     root.validators.flatMap(_.approveGenesisDuration) shouldEqual Some(30.minutes)
     root.validators.flatMap(_.approveGenesisInterval) shouldEqual Some(1.minute)
     root.validators.flatMap(_.deployTimestamp) shouldEqual Some(1)
+
+    // kamon
+    root.kamon.flatMap(_.prometheus) shouldEqual Some(false)
+    root.kamon.flatMap(_.influxDb) shouldEqual Some(true)
+
+    // influx-db
+    root.influxDb.flatMap(_.hostname) shouldEqual Some("0.0.0.0")
+    root.influxDb.flatMap(_.port) shouldEqual Some(14)
+    root.influxDb.flatMap(_.database) shouldEqual Some("test")
   }
 
 }

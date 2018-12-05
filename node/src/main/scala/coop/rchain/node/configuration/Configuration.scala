@@ -76,6 +76,12 @@ object Configuration {
     .get
   private val DefaultShardId = "rchain"
 
+  private val DefaultKamonPrometheus  = false
+  private val DefaultKamonInfluxDb    = false
+  private val DefaultInfluxDbHostname = "127.0.0.1"
+  private val DefaultInfluxDbPort     = 8086
+  private val DefaultInfluxDbDatabase = "rnode"
+
   private def loadConfigurationFile(
       configFile: File
   )(implicit log: Log[Task]): Task[Option[TomlConfiguration]] =
@@ -183,6 +189,7 @@ object Configuration {
             hasFaucet = DefaultHasFaucet
           ),
           LMDBBlockStore.Config(dataDir.resolve("casper-block-store"), DefaultCasperBlockStoreSize),
+          Kamon(prometheus = false, None),
           options
         )
       )
@@ -320,6 +327,19 @@ object Configuration {
 
     val shardId = get(_.run.shardId, _.validators.flatMap(_.shardId), DefaultShardId)
 
+    val kamonPrometheus = get(kp(None), _.kamon.flatMap(_.prometheus), DefaultKamonPrometheus)
+    val kamonInfluxDb   = get(kp(None), _.kamon.flatMap(_.influxDb), DefaultKamonInfluxDb)
+
+    val influxDb =
+      if (kamonInfluxDb) {
+        val influxDbHostname =
+          get(kp(None), _.influxDb.flatMap(_.hostname), DefaultInfluxDbHostname)
+        val influxDbPort = get(kp(None), _.influxDb.flatMap(_.port), DefaultInfluxDbPort)
+        val influxDbDatabase =
+          get(kp(None), _.influxDb.flatMap(_.database), DefaultInfluxDbDatabase)
+        Some(InfluxDb(influxDbHostname, influxDbPort, influxDbDatabase))
+      } else None
+
     val server = Server(
       host,
       port,
@@ -371,10 +391,18 @@ object Configuration {
         genesisAppriveDuration,
         deployTimestamp
       )
-    val blockstorage = LMDBBlockStore.Config(
-      dataDir.resolve("casper-block-store"),
-      casperBlockStoreSize
-    )
+
+    val blockstorage =
+      LMDBBlockStore.Config(
+        dataDir.resolve("casper-block-store"),
+        casperBlockStoreSize
+      )
+
+    val kamon =
+      Kamon(
+        kamonPrometheus,
+        influxDb
+      )
 
     new Configuration(
       command,
@@ -383,6 +411,7 @@ object Configuration {
       tls,
       casper,
       blockstorage,
+      kamon,
       options
     )
   }
@@ -428,6 +457,7 @@ final class Configuration(
     val tls: Tls,
     val casper: CasperConf,
     val blockstorage: LMDBBlockStore.Config,
+    val kamon: Kamon,
     private val options: commandline.Options
 ) {
   import coop.rchain.catscontrib.Capture._

@@ -10,7 +10,9 @@ case class Configuration(
     server: Option[Server],
     grpcServer: Option[GrpcServer],
     tls: Option[Tls],
-    validators: Option[Validators]
+    validators: Option[Validators],
+    kamon: Option[Kamon],
+    influxDb: Option[InfluxDb]
 )
 
 case class Server(
@@ -61,4 +63,15 @@ case class Validators(
     approveGenesisDuration: Option[FiniteDuration],
     approveGenesisInterval: Option[FiniteDuration],
     deployTimestamp: Option[Long]
+)
+
+case class Kamon(
+    prometheus: Option[Boolean],
+    influxDb: Option[Boolean]
+)
+
+case class InfluxDb(
+    hostname: Option[String],
+    port: Option[Int],
+    database: Option[String]
 )

@@ -1,6 +1,7 @@
 package coop.rchain.node
 
 import scala.concurrent.duration._
+import scala.util.Try
 
 import cats._
 import cats.data._
@@ -9,6 +10,7 @@ import cats.effect.concurrent.Ref
 import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.functor._
+
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
 import coop.rchain.casper._
@@ -34,6 +36,7 @@ import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
 
+import com.typesafe.config.ConfigFactory
 import kamon._
 import kamon.zipkin.ZipkinReporter
 import monix.eval.Task
@@ -122,7 +125,22 @@ class NodeRuntime private[node] (
                           .toEffect
 
       _ <- Task.delay {
-            Kamon.addReporter(prometheusReporter)
+            val influxConf = conf.kamon.influxDb.flatMap { i =>
+              val str =
+                s"""
+                |kamon.influxdb {
+                |  hostname = "${i.hostname}"
+                |  port = ${i.port}
+                |  database = "${i.database}"
+                |}
+                |""".stripMargin
+              Try(ConfigFactory.parseString(str)).toOption
+            }
+            influxConf.foreach { ic =>
+              Kamon.reconfigure(Kamon.config().withFallback(ic))
+              Kamon.addReporter(new kamon.influxdb.InfluxDBReporter())
+            }
+            if (conf.kamon.prometheus) Kamon.addReporter(prometheusReporter)
             Kamon.addReporter(new JmxReporter())
             Kamon.addReporter(new ZipkinReporter())
           }.toEffect
