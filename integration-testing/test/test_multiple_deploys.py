@@ -78,12 +78,12 @@ def test_multiple_deploys_at_once(command_line_options_fixture, docker_client_fi
 
                         expected_blocks_count = 2
                         max_retrieved_blocks = 2
-                        # wait_for_blocks_count_at_least(
-                        #     no1,
-                        #     expected_blocks_count,
-                        #     max_retrieved_blocks,
-                        #     expected_blocks_count * 10,
-                        # )
+                        wait_for_blocks_count_at_least(
+                            no1,
+                            expected_blocks_count,
+                            max_retrieved_blocks,
+                            expected_blocks_count * 10,
+                        )
 
                         deploy2 = DeployThread("node2", no2, contract_path, 3)
                         deploy2.start()
