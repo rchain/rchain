@@ -86,7 +86,7 @@ class LMDBStore[C, P, A, K] private[rspace] (
     _dbJoins.put(txn, joinedChannelHash, joins)(joinCodec)
 
   private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash =
-    StableHashProvider.hash(channels)
+    StableHashProvider.hash(channels)(Serialize.fromCodec(codecC))
 
   /* Channels */
 

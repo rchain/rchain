@@ -1,16 +1,14 @@
 package coop.rchain.rspace.bench.serialization
 
-import java.util.concurrent.TimeUnit
 import java.nio.ByteBuffer
+import java.util.concurrent.TimeUnit
 
 import coop.rchain.models._
 import coop.rchain.models.testImplicits._
-import coop.rchain.rspace.internal._
 import coop.rchain.rspace.Serialize
-import org.scalacheck.Gen.Parameters
-import org.scalacheck.rng.Seed
+import coop.rchain.rspace.bench._
 import coop.rchain.rspace.bench.serialization._
-
+import coop.rchain.rspace.internal._
 import org.openjdk.jmh.annotations.{State => BenchState, _}
 import org.openjdk.jmh.infra.Blackhole
 
@@ -141,8 +139,6 @@ abstract class ModelSerializerBenchState {
   import org.scalacheck._
   import org.scalacheck.Arbitrary._
 
-  import coop.rchain.rspace.Serialize
-
   implicit def arbitraryDatum[C, T](chan: C)(
       implicit
       arbT: Arbitrary[T],
@@ -193,27 +189,17 @@ abstract class ModelSerializerBenchState {
 
   import coop.rchain.rholang.interpreter.storage.implicits._
 
-  val initSeed = 123456789L
-  val elements = 100
+  val lightGnats = generateSeq[TestGNAT](1)(arbitraryGnat)
+  val midGnats   = generateSeq[TestGNAT](5)(arbitraryGnat)
+  val heavyGnats = generateSeq[TestGNAT](10)(arbitraryGnat)
 
-  def generate[A: Arbitrary](size: Int): Seq[A] = {
-    val params = Parameters.default.withSize(size)
-    (1 to elements).map(
-      i => implicitly[Arbitrary[A]].arbitrary.apply(params, Seed(initSeed + i)).get
-    )
-  }
+  val lightPars = generateSeq[Par](1)
+  val midPars   = generateSeq[Par](5)
+  val heavyPars = generateSeq[Par](10)
 
-  val lightGnats = generate[TestGNAT](1)(arbitraryGnat)
-  val midGnats   = generate[TestGNAT](5)(arbitraryGnat)
-  val heavyGnats = generate[TestGNAT](10)(arbitraryGnat)
-
-  val lightPars = generate[Par](1)
-  val midPars   = generate[Par](5)
-  val heavyPars = generate[Par](10)
-
-  val lightExprs = generate[Expr](1)
-  val midExprs   = generate[Expr](5)
-  val heavyExprs = generate[Expr](10)
+  val lightExprs = generateSeq[Expr](1)
+  val midExprs   = generateSeq[Expr](5)
+  val heavyExprs = generateSeq[Expr](10)
 
 }
 

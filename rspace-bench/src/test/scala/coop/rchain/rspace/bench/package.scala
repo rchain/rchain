@@ -2,7 +2,14 @@ package coop.rchain.rspace
 
 import java.nio.file.Path
 
+import scala.collection.immutable.Seq
+
 import coop.rchain.shared.PathOps.RichPath
+import org.scalacheck._
+import org.scalacheck.Arbitrary._
+import org.scalacheck.rng.Seed
+
+import org.scalacheck.Gen.Parameters
 
 package object bench {
 
@@ -25,4 +32,16 @@ package object bench {
             case _: Exception =>
           }
       )
+
+  def generateSeq[A: Arbitrary](
+      innerElementsSize: Int,
+      initSeed: Long = 123456789L,
+      seqSize: Int = 100
+  ): Seq[A] = {
+    val params = Parameters.default.withSize(innerElementsSize)
+    (1 to seqSize).map(
+      i => implicitly[Arbitrary[A]].arbitrary.apply(params, Seed(initSeed + i)).get
+    )
+  }
+
 }

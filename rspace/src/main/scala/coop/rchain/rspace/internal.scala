@@ -156,4 +156,10 @@ object internal {
           throw new Exception("Data in RSpace is corrupted. " + err.messageWithContext)
       }
   }
+
+  def toOrderedByteVectors[A](elements: Seq[A])(implicit serialize: Serialize[A]): Seq[ByteVector] =
+    elements
+      .map(e => serialize.encode(e))
+      .sorted(util.ordByteVector)
+
 }
