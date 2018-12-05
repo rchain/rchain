@@ -1,8 +1,8 @@
 package coop.rchain.rholang.interpreter.matcher
 
-import cats.data.WriterT
+import cats.data.{EitherT, WriterT}
 import cats.implicits._
-import cats.laws.discipline.{MonadTests, MonoidKTests}
+import cats.laws.discipline.{MonadErrorTests, MonadTests, MonoidKTests}
 import cats.tests.CatsSuite
 import cats.{Eq, Monad}
 import coop.rchain.catscontrib.laws.discipline.MonadTransTests
@@ -83,7 +83,8 @@ class StreamTSpec extends FlatSpec with Matchers {
 class StreamTLawsSpec extends CatsSuite {
 
   type Safe[A]          = Coeval[A]
-  type Effect[A]        = WriterT[Safe, String, A]
+  type Err[A]           = EitherT[Safe, String, A]
+  type Effect[A]        = WriterT[Err, String, A]
   type StreamTEffect[A] = StreamT[Effect, A]
 
   implicit val stringArb = Arbitrary(Gen.oneOf("", "a", "b", "c"))
@@ -92,7 +93,7 @@ class StreamTLawsSpec extends CatsSuite {
     Arbitrary(for {
       s <- Arbitrary.arbitrary[String]
       a <- Arbitrary.arbitrary[A]
-    } yield WriterT[Safe, String, A](Coeval.now(s -> a)))
+    } yield WriterT[Err, String, A](EitherT.liftF(Coeval.now(s -> a))))
 
   implicit def arbStreamEff[A: Arbitrary]: Arbitrary[StreamTEffect[A]] =
     Arbitrary(
@@ -106,11 +107,12 @@ class StreamTLawsSpec extends CatsSuite {
       )
     )
 
-  implicit def eqEff[A: Eq]: Eq[Effect[A]]       = Eq.by(x => (x.value.value))
+  implicit def eqEff[A: Eq]: Eq[Effect[A]]       = Eq.by(x => x.value.value.value())
   implicit def eqFA[A: Eq]: Eq[StreamTEffect[A]] = Eq.by(StreamT.run[Effect, A])
 
   checkAll("StreamT.MonadLaws", MonadTests[StreamTEffect].monad[Int, Int, String])
   checkAll("StreamT.MonoidKLaws", MonoidKTests[StreamTEffect].monoidK[Int])
   checkAll("StreamT.MonadTransLaws", MonadTransTests[StreamT].monadTrans[Effect, Int, String])
+  checkAll("StreamT.MonadErrorLaws", MonadErrorTests[StreamTEffect, String].monadError[Int, Int, String])
 
 }

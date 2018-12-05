@@ -63,7 +63,7 @@ object StreamT extends StreamTInstances0 {
     }
 }
 
-trait StreamTInstances0 {
+trait StreamTInstances0 extends StreamTInstances1 {
 
   implicit val streamTMonadTrans = new MonadTrans[StreamT] {
     override def liftM[G[_]: Monad, A](a: G[A]): StreamT[G, A] =
@@ -117,5 +117,26 @@ private trait StreamTMonad[F[_]] extends Monad[StreamT[F, ?]] {
       case Left(a)  => tailRecM(a)(f)
       case Right(b) => pure(b)
     }
+
+}
+
+trait StreamTInstances1 {
+
+  implicit def catsDataMonadErrorForStreamT[F[_], E](
+      implicit F0: MonadError[F, E]
+  ): MonadError[StreamT[F, ?], E] =
+    new StreamTMonadError[F, E] { implicit val F = F0 }
+
+}
+
+private trait StreamTMonadError[F[_], E] extends MonadError[StreamT[F, ?], E] with StreamTMonad[F] {
+
+  override def F: MonadError[F, E]
+
+  override def raiseError[A](e: E): StreamT[F, A] =
+    StreamT.liftF(F.raiseError[A](e))(F)
+
+  override def handleErrorWith[A](fa: StreamT[F, A])(f: E => StreamT[F, A]): StreamT[F, A] =
+    StreamT(F.handleErrorWith(fa.next)(f(_).next))
 
 }
