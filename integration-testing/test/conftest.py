@@ -100,11 +100,11 @@ def docker_client_fixture() -> Generator["DockerClient", None, None]:
 
 
 @contextlib.contextmanager
-def testing_context(command_line_options_fixture, docker_client_fixture, bootstrap_keypair: KeyPair = None, peers_keypairs: List[KeyPair] = None) -> Generator[TestingContext, None, None]:
+def testing_context(command_line_options_fixture, docker_client_fixture, bootstrap_keypair: KeyPair = None, peers_keypairs: List[KeyPair] = None, network_peers: int = 2) -> Generator[TestingContext, None, None]:
     if bootstrap_keypair is None:
         bootstrap_keypair = PREGENERATED_KEYPAIRS[0]
     if peers_keypairs is None:
-        peers_keypairs = PREGENERATED_KEYPAIRS[1:]
+        peers_keypairs = PREGENERATED_KEYPAIRS[1:][:network_peers]
 
     bonds_file_keypairs = [bootstrap_keypair] + peers_keypairs
     with temporary_bonds_file(bonds_file_keypairs) as bonds_file:
