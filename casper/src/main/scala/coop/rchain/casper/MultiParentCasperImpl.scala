@@ -1,12 +1,11 @@
 package coop.rchain.casper
 
-import cats.effect.Sync
-import cats.effect.concurrent.Ref
-import cats.{Applicative, Monad}
+import cats.Applicative
+import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockMetadata, BlockStore}
-import coop.rchain.blockstorage.util.TopologicalSortUtil
+import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util._
@@ -21,19 +20,16 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.shared._
 import monix.execution.Scheduler
 import monix.execution.atomic.AtomicAny
-import coop.rchain.shared.AttemptOps._
-import coop.rchain.catscontrib.TaskContrib._
 
-import scala.collection.immutable.HashSet
 import scala.collection.mutable
-import scala.concurrent.SyncVar
 
-class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage](
+class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage](
     runtimeManager: RuntimeManager,
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
-    shardId: String
+    shardId: String,
+    semaphore: Semaphore[F]
 )(implicit scheduler: Scheduler)
     extends MultiParentCasper[F] {
 
@@ -66,29 +62,26 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   private val faultToleranceThreshold         = 0f
   private val lastFinalizedBlockHashContainer = Ref.unsafe[F, BlockHash](genesis.blockHash)
 
-  private val processingBlock          = new SyncVar[Unit]()
-  private val PROCESSING_BLOCK_TIMEOUT = 5 * 60 * 1000L
-  processingBlock.put(())
-
   def addBlock(b: BlockMessage): F[BlockStatus] =
-    for {
-      _              <- Sync[F].delay(processingBlock.take(PROCESSING_BLOCK_TIMEOUT))
-      dag            <- blockDag
-      blockHash      = b.blockHash
-      containsResult <- dag.contains(blockHash)
-      result <- if (containsResult || blockBuffer.exists(
-                      _.blockHash == blockHash
-                    )) {
-                 Log[F]
-                   .info(
-                     s"Block ${PrettyPrinter.buildString(b.blockHash)} has already been processed by another thread."
-                   )
-                   .map(_ => BlockStatus.processing)
-               } else {
-                 internalAddBlock(b)
-               }
-      _ <- Sync[F].delay(processingBlock.put(()))
-    } yield result
+    Sync[F].bracket(semaphore.acquire)(
+      _ =>
+        for {
+          dag            <- blockDag
+          blockHash      = b.blockHash
+          containsResult <- dag.contains(blockHash)
+          result <- if (containsResult || blockBuffer.exists(
+                          _.blockHash == blockHash
+                        )) {
+                     Log[F]
+                       .info(
+                         s"Block ${PrettyPrinter.buildString(b.blockHash)} has already been processed by another thread."
+                       )
+                       .map(_ => BlockStatus.processing)
+                   } else {
+                     internalAddBlock(b)
+                   }
+        } yield result
+    )(_ => semaphore.release)
 
   def internalAddBlock(b: BlockMessage): F[BlockStatus] =
     for {
