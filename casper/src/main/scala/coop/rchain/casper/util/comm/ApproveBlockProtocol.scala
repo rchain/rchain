@@ -5,6 +5,7 @@ import cats.effect.concurrent.Ref
 import cats.effect.Sync
 import cats.implicits._
 import cats.{FlatMap, Monad}
+
 import com.google.protobuf.ByteString
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.protocol._
@@ -16,9 +17,8 @@ import coop.rchain.comm.transport
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, MetricsSource}
 import coop.rchain.shared._
-
 import scala.concurrent.duration._
 
 /**
@@ -96,7 +96,8 @@ object ApproveBlockProtocol {
       val interval: FiniteDuration,
       private val sigsF: Ref[F, Set[Signature]]
   ) extends ApproveBlockProtocol[F] {
-    private implicit val logSource: LogSource = LogSource(this.getClass)
+    private implicit val logSource: LogSource         = LogSource(this.getClass)
+    private implicit val metricsSource: MetricsSource = MetricsSource("casper.approve-block")
 
     private val candidate                 = ApprovedBlockCandidate(Some(block), requiredSigs)
     private val u                         = UnapprovedBlock(Some(candidate), start, duration.toMillis)
@@ -131,7 +132,7 @@ object ApproveBlockProtocol {
           _      <- sigsF.update(_ + validSig.get)
           after  <- sigsF.get
           _ <- if (after > before)
-                Metrics[F].incrementCounter(METRICS_APPROVAL_COUNTER_NAME)
+                Metrics[F].incrementCounter("genesis")
               else ().pure[F]
           _ <- Log[F].info(s"APPROVAL: received block approval from $sender")
         } yield (),
@@ -187,7 +188,4 @@ object ApproveBlockProtocol {
             }
       } yield ()
   }
-
-  val METRICS_APPROVAL_COUNTER_NAME = "genesis-block-approvals"
-
 }

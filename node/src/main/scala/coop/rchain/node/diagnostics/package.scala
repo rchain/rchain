@@ -8,7 +8,7 @@ import cats._
 import cats.implicits._
 
 import coop.rchain.catscontrib.Capture
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, MetricsSource}
 import coop.rchain.node.model.diagnostics._
 import coop.rchain.catscontrib._
 import Catscontrib._
@@ -168,51 +168,53 @@ package object diagnostics {
 
       private val m = scala.collection.concurrent.TrieMap[String, metric.Metric[_]]()
 
-      def incrementCounter(name: String, delta: Long): F[Unit] =
+      private def source(name: String)(implicit ev: MetricsSource): String = s"${ev.name}.$name"
+
+      def incrementCounter(name: String, delta: Long)(implicit ev: MetricsSource): F[Unit] =
         Capture[F].capture {
-          m.getOrElseUpdate(name, Kamon.counter(name)) match {
+          m.getOrElseUpdate(source(name), Kamon.counter(source(name))) match {
             case c: metric.Counter => c.increment(delta)
           }
         }
 
-      def incrementSampler(name: String, delta: Long): F[Unit] =
+      def incrementSampler(name: String, delta: Long)(implicit ev: MetricsSource): F[Unit] =
         Capture[F].capture {
-          m.getOrElseUpdate(name, Kamon.rangeSampler(name)) match {
+          m.getOrElseUpdate(source(name), Kamon.rangeSampler(source(name))) match {
             case c: metric.RangeSampler => c.increment(delta)
           }
         }
 
-      def sample(name: String): F[Unit] =
+      def sample(name: String)(implicit ev: MetricsSource): F[Unit] =
         Capture[F].capture {
-          m.getOrElseUpdate(name, Kamon.rangeSampler(name)) match {
+          m.getOrElseUpdate(source(name), Kamon.rangeSampler(source(name))) match {
             case c: metric.RangeSampler => c.sample
           }
         }
 
-      def setGauge(name: String, value: Long): F[Unit] =
+      def setGauge(name: String, value: Long)(implicit ev: MetricsSource): F[Unit] =
         Capture[F].capture {
-          m.getOrElseUpdate(name, Kamon.gauge(name)) match {
+          m.getOrElseUpdate(source(name), Kamon.gauge(source(name))) match {
             case c: metric.Gauge => c.set(value)
           }
         }
 
-      def incrementGauge(name: String, delta: Long): F[Unit] =
+      def incrementGauge(name: String, delta: Long)(implicit ev: MetricsSource): F[Unit] =
         Capture[F].capture {
-          m.getOrElseUpdate(name, Kamon.gauge(name)) match {
+          m.getOrElseUpdate(source(name), Kamon.gauge(source(name))) match {
             case c: metric.Gauge => c.increment(delta)
           }
         }
 
-      def decrementGauge(name: String, delta: Long): F[Unit] =
+      def decrementGauge(name: String, delta: Long)(implicit ev: MetricsSource): F[Unit] =
         Capture[F].capture {
-          m.getOrElseUpdate(name, Kamon.gauge(name)) match {
+          m.getOrElseUpdate(source(name), Kamon.gauge(source(name))) match {
             case c: metric.Gauge => c.decrement(delta)
           }
         }
 
-      def record(name: String, value: Long, count: Long = 1): F[Unit] =
+      def record(name: String, value: Long, count: Long = 1)(implicit ev: MetricsSource): F[Unit] =
         Capture[F].capture {
-          m.getOrElseUpdate(name, Kamon.histogram(name)) match {
+          m.getOrElseUpdate(source(name), Kamon.histogram(source(name))) match {
             case c: metric.Histogram => c.record(value, count)
           }
         }

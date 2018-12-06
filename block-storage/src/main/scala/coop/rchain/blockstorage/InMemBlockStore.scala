@@ -4,10 +4,10 @@ import cats._
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
+
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.metrics.Metrics
-
+import coop.rchain.metrics.{Metrics, MetricsSource}
 import scala.language.higherKinds
 
 class InMemBlockStore[F[_]] private ()(
@@ -17,9 +17,11 @@ class InMemBlockStore[F[_]] private ()(
     metricsF: Metrics[F]
 ) extends BlockStore[F] {
 
+  private implicit val metricsSource: MetricsSource = MetricsSource("block-storage.in-mem")
+
   def get(blockHash: BlockHash): F[Option[BlockMessage]] =
     for {
-      _     <- metricsF.incrementCounter("block-store-get")
+      _     <- metricsF.incrementCounter("get")
       state <- refF.get
     } yield state.get(blockHash)
 
@@ -29,19 +31,19 @@ class InMemBlockStore[F[_]] private ()(
   )
   def asMap(): F[Map[BlockHash, BlockMessage]] =
     for {
-      _     <- metricsF.incrementCounter("block-store-as-map")
+      _     <- metricsF.incrementCounter("as-map")
       state <- refF.get
     } yield state
 
   override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
     for {
-      _     <- metricsF.incrementCounter("block-store-find")
+      _     <- metricsF.incrementCounter("find")
       state <- refF.get
     } yield state.filterKeys(p(_)).toSeq
 
   def put(f: => (BlockHash, BlockMessage)): F[Unit] =
     for {
-      _ <- metricsF.incrementCounter("block-store-put")
+      _ <- metricsF.incrementCounter("put")
       _ <- refF.update { state =>
             val (hash, message) = f
             state.updated(hash, message)

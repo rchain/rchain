@@ -1,18 +1,19 @@
 package coop.rchain.comm.discovery
 
 import cats.implicits._
+
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.CachedConnections.ConnectionsCache
 import coop.rchain.comm._
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, MetricsSource}
 import coop.rchain.shared.{Log, LogSource}
+
 import io.grpc._
 import io.grpc.netty._
 import monix.eval._
 import monix.execution._
-
 import scala.concurrent.duration._
 
 class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
@@ -24,7 +25,8 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
     connectionsCache: ConnectionsCache[Task, KademliaConnTag]
 ) extends KademliaRPC[Task] {
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  private implicit val logSource: LogSource         = LogSource(this.getClass)
+  private implicit val metricsSource: MetricsSource = MetricsSource("comm.discovery.kademlia.grpc")
 
   private val connections = connectionsCache(clientChannel)
 
@@ -32,7 +34,7 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
 
   def ping(peer: PeerNode): Task[Boolean] =
     for {
-      _       <- Metrics[Task].incrementCounter("protocol-ping-sends")
+      _       <- Metrics[Task].incrementCounter("ping")
       channel <- connection(peer, enforce = false)
       local   <- peerNodeAsk.ask
       pongErr <- KademliaGrpcMonix
@@ -46,7 +48,7 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
 
   def lookup(key: Seq[Byte], peer: PeerNode): Task[Seq[PeerNode]] =
     for {
-      _     <- Metrics[Task].incrementCounter("protocol-lookup-send")
+      _     <- Metrics[Task].incrementCounter("lookup")
       local <- peerNodeAsk.ask
       lookup = Lookup()
         .withId(ByteString.copyFrom(key.toArray))

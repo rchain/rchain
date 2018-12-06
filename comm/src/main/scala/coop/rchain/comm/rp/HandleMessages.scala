@@ -13,13 +13,14 @@ import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.rp.Connect.Connections._
 import coop.rchain.comm.transport._
 import coop.rchain.comm.transport.CommunicationResponse._
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, MetricsSource}
 import coop.rchain.p2p.effects._
 import coop.rchain.shared._
 
 object HandleMessages {
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  private implicit val logSource: LogSource         = LogSource(this.getClass)
+  private implicit val metricsSource: MetricsSource = MetricsSource("comm.rp.handle")
 
   def handle[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
       protocol: Protocol,
@@ -55,7 +56,7 @@ object HandleMessages {
       _ <- Log[F].info(s"Forgetting about ${sender.toAddress}.")
       _ <- TransportLayer[F].disconnect(sender)
       _ <- ConnectionsCell[F].modify(_.removeConn[F](sender))
-      _ <- Metrics[F].incrementCounter("disconnect-recv-count")
+      _ <- Metrics[F].incrementCounter("disconnect")
     } yield handledWithoutMessage
 
   def handlePacket[F[_]: Monad: Time: TransportLayer: ErrorHandler: Log: PacketHandler: RPConfAsk](

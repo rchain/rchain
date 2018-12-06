@@ -3,6 +3,7 @@ package coop.rchain.comm.rp
 import cats._
 import cats.implicits._
 import cats.mtl._
+
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib._
 import coop.rchain.comm.CommError._
@@ -11,9 +12,8 @@ import coop.rchain.comm.discovery._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.comm.transport._
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, MetricsSource}
 import coop.rchain.shared._
-
 import scala.concurrent.duration._
 
 object Connect {
@@ -21,6 +21,8 @@ object Connect {
   type Connection            = PeerNode
   type Connections           = List[Connection]
   type ConnectionsCell[F[_]] = Cell[F, Connections]
+
+  private implicit val metricsSource: MetricsSource = MetricsSource("comm.rp.connect")
 
   object ConnectionsCell {
     def apply[F[_]](implicit ev: ConnectionsCell[F]): ConnectionsCell[F] = ev
@@ -135,7 +137,7 @@ object Connect {
       tss      <- Time[F].currentMillis
       peerAddr = peer.toAddress
       _        <- Log[F].debug(s"Connecting to $peerAddr")
-      _        <- Metrics[F].incrementCounter("connects")
+      _        <- Metrics[F].incrementCounter("connect")
       _        <- Log[F].debug(s"Initialize protocol handshake to $peerAddr")
       local    <- RPConfAsk[F].reader(_.local)
       ph       = protocolHandshake(local)

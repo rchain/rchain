@@ -9,7 +9,7 @@ import cats.implicits._
 import coop.rchain.catscontrib._
 import Catscontrib._
 import coop.rchain.comm._
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, MetricsSource}
 import coop.rchain.shared._
 
 object KademliaNodeDiscovery {
@@ -29,22 +29,23 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Time: 
     timeout: FiniteDuration
 ) extends NodeDiscovery[F] {
 
-  private val table = PeerTable[PeerNode](id.key)
+  private val table                                 = PeerTable[PeerNode](id.key)
+  private implicit val metricsSource: MetricsSource = MetricsSource("comm.discovery.kademlia")
 
   // TODO inline usage
   private[discovery] def addNode(peer: PeerNode): F[Unit] =
     for {
       _ <- table.updateLastSeen[F](peer)
-      _ <- Metrics[F].setGauge("kademlia-peers", table.peers.length.toLong)
+      _ <- Metrics[F].setGauge("peers", table.peers.length.toLong)
     } yield ()
 
   private def pingHandler(peer: PeerNode): F[Unit] =
-    addNode(peer) *> Metrics[F].incrementCounter("ping-recv-count")
+    addNode(peer) *> Metrics[F].incrementCounter("handle.ping")
 
   private def lookupHandler(peer: PeerNode, id: Array[Byte]): F[Seq[PeerNode]] =
     for {
       peers <- Capture[F].capture(table.lookup(id))
-      _     <- Metrics[F].incrementCounter("lookup-recv-count")
+      _     <- Metrics[F].incrementCounter("handle.lookup")
       _     <- addNode(peer)
     } yield peers
 
