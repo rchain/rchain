@@ -364,17 +364,15 @@ def make_bootstrap_node(
     key_file = get_absolute_path_for_mounting("bootstrap_certificate/node.key.pem", mount_dir=mount_dir)
     cert_file = get_absolute_path_for_mounting("bootstrap_certificate/node.certificate.pem", mount_dir=mount_dir)
 
-    name = "{node_name}.{network_name}".format(
-        node_name='bootstrap' if container_name is None else container_name,
-        network_name=network,
-    )
+    container_name = make_bootstrap_name(network)
+
     container_command_options = {
         "--port":                   40400,
         "--standalone":             "",
         "--validator-private-key":  key_pair.private_key,
         "--validator-public-key":   key_pair.public_key,
         "--has-faucet":             "",
-        "--host":                   name,
+        "--host":                   container_name,
     }
 
     if cli_options is not None:
@@ -387,7 +385,7 @@ def make_bootstrap_node(
 
     container = make_node(
         docker_client=docker_client,
-        name=name,
+        name=container_name,
         network=network,
         bonds_file=bonds_file,
         container_command='run',
@@ -400,8 +398,16 @@ def make_bootstrap_node(
     return container
 
 
-def make_peer_name(network: str, i: str) -> str:
-    return "peer{i}.{network}".format(i=i, network=network)
+def make_container_name(network_name: str, name: str) -> str:
+    return "{network_name}.{name}".format(network_name=network_name, name=name)
+
+
+def make_bootstrap_name(network_name: str) -> str:
+    return make_container_name(network_name=network_name, name='bootstrap')
+
+
+def make_peer_name(network_name: str, name: str) -> str:
+    return make_container_name(network_name=network_name, name='peer{}'.format(name))
 
 
 def make_peer(
