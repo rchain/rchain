@@ -54,15 +54,6 @@ object BlockAPI {
       )
   }
 
-  def addBlock[F[_]: Monad: MultiParentCasperRef: Log](b: BlockMessage): F[DeployServiceResponse] =
-    MultiParentCasperRef.withCasper[F, DeployServiceResponse](
-      casper =>
-        for {
-          status <- casper.addBlock(b)
-        } yield addResponse(status, b),
-      DeployServiceResponse(success = false, "Error: Casper instance not available")
-    )
-
   def createBlock[F[_]: Sync: MultiParentCasperRef: Log]: F[DeployServiceResponse] =
     MultiParentCasperRef.withCasper[F, DeployServiceResponse](
       casper =>
