@@ -82,8 +82,10 @@ class ScoredTermSpec extends FlatSpec with PropertyChecks with Matchers {
     assert(sort(map3).score != sort(map4).score)
   }
   it should "sort so that unequal ParSet have unequal scores" in {
-    val set1 = Expr(ESetBody(ParSet(Seq.empty, connectiveUsed = true, Coeval.delay(BitSet()), None)))
-    val set2 = Expr(ESetBody(ParSet(Seq.empty, connectiveUsed = false, Coeval.delay(BitSet()), None)))
+    val set1 =
+      Expr(ESetBody(ParSet(Seq.empty, connectiveUsed = true, Coeval.delay(BitSet()), None)))
+    val set2 =
+      Expr(ESetBody(ParSet(Seq.empty, connectiveUsed = false, Coeval.delay(BitSet()), None)))
     assert(sort(set1).score != sort(set2).score)
     val set3 =
       Expr(ESetBody(ParSet(Seq.empty, connectiveUsed = true, Coeval.delay(BitSet()), None)))
