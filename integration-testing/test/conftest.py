@@ -77,7 +77,7 @@ def command_line_options_fixture(request):
 
 
 @contextlib.contextmanager
-def temporary_bonds_txt_file(validator_keys: List[KeyPair]) -> Generator[str, None, None]:
+def temporary_bonds_file(validator_keys: List[KeyPair]) -> Generator[str, None, None]:
     (fd, file) = tempfile.mkstemp(prefix="rchain-bonds-file-", suffix=".txt", dir="/tmp")
     try:
         with os.fdopen(fd, "w") as f:
@@ -106,11 +106,12 @@ def testing_context(command_line_options_fixture, docker_client_fixture, bootstr
     if peers_keypairs is None:
         peers_keypairs = PREGENERATED_KEYPAIRS[1:]
 
-    with temporary_bonds_txt_file(peers_keypairs) as bonds_file:
+    bonds_file_keypairs = [bootstrap_keypair] + peers_keypairs
+    with temporary_bonds_file(bonds_file_keypairs) as bonds_file:
         context = TestingContext(
             bonds_file=bonds_file,
             bootstrap_keypair=bootstrap_keypair,
-            peers_keypairs=peers_keypairs[1:],
+            peers_keypairs=peers_keypairs,
             docker=docker_client_fixture,
             **dataclasses.asdict(command_line_options_fixture),
         )
