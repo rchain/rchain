@@ -172,11 +172,11 @@ class Node:
             exit_code, output = control_queue.get(True, self.command_timeout)
             if exit_code != 0:
                 for line in output.splitlines():
-                    logging.info('\t{}: {}'.format(self.name, line))
+                    logging.info('{}: {}'.format(self.name, line))
                 logging.warning("EXITED {} {} {}".format(self.name, cmd, exit_code))
             else:
                 for line in output.splitlines():
-                    logging.debug('\t{}: {}'.format(self.name, line))
+                    logging.debug('{}: {}'.format(self.name, line))
                 logging.debug("EXITED {} {} {}".format(self.name, cmd, exit_code))
             return exit_code, output
         except queue.Empty:
@@ -257,7 +257,7 @@ class LoggingThread(threading.Thread):
                 if self.terminate_thread_event.is_set():
                     break
                 line = next(containers_log_lines_generator)
-                self.logger.info('\t{}: {}'.format(self.container.name, line.decode('utf-8').rstrip()))
+                self.logger.info('{}: {}'.format(self.container.name, line.decode('utf-8').rstrip()))
         except StopIteration:
             pass
 
