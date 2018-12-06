@@ -359,7 +359,6 @@ def make_bootstrap_node(
     allowed_peers: Optional[List[str]] = None,
     mem_limit: Optional[str] = None,
     cli_options: Optional[Dict] = None,
-    container_name: Optional[str] = None,
     mount_dir: Optional[str] = None,
 ) -> Node:
     key_file = get_absolute_path_for_mounting("bootstrap_certificate/node.key.pem", mount_dir=mount_dir)
@@ -521,14 +520,13 @@ def docker_network(docker_client: "DockerClient") -> Generator[str, None, None]:
 
 
 @contextlib.contextmanager
-def started_bootstrap_node(*, context: TestingContext, network, container_name: str = None, mount_dir: str = None) -> Generator[Node, None, None]:
+def started_bootstrap_node(*, context: TestingContext, network, mount_dir: str = None) -> Generator[Node, None, None]:
     bootstrap_node = make_bootstrap_node(
         docker_client=context.docker,
         network=network,
         bonds_file=context.bonds_file,
         key_pair=context.bootstrap_keypair,
         command_timeout=context.command_timeout,
-        container_name=container_name,
         mount_dir=mount_dir,
     )
     try:
@@ -539,9 +537,9 @@ def started_bootstrap_node(*, context: TestingContext, network, container_name: 
 
 
 @contextlib.contextmanager
-def docker_network_with_started_bootstrap(context, *, container_name=None):
+def docker_network_with_started_bootstrap(context):
     with docker_network(context.docker) as network:
-        with started_bootstrap_node(context=context, network=network, container_name=container_name, mount_dir=context.mount_dir) as node:
+        with started_bootstrap_node(context=context, network=network, mount_dir=context.mount_dir) as node:
             yield node
 
 
