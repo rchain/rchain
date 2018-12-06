@@ -4,6 +4,7 @@ import cats.MonadError
 import cats.arrow.FunctionK
 import cats.data.{OptionT, StateT}
 import cats.implicits._
+import cats.mtl.implicits._
 import cats.mtl.MonadState
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting.Cost
@@ -34,22 +35,22 @@ package object matcher {
   type _error[F[_]]   = MonadError[F, OutOfPhlogistonsError.type]
   type _short[F[_]]   = MonadError[F, Unit] //arises from and corresponds to the OptionT/StreamT in the stack
 
+  private[matcher] def charge[F[_]](
+      amount: Cost
+  )(implicit cost: _cost[F], error: _error[F]): F[Unit] =
+    for {
+      currentCost <- cost.get
+      newCost     = currentCost - amount
+      _           <- cost.set(newCost)
+      _           <- error.ensure(cost.get)(OutOfPhlogistonsError)(_.value >= 0)
+    } yield ()
+
   object OptionalFreeMapWithCost {
 
     class OptionalFreeMapWithCostOps[A](s: OptionalFreeMapWithCost[A]) {
+
       def charge(amount: Cost): OptionalFreeMapWithCost[A] =
-        StateT((m: FreeMap) => {
-          OptionT(StateT((c: Cost) => {
-            s.run(m).value.run(c).flatMap {
-              case (cost, result) =>
-                val newCost = cost - amount
-                if (newCost.value < 0)
-                  Left(OutOfPhlogistonsError)
-                else
-                  Right((newCost, result))
-            }
-          }))
-        })
+        s.flatMap(matcher.charge[OptionalFreeMapWithCost](amount).as)
 
       def attemptOpt: OptionalFreeMapWithCost[Option[A]] =
         StateT((m: FreeMap) => {
@@ -97,20 +98,11 @@ package object matcher {
   }
 
   object NonDetFreeMapWithCost {
+
     class NonDetFreeMapWithCostOps[A](s: NonDetFreeMapWithCost[A]) {
+
       def charge(amount: Cost): NonDetFreeMapWithCost[A] =
-        StateT((m: FreeMap) => {
-          StreamT(StateT((c: Cost) => {
-            s.run(m).next.run(c).flatMap {
-              case (cost, result) =>
-                val newCost = cost - amount
-                if (newCost.value < 0)
-                  Left(OutOfPhlogistonsError)
-                else
-                  Right((newCost, result))
-            }
-          }))
-        })
+        s.flatMap(matcher.charge[NonDetFreeMapWithCost](amount).as)
 
       def runWithCost(
           initCost: Cost
