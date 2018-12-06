@@ -339,7 +339,8 @@ object SpatialMatcher extends SpatialMatcherInstances {
           case Remainder(_) =>
             //Remainders can't match non-concrete terms, because they can't be captured.
             //They match everything that's concrete though.
-            guardMatch[StateT[?[_], FreeMap, ?], OptionWithCost](lf.locallyFree(t, 0).isEmpty).charge(COMPARISON_COST)
+            guardMatch[StateT[?[_], FreeMap, ?], OptionWithCost](lf.locallyFree(t, 0).isEmpty)
+              .charge(COMPARISON_COST)
         }
         isolateState[OptionalFreeMapWithCost, FreeMap](matchEffect).attemptOpt
       }
@@ -347,7 +348,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
 
     for {
       matchesOpt             <- maximumBipartiteMatch.findMatches(allPatterns, targets)
-      matches                <- OptionalFreeMapWithCost.liftF(matchesOpt)
+      matches                <- OptionalFreeMapWithCost.fromOption(matchesOpt)
       freeMaps               = matches.map(_._3)
       updatedFreeMap         <- aggregateUpdates(freeMaps)
       _                      <- StateT.set[OptionWithCost, FreeMap](updatedFreeMap)
@@ -371,7 +372,9 @@ object SpatialMatcher extends SpatialMatcherInstances {
     } yield Unit
   }
 
-  private def guardMatch[F[_[_], _]: MonadTrans, G[_]: Monad: FunctorFilter](predicate: => Boolean): F[G, Unit] =
+  private def guardMatch[F[_[_], _]: MonadTrans, G[_]: Monad: FunctorFilter](
+      predicate: => Boolean
+  ): F[G, Unit] =
     MonadTrans[F].liftM(guard[G](predicate))
 
   private def guard[F[_]: FunctorFilter: Applicative](predicate: => Boolean): F[Unit] =
@@ -646,7 +649,7 @@ trait SpatialMatcherInstances {
         ): NonDetFreeMapWithCost[Par] = {
           val (con, bounds, remainders) = labeledConnective
           for {
-            sp <- NonDetFreeMapWithCost.liftF(
+            sp <- NonDetFreeMapWithCost.fromStream(
                    subPars(target, bounds._1, bounds._2, remainders._1, remainders._2)
                  )
             _ <- nonDetMatch(sp._1, con)

@@ -1,39 +1,112 @@
 package coop.rchain.rholang.interpreter.matcher
-import cats.{Applicative, Functor, Monad}
+import cats.implicits._
+import cats.{Monad, MonoidK}
+import coop.rchain.catscontrib.MonadTrans
+import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, SNil, Step}
 
 import scala.collection.immutable.Stream
-import cats.implicits._
+import scala.collection.immutable.Stream.Cons
+import scala.util.{Left, Right}
 
-final case class StreamT[F[_], A](value: F[Stream[A]]) {
-  def ap[B](f: F[A => B])(implicit F: Monad[F]): StreamT[F, B] =
-    StreamT(F.flatMap(f)(ff => F.map(value)((stream: Stream[A]) => stream.map(ff))))
-
-  def map[B](f: A => B)(implicit F: Functor[F]): StreamT[F, B] =
-    StreamT(F.map(value)(_.map(f)))
-
-  def flatMap[B](f: A => StreamT[F, B])(implicit F: Monad[F]): StreamT[F, B] =
-    flatMapF(a => f(a).value)
-
-  def flatMapF[B](f: A => F[Stream[B]])(implicit F: Monad[F]): StreamT[F, B] =
-    StreamT(Monad[F].flatMap(value)(astream => astream.flatTraverse(a => f(a))))
-}
+/**
+  * Shamelessly transcribed minimal version of Gabriel Gonzalez's beginner-friendly ListT
+  * https://github.com/Gabriel439/Haskell-List-Transformer-Library/blob/e9a1d19/src/List/Transformer.hs
+  *
+  * See also: http://www.haskellforall.com/2016/07/list-transformer-beginner-friendly-listt.html
+  *
+  * The monads resulting from applying this transformer are as lazy and stacksafe as the underlying F monad you pass.
+  * Don't pass a strict monad and expect stacksafety. This, somewhat unlawfully, includes the behavior of tailRecM (!).
+  * All is good if F is stacksafe though.
+  *
+  * @param next effectful computation of the next Step in the represented stream
+  * @tparam F
+  * @tparam A
+  */
+final case class StreamT[F[_], A](next: F[Step[F, A]])
 
 object StreamT extends StreamTInstances0 {
-  def pure[F[_], A](single: A)(implicit F: Applicative[F]): StreamT[F, A] =
-    StreamT(F.pure(Stream(single)))
+
+  sealed trait Step[F[_], A]
+  case class SNil[F[_], A]()                              extends Step[F, A]
+  case class SCons[F[_], A](head: A, tail: StreamT[F, A]) extends Step[F, A]
+
+  def empty[F[_]: Monad, A]: StreamT[F, A] =
+    StreamT[F, A](Monad[F].pure(SNil()))
+
+  def pure[F[_]: Monad, A](a: A): StreamT[F, A] =
+    StreamT(Monad[F].pure(SCons(a, empty)))
+
+  def liftF[F[_]: Monad, A](fa: F[A]): StreamT[F, A] =
+    StreamT(fa.map(value => SCons(value, empty)))
+
+  def fromStream[F[_]: Monad, A](fs: F[Stream[A]]): StreamT[F, A] = {
+
+    def next(curr: Stream[A]): Step[F, A] =
+      curr match {
+        case Stream.Empty  => SNil()
+        case cons: Cons[A] => SCons(cons.head, StreamT(delay[F, Step[F, A]](next(cons.tail))))
+      }
+
+    StreamT[F, A](fs.map(next))
+  }
+
+  //This should delay the computation for most stacksafe monads
+  //TODO consider doing the delay only for `F: Defer` to avoid the useless map
+  private def delay[F[_]: Monad, A](a: => A): F[A] =
+    Monad[F].unit.map(_ => a)
+
+  def run[F[_]: Monad, A](s: StreamT[F, A]): F[Stream[A]] =
+    s.next.flatMap {
+      case SNil()            => Monad[F].pure(Stream.Empty)
+      case SCons(head, tail) => run(tail).map(t => head +: t)
+    }
 }
 
 trait StreamTInstances0 {
-  implicit def streamTMonad[F[_]: Monad]: Monad[StreamT[F, ?]] = new Monad[StreamT[F, ?]] {
-    override def pure[A](x: A): StreamT[F, A] = StreamT(Monad[F].pure(Stream(x)))
 
-    override def flatMap[A, B](fa: StreamT[F, A])(f: A => StreamT[F, B]): StreamT[F, B] =
-      fa.flatMap(f)
+  implicit val streamTMonadTrans = new MonadTrans[StreamT] {
+    override def liftM[G[_]: Monad, A](a: G[A]): StreamT[G, A] =
+      StreamT.liftF(a)
+
+    override implicit def apply[G[_]: Monad]: Monad[StreamT[G, ?]] =
+      streamTMonad[G]
+  }
+
+  implicit def streamTMonoidK[F[_]: Monad]: MonoidK[StreamT[F, ?]] = new MonoidK[StreamT[F, ?]] {
+
+    override def empty[A]: StreamT[F, A] = StreamT.empty
+
+    override def combineK[A](x: StreamT[F, A], y: StreamT[F, A]): StreamT[F, A] = {
+      val next: F[Step[F, A]] = x.next.flatMap {
+        case SNil()            => y.next
+        case SCons(head, tail) => Monad[F].pure(SCons(head, combineK(tail, y)))
+      }
+      StreamT(next)
+    }
+
+  }
+
+  implicit def streamTMonad[F[_]: Monad]: Monad[StreamT[F, ?]] = new Monad[StreamT[F, ?]] {
+
+    override def pure[A](x: A): StreamT[F, A] =
+      StreamT.pure(x)
+
+    override def flatMap[A, B](fa: StreamT[F, A])(f: A => StreamT[F, B]): StreamT[F, B] = {
+      val next: F[Step[F, B]] = fa.next.flatMap {
+        case SNil() => Monad[F].pure[Step[F, B]](SNil())
+        case SCons(head, tail) =>
+          val effectMonoid          = MonoidK[StreamT[F, ?]]
+          val result: StreamT[F, B] = effectMonoid.combineK(f(head), tail.flatMap(f))
+          result.next
+      }
+      StreamT(next)
+    }
 
     override def tailRecM[A, B](a: A)(f: A => StreamT[F, Either[A, B]]): StreamT[F, B] =
-      f(a).flatMap {
-        case Right(b) => StreamT.pure(b)
-        case Left(e)  => tailRecM(e)(f)
+      flatMap(f(a)) {
+        case Left(a)  => tailRecM(a)(f)
+        case Right(b) => pure(b)
       }
+
   }
 }
