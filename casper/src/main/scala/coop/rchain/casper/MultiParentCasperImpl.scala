@@ -145,7 +145,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
     SafetyOracle[F].normalizedFaultTolerance(dag, blockHash).map(_ > faultToleranceThreshold)
 
   def contains(b: BlockMessage): F[Boolean] =
-    BlockStore[F].contains(b.blockHash).map(_ || blockBuffer.contains(b))
+    BlockStore[F].contains(b.blockHash)
 
   def deploy(deploy: Deploy): F[Unit] =
     for {
