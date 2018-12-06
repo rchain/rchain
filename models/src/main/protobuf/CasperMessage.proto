@@ -22,16 +22,13 @@ option (scalapb.options) = {
 // --------- DeployService  --------
 
 // Use `DoDeploy` to queue deployments of Rholang code and then
-// `addBlock` to make a new block with the results of running them
+// `createBlock` to make a new block with the results of running them
 // all.
 //
 // To get results back, use `listenForDataAtName`.
 service DeployService {
   // Queue deployment of Rholang code (or fail to parse).
   rpc DoDeploy(DeployData) returns (DeployServiceResponse) {}
-  // Add a signed block, after validating it. (Typically used
-  // in node-to-node interactions rather than by dApps.)
-  rpc addBlock(BlockMessage) returns (DeployServiceResponse) {}
   // Add a block including all pending deploys.
   rpc createBlock(google.protobuf.Empty) returns (DeployServiceResponse) {}
   // Get details about a particular block.

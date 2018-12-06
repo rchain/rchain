@@ -798,7 +798,7 @@ Note: deploys are uniquely keyed by `user`, `timestamp`.
 
 ### DeployService
 Use `DoDeploy` to queue deployments of Rholang code and then
-`addBlock` to make a new block with the results of running them
+`createBlock` to make a new block with the results of running them
 all.
 
 To get results back, use `listenForDataAtName`.
@@ -806,7 +806,6 @@ To get results back, use `listenForDataAtName`.
 | Method Name | Request Type | Response Type | Description |
 | ----------- | ------------ | ------------- | ------------|
 | DoDeploy | [DeployData](#coop.rchain.casper.protocol.DeployData) | [DeployServiceResponse](#coop.rchain.casper.protocol.DeployData) | Queue deployment of Rholang code (or fail to parse). |
-| addBlock | [BlockMessage](#coop.rchain.casper.protocol.BlockMessage) | [DeployServiceResponse](#coop.rchain.casper.protocol.BlockMessage) | Add a signed block, after validating it. (Typically used in node-to-node interactions rather than by dApps.) |
 | createBlock | [.google.protobuf.Empty](#google.protobuf.Empty) | [DeployServiceResponse](#google.protobuf.Empty) | Add a block including all pending deploys. |
 | showBlock | [BlockQuery](#coop.rchain.casper.protocol.BlockQuery) | [BlockQueryResponse](#coop.rchain.casper.protocol.BlockQuery) | Get details about a particular block. |
 | showMainChain | [BlocksQuery](#coop.rchain.casper.protocol.BlocksQuery) | [BlockInfoWithoutTuplespace](#coop.rchain.casper.protocol.BlocksQuery) |  |

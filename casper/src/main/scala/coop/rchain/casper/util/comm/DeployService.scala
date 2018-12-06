@@ -16,7 +16,6 @@ trait DeployService[F[_]] {
   def createBlock(): F[Either[Throwable, String]] //create block and add to Casper internal state
   def showBlock(q: BlockQuery): F[Either[Throwable, String]]
   def showBlocks(q: BlocksQuery): F[Either[Throwable, String]]
-  def addBlock(b: BlockMessage): F[Either[Throwable, String]]
   def listenForDataAtName(request: DataAtNameQuery): F[ListeningNameDataResponse]
   def listenForContinuationAtName(
       request: ContinuationAtNameQuery
@@ -77,12 +76,6 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
 
         Right(bs.mkString("\n") + "\n" + showLength)
       }
-
-  def addBlock(b: BlockMessage): Task[Either[Throwable, String]] =
-    stub.addBlock(b).map { response =>
-      if (response.success) Right(response.message)
-      else Left(new RuntimeException(response.message))
-    }
 
   def listenForDataAtName(request: DataAtNameQuery): Task[ListeningNameDataResponse] =
     stub.listenForDataAtName(request)
