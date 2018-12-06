@@ -1,7 +1,6 @@
 package coop.rchain.rholang.interpreter.matcher
-import cats.implicits._
 import cats.mtl.lifting.MonadLayerControl
-import cats.{~>, Monad, MonadError, MonoidK}
+import cats.{Applicative, Functor, Monad, MonadError, MonoidK, ~>}
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, SNil, Step}
 
@@ -31,16 +30,16 @@ object StreamT extends StreamTInstances0 {
   case class SNil[F[_], A]()                              extends Step[F, A]
   case class SCons[F[_], A](head: A, tail: StreamT[F, A]) extends Step[F, A]
 
-  def empty[F[_]: Monad, A]: StreamT[F, A] =
-    StreamT[F, A](Monad[F].pure(SNil()))
+  def empty[F[_]: Applicative, A]: StreamT[F, A] =
+    StreamT[F, A](Applicative[F].pure(SNil()))
 
-  def pure[F[_]: Monad, A](a: A): StreamT[F, A] =
-    StreamT(Monad[F].pure(SCons(a, empty)))
+  def pure[F[_]: Applicative, A](a: A): StreamT[F, A] =
+    StreamT(Applicative[F].pure(SCons(a, empty)))
 
-  def liftF[F[_]: Monad, A](fa: F[A]): StreamT[F, A] =
-    StreamT(Monad[F].map(fa)(value => SCons(value, empty)))
+  def liftF[F[_]: Applicative, A](fa: F[A]): StreamT[F, A] =
+    StreamT(Functor[F].map(fa)(value => SCons(value, empty)))
 
-  def fromStream[F[_]: Monad, A](fs: F[Stream[A]]): StreamT[F, A] = {
+  def fromStream[F[_]: Applicative, A](fs: F[Stream[A]]): StreamT[F, A] = {
 
     def next(curr: Stream[A]): Step[F, A] =
       curr match {
@@ -48,19 +47,19 @@ object StreamT extends StreamTInstances0 {
         case cons: Cons[A] => SCons(cons.head, StreamT(delay[F, Step[F, A]](next(cons.tail))))
       }
 
-    StreamT[F, A](Monad[F].map(fs)(next))
+    StreamT[F, A](Functor[F].map(fs)(next))
   }
 
   //This should delay the computation for most stacksafe monads
   //TODO consider doing the delay only for `F: Defer` to avoid the useless map
-  private def delay[F[_]: Monad, A](a: => A): F[A] =
-    Monad[F].unit.map(_ => a)
+  private def delay[F[_]: Applicative, A](a: => A): F[A] =
+    Functor[F].map(Applicative[F].unit)(_ => a)
 
   def run[F[_]: Monad, A](s: StreamT[F, A]): F[Stream[A]] = {
     val F = Monad[F]
     F.flatMap(s.next) {
       case SNil()            => F.pure(Stream.Empty)
-      case SCons(head, tail) => run(tail).map(t => head +: t)
+      case SCons(head, tail) => F.map(run(tail))(t => head +: t)
     }
   }
 }
