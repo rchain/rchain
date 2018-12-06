@@ -5,6 +5,7 @@ import cats.implicits._
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.catscontrib.ski.kp2
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.collection.ListOps
 import coop.rchain.rholang.interpreter.accounting
@@ -39,7 +40,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
     for {
       createBlockResult    <- MultiParentCasper[Effect].deploy(deploy) *> MultiParentCasper[Effect].createBlock
       Created(signedBlock) = createBlockResult
-      _                    <- MultiParentCasper[Effect].addBlock(signedBlock)
+      _                    <- MultiParentCasper[Effect].addBlock(signedBlock, kp2(().pure[Effect]))
       storage              <- HashSetCasperTest.blockTuplespaceContents(signedBlock)
       _                    = logEff.warns should be(Nil)
       _                    = storage.contains("!([4, 6, 10, 14])") should be(true)

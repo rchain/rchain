@@ -23,6 +23,7 @@ import coop.rchain.rspace.Serialize
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
+import coop.rchain.catscontrib.ski.kp2
 
 import scala.collection.immutable.BitSet
 
@@ -93,7 +94,7 @@ object DeployPaymentCostTest {
       _              <- casperEff.deploy(deploy)
       b              <- casperEff.createBlock
       Created(block) = b
-      blockStatus    <- casperEff.addBlock(block)
+      blockStatus    <- casperEff.addBlock(block, kp2(().pure[F]))
       _              = assert(blockStatus == Valid)
     } yield block
 
@@ -209,7 +210,7 @@ object DeployPaymentCostTest {
       _              <- casperEff.deploy(ProtoUtil.termDeployNow(par))
       newBlock       <- casperEff.createBlock
       Created(block) = newBlock
-      status         <- casperEff.addBlock(block)
+      status         <- casperEff.addBlock(block, kp2(().pure[F]))
       _              = assert(status == Valid)
     } yield block
 

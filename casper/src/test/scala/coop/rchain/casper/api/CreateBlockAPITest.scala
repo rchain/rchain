@@ -19,6 +19,7 @@ import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.Time
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagRepresentation
+import coop.rchain.catscontrib.ski.kp2
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
@@ -79,7 +80,10 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
 private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: MultiParentCasper[F])
     extends MultiParentCasper[F] {
 
-  def addBlock(b: BlockMessage): F[BlockStatus]         = underlying.addBlock(b)
+  def addBlock(
+      b: BlockMessage,
+      handleDoppelganger: (BlockMessage, Validator) => F[Unit]
+  ): F[BlockStatus]                                     = underlying.addBlock(b, kp2(().pure[F]))
   def contains(b: BlockMessage): F[Boolean]             = underlying.contains(b)
   def deploy(d: DeployData): F[Either[Throwable, Unit]] = underlying.deploy(d)
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockMessage]] =

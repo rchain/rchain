@@ -7,6 +7,7 @@ import cats.implicits._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagStorage, BlockStore}
+import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper._
@@ -135,7 +136,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     }
 
   trait CasperPacketHandlerInternal[F[_]] {
-    def handleBlockMessage(bm: BlockMessage): F[Option[Packet]]
+    def handleBlockMessage(peer: PeerNode, bm: BlockMessage): F[Option[Packet]]
 
     def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Option[Packet]]
 
@@ -165,7 +166,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       extends CasperPacketHandlerInternal[F] {
     private val nonePacket: F[Option[Packet]] = Monad[F].pure(None: Option[Packet])
 
-    override def handleBlockMessage(bm: BlockMessage): F[Option[Packet]] = nonePacket
+    override def handleBlockMessage(peer: PeerNode, bm: BlockMessage): F[Option[Packet]] =
+      nonePacket
     override def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Option[Packet]] =
       nonePacket
     override def handleApprovedBlock(
@@ -216,7 +218,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
 
     private val nonePacket: F[Option[Packet]] = Applicative[F].pure(None: Option[Packet])
 
-    override def handleBlockMessage(bm: BlockMessage): F[Option[Packet]] =
+    override def handleBlockMessage(peer: PeerNode, bm: BlockMessage): F[Option[Packet]] =
       nonePacket
     override def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Option[Packet]] =
       nonePacket
@@ -294,7 +296,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       extends CasperPacketHandlerInternal[F] {
     private val nonePacket: F[Option[Packet]] = Applicative[F].pure(None: Option[Packet])
 
-    override def handleBlockMessage(bm: BlockMessage): F[Option[Packet]] = nonePacket
+    override def handleBlockMessage(peer: PeerNode, bm: BlockMessage): F[Option[Packet]] =
+      nonePacket
     override def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Option[Packet]] =
       nonePacket
     override def handleApprovedBlockRequest(
@@ -348,13 +351,13 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     override def handleBlockApproval(b: BlockApproval): F[Option[Packet]] =
       nonePacket
 
-    override def handleBlockMessage(b: BlockMessage): F[Option[Packet]] =
+    override def handleBlockMessage(peer: PeerNode, b: BlockMessage): F[Option[Packet]] =
       for {
         isOldBlock <- MultiParentCasper[F].contains(b)
         _ <- if (isOldBlock) {
               Log[F].info(s"Received block ${PrettyPrinter.buildString(b.blockHash)} again.")
             } else {
-              handleNewBlock[F](b)
+              handleNewBlock[F](peer, b)
             }
       } yield none[Packet]
 
@@ -445,7 +448,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
           case bm: BlockMessage =>
             for {
               cph <- cphI.get
-              res <- cph.handleBlockMessage(bm)
+              res <- cph.handleBlockMessage(peer, bm)
             } yield res
 
           case ba: BlockApproval =>
@@ -470,12 +473,26 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   }
 
   private def handleNewBlock[F[_]: Monad: MultiParentCasper: TransportLayer: Log: Time: ErrorHandler](
+      peer: PeerNode,
       b: BlockMessage
   ): F[Unit] =
     for {
       _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.")
-      _ <- MultiParentCasper[F].addBlock(b)
+      _ <- MultiParentCasper[F].addBlock(b, handleDoppelganger[F](peer, _, _))
     } yield ()
+
+  private def handleDoppelganger[F[_]: Monad: Log](
+      peer: PeerNode,
+      b: BlockMessage,
+      self: Validator
+  ): F[Unit] =
+    if (b.sender == self) {
+      Log[F].warn(
+        s"There is another node $peer proposing using the same private key as you. Or did you restart your node?"
+      )
+    } else {
+      ().pure[F]
+    }
 
   private def packetToBlockMessage(msg: Packet): Option[BlockMessage] =
     if (msg.typeId == transport.BlockMessage.id)

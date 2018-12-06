@@ -70,7 +70,10 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   private val PROCESSING_BLOCK_TIMEOUT = 5 * 60 * 1000L
   processingBlock.put(())
 
-  def addBlock(b: BlockMessage): F[BlockStatus] =
+  def addBlock(
+      b: BlockMessage,
+      handleDoppelganger: (BlockMessage, Validator) => F[Unit]
+  ): F[BlockStatus] =
     for {
       _              <- Sync[F].delay(processingBlock.take(PROCESSING_BLOCK_TIMEOUT))
       dag            <- blockDag
@@ -85,7 +88,12 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
                    )
                    .map(_ => BlockStatus.processing)
                } else {
-                 internalAddBlock(b)
+                 (validatorId match {
+                   case Some(ValidatorIdentity(publicKey, _, _)) =>
+                     val sender = ByteString.copyFrom(publicKey)
+                     handleDoppelganger(b, sender)
+                   case None => ().pure[F]
+                 }) *> internalAddBlock(b)
                }
       _ <- Sync[F].delay(processingBlock.put(()))
     } yield result

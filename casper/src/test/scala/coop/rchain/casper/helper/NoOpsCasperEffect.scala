@@ -18,7 +18,10 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
 
   def store: Map[BlockHash, BlockMessage] = blockStore.toMap
 
-  def addBlock(b: BlockMessage): F[BlockStatus] =
+  def addBlock(
+      b: BlockMessage,
+      handleDoppelganger: (BlockMessage, Validator) => F[Unit]
+  ): F[BlockStatus] =
     for {
       _ <- Sync[F].delay(blockStore.update(b.blockHash, b))
       _ <- BlockStore[F].put(b.blockHash, b)

@@ -34,7 +34,10 @@ import monix.execution.atomic.AtomicAny
 import scala.concurrent.SyncVar
 
 trait Casper[F[_], A] {
-  def addBlock(b: BlockMessage): F[BlockStatus]
+  def addBlock(
+      b: BlockMessage,
+      handleDoppelganger: (BlockMessage, Validator) => F[Unit]
+  ): F[BlockStatus]
   def contains(b: BlockMessage): F[Boolean]
   def deploy(d: DeployData): F[Either[Throwable, Unit]]
   def estimator(dag: BlockDagRepresentation[F]): F[A]
