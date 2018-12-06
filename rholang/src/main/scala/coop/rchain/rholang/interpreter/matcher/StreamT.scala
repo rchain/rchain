@@ -38,7 +38,7 @@ object StreamT extends StreamTInstances0 {
     StreamT(Monad[F].pure(SCons(a, empty)))
 
   def liftF[F[_]: Monad, A](fa: F[A]): StreamT[F, A] =
-    StreamT(fa.map(value => SCons(value, empty)))
+    StreamT(Monad[F].map(fa)(value => SCons(value, empty)))
 
   def fromStream[F[_]: Monad, A](fs: F[Stream[A]]): StreamT[F, A] = {
 
@@ -48,7 +48,7 @@ object StreamT extends StreamTInstances0 {
         case cons: Cons[A] => SCons(cons.head, StreamT(delay[F, Step[F, A]](next(cons.tail))))
       }
 
-    StreamT[F, A](fs.map(next))
+    StreamT[F, A](Monad[F].map(fs)(next))
   }
 
   //This should delay the computation for most stacksafe monads
@@ -56,11 +56,13 @@ object StreamT extends StreamTInstances0 {
   private def delay[F[_]: Monad, A](a: => A): F[A] =
     Monad[F].unit.map(_ => a)
 
-  def run[F[_]: Monad, A](s: StreamT[F, A]): F[Stream[A]] =
-    s.next.flatMap {
-      case SNil()            => Monad[F].pure(Stream.Empty)
+  def run[F[_]: Monad, A](s: StreamT[F, A]): F[Stream[A]] = {
+    val F = Monad[F]
+    F.flatMap(s.next) {
+      case SNil()            => F.pure(Stream.Empty)
       case SCons(head, tail) => run(tail).map(t => head +: t)
     }
+  }
 }
 
 trait StreamTInstances0 extends StreamTInstances1 {
@@ -75,12 +77,14 @@ trait StreamTInstances0 extends StreamTInstances1 {
 
   implicit def streamTMonoidK[F[_]: Monad]: MonoidK[StreamT[F, ?]] = new MonoidK[StreamT[F, ?]] {
 
+    private val F = Monad[F]
+
     override def empty[A]: StreamT[F, A] = StreamT.empty
 
     override def combineK[A](x: StreamT[F, A], y: StreamT[F, A]): StreamT[F, A] = {
-      val next: F[Step[F, A]] = x.next.flatMap {
+      val next: F[Step[F, A]] = F.flatMap(x.next) {
         case SNil()            => y.next
-        case SCons(head, tail) => Monad[F].pure(SCons(head, combineK(tail, y)))
+        case SCons(head, tail) => F.pure(SCons(head, combineK(tail, y)))
       }
       StreamT(next)
     }
@@ -98,15 +102,16 @@ private trait StreamTMonad[F[_]] extends Monad[StreamT[F, ?]] {
 
   implicit def F: Monad[F]
 
+  private lazy val effectMonoid = MonoidK[StreamT[F, ?]]
+
   override def pure[A](x: A): StreamT[F, A] =
     StreamT.pure[F, A](x)
 
   override def flatMap[A, B](fa: StreamT[F, A])(f: A => StreamT[F, B]): StreamT[F, B] = {
-    val next: F[Step[F, B]] = fa.next.flatMap {
-      case SNil() => Monad[F].pure[Step[F, B]](SNil())
+    val next: F[Step[F, B]] = F.flatMap(fa.next) {
+      case SNil() => F.pure[Step[F, B]](SNil())
       case SCons(head, tail) =>
-        val effectMonoid          = MonoidK[StreamT[F, ?]]
-        val result: StreamT[F, B] = effectMonoid.combineK(f(head), tail.flatMap(f))
+        val result: StreamT[F, B] = effectMonoid.combineK(f(head), flatMap(tail)(f))
         result.next
     }
     StreamT(next)
@@ -161,7 +166,7 @@ trait StreamTInstances2 {
       def layer[A](inner: M[A]): StreamT[M, A] = StreamT.liftF(inner)
 
       def restore[A](state: Stream[A]): StreamT[M, A] =
-        StreamT.fromStream[M, A](Monad[M].pure(state))
+        StreamT.fromStream[M, A](innerInstance.pure(state))
 
       def layerControl[A](cps: (StreamTC[M]#l ~> (M of Stream)#l) => M[A]): StreamT[M, A] =
         StreamT.liftF(cps(new (StreamTC[M]#l ~> (M of Stream)#l) {
