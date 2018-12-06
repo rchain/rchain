@@ -30,27 +30,12 @@ trait Metrics[F[_]] {
 
   // Histogram
   def record(name: String, value: Long, count: Long = 1)(implicit ev: MetricsSource): F[Unit]
+
+  def timer[A](name: String, block: F[A])(implicit ev: MetricsSource): F[A]
 }
 
 object Metrics extends MetricsInstances {
   def apply[F[_]](implicit M: Metrics[F]): Metrics[F] = M
-
-  def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](implicit M: Metrics[F]): Metrics[T[F, ?]] =
-    new Metrics[T[F, ?]] {
-      def incrementCounter(name: String, delta: Long)(implicit ev: MetricsSource) =
-        M.incrementCounter(name, delta).liftM[T]
-      def incrementSampler(name: String, delta: Long)(implicit ev: MetricsSource) =
-        M.incrementSampler(name, delta).liftM[T]
-      def sample(name: String)(implicit ev: MetricsSource) = M.sample(name).liftM[T]
-      def setGauge(name: String, value: Long)(implicit ev: MetricsSource) =
-        M.setGauge(name, value).liftM[T]
-      def incrementGauge(name: String, delta: Long)(implicit ev: MetricsSource) =
-        M.incrementGauge(name, delta).liftM[T]
-      def decrementGauge(name: String, delta: Long)(implicit ev: MetricsSource) =
-        M.decrementGauge(name, delta).liftM[T]
-      def record(name: String, value: Long, count: Long)(implicit ev: MetricsSource) =
-        M.record(name, value, count).liftM[T]
-    }
 
   class MetricsNOP[F[_]: Applicative] extends Metrics[F] {
     def incrementCounter(name: String, delta: Long = 1)(implicit ev: MetricsSource): F[Unit] =
@@ -63,11 +48,49 @@ object Metrics extends MetricsInstances {
     def decrementGauge(name: String, delta: Long)(implicit ev: MetricsSource): F[Unit] = ().pure[F]
     def record(name: String, value: Long, count: Long = 1)(implicit ev: MetricsSource): F[Unit] =
       ().pure[F]
+    def timer[A](name: String, block: F[A])(implicit ev: MetricsSource): F[A] = block
   }
 
 }
 
 sealed abstract class MetricsInstances {
-  implicit def eitherT[E, F[_]: Monad: Metrics[?[_]]]: Metrics[EitherT[F, E, ?]] =
-    Metrics.forTrans[F, EitherT[?[_], E, ?]]
+
+  implicit def eitherT[E, F[_]: Monad](implicit evF: Metrics[F]): Metrics[EitherT[F, E, ?]] =
+    new Metrics[EitherT[F, E, ?]] {
+      def incrementCounter(name: String, delta: Long = 1)(
+          implicit ev: MetricsSource
+      ): EitherT[F, E, Unit] =
+        EitherT.liftF(evF.incrementCounter(name, delta))
+
+      def incrementSampler(name: String, delta: Long = 1)(
+          implicit ev: MetricsSource
+      ): EitherT[F, E, Unit] =
+        EitherT.liftF(evF.incrementSampler(name, delta))
+
+      def sample(name: String)(implicit ev: MetricsSource): EitherT[F, E, Unit] =
+        EitherT.liftF(evF.sample(name))
+
+      def setGauge(name: String, value: Long)(implicit ev: MetricsSource): EitherT[F, E, Unit] =
+        EitherT.liftF(evF.setGauge(name, value))
+
+      def incrementGauge(name: String, delta: Long = 1)(
+          implicit ev: MetricsSource
+      ): EitherT[F, E, Unit] =
+        EitherT.liftF(evF.incrementGauge(name, delta))
+
+      def decrementGauge(name: String, delta: Long = 1)(
+          implicit ev: MetricsSource
+      ): EitherT[F, E, Unit] =
+        EitherT.liftF(evF.decrementGauge(name, delta))
+
+      def record(name: String, value: Long, count: Long = 1)(
+          implicit ev: MetricsSource
+      ): EitherT[F, E, Unit] =
+        EitherT.liftF(evF.record(name, count))
+
+      def timer[A](name: String, block: EitherT[F, E, A])(
+          implicit ev: MetricsSource
+      ): EitherT[F, E, A] =
+        EitherT(evF.timer(name, block.value))
+    }
 }
