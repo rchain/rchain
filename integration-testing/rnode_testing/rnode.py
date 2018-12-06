@@ -122,6 +122,7 @@ class Node:
             logger=logging.getLogger('peers'),
             terminate_thread_event=self.terminate_background_logging_event,
         )
+        self.background_logging.setDaemon(True)
         self.background_logging.start()
 
     def __repr__(self) -> str:
@@ -168,21 +169,23 @@ class Node:
         process = Process(target=command_process)
         logging.info("COMMAND {} {}".format(self.name, cmd))
         process.start()
+
         try:
             exit_code, output = control_queue.get(True, self.command_timeout)
-            if exit_code != 0:
-                for line in output.splitlines():
-                    logging.info('{}: {}'.format(self.name, line))
-                logging.warning("EXITED {} {} {}".format(self.name, cmd, exit_code))
-            else:
-                for line in output.splitlines():
-                    logging.debug('{}: {}'.format(self.name, line))
-                logging.debug("EXITED {} {} {}".format(self.name, cmd, exit_code))
-            return exit_code, output
         except queue.Empty:
-            process.terminate()
-            process.join()
             raise CommandTimeoutError(cmd, self.command_timeout)
+        finally:
+            process.terminate()
+
+        if exit_code != 0:
+            for line in output.splitlines():
+                logging.info('{}: {}'.format(self.name, line))
+            logging.warning("EXITED {} {} {}".format(self.name, cmd, exit_code))
+        else:
+            for line in output.splitlines():
+                logging.debug('{}: {}'.format(self.name, line))
+            logging.debug("EXITED {} {} {}".format(self.name, cmd, exit_code))
+        return exit_code, output
 
     def shell_out(self, *cmd: str, stderr=True) -> str:
         exit_code, output = self._exec_run_with_timeout(cmd, stderr=stderr)
