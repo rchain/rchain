@@ -10,7 +10,7 @@ import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.functor._
 import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
+import coop.rchain.blockstorage.{BlockDagFileStorage, BlockStore, InMemBlockStore}
 import coop.rchain.casper._
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.protocol.BlockMessage
@@ -327,6 +327,12 @@ class NodeRuntime private[node] (
       blockMap,
       Metrics.eitherT(Monad[Task], metrics)
     )
+    blockDagStorage <- BlockDagFileStorage.create[Effect](conf.blockDagStorage)(
+                        Concurrent[Effect],
+                        Sync[Effect],
+                        Log.eitherTLog(Monad[Task], log),
+                        blockStore
+                      )
     _       <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
     oracle  = SafetyOracle.turanOracle[Effect](Monad[Effect])
     runtime = Runtime.create(storagePath, storageSize, storeType)(rspaceScheduler)
@@ -351,6 +357,7 @@ class NodeRuntime private[node] (
                               Time.eitherTTime(Monad[Task], time),
                               Log.eitherTLog(Monad[Task], log),
                               multiParentCasperRef,
+                              blockDagStorage,
                               scheduler
                             )
     packetHandler = PacketHandler.pf[Effect](casperPacketHandler.handle)(

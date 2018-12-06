@@ -106,10 +106,4 @@ package object util {
 
   val ordByteVector: Ordering[ByteVector] = (a: ByteVector, b: ByteVector) => veccmp(a, b)
 
-  val ordByteVectorPair: Ordering[(ByteVector, ByteVector)] =
-    (a: (ByteVector, ByteVector), b: (ByteVector, ByteVector)) =>
-      veccmp(a._1, b._1) match {
-        case 0 => veccmp(a._2, b._2)
-        case c => c
-      }
 }

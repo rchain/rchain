@@ -29,7 +29,7 @@ object Blake2b256 {
     res
   }
 
-  def hash(inputs: Seq[ByteVector]): Array[Byte] = {
+  def hash(inputs: ByteVector*): Array[Byte] = {
     val outStream = new DigestOutputStream(new Blake2bDigest(256))
     for (input <- inputs) {
       input.copyToStream(outStream)

@@ -22,7 +22,16 @@ object Serialize {
 
   def apply[A](implicit ev: Serialize[A]): Serialize[A] = ev
 
-  implicit class RichSerialize[A](instance: Serialize[A]) {
+  def fromCodec[A](codec: Codec[A]): Serialize[A] = new Serialize[A] {
+    def encode(a: A): ByteVector = codec.encode(a).require.bytes
+    def decode(bytes: ByteVector): Either[Throwable, A] =
+      codec
+        .decode(bytes.toBitVector)
+        .toEither
+        .fold(err => Left(new Exception(err.message)), v => Right(v.value))
+  }
+
+  implicit class RichSerialize[A](val instance: Serialize[A]) extends AnyVal {
 
     def toCodec: Codec[A] = new Codec[A] {
 

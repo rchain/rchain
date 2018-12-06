@@ -73,6 +73,24 @@ class ScoredTermSpec extends FlatSpec with PropertyChecks with Matchers {
     checkScoreEquality[Send]
     checkScoreEquality[Var]
   }
+  it should "sort so that unequal ParMap have unequal scores" in {
+    val map1 = Expr(EMapBody(ParMap(Seq.empty, connectiveUsed = true, BitSet(), None)))
+    val map2 = Expr(EMapBody(ParMap(Seq.empty, connectiveUsed = false, BitSet(), None)))
+    assert(sort(map1).score != sort(map2).score)
+    val map3 = Expr(EMapBody(ParMap(Seq.empty, connectiveUsed = true, BitSet(), None)))
+    val map4 = Expr(EMapBody(ParMap(Seq.empty, connectiveUsed = true, BitSet(), Some(Var()))))
+    assert(sort(map3).score != sort(map4).score)
+  }
+  it should "sort so that unequal ParSet have unequal scores" in {
+    val set1 = Expr(ESetBody(ParSet(Seq.empty, connectiveUsed = true, Coeval.delay(BitSet()), None)))
+    val set2 = Expr(ESetBody(ParSet(Seq.empty, connectiveUsed = false, Coeval.delay(BitSet()), None)))
+    assert(sort(set1).score != sort(set2).score)
+    val set3 =
+      Expr(ESetBody(ParSet(Seq.empty, connectiveUsed = true, Coeval.delay(BitSet()), None)))
+    val set4 =
+      Expr(ESetBody(ParSet(Seq.empty, connectiveUsed = true, Coeval.delay(BitSet()), Some(Var()))))
+    assert(sort(set3).score != sort(set4).score)
+  }
 }
 
 class VarSortMatcherSpec extends FlatSpec with Matchers {
