@@ -197,7 +197,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val maximumBond = opt[Long](
       descr = "Maximum bond accepted by the PoS contract in the genesis block."
     )
-    val hasFaucet = opt[Boolean](
+    val hasFaucet = opt[Flag](
       descr = "True if there should be a public access Rev faucet in the genesis block."
     )
 
