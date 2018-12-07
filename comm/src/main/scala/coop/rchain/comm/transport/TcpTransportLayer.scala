@@ -19,6 +19,10 @@ import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.shared._
 import coop.rchain.shared.Compression._
 import java.nio.file._
+
+import coop.rchain.metrics.{Metrics, MetricsSource}
+import coop.rchain.metrics.implicits._
+
 import io.grpc._
 import io.grpc.netty._
 import io.netty.handler.ssl._
@@ -29,20 +33,20 @@ import monix.reactive._
 class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: Int, tempFolder: Path)(
     implicit scheduler: Scheduler,
     log: Log[Task],
+    metrics: Metrics[Task],
     connectionsCache: ConnectionsCache[Task, TcpConnTag]
 ) extends TransportLayer[Task] {
 
   private val DefaultSendTimeout = 5.seconds
-  private val connections        = connectionsCache(clientChannel)
+  private val cell               = connectionsCache(clientChannel)
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  private implicit val logSource: LogSource         = LogSource(this.getClass)
+  private implicit val metricsSource: MetricsSource = MetricsSource("comm.rp.transport")
 
   private def certInputStream = new ByteArrayInputStream(cert.getBytes())
   private def keyInputStream  = new ByteArrayInputStream(key.getBytes())
 
   private val streamObservable = new StreamObservable(100, tempFolder)
-
-  import connections.cell
 
   private lazy val serverSslContext: SslContext =
     try {
@@ -109,7 +113,7 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
       f: TransportLayerStub => Task[A]
   ): Task[A] =
     for {
-      channel <- connections.connection(peer, enforce)
+      channel <- cell.connection(peer, enforce)
       stub    <- Task.delay(RoutingGrpcMonix.stub(channel))
       result <- f(stub).doOnFinish {
                  case Some(PeerUnavailable()) => disconnect(peer)
@@ -172,11 +176,18 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
       )
 
   def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): Task[CommErr[Protocol]] =
-    transport(peer, enforce = false)(_.ask(TLRequest(msg.some)).nonCancelingTimeout(timeout))
-      .map(_.flatMap {
-        case Some(p) => Right(p)
-        case _       => Left(internalCommunicationError("Was expecting message, nothing arrived"))
-      })
+    for {
+      _ <- metrics.incrementCounter("round-trip")
+      result <- transport(peer, enforce = false)(
+                 _.ask(TLRequest(msg.some))
+                   .timer("round-trip-time")
+                   .nonCancelingTimeout(timeout)
+               ).map(_.flatMap {
+                 case Some(p) => Right(p)
+                 case _ =>
+                   Left(internalCommunicationError("Was expecting message, nothing arrived"))
+               })
+    } yield result
 
   private def innerSend(
       peer: PeerNode,
@@ -184,11 +195,18 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
       enforce: Boolean = false,
       timeout: FiniteDuration = DefaultSendTimeout
   ): Task[CommErr[Unit]] =
-    transport(peer, enforce)(_.ask(TLRequest(msg.some)).nonCancelingTimeout(timeout))
-      .map(_.flatMap {
-        case Some(p) => Left(internalCommunicationError(s"Was expecting no message. Response: $p"))
-        case _       => Right(())
-      })
+    for {
+      _ <- metrics.incrementCounter("send")
+      result <- transport(peer, enforce)(
+                 _.ask(TLRequest(msg.some))
+                   .timer("send-time")
+                   .nonCancelingTimeout(timeout)
+               ).map(_.flatMap {
+                 case Some(p) =>
+                   Left(internalCommunicationError(s"Was expecting no message. Response: $p"))
+                 case _ => Right(())
+               })
+    } yield result
 
   private def innerBroadcast(
       peers: Seq[PeerNode],

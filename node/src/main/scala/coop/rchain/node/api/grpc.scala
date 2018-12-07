@@ -66,7 +66,7 @@ object GrpcServer {
           .addService(
             ReplGrpcMonix.bindService(new ReplGrpcService(runtime, worker), grpcExecutor)
           )
-          .addService(DiagnosticsGrpcMonix.bindService(diagnostics.grpc, grpcExecutor))
+          .addService(DiagnosticsGrpcMonix.bindService(diagnostics.effects.grpc, grpcExecutor))
           .build
       )
     }

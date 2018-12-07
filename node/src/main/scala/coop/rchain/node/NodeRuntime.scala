@@ -313,11 +313,11 @@ class NodeRuntime private[node] (
     rpConfAsk            = effects.rpConfAsk(rpConfState)
     peerNodeAsk          = effects.peerNodeAsk(rpConfState)
     rpConnections        <- effects.rpConnections.toEffect
-    kademliaConnections  <- CachedConnections[Task, KademliaConnTag].toEffect
-    tcpConnections       <- CachedConnections[Task, TcpConnTag].toEffect
+    metrics              = diagnostics.effects.metrics[Task]
+    kademliaConnections  <- CachedConnections[Task, KademliaConnTag](Task.catsAsync, metrics).toEffect
+    tcpConnections       <- CachedConnections[Task, TcpConnTag](Task.catsAsync, metrics).toEffect
     time                 = effects.time
     timerTask            = Task.timer
-    metrics              = diagnostics.metrics[Task]
     multiParentCasperRef <- MultiParentCasperRef.of[Effect]
     lab                  <- LastApprovedBlock.of[Task].toEffect
     labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
@@ -327,7 +327,7 @@ class NodeRuntime private[node] (
       conf.tls.key,
       conf.server.maxMessageSize,
       conf.server.dataDir.resolve("tmp").resolve("comm")
-    )(grpcScheduler, log, tcpConnections)
+    )(grpcScheduler, log, metrics, tcpConnections)
     kademliaRPC = effects.kademliaRPC(kademliaPort, defaultTimeout)(
       grpcScheduler,
       peerNodeAsk,
@@ -376,8 +376,8 @@ class NodeRuntime private[node] (
       Log.eitherTLog(Monad[Task], log),
       ErrorHandler[Effect]
     )
-    nodeCoreMetrics = diagnostics.nodeCoreMetrics[Task]
-    jvmMetrics      = diagnostics.jvmMetrics[Task]
+    nodeCoreMetrics = diagnostics.effects.nodeCoreMetrics[Task]
+    jvmMetrics      = diagnostics.effects.jvmMetrics[Task]
 
     // 4. run the node program.
     program = nodeProgram(runtime, casperRuntime)(

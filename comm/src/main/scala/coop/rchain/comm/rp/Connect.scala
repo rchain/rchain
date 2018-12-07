@@ -13,6 +13,7 @@ import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.comm.transport._
 import coop.rchain.metrics.{Metrics, MetricsSource}
+import coop.rchain.metrics.implicits._
 import coop.rchain.shared._
 import scala.concurrent.duration._
 
@@ -133,21 +134,20 @@ object Connect {
       peer: PeerNode,
       timeout: FiniteDuration
   ): F[Unit] =
-    for {
-      tss      <- Time[F].currentMillis
-      peerAddr = peer.toAddress
-      _        <- Log[F].debug(s"Connecting to $peerAddr")
-      _        <- Metrics[F].incrementCounter("connect")
-      _        <- Log[F].debug(s"Initialize protocol handshake to $peerAddr")
-      local    <- RPConfAsk[F].reader(_.local)
-      ph       = protocolHandshake(local)
-      phsresp  <- TransportLayer[F].roundTrip(peer, ph, timeout * 2) >>= ErrorHandler[F].fromEither
-      _ <- Log[F].debug(
-            s"Received protocol handshake response from ${ProtocolHelper.sender(phsresp)}."
-          )
-      _   <- ConnectionsCell[F].modify(_.addConn[F](peer))
-      tsf <- Time[F].currentMillis
-      _   <- Metrics[F].record("connect-time-ms", tsf - tss)
-    } yield ()
+    (
+      for {
+        address  <- Capture[F].capture(peer.toAddress)
+        _        <- Log[F].debug(s"Connecting to $address")
+        _        <- Metrics[F].incrementCounter("connect")
+        _        <- Log[F].debug(s"Initialize protocol handshake to $address")
+        local    <- RPConfAsk[F].reader(_.local)
+        ph       = protocolHandshake(local)
+        response <- TransportLayer[F].roundTrip(peer, ph, timeout * 2) >>= ErrorHandler[F].fromEither
+        _ <- Log[F].debug(
+              s"Received protocol handshake response from ${ProtocolHelper.sender(response)}."
+            )
+        _ <- ConnectionsCell[F].modify(_.addConn[F](peer))
+      } yield ()
+    ).timer("connect-time")
 
 }

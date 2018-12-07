@@ -8,6 +8,7 @@ import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.CachedConnections.ConnectionsCache
 import coop.rchain.comm._
 import coop.rchain.metrics.{Metrics, MetricsSource}
+import coop.rchain.metrics.implicits._
 import coop.rchain.shared.{Log, LogSource}
 
 import io.grpc._
@@ -28,9 +29,9 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
   private implicit val logSource: LogSource         = LogSource(this.getClass)
   private implicit val metricsSource: MetricsSource = MetricsSource("comm.discovery.kademlia.grpc")
 
-  private val connections = connectionsCache(clientChannel)
+  private val cell = connectionsCache(clientChannel)
 
-  import connections.connection
+  import cell.connection
 
   def ping(peer: PeerNode): Task[Boolean] =
     for {
@@ -40,6 +41,7 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
       pongErr <- KademliaGrpcMonix
                   .stub(channel)
                   .sendPing(Ping().withSender(node(local)))
+                  .timer("ping-time")
                   .nonCancelingTimeout(timeout)
                   .attempt
       _ <- Task.delay(channel.shutdown())
@@ -57,6 +59,7 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
       responseErr <- KademliaGrpcMonix
                       .stub(channel)
                       .sendLookup(lookup)
+                      .timer("lookup-time")
                       .nonCancelingTimeout(timeout)
                       .attempt
       _ <- Task.delay(channel.shutdown())

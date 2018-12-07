@@ -1,4 +1,4 @@
-package coop.rchain.node
+package coop.rchain.node.diagnostics
 
 import java.lang.management.{ManagementFactory, MemoryType}
 
@@ -18,7 +18,7 @@ import com.google.protobuf.empty.Empty
 import javax.management.ObjectName
 import monix.eval.Task
 
-package object diagnostics {
+package object effects {
 
   def jvmMetrics[F[_]: Capture]: JvmMetrics[F] =
     new JvmMetrics[F] {
