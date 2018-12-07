@@ -74,7 +74,7 @@ sealed abstract class MultiParentCasperInstances {
   )(implicit scheduler: Scheduler): F[MultiParentCasper[F]] =
     for {
       // Initialize DAG storage with genesis block in case it is empty
-      _   <- BlockDagStorage[F].insert(genesis)
+      _   <- BlockDagStorage[F].insertGenesis(genesis)
       dag <- BlockDagStorage[F].getRepresentation
       maybePostGenesisStateHash <- InterpreterUtil
                                     .validateBlockCheckpoint[F](
