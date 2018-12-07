@@ -1374,6 +1374,8 @@ object Reduce {
         baseExpr.exprInstance match {
           case GString(string) =>
             Applicative[M].pure[Expr](GInt(string.length.toLong))
+          case GByteArray(bytes) =>
+            Applicative[M].pure[Expr](GInt(bytes.size.toLong))
           case EListBody(EList(ps, _, _, _)) =>
             Applicative[M].pure[Expr](GInt(ps.length.toLong))
           case other =>
