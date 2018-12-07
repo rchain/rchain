@@ -217,11 +217,10 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
               case Right(_)    => Task.unit
             }
         case Left(error) => log.error(s"Error while streaming packet, error: $error")
-      } >>=
-        (kp(Task.delay {
-          if (path.toFile.exists)
-            path.toFile.delete
-        }))
+      } >>= kp(Task.delay {
+        if (path.toFile.exists)
+          path.toFile.delete
+      })
   }
 
   private def initQueue(
@@ -299,21 +298,4 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
       else shutdownServer *> sendShutdownMessages
     }
   }
-}
-
-object TcpTransportLayer {
-  type Connection          = ManagedChannel
-  type Connections         = Map[PeerNode, Connection]
-  type TransportCell[F[_]] = Cell[F, TransportState]
-}
-
-case class TransportState(
-    connections: TcpTransportLayer.Connections = Map.empty,
-    server: Option[Cancelable] = None,
-    clientQueue: Option[Cancelable] = None,
-    shutdown: Boolean = false
-)
-
-object TransportState {
-  def empty: TransportState = TransportState()
 }
