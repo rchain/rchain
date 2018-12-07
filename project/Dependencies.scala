@@ -4,10 +4,11 @@ object Dependencies {
 
   val osClassifier: String = Detector.detect(Seq("fedora")).osClassifier
 
-  val circeVersion  = "0.10.0"
-  val http4sVersion = "0.19.0"
-  val kamonVersion  = "1.1.0"
-  val catsVersion   = "1.4.0" 
+  val circeVersion   = "0.10.0"
+  val http4sVersion  = "0.19.0"
+  val kamonVersion   = "1.1.0"
+  val catsVersion    = "1.4.0" 
+  val catsMtlVersion = "0.4.0" 
 
   // format: off
   val bitcoinjCore        = "org.bitcoinj"                % "bitcoinj-core"             % "0.14.6"
@@ -16,7 +17,8 @@ object Dependencies {
   val catsLawsTest        = "org.typelevel"              %% "cats-laws"                 % catsVersion % "test"
   val catsLawsTestkitTest = "org.typelevel"              %% "cats-testkit"              % catsVersion % "test"
   val catsEffect          = "org.typelevel"              %% "cats-effect"               % "1.0.0"
-  val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % "0.4.0"
+  val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % catsMtlVersion
+  val catsMtlLawsTest     = "org.typelevel"              %% "cats-mtl-laws"             % catsMtlVersion % "test"
   val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion
   val circeGeneric        = "io.circe"                   %% "circe-generic"             % circeVersion
   val circeGenericExtras  = "io.circe"                   %% "circe-generic-extras"      % circeVersion
@@ -44,8 +46,8 @@ object Dependencies {
   val monix               = "io.monix"                   %% "monix"                     % "3.0.0-RC2"
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.9.0"
   val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "1.1.5"
-  val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.14.0" % "test"
-  val scalacheckNoTest    = "org.scalacheck"             %% "scalacheck"                % "1.14.0"
+  val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.13.5" % "test"
+  val scalacheckNoTest    = "org.scalacheck"             %% "scalacheck"                % "1.13.5"
   val scalacheckShapeless = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.8" % "test"
   val scalactic           = "org.scalactic"              %% "scalactic"                 % "3.0.5" % "test"
   val scalapbCompiler     = "com.thesamet.scalapb"       %% "compilerplugin"            % scalapb.compiler.Version.scalapbVersion
@@ -79,6 +81,7 @@ object Dependencies {
     scalacheckNoTest,
     //overrides for transitive dependencies (we don't use them directly, hence no val-s)
     "org.typelevel"            %% "machinist"              % "0.6.5",
+    "org.typelevel"            %% "catalysts-platform"     % "0.6",
     "com.lihaoyi"              %% "sourcecode"             % "0.1.4",
     "org.scala-lang.modules"   %% "scala-xml"              % "1.1.0",
     "com.google.code.findbugs" % "jsr305"                  % "3.0.2",

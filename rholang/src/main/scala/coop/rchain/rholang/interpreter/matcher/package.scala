@@ -80,7 +80,7 @@ package object matcher {
       StateT.liftF(OptionT.fromOption(None))
 
     def pure[A](value: A): OptionalFreeMapWithCost[A] =
-      StateT.liftF(OptionT.liftF(StateT.liftF(Right(value))))
+      StateT.pure[OptionWithCost, FreeMap, A](value)
 
     def fromOption[A](option: Option[A]): OptionalFreeMapWithCost[A] =
       StateT.liftF(OptionT.fromOption(option))
@@ -121,7 +121,7 @@ package object matcher {
       StateT.liftF(StreamT.empty)
 
     def pure[A](value: A): NonDetFreeMapWithCost[A] =
-      StateT.liftF(StreamT.liftF(StateT.liftF(Right(value))))
+      StateT.pure[StreamWithCost, FreeMap, A](value)
 
     def fromStream[A](stream: Stream[A]): NonDetFreeMapWithCost[A] =
       StateT.liftF(StreamT.fromStream(StateT.pure(stream)))

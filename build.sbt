@@ -319,7 +319,8 @@ lazy val rholang = (project in file("rholang"))
       scallop,
       lightningj,
       catsLawsTest,
-      catsLawsTestkitTest
+      catsLawsTestkitTest,
+      catsMtlLawsTest
     ),
     mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
     coverageExcludedFiles := Seq(
