@@ -4,7 +4,7 @@ import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import cats.{Applicative, Monad}
 import cats.implicits._
 import cats.mtl.implicits._
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.protocol._
@@ -22,7 +22,7 @@ import coop.rchain.shared.AttemptOps._
 import scala.annotation.tailrec
 import scala.collection.{immutable, mutable}
 import scala.collection.immutable.{HashMap, HashSet}
-import cats.effect.concurrent.Ref
+import cats.effect.concurrent.{Ref, Semaphore}
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockMetadata, BlockStore}
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.Validator
@@ -66,7 +66,7 @@ object MultiParentCasper extends MultiParentCasperInstances {
 
 sealed abstract class MultiParentCasperInstances {
 
-  def hashSetCasper[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage](
+  def hashSetCasper[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage](
       runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
@@ -90,12 +90,14 @@ sealed abstract class MultiParentCasperInstances {
                                  )
                                case Right(Some(hash)) => hash.pure[F]
                              }
+      semaphore <- Semaphore[F](1)
     } yield
       new MultiParentCasperImpl[F](
         runtimeManager,
         validatorId,
         genesis,
         postGenesisStateHash,
-        shardId
+        shardId,
+        semaphore
       )
 }

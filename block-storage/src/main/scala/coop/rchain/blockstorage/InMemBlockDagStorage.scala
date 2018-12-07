@@ -1,18 +1,18 @@
 package coop.rchain.blockstorage
 
-import cats.Monad
-import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.util.BlockMessageUtil.parentHashes
 import coop.rchain.blockstorage.util.TopologicalSortUtil
 import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.shared.Log
 
 import scala.collection.immutable.HashSet
 
-final class InMemBlockDagStorage[F[_]: Monad](
+final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
     lock: Semaphore[F],
     latestMessagesRef: Ref[F, Map[Validator, BlockHash]],
     childMapRef: Ref[F, Map[BlockHash, Set[BlockHash]]],
@@ -93,7 +93,7 @@ final class InMemBlockDagStorage[F[_]: Monad](
 }
 
 object InMemBlockDagStorage {
-  def create[F[_]: Monad: Sync: Concurrent]: F[InMemBlockDagStorage[F]] =
+  def create[F[_]: Concurrent: Sync: Log: BlockStore]: F[InMemBlockDagStorage[F]] =
     for {
       lock              <- Semaphore[F](1)
       latestMessagesRef <- Ref.of[F, Map[Validator, BlockHash]](Map.empty)

@@ -68,14 +68,6 @@ def complete_network(context: TestingContext) -> Generator[Network, None, None]:
             yield network
 
 
-def test_metrics_api_socket(command_line_options_fixture, docker_client_fixture):
-    with conftest.testing_context(command_line_options_fixture, docker_client_fixture) as context:
-        with complete_network(context) as network:
-            for node in network.nodes:
-                exit_code, _ = node.get_metrics()
-                assert exit_code == 0, "Could not get the metrics for node {node.name}"
-
-
 def deploy_block(node, expected_string, contract_name):
     local_contract_file_path = os.path.join('resources', contract_name)
     shutil.copyfile(local_contract_file_path, f"{node.local_deploy_dir}/{contract_name}")
@@ -91,45 +83,26 @@ def deploy_block(node, expected_string, contract_name):
     return block_hash
 
 
-def check_blocks(node, expected_string, network, context, block_hash):
-    logging.info("Check all peer logs for blocks containing {}".format(expected_string))
-
-    other_nodes = [n for n in network.nodes if n.container.name != node.container.name]
-
-    for node in other_nodes:
-        wait_for_block_contains(node, block_hash, expected_string, context.receive_timeout)
-
-
-def mk_expected_string(node, random_token):
+def make_expected_string(node, random_token):
     return "<{name}:{random_token}>".format(name=node.container.name, random_token=random_token)
 
 
-def casper_propose_and_deploy(context, network):
+def test_casper_propose_and_deploy(command_line_options_fixture, docker_client_fixture):
     """Deploy a contract and then checks if all the nodes have received the block
     containing the contract.
     """
 
-    token_size = 20
-    contract_name = 'contract.rho'
-    for node in network.nodes:
-        logging.info("Run test on node '{}'".format(node.name))
-
-        random_token = random_string(token_size)
-
-        expected_string = mk_expected_string(node, random_token)
-        block_hash = deploy_block(node, expected_string, contract_name)
-
-        expected_string = mk_expected_string(node, random_token)
-        check_blocks(node, expected_string, network, context, block_hash)
-
-
-def test_casper_propose_and_deploy(command_line_options_fixture, docker_client_fixture):
     with conftest.testing_context(command_line_options_fixture, docker_client_fixture) as context:
         with complete_network(context) as network:
-            casper_propose_and_deploy(context, network)
+            token_size = 20
+            contract_name = 'contract.rho'
+            for node in network.nodes:
+                random_token = random_string(token_size)
 
+                expected_string = make_expected_string(node, random_token)
+                block_hash = deploy_block(node, expected_string, contract_name)
 
-def test_convergence(command_line_options_fixture, docker_client_fixture):
-    with conftest.testing_context(command_line_options_fixture, docker_client_fixture) as context:
-        with complete_network(context) as network:
-            pass
+                expected_string = make_expected_string(node, random_token)
+                other_nodes = [n for n in network.nodes if n.container.name != node.container.name]
+                for node in other_nodes:
+                    wait_for_block_contains(node, block_hash, expected_string, context.receive_timeout)
