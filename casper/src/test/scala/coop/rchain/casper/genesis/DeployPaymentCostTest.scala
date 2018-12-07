@@ -6,6 +6,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.DeployPaymentCostTest._
 import coop.rchain.casper.genesis.contracts.{Faucet, PreWallet}
 import coop.rchain.casper.helper.HashSetCasperTestNode
+import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.protocol.{BlockMessage, Deploy, DeployData}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -94,7 +95,7 @@ object DeployPaymentCostTest {
       _              <- casperEff.deploy(deploy)
       b              <- casperEff.createBlock
       Created(block) = b
-      blockStatus    <- casperEff.addBlock(block, kp2(().pure[F]))
+      blockStatus    <- casperEff.addBlock(block, ignoreDoppelgangerCheck[F])
       _              = assert(blockStatus == Valid)
     } yield block
 
@@ -210,7 +211,7 @@ object DeployPaymentCostTest {
       _              <- casperEff.deploy(ProtoUtil.termDeployNow(par))
       newBlock       <- casperEff.createBlock
       Created(block) = newBlock
-      status         <- casperEff.addBlock(block, kp2(().pure[F]))
+      status         <- casperEff.addBlock(block, ignoreDoppelgangerCheck[F])
       _              = assert(status == Valid)
     } yield block
 

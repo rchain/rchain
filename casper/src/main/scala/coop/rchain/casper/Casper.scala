@@ -27,6 +27,7 @@ import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockM
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.catscontrib.ski.kp2
 import coop.rchain.rspace.Checkpoint
 import monix.execution.Scheduler
 import monix.execution.atomic.AtomicAny
@@ -59,6 +60,8 @@ trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]] {
 
 object MultiParentCasper extends MultiParentCasperInstances {
   def apply[F[_]](implicit instance: MultiParentCasper[F]): MultiParentCasper[F] = instance
+  def ignoreDoppelgangerCheck[F[_]: Applicative]: (BlockMessage, Validator) => F[Unit] =
+    kp2(().pure[F])
 }
 
 sealed abstract class MultiParentCasperInstances {
