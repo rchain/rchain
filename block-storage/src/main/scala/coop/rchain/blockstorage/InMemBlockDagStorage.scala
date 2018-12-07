@@ -8,7 +8,6 @@ import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.util.BlockMessageUtil.parentHashes
 import coop.rchain.blockstorage.util.TopologicalSortUtil
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.shared.Log
 
 import scala.collection.immutable.HashSet
