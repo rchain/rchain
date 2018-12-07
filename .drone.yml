@@ -49,17 +49,6 @@ pipeline:
     commands:
       - sbt rholang/bnfc:generate compile test:compile it:compile doc
 
-  run-unit-tests:
-    <<: *sbtenv
-    commands:
-      - sbt test it:test
-
-  run-code-analysis:
-    <<: *sbtenv
-    commands:
-      - sbt scalafmtCheck coverage
-      - ./scripts/ci/codecov-upload
-
   # push
 
   package:
@@ -72,8 +61,6 @@ pipeline:
       - /var/cache/rchain-build/.sbt:/root/.sbt
       - /var/cache/rchain-build/.ivy2:/root/.ivy2
       - /var/run/docker.sock:/var/run/docker.sock
-    when:
-      event: [ push, tag ]
 
   run-integration-tests:
     <<: *buildenv
@@ -85,8 +72,6 @@ pipeline:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp:/tmp
       - /var/tmp/rchain-it:/var/tmp/rchain-it
-    when:
-      event: [ push, tag ]
 
   package-rpm:
     <<: *sbtenv
