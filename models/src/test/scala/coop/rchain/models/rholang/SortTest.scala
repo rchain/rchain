@@ -7,7 +7,6 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.SortTest.sort
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.rholang.sorter._
-import coop.rchain.models.testImplicits._
 import monix.eval.Coeval
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.{Arbitrary, Gen}
@@ -63,6 +62,9 @@ class ScoredTermSpec extends FlatSpec with PropertyChecks with Matchers {
             assert(sort(x).score == sort(y).score)
         }
       }
+
+    import coop.rchain.models.testImplicits._
+
     checkScoreEquality[Bundle]
     checkScoreEquality[Connective]
     checkScoreEquality[Expr]
