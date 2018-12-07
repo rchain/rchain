@@ -7,6 +7,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
+import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
@@ -27,6 +28,7 @@ import scodec.Codec
 
 import scala.collection.immutable
 import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.ski._
 import coop.rchain.casper.util.{EventConverter, ProtoUtil}
 import coop.rchain.casper._
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
@@ -65,7 +67,10 @@ object BlockAPI {
                        case err: NoBlock =>
                          DeployServiceResponse(success = false, s"Error while creating block: $err")
                            .pure[F]
-                       case Created(block) => casper.addBlock(block).map(addResponse(_, block))
+                       case Created(block) =>
+                         casper
+                           .addBlock(block, ignoreDoppelgangerCheck[F])
+                           .map(addResponse(_, block))
                      }
             _ <- Sync[F].delay { createBlockLock.unlock() }
           } yield result,

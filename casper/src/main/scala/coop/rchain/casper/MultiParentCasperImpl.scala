@@ -62,7 +62,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
   private val faultToleranceThreshold         = 0f
   private val lastFinalizedBlockHashContainer = Ref.unsafe[F, BlockHash](genesis.blockHash)
 
-  def addBlock(b: BlockMessage): F[BlockStatus] =
+  def addBlock(
+      b: BlockMessage,
+      handleDoppelganger: (BlockMessage, Validator) => F[Unit]
+  ): F[BlockStatus] =
     Sync[F].bracket(semaphore.acquire)(
       _ =>
         for {
@@ -78,7 +81,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
                        )
                        .map(_ => BlockStatus.processing)
                    } else {
-                     internalAddBlock(b)
+                     (validatorId match {
+                       case Some(ValidatorIdentity(publicKey, _, _)) =>
+                         val sender = ByteString.copyFrom(publicKey)
+                         handleDoppelganger(b, sender)
+                       case None => ().pure[F]
+                     }) *> internalAddBlock(b)
                    }
         } yield result
     )(_ => semaphore.release)
