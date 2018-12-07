@@ -71,9 +71,9 @@ node-client/__pycache__
 node-client/ve
 research/sharding/ve
 *.pyc
-integration-testing/.pytest_cache
-integration-testing/.mypy_cache
-integration-testing/report.json
-integration-testing.log
+integration-tests/.pytest_cache
+integration-tests/.mypy_cache
+integration-tests/report.json
+integration-tests.log
 *.log
 .virtualenv

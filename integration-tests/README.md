@@ -34,7 +34,7 @@ Python 3.7.0
 ## Step 4: Dependencies
 
 
-Once Python is installed you can run within `integration-testing` subdirectory
+Once Python is installed you can run within `integration-tests` subdirectory
 the following command:
 
 ```bash

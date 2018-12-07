@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from docker.models.containers import ExecResult
 
 
-DEFAULT_IMAGE = os.environ.get("DEFAULT_IMAGE", "rchain-integration-testing:latest")
+DEFAULT_IMAGE = os.environ.get("DEFAULT_IMAGE", "rchain-integration-tests:latest")
 
 
 rnode_binary = '/opt/docker/bin/rnode'

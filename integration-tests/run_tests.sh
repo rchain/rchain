@@ -6,7 +6,7 @@ if [[ -n $DRONE_BUILD_NUMBER ]]; then
 	tag=DRONE-$DRONE_BUILD_NUMBER
 fi
 
-export DEFAULT_IMAGE=rchain-integration-testing:$tag
+export DEFAULT_IMAGE=rchain-integration-tests:$tag
 
 sed "s/rnode:latest/rnode:$tag/" Dockerfile |\
 	docker build -t $DEFAULT_IMAGE -f - .
