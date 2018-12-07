@@ -954,7 +954,8 @@ object Reduce {
                          s.fromEither(localNth(ps, nth))
                        case GByteArray(bs) =>
                          s.fromEither(if (0 <= nth && nth < bs.size) {
-                           val p: Par = Expr(GInt(bs.byteAt(nth).toLong))
+                           val b      = bs.byteAt(nth) & 0xff // convert to unsigned
+                           val p: Par = Expr(GInt(b.toLong))
                            Right(p)
                          } else {
                            Left(ReduceError("Error: index out of bound: " + nth))

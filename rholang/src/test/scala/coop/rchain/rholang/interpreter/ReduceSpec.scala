@@ -779,13 +779,27 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     implicit val errorLog = new ErrorLog()
 
     val nthCall: Expr =
-      EMethod("nth", GByteArray(ByteString.copyFrom("abc", "utf8")), List[Par](GInt(2L)))
+      EMethod("nth", GByteArray(ByteString.copyFrom(Array[Byte](1, 2, -1))), List[Par](GInt(2L)))
     val directResult: Par = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
         implicit val env = Env[Par]()
         Await.result(reducer.evalExprToPar(nthCall).runToFuture, 3.seconds)
     }
-    val expectedResult: Par = GInt('c'.toLong)
+    val expectedResult: Par = GInt(255.toLong)
+    directResult should be(expectedResult)
+  }
+
+  "eval of length method" should "get length of ByteArray" in {
+    implicit val errorLog = new ErrorLog()
+
+    val nthCall: Expr =
+      EMethod("length", GByteArray(ByteString.copyFrom(Array[Byte](1, 2, -1))), List[Par]())
+    val directResult: Par = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env = Env[Par]()
+        Await.result(reducer.evalExprToPar(nthCall).runToFuture, 3.seconds)
+    }
+    val expectedResult: Par = GInt(3.toLong)
     directResult should be(expectedResult)
   }
 
