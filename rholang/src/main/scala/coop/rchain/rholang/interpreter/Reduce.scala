@@ -952,6 +952,13 @@ object Reduce {
                          s.fromEither(localNth(ps, nth))
                        case ETupleBody(ETuple(ps, _, _)) =>
                          s.fromEither(localNth(ps, nth))
+                       case GByteArray(bs) =>
+                         s.fromEither(if (0 <= nth && nth < bs.size) {
+                           val p: Par = Expr(GInt(bs.byteAt(nth).toLong))
+                           Right(p)
+                         } else {
+                           Left(ReduceError("Error: index out of bound: " + nth))
+                         })
                        case _ =>
                          s.raiseError(
                            ReduceError(

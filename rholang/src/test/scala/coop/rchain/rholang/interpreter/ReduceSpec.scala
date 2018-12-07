@@ -775,6 +775,20 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
+  "eval of nth method" should "pick out the nth item from a ByteArray" in {
+    implicit val errorLog = new ErrorLog()
+
+    val nthCall: Expr =
+      EMethod("nth", GByteArray(ByteString.copyFrom("abc", "utf8")), List[Par](GInt(2L)))
+    val directResult: Par = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env = Env[Par]()
+        Await.result(reducer.evalExprToPar(nthCall).runToFuture, 3.seconds)
+    }
+    val expectedResult: Par = GInt('c'.toLong)
+    directResult should be(expectedResult)
+  }
+
   "eval of New" should "use deterministic names and provide urn-based resources" in {
     implicit val errorLog = new ErrorLog()
 
