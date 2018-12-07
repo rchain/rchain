@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "8ed4184eca09b0eafa14132b9d1d8e0ffb82a379083ab5be301b4f7e4473bc75"
+            "sha256": "0c5e5a34bfaa5ade2a567abd8923614b37086264324d2007b4409c410908d332"
         },
         "pipfile-spec": 6,
         "requires": {},
@@ -193,6 +193,14 @@
             ],
             "index": "pypi",
             "version": "==0.3.2"
+        },
+        "pytest-parallel": {
+            "hashes": [
+                "sha256:94df6b0ebf48e03cbce66622d55ba6bd2cb116b06cfb39cc5fc4d2d310df25ca",
+                "sha256:c4226352462ae32ff01d47a642d087005c3b9bf995cea61fc37a4becb146278d"
+            ],
+            "index": "pypi",
+            "version": "==0.0.9"
         },
         "pytest-pylint": {
             "hashes": [
