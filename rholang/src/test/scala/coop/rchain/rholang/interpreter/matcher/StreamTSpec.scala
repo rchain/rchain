@@ -6,7 +6,7 @@ import cats.implicits._
 import cats.laws.discipline.{MonadErrorTests, MonadTests, MonoidKTests}
 import cats.mtl.laws.discipline.{FunctorListenTests, MonadLayerControlTests}
 import cats.tests.CatsSuite
-import cats.{Eq, Monad, ~>}
+import cats.{~>, Eq, Monad}
 import coop.rchain.catscontrib.laws.discipline.MonadTransTests
 import coop.rchain.rholang.StackSafetySpec
 import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, Step}
@@ -116,7 +116,8 @@ class StreamTLawsSpec extends CatsSuite with LowPriorityDerivations {
           def apply[A](fa: Stream[A]): Stream[A] = Stream.Empty
         },
         FunctionK.id[Stream]
-      ))
+      )
+    )
 
   implicit def eqEff[A: Eq]: Eq[Effect[A]]       = Eq.by(x => x.value.value.value())
   implicit def eqFA[A: Eq]: Eq[StreamTEffect[A]] = Eq.by(StreamT.run[Effect, A])

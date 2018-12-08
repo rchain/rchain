@@ -7,7 +7,7 @@ import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.util.BlockMessageUtil.parentHashes
 import coop.rchain.blockstorage.util.TopologicalSortUtil
-import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.shared.Log
 
 import scala.collection.immutable.HashSet
@@ -64,6 +64,31 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
       _              <- lock.release
     } yield InMemBlockDagRepresentation(latestMessages, childMap, dataLookup, topoSort)
   override def insert(block: BlockMessage): F[Unit] =
+    genericInsert(block, normalLatestMessagesStrategy)
+  private def normalLatestMessagesStrategy(
+      block: BlockMessage,
+      latestMessages: Map[Validator, BlockHash]
+  ): Map[Validator, BlockHash] =
+    latestMessages.updated(block.sender, block.blockHash)
+  override def insertGenesis(genesis: BlockMessage): F[Unit] =
+    genericInsert(genesis, genesisLatestMessagesStrategy)
+  private def genesisLatestMessagesStrategy(
+      genesis: BlockMessage,
+      latestMessages: Map[Validator, BlockHash]
+  ): Map[Validator, BlockHash] = {
+    val genesisBonds = (for {
+      bd <- genesis.body
+      ps <- bd.state
+    } yield ps.bonds).getOrElse(List.empty[Bond])
+    val initialLatestMessages = genesisBonds.map(_.validator -> genesis).toMap
+    initialLatestMessages.toList.foldLeft(latestMessages) {
+      case (acc, (validator, block)) => acc.updated(validator, block.blockHash)
+    }
+  }
+  private def genericInsert(
+      block: BlockMessage,
+      latestMessagesStrategy: (BlockMessage, Map[Validator, BlockHash]) => Map[Validator, BlockHash]
+  ): F[Unit] =
     for {
       _ <- lock.acquire
       _ <- dataLookupRef.update(_.updated(block.blockHash, BlockMetadata.fromBlock(block)))
@@ -76,7 +101,7 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
               }
           )
       _ <- topoSortRef.update(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
-      _ <- latestMessagesRef.update(_.updated(block.sender, block.blockHash))
+      _ <- latestMessagesRef.update(latestMessages => latestMessagesStrategy(block, latestMessages))
       _ <- lock.release
     } yield ()
   override def checkpoint(): F[Unit] = ().pure[F]

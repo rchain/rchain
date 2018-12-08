@@ -26,6 +26,7 @@ final class IndexedBlockDagStorage[F[_]: Monad](
       _ <- underlying.insert(block)
       _ <- lock.release
     } yield ()
+  def insertGenesis(genesis: BlockMessage): F[Unit] = ???
   def insertIndexed(block: BlockMessage): F[BlockMessage] =
     for {
       _                 <- lock.acquire

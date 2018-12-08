@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter.matcher
 import cats.mtl.lifting.MonadLayerControl
-import cats.{Applicative, Functor, Monad, MonadError, MonoidK, ~>}
+import cats.{~>, Applicative, Functor, Monad, MonadError, MonoidK}
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, SNil, Step}
 
