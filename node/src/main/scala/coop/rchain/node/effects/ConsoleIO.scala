@@ -1,7 +1,10 @@
 package coop.rchain.node.effects
 
-import coop.rchain.catscontrib._, Catscontrib._
-import cats._, cats.data._, cats.implicits._
+import coop.rchain.catscontrib._
+import Catscontrib._
+import cats._
+import cats.data._
+import cats.implicits._
 
 trait ConsoleIO[F[_]] {
   def readLine: F[String]

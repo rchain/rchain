@@ -1,8 +1,12 @@
 package coop.rchain.node
 
 import coop.rchain.shared.StringOps._
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski.kp
+import cats._
+import cats.data._
+import cats.implicits._
+import coop.rchain.catscontrib._
+import Catscontrib._
+import ski.kp
 import coop.rchain.node.effects.{ConsoleIO, ReplClient}
 
 class ReplRuntime() {
@@ -12,9 +16,10 @@ class ReplRuntime() {
   ╦═╗┌─┐┬ ┬┌─┐┬┌┐┌  ╔╗╔┌─┐┌┬┐┌─┐  ╦═╗╔═╗╔═╗╦  
   ╠╦╝│  ├─┤├─┤││││  ║║║│ │ ││├┤   ╠╦╝║╣ ╠═╝║  
   ╩╚═└─┘┴ ┴┴ ┴┴┘└┘  ╝╚╝└─┘─┴┘└─┘  ╩╚═╚═╝╩  ╩═╝
-    """.red
+    """
 
-  def replProgram[F[_]: Capture: Monad: ConsoleIO: ReplClient]: F[Boolean] = {
+  def replProgram[F[_]: Capture: Monad: ConsoleIO: ReplClient: TerminalMode]: F[Boolean] = {
+    implicit val isTty: Boolean = TerminalMode[F].interactive.exists(Function.const(true))
 
     def run(program: String): F[Boolean] =
       for {
@@ -43,10 +48,15 @@ class ReplRuntime() {
       case false => ConsoleIO[F].close.as(false)
     }
 
-    ConsoleIO[F].println(logo) >>= kp(repl)
+    TerminalMode[F].interactive match {
+      case Some(_) => ConsoleIO[F].println(logo.red) >>= kp(repl)
+      case None => repl
+    }
   }
 
-  def evalProgram[F[_]: Monad: ReplClient: ConsoleIO](fileNames: List[String]): F[Unit] = {
+  def evalProgram[F[_]: Monad: ReplClient: ConsoleIO: TerminalMode](fileNames: List[String]): F[Unit] = {
+
+    implicit val isTty: Boolean = TerminalMode[F].interactive.exists(Function.const(true))
 
     def printResult(result: Either[Throwable, String]): F[Unit] =
       result match {

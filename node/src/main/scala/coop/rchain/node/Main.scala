@@ -3,9 +3,7 @@ package coop.rchain.node
 import scala.collection.JavaConverters._
 import scala.tools.jline.console._
 import completer.StringsCompleter
-
 import cats.implicits._
-
 import coop.rchain.casper.util.comm._
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
@@ -16,9 +14,10 @@ import coop.rchain.node.diagnostics.client.GrpcDiagnosticsService
 import coop.rchain.node.effects._
 import coop.rchain.shared._
 import coop.rchain.shared.StringOps._
-
 import monix.eval.Task
 import monix.execution.Scheduler
+
+import scala.Function._
 
 object Main {
 
@@ -63,6 +62,8 @@ object Main {
       )
 
     implicit val time: Time[Task] = effects.time
+
+    implicit val terminalMode: TerminalMode[Task] = TerminalModeInstances.consoleBasedTTY[Task]
 
     val program = conf.command match {
       case Eval(files) => new ReplRuntime().evalProgram[Task](files)
@@ -115,10 +116,10 @@ object Main {
     }
   }
 
-  implicit private def consoleIO: ConsoleIO[Task] = {
+  implicit private def consoleIO(implicit terminalMode: TerminalMode[Task]): ConsoleIO[Task] = {
     val console = new ConsoleReader()
     console.setHistoryEnabled(true)
-    console.setPrompt("rholang $ ".green)
+    terminalMode.interactive.foreach(const(console.setPrompt("rholang $ ".green(true))))
     console.addCompleter(new StringsCompleter(ReplRuntime.keywords.asJava))
     effects.consoleIO(console)
   }
