@@ -389,6 +389,80 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
+  it should "handle multi-parent blocks correctly 2" in effectTest {
+    val contract1 = """
+      new helloworld, stdout(`rho:io:stdout`) in {
+          contract helloworld( world ) = {
+              for( @msg <- world ) {
+                  stdout!("Message is: "+msg)
+              }
+          } |
+          new world, world2 in {
+              helloworld!(*world) |
+              world!("Hello World") |
+              helloworld!(*world2) |
+              world2!("Hello World again")
+          }
+      }
+      """
+    val contract2 = """
+      new helloWorld, stdout(`rho:io:stdout`), stdoutAck(`rho:io:stdoutAck`) in {
+        contract helloWorld(@name) = {
+          new ack in {
+            stdoutAck!("Hello, ", *ack) |
+            for (_ <- ack) {
+              stdoutAck!(name, *ack) |
+              for (_ <- ack) {
+                stdout!("\n")
+              }
+            }
+          }
+        } |
+        helloWorld!("Joe")
+      }
+      """
+
+    for {
+      nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
+      deploys = Vector(
+        ProtoUtil.sourceDeploy(contract1, System.currentTimeMillis(), accounting.MAX_VALUE),
+        ProtoUtil.sourceDeploy(
+          "@1!(1) | for(@x <- @1){ @1!(x) }",
+          System.currentTimeMillis() + 1,
+          accounting.MAX_VALUE
+        ),
+        ProtoUtil.sourceDeploy(contract2, System.currentTimeMillis() + 2, accounting.MAX_VALUE)
+      )
+      createBlockResult0 <- nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
+      createBlockResult1 <- nodes(1).casperEff.deploy(deploys(1)) *> nodes(1).casperEff.createBlock
+      Created(block0)    = createBlockResult0
+      Created(block1)    = createBlockResult1
+      _                  <- nodes(0).casperEff.addBlock(block0, ignoreDoppelgangerCheck[Effect])
+      _                  <- nodes(1).casperEff.addBlock(block1, ignoreDoppelgangerCheck[Effect])
+      _                  <- nodes(0).receive()
+      _                  <- nodes(1).receive()
+      _                  <- nodes(0).receive()
+      _                  <- nodes(1).receive()
+
+      //multiparent block joining block0 and block1 since they do not conflict
+      multiparentCreateBlockResult <- nodes(0).casperEff
+                                       .deploy(deploys(2)) *> nodes(0).casperEff.createBlock
+      Created(multiparentBlock) = multiparentCreateBlockResult
+      _                         <- nodes(0).casperEff.addBlock(multiparentBlock, ignoreDoppelgangerCheck[Effect])
+      _                         <- nodes(1).receive()
+
+      _ = nodes(0).logEff.warns.isEmpty shouldBe true
+      _ = nodes(1).logEff.warns.isEmpty shouldBe true
+      _ = multiparentBlock.header.get.parentsHashList.size shouldBe 2
+      _ = nodes(0).casperEff.contains(multiparentBlock) shouldBeF true
+      _ = nodes(1).casperEff.contains(multiparentBlock) shouldBeF true
+
+      finalTuplespace <- nodes(0).casperEff
+                          .storageContents(ProtoUtil.postStateHash(multiparentBlock))
+      _ = nodes.foreach(_.tearDown())
+    } yield ()
+  }
+
   it should "not merge blocks that touch the same channel" in effectTest {
     for {
       nodes    <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
