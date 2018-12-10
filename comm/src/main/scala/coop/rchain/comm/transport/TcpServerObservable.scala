@@ -2,13 +2,16 @@ package coop.rchain.comm.transport
 
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
-import coop.rchain.comm.PeerNode
+import scala.util.control.NonFatal
+
 import cats.implicits._
-import coop.rchain.shared.{Log, LogSource}
+
+import coop.rchain.shared._, Compression._
+import coop.rchain.comm.{CommError, PeerNode}
 import coop.rchain.comm.protocol.routing._
-import coop.rchain.comm.CommError
 import coop.rchain.comm.rp.ProtocolHelper
 
+import com.google.protobuf.ByteString
 import io.grpc.netty.NettyServerBuilder
 import io.netty.handler.ssl.SslContext
 import monix.eval.Task
@@ -16,7 +19,6 @@ import monix.execution.{Cancelable, Scheduler}
 import monix.reactive.Observable
 import monix.reactive.observers.Subscriber
 import monix.reactive.OverflowStrategy._
-import monix.reactive.subjects.ConcurrentSubject
 
 class TcpServerObservable(
     port: Int,
@@ -31,21 +33,20 @@ class TcpServerObservable(
 
   def unsafeSubscribeFn(subscriber: Subscriber[ServerMessage]): Cancelable = {
 
-    implicit val logSource: LogSource = LogSource(this.getClass)
-
-    val subjectTell        = ConcurrentSubject.publishToOne[ServerMessage](DropNew(tellBufferSize))
-    val subjectAsk         = ConcurrentSubject.publishToOne[ServerMessage](DropNew(askBufferSize))
-    val subjectBlobMessage = ConcurrentSubject.publishToOne[ServerMessage](DropNew(blobBufferSize))
-    val merged             = Observable.merge(subjectTell, subjectAsk, subjectBlobMessage)(BackPressure(10))
+    val bufferTell        = buffer.LimitedBufferObservable.dropNew[ServerMessage](tellBufferSize)
+    val bufferAsk         = buffer.LimitedBufferObservable.dropNew[ServerMessage](askBufferSize)
+    val bufferBlobMessage = buffer.LimitedBufferObservable.dropNew[ServerMessage](blobBufferSize)
+    val merged =
+      Observable(bufferTell, bufferAsk, bufferBlobMessage).mergeMap(identity)(BackPressure(10))
 
     val service = new RoutingGrpcMonix.TransportLayer {
 
       def tell(request: TLRequest): Task[TLResponse] =
         request.protocol
           .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>
-            Task.delay {
-              subjectTell.onNext(Tell(protocol))
-              noResponse
+            Task.delay(bufferTell.pushNext(Tell(protocol))).map {
+              case false => internalServerError("message dropped")
+              case true  => noResponse
             }
           }
 
@@ -55,8 +56,11 @@ class TcpServerObservable(
             Task
               .create[CommunicationResponse] { (s, cb) =>
                 val reply = Reply(cb)
-                subjectAsk.onNext(Ask(protocol, reply))
                 s.scheduleOnce(askTimeout)(reply.failWith(new TimeoutException))
+                bufferAsk.pushNext(Ask(protocol, reply)) match {
+                  case false => reply.failWith(new RuntimeException("message dropped"))
+                  case true  =>
+                }
                 Cancelable.empty
               }
               .map {
@@ -66,48 +70,12 @@ class TcpServerObservable(
               }
               .onErrorRecover {
                 case _: TimeoutException => internalServerError(CommError.timeout.message)
+                case NonFatal(ex)        => internalServerError(ex.getMessage)
               }
           }
 
-      def stream(observable: Observable[Chunk]): Task[ChunkResponse] = {
-        case class PartialBlob(
-            peerNode: Option[PeerNode] = None,
-            typeId: Option[String] = None,
-            content: Option[Array[Byte]] = None
-        )
-        def collect: Task[PartialBlob] = observable.foldLeftL(PartialBlob()) {
-          case (
-              PartialBlob(_, _, content),
-              Chunk(Chunk.Content.Header(ChunkHeader(sender, typeId)))
-              ) =>
-            PartialBlob(sender.map(ProtocolHelper.toPeerNode), Some(typeId), content)
-          case (
-              PartialBlob(sender, typeId, None),
-              Chunk(Chunk.Content.Data(ChunkData(newData)))
-              ) =>
-            PartialBlob(sender, typeId, Some(newData.toByteArray))
-          case (
-              PartialBlob(sender, typeId, Some(content)),
-              Chunk(Chunk.Content.Data(ChunkData(newData)))
-              ) =>
-            PartialBlob(sender, typeId, Some(content ++ newData.toByteArray))
-        }
-
-        (collect >>= {
-          case PartialBlob(Some(peerNode), Some(typeId), Some(content)) =>
-            Task.fromFuture(
-              subjectBlobMessage.onNext(
-                StreamMessage(
-                  Blob(
-                    peerNode,
-                    Packet().withTypeId(typeId).withContent(ProtocolHelper.toProtocolBytes(content))
-                  )
-                )
-              )
-            )
-          case incorrect => logger.error(s"Streamed incorrect blob of data. Received $incorrect")
-        }).as(ChunkResponse())
-      }
+      def stream(observable: Observable[Chunk]): Task[ChunkResponse] =
+        StreamHandler.handleStream(observable, bufferBlobMessage)
 
       private def returnProtocol(protocol: Protocol): TLResponse =
         TLResponse(TLResponse.Payload.Protocol(protocol))

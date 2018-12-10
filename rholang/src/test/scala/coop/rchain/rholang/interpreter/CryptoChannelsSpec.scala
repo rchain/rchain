@@ -3,6 +3,7 @@ package coop.rchain.rholang.interpreter
 import java.nio.file.Files
 
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
@@ -58,7 +59,7 @@ class CryptoChannelsSpec
       Seq(ReceiveBind(Seq(EVar(Var(Wildcard(WildcardMsg())))), ackChannel)),
       Par()
     )
-    Await.ready(reduce.eval(consume).runAsync, 3.seconds)
+    Await.ready(reduce.eval(consume).runToFuture, 3.seconds)
   }
 
   def assertStoreContains(
@@ -99,7 +100,7 @@ class CryptoChannelsSpec
       // 1. meet with the system process in the tuplespace
       // 2. hash input array
       // 3. send result on supplied ack channel
-      Await.result(reduce.eval(send).runAsync, 3.seconds)
+      Await.result(reduce.eval(send).runToFuture, 3.seconds)
       storeContainsTest(ListParWithRandom(Seq(expected), rand))
       clearStore(store, reduce, ackChannel)
     }
@@ -158,7 +159,7 @@ class CryptoChannelsSpec
           persistent = false,
           BitSet()
         )
-        Await.result(reduce.eval(send).runAsync, 3.seconds)
+        Await.result(reduce.eval(send).runToFuture, 3.seconds)
         storeContainsTest(
           ListParWithRandom(Seq(Expr(GBool(true))), rand)
         )
@@ -198,7 +199,7 @@ class CryptoChannelsSpec
           persistent = false,
           BitSet()
         )
-        Await.result(reduce.eval(send).runAsync, 3.seconds)
+        Await.result(reduce.eval(send).runToFuture, 3.seconds)
         storeContainsTest(
           ListParWithRandom(List(Expr(GBool(true))), rand)
         )
@@ -216,7 +217,7 @@ class CryptoChannelsSpec
     try {
       test((runtime.reducer, runtime.space.store))
     } finally {
-      runtime.close()
+      runtime.close().unsafeRunSync
       dbDir.recursivelyDelete
     }
   }

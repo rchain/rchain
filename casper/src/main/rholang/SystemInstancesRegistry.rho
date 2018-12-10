@@ -1,0 +1,50 @@
+//scalapackage coop.rchain.rholang.registry
+
+//The purpose of this contract is to allow users to
+//look up the various instances of system contracts that
+//were created in the genesis block.
+
+//Registry info:
+//  sk: 7f2a3526664f04096067654705776950e2e475a1479d3569d8d7423e27bad603
+//  pk: 08a0f8fccace949453dcb6a885e9f50dd96a58ed51c49fc2e346aa4d42ffb7c1
+//  user == pk
+//  timestamp: 1540563894858
+//Resulting unforgable name: Unforgeable(0xeaf4d685675c199b2a2cceef521dacaaa711cd70c7d082c20d154507e5c58407) 
+//  ==> signature data == 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a20eaf4d685675c199b2a2cceef521dacaaa711cd70c7d082c20d154507e5c584071001
+//  ==> signature == fbf76226c16f1327058fba896fe4d43f69b3707981ae7b8498de6fcbc36c4bbe66885904dde6a8a4f5cdf8e74f035f8e505b895a381833d3ecfb717748bc8b0d
+//URI derived from pk == `rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`
+new
+  SystemInstancesRegistry, rs(`rho:registry:insertSigned:ed25519`), uriOut,
+  faucetStore, posStore, revStore
+in {
+  contract SystemInstancesRegistry(@"lookup", @systemContract, return) = {
+    match systemContract {
+      "faucet"     => { for(@value <- faucetStore)    { return!(value) | faucetStore!(value) } }
+      "pos"        => { for(@value <- posStore)       { return!(value) | posStore!(value) } }
+      "rev"        => { for(@value <- revStore)       { return!(value) | revStore!(value) } }
+      _            => { return!(Nil) }
+    }
+  } |
+
+  //one time use only call for registering a faucet instance
+  for(@"register", @"faucet", @value <- SystemInstancesRegistry) {
+    faucetStore!(value)
+  } |
+  
+  //one time use only call for registering a proof-of-stake instance
+  for(@"register", @"pos", @value <- SystemInstancesRegistry) {
+    posStore!(value)
+  } |
+  
+  //one time use only call for registering a rev-mint instance
+  for(@"register", @"rev", @value <- SystemInstancesRegistry) {
+    revStore!(value)
+  } |
+  
+  rs!(
+    "08a0f8fccace949453dcb6a885e9f50dd96a58ed51c49fc2e346aa4d42ffb7c1".hexToBytes(), 
+    (9223372036854775807, bundle+{*SystemInstancesRegistry}), 
+    "fbf76226c16f1327058fba896fe4d43f69b3707981ae7b8498de6fcbc36c4bbe66885904dde6a8a4f5cdf8e74f035f8e505b895a381833d3ecfb717748bc8b0d".hexToBytes(), 
+    *uriOut
+  )
+}

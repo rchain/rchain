@@ -12,7 +12,7 @@ import coop.rchain.rholang.interpreter.Runtime.RhoDispatchMap
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccounting}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.ISpace.IdISpace
+import coop.rchain.rspace.ISpace
 import coop.rchain.rspace.internal.{Datum, Row}
 import coop.rchain.rspace.pure.PureRSpace
 import monix.eval.Task
@@ -48,7 +48,8 @@ trait RegistryTester extends PersistentStoreTester {
   def withRegistryAndTestSpace[R](
       f: (
           ChargingReducer[Task],
-          IdISpace[
+          ISpace[
+            Task,
             Par,
             BindPattern,
             OutOfPhlogistonsError.type,
@@ -72,6 +73,9 @@ trait RegistryTester extends PersistentStoreTester {
 }
 
 class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
+
+  private val EvaluateTimeout = 10.seconds
+
   /*
     0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2
     089775e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e
@@ -171,21 +175,33 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       s: String,
       expected: Par,
       rand: Blake2b512Random
-  ): Unit =
-    result.get(List[Par](GString(s))) should be(
+  ): Unit = {
+    val resultRow      = result.get(List[Par](GString(s)))
+    val sequenceNumber = resultSequenceNumber(resultRow)
+    resultRow should be(
       Some(
         Row(
           List(
             Datum.create[Par, ListParWithRandom](
               GString(s),
               ListParWithRandom(Seq(expected), rand),
-              false
+              false,
+              sequenceNumber
             )
           ),
           List()
         )
       )
     )
+  }
+
+  // It is safe to pull out the sequence number because it can vary depending
+  // on the registry execution of the produces/consumes and we are not
+  // testing replay
+  private def resultSequenceNumber(
+      resultRow: Option[Row[BindPattern, ListParWithRandom, TaggedContinuation]]
+  ) =
+    resultRow.fold(0)(_.data.head.source.sequenceNumber)
 
   "lookup" should "recurse" in {
     val lookupString: String =
@@ -208,13 +224,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     val randResult2 = newRand.splitByte(2)
     randResult2.next; randResult2.next
 
-    val result = withRegistryAndTestSpace { (reducer, space) =>
-      implicit val env = Env[Par]()
-      val resultTask = for {
-        _ <- reducer.eval(completePar)
-      } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
-    }
+    val result = evaluate(completePar)
 
     checkResult(result, "result0", GInt(7), randResult0)
     checkResult(result, "result1", GInt(9), randResult1)
@@ -321,13 +331,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     val result10Rand = merge7.splitByte(5)
     result10Rand.next(); result10Rand.next()
 
-    val result = withRegistryAndTestSpace { (reducer, space) =>
-      implicit val env = Env[Par]()
-      val resultTask = for {
-        _ <- reducer.eval(completePar)
-      } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
-    }
+    val result = evaluate(completePar)
 
     checkResult(result, "result0", GInt(8), result0Rand)
     checkResult(result, "result1", GInt(10), result1Rand)
@@ -387,13 +391,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     val completePar                     = deletePar.addSends(rootSend, fullBranchSend)
     implicit val rand: Blake2b512Random = baseRand.splitByte(3)
 
-    val result = withRegistryAndTestSpace { (reducer, space) =>
-      implicit val env = Env[Par]()
-      val resultTask = for {
-        _ <- reducer.eval(completePar)
-      } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
-    }
+    val result = evaluate(completePar)
 
     // Compute the random states for the results
     val resultRand = baseRand.splitByte(3)
@@ -453,14 +451,17 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     checkResult(result, "result5", GInt(8), result5Rand)
     checkResult(result, "result6", GInt(8), result6Rand)
     checkResult(result, "result6", GInt(8), result6Rand)
-    result.get(List[Par](Registry.registryRoot)) should be(
+    val registryRootResult = result.get(List[Par](Registry.registryRoot))
+    val sequenceNumber     = resultSequenceNumber(registryRootResult)
+    registryRootResult should be(
       Some(
         Row(
           List(
             Datum.create[Par, ListParWithRandom](
               Registry.registryRoot,
               ListParWithRandom(Seq(EMapBody(ParMap(SortedParMap.empty))), rootRand),
-              false
+              false,
+              sequenceNumber
             )
           ),
           List()
@@ -485,13 +486,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     val randResult1 = newRand.splitByte(1)
     randResult1.next; randResult1.next
 
-    val result = withRegistryAndTestSpace { (reducer, space) =>
-      implicit val env = Env[Par]()
-      val resultTask = for {
-        _ <- reducer.eval(completePar)
-      } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
-    }
+    val result = evaluate(completePar)
 
     checkResult(result, "result0", GInt(8), randResult0)
     checkResult(result, "result1", GInt(9), randResult1)
@@ -526,13 +521,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     lookupRand.next();
     val randResult1 = lookupRand
 
-    val result = withRegistryAndTestSpace { (reducer, space) =>
-      implicit val env = Env[Par]()
-      val resultTask = for {
-        _ <- reducer.eval(completePar)
-      } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
-    }
+    val result = evaluate(completePar)
 
     val expectedBundle: Par =
       Bundle(GPrivate(ByteString.copyFrom(registeredName)), writeFlag = true, readFlag = false)
@@ -664,13 +653,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         .hash(Base16.decode("11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d"))
     )
 
-    val result = withRegistryAndTestSpace { (reducer, space) =>
-      implicit val env = Env[Par]()
-      val resultTask = for {
-        _ <- reducer.eval(completePar)
-      } yield space.store.toMap
-      Await.result(resultTask.runAsync, 3.seconds)
-    }
+    val result = evaluate(completePar)
 
     checkResult(result, "result0", ETuple(List(GInt(789), GString("entry"))), result0Rand)
     checkResult(result, "result1", ETuple(List(GInt(789), GString("entry"))), result1Rand)
@@ -680,4 +663,14 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     checkResult(result, "result5", ETuple(List(GInt(790), GString("entryReplace"))), result5Rand)
     checkResult(result, "result6", GUri(expectedUri), result6Rand)
   }
+
+  private def evaluate(completePar: Par)(implicit rand: Blake2b512Random) =
+    withRegistryAndTestSpace { (reducer, space) =>
+      implicit val env = Env[Par]()
+      val resultTask = for {
+        _ <- reducer.eval(completePar)
+      } yield space.store.toMap
+      Await.result(resultTask.runToFuture, EvaluateTimeout)
+    }
+
 }

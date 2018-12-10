@@ -44,15 +44,21 @@ object Interpreter {
   def buildNormalizedTerm(source: Reader): Coeval[Par] =
     try {
       for {
-        term    <- buildAST(source)
-        inputs  = ProcVisitInputs(VectorPar(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
-        outputs <- normalizeTerm(term, inputs)
-        sorted <- Sortable[Par]
-                   .sortMatch(outputs.par)
-      } yield sorted.term
+        term <- buildAST(source)
+        par  <- buildPar(term)
+      } yield par
     } catch {
       case th: Throwable => Coeval.raiseError(UnrecognizedInterpreterError(th))
     }
+
+  def buildPar(proc: Proc): Coeval[Par] = {
+
+    val inputs = ProcVisitInputs(VectorPar(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
+    for {
+      outputs <- normalizeTerm(proc, inputs)
+      sorted  <- Sortable[Par].sortMatch(outputs.par)
+    } yield sorted.term
+  }
 
   private def buildAST(source: Reader): Coeval[Proc] =
     Coeval
@@ -122,13 +128,13 @@ object Interpreter {
     implicit val rand      = Blake2b512Random(128)
     val evaluatePhlosLimit = Cost(Integer.MAX_VALUE) //This is OK because evaluate is not called on deploy
     for {
-      checkpoint <- Task.now(runtime.space.createCheckpoint())
+      checkpoint <- runtime.space.createCheckpoint()
       _          <- runtime.reducer.setAvailablePhlos(evaluatePhlosLimit)
       _          <- runtime.reducer.inj(normalizedTerm)(rand)
       errors     <- Task.now(runtime.readAndClearErrorVector())
       leftPhlos  <- runtime.reducer.getAvailablePhlos()
       cost       = leftPhlos.copy(cost = evaluatePhlosLimit - leftPhlos.cost)
-      _          <- Task.now(if (errors.nonEmpty) runtime.space.reset(checkpoint.root))
+      _          <- if (errors.nonEmpty) runtime.space.reset(checkpoint.root) else Task.now(())
     } yield EvaluateResult(cost, errors)
   }
 

@@ -22,6 +22,7 @@ import coop.rchain.shared._
 import monix.execution.Scheduler
 
 import scala.util.Try
+import scala.concurrent.duration.Duration
 
 /**
   * Validator side of the protocol defined in
@@ -114,7 +115,7 @@ object BlockApproverProtocol {
             .or("Candidate didn't have required signatures number.")
       block      <- Either.fromOption(candidate.block, "Candidate block is empty.")
       body       <- Either.fromOption(block.body, "Body is empty")
-      postState  <- Either.fromOption(body.postState, "Post state is empty")
+      postState  <- Either.fromOption(body.state, "Post state is empty")
       blockBonds = postState.bonds.map { case Bond(validator, stake) => validator -> stake }.toMap
       _ <- (blockBonds == bonds)
             .either(())
@@ -141,11 +142,12 @@ object BlockApproverProtocol {
             .or("Mismatch between number of candidate deploys and expected number of deploys.")
       stateHash <- runtimeManager
                     .replayComputeState(runtimeManager.emptyStateHash, blockDeploys)
+                    .runSyncUnsafe(Duration.Inf)
                     .leftMap { case (_, status) => s"Failed status during replay: $status." }
-      _ <- (stateHash == postState.tuplespace)
+      _ <- (stateHash == postState.postStateHash)
             .either(())
             .or("Tuplespace hash mismatch.")
-      tuplespaceBonds <- Try(runtimeManager.computeBonds(postState.tuplespace)).toEither
+      tuplespaceBonds <- Try(runtimeManager.computeBonds(postState.postStateHash)).toEither
                           .leftMap(_.getMessage)
       tuplespaceBondsMap = tuplespaceBonds.map { case Bond(validator, stake) => validator -> stake }.toMap
       _ <- (tuplespaceBondsMap == bonds)
@@ -157,9 +159,6 @@ object BlockApproverProtocol {
     if (msg.typeId == transport.UnapprovedBlock.id)
       Try(UnapprovedBlock.parseFrom(msg.content.toByteArray)).toOption
     else None
-
-  implicit val phloPriceEq = Eq.by[PhloPrice, Long](_.value)
-  implicit val phloLimitEq = Eq.by[PhloLimit, Long](_.value)
 
   val deployDataEq: cats.kernel.Eq[DeployData] = new cats.kernel.Eq[DeployData] {
     override def eqv(x: DeployData, y: DeployData): Boolean =

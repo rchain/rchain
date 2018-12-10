@@ -1,13 +1,10 @@
 package coop.rchain.comm.transport
 
-import cats.Id
-
-import coop.rchain.catscontrib._
 import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.protocol.routing.TLResponse.Payload
+import coop.rchain.crypto.util.CertificateHelper
 import coop.rchain.shared.{Log, LogSource}
-
 import io.grpc._
 import javax.net.ssl.SSLSession
 
@@ -25,7 +22,7 @@ class SslSessionClientCallInterceptor[ReqT, RespT](next: ClientCall[ReqT, RespT]
   self =>
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
-  private val log                           = Log.log[Id]
+  private val log                           = Log.logId
 
   def cancel(message: String, cause: Throwable): Unit = next.cancel(message, cause)
   def request(numMessages: Int): Unit                 = next.request(numMessages)

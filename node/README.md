@@ -28,120 +28,7 @@ coop.rchain/rnode                               latest              b1af7024d9bf
 ## 2. Modes
 
 The node module comes with single executable (jar, docker image, debian or fedora package), that can run in a few modes. Which mode is running depends on the flag you use. 
-You can run node with the following flags:
-
-```
-RChain Node 0.6.1
-  -c, --config-file  <arg>          Path to the configuration file.
-      --grpc-host  <arg>            Hostname or IP of node on which gRPC service
-                                    is running.
-  -g, --grpc-port  <arg>            Port used for external gRPC API.
-      --grpc-port-internal  <arg>   Port used for internal gRPC API.
-  -p, --profile  <arg>              Which predefined set of defaults to use:
-                                    default or docker.
-      --help                        Show help message
-      --version                     Show version of this program
-
-Subcommand: diagnostics - Node diagnostics
-      --help   Show help message
-Subcommand: run
-      --bonds-file  <arg>                Plain text file consisting of lines of
-                                         the form `<pk> <stake>`, which defines
-                                         the bond amounts for each validator at
-                                         genesis. <pk> is the public key (in
-                                         base-16 encoding) identifying the
-                                         validator and <stake>is the amount of
-                                         Rev they have bonded (an integer).
-                                         Note: this overrides the
-                                         --num-validators option.
-  -b, --bootstrap  <arg>                 Bootstrap rnode address for initial
-                                         seed.
-      --casper-block-store-size  <arg>   Casper BlockStore map size (in bytes)
-  -c, --certificate  <arg>               Path to node's X.509 certificate file,
-                                         that is being used for identification
-      --data_dir  <arg>                  Path to data directory. Defaults to
-                                         $HOME/.rnode
-  -d, --default-timeout  <arg>           Default timeout for roundtrip
-                                         connections. Default 1 second.
-      --host  <arg>                      Hostname or IP of this node.
-  -h, --http-port  <arg>                 HTTP port (deprecated - all API
-                                         features will be ported to gRPC API).
-  -i, --in-memory-store                  Use in-memory store beneath RSpace
-  -k, --key  <arg>                       Path to node's private key PEM file,
-                                         that is being used for TLS
-                                         communication
-      --known-validators  <arg>          Plain text file listing the public keys
-                                         of validators known to the user (one
-                                         per line). Signatures from these
-                                         validators are required in order to
-                                         accept a block which starts the
-                                         localnode's view of the blockDAG.
-      --map_size  <arg>                  Map size (in bytes)
-      --max-num-of-connections  <arg>    Maximum number of peers allowed to
-                                         connect to the node
-  -m, --metrics-port  <arg>              Port used by metrics API.
-  -n, --no-upnp                          Use this flag to disable UpNp.
-      --num-validators  <arg>            Number of validators at genesis.
-  -p, --port  <arg>                      Network port to use.
-      --secure-random-non-blocking       Use a non blocking secure random
-                                         instance
-      --shard-id  <arg>                  Identifier of the shard this node is
-                                         connected to.
-  -s, --standalone                       Start a stand-alone node (no
-                                         bootstrapping).
-      --validator-private-key  <arg>     Base16 encoding of the private key to
-                                         use for signing a proposed blocks.
-  -v, --validator-public-key  <arg>      Base16 encoding of the public key to
-                                         use for signing a proposed blocks. Can
-                                         be inferred from the private key for
-                                         some signature algorithms.
-      --validator-sig-algorithm  <arg>   Name of the algorithm to use for
-                                         signing proposed blocks. Currently
-                                         supported values: ed25519
-  -w, --wallets-file  <arg>              Plain text file consisting of lines of
-                                         the form `<algorithm> <pk>
-                                         <revBalance>`, which defines the Rev
-                                         wallets that exist at genesis.
-                                         <algorithm> is the algorithm used to
-                                         verify signatures when using the wallet
-                                         (one of ed25519 or secp256k1),<pk> is
-                                         the public key (in base-16 encoding)
-                                         identifying the wallet and
-                                         <revBalance>is the amount of Rev in the
-                                         wallet.
-      --help                             Show help message
-Subcommand: repl - Starts a thin client, that will connect to existing node. See grpcHost and grpcPort.
-      --help   Show help message
-Subcommand: eval - Starts a thin client that will evaluate rholang in file on a existing running node. See grpcHost and grpcPort.
-      --help   Show help message
-
- trailing arguments:
-  file-names (required)
-Subcommand: deploy-demo - Demo sending some placeholder Deploy operations to Casper on an existing running node at regular intervals
-      --help   Show help message
-Subcommand: deploy - Deploy a Rholang source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance.
-  -f, --from  <arg>         Purse address that will be used to pay for the
-                            deployment.
-  -n, --nonce  <arg>        This allows to overwrite your own pending
-                            transactions that use the same nonce.
-  -p, --phlo-limit  <arg>   The amount of phlo to use for the transaction
-                            (unused phlo is refunded).
-      --phlo-price  <arg>   The price of phlo for this transaction in units
-                            dust/phlo.
-      --help                Show help message
-
- trailing arguments:
-  location (required)
-Subcommand: show-block - View properties of a block known by Casper on an existing running node.Output includes: parent hashes, storage contents of the tuplespace.
-      --help   Show help message
-
- trailing arguments:
-  hash (required)   the hash value of the block
-Subcommand: show-blocks - View list of blocks on the main chain in the current Casper view on an existing running node.
-      --help   Show help message
-Subcommand: propose - Force Casper (on an existing running node) to propose a block based on its accumulated deploys.
-      --help   Show help message
-```
+To see the list of available flags you can run `./rnode --help`
 
 ### 2.1 The Node
 By default when you execute the program, it will fire up a running node instance. That instance will become either a bootstrap node (see `--standalone` flag) or will try to connect to existing bootstrap.
@@ -168,7 +55,7 @@ Node exposes its API via gRPC services, which are exposed on `grpc-port`. To see
 
 #### 2.1.2 Data directory
 
-Node needs to have read and write access to a folder called data directory. By default that folder is `$HOME/.rnode`. User can control that value by providing `--data_dir` flag. 
+Node needs to have read and write access to a folder called data directory. By default that folder is `$HOME/.rnode`. User can control that value by providing `--data-dir` flag. 
 Regardless of which path on the file system you choose for the data directory, please remember that node needs to have read and write access to that folder.
 
 #### 2.1.2 Running the Node

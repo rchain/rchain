@@ -60,7 +60,8 @@ object Connect {
 
   import Connections._
 
-  type RPConfAsk[F[_]] = ApplicativeAsk[F, RPConf]
+  type RPConfState[F[_]] = MonadState[F, RPConf]
+  type RPConfAsk[F[_]]   = ApplicativeAsk[F, RPConf]
 
   object RPConfAsk {
     def apply[F[_]](implicit ev: ApplicativeAsk[F, RPConf]): ApplicativeAsk[F, RPConf] = ev
@@ -83,7 +84,7 @@ object Connect {
       for {
         numOfConnectionsPinged <- RPConfAsk[F].reader(_.clearConnections.numOfConnectionsPinged)
         toPing                 = connections.take(numOfConnectionsPinged)
-        results                <- toPing.traverse(sendHeartbeat(_))
+        results                <- toPing.traverse(sendHeartbeat)
         successfulPeers        = results.collect { case (peer, Right(_)) => peer }
         failedPeers            = results.collect { case (peer, Left(_)) => peer }
         _ <- ConnectionsCell[F].modify { connections =>
@@ -97,6 +98,17 @@ object Connect {
       cleared     <- if (connections.size > ((max * 2) / 3)) clear(connections) else 0.pure[F]
     } yield cleared
   }
+
+  def resetConnections[F[_]: Monad: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]
+    : F[Unit] =
+    ConnectionsCell[F].modify { connections =>
+      for {
+        local  <- RPConfAsk[F].reader(_.local)
+        _      <- TransportLayer[F].broadcast(connections, disconnect(local))
+        _      <- connections.traverse(TransportLayer[F].disconnect)
+        result <- connections.removeConn[F](connections)
+      } yield result
+    }
 
   def findAndConnect[F[_]: Capture: Monad: Log: Time: Metrics: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
       conn: (PeerNode, FiniteDuration) => F[Unit]

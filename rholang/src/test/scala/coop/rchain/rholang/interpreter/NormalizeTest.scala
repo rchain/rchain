@@ -1202,9 +1202,39 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
         new PPar(new PVar(new ProcVarWildcard()), new PVar(new ProcVarVar("x")))
       )
 
-    an[UnexpectedBundleContent] should be thrownBy (
+    an[UnexpectedBundleContent] should be thrownBy
       ProcNormalizeMatcher.normalizeMatch[Coeval](pbundle, inputs).value
-    )
+  }
+
+  /** Example:
+    * bundle { Uri }
+    */
+  it should "throw an error when connective is used at top level of body of bundle" in {
+    val pbundle =
+      new PBundle(
+        new BundleReadWrite(),
+        new PSimpleType(new SimpleTypeUri())
+      )
+
+    an[UnexpectedBundleContent] should be thrownBy
+      ProcNormalizeMatcher.normalizeMatch[Coeval](pbundle, inputs).value
+  }
+
+  /** Example:
+    * bundle { @Nil!(Uri) }
+    */
+  it should "not throw an error when connective is used outside of top level of body of bundle" in {
+    val listProc = new ListProc()
+    listProc.add(new PSimpleType(new SimpleTypeUri()))
+
+    val pbundle =
+      new PBundle(
+        new BundleReadWrite(),
+        new PSend(new NameQuote(new PNil()), new SendSingle(), listProc)
+      )
+
+    noException should be thrownBy
+      ProcNormalizeMatcher.normalizeMatch[Coeval](pbundle, inputs).value
   }
 
   it should "interpret bundle polarization" in {

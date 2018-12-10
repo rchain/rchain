@@ -8,7 +8,10 @@ import coop.rchain.models.rholang.SortTest.sort
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.rholang.sorter._
 import monix.eval.Coeval
+import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest._
+import org.scalatest.prop.PropertyChecks
 
 import scala.collection.immutable.BitSet
 
@@ -16,7 +19,7 @@ object SortTest {
   def sort[T: Sortable](t: T) = Sortable[T].sortMatch[Coeval](t).value
 }
 
-class ScoredTermSpec extends FlatSpec with Matchers {
+class ScoredTermSpec extends FlatSpec with PropertyChecks with Matchers {
 
   behavior of "ScoredTerm"
 
@@ -46,6 +49,63 @@ class ScoredTermSpec extends FlatSpec with Matchers {
       ScoredTerm("foo", Node(Seq(Leaves(1, 2), Leaves(2, 2))))
     )
     unsortedTerms.sorted should be(sortedTerms)
+  }
+  it should "sort so that unequal terms have unequal scores and the other way around" in {
+    def checkScoreEquality[A: Sortable: Arbitrary]: Unit =
+      // ScalaCheck generates similar A-s in subsequent calls which
+      // we need to hit the case where `x == y` more often
+      forAll(Gen.listOfN(5, arbitrary[A])) { as: List[A] =>
+        for (x :: y :: Nil <- as.combinations(2)) {
+          if (x != y)
+            assert(sort(x).score != sort(y).score)
+          else
+            assert(sort(x).score == sort(y).score)
+        }
+      }
+
+    import coop.rchain.models.testImplicits._
+
+    checkScoreEquality[Bundle]
+    checkScoreEquality[Connective]
+    checkScoreEquality[Expr]
+    checkScoreEquality[Match]
+    checkScoreEquality[New]
+    checkScoreEquality[Par]
+    checkScoreEquality[Receive]
+    checkScoreEquality[Send]
+    checkScoreEquality[Var]
+  }
+  it should "sort so that unequal ParMap have unequal scores" in {
+    val map1 = Expr(EMapBody(ParMap(Seq.empty, connectiveUsed = true, BitSet(), None)))
+    val map2 = Expr(EMapBody(ParMap(Seq.empty, connectiveUsed = false, BitSet(), None)))
+    assert(sort(map1).score != sort(map2).score)
+    val map3 = Expr(EMapBody(ParMap(Seq.empty, connectiveUsed = true, BitSet(), None)))
+    val map4 = Expr(EMapBody(ParMap(Seq.empty, connectiveUsed = true, BitSet(), Some(Var()))))
+    assert(sort(map3).score != sort(map4).score)
+  }
+  it should "sort so that unequal ParSet have unequal scores" in {
+    val set1 =
+      Expr(ESetBody(ParSet(Seq.empty, connectiveUsed = true, Coeval.delay(BitSet()), None)))
+    val set2 =
+      Expr(ESetBody(ParSet(Seq.empty, connectiveUsed = false, Coeval.delay(BitSet()), None)))
+    assert(sort(set1).score != sort(set2).score)
+    val set3 =
+      Expr(ESetBody(ParSet(Seq.empty, connectiveUsed = true, Coeval.delay(BitSet()), None)))
+    val set4 =
+      Expr(ESetBody(ParSet(Seq.empty, connectiveUsed = true, Coeval.delay(BitSet()), Some(Var()))))
+    assert(sort(set3).score != sort(set4).score)
+  }
+  it should "sort so that unequal List have unequal scores" in {
+    val list1 =
+      Expr(EListBody(EList(Seq.empty, AlwaysEqual(BitSet()), connectiveUsed = true, None)))
+    val list2 =
+      Expr(EListBody(EList(Seq.empty, AlwaysEqual(BitSet()), connectiveUsed = false, None)))
+    assert(sort(list1).score != sort(list2).score)
+    val list3 =
+      Expr(EListBody(EList(Seq.empty, AlwaysEqual(BitSet()), connectiveUsed = true, None)))
+    val list4 =
+      Expr(EListBody(EList(Seq.empty, AlwaysEqual(BitSet()), connectiveUsed = true, Some(Var()))))
+    assert(sort(list3).score != sort(list4).score)
   }
 }
 
@@ -543,12 +603,6 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
               )
             )
           ),
-          Connective(VarRefBody(VarRef(0, 2))),
-          Connective(ConnInt(true)),
-          Connective(ConnBool(true)),
-          Connective(ConnString(true)),
-          Connective(ConnByteArray(true)),
-          Connective(ConnUri(true)),
           Connective(ConnNotBody(Par()))
         ),
         connectiveUsed = true
@@ -556,11 +610,6 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
     val sortedParExpr: Par =
       Par(
         connectives = List(
-          Connective(ConnBool(true)),
-          Connective(ConnInt(true)),
-          Connective(ConnString(true)),
-          Connective(ConnUri(true)),
-          Connective(ConnByteArray(true)),
           Connective(ConnNotBody(Par())),
           Connective(
             ConnAndBody(
@@ -578,12 +627,63 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
                 )
               )
             )
-          ),
-          Connective(VarRefBody(VarRef(0, 2)))
+          )
         ),
         connectiveUsed = true
       )
     val result = sort(parExpr)
     result.term should be(sortedParExpr)
+  }
+
+  it should "sort logical connectives in \"varref\", \"bool\", \"int\", \"string\", \"uri\", \"bytearray\" order" in {
+    val parExpr =
+      Par(
+        connectives = List(
+          Connective(ConnByteArray(true)),
+          Connective(ConnUri(true)),
+          Connective(ConnString(true)),
+          Connective(ConnInt(true)),
+          Connective(ConnBool(true)),
+          Connective(
+            VarRefBody(VarRef())
+          )
+        ),
+        connectiveUsed = true
+      )
+    val sortedParExpr: Par =
+      Par(
+        connectives = List(
+          Connective(
+            VarRefBody(VarRef())
+          ),
+          Connective(ConnBool(true)),
+          Connective(ConnInt(true)),
+          Connective(ConnString(true)),
+          Connective(ConnUri(true)),
+          Connective(ConnByteArray(true))
+        ),
+        connectiveUsed = true
+      )
+    val result = sort(parExpr)
+    result.term should be(sortedParExpr)
+  }
+
+  it should "sort based on the connectiveUsed flag" in {
+    val expr = Expr(
+      EMapBody(
+        ParMap(
+          SortedParMap(
+            Map(
+              Par() -> Par(
+                exprs = Seq()
+              ),
+              Par(connectiveUsed = true) -> Par(exprs = Seq())
+            )
+          )
+        )
+      )
+    )
+    val result = sort(expr)
+    result.term should be(expr)
   }
 }

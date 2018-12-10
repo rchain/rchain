@@ -12,13 +12,17 @@ import coop.rchain.rholang.mint.BasicWalletFaucet
 object Faucet {
   //TODO: use registry instead of public names
   def basicWalletFaucet(mintName: String): String =
-    s"""new faucetCh in {
-       |  @"BasicWalletFaucet"!($mintName, *faucetCh) |
-       |  for(@faucet <- faucetCh){
-       |    @"faucet"!!(faucet)
+    s"""new rl(`rho:registry:lookup`), BasicWalletFaucetCh, faucetCh in {
+       |  rl!(`rho:id:r3pfwhwyzfg3n3yhcndwuszkszr11rjdbksizz4eqbqnwg5w49kfo7`, *BasicWalletFaucetCh) |
+       |  for(@(_, BasicWalletFaucet) <- BasicWalletFaucetCh) {
+       |    @BasicWalletFaucet!($mintName, *faucetCh) |
+       |    for(@faucet <- faucetCh){
+       |      @SystemInstancesRegistry!("register", "faucet", faucet)
+       |    }
        |  }
        |}""".stripMargin
 
-  val noopFaucet: String => String = (mintName: String) => "Nil"
+  val noopFaucet: String => String = (mintName: String) =>
+    """@SystemInstancesRegistry!("register", "faucet", Nil)"""
 
 }

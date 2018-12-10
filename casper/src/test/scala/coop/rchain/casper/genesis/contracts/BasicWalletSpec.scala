@@ -2,6 +2,8 @@ package coop.rchain.casper.genesis.contracts
 
 import java.io.StringReader
 
+import coop.rchain.casper.util.ProtoUtil.compiledSourceDeploy
+import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
@@ -19,9 +21,14 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class BasicWalletSpec extends FlatSpec with Matchers {
   val runtime = TestSetUtil.runtime
-  val tests   = TestSetUtil.getTests("./casper/src/test/rholang/BasicWalletTest.rho").toList
+  val tests   = TestSetUtil.getTests("../casper/src/test/rholang/BasicWalletTest.rho").toList
 
-  TestSetUtil.runTests(BasicWalletTest, List(NonNegativeNumber, MakeMint, BasicWallet), runtime)
+  val deploys = List(
+    StandardDeploys.nonNegativeNumber,
+    StandardDeploys.makeMint,
+    StandardDeploys.basicWallet
+  )
+  TestSetUtil.runTestsWithDeploys(BasicWalletTest, deploys, runtime)
   val tuplespace = StoragePrinter.prettyPrint(runtime.space.store)
 
   "Kalium" should "work" in {
@@ -43,9 +50,9 @@ class BasicWalletSpec extends FlatSpec with Matchers {
 /**
   * A tool for generating withdrawal signatures for the BasicWalletTest.rho
   */
-object Signer extends App {
+object Signer {
 
-  override def main(args: Array[String]): Unit = {
+  def main(args: Array[String]): Unit = {
     val sigKey = "1388803416a5869f3d4682fb3fae738278287b80d1a5a52ddf89be8eb9dac59d"
     println(signWithdrawal(0, 60, sigKey))
     println(signWithdrawal(1, 10, sigKey))

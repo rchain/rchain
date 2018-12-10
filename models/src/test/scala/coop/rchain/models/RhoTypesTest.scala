@@ -1,16 +1,17 @@
 package coop.rchain.models
 
-import com.google.protobuf.ByteString
+import com.google.protobuf.{ByteString, CodedInputStream}
 import coop.rchain.models.Assertions.assertEqual
 import coop.rchain.models.BitSetBytesMapper._
 import coop.rchain.models.Connective.ConnectiveInstance.{Empty => _}
-import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.testImplicits._
 import coop.rchain.rspace.Serialize
+import monix.eval.Coeval
 import org.scalacheck.{Arbitrary, Shrink}
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{Assertion, FlatSpec, Matchers}
+import scalapb.GeneratedMessageCompanion
 
 import scala.collection.immutable.BitSet
 import scala.reflect.ClassTag
@@ -33,35 +34,48 @@ class RhoTypesTest extends FlatSpec with PropertyChecks with Matchers {
   roundTripSerialization[ESet]
   roundTripSerialization[EMap]
 
-  def isExcluded(a: Any): Boolean = {
-    //This won't prevent such cases from being generated
-    //within the deeply-nested ast trees, but will make it much less likely.
-    //FIXME eradicate.
-    val exclusions: PartialFunction[Any, Boolean] = {
-      case Expr(EMapBody(_)) => true
-    }
-    exclusions.applyOrElse(a, { x: Any =>
-      false
-    })
-  }
-
-  def roundTripSerialization[A: Serialize: Arbitrary: Shrink: Pretty](
-      implicit tag: ClassTag[A]
+  def roundTripSerialization[A <: StacksafeMessage[A]: Serialize: Arbitrary: Shrink: Pretty](
+      implicit tag: ClassTag[A],
+      companion: GeneratedMessageCompanion[A]
   ): Unit =
     it must s"work for ${tag.runtimeClass.getSimpleName}" in {
       forAll { a: A =>
-        whenever(!isExcluded(a)) {
-          roundTripSerialization(a)
-        }
+        roundTripSerialization(a)
+        stacksafeSizeSameAsReference(a)
+        stacksafeWriteToSameAsReference(a)
+        stacksafeReadFromSameAsReference(a)
       }
     }
 
-  def roundTripSerialization[A: Serialize: Arbitrary: Shrink: Pretty](a: A): Assertion = {
+  def roundTripSerialization[A: Serialize: Pretty](a: A): Assertion = {
     val bytes    = Serialize[A].encode(a)
     val result   = Serialize[A].decode(bytes)
     val expected = Right(a)
     assertEqual(result, expected)
   }
+
+  def stacksafeSizeSameAsReference[A <: StacksafeMessage[A]](a: A): Assertion =
+    assert(ProtoM.serializedSize(a).value() == a.serializedSize)
+
+  def stacksafeWriteToSameAsReference[A <: StacksafeMessage[A]](a: A): Assertion =
+    assert(ProtoM.toByteArray(a).value sameElements a.toByteArray)
+
+  def stacksafeReadFromSameAsReference[A <: StacksafeMessage[A]](a: A)(
+      implicit companion: GeneratedMessageCompanion[A]
+  ): Assertion = {
+    // We don't want to rely on the (sometimes overridden) equals,
+    // so instead we compare the output of reference serializer
+    // on the messages parsed by the stacksafe deserializer.
+    // In short we check `referenceSerialize === referenceSerialize . stacksafeDeserialize . referenceSerialize`.
+    // We also check `stacksafeDeserialize(referenceSerialize(a)).equals(a)` just in case :)
+    val referenceBytes = a.toByteArray
+    val in             = CodedInputStream.newInstance(referenceBytes)
+    val decoded        = companion.defaultInstance.mergeFromM[Coeval](in).value
+    val encoded        = decoded.toByteArray
+    assert(encoded sameElements referenceBytes)
+    assert(decoded == a)
+  }
+
 }
 
 class BitSetBytesMapperTest extends FlatSpec with PropertyChecks with Matchers {

@@ -1,6 +1,7 @@
 # RNode windows build
 ## Important
-Currently some errors inside coop.rchain.kalium-0.8.1-SNAPSHOT.jar blocks starting of the node. We will update this guide as soon as those issues will be fixed.
+During windows build you may see the following error: "java.util.regex.PatternSyntaxException: Unclosed group near index 9". This is an issue inside scalamft formatter, https://github.com/scalameta/sbt-scalafmt/issues/5
+To fix it just disable scalafmt: find "scalafmtOnCompile := true" line in the "build.sbt" file, and replace "true" with "false".
 
 ## 1. Install Haskell Platform
 https://www.haskell.org/platform/
@@ -17,7 +18,7 @@ http://www2.cs.tum.edu/projects/cup/install.php
 http://jflex.de/download.html
 	
 	update JFLEX_HOME in jflex.bat
-	Make ìjflex.batî available from PATH (add <location>\jflex\bin to PATH variable)
+	Make ‚Äújflex.bat‚Äù available from PATH (add <location>\jflex\bin to PATH variable)
 
 ## 5. Open sbt shell and generate parser with bnfc
 ```
@@ -44,7 +45,7 @@ See also [rnode.toml](rnode.toml) example
 ## 9. Start RNode
 For easy start you can use rnode.bat start file generated during build. For example:
 ```
-rnode.bat run --data_dir C:\RChain\data
+rnode.bat run --data-dir C:\RChain\data
 ```
 
 Sometimes the following errors could appear "invalid syntax" and "the command is too long" or "the path is too long". If you see those errors, open rnode.bat and find the very long line (usally 83) that starts with 

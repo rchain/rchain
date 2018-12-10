@@ -1,7 +1,6 @@
 package coop.rchain.node.api
 
 import cats.effect.Sync
-
 import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
@@ -10,7 +9,6 @@ import coop.rchain.casper.api.BlockAPI
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.casper.protocol.{DeployData, DeployServiceResponse, _}
 import coop.rchain.catscontrib.Taskable
-import coop.rchain.models.Par
 import coop.rchain.shared._
 import coop.rchain.catscontrib.TaskContrib._
 import com.google.protobuf.empty.Empty
@@ -20,7 +18,7 @@ import monix.reactive.Observable
 
 private[api] object DeployGrpcService {
   def instance[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
-      worker: Scheduler
+      implicit worker: Scheduler
   ): CasperMessageGrpcMonix.DeployService =
     new CasperMessageGrpcMonix.DeployService {
 
@@ -32,9 +30,6 @@ private[api] object DeployGrpcService {
 
       override def createBlock(e: Empty): Task[DeployServiceResponse] =
         defer(BlockAPI.createBlock[F])
-
-      override def addBlock(b: BlockMessage): Task[DeployServiceResponse] =
-        defer(BlockAPI.addBlock[F](b))
 
       override def showBlock(q: BlockQuery): Task[BlockQueryResponse] =
         defer(BlockAPI.showBlock[F](q))
@@ -57,5 +52,13 @@ private[api] object DeployGrpcService {
         Observable
           .fromTask(defer(BlockAPI.showMainChain[F](request.depth)))
           .flatMap(Observable.fromIterable)
+
+      override def findBlockWithDeploy(request: FindDeployInBlockQuery): Task[BlockQueryResponse] =
+        defer(BlockAPI.findBlockWithDeploy[F](request.user, request.timestamp))
+
+      override def previewPrivateNames(
+          request: PrivateNamePreviewQuery
+      ): Task[PrivateNamePreviewResponse] =
+        defer(BlockAPI.previewPrivateNames[F](request.user, request.timestamp, request.nameQty))
     }
 }

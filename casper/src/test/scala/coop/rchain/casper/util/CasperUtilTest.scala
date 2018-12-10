@@ -2,109 +2,100 @@ package coop.rchain.casper.util
 
 import ProtoUtil._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.{BlockDag, MultiParentCasperInstances}
-import coop.rchain.casper.protocol._
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.catscontrib._
-import Catscontrib._
-import cats._
+import cats.implicits._
+import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import cats.data._
 import cats.effect.Bracket
 import cats.implicits._
 import cats.mtl.MonadState
 import cats.mtl.implicits._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
-import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture, IndexedBlockDag}
+import coop.rchain.casper.helper.BlockGenerator
 import coop.rchain.casper.helper.BlockGenerator._
+import coop.rchain.casper.helper.BlockUtil.generateValidator
+import coop.rchain.casper.scalatestcontrib._
+import monix.eval.Task
+import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
+import coop.rchain.casper.util.rholang.{InterpreterUtil, ProcessedDeployUtil, RuntimeManager}
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.shared.Time
+import monix.eval.Task
+import scala.concurrent.duration._
+import monix.execution.Scheduler.Implicits.global
 
 import scala.collection.immutable.{HashMap, HashSet}
 
-class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with BlockStoreFixture {
-  val initState = IndexedBlockDag.empty.withOffset(1L)
-
-  "isInMainChain" should "classify appropriately" in withStore { implicit blockStore =>
-    implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
-    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
+class CasperUtilTest
+    extends FlatSpec
+    with Matchers
+    with BlockGenerator
+    with BlockDagStorageFixture {
+  "isInMainChain" should "classify appropriately" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
       for {
-        genesis <- createBlock[F](Seq())
-        b2      <- createBlock[F](Seq(genesis.blockHash))
-        b3      <- createBlock[F](Seq(b2.blockHash))
-      } yield b3
-    val chain = createChain[StateWithChain].runS(initState)
+        genesis <- createBlock[Task](Seq())
+        b2      <- createBlock[Task](Seq(genesis.blockHash))
+        b3      <- createBlock[Task](Seq(b2.blockHash))
 
-    val genesisBlockHash = chain.idToBlocks(1).blockHash
-    val b2BlockHash      = chain.idToBlocks(2).blockHash
-    val b3BlockHash      = chain.idToBlocks(3).blockHash
-    isInMainChain(chain, genesisBlockHash, b3BlockHash) should be(true)
-    isInMainChain(chain, b2BlockHash, b3BlockHash) should be(true)
-    isInMainChain(chain, b3BlockHash, b2BlockHash) should be(false)
-    isInMainChain(chain, b3BlockHash, genesisBlockHash) should be(false)
+        dag <- blockDagStorage.getRepresentation
+
+        _      <- isInMainChain(dag, genesis.blockHash, b3.blockHash) shouldBeF true
+        _      <- isInMainChain(dag, b2.blockHash, b3.blockHash) shouldBeF true
+        _      <- isInMainChain(dag, b3.blockHash, b2.blockHash) shouldBeF false
+        result <- isInMainChain(dag, b3.blockHash, genesis.blockHash) shouldBeF false
+      } yield result
   }
 
-  "isInMainChain" should "classify diamond DAGs appropriately" in withStore { implicit blockStore =>
-    implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
-    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
+  "isInMainChain" should "classify diamond DAGs appropriately" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
       for {
-        genesis <- createBlock[F](Seq())
-        b2      <- createBlock[F](Seq(genesis.blockHash))
-        b3      <- createBlock[F](Seq(genesis.blockHash))
-        b4      <- createBlock[F](Seq(b2.blockHash, b3.blockHash))
-      } yield b4
+        genesis <- createBlock[Task](Seq())
+        b2      <- createBlock[Task](Seq(genesis.blockHash))
+        b3      <- createBlock[Task](Seq(genesis.blockHash))
+        b4      <- createBlock[Task](Seq(b2.blockHash, b3.blockHash))
 
-    val chain = createChain[StateWithChain].runS(initState)
+        dag <- blockDagStorage.getRepresentation
 
-    val genesisBlockHash = chain.idToBlocks(1).blockHash
-    val b2BlockHash      = chain.idToBlocks(2).blockHash
-    val b3BlockHash      = chain.idToBlocks(3).blockHash
-    val b4BlockHash      = chain.idToBlocks(4).blockHash
-    isInMainChain(chain, genesisBlockHash, b2BlockHash) should be(true)
-    isInMainChain(chain, genesisBlockHash, b3BlockHash) should be(true)
-    isInMainChain(chain, genesisBlockHash, b4BlockHash) should be(true)
-    isInMainChain(chain, b2BlockHash, b4BlockHash) should be(true)
-    isInMainChain(chain, b3BlockHash, b4BlockHash) should be(false)
+        _      <- isInMainChain(dag, genesis.blockHash, b2.blockHash) shouldBeF true
+        _      <- isInMainChain(dag, genesis.blockHash, b3.blockHash) shouldBeF true
+        _      <- isInMainChain(dag, genesis.blockHash, b4.blockHash) shouldBeF true
+        _      <- isInMainChain(dag, b2.blockHash, b4.blockHash) shouldBeF true
+        result <- isInMainChain(dag, b3.blockHash, b4.blockHash) shouldBeF false
+      } yield result
   }
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
-  "isInMainChain" should "classify complicated chains appropriately" in withStore {
-    implicit blockStore =>
-      implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
-      val v1                       = ByteString.copyFromUtf8("Validator One")
-      val v2                       = ByteString.copyFromUtf8("Validator Two")
-      def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
-        for {
-          genesis <- createBlock[F](Seq(), ByteString.EMPTY)
-          b2      <- createBlock[F](Seq(genesis.blockHash), v2)
-          _       <- createBlock[F](Seq(genesis.blockHash), v1)
-          b4      <- createBlock[F](Seq(b2.blockHash), v2)
-          _       <- createBlock[F](Seq(b2.blockHash), v1)
-          _       <- createBlock[F](Seq(b4.blockHash), v2)
-          b7      <- createBlock[F](Seq(b4.blockHash), v1)
-          b8      <- createBlock[F](Seq(b7.blockHash), v1)
-        } yield b8
+  "isInMainChain" should "classify complicated chains appropriately" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      val v1 = generateValidator("Validator One")
+      val v2 = generateValidator("Validator Two")
 
-      val chain = createChain[StateWithChain].runS(initState)
+      for {
+        genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
+        b2      <- createBlock[Task](Seq(genesis.blockHash), v2)
+        b3      <- createBlock[Task](Seq(genesis.blockHash), v1)
+        b4      <- createBlock[Task](Seq(b2.blockHash), v2)
+        b5      <- createBlock[Task](Seq(b2.blockHash), v1)
+        b6      <- createBlock[Task](Seq(b4.blockHash), v2)
+        b7      <- createBlock[Task](Seq(b4.blockHash), v1)
+        b8      <- createBlock[Task](Seq(b7.blockHash), v1)
 
-      val genesisBlockHash = chain.idToBlocks(1).blockHash
-      val b2BlockHash      = chain.idToBlocks(2).blockHash
-      val b3BlockHash      = chain.idToBlocks(3).blockHash
-      val b4BlockHash      = chain.idToBlocks(4).blockHash
-      val b5BlockHash      = chain.idToBlocks(5).blockHash
-      val b6BlockHash      = chain.idToBlocks(6).blockHash
-      val b7BlockHash      = chain.idToBlocks(7).blockHash
-      val b8BlockHash      = chain.idToBlocks(8).blockHash
-      isInMainChain(chain, genesisBlockHash, b2BlockHash) should be(true)
-      isInMainChain(chain, b2BlockHash, b3BlockHash) should be(false)
-      isInMainChain(chain, b3BlockHash, b4BlockHash) should be(false)
-      isInMainChain(chain, b4BlockHash, b5BlockHash) should be(false)
-      isInMainChain(chain, b5BlockHash, b6BlockHash) should be(false)
-      isInMainChain(chain, b6BlockHash, b7BlockHash) should be(false)
-      isInMainChain(chain, b7BlockHash, b8BlockHash) should be(true)
-      isInMainChain(chain, b2BlockHash, b6BlockHash) should be(true)
-      isInMainChain(chain, b2BlockHash, b8BlockHash) should be(true)
-      isInMainChain(chain, b4BlockHash, b2BlockHash) should be(false)
+        dag <- blockDagStorage.getRepresentation
+
+        _      <- isInMainChain(dag, genesis.blockHash, b2.blockHash) shouldBeF true
+        _      <- isInMainChain(dag, b2.blockHash, b3.blockHash) shouldBeF false
+        _      <- isInMainChain(dag, b3.blockHash, b4.blockHash) shouldBeF false
+        _      <- isInMainChain(dag, b4.blockHash, b5.blockHash) shouldBeF false
+        _      <- isInMainChain(dag, b5.blockHash, b6.blockHash) shouldBeF false
+        _      <- isInMainChain(dag, b6.blockHash, b7.blockHash) shouldBeF false
+        _      <- isInMainChain(dag, b7.blockHash, b8.blockHash) shouldBeF true
+        _      <- isInMainChain(dag, b2.blockHash, b6.blockHash) shouldBeF true
+        _      <- isInMainChain(dag, b2.blockHash, b8.blockHash) shouldBeF true
+        result <- isInMainChain(dag, b4.blockHash, b2.blockHash) shouldBeF false
+      } yield result
   }
 
   /*
@@ -122,44 +113,56 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
    *        \       /
    *         genesis
    */
-  "Blocks" should "conflict if they use the same deploys in different histories" in withStore {
-    implicit blockStore =>
-      implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
-      val deploys                  = (0 until 6).map(basicProcessedDeploy)
+  "Blocks" should "conflict if they use the same deploys in different histories" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      for {
+        deploys <- (0 until 6).toList.traverse(basicProcessedDeploy[Task])
+        genesis <- createBlock[Task](Seq())
+        b2      <- createBlock[Task](Seq(genesis.blockHash), deploys = Seq(deploys(0)))
+        b3      <- createBlock[Task](Seq(genesis.blockHash), deploys = Seq(deploys(1)))
+        b4      <- createBlock[Task](Seq(b2.blockHash), deploys = Seq(deploys(2)))
+        b5      <- createBlock[Task](Seq(b3.blockHash), deploys = Seq(deploys(2)))
+        b6      <- createBlock[Task](Seq(b2.blockHash, b3.blockHash), deploys = Seq(deploys(2)))
+        b7      <- createBlock[Task](Seq(b6.blockHash), deploys = Seq(deploys(3)))
+        b8      <- createBlock[Task](Seq(b6.blockHash), deploys = Seq(deploys(5)))
+        b9      <- createBlock[Task](Seq(b7.blockHash), deploys = Seq(deploys(5)))
+        b10     <- createBlock[Task](Seq(b8.blockHash), deploys = Seq(deploys(4)))
 
-      def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
-        for {
-          genesis <- createBlock[F](Seq())
-          b2      <- createBlock[F](Seq(genesis.blockHash), deploys = Seq(deploys(0)))
-          b3      <- createBlock[F](Seq(genesis.blockHash), deploys = Seq(deploys(1)))
-          b4      <- createBlock[F](Seq(b2.blockHash), deploys = Seq(deploys(2)))
-          b5      <- createBlock[F](Seq(b3.blockHash), deploys = Seq(deploys(2)))
-          b6      <- createBlock[F](Seq(b2.blockHash, b3.blockHash), deploys = Seq(deploys(2)))
-          b7      <- createBlock[F](Seq(b6.blockHash), deploys = Seq(deploys(3)))
-          b8      <- createBlock[F](Seq(b6.blockHash), deploys = Seq(deploys(5)))
-          b9      <- createBlock[F](Seq(b7.blockHash), deploys = Seq(deploys(5)))
-          b10     <- createBlock[F](Seq(b8.blockHash), deploys = Seq(deploys(4)))
-        } yield b10
+        dag <- blockDagStorage.getRepresentation
+        result <- mkRuntimeManager("casper-util-test").use { runtimeManager =>
+                   for {
+                     computeBlockCheckpointResult <- computeBlockCheckpoint(
+                                                      genesis,
+                                                      genesis,
+                                                      dag,
+                                                      runtimeManager
+                                                    )
+                     (postGenStateHash, postGenProcessedDeploys) = computeBlockCheckpointResult
+                     _ <- injectPostStateHash[Task](
+                           0,
+                           genesis,
+                           postGenStateHash,
+                           postGenProcessedDeploys
+                         )
+                     _ <- updateChainWithBlockStateUpdate[Task](1, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](2, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](3, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](4, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](5, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](6, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](7, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](8, genesis, runtimeManager)
+                     _ <- updateChainWithBlockStateUpdate[Task](9, genesis, runtimeManager)
 
-      val chain   = createChain[StateWithChain].runS(initState)
-      val genesis = chain.idToBlocks(1)
-
-      val b2  = chain.idToBlocks(2)
-      val b3  = chain.idToBlocks(3)
-      val b4  = chain.idToBlocks(4)
-      val b5  = chain.idToBlocks(5)
-      val b6  = chain.idToBlocks(6)
-      val b7  = chain.idToBlocks(7)
-      val b8  = chain.idToBlocks(8)
-      val b9  = chain.idToBlocks(9)
-      val b10 = chain.idToBlocks(10)
-
-      conflicts[Id](b2, b3, genesis, chain) should be(false)
-      conflicts[Id](b4, b5, genesis, chain) should be(true)
-      conflicts[Id](b6, b6, genesis, chain) should be(false)
-      conflicts[Id](b6, b9, genesis, chain) should be(false)
-      conflicts[Id](b7, b8, genesis, chain) should be(false)
-      conflicts[Id](b7, b10, genesis, chain) should be(false)
-      conflicts[Id](b9, b10, genesis, chain) should be(true)
+                     _      <- conflicts[Task](b2, b3, dag) shouldBeF false
+                     _      <- conflicts[Task](b4, b5, dag) shouldBeF true
+                     _      <- conflicts[Task](b6, b6, dag) shouldBeF false
+                     _      <- conflicts[Task](b6, b9, dag) shouldBeF false
+                     _      <- conflicts[Task](b7, b8, dag) shouldBeF false
+                     _      <- conflicts[Task](b7, b10, dag) shouldBeF false
+                     result <- conflicts[Task](b9, b10, dag) shouldBeF true
+                   } yield result
+                 }
+      } yield result
   }
 }

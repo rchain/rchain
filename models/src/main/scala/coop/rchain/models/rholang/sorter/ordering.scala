@@ -6,8 +6,6 @@ import coop.rchain.models.rholang.sorter.ScoredTerm._
 import monix.eval.Coeval
 import cats.implicits._
 
-import scala.collection.immutable
-
 //FIXME the `.sort` methods in this file should return via F[_] : Sync, and the corresponding ParSet and ParMap should
 //be constructed via factory methods also returning via F. Otherwise we risk StackOverflowErrors.
 object ordering {

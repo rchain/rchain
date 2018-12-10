@@ -1,32 +1,41 @@
 package coop.rchain.node
 
+import java.nio.file.Path
+
+import cats.effect.Timer
+import cats.mtl._
+
+import coop.rchain.catscontrib._
+import coop.rchain.comm.CachedConnections.ConnectionsCache
 import coop.rchain.comm._
+import coop.rchain.comm.discovery._
+import coop.rchain.comm.rp.Connect._
+import coop.rchain.comm.rp._
+import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
-import scala.tools.jline.console._
-import cats._, cats.data._, cats.implicits._, cats.mtl._, cats.effect.Timer
-import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
+import coop.rchain.shared._
+
 import monix.eval._
 import monix.execution._
-import coop.rchain.comm.transport._
-import coop.rchain.comm.discovery._
-import coop.rchain.shared._
+import monix.execution.atomic.AtomicAny
 import scala.concurrent.duration._
-import java.nio.file.Path
 import scala.io.Source
-import coop.rchain.comm.rp._, Connect._
+import scala.tools.jline.console._
+
+import cats.Applicative
 
 package object effects {
 
   def log: Log[Task] = Log.log
 
-  def nodeDiscovery(src: PeerNode, defaultTimeout: FiniteDuration)(init: Option[PeerNode])(
+  def nodeDiscovery(id: NodeIdentifier, defaultTimeout: FiniteDuration)(init: Option[PeerNode])(
       implicit
       log: Log[Task],
       time: Time[Task],
       metrics: Metrics[Task],
       kademliaRPC: KademliaRPC[Task]
   ): Task[NodeDiscovery[Task]] =
-    KademliaNodeDiscovery.create[Task](src, defaultTimeout)(init)
+    KademliaNodeDiscovery.create[Task](id, defaultTimeout)(init)
 
   def time(implicit timer: Timer[Task]): Time[Task] =
     new Time[Task] {
@@ -35,36 +44,49 @@ package object effects {
       def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
     }
 
-  def kademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(
+  def kademliaRPC(port: Int, timeout: FiniteDuration)(
       implicit
       scheduler: Scheduler,
+      peerNodeAsk: PeerNodeAsk[Task],
       metrics: Metrics[Task],
-      log: Log[Task]
-  ): KademliaRPC[Task] = new GrpcKademliaRPC(src, port, timeout)
+      log: Log[Task],
+      cache: ConnectionsCache[Task, KademliaConnTag]
+  ): KademliaRPC[Task] = new GrpcKademliaRPC(port, timeout)
 
   def tcpTransportLayer(
-      host: String,
       port: Int,
       certPath: Path,
       keyPath: Path,
-      maxMessageSize: Int
+      maxMessageSize: Int,
+      folder: Path
   )(
       implicit scheduler: Scheduler,
-      connections: TcpTransportLayer.TransportCell[Task],
-      log: Log[Task]
+      log: Log[Task],
+      cache: ConnectionsCache[Task, TcpConnTag]
   ): TcpTransportLayer = {
     val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
     val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
-    new TcpTransportLayer(host, port, cert, key, maxMessageSize)
+    new TcpTransportLayer(port, cert, key, maxMessageSize, folder)
   }
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 
-  def tcpConnections: Task[Cell[Task, TransportState]] = Cell.mvarCell(TransportState.empty)
-
   def rpConnections: Task[ConnectionsCell[Task]] =
-    Cell.mvarCell[Connections](Connections.empty)
+    Cell.mvarCell[Task, Connections](Connections.empty)
 
-  def rpConfAsk(conf: RPConf): ApplicativeAsk[Task, RPConf] =
-    new ConstApplicativeAsk[Task, RPConf](conf)
+  def rpConfState(conf: RPConf): MonadState[Task, RPConf] =
+    new AtomicMonadState[Task, RPConf](AtomicAny(conf))
+
+  def rpConfAsk(implicit state: MonadState[Task, RPConf]): ApplicativeAsk[Task, RPConf] =
+    new DefaultApplicativeAsk[Task, RPConf] {
+      val applicative: Applicative[Task] = Applicative[Task]
+      def ask: Task[RPConf]              = state.get
+    }
+
+  def peerNodeAsk(implicit state: MonadState[Task, RPConf]): ApplicativeAsk[Task, PeerNode] =
+    new DefaultApplicativeAsk[Task, PeerNode] {
+      val applicative: Applicative[Task] = Applicative[Task]
+      def ask: Task[PeerNode]            = state.get.map(_.local)
+    }
+
 }

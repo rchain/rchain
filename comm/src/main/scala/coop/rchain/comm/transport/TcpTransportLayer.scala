@@ -2,33 +2,47 @@ package coop.rchain.comm.transport
 
 import java.io.ByteArrayInputStream
 
-import coop.rchain.comm._, CommError._
-import coop.rchain.comm.protocol.routing._
-import coop.rchain.comm.rp.ProtocolHelper
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
-import coop.rchain.shared.{Cell, Log, LogSource}
-
+import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
 import scala.util._
-import io.grpc._, io.grpc.netty._
-import io.netty.handler.ssl.{ClientAuth, SslContext, SslContextBuilder}
-import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
-import monix.eval._, monix.execution._, monix.reactive._
-import scala.concurrent.TimeoutException
 
-class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxMessageSize: Int)(
+import cats.implicits._
+
+import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.catscontrib.ski._
+import coop.rchain.comm._
+import coop.rchain.comm.CachedConnections.ConnectionsCache
+import coop.rchain.comm.CommError._
+import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
+import coop.rchain.comm.rp.ProtocolHelper
+import coop.rchain.shared._
+import coop.rchain.shared.Compression._
+import java.nio.file._
+import io.grpc._
+import io.grpc.netty._
+import io.netty.handler.ssl._
+import monix.eval._
+import monix.execution._
+import monix.reactive._
+
+class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: Int, tempFolder: Path)(
     implicit scheduler: Scheduler,
-    cell: TcpTransportLayer.TransportCell[Task],
-    log: Log[Task]
+    log: Log[Task],
+    connectionsCache: ConnectionsCache[Task, TcpConnTag]
 ) extends TransportLayer[Task] {
 
   private val DefaultSendTimeout = 5.seconds
+  private val connections        = connectionsCache(clientChannel)
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   private def certInputStream = new ByteArrayInputStream(cert.getBytes())
   private def keyInputStream  = new ByteArrayInputStream(key.getBytes())
+
+  private val streamObservable = new StreamObservable(100, tempFolder)
+
+  import connections.cell
 
   private lazy val serverSslContext: SslContext =
     try {
@@ -39,7 +53,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
         .build()
     } catch {
       case e: Throwable =>
-        println(e.getMessage)
+        e.printStackTrace()
         throw e
     }
 
@@ -71,16 +85,6 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
           }
     } yield c
 
-  private def connection(peer: PeerNode, enforce: Boolean): Task[ManagedChannel] =
-    cell.modify { s =>
-      if (s.shutdown && !enforce)
-        Task.raiseError(new RuntimeException("The transport layer has been shut down")).as(s)
-      else
-        for {
-          c <- s.connections.get(peer).fold(clientChannel(peer))(_.pure[Task])
-        } yield s.copy(connections = s.connections + (peer -> c))
-    } >>= kp(cell.read.map(_.connections.apply(peer)))
-
   def disconnect(peer: PeerNode): Task[Unit] =
     cell.modify { s =>
       for {
@@ -105,7 +109,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
       f: TransportLayerStub => Task[A]
   ): Task[A] =
     for {
-      channel <- connection(peer, enforce)
+      channel <- connections.connection(peer, enforce)
       stub    <- Task.delay(RoutingGrpcMonix.stub(channel))
       result <- f(stub).doOnFinish {
                  case Some(PeerUnavailable()) => disconnect(peer)
@@ -119,37 +123,33 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
   ): Task[CommErr[Option[Protocol]]] =
     withClient(peer, enforce)(f).attempt.map(processResponse(peer, _))
 
-  def chunkIt(blob: Blob): Iterator[Chunk] = {
-    def header: Chunk =
-      Chunk().withHeader(
-        ChunkHeader().withSender(ProtocolHelper.node(blob.sender)).withTypeId(blob.packet.typeId)
-      )
-    val buffer    = 2 * 1024 // 2 kbytes for protobuf related stuff
-    val chunkSize = maxMessageSize - buffer
-    def data: Iterator[Chunk] =
-      blob.packet.content.toByteArray.sliding(chunkSize, chunkSize).map { data =>
-        Chunk().withData(ChunkData().withContentData(ProtocolHelper.toProtocolBytes(data)))
-      }
+  def chunkIt(blob: Blob): Task[Iterator[Chunk]] =
+    Task.delay {
+      val raw      = blob.packet.content.toByteArray
+      val kb500    = 1024 * 500
+      val compress = raw.length > kb500
+      val content  = if (compress) raw.compress else raw
 
-    Iterator(header) ++ data
-  }
+      def header: Chunk =
+        Chunk().withHeader(
+          ChunkHeader()
+            .withCompressed(compress)
+            .withContentLength(raw.length)
+            .withSender(ProtocolHelper.node(blob.sender))
+            .withTypeId(blob.packet.typeId)
+        )
+      val buffer    = 2 * 1024 // 2 kbytes for protobuf related stuff
+      val chunkSize = maxMessageSize - buffer
+      def data: Iterator[Chunk] =
+        content.sliding(chunkSize, chunkSize).map { data =>
+          Chunk().withData(ChunkData().withContentData(ProtocolHelper.toProtocolBytes(data)))
+        }
 
-  /**
-    * This implmementation is temporary, it sequentially sends blob to each peers.
-    * TODO Provide solution that stacks blob on a queue that is later consumed
-    */
+      Iterator(header) ++ data
+    }
+
   def stream(peers: Seq[PeerNode], blob: Blob): Task[Unit] =
-    peers.toList
-      .traverse(
-        peer =>
-          withClient(peer, enforce = false) { stub =>
-            stub.stream(Observable.fromIterator(chunkIt(blob)))
-          }.attempt.flatMap {
-            case Left(error) => log.debug(s"Error while streaming packet, error: $error")
-            case Right(_)    => Task.unit
-          }
-      )
-      .as(())
+    streamObservable.stream(peers.toList, blob) *> log.info(s"stream to $peers blob")
 
   private def processResponse(
       peer: PeerNode,
@@ -204,14 +204,42 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
   def broadcast(peers: Seq[PeerNode], msg: Protocol): Task[Seq[CommErr[Unit]]] =
     innerBroadcast(peers, msg)
 
-  private def receiveInternal(
-      parallelism: Int
-  )(
+  def handleToStream: ToStream => Task[Unit] = {
+    case ToStream(peer, path, sender) =>
+      PacketOps.restore[Task](path) >>= {
+        case Right(packet) =>
+          withClient(peer, enforce = false) { stub =>
+            val blob = Blob(sender, packet)
+            stub.stream(Observable.fromIterator(chunkIt(blob)))
+          }.attempt
+            .flatMap {
+              case Left(error) => log.error(s"Error while streaming packet, error: $error")
+              case Right(_)    => Task.unit
+            }
+        case Left(error) => log.error(s"Error while streaming packet, error: $error")
+      } >>=
+        (kp(Task.delay {
+          if (path.toFile.exists)
+            path.toFile.delete
+        }))
+  }
+
+  private def initQueue(
+      maybeQueue: Option[Cancelable]
+  )(create: Task[Cancelable]): Task[Cancelable] =
+    maybeQueue.fold(create) {
+      kp(
+        Task.raiseError[Cancelable](
+          new RuntimeException("TransportLayer server is already started")
+        )
+      )
+    }
+
+  def receive(
       dispatch: Protocol => Task[CommunicationResponse],
       handleStreamed: Blob => Task[Unit]
-  ): Task[Cancelable] = {
-
-    def dispatchInternal: ServerMessage => Task[Unit] = {
+  ): Task[Unit] = {
+    val dispatchInternal: ServerMessage => Task[Unit] = {
       // TODO: consider logging on failure (Left)
       case Tell(protocol) => dispatch(protocol).attemptAndLog.void
       case Ask(protocol, handle) if !handle.complete =>
@@ -223,37 +251,37 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
       case _                   => Task.unit // sender timeout
     }
 
-    Task.delay {
-      new TcpServerObservable(port, serverSslContext, maxMessageSize)
-        .mapParallelUnordered(parallelism)(dispatchInternal)
-        .subscribe()(Scheduler.fixedPool("tl-dispatcher", parallelism))
-    }
-  }
-
-  def receive(
-      dispatch: Protocol => Task[CommunicationResponse],
-      handleStreamed: Blob => Task[Unit]
-  ): Task[Unit] =
     cell.modify { s =>
+      val parallelism = Math.max(Runtime.getRuntime.availableProcessors(), 2)
+      val queueScheduler =
+        Scheduler.fixedPool("tl-dispatcher", parallelism, reporter = UncaughtExceptionLogger)
       for {
-        server <- s.server match {
-                   case Some(_) =>
-                     Task.raiseError(
-                       new RuntimeException("TransportLayer server is already started")
-                     )
-                   case _ =>
-                     val parallelism = Math.max(Runtime.getRuntime.availableProcessors(), 2)
-                     receiveInternal(parallelism)(dispatch, handleStreamed)
-                 }
-      } yield s.copy(server = Some(server))
+        server <- initQueue(s.server) {
+                   Task.delay {
+                     new TcpServerObservable(port, serverSslContext, maxMessageSize)
+                       .mapParallelUnordered(parallelism)(dispatchInternal)
+                       .subscribe()(queueScheduler)
+                   }
 
+                 }
+        clientQueue <- initQueue(s.clientQueue) {
+                        Task.delay {
+                          streamObservable
+                            .mapParallelUnordered(parallelism)(handleToStream)
+                            .subscribe()(queueScheduler)
+                        }
+                      }
+      } yield s.copy(server = Some(server), clientQueue = Some(clientQueue))
     }
+
+  }
 
   def shutdown(msg: Protocol): Task[Unit] = {
     def shutdownServer: Task[Unit] = cell.modify { s =>
       for {
         _ <- log.info("Shutting down server")
         _ <- s.server.fold(Task.unit)(server => Task.delay(server.cancel()))
+        _ <- s.clientQueue.fold(Task.unit)(server => Task.delay(server.cancel()))
       } yield s.copy(server = None, shutdown = true)
     }
 
@@ -282,6 +310,7 @@ object TcpTransportLayer {
 case class TransportState(
     connections: TcpTransportLayer.Connections = Map.empty,
     server: Option[Cancelable] = None,
+    clientQueue: Option[Cancelable] = None,
     shutdown: Boolean = false
 )
 

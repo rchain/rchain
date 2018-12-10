@@ -5,7 +5,7 @@ import cats._, cats.data._, cats.implicits._
 object eitherT extends EitherTInstances
 
 trait EitherTInstances {
-  implicit def monadTrans[A] = new EitherTMonadTrans[A] {}
+  implicit def eitherTMonadTrans[A] = new EitherTMonadTrans[A] {}
 }
 
 trait EitherTMonadTrans[A] extends MonadTrans[EitherT[?[_], A, ?]] {

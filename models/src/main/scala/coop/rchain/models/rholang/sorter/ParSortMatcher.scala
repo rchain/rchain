@@ -29,6 +29,7 @@ private[sorter] object ParSortMatcher extends Sortable[Par] {
         locallyFree = par.locallyFree,
         connectiveUsed = par.connectiveUsed
       )
+      connectiveUsedScore = if (par.connectiveUsed) 1 else 0
       parScore = Node(
         Score.PAR,
         sends.map(_.score) ++
@@ -38,7 +39,8 @@ private[sorter] object ParSortMatcher extends Sortable[Par] {
           matches.map(_.score) ++
           bundles.map(_.score) ++
           connectives.map(_.score) ++
-          ids.map(_.score): _*
+          ids.map(_.score) ++
+          Seq(Leaf(connectiveUsedScore)): _*
       )
     } yield ScoredTerm(sortedPar, parScore)
 }

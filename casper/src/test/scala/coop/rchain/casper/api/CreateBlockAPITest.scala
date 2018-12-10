@@ -1,26 +1,25 @@
 package coop.rchain.casper.api
 
 import scala.concurrent.duration._
-
 import cats.Monad
 import cats.data.EitherT
 import cats.implicits._
-
 import coop.rchain.casper._
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang._
 import coop.rchain.casper.Estimator.Validator
-import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
+import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.Time
-
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.BlockDagRepresentation
+import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
@@ -28,6 +27,8 @@ import org.scalatest.{FlatSpec, Matchers}
 class CreateBlockAPITest extends FlatSpec with Matchers {
   import HashSetCasperTest._
   import HashSetCasperTestNode.Effect
+
+  private implicit val scheduler: Scheduler = Scheduler.fixedPool("create-block-api-test", 4)
 
   private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val bonds                       = createBonds(validators)
@@ -53,10 +54,10 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
         implicit casperRef: MultiParentCasperRef[Effect]
     ): Effect[(DeployServiceResponse, DeployServiceResponse)] = EitherT.liftF(
       for {
-        t1 <- (BlockAPI.deploy[Effect](deploys.head) *> BlockAPI.createBlock[Effect]).value.fork
+        t1 <- (BlockAPI.deploy[Effect](deploys.head) *> BlockAPI.createBlock[Effect]).value.start
         _  <- Time[Task].sleep(2.second)
         t2 <- (BlockAPI.deploy[Effect](deploys.last) *> BlockAPI
-               .createBlock[Effect]).value.fork //should fail because other not done
+               .createBlock[Effect]).value.start //should fail because other not done
         r1 <- t1.join
         r2 <- t2.join
       } yield (r1.right.get, r2.right.get)
@@ -79,11 +80,15 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
 private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: MultiParentCasper[F])
     extends MultiParentCasper[F] {
 
-  def addBlock(b: BlockMessage): F[BlockStatus]             = underlying.addBlock(b)
-  def contains(b: BlockMessage): F[Boolean]                 = underlying.contains(b)
-  def deploy(d: DeployData): F[Either[Throwable, Unit]]     = underlying.deploy(d)
-  def estimator(dag: BlockDag): F[IndexedSeq[BlockMessage]] = underlying.estimator(dag)
-  def blockDag: F[BlockDag]                                 = underlying.blockDag
+  def addBlock(
+      b: BlockMessage,
+      handleDoppelganger: (BlockMessage, Validator) => F[Unit]
+  ): F[BlockStatus]                                     = underlying.addBlock(b, ignoreDoppelgangerCheck[F])
+  def contains(b: BlockMessage): F[Boolean]             = underlying.contains(b)
+  def deploy(d: DeployData): F[Either[Throwable, Unit]] = underlying.deploy(d)
+  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockMessage]] =
+    underlying.estimator(dag)
+  def blockDag: F[BlockDagRepresentation[F]] = underlying.blockDag
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     underlying.normalizedInitialFault(weights)
   def lastFinalizedBlock: F[BlockMessage]          = underlying.lastFinalizedBlock

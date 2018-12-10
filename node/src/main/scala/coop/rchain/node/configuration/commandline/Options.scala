@@ -141,6 +141,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
   val run = new Subcommand("run") {
 
+    val dynamicHostAddress = opt[Flag](descr = "Host IP address changes dynamically")
+
     val noUpnp = opt[Flag](descr = "Use this flag to disable UpNp.")
 
     val defaultTimeout =
@@ -195,7 +197,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val maximumBond = opt[Long](
       descr = "Maximum bond accepted by the PoS contract in the genesis block."
     )
-    val hasFaucet = opt[Boolean](
+    val hasFaucet = opt[Flag](
       descr = "True if there should be a public access Rev faucet in the genesis block."
     )
 
@@ -237,10 +239,10 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val host = opt[String](descr = "Hostname or IP of this node.")
 
-    val data_dir =
+    val dataDir =
       opt[Path](required = false, descr = "Path to data directory. Defaults to $HOME/.rnode")
 
-    val map_size = opt[Long](required = false, descr = "Map size (in bytes)")
+    val mapSize = opt[Long](required = false, descr = "Map size (in bytes)")
 
     val storeType = opt[StoreType](required = false, descr = "Type of RSpace backing store")
 
@@ -256,13 +258,24 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val casperBlockStoreSize =
       opt[Long](required = false, descr = "Casper BlockStore map size (in bytes)")
 
+    val casperLatestMessagesDataPath =
+      opt[Path](required = false, descr = "Path to latest messages data file")
+
+    val casperLatestMessagesCrcPath =
+      opt[Path](required = false, descr = "Path to latest messages crc file")
+
     val validatorPublicKey = opt[String](
       descr = "Base16 encoding of the public key to use for signing a proposed blocks. " +
         "Can be inferred from the private key for some signature algorithms."
     )
 
     val validatorPrivateKey = opt[String](
-      descr = "Base16 encoding of the private key to use for signing a proposed blocks."
+      descr = "Base16 encoding of the private key to use for signing a proposed blocks. " +
+        "It is not recommended to use in production since private key could be revealed through the process table"
+    )
+
+    val validatorPrivateKeyPath = opt[Path](
+      descr = "Path to the base16 encoded private key to use for signing a proposed blocks."
     )
 
     val validatorSigAlgorithm = opt[String](

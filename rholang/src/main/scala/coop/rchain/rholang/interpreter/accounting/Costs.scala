@@ -1,9 +1,8 @@
 package coop.rchain.rholang.interpreter.accounting
 
+import cats.Monoid
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.PhloLimit
-import coop.rchain.models.Par
-import scalapb.GeneratedMessage
+import coop.rchain.models.{Par, ProtoM, StacksafeMessage}
 
 //TODO(mateusz.gorski): Adjust the costs of operations
 final case class Cost(value: Long) extends AnyVal {
@@ -16,6 +15,11 @@ object Cost {
   def apply[A](term: A)(implicit chargeable: Chargeable[A]): Cost =
     Cost(chargeable.cost(term))
   def apply(value: Int): Cost = Cost(value.toLong)
+
+  implicit val CostMonoid: Monoid[Cost] = new Monoid[Cost] {
+    override def empty: Cost                     = Cost(0)
+    override def combine(x: Cost, y: Cost): Cost = x + y
+  }
 }
 
 trait Costs {
@@ -23,8 +27,10 @@ trait Costs {
   final val SUM_COST: Cost         = Cost(3)
   final val SUBTRACTION_COST: Cost = Cost(3)
 
-  def equalityCheckCost[T <: GeneratedMessage, P <: GeneratedMessage](x: T, y: P): Cost =
-    Cost(scala.math.min(x.serializedSize, y.serializedSize))
+  def equalityCheckCost[T <: StacksafeMessage[_], P <: StacksafeMessage[_]](x: T, y: P): Cost =
+    Cost(
+      scala.math.min(ProtoM.serializedSize(x).value, ProtoM.serializedSize(y).value)
+    )
 
   final val BOOLEAN_AND_COST = Cost(2)
   final val BOOLEAN_OR_COST  = Cost(2)
@@ -63,7 +69,8 @@ trait Costs {
   // serializing any Par into a Array[Byte]:
   // + allocates byte array of the same size as `serializedSize`
   // + then it copies all elements of the Par
-  def toByteArrayCost[T <: GeneratedMessage](a: T): Cost = Cost(a.serializedSize)
+  def toByteArrayCost[T <: StacksafeMessage[_]](a: T): Cost =
+    Cost(ProtoM.serializedSize(a).value)
   //TODO: adjust the cost of size method
   def sizeMethodCost(size: Int): Cost = Cost(size)
   // slice(from, to) needs to drop `from` elements and then append `to - from` elements
@@ -91,12 +98,12 @@ trait Costs {
 
   final val MATCH_EVAL_COST = Cost(12)
 
-  implicit def toStorageCostOps[A <: GeneratedMessage](a: Seq[A]) = new StorageCostOps(a: _*)
+  implicit def toStorageCostOps[A <: StacksafeMessage[_]](a: Seq[A]) = new StorageCostOps(a: _*)
 
-  implicit def toStorageCostOps[A <: GeneratedMessage](a: A) = new StorageCostOps(a)
+  implicit def toStorageCostOps[A <: StacksafeMessage[_]](a: A) = new StorageCostOps(a)
 
-  class StorageCostOps[A <: GeneratedMessage](a: A*) {
-    def storageCost: Cost = Cost(a.map(a => a.serializedSize).sum)
+  class StorageCostOps[A <: StacksafeMessage[_]](a: A*) {
+    def storageCost: Cost = Cost(a.map(a => ProtoM.serializedSize(a).value).sum)
   }
 
   // Even though we use Long for phlo limit we can't use Long.MaxValue here.
@@ -104,5 +111,5 @@ trait Costs {
   // which may result in overflow when we start with maximum value.
   // In normal scenario this will never happen because user would need to provide equivalent of Long.MaxValue
   // in REVs and this is more than there is REVs available.
-  final val MAX_VALUE = PhloLimit(Integer.MAX_VALUE)
+  final val MAX_VALUE = Integer.MAX_VALUE
 }
