@@ -3,6 +3,8 @@ package coop.rchain.casper
 import cats.Id
 import cats.implicits._
 import coop.rchain.casper.helper.HashSetCasperTestNode
+import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
+import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.collection.ListOps
@@ -19,7 +21,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
   //put a new casper instance at the start of each
   //test since we cannot reset it
   "Our build system" should "allow import of rholang sources into scala code" in {
-    val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.last)
+    val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.last)
     import node._
 
     val code =
@@ -34,18 +36,17 @@ class RholangBuildTest extends FlatSpec with Matchers {
         |    timeStore!("The timestamp is ${timestamp}" %% {"timestamp" : timestamp})
         |  }
         |}""".stripMargin
-
-    val deploy               = ProtoUtil.sourceDeploy(code, 1L, accounting.MAX_VALUE)
-    val Created(signedBlock) = MultiParentCasper[Id].deploy(deploy) *> MultiParentCasper[Id].createBlock
-    val _                    = MultiParentCasper[Id].addBlock(signedBlock)
-
-    val storage = HashSetCasperTest.blockTuplespaceContents(signedBlock)
-
-    logEff.warns should be(Nil)
-    storage.contains("!([4, 6, 10, 14])") should be(true)
-    storage.contains("!(\"The timestamp is 1\")") should be(true)
-
-    node.tearDown()
+    val deploy = ProtoUtil.sourceDeploy(code, 1L, accounting.MAX_VALUE)
+    for {
+      createBlockResult    <- MultiParentCasper[Effect].deploy(deploy) *> MultiParentCasper[Effect].createBlock
+      Created(signedBlock) = createBlockResult
+      _                    <- MultiParentCasper[Effect].addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
+      storage              <- HashSetCasperTest.blockTuplespaceContents(signedBlock)
+      _                    = logEff.warns should be(Nil)
+      _                    = storage.contains("!([4, 6, 10, 14])") should be(true)
+      result               = storage.contains("!(\"The timestamp is 1\")") should be(true)
+      _                    = node.tearDown()
+    } yield result
   }
 
 }

@@ -197,7 +197,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val maximumBond = opt[Long](
       descr = "Maximum bond accepted by the PoS contract in the genesis block."
     )
-    val hasFaucet = opt[Boolean](
+    val hasFaucet = opt[Flag](
       descr = "True if there should be a public access Rev faucet in the genesis block."
     )
 
@@ -260,6 +260,12 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val casperBlockStoreSize =
       opt[Long](required = false, descr = "Casper BlockStore map size (in bytes)")
+
+    val casperLatestMessagesDataPath =
+      opt[Path](required = false, descr = "Path to latest messages data file")
+
+    val casperLatestMessagesCrcPath =
+      opt[Path](required = false, descr = "Path to latest messages crc file")
 
     val validatorPublicKey = opt[String](
       descr = "Base16 encoding of the public key to use for signing a proposed blocks. " +

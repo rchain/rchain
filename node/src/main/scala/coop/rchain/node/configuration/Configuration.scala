@@ -6,7 +6,7 @@ import java.nio.file.{Path, Paths}
 
 import cats.implicits._
 
-import coop.rchain.blockstorage.LMDBBlockStore
+import coop.rchain.blockstorage.{BlockDagFileStorage, LMDBBlockStore}
 import coop.rchain.casper.CasperConf
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
@@ -189,6 +189,13 @@ object Configuration {
             hasFaucet = DefaultHasFaucet
           ),
           LMDBBlockStore.Config(dataDir.resolve("casper-block-store"), DefaultCasperBlockStoreSize),
+          BlockDagFileStorage.Config(
+            dataDir.resolve("casper-block-dag-file-storage-latest-messages-log"),
+            dataDir.resolve("casper-block-dag-file-storage-latest-messages-crc"),
+            dataDir.resolve("casper-block-dag-file-storage-block-metadata-log"),
+            dataDir.resolve("casper-block-dag-file-storage-block-metadata-crc"),
+            dataDir.resolve("casper-block-dag-file-storage-checkpoints")
+          ),
           Kamon(prometheus = false, None),
           options
         )
@@ -398,6 +405,13 @@ object Configuration {
         dataDir.resolve("casper-block-store"),
         casperBlockStoreSize
       )
+    val blockDagStorage = BlockDagFileStorage.Config(
+      dataDir.resolve("casper-block-dag-file-storage-latest-messages-log"),
+      dataDir.resolve("casper-block-dag-file-storage-latest-messages-crc"),
+      dataDir.resolve("casper-block-dag-file-storage-block-metadata-log"),
+      dataDir.resolve("casper-block-dag-file-storage-block-metadata-crc"),
+      dataDir.resolve("casper-block-dag-file-storage-checkpoints")
+    )
 
     val kamon =
       Kamon(
@@ -412,6 +426,7 @@ object Configuration {
       tls,
       casper,
       blockstorage,
+      blockDagStorage,
       kamon,
       options
     )
@@ -458,6 +473,7 @@ final class Configuration(
     val tls: Tls,
     val casper: CasperConf,
     val blockstorage: LMDBBlockStore.Config,
+    val blockDagStorage: BlockDagFileStorage.Config,
     val kamon: Kamon,
     private val options: commandline.Options
 ) {

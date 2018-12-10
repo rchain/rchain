@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter.matcher
-import cats.implicits._
-import cats.{Monad, MonoidK}
+import cats.mtl.lifting.MonadLayerControl
+import cats.{~>, Applicative, Functor, Monad, MonadError, MonoidK}
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, SNil, Step}
 
@@ -30,16 +30,16 @@ object StreamT extends StreamTInstances0 {
   case class SNil[F[_], A]()                              extends Step[F, A]
   case class SCons[F[_], A](head: A, tail: StreamT[F, A]) extends Step[F, A]
 
-  def empty[F[_]: Monad, A]: StreamT[F, A] =
-    StreamT[F, A](Monad[F].pure(SNil()))
+  def empty[F[_]: Applicative, A]: StreamT[F, A] =
+    StreamT[F, A](Applicative[F].pure(SNil()))
 
-  def pure[F[_]: Monad, A](a: A): StreamT[F, A] =
-    StreamT(Monad[F].pure(SCons(a, empty)))
+  def pure[F[_]: Applicative, A](a: A): StreamT[F, A] =
+    StreamT(Applicative[F].pure(SCons(a, empty)))
 
-  def liftF[F[_]: Monad, A](fa: F[A]): StreamT[F, A] =
-    StreamT(fa.map(value => SCons(value, empty)))
+  def liftF[F[_]: Applicative, A](fa: F[A]): StreamT[F, A] =
+    StreamT(Functor[F].map(fa)(value => SCons(value, empty)))
 
-  def fromStream[F[_]: Monad, A](fs: F[Stream[A]]): StreamT[F, A] = {
+  def fromStream[F[_]: Applicative, A](fs: F[Stream[A]]): StreamT[F, A] = {
 
     def next(curr: Stream[A]): Step[F, A] =
       curr match {
@@ -47,22 +47,24 @@ object StreamT extends StreamTInstances0 {
         case cons: Cons[A] => SCons(cons.head, StreamT(delay[F, Step[F, A]](next(cons.tail))))
       }
 
-    StreamT[F, A](fs.map(next))
+    StreamT[F, A](Functor[F].map(fs)(next))
   }
 
   //This should delay the computation for most stacksafe monads
   //TODO consider doing the delay only for `F: Defer` to avoid the useless map
-  private def delay[F[_]: Monad, A](a: => A): F[A] =
-    Monad[F].unit.map(_ => a)
+  private def delay[F[_]: Applicative, A](a: => A): F[A] =
+    Functor[F].map(Applicative[F].unit)(_ => a)
 
-  def run[F[_]: Monad, A](s: StreamT[F, A]): F[Stream[A]] =
-    s.next.flatMap {
-      case SNil()            => Monad[F].pure(Stream.Empty)
-      case SCons(head, tail) => run(tail).map(t => head +: t)
+  def run[F[_]: Monad, A](s: StreamT[F, A]): F[Stream[A]] = {
+    val F = Monad[F]
+    F.flatMap(s.next) {
+      case SNil()            => F.pure(Stream.Empty)
+      case SCons(head, tail) => F.map(run(tail))(t => head +: t)
     }
+  }
 }
 
-trait StreamTInstances0 {
+trait StreamTInstances0 extends StreamTInstances1 {
 
   implicit val streamTMonadTrans = new MonadTrans[StreamT] {
     override def liftM[G[_]: Monad, A](a: G[A]): StreamT[G, A] =
@@ -74,39 +76,102 @@ trait StreamTInstances0 {
 
   implicit def streamTMonoidK[F[_]: Monad]: MonoidK[StreamT[F, ?]] = new MonoidK[StreamT[F, ?]] {
 
+    private val F = Monad[F]
+
     override def empty[A]: StreamT[F, A] = StreamT.empty
 
     override def combineK[A](x: StreamT[F, A], y: StreamT[F, A]): StreamT[F, A] = {
-      val next: F[Step[F, A]] = x.next.flatMap {
+      val next: F[Step[F, A]] = F.flatMap(x.next) {
         case SNil()            => y.next
-        case SCons(head, tail) => Monad[F].pure(SCons(head, combineK(tail, y)))
+        case SCons(head, tail) => F.pure(SCons(head, combineK(tail, y)))
       }
       StreamT(next)
     }
 
   }
 
-  implicit def streamTMonad[F[_]: Monad]: Monad[StreamT[F, ?]] = new Monad[StreamT[F, ?]] {
-
-    override def pure[A](x: A): StreamT[F, A] =
-      StreamT.pure(x)
-
-    override def flatMap[A, B](fa: StreamT[F, A])(f: A => StreamT[F, B]): StreamT[F, B] = {
-      val next: F[Step[F, B]] = fa.next.flatMap {
-        case SNil() => Monad[F].pure[Step[F, B]](SNil())
-        case SCons(head, tail) =>
-          val effectMonoid          = MonoidK[StreamT[F, ?]]
-          val result: StreamT[F, B] = effectMonoid.combineK(f(head), tail.flatMap(f))
-          result.next
-      }
-      StreamT(next)
+  implicit def streamTMonad[F[_]](implicit F0: Monad[F]): Monad[StreamT[F, ?]] =
+    new StreamTMonad[F]() {
+      implicit val F = F0
     }
 
-    override def tailRecM[A, B](a: A)(f: A => StreamT[F, Either[A, B]]): StreamT[F, B] =
-      flatMap(f(a)) {
-        case Left(a)  => tailRecM(a)(f)
-        case Right(b) => pure(b)
-      }
+}
 
+private trait StreamTMonad[F[_]] extends Monad[StreamT[F, ?]] {
+
+  implicit def F: Monad[F]
+
+  private lazy val effectMonoid = MonoidK[StreamT[F, ?]]
+
+  override def pure[A](x: A): StreamT[F, A] =
+    StreamT.pure[F, A](x)
+
+  override def flatMap[A, B](fa: StreamT[F, A])(f: A => StreamT[F, B]): StreamT[F, B] = {
+    val next: F[Step[F, B]] = F.flatMap(fa.next) {
+      case SNil() => F.pure[Step[F, B]](SNil())
+      case SCons(head, tail) =>
+        val result: StreamT[F, B] = effectMonoid.combineK(f(head), flatMap(tail)(f))
+        result.next
+    }
+    StreamT(next)
   }
+
+  override def tailRecM[A, B](a: A)(f: A => StreamT[F, Either[A, B]]): StreamT[F, B] =
+    flatMap(f(a)) {
+      case Left(a)  => tailRecM(a)(f)
+      case Right(b) => pure(b)
+    }
+
+}
+
+trait StreamTInstances1 extends StreamTInstances2 {
+
+  implicit def catsDataMonadErrorForStreamT[F[_], E](
+      implicit F0: MonadError[F, E]
+  ): MonadError[StreamT[F, ?], E] =
+    new StreamTMonadError[F, E] { implicit val F = F0 }
+
+}
+
+private trait StreamTMonadError[F[_], E] extends MonadError[StreamT[F, ?], E] with StreamTMonad[F] {
+
+  override def F: MonadError[F, E]
+
+  override def raiseError[A](e: E): StreamT[F, A] =
+    StreamT.liftF(F.raiseError[A](e))(F)
+
+  override def handleErrorWith[A](fa: StreamT[F, A])(f: E => StreamT[F, A]): StreamT[F, A] =
+    StreamT(F.handleErrorWith(fa.next)(f(_).next))
+
+}
+
+trait StreamTInstances2 {
+  private[matcher] type of[F[_], G[_]] = { type l[A] = F[G[A]] }
+  private[matcher] type StreamTC[M[_]] = { type l[A] = StreamT[M, A] }
+
+  implicit final def streamMonadLayerControl[M[_]](
+      implicit M: Monad[M]
+  ): MonadLayerControl.Aux[StreamTC[M]#l, M, Stream] =
+    new MonadLayerControl[StreamTC[M]#l, M] {
+      type State[A] = Stream[A]
+
+      val outerInstance: Monad[StreamTC[M]#l] =
+        StreamT.streamTMonad
+
+      val innerInstance: Monad[M] = M
+
+      def layerMapK[A](ma: StreamT[M, A])(trans: M ~> M): StreamT[M, A] = StreamT(trans(ma.next))
+
+      def layer[A](inner: M[A]): StreamT[M, A] = StreamT.liftF(inner)
+
+      def restore[A](state: Stream[A]): StreamT[M, A] =
+        StreamT.fromStream[M, A](innerInstance.pure(state))
+
+      def layerControl[A](cps: (StreamTC[M]#l ~> (M of Stream)#l) => M[A]): StreamT[M, A] =
+        StreamT.liftF(cps(new (StreamTC[M]#l ~> (M of Stream)#l) {
+          def apply[X](fa: StreamT[M, X]): M[Stream[X]] = StreamT.run(fa)
+        }))
+
+      def zero[A](state: Stream[A]): Boolean = state.isEmpty
+    }
 }

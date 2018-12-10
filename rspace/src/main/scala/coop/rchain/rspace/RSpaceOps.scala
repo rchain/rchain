@@ -4,25 +4,55 @@ import cats.effect.Sync
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
+import coop.rchain.rspace.concurrent.{DefaultTwoStepLock, TwoStepLock}
 import coop.rchain.rspace.history.{Branch, Leaf}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.Consume
 import coop.rchain.shared.SyncVarOps._
+import kamon._
+import kamon.trace.Tracer.SpanBuilder
 
 import scala.Function.const
 import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 import scala.util.Random
-import kamon._
-import kamon.trace.Tracer.SpanBuilder
 
-abstract class RSpaceOps[F[_], C, P, E, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
+abstract class RSpaceOps[F[_], C, P, E, A, R, K](
+    val store: IStore[C, P, A, K],
+    val branch: Branch
+)(
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeK: Serialize[K],
     syncF: Sync[F]
 ) extends SpaceMatcher[F, C, P, E, A, R, K] {
+
+  implicit val codecC = serializeC.toCodec
+
+  private val lock: TwoStepLock[Blake2b256Hash] = new DefaultTwoStepLock()
+
+  protected[this] def consumeLock(
+      channels: Seq[C]
+  )(
+      thunk: => Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]
+  ): Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]] = {
+    val hashes = channels.map(ch => StableHashProvider.hash(ch))
+    lock.acquire(hashes)(() => hashes)(thunk)
+  }
+
+  protected[this] def produceLock(
+      channel: C
+  )(
+      thunk: => Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]
+  ): Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]] =
+    lock.acquire(Seq(StableHashProvider.hash(channel)))(
+      () =>
+        store.withTxn(store.createTxnRead()) { txn =>
+          val groupedChannels: Seq[Seq[C]] = store.getJoin(txn, channel)
+          groupedChannels.flatten.map(StableHashProvider.hash(_))
+        }
+    )(thunk)
 
   protected[this] val logger: Logger
   protected[this] val installSpan: SpanBuilder
@@ -94,19 +124,22 @@ abstract class RSpaceOps[F[_], C, P, E, A, R, K](val store: IStore[C, P, A, K], 
 
   override def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
       implicit m: Match[P, E, A, R]
-  ): F[Option[(K, Seq[R])]] = syncF.delay {
-    Kamon.withSpan(installSpan.start(), finishSpan = true) {
-      store.withTxn(store.createTxnWrite()) { txn =>
-        install(txn, channels, patterns, continuation)
+  ): F[Option[(K, Seq[R])]] =
+    syncF.delay {
+      Kamon.withSpan(installSpan.start(), finishSpan = true) {
+        store.withTxn(store.createTxnWrite()) { txn =>
+          install(txn, channels, patterns, continuation)
+        }
       }
     }
-  }
 
   override def retrieve(
       root: Blake2b256Hash,
       channelsHash: Blake2b256Hash
   ): F[Option[GNAT[C, P, A, K]]] =
-    syncF.delay { history.lookup(store.trieStore, root, channelsHash) }
+    syncF.delay {
+      history.lookup(store.trieStore, root, channelsHash)
+    }
 
   override def reset(root: Blake2b256Hash): F[Unit] =
     syncF.delay {
@@ -123,14 +156,13 @@ abstract class RSpaceOps[F[_], C, P, E, A, R, K](val store: IStore[C, P, A, K], 
       }
     }
 
-  override def clear(): F[Unit] = {
-    val emptyRootHash: F[Blake2b256Hash] = syncF.delay {
-      store.withTxn(store.createTxnRead()) { txn =>
+  override def clear(): F[Unit] =
+    syncF.suspend {
+      val root = store.withTxn(store.createTxnRead()) { txn =>
         store.withTrieTxn(txn) { trieTxn =>
           store.trieStore.getEmptyRoot(trieTxn)
         }
       }
+      reset(root)
     }
-    emptyRootHash.flatMap(root => reset(root))
-  }
 }

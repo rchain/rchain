@@ -1,40 +1,45 @@
 import re
 import os
+import queue
 import shlex
 import logging
 import threading
 import contextlib
-from typing import Generator
+from multiprocessing import Queue, Process
+from typing import (
+    Dict,
+    List,
+    Tuple,
+    TYPE_CHECKING,
+    Optional,
+    Generator,
+)
 
 import pytest
-from docker.client import DockerClient
 
-import conftest
-from rnode_testing.common import (
+from . import conftest
+from .common import (
     random_string,
     make_tempfile,
     make_tempdir,
     TestingContext,
 )
-from rnode_testing.wait import (
+from .wait import (
     wait_for_node_started,
 )
 
-from multiprocessing import Queue, Process
-from queue import Empty
-
-from typing import Dict, List, Tuple, Union, TYPE_CHECKING, Optional, Generator
 
 if TYPE_CHECKING:
-    from conftest import KeyPair
-    from docker.client import DockerClient
+    from .conftest import KeyPair
     from docker.models.containers import Container
     from logging import Logger
     from threading import Event
+    from docker.client import DockerClient
+    from docker.models.containers import ExecResult
 
-DEFAULT_IMAGE = os.environ.get(
-        "DEFAULT_IMAGE",
-        "rchain-integration-testing:latest")
+
+DEFAULT_IMAGE = os.environ.get("DEFAULT_IMAGE", "rchain-integration-tests:latest")
+
 
 rnode_binary = '/opt/docker/bin/rnode'
 rnode_directory = "/var/lib/rnode"
@@ -44,42 +49,36 @@ rnode_certificate = '{}/node.certificate.pem'.format(rnode_directory)
 rnode_key = '{}/node.key.pem'.format(rnode_directory)
 
 
-class InterruptedException(Exception):
-    pass
-
-
 class RNodeAddressNotFoundError(Exception):
-    pass
+    def __init__(self, regex):
+        super().__init__()
+        self.regex = regex
 
 
 class NonZeroExitCodeError(Exception):
-    def __init__(self, command: Tuple[Union[int, str], ...], exit_code: int, output: str):
+    def __init__(self, command: Tuple[str, ...], exit_code: int, output: str):
+        super().__init__()
         self.command = command
         self.exit_code = exit_code
         self.output = output
 
-    def __repr__(self) -> str:
-        return '{}({}, {}, {})'.format(
-            self.__class__.__name__,
-            repr(self.command),
-            self.exit_code,
-            repr(self.output),
-        )
 
-
-class TimeoutError(Exception):
-    def __init__(self, command: Union[Tuple[str, ...], str], timeout: int) -> None:
+class CommandTimeoutError(Exception):
+    def __init__(self, command: Tuple[str, ...], timeout: int) -> None:
+        super().__init__()
         self.command = command
         self.timeout = timeout
 
 
 class UnexpectedShowBlocksOutputFormatError(Exception):
     def __init__(self, output: str) -> None:
+        super().__init__()
         self.output = output
 
 
 class UnexpectedProposeOutputFormatError(Exception):
     def __init__(self, output: str) -> None:
+        super().__init__()
         self.output = output
 
 
@@ -110,14 +109,12 @@ def extract_block_hash_from_propose_output(propose_output: str):
 
 
 class Node:
-    def __init__(self, container: "Container", deploy_dir: str, docker_client: "DockerClient", timeout: int,
-                 network: str) -> None:
+    def __init__(self, *, container: "Container", deploy_dir: str, command_timeout: int, network: str) -> None:
         self.container = container
         self.local_deploy_dir = deploy_dir
         self.remote_deploy_dir = rnode_deploy_dir
         self.name = container.name
-        self.docker_client = docker_client
-        self.timeout = timeout
+        self.command_timeout = command_timeout
         self.network = network
         self.terminate_background_logging_event = threading.Event()
         self.background_logging = LoggingThread(
@@ -125,6 +122,7 @@ class Node:
             logger=logging.getLogger('peers'),
             terminate_thread_event=self.terminate_background_logging_event,
         )
+        self.background_logging.setDaemon(True)
         self.background_logging.start()
 
     def __repr__(self) -> str:
@@ -135,19 +133,14 @@ class Node:
 
     def get_rnode_address(self) -> str:
         log_content = self.logs()
-        m = re.search("Listening for traffic on (rnode://.+@{name}\\?protocol=\\d+&discovery=\\d+)\\.$".format(name=self.container.name),
-                      log_content,
-                      re.MULTILINE | re.DOTALL)
-        if m is None:
-            raise RNodeAddressNotFoundError()
-        address = m.group(1)
+        regex = "Listening for traffic on (rnode://.+@{name}\\?protocol=\\d+&discovery=\\d+)\\.$".format(name=self.container.name)
+        match = re.search(regex, log_content, re.MULTILINE | re.DOTALL)
+        if match is None:
+            raise RNodeAddressNotFoundError(regex)
+        address = match.group(1)
         return address
 
-    def get_metrics(self) -> Tuple[int, str]:
-        cmd = 'curl -s http://localhost:40403/metrics'
-        return self.exec_run(cmd=cmd)
-
-    def get_metrics_strict(self):
+    def get_metrics(self):
         return self.shell_out('curl', '-s', 'http://localhost:40403/metrics')
 
     def cleanup(self) -> None:
@@ -155,70 +148,59 @@ class Node:
         self.terminate_background_logging_event.set()
         self.background_logging.join()
 
-    def deploy_contract(self, contract: str) -> Tuple[int, str]:
-        cmd = '{rnode_binary} deploy --from "0x1" --phlo-limit 1000000 --phlo-price 1 --nonce 0 {rnode_deploy_dir}/{contract}'.format(
-            rnode_binary=rnode_binary,
-            rnode_deploy_dir=rnode_deploy_dir,
-            contract=contract
-        )
-        return self.exec_run(cmd)
-
-    def propose_contract(self) -> Tuple[int, str]:
-        return self.exec_run('{} propose'.format(rnode_binary))
-
-    def show_blocks(self) -> Tuple[int, str]:
-        return self.exec_run('{} show-blocks'.format(rnode_binary))
-
-    def show_blocks_with_depth(self, depth: int) -> Tuple[int, str]:
-        return self.exec_run(f'{rnode_binary} show-blocks --depth {depth}')
+    def show_blocks_with_depth(self, depth: int) -> str:
+        return self.rnode_command('show-blocks', '--depth', str(depth))
 
     def get_blocks_count(self, depth: int) -> int:
-        _, show_blocks_output = self.show_blocks_with_depth(depth)
+        show_blocks_output = self.show_blocks_with_depth(depth)
         return extract_block_count_from_show_blocks(show_blocks_output)
 
     def get_block(self, block_hash: str) -> str:
-        return self.call_rnode('show-block', block_hash, stderr=False)
+        return self.rnode_command('show-block', block_hash, stderr=False)
 
-    # deprecated, don't use, why? ask @adaszko
-    def exec_run(self, cmd: Union[Tuple[str, ...], str], stderr=True) -> Tuple[int, str]:
-        queue: Queue = Queue(1)
+    # Too low level -- do not use directly.  Prefer shell_out() instead.
+    def _exec_run_with_timeout(self, cmd: Tuple[str, ...], stderr=True) -> Tuple[int, str]:
+        control_queue: queue.Queue = Queue(1)
 
-        def execution():
-            r = self.container.exec_run(cmd, stderr=stderr)
-            queue.put((r.exit_code, r.output.decode('utf-8')))
+        def command_process():
+            exec_result: ExecResult = self.container.exec_run(cmd, stderr=stderr)
+            control_queue.put((exec_result.exit_code, exec_result.output.decode('utf-8')))
 
-        process = Process(target=execution)
-
+        process = Process(target=command_process)
         logging.info("COMMAND {} {}".format(self.name, cmd))
-
         process.start()
 
         try:
-            exit_code, output = queue.get(True, None)
-            if exit_code != 0:
-                logging.warning("EXITED {} {} {}".format(self.name, cmd, exit_code))
-            logging.debug('OUTPUT {}'.format(repr(output)))
-            return exit_code, output
-        except Empty:
+            exit_code, output = control_queue.get(True, self.command_timeout)
+        except queue.Empty:
+            raise CommandTimeoutError(cmd, self.command_timeout)
+        finally:
             process.terminate()
-            process.join()
-            raise TimeoutError(cmd, self.timeout)
+
+        if exit_code != 0:
+            for line in output.splitlines():
+                logging.info('{}: {}'.format(self.name, line))
+            logging.warning("EXITED {} {} {}".format(self.name, cmd, exit_code))
+        else:
+            for line in output.splitlines():
+                logging.debug('{}: {}'.format(self.name, line))
+            logging.debug("EXITED {} {} {}".format(self.name, cmd, exit_code))
+        return exit_code, output
 
     def shell_out(self, *cmd: str, stderr=True) -> str:
-        exit_code, output = self.exec_run(cmd, stderr=stderr)
+        exit_code, output = self._exec_run_with_timeout(cmd, stderr=stderr)
         if exit_code != 0:
             raise NonZeroExitCodeError(command=cmd, exit_code=exit_code, output=output)
         return output
 
-    def call_rnode(self, *node_args: str, stderr: bool = True) -> str:
+    def rnode_command(self, *node_args: str, stderr: bool = True) -> str:
         return self.shell_out(rnode_binary, *node_args, stderr=stderr)
 
     def eval(self, rho_file_path: str) -> str:
-        return self.call_rnode('eval', rho_file_path)
+        return self.rnode_command('eval', rho_file_path)
 
     def deploy(self, rho_file_path: str) -> str:
-        return self.call_rnode('deploy', '--from=0x1', '--phlo-limit=1000000', '--phlo-price=1', '--nonce=0',
-                               rho_file_path)
+        return self.rnode_command('deploy', '--from=0x1', '--phlo-limit=1000000', '--phlo-price=1', '--nonce=0', rho_file_path)
 
     def deploy_string(self, rholang_code: str) -> str:
         quoted_rholang = shlex.quote(rholang_code)
@@ -228,19 +210,22 @@ class Node:
         ))
 
     def propose(self) -> str:
-        output = self.call_rnode('propose', stderr=False)
+        output = self.rnode_command('propose', stderr=False)
         block_hash = extract_block_hash_from_propose_output(output)
         return block_hash
 
     def repl(self, rholang_code: str, stderr: bool = False) -> str:
         quoted_rholang_code = shlex.quote(rholang_code)
-        return self.shell_out('sh',
-                              '-c',
-                              'echo {quoted_rholang_code} | {rnode_binary} repl'.format(quoted_rholang_code=quoted_rholang_code,rnode_binary=rnode_binary),
-                              stderr=stderr)
+        output = self.shell_out(
+            'sh',
+            '-c',
+            'echo {quoted_rholang_code} | {rnode_binary} repl'.format(quoted_rholang_code=quoted_rholang_code,rnode_binary=rnode_binary),
+            stderr=stderr,
+        )
+        return output
 
     def generate_faucet_bonding_deploys(self, bond_amount: int, private_key: str, public_key: str) -> str:
-        return self.call_rnode('generateFaucetBondingDeploys',
+        return self.rnode_command('generateFaucetBondingDeploys',
             '--amount={}'.format(bond_amount),
             '--private-key={}'.format(private_key),
             '--public-key={}'.format(public_key),
@@ -275,12 +260,12 @@ class LoggingThread(threading.Thread):
                 if self.terminate_thread_event.is_set():
                     break
                 line = next(containers_log_lines_generator)
-                self.logger.info('\t{}: {}'.format(self.container.name, line.decode('utf-8').rstrip()))
+                self.logger.info('{}: {}'.format(self.container.name, line.decode('utf-8').rstrip()))
         except StopIteration:
             pass
 
 
-def make_container_command(container_command: str, container_command_options: Dict):
+def make_container_command(container_command: str, container_command_options: Dict) -> str:
     opts = ['{} {}'.format(option, argument) for option, argument in container_command_options.items()]
     result = '{} {}'.format(container_command, ' '.join(opts))
     return result
@@ -339,11 +324,10 @@ def make_node(
     )
 
     node = Node(
-        container,
-        deploy_dir,
-        docker_client,
-        command_timeout,
-        network,
+        container=container,
+        deploy_dir=deploy_dir,
+        command_timeout=command_timeout,
+        network=network,
     )
 
     return node
@@ -376,26 +360,22 @@ def make_bootstrap_node(
     key_pair: "KeyPair",
     command_timeout: int,
     allowed_peers: Optional[List[str]] = None,
-    image: str = DEFAULT_IMAGE,
     mem_limit: Optional[str] = None,
     cli_options: Optional[Dict] = None,
-    container_name: Optional[str] = None,
     mount_dir: Optional[str] = None,
 ) -> Node:
     key_file = get_absolute_path_for_mounting("bootstrap_certificate/node.key.pem", mount_dir=mount_dir)
     cert_file = get_absolute_path_for_mounting("bootstrap_certificate/node.certificate.pem", mount_dir=mount_dir)
 
-    name = "{node_name}.{network_name}".format(
-        node_name='bootstrap' if container_name is None else container_name,
-        network_name=network,
-    )
+    container_name = make_bootstrap_name(network)
+
     container_command_options = {
         "--port":                   40400,
         "--standalone":             "",
         "--validator-private-key":  key_pair.private_key,
         "--validator-public-key":   key_pair.public_key,
         "--has-faucet":             "",
-        "--host":                   name,
+        "--host":                   container_name,
     }
 
     if cli_options is not None:
@@ -408,7 +388,7 @@ def make_bootstrap_node(
 
     container = make_node(
         docker_client=docker_client,
-        name=name,
+        name=container_name,
         network=network,
         bonds_file=bonds_file,
         container_command='run',
@@ -421,8 +401,16 @@ def make_bootstrap_node(
     return container
 
 
-def make_peer_name(network: str, i: Union[int, str]) -> str:
-    return "peer{i}.{network}".format(i=i, network=network)
+def make_container_name(network_name: str, name: str) -> str:
+    return "{network_name}.{name}".format(network_name=network_name, name=name)
+
+
+def make_bootstrap_name(network_name: str) -> str:
+    return make_container_name(network_name=network_name, name='bootstrap')
+
+
+def make_peer_name(network_name: str, name: str) -> str:
+    return make_container_name(network_name=network_name, name='peer{}'.format(name))
 
 
 def make_peer(
@@ -435,7 +423,6 @@ def make_peer(
     bootstrap: Node,
     key_pair: "KeyPair",
     allowed_peers: Optional[List[str]] = None,
-    image: str = DEFAULT_IMAGE,
     mem_limit: Optional[str] = None,
 ) -> Node:
     assert isinstance(name, str)
@@ -500,13 +487,12 @@ def create_peer_nodes(
     key_pairs: List["KeyPair"],
     command_timeout: int,
     allowed_peers: Optional[List[str]] = None,
-    image: str = DEFAULT_IMAGE,
     mem_limit: Optional[str] = None,
 ) -> List[Node]:
     assert len(set(key_pairs)) == len(key_pairs), "There shouldn't be any duplicates in the key pairs"
 
     if allowed_peers is None:
-        allowed_peers = [bootstrap.name] + [make_peer_name(network, i) for i in range(0, len(key_pairs))]
+        allowed_peers = [bootstrap.name] + [make_peer_name(network, str(i)) for i in range(0, len(key_pairs))]
 
     result = []
     try:
@@ -520,7 +506,6 @@ def create_peer_nodes(
                 bootstrap=bootstrap,
                 key_pair=key_pair,
                 allowed_peers=allowed_peers,
-                image=image,
                 mem_limit=mem_limit if mem_limit is not None else '4G',
             )
             result.append(peer_node)
@@ -544,14 +529,13 @@ def docker_network(docker_client: "DockerClient") -> Generator[str, None, None]:
 
 
 @contextlib.contextmanager
-def started_bootstrap_node(*, context: TestingContext, network, container_name: str = None, cli_options=None, mount_dir: str = None) -> Generator[Node, None, None]:
+def started_bootstrap_node(*, context: TestingContext, network, mount_dir: str = None) -> Generator[Node, None, None]:
     bootstrap_node = make_bootstrap_node(
         docker_client=context.docker,
         network=network,
         bonds_file=context.bonds_file,
         key_pair=context.bootstrap_keypair,
         command_timeout=context.command_timeout,
-        container_name=container_name,
         mount_dir=mount_dir,
     )
     try:
@@ -562,9 +546,9 @@ def started_bootstrap_node(*, context: TestingContext, network, container_name: 
 
 
 @contextlib.contextmanager
-def docker_network_with_started_bootstrap(context, *, container_name=None, cli_options=None):
+def docker_network_with_started_bootstrap(context):
     with docker_network(context.docker) as network:
-        with started_bootstrap_node(context=context, network=network, container_name=container_name, cli_options=cli_options, mount_dir=context.mount_dir) as node:
+        with started_bootstrap_node(context=context, network=network, mount_dir=context.mount_dir) as node:
             yield node
 
 

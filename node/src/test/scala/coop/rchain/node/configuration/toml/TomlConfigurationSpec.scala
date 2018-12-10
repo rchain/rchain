@@ -48,6 +48,7 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
       |approve-genesis-duration = "30min"
       |approve-genesis-interval = "1min"
       |deploy-timestamp = 1
+      |has-faucet = true
       |
       |[kamon]
       |prometheus = false
@@ -108,6 +109,7 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
     root.validators.flatMap(_.approveGenesisDuration) shouldEqual Some(30.minutes)
     root.validators.flatMap(_.approveGenesisInterval) shouldEqual Some(1.minute)
     root.validators.flatMap(_.deployTimestamp) shouldEqual Some(1)
+    root.validators.flatMap(_.hasFaucet) shouldEqual Some(true)
 
     // kamon
     root.kamon.flatMap(_.prometheus) shouldEqual Some(false)

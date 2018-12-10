@@ -1,5 +1,7 @@
 package coop.rchain.blockstorage
 import coop.rchain.blockstorage.BlockDagFileStorage.Checkpoint
+import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.crypto.codec.Base16
 
 object errors {
   sealed abstract class BlockDagStorageError(message: String) extends Throwable(message) {
@@ -22,5 +24,11 @@ object errors {
   final case class TopoSortLengthIsTooBig(length: Long)
       extends BlockDagStorageError(
         s"Topological sorting of length $length was requested while maximal length is ${Int.MaxValue}"
+      )
+
+  final case class BlockSenderIsMalformed(block: BlockMessage)
+      extends BlockDagStorageError(
+        s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is malformed: ${Base16
+          .encode(block.sender.toByteArray)}"
       )
 }

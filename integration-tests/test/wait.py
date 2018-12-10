@@ -8,8 +8,8 @@ import typing_extensions
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from rnode_testing.common import Network
-    from rnode_testing.rnode import Node
+    from .common import Network
+    from .rnode import Node
 
 
 class PredicateProtocol(typing_extensions.Protocol):
@@ -59,7 +59,7 @@ class HasAtLeastPeers:
         return '<{}({})>'.format(self.__class__.__name__, args)
 
     def is_satisfied(self) -> bool:
-        output = self.node.get_metrics_strict()
+        output = self.node.get_metrics()
         match = self.metric_regex.search(output)
         if match is None:
             return False

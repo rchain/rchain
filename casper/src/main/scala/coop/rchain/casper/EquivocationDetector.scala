@@ -3,7 +3,7 @@ package coop.rchain.casper
 import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.{BlockMessage, Bond, Justification}
@@ -67,32 +67,31 @@ object EquivocationDetector {
   def checkEquivocations[F[_]: Monad: Log](
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
       block: BlockMessage,
-      dag: BlockDag
-  ): F[Either[InvalidBlock, ValidBlock]] = {
-    val maybeCreatorJustification   = creatorJustificationHash(block)
-    val maybeLatestMessageOfCreator = dag.latestMessages.get(block.sender)
-    val isNotEquivocation = maybeCreatorJustification == maybeLatestMessageOfCreator.map(
-      _.blockHash
-    )
-    if (isNotEquivocation) {
-      Applicative[F].pure(Right(Valid))
-    } else if (requestedAsDependency(block, blockBufferDependencyDag)) {
-      Applicative[F].pure(Left(AdmissibleEquivocation))
-    } else {
-      for {
-        sender <- PrettyPrinter.buildString(block.sender).pure[F]
-        creatorJustificationHash = PrettyPrinter.buildString(
-          maybeCreatorJustification.getOrElse(ByteString.EMPTY)
-        )
-        latestMessageOfCreator = PrettyPrinter.buildString(
-          maybeLatestMessageOfCreator.map(_.blockHash).getOrElse(ByteString.EMPTY)
-        )
-        _ <- Log[F].warn(
-              s"Ignorable equivocation: sender is $sender, creator justification is $creatorJustificationHash, latest message of creator is $latestMessageOfCreator"
-            )
-      } yield Left(IgnorableEquivocation)
-    }
-  }
+      dag: BlockDagRepresentation[F]
+  ): F[Either[InvalidBlock, ValidBlock]] =
+    for {
+      maybeLatestMessageOfCreatorHash <- dag.latestMessageHash(block.sender)
+      maybeCreatorJustification       = creatorJustificationHash(block)
+      isNotEquivocation               = maybeCreatorJustification == maybeLatestMessageOfCreatorHash
+      result <- if (isNotEquivocation) {
+                 Applicative[F].pure(Right(Valid))
+               } else if (requestedAsDependency(block, blockBufferDependencyDag)) {
+                 Applicative[F].pure(Left(AdmissibleEquivocation))
+               } else {
+                 for {
+                   sender <- PrettyPrinter.buildString(block.sender).pure[F]
+                   creatorJustificationHash = PrettyPrinter.buildString(
+                     maybeCreatorJustification.getOrElse(ByteString.EMPTY)
+                   )
+                   latestMessageOfCreator = PrettyPrinter.buildString(
+                     maybeLatestMessageOfCreatorHash.getOrElse(ByteString.EMPTY)
+                   )
+                   _ <- Log[F].warn(
+                         s"Ignorable equivocation: sender is $sender, creator justification is $creatorJustificationHash, latest message of creator is $latestMessageOfCreator"
+                       )
+                 } yield Left(IgnorableEquivocation)
+               }
+    } yield result
 
   private def requestedAsDependency(
       block: BlockMessage,
@@ -109,7 +108,7 @@ object EquivocationDetector {
   def checkNeglectedEquivocationsWithUpdate[F[_]: Monad: BlockStore](
       equivocationsTracker: mutable.Set[EquivocationRecord],
       block: BlockMessage,
-      dag: BlockDag,
+      dag: BlockDagRepresentation[F],
       genesis: BlockMessage
   ): F[Either[InvalidBlock, ValidBlock]] =
     for {
@@ -129,7 +128,7 @@ object EquivocationDetector {
   private def isNeglectedEquivocationDetectedWithUpdate[F[_]: Monad: BlockStore](
       equivocationsTracker: mutable.Set[EquivocationRecord],
       block: BlockMessage,
-      dag: BlockDag,
+      dag: BlockDagRepresentation[F],
       genesis: BlockMessage
   ): F[Boolean] =
     equivocationsTracker.toList.existsM { equivocationRecord =>
@@ -153,7 +152,7 @@ object EquivocationDetector {
   private def updateEquivocationsTracker[F[_]: Monad: BlockStore](
       equivocationsTracker: mutable.Set[EquivocationRecord],
       block: BlockMessage,
-      dag: BlockDag,
+      dag: BlockDagRepresentation[F],
       equivocationRecord: EquivocationRecord,
       genesis: BlockMessage
   ): F[Boolean] =
@@ -182,7 +181,7 @@ object EquivocationDetector {
 
   private def getEquivocationDiscoveryStatus[F[_]: Monad: BlockStore](
       block: BlockMessage,
-      dag: BlockDag,
+      dag: BlockDagRepresentation[F],
       equivocationRecord: EquivocationRecord,
       genesis: BlockMessage
   ): F[EquivocationDiscoveryStatus] = {

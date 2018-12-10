@@ -1,7 +1,6 @@
 import os
 
-import conftest
-from rnode_testing.rnode import started_standalone_bootstrap_node
+from .rnode import started_standalone_bootstrap_node
 
 
 def test_eval(started_standalone_bootstrap_node):

@@ -4,9 +4,10 @@ import cats.Monad
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
+import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
@@ -27,6 +28,7 @@ import scodec.Codec
 
 import scala.collection.immutable
 import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.ski._
 import coop.rchain.casper.util.{EventConverter, ProtoUtil}
 import coop.rchain.casper._
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
@@ -54,15 +56,6 @@ object BlockAPI {
       )
   }
 
-  def addBlock[F[_]: Monad: MultiParentCasperRef: Log](b: BlockMessage): F[DeployServiceResponse] =
-    MultiParentCasperRef.withCasper[F, DeployServiceResponse](
-      casper =>
-        for {
-          status <- casper.addBlock(b)
-        } yield addResponse(status, b),
-      DeployServiceResponse(success = false, "Error: Casper instance not available")
-    )
-
   def createBlock[F[_]: Sync: MultiParentCasperRef: Log]: F[DeployServiceResponse] =
     MultiParentCasperRef.withCasper[F, DeployServiceResponse](
       casper =>
@@ -74,7 +67,10 @@ object BlockAPI {
                        case err: NoBlock =>
                          DeployServiceResponse(success = false, s"Error while creating block: $err")
                            .pure[F]
-                       case Created(block) => casper.addBlock(block).map(addResponse(_, block))
+                       case Created(block) =>
+                         casper
+                           .addBlock(block, ignoreDoppelgangerCheck[F])
+                           .map(addResponse(_, block))
                      }
             _ <- Sync[F].delay { createBlockLock.unlock() }
           } yield result,
@@ -236,7 +232,7 @@ object BlockAPI {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
         dag         <- MultiParentCasper[F].blockDag
-        maxHeight   = dag.topoSort.length + dag.sortOffset - 1
+        maxHeight   <- dag.topoSort(0L).map(_.length - 1) // TODO: Optimize calculating max height
         startHeight = math.max(0, maxHeight - depth)
         flattenedBlockInfosUntilDepth <- getFlattenedBlockInfosUntilDepth[F](
                                           depth,
@@ -252,15 +248,18 @@ object BlockAPI {
 
   private def getFlattenedBlockInfosUntilDepth[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
       depth: Int,
-      dag: BlockDag
+      dag: BlockDagRepresentation[F]
   ): F[List[BlockInfoWithoutTuplespace]] =
-    dag.topoSort.takeRight(depth).foldM(List.empty[BlockInfoWithoutTuplespace]) {
-      case (blockInfosAtHeightAcc, blockHashesAtHeight) =>
-        for {
-          blocksAtHeight     <- blockHashesAtHeight.traverse(ProtoUtil.unsafeGetBlock[F])
-          blockInfosAtHeight <- blocksAtHeight.traverse(getBlockInfoWithoutTuplespace[F])
-        } yield blockInfosAtHeightAcc ++ blockInfosAtHeight
-    }
+    for {
+      topoSort <- dag.topoSortTail(depth)
+      result <- topoSort.foldM(List.empty[BlockInfoWithoutTuplespace]) {
+                 case (blockInfosAtHeightAcc, blockHashesAtHeight) =>
+                   for {
+                     blocksAtHeight     <- blockHashesAtHeight.traverse(ProtoUtil.unsafeGetBlock[F])
+                     blockInfosAtHeight <- blocksAtHeight.traverse(getBlockInfoWithoutTuplespace[F])
+                   } yield blockInfosAtHeightAcc ++ blockInfosAtHeight
+               }
+    } yield result
 
   def showMainChain[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int
@@ -280,6 +279,7 @@ object BlockAPI {
     )
   }
 
+  // TODO: Replace with call to BlockStore
   def findBlockWithDeploy[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       user: ByteString,
       timestamp: Long
@@ -287,7 +287,8 @@ object BlockAPI {
     def casperResponse(implicit casper: MultiParentCasper[F]): F[BlockQueryResponse] =
       for {
         dag                <- MultiParentCasper[F].blockDag
-        maybeBlock         <- findBlockWithDeploy[F](dag.topoSort.flatten.reverse, user, timestamp)
+        allBlocksTopoSort  <- dag.topoSort(0L)
+        maybeBlock         <- findBlockWithDeploy[F](allBlocksTopoSort.flatten.reverse, user, timestamp)
         blockQueryResponse <- maybeBlock.traverse(getFullBlockInfo[F])
       } yield
         blockQueryResponse.fold(
@@ -373,7 +374,7 @@ object BlockAPI {
       timestamp                = header.timestamp
       mainParent               = header.parentsHashList.headOption.getOrElse(ByteString.EMPTY)
       parentsHashList          = header.parentsHashList
-      normalizedFaultTolerance = SafetyOracle[F].normalizedFaultTolerance(dag, block.blockHash)
+      normalizedFaultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, block.blockHash)
       initialFault             <- MultiParentCasper[F].normalizedInitialFault(ProtoUtil.weightMap(block))
       blockInfo <- constructor(
                     block,
@@ -453,7 +454,7 @@ object BlockAPI {
 
   private def getBlock[F[_]: Monad: MultiParentCasper: BlockStore](
       q: BlockQuery,
-      dag: BlockDag
+      dag: BlockDagRepresentation[F]
   ): F[Option[BlockMessage]] =
     for {
       findResult <- BlockStore[F].find(h => {
