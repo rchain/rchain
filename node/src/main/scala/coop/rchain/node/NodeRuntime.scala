@@ -125,21 +125,33 @@ class NodeRuntime private[node] (
                           .toEffect
 
       _ <- Task.delay {
-            val influxConf = conf.kamon.influxDb.flatMap { i =>
-              val str =
+            val influxdbConf = conf.kamon.influxDb
+              .map { i =>
                 s"""
-                |kamon.influxdb {
-                |  hostname = "${i.hostname}"
-                |  port = ${i.port}
-                |  database = "${i.database}"
-                |}
+                |  influxdb {
+                |    hostname = "${i.hostname}"
+                |    port = ${i.port}
+                |    database = "${i.database}"
+                |  }
                 |""".stripMargin
-              Try(ConfigFactory.parseString(str)).toOption
-            }
-            influxConf.foreach { ic =>
-              Kamon.reconfigure(Kamon.config().withFallback(ic))
+              }
+              .getOrElse("")
+            val kamonConf =
+              s"""
+               |kamon {
+               |  environment {
+               |    service = "rnode"
+               |    host = "${id.toString}"
+               |  }
+               |  metric {
+               |    tick-interval = 10 seconds
+               |  }
+               |  $influxdbConf
+               |}
+               |""".stripMargin
+            Kamon.reconfigure(Kamon.config().withFallback(ConfigFactory.parseString(kamonConf)))
+            if (conf.kamon.influxDb.isDefined)
               Kamon.addReporter(new kamon.influxdb.InfluxDBReporter())
-            }
             if (conf.kamon.prometheus) Kamon.addReporter(prometheusReporter)
             Kamon.addReporter(new JmxReporter())
             Kamon.addReporter(new ZipkinReporter())
