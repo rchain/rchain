@@ -1,15 +1,37 @@
 # Mainnet Feature Requirements
 
 ## Node
-### As a Node Operator, I want to install software from binary artifacts or a Docker image
+### As a Node perator, I want to install software from binary artifacts or a Docker image
 ##### test: not available 
 ##### steps: TBD
 ### As a Node Operator, I want to run software on Linux, MacOS, and in Docker
 ##### test: not available 
 ##### steps: TBD
 ### As a dApp Developer, I want to interface with the Rholang interpreter and evaluate smart contracts independently from the blockchain
-##### test: not available 
-##### steps: TBD
+#### A contract being run using rnode eval
+##### test: test/test_eval.py::test_eval
+##### steps:
+
+* given that `rnode` is running
+* user executes all contracts from `/rholang/examples/*.rho` using `rnode eval`
+* program exists with 0 for each of the contract
+
+#### A contract being run using rnode repl
+##### test: test/test_repl.py::test_repl
+##### steps:
+
+* given that `rnode` is running
+* user executes all contracts from `/rholang/examples/*.rho` using `rnode repl`
+* program exists with 0 for each of the contract
+
+#### REPL detects invalid rholang
+##### test: test/test_repl.py::test_repl_detects_invalid_rholang
+##### steps:
+
+* given that `rnode` is running
+* user executes rholang code that is "foo"
+* program exists with 1 and prints out coop.rchain.rholang.interpreter.errorsTopLevelFreeVariablesNotAllowedError
+
 ### As a Node Operator, I want to have a default configuration and the ability to customize the configuration on the command line
 ##### test: not available 
 ##### steps: TBD
@@ -30,10 +52,10 @@
 ##### test: not available 
 ##### steps: TBD
 ## Network Launch
-### As a Coop SRE I want to launch a network
+### As a platform stakeholder, I want a Coop-governed, community-driven, and independently verifiable validation of the genesis block used to launch a network.
 ##### test: not available 
 ##### steps: TBD
-#### A successful genesis ceremony 
+#### As a platform stakeholder, I want a Coop-goverend, community-driven, and independently verifiable successful genesis ceremony. 
 ##### test: test/test_genesis_ceremony.py::test_successful_genesis_ceremony 
 ##### steps:
 
@@ -75,7 +97,7 @@
 * `validatorA` and `validatorB` send back `BlockApproval`
 * `ceremonyMaster` logs an error about not getting enough signatures on time (`duration`)
 
-### As a Node operator I want to join the network after genesis ceremony
+### As a Node operator I want to join the network after genesis ceremony, receive the genesis block, and know the state of the blockchain.
 #### A validator catching up after genesis ceremony
 ##### test: not available
 ##### steps:
@@ -88,7 +110,7 @@
 * `validatorC` tip points to block (genesis) where it has no parent and Bonds holds `validatorA` and `validatorB`
 
 ## Wallets
-### As a user, I want to be able to create a wallet so that I can store REV in it
+### As a user, I want to be able to configure a wallet so that I can store REV in it
 ##### test: not available 
 ##### steps: TBD
 ### As a user, I want to be able to add REV to my wallet so that I have available REV to pay for goods/services
@@ -97,16 +119,22 @@
 ### As a user, I want to be able to remove REV from my wallet so that I can pay for goods/services
 ##### test: not available 
 ##### steps: TBD
+### As a user, I want to be able to receive REV from another user by providing that user with the public key for my wallet.
+##### test: not available
+##### steps: TBD
+### As a user, I want to be able to send REV to the wallet of another user.
+##### test: not available
+##### steps: TBD
 ### Expose purses inside a wallet
 ##### test: not available 
 ##### steps: TBD
-### As a wallet application, I want to query a wallet contract (or the blocks) for the history of all Rev transfers to/from it
+### As a user of a wallet application, I want to query a wallet contract (or the blocks) for my public address to get the history of all REV transfers to and/or from it
 ##### test: not available 
 ##### steps: TBD
 ### As a REV holder, I can move some of my REV to the control another user’s public key (or address) via a co-op supplied dApp wallet
 ##### test: not available 
 ##### steps: TBD
-### As a recipient of REV (other than Genesis REV), I can use a co-op supplied dApp to view my REV balance
+### As a recipient of REV (other than REV at mainnet launch 'genesis'), I can use a co-op supplied dApp to view my REV balance
 ##### test: not available 
 ##### steps: TBD
 ### As a validator, I can move Rev to/from the key-pair for one validator node to the key-pair for another validator node or that of the co-op supplied wallet dApp
@@ -204,32 +232,6 @@
 ### As a dApp developer, I want contract definition inside another contract (ex WIDE, persisting contracts).
 ##### test: not available
 ##### steps: TBD
-
-## External tooling: support for Rholang
-### As a dApp developer I can run arbitrary rholang contracts on a node
-#### A contract being run using rnode eval
-##### test: test/test_eval.py::test_eval
-##### steps:
-
-* given that `rnode` is running
-* user executes all contracts from `/rholang/examples/*.rho` using `rnode eval`
-* program exists with 0 for each of the contract
-
-#### A contract being run using rnode repl
-##### test: test/test_repl.py::test_repl
-##### steps:
-
-* given that `rnode` is running
-* user executes all contracts from `/rholang/examples/*.rho` using `rnode repl`
-* program exists with 0 for each of the contract
-
-#### REPL detects invalid rholang
-##### test: test/test_repl.py::test_repl_detects_invalid_rholang
-##### steps:
-
-* given that `rnode` is running
-* user executes rholang code that is "foo"
-* program exists with 1 and prints out coop.rchain.rholang.interpreter.errorsTopLevelFreeVariablesNotAllowedError
 
 ## Not_Grouped
 ### All existing tests that need proper user story
