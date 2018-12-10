@@ -38,6 +38,7 @@ import coop.rchain.shared._
 
 import com.typesafe.config.ConfigFactory
 import kamon._
+import kamon.system.SystemMetrics
 import kamon.zipkin.ZipkinReporter
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -155,6 +156,7 @@ class NodeRuntime private[node] (
             if (conf.kamon.prometheus) Kamon.addReporter(prometheusReporter)
             Kamon.addReporter(new JmxReporter())
             Kamon.addReporter(new ZipkinReporter())
+            SystemMetrics.startCollecting()
           }.toEffect
     } yield Servers(grpcServerExternal, grpcServerInternal, httpServerFiber)
   }
@@ -184,17 +186,6 @@ class NodeRuntime private[node] (
       _   <- blockStore.close().value
       _   <- log.info("Goodbye.")
     } yield ()).unsafeRunSync(scheduler)
-
-  def startReportJvmMetrics(
-      implicit metrics: Metrics[Task],
-      jvmMetrics: JvmMetrics[Task]
-  ): Task[Unit] =
-    Task.delay {
-      import scala.concurrent.duration._
-      loopScheduler.scheduleAtFixedRate(3.seconds, 3.second)(
-        JvmMetrics.report[Task].unsafeRunSync(scheduler)
-      )
-    }
 
   def addShutdownHook(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
       implicit transport: TransportLayer[Task],
@@ -267,8 +258,6 @@ class NodeRuntime private[node] (
       _ <- Log[Effect].info(
             s"gRPC internal server started at $host:${servers.grpcServerInternal.port}"
           )
-      _ <- startReportJvmMetrics.toEffect
-
       _ <- TransportLayer[Effect].receive(
             pm => HandleMessages.handle[Effect](pm, defaultTimeout),
             blob => packetHandler.handlePacket(blob.sender, blob.packet).as(())
