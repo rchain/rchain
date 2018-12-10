@@ -1,7 +1,6 @@
 import pytest
 
-import conftest
-from rnode_testing.rnode import started_standalone_bootstrap_node
+from .rnode import started_standalone_bootstrap_node
 
 
 def without_banner_and_prompt(input, output):

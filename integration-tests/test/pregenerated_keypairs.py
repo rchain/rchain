@@ -1,4 +1,4 @@
-from rnode_testing.common import KeyPair
+from .common import KeyPair
 
 
 PREGENERATED_KEYPAIRS = [

@@ -8,8 +8,8 @@ import typing_extensions
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from rnode_testing.common import Network
-    from rnode_testing.rnode import Node
+    from .common import Network
+    from .rnode import Node
 
 
 class PredicateProtocol(typing_extensions.Protocol):
