@@ -1,8 +1,11 @@
+# See https://bors.tech/documentation/getting-started/ for why we have trying and staging here:
 branches:
   - dev
   - master
   - release-*
   - testing*
+  - trying
+  - staging
 
 # Common parts
 
