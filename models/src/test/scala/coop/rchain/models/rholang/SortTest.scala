@@ -95,6 +95,18 @@ class ScoredTermSpec extends FlatSpec with PropertyChecks with Matchers {
       Expr(ESetBody(ParSet(Seq.empty, connectiveUsed = true, Coeval.delay(BitSet()), Some(Var()))))
     assert(sort(set3).score != sort(set4).score)
   }
+  it should "sort so that unequal List have unequal scores" in {
+    val list1 =
+      Expr(EListBody(EList(Seq.empty, AlwaysEqual(BitSet()), connectiveUsed = true, None)))
+    val list2 =
+      Expr(EListBody(EList(Seq.empty, AlwaysEqual(BitSet()), connectiveUsed = false, None)))
+    assert(sort(list1).score != sort(list2).score)
+    val list3 =
+      Expr(EListBody(EList(Seq.empty, AlwaysEqual(BitSet()), connectiveUsed = true, None)))
+    val list4 =
+      Expr(EListBody(EList(Seq.empty, AlwaysEqual(BitSet()), connectiveUsed = true, Some(Var()))))
+    assert(sort(list3).score != sort(list4).score)
+  }
 }
 
 class VarSortMatcherSpec extends FlatSpec with Matchers {
