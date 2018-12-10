@@ -327,8 +327,9 @@ object Configuration {
 
     val shardId = get(_.run.shardId, _.validators.flatMap(_.shardId), DefaultShardId)
 
-    val kamonPrometheus = get(kp(None), _.kamon.flatMap(_.prometheus), DefaultKamonPrometheus)
-    val kamonInfluxDb   = get(kp(None), _.kamon.flatMap(_.influxDb), DefaultKamonInfluxDb)
+    val kamonPrometheus =
+      get(_.run.prometheus, _.kamon.flatMap(_.prometheus), DefaultKamonPrometheus)
+    val kamonInfluxDb = get(kp(None), _.kamon.flatMap(_.influxDb), DefaultKamonInfluxDb)
 
     val influxDb =
       if (kamonInfluxDb) {

@@ -210,6 +210,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val standalone =
       opt[Flag](short = 's', descr = "Start a stand-alone node (no bootstrapping).")
 
+    val prometheus =
+      opt[Flag](descr = "Enable the Prometheus metrics reporter")
+
     val requiredSigs =
       opt[Int](
         descr =
