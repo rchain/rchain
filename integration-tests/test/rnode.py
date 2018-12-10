@@ -17,20 +17,20 @@ from typing import (
 
 import pytest
 
-import conftest
-from rnode_testing.common import (
+from . import conftest
+from .common import (
     random_string,
     make_tempfile,
     make_tempdir,
     TestingContext,
 )
-from rnode_testing.wait import (
+from .wait import (
     wait_for_node_started,
 )
 
 
 if TYPE_CHECKING:
-    from conftest import KeyPair
+    from .conftest import KeyPair
     from docker.models.containers import Container
     from logging import Logger
     from threading import Event
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from docker.models.containers import ExecResult
 
 
-DEFAULT_IMAGE = os.environ.get("DEFAULT_IMAGE", "rchain-integration-testing:latest")
+DEFAULT_IMAGE = os.environ.get("DEFAULT_IMAGE", "rchain-integration-tests:latest")
 
 
 rnode_binary = '/opt/docker/bin/rnode'

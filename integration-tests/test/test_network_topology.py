@@ -10,14 +10,14 @@ from typing import (
 import pytest
 
 
-import conftest
-from rnode_testing.common import TestingContext, Network
-from rnode_testing.rnode import (
+from . import conftest
+from .common import TestingContext, Network
+from .rnode import (
     docker_network_with_started_bootstrap,
     create_peer_nodes,
 )
-from rnode_testing.common import random_string
-from rnode_testing.wait import (
+from .common import random_string
+from .wait import (
     wait_for_block_contains,
     wait_for_approved_block_received_handler_state,
     wait_for_started_network,
@@ -26,7 +26,7 @@ from rnode_testing.wait import (
 )
 
 if TYPE_CHECKING:
-    from rnode_testing.rnode import Node
+    from .rnode import Node
 
 
 @contextlib.contextmanager

@@ -32,7 +32,7 @@ Return code of 0 is success on test and 1 is fail.
 
 Example below shows how to boot network with 3 nodes, including bootstrap, and run specific test
 
-sudo ./boot-p2p.py -m 34360m -c 1 -p 3  --genesis --sigs 2 --bonds <bond_file_path> --wallet <wallet_file_path> --has-faucet  -i rchain-integration-testing:latest --remove
+sudo ./boot-p2p.py -m 34360m -c 1 -p 3  --genesis --sigs 2 --bonds <bond_file_path> --wallet <wallet_file_path> --has-faucet  -i rchain-integration-tests:latest --remove
 
 """
 # This requires Python 3.6 to be installed for f-string. Install dependencies via pip

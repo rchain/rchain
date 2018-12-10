@@ -1,7 +1,3 @@
-import sys
-
-sys.path.insert(0, '.')
-
 import os
 import random
 import pathlib
@@ -20,11 +16,11 @@ from typing import (
 import pytest
 import docker as docker_py
 
-from rnode_testing.common import (
+from .common import (
     KeyPair,
     TestingContext,
 )
-from rnode_testing.pregenerated_keypairs import PREGENERATED_KEYPAIRS
+from .pregenerated_keypairs import PREGENERATED_KEYPAIRS
 
 if TYPE_CHECKING:
     from docker.client import DockerClient

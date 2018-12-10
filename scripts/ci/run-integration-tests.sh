@@ -12,7 +12,7 @@ delete_resources_dir () {
 main () {
     python3 -m pip install pipenv
 
-    cd integration-testing
+    cd integration-tests
     pipenv sync
 
     trap delete_resources_dir EXIT

@@ -8,14 +8,14 @@ from typing import (
 
 import pytest
 
-import conftest
+from . import conftest
 
-from rnode_testing.common import TestingContext
-from rnode_testing.rnode import (
+from .common import TestingContext
+from .rnode import (
     docker_network_with_started_bootstrap,
     started_peer,
 )
-from rnode_testing.wait import (
+from .wait import (
     wait_for_blocks_count_at_least,
     wait_for_approved_block_received_handler_state,
 )
@@ -23,7 +23,7 @@ from rnode_testing.wait import (
 if TYPE_CHECKING:
     from _pytest.fixtures import SubRequest
     from docker.client import DockerClient
-    from rnode_testing.rnode import Node
+    from .rnode import Node
 
 
 
