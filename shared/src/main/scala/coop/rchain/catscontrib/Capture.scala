@@ -14,12 +14,6 @@ trait Capture[F[_]] {
     */
   def capture[A](a: => A): F[A]
 
-  /** This feature is strictly temporary as we must accomodate some imparative/eager code that we use.
-    * Eventaully this method should be thrown away ASAP.
-    * Every time you call this method, God kills a kitten.
-    */
-  def unsafeUncapture[A](fa: F[A]): A
-
   /** Alias for `capture`. */
   def apply[A] = capture[A] _
 
@@ -43,22 +37,16 @@ trait CaptureInstances extends CaptureInstances0 {
     import scala.concurrent.duration._
     import monix.execution.Scheduler.Implicits.global
 
-    def capture[A](a: => A): Task[A]       = Task.delay(a)
-    def unsafeUncapture[A](fa: Task[A]): A = Await.result(fa.runToFuture, Duration.Inf)
+    def capture[A](a: => A): Task[A] = Task.delay(a)
   }
 
   /** TEMP REMOVE once comm no longer imperative*/
   implicit def eitherCapture[E]: Capture[Either[E, ?]] = new Capture[Either[E, ?]] {
     def capture[A](a: => A): Either[E, ?][A] = Right(a)
-    def unsafeUncapture[A](fa: Either[E, A]): A = fa match {
-      case Right(a) => a
-      case Left(_)  => throw new RuntimeException("dead kitty")
-    }
   }
 
   implicit def idCapture: Capture[Id] = new Capture[Id] {
-    def capture[A](a: => A): Id[A]       = a
-    def unsafeUncapture[A](fa: Id[A]): A = fa
+    def capture[A](a: => A): Id[A] = a
   }
   /** TEMP REMOVE END */
 }
@@ -83,7 +71,6 @@ private class TransCapture[F[_]: Monad: Capture, T[_[_], _]: MonadTrans](
 ) extends Capture[T[F, ?]] {
   def capture[A](a: => A) =
     MonadTrans[T].liftM(Capture[F].capture(a))
-  def unsafeUncapture[A](fa: T[F, A]): A = Capture[F].unsafeUncapture(tuu.unsafeUnlift[A](fa))
 }
 
 trait TransUnsafeUncapture[T[_[_], _], F[_]] {

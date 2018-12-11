@@ -31,8 +31,7 @@ class DistanceSpec extends FlatSpec with Matchers {
     ): Id[Unit] = ()
   }
   implicit val capture: Capture[Id] = new Capture[Id] {
-    def capture[A](a: => A): Id[A]       = a
-    def unsafeUncapture[A](fa: Id[A]): A = fa
+    def capture[A](a: => A): Id[A] = a
   }
 
   "A PeerNode of width n bytes" should "have distance to itself equal to 8n" in {
