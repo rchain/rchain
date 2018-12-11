@@ -389,37 +389,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  it should "handle multi-parent blocks correctly 2" in effectTest {
+  it should "handle multi-parent blocks correctly when they operate on stdout" in effectTest {
     val contract1 = """
-      new helloworld, stdout(`rho:io:stdout`) in {
-          contract helloworld( world ) = {
-              for( @msg <- world ) {
-                  stdout!(msg)
-              }
-          } |
-          new world, world2 in {
-              helloworld!(*world) |
-              world!("Hello World") |
-              helloworld!(*world2) |
-              world2!("Hello World again")
-          }
-      }
+      new stdout(`rho:io:stdout`) in { stdout!("Contract 1") }
       """
     val contract2 = """
-      new helloWorld, stdout(`rho:io:stdout`), stdoutAck(`rho:io:stdoutAck`) in {
-        contract helloWorld(@name) = {
-          new ack in {
-            stdoutAck!("Hello, ", *ack) |
-            for (_ <- ack) {
-              stdoutAck!(name, *ack) |
-              for (_ <- ack) {
-                stdout!("\n")
-              }
-            }
-          }
-        } |
-        helloWorld!("Janusz")
-      }
+      new stdout(`rho:io:stdout`) in { stdout!("Contract 2") }
       """
 
     val time = System.currentTimeMillis()
