@@ -1,13 +1,23 @@
 package coop.rchain.node.effects
 
 import scala.tools.jline._
-import scala.tools.jline.console._, completer.StringsCompleter
+import scala.tools.jline.console._
+import completer.StringsCompleter
 import scala.collection.JavaConverters._
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
+import cats._
+import cats.data._
+import cats.implicits._
+import coop.rchain.catscontrib._
+import Catscontrib._
+import ski._
+import TaskContrib._
+import coop.rchain.shared.StringOps.ColoredString
+import coop.rchain.shared.TerminalMode
 import monix.eval.Task
 
 class JLineConsoleIO(console: ConsoleReader) extends ConsoleIO[Task] {
+  private val mode = TerminalMode.readMode
+
   def readLine: Task[String] = Task.delay {
     console.readLine
   }
@@ -23,5 +33,14 @@ class JLineConsoleIO(console: ConsoleReader) extends ConsoleIO[Task] {
   def close: Task[Unit] = Task.delay {
     TerminalFactory.get().restore()
   }
-
+  def println(str: ColoredString): Task[Unit] =
+    Task
+      .delay {
+        if (mode) {
+          str.colorize
+        } else {
+          str.str
+        }
+      }
+      .flatMap(println)
 }

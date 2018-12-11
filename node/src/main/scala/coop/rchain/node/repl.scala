@@ -2,12 +2,10 @@ package coop.rchain.node
 
 import coop.rchain.shared.StringOps._
 import cats._
-import cats.data._
 import cats.implicits._
 import coop.rchain.catscontrib._
-import Catscontrib._
-import ski.kp
 import coop.rchain.node.effects.{ConsoleIO, ReplClient}
+import coop.rchain.shared.TerminalMode
 
 class ReplRuntime() {
 
@@ -18,9 +16,7 @@ class ReplRuntime() {
   ╩╚═└─┘┴ ┴┴ ┴┴┘└┘  ╝╚╝└─┘─┴┘└─┘  ╩╚═╚═╝╩  ╩═╝
     """
 
-  def replProgram[F[_]: Capture: Monad: ConsoleIO: ReplClient: TerminalMode]: F[Boolean] = {
-    implicit val isTty: Boolean = TerminalMode[F].interactive.exists(Function.const(true))
-
+  def replProgram[F[_]: Capture: Monad: ConsoleIO: ReplClient]: F[Boolean] = {
     def run(program: String): F[Boolean] =
       for {
         result <- ReplClient[F].run(program)
@@ -47,17 +43,17 @@ class ReplRuntime() {
       case true  => repl
       case false => ConsoleIO[F].close.as(false)
     }
-
-    TerminalMode[F].interactive match {
-      case Some(_) => ConsoleIO[F].println(logo.red) >>= kp(repl)
-      case None => repl
+    if (TerminalMode.readMode) {
+      for {
+        _   <- ConsoleIO[F].println(logo.red)
+        res <- repl
+      } yield res
+    } else {
+      repl
     }
   }
 
-  def evalProgram[F[_]: Monad: ReplClient: ConsoleIO: TerminalMode](fileNames: List[String]): F[Unit] = {
-
-    implicit val isTty: Boolean = TerminalMode[F].interactive.exists(Function.const(true))
-
+  def evalProgram[F[_]: Monad: ReplClient: ConsoleIO](fileNames: List[String]): F[Unit] = {
     def printResult(result: Either[Throwable, String]): F[Unit] =
       result match {
         case Left(ex)   => ConsoleIO[F].println(s"Error: ${ex.getMessage}".red)

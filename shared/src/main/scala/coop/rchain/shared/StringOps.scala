@@ -3,17 +3,15 @@ package coop.rchain.shared
 import scala.util.Try
 
 object StringOps {
-  implicit class StringColors(str: String) {
-    private def conditionalColor(coloring: String)(implicit tty: Boolean): String =
-      if (tty)
-        coloring + str + "\u001B[0m"
-      else
-        str
+  case class ColoredString(str: String, color: String) {
+    def colorize: String = color + str + "\u001B[0m"
+  }
 
-    def green(implicit tty: Boolean): String = conditionalColor("\u001B[32m")
-    def red(implicit tty: Boolean): String   = conditionalColor("\u001B[31m")
-    def blue(implicit tty: Boolean): String  = conditionalColor("\u001B[34m")
-    def isNumber: Boolean                    = str.matches("[+-]?\\d+.?\\d+")
+  implicit class StringColors(str: String) {
+    def green: ColoredString = ColoredString(str, "\u001B[32m")
+    def red: ColoredString   = ColoredString(str, "\u001B[31m")
+    def blue: ColoredString  = ColoredString(str, "\u001B[34m")
+    def isNumber: Boolean    = str.matches("[+-]?\\d+.?\\d+")
   }
 
   implicit class BracesOps(expr: String) {

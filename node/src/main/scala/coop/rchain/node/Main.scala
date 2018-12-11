@@ -17,8 +17,6 @@ import coop.rchain.shared.StringOps._
 import monix.eval.Task
 import monix.execution.Scheduler
 
-import scala.Function._
-
 object Main {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
@@ -62,8 +60,6 @@ object Main {
       )
 
     implicit val time: Time[Task] = effects.time
-
-    implicit val terminalMode: TerminalMode[Task] = TerminalModeInstances.consoleBasedTTY[Task]
 
     val program = conf.command match {
       case Eval(files) => new ReplRuntime().evalProgram[Task](files)
@@ -116,10 +112,11 @@ object Main {
     }
   }
 
-  implicit private def consoleIO(implicit terminalMode: TerminalMode[Task]): ConsoleIO[Task] = {
+  implicit private def consoleIO: ConsoleIO[Task] = {
     val console = new ConsoleReader()
     console.setHistoryEnabled(true)
-    terminalMode.interactive.foreach(const(console.setPrompt("rholang $ ".green(true))))
+    if (TerminalMode.readMode)
+      console.setPrompt("rholang $ ".green.colorize)
     console.addCompleter(new StringsCompleter(ReplRuntime.keywords.asJava))
     effects.consoleIO(console)
   }
