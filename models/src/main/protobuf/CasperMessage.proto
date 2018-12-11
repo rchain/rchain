@@ -1,3 +1,6 @@
+/**
+ * The main API is `DeployService`.
+ */
 syntax = "proto3";
 package coop.rchain.casper.protocol;
 
@@ -17,25 +20,38 @@ option (scalapb.options) = {
 };
 
 // --------- DeployService  --------
+
+// Use `DoDeploy` to queue deployments of Rholang code and then
+// `createBlock` to make a new block with the results of running them
+// all.
+//
+// To get results back, use `listenForDataAtName`.
 service DeployService {
+  // Queue deployment of Rholang code (or fail to parse).
   rpc DoDeploy(DeployData) returns (DeployServiceResponse) {}
-  rpc addBlock(BlockMessage) returns (DeployServiceResponse) {}
+  // Add a block including all pending deploys.
   rpc createBlock(google.protobuf.Empty) returns (DeployServiceResponse) {}
+  // Get details about a particular block.
   rpc showBlock(BlockQuery) returns (BlockQueryResponse) {}
   rpc showMainChain(BlocksQuery) returns (stream BlockInfoWithoutTuplespace) {}
+  // Get a summary of blocks on the blockchain.
   rpc showBlocks(BlocksQuery) returns (stream BlockInfoWithoutTuplespace) {}
+  // Find data sent to a name.
   rpc listenForDataAtName(DataAtNameQuery) returns (ListeningNameDataResponse) {}
+  // Find processes receiving on a name.
   rpc listenForContinuationAtName(ContinuationAtNameQuery) returns (ListeningNameContinuationResponse) {}
+  // Find block from a deploy.
+  rpc findBlockWithDeploy(FindDeployInBlockQuery) returns (BlockQueryResponse) {}
+  // Preview new top-level unforgeable names (for example, to compute signatures over them).
+  rpc previewPrivateNames(PrivateNamePreviewQuery) returns (PrivateNamePreviewResponse) {}
 }
 
-message PhloLimit {
-  int64 value = 1;
-}
 
-message PhloPrice {
-  int64 value = 1;
-}
-
+/**
+ * Note: deploys are uniquely keyed by `user`, `timestamp`.
+ *
+ * **TODO**: details of signatures and payment. See RHOL-781
+ */
 message DeployData {
   bytes  user         = 1; //public key
   string term         = 2; //rholang source code to deploy (will be parsed into `Par`)
@@ -43,8 +59,8 @@ message DeployData {
   bytes  sig          = 4; //signature of (hash(term) + timestamp) using private key
   string sigAlgorithm = 5; // name of the algorithm used to sign
   string from         = 6; //wallet address which will be used to pay for the deployment
-  PhloPrice phloPrice  = 7; //phlo price
-  PhloLimit phloLimit  = 8; //phlo limit for the deployment
+  int64 phloPrice     = 7; //phlo price
+  int64 phloLimit     = 8; //phlo limit for the deployment
   int32 nonce         = 9; //nonce for transaction made against `from` wallet
 }
 
@@ -54,6 +70,11 @@ message BlockRequest {
   //from other message types with similar serializations.
   string base16Hash = 1;
   bytes  hash       = 2;
+}
+
+message FindDeployInBlockQuery {
+  bytes user = 1;
+  int64 timestamp = 2;
 }
 
 message BlockQuery {
@@ -146,6 +167,17 @@ message BlockInfo {
   string shardId = 13;
 }
 
+message PrivateNamePreviewQuery {
+  bytes  user         = 1; // public key a la DeployData
+  int64  timestamp    = 2; // millisecond timestamp
+  int32  nameQty      = 3; // how many names to preview? (max: 1024)
+}
+
+message PrivateNamePreviewResponse {
+  repeated bytes ids  = 1; // a la GPrivate
+}
+
+
 // --------- End DeployService  --------
 
 // ---------- Signing Protocol ---------
@@ -155,7 +187,7 @@ message ApprovedBlockCandidate {
 }
 
 message UnapprovedBlock {
-  ApprovedBlockCandidate candidate = 1; 
+  ApprovedBlockCandidate candidate = 1;
   int64                  timestamp = 2;
   int64                  duration  = 3;
 }
@@ -167,12 +199,12 @@ message Signature {
 }
 
 message BlockApproval {
-  ApprovedBlockCandidate candidate = 1; 
+  ApprovedBlockCandidate candidate = 1;
   Signature              sig       = 2;
 }
 
 message ApprovedBlock  {
-  ApprovedBlockCandidate candidate = 1; 
+  ApprovedBlockCandidate candidate = 1;
   repeated Signature     sigs      = 2;
 }
 
@@ -219,7 +251,7 @@ message ProcessedDeploy {
 }
 
 message Body {
-  RChainState              postState    = 1;
+  RChainState              state    = 1;
   repeated ProcessedDeploy deploys      = 2;
   bytes                    extraBytes   = 3;
 }
@@ -230,12 +262,13 @@ message Justification {
 }
 
 message RChainState {
-  bytes tuplespace = 1; //hash of the tuplespace contents
+  bytes preStateHash = 1; //hash of the tuplespace contents before new deploys
+  bytes postStateHash = 2; //hash of the tuplespace contents after new deploys
 
   //Internals of what will be the "blessed" PoS contract
   //(which will be part of the tuplespace in the real implementation).
-  repeated Bond bonds        = 2;
-  int64         blockNumber  = 3;
+  repeated Bond bonds        = 3;
+  int64         blockNumber  = 4;
 }
 
 message Deploy {
@@ -254,11 +287,13 @@ message Event {
 message ProduceEvent {
   bytes channelsHash = 1;
   bytes hash = 2;
+  int32 sequenceNumber = 3;
 }
 
 message ConsumeEvent {
-  bytes channelsHash = 1;
+  repeated bytes channelsHashes = 1;
   bytes hash = 2;
+  int32 sequenceNumber = 3;
 }
 
 message CommEvent {
@@ -271,5 +306,3 @@ message Bond {
   int64 stake     = 2;
 }
 // --------- End Core Protocol  --------
-
-

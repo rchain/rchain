@@ -4,18 +4,20 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, 
 import java.nio.file.{Files, Path}
 
 import cats.Id
-import cats.effect.Sync
-import cats.implicits._
+import cats.effect.{ContextShift, Sync}
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Language.ignore
 import coop.rchain.rspace.util._
+import scala.concurrent.ExecutionContext
 import scodec.bits.ByteVector
 
 import scala.collection.immutable.Seq
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
+
+import scala.concurrent.ExecutionContext.Implicits.global
 
 object AddressBookExample {
 
@@ -81,6 +83,12 @@ object AddressBookExample {
   object implicits {
 
     implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+
+    implicit val contextShiftId: ContextShift[Id] =
+      new ContextShift[Id] {
+        def shift: Id[Unit]                                   = ???
+        def evalOn[A](ec: ExecutionContext)(fa: Id[A]): Id[A] = fa
+      }
 
     /* Now I will troll Greg... */
 
@@ -291,7 +299,7 @@ object AddressBookExample {
     println("Rollback example: And create a checkpoint...")
     val checkpointHash = space.createCheckpoint().root
 
-    def produceAlice(): Option[(Printer, Seq[Entry])] =
+    def produceAlice(): Option[(Printer, Seq[Entry], Int)] =
       space.produce(Channel("friends"), alice, persist = false).right.get
 
     println("Rollback example: First produce result should return some data")

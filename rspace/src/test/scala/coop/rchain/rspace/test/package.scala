@@ -4,12 +4,21 @@ import java.nio.ByteBuffer
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.{FileVisitResult, Files, Path, SimpleFileVisitor}
 
+import cats.Id
+import cats.effect.ContextShift
 import coop.rchain.rspace.history.{Branch, ITrieStore, Leaf, Node, Skip, Trie}
 import coop.rchain.shared.Language.ignore
+import scala.concurrent.ExecutionContext
 import scodec.bits.BitVector
 import scodec.{Attempt, Codec, DecodeResult}
 
 package object test {
+
+  implicit val contextShiftId: ContextShift[Id] =
+    new ContextShift[Id] {
+      def shift: Id[Unit]                                   = ???
+      def evalOn[A](ec: ExecutionContext)(fa: Id[A]): Id[A] = fa
+    }
 
   /**
     * Converts specified byteBuffer to '-' separated string,

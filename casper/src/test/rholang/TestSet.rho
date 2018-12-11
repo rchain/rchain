@@ -1,11 +1,22 @@
 //scalapackage coop.rchain.rholang.unittest
 
-//requires ListOps
-
-new rl(`rho:registry:lookup`), ListOpsCh in {
+//Registry info:
+//  sk: adf1e344dd34979255aeaaf5703a586fba52246d9940ef58572572db339316d3
+//  pk: 4ae94eb0b2d7df529f7ae68863221d5adda402fc54303a3d90a8a7a279326828
+//  user == pk
+//  timestamp: 1539808849271
+//Resulting unforgable name: TestSet == Unforgeable(0xbc4bad752f043b9e488ddfc1c69370a89700f4852f318a79d0b50d88f44e1210)
+//  ==> signature data == 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a20bc4bad752f043b9e488ddfc1c69370a89700f4852f318a79d0b50d88f44e12101001
+//  ==> signature == 07aa40b3bcb61b91816d7f7763ed3b7abccfeb99688ecec75cd76099f1552010bc523980fb476c990b982a46a9f36649097b8c02b590ae72a2bac4a7a790490b
+//URI derived from pk == `rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`
+new
+  TestSet, rs(`rho:registry:insertSigned:ed25519`), 
+  rl(`rho:registry:lookup`), ListOpsCh,
+  runWithTimeout, uriOut
+in {
   rl!(`rho:id:dputnspi15oxxnyymjrpu7rkaok3bjkiwq84z7cqcrx4ktqfpyapn4`, *ListOpsCh) |
   for(@(_, ListOps) <- ListOpsCh) {
-    contract @"runWithTimeout"(function, @t, return) = {
+    contract runWithTimeout(function, @t, return) = {
       new result, ticksCh in {
         ticksCh!(t) |
         for(@ticks <= ticksCh) {
@@ -19,7 +30,7 @@ new rl(`rho:registry:lookup`), ListOpsCh in {
         }
       }
     } |
-    contract @"TestSet"(desc, @tests) = {
+    contract TestSet(@"define", @desc, @tests, return) = {
       new addTests, execTests, testsCh in {
         contract execTests(return) = {
           new combinator in {
@@ -49,7 +60,7 @@ new rl(`rho:registry:lookup`), ListOpsCh in {
                       for (function <- @functionCh) {
                         @functionCh!(*function) | //put back for possible re-use
                         new result in {
-                          @"runWithTimeout"!(*function, 1000, *result) |
+                          runWithTimeout!(*function, 2000, *result) |
                           for(@r <- result) {
                             match r {
                               [result] => {
@@ -72,17 +83,34 @@ new rl(`rho:registry:lookup`), ListOpsCh in {
           }
         } |
         addTests!(tests) |
-        execTests!(*desc)
+        new testsResult in {
+          execTests!(*testsResult) |
+          for(@result <- testsResult) {
+            return!(("${desc} == ${result}" %% {"desc" : desc, "result" : result}, result))
+          }
+        }
       }
     } |
-    contract @("TestSet", "after")(desc, continuation) = {
-      for(@result <- desc) {
-        if (result) {
-          desc!(result) | { *continuation }
-        } else {
-          desc!(result)
+    contract TestSet(@"after", testReturn, continuation) = {
+      for(@value <- testReturn) {
+        match value {
+          (_, result) => {
+            if (result) {
+              testReturn!(value) | { *continuation }
+            } else {
+              testReturn!(value)
+            }
+          }
+          _ => { testReturn!(value) }
         }
       }
     }
-  }
+  } |
+  
+  rs!(
+    "4ae94eb0b2d7df529f7ae68863221d5adda402fc54303a3d90a8a7a279326828".hexToBytes(), 
+    (9223372036854775807, bundle+{*TestSet}), 
+    "07aa40b3bcb61b91816d7f7763ed3b7abccfeb99688ecec75cd76099f1552010bc523980fb476c990b982a46a9f36649097b8c02b590ae72a2bac4a7a790490b".hexToBytes(), 
+    *uriOut
+  )
 }

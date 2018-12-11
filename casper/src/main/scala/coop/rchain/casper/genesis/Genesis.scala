@@ -25,6 +25,8 @@ import scala.util.{Failure, Success, Try}
 import coop.rchain.casper.util.Sorting.byteArrayOrdering
 import coop.rchain.rholang.interpreter.accounting
 
+import scala.concurrent.duration.Duration
+
 object Genesis {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
@@ -44,6 +46,7 @@ object Genesis {
       StandardDeploys.basicWallet,
       StandardDeploys.basicWalletFaucet,
       StandardDeploys.walletCheck,
+      StandardDeploys.systemInstances,
       StandardDeploys.rev(wallets, faucetCode, posParams)
     )
 
@@ -69,12 +72,13 @@ object Genesis {
       startHash: StateHash,
       runtimeManager: RuntimeManager
   )(implicit scheduler: Scheduler): BlockMessage = {
-    val (stateHash, processedDeploys) = runtimeManager.computeState(startHash, blessedTerms)
+    val (stateHash, processedDeploys) =
+      runtimeManager.computeState(startHash, blessedTerms).runSyncUnsafe(Duration.Inf)
 
     val stateWithContracts = for {
       bd <- initial.body
-      ps <- bd.postState
-    } yield ps.withTuplespace(stateHash)
+      ps <- bd.state
+    } yield ps.withPreStateHash(runtimeManager.emptyStateHash).withPostStateHash(stateHash)
     val version   = initial.header.get.version
     val timestamp = initial.header.get.timestamp
 
@@ -82,7 +86,7 @@ object Genesis {
       processedDeploys.filterNot(_.status.isFailed).map(ProcessedDeployUtil.fromInternal)
     val sortedDeploys = blockDeploys.map(d => d.copy(log = d.log.sortBy(_.toByteArray)))
 
-    val body = Body(postState = stateWithContracts, deploys = sortedDeploys)
+    val body = Body(state = stateWithContracts, deploys = sortedDeploys)
 
     val header = blockHeader(body, List.empty[ByteString], version, timestamp)
 
@@ -107,7 +111,7 @@ object Genesis {
       .withBlockNumber(0)
       .withBonds(bondsProto)
     val body = Body()
-      .withPostState(state)
+      .withState(state)
     val header = blockHeader(body, List.empty[ByteString], version, timestamp)
 
     unsignedBlockProto(body, header, List.empty[Justification], shardId)
@@ -140,7 +144,7 @@ object Genesis {
       wallets     <- getWallets[F](walletsFile, maybeWalletsPath)
       bonds       <- getBonds[F](bondsFile, numValidators, genesisPath)
       timestamp   <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
-      initial     = withoutContracts(bonds = bonds, timestamp = 1L, version = 0L, shardId = shardId)
+      initial     = withoutContracts(bonds = bonds, timestamp = 1L, version = 1L, shardId = shardId)
       validators  = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
       faucetCode  = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
       withContr = withContracts(

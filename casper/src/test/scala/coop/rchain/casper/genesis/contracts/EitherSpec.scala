@@ -1,7 +1,7 @@
 package coop.rchain.casper.genesis.contracts
 
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rholang.collection.{Either, EitherTest}
+import coop.rchain.rholang.collection.EitherTest
 
 import monix.execution.Scheduler.Implicits.global
 
@@ -9,9 +9,9 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class EitherSpec extends FlatSpec with Matchers {
   val runtime = TestSetUtil.runtime
-  val tests   = TestSetUtil.getTests("./casper/src/test/rholang/EitherTest.rho").toList
+  val tests   = TestSetUtil.getTests("../casper/src/test/rholang/EitherTest.rho").toList
 
-  TestSetUtil.runTests(EitherTest, List(Either), runtime)
+  TestSetUtil.runTestsWithDeploys(EitherTest, List(StandardDeploys.either), runtime)
   val tuplespace = StoragePrinter.prettyPrint(runtime.space.store)
 
   "Either rholang contract" should tests.head in {

@@ -47,10 +47,16 @@ object GroundNormalizeMatcher {
     }
   // This is necessary to remove the backticks. We don't use a regular
   // expression because they're always there.
-  def stripUri(raw: String): String = raw.substring(1, raw.length - 1)
+  def stripUri(raw: String): String = {
+    require(raw.length >= 2)
+    raw.substring(1, raw.length - 1)
+  }
   // Similarly, we need to remove quotes from strings, since we are using
   // a custom string token
-  def stripString(raw: String): String = raw.substring(1, raw.length - 1)
+  def stripString(raw: String): String = {
+    require(raw.length >= 2)
+    raw.substring(1, raw.length - 1)
+  }
 }
 
 object RemainderNormalizeMatcher {
@@ -967,7 +973,7 @@ object ProcNormalizeMatcher {
           }
           sync.raiseError(
             UnexpectedBundleContent(
-              s"Bundle's content shouldn't have free variables or wildcards.$errMsg"
+              s"Bundle's content must not have free variables or wildcards.$errMsg"
             )
           )
         }
@@ -981,7 +987,13 @@ object ProcNormalizeMatcher {
             case _: BundleWrite     => Bundle(targetResult.par, writeFlag = true, readFlag = false)
             case _: BundleEquiv     => Bundle(targetResult.par, writeFlag = false, readFlag = false)
           }
-          res <- if (targetResult.par.connectiveUsed) {
+          res <- if (targetResult.par.connectives.nonEmpty) {
+                  sync.raiseError(
+                    UnexpectedBundleContent(
+                      s"Illegal top level connective in bundle at position: line: ${b.line_num}, column: ${b.col_num}."
+                    )
+                  )
+                } else if (targetResult.knownFree.wildcards.nonEmpty || targetResult.knownFree.env.nonEmpty) {
                   error(targetResult)
                 } else {
                   val newBundle: Bundle = targetResult.par.singleBundle() match {

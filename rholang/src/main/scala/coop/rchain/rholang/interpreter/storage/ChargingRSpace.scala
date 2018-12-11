@@ -29,23 +29,26 @@ object ChargingRSpace {
   def storageCostProduce(channel: Par, data: ListParWithRandom): Cost =
     channel.storageCost + data.pars.storageCost
 
-  def pureRSpace[F[_]: Sync](implicit costAlg: CostAccounting[F], space: RhoISpace) =
+  def pureRSpace[F[_]: Sync](implicit costAlg: CostAccounting[F], space: RhoISpace[F]) =
     new RhoPureSpace[F] {
 
       override def consume(
           channels: Seq[Par],
           patterns: Seq[BindPattern],
           continuation: TaggedContinuation,
-          persist: Boolean
+          persist: Boolean,
+          sequenceNumber: Int
       ): F[Either[errors.OutOfPhlogistonsError.type, Option[
         (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandomAndPhlos]])
       ]]] = {
         val storageCost = storageCostConsume(channels, patterns, continuation)
         for {
-          _       <- costAlg.charge(storageCost)
-          matchF  <- costAlg.get().map(ca => matchListPar(ca.cost))
-          consRes <- Sync[F].delay(space.consume(channels, patterns, continuation, persist)(matchF))
-          _       <- handleResult(consRes)
+          _      <- costAlg.charge(storageCost)
+          matchF <- costAlg.get().map(ca => matchListPar(ca.cost))
+          consRes <- space.consume(channels, patterns, continuation, persist, sequenceNumber)(
+                      matchF
+                    )
+          _ <- handleResult(consRes)
         } yield consRes
       }
 
@@ -54,16 +57,16 @@ object ChargingRSpace {
           patterns: Seq[BindPattern],
           continuation: TaggedContinuation
       ): F[Option[(TaggedContinuation, Seq[ListParWithRandomAndPhlos])]] =
-        Sync[F].delay(
-          space.install(channels, patterns, continuation)(
+        space
+          .install(channels, patterns, continuation)(
             matchListPar(Cost(Integer.MAX_VALUE))
           )
-        )
 
       override def produce(
           channel: Par,
           data: ListParWithRandom,
-          persist: Boolean
+          persist: Boolean,
+          sequenceNumber: Int
       ): F[Either[errors.OutOfPhlogistonsError.type, Option[
         (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandomAndPhlos]])
       ]]] = {
@@ -71,7 +74,7 @@ object ChargingRSpace {
         for {
           _       <- costAlg.charge(storageCost)
           matchF  <- costAlg.get().map(ca => matchListPar(ca.cost))
-          prodRes <- Sync[F].delay(space.produce(channel, data, persist)(matchF))
+          prodRes <- space.produce(channel, data, persist, sequenceNumber)(matchF)
           _       <- handleResult(prodRes)
         } yield prodRes
       }
@@ -131,9 +134,8 @@ object ChargingRSpace {
           }
           .foldLeft(Cost(0))(_ + _)
 
-      override def createCheckpoint(): F[Checkpoint] =
-        Sync[F].delay(space.createCheckpoint())
-      override def reset(hash: Blake2b256Hash): F[Unit] = Sync[F].delay(space.reset(hash))
-      override def close(): F[Unit]                     = Sync[F].delay(space.close())
+      override def createCheckpoint(): F[Checkpoint]    = space.createCheckpoint()
+      override def reset(hash: Blake2b256Hash): F[Unit] = space.reset(hash)
+      override def close(): F[Unit]                     = space.close()
     }
 }

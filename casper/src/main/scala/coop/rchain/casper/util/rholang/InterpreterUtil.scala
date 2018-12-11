@@ -2,23 +2,23 @@ package coop.rchain.casper.util.rholang
 
 import cats.Monad
 import cats.implicits._
-import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.{BlockDag, BlockException, PrettyPrinter}
+import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
+import coop.rchain.casper.{BlockException, PrettyPrinter}
 import coop.rchain.casper.PrettyPrinter.buildString
+import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.{BlockMetadata, BlockStore}
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
+import coop.rchain.casper.{BlockException, PrettyPrinter}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.Interpreter
-import java.io.StringReader
-
-import com.google.protobuf.ByteString
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.rspace.ReplayException
-import monix.execution.Scheduler
 import coop.rchain.shared.{Log, LogSource}
+import monix.execution.Scheduler
 
-import scala.collection.immutable
+import scala.concurrent.duration._
 
 object InterpreterUtil {
 
@@ -31,133 +31,155 @@ object InterpreterUtil {
   //does not match the computed hash based on the deploys
   def validateBlockCheckpoint[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
-      dag: BlockDag,
-      knownStateHashes: Set[StateHash],
+      dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager
   )(
       implicit scheduler: Scheduler
-  ): F[(Either[BlockException, Option[StateHash]], Set[StateHash])] = {
+  ): F[Either[BlockException, Option[StateHash]]] = {
+    val preStateHash    = ProtoUtil.preStateHash(b)
     val tsHash          = ProtoUtil.tuplespace(b)
     val deploys         = ProtoUtil.deploys(b)
     val internalDeploys = deploys.flatMap(ProcessedDeployUtil.toInternal)
+    val timestamp       = Some(b.header.get.timestamp) // TODO: Ensure header exists through type
     for {
       parents <- ProtoUtil.unsafeGetParents[F](b)
-      parentsPostStateResult <- computeParentsPostState[F](
-                                 parents,
-                                 dag,
-                                 knownStateHashes,
-                                 runtimeManager
-                               )
-      (possiblePreStateHash, updatedStateHashes) = parentsPostStateResult
+      possiblePreStateHash <- computeParentsPostState[F](
+                               parents,
+                               dag,
+                               runtimeManager,
+                               timestamp
+                             )
       result <- processPossiblePreStateHash[F](
-                 knownStateHashes,
                  runtimeManager,
+                 preStateHash,
                  tsHash,
                  internalDeploys,
                  possiblePreStateHash,
-                 updatedStateHashes
+                 timestamp
                )
     } yield result
-
   }
 
   private def processPossiblePreStateHash[F[_]: Monad: Log: BlockStore](
-      knownStateHashes: Set[StateHash],
       runtimeManager: RuntimeManager,
+      preStateHash: StateHash,
       tsHash: Option[StateHash],
       internalDeploys: Seq[InternalProcessedDeploy],
       possiblePreStateHash: Either[Throwable, StateHash],
-      updatedStateHashes: Set[StateHash]
-  )(implicit scheduler: Scheduler): F[(Either[BlockException, Option[StateHash]], Set[StateHash])] =
+      time: Option[Long]
+  )(implicit scheduler: Scheduler): F[Either[BlockException, Option[StateHash]]] =
     possiblePreStateHash match {
       case Left(ex) =>
-        (Left(BlockException(ex)).rightCast[Option[StateHash]] -> knownStateHashes).pure[F]
-      case Right(parentStateHash) =>
-        runtimeManager.replayComputeState(parentStateHash, internalDeploys) match {
-          case Left((Some(deploy), status)) =>
-            status match {
-              case InternalErrors(exs) =>
-                (Left(
-                  BlockException(
-                    new Exception(s"Internal errors encountered while processing ${PrettyPrinter
-                      .buildString(deploy)}: ${exs.mkString("\n")}")
-                  )
-                ).rightCast[Option[StateHash]] -> knownStateHashes).pure[F]
-              case UserErrors(errors: Vector[Throwable]) =>
-                Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") *> (Right(
-                  none[StateHash]
-                ).leftCast[BlockException] -> knownStateHashes).pure[F]
-              case ReplayStatusMismatch(replay: DeployStatus, orig: DeployStatus) =>
-                Log[F].warn(
-                  s"Found replay status mismatch; replay failure is ${replay.isFailed} and orig failure is ${orig.isFailed}"
-                ) *> (Right(none[StateHash]).leftCast[BlockException] -> knownStateHashes).pure[F]
-              case UnknownFailure =>
-                Log[F].warn(s"Found unknown failure") *> (Right(none[StateHash])
-                  .leftCast[BlockException] -> knownStateHashes).pure[F]
-            }
-          case Left((None, status)) =>
-            status match {
-              case UnusedCommEvent(ex: ReplayException) =>
-                Log[F].warn(s"Found unused comm event ${ex.getMessage}") *> (Right(none[StateHash])
-                  .leftCast[BlockException] -> knownStateHashes).pure[F]
-            }
-          case Right(computedStateHash) =>
-            if (tsHash.contains(computedStateHash)) {
-              // state hash in block matches computed hash!
-              (Right(Option(computedStateHash))
-                .leftCast[BlockException] -> (updatedStateHashes + computedStateHash)).pure[F]
-            } else {
-              // state hash in block does not match computed hash -- invalid!
-              // return no state hash, do not update the state hash set
-              Log[F].warn(
-                s"Tuplespace hash ${tsHash.getOrElse(ByteString.EMPTY)} does not match computed hash $computedStateHash."
-              ) *> (Right(none[StateHash]).leftCast[BlockException] -> knownStateHashes).pure[F]
-            }
+        Left(BlockException(ex)).rightCast[Option[StateHash]].pure[F]
+      case Right(computedPreStateHash) =>
+        if (preStateHash == computedPreStateHash) {
+          processPreStateHash[F](
+            runtimeManager,
+            preStateHash,
+            tsHash,
+            internalDeploys,
+            possiblePreStateHash,
+            time
+          )
+        } else {
+          Log[F].warn(
+            s"Computed pre-state hash ${PrettyPrinter.buildString(computedPreStateHash)} does not equal block's pre-state hash ${PrettyPrinter
+              .buildString(preStateHash)}"
+          ) *> Right(none[StateHash]).leftCast[BlockException].pure[F]
         }
     }
+
+  private def processPreStateHash[F[_]: Monad: Log: BlockStore](
+      runtimeManager: RuntimeManager,
+      preStateHash: StateHash,
+      tsHash: Option[StateHash],
+      internalDeploys: Seq[InternalProcessedDeploy],
+      possiblePreStateHash: Either[Throwable, StateHash],
+      time: Option[Long]
+  )(implicit scheduler: Scheduler): F[Either[BlockException, Option[StateHash]]] =
+    runtimeManager
+      .replayComputeState(preStateHash, internalDeploys, time)
+      .runSyncUnsafe(Duration.Inf) match {
+      case Left((Some(deploy), status)) =>
+        status match {
+          case InternalErrors(exs) =>
+            Left(
+              BlockException(
+                new Exception(s"Internal errors encountered while processing ${PrettyPrinter
+                  .buildString(deploy)}: ${exs.mkString("\n")}")
+              )
+            ).rightCast[Option[StateHash]].pure[F]
+          case UserErrors(errors: Vector[Throwable]) =>
+            Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") *> Right(
+              none[StateHash]
+            ).leftCast[BlockException].pure[F]
+          case ReplayStatusMismatch(replay: DeployStatus, orig: DeployStatus) =>
+            Log[F].warn(
+              s"Found replay status mismatch; replay failure is ${replay.isFailed} and orig failure is ${orig.isFailed}"
+            ) *> Right(none[StateHash]).leftCast[BlockException].pure[F]
+          case UnknownFailure =>
+            Log[F].warn(s"Found unknown failure") *> Right(none[StateHash])
+              .leftCast[BlockException]
+              .pure[F]
+        }
+      case Left((None, status)) =>
+        status match {
+          case UnusedCommEvent(ex: ReplayException) =>
+            Log[F].warn(s"Found unused comm event ${ex.getMessage}") *> Right(none[StateHash])
+              .leftCast[BlockException]
+              .pure[F]
+        }
+      case Right(computedStateHash) =>
+        if (tsHash.contains(computedStateHash)) {
+          // state hash in block matches computed hash!
+          Right(Option(computedStateHash)).leftCast[BlockException].pure[F]
+        } else {
+          // state hash in block does not match computed hash -- invalid!
+          // return no state hash, do not update the state hash set
+          Log[F].warn(
+            s"Tuplespace hash ${tsHash.getOrElse(ByteString.EMPTY)} does not match computed hash $computedStateHash."
+          ) *> Right(none[StateHash]).leftCast[BlockException].pure[F]
+
+        }
+    }
+
   def computeDeploysCheckpoint[F[_]: Monad: BlockStore](
       parents: Seq[BlockMessage],
       deploys: Seq[Deploy],
-      dag: BlockDag,
-      knownStateHashes: Set[StateHash],
-      runtimeManager: RuntimeManager
+      dag: BlockDagRepresentation[F],
+      runtimeManager: RuntimeManager,
+      time: Option[Long] = None
   )(
       implicit scheduler: Scheduler
-  ): F[(Either[Throwable, (StateHash, Seq[InternalProcessedDeploy])], Set[StateHash])] =
+  ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     for {
-      cpps                                       <- computeParentsPostState[F](parents, dag, knownStateHashes, runtimeManager)
-      (possiblePreStateHash, updatedStateHashes) = cpps
+      possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager, time)
     } yield
       possiblePreStateHash match {
         case Right(preStateHash) =>
-          val (postStateHash, processedDeploys) = runtimeManager.computeState(preStateHash, deploys)
-          Right(postStateHash, processedDeploys) -> (updatedStateHashes + postStateHash)
-
+          val (postStateHash, processedDeploys) =
+            runtimeManager.computeState(preStateHash, deploys, time).runSyncUnsafe(Duration.Inf)
+          Right(preStateHash, postStateHash, processedDeploys)
         case Left(err) =>
-          Left(err) -> updatedStateHashes
+          Left(err)
       }
 
   private def computeParentsPostState[F[_]: Monad: BlockStore](
       parents: Seq[BlockMessage],
-      dag: BlockDag,
-      knownStateHashes: Set[StateHash],
-      runtimeManager: RuntimeManager
-  )(implicit scheduler: Scheduler): F[(Either[Throwable, StateHash], Set[StateHash])] = {
+      dag: BlockDagRepresentation[F],
+      runtimeManager: RuntimeManager,
+      time: Option[Long]
+  )(implicit scheduler: Scheduler): F[Either[Throwable, StateHash]] = {
     val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
 
     parentTuplespaces match {
       //no parents to base off of, so use default
       case Seq() =>
-        (Right(runtimeManager.emptyStateHash).leftCast[Throwable], knownStateHashes).pure[F]
+        Right(runtimeManager.emptyStateHash).leftCast[Throwable].pure[F]
 
       //For a single parent we look up its checkpoint
       case Seq((_, parentStateHash)) =>
-        assert(
-          knownStateHashes.contains(parentStateHash),
-          "We should have already computed parent state hash when we added " +
-            s"the parent tuplespace hash ${buildString(parentStateHash)} to our blockDAG."
-        )
-        (Right(parentStateHash).leftCast[Throwable], knownStateHashes).pure[F]
+        Right(parentStateHash).leftCast[Throwable].pure[F]
 
       //In the case of multiple parents we need
       //to apply all of the deploys that have been
@@ -165,49 +187,48 @@ object InterpreterUtil {
       //merged. This is done by computing uncommon ancestors
       //and applying the deploys in those blocks.
       case (initParent, initStateHash) +: _ =>
-        implicit val ordering = BlockDag.deriveOrdering(dag)
-        val indexedParents    = parents.toVector.map(b => dag.dataLookup(b.blockHash))
-        val uncommonAncestors = DagOperations.uncommonAncestors(indexedParents, dag.dataLookup)
-        assert(
-          knownStateHashes.contains(initStateHash),
-          "We should have already computed parent state hash when we added " +
-            s"the parent tuplespace hash ${buildString(initStateHash)} to our blockDAG."
-        )
-
-        val initIndex = indexedParents.indexOf(dag.dataLookup(initParent.blockHash))
-        //filter out blocks that already included by starting from the chosen initParent
-        val blocksToApply = uncommonAncestors
-          .filterNot { case (_, set) => set.contains(initIndex) }
-          .keys
-          .toVector
-          .sorted //ensure blocks to apply is topologically sorted to maintain any causal dependencies
-
-        for {
-          maybeBlocks <- blocksToApply.traverse(b => BlockStore[F].get(b.blockHash))
-          _           = assert(maybeBlocks.forall(_.isDefined))
-          blocks      = maybeBlocks.flatten
-          deploys     = blocks.flatMap(_.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal))
-        } yield
-          runtimeManager.replayComputeState(initStateHash, deploys) match {
-            case result @ Right(hash) => result.leftCast[Throwable] -> (knownStateHashes + hash)
-            case Left((_, status)) =>
-              val parentHashes = parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
-              Left(
-                new Exception(s"Failed status while computing post state of $parentHashes: $status")
-              ) -> knownStateHashes
-          }
+        dag.deriveOrdering(0L).flatMap { implicit ordering: Ordering[BlockMetadata] => // TODO: Replace with an actual starting number
+          for {
+            parentsMetadata    <- parents.toList.traverse(b => dag.lookup(b.blockHash).map(_.get))
+            indexedParents     = parentsMetadata.toVector
+            uncommonAncestors  <- DagOperations.uncommonAncestors[F](indexedParents, dag)
+            initParentMetadata <- dag.lookup(initParent.blockHash)
+            initIndex          = indexedParents.indexOf(initParentMetadata)
+            //filter out blocks that already included by starting from the chosen initParent
+            blocksToApply = uncommonAncestors
+              .filterNot { case (_, set) => set.contains(initIndex) }
+              .keys
+              .toVector
+              .sorted //ensure blocks to apply is topologically sorted to maintain any causal dependencies
+            maybeBlocks <- blocksToApply.traverse(b => BlockStore[F].get(b.blockHash))
+            _           = assert(maybeBlocks.forall(_.isDefined))
+            blocks      = maybeBlocks.flatten
+            deploys     = blocks.flatMap(_.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal))
+          } yield
+            runtimeManager
+              .replayComputeState(initStateHash, deploys, time)
+              .runSyncUnsafe(Duration.Inf) match {
+              case result @ Right(_) => result.leftCast[Throwable]
+              case Left((_, status)) =>
+                val parentHashes = parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
+                Left(
+                  new Exception(
+                    s"Failed status while computing post state of $parentHashes: $status"
+                  )
+                )
+            }
+        }
     }
   }
 
   private[casper] def computeBlockCheckpointFromDeploys[F[_]: Monad: BlockStore](
       b: BlockMessage,
       genesis: BlockMessage,
-      dag: BlockDag,
-      knownStateHashes: Set[StateHash],
+      dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager
   )(
       implicit scheduler: Scheduler
-  ): F[(Either[Throwable, (StateHash, Seq[InternalProcessedDeploy])], Set[StateHash])] =
+  ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     for {
       parents <- ProtoUtil.unsafeGetParents[F](b)
 
@@ -222,7 +243,6 @@ object InterpreterUtil {
                  parents,
                  deploys,
                  dag,
-                 knownStateHashes,
                  runtimeManager
                )
     } yield result

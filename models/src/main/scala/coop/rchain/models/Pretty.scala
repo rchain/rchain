@@ -1,7 +1,9 @@
 package coop.rchain.models
+import java.io.{PrintWriter, StringWriter}
+
 import com.google.protobuf.ByteString
+import coop.rchain.crypto.hash.Blake2b512Random
 import monix.eval.Coeval
-import monix.eval.Coeval.Now
 
 import scala.annotation.switch
 import scala.collection.immutable.{BitSet, HashSet}
@@ -38,10 +40,19 @@ trait PrettyInstances extends PrettyDerivation {
 
   // obviously won't print compiling code,
   // but seeing the stacktrace is more important in this case
-  implicit val PrettyThrowable = fromToString[Throwable]
+  implicit val PrettyThrowable: Pretty[Throwable] = (value: Throwable, indentLevel: Int) => {
+    val stackTrace = new StringWriter()
+    value.printStackTrace(new PrintWriter(stackTrace))
+    "\n" + stackTrace.toString
+  }
 
   implicit val PrettyByteString: Pretty[ByteString] = (value: ByteString, indentLevel: Int) =>
     "ByteString.copyFrom(Array[Byte]" + parenthesised(value.toByteArray, indentLevel) + ")"
+
+  implicit val PrettyBlake2b512Random: Pretty[Blake2b512Random] = fromWrapped(
+    Blake2b512Random.typeMapper.toBase,
+    x => s"Blake2b512Random.typeMapper.toCustom($x)"
+  )
 
   implicit def prettyArray[A: Pretty]: Pretty[Array[A]] = "Array" + parenthesised(_, _)
 
@@ -72,14 +83,19 @@ trait PrettyInstances extends PrettyDerivation {
     }
 
   implicit def prettyAlwaysEqual[A: Pretty]: Pretty[AlwaysEqual[A]] =
-    (value: AlwaysEqual[A], indentLevel: Int) =>
-      s"AlwaysEqual(${Pretty[A].pretty(value.item, indentLevel)})"
+    fromWrapped(_.item, value => s"AlwaysEqual($value)")
 
   implicit def prettyCoeval[A: Pretty]: Pretty[Coeval[A]] =
     (value: Coeval[A], indentLevel: Int) =>
       s"Coeval.now(${Pretty[A].pretty(value.value, indentLevel)}) /* was Coeval.${value.getClass.getSimpleName} */"
 
-  implicit val PrettyPar: Pretty[Par] = gen[Par]
+  implicit val PrettyPar: Pretty[Par]   = gen[Par]
+  implicit val PrettyExpr               = gen[Expr]
+  implicit val PrettyConnective         = gen[Connective]
+  implicit val PrettyReceive            = gen[Receive]
+  implicit val PrettyReceiveBind        = gen[ReceiveBind]
+  implicit val PrettyTaggedContinuation = gen[TaggedContinuation]
+  implicit val PrettyParWithRandom      = gen[ParWithRandom]
 
   def singleLine[A](print: A => String): Pretty[A] = (value: A, indentLevel: Int) => print(value)
 
@@ -89,6 +105,9 @@ trait PrettyInstances extends PrettyDerivation {
     val prefixParensCount = prefix.count(_ == '(')
     prefix + parenthesised(_, _) + (")" * prefixParensCount)
   }
+
+  def fromWrapped[A, B: Pretty](f: A => B, wrappingCode: String => String): Pretty[A] =
+    (value: A, indentLevel: Int) => wrappingCode(Pretty[B].pretty(f(value), indentLevel))
 }
 
 trait PrettyDerivation {

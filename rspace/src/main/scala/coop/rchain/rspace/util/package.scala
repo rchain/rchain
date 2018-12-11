@@ -10,27 +10,28 @@ package object util {
 
   implicit def unpackSeq[C, P, K, R](
       v: Seq[Option[(ContResult[C, P, K], Seq[Result[R]])]]
-  ): Seq[Option[(K, Seq[R])]] =
+  ): Seq[Option[(K, Seq[R], Int)]] =
     v.map(unpackOption)
 
   implicit def unpackEither[C, P, E, K, R](
       v: Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]
-  ): Either[E, Option[(K, Seq[R])]] =
+  ): Either[E, Option[(K, Seq[R], Int)]] =
     v.map(unpackOption)
 
   implicit def unpackEither[F[_], C, P, E, K, R](
       v: F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
-  )(implicit ev: Functor[F]): F[Either[E, Option[(K, Seq[R])]]] =
+  )(implicit ev: Functor[F]): F[Either[E, Option[(K, Seq[R], Int)]]] =
     ev.map(v)(_.map(unpackOption))
 
   implicit def unpackOption[C, P, K, R](
       v: Option[(ContResult[C, P, K], Seq[Result[R]])]
-  ): Option[(K, Seq[R])] =
+  ): Option[(K, Seq[R], Int)] =
     v.map(unpackTuple)
 
-  implicit def unpackTuple[C, P, K, R](v: (ContResult[C, P, K], Seq[Result[R]])): (K, Seq[R]) =
+  implicit def unpackTuple[C, P, K, R](v: (ContResult[C, P, K], Seq[Result[R]])): (K, Seq[R], Int) =
     v match {
-      case (ContResult(continuation, _, _, _), data) => (continuation, data.map(_.value))
+      case (ContResult(continuation, _, _, _, sequenceNumber), data) =>
+        (continuation, data.map(_.value), sequenceNumber)
     }
 
   implicit def unpack[T](v: Result[T]): T                     = v.value
@@ -47,13 +48,13 @@ package object util {
 
   /** Runs a continuation with the accompanying data
     */
-  def runK[T](e: Either[Nothing, Option[((T) => Unit, T)]]): Unit =
-    e.right.get.foreach { case (k, data) => k(data) }
+  def runK[T](e: Either[Nothing, Option[((T) => Unit, T, Int)]]): Unit =
+    e.right.get.foreach { case (k, data, _) => k(data) }
 
   /** Runs a list of continuations with the accompanying data
     */
-  def runKs[T](t: Seq[Option[((T) => Unit, T)]]): Unit =
-    t.foreach { case Some((k, data)) => k(data); case None => () }
+  def runKs[T](t: Seq[Option[((T) => Unit, T, Int)]]): Unit =
+    t.foreach { case Some((k, data, _)) => k(data); case None => () }
 
   /**
     * Compare to `memcmp` in C/C++
@@ -105,10 +106,4 @@ package object util {
 
   val ordByteVector: Ordering[ByteVector] = (a: ByteVector, b: ByteVector) => veccmp(a, b)
 
-  val ordByteVectorPair: Ordering[(ByteVector, ByteVector)] =
-    (a: (ByteVector, ByteVector), b: (ByteVector, ByteVector)) =>
-      veccmp(a._1, b._1) match {
-        case 0 => veccmp(a._2, b._2)
-        case c => c
-      }
 }

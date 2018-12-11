@@ -2,7 +2,6 @@ package coop.rchain.node.configuration
 
 import java.nio.file.Path
 
-import coop.rchain.casper.protocol.{PhloLimit, PhloPrice}
 import coop.rchain.casper.util.comm.ListenAtName.Name
 import coop.rchain.comm.PeerNode
 import coop.rchain.shared.StoreType
@@ -12,6 +11,7 @@ case class Server(
     port: Int,
     httpPort: Int,
     kademliaPort: Int,
+    dynamicHostAddress: Boolean,
     noUpnp: Boolean,
     defaultTimeout: Int,
     bootstrap: PeerNode,
@@ -44,8 +44,8 @@ case object Repl                     extends Command
 case object Diagnostics              extends Command
 case class Deploy(
     address: String,
-    phloLimit: PhloLimit,
-    phloPrice: PhloPrice,
+    phloLimit: Long,
+    phloPrice: Long,
     nonce: Int,
     location: String
 ) extends Command

@@ -26,7 +26,17 @@ lazy val projectSettings = Seq(
   testOptions in Test += Tests.Argument("-oD"), //output test durations
   dependencyOverrides ++= Seq(
     "io.kamon" %% "kamon-core" % kamonVersion
-  )
+  ),
+  javacOptions ++= (sys.env.get("JAVAC_VERSION") match {
+    case None    => Seq()
+    case Some(v) => Seq("-source", v, "-target", v)
+  }),
+  Test / fork := true,
+  Test / parallelExecution := false,
+  Test / testForkedParallel := false,
+  IntegrationTest / fork := true,
+  IntegrationTest / parallelExecution := false,
+  IntegrationTest / testForkedParallel := false
 )
 
 lazy val coverageSettings = Seq(
@@ -62,10 +72,13 @@ lazy val shared = (project in file("shared"))
       catsCore,
       catsEffect,
       catsMtl,
+      lz4,
       monix,
       scodecCore,
       scodecBits,
-      scalapbRuntimegGrpc
+      scalapbRuntimegGrpc,
+      catsLawsTest,
+      catsLawsTestkitTest
     )
   )
 
@@ -88,7 +101,7 @@ lazy val casper = (project in file("casper"))
     crypto,
     models,
     rspace,
-    rholang,
+    rholang      % "compile->compile;test->test",
     rholangProtoBuild
   )
 
@@ -133,6 +146,7 @@ lazy val crypto = (project in file("crypto"))
     fork := true,
     doctestTestFramework := DoctestTestFramework.ScalaTest
   )
+  .dependsOn(shared)
 
 lazy val models = (project in file("models"))
   .settings(commonSettings: _*)
@@ -140,12 +154,14 @@ lazy val models = (project in file("models"))
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       catsCore,
       magnolia,
+      scalapbCompiler,
       scalacheck,
       scalacheckShapeless,
       scalapbRuntimegGrpc
     ),
     PB.targets in Compile := Seq(
-      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value,
+      coop.rchain.scalapb.StacksafeScalapbGenerator
+        .gen(flatPackage = true) -> (sourceManaged in Compile).value,
       grpcmonix.generators
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
@@ -156,7 +172,7 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.7.1",
+    version := "0.8.1",
     name := "rnode",
     maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary := "RChain Node",
@@ -185,10 +201,43 @@ lazy val node = (project in file("node"))
         val oldStrategy = (assemblyMergeStrategy in assembly).value
         oldStrategy(x)
     },
+    /*
+     * This monstrosity exists because
+     * a) we want to get rid of annoying JVM >= 9 warnings,
+     * b) we must support Java 8 for RedHat (see below) and
+     * c) sbt-native-packager puts bashScriptExtraDefines before it
+     *    initializes all useful variables (like $java_version).
+     *
+     * This won't work if someone passes -no-version-check command line
+     * argument to rnode. They most probably know what they're doing.
+     *
+     * https://unix.stackexchange.com/a/29742/124070
+     * Thanks Gilles!
+     */
+    bashScriptExtraDefines += """
+      eval "original_$(declare -f java_version_check)"
+      java_version_check() {
+        original_java_version_check
+        if [[ ${java_version%%.*} -ge 9 ]]; then
+          java_args+=(
+            --illegal-access=warn # set to deny if you feel brave
+            --add-opens=java.base/java.nio=ALL-UNNAMED
+            --add-opens=java.base/sun.nio.ch=ALL-UNNAMED
+            --add-opens=java.base/sun.security.util=ALL-UNNAMED
+            --add-opens=java.base/sun.security.x509=ALL-UNNAMED
+          )
+        fi
+      }
+    """,
     /* Dockerization */
     dockerUsername := Some(organization.value),
-    dockerUpdateLatest := true,
-    dockerBaseImage := "openjdk:8u171-jre-slim-stretch",
+    version in Docker := version.value +
+      git.gitHeadCommit.value.map("-git" + _.take(8)).getOrElse(""),
+    dockerAliases ++=
+      sys.env.get("DRONE_BUILD_NUMBER")
+        .toSeq.map(num => dockerAlias.value.withTag(Some(s"DRONE-${num}"))),
+    dockerUpdateLatest := sys.env.get("DRONE").isEmpty,
+    dockerBaseImage := "openjdk:11-jre-slim",
     dockerCommands := {
       val daemon = (daemonUser in Docker).value
       Seq(
@@ -220,7 +269,7 @@ lazy val node = (project in file("node"))
     },
     /* Debian */
     debianPackageDependencies in Debian ++= Seq(
-      "openjdk-8-jre-headless (>= 1.8.0.171)",
+      "openjdk-11-jre-headless",
       "openssl(>= 1.0.2g) | openssl(>= 1.1.0f)", //ubuntu & debian
       "bash (>= 2.05a-11)"
     ),
@@ -233,6 +282,10 @@ lazy val node = (project in file("node"))
       RpmConstants.Post -> (sourceDirectory.value / "rpm" / "scriptlets" / "post")
     ),
     rpmPrerequisites := Seq(
+      /*
+       * https://access.redhat.com/articles/1299013
+       * Red Hat will skip Java SE 9 and 10, and ship an OpenJDK distribution based on Java SE 11.
+       */
       "java-1.8.0-openjdk-headless >= 1.8.0.171",
       //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
       "openssl"
@@ -264,7 +317,10 @@ lazy val rholang = (project in file("rholang"))
       catsEffect,
       monix,
       scallop,
-      lightningj
+      lightningj,
+      catsLawsTest,
+      catsLawsTestkitTest,
+      catsMtlLawsTest
     ),
     mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
     coverageExcludedFiles := Seq(
@@ -274,11 +330,15 @@ lazy val rholang = (project in file("rholang"))
       baseDirectory.value / "src" / "main" / "k",
       baseDirectory.value / "src" / "main" / "rbl"
     ).map(_.getPath ++ "/.*").mkString(";"),
-    fork in Test := true,
     //constrain the resource usage so that we hit SOE-s and OOME-s more quickly should they happen
     javaOptions in Test ++= Seq("-Xss240k", "-XX:MaxJavaStackTraceDepth=10000", "-Xmx128m")
   )
-  .dependsOn(models % "compile->compile;test->test", rspace % "compile->compile;test->test", crypto)
+  .dependsOn(
+    models % "compile->compile;test->test",
+    rspace % "compile->compile;test->test",
+    shared % "compile->compile;test->test",
+    crypto
+  )
 
 lazy val rholangCLI = (project in file("rholang-cli"))
   .settings(commonSettings: _*)
@@ -320,7 +380,7 @@ lazy val roscala = (project in file("roscala"))
     mainClass in assembly := Some("coop.rchain.rosette.Main"),
     assemblyJarName in assembly := "rosette.jar",
     inThisBuild(
-      List(addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full))
+      List(addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full))
     ),
     libraryDependencies ++= commonDependencies
   )
@@ -418,10 +478,16 @@ lazy val rspaceBench = (project in file("rspace-bench"))
     libraryDependencies += "com.esotericsoftware" % "kryo" % "4.0.2",
     dependencyOverrides ++= Seq(
       "org.ow2.asm" % "asm" % "5.0.4"
-    )
+    ),
+    sourceDirectory in Jmh := (sourceDirectory in Test).value,
+    classDirectory in Jmh := (classDirectory in Test).value,
+    dependencyClasspath in Jmh := (dependencyClasspath in Test).value,
+    // rewire tasks, so that 'jmh:run' automatically invokes 'jmh:compile' (otherwise a clean 'jmh:run' would fail),
+    compile in Jmh := (compile in Jmh).dependsOn(compile in Test).value,
+    run in Jmh := (run in Jmh).dependsOn(Keys.compile in Jmh).evaluated
   )
   .enablePlugins(JmhPlugin)
-  .dependsOn(rspace, rholang)
+  .dependsOn(rspace % "test->test", rholang, models % "test->test")
 
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)

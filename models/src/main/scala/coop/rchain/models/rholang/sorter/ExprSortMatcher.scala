@@ -13,6 +13,12 @@ private[sorter] object ExprSortMatcher extends Sortable[Expr] {
     def constructExpr(exprInstance: ExprInstance, score: Tree[ScoreAtom]) =
       ScoredTerm(Expr(exprInstance = exprInstance), score)
 
+    def remainderScore[F[_]: Sync](remainder: Option[Var]): F[Tree[ScoreAtom]] =
+      remainder match {
+        case Some(_var) => Sortable[Var].sortMatch[F](_var).map(_.score)
+        case None       => Sync[F].pure(Leaf(-1))
+      }
+
     e.exprInstance match {
       case ENegBody(en) =>
         for {
@@ -170,6 +176,49 @@ private[sorter] object ExprSortMatcher extends Sortable[Expr] {
           constructExpr(
             EMinusMinusBody(EMinusMinus(sortedPar1.term, sortedPar2.term)),
             Node(Score.EMINUSMINUS, sortedPar1.score, sortedPar2.score)
+          )
+      case EMapBody(parMap) =>
+        for {
+          sortedPars <- parMap.ps.sortedList
+                         .flatMap(t => List(t._1, t._2))
+                         .traverse(Sortable[Par].sortMatch[F])
+          remainderScore      <- remainderScore(parMap.remainder)
+          connectiveUsedScore = if (parMap.connectiveUsed) 1 else 0
+        } yield
+          constructExpr(
+            EMapBody(parMap),
+            Node(
+              Seq(Leaf(Score.EMAP), remainderScore) ++ sortedPars.map(_.score) ++ Seq(
+                Leaf(connectiveUsedScore)
+              )
+            )
+          )
+      case ESetBody(parSet) =>
+        for {
+          sortedPars          <- parSet.ps.sortedPars.traverse(Sortable[Par].sortMatch[F])
+          remainderScore      <- remainderScore(parSet.remainder)
+          connectiveUsedScore = if (parSet.connectiveUsed) 1 else 0
+        } yield
+          constructExpr(
+            ESetBody(parSet),
+            Node(
+              Seq(Leaf(Score.ESET), remainderScore) ++ sortedPars
+                .map(_.score) ++ Seq(Leaf(connectiveUsedScore))
+            )
+          )
+      case EListBody(list) =>
+        for {
+          pars                <- list.ps.toList.traverse(Sortable[Par].sortMatch[F])
+          remainderScore      <- remainderScore(list.remainder)
+          connectiveUsedScore = if (list.connectiveUsed) 1 else 0
+        } yield
+          constructExpr(
+            EListBody(list),
+            Node(
+              Seq(Leaf(Score.ELIST), remainderScore) ++ pars.map(_.score) ++ Seq(
+                Leaf(connectiveUsedScore)
+              )
+            )
           )
       case EMethodBody(em) =>
         for {

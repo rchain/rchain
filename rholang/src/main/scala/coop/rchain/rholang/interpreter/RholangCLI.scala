@@ -4,6 +4,7 @@ import java.io.{BufferedOutputStream, FileOutputStream, FileReader, StringReader
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
 
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Interpreter.EvaluateResult
 import coop.rchain.rholang.interpreter.Runtime.RhoIStore
@@ -28,13 +29,13 @@ object RholangCLI {
     val binary = opt[Boolean](descr = "outputs binary protobuf serialization")
     val text   = opt[Boolean](descr = "outputs textual protobuf serialization")
 
-    val data_dir = opt[Path](
+    val dataDir = opt[Path](
       required = false,
       descr = "Path to data directory",
       default = Some(Files.createTempDirectory("rspace-store-"))
     )
 
-    val map_size = opt[Long](
+    val mapSize = opt[Long](
       required = false,
       descr = "Map size (in bytes)",
       default = Some(1024L * 1024L * 1024L)
@@ -51,8 +52,11 @@ object RholangCLI {
 
     val conf = new Conf(args)
 
-    val runtime = Runtime.create(conf.data_dir(), conf.map_size())
-    Await.result(runtime.injectEmptyRegistryRoot[Task].runAsync, 5.seconds)
+    val runtime = Runtime.create(conf.dataDir(), conf.mapSize())
+    Await.result(
+      Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace).runToFuture,
+      5.seconds
+    )
 
     try {
       if (conf.files.supplied) {
@@ -62,7 +66,7 @@ object RholangCLI {
         repl(runtime)
       }
     } finally {
-      runtime.close()
+      runtime.close().unsafeRunSync
     }
   }
 
@@ -170,7 +174,7 @@ object RholangCLI {
         result <- Interpreter.evaluate(runtime, par)
       } yield result
 
-    waitForSuccess(evaluatorTask.runAsync)
+    waitForSuccess(evaluatorTask.runToFuture)
     printStorageContents(runtime.space.store)
   }
 }

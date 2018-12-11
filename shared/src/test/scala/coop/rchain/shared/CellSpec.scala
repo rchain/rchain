@@ -71,7 +71,7 @@ class CellSpec extends FunSpec with Matchers with BeforeAndAfterEach {
 
   private def run(test: Cell[Task, Int] => Task[Unit]): Unit =
     (for {
-      cell <- Cell.mvarCell[Int](0)
+      cell <- Cell.mvarCell[Task, Int](0)
       _    <- test(cell)
     } yield ()).unsafeRunSync
 

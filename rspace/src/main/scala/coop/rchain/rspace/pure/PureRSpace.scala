@@ -12,7 +12,8 @@ trait PureRSpace[F[_], C, P, E, A, R, K] {
       channels: Seq[C],
       patterns: Seq[P],
       continuation: K,
-      persist: Boolean
+      persist: Boolean,
+      sequenceNumber: Int = 0
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
 
   def install(channels: Seq[C], patterns: Seq[P], continuation: K): F[Option[(K, Seq[R])]]
@@ -20,7 +21,8 @@ trait PureRSpace[F[_], C, P, E, A, R, K] {
   def produce(
       channel: C,
       data: A,
-      persist: Boolean
+      persist: Boolean,
+      sequenceNumber: Int = 0
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
 
   def createCheckpoint(): F[Checkpoint]
@@ -35,32 +37,34 @@ object PureRSpace {
 
   final class PureRSpaceApplyBuilders[F[_]](val F: Sync[F]) extends AnyVal {
     def of[C, P, E, A, R, K](
-        space: ISpace[Id, C, P, E, A, R, K]
+        space: ISpace[F, C, P, E, A, R, K]
     )(implicit mat: Match[P, E, A, R]): PureRSpace[F, C, P, E, A, R, K] =
       new PureRSpace[F, C, P, E, A, R, K] {
         def consume(
             channels: Seq[C],
             patterns: Seq[P],
             continuation: K,
-            persist: Boolean
+            persist: Boolean,
+            sequenceNumber: Int
         ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
-          F.delay(space.consume(channels, patterns, continuation, persist))
+          space.consume(channels, patterns, continuation, persist, sequenceNumber)
 
         def install(channels: Seq[C], patterns: Seq[P], continuation: K): F[Option[(K, Seq[R])]] =
-          F.delay(space.install(channels, patterns, continuation))
+          space.install(channels, patterns, continuation)
 
         def produce(
             channel: C,
             data: A,
-            persist: Boolean
+            persist: Boolean,
+            sequenceNumber: Int
         ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
-          F.delay(space.produce(channel, data, persist))
+          space.produce(channel, data, persist, sequenceNumber)
 
-        def createCheckpoint(): F[Checkpoint] = F.delay(space.createCheckpoint())
+        def createCheckpoint(): F[Checkpoint] = space.createCheckpoint()
 
-        def reset(hash: Blake2b256Hash): F[Unit] = F.delay(space.reset(hash))
+        def reset(hash: Blake2b256Hash): F[Unit] = space.reset(hash)
 
-        def close(): F[Unit] = F.delay(space.close())
+        def close(): F[Unit] = space.close()
       }
   }
 }

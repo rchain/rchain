@@ -15,7 +15,7 @@ class MultiLockTest extends FlatSpec with Matchers {
     import scala.concurrent.duration._
 
     def unsafeRunSync: A =
-      Await.result(task.runAsync, Duration.Inf)
+      Await.result(task.runToFuture, Duration.Inf)
   }
 
   val tested = new DefaultMultiLock[String]()

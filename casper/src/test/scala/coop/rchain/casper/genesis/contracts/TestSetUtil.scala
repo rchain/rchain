@@ -11,6 +11,7 @@ import coop.rchain.models.Par
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.collection.ListOps
 import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.unittest.TestSet
 import coop.rchain.shared.StoreType.InMem
@@ -22,9 +23,26 @@ import scala.io.Source
 
 object TestSetUtil {
 
+  val testSetDeploy: Deploy = {
+    val deployData = DeployData(
+      user = ProtoUtil.stringToByteString(
+        "4ae94eb0b2d7df529f7ae68863221d5adda402fc54303a3d90a8a7a279326828"
+      ),
+      timestamp = 1539808849271L,
+      term = TestSet.code,
+      phloLimit = accounting.MAX_VALUE
+    )
+
+    Deploy(
+      term = Some(TestSet.term),
+      raw = Some(deployData)
+    )
+
+  }
+
   def runtime(implicit scheduler: Scheduler): Runtime = {
     val runtime = Runtime.create(Paths.get("/not/a/path"), -1, InMem)
-    runtime.injectEmptyRegistryRoot[Task].unsafeRunSync
+    Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace).unsafeRunSync
     runtime
   }
 
@@ -53,6 +71,16 @@ object TestSetUtil {
       case Left(ex)    => throw ex
     }
 
+  def runTestsWithDeploys(tests: CompiledRholangSource, otherLibs: Seq[Deploy], runtime: Runtime)(
+      implicit scheduler: Scheduler
+  ): Unit = {
+    val rand = Blake2b512Random(128)
+    evalDeploy(StandardDeploys.listOps, runtime)(implicitly)
+    evalDeploy(testSetDeploy, runtime)(implicitly)
+    otherLibs.foreach(evalDeploy(_, runtime))
+    eval(tests.code, runtime)(implicitly, rand.splitShort(1))
+  }
+
   def runTests(
       tests: CompiledRholangSource,
       otherLibs: Seq[CompiledRholangSource],
@@ -61,7 +89,7 @@ object TestSetUtil {
     //load "libraries" required for all tests
     val rand = Blake2b512Random(128)
     evalDeploy(StandardDeploys.listOps, runtime)(implicitly)
-    eval(TestSet.code, runtime)(implicitly, rand.splitShort(1))
+    evalDeploy(testSetDeploy, runtime)(implicitly)
 
     //load "libraries" required for this particular set of tests
     otherLibs.zipWithIndex.foreach {
@@ -77,10 +105,10 @@ object TestSetUtil {
     */
   def getTests(src: String): Iterator[String] =
     Source.fromFile(src).getLines().sliding(2).collect {
-      case Seq(line1, line2) if line1.contains("TestSet\"!") =>
-        line2.trim.dropRight(1)
+      case Seq(line1, line2) if line1.contains("@TestSet!(\"define\",") =>
+        line2.split('"')(1)
     }
 
   def testPassed(test: String, tuplespace: String): Boolean =
-    tuplespace.contains(s"@{$test}!(true)")
+    tuplespace.contains(s"$test == true")
 }

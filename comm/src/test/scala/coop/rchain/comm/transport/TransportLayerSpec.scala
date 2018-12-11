@@ -4,16 +4,13 @@ import scala.concurrent.duration._
 
 import cats._
 import cats.implicits._
-import coop.rchain.shared._
 import coop.rchain.comm._, rp.ProtocolHelper
 import coop.rchain.comm.protocol.routing.{Packet, Protocol}
-import coop.rchain.casper.protocol.{BlockApproval => CasperBlockApproval}
 import coop.rchain.comm.CommError.CommErr
 import com.google.protobuf.ByteString
-import scala.util.Random
 import org.scalatest._
 
-abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
+abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
     extends TransportLayerRuntime[F, E]
     with WordSpecLike
     with Matchers
@@ -59,7 +56,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
       "response takes to long" should {
         "fail with a timeout" in
           new TwoNodesRuntime[CommErr[Protocol]](
-            Dispatcher.heartbeatResponseDispatcherWithDelay(500)
+            Dispatcher.heartbeatResponseDispatcherWithDelay(1.second)
           ) {
             def execute(
                 transportLayer: TransportLayer[F],
@@ -190,7 +187,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
                 r <- roundTripWithHeartbeat(transportLayer, local, remote)
               } yield r
 
-            val result: TwoNodesResult = run()
+            val result: TwoNodesResult = run(false)
 
             inside(result()) {
               case Left(ProtocolException(e)) =>
@@ -214,7 +211,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
                 r <- sendHeartbeat(transportLayer, local, remote)
               } yield r
 
-            run()
+            run(false)
             protocolDispatcher.received shouldBe 'empty
           }
       }
@@ -233,8 +230,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
                 r <- broadcastHeartbeat(transportLayer, local, remote1, remote2)
               } yield r
 
-            run()
-
+            run(false)
             protocolDispatcher.received shouldBe 'empty
           }
       }

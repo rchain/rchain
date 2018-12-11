@@ -1,0 +1,15 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+docker = "*"
+pytest = "*"
+pytest-json = "*"
+pytest-mypy = "*"
+pytest-pylint = "*"
+typing-extensions = "*"
+dataclasses = "*"
+
+[dev-packages]

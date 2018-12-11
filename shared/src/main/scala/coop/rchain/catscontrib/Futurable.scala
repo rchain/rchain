@@ -15,7 +15,7 @@ object Futurable extends FuturableInstances {
 
 trait FuturableInstances extends FuturableInstances0 {
   implicit def taskFuturable(implicit scheduler: Scheduler): Futurable[Task] = new Futurable[Task] {
-    def toFuture[A](fa: Task[A]): Future[A] = fa.runAsync
+    def toFuture[A](fa: Task[A]): Future[A] = fa.runToFuture
   }
 }
 

@@ -15,7 +15,7 @@ import coop.rchain.rspace.pure.PureRSpace
 
 object RholangOnlyDispatcher {
 
-  def create[M[_], F[_]](tuplespace: RhoISpace, urnMap: Map[String, Par] = Map.empty)(
+  def create[M[_], F[_]](tuplespace: RhoISpace[M], urnMap: Map[String, Par] = Map.empty)(
       implicit
       parallel: Parallel[M, F],
       s: Sync[M],
@@ -40,7 +40,8 @@ class RholangOnlyDispatcher[M[_]] private (reducer: => ChargingReducer[M])(impli
 
   def dispatch(
       continuation: TaggedContinuation,
-      dataList: Seq[ListParWithRandomAndPhlos]
+      dataList: Seq[ListParWithRandomAndPhlos],
+      sequenceNumber: Int
   ): M[Unit] =
     for {
       res <- continuation.taggedCont match {

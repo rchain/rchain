@@ -2,10 +2,13 @@ package coop.rchain.node.diagnostics
 
 import java.time.Duration
 
-import kamon._
 import com.typesafe.config.{Config, ConfigUtil}
+import coop.rchain.node.Ok
+import kamon._
 import kamon.metric._
-import org.slf4j.LoggerFactory
+import monix.eval.Task
+import org.http4s._
+import org.http4s.dsl.io._
 
 import scala.collection.JavaConverters._
 
@@ -86,11 +89,7 @@ object NewPrometheusReporter {
         .toMap
   }
 
-  import cats.effect._
-  import org.http4s._
-  import org.http4s.dsl.io._
-
-  def service(reporter: NewPrometheusReporter) = HttpService[IO] {
+  def service(reporter: NewPrometheusReporter) = HttpRoutes.of[Task] {
     case GET -> Root => Ok(reporter.scrapeData())
   }
 }

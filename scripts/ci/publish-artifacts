@@ -22,19 +22,24 @@ echo "$SSH_PRIVATE_KEY" | base64 -d | tr -d '\r' >~/.ssh/id_rsa
 )
 
 # We don't check host keys because artifacts are public.
-rsync -avrz --delete \
-	-e "ssh -p 22 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
-	node/target/rnode_*_all.deb \
-	node/target/rpm/RPMS/noarch/rnode-*.noarch.rpm \
-	node/target/universal/*.tgz \
-	inbound@dispatch.pyr8.io:/home/inbound/cd/artifacts/$REF/
+rsync -avrz --delete -e "ssh -p 22 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
+    artifacts/*.deb artifacts/*.rpm artifacts/*.tgz \
+    inbound@build.rchain-dev.tk:/srv/inbound/$REF/
 
 # Upload Docker image
 
+set +x
 builtin echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
-docker tag coop.rchain/rnode:latest rchain/rnode:$REF
+
+# There's a slight race condition between tag and push. Tag is fast, but what
+# can happen if some other jobs tags with latest while push is in progress?
+
+set -x
+
+docker tag coop.rchain/rnode:DRONE-$DRONE_BUILD_NUMBER rchain/rnode:$REF
 docker push rchain/rnode:$REF
+
 if [[ $TAG == 1 ]]; then
-	docker tag coop.rchain/rnode:latest rchain/rnode:latest
+	docker tag coop.rchain/rnode:DRONE-$DRONE_BUILD_NUMBER rchain/rnode:latest
 	docker push rchain/rnode:latest
 fi

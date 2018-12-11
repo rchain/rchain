@@ -3,12 +3,13 @@ package coop.rchain.casper.util
 import cats.effect.{Resource, Sync}
 import cats.implicits._
 
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
+import coop.rchain.casper.util.ProtoUtil.{deployDataToDeploy, sourceDeploy}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
-import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.{accounting, Runtime}
 import coop.rchain.shared.PathOps.RichPath
 
 import java.io.PrintWriter
@@ -22,10 +23,16 @@ object BondingUtil {
   def transferStatusOut(ethAddress: String): String       = s"${ethAddress}_transferOut"
 
   def bondingForwarderDeploy(bondKey: String, ethAddress: String): String =
-    s"""for(@purse <- @"${bondingForwarderAddress(ethAddress)}"; @pos <- @"proofOfStake"){
-       |  @(pos, "bond")!("$bondKey".hexToBytes(), "ed25519Verify", purse, "$ethAddress", "${bondingStatusOut(
+    s"""new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
+       |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+       |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
+       |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
+       |    for(@purse <- @"${bondingForwarderAddress(ethAddress)}"; pos <- posCh){
+       |      pos!("bond", "$bondKey".hexToBytes(), "ed25519Verify", purse, "$ethAddress", "${bondingStatusOut(
          ethAddress
        )}")
+       |    }
+       |  }
        |}""".stripMargin
 
   def unlockDeploy[F[_]: Sync](ethAddress: String, pubKey: String, secKey: String)(
@@ -59,8 +66,13 @@ object BondingUtil {
       statusOut: String
   )(implicit runtimeManager: RuntimeManager, scheduler: Scheduler): F[String] = {
     require(Base16.encode(Keccak256.hash(Base16.decode(pubKey)).drop(12)) == ethAddress.drop(2))
-    val unlockSigDataTerm =
-      mkTerm(s""" @"__SCALA__"!(["$pubKey", "$statusOut"].toByteArray())""").right.get
+    val unlockSigDataTerm = deployDataToDeploy(
+      sourceDeploy(
+        s""" @"__SCALA__"!(["$pubKey", "$statusOut"].toByteArray())""",
+        0L,
+        accounting.MAX_VALUE
+      )
+    )
     for {
       sigBytes <- Sync[F].delay {
                    runtimeManager
@@ -74,7 +86,13 @@ object BondingUtil {
       unlockSigData = Keccak256.hash(sigBytes)
       unlockSig     = Secp256k1.sign(unlockSigData, secKey)
       _             = assert(Secp256k1.verify(unlockSigData, unlockSig, Base16.decode("04" + pubKey)))
-    } yield s"""@"$ethAddress"!(["$pubKey", "$statusOut"], "${Base16.encode(unlockSig)}")"""
+      sigString     = Base16.encode(unlockSig)
+    } yield s"""new rl(`rho:registry:lookup`), WalletCheckCh in {
+           |  rl!(`rho:id:oqez475nmxx9ktciscbhps18wnmnwtm6egziohc3rkdzekkmsrpuyt`, *WalletCheckCh) |
+           |  for(@(_, WalletCheck) <- WalletCheckCh) {
+           |    @WalletCheck!("claim", "$ethAddress", "$pubKey", "$sigString", "$statusOut")
+           |  }
+           |}""".stripMargin
   }
 
   def walletTransferSigData[F[_]: Sync](
@@ -82,8 +100,13 @@ object BondingUtil {
       amount: Long,
       destination: String
   )(implicit runtimeManager: RuntimeManager, scheduler: Scheduler): F[Array[Byte]] = {
-    val transferSigDataTerm =
-      mkTerm(s""" @"__SCALA__"!([$nonce, $amount, "$destination"].toByteArray())""").right.get
+    val transferSigDataTerm = deployDataToDeploy(
+      sourceDeploy(
+        s""" @"__SCALA__"!([$nonce, $amount, "$destination"].toByteArray())""",
+        0L,
+        accounting.MAX_VALUE
+      )
+    )
 
     for {
       sigBytes <- Sync[F].delay {
@@ -109,10 +132,15 @@ object BondingUtil {
     for {
       transferSigData <- walletTransferSigData[F](nonce, amount, destination)
       transferSig     = Secp256k1.sign(transferSigData, secKey)
-    } yield s"""
-             |for(@wallet <- @"$pubKey") {
-             |  @(wallet, "transfer")!($amount, $nonce, "${Base16.encode(transferSig)}", "$destination", "$transferStatusOut")
-             |}""".stripMargin
+    } yield s"""new rl(`rho:registry:lookup`), WalletCheckCh, result in {
+               |  rl!(`rho:id:oqez475nmxx9ktciscbhps18wnmnwtm6egziohc3rkdzekkmsrpuyt`, *WalletCheckCh) |
+               |  for(@(_, WalletCheck) <- WalletCheckCh) {
+               |    @WalletCheck!("access", "$pubKey", *result) |
+               |    for(@(true, wallet) <- result) {
+               |      @wallet!("transfer", $amount, $nonce, "${Base16.encode(transferSig)}", "$destination", "$transferStatusOut")
+               |    }
+               |  }
+               |}""".stripMargin
 
   def faucetBondDeploy[F[_]: Sync](
       amount: Long,
@@ -136,10 +164,14 @@ object BondingUtil {
       statusOut       = transferStatusOut(pubKey)
       transferSigData <- walletTransferSigData(nonce, amount, destination)
       transferSig     = sigFunc(transferSigData)
-    } yield s"""new walletCh in {
-               |  for(faucet <- @"faucet"){ faucet!($amount, "ed25519", "$pubKey", *walletCh) } |
-               |  for(@[wallet] <- walletCh) {
-               |    @(wallet, "transfer")!($amount, $nonce, "${Base16.encode(transferSig)}", "$destination", "$statusOut")
+    } yield s"""new rl(`rho:registry:lookup`), SystemInstancesCh, walletCh, faucetCh in {
+               |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+               |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
+               |    @SystemInstancesRegistry!("lookup", "faucet", *faucetCh) |
+               |    for(faucet <- faucetCh){ faucet!($amount, "ed25519", "$pubKey", *walletCh) } |
+               |    for(@[wallet] <- walletCh) {
+               |      @wallet!("transfer", $amount, $nonce, "${Base16.encode(transferSig)}", "$destination", "$statusOut")
+               |    }
                |  }
                |}""".stripMargin
 
@@ -156,12 +188,14 @@ object BondingUtil {
       runtimeDir => Sync[F].delay { runtimeDir.recursivelyDelete() }
     )
 
-  def makeRuntimeResource[F[_]: Sync](runtimeDirResource: Resource[F, Path]): Resource[F, Runtime] =
+  def makeRuntimeResource[F[_]: Sync](
+      runtimeDirResource: Resource[F, Path]
+  )(implicit scheduler: Scheduler): Resource[F, Runtime] =
     runtimeDirResource.flatMap(
       runtimeDir =>
         Resource
           .make(Sync[F].delay { Runtime.create(runtimeDir, 1024L * 1024 * 1024) })(
-            runtime => Sync[F].delay { runtime.close() }
+            runtime => Sync[F].delay { runtime.close().unsafeRunSync }
           )
     )
 
