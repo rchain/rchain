@@ -3,9 +3,7 @@ package coop.rchain.node
 import scala.collection.JavaConverters._
 import scala.tools.jline.console._
 import completer.StringsCompleter
-
 import cats.implicits._
-
 import coop.rchain.casper.util.comm._
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
@@ -16,7 +14,6 @@ import coop.rchain.node.diagnostics.client.GrpcDiagnosticsService
 import coop.rchain.node.effects._
 import coop.rchain.shared._
 import coop.rchain.shared.StringOps._
-
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -118,7 +115,8 @@ object Main {
   implicit private def consoleIO: ConsoleIO[Task] = {
     val console = new ConsoleReader()
     console.setHistoryEnabled(true)
-    console.setPrompt("rholang $ ".green)
+    if (TerminalMode.readMode)
+      console.setPrompt("rholang $ ".green.colorize)
     console.addCompleter(new StringsCompleter(ReplRuntime.keywords.asJava))
     effects.consoleIO(console)
   }
