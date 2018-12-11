@@ -49,7 +49,6 @@ trait CaptureInstances extends CaptureInstances0 {
 
 sealed trait CaptureInstances0 {
   import eitherT._
-  import writerT._
   implicit def eitherTCapture[F[_]: Monad: Capture, E]: Capture[EitherT[F, E, ?]] =
     new TransCapture[F, EitherT[?[_], E, ?]]()
 }
