@@ -127,6 +127,4 @@ def test_heterogenous_validators(command_line_options_fixture, docker_client_fix
                         wait_for_blocks_count_at_least(
                             readonly_peer,
                             expected_blocks_count,
-                            max_retrieved_blocks,
-                            expected_blocks_count * 10,
                         )

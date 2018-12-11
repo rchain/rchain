@@ -79,12 +79,9 @@ def test_multiple_deploys_at_once(command_line_options_fixture, docker_client_fi
                         deploy1.start()
 
                         expected_blocks_count = 1
-                        max_retrieved_blocks = 1
                         wait_for_blocks_count_at_least(
                             no1,
                             expected_blocks_count,
-                            max_retrieved_blocks,
-                            expected_blocks_count * 10,
                         )
 
                         deploy2 = DeployThread("node2", no2, contract_path, 3)
@@ -94,24 +91,17 @@ def test_multiple_deploys_at_once(command_line_options_fixture, docker_client_fi
                         deploy3.start()
 
                         expected_blocks_count = 7
-                        max_retrieved_blocks = 7
                         wait_for_blocks_count_at_least(
                             no1,
                             expected_blocks_count,
-                            max_retrieved_blocks,
-                            480
                         )
                         wait_for_blocks_count_at_least(
                             no2,
                             expected_blocks_count,
-                            max_retrieved_blocks,
-                            expected_blocks_count * 10,
                         )
                         wait_for_blocks_count_at_least(
                             no3,
                             expected_blocks_count,
-                            max_retrieved_blocks,
-                            expected_blocks_count * 10,
                         )
 
                         deploy1.join()

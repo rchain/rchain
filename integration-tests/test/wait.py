@@ -83,17 +83,16 @@ class BlockContainsString:
 
 
 class BlocksCountAtLeast:
-    def __init__(self, node: 'Node', blocks_count: int, max_retrieved_blocks: int) -> None:
+    def __init__(self, node: 'Node', blocks_count: int) -> None:
         self.node = node
         self.blocks_count = blocks_count
-        self.max_retrieved_blocks = max_retrieved_blocks
 
     def __str__(self) -> str:
-        args = ', '.join(repr(a) for a in (self.node.name, self.blocks_count, self.max_retrieved_blocks))
+        args = ', '.join(repr(a) for a in (self.node.name, self.blocks_count, self.blocks_count))
         return '<{}({})>'.format(self.__class__.__name__, args)
 
     def is_satisfied(self) -> bool:
-        actual_blocks_count = self.node.get_blocks_count(self.max_retrieved_blocks)
+        actual_blocks_count = self.node.get_blocks_count(self.blocks_count)
         return actual_blocks_count >= self.blocks_count
 
 
@@ -128,9 +127,9 @@ def wait_for_block_contains(node: 'Node', block_hash: str, expected_string: str,
     wait_on_using_wall_clock_time(predicate, timeout)
 
 
-def wait_for_blocks_count_at_least(node: 'Node', expected_blocks_count: int, max_retrieved_blocks: int, timeout: int):
-    predicate = BlocksCountAtLeast(node, expected_blocks_count, max_retrieved_blocks)
-    wait_on_using_wall_clock_time(predicate, timeout)
+def wait_for_blocks_count_at_least(context: 'TestingContext', node: 'Node', expected_blocks_count: int) -> None:
+    predicate = BlocksCountAtLeast(node, expected_blocks_count)
+    wait_on_using_wall_clock_time(predicate, context.receive_timeout * expected_blocks_count)
 
 
 def wait_for_node_started(node: 'Node', startup_timeout: int):
