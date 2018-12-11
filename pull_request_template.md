@@ -22,7 +22,6 @@
 
 ### [Bors](https://bors.tech/) cheat-sheet:
 
-- `bors delegate+` enables author to request a merge from Bors.
-  Please **add it in your PR :heavy_check_mark: message** or in a comment later!
-- `bors r+` runs integration tests and merges the PR
-- `bors try` in a comment triggers integration tests for the PR
+- `bors r+` runs integration tests and merges the PR (if it's approved),
+- `bors try` runs integration tests for the PR,
+- `bors delegate+` enables non-maintainer PR authors to run the above.
