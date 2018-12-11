@@ -390,19 +390,13 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   it should "handle multi-parent blocks correctly when they operate on stdout" in effectTest {
-    val contract1 = """
-      new stdout(`rho:io:stdout`) in { stdout!("Contract 1") }
-      """
-    val contract2 = """
-      new stdout(`rho:io:stdout`) in { stdout!("Contract 2") }
-      """
-
-    val time = System.currentTimeMillis()
+    def echoContract(no: Int) = s"""new stdout(`rho:io:stdout`) in { stdout!("Contract $no") }"""
+    val time                  = System.currentTimeMillis()
     for {
       nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
       deploys = Vector(
-        ProtoUtil.sourceDeploy(contract1, time + 1, accounting.MAX_VALUE),
-        ProtoUtil.sourceDeploy(contract2, time + 2, accounting.MAX_VALUE)
+        ProtoUtil.sourceDeploy(echoContract(1), time + 1, accounting.MAX_VALUE),
+        ProtoUtil.sourceDeploy(echoContract(2), time + 2, accounting.MAX_VALUE)
       )
       createBlockResult0 <- nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
       createBlockResult1 <- nodes(1).casperEff.deploy(deploys(1)) *> nodes(1).casperEff.createBlock
