@@ -352,8 +352,6 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
       _ <- lock.release
     } yield ()
 
-  def insertGenesis(genesis: BlockMessage): F[Unit] = ???
-
   def checkpoint(): F[Unit] =
     ().pure[F]
 
