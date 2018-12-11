@@ -109,32 +109,43 @@
 * `validatorC` transitions to `ApprovedBlockReceivedHandler`
 * `validatorC` tip points to block (genesis) where it has no parent and Bonds holds `validatorA` and `validatorB`
 
+## REV
+### As a platform stakeholder, I want REV to be the currency token for the RChain platform.
+##### test: not available
+##### steps: TBD
+### As a REV holder, assuming I maintain control of my keys and properly use the wallet where I store REV, I expect my REV to never be lost.
+##### test: not available 
+##### steps: TBD
+
 ## Wallets
-### As a user, I want to be able to configure a wallet so that I can store REV in it
+### As a user, I want to be able to configure a coop-supplied wallet so that I can store REV in it
 ##### test: not available 
 ##### steps: TBD
-### As a user, I want to be able to add REV to my wallet so that I have available REV to pay for goods/services
+### As a user, I want to be able to interface with the coop-supplied wallet at the command line.
 ##### test: not available 
 ##### steps: TBD
-### As a user, I want to be able to remove REV from my wallet so that I can pay for goods/services
+### As a user, I want to be able to add REV to my coop-supplied wallet so that I have available REV to pay for goods/services
 ##### test: not available 
 ##### steps: TBD
-### As a user, I want to be able to receive REV from another user by providing that user with the public key for my wallet.
+### As a user, I want to be able to remove REV from my coop-supplied wallet so that I can pay for goods/services
+##### test: not available 
+##### steps: TBD
+### As a user, I want to be able to receive REV from another user by providing that user with the public key for my coop-supplied-wallet.
 ##### test: not available
 ##### steps: TBD
-### As a user, I want to be able to send REV to the wallet of another user.
+### As a user, I want to be able to send REV to the coop-supplied wallet of another user by specifying the public key to the coop-supplied wallet of that user.
 ##### test: not available
 ##### steps: TBD
-### Expose purses inside a wallet
-##### test: not available 
-##### steps: TBD
-### As a user of a wallet application, I want to query a wallet contract (or the blocks) for my public address to get the history of all REV transfers to and/or from it
-##### test: not available 
-##### steps: TBD
-### As a REV holder, I can move some of my REV to the control another user’s public key (or address) via a co-op supplied dApp wallet
+### As a user of a coop-supplied wallet, I want to query a wallet contract (or the blocks) for my public address to get the history of all REV transfers to and/or from it
 ##### test: not available 
 ##### steps: TBD
 ### As a recipient of REV (other than REV at mainnet launch 'genesis'), I can use a co-op supplied dApp to view my REV balance
+##### test: not available 
+##### steps: TBD
+### As a recipient of REV at mainnet launch 'genesis', I can use a co-op supplied wallet to view my REV balance after launch.
+##### test: not available 
+##### steps: TBD
+### As an organization holding REV, I need to have multiple approviesr for any REV transaction.
 ##### test: not available 
 ##### steps: TBD
 ### As a validator, I can move Rev to/from the key-pair for one validator node to the key-pair for another validator node or that of the co-op supplied wallet dApp
@@ -161,7 +172,13 @@
 ##### steps: TBD
 
 ## Validation
+### As a RChain validator, I want my validator identity to be different from the identity of my node and from the identity of my wallet.
+##### test: not available
+##### steps: TBD
 ### As a RChain validator, I want to know when a block I propose is finalized and with what degree of confidence.
+##### test: not available
+##### steps: TBD
+### As a RChain validator, I want to expose to the internet only those methods needed for production dApps.
 ##### test: not available
 ##### steps: TBD
 
@@ -191,13 +208,16 @@
 ##### steps: TBD
 
 ## Validator slashing and ejection
-### As a RChain validator and as a platform stakeholder, I want to know that other validators who do not validate according to the slashing API will be slashed (removed as a validator and lose stake).
+### As a RChain validator and as a platform stakeholder, I want to know that other validators who do not validate according to the slashing API will be slashed (removed as a validator and lose stake) in a process observable to other validators.
 ##### test: not available
 ##### steps: TBD
 ### As a RChain validator, I want to know that if I am slashed then the Coop will hold my bond amount and not distribute it to other validators for a specified period of reconcilliation in the event that my slashing was unjustified.
 ##### test: not available
 ##### steps: TBD
+### As a platform stakeholder, I want to see the stake of a slashed validator distributed to other validators after the time specified for a hold for reconciliation.
 ### As a platform stakeholder, I want to know that a validator that has been slashed is no longer able to validate.
+##### test: not available
+##### steps: TBD
 ##### test: not available
 ##### steps: TBD
 ### As a RChain validator, I want to update my RNode software without being slashed.
@@ -232,6 +252,65 @@
 ### As a dApp developer, I want contract definition inside another contract (ex WIDE, persisting contracts).
 ##### test: not available
 ##### steps: TBD
+
+### As a dApp developer, I want support for binary files as part of deployments.
+##### test: not available
+##### steps: TBD
+
+### As a dApp developer, I want STDOUT to go back to gRPC response and not the log.
+##### test: not available
+##### steps: TBD
+
+### As a dApp developer, when I make one or more deployments, I want a receipt of the transaction.
+##### test: not available
+##### steps: TBD
+
+## Name registry
+### As a dApp developer, I want to predict registry names using readily available crypto libraries.
+##### test: not available
+##### steps: TBD
+
+## Cost accounting
+Requirements for Mercury TBD.
+
+## Storage
+### As a platform user, I want to store transaction data on the blockchain so it is available and accessible to other users.
+##### test: not available 
+##### steps: TBD
+
+## Performance
+### As a user of the platform, I want to know the current performance of the network in terms of COMM events per second.
+##### test: not available
+##### steps: TBD
+
+## Platform administration
+### As the RChain coop, I need to verify how much total phlogiston over a period of time was paid out of a sending address.
+##### test: not available
+##### steps: TBD
+
+## Documentation
+### As a any type of platform stakeholder, I want a single-source of indexed documenation.
+##### documentation location: not available
+### As a any type of platform stakeholder, I want to know what I can expect for the performance and reliability of the RChain platform im the form of a production engineering plan.
+##### documentation location: not available
+### As a node operator, I want to learn how to install, run, operate, and monitor my node.
+##### documentation location: not available
+### As a validator, I want to learn the minimum hardware, infrastructure, and networking requirements to participate as a validator.
+##### documentation location: not available
+### As a validator, I want to learn about the slashing API, the conditions and process for slashing, and the conditions and process for ejection.
+##### documentation location: not available
+### As a dApp developer, I want to learn how to use and write smart contracts in Rholang.
+##### documentation location: not available
+### As a dApp developer, I want to formally verify my Rholang contracts.
+##### documentation location: not available
+### As a dApp developer, I need to learn about COMM events (ex what are they? how are they measured? how are they part of the platform performance benchmark metric?) and how to optimize them in my smart contracts.
+##### documentation location: not available
+### As a dApp developer, I need to learn how unforgeable names are generated, how to determine unforgeable names, and how to retrieve the UUID of the unforgeable names.
+##### documentation location: not available
+### As a dApp developer, i need a reference for gRPC calls and a description of what they do.
+##### documentation location: not available
+### As an Ehtereum developer familiar with the Infura API, I want to learn how to use the RChain platform.
+##### documentation location: not available
 
 ## Not_Grouped
 ### All existing tests that need proper user story
