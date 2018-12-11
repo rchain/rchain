@@ -394,7 +394,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       new helloworld, stdout(`rho:io:stdout`) in {
           contract helloworld( world ) = {
               for( @msg <- world ) {
-                  stdout!("Message is: "+msg)
+                  stdout!(msg)
               }
           } |
           new world, world2 in {
@@ -418,20 +418,16 @@ class HashSetCasperTest extends FlatSpec with Matchers {
             }
           }
         } |
-        helloWorld!("Joe")
+        helloWorld!("Janusz")
       }
       """
 
+    val time = System.currentTimeMillis()
     for {
       nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
       deploys = Vector(
-        ProtoUtil.sourceDeploy(contract1, System.currentTimeMillis(), accounting.MAX_VALUE),
-        ProtoUtil.sourceDeploy(
-          "@1!(1) | for(@x <- @1){ @1!(x) }",
-          System.currentTimeMillis() + 1,
-          accounting.MAX_VALUE
-        ),
-        ProtoUtil.sourceDeploy(contract2, System.currentTimeMillis() + 2, accounting.MAX_VALUE)
+        ProtoUtil.sourceDeploy(contract1, time + 1, accounting.MAX_VALUE),
+        ProtoUtil.sourceDeploy(contract2, time + 2, accounting.MAX_VALUE)
       )
       createBlockResult0 <- nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
       createBlockResult1 <- nodes(1).casperEff.deploy(deploys(1)) *> nodes(1).casperEff.createBlock
@@ -446,7 +442,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
       //multiparent block joining block0 and block1 since they do not conflict
       multiparentCreateBlockResult <- nodes(0).casperEff
-                                       .deploy(deploys(2)) *> nodes(0).casperEff.createBlock
+                                       .deploy(deploys(1)) *> nodes(0).casperEff.createBlock
       Created(multiparentBlock) = multiparentCreateBlockResult
       _                         <- nodes(0).casperEff.addBlock(multiparentBlock, ignoreDoppelgangerCheck[Effect])
       _                         <- nodes(1).receive()
@@ -456,9 +452,6 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _ = multiparentBlock.header.get.parentsHashList.size shouldBe 2
       _ = nodes(0).casperEff.contains(multiparentBlock) shouldBeF true
       _ = nodes(1).casperEff.contains(multiparentBlock) shouldBeF true
-
-      finalTuplespace <- nodes(0).casperEff
-                          .storageContents(ProtoUtil.postStateHash(multiparentBlock))
       _ = nodes.foreach(_.tearDown())
     } yield ()
   }
