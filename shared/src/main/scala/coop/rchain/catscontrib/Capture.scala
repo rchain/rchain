@@ -55,24 +55,11 @@ sealed trait CaptureInstances0 {
   import eitherT._
   import writerT._
   implicit def eitherTCapture[F[_]: Monad: Capture, E]: Capture[EitherT[F, E, ?]] =
-    new TransCapture[F, EitherT[?[_], E, ?]](new TransUnsafeUncapture[EitherT[?[_], E, ?], F] {
-      def unsafeUnlift[A]: EitherT[F, E, A] => F[A] = {
-        case EitherT(fea) =>
-          fea.map {
-            case Right(a) => a
-            case _        => throw new RuntimeException("dead kitty")
-          }
-      }
-    })
+    new TransCapture[F, EitherT[?[_], E, ?]]()
 }
 
-private class TransCapture[F[_]: Monad: Capture, T[_[_], _]: MonadTrans](
-    tuu: TransUnsafeUncapture[T, F]
-) extends Capture[T[F, ?]] {
+private class TransCapture[F[_]: Monad: Capture, T[_[_], _]: MonadTrans]() extends Capture[T[F, ?]] {
   def capture[A](a: => A) =
     MonadTrans[T].liftM(Capture[F].capture(a))
 }
 
-trait TransUnsafeUncapture[T[_[_], _], F[_]] {
-  def unsafeUnlift[A]: T[F, A] => F[A]
-}
