@@ -389,7 +389,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  it should "handle multi-parent blocks correctly when they operate on stdout" in effectTest {
+  it should "handle multi-parent blocks correctly when they operate on stdout" ignore effectTest {
     def echoContract(no: Int) = s"""new stdout(`rho:io:stdout`) in { stdout!("Contract $no") }"""
     val time                  = System.currentTimeMillis()
     for {
