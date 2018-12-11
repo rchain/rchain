@@ -52,7 +52,7 @@ def start_network(*, context: TestingContext, bootstrap: 'Node', allowed_peers=N
 def star_network(context: TestingContext) -> Generator[Network, None, None]:
     with docker_network_with_started_bootstrap(context) as bootstrap_node:
         with start_network(context=context, bootstrap=bootstrap_node, allowed_peers=[bootstrap_node.name]) as network:
-            wait_for_started_network(context.node_startup_timeout, network)
+            wait_for_started_network(context, network)
             wait_for_converged_network(context.network_converge_timeout, network, 1)
             yield network
 
@@ -62,7 +62,7 @@ def complete_network(context: TestingContext) -> Generator[Network, None, None]:
     with docker_network_with_started_bootstrap(context) as bootstrap_node:
         wait_for_approved_block_received_handler_state(context, bootstrap_node)
         with start_network(context=context, bootstrap=bootstrap_node) as network:
-            wait_for_started_network(context.node_startup_timeout, network)
+            wait_for_started_network(context, network)
             wait_for_converged_network(context.network_converge_timeout, network, len(network.peers))
             wait_for_approved_block_received(network, context.node_startup_timeout)
             yield network

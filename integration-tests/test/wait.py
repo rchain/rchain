@@ -132,9 +132,9 @@ def wait_for_blocks_count_at_least(context: 'TestingContext', node: 'Node', expe
     wait_on_using_wall_clock_time(predicate, context.receive_timeout * expected_blocks_count)
 
 
-def wait_for_node_started(node: 'Node', startup_timeout: int):
+def wait_for_node_started(context: 'TestingContext', node: 'Node') -> None:
     predicate = NodeStarted(node)
-    wait_on_using_wall_clock_time(predicate, startup_timeout)
+    wait_on_using_wall_clock_time(predicate, context.node_startup_timeout)
 
 
 def wait_for_approved_block_received_handler_state(context: 'TestingContext', node: 'Node') -> None:
@@ -148,9 +148,9 @@ def wait_for_approved_block_received(network: 'Network', timeout: int):
         wait_on_using_wall_clock_time(predicate, timeout)
 
 
-def wait_for_started_network(node_startup_timeout: int, network: 'Network'):
+def wait_for_started_network(context: 'TestingContext', network: 'Network') -> None:
     for peer in network.peers:
-        wait_for_node_started(peer, node_startup_timeout)
+        wait_for_node_started(context, peer)
 
 
 def wait_for_converged_network(timeout: int, network: 'Network', peer_connections: int):

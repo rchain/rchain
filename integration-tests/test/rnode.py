@@ -472,7 +472,7 @@ def started_peer(
         command_timeout=context.command_timeout,
     )
     try:
-        wait_for_node_started(peer, context.node_startup_timeout)
+        wait_for_node_started(context, peer)
         yield peer
     finally:
         peer.cleanup()
@@ -539,7 +539,7 @@ def started_bootstrap_node(*, context: TestingContext, network, mount_dir: str =
         mount_dir=mount_dir,
     )
     try:
-        wait_for_node_started(bootstrap_node, context.node_startup_timeout)
+        wait_for_node_started(context, bootstrap_node)
         yield bootstrap_node
     finally:
         bootstrap_node.cleanup()
