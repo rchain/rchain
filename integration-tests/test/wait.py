@@ -122,9 +122,9 @@ def wait_on_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) ->
     pytest.fail('Failed to satisfy {} after {}s'.format(predicate, elapsed))
 
 
-def wait_for_block_contains(node: 'Node', block_hash: str, expected_string: str, timeout: int):
+def wait_for_block_contains(context: 'TestingContext', node: 'Node', block_hash: str, expected_string: str) -> None:
     predicate = BlockContainsString(node, block_hash, expected_string)
-    wait_on_using_wall_clock_time(predicate, timeout)
+    wait_on_using_wall_clock_time(predicate, context.receive_timeout)
 
 
 def wait_for_blocks_count_at_least(context: 'TestingContext', node: 'Node', expected_blocks_count: int) -> None:

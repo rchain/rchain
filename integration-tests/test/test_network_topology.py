@@ -105,4 +105,4 @@ def test_casper_propose_and_deploy(command_line_options_fixture, docker_client_f
                 expected_string = make_expected_string(node, random_token)
                 other_nodes = [n for n in network.nodes if n.container.name != node.container.name]
                 for node in other_nodes:
-                    wait_for_block_contains(node, block_hash, expected_string, context.receive_timeout)
+                    wait_for_block_contains(context, node, block_hash, expected_string)
