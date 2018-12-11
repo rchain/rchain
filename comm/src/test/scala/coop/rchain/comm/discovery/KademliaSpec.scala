@@ -6,6 +6,7 @@ import cats.Id
 
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.catscontrib._, Catscontrib._
+import coop.rchain.catscontrib.TestOutlaws._
 import coop.rchain.comm._
 
 import org.scalatest._

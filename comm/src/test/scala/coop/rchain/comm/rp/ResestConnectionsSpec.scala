@@ -6,6 +6,7 @@ import cats._
 
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.ski._
+import coop.rchain.catscontrib.TestOutlaws._
 import coop.rchain.comm._
 import coop.rchain.comm.CommError._
 import coop.rchain.comm.protocol.routing._

@@ -39,12 +39,6 @@ trait CaptureInstances extends CaptureInstances0 {
 
     def capture[A](a: => A): Task[A] = Task.delay(a)
   }
-
-  /** TEMP REMOVE once comm no longer imperative*/
-  implicit def idCapture: Capture[Id] = new Capture[Id] {
-    def capture[A](a: => A): Id[A] = a
-  }
-  /** TEMP REMOVE END */
 }
 
 sealed trait CaptureInstances0 {
