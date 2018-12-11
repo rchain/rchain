@@ -41,10 +41,6 @@ trait CaptureInstances extends CaptureInstances0 {
   }
 
   /** TEMP REMOVE once comm no longer imperative*/
-  implicit def eitherCapture[E]: Capture[Either[E, ?]] = new Capture[Either[E, ?]] {
-    def capture[A](a: => A): Either[E, ?][A] = Right(a)
-  }
-
   implicit def idCapture: Capture[Id] = new Capture[Id] {
     def capture[A](a: => A): Id[A] = a
   }
@@ -58,8 +54,8 @@ sealed trait CaptureInstances0 {
     new TransCapture[F, EitherT[?[_], E, ?]]()
 }
 
-private class TransCapture[F[_]: Monad: Capture, T[_[_], _]: MonadTrans]() extends Capture[T[F, ?]] {
+private class TransCapture[F[_]: Monad: Capture, T[_[_], _]: MonadTrans]()
+    extends Capture[T[F, ?]] {
   def capture[A](a: => A) =
     MonadTrans[T].liftM(Capture[F].capture(a))
 }
-
