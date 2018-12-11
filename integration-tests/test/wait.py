@@ -153,10 +153,10 @@ def wait_for_started_network(context: 'TestingContext', network: 'Network') -> N
         wait_for_node_started(context, peer)
 
 
-def wait_for_converged_network(timeout: int, network: 'Network', peer_connections: int):
+def wait_for_converged_network(context: 'TestingContext', network: 'Network', peer_connections: int) -> None:
     bootstrap_predicate = HasAtLeastPeers(network.bootstrap, len(network.peers))
-    wait_on_using_wall_clock_time(bootstrap_predicate, timeout)
+    wait_on_using_wall_clock_time(bootstrap_predicate, context.network_converge_timeout)
 
     for peer in network.peers:
         peer_predicate = HasAtLeastPeers(peer, peer_connections)
-        wait_on_using_wall_clock_time(peer_predicate, timeout)
+        wait_on_using_wall_clock_time(peer_predicate, context.network_converge_timeout)
