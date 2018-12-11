@@ -6,7 +6,7 @@ import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.protocol.Deploy
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
-import coop.rchain.catscontrib.Capture._
+import coop.rchain.catscontrib.TestOutlaws._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.accounting
 import monix.eval.Task
