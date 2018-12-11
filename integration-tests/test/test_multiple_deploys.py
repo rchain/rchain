@@ -62,7 +62,7 @@ def started_bonded_validator(context: TestingContext, bootstrap_node: "Node", no
         bootstrap=bootstrap_node,
         key_pair=key_pair,
     ) as bonded_validator:
-        wait_for_approved_block_received_handler_state(bonded_validator, context.node_startup_timeout)
+        wait_for_approved_block_received_handler_state(context, bonded_validator)
         yield bonded_validator
 
 

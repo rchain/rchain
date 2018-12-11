@@ -8,7 +8,7 @@ import typing_extensions
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .common import Network
+    from .common import Network, TestingContext
     from .rnode import Node
 
 
@@ -138,9 +138,9 @@ def wait_for_node_started(node: 'Node', startup_timeout: int):
     wait_on_using_wall_clock_time(predicate, startup_timeout)
 
 
-def wait_for_approved_block_received_handler_state(node: 'Node', timeout: int):
+def wait_for_approved_block_received_handler_state(context: 'TestingContext', node: 'Node') -> None:
     predicate = ApprovedBlockReceivedHandlerStateEntered(node)
-    wait_on_using_wall_clock_time(predicate, timeout)
+    wait_on_using_wall_clock_time(predicate, context.node_startup_timeout)
 
 
 def wait_for_approved_block_received(network: 'Network', timeout: int):

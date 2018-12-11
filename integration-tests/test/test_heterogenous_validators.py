@@ -58,7 +58,7 @@ def started_bonded_validator(context: TestingContext, bootstrap_node: Node):
         bootstrap=bootstrap_node,
         key_pair=BONDED_VALIDATOR_KEYS,
     ) as bonded_validator:
-        wait_for_approved_block_received_handler_state(bonded_validator, context.node_startup_timeout)
+        wait_for_approved_block_received_handler_state(context, bonded_validator)
         yield bonded_validator
 
 
@@ -71,7 +71,7 @@ def started_joining_validator(context: TestingContext, bootstrap_node: Node):
         bootstrap=bootstrap_node,
         key_pair=JOINING_VALIDATOR_KEYS,
     ) as joining_validator:
-        wait_for_approved_block_received_handler_state(joining_validator, context.node_startup_timeout)
+        wait_for_approved_block_received_handler_state(context, joining_validator)
         yield joining_validator
 
 
@@ -85,7 +85,7 @@ def started_readonly_peer(context: TestingContext, bootstrap_node: Node):
         bootstrap=bootstrap_node,
         key_pair=UNBONDED_VALIDATOR_KEYS,
     ) as readonly_peer:
-        wait_for_approved_block_received_handler_state(readonly_peer, context.node_startup_timeout)
+        wait_for_approved_block_received_handler_state(context, readonly_peer)
         yield readonly_peer
 
 
