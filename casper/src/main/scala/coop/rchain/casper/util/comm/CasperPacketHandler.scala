@@ -126,6 +126,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                       )
                     )
         casperPacketHandler = new CasperPacketHandlerImpl[F](bootstrap)
+        //FIXME most likely we're dropping effects here
         _ <- Sync[F].delay {
               implicit val ph: PacketHandler[F] = PacketHandler.pf[F](casperPacketHandler.handle)
               val rb                            = CommUtil.requestApprovedBlock[F](delay)
