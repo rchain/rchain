@@ -1,4 +1,5 @@
 import contextlib
+from typing import TYPE_CHECKING
 
 import pytest
 from . import conftest
@@ -14,12 +15,10 @@ from .wait import (
     wait_for_approved_block_received_handler_state,
 )
 
-from typing import Generator, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from _pytest.fixtures import SubRequest
     from docker.client import DockerClient
-    from .rnode import Node
 
 """
 First approximation:
@@ -123,8 +122,8 @@ def test_heterogenous_validators(command_line_options_fixture, docker_client_fix
                         joining_validator.deploy(contract_path)
                         joining_validator.propose()
                         expected_blocks_count = BONDED_VALIDATOR_BLOCKS + JOINING_VALIDATOR_BLOCKS
-                        max_retrieved_blocks = 30
                         wait_for_blocks_count_at_least(
+                            context,
                             readonly_peer,
                             expected_blocks_count,
                         )

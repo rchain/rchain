@@ -1,13 +1,10 @@
 import os
 import shutil
-import logging
 import contextlib
 from typing import (
     TYPE_CHECKING,
     Generator,
 )
-
-import pytest
 
 
 from . import conftest

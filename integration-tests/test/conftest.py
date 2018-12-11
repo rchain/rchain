@@ -1,16 +1,13 @@
 import os
 import random
-import pathlib
 import tempfile
 import logging
 import contextlib
-import collections
 import dataclasses
 from typing import (
     TYPE_CHECKING,
     List,
     Generator,
-    TextIO,
 )
 
 import pytest

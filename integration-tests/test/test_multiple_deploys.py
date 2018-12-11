@@ -80,6 +80,7 @@ def test_multiple_deploys_at_once(command_line_options_fixture, docker_client_fi
 
                         expected_blocks_count = 1
                         wait_for_blocks_count_at_least(
+                            context,
                             no1,
                             expected_blocks_count,
                         )
@@ -92,14 +93,17 @@ def test_multiple_deploys_at_once(command_line_options_fixture, docker_client_fi
 
                         expected_blocks_count = 7
                         wait_for_blocks_count_at_least(
+                            context,
                             no1,
                             expected_blocks_count,
                         )
                         wait_for_blocks_count_at_least(
+                            context,
                             no2,
                             expected_blocks_count,
                         )
                         wait_for_blocks_count_at_least(
+                            context,
                             no3,
                             expected_blocks_count,
                         )
