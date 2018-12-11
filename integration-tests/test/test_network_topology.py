@@ -64,7 +64,7 @@ def complete_network(context: TestingContext) -> Generator[Network, None, None]:
         with start_network(context=context, bootstrap=bootstrap_node) as network:
             wait_for_started_network(context, network)
             wait_for_converged_network(context.network_converge_timeout, network, len(network.peers))
-            wait_for_approved_block_received(network, context.node_startup_timeout)
+            wait_for_approved_block_received(context, network)
             yield network
 
 

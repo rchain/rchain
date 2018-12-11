@@ -142,10 +142,10 @@ def wait_for_approved_block_received_handler_state(context: 'TestingContext', no
     wait_on_using_wall_clock_time(predicate, context.node_startup_timeout)
 
 
-def wait_for_approved_block_received(network: 'Network', timeout: int):
+def wait_for_approved_block_received(context: 'TestingContext', network: 'Network') -> None:
     for peer in network.peers:
         predicate = ApprovedBlockReceived(peer)
-        wait_on_using_wall_clock_time(predicate, timeout)
+        wait_on_using_wall_clock_time(predicate, context.node_startup_timeout + context.receive_timeout)
 
 
 def wait_for_started_network(context: 'TestingContext', network: 'Network') -> None:
