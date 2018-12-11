@@ -20,6 +20,7 @@ main () {
     cp -r resources/* "$TEMP_RESOURCES_DIR/"
 
     ./mypy.sh
+    ./pylint.sh || true
     ./run_tests.sh --mount-dir="$TEMP_RESOURCES_DIR"
 }
 
