@@ -53,6 +53,7 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
       |[kamon]
       |prometheus = false
       |influx-db = true
+      |zipkin = true
       |
       |[influx-db]
       |hostname = "0.0.0.0"
@@ -114,6 +115,7 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
     // kamon
     root.kamon.flatMap(_.prometheus) shouldEqual Some(false)
     root.kamon.flatMap(_.influxDb) shouldEqual Some(true)
+    root.kamon.flatMap(_.zipkin) shouldEqual Some(true)
 
     // influx-db
     root.influxDb.flatMap(_.hostname) shouldEqual Some("0.0.0.0")

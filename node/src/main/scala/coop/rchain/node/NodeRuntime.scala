@@ -158,8 +158,8 @@ class NodeRuntime private[node] (
             if (conf.kamon.influxDb.isDefined)
               Kamon.addReporter(new kamon.influxdb.InfluxDBReporter())
             if (conf.kamon.prometheus) Kamon.addReporter(prometheusReporter)
+            if (conf.kamon.zipkin) Kamon.addReporter(new ZipkinReporter())
             Kamon.addReporter(new JmxReporter())
-            Kamon.addReporter(new ZipkinReporter())
             SystemMetrics.startCollecting()
           }.toEffect
     } yield Servers(grpcServerExternal, grpcServerInternal, httpServerFiber)

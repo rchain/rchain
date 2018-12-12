@@ -213,6 +213,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val prometheus =
       opt[Flag](descr = "Enable the Prometheus metrics reporter")
 
+    val zipkin =
+      opt[Flag](descr = "Enable the Zipkin span reporter")
+
     val requiredSigs =
       opt[Int](
         descr =

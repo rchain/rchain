@@ -67,7 +67,8 @@ case class Validators(
 
 case class Kamon(
     prometheus: Option[Boolean],
-    influxDb: Option[Boolean]
+    influxDb: Option[Boolean],
+    zipkin: Option[Boolean]
 )
 
 case class InfluxDb(

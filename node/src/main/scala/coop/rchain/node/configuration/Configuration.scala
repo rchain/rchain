@@ -78,6 +78,7 @@ object Configuration {
 
   private val DefaultKamonPrometheus  = false
   private val DefaultKamonInfluxDb    = false
+  private val DefaultKamonZipkin      = false
   private val DefaultInfluxDbHostname = "127.0.0.1"
   private val DefaultInfluxDbPort     = 8086
   private val DefaultInfluxDbDatabase = "rnode"
@@ -196,7 +197,7 @@ object Configuration {
             dataDir.resolve("casper-block-dag-file-storage-block-metadata-crc"),
             dataDir.resolve("casper-block-dag-file-storage-checkpoints")
           ),
-          Kamon(prometheus = false, None),
+          Kamon(prometheus = false, None, zipkin = false),
           options
         )
       )
@@ -337,6 +338,7 @@ object Configuration {
     val kamonPrometheus =
       get(_.run.prometheus, _.kamon.flatMap(_.prometheus), DefaultKamonPrometheus)
     val kamonInfluxDb = get(kp(None), _.kamon.flatMap(_.influxDb), DefaultKamonInfluxDb)
+    val kamonZipkin   = get(_.run.zipkin, _.kamon.flatMap(_.zipkin), DefaultKamonZipkin)
 
     val influxDb =
       if (kamonInfluxDb) {
@@ -416,7 +418,8 @@ object Configuration {
     val kamon =
       Kamon(
         kamonPrometheus,
-        influxDb
+        influxDb,
+        kamonZipkin
       )
 
     new Configuration(
