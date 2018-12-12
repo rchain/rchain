@@ -1,5 +1,3 @@
-import pytest
-
 from .rnode import started_standalone_bootstrap_node
 
 

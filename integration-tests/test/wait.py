@@ -1,14 +1,13 @@
 import re
 import time
 import logging
+from typing import TYPE_CHECKING
 
 import pytest
 import typing_extensions
 
-from typing import TYPE_CHECKING
-
 if TYPE_CHECKING:
-    from .common import Network
+    from .common import Network, TestingContext
     from .rnode import Node
 
 
@@ -83,17 +82,16 @@ class BlockContainsString:
 
 
 class BlocksCountAtLeast:
-    def __init__(self, node: 'Node', blocks_count: int, max_retrieved_blocks: int) -> None:
+    def __init__(self, node: 'Node', blocks_count: int) -> None:
         self.node = node
         self.blocks_count = blocks_count
-        self.max_retrieved_blocks = max_retrieved_blocks
 
     def __str__(self) -> str:
-        args = ', '.join(repr(a) for a in (self.node.name, self.blocks_count, self.max_retrieved_blocks))
+        args = ', '.join(repr(a) for a in (self.node.name, self.blocks_count))
         return '<{}({})>'.format(self.__class__.__name__, args)
 
     def is_satisfied(self) -> bool:
-        actual_blocks_count = self.node.get_blocks_count(self.max_retrieved_blocks)
+        actual_blocks_count = self.node.get_blocks_count(self.blocks_count)
         return actual_blocks_count >= self.blocks_count
 
 
@@ -120,44 +118,45 @@ def wait_on_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) ->
         time.sleep(iteration_duration)
         elapsed = elapsed + iteration_duration
 
+    logging.info("TIMEOUT %s", predicate)
     pytest.fail('Failed to satisfy {} after {}s'.format(predicate, elapsed))
 
 
-def wait_for_block_contains(node: 'Node', block_hash: str, expected_string: str, timeout: int):
+def wait_for_block_contains(context: 'TestingContext', node: 'Node', block_hash: str, expected_string: str) -> None:
     predicate = BlockContainsString(node, block_hash, expected_string)
-    wait_on_using_wall_clock_time(predicate, timeout)
+    wait_on_using_wall_clock_time(predicate, context.receive_timeout)
 
 
-def wait_for_blocks_count_at_least(node: 'Node', expected_blocks_count: int, max_retrieved_blocks: int, timeout: int):
-    predicate = BlocksCountAtLeast(node, expected_blocks_count, max_retrieved_blocks)
-    wait_on_using_wall_clock_time(predicate, timeout)
+def wait_for_blocks_count_at_least(context: 'TestingContext', node: 'Node', expected_blocks_count: int) -> None:
+    predicate = BlocksCountAtLeast(node, expected_blocks_count)
+    wait_on_using_wall_clock_time(predicate, context.receive_timeout * expected_blocks_count)
 
 
-def wait_for_node_started(node: 'Node', startup_timeout: int):
+def wait_for_node_started(context: 'TestingContext', node: 'Node') -> None:
     predicate = NodeStarted(node)
-    wait_on_using_wall_clock_time(predicate, startup_timeout)
+    wait_on_using_wall_clock_time(predicate, context.node_startup_timeout)
 
 
-def wait_for_approved_block_received_handler_state(node: 'Node', timeout: int):
+def wait_for_approved_block_received_handler_state(context: 'TestingContext', node: 'Node') -> None:
     predicate = ApprovedBlockReceivedHandlerStateEntered(node)
-    wait_on_using_wall_clock_time(predicate, timeout)
+    wait_on_using_wall_clock_time(predicate, context.node_startup_timeout)
 
 
-def wait_for_approved_block_received(network: 'Network', timeout: int):
+def wait_for_approved_block_received(context: 'TestingContext', network: 'Network') -> None:
     for peer in network.peers:
         predicate = ApprovedBlockReceived(peer)
-        wait_on_using_wall_clock_time(predicate, timeout)
+        wait_on_using_wall_clock_time(predicate, context.node_startup_timeout + context.receive_timeout)
 
 
-def wait_for_started_network(node_startup_timeout: int, network: 'Network'):
+def wait_for_started_network(context: 'TestingContext', network: 'Network') -> None:
     for peer in network.peers:
-        wait_for_node_started(peer, node_startup_timeout)
+        wait_for_node_started(context, peer)
 
 
-def wait_for_converged_network(timeout: int, network: 'Network', peer_connections: int):
+def wait_for_converged_network(context: 'TestingContext', network: 'Network', peer_connections: int) -> None:
     bootstrap_predicate = HasAtLeastPeers(network.bootstrap, len(network.peers))
-    wait_on_using_wall_clock_time(bootstrap_predicate, timeout)
+    wait_on_using_wall_clock_time(bootstrap_predicate, context.network_converge_timeout)
 
     for peer in network.peers:
         peer_predicate = HasAtLeastPeers(peer, peer_connections)
-        wait_on_using_wall_clock_time(peer_predicate, timeout)
+        wait_on_using_wall_clock_time(peer_predicate, context.network_converge_timeout)
