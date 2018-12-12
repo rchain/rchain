@@ -101,6 +101,35 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
     result shouldBe """{x0 : x1, 7 : "Seven"...free0}"""
   }
 
+  "Map" should "Print commas correctly" in {
+    val mapData = new ListKeyValuePair()
+    mapData.add(
+      new KeyValuePairImpl(
+        new PGround(new GroundString("\"c\"")),
+        new PGround(new GroundInt("3"))
+      )
+    )
+    mapData.add(
+      new KeyValuePairImpl(
+        new PGround(new GroundString("\"b\"")),
+        new PGround(new GroundInt("2"))
+      )
+    )
+    mapData.add(
+      new KeyValuePairImpl(
+        new PGround(new GroundString("\"a\"")),
+        new PGround(new GroundInt("1"))
+      )
+    )
+    val map = new PCollect(new CollectMap(mapData, new ProcRemainderEmpty()))
+
+    val result =
+      PrettyPrinter().buildString(
+        ProcNormalizeMatcher.normalizeMatch[Coeval](map, inputs).value.par
+      )
+    val target = """{"a" : 1, "b" : 2, "c" : 3}"""
+    result shouldBe target
+  }
 }
 
 class ProcPrinterSpec extends FlatSpec with Matchers {
