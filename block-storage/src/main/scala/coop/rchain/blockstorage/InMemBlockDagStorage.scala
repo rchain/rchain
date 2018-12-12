@@ -3,11 +3,14 @@ package coop.rchain.blockstorage
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.blockstorage.util.BlockMessageUtil.parentHashes
+import coop.rchain.blockstorage.errors.BlockSenderIsMalformed
+import coop.rchain.blockstorage.util.BlockMessageUtil.{bonds, parentHashes}
 import coop.rchain.blockstorage.util.TopologicalSortUtil
-import coop.rchain.casper.protocol.{BlockMessage, Bond}
+import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.shared.Log
 
 import scala.collection.immutable.HashSet
@@ -64,31 +67,6 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
       _              <- lock.release
     } yield InMemBlockDagRepresentation(latestMessages, childMap, dataLookup, topoSort)
   override def insert(block: BlockMessage): F[Unit] =
-    genericInsert(block, normalLatestMessagesStrategy)
-  private def normalLatestMessagesStrategy(
-      block: BlockMessage,
-      latestMessages: Map[Validator, BlockHash]
-  ): Map[Validator, BlockHash] =
-    latestMessages.updated(block.sender, block.blockHash)
-  override def insertGenesis(genesis: BlockMessage): F[Unit] =
-    genericInsert(genesis, genesisLatestMessagesStrategy)
-  private def genesisLatestMessagesStrategy(
-      genesis: BlockMessage,
-      latestMessages: Map[Validator, BlockHash]
-  ): Map[Validator, BlockHash] = {
-    val genesisBonds = (for {
-      bd <- genesis.body
-      ps <- bd.state
-    } yield ps.bonds).getOrElse(List.empty[Bond])
-    val initialLatestMessages = genesisBonds.map(_.validator -> genesis).toMap
-    initialLatestMessages.toList.foldLeft(latestMessages) {
-      case (acc, (validator, block)) => acc.updated(validator, block.blockHash)
-    }
-  }
-  private def genericInsert(
-      block: BlockMessage,
-      latestMessagesStrategy: (BlockMessage, Map[Validator, BlockHash]) => Map[Validator, BlockHash]
-  ): F[Unit] =
     for {
       _ <- lock.acquire
       _ <- dataLookupRef.update(_.updated(block.blockHash, BlockMetadata.fromBlock(block)))
@@ -101,7 +79,27 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
               }
           )
       _ <- topoSortRef.update(topoSort => TopologicalSortUtil.update(topoSort, 0L, block))
-      _ <- latestMessagesRef.update(latestMessages => latestMessagesStrategy(block, latestMessages))
+      newValidators = bonds(block)
+        .map(_.validator)
+        .toSet
+        .diff(block.justifications.map(_.validator).toSet)
+      newValidatorsWithSender <- if (block.sender.isEmpty) {
+                                  // Ignore empty sender for special cases such as genesis block
+                                  Log[F].warn(
+                                    s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
+                                  ) *> newValidators.pure[F]
+                                } else if (block.sender.size() == 32) {
+                                  (newValidators + block.sender).pure[F]
+                                } else {
+                                  Sync[F].raiseError[Set[ByteString]](
+                                    BlockSenderIsMalformed(block)
+                                  )
+                                }
+      _ <- latestMessagesRef.update { latestMessages =>
+            newValidatorsWithSender.foldLeft(latestMessages) {
+              case (acc, v) => acc.updated(v, block.blockHash)
+            }
+          }
       _ <- lock.release
     } yield ()
   override def checkpoint(): F[Unit] = ().pure[F]
