@@ -89,9 +89,9 @@
 ##### steps:
 
 * instantiate p2p network with single `ceremonyMaster` that transitions to `ApprovedBlockReceivedhandler` (`--required-sig 0`)
-* call `rnode deploy` & `rnode propose` with `features/contracts/storage/store-non-transaction-data.rho` on `ceremonyMaster`
+* call `rnode deploy` & `rnode propose` with `integration-tests/features/contracts/storage/store-non-transaction-data.rho` on `ceremonyMaster`
 * assert success on std out
-* call `rnode deploy` & `rnode propose` with `features/contracts/storage/read-non-transaction-data.rho` on `ceremonyMaster`
+* call `rnode deploy` & `rnode propose` with `integration-tests/features/contracts/storage/read-non-transaction-data.rho` on `ceremonyMaster`
 * assert success on std out
 * compare non-transactional data sent and restored
 
