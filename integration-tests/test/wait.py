@@ -118,6 +118,7 @@ def wait_on_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) ->
         time.sleep(iteration_duration)
         elapsed = elapsed + iteration_duration
 
+    logging.info("TIMEOUT %s", predicate)
     pytest.fail('Failed to satisfy {} after {}s'.format(predicate, elapsed))
 
 
