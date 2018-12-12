@@ -20,6 +20,7 @@ __sbtenv: &sbtenv
   <<: *buildenv
   environment:
     - _JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G
+                    -Dsbt.task.timings=true -Dsbt.task.timings.on.shutdown=true -Dsbt.task.timings.threshold=2000
   volumes:
     - /var/cache/rchain-build/.sbt:/root/.sbt
     - /var/cache/rchain-build/.ivy2:/root/.ivy2
