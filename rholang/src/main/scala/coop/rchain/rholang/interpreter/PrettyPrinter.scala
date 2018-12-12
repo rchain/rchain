@@ -31,7 +31,8 @@ case class PrettyPrinter(
     freeId: String,
     baseId: String,
     rotation: Int,
-    maxVarCount: Int
+    maxVarCount: Int,
+    isBuildingChannel: Boolean = false
 ) {
 
   val indentStr = "  "
@@ -119,30 +120,39 @@ case class PrettyPrinter(
   private def buildRemainderString(remainder: Option[Var]): Coeval[String] =
     remainder.fold(pure(""))(v => pure("...") |+| buildStringM(v))
 
-  private def buildStringM(v: Var): Coeval[String] = {
-    def isNewVar(level: Int): Boolean = newsShiftIndices.contains(boundShift - level - 1)
-
+  private def buildStringM(v: Var): Coeval[String] =
     v.varInstance match {
       case FreeVar(level) => pure(s"$freeId${freeShift + level}")
       case BoundVar(level) =>
-        (if (isNewVar(level)) pure("*") else pure("")) |+| pure(
+        (if (isNewVar(level) && !isBuildingChannel) pure("*") else pure("")) |+| pure(
           s"$boundId${boundShift - level - 1}"
         )
       case Wildcard(_)       => pure("_")
       case VarInstance.Empty => pure("@Nil")
     }
-  }
 
   private def buildChannelStringM(p: Par): Coeval[String] = buildChannelStringM(p, 0)
 
-  private def buildChannelStringM(p: Par, indent: Int): Coeval[String] =
-    buildStringM(p, indent).map { b =>
-      if (b.size > 60) {
-        "@{" + b + "}"
-      } else {
-        "@{" + b.replaceAll("[\n](\\s\\s)*", (" ")) + "}"
+  private def buildChannelStringM(p: Par, indent: Int): Coeval[String] = {
+    def quoteIfNotNew(s: String): String = {
+      val isBoundNew = p match {
+        case Par(_, _, _, Seq(Expr(EVarBody(EVar(Var(BoundVar(level)))))), _, _, _, _, _, _)
+            if isNewVar(level) =>
+          true
+        case _ => false
+      }
+      if (isBoundNew) s else "@{" + s + "}"
+    }
+
+    this.copy(isBuildingChannel = true).buildStringM(p, indent).map { b =>
+      if (b.length > 60)
+        quoteIfNotNew(b)
+      else {
+        val whitespace = "\n(\\s\\s)*"
+        quoteIfNotNew(b.replaceAll(whitespace, " "))
       }
     }
+  }
 
   private def buildStringM(t: GeneratedMessage): Coeval[String] = buildStringM(t, 0)
 
@@ -331,4 +341,6 @@ case class PrettyPrinter(
       p.ids.isEmpty &
       p.bundles.isEmpty &
       p.connectives.isEmpty
+
+  private def isNewVar(level: Int): Boolean = newsShiftIndices.contains(boundShift - level - 1)
 }
