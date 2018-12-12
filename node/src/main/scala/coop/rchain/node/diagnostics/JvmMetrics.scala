@@ -18,7 +18,8 @@ trait JvmMetrics[F[_]] {
 }
 
 object JvmMetrics extends JmxMetricsInstances {
-  private implicit val metricsSource: MetricsSource = MetricsSource("node.diagnostics.jvm")
+  private implicit val metricsSource: MetricsSource =
+    MetricsSource(Metrics.source, "node.diagnostics.jvm")
 
   def apply[F[_]](implicit M: JvmMetrics[F]): JvmMetrics[F] = M
 

@@ -2,6 +2,8 @@ package coop.rchain
 
 import cats.mtl.ApplicativeAsk
 
+import coop.rchain.metrics.Metrics
+
 package object comm {
   type PeerNodeAsk[F[_]] = ApplicativeAsk[F, PeerNode]
 
@@ -9,4 +11,5 @@ package object comm {
     def apply[F[_]](implicit ev: ApplicativeAsk[F, PeerNode]): ApplicativeAsk[F, PeerNode] = ev
   }
 
+  val CommMetricsSource: String = Metrics.source + ".comm"
 }

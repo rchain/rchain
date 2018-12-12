@@ -23,7 +23,7 @@ object Connect {
   type Connections           = List[Connection]
   type ConnectionsCell[F[_]] = Cell[F, Connections]
 
-  private implicit val metricsSource: MetricsSource = MetricsSource("comm.rp.connect")
+  private implicit val metricsSource: MetricsSource = MetricsSource(CommMetricsSource, "rp.connect")
 
   object ConnectionsCell {
     def apply[F[_]](implicit ev: ConnectionsCell[F]): ConnectionsCell[F] = ev

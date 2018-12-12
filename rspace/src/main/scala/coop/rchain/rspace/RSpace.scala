@@ -34,12 +34,13 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
 
   override protected[this] val logger: Logger = Logger[this.type]
 
-  private[this] val consumeCommCounter = Kamon.counter("rspace.comm.consume")
-  private[this] val produceCommCounter = Kamon.counter("rspace.comm.produce")
+  private[this] val MetricsSource      = RSpaceMetricsSource
+  private[this] val consumeCommCounter = Kamon.counter(MetricsSource + ".comm.consume")
+  private[this] val produceCommCounter = Kamon.counter(MetricsSource + ".comm.produce")
 
-  private[this] val consumeSpan   = Kamon.buildSpan("rspace.consume")
-  private[this] val produceSpan   = Kamon.buildSpan("rspace.produce")
-  protected[this] val installSpan = Kamon.buildSpan("rspace.install")
+  private[this] val consumeSpan   = Kamon.buildSpan(MetricsSource + ".consume")
+  private[this] val produceSpan   = Kamon.buildSpan(MetricsSource + ".produce")
+  protected[this] val installSpan = Kamon.buildSpan(MetricsSource + ".install")
 
   override def consume(
       channels: Seq[C],

@@ -30,12 +30,14 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
 
   override protected[this] val logger: Logger = Logger[this.type]
 
-  private[this] val consumeCommCounter = Kamon.counter("replayrspace.comm.consume")
-  private[this] val produceCommCounter = Kamon.counter("replayrspace.comm.produce")
+  private[this] val MetricsSource = RSpaceMetricsSource + ".replay"
 
-  private[this] val consumeSpan   = Kamon.buildSpan("replayrspace.consume")
-  private[this] val produceSpan   = Kamon.buildSpan("replayrspace.produce")
-  protected[this] val installSpan = Kamon.buildSpan("replayrspace.install")
+  private[this] val consumeCommCounter = Kamon.counter(MetricsSource + ".comm.consume")
+  private[this] val produceCommCounter = Kamon.counter(MetricsSource + ".comm.produce")
+
+  private[this] val consumeSpan   = Kamon.buildSpan(MetricsSource + ".consume")
+  private[this] val produceSpan   = Kamon.buildSpan(MetricsSource + ".produce")
+  protected[this] val installSpan = Kamon.buildSpan(MetricsSource + ".install")
 
   def consume(
       channels: Seq[C],

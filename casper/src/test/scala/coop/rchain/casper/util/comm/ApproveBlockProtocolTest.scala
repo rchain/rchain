@@ -31,7 +31,7 @@ import coop.rchain.casper.util.TestTime
 import scala.util.Success
 
 class ApproveBlockProtocolTest extends FlatSpec with Matchers {
-  private val METRICS_APPROVAL_COUNTER_NAME = "casper.approve-block.genesis"
+  private val METRICS_APPROVAL_COUNTER_NAME = "rchain.casper.approve-block.genesis"
 
   "ApproveBlockProtocol" should "add valid signatures it receives to its state" in {
     implicit val ctx         = TestScheduler()

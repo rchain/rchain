@@ -8,9 +8,11 @@ trait MetricsSource {
 }
 
 object MetricsSource {
-  def apply(source: String): MetricsSource = new MetricsSource {
+  private def apply(source: String): MetricsSource = new MetricsSource {
     val name: String = source
   }
+
+  def apply(prefix: String, source: String): MetricsSource = apply(s"$prefix.$source")
 }
 
 trait Metrics[F[_]] {
@@ -50,6 +52,8 @@ object Metrics extends MetricsInstances {
       ().pure[F]
     def timer[A](name: String, block: F[A])(implicit ev: MetricsSource): F[A] = block
   }
+
+  val source = "rchain"
 
 }
 

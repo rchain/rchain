@@ -8,6 +8,7 @@ import cats.implicits._
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.metrics.{Metrics, MetricsSource}
+import coop.rchain.rspace._
 import scala.language.higherKinds
 
 class InMemBlockStore[F[_]] private ()(
@@ -17,7 +18,8 @@ class InMemBlockStore[F[_]] private ()(
     metricsF: Metrics[F]
 ) extends BlockStore[F] {
 
-  private implicit val metricsSource: MetricsSource = MetricsSource("block-storage.in-mem")
+  private implicit val metricsSource: MetricsSource =
+    MetricsSource(RSpaceMetricsSource, "block-storage.in-mem")
 
   def get(blockHash: BlockHash): F[Option[BlockMessage]] =
     for {

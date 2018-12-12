@@ -26,8 +26,9 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
     connectionsCache: ConnectionsCache[Task, KademliaConnTag]
 ) extends KademliaRPC[Task] {
 
-  private implicit val logSource: LogSource         = LogSource(this.getClass)
-  private implicit val metricsSource: MetricsSource = MetricsSource("comm.discovery.kademlia.grpc")
+  private implicit val logSource: LogSource = LogSource(this.getClass)
+  private implicit val metricsSource: MetricsSource =
+    MetricsSource(CommMetricsSource, "discovery.kademlia.grpc")
 
   private val cell = connectionsCache(clientChannel)
 

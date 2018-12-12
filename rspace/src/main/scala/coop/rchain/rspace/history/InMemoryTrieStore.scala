@@ -1,6 +1,8 @@
 package coop.rchain.rspace.history
+
 import coop.rchain.rspace.{Blake2b256Hash, InMemTransaction, InMemoryOps}
 import kamon.Kamon
+import coop.rchain.rspace._
 
 import scala.collection.immutable.Seq
 
@@ -34,8 +36,9 @@ class InMemoryTrieStore[K, V]
 
   override def emptyState: State[K, V] = State.empty
 
-  private[this] val refine       = Map("path" -> "inmemTrie")
-  private[this] val entriesGauge = Kamon.gauge("entries").refine(refine)
+  private[this] val MetricsSource = RSpaceMetricsSource + ".history"
+  private[this] val refine        = Map("path" -> "inmemTrie")
+  private[this] val entriesGauge  = Kamon.gauge(MetricsSource + ".entries").refine(refine)
 
   override private[rspace] def updateGauges(): Unit =
     withTxn(createTxnRead())(_.readState { state =>

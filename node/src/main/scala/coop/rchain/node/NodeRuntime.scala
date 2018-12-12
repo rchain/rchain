@@ -146,7 +146,7 @@ class NodeRuntime private[node] (
                |kamon {
                |  environment {
                |    service = "rnode"
-               |    host = "${id.toString}"
+               |    instance = "${id.toString}"
                |  }
                |  metric {
                |    tick-interval = 10 seconds
@@ -154,7 +154,7 @@ class NodeRuntime private[node] (
                |  $influxdbConf
                |}
                |""".stripMargin
-            Kamon.reconfigure(Kamon.config().withFallback(ConfigFactory.parseString(kamonConf)))
+            Kamon.reconfigure(ConfigFactory.parseString(kamonConf).withFallback(Kamon.config()))
             if (conf.kamon.influxDb.isDefined)
               Kamon.addReporter(new kamon.influxdb.InfluxDBReporter())
             if (conf.kamon.prometheus) Kamon.addReporter(prometheusReporter)
@@ -266,7 +266,7 @@ class NodeRuntime private[node] (
             pm => HandleMessages.handle[Effect](pm, defaultTimeout),
             blob => packetHandler.handlePacket(blob.sender, blob.packet).as(())
           )
-      _       <- NodeDiscovery[Task].discover.executeOn(loopScheduler).start.toEffect
+      _       <- NodeDiscovery[Task].discover.attemptAndLog.executeOn(loopScheduler).start.toEffect
       _       <- Task.defer(casperLoop.forever.value).executeOn(loopScheduler).start.toEffect
       address = s"rnode://$id@$host?protocol=$port&discovery=$kademliaPort"
       _       <- Log[Effect].info(s"Listening for traffic on $address.")

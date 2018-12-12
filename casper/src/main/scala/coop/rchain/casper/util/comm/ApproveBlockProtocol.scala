@@ -7,6 +7,7 @@ import cats.implicits._
 import cats.{FlatMap, Monad}
 
 import com.google.protobuf.ByteString
+import coop.rchain.casper._
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.{LastApprovedBlock, PrettyPrinter, Validate}
@@ -96,8 +97,9 @@ object ApproveBlockProtocol {
       val interval: FiniteDuration,
       private val sigsF: Ref[F, Set[Signature]]
   ) extends ApproveBlockProtocol[F] {
-    private implicit val logSource: LogSource         = LogSource(this.getClass)
-    private implicit val metricsSource: MetricsSource = MetricsSource("casper.approve-block")
+    private implicit val logSource: LogSource = LogSource(this.getClass)
+    private implicit val metricsSource: MetricsSource =
+      MetricsSource(CasperMetricsSource, "approve-block")
 
     private val candidate                 = ApprovedBlockCandidate(Some(block), requiredSigs)
     private val u                         = UnapprovedBlock(Some(candidate), start, duration.toMillis)

@@ -53,8 +53,9 @@ class InMemoryStore[T, C, P, A, K](
 
   override def emptyState: State[C, P, A, K] = State.empty
 
-  private[this] val refine       = Map("path" -> "inmem")
-  private[this] val entriesGauge = Kamon.gauge("entries").refine(refine)
+  private[this] val MetricsSource = RSpaceMetricsSource + ".in-mem"
+  private[this] val refine        = Map("path" -> "inmem")
+  private[this] val entriesGauge  = Kamon.gauge(MetricsSource + ".entries").refine(refine)
 
   private[rspace] def updateGauges() =
     withTxn(createTxnRead())(_.readState { state =>

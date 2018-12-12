@@ -29,8 +29,9 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Time: 
     timeout: FiniteDuration
 ) extends NodeDiscovery[F] {
 
-  private val table                                 = PeerTable[PeerNode](id.key)
-  private implicit val metricsSource: MetricsSource = MetricsSource("comm.discovery.kademlia")
+  private val table = PeerTable[PeerNode](id.key)
+  private implicit val metricsSource: MetricsSource =
+    MetricsSource(CommMetricsSource, "discovery.kademlia")
 
   // TODO inline usage
   private[discovery] def addNode(peer: PeerNode): F[Unit] =

@@ -40,6 +40,8 @@ class LMDBStore[C, P, A, K] private[rspace] (
 ) extends IStore[C, P, A, K]
     with LMDBOps {
 
+  protected val MetricsSource: String = RSpaceMetricsSource + ".lmdb"
+
   // Good luck trying to get this to resolve as an implicit
   val joinCodec: Codec[Seq[Seq[C]]] = codecSeq(codecSeq(codecC))
 

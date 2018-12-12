@@ -60,8 +60,9 @@ class LockFreeInMemoryStore[T, C, P, A, K](
     TrieMap[Blake2b256Hash, GNAT[C, P, A, K]]()
   private val stateJoin: TrieMap[C, Seq[Seq[C]]] = TrieMap[C, Seq[Seq[C]]]()
 
-  private[this] val refine       = Map("path" -> "inmem")
-  private[this] val entriesGauge = Kamon.gauge("entries").refine(refine)
+  private[this] val MetricsSource = RSpaceMetricsSource + ".lock-free-in-mem"
+  private[this] val refine        = Map("path" -> "inmem")
+  private[this] val entriesGauge  = Kamon.gauge(MetricsSource + ".entries").refine(refine)
 
   private[rspace] def updateGauges() =
     entriesGauge.set(stateGNAT.readOnlySnapshot.size.toLong)

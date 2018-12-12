@@ -14,6 +14,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.metrics.{Metrics, MetricsSource}
+import coop.rchain.rspace._
 
 import org.lmdbjava._
 import org.lmdbjava.DbiFlags.MDB_CREATE
@@ -26,7 +27,8 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
     metricsF: Metrics[F]
 ) extends BlockStore[F] {
 
-  private implicit val metricsSource: MetricsSource = MetricsSource("block-storage.lmdb")
+  private implicit val metricsSource: MetricsSource =
+    MetricsSource(RSpaceMetricsSource, "block-storage.lmdb")
 
   implicit class RichBlockHash(byteVector: BlockHash) {
 

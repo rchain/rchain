@@ -6,6 +6,7 @@ import java.nio.file.Path
 
 import coop.rchain.rspace.{Blake2b256Hash, LMDBOps, Serialize}
 import coop.rchain.rspace.internal._
+import coop.rchain.rspace._
 import coop.rchain.shared.Resources.withResource
 import coop.rchain.shared.ByteVectorOps._
 import org.lmdbjava.DbiFlags.MDB_CREATE
@@ -29,6 +30,8 @@ class LMDBTrieStore[K, V] private (
     codecV: Codec[V]
 ) extends ITrieStore[Txn[ByteBuffer], K, V]
     with LMDBOps {
+
+  protected val MetricsSource: String = RSpaceMetricsSource + ".history.lmdb"
 
   private[rspace] def put(txn: Txn[ByteBuffer], key: Blake2b256Hash, value: Trie[K, V]): Unit =
     _dbTrie.put(txn, key, value)

@@ -40,8 +40,9 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
   private val DefaultSendTimeout = 5.seconds
   private val cell               = connectionsCache(clientChannel)
 
-  private implicit val logSource: LogSource         = LogSource(this.getClass)
-  private implicit val metricsSource: MetricsSource = MetricsSource("comm.rp.transport")
+  private implicit val logSource: LogSource = LogSource(this.getClass)
+  private implicit val metricsSource: MetricsSource =
+    MetricsSource(CommMetricsSource, "rp.transport")
 
   private def certInputStream = new ByteArrayInputStream(cert.getBytes())
   private def keyInputStream  = new ByteArrayInputStream(key.getBytes())
