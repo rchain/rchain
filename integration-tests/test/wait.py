@@ -87,7 +87,7 @@ class BlocksCountAtLeast:
         self.blocks_count = blocks_count
 
     def __str__(self) -> str:
-        args = ', '.join(repr(a) for a in (self.node.name, self.blocks_count, self.blocks_count))
+        args = ', '.join(repr(a) for a in (self.node.name, self.blocks_count))
         return '<{}({})>'.format(self.__class__.__name__, args)
 
     def is_satisfied(self) -> bool:

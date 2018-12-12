@@ -34,17 +34,12 @@ class DeployThread(threading.Thread):
         self.node = node
         self.contract = contract
         self.count = count
-        logging.info(f"Setup thread - {self.contract} to node {self.name}, amount {count}.")
 
     def run(self):
         for i in range(self.count):
-            logging.info(f"[{self.name}]-[{i}] Will deploy {self.contract}.")
-            d = self.node.deploy(self.contract)
-            logging.info(f"[{self.name}]-[{i}] Deploy {self.contract}: {d}")
-            p = self.node.propose()
-            logging.info(f"[{self.name}]-[{i}] Proposed {self.contract}: {p}")
-            s = self.node.show_blocks_with_depth(1)
-            logging.info(f"[{self.name}]-[{i}] Show blocks: {s}")
+            self.node.deploy(self.contract)
+            self.node.propose()
+            self.node.show_blocks_with_depth(1)
 
 
 BOOTSTRAP_NODE_KEYS = conftest.KeyPair(private_key='80366db5fbb8dad7946f27037422715e4176dda41d582224db87b6c3b783d709', public_key='1cd8bf79a2c1bd0afa160f6cdfeb8597257e48135c9bf5e4823f2875a1492c97')
