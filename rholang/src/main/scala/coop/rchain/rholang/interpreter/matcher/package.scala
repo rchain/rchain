@@ -20,7 +20,7 @@ package object matcher {
   type OOPE[A]           = Either[OutOfPhlogistonsError.type, A]
   type ErroredOrCostA[A] = StateT[OOPE, Cost, A]
 
-  //FreeMap => Cost => Either[OOPE, (Cost, Stream[(FreeMap, A)])]
+    //FreeMap => Cost => Either[OOPE, (Cost, Stream[(FreeMap, A)])]
   type NonDetFreeMapWithCost[A] = StateT[StreamWithCost, FreeMap, A]
   type StreamWithCost[A]        = StreamT[ErroredOrCostA, A]
 
