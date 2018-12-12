@@ -376,6 +376,7 @@ def make_bootstrap_node(
         "--validator-public-key":   key_pair.public_key,
         "--has-faucet":             "",
         "--host":                   container_name,
+        "--prometheus":             ""
     }
 
     if cli_options is not None:
@@ -436,6 +437,7 @@ def make_peer(
         "--validator-private-key":  key_pair.private_key,
         "--validator-public-key":   key_pair.public_key,
         "--host":                   name,
+        "--prometheus":             ""
     }
 
     container = make_node(
