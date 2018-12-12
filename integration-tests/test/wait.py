@@ -65,6 +65,18 @@ class HasAtLeastPeers:
         peers = int(match[1])
         return peers >= self.minimum_peers_number
 
+class NodeSeesBlock:
+    def __init__(self, node: 'Node', block_hash: str) -> None:
+        self.node = node
+        self.block_hash = block_hash
+
+    def __str__(self) -> str:
+        args = ', '.join(repr(a) for a in (self.node.name, self.block_hash))
+        return '<{}({})>'.format(self.__class__.__name__, args)
+
+    def is_satisfied(self) -> bool:
+        block_message = self.node.get_block(self.block_hash)
+        return "Error: Failure to find block with hash" not in block_message
 
 class BlockContainsString:
     def __init__(self, node: 'Node', block_hash: str, expected_string: str) -> None:
@@ -120,6 +132,10 @@ def wait_on_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) ->
 
     logging.info("TIMEOUT %s", predicate)
     pytest.fail('Failed to satisfy {} after {}s'.format(predicate, elapsed))
+
+def wait_for_node_sees_block(context: 'TestingContext', node: 'Node', block_hash: str) -> None:
+    predicate = NodeSeesBlock(node, block_hash)
+    wait_on_using_wall_clock_time(predicate, context.node_startup_timeout)
 
 
 def wait_for_block_contains(context: 'TestingContext', node: 'Node', block_hash: str, expected_string: str) -> None:
