@@ -84,6 +84,17 @@
 ## Storage
 ### As a user, I want to be able to store transaction data on the blockchain so that it is available and accessible to users
 ### As a user, I want to be able to store non-transaction data on the blockchain so that it is available and accessible to users
+#### A contract pointing to non-transactional data gets deployed and the data gets fetched.
+##### test: test/test_storage.py::test_non_transactional_data_is_stored_and_served_by_node
+##### steps:
+
+* instantiate p2p network with single `ceremonyMaster` that transitions to `ApprovedBlockReceivedhandler` (`--required-sig 0`)
+* call `rnode deploy` & `rnode propose` with `features/contracts/storage/store-non-transaction-data.rho` on `ceremonyMaster`
+* assert success on std out
+* call `rnode deploy` & `rnode propose` with `features/contracts/storage/read-non-transaction-data.rho` on `ceremonyMaster`
+* assert success on std out
+* compare non-transactional data sent and restored
+
 ## Bonding/Unbonding
 ### As a Node Validator, I want to be able to add my stake to the network and be recognized as a validator so I can participate in proof of stake consensus and be eligible to earn rewards (validating)
 ### As a Node Validator, I want to be able to retrieve my stake from the network and no longer be recognized a as validator
