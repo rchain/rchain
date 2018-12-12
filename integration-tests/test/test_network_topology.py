@@ -1,13 +1,10 @@
 import os
 import shutil
-import logging
 import contextlib
 from typing import (
     TYPE_CHECKING,
     Generator,
 )
-
-import pytest
 
 
 from . import conftest
@@ -52,19 +49,19 @@ def start_network(*, context: TestingContext, bootstrap: 'Node', allowed_peers=N
 def star_network(context: TestingContext) -> Generator[Network, None, None]:
     with docker_network_with_started_bootstrap(context) as bootstrap_node:
         with start_network(context=context, bootstrap=bootstrap_node, allowed_peers=[bootstrap_node.name]) as network:
-            wait_for_started_network(context.node_startup_timeout, network)
-            wait_for_converged_network(context.network_converge_timeout, network, 1)
+            wait_for_started_network(context, network)
+            wait_for_converged_network(context, network, 1)
             yield network
 
 
 @contextlib.contextmanager
 def complete_network(context: TestingContext) -> Generator[Network, None, None]:
     with docker_network_with_started_bootstrap(context) as bootstrap_node:
-        wait_for_approved_block_received_handler_state(bootstrap_node, context.node_startup_timeout)
+        wait_for_approved_block_received_handler_state(context, bootstrap_node)
         with start_network(context=context, bootstrap=bootstrap_node) as network:
-            wait_for_started_network(context.node_startup_timeout, network)
-            wait_for_converged_network(context.network_converge_timeout, network, len(network.peers))
-            wait_for_approved_block_received(network, context.node_startup_timeout)
+            wait_for_started_network(context, network)
+            wait_for_converged_network(context, network, len(network.peers))
+            wait_for_approved_block_received(context, network)
             yield network
 
 
@@ -105,4 +102,4 @@ def test_casper_propose_and_deploy(command_line_options_fixture, docker_client_f
                 expected_string = make_expected_string(node, random_token)
                 other_nodes = [n for n in network.nodes if n.container.name != node.container.name]
                 for node in other_nodes:
-                    wait_for_block_contains(node, block_hash, expected_string, context.receive_timeout)
+                    wait_for_block_contains(context, node, block_hash, expected_string)

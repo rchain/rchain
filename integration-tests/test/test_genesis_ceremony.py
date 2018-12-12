@@ -1,7 +1,4 @@
-import contextlib
 from typing import (
-    Generator,
-    List,
     TYPE_CHECKING,
 )
 

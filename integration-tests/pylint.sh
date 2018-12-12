@@ -2,7 +2,7 @@
 
 main () {
     pushd "$(dirname $0)" >/dev/null
-    pipenv run py.test --mypy -m mypy "$@"
+    pipenv run py.test --pylint -m pylint "$@"
 }
 
 main "$@"

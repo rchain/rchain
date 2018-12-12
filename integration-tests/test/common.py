@@ -28,7 +28,7 @@ class TestingContext:
     bonds_file: str
     bootstrap_keypair: KeyPair
     peers_keypairs: typing.List[KeyPair]
-    docker: 'DockerClient'
+    docker: DockerClient
 
 
 def random_string(length: int) -> str:

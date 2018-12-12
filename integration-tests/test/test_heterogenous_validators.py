@@ -1,4 +1,5 @@
 import contextlib
+from typing import TYPE_CHECKING
 
 import pytest
 from . import conftest
@@ -14,12 +15,10 @@ from .wait import (
     wait_for_approved_block_received_handler_state,
 )
 
-from typing import Generator, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from _pytest.fixtures import SubRequest
     from docker.client import DockerClient
-    from .rnode import Node
 
 """
 First approximation:
@@ -58,7 +57,7 @@ def started_bonded_validator(context: TestingContext, bootstrap_node: Node):
         bootstrap=bootstrap_node,
         key_pair=BONDED_VALIDATOR_KEYS,
     ) as bonded_validator:
-        wait_for_approved_block_received_handler_state(bonded_validator, context.node_startup_timeout)
+        wait_for_approved_block_received_handler_state(context, bonded_validator)
         yield bonded_validator
 
 
@@ -71,7 +70,7 @@ def started_joining_validator(context: TestingContext, bootstrap_node: Node):
         bootstrap=bootstrap_node,
         key_pair=JOINING_VALIDATOR_KEYS,
     ) as joining_validator:
-        wait_for_approved_block_received_handler_state(joining_validator, context.node_startup_timeout)
+        wait_for_approved_block_received_handler_state(context, joining_validator)
         yield joining_validator
 
 
@@ -85,7 +84,7 @@ def started_readonly_peer(context: TestingContext, bootstrap_node: Node):
         bootstrap=bootstrap_node,
         key_pair=UNBONDED_VALIDATOR_KEYS,
     ) as readonly_peer:
-        wait_for_approved_block_received_handler_state(readonly_peer, context.node_startup_timeout)
+        wait_for_approved_block_received_handler_state(context, readonly_peer)
         yield readonly_peer
 
 
@@ -123,10 +122,8 @@ def test_heterogenous_validators(command_line_options_fixture, docker_client_fix
                         joining_validator.deploy(contract_path)
                         joining_validator.propose()
                         expected_blocks_count = BONDED_VALIDATOR_BLOCKS + JOINING_VALIDATOR_BLOCKS
-                        max_retrieved_blocks = 30
                         wait_for_blocks_count_at_least(
+                            context,
                             readonly_peer,
                             expected_blocks_count,
-                            max_retrieved_blocks,
-                            expected_blocks_count * 10,
                         )

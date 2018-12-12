@@ -1,9 +1,11 @@
 package coop.rchain.node
 
 import coop.rchain.shared.StringOps._
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski.kp
+import cats._
+import cats.implicits._
+import coop.rchain.catscontrib._
 import coop.rchain.node.effects.{ConsoleIO, ReplClient}
+import coop.rchain.shared.TerminalMode
 
 class ReplRuntime() {
 
@@ -12,10 +14,9 @@ class ReplRuntime() {
   ╦═╗┌─┐┬ ┬┌─┐┬┌┐┌  ╔╗╔┌─┐┌┬┐┌─┐  ╦═╗╔═╗╔═╗╦  
   ╠╦╝│  ├─┤├─┤││││  ║║║│ │ ││├┤   ╠╦╝║╣ ╠═╝║  
   ╩╚═└─┘┴ ┴┴ ┴┴┘└┘  ╝╚╝└─┘─┴┘└─┘  ╩╚═╚═╝╩  ╩═╝
-    """.red
+    """
 
   def replProgram[F[_]: Capture: Monad: ConsoleIO: ReplClient]: F[Boolean] = {
-
     def run(program: String): F[Boolean] =
       for {
         result <- ReplClient[F].run(program)
@@ -42,12 +43,17 @@ class ReplRuntime() {
       case true  => repl
       case false => ConsoleIO[F].close.as(false)
     }
-
-    ConsoleIO[F].println(logo) >>= kp(repl)
+    if (TerminalMode.readMode) {
+      for {
+        _   <- ConsoleIO[F].println(logo.red)
+        res <- repl
+      } yield res
+    } else {
+      repl
+    }
   }
 
   def evalProgram[F[_]: Monad: ReplClient: ConsoleIO](fileNames: List[String]): F[Unit] = {
-
     def printResult(result: Either[Throwable, String]): F[Unit] =
       result match {
         case Left(ex)   => ConsoleIO[F].println(s"Error: ${ex.getMessage}".red)

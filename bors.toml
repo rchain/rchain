@@ -1,0 +1,16 @@
+# require the below checks before bors merges anything
+status = [
+  "continuous-integration/drone/push"
+]
+
+# Ensure that reviewers (all maintainers!) can't merge their own PRs without review.
+# This works because Github doesn't allow self-review.
+required_approvals = 1
+
+# Number of seconds from when a merge commit is created to when its statuses must pass.
+timeout_sec = 10800 #3h
+
+# A marker in the PR description that indicates boilerplate that does not belong in the merge-commit message.
+cut_body_after = "## Overview"
+
+delete_merged_branches = true
