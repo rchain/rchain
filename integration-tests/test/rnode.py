@@ -410,7 +410,11 @@ def make_bootstrap_name(network_name: str) -> str:
 
 
 def make_peer_name(network_name: str, name: str) -> str:
-    return make_container_name(network_name=network_name, name='peer{}'.format(name))
+    if name.isdigit():
+        actual_name = 'peer{}'.format(name)
+    else:
+        actual_name = name
+    return make_container_name(network_name=network_name, name=actual_name)
 
 
 def make_peer(
