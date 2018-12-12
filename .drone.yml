@@ -58,13 +58,16 @@ pipeline:
     group: parallel
     <<: *sbtenv
     commands:
+      - mkdir ../job.unit-tests
+      - cp -r . ../job.unit-tests/
+      - cd ../job.unit-tests
       - sbt test:compile it:compile test it:test
 
   run-code-analysis:
     group: parallel
     <<: *sbtenv
     commands:
-      - sbt scalafmtCheck coverage
+      - sbt coverage
       - ./scripts/ci/codecov-upload
 
   # push
@@ -73,6 +76,9 @@ pipeline:
     group: parallel
     <<: *sbtenv
     commands:
+      - mkdir ../job.package
+      - cp -r . ../job.package/
+      - cd ../job.package
       - sbt node/debian:packageBin node/universal:packageZipTarball
       - mkdir -p artifacts
       - cp node/target/rnode_*_all.deb node/target/universal/*.tgz artifacts/
@@ -101,6 +107,7 @@ pipeline:
   publish:
     <<: *buildenv
     commands:
+      - cd ../job.package
       - ./scripts/ci/publish-artifacts
     secrets:
       - docker_username
