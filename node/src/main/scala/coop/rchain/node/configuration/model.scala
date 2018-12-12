@@ -41,7 +41,8 @@ case class Tls(
 case class Kamon(
     prometheus: Boolean,
     influxDb: Option[InfluxDb],
-    zipkin: Boolean
+    zipkin: Boolean,
+    sigar: Boolean
 )
 
 case class InfluxDb(

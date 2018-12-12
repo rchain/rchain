@@ -151,6 +151,12 @@ class NodeRuntime private[node] (
                |  metric {
                |    tick-interval = 10 seconds
                |  }
+               |  system-metrics {
+               |    host {
+               |      enabled = ${conf.kamon.sigar}
+               |      sigar-native-folder = ${conf.server.dataDir.resolve("native")}
+               |    }
+               |  }
                |  $influxdbConf
                |}
                |""".stripMargin

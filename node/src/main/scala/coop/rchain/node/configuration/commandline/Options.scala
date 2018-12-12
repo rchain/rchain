@@ -216,6 +216,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val zipkin =
       opt[Flag](descr = "Enable the Zipkin span reporter")
 
+    val sigar =
+      opt[Flag](descr = "Enable Sigar host system metrics")
+
     val requiredSigs =
       opt[Int](
         descr =
