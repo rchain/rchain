@@ -21,7 +21,7 @@ import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.comm.rp.ProtocolHelper.packet
-import coop.rchain.comm.{transport, CommError}
+import coop.rchain.comm.{transport, CommError, TimeOut}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
@@ -37,9 +37,11 @@ import org.scalatest.{Assertion, FlatSpec, Matchers}
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.catscontrib.ski.kp2
 import coop.rchain.metrics.Metrics
+import org.scalatest
 
 import scala.collection.immutable
 import scala.util.Random
+import scala.concurrent.duration._
 
 class HashSetCasperTest extends FlatSpec with Matchers {
 
@@ -276,12 +278,45 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       invalidBlock   = block.withSig(ByteString.EMPTY)
       _              <- MultiParentCasper[Effect].addBlock(invalidBlock, ignoreDoppelgangerCheck[Effect])
 
+      _ <- node.casperEff.contains(invalidBlock) shouldBeF false
       _ = logEff.warns.head.contains("Ignoring block") should be(true)
       _ = node.tearDownNode()
       result <- validateBlockStore(node) { blockStore =>
                  blockStore.get(block.blockHash) shouldBeF None
                }
     } yield result
+  }
+
+  it should "not request invalid blocks from peers" in effectTest {
+
+    val List(data0, data1) =
+      (0 to 1)
+        .map(i => ProtoUtil.sourceDeploy(s"@$i!($i)", i, accounting.MAX_VALUE))
+        .toList
+
+    for {
+      nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
+      List(node0, node1) = nodes.toList
+
+      unsignedBlock <- (node0.casperEff.deploy(data0) *> node0.casperEff.createBlock)
+                         .map {
+                           case Created(block) =>
+                             block.copy(sigAlgorithm = "invalid", sig = ByteString.EMPTY)
+                         }
+
+      _ <- node0.casperEff.addBlock(unsignedBlock, ignoreDoppelgangerCheck[Effect])
+      _ <- node1.transportLayerEff.clear(node1.local) //node1 misses this block
+
+      signedBlock <- (node0.casperEff.deploy(data1) *> node0.casperEff.createBlock)
+        .map { case Created(block) => block}
+
+      _ <- node0.casperEff.addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
+      _ <- node1.receive() //receives block1; should not ask for block0
+
+      _ <- node0.casperEff.contains(unsignedBlock) shouldBeF false
+      _ <- node1.casperEff.contains(unsignedBlock) shouldBeF false
+
+    } yield ()
   }
 
   it should "reject blocks not from bonded validators" in effectTest {
