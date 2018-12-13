@@ -112,7 +112,7 @@ def test_heterogenous_validators(command_line_options_fixture, docker_client_fix
                     bonded_validator.propose()
                     bonded_validator.deploy_string(bond_file)
                     bonding_block_hash = bonded_validator.propose()
-                    wait_for_node_sees_block(context,joining_validator,bonding_block_hash)
+                    wait_for_node_sees_block(context, joining_validator, bonding_block_hash)
                     for _ in range(JOINING_VALIDATOR_BLOCKS):
                         joining_validator.deploy(contract_path)
                         joining_validator.propose()
