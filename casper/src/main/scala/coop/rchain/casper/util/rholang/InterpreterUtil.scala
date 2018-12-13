@@ -203,26 +203,22 @@ object InterpreterUtil {
   )(implicit scheduler: Scheduler): F[Either[Throwable, StateHash]] =
     for {
       parentsMetadata <- parents.toList.traverse(b => dag.lookup(b.blockHash).map(_.get))
-      indexedParents  = parentsMetadata.toVector
       ordering        <- dag.deriveOrdering(0L) // TODO: Replace with an actual starting number
       blockHashesToApply <- {
         implicit val o: Ordering[BlockMetadata] = ordering
         for {
-          uncommonAncestors <- DagOperations.uncommonAncestors[F](indexedParents, dag)
-          initIndex         = indexedParents.indexOf(parentsMetadata.head)
+          uncommonAncestors          <- DagOperations.uncommonAncestors[F](parentsMetadata.toVector, dag)
+          ancestorsOfInitParentIndex = 0
           // Filter out blocks that already included by starting from the chosen initial parent
           // as otherwise we will be applying the initial parent's ancestor's twice.
           result = uncommonAncestors
-            .filterNot { case (_, set) => set.contains(initIndex) }
+            .filterNot { case (_, set) => set.contains(ancestorsOfInitParentIndex) }
             .keys
             .toVector
             .sorted // Ensure blocks to apply is topologically sorted to maintain any causal dependencies
         } yield result
       }
-      maybeBlocks <- blockHashesToApply
-                      .traverse(b => BlockStore[F].get(b.blockHash))
-      _             = assert(maybeBlocks.forall(_.isDefined))
-      blocksToApply = maybeBlocks.flatten
+      blocksToApply <- blockHashesToApply.traverse(b => ProtoUtil.unsafeGetBlock[F](b.blockHash))
       deploys       = blocksToApply.flatMap(_.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal))
     } yield
       runtimeManager
