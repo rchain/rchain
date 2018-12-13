@@ -48,17 +48,6 @@ pipeline:
     commands:
       - sbt update rholang/bnfc:generate compile
 
-  run-unit-tests:
-    <<: *sbtenv
-    commands:
-      - sbt test it:test
-
-  run-code-analysis:
-    <<: *sbtenv
-    commands:
-      - sbt scalafmtCheck coverage
-      - ./scripts/ci/codecov-upload
-
   # push
 
   docker-build:
@@ -72,7 +61,26 @@ pipeline:
     when:
       event: [ push, tag ]
 
+  # pr
+
+  run-unit-tests:
+    group: parallel
+    <<: *sbtenv
+    commands:
+      - cp -r . ../step.run-unit-tests && cd ../step.run-unit-tests
+      - sbt test it:test
+
+  run-code-analysis:
+    group: parallel
+    <<: *sbtenv
+    commands:
+      - sbt scalafmtCheck coverage
+      - ./scripts/ci/codecov-upload
+
+  # push
+
   run-integration-tests:
+    group: parallel
     <<: *buildenv
     environment:
       - _JAVA_OPTIONS=-Xms2G -Xmx4G
@@ -86,8 +94,10 @@ pipeline:
       event: [ push, tag ]
 
   package:
+    group: parallel
     <<: *sbtenv
     commands:
+      - cp -r . ../step.package && cd ../step.package
       - mkdir -p artifacts
       - sbt node/debian:packageBin node/universal:packageZipTarball
       - cp node/target/rnode_*_all.deb node/target/universal/*.tgz artifacts/
@@ -99,6 +109,7 @@ pipeline:
   publish:
     <<: *buildenv
     commands:
+      - cd ../step.package
       - ./scripts/ci/publish-artifacts
     secrets:
       - docker_username
