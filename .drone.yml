@@ -11,7 +11,7 @@ branches:
 
 # FYI: There's no merging of arrays in YAML. At least not in the Go library
 # Drone uses to parse YAML. So if you mix in &sbtenv and want to add
-# additional volumes, as in package step, you need to specify all volumes.
+# additional volumes, as in docker-build step, you need to specify all volumes.
 
 __buildenv: &buildenv
   image: rchain/buildenv:latest
@@ -66,16 +66,23 @@ pipeline:
 
   # push
 
-  package:
+  docker-build:
     <<: *sbtenv
     commands:
-      - sbt node/docker:publishLocal node/debian:packageBin node/universal:packageZipTarball
-      - mkdir -p artifacts
-      - cp node/target/rnode_*_all.deb node/target/universal/*.tgz artifacts/
+      - sbt node/docker:publishLocal
     volumes:
       - /var/cache/rchain-build/.sbt:/root/.sbt
       - /var/cache/rchain-build/.ivy2:/root/.ivy2
       - /var/run/docker.sock:/var/run/docker.sock
+    when:
+      event: [ push, tag ]
+
+  package:
+    <<: *sbtenv
+    commands:
+      - sbt node/debian:packageBin node/universal:packageZipTarball
+      - mkdir -p artifacts
+      - cp node/target/rnode_*_all.deb node/target/universal/*.tgz artifacts/
     when:
       event: [ push, tag ]
 
@@ -98,9 +105,6 @@ pipeline:
       - env JAVAC_VERSION=1.8 sbt clean compile doc node/rpm:packageBin
       - mkdir -p artifacts
       - cp node/target/rpm/RPMS/noarch/rnode-*.noarch.rpm artifacts/
-    volumes:
-      - /var/cache/rchain-build/.sbt:/root/.sbt
-      - /var/cache/rchain-build/.ivy2:/root/.ivy2
     when:
       event: [ push, tag ]
 
