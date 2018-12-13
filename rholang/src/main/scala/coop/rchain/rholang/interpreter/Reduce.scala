@@ -894,7 +894,7 @@ object Reduce {
 
         case EMapBody(map) =>
           for {
-            evaledPs <- map.ps.sortedMap.toList.traverse {
+            evaledPs <- map.ps.sortedList.traverse {
                          case (key, value) =>
                            for {
                              eKey   <- evalExpr(key).map(updateLocallyFree)
@@ -1069,7 +1069,7 @@ object Reduce {
               Applicative[M].pure[Expr](
                 EMapBody(
                   ParMap(
-                    (baseMap ++ otherMap.sortedMap).toSeq,
+                    (baseMap ++ otherMap).toSeq,
                     base.connectiveUsed || other.connectiveUsed,
                     locallyFreeUnion(base.locallyFree, other.locallyFree),
                     None
