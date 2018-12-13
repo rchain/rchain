@@ -8,5 +8,5 @@ from .wait import (
 import pytest
 
 @pytest.mark.xfail
-def test_non_transactional_data_is_stored_and_served_by_node(command_line_options_fixture, docker_client_fixture):
+def test_data_is_stored_and_served_by_node(command_line_options_fixture, docker_client_fixture):
     fail
