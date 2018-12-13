@@ -21,7 +21,7 @@ import coop.rchain.models.{BindPattern, Par}
 import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rspace.{Serialize, StableHashProvider}
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
-import coop.rchain.shared.{Log, SyncLock}
+import coop.rchain.shared.Log
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
 import coop.rchain.rholang.interpreter.{PrettyPrinter => RholangPrettyPrinter}
 import coop.rchain.models.rholang.sorter.Sortable._
@@ -62,19 +62,24 @@ object BlockAPI {
     MultiParentCasperRef.withCasper[F, DeployServiceResponse](
       casper => {
         Sync[F].bracket(blockApiLock.tryAcquire) {
-          case true => for {
-            maybeBlock <- casper.createBlock
-            result <- maybeBlock match {
-                       case err: NoBlock =>
-                         DeployServiceResponse(success = false, s"Error while creating block: $err")
-                           .pure[F]
-                       case Created(block) =>
-                         casper
-                           .addBlock(block, ignoreDoppelgangerCheck[F])
-                           .map(addResponse(_, block))
-                     }
-          } yield result
-          case false => DeployServiceResponse(success = false, "Error: There is another propose in progress.").pure[F]
+          case true =>
+            for {
+              maybeBlock <- casper.createBlock
+              result <- maybeBlock match {
+                         case err: NoBlock =>
+                           DeployServiceResponse(
+                             success = false,
+                             s"Error while creating block: $err"
+                           ).pure[F]
+                         case Created(block) =>
+                           casper
+                             .addBlock(block, ignoreDoppelgangerCheck[F])
+                             .map(addResponse(_, block))
+                       }
+            } yield result
+          case false =>
+            DeployServiceResponse(success = false, "Error: There is another propose in progress.")
+              .pure[F]
         } { _ =>
           blockApiLock.release
         }
