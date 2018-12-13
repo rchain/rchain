@@ -121,7 +121,7 @@ def test_heterogenous_validators(command_line_options_fixture, docker_client_fix
                         # Force sync with the network
                         joining_validator.deploy(contract_path)
                         joining_validator.propose()
-                        expected_blocks_count = BONDED_VALIDATOR_BLOCKS + JOINING_VALIDATOR_BLOCKS
+                        expected_blocks_count = BONDED_VALIDATOR_BLOCKS + JOINING_VALIDATOR_BLOCKS + 2
                         wait_for_blocks_count_at_least(
                             context,
                             readonly_peer,
