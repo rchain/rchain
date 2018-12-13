@@ -70,13 +70,6 @@ pipeline:
       - cp -r . ../step.run-unit-tests && cd ../step.run-unit-tests
       - sbt test it:test
 
-  run-code-analysis:
-    group: parallel
-    <<: *sbtenv
-    commands:
-      - sbt coverage
-      - ./scripts/ci/codecov-upload
-
   # push
 
   run-integration-tests:
