@@ -109,6 +109,7 @@ lazy val casper = (project in file("casper"))
     blockStorage % "compile->compile;test->test",
     comm         % "compile->compile;test->test",
     shared       % "compile->compile;test->test",
+    graphz,
     crypto,
     models,
     rspace,
