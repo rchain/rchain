@@ -1,7 +1,6 @@
 package coop.rchain.node.api
 
-import cats.effect.Sync
-
+import cats.effect.{Concurrent, Sync}
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.SafetyOracle
@@ -17,10 +16,15 @@ import coop.rchain.shared._
 import io.grpc.netty.NettyServerBuilder
 import io.grpc.Server
 import java.util.concurrent.TimeUnit
+
 import monix.eval.Task
 import monix.execution.Scheduler
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, ski._
+import cats._
+import cats.data._
+import cats.effect.concurrent.Semaphore
+import cats.implicits._
+import coop.rchain.catscontrib._
+import ski._
 
 class GrpcServer(server: Server) {
   def start: Task[Unit] = Task.delay(server.start())
@@ -71,10 +75,11 @@ object GrpcServer {
       )
     }
 
-  def acquireExternalServer[F[_]: Sync: Capture: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
+  def acquireExternalServer[F[_]: Sync: Concurrent: Capture: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
       port: Int,
       maxMessageSize: Int,
-      grpcExecutor: Scheduler
+      grpcExecutor: Scheduler,
+      blockApiLock: Semaphore[F]
   )(implicit worker: Scheduler): F[GrpcServer] =
     Capture[F].capture {
       GrpcServer(
@@ -83,7 +88,8 @@ object GrpcServer {
           .executor(grpcExecutor)
           .maxMessageSize(maxMessageSize)
           .addService(
-            CasperMessageGrpcMonix.bindService(DeployGrpcService.instance, grpcExecutor)
+            CasperMessageGrpcMonix
+              .bindService(DeployGrpcService.instance(blockApiLock), grpcExecutor)
           )
           .build
       )

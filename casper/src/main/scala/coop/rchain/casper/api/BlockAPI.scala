@@ -1,7 +1,9 @@
 package coop.rchain.casper.api
 
 import cats.Monad
-import cats.effect.Sync
+import cats.effect.ExitCase.Completed
+import cats.effect.concurrent.Semaphore
+import cats.effect.{Bracket, Concurrent, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
@@ -37,8 +39,6 @@ import coop.rchain.casper.util.rholang.InterpreterUtil
 
 object BlockAPI {
 
-  private val createBlockLock = new SyncLock
-
   def deploy[F[_]: Monad: MultiParentCasperRef: Log](d: DeployData): F[DeployServiceResponse] = {
     def casperDeploy(implicit casper: MultiParentCasper[F]): F[DeployServiceResponse] =
       for {
@@ -56,12 +56,13 @@ object BlockAPI {
       )
   }
 
-  def createBlock[F[_]: Sync: MultiParentCasperRef: Log]: F[DeployServiceResponse] =
+  def createBlock[F[_]: Sync: Concurrent: MultiParentCasperRef: Log](
+      blockApiLock: Semaphore[F]
+  ): F[DeployServiceResponse] =
     MultiParentCasperRef.withCasper[F, DeployServiceResponse](
-      casper =>
-        // TODO: Use Bracket: See https://github.com/rchain/rchain/pull/1436#discussion_r215520914
-        Monad[F].ifM(Sync[F].delay { createBlockLock.tryLock() })(
-          for {
+      casper => {
+        Sync[F].bracket(blockApiLock.tryAcquire) {
+          case true => for {
             maybeBlock <- casper.createBlock
             result <- maybeBlock match {
                        case err: NoBlock =>
@@ -72,12 +73,13 @@ object BlockAPI {
                            .addBlock(block, ignoreDoppelgangerCheck[F])
                            .map(addResponse(_, block))
                      }
-            _ <- Sync[F].delay { createBlockLock.unlock() }
-          } yield result,
-          DeployServiceResponse(success = false, "Error: There is another propose in progress.")
-            .pure[F]
-        ),
-      DeployServiceResponse(success = false, "Error: Casper instance not available")
+          } yield result
+          case false => DeployServiceResponse(success = false, "Error: There is another propose in progress.").pure[F]
+        } { _ =>
+          blockApiLock.release
+        }
+      },
+      default = DeployServiceResponse(success = false, "Error: Casper instance not available")
     )
 
   def getListeningNameDataResponse[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](

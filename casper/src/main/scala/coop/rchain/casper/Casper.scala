@@ -90,7 +90,7 @@ sealed abstract class MultiParentCasperInstances {
                                  )
                                case Right(Some(hash)) => hash.pure[F]
                              }
-      semaphore <- Semaphore[F](1)
+      blockProcessingLock <- Semaphore[F](1)
     } yield
       new MultiParentCasperImpl[F](
         runtimeManager,
@@ -98,6 +98,6 @@ sealed abstract class MultiParentCasperInstances {
         genesis,
         postGenesisStateHash,
         shardId,
-        semaphore
+        blockProcessingLock
       )
 }

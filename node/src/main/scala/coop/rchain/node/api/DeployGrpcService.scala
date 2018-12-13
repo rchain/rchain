@@ -1,6 +1,7 @@
 package coop.rchain.node.api
 
-import cats.effect.Sync
+import cats.effect.concurrent.Semaphore
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
@@ -17,7 +18,9 @@ import monix.execution.Scheduler
 import monix.reactive.Observable
 
 private[api] object DeployGrpcService {
-  def instance[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
+  def instance[F[_]: Sync: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
+      blockApiLock: Semaphore[F]
+  )(
       implicit worker: Scheduler
   ): CasperMessageGrpcMonix.DeployService =
     new CasperMessageGrpcMonix.DeployService {
@@ -29,7 +32,7 @@ private[api] object DeployGrpcService {
         defer(BlockAPI.deploy[F](d))
 
       override def createBlock(e: Empty): Task[DeployServiceResponse] =
-        defer(BlockAPI.createBlock[F])
+        defer(BlockAPI.createBlock[F](blockApiLock))
 
       override def showBlock(q: BlockQuery): Task[BlockQueryResponse] =
         defer(BlockAPI.showBlock[F](q))
