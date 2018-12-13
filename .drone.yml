@@ -43,15 +43,10 @@ pipeline:
 
   # pr
 
-  sbt-update:
-    <<: *sbtenv
-    commands:
-      - sbt update
-
   compile:
     <<: *sbtenv
     commands:
-      - sbt rholang/bnfc:generate compile
+      - sbt update rholang/bnfc:generate compile
 
   run-unit-tests:
     <<: *sbtenv
