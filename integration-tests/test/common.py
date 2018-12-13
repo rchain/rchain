@@ -7,7 +7,9 @@ import dataclasses
 
 from docker.client import DockerClient
 
-
+from typing import (
+    Tuple
+)
 
 @dataclasses.dataclass(eq=True, frozen=True)
 class KeyPair:
@@ -30,6 +32,12 @@ class TestingContext:
     peers_keypairs: typing.List[KeyPair]
     docker: DockerClient
 
+class NonZeroExitCodeError(Exception):
+    def __init__(self, command: Tuple[str, ...], exit_code: int, output: str):
+        super().__init__()
+        self.command = command
+        self.exit_code = exit_code
+        self.output = output
 
 def random_string(length: int) -> str:
     return ''.join(random.choice(string.ascii_letters) for m in range(length))

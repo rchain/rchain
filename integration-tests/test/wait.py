@@ -2,9 +2,10 @@ import re
 import time
 import logging
 from typing import TYPE_CHECKING
-
 import pytest
 import typing_extensions
+
+from .common import NonZeroExitCodeError
 
 if TYPE_CHECKING:
     from .common import Network, TestingContext
@@ -78,7 +79,7 @@ class NodeSeesBlock:
         try:
             self.node.get_block(self.block_hash)
             return True
-        except test.rnode.NonZeroExitCodeError:
+        except NonZeroExitCodeError:
             return False
 
 class BlockContainsString:
