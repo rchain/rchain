@@ -75,8 +75,11 @@ class NodeSeesBlock:
         return '<{}({})>'.format(self.__class__.__name__, args)
 
     def is_satisfied(self) -> bool:
-        block_message = self.node.get_block(self.block_hash)
-        return "Error: Failure to find block with hash" not in block_message
+        try:
+            self.node.get_block(self.block_hash)
+            return True
+        except test.rnode.NonZeroExitCodeError:
+            return False
 
 class BlockContainsString:
     def __init__(self, node: 'Node', block_hash: str, expected_string: str) -> None:
