@@ -136,9 +136,8 @@ case class PrettyPrinter(
   private def buildChannelStringM(p: Par, indent: Int): Coeval[String] = {
     def quoteIfNotNew(s: String): String = {
       val isBoundNew = p match {
-        case Par(_, _, _, Seq(Expr(EVarBody(EVar(Var(BoundVar(level)))))), _, _, _, _, _, _)
-            if isNewVar(level) =>
-          true
+        case Par(_, _, _, Seq(Expr(EVarBody(EVar(Var(BoundVar(level)))))), _, _, _, _, _, _) =>
+          isNewVar(level)
         case _ => false
       }
       if (isBoundNew) s else "@{" + s + "}"
