@@ -36,8 +36,16 @@ lazy val projectSettings = Seq(
   Test / testForkedParallel := false,
   IntegrationTest / fork := true,
   IntegrationTest / parallelExecution := false,
-  IntegrationTest / testForkedParallel := false
-)
+  IntegrationTest / testForkedParallel := false,
+) ++
+// skip api doc generation if SKIP_DOC env variable is defined 
+Seq(sys.env.get("SKIP_DOC")).flatMap { _ =>
+  Seq(
+    publishArtifact in (Compile, packageDoc) := false,
+    publishArtifact in packageDoc := false,
+    sources in (Compile, doc) := Seq.empty
+  )
+}
 
 lazy val coverageSettings = Seq(
   coverageMinimum := 90,

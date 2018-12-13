@@ -53,7 +53,8 @@ pipeline:
   docker-build:
     <<: *sbtenv
     commands:
-      - sbt node/docker:publishLocal
+      # Skip the `doc` task - it's being invoked explicitly later
+      - SKIP_DOC=true sbt node/docker:publishLocal
     volumes:
       - /var/cache/rchain-build/.sbt:/root/.sbt
       - /var/cache/rchain-build/.ivy2:/root/.ivy2
