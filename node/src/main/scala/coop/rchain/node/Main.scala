@@ -67,13 +67,14 @@ object Main {
       case Diagnostics => diagnostics.client.Runtime.diagnosticsProgram[Task]
       case Deploy(address, phlo, phloPrice, nonce, location) =>
         DeployRuntime.deployFileProgram[Task](address, phlo, phloPrice, nonce, location)
-      case DeployDemo        => DeployRuntime.deployDemoProgram[Task]
-      case Propose           => DeployRuntime.propose[Task]()
-      case ShowBlock(hash)   => DeployRuntime.showBlock[Task](hash)
-      case ShowBlocks(depth) => DeployRuntime.showBlocks[Task](depth)
-      case DataAtName(name)  => DeployRuntime.listenForDataAtName[Task](name)
-      case ContAtName(names) => DeployRuntime.listenForContinuationAtName[Task](names)
-      case Run               => nodeProgram(conf)
+      case DeployDemo             => DeployRuntime.deployDemoProgram[Task]
+      case Propose                => DeployRuntime.propose[Task]()
+      case ShowBlock(hash)        => DeployRuntime.showBlock[Task](hash)
+      case ShowBlocks(depth)      => DeployRuntime.showBlocks[Task](depth)
+      case VisualizeBlocks(depth) => DeployRuntime.visualizeBlocks[Task](depth)
+      case DataAtName(name)       => DeployRuntime.listenForDataAtName[Task](name)
+      case ContAtName(names)      => DeployRuntime.listenForContinuationAtName[Task](names)
+      case Run                    => nodeProgram(conf)
       case BondingDeployGen(bondKey, ethAddress, amount, secKey, pubKey) =>
         BondingUtil.writeIssuanceBasedRhoFiles[Task](bondKey, ethAddress, amount, secKey, pubKey)
       case FaucetBondingDeployGen(amount, sigAlgorithm, secKey, pubKey) =>
