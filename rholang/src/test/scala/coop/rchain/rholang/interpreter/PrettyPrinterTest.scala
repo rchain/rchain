@@ -98,7 +98,7 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
       PrettyPrinter(0, 2).buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](map, inputs).value.par
       )
-    result shouldBe """{x0 : x1, 7 : "Seven"...free0}"""
+    result shouldBe "{7 : \"" + "Seven" + "\", x0 : x1...free0}"
   }
 
   "Map" should "Print commas correctly" in {
