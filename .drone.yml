@@ -77,15 +77,6 @@ pipeline:
     when:
       event: [ push, tag ]
 
-  package:
-    <<: *sbtenv
-    commands:
-      - sbt node/debian:packageBin node/universal:packageZipTarball
-      - mkdir -p artifacts
-      - cp node/target/rnode_*_all.deb node/target/universal/*.tgz artifacts/
-    when:
-      event: [ push, tag ]
-
   run-integration-tests:
     <<: *buildenv
     environment:
@@ -99,11 +90,13 @@ pipeline:
     when:
       event: [ push, tag ]
 
-  package-rpm:
+  package:
     <<: *sbtenv
     commands:
-      - env JAVAC_VERSION=1.8 sbt clean compile doc node/rpm:packageBin
       - mkdir -p artifacts
+      - sbt node/debian:packageBin node/universal:packageZipTarball
+      - cp node/target/rnode_*_all.deb node/target/universal/*.tgz artifacts/
+      - env JAVAC_VERSION=1.8 sbt clean compile doc node/rpm:packageBin
       - cp node/target/rpm/RPMS/noarch/rnode-*.noarch.rpm artifacts/
     when:
       event: [ push, tag ]
