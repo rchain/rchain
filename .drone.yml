@@ -74,7 +74,7 @@ pipeline:
     group: parallel
     <<: *sbtenv
     commands:
-      - sbt scalafmtCheck coverage
+      - sbt coverage
       - ./scripts/ci/codecov-upload
 
   # push
