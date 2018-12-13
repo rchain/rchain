@@ -1,14 +1,22 @@
 package coop.rchain.blockstorage
 
-import scala.language.higherKinds
+import java.nio.file.Paths
 
+import scala.language.higherKinds
 import cats._
+import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.{BlockMessage, Header}
 import coop.rchain.rspace.Context
 import coop.rchain.shared.PathOps._
 import BlockGen.blockHashElementsGen
+import coop.rchain.blockstorage.InMemBlockStore.emptyMapRef
+import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.Metrics.MetricsNOP
+import coop.rchain.catscontrib.TaskContrib._
+import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
 import org.scalactic.anyvals.PosInt
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
@@ -33,78 +41,89 @@ trait BlockStoreTest
   ): (BlockHash, BlockMessage) =
     (ByteString.copyFromUtf8(s._1), s._2)
 
-  def withStore[R](f: BlockStore[Id] => R): R
+  def withStore[R](f: BlockStore[Task] => Task[R]): R
 
   "Block Store" should "return Some(message) on get for a published key" in {
-    withStore { store =>
-      forAll(blockHashElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
+    forAll(blockHashElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
+      withStore { store =>
         val items = blockStoreElements
-        items.foreach(store.put(_))
-        items.foreach {
-          case (k, v) =>
-            store.get(k) shouldBe Some(v)
-        }
-        store.asMap().size shouldEqual items.size
-        store.clear()
+        for {
+          _ <- items.traverse_(store.put(_))
+          _ <- items.traverse[Task, Assertion] {
+                case (k, v) =>
+                  store.get(k).map(_ shouldBe Some(v))
+              }
+          result <- store.asMap().map(_.size shouldEqual items.size)
+          _      <- store.clear()
+        } yield result
       }
     }
   }
 
   it should "discover keys by predicate" in {
-    withStore { store =>
-      forAll(blockHashElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
+    forAll(blockHashElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
+      withStore { store =>
         val items = blockStoreElements
-        items.foreach(store.put(_))
-        items.foreach {
-          case (k, v) =>
-            val w = store.find(_ == ByteString.copyFrom(k.getBytes()))
-            w should have size 1
-            w.head._2 shouldBe v
-        }
-        store.asMap().size shouldEqual items.size
-        store.clear()
+        for {
+          _ <- items.traverse_(store.put(_))
+          _ <- items.traverse[Task, Assertion] {
+                case (k, v) =>
+                  store.find(_ == ByteString.copyFrom(k.getBytes())).map { w =>
+                    w should have size 1
+                    w.head._2 shouldBe v
+                  }
+              }
+          result <- store.asMap().map(_.size shouldEqual items.size)
+          _      <- store.clear()
+        } yield result
       }
     }
   }
 
   it should "overwrite existing value" in
-    withStore { store =>
-      forAll(blockHashElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
+    forAll(blockHashElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
+      withStore { store =>
         val items = blockStoreElements.map {
           case (hash, elem) =>
             (hash, elem, toBlockMessage(hash, 200L, 20000L))
         }
-        items.foreach { case (k, v1, _) => store.put(k, v1) }
-        items.foreach { case (k, v1, _) => store.get(k) shouldBe Some(v1) }
-        items.foreach { case (k, _, v2) => store.put(k, v2) }
-        items.foreach { case (k, _, v2) => store.get(k) shouldBe Some(v2) }
-
-        store.asMap().size shouldEqual items.size
-        store.clear()
+        for {
+          _ <- items.traverse_[Task, Unit] { case (k, v1, _) => store.put(k, v1) }
+          _ <- items.traverse_[Task, Assertion] { case (k, v1, _) => store.get(k).map(_ shouldBe Some(v1)) }
+          _ <- items.traverse_[Task, Unit] { case (k, _, v2) => store.put(k, v2) }
+          _ <- items.traverse_[Task, Assertion] { case (k, _, v2) => store.get(k).map(_ shouldBe Some(v2)) }
+          result <- store.asMap().map(_.size shouldEqual items.size)
+          _ <- store.clear()
+        } yield result
       }
     }
 
   it should "rollback the transaction on error" in {
     withStore { store =>
-      store.asMap().size shouldEqual 0
       def elem = {
         blockHashElementsGen.sample.get
         throw new RuntimeException("msg")
       }
-
-      a[RuntimeException] shouldBe thrownBy {
-        store.put { elem }
-      }
-      store.asMap().size shouldEqual 0
+      
+      for {
+        _ <- store.asMap().map(_.size shouldEqual 0)
+        _ <- store.put { elem }
+        result <- store.asMap().map(_.size shouldEqual 0)
+      } yield result
     }
   }
 }
 
 class InMemBlockStoreTest extends BlockStoreTest {
-  override def withStore[R](f: BlockStore[Id] => R): R = {
-    val store = InMemBlockStore.createWithId
-    assert(store.asMap.isEmpty)
-    f(store)
+  override def withStore[R](f: BlockStore[Task] => Task[R]): R = {
+    val test = for {
+      refTask <- emptyMapRef[Task]
+      metrics = new MetricsNOP[Task]()
+      store = InMemBlockStore.create[Task](Monad[Task], refTask, metrics)
+      _ <- store.asMap().map(map => assert(map.isEmpty))
+      result <- f(store)
+    } yield result
+    test.unsafeRunSync
   }
 }
 
@@ -115,13 +134,42 @@ class LMDBBlockStoreTest extends BlockStoreTest {
   private[this] def mkTmpDir(): Path = Files.createTempDirectory("block-store-test-")
   private[this] val mapSize: Long    = 100L * 1024L * 1024L * 4096L
 
-  override def withStore[R](f: BlockStore[Id] => R): R = {
+  override def withStore[R](f: BlockStore[Task] => Task[R]): R = {
     val dbDir = mkTmpDir()
     val env   = Context.env(dbDir, mapSize)
-    val store = LMDBBlockStore.createWithId(env, dbDir)
+    implicit val metrics: Metrics[Task] = new MetricsNOP[Task]()
+    val store = LMDBBlockStore.create[Task](env, dbDir)
+    val test = for {
+      _ <- store.asMap().map(map => assert(map.isEmpty))
+      result <- f(store)
+    } yield result
     try {
-      assert(store.asMap.isEmpty)
-      f(store)
+      test.unsafeRunSync
+    } finally {
+      env.close()
+      dbDir.recursivelyDelete
+    }
+  }
+}
+
+class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
+
+  import java.nio.file.{Files, Path}
+
+  private[this] def mkTmpDir(): Path = Files.createTempDirectory("block-store-test-")
+  private[this] val mapSize: Long    = 100L * 1024L * 1024L * 4096L
+
+  override def withStore[R](f: BlockStore[Task] => Task[R]): R = {
+    val dbDir = mkTmpDir()
+    val env   = Context.env(dbDir, mapSize)
+    implicit val metrics: Metrics[Task] = new MetricsNOP[Task]()
+    val test = for {
+      store <- FileLMDBIndexBlockStore.create[Task](FileLMDBIndexBlockStore.Config(dbDir.resolve("block-store-data")))
+      _ <- store.asMap().map(map => assert(map.isEmpty))
+      result <- f(store)
+    } yield result
+    try {
+      test.unsafeRunSync
     } finally {
       env.close()
       dbDir.recursivelyDelete
