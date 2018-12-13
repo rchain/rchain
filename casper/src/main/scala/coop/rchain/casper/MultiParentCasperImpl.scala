@@ -91,7 +91,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
         } yield result
     )(_ => semaphore.release)
 
-  def internalAddBlock(b: BlockMessage): F[BlockStatus] =
+  private def internalAddBlock(b: BlockMessage): F[BlockStatus] =
     for {
       validFormat  <- Validate.formatOfFields[F](b)
       validSig     <- Validate.blockSignature[F](b)

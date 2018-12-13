@@ -60,7 +60,7 @@ private[sorter] object GroundSortMatcher extends Sortable[ExprInstance] {
           } yield ScoredTerm((sortedKey.term, sortedValue.term), sortedKey.score)
 
         for {
-          pars              <- gm.ps.sortedMap.toList.traverse(kv => sortKeyValuePair(kv._1, kv._2))
+          pars              <- gm.ps.sortedList.traverse(kv => sortKeyValuePair(kv._1, kv._2))
           sortedPars        = pars.sorted
           remainderScoreOpt = gm.remainder.map(_ => Leaf(Score.REMAINDER))
         } yield
