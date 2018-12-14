@@ -1,6 +1,7 @@
 package coop.rchain.casper.helper
 
 import cats._
+import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
@@ -22,7 +23,7 @@ import scala.language.higherKinds
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]()(Capture.taskCapture)
 
-  def updateChainWithBlockStateUpdate[F[_]: Monad: BlockStore: IndexedBlockDagStorage](
+  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage](
       id: Int,
       genesis: BlockMessage,
       runtimeManager: RuntimeManager
@@ -40,7 +41,7 @@ object BlockGenerator {
       _                                 <- injectPostStateHash[F](id, b, postStateHash, processedDeploys)
     } yield b
 
-  def computeBlockCheckpoint[F[_]: Monad: BlockStore](
+  def computeBlockCheckpoint[F[_]: Sync: BlockStore](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
