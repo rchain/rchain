@@ -1,7 +1,7 @@
 package coop.rchain.casper.util.rholang
 
 import cats.Monad
-import cats.effect.{LiftIO, Sync}
+import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.{BlockException, PrettyPrinter}

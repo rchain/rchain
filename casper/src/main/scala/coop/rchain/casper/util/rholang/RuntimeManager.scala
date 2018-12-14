@@ -59,7 +59,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   ): F[Either[(Option[Deploy], Failed), StateHash]] =
     for {
       runtime <- Sync[F].delay(runtimeContainer.take())
-      _       <- LiftIO[F].liftIO(setTimestamp(time, runtime).toIO)
+      _       <- setTimestamp(time, runtime)
       result  <- LiftIO[F].liftIO(replayEval(terms, runtime, hash).toIO)
       _       <- Sync[F].delay(runtimeContainer.put(runtime))
     } yield result
@@ -68,6 +68,9 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       hash: StateHash,
       terms: Seq[Deploy],
       time: Option[Long] = None
+  )(
+      implicit scheduler: Scheduler,
+      liftIO: LiftIO[Task]
   ): Task[(StateHash, Seq[InternalProcessedDeploy])] =
     for {
       runtime <- Task.delay(runtimeContainer.take())
@@ -76,13 +79,16 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       _       <- Task.delay(runtimeContainer.put(runtime))
     } yield result
 
-  private def setTimestamp(time: Option[Long], runtime: Runtime): Task[Unit] =
-    time match {
+  private def setTimestamp[F[_]: LiftIO](time: Option[Long], runtime: Runtime)(
+      implicit scheduler: Scheduler,
+      sync: Sync[Task]
+  ): F[Unit] =
+    LiftIO[F].liftIO(time match {
       case Some(t) =>
         val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(t))))
-        runtime.blockTime.setParams(timestamp)
-      case None => Task.unit
-    }
+        runtime.blockTime.setParams(timestamp).toIO
+      case None => Task.unit.toIO
+    })
 
   def storageRepr(hash: StateHash)(
       implicit scheduler: Scheduler
