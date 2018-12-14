@@ -295,20 +295,20 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         .toList
 
     for {
-      nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
+      nodes              <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
       List(node0, node1) = nodes.toList
 
       unsignedBlock <- (node0.casperEff.deploy(data0) *> node0.casperEff.createBlock)
-                         .map {
-                           case Created(block) =>
-                             block.copy(sigAlgorithm = "invalid", sig = ByteString.EMPTY)
-                         }
+                        .map {
+                          case Created(block) =>
+                            block.copy(sigAlgorithm = "invalid", sig = ByteString.EMPTY)
+                        }
 
       _ <- node0.casperEff.addBlock(unsignedBlock, ignoreDoppelgangerCheck[Effect])
       _ <- node1.transportLayerEff.clear(node1.local) //node1 misses this block
 
       signedBlock <- (node0.casperEff.deploy(data1) *> node0.casperEff.createBlock)
-        .map { case Created(block) => block}
+                      .map { case Created(block) => block }
 
       _ <- node0.casperEff.addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
       _ <- node1.receive() //receives block1; should not ask for block0
