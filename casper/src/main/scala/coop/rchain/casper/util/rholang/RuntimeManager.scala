@@ -19,7 +19,6 @@ import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.rspace.trace.Produce
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 import monix.eval.Task
-import monix.eval.TaskLift
 import monix.execution.Scheduler
 
 import coop.rchain.catscontrib.TaskContrib._
@@ -53,7 +52,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     result.flatMap(_.a.pars)
   }
 
-  def replayComputeState[F[_]: TaskLift: Sync](
+  def replayComputeState[F[_]: ToAbstractContext: Sync](
       hash: StateHash,
       terms: Seq[InternalProcessedDeploy],
       time: Option[Long] = None
@@ -61,7 +60,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     for {
       runtime <- Sync[F].delay(runtimeContainer.take())
       _       <- setTimestamp(time, runtime)
-      result  <- TaskLift[F].taskLift(replayEval(terms, runtime, hash))
+      result  <- ToAbstractContext[F].fromTask(replayEval(terms, runtime, hash))
       _       <- Sync[F].delay(runtimeContainer.put(runtime))
     } yield result
 
@@ -77,14 +76,14 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       _       <- Task.delay(runtimeContainer.put(runtime))
     } yield result
 
-  private def setTimestamp[F[_]: TaskLift: Sync](
+  private def setTimestamp[F[_]: ToAbstractContext: Sync](
       time: Option[Long],
       runtime: Runtime
   ): F[Unit] =
     time match {
       case Some(t) =>
         val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(t))))
-        TaskLift[F].taskLift(runtime.blockTime.setParams(timestamp))
+        ToAbstractContext[F].fromTask(runtime.blockTime.setParams(timestamp))
       case None => ().pure[F]
     }
 

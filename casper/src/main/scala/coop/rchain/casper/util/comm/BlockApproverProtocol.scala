@@ -19,7 +19,6 @@ import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.shared._
-import monix.eval.Task
 import monix.execution.Scheduler
 
 import scala.util.Try
@@ -142,7 +141,7 @@ object BlockApproverProtocol {
             .either(())
             .or("Mismatch between number of candidate deploys and expected number of deploys.")
       stateHash <- runtimeManager
-                    .replayComputeState[Task](runtimeManager.emptyStateHash, blockDeploys)
+                    .replayComputeState(runtimeManager.emptyStateHash, blockDeploys)
                     .runSyncUnsafe(Duration.Inf)
                     .leftMap { case (_, status) => s"Failed status during replay: $status." }
       _ <- (stateHash == postState.postStateHash)

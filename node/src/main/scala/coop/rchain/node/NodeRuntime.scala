@@ -344,6 +344,9 @@ class NodeRuntime private[node] (
           .toEffect
     casperRuntime  = Runtime.create(casperStoragePath, storageSize, storeType)(rspaceScheduler)
     runtimeManager = RuntimeManager.fromRuntime(casperRuntime)(scheduler)
+    abs = new ToAbstractContext[Effect] {
+      def fromTask[A](fa: Task[A]): Effect[A] = fa.toEffect
+    }
     casperPacketHandler <- CasperPacketHandler
                             .of[Effect](conf.casper, defaultTimeout, runtimeManager, _.value)(
                               labEff,
@@ -362,6 +365,7 @@ class NodeRuntime private[node] (
                               Log.eitherTLog(Monad[Task], log),
                               multiParentCasperRef,
                               blockDagStorage,
+                              abs,
                               scheduler
                             )
     packetHandler = PacketHandler.pf[Effect](casperPacketHandler.handle)(

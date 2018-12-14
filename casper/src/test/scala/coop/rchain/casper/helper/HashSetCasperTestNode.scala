@@ -63,7 +63,8 @@ class HashSetCasperTestNode[F[_]](
     concurrentF: Concurrent[F],
     val blockStore: BlockStore[F],
     val blockDagStorage: BlockDagStorage[F],
-    val metricEff: Metrics[F]
+    val metricEff: Metrics[F],
+    abF: ToAbstractContext[F]
 ) {
 
   private val storageDirectory = Files.createTempDirectory(s"hash-set-casper-test-$name")
@@ -138,6 +139,10 @@ object HashSetCasperTestNode {
 
   import coop.rchain.catscontrib._
 
+  implicit val absF = new ToAbstractContext[Effect] {
+    def fromTask[A](fa: Task[A]): Effect[A] = new MonadOps(fa).liftM[CommErrT]
+  }
+
   def standaloneF[F[_]](
       genesis: BlockMessage,
       sk: Array[Byte],
@@ -147,7 +152,8 @@ object HashSetCasperTestNode {
       errorHandler: ErrorHandler[F],
       syncF: Sync[F],
       captureF: Capture[F],
-      concurrentF: Concurrent[F]
+      concurrentF: Concurrent[F],
+      absF: ToAbstractContext[F]
   ): F[HashSetCasperTestNode[F]] = {
     val name     = "standalone"
     val identity = peerNode(name, 40400)
@@ -188,7 +194,7 @@ object HashSetCasperTestNode {
         blockStoreDir,
         semaphore,
         "rchain"
-      )(scheduler, syncF, captureF, concurrentF, blockStore, blockDagStorage, metricEff)
+      )(scheduler, syncF, captureF, concurrentF, blockStore, blockDagStorage, metricEff, absF)
       result <- node.initialize.map(_ => node)
     } yield result
   }
@@ -200,7 +206,8 @@ object HashSetCasperTestNode {
       ApplicativeError_[Effect, CommError],
       syncEffectInstance,
       Capture[Effect],
-      Concurrent[Effect]
+      Concurrent[Effect],
+      ToAbstractContext[Effect]
     ).value.unsafeRunSync.right.get
 
   def networkF[F[_]](
@@ -212,7 +219,8 @@ object HashSetCasperTestNode {
       errorHandler: ErrorHandler[F],
       syncF: Sync[F],
       captureF: Capture[F],
-      concurrentF: Concurrent[F]
+      concurrentF: Concurrent[F],
+      absF: ToAbstractContext[F]
   ): F[IndexedSeq[HashSetCasperTestNode[F]]] = {
     val n     = sks.length
     val names = (1 to n).map(i => s"node-$i")
@@ -272,7 +280,8 @@ object HashSetCasperTestNode {
                 concurrentF,
                 blockStore,
                 blockDagStorage,
-                metricEff
+                metricEff,
+                absF
               )
             } yield node
         }
@@ -307,7 +316,8 @@ object HashSetCasperTestNode {
       ApplicativeError_[Effect, CommError],
       syncEffectInstance,
       Capture[Effect],
-      Concurrent[Effect]
+      Concurrent[Effect],
+      ToAbstractContext[Effect]
     )
 
   val appErrId = new ApplicativeError[Id, CommError] {

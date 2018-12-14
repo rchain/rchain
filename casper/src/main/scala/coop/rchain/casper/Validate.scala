@@ -17,7 +17,6 @@ import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.shared._
-import monix.eval.TaskLift
 import monix.execution.Scheduler
 
 import scala.util.{Failure, Success, Try}
@@ -564,7 +563,7 @@ object Validate {
         false
       }
 
-  def transactions[F[_]: Sync: Log: BlockStore: TaskLift](
+  def transactions[F[_]: Sync: Log: BlockStore: ToAbstractContext](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       emptyStateHash: StateHash,
