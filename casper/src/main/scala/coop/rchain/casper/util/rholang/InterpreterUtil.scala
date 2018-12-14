@@ -179,53 +179,67 @@ object InterpreterUtil {
     val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
 
     parentTuplespaces match {
-      //no parents to base off of, so use default
+      // For genesis, use empty trie's root hash
       case Seq() =>
         Right(runtimeManager.emptyStateHash).leftCast[Throwable].pure[F]
 
-      //For a single parent we look up its checkpoint
       case Seq((_, parentStateHash)) =>
         Right(parentStateHash).leftCast[Throwable].pure[F]
 
-      //In the case of multiple parents we need
-      //to apply all of the deploys that have been
-      //made in all of the branches of the DAG being
-      //merged. This is done by computing uncommon ancestors
-      //and applying the deploys in those blocks.
-      case (initParent, initStateHash) +: _ =>
-        dag.deriveOrdering(0L).flatMap { implicit ordering: Ordering[BlockMetadata] => // TODO: Replace with an actual starting number
-          for {
-            parentsMetadata    <- parents.toList.traverse(b => dag.lookup(b.blockHash).map(_.get))
-            indexedParents     = parentsMetadata.toVector
-            uncommonAncestors  <- DagOperations.uncommonAncestors[F](indexedParents, dag)
-            initParentMetadata <- dag.lookup(initParent.blockHash)
-            initIndex          = indexedParents.indexOf(initParentMetadata)
-            //filter out blocks that already included by starting from the chosen initParent
-            blocksToApply = uncommonAncestors
-              .filterNot { case (_, set) => set.contains(initIndex) }
-              .keys
-              .toVector
-              .sorted //ensure blocks to apply is topologically sorted to maintain any causal dependencies
-            maybeBlocks <- blocksToApply.traverse(b => BlockStore[F].get(b.blockHash))
-            _           = assert(maybeBlocks.forall(_.isDefined))
-            blocks      = maybeBlocks.flatten
-            deploys     = blocks.flatMap(_.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal))
-          } yield
-            runtimeManager
-              .replayComputeState[Task](initStateHash, deploys, time)
-              .runSyncUnsafe(Duration.Inf) match {
-              case result @ Right(_) => result.leftCast[Throwable]
-              case Left((_, status)) =>
-                val parentHashes = parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
-                Left(
-                  new Exception(
-                    s"Failed status while computing post state of $parentHashes: $status"
-                  )
-                )
-            }
-        }
+      case (_, initStateHash) +: _ =>
+        computeMultiParentsPostState[F](
+          parents,
+          dag,
+          runtimeManager,
+          time,
+          initStateHash
+        )
     }
   }
+
+  // In the case of multiple parents we need to apply all of the deploys that have been
+  // made in all of the branches of the DAG being merged. This is done by computing uncommon ancestors
+  // and applying the deploys in those blocks on top of the initial parent.
+  private def computeMultiParentsPostState[F[_]: Monad: BlockStore](
+      parents: Seq[BlockMessage],
+      dag: BlockDagRepresentation[F],
+      runtimeManager: RuntimeManager,
+      time: Option[Long],
+      initStateHash: StateHash
+  )(implicit scheduler: Scheduler): F[Either[Throwable, StateHash]] =
+    for {
+      parentsMetadata <- parents.toList.traverse(b => dag.lookup(b.blockHash).map(_.get))
+      ordering        <- dag.deriveOrdering(0L) // TODO: Replace with an actual starting number
+      blockHashesToApply <- {
+        implicit val o: Ordering[BlockMetadata] = ordering
+        for {
+          uncommonAncestors          <- DagOperations.uncommonAncestors[F](parentsMetadata.toVector, dag)
+          ancestorsOfInitParentIndex = 0
+          // Filter out blocks that already included by starting from the chosen initial parent
+          // as otherwise we will be applying the initial parent's ancestor's twice.
+          result = uncommonAncestors
+            .filterNot { case (_, set) => set.contains(ancestorsOfInitParentIndex) }
+            .keys
+            .toVector
+            .sorted // Ensure blocks to apply is topologically sorted to maintain any causal dependencies
+        } yield result
+      }
+      blocksToApply <- blockHashesToApply.traverse(b => ProtoUtil.unsafeGetBlock[F](b.blockHash))
+      deploys       = blocksToApply.flatMap(_.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal))
+    } yield
+      runtimeManager
+        .replayComputeState[Task](initStateHash, deploys, time)
+        .runSyncUnsafe(Duration.Inf) match {
+        case result @ Right(_) => result.leftCast[Throwable]
+        case Left((_, status)) =>
+          val parentHashes =
+            parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
+          Left(
+            new Exception(
+              s"Failed status while computing post state of $parentHashes: $status"
+            )
+          )
+      }
 
   private[casper] def computeBlockCheckpointFromDeploys[F[_]: Monad: BlockStore](
       b: BlockMessage,

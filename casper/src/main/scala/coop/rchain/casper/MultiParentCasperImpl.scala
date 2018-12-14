@@ -92,7 +92,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
         } yield result
     )(_ => semaphore.release)
 
-  def internalAddBlock(b: BlockMessage): F[BlockStatus] =
+  private def internalAddBlock(b: BlockMessage): F[BlockStatus] =
     for {
       validFormat  <- Validate.formatOfFields[F](b)
       validSig     <- Validate.blockSignature[F](b)
@@ -197,7 +197,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
    *  produced (no deploys, already processing, no validator id)
    */
   def createBlock: F[CreateBlockStatus] = validatorId match {
-    case Some(vId @ ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
+    case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
       for {
         dag              <- blockDag
         orderedHeads     <- estimator(dag)

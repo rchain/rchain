@@ -11,6 +11,7 @@ from .rnode import (
     Node,
 )
 from .wait import (
+    wait_for_node_sees_block,
     wait_for_blocks_count_at_least,
     wait_for_approved_block_received_handler_state,
 )
@@ -89,10 +90,8 @@ def started_readonly_peer(context: TestingContext, bootstrap_node: Node):
 
 
 
-@pytest.mark.xfail
 def test_heterogenous_validators(command_line_options_fixture, docker_client_fixture):
-    BONDED_VALIDATOR_BLOCKS = 10
-    JOINING_VALIDATOR_BLOCKS = 10
+    BONDED_VALIDATOR_BLOCKS = JOINING_VALIDATOR_BLOCKS = 10
     with conftest.testing_context(command_line_options_fixture, docker_client_fixture, bootstrap_keypair=BOOTSTRAP_NODE_KEYS, peers_keypairs=[BONDED_VALIDATOR_KEYS]) as context:
         with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
             with started_bonded_validator(context, bootstrap_node) as bonded_validator:
@@ -112,7 +111,8 @@ def test_heterogenous_validators(command_line_options_fixture, docker_client_fix
                     bonded_validator.deploy_string(forward_file)
                     bonded_validator.propose()
                     bonded_validator.deploy_string(bond_file)
-                    bonded_validator.propose()
+                    bonding_block_hash = bonded_validator.propose()
+                    wait_for_node_sees_block(context, joining_validator, bonding_block_hash)
                     for _ in range(JOINING_VALIDATOR_BLOCKS):
                         joining_validator.deploy(contract_path)
                         joining_validator.propose()
@@ -121,7 +121,7 @@ def test_heterogenous_validators(command_line_options_fixture, docker_client_fix
                         # Force sync with the network
                         joining_validator.deploy(contract_path)
                         joining_validator.propose()
-                        expected_blocks_count = BONDED_VALIDATOR_BLOCKS + JOINING_VALIDATOR_BLOCKS
+                        expected_blocks_count = BONDED_VALIDATOR_BLOCKS + JOINING_VALIDATOR_BLOCKS + 2
                         wait_for_blocks_count_at_least(
                             context,
                             readonly_peer,

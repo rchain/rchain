@@ -98,9 +98,38 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
       PrettyPrinter(0, 2).buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](map, inputs).value.par
       )
-    result shouldBe """{x0 : x1, 7 : "Seven"...free0}"""
+    result shouldBe "{7 : \"" + "Seven" + "\", x0 : x1...free0}"
   }
 
+  "Map" should "Print commas correctly" in {
+    val mapData = new ListKeyValuePair()
+    mapData.add(
+      new KeyValuePairImpl(
+        new PGround(new GroundString("\"c\"")),
+        new PGround(new GroundInt("3"))
+      )
+    )
+    mapData.add(
+      new KeyValuePairImpl(
+        new PGround(new GroundString("\"b\"")),
+        new PGround(new GroundInt("2"))
+      )
+    )
+    mapData.add(
+      new KeyValuePairImpl(
+        new PGround(new GroundString("\"a\"")),
+        new PGround(new GroundInt("1"))
+      )
+    )
+    val map = new PCollect(new CollectMap(mapData, new ProcRemainderEmpty()))
+
+    val result =
+      PrettyPrinter().buildString(
+        ProcNormalizeMatcher.normalizeMatch[Coeval](map, inputs).value.par
+      )
+    val target = """{"a" : 1, "b" : 2, "c" : 3}"""
+    result shouldBe target
+  }
 }
 
 class ProcPrinterSpec extends FlatSpec with Matchers {
@@ -194,7 +223,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
       )
     val target =
       """new x0 in {
-        |  for( @{x1} <- @{*x0} ) {
+        |  for( @{x1} <- x0 ) {
         |    x1
         |  }
         |}""".stripMargin
@@ -224,7 +253,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
       )
     val target =
       """new x0 in {
-        |  for( @{x1}, @{x2} <- @{*x0} ) {
+        |  for( @{x1}, @{x2} <- x0 ) {
         |    x2 |
         |    x1
         |  }
@@ -259,7 +288,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
       )
     val target =
       """new x0 in {
-        |  for( @{x1} <- @{*x0} ; @{x2} <- @{*x0} ) {
+        |  for( @{x1} <- x0 ; @{x2} <- x0 ) {
         |    x2 |
         |    x1
         |  }
@@ -300,7 +329,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
       )
     val target =
       """new x0, x1 in {
-        |  for( @{x2}, @{x3} <- @{*x1} ; @{x4}, @{x5} <- @{*x0} ) {
+        |  for( @{x2}, @{x3} <- x1 ; @{x4}, @{x5} <- x0 ) {
         |    x3 |
         |    x2 |
         |    x5 |
@@ -346,7 +375,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
       )
     val target =
       """new x0, x1 in {
-        |  for( @{x2}, @{x3} <- @{*x1} ; @{x4}, @{x5} <- @{*x0} ) {
+        |  for( @{x2}, @{x3} <- x1 ; @{x4}, @{x5} <- x0 ) {
         |    @{x3}!(Nil) |
         |    x2 |
         |    x5 |
@@ -381,8 +410,8 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
       )
     val target =
       """new x0 in {
-        |  @{*x0}!(*x0) |
-        |  for( @{x1} <- @{*x0} ) {
+        |  x0!(*x0) |
+        |  for( @{x1} <- x0 ) {
         |    x1
         |  }
         |}""".stripMargin
@@ -618,7 +647,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
       )
     result shouldBe
       """new x0, x1 in {
-        |  for( @{x2}, @{x3} <- @{*x1} ; @{x4}, @{x5} <- @{*x0} ) {
+        |  for( @{x2}, @{x3} <- x1 ; @{x4}, @{x5} <- x0 ) {
         |    @{x2}!(x5) |
         |    @{x4}!(x3) |
         |    for( @{x6} <- @{x4} ) {
@@ -664,9 +693,9 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
       )
     result shouldBe
       """new x0, x1, x2 in {
-        |  @{*x2}!(9) |
-        |  @{*x1}!(8) |
-        |  @{*x0}!(7)
+        |  x2!(9) |
+        |  x1!(8) |
+        |  x0!(7)
         |}""".stripMargin
   }
 
@@ -749,10 +778,10 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     result shouldBe
       """match (47 == 47) {
         |  true => new x0 in {
-        |    @{*x0}!(47)
+        |    x0!(47)
         |  } ;
         |  false => new x0 in {
-        |    @{*x0}!(47)
+        |    x0!(47)
         |  }
         |}""".stripMargin
   }
