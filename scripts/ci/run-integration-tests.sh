@@ -21,7 +21,7 @@ main () {
 
     ./mypy.sh
     ./pylint.sh || true
-    ./run_tests.sh --mount-dir="$TEMP_RESOURCES_DIR"
+    ./run_tests.sh --log-cli-level=ERROR --mount-dir="$TEMP_RESOURCES_DIR"
 }
 
 
