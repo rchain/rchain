@@ -8,7 +8,6 @@ import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.{Applicative, ApplicativeError, Id, Monad}
 import coop.rchain.blockstorage._
-import coop.rchain.catscontrib._
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
@@ -133,10 +132,7 @@ class HashSetCasperTestNode[F[_]](
 }
 
 object HashSetCasperTestNode {
-  type CommErrT[F[_], A] = EitherT[F, CommError, A]
-  type Effect[A]         = CommErrT[Task, A]
-
-  import coop.rchain.catscontrib._
+  type Effect[A] = EitherT[Task, CommError, A]
 
   def standaloneF[F[_]](
       genesis: BlockMessage,
