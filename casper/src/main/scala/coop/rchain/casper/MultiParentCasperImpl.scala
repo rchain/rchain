@@ -6,6 +6,7 @@ import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
+import coop.rchain.catscontrib._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util._
@@ -23,7 +24,7 @@ import monix.execution.atomic.AtomicAny
 
 import scala.collection.mutable
 
-class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage](
+class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ToAbstractContext](
     runtimeManager: RuntimeManager,
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
