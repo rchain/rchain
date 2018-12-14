@@ -1,6 +1,7 @@
 package coop.rchain.casper.util.comm
 
 import cats.Monad
+import cats.effect.Sync
 import cats.implicits._
 import cats.kernel.Eq
 import com.google.protobuf.ByteString
@@ -19,6 +20,7 @@ import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.shared._
+import monix.eval.Task
 import monix.execution.Scheduler
 
 import scala.util.Try
@@ -108,7 +110,7 @@ object BlockApproverProtocol {
       minimumBond: Long,
       maximumBond: Long,
       faucet: Boolean
-  )(implicit scheduler: Scheduler): Either[String, Unit] =
+  )(implicit scheduler: Scheduler, sync: Sync[Task]): Either[String, Unit] =
     for {
       _ <- (candidate.requiredSigs == requiredSigs)
             .either(())

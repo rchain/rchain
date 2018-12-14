@@ -1,6 +1,7 @@
 package coop.rchain.casper.util.rholang
 
 import cats.Monad
+import cats.effect.{LiftIO, Sync}
 import cats.implicits._
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.{BlockException, PrettyPrinter}
@@ -16,6 +17,7 @@ import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.Interpreter
 import coop.rchain.rspace.ReplayException
 import coop.rchain.shared.{Log, LogSource}
+import monix.eval.Task
 import monix.execution.Scheduler
 
 import scala.concurrent.duration._
@@ -96,7 +98,10 @@ object InterpreterUtil {
       internalDeploys: Seq[InternalProcessedDeploy],
       possiblePreStateHash: Either[Throwable, StateHash],
       time: Option[Long]
-  )(implicit scheduler: Scheduler): F[Either[BlockException, Option[StateHash]]] =
+  )(
+      implicit scheduler: Scheduler,
+      sync: Sync[Task]
+  ): F[Either[BlockException, Option[StateHash]]] =
     runtimeManager
       .replayComputeState(preStateHash, internalDeploys, time)
       .runSyncUnsafe(Duration.Inf) match {
@@ -169,7 +174,10 @@ object InterpreterUtil {
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager,
       time: Option[Long]
-  )(implicit scheduler: Scheduler): F[Either[Throwable, StateHash]] = {
+  )(
+      implicit scheduler: Scheduler,
+      sync: Sync[Task]
+  ): F[Either[Throwable, StateHash]] = {
     val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
 
     parentTuplespaces match {
@@ -200,7 +208,10 @@ object InterpreterUtil {
       runtimeManager: RuntimeManager,
       time: Option[Long],
       initStateHash: StateHash
-  )(implicit scheduler: Scheduler): F[Either[Throwable, StateHash]] =
+  )(
+      implicit scheduler: Scheduler,
+      sync: Sync[Task]
+  ): F[Either[Throwable, StateHash]] =
     for {
       parentsMetadata <- parents.toList.traverse(b => dag.lookup(b.blockHash).map(_.get))
       ordering        <- dag.deriveOrdering(0L) // TODO: Replace with an actual starting number

@@ -1,5 +1,6 @@
 package coop.rchain.casper.util.rholang
 
+import cats.effect.{LiftIO, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
@@ -18,7 +19,6 @@ import coop.rchain.rspace.trace.Produce
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 import monix.eval.Task
 import monix.execution.Scheduler
-
 import coop.rchain.catscontrib.TaskContrib._
 
 import scala.annotation.tailrec
@@ -50,16 +50,18 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     result.flatMap(_.a.pars)
   }
 
-  def replayComputeState(
+  def replayComputeState[F[_]: Sync: LiftIO](
       hash: StateHash,
       terms: Seq[InternalProcessedDeploy],
       time: Option[Long] = None
-  ): Task[Either[(Option[Deploy], Failed), StateHash]] =
+  )(
+      implicit scheduler: Scheduler
+  ): F[Either[(Option[Deploy], Failed), StateHash]] =
     for {
-      runtime <- Task.delay(runtimeContainer.take())
-      _       <- setTimestamp(time, runtime)
-      result  <- replayEval(terms, runtime, hash)
-      _       <- Task.delay(runtimeContainer.put(runtime))
+      runtime <- Sync[F].delay(runtimeContainer.take())
+      _       <- LiftIO[F].liftIO(setTimestamp(time, runtime).toIO)
+      result  <- LiftIO[F].liftIO(replayEval(terms, runtime, hash).toIO)
+      _       <- Sync[F].delay(runtimeContainer.put(runtime))
     } yield result
 
   def computeState(
