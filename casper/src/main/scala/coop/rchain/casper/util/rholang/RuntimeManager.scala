@@ -1,13 +1,12 @@
 package coop.rchain.casper.util.rholang
 
-import cats.effect._
+import cats.effect.{LiftIO, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GString
@@ -20,7 +19,6 @@ import coop.rchain.rspace.trace.Produce
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 import monix.eval.Task
 import monix.execution.Scheduler
-
 import coop.rchain.catscontrib.TaskContrib._
 
 import scala.annotation.tailrec
@@ -52,15 +50,15 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     result.flatMap(_.a.pars)
   }
 
-  def replayComputeState[F[_]: ToAbstractContext: Sync](
+  def replayComputeState[F[_]: Sync: LiftIO](
       hash: StateHash,
       terms: Seq[InternalProcessedDeploy],
       time: Option[Long] = None
-  ): F[Either[(Option[Deploy], Failed), StateHash]] =
+  )(implicit scheduler: Scheduler): F[Either[(Option[Deploy], Failed), StateHash]] =
     for {
       runtime <- Sync[F].delay(runtimeContainer.take())
       _       <- setTimestamp(time, runtime)
-      result  <- ToAbstractContext[F].fromTask(replayEval(terms, runtime, hash))
+      result  <- LiftIO[F].liftIO(replayEval(terms, runtime, hash).toIO)
       _       <- Sync[F].delay(runtimeContainer.put(runtime))
     } yield result
 
@@ -68,24 +66,25 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       hash: StateHash,
       terms: Seq[Deploy],
       time: Option[Long] = None
+  )(
+      implicit scheduler: Scheduler
   ): Task[(StateHash, Seq[InternalProcessedDeploy])] =
     for {
       runtime <- Task.delay(runtimeContainer.take())
-      _       <- setTimestamp(time, runtime)
+      _       <- setTimestamp[Task](time, runtime)
       result  <- newEval(terms, runtime, hash)
       _       <- Task.delay(runtimeContainer.put(runtime))
     } yield result
 
-  private def setTimestamp[F[_]: ToAbstractContext: Sync](
-      time: Option[Long],
-      runtime: Runtime
+  private def setTimestamp[F[_]: Sync: LiftIO](time: Option[Long], runtime: Runtime)(
+      implicit scheduler: Scheduler
   ): F[Unit] =
-    time match {
+    LiftIO[F].liftIO(time match {
       case Some(t) =>
         val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(t))))
-        ToAbstractContext[F].fromTask(runtime.blockTime.setParams(timestamp))
-      case None => ().pure[F]
-    }
+        runtime.blockTime.setParams(timestamp).toIO
+      case None => Task.unit.toIO
+    })
 
   def storageRepr(hash: StateHash)(
       implicit scheduler: Scheduler
