@@ -18,6 +18,8 @@ import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.Interpreter
 import coop.rchain.rspace.ReplayException
 import coop.rchain.shared.{Log, LogSource}
+import monix.eval.Task
+import monix.eval.TaskLift
 import monix.execution.Scheduler
 
 import scala.concurrent.duration._
@@ -31,7 +33,7 @@ object InterpreterUtil {
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
-  def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: ToAbstractContext](
+  def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: TaskLift](
       b: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager
@@ -62,7 +64,7 @@ object InterpreterUtil {
     } yield result
   }
 
-  private def processPossiblePreStateHash[F[_]: Sync: Log: BlockStore: ToAbstractContext](
+  private def processPossiblePreStateHash[F[_]: Sync: Log: BlockStore: TaskLift](
       runtimeManager: RuntimeManager,
       preStateHash: StateHash,
       tsHash: Option[StateHash],
@@ -91,7 +93,7 @@ object InterpreterUtil {
         }
     }
 
-  private def processPreStateHash[F[_]: Sync: Log: BlockStore: ToAbstractContext](
+  private def processPreStateHash[F[_]: Sync: Log: BlockStore: TaskLift](
       runtimeManager: RuntimeManager,
       preStateHash: StateHash,
       tsHash: Option[StateHash],
@@ -210,7 +212,7 @@ object InterpreterUtil {
             deploys     = blocks.flatMap(_.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal))
           } yield
             runtimeManager
-              .replayComputeState(initStateHash, deploys, time)
+              .replayComputeState[Task](initStateHash, deploys, time)
               .runSyncUnsafe(Duration.Inf) match {
               case result @ Right(_) => result.leftCast[Throwable]
               case Left((_, status)) =>
