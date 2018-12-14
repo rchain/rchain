@@ -32,7 +32,7 @@ object InterpreterUtil {
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
-  def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: TaskLift](
+  def validateBlockCheckpoint[F[_]: Sync: TaskLift: Log: BlockStore](
       b: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager
@@ -63,7 +63,7 @@ object InterpreterUtil {
     } yield result
   }
 
-  private def processPossiblePreStateHash[F[_]: Sync: Log: BlockStore: TaskLift](
+  private def processPossiblePreStateHash[F[_]: Sync: TaskLift: Log: BlockStore](
       runtimeManager: RuntimeManager,
       preStateHash: StateHash,
       tsHash: Option[StateHash],
@@ -92,7 +92,7 @@ object InterpreterUtil {
         }
     }
 
-  private def processPreStateHash[F[_]: Sync: Log: BlockStore: TaskLift](
+  private def processPreStateHash[F[_]: Sync: TaskLift: Log: BlockStore](
       runtimeManager: RuntimeManager,
       preStateHash: StateHash,
       tsHash: Option[StateHash],

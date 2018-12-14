@@ -52,7 +52,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     result.flatMap(_.a.pars)
   }
 
-  def replayComputeState[F[_]: TaskLift: Sync](
+  def replayComputeState[F[_]: Sync: TaskLift](
       hash: StateHash,
       terms: Seq[InternalProcessedDeploy],
       time: Option[Long] = None
