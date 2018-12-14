@@ -4,6 +4,7 @@ import cats.Monad
 import cats.effect._
 import cats.implicits._
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
+import coop.rchain.catscontrib._
 import coop.rchain.casper.{BlockException, PrettyPrinter}
 import coop.rchain.casper.PrettyPrinter.buildString
 import com.google.protobuf.ByteString
@@ -99,7 +100,7 @@ object InterpreterUtil {
       internalDeploys: Seq[InternalProcessedDeploy],
       possiblePreStateHash: Either[Throwable, StateHash],
       time: Option[Long]
-  ): F[Either[BlockException, Option[StateHash]]] =
+  )(implicit scheduler: Scheduler): F[Either[BlockException, Option[StateHash]]] =
     (runtimeManager
       .replayComputeState(preStateHash, internalDeploys, time))
       .flatMap { res =>
