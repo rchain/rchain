@@ -1,7 +1,7 @@
 package coop.rchain.casper.util.rholang
 
 import cats.Monad
-import cats.effect.{LiftIO, Sync}
+import cats.effect.{Async, LiftIO, Sync}
 import cats.implicits._
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.{BlockException, PrettyPrinter}
@@ -18,7 +18,9 @@ import coop.rchain.rholang.interpreter.Interpreter
 import coop.rchain.rspace.ReplayException
 import coop.rchain.shared.{Log, LogSource}
 import monix.eval.Task
+import monix.execution.ExecutionModel.SynchronousExecution
 import monix.execution.Scheduler
+import monix.execution.schedulers.{TracingScheduler, TrampolineScheduler}
 
 import scala.concurrent.duration._
 
@@ -31,7 +33,7 @@ object InterpreterUtil {
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
-  def validateBlockCheckpoint[F[_]: Log: BlockStore: Sync: LiftIO](
+  def validateBlockCheckpoint[F[_]: Log: BlockStore: Async](
       b: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager
@@ -62,7 +64,7 @@ object InterpreterUtil {
     } yield result
   }
 
-  private def processPossiblePreStateHash[F[_]: Log: BlockStore: Sync: LiftIO](
+  private def processPossiblePreStateHash[F[_]: Log: BlockStore: Async](
       runtimeManager: RuntimeManager,
       preStateHash: StateHash,
       tsHash: Option[StateHash],
@@ -91,7 +93,7 @@ object InterpreterUtil {
         }
     }
 
-  private def processPreStateHash[F[_]: Log: BlockStore: Sync: LiftIO](
+  private def processPreStateHash[F[_]: Log: BlockStore: Async](
       runtimeManager: RuntimeManager,
       preStateHash: StateHash,
       tsHash: Option[StateHash],

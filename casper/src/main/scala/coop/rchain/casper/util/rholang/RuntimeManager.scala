@@ -1,6 +1,6 @@
 package coop.rchain.casper.util.rholang
 
-import cats.effect.{LiftIO, Sync}
+import cats.effect.{Async, LiftIO, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
@@ -50,7 +50,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     result.flatMap(_.a.pars)
   }
 
-  def replayComputeState[F[_]: Sync: LiftIO](
+  def replayComputeState[F[_]: Async](
       hash: StateHash,
       terms: Seq[InternalProcessedDeploy],
       time: Option[Long] = None
@@ -58,7 +58,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     for {
       runtime <- Sync[F].delay(runtimeContainer.take())
       _       <- setTimestamp(time, runtime)
-      result  <- LiftIO[F].liftIO(replayEval(terms, runtime, hash).toIO)
+      result  <- replayEval(terms, runtime, hash).toAsync
       _       <- Sync[F].delay(runtimeContainer.put(runtime))
     } yield result
 
@@ -76,15 +76,15 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       _       <- Task.delay(runtimeContainer.put(runtime))
     } yield result
 
-  private def setTimestamp[F[_]: Sync: LiftIO](time: Option[Long], runtime: Runtime)(
+  private def setTimestamp[F[_]: Async](time: Option[Long], runtime: Runtime)(
       implicit scheduler: Scheduler
   ): F[Unit] =
-    LiftIO[F].liftIO(time match {
+    time match {
       case Some(t) =>
         val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(t))))
-        runtime.blockTime.setParams(timestamp).toIO
-      case None => Task.unit.toIO
-    })
+        runtime.blockTime.setParams(timestamp).toAsync
+      case None => Task.unit.toAsync
+    }
 
   def storageRepr(hash: StateHash)(
       implicit scheduler: Scheduler

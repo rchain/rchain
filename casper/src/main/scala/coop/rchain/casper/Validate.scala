@@ -1,6 +1,6 @@
 package coop.rchain.casper
 
-import cats.effect.{LiftIO, Sync}
+import cats.effect.{Async, LiftIO, Sync}
 import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
@@ -562,7 +562,7 @@ object Validate {
         false
       }
 
-  def transactions[F[_]: Sync: LiftIO: Log: BlockStore](
+  def transactions[F[_]: Async: Log: BlockStore](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       emptyStateHash: StateHash,
