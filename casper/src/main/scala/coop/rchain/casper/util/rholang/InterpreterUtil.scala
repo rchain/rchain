@@ -102,48 +102,50 @@ object InterpreterUtil {
   ): F[Either[BlockException, Option[StateHash]]] =
     (runtimeManager
       .replayComputeState(preStateHash, internalDeploys, time))
-      .flatMap {
-        case Left((Some(deploy), status)) =>
-          status match {
-            case InternalErrors(exs) =>
-              Left(
-                BlockException(
-                  new Exception(s"Internal errors encountered while processing ${PrettyPrinter
-                    .buildString(deploy)}: ${exs.mkString("\n")}")
-                )
-              ).rightCast[Option[StateHash]].pure[F]
-            case UserErrors(errors: Vector[Throwable]) =>
-              Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") *> Right(
-                none[StateHash]
-              ).leftCast[BlockException].pure[F]
-            case ReplayStatusMismatch(replay: DeployStatus, orig: DeployStatus) =>
+      .flatMap { res =>
+        res match {
+          case Left((Some(deploy), status)) =>
+            status match {
+              case InternalErrors(exs) =>
+                Left(
+                  BlockException(
+                    new Exception(s"Internal errors encountered while processing ${PrettyPrinter
+                      .buildString(deploy)}: ${exs.mkString("\n")}")
+                  )
+                ).rightCast[Option[StateHash]].pure[F]
+              case UserErrors(errors: Vector[Throwable]) =>
+                Log[F].warn(s"Found user error(s) ${errors.map(_.getMessage).mkString("\n")}") *> Right(
+                  none[StateHash]
+                ).leftCast[BlockException].pure[F]
+              case ReplayStatusMismatch(replay: DeployStatus, orig: DeployStatus) =>
+                Log[F].warn(
+                  s"Found replay status mismatch; replay failure is ${replay.isFailed} and orig failure is ${orig.isFailed}"
+                ) *> Right(none[StateHash]).leftCast[BlockException].pure[F]
+              case UnknownFailure =>
+                Log[F].warn(s"Found unknown failure") *> Right(none[StateHash])
+                  .leftCast[BlockException]
+                  .pure[F]
+            }
+          case Left((None, status)) =>
+            status match {
+              case UnusedCommEvent(ex: ReplayException) =>
+                Log[F].warn(s"Found unused comm event ${ex.getMessage}") *> Right(none[StateHash])
+                  .leftCast[BlockException]
+                  .pure[F]
+            }
+          case Right(computedStateHash) =>
+            if (tsHash.contains(computedStateHash)) {
+              // state hash in block matches computed hash!
+              Right(Option(computedStateHash)).leftCast[BlockException].pure[F]
+            } else {
+              // state hash in block does not match computed hash -- invalid!
+              // return no state hash, do not update the state hash set
               Log[F].warn(
-                s"Found replay status mismatch; replay failure is ${replay.isFailed} and orig failure is ${orig.isFailed}"
+                s"Tuplespace hash ${tsHash.getOrElse(ByteString.EMPTY)} does not match computed hash $computedStateHash."
               ) *> Right(none[StateHash]).leftCast[BlockException].pure[F]
-            case UnknownFailure =>
-              Log[F].warn(s"Found unknown failure") *> Right(none[StateHash])
-                .leftCast[BlockException]
-                .pure[F]
-          }
-        case Left((None, status)) =>
-          status match {
-            case UnusedCommEvent(ex: ReplayException) =>
-              Log[F].warn(s"Found unused comm event ${ex.getMessage}") *> Right(none[StateHash])
-                .leftCast[BlockException]
-                .pure[F]
-          }
-        case Right(computedStateHash) =>
-          if (tsHash.contains(computedStateHash)) {
-            // state hash in block matches computed hash!
-            Right(Option(computedStateHash)).leftCast[BlockException].pure[F]
-          } else {
-            // state hash in block does not match computed hash -- invalid!
-            // return no state hash, do not update the state hash set
-            Log[F].warn(
-              s"Tuplespace hash ${tsHash.getOrElse(ByteString.EMPTY)} does not match computed hash $computedStateHash."
-            ) *> Right(none[StateHash]).leftCast[BlockException].pure[F]
 
-          }
+            }
+        }
       }
 
   def computeDeploysCheckpoint[F[_]: Monad: BlockStore](
