@@ -14,6 +14,7 @@ from .common import TestingContext
 from .rnode import (
     docker_network_with_started_bootstrap,
     started_peer,
+    Node,
 )
 from .wait import (
     wait_for_blocks_count_at_least,
@@ -49,7 +50,7 @@ BONDED_VALIDATOR_KEY_3 = conftest.KeyPair(private_key='2b173084083291ac6850cb734
 
 
 @contextlib.contextmanager
-def started_bonded_validator(context: TestingContext, bootstrap_node: "Node", no, key_pair) -> Generator["Node", None, None]:
+def started_bonded_validator(context: TestingContext, bootstrap_node: Node, no, key_pair) -> Generator["Node", None, None]:
     with started_peer(
         context=context,
         network=bootstrap_node.network,
@@ -63,7 +64,7 @@ def started_bonded_validator(context: TestingContext, bootstrap_node: "Node", no
 
 @pytest.mark.xfail
 def test_multiple_deploys_at_once(command_line_options_fixture, docker_client_fixture) -> None:
-    contract_path = '/opt/docker/examples/hello_world_again.rho'
+    contract_path = '/opt/docker/examples/shortfast.rho'
     peers_keypairs = [BONDED_VALIDATOR_KEY_1, BONDED_VALIDATOR_KEY_2, BONDED_VALIDATOR_KEY_3]
     with conftest.testing_context(command_line_options_fixture, docker_client_fixture, bootstrap_keypair=BOOTSTRAP_NODE_KEYS, peers_keypairs=peers_keypairs) as context:
         with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
