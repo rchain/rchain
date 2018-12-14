@@ -17,6 +17,16 @@ case class Acc[G[_]](timeseries: List[Long] = List.empty, graph: G[Graphz[G]])
 
 object GraphzGenerator {
 
+  private def init[G[_]: Monad: GraphSerializer](name: String): Acc[G] =
+    Acc[G](
+      graph = Graphz[G](
+        name,
+        DiGraph,
+        rankdir = Some(BT),
+        node = Map("width" -> "0", "height" -> "0", "margin" -> "0.03", "fontsize" -> "8")
+      )
+    )
+
   def generate[
       F[_]: Monad: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore,
       G[_]: Monad: GraphSerializer
@@ -50,8 +60,9 @@ object GraphzGenerator {
                             val blockSenderHash = PrettyPrinter.buildString(b.sender)
                             g.node(
                               name = blockHash,
-                              shape = Box,
-                              color = Some(hashColor(blockSenderHash))
+                              shape = Record,
+                              color = Some(hashColor(blockSenderHash)),
+                              label = Some(s""""{$blockHash|$blockSenderHash}"""")
                             )
                           }
                         )
@@ -99,16 +110,6 @@ object GraphzGenerator {
 
                }
     } yield result
-
-  private def init[G[_]: Monad: GraphSerializer](name: String): Acc[G] =
-    Acc[G](
-      graph = Graphz[G](
-        name,
-        DiGraph,
-        rankdir = Some(BT),
-        node = Map("width" -> "0", "height" -> "0", "margin" -> "0.05", "fontsize" -> "8")
-      )
-    )
 
   private def hashColor(hash: String): String =
     s""""#${hash.substring(0, 6)}""""
