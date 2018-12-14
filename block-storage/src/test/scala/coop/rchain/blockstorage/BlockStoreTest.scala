@@ -25,6 +25,7 @@ trait BlockStoreTest
     extends FlatSpecLike
     with Matchers
     with OptionValues
+    with EitherValues
     with GeneratorDrivenPropertyChecks
     with BeforeAndAfterAll {
 
@@ -100,14 +101,17 @@ trait BlockStoreTest
 
   it should "rollback the transaction on error" in {
     withStore { store =>
+      val exception = new RuntimeException("msg")
+      
       def elem = {
         blockHashElementsGen.sample.get
-        throw new RuntimeException("msg")
+        throw exception
       }
       
       for {
         _ <- store.asMap().map(_.size shouldEqual 0)
-        _ <- store.put { elem }
+        putAttempt <- store.put { elem }.attempt
+        _ = putAttempt.left.value shouldBe exception
         result <- store.asMap().map(_.size shouldEqual 0)
       } yield result
     }
