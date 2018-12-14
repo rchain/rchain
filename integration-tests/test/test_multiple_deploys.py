@@ -19,6 +19,7 @@ from .rnode import (
 from .wait import (
     wait_for_blocks_count_at_least,
     wait_for_approved_block_received_handler_state,
+    wait_for_peers_count_at_least,
 )
 
 if TYPE_CHECKING:
@@ -61,8 +62,6 @@ def started_bonded_validator(context: TestingContext, bootstrap_node: Node, no, 
         wait_for_approved_block_received_handler_state(context, bonded_validator)
         yield bonded_validator
 
-
-@pytest.mark.xfail
 def test_multiple_deploys_at_once(command_line_options_fixture, docker_client_fixture) -> None:
     contract_path = '/opt/docker/examples/shortfast.rho'
     peers_keypairs = [BONDED_VALIDATOR_KEY_1, BONDED_VALIDATOR_KEY_2, BONDED_VALIDATOR_KEY_3]
@@ -71,6 +70,8 @@ def test_multiple_deploys_at_once(command_line_options_fixture, docker_client_fi
             with started_bonded_validator(context, bootstrap_node, 1, BONDED_VALIDATOR_KEY_1) as no1:
                 with started_bonded_validator(context, bootstrap_node, 2, BONDED_VALIDATOR_KEY_2) as no2:
                     with started_bonded_validator(context, bootstrap_node, 3, BONDED_VALIDATOR_KEY_3) as no3:
+                        wait_for_peers_count_at_least(context, no1, 3)
+
                         deploy1 = DeployThread("node1", no1, contract_path, 1)
                         deploy1.start()
 
