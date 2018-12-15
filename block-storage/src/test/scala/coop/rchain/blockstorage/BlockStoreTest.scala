@@ -151,7 +151,7 @@ class LMDBBlockStoreTest extends BlockStoreTest {
       test.unsafeRunSync
     } finally {
       env.close()
-      dbDir.recursivelyDelete
+      dbDir.recursivelyDelete()
     }
   }
 }
@@ -168,7 +168,13 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
     val env   = Context.env(dbDir, mapSize)
     implicit val metrics: Metrics[Task] = new MetricsNOP[Task]()
     val test = for {
-      store <- FileLMDBIndexBlockStore.create[Task](FileLMDBIndexBlockStore.Config(dbDir.resolve("block-store-data")))
+      store <- FileLMDBIndexBlockStore.create[Task](
+        FileLMDBIndexBlockStore.Config(
+          dbDir.resolve("block-store-data"),
+          dbDir.resolve("block-store-index"),
+          mapSize
+        )
+      )
       _ <- store.asMap().map(map => assert(map.isEmpty))
       result <- f(store)
     } yield result
@@ -176,7 +182,7 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
       test.unsafeRunSync
     } finally {
       env.close()
-      dbDir.recursivelyDelete
+      dbDir.recursivelyDelete()
     }
   }
 }

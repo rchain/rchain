@@ -23,4 +23,12 @@ object byteOps {
       ByteString.copyFrom(byteBuffer.array())
     }
   }
+
+  implicit class LongRich(val value: Long) extends AnyVal {
+    def toByteString: ByteString = {
+      val byteBuffer = ByteBuffer.allocate(8)
+      byteBuffer.putLong(value)
+      ByteString.copyFrom(byteBuffer.array())
+    }
+  }
 }

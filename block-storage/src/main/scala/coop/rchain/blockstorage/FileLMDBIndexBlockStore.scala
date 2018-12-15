@@ -1,20 +1,70 @@
 package coop.rchain.blockstorage
 
 import java.io.RandomAccessFile
-import java.nio.file.Path
+import java.nio.ByteBuffer
+import java.nio.file.{Files, Path}
 
 import cats.Monad
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Concurrent, ExitCase, Sync}
 import cats.implicits._
 import cats.effect.concurrent.{Ref, Semaphore}
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.shared.Resources.withResource
+import coop.rchain.blockstorage.util.byteOps._
+import org.lmdbjava.DbiFlags.MDB_CREATE
+import org.lmdbjava.Txn.NotReadyException
+import org.lmdbjava._
+
+import scala.collection.JavaConverters._
 
 class FileLMDBIndexBlockStore[F[_]: Monad: Sync] private (
     lock: Semaphore[F],
-    indexRef: Ref[F, Map[BlockHash, Long]],
+    env: Env[ByteBuffer],
+    index: Dbi[ByteBuffer],
     blockMessageRandomAccessFileRef: Ref[F, RandomAccessFile]
 ) extends BlockStore[F] {
+  implicit class RichBlockHash(byteVector: BlockHash) {
+
+    def toDirectByteBuffer: ByteBuffer = {
+      val buffer: ByteBuffer = ByteBuffer.allocateDirect(byteVector.size)
+      byteVector.copyTo(buffer)
+      // TODO: get rid of this:
+      buffer.flip()
+      buffer
+    }
+  }
+
+  private[this] def withTxn[R](txnThunk: => Txn[ByteBuffer])(f: Txn[ByteBuffer] => R): F[R] =
+    Sync[F].bracketCase(Sync[F].delay(txnThunk)) { txn =>
+      Sync[F].delay {
+        val r = f(txn)
+        txn.commit()
+        r
+      }
+    } {
+      case (txn, ExitCase.Completed) => Sync[F].delay(txn.close())
+      case (txn, _) =>
+        Sync[F].delay {
+          try {
+            txn.abort()
+          } catch {
+            case ex: NotReadyException =>
+              ex.printStackTrace()
+              TxnOps.manuallyAbortTxn(txn)
+            // vide: rchain/rspace/src/main/scala/coop/rchain/rspace/LMDBOps.scala
+          }
+          txn.close()
+        }
+    }
+
+  private[this] def withWriteTxn(f: Txn[ByteBuffer] => Unit): F[Unit] =
+    withTxn(env.txnWrite())(f)
+
+  private[this] def withReadTxn[R](f: Txn[ByteBuffer] => R): F[R] =
+    withTxn(env.txnRead())(f)
+
   private def readBlockMessage(offset: Long): F[BlockMessage] =
     for {
       blockMessageRandomAccessFile <- blockMessageRandomAccessFileRef.get
@@ -28,17 +78,27 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync] private (
   override def get(blockHash: BlockHash): F[Option[BlockMessage]] =
     lock.withPermit(
       for {
-        index  <- indexRef.get
-        result <- index.get(blockHash).traverse(readBlockMessage)
+        indexOpt <- withReadTxn { txn =>
+                     Option(index.get(txn, blockHash.toDirectByteBuffer))
+                       .map(r => r.getLong)
+                   }
+        result <- indexOpt.traverse(readBlockMessage)
       } yield result
     )
 
   override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
     lock.withPermit(
       for {
-        index         <- indexRef.get
-        filteredIndex = index.filter { case (blockHash, _) => p(blockHash) }
-        result <- filteredIndex.toList.traverse {
+        filteredIndex <- withReadTxn { txn =>
+                          withResource(index.iterate(txn)) { iterator =>
+                            iterator.asScala
+                              .map(kv => (ByteString.copyFrom(kv.key()), kv.`val`()))
+                              .withFilter { case (key, _) => p(key) }
+                              .map { case (key, value) => (key, value.getLong()) }
+                              .toList
+                          }
+                        }
+        result <- filteredIndex.traverse {
                    case (blockHash, offset) => readBlockMessage(offset).map(blockHash -> _)
                  }
       } yield result
@@ -48,13 +108,19 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync] private (
     lock.withPermit(
       for {
         blockMessageRandomAccessFile <- blockMessageRandomAccessFileRef.get
-        (blockHash, blockMessage)    = f
-        blockMessageByteArray        = blockMessage.toByteArray
         endOfFileOffset              <- Sync[F].delay { blockMessageRandomAccessFile.length() }
         _                            <- Sync[F].delay { blockMessageRandomAccessFile.seek(endOfFileOffset) }
+        (blockHash, blockMessage)    = f
+        blockMessageByteArray        = blockMessage.toByteArray
         _                            <- Sync[F].delay { blockMessageRandomAccessFile.writeInt(blockMessageByteArray.length) }
         _                            <- Sync[F].delay { blockMessageRandomAccessFile.write(blockMessageByteArray) }
-        _                            <- indexRef.update(_.updated(blockHash, endOfFileOffset))
+        _ <- withWriteTxn { txn =>
+              index.put(
+                txn,
+                blockHash.toDirectByteBuffer,
+                endOfFileOffset.toByteString.toDirectByteBuffer
+              )
+            }
       } yield ()
     )
 
@@ -66,7 +132,9 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync] private (
       for {
         blockMessageRandomAccessFile <- blockMessageRandomAccessFileRef.get
         _                            <- Sync[F].delay { blockMessageRandomAccessFile.setLength(0) }
-        _                            <- indexRef.update(_ => Map.empty)
+        _ <- withWriteTxn { txn =>
+              index.drop(txn)
+            }
       } yield ()
     )
 
@@ -81,14 +149,30 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync] private (
 
 object FileLMDBIndexBlockStore {
   case class Config(
-      path: Path
+      storagePath: Path,
+      indexPath: Path,
+      mapSize: Long,
+      maxDbs: Int = 1,
+      maxReaders: Int = 126,
+      noTls: Boolean = true
   )
 
   def create[F[_]: Monad: Sync: Concurrent](config: Config): F[FileLMDBIndexBlockStore[F]] =
     for {
-      lock                            <- Semaphore[F](1)
-      blockMessageRandomAccessFile    = new RandomAccessFile(config.path.toFile, "rw")
-      indexRef                        <- Ref.of[F, Map[BlockHash, Long]](Map.empty)
-      blockMessageRandomAccessFileRef <- Ref.of[F, RandomAccessFile](blockMessageRandomAccessFile)
-    } yield new FileLMDBIndexBlockStore[F](lock, indexRef, blockMessageRandomAccessFileRef)
+      lock <- Semaphore[F](1)
+      env <- Sync[F].delay {
+        if (Files.notExists(config.indexPath)) Files.createDirectories(config.indexPath)
+        val flags = if (config.noTls) List(EnvFlags.MDB_NOTLS) else List.empty
+        Env
+          .create()
+          .setMapSize(config.mapSize)
+          .setMaxDbs(config.maxDbs)
+          .setMaxReaders(config.maxReaders)
+          .open(config.indexPath.toFile, flags: _*)
+      }
+      index <- Sync[F].delay { env.openDbi(s"block_store_index", MDB_CREATE) }
+      blockMessageRandomAccessFile <- Sync[F].delay { new RandomAccessFile(config.storagePath.toFile, "rw") }
+      blockMessageRandomAccessFileRef <- Ref.of[F, RandomAccessFile](
+                                          blockMessageRandomAccessFile)
+    } yield new FileLMDBIndexBlockStore[F](lock, env, index, blockMessageRandomAccessFileRef)
 }
