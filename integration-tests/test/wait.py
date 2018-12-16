@@ -180,3 +180,7 @@ def wait_for_converged_network(context: 'TestingContext', network: 'Network', pe
     for peer in network.peers:
         peer_predicate = HasAtLeastPeers(peer, peer_connections)
         wait_on_using_wall_clock_time(peer_predicate, context.network_converge_timeout)
+
+def wait_for_peers_count_at_least(context: 'TestingContext', node: 'Node', npeers: int) -> None:
+    predicate = HasAtLeastPeers(node, npeers)
+    wait_on_using_wall_clock_time(predicate, context.network_converge_timeout)
