@@ -30,7 +30,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
     shardId: String,
-    semaphore: Semaphore[F]
+    blockProcessingLock: Semaphore[F]
 )(implicit scheduler: Scheduler)
     extends MultiParentCasper[F] {
 
@@ -67,7 +67,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       b: BlockMessage,
       handleDoppelganger: (BlockMessage, Validator) => F[Unit]
   ): F[BlockStatus] =
-    Sync[F].bracket(semaphore.acquire)(
+    Sync[F].bracket(blockProcessingLock.acquire)(
       _ =>
         for {
           dag            <- blockDag
@@ -90,7 +90,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
                      }) *> internalAddBlock(b)
                    }
         } yield result
-    )(_ => semaphore.release)
+    )(_ => blockProcessingLock.release)
 
   private def internalAddBlock(b: BlockMessage): F[BlockStatus] =
     for {

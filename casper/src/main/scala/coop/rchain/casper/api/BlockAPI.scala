@@ -1,6 +1,8 @@
 package coop.rchain.casper.api
 
 import cats.Monad
+import cats.effect.concurrent.Semaphore
+import cats.effect.{Bracket, Concurrent, Sync}
 import cats.effect.Sync
 import cats._, cats.data._, cats.implicits._
 import cats.mtl._
@@ -22,7 +24,7 @@ import coop.rchain.models.{BindPattern, Par}
 import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rspace.{Serialize, StableHashProvider}
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
-import coop.rchain.shared.{Log, SyncLock}
+import coop.rchain.shared.Log
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
 import coop.rchain.rholang.interpreter.{PrettyPrinter => RholangPrettyPrinter}
 import coop.rchain.models.rholang.sorter.Sortable._
@@ -39,8 +41,6 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil
 
 object BlockAPI {
-
-  private val createBlockLock = new SyncLock
 
   def deploy[F[_]: Monad: MultiParentCasperRef: Log](d: DeployData): F[DeployServiceResponse] = {
     def casperDeploy(implicit casper: MultiParentCasper[F]): F[DeployServiceResponse] =
@@ -59,28 +59,35 @@ object BlockAPI {
       )
   }
 
-  def createBlock[F[_]: Sync: MultiParentCasperRef: Log]: F[DeployServiceResponse] =
+  def createBlock[F[_]: Sync: Concurrent: MultiParentCasperRef: Log](
+      blockApiLock: Semaphore[F]
+  ): F[DeployServiceResponse] =
     MultiParentCasperRef.withCasper[F, DeployServiceResponse](
-      casper =>
-        // TODO: Use Bracket: See https://github.com/rchain/rchain/pull/1436#discussion_r215520914
-        Monad[F].ifM(Sync[F].delay { createBlockLock.tryLock() })(
-          for {
-            maybeBlock <- casper.createBlock
-            result <- maybeBlock match {
-                       case err: NoBlock =>
-                         DeployServiceResponse(success = false, s"Error while creating block: $err")
-                           .pure[F]
-                       case Created(block) =>
-                         casper
-                           .addBlock(block, ignoreDoppelgangerCheck[F])
-                           .map(addResponse(_, block))
-                     }
-            _ <- Sync[F].delay { createBlockLock.unlock() }
-          } yield result,
-          DeployServiceResponse(success = false, "Error: There is another propose in progress.")
-            .pure[F]
-        ),
-      DeployServiceResponse(success = false, "Error: Casper instance not available")
+      casper => {
+        Sync[F].bracket(blockApiLock.tryAcquire) {
+          case true =>
+            for {
+              maybeBlock <- casper.createBlock
+              result <- maybeBlock match {
+                         case err: NoBlock =>
+                           DeployServiceResponse(
+                             success = false,
+                             s"Error while creating block: $err"
+                           ).pure[F]
+                         case Created(block) =>
+                           casper
+                             .addBlock(block, ignoreDoppelgangerCheck[F])
+                             .map(addResponse(_, block))
+                       }
+            } yield result
+          case false =>
+            DeployServiceResponse(success = false, "Error: There is another propose in progress.")
+              .pure[F]
+        } { _ =>
+          blockApiLock.release
+        }
+      },
+      default = DeployServiceResponse(success = false, "Error: Casper instance not available")
     )
 
   def getListeningNameDataResponse[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](

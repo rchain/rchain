@@ -54,7 +54,7 @@ class HashSetCasperTestNode[F[_]](
     storageSize: Long,
     val blockDagDir: Path,
     val blockStoreDir: Path,
-    semaphore: Semaphore[F],
+    blockProcessingLock: Semaphore[F],
     shardId: String = "rchain"
 )(
     implicit scheduler: Scheduler,
@@ -93,7 +93,7 @@ class HashSetCasperTestNode[F[_]](
     genesis,
     postGenesisStateHash,
     shardId,
-    semaphore
+    blockProcessingLock
   )
 
   implicit val multiparentCasperRef = MultiParentCasperRef.unsafe[F](Some(casperEff))
@@ -180,7 +180,7 @@ object HashSetCasperTestNode {
                           ),
                           genesis
                         )
-      semaphore <- Semaphore[F](1)
+      blockProcessingLock <- Semaphore[F](1)
       node = new HashSetCasperTestNode[F](
         name,
         identity,
@@ -192,7 +192,7 @@ object HashSetCasperTestNode {
         storageSize,
         blockDagDir,
         blockStoreDir,
-        semaphore,
+        blockProcessingLock,
         "rchain"
       )(scheduler, syncF, captureF, concurrentF, blockStore, blockDagStorage, metricEff, absF)
       result <- node.initialize.map(_ => node)
