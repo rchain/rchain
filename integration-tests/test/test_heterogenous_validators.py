@@ -14,6 +14,7 @@ from .wait import (
     wait_for_node_sees_block,
     wait_for_blocks_count_at_least,
     wait_for_approved_block_received_handler_state,
+    wait_for_peers_count_at_least,
 )
 
 
@@ -95,6 +96,7 @@ def test_heterogenous_validators(command_line_options_fixture, docker_client_fix
     with conftest.testing_context(command_line_options_fixture, docker_client_fixture, bootstrap_keypair=BOOTSTRAP_NODE_KEYS, peers_keypairs=[BONDED_VALIDATOR_KEYS]) as context:
         with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
             with started_bonded_validator(context, bootstrap_node) as bonded_validator:
+                wait_for_peers_count_at_least(context, bonded_validator, 1)
                 contract_path = '/opt/docker/examples/hello_world_again.rho'
                 for _ in range(BONDED_VALIDATOR_BLOCKS):
                     bonded_validator.deploy(contract_path)
@@ -106,6 +108,7 @@ def test_heterogenous_validators(command_line_options_fixture, docker_client_fix
                         private_key=JOINING_VALIDATOR_KEYS.private_key,
                         public_key=JOINING_VALIDATOR_KEYS.public_key,
                     )
+                    wait_for_peers_count_at_least(context, bonded_validator, 2)
                     forward_file = joining_validator.cat_forward_file(public_key=JOINING_VALIDATOR_KEYS.public_key)
                     bond_file = joining_validator.cat_bond_file(public_key=JOINING_VALIDATOR_KEYS.public_key)
                     bonded_validator.deploy_string(forward_file)
@@ -118,6 +121,7 @@ def test_heterogenous_validators(command_line_options_fixture, docker_client_fix
                         joining_validator.propose()
 
                     with started_readonly_peer(context, bootstrap_node) as readonly_peer:
+                        wait_for_peers_count_at_least(context, bonded_validator, 3)
                         # Force sync with the network
                         joining_validator.deploy(contract_path)
                         joining_validator.propose()
