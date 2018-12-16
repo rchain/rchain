@@ -163,7 +163,7 @@ class Graphz[F[_]: Monad](gtype: GraphType, t: String)(implicit ser: GraphSerial
     val attrLabel: Map[String, String] = label.map(c => Map("label" -> c)).getOrElse(Map.empty)
 
     val attrs: Map[String, String] = attrShape |+| attrColor |+| attrLabel
-    ser.push(t + Graphz.quote(name) + Graphz.attrMkStr(attrs).getOrElse(""))
+    ser.push(t + Graphz.quote(name) + Graphz.attrMkStr(attrs).map(a => " " + a).getOrElse(""))
   }
 
   def subgraph(sub: F[Graphz[F]]): F[Unit] = sub >>= (_ => ser.push(""))
