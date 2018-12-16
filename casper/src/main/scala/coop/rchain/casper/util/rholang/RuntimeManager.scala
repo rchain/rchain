@@ -1,11 +1,13 @@
 package coop.rchain.casper.util.rholang
 
+import cats.effect._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GString
@@ -50,16 +52,16 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     result.flatMap(_.a.pars)
   }
 
-  def replayComputeState(
+  def replayComputeState[F[_]: ToAbstractContext: Sync](
       hash: StateHash,
       terms: Seq[InternalProcessedDeploy],
       time: Option[Long] = None
-  ): Task[Either[(Option[Deploy], Failed), StateHash]] =
+  ): F[Either[(Option[Deploy], Failed), StateHash]] =
     for {
-      runtime <- Task.delay(runtimeContainer.take())
+      runtime <- Sync[F].delay(runtimeContainer.take())
       _       <- setTimestamp(time, runtime)
-      result  <- replayEval(terms, runtime, hash)
-      _       <- Task.delay(runtimeContainer.put(runtime))
+      result  <- ToAbstractContext[F].fromTask(replayEval(terms, runtime, hash))
+      _       <- Sync[F].delay(runtimeContainer.put(runtime))
     } yield result
 
   def computeState(
@@ -74,12 +76,15 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       _       <- Task.delay(runtimeContainer.put(runtime))
     } yield result
 
-  private def setTimestamp(time: Option[Long], runtime: Runtime): Task[Unit] =
+  private def setTimestamp[F[_]: ToAbstractContext: Sync](
+      time: Option[Long],
+      runtime: Runtime
+  ): F[Unit] =
     time match {
       case Some(t) =>
         val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(t))))
-        runtime.blockTime.setParams(timestamp)
-      case None => Task.unit
+        ToAbstractContext[F].fromTask(runtime.blockTime.setParams(timestamp))
+      case None => ().pure[F]
     }
 
   def storageRepr(hash: StateHash)(
