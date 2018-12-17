@@ -2,9 +2,10 @@ import re
 import time
 import logging
 from typing import TYPE_CHECKING
-
 import pytest
 import typing_extensions
+
+from .common import NonZeroExitCodeError
 
 if TYPE_CHECKING:
     from .common import Network, TestingContext
@@ -65,6 +66,21 @@ class HasAtLeastPeers:
         peers = int(match[1])
         return peers >= self.minimum_peers_number
 
+class NodeSeesBlock:
+    def __init__(self, node: 'Node', block_hash: str) -> None:
+        self.node = node
+        self.block_hash = block_hash
+
+    def __str__(self) -> str:
+        args = ', '.join(repr(a) for a in (self.node.name, self.block_hash))
+        return '<{}({})>'.format(self.__class__.__name__, args)
+
+    def is_satisfied(self) -> bool:
+        try:
+            self.node.get_block(self.block_hash)
+            return True
+        except NonZeroExitCodeError:
+            return False
 
 class BlockContainsString:
     def __init__(self, node: 'Node', block_hash: str, expected_string: str) -> None:
@@ -121,6 +137,10 @@ def wait_on_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) ->
     logging.info("TIMEOUT %s", predicate)
     pytest.fail('Failed to satisfy {} after {}s'.format(predicate, elapsed))
 
+def wait_for_node_sees_block(context: 'TestingContext', node: 'Node', block_hash: str) -> None:
+    predicate = NodeSeesBlock(node, block_hash)
+    wait_on_using_wall_clock_time(predicate, context.node_startup_timeout)
+
 
 def wait_for_block_contains(context: 'TestingContext', node: 'Node', block_hash: str, expected_string: str) -> None:
     predicate = BlockContainsString(node, block_hash, expected_string)
@@ -160,3 +180,7 @@ def wait_for_converged_network(context: 'TestingContext', network: 'Network', pe
     for peer in network.peers:
         peer_predicate = HasAtLeastPeers(peer, peer_connections)
         wait_on_using_wall_clock_time(peer_predicate, context.network_converge_timeout)
+
+def wait_for_peers_count_at_least(context: 'TestingContext', node: 'Node', npeers: int) -> None:
+    predicate = HasAtLeastPeers(node, npeers)
+    wait_on_using_wall_clock_time(predicate, context.network_converge_timeout)

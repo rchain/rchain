@@ -13,12 +13,6 @@ object MultiParentCasperRef {
 
   def apply[F[_]](implicit ev: MultiParentCasperRef[F]): MultiParentCasperRef[F] = ev
 
-  private class MultiParentCasperRefImpl[F[_]](state: Ref[F, Option[MultiParentCasper[F]]])
-      extends MultiParentCasperRef[F] {
-    override def get: F[Option[MultiParentCasper[F]]]       = state.get
-    override def set(casper: MultiParentCasper[F]): F[Unit] = state.set(Some(casper))
-  }
-
   def of[F[_]: Sync]: F[MultiParentCasperRef[F]] = MaybeCell.of[F, MultiParentCasper[F]]
 
   // For usage in tests only

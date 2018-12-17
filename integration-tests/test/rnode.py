@@ -23,6 +23,7 @@ from .common import (
     make_tempfile,
     make_tempdir,
     TestingContext,
+    NonZeroExitCodeError
 )
 from .wait import (
     wait_for_node_started,
@@ -53,14 +54,6 @@ class RNodeAddressNotFoundError(Exception):
     def __init__(self, regex):
         super().__init__()
         self.regex = regex
-
-
-class NonZeroExitCodeError(Exception):
-    def __init__(self, command: Tuple[str, ...], exit_code: int, output: str):
-        super().__init__()
-        self.command = command
-        self.exit_code = exit_code
-        self.output = output
 
 
 class CommandTimeoutError(Exception):

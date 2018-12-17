@@ -21,7 +21,7 @@ lazy val projectSettings = Seq(
     Resolver.sonatypeRepo("snapshots"),
     "jitpack" at "https://jitpack.io"
   ),
-  scalafmtOnCompile := true,
+  scalafmtOnCompile := sys.env.get("CI").isEmpty, // disable in CI environments
   scapegoatVersion in ThisBuild := "1.3.4",
   testOptions in Test += Tests.Argument("-oD"), //output test durations
   dependencyOverrides ++= Seq(
@@ -36,8 +36,16 @@ lazy val projectSettings = Seq(
   Test / testForkedParallel := false,
   IntegrationTest / fork := true,
   IntegrationTest / parallelExecution := false,
-  IntegrationTest / testForkedParallel := false
-)
+  IntegrationTest / testForkedParallel := false,
+) ++
+// skip api doc generation if SKIP_DOC env variable is defined 
+Seq(sys.env.get("SKIP_DOC")).flatMap { _ =>
+  Seq(
+    publishArtifact in (Compile, packageDoc) := false,
+    publishArtifact in packageDoc := false,
+    sources in (Compile, doc) := Seq.empty
+  )
+}
 
 lazy val coverageSettings = Seq(
   coverageMinimum := 90,
@@ -82,6 +90,17 @@ lazy val shared = (project in file("shared"))
     )
   )
 
+lazy val graphz = (project in file("graphz"))
+  .settings(commonSettings: _*)
+  .settings(
+    version := "0.1",
+    libraryDependencies ++= commonDependencies ++ Seq(
+      catsCore,
+      catsEffect,
+      catsMtl
+    )
+  ).dependsOn(shared)
+
 lazy val casper = (project in file("casper"))
   .settings(commonSettings: _*)
   .settings(rholangSettings: _*)
@@ -98,6 +117,7 @@ lazy val casper = (project in file("casper"))
     blockStorage % "compile->compile;test->test",
     comm         % "compile->compile;test->test",
     shared       % "compile->compile;test->test",
+    graphz,
     crypto,
     models,
     rspace,
@@ -497,6 +517,7 @@ lazy val rchain = (project in file("."))
     casper,
     comm,
     crypto,
+    graphz,
     models,
     node,
     regex,

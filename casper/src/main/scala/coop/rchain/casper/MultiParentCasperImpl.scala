@@ -6,6 +6,7 @@ import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
+import coop.rchain.catscontrib._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util._
@@ -23,13 +24,13 @@ import monix.execution.atomic.AtomicAny
 
 import scala.collection.mutable
 
-class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage](
+class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ToAbstractContext](
     runtimeManager: RuntimeManager,
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
     shardId: String,
-    semaphore: Semaphore[F]
+    blockProcessingLock: Semaphore[F]
 )(implicit scheduler: Scheduler)
     extends MultiParentCasper[F] {
 
@@ -66,7 +67,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       b: BlockMessage,
       handleDoppelganger: (BlockMessage, Validator) => F[Unit]
   ): F[BlockStatus] =
-    Sync[F].bracket(semaphore.acquire)(
+    Sync[F].bracket(blockProcessingLock.acquire)(
       _ =>
         for {
           dag            <- blockDag
@@ -89,9 +90,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
                      }) *> internalAddBlock(b)
                    }
         } yield result
-    )(_ => semaphore.release)
+    )(_ => blockProcessingLock.release)
 
-  def internalAddBlock(b: BlockMessage): F[BlockStatus] =
+  private def internalAddBlock(b: BlockMessage): F[BlockStatus] =
     for {
       validFormat  <- Validate.formatOfFields[F](b)
       validSig     <- Validate.blockSignature[F](b)
@@ -196,7 +197,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
    *  produced (no deploys, already processing, no validator id)
    */
   def createBlock: F[CreateBlockStatus] = validatorId match {
-    case Some(vId @ ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
+    case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
       for {
         dag              <- blockDag
         orderedHeads     <- estimator(dag)

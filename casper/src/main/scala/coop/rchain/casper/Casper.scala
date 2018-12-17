@@ -66,7 +66,7 @@ object MultiParentCasper extends MultiParentCasperInstances {
 
 sealed abstract class MultiParentCasperInstances {
 
-  def hashSetCasper[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage](
+  def hashSetCasper[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ToAbstractContext](
       runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
@@ -90,7 +90,7 @@ sealed abstract class MultiParentCasperInstances {
                                  )
                                case Right(Some(hash)) => hash.pure[F]
                              }
-      semaphore <- Semaphore[F](1)
+      blockProcessingLock <- Semaphore[F](1)
     } yield
       new MultiParentCasperImpl[F](
         runtimeManager,
@@ -98,6 +98,6 @@ sealed abstract class MultiParentCasperInstances {
         genesis,
         postGenesisStateHash,
         shardId,
-        semaphore
+        blockProcessingLock
       )
 }
