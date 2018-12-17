@@ -25,8 +25,6 @@ trait BlockStore[F[_]] {
   def contains(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[Boolean] =
     get(blockHash).map(_.isDefined)
 
-  def asMap(): F[Map[BlockHash, BlockMessage]]
-
   def clear(): F[Unit]
 
   def close(): F[Unit]

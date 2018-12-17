@@ -54,7 +54,7 @@ trait BlockStoreTest
                 case (k, v) =>
                   store.get(k).map(_ shouldBe Some(v))
               }
-          result <- store.asMap().map(_.size shouldEqual items.size)
+          result <- store.find(_ => true).map(_.size shouldEqual items.size)
           _      <- store.clear()
         } yield result
       }
@@ -74,7 +74,7 @@ trait BlockStoreTest
                     w.head._2 shouldBe v
                   }
               }
-          result <- store.asMap().map(_.size shouldEqual items.size)
+          result <- store.find(_ => true).map(_.size shouldEqual items.size)
           _      <- store.clear()
         } yield result
       }
@@ -97,7 +97,7 @@ trait BlockStoreTest
           _ <- items.traverse_[Task, Assertion] {
                 case (k, _, v2) => store.get(k).map(_ shouldBe Some(v2))
               }
-          result <- store.asMap().map(_.size shouldEqual items.size)
+          result <- store.find(_ => true).map(_.size shouldEqual items.size)
           _      <- store.clear()
         } yield result
       }
@@ -113,10 +113,10 @@ trait BlockStoreTest
       }
 
       for {
-        _          <- store.asMap().map(_.size shouldEqual 0)
+        _          <- store.find(_ => true).map(_.size shouldEqual 0)
         putAttempt <- store.put { elem }.attempt
         _          = putAttempt.left.value shouldBe exception
-        result     <- store.asMap().map(_.size shouldEqual 0)
+        result     <- store.find(_ => true).map(_.size shouldEqual 0)
       } yield result
     }
   }
@@ -128,7 +128,7 @@ class InMemBlockStoreTest extends BlockStoreTest {
       refTask <- emptyMapRef[Task]
       metrics = new MetricsNOP[Task]()
       store   = InMemBlockStore.create[Task](Monad[Task], refTask, metrics)
-      _       <- store.asMap().map(map => assert(map.isEmpty))
+      _       <- store.find(_ => true).map(map => assert(map.isEmpty))
       result  <- f(store)
     } yield result
     test.unsafeRunSync
@@ -148,7 +148,7 @@ class LMDBBlockStoreTest extends BlockStoreTest {
     implicit val metrics: Metrics[Task] = new MetricsNOP[Task]()
     val store                           = LMDBBlockStore.create[Task](env, dbDir)
     val test = for {
-      _      <- store.asMap().map(map => assert(map.isEmpty))
+      _      <- store.find(_ => true).map(map => assert(map.isEmpty))
       result <- f(store)
     } yield result
     try {
@@ -179,7 +179,7 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
                   mapSize
                 )
               )
-      _      <- store.asMap().map(map => assert(map.isEmpty))
+      _      <- store.find(_ => true).map(map => assert(map.isEmpty))
       result <- f(store)
     } yield result
     try {

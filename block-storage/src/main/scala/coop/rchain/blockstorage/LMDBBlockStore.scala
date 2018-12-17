@@ -109,23 +109,6 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
             }
     } yield ret
 
-  @deprecated(
-    message = "to be removed when casper code no longer needs the whole DB in memmory",
-    since = "0.5"
-  )
-  def asMap(): F[Map[BlockHash, BlockMessage]] =
-    for {
-      _ <- metricsF.incrementCounter("as-map")
-      ret <- withReadTxn { txn =>
-              blocks.iterate(txn).asScala.foldLeft(Map.empty[BlockHash, BlockMessage]) {
-                (acc: Map[BlockHash, BlockMessage], x: CursorIterator.KeyVal[ByteBuffer]) =>
-                  val hash = ByteString.copyFrom(x.key())
-                  val msg  = BlockMessage.parseFrom(ByteString.copyFrom(x.`val`()).newCodedInput())
-                  acc.updated(hash, msg)
-              }
-            }
-    } yield ret
-
   def clear(): F[Unit] =
     for {
       ret <- withWriteTxn { txn =>

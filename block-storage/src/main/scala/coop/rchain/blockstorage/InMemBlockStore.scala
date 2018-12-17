@@ -26,16 +26,6 @@ class InMemBlockStore[F[_]] private ()(
       state <- refF.get
     } yield state.get(blockHash)
 
-  @deprecated(
-    message = "to be removed when casper code no longer needs the whole DB in memmory",
-    since = "0.5"
-  )
-  def asMap(): F[Map[BlockHash, BlockMessage]] =
-    for {
-      _     <- metricsF.incrementCounter("as-map")
-      state <- refF.get
-    } yield state
-
   override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
     for {
       _     <- metricsF.incrementCounter("find")

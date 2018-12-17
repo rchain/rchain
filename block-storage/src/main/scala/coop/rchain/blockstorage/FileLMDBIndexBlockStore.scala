@@ -124,9 +124,6 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync] private (
       } yield ()
     )
 
-  override def asMap(): F[Map[BlockHash, BlockMessage]] =
-    find(_ => true).map(_.toMap)
-
   override def clear(): F[Unit] =
     lock.withPermit(
       for {
