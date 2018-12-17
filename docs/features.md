@@ -76,7 +76,7 @@ database = "rnode"
 
 ### As a Node operator, once connected via a bootstrap node, I want to discover and connect to peers
 #### discover other nodes
-##### test: TBD
+##### test: test/test_p2p.py::test_discover_other_nodes
 ##### steps:
 
 * create a p2p network with 3 nodes `nodaA`, `nodeB` and `nodeC`

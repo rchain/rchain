@@ -13,3 +13,7 @@ def test_connecting_to_existing_node(command_line_options_fixture, docker_client
 @pytest.mark.xfail
 def test_connecting_to_non_existing_node(command_line_options_fixture, docker_client_fixture):
     fail 
+
+@pytest.mark.xfail
+def test_discover_other_nodes(command_line_options_fixture, docker_client_fixture):
+    fail
