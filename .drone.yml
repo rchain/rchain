@@ -6,7 +6,9 @@
 
 # See https://bors.tech/documentation/getting-started/ for why we have trying and staging here:
 __branches: &branches
-  - dev
+  # Merges to `dev` are only ever done by bors, using a fast-forward merge, if the `staging` build passes.
+  # This means everything that lands in dev has already been tested in CI. Hence, the `dev` build is redundant.
+  # - dev
   - master
   - release-*
   - testing*
