@@ -75,6 +75,15 @@ database = "rnode"
 * node should log that bootstrap could not been found
 
 ### As a Node operator, once connected via a bootstrap node, I want to discover and connect to peers
+#### discover other nodes
+##### test: TBD
+##### steps:
+
+* create a p2p network with 3 nodes `nodaA`, `nodeB` and `nodeC`
+* join p2p network as described in "As a Node operator, I want to be able to bootstrap to the network by connecting to any known node" bootstaping from `nodeA`
+* after a period of time new node discovers `nodeB` and `nodeC`
+* after a period of time new node connects (via protocol handshake) with `nodeB` and `nodeC`
+
 ### As a Node operator, I want to know how many peers I am connected to
 ## Network Launch
 ### As a Coop SRE I want to launch a network
