@@ -2,6 +2,7 @@ import re
 import os
 import queue
 import shlex
+import string
 import logging
 import threading
 import contextlib
@@ -16,14 +17,15 @@ from typing import (
 )
 
 import pytest
+from docker.client import DockerClient
 
 from . import conftest
 from .common import (
-    random_string,
     make_tempfile,
     make_tempdir,
     TestingContext,
-    NonZeroExitCodeError
+    NonZeroExitCodeError,
+    CommandLineOptions,
 )
 from .wait import (
     wait_for_node_started,
@@ -35,7 +37,6 @@ if TYPE_CHECKING:
     from docker.models.containers import Container
     from logging import Logger
     from threading import Event
-    from docker.client import DockerClient
     from docker.models.containers import ExecResult
 
 
@@ -48,7 +49,6 @@ rnode_deploy_dir = "{}/deploy".format(rnode_directory)
 rnode_bonds_file = '{}/genesis/bonds.txt'.format(rnode_directory)
 rnode_certificate = '{}/node.certificate.pem'.format(rnode_directory)
 rnode_key = '{}/node.key.pem'.format(rnode_directory)
-
 
 class RNodeAddressNotFoundError(Exception):
     def __init__(self, regex):
@@ -266,7 +266,7 @@ def make_container_command(container_command: str, container_command_options: Di
 
 def make_node(
     *,
-    docker_client: "DockerClient",
+    docker_client: DockerClient,
     name: str,
     network: str,
     bonds_file: str,
@@ -347,7 +347,7 @@ def get_absolute_path_for_mounting(relative_path: str, mount_dir: Optional[str]=
 
 def make_bootstrap_node(
     *,
-    docker_client: "DockerClient",
+    docker_client: DockerClient,
     network: str,
     bonds_file: str,
     key_pair: "KeyPair",
@@ -412,7 +412,7 @@ def make_peer_name(network_name: str, name: str) -> str:
 
 def make_peer(
     *,
-    docker_client: "DockerClient",
+    docker_client: DockerClient,
     network: str,
     name: str,
     bonds_file: str,
@@ -477,7 +477,7 @@ def started_peer(
 
 def create_peer_nodes(
     *,
-    docker_client: "DockerClient",
+    docker_client: DockerClient,
     bootstrap: Node,
     network: str,
     bonds_file: str,
@@ -513,9 +513,13 @@ def create_peer_nodes(
     return result
 
 
+def make_random_network_name(context: TestingContext, length: int) -> str:
+    return ''.join(context.random_generator.choice(string.ascii_lowercase) for m in range(length))
+
+
 @contextlib.contextmanager
-def docker_network(docker_client: "DockerClient") -> Generator[str, None, None]:
-    network_name = "rchain-{}".format(random_string(5).lower())
+def docker_network(context: TestingContext, docker_client: DockerClient) -> Generator[str, None, None]:
+    network_name = "rchain-{}".format(make_random_network_name(context, 5))
     docker_client.networks.create(network_name, driver="bridge")
     try:
         yield network_name
@@ -544,13 +548,13 @@ def started_bootstrap_node(*, context: TestingContext, network, mount_dir: str =
 
 @contextlib.contextmanager
 def docker_network_with_started_bootstrap(context):
-    with docker_network(context.docker) as network:
+    with docker_network(context, context.docker) as network:
         with started_bootstrap_node(context=context, network=network, mount_dir=context.mount_dir) as node:
             yield node
 
 
 @pytest.yield_fixture(scope='module')
-def started_standalone_bootstrap_node(command_line_options_fixture, docker_client_fixture):
-    with conftest.testing_context(command_line_options_fixture, docker_client_fixture) as context:
+def started_standalone_bootstrap_node(command_line_options: CommandLineOptions, docker_client: DockerClient) -> Node:
+    with conftest.testing_context(command_line_options, docker_client) as context:
         with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
             yield bootstrap_node

@@ -1,4 +1,3 @@
-import logging
 import contextlib
 import threading
 from typing import (
@@ -6,11 +5,13 @@ from typing import (
     Generator,
 )
 
-import pytest
+from docker.client import DockerClient
 
 from . import conftest
-
-from .common import TestingContext
+from .common import (
+    CommandLineOptions,
+    TestingContext,
+)
 from .rnode import (
     docker_network_with_started_bootstrap,
     started_peer,
@@ -24,8 +25,6 @@ from .wait import (
 
 if TYPE_CHECKING:
     from _pytest.fixtures import SubRequest
-    from docker.client import DockerClient
-    from .rnode import Node
 
 
 
@@ -38,10 +37,9 @@ class DeployThread(threading.Thread):
         self.count = count
 
     def run(self):
-        for i in range(self.count):
+        for _ in range(self.count):
             self.node.deploy(self.contract)
             self.node.propose()
-            self.node.show_blocks_with_depth(1)
 
 
 BOOTSTRAP_NODE_KEYS = conftest.KeyPair(private_key='80366db5fbb8dad7946f27037422715e4176dda41d582224db87b6c3b783d709', public_key='1cd8bf79a2c1bd0afa160f6cdfeb8597257e48135c9bf5e4823f2875a1492c97')
@@ -62,10 +60,11 @@ def started_bonded_validator(context: TestingContext, bootstrap_node: Node, no, 
         wait_for_approved_block_received_handler_state(context, bonded_validator)
         yield bonded_validator
 
-def test_multiple_deploys_at_once(command_line_options_fixture, docker_client_fixture) -> None:
+
+def test_multiple_deploys_at_once(command_line_options: CommandLineOptions, docker_client: DockerClient) -> None:
     contract_path = '/opt/docker/examples/shortfast.rho'
     peers_keypairs = [BONDED_VALIDATOR_KEY_1, BONDED_VALIDATOR_KEY_2, BONDED_VALIDATOR_KEY_3]
-    with conftest.testing_context(command_line_options_fixture, docker_client_fixture, bootstrap_keypair=BOOTSTRAP_NODE_KEYS, peers_keypairs=peers_keypairs) as context:
+    with conftest.testing_context(command_line_options, docker_client, bootstrap_keypair=BOOTSTRAP_NODE_KEYS, peers_keypairs=peers_keypairs) as context:
         with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
             with started_bonded_validator(context, bootstrap_node, 1, BONDED_VALIDATOR_KEY_1) as no1:
                 with started_bonded_validator(context, bootstrap_node, 2, BONDED_VALIDATOR_KEY_2) as no2:

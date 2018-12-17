@@ -14,9 +14,11 @@ if TYPE_CHECKING:
 
 class PredicateProtocol(typing_extensions.Protocol):
     def __str__(self) -> str:
+        # pylint: disable=pointless-statement
         ...
 
     def is_satisfied(self) -> bool:
+        # pylint: disable=pointless-statement, no-self-use
         ...
 
 
