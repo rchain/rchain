@@ -11,5 +11,6 @@ pytest-mypy = "*"
 pytest-pylint = "*"
 typing-extensions = "*"
 dataclasses = "*"
+pytest-xdist = "*"
 
 [dev-packages]
