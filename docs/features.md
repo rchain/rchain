@@ -57,12 +57,28 @@ database = "rnode"
 
 ## Peer to Peer Network
 ### As a Node operator, I want to be able to bootstrap to the network by connecting to any known node
+#### connecting to existing node
+##### test: TBD
+##### steps:
+
+* given that `standalone` is a running node in a standalone mode
+* start new node with `--bootstrap` pointing to `standalone`
+* node should succesfully start and connect to `standalone` via protocol handshake
+
+#### connecting to non-existing node
+##### test: TBD
+##### steps:
+
+* start new node with `--bootstrap` pointing to some non-existing address
+* node should exit
+* exit code should be 1
+* node should log that bootstrap could not been found
+
 ### As a Node operator, once connected via a bootstrap node, I want to discover and connect to peers
 ### As a Node operator, I want to know how many peers I am connected to
 ## Network Launch
 ### As a Coop SRE I want to launch a network
 #### A successful genesis ceremony 
-
 ##### test: test/test_genesis_ceremony.py::test_successful_genesis_ceremony 
 ##### steps:
 
