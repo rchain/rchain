@@ -84,17 +84,17 @@ def make_expected_string(node, random_token):
     return "<{name}:{random_token}>".format(name=node.container.name, random_token=random_token)
 
 
-def test_casper_propose_and_deploy(command_line_options_fixture, docker_client_fixture):
+def test_casper_propose_and_deploy(command_line_options: 'CommandLineOptions', docker_client: 'DockerClient'):
     """Deploy a contract and then checks if all the nodes have received the block
     containing the contract.
     """
 
-    with conftest.testing_context(command_line_options_fixture, docker_client_fixture) as context:
+    with conftest.testing_context(command_line_options, docker_client) as context:
         with complete_network(context) as network:
             token_size = 20
             contract_name = 'contract.rho'
             for node in network.nodes:
-                random_token = random_string(token_size)
+                random_token = random_string(context, token_size)
 
                 expected_string = make_expected_string(node, random_token)
                 block_hash = deploy_block(node, expected_string, contract_name)
