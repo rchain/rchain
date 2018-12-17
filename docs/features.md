@@ -82,8 +82,18 @@
 ### As a wallet user, I need a command line interface for interacting with wallets.
 ### As a dApp organization, I need to have multiple approvers for any send transaction.
 ## Storage
-### As a user, I want to be able to store transaction data on the blockchain so that it is available and accessible to users
-### As a user, I want to be able to store non-transaction data on the blockchain so that it is available and accessible to users
+### As a user I want to be able to store data using a rholang contract in the tuplespace. 
+#### A contract pointing to some data gets deployed, the data gets fetched and asserted.
+##### test: test/test_storage.py::test_data_is_stored_and_served_by_node
+##### steps:
+
+* instantiate p2p network with single `ceremonyMaster` that transitions to `ApprovedBlockReceivedhandler` (`--required-sig 0`)
+* call `rnode deploy` & `rnode propose` with `integration-tests/features/contracts/storage/store-data.rho` on `ceremonyMaster`
+* assert success on std out
+* call `rnode deploy` & `rnode propose` with `integration-tests/features/contracts/storage/read-data.rho` on `ceremonyMaster`
+* assert success on std out
+* compare data sent and restored
+
 ## Bonding/Unbonding
 ### As a Node Validator, I want to be able to add my stake to the network and be recognized as a validator so I can participate in proof of stake consensus and be eligible to earn rewards (validating)
 ### As a Node Validator, I want to be able to retrieve my stake from the network and no longer be recognized a as validator

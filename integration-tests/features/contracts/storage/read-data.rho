@@ -1,0 +1,5 @@
+new stdout(`rho:io:stdout`) in {
+  for(v <- channel1) {
+      stdout!(v)
+  }
+}
