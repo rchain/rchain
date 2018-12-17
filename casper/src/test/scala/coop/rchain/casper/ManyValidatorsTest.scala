@@ -26,11 +26,10 @@ class ManyValidatorsTest
     with BlockGenerator
     with BlockDagStorageFixture {
   "Show blocks" should "be processed quickly for a node with 300 validators" in {
-    val blockDagStorageDir  = BlockDagStorageTestFixture.blockDagStorageDir
-    val blockStoreDir       = BlockDagStorageTestFixture.blockStorageDir
-    implicit val metrics    = new MetricsNOP[Task]()
-    implicit val log        = new Log.NOPLog[Task]()
-    implicit val blockStore = BlockDagStorageTestFixture.createBlockStorage[Task](blockStoreDir)
+    val blockDagStorageDir = BlockDagStorageTestFixture.blockDagStorageDir
+    val blockStoreDir      = BlockDagStorageTestFixture.blockStorageDir
+    implicit val metrics   = new MetricsNOP[Task]()
+    implicit val log       = new Log.NOPLog[Task]()
     val bonds = Seq
       .fill(300)(
         ByteString.copyFromUtf8(Random.nextString(20)).substring(0, 32)
@@ -39,7 +38,12 @@ class ManyValidatorsTest
     val v1 = bonds(0).validator
 
     val testProgram = for {
-      blockDagStorage        <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)
+      blockStore <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStoreDir)
+      blockDagStorage <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)(
+                          metrics,
+                          log,
+                          blockStore
+                        )
       indexedBlockDagStorage <- IndexedBlockDagStorage.create(blockDagStorage)
       genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)(
                   Monad[Task],
@@ -49,7 +53,7 @@ class ManyValidatorsTest
                 )
       b <- createBlock[Task](Seq(genesis.blockHash), v1, bonds, bonds.map {
             case Bond(validator, _) => validator -> genesis.blockHash
-          }.toMap)(Monad[Task], Time[Task], BlockStore[Task], indexedBlockDagStorage)
+          }.toMap)(Monad[Task], Time[Task], blockStore, indexedBlockDagStorage)
       _                     <- indexedBlockDagStorage.close()
       initialLatestMessages = bonds.map { case Bond(validator, _) => validator -> b }.toMap
       _ <- Sync[Task].delay {
@@ -59,10 +63,14 @@ class ManyValidatorsTest
               initialLatestMessages
             )
           }
-      newBlockDagStorage        <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)
+      newBlockDagStorage <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)(
+                             metrics,
+                             log,
+                             blockStore
+                           )
       newIndexedBlockDagStorage <- IndexedBlockDagStorage.create(newBlockDagStorage)
       dag                       <- newIndexedBlockDagStorage.getRepresentation
-      tips                      <- Estimator.tips[Task](dag, genesis.blockHash)
+      tips                      <- Estimator.tips[Task](dag, genesis.blockHash)(Monad[Task], blockStore)
       casperEffect <- NoOpsCasperEffect[Task](
                        HashMap.empty[BlockHash, BlockMessage],
                        tips.toIndexedSeq

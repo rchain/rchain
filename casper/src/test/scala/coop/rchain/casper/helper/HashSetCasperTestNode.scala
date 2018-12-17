@@ -180,11 +180,15 @@ object HashSetCasperTestNode {
 
     val blockDagDir   = BlockDagStorageTestFixture.blockDagStorageDir
     val blockStoreDir = BlockDagStorageTestFixture.blockStorageDir
-    implicit val blockStore =
-      LMDBBlockStore.create[F](
-        LMDBBlockStore.Config(path = blockStoreDir, mapSize = storageSize)
-      )
     for {
+      blockStore <- FileLMDBIndexBlockStore.create[F](
+                     FileLMDBIndexBlockStore
+                       .Config(
+                         blockStoreDir.resolve("data"),
+                         blockStoreDir.resolve("index"),
+                         storageSize
+                       )
+                   )
       blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
                           BlockDagFileStorage.Config(
                             blockDagDir.resolve("latest-messages-data"),
@@ -194,7 +198,7 @@ object HashSetCasperTestNode {
                             blockDagDir.resolve("checkpoints")
                           ),
                           genesis
-                        )
+                        )(Monad[F], Concurrent[F], Sync[F], Log[F], blockStore)
       blockProcessingLock <- Semaphore[F](1)
       node = new HashSetCasperTestNode[F](
         name,
@@ -261,11 +265,14 @@ object HashSetCasperTestNode {
 
             val blockDagDir   = BlockDagStorageTestFixture.blockDagStorageDir
             val blockStoreDir = BlockDagStorageTestFixture.blockStorageDir
-            implicit val blockStore =
-              LMDBBlockStore.create[F](
-                LMDBBlockStore.Config(path = blockStoreDir, mapSize = storageSize)
-              )
             for {
+              blockStore <- FileLMDBIndexBlockStore.create[F](
+                             FileLMDBIndexBlockStore.Config(
+                               blockStoreDir.resolve("data"),
+                               blockStoreDir.resolve("index"),
+                               storageSize
+                             )
+                           )
               blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
                                   BlockDagFileStorage.Config(
                                     blockDagDir.resolve("latest-messages-data"),
@@ -275,7 +282,7 @@ object HashSetCasperTestNode {
                                     blockDagDir.resolve("checkpoints")
                                   ),
                                   genesis
-                                )
+                                )(Monad[F], Concurrent[F], Sync[F], Log[F], blockStore)
               semaphore <- Semaphore[F](1)
               node = new HashSetCasperTestNode[F](
                 n,

@@ -1704,14 +1704,13 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 object HashSetCasperTest {
   def validateBlockStore[R](
       node: HashSetCasperTestNode[Effect]
-  )(f: BlockStore[Effect] => Effect[R])(implicit metrics: Metrics[Effect]) = {
-    val bs = BlockDagStorageTestFixture.createBlockStorage[Effect](node.blockStoreDir)
+  )(f: BlockStore[Effect] => Effect[R])(implicit metrics: Metrics[Effect]) =
     for {
+      bs     <- BlockDagStorageTestFixture.createBlockStorage[Effect](node.blockStoreDir)
       result <- f(bs)
       _      <- bs.close()
       _      <- Sync[Effect].delay { node.blockStoreDir.recursivelyDelete() }
     } yield result
-  }
 
   def blockTuplespaceContents(
       block: BlockMessage

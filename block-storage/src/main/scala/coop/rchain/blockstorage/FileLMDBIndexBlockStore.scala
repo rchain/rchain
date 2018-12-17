@@ -157,22 +157,23 @@ object FileLMDBIndexBlockStore {
       noTls: Boolean = true
   )
 
-  def create[F[_]: Monad: Sync: Concurrent](config: Config): F[FileLMDBIndexBlockStore[F]] =
+  def create[F[_]: Monad: Sync: Concurrent](config: Config): F[BlockStore[F]] =
     for {
       lock <- Semaphore[F](1)
       env <- Sync[F].delay {
-        if (Files.notExists(config.indexPath)) Files.createDirectories(config.indexPath)
-        val flags = if (config.noTls) List(EnvFlags.MDB_NOTLS) else List.empty
-        Env
-          .create()
-          .setMapSize(config.mapSize)
-          .setMaxDbs(config.maxDbs)
-          .setMaxReaders(config.maxReaders)
-          .open(config.indexPath.toFile, flags: _*)
-      }
+              if (Files.notExists(config.indexPath)) Files.createDirectories(config.indexPath)
+              val flags = if (config.noTls) List(EnvFlags.MDB_NOTLS) else List.empty
+              Env
+                .create()
+                .setMapSize(config.mapSize)
+                .setMaxDbs(config.maxDbs)
+                .setMaxReaders(config.maxReaders)
+                .open(config.indexPath.toFile, flags: _*)
+            }
       index <- Sync[F].delay { env.openDbi(s"block_store_index", MDB_CREATE) }
-      blockMessageRandomAccessFile <- Sync[F].delay { new RandomAccessFile(config.storagePath.toFile, "rw") }
-      blockMessageRandomAccessFileRef <- Ref.of[F, RandomAccessFile](
-                                          blockMessageRandomAccessFile)
+      blockMessageRandomAccessFile <- Sync[F].delay {
+                                       new RandomAccessFile(config.storagePath.toFile, "rw")
+                                     }
+      blockMessageRandomAccessFileRef <- Ref.of[F, RandomAccessFile](blockMessageRandomAccessFile)
     } yield new FileLMDBIndexBlockStore[F](lock, env, index, blockMessageRandomAccessFileRef)
 }

@@ -90,11 +90,15 @@ trait BlockStoreTest
         }
         for {
           _ <- items.traverse_[Task, Unit] { case (k, v1, _) => store.put(k, v1) }
-          _ <- items.traverse_[Task, Assertion] { case (k, v1, _) => store.get(k).map(_ shouldBe Some(v1)) }
+          _ <- items.traverse_[Task, Assertion] {
+                case (k, v1, _) => store.get(k).map(_ shouldBe Some(v1))
+              }
           _ <- items.traverse_[Task, Unit] { case (k, _, v2) => store.put(k, v2) }
-          _ <- items.traverse_[Task, Assertion] { case (k, _, v2) => store.get(k).map(_ shouldBe Some(v2)) }
+          _ <- items.traverse_[Task, Assertion] {
+                case (k, _, v2) => store.get(k).map(_ shouldBe Some(v2))
+              }
           result <- store.asMap().map(_.size shouldEqual items.size)
-          _ <- store.clear()
+          _      <- store.clear()
         } yield result
       }
     }
@@ -102,17 +106,17 @@ trait BlockStoreTest
   it should "rollback the transaction on error" in {
     withStore { store =>
       val exception = new RuntimeException("msg")
-      
+
       def elem = {
         blockHashElementsGen.sample.get
         throw exception
       }
-      
+
       for {
-        _ <- store.asMap().map(_.size shouldEqual 0)
+        _          <- store.asMap().map(_.size shouldEqual 0)
         putAttempt <- store.put { elem }.attempt
-        _ = putAttempt.left.value shouldBe exception
-        result <- store.asMap().map(_.size shouldEqual 0)
+        _          = putAttempt.left.value shouldBe exception
+        result     <- store.asMap().map(_.size shouldEqual 0)
       } yield result
     }
   }
@@ -123,9 +127,9 @@ class InMemBlockStoreTest extends BlockStoreTest {
     val test = for {
       refTask <- emptyMapRef[Task]
       metrics = new MetricsNOP[Task]()
-      store = InMemBlockStore.create[Task](Monad[Task], refTask, metrics)
-      _ <- store.asMap().map(map => assert(map.isEmpty))
-      result <- f(store)
+      store   = InMemBlockStore.create[Task](Monad[Task], refTask, metrics)
+      _       <- store.asMap().map(map => assert(map.isEmpty))
+      result  <- f(store)
     } yield result
     test.unsafeRunSync
   }
@@ -139,12 +143,12 @@ class LMDBBlockStoreTest extends BlockStoreTest {
   private[this] val mapSize: Long    = 100L * 1024L * 1024L * 4096L
 
   override def withStore[R](f: BlockStore[Task] => Task[R]): R = {
-    val dbDir = mkTmpDir()
-    val env   = Context.env(dbDir, mapSize)
+    val dbDir                           = mkTmpDir()
+    val env                             = Context.env(dbDir, mapSize)
     implicit val metrics: Metrics[Task] = new MetricsNOP[Task]()
-    val store = LMDBBlockStore.create[Task](env, dbDir)
+    val store                           = LMDBBlockStore.create[Task](env, dbDir)
     val test = for {
-      _ <- store.asMap().map(map => assert(map.isEmpty))
+      _      <- store.asMap().map(map => assert(map.isEmpty))
       result <- f(store)
     } yield result
     try {
@@ -164,18 +168,18 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
   private[this] val mapSize: Long    = 100L * 1024L * 1024L * 4096L
 
   override def withStore[R](f: BlockStore[Task] => Task[R]): R = {
-    val dbDir = mkTmpDir()
-    val env   = Context.env(dbDir, mapSize)
+    val dbDir                           = mkTmpDir()
+    val env                             = Context.env(dbDir, mapSize)
     implicit val metrics: Metrics[Task] = new MetricsNOP[Task]()
     val test = for {
       store <- FileLMDBIndexBlockStore.create[Task](
-        FileLMDBIndexBlockStore.Config(
-          dbDir.resolve("block-store-data"),
-          dbDir.resolve("block-store-index"),
-          mapSize
-        )
-      )
-      _ <- store.asMap().map(map => assert(map.isEmpty))
+                FileLMDBIndexBlockStore.Config(
+                  dbDir.resolve("block-store-data"),
+                  dbDir.resolve("block-store-index"),
+                  mapSize
+                )
+              )
+      _      <- store.asMap().map(map => assert(map.isEmpty))
       result <- f(store)
     } yield result
     try {

@@ -5,7 +5,7 @@ import java.nio.file.{Files, Path}
 import java.util.zip.CRC32
 
 import cats.Id
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.blockstorage._
@@ -32,10 +32,13 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
       case (blockDagStorageDir, blockStorageDir) =>
         implicit val metrics = new MetricsNOP[Task]()
         implicit val log     = new Log.NOPLog[Task]()
-        implicit val blockStore =
-          BlockDagStorageTestFixture.createBlockStorage[Task](blockStorageDir)
         for {
-          blockDagStorage        <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)
+          blockStore <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStorageDir)
+          blockDagStorage <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)(
+                              metrics,
+                              log,
+                              blockStore
+                            )
           indexedBlockDagStorage <- IndexedBlockDagStorage.create(blockDagStorage)
           result                 <- f(blockStore)(indexedBlockDagStorage)
         } yield result
@@ -90,12 +93,13 @@ object BlockDagStorageTestFixture {
 
   val mapSize: Long = 1024L * 1024L * 100L
 
-  def createBlockStorage[F[_]: Sync: Metrics](
+  def createBlockStorage[F[_]: Sync: Concurrent: Metrics](
       blockStorageDir: Path
-  ): BlockStore[F] = {
-    val environment = env(blockStorageDir, mapSize)
-    LMDBBlockStore.create[F](environment, blockStorageDir)
-  }
+  ): F[BlockStore[F]] =
+    FileLMDBIndexBlockStore.create[F](
+      FileLMDBIndexBlockStore
+        .Config(blockStorageDir.resolve("data"), blockStorageDir.resolve("index"), mapSize)
+    )
 
   def createBlockDagStorage(blockDagStorageDir: Path)(
       implicit metrics: Metrics[Task],
