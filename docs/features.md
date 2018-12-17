@@ -58,7 +58,7 @@ database = "rnode"
 ## Peer to Peer Network
 ### As a Node operator, I want to be able to bootstrap to the network by connecting to any known node
 #### connecting to existing node
-##### test: TBD
+##### test: test/test_p2p.py::test_connecting_to_existing_node
 ##### steps:
 
 * given that `standalone` is a running node in a standalone mode
@@ -66,7 +66,7 @@ database = "rnode"
 * node should succesfully start and connect to `standalone` via protocol handshake
 
 #### connecting to non-existing node
-##### test: TBD
+##### test: test/test_p2p.py::test_connecting_to_non_existing_node
 ##### steps:
 
 * start new node with `--bootstrap` pointing to some non-existing address
