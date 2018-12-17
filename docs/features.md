@@ -85,6 +85,22 @@ database = "rnode"
 * after a period of time new node connects (via protocol handshake) with `nodeB` and `nodeC`
 
 ### As a Node operator, I want to know how many peers I am connected to
+#### number of protocol peers
+##### test: test/test_p2p.py::test_number_of_protocol_peers
+##### steps:
+
+* create a p2p network with 3 nodes `nodaA`, `nodeB` and `nodeC`
+* access `nodeA` http endpoint under `/info` should print `connected_peers = 2`
+* access `nodeA` http endpoint under `/peers` to list `nodeB` and `nodeC` in JSON format
+
+#### number of protocol peers
+##### test: test/test_p2p.py::test_number_of_discovery_peers
+##### steps:
+
+* create a p2p network with 3 nodes `nodaA`, `nodeB` and `nodeC`
+* access `nodeA` http endpoint under `/info` should print `discovered_peers = 2`
+* access `nodeA` http endpoint under `/discovered-peers` to list `nodeB` and `nodeC` in JSON format
+
 ## Network Launch
 ### As a Coop SRE I want to launch a network
 #### A successful genesis ceremony 
