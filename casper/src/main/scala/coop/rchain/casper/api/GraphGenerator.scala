@@ -4,7 +4,7 @@ import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper._, Estimator.BlockHash, MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.graphz._
-import coop.rchain.shared.{Log, SyncLock}
+import coop.rchain.shared.Log
 
 import cats.Monad
 import cats.effect.Sync
