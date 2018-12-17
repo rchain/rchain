@@ -130,24 +130,24 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
       } yield g
       graph.show shouldBe (
         """digraph Process {
-          |  "0" []
+          |  "0"
           |  subgraph {
-          |    "A" []
-          |    "B" []
-          |    "C" []
+          |    "A"
+          |    "B"
+          |    "C"
           |    "A" -> "B" []
           |    "B" -> "C" []
           |  }
           |  "0" -> "A" []
           |  subgraph {
-          |    "K" []
-          |    "L" []
-          |    "M" []
+          |    "K"
+          |    "L"
+          |    "M"
           |    "K" -> "L" []
           |    "L" -> "M" []
           |  }
           |  "0" -> "K" []
-          |  "1" []
+          |  "1"
           |  "M" -> "1" []
           |  "C" -> "1" []
           |}""".stripMargin
@@ -201,13 +201,13 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
       } yield g
       graph.show shouldBe (
         """digraph Process {
-          |  "0" []
+          |  "0"
           |  subgraph cluster_p1 {
           |    label = "process #1"
           |    color=blue
-          |    "A" []
-          |    "B" []
-          |    "C" []
+          |    "A"
+          |    "B"
+          |    "C"
           |    "A" -> "B" []
           |    "B" -> "C" []
           |  }
@@ -215,14 +215,14 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
           |  subgraph cluster_p2 {
           |    label = "process #2"
           |    color=green
-          |    "K" []
-          |    "L" []
-          |    "M" []
+          |    "K"
+          |    "L"
+          |    "M"
           |    "K" -> "L" []
           |    "L" -> "M" []
           |  }
           |  "0" -> "K" []
-          |  "1" []
+          |  "1"
           |  "M" -> "1" []
           |  "C" -> "1" []
           |}""".stripMargin
@@ -273,7 +273,7 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
           |  rankdir=BT
           |  subgraph {
           |    rank=same
-          |    "1" []
+          |    "1"
           |    "ddeecc" [shape=box]
           |    "ffeeff" [shape=box]
           |  }
@@ -281,7 +281,7 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
           |  "000000" -> "ddeecc" []
           |  subgraph {
           |    rank=same
-          |    "0" []
+          |    "0"
           |    "000000" [shape=box]
           |  }
           |  subgraph timeline {

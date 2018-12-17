@@ -243,7 +243,6 @@ object BlockAPI {
 
     type Effect[A] = StateT[Id, StringBuffer, A]
     implicit val ser = new StringSerializer[Effect]
-    case class Acc(timeseries: List[Long] = List.empty, graph: Effect[Graphz[Effect]])
 
     def casperResponse(implicit casper: MultiParentCasper[F]): F[String] =
       for {
@@ -252,71 +251,8 @@ object BlockAPI {
         depth       = d.getOrElse(maxHeight)
         startHeight = math.max(0, maxHeight - depth)
         topoSort    <- dag.topoSortTail(depth)
-        acc <- topoSort.foldM(Acc(graph = Graphz[Effect]("DAG", DiGraph, rankdir = Some(BT)))) {
-                case (acc, blockHashes) =>
-                  for {
-                    blocks    <- blockHashes.traverse(ProtoUtil.unsafeGetBlock[F])
-                    timeEntry = blocks.head.getBody.getState.blockNumber
-                    maybeLvl0 = if (timeEntry != 1) None
-                    else
-                      Some(for {
-                        g       <- Graphz.subgraph[Effect](s"lvl0", DiGraph, rank = Some(Same))
-                        _       <- g.node("0")
-                        genesis = blocks.head.getHeader.parentsHashList.head
-                        _       <- g.node(name = PrettyPrinter.buildString(genesis), shape = Msquare)
-                        _       <- g.close
-                      } yield g)
-
-                    lvlGraph = for {
-                      g <- Graphz.subgraph[Effect](s"lvl$timeEntry", DiGraph, rank = Some(Same))
-                      _ <- g.node(timeEntry.toString)
-                      _ <- blocks.traverse(
-                            b => g.node(name = PrettyPrinter.buildString(b.blockHash), shape = Box)
-                          )
-                      _ <- g.close
-                    } yield g
-                    graph = for {
-                      g <- acc.graph
-                      _ <- maybeLvl0.getOrElse(().pure[Effect])
-                      _ <- g.subgraph(lvlGraph)
-                      _ <- blocks.traverse(
-                            b =>
-                              b.getHeader.parentsHashList.toList
-                                .map(PrettyPrinter.buildString)
-                                .traverse { parentHash =>
-                                  g.edge(PrettyPrinter.buildString(b.blockHash) -> parentHash)
-                                }
-                          )
-                    } yield g
-                  } yield {
-                    val timeEntries = timeEntry :: maybeLvl0.map(kp(0L)).toList
-                    acc.copy(
-                      timeseries = timeEntries ++ acc.timeseries,
-                      graph = graph
-                    )
-                  }
-
-              }
-        result <- Sync[F].delay {
-
-                   val times = acc.timeseries.sorted.map(_.toString)
-
-                   val timeseries: Effect[Graphz[Effect]] = for {
-                     g     <- Graphz.subgraph[Effect]("timeseries", DiGraph)
-                     _     <- times.traverse(n => g.node(name = n, shape = PlainText))
-                     edges = times.zip(times.drop(1))
-                     _     <- edges.traverse(g.edge)
-                     _     <- g.close
-                   } yield g
-
-                   val finalGraph: Effect[Graphz[Effect]] = for {
-                     g <- acc.graph
-                     _ <- g.subgraph(timeseries)
-                     _ <- g.close
-                   } yield g
-                   finalGraph.runS(new StringBuffer).toString
-                 }
-      } yield result
+        graph       <- GraphzGenerator.generate[F, Effect](topoSort)
+      } yield graph.runS(new StringBuffer).toString
 
     MultiParentCasperRef.withCasper[F, String](
       casperResponse(_),
