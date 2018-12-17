@@ -264,7 +264,6 @@ lazy val node = (project in file("node"))
         Cmd("FROM", dockerBaseImage.value),
         ExecCmd("RUN", "apt", "update"),
         ExecCmd("RUN", "apt", "install", "-yq", "openssl"),
-        ExecCmd("RUN", "apt", "install", "-yq", "libhyperic-sigar-java"),
         Cmd("LABEL", s"""MAINTAINER="${maintainer.value}""""),
         Cmd("WORKDIR", (defaultLinuxInstallLocation in Docker).value),
         Cmd("ADD", s"--chown=$daemon:$daemon opt /opt"),
