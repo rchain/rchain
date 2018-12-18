@@ -28,7 +28,8 @@ class DistanceSpec extends FlatSpec with Matchers {
     def receive(
         pingHandler: PeerNode => Id[Unit],
         lookupHandler: (PeerNode, Array[Byte]) => Id[Seq[PeerNode]]
-    ): Id[Unit] = ()
+    ): Id[Unit]              = ()
+    def shutdown(): Id[Unit] = ()
   }
 
   "A PeerNode of width n bytes" should "have distance to itself equal to 8n" in {

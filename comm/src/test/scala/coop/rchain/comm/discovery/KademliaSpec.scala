@@ -167,7 +167,8 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
     def receive(
         pingHandler: PeerNode => Id[Unit],
         lookupHandler: (PeerNode, Array[Byte]) => Id[Seq[PeerNode]]
-    ): Id[Unit] = ()
+    ): Id[Unit]              = ()
+    def shutdown(): Id[Unit] = ()
   }
 
   private def createPeer(id: String): PeerNode =

@@ -137,6 +137,7 @@ class NodeRuntime private[node] (
   def clearResources(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
       implicit
       transport: TransportLayer[Task],
+      kademliaRPC: KademliaRPC[Task],
       blockStore: BlockStore[Effect],
       peerNodeAsk: PeerNodeAsk[Task]
   ): Unit =
@@ -148,6 +149,7 @@ class NodeRuntime private[node] (
       loc <- peerNodeAsk.ask
       msg = ProtocolHelper.disconnect(loc)
       _   <- transport.shutdown(msg)
+      _   <- kademliaRPC.shutdown()
       _   <- log.info("Shutting down HTTP server....")
       _   <- Task.delay(Kamon.stopAllReporters())
       _   <- servers.httpServer.cancel
@@ -173,6 +175,7 @@ class NodeRuntime private[node] (
 
   def addShutdownHook(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
       implicit transport: TransportLayer[Task],
+      kademliaRPC: KademliaRPC[Task],
       blockStore: BlockStore[Effect],
       peerNodeAsk: PeerNodeAsk[Task]
   ): Task[Unit] =
@@ -188,6 +191,7 @@ class NodeRuntime private[node] (
       peerNodeAsk: PeerNodeAsk[Task],
       metrics: Metrics[Task],
       transport: TransportLayer[Task],
+      kademliaRPC: KademliaRPC[Task],
       nodeDiscovery: NodeDiscovery[Task],
       rpConnectons: ConnectionsCell[Task],
       blockStore: BlockStore[Effect],
@@ -205,8 +209,9 @@ class NodeRuntime private[node] (
     val dynamicIpCheck: Task[Unit] =
       if (conf.server.dynamicHostAddress)
         for {
-          local    <- peerNodeAsk.ask
-          newLocal <- conf.checkLocalPeerNode(local)
+          local <- peerNodeAsk.ask
+          newLocal <- WhoAmI
+                       .checkLocalPeerNode[Task](conf.server.port, conf.server.kademliaPort, local)
           _ <- newLocal.fold(Task.unit) { pn =>
                 Connect.resetConnections[Task].flatMap(kp(rpConfState.modify(_.copy(local = pn))))
               }
@@ -290,7 +295,15 @@ class NodeRuntime private[node] (
   // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
   val main: Effect[Unit] = for {
     // 1. fetch local peer node
-    local <- conf.fetchLocalPeerNode(id).toEffect
+    local <- WhoAmI
+              .fetchLocalPeerNode[Task](
+                conf.server.host,
+                conf.server.port,
+                conf.server.kademliaPort,
+                conf.server.noUpnp,
+                id
+              )
+              .toEffect
 
     // 2. set up configurations
     defaultTimeout = conf.server.defaultTimeout.millis
@@ -387,6 +400,7 @@ class NodeRuntime private[node] (
       peerNodeAsk,
       metrics,
       transport,
+      kademliaRPC,
       nodeDiscovery,
       rpConnections,
       blockStore,
