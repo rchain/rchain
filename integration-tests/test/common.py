@@ -76,3 +76,8 @@ class Network:
         self.bootstrap = bootstrap
         self.peers = peers
         self.nodes = [bootstrap] + peers
+
+
+class Node:
+    # pylint: disable=pointless-statement
+    ...
