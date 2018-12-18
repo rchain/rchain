@@ -1,8 +1,9 @@
 package coop.rchain.comm.transport
 
 import java.io.ByteArrayInputStream
+import java.nio.file._
+import java.util.concurrent.TimeoutException
 
-import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
 import scala.util._
 
@@ -16,12 +17,10 @@ import coop.rchain.comm.CommError._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
 import coop.rchain.comm.rp.ProtocolHelper
-import coop.rchain.shared._
-import coop.rchain.shared.Compression._
-import java.nio.file._
-
 import coop.rchain.metrics.{Metrics, MetricsSource}
 import coop.rchain.metrics.implicits._
+import coop.rchain.shared._
+import coop.rchain.shared.Compression._
 
 import io.grpc._
 import io.grpc.netty._
@@ -104,12 +103,6 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
       } yield s.copy(connections = s.connections - peer)
     }
 
-  private object PeerUnavailable {
-    def unapply(e: Throwable): Boolean =
-      e.isInstanceOf[StatusRuntimeException] &&
-        e.asInstanceOf[StatusRuntimeException].getStatus.getCode == Status.Code.UNAVAILABLE
-  }
-
   private def withClient[A](peer: PeerNode, enforce: Boolean)(
       f: TransportLayerStub => Task[A]
   ): Task[A] =
@@ -117,8 +110,8 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
       channel <- cell.connection(peer, enforce)
       stub    <- Task.delay(RoutingGrpcMonix.stub(channel))
       result <- f(stub).doOnFinish {
-                 case Some(PeerUnavailable()) => disconnect(peer)
-                 case _                       => Task.unit
+                 case Some(_) => disconnect(peer)
+                 case _       => Task.unit
                }
       _ <- Task.unit.asyncBoundary // return control to caller thread
     } yield result
@@ -156,15 +149,25 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
   def stream(peers: Seq[PeerNode], blob: Blob): Task[Unit] =
     streamObservable.stream(peers.toList, blob) *> log.info(s"stream to $peers blob")
 
+  private object PeerUnavailable {
+    def unapply(e: Throwable): Boolean =
+      e.isInstanceOf[StatusRuntimeException] &&
+        e.asInstanceOf[StatusRuntimeException].getStatus.getCode == Status.Code.UNAVAILABLE
+  }
+
+  private object PeerTimeout {
+    def unapply(e: Throwable): Boolean = e.isInstanceOf[TimeoutException]
+  }
+
   private def processResponse(
       peer: PeerNode,
       response: Either[Throwable, TLResponse]
   ): CommErr[Option[Protocol]] =
     response
       .leftMap {
-        case _: TimeoutException => CommError.timeout
-        case PeerUnavailable()   => peerUnavailable(peer)
-        case e                   => protocolException(e)
+        case PeerTimeout()     => CommError.timeout
+        case PeerUnavailable() => peerUnavailable(peer)
+        case e                 => protocolException(e)
       }
       .flatMap(
         tlr =>
@@ -297,7 +300,7 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
   def shutdown(msg: Protocol): Task[Unit] = {
     def shutdownServer: Task[Unit] = cell.modify { s =>
       for {
-        _ <- log.info("Shutting down server")
+        _ <- log.info("Shutting down transport layer server")
         _ <- s.server.fold(Task.unit)(server => Task.delay(server.cancel()))
         _ <- s.clientQueue.fold(Task.unit)(server => Task.delay(server.cancel()))
       } yield s.copy(server = None, shutdown = true)

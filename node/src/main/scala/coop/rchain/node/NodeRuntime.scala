@@ -176,6 +176,7 @@ class NodeRuntime private[node] (
   def clearResources(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
       implicit
       transport: TransportLayer[Task],
+      kademliaRPC: KademliaRPC[Task],
       blockStore: BlockStore[Effect],
       peerNodeAsk: PeerNodeAsk[Task]
   ): Unit =
@@ -187,6 +188,7 @@ class NodeRuntime private[node] (
       loc <- peerNodeAsk.ask
       msg = ProtocolHelper.disconnect(loc)
       _   <- transport.shutdown(msg)
+      _   <- kademliaRPC.shutdown()
       _   <- log.info("Shutting down HTTP server....")
       _   <- Task.delay(Kamon.stopAllReporters())
       _   <- servers.httpServer.cancel
@@ -201,6 +203,7 @@ class NodeRuntime private[node] (
 
   def addShutdownHook(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
       implicit transport: TransportLayer[Task],
+      kademliaRPC: KademliaRPC[Task],
       blockStore: BlockStore[Effect],
       peerNodeAsk: PeerNodeAsk[Task]
   ): Task[Unit] =
@@ -216,6 +219,7 @@ class NodeRuntime private[node] (
       peerNodeAsk: PeerNodeAsk[Task],
       metrics: Metrics[Task],
       transport: TransportLayer[Task],
+      kademliaRPC: KademliaRPC[Task],
       nodeDiscovery: NodeDiscovery[Task],
       rpConnectons: ConnectionsCell[Task],
       blockStore: BlockStore[Effect],
@@ -413,6 +417,7 @@ class NodeRuntime private[node] (
       peerNodeAsk,
       metrics,
       transport,
+      kademliaRPC,
       nodeDiscovery,
       rpConnections,
       blockStore,

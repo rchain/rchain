@@ -33,6 +33,7 @@ final case object DoubleCircle extends GraphShape
 final case object Box          extends GraphShape
 final case object PlainText    extends GraphShape
 final case object Msquare      extends GraphShape
+final case object Record       extends GraphShape
 
 sealed trait GraphRank
 final case object Same   extends GraphRank
@@ -56,6 +57,7 @@ object Graphz {
       case Box          => "box"
       case PlainText    => "plaintext"
       case Msquare      => "Msquare"
+      case Record       => "record"
     }
   }
 
@@ -77,7 +79,8 @@ object Graphz {
       rank: Option[GraphRank] = None,
       rankdir: Option[GraphRankDir] = None,
       style: Option[String] = None,
-      color: Option[String] = None
+      color: Option[String] = None,
+      node: Map[String, String] = Map.empty
   )(
       implicit ser: GraphSerializer[F]
   ): F[Graphz[F]] = {
@@ -96,6 +99,7 @@ object Graphz {
       _ <- insert(color, s => s"color=$s")
       _ <- insert(rank.map(_.show), r => s"rank=$r")
       _ <- insert(rankdir.map(_.show), r => s"rankdir=$r")
+      _ <- insert(attrMkStr(node), n => s"node $n")
     } yield new Graphz[F](gtype, t)
   }
 
@@ -133,6 +137,11 @@ object Graphz {
     case _                         => s""""$str""""
   }
 
+  def attrMkStr(attr: Map[String, String]): Option[String] =
+    if (attr.isEmpty) None
+    else
+      Some("[" + attr.map(t => t._1 + "=" + t._2).mkString(" ") + "]")
+
   val tab = "  "
 }
 
@@ -141,19 +150,27 @@ class Graphz[F[_]: Monad](gtype: GraphType, t: String)(implicit ser: GraphSerial
   def edge(edg: (String, String)): F[Unit] = edge(edg._1, edg._2)
   def edge(src: String, dst: String): F[Unit] =
     ser.push(edgeMkStr.format(Graphz.quote(src), Graphz.quote(dst), "[]"))
-  def node(name: String, shape: GraphShape = Circle): F[Unit] =
-    ser.push(nodeMkStr(name, shape))
+  def node(
+      name: String,
+      shape: GraphShape = Circle,
+      color: Option[String] = None,
+      label: Option[String] = None
+  ): F[Unit] = {
+    import Graphz.showShape
+    val attrShape: Map[String, String] =
+      if (shape == Graphz.DefaultShape) Map.empty else Map("shape" -> shape.show)
+    val attrColor: Map[String, String] = color.map(c => Map("color" -> c)).getOrElse(Map.empty)
+    val attrLabel: Map[String, String] = label.map(c => Map("label" -> c)).getOrElse(Map.empty)
+
+    val attrs: Map[String, String] = attrShape |+| attrColor |+| attrLabel
+    ser.push(t + Graphz.quote(name) + Graphz.attrMkStr(attrs).map(a => " " + a).getOrElse(""))
+  }
+
   def subgraph(sub: F[Graphz[F]]): F[Unit] = sub >>= (_ => ser.push(""))
   def close: F[Unit]                       = ser.push(s"${t.substring(Graphz.tab.length)}}", suffix = "")
 
   private def edgeMkStr: String = gtype match {
     case Graph   => s"$t%s -- %s %s"
     case DiGraph => s"$t%s -> %s %s"
-  }
-
-  private def nodeMkStr(name: String, shape: GraphShape): String = {
-    import Graphz.showShape
-    val attributes = if (shape == Graphz.DefaultShape) "" else s"shape=${shape.show}"
-    t + Graphz.quote(name) + " [" + attributes + "]"
   }
 }

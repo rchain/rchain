@@ -1,10 +1,13 @@
 import contextlib
 from typing import TYPE_CHECKING
 
-import pytest
-from . import conftest
+from docker.client import DockerClient
 
-from .common import TestingContext
+from . import conftest
+from .common import (
+    CommandLineOptions,
+    TestingContext,
+)
 from .rnode import (
     docker_network_with_started_bootstrap,
     started_peer,
@@ -20,28 +23,24 @@ from .wait import (
 
 if TYPE_CHECKING:
     from _pytest.fixtures import SubRequest
-    from docker.client import DockerClient
-
-"""
-First approximation:
-1) Bootstrap node with a bonds file in the genesis block for at least one bonded validator
-2) Bonded validator joins the network and proposes to create a block chain length 10
-3) Unbounded validator joins and goes through the process to bond.
-4) Validators create a blockchain length 20
-5) Unbounded validator joins and attempts to catch the state (20 blocks)
-"""
 
 
-"""
-Second approximation:
-1) Create boostrap node
-2) Create validator B bonded with the bootstrap node
-3) B executes propose 10 times in a row
-4) Create new validator U
-5) Make U bonded
-6) Execute 10 propose operations
-7) Create new validator N and wait until it catches up
-"""
+# First approximation:
+# 1) Bootstrap node with a bonds file in the genesis block for at least one bonded validator
+# 2) Bonded validator joins the network and proposes to create a block chain length 10
+# 3) Unbounded validator joins and goes through the process to bond.
+# 4) Validators create a blockchain length 20
+# 5) Unbounded validator joins and attempts to catch the state (20 blocks)
+
+
+# Second approximation:
+# 1) Create boostrap node
+# 2) Create validator B bonded with the bootstrap node
+# 3) B executes propose 10 times in a row
+# 4) Create new validator U
+# 5) Make U bonded
+# 6) Execute 10 propose operations
+# 7) Create new validator N and wait until it catches up
 
 
 BOOTSTRAP_NODE_KEYS = conftest.KeyPair(private_key='80366db5fbb8dad7946f27037422715e4176dda41d582224db87b6c3b783d709', public_key='1cd8bf79a2c1bd0afa160f6cdfeb8597257e48135c9bf5e4823f2875a1492c97')
@@ -91,9 +90,9 @@ def started_readonly_peer(context: TestingContext, bootstrap_node: Node):
 
 
 
-def test_heterogenous_validators(command_line_options_fixture, docker_client_fixture):
+def test_heterogenous_validators(command_line_options: CommandLineOptions, docker_client: DockerClient):
     BONDED_VALIDATOR_BLOCKS = JOINING_VALIDATOR_BLOCKS = 10
-    with conftest.testing_context(command_line_options_fixture, docker_client_fixture, bootstrap_keypair=BOOTSTRAP_NODE_KEYS, peers_keypairs=[BONDED_VALIDATOR_KEYS]) as context:
+    with conftest.testing_context(command_line_options, docker_client, bootstrap_keypair=BOOTSTRAP_NODE_KEYS, peers_keypairs=[BONDED_VALIDATOR_KEYS]) as context:
         with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
             with started_bonded_validator(context, bootstrap_node) as bonded_validator:
                 wait_for_peers_count_at_least(context, bonded_validator, 1)
