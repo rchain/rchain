@@ -209,8 +209,9 @@ class NodeRuntime private[node] (
     val dynamicIpCheck: Task[Unit] =
       if (conf.server.dynamicHostAddress)
         for {
-          local    <- peerNodeAsk.ask
-          newLocal <- conf.checkLocalPeerNode(local)
+          local <- peerNodeAsk.ask
+          newLocal <- WhoAmI
+                       .checkLocalPeerNode[Task](conf.server.port, conf.server.kademliaPort, local)
           _ <- newLocal.fold(Task.unit) { pn =>
                 Connect.resetConnections[Task].flatMap(kp(rpConfState.modify(_.copy(local = pn))))
               }
@@ -294,7 +295,15 @@ class NodeRuntime private[node] (
   // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
   val main: Effect[Unit] = for {
     // 1. fetch local peer node
-    local <- conf.fetchLocalPeerNode(id).toEffect
+    local <- WhoAmI
+              .fetchLocalPeerNode[Task](
+                conf.server.host,
+                conf.server.port,
+                conf.server.kademliaPort,
+                conf.server.noUpnp,
+                id
+              )
+              .toEffect
 
     // 2. set up configurations
     defaultTimeout = conf.server.defaultTimeout.millis
