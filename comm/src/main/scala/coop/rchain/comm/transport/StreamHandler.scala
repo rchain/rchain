@@ -20,7 +20,7 @@ import coop.rchain.catscontrib.TaskContrib._
 
 object StreamHandler {
 
-  case class Streamed(
+  private case class Streamed(
       sender: Option[PeerNode] = None,
       typeId: Option[String] = None,
       contentLength: Option[Int] = None,
@@ -68,7 +68,7 @@ object StreamHandler {
 
   private def push(stmd: Streamed, buff: buffer.LimitedBuffer[ServerMessage])(
       implicit logger: Log[Task]
-  ): Task[Unit] = stmd match {
+  ): Task[Boolean] = stmd match {
     case Streamed(Some(sender), Some(packetType), Some(contentLength), compressed, path, _) =>
       Task.delay {
         // TODO what if returns false?
@@ -77,7 +77,7 @@ object StreamHandler {
     case stmd =>
       logger.warn(
         s"received not full stream message, will not process. $stmd"
-      )
+      ).as(false)
   }
 
   def restore(msg: StreamMessage)(implicit logger: Log[Task]): Task[Either[Throwable, Blob]] =
