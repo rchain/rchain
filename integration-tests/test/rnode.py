@@ -4,40 +4,33 @@ import queue
 import shlex
 import string
 import logging
+from logging import Logger
 import threading
+from threading import Event
 import contextlib
 from multiprocessing import Queue, Process
 from typing import (
     Dict,
     List,
     Tuple,
-    TYPE_CHECKING,
     Optional,
     Generator,
 )
 
-import pytest
 from docker.client import DockerClient
+from docker.models.containers import Container
+from docker.models.containers import ExecResult
 
-from . import conftest
 from .common import (
     make_tempfile,
     make_tempdir,
     TestingContext,
     NonZeroExitCodeError,
-    CommandLineOptions,
+    KeyPair,
 )
 from .wait import (
     wait_for_node_started,
 )
-
-
-if TYPE_CHECKING:
-    from .conftest import KeyPair
-    from docker.models.containers import Container
-    from logging import Logger
-    from threading import Event
-    from docker.models.containers import ExecResult
 
 
 DEFAULT_IMAGE = os.environ.get("DEFAULT_IMAGE", "rchain-integration-tests:latest")
@@ -102,7 +95,7 @@ def extract_block_hash_from_propose_output(propose_output: str):
 
 
 class Node:
-    def __init__(self, *, container: "Container", deploy_dir: str, command_timeout: int, network: str) -> None:
+    def __init__(self, *, container: Container, deploy_dir: str, command_timeout: int, network: str) -> None:
         self.container = container
         self.local_deploy_dir = deploy_dir
         self.remote_deploy_dir = rnode_deploy_dir
@@ -240,7 +233,7 @@ class Node:
 
 
 class LoggingThread(threading.Thread):
-    def __init__(self, terminate_thread_event: "Event", container: "Container", logger: "Logger") -> None:
+    def __init__(self, terminate_thread_event: Event, container: Container, logger: Logger) -> None:
         super().__init__()
         self.terminate_thread_event = terminate_thread_event
         self.container = container
@@ -350,7 +343,7 @@ def make_bootstrap_node(
     docker_client: DockerClient,
     network: str,
     bonds_file: str,
-    key_pair: "KeyPair",
+    key_pair: KeyPair,
     command_timeout: int,
     allowed_peers: Optional[List[str]] = None,
     mem_limit: Optional[str] = None,
@@ -418,7 +411,7 @@ def make_peer(
     bonds_file: str,
     command_timeout: int,
     bootstrap: Node,
-    key_pair: "KeyPair",
+    key_pair: KeyPair,
     allowed_peers: Optional[List[str]] = None,
     mem_limit: Optional[str] = None,
 ) -> Node:
@@ -481,7 +474,7 @@ def create_peer_nodes(
     bootstrap: Node,
     network: str,
     bonds_file: str,
-    key_pairs: List["KeyPair"],
+    key_pairs: List[KeyPair],
     command_timeout: int,
     allowed_peers: Optional[List[str]] = None,
     mem_limit: Optional[str] = None,
@@ -551,10 +544,3 @@ def docker_network_with_started_bootstrap(context):
     with docker_network(context, context.docker) as network:
         with started_bootstrap_node(context=context, network=network, mount_dir=context.mount_dir) as node:
             yield node
-
-
-@pytest.yield_fixture(scope='module')
-def started_standalone_bootstrap_node(command_line_options: CommandLineOptions, docker_client: DockerClient) -> Node:
-    with conftest.testing_context(command_line_options, docker_client) as context:
-        with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
-            yield bootstrap_node
