@@ -237,12 +237,16 @@ object BlockAPI {
 
     def casperResponse(implicit casper: MultiParentCasper[F]): F[String] =
       for {
-        dag         <- MultiParentCasper[F].blockDag
-        maxHeight   <- dag.topoSort(0L).map(_.length - 1)
-        depth       = d.getOrElse(maxHeight)
-        startHeight = math.max(0, maxHeight - depth)
-        topoSort    <- dag.topoSortTail(depth)
-        graph       <- GraphzGenerator.generate[F, Effect](topoSort)
+        dag                <- MultiParentCasper[F].blockDag
+        maxHeight          <- dag.topoSort(0L).map(_.length - 1)
+        depth              = d.getOrElse(maxHeight)
+        startHeight        = math.max(0, maxHeight - depth)
+        topoSort           <- dag.topoSortTail(depth)
+        lastFinalizedBlock <- MultiParentCasper[F].lastFinalizedBlock
+        graph <- GraphzGenerator.generate[F, Effect](
+                  topoSort,
+                  PrettyPrinter.buildString(lastFinalizedBlock.blockHash)
+                )
       } yield graph.runS(new StringBuffer).toString
 
     MultiParentCasperRef.withCasper[F, String](
