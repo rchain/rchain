@@ -1,5 +1,6 @@
 package coop.rchain.casper.util.rholang
 
+import coop.rchain.models.PCost
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rspace.ReplayException
 
@@ -18,6 +19,7 @@ final case object Succeeded                                                     
 sealed trait Failed                                                             extends DeployStatus
 final case class UnusedCommEvent(ex: ReplayException)                           extends Failed
 final case class ReplayStatusMismatch(replay: DeployStatus, orig: DeployStatus) extends Failed
+final case class CostMismatch(replay: PCost, orig: PCost)                       extends Failed
 final case object UnknownFailure                                                extends Failed
 final case class UserErrors(errors: Vector[Throwable])                          extends Failed
 final case class InternalErrors(errors: Vector[Throwable])                      extends Failed

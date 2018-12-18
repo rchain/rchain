@@ -229,35 +229,40 @@ class RuntimeManager private (
     ): Task[Either[(Option[Deploy], Failed), StateHash]] =
       Task.defer {
         terms match {
-          case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
+          case InternalProcessedDeploy(deploy, cost, log, status) +: rem =>
             val availablePhlos = Cost(deploy.raw.map(_.phloLimit).get.value)
             for {
               _ <- runtime.replayReducer.setAvailablePhlos(availablePhlos)
               (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(
                 deploy.raw.get
               )
-              _         <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
-              _         <- runtime.replaySpace.rig(hash, log.toList)
-              injResult <- injAttempt(deploy, runtime.replayReducer, runtime.errorLog)
-              //TODO: compare replay deploy cost to given deploy cost
+              _                   <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
+              _                   <- runtime.replaySpace.rig(hash, log.toList)
+              injResult           <- injAttempt(deploy, runtime.replayReducer, runtime.errorLog)
               (phlosLeft, errors) = injResult
-              cost                = phlosLeft.copy(cost = availablePhlos.value - phlosLeft.cost)
-              cont <- DeployStatus.fromErrors(errors) match {
-                       case int: InternalErrors => Task.now(Left(Some(deploy) -> int))
-                       case replayStatus =>
-                         if (status.isFailed != replayStatus.isFailed)
-                           Task.now(
-                             Left(Some(deploy) -> ReplayStatusMismatch(replayStatus, status))
-                           )
-                         else if (errors.nonEmpty) doReplayEval(rem, hash)
-                         else {
-                           runtime.replaySpace.createCheckpoint().attempt.flatMap {
-                             case Right(newCheckpoint) =>
-                               doReplayEval(rem, newCheckpoint.root)
-                             case Left(ex: ReplayException) =>
-                               Task.now(Left(none[Deploy] -> UnusedCommEvent(ex)))
+              computedCost        = phlosLeft.copy(cost = availablePhlos.value - phlosLeft.cost)
+              cont <- if (computedCost == cost) {
+                       DeployStatus.fromErrors(errors) match {
+                         case int: InternalErrors => Task.now(Left(Some(deploy) -> int))
+                         case replayStatus =>
+                           if (status.isFailed != replayStatus.isFailed)
+                             Task.now(
+                               Left(Some(deploy) -> ReplayStatusMismatch(replayStatus, status))
+                             )
+                           else if (errors.nonEmpty) doReplayEval(rem, hash)
+                           else {
+                             runtime.replaySpace.createCheckpoint().attempt.flatMap {
+                               case Right(newCheckpoint) =>
+                                 doReplayEval(rem, newCheckpoint.root)
+                               case Left(ex: ReplayException) =>
+                                 Task.now(Left(none[Deploy] -> UnusedCommEvent(ex)))
+                             }
                            }
-                         }
+                       }
+                     } else {
+                       Task.now(
+                         Left(Some(deploy) -> CostMismatch(computedCost, cost))
+                       )
                      }
             } yield cont
 
