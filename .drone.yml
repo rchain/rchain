@@ -20,6 +20,10 @@ __branch_build_condiditions: &branch_build_conditions
     event: [ push, tag ]
     branch: *branches
 
+__pr_build_condiditions: &pr_build_conditions
+  when:
+    event: [ pull_request ]
+
 __buildenv: &buildenv
   image: rchain/buildenv:latest
 
@@ -48,16 +52,31 @@ clone:
 
 pipeline:
 
-  # pr
+  # pr build
 
-  compile:
+  pr-compile:
+    <<: *pr_build_conditions
     <<: *sbtenv
     commands:
       - sbt update rholang/bnfc:generate compile
 
-  # push
+  pr-run-unit-tests:
+    <<: *pr_build_conditions
+    group: parallel
+    <<: *sbtenv
+    commands:
+      - sbt test it:test
+
+  # full build
+
+  compile:
+    <<: *branch_build_conditions
+    <<: *sbtenv
+    commands:
+      - sbt update rholang/bnfc:generate compile
 
   docker-build:
+    <<: *branch_build_conditions
     <<: *sbtenv
     commands:
       # Skip the `doc` task - it's being invoked explicitly later
@@ -66,20 +85,17 @@ pipeline:
       - /var/cache/rchain-build/.sbt:/root/.sbt
       - /var/cache/rchain-build/.ivy2:/root/.ivy2
       - /var/run/docker.sock:/var/run/docker.sock
-    <<: *branch_build_conditions
-
-  # pr
 
   run-unit-tests:
+    <<: *branch_build_conditions
     group: parallel
     <<: *sbtenv
     commands:
       - cp -r . ../step.run-unit-tests && cd ../step.run-unit-tests
       - sbt test it:test
 
-  # push
-
   run-integration-tests:
+    <<: *branch_build_conditions
     group: parallel
     <<: *buildenv
     environment:
@@ -90,9 +106,9 @@ pipeline:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp:/tmp
       - /var/tmp/rchain-it:/var/tmp/rchain-it
-    <<: *branch_build_conditions
 
   package:
+    <<: *branch_build_conditions
     group: parallel
     <<: *sbtenv
     commands:
@@ -102,9 +118,9 @@ pipeline:
       - cp node/target/rnode_*_all.deb node/target/universal/*.tgz artifacts/
       - env JAVAC_VERSION=1.8 sbt clean compile doc node/rpm:packageBin
       - cp node/target/rpm/RPMS/noarch/rnode-*.noarch.rpm artifacts/
-    <<: *branch_build_conditions
 
   publish:
+    <<: *branch_build_conditions
     <<: *buildenv
     commands:
       - cd ../step.package
@@ -115,7 +131,6 @@ pipeline:
       - ssh_private_key
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    <<: *branch_build_conditions
 
 
   notify:
