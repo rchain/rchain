@@ -117,6 +117,9 @@ def testing_context(command_line_options: CommandLineOptions, docker_client: Doc
         yield context
 
 
+testing_context.__test__ = False
+
+
 @pytest.yield_fixture(scope='module')
 def started_standalone_bootstrap_node(command_line_options: CommandLineOptions, docker_client: DockerClient) -> Node:
     with testing_context(command_line_options, docker_client) as context:
