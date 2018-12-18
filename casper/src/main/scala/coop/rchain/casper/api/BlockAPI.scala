@@ -2,7 +2,7 @@ package coop.rchain.casper.api
 
 import cats.Monad
 import cats.effect.concurrent.Semaphore
-import cats.effect.{Bracket, Concurrent, Sync}
+import cats.effect.Concurrent
 import cats.effect.Sync
 import cats._, cats.data._, cats.implicits._
 import cats.mtl._
@@ -12,33 +12,25 @@ import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
-import coop.rchain.casper._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper._
-import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.graphz._
 import coop.rchain.models.{BindPattern, Par}
-import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rspace.{Serialize, StableHashProvider}
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import coop.rchain.shared.Log
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
-import coop.rchain.rholang.interpreter.{PrettyPrinter => RholangPrettyPrinter}
 import coop.rchain.models.rholang.sorter.Sortable._
 import monix.execution.Scheduler
 import scodec.Codec
 
 import scala.collection.immutable
-import coop.rchain.catscontrib._
-import coop.rchain.catscontrib.ski._
-import coop.rchain.casper.util.{EventConverter, ProtoUtil}
+import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.casper.util.EventConverter
 import coop.rchain.casper._
-import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.rholang.InterpreterUtil
 
 object BlockAPI {
 
@@ -174,7 +166,7 @@ object BlockAPI {
       val stateHash =
         ProtoUtil.tuplespace(block).get
       val data =
-        runtimeManager.getData(stateHash, sortedListeningName)
+        runtimeManager.getData(stateHash, sortedListeningName).unsafeRunSync
       for {
         blockInfo <- getBlockInfoWithoutTuplespace[F](block)
       } yield Option[DataWithBlockInfo](DataWithBlockInfo(data, Some(blockInfo)))
@@ -194,7 +186,7 @@ object BlockAPI {
       val stateHash =
         ProtoUtil.tuplespace(block).get
       val continuations: Seq[(Seq[BindPattern], Par)] =
-        runtimeManager.getContinuation(stateHash, sortedListeningNames)
+        runtimeManager.getContinuation(stateHash, sortedListeningNames).unsafeRunSync
       val continuationInfos = continuations.map(
         continuation => WaitingContinuationInfo(continuation._1, Some(continuation._2))
       )
@@ -242,7 +234,7 @@ object BlockAPI {
   ): F[String] = {
 
     type Effect[A] = StateT[Id, StringBuffer, A]
-    implicit val ser = new StringSerializer[Effect]
+    implicit val ser: StringSerializer[Effect] = new StringSerializer[Effect]
 
     def casperResponse(implicit casper: MultiParentCasper[F]): F[String] =
       for {

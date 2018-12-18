@@ -1,6 +1,7 @@
 package coop.rchain.casper.genesis.contracts
 
 import cats.Id
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.HashSetCasperTest.createBonds
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.DeployData
@@ -64,23 +65,29 @@ class RevIssuanceTest extends FlatSpec with Matchers {
     val (postUnlockHash, _) =
       runtimeManager.computeState(postGenHash, unlockDeploy :: Nil).runSyncUnsafe(10.seconds)
     val unlockResult =
-      runtimeManager.getData(
-        postUnlockHash,
-        Par().copy(exprs = Seq(Expr(GString(statusOut))))
-      )
+      runtimeManager
+        .getData(
+          postUnlockHash,
+          Par().copy(exprs = Seq(Expr(GString(statusOut))))
+        )
+        .unsafeRunSync
     assert(unlockResult.head.exprs.head.getETupleBody.ps.head.exprs.head.getGBool) //assert unlock success
 
     val (postTransferHash, _) =
       runtimeManager.computeState(postUnlockHash, transferDeploy :: Nil).runSyncUnsafe(10.seconds)
-    val transferSuccess = runtimeManager.getData(
-      postTransferHash,
-      Par().copy(exprs = Seq(Expr(GString(transferStatusOut))))
-    )
-    val transferResult =
-      runtimeManager.getData(
+    val transferSuccess = runtimeManager
+      .getData(
         postTransferHash,
-        Par().copy(exprs = Seq(Expr(GString(destination))))
+        Par().copy(exprs = Seq(Expr(GString(transferStatusOut))))
       )
+      .unsafeRunSync
+    val transferResult =
+      runtimeManager
+        .getData(
+          postTransferHash,
+          Par().copy(exprs = Seq(Expr(GString(destination))))
+        )
+        .unsafeRunSync
     assert(transferSuccess.head.exprs.head.getGString == "Success") //assert transfer success
     assert(transferResult.nonEmpty)
 

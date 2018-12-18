@@ -4,6 +4,7 @@ import cats.Monad
 import cats.implicits._
 import cats.kernel.Eq
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
@@ -147,7 +148,7 @@ object BlockApproverProtocol {
       _ <- (stateHash == postState.postStateHash)
             .either(())
             .or("Tuplespace hash mismatch.")
-      tuplespaceBonds <- Try(runtimeManager.computeBonds(postState.postStateHash)).toEither
+      tuplespaceBonds <- Try(runtimeManager.computeBonds(postState.postStateHash).unsafeRunSync).toEither
                           .leftMap(_.getMessage)
       tuplespaceBondsMap = tuplespaceBonds.map { case Bond(validator, stake) => validator -> stake }.toMap
       _ <- (tuplespaceBondsMap == bonds)

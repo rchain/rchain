@@ -2,6 +2,7 @@ package coop.rchain.casper.util.rholang
 
 import cats.Id
 import cats.effect.Resource
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.protocol.Deploy
 import coop.rchain.casper.util.ProtoUtil
@@ -58,17 +59,19 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
             .computeState(mgr.emptyStateHash, deploys)
             .map { result =>
               val hash = result._1
-              mgr.captureResults(
-                hash,
-                ProtoUtil.deployDataToDeploy(
-                  ProtoUtil.sourceDeploy(
-                    s""" for(nn <- @"nn"){ nn!("value", "$captureChannel") } """,
-                    0L,
-                    accounting.MAX_VALUE
-                  )
-                ),
-                captureChannel
-              )
+              mgr
+                .captureResults(
+                  hash,
+                  ProtoUtil.deployDataToDeploy(
+                    ProtoUtil.sourceDeploy(
+                      s""" for(nn <- @"nn"){ nn!("value", "$captureChannel") } """,
+                      0L,
+                      accounting.MAX_VALUE
+                    )
+                  ),
+                  captureChannel
+                )
+                .unsafeRunSync
             }
         }
         .runSyncUnsafe(10.seconds)
@@ -83,11 +86,16 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val term = ProtoUtil.deployDataToDeploy(ProtoUtil.sourceDeploy(code, 0L, accounting.MAX_VALUE))
     val manyResults =
       runtimeManager
-        .use(mgr => Task.delay { mgr.captureResults(mgr.emptyStateHash, term) })
+        .use(mgr => Task.delay { mgr.captureResults(mgr.emptyStateHash, term).unsafeRunSync })
         .runSyncUnsafe(10.seconds)
     val noResults =
       runtimeManager
-        .use(mgr => Task.delay { mgr.captureResults(mgr.emptyStateHash, term, "differentName") })
+        .use(
+          mgr =>
+            Task.delay {
+              mgr.captureResults(mgr.emptyStateHash, term, "differentName").unsafeRunSync
+            }
+        )
         .runSyncUnsafe(10.seconds)
 
     noResults.isEmpty should be(true)

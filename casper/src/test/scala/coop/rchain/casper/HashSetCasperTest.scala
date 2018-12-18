@@ -659,6 +659,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
           ProtoUtil.postStateHash(block1),
           ProtoUtil.deployDataToDeploy(rankedValidatorQuery)
         )
+        .unsafeRunSync
         .head
         .exprs
         .head
@@ -746,10 +747,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         0L,
         accounting.MAX_VALUE
       )
-      newWalletBalance = node.runtimeManager.captureResults(
-        ProtoUtil.postStateHash(block),
-        ProtoUtil.deployDataToDeploy(balanceQuery)
-      )
+      newWalletBalance = node.runtimeManager
+        .captureResults(
+          ProtoUtil.postStateHash(block),
+          ProtoUtil.deployDataToDeploy(balanceQuery)
+        )
+        .unsafeRunSync
       _      = blockStatus shouldBe Valid
       result = newWalletBalance.head.exprs.head.getGInt shouldBe amount
 
@@ -894,6 +897,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         ProtoUtil.postStateHash(genesis),
         ProtoUtil.deployDataToDeploy(sigDeployData)
       )
+      .unsafeRunSync
       .head
       .exprs
       .head
@@ -1442,6 +1446,7 @@ object HashSetCasperTest {
           ProtoUtil.postStateHash(block),
           query
         )
+        .unsafeRunSync
     } yield (blockStatus, queryResult)
 
   def createBonds(validators: Seq[Array[Byte]]): Map[Array[Byte], Long] =

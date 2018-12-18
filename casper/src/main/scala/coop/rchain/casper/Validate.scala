@@ -6,6 +6,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
@@ -614,7 +615,7 @@ object Validate {
     val bonds = ProtoUtil.bonds(b)
     ProtoUtil.tuplespace(b) match {
       case Some(tuplespaceHash) =>
-        Try(runtimeManager.computeBonds(tuplespaceHash)) match {
+        Try(runtimeManager.computeBonds(tuplespaceHash).unsafeRunSync) match {
           case Success(computedBonds) =>
             if (bonds.toSet == computedBonds.toSet) {
               Applicative[F].pure(Right(Valid))

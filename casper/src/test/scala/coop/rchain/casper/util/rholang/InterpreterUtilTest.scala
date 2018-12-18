@@ -6,6 +6,7 @@ import cats.mtl.implicits._
 import cats.{Id, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.blockstorage.{
   BlockDagRepresentation,
   BlockDagStorage,
@@ -91,7 +92,7 @@ class InterpreterUtilTest
           blockCheckpoint                             <- computeBlockCheckpoint(genesis, genesis, dag1, runtimeManager)
           (postGenStateHash, postGenProcessedDeploys) = blockCheckpoint
           _                                           <- injectPostStateHash[Task](0, genesis, postGenStateHash, postGenProcessedDeploys)
-          genPostState                                = runtimeManager.storageRepr(postGenStateHash).get
+          genPostState                                = runtimeManager.storageRepr(postGenStateHash).unsafeRunSync.get
 
           _                                         = genPostState.contains("@{2}!(2)") should be(true)
           _                                         = genPostState.contains("@{123}!(5)") should be(true)
@@ -99,7 +100,7 @@ class InterpreterUtilTest
           blockCheckpointB1                         <- computeBlockCheckpoint(b1, genesis, dag2, runtimeManager)
           (postB1StateHash, postB1ProcessedDeploys) = blockCheckpointB1
           _                                         <- injectPostStateHash[Task](1, b1, postB1StateHash, postB1ProcessedDeploys)
-          b1PostState                               = runtimeManager.storageRepr(postB1StateHash).get
+          b1PostState                               = runtimeManager.storageRepr(postB1StateHash).unsafeRunSync.get
           _                                         = b1PostState.contains("@{1}!(1)") should be(true)
           _                                         = b1PostState.contains("@{123}!(5)") should be(true)
           _                                         = b1PostState.contains("@{456}!(10)") should be(true)
@@ -121,7 +122,7 @@ class InterpreterUtilTest
                                 runtimeManager
                               )
           (postb3StateHash, _) = blockCheckpointB4
-          b3PostState          = runtimeManager.storageRepr(postb3StateHash).get
+          b3PostState          = runtimeManager.storageRepr(postb3StateHash).unsafeRunSync.get
 
           _      = b3PostState.contains("@{1}!(1)") should be(true)
           _      = b3PostState.contains("@{1}!(15)") should be(true)
@@ -205,7 +206,7 @@ class InterpreterUtilTest
                                 runtimeManager
                               )
           (postb3StateHash, _) = blockCheckpointB3
-          b3PostState          = runtimeManager.storageRepr(postb3StateHash).get
+          b3PostState          = runtimeManager.storageRepr(postb3StateHash).unsafeRunSync.get
 
           _      = b3PostState.contains("@{1}!(15)") should be(true)
           _      = b3PostState.contains("@{5}!(5)") should be(true)

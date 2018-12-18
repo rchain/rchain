@@ -77,6 +77,7 @@ object BondingUtil {
       sigBytes <- Sync[F].delay {
                    runtimeManager
                      .captureResults(runtimeManager.emptyStateHash, unlockSigDataTerm)
+                     .unsafeRunSync
                      .head
                      .exprs
                      .head
@@ -112,6 +113,7 @@ object BondingUtil {
       sigBytes <- Sync[F].delay {
                    runtimeManager
                      .captureResults(runtimeManager.emptyStateHash, transferSigDataTerm)
+                     .unsafeRunSync
                      .head
                      .exprs
                      .head

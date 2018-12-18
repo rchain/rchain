@@ -7,6 +7,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util._
@@ -285,7 +286,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
                            case (acc, b) => math.max(acc, blockNumber(b))
                          }
 
-                       val newBonds = runtimeManager.computeBonds(postStateHash)
+                       val newBonds = runtimeManager.computeBonds(postStateHash).unsafeRunSync
                        val postState = RChainState()
                          .withPreStateHash(preStateHash)
                          .withPostStateHash(postStateHash)
@@ -308,6 +309,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
   def storageContents(hash: StateHash): F[String] =
     runtimeManager
       .storageRepr(hash)
+      .unsafeRunSync
       .getOrElse(s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!")
       .pure[F]
 
