@@ -1,5 +1,11 @@
+# Common parts
+
+# FYI: There's no merging of arrays in YAML. At least not in the Go library
+# Drone uses to parse YAML. So if you mix in &sbtenv and want to add
+# additional volumes, as in docker-build step, you need to specify all volumes.
+
 # See https://bors.tech/documentation/getting-started/ for why we have trying and staging here:
-branches:
+__branches: &branches
   - dev
   - master
   - release-*
@@ -7,11 +13,10 @@ branches:
   - trying
   - staging
 
-# Common parts
-
-# FYI: There's no merging of arrays in YAML. At least not in the Go library
-# Drone uses to parse YAML. So if you mix in &sbtenv and want to add
-# additional volumes, as in docker-build step, you need to specify all volumes.
+__branch_build_condiditions: &branch_build_conditions
+  when:
+    event: [ push, tag ]
+    branch: *branches
 
 __buildenv: &buildenv
   image: rchain/buildenv:latest
@@ -59,8 +64,7 @@ pipeline:
       - /var/cache/rchain-build/.sbt:/root/.sbt
       - /var/cache/rchain-build/.ivy2:/root/.ivy2
       - /var/run/docker.sock:/var/run/docker.sock
-    when:
-      event: [ push, tag ]
+    <<: *branch_build_conditions
 
   # pr
 
@@ -84,8 +88,7 @@ pipeline:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp:/tmp
       - /var/tmp/rchain-it:/var/tmp/rchain-it
-    when:
-      event: [ push, tag ]
+    <<: *branch_build_conditions
 
   package:
     group: parallel
@@ -97,8 +100,7 @@ pipeline:
       - cp node/target/rnode_*_all.deb node/target/universal/*.tgz artifacts/
       - env JAVAC_VERSION=1.8 sbt clean compile doc node/rpm:packageBin
       - cp node/target/rpm/RPMS/noarch/rnode-*.noarch.rpm artifacts/
-    when:
-      event: [ push, tag ]
+    <<: *branch_build_conditions
 
   publish:
     <<: *buildenv
@@ -111,8 +113,8 @@ pipeline:
       - ssh_private_key
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    when:
-      event: [ push, tag ]
+    <<: *branch_build_conditions
+
 
   notify:
     <<: *buildenv
@@ -126,4 +128,5 @@ pipeline:
       - email_sender
     when:
       event: [ push, tag ]
+      branch: *branches
       status: [ changed, failure ]
