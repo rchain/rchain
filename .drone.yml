@@ -132,3 +132,4 @@ pipeline:
       event: [ push, tag ]
       branch: *branches
       status: [ changed, failure ]
+
