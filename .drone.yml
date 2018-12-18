@@ -130,5 +130,5 @@ pipeline:
       - email_sender
     when:
       event: [ push, tag ]
-      branch: *branches
+      branch: [ master, release*, testing* ]
       status: [ changed, failure ]
