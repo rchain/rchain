@@ -1,23 +1,19 @@
 package coop.rchain.rholang.interpreter
 
-import cats.effect.ContextShift
 import java.nio.file.{Files, Path}
 
-import cats.{Id, Monad}
-import scala.collection.immutable
-
 import cats.Applicative
-import cats.effect.Sync
 import cats.effect.concurrent.Ref
+import cats.effect.{ContextShift, Sync}
 import cats.implicits._
 import cats.mtl.FunctorTell
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models._
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
+import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.ShortLeashParams.ShortLeashParameters
 import coop.rchain.rholang.interpreter.Runtime._
@@ -31,6 +27,8 @@ import coop.rchain.shared.StoreType
 import coop.rchain.shared.StoreType._
 import monix.eval.Task
 import monix.execution.Scheduler
+
+import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 
 class Runtime private (
@@ -213,31 +211,32 @@ object Runtime {
         shortLeashParams: ShortLeashParams[Task],
         blockTime: BlockTime[Task]
     ): RhoDispatchMap = {
+      val systemProcesses = SystemProcesses[Task](dispatcher, space)
       import BodyRefs._
       Map(
-        STDOUT                       -> SystemProcesses.stdout,
-        STDOUT_ACK                   -> SystemProcesses.stdoutAck(space, dispatcher),
-        STDERR                       -> SystemProcesses.stderr,
-        STDERR_ACK                   -> SystemProcesses.stderrAck(space, dispatcher),
-        ED25519_VERIFY               -> SystemProcesses.ed25519Verify(space, dispatcher),
-        SHA256_HASH                  -> SystemProcesses.sha256Hash(space, dispatcher),
-        KECCAK256_HASH               -> SystemProcesses.keccak256Hash(space, dispatcher),
-        BLAKE2B256_HASH              -> SystemProcesses.blake2b256Hash(space, dispatcher),
-        SECP256K1_VERIFY             -> SystemProcesses.secp256k1Verify(space, dispatcher),
-        REG_LOOKUP                   -> (registry.lookup(_, _)),
-        REG_LOOKUP_CALLBACK          -> (registry.lookupCallback(_, _)),
+        STDOUT -> systemProcesses.stdOut,
+        STDOUT_ACK -> systemProcesses.stdOutAck,
+        STDERR -> systemProcesses.stdErr,
+        STDERR_ACK -> systemProcesses.stdErrAck,
+        ED25519_VERIFY -> systemProcesses.ed25519Verify,
+        SHA256_HASH -> systemProcesses.sha256Hash,
+        KECCAK256_HASH -> systemProcesses.keccak256Hash,
+        BLAKE2B256_HASH -> systemProcesses.blake2b256Hash,
+        SECP256K1_VERIFY -> systemProcesses.secp256k1Verify,
+        REG_LOOKUP -> (registry.lookup(_, _)),
+        REG_LOOKUP_CALLBACK -> (registry.lookupCallback(_, _)),
         REG_INSERT                   -> (registry.insert(_, _)),
         REG_INSERT_CALLBACK          -> (registry.insertCallback(_, _)),
         REG_REGISTER_INSERT_CALLBACK -> (registry.registerInsertCallback(_, _)),
         REG_DELETE                   -> (registry.delete(_, _)),
         REG_DELETE_ROOT_CALLBACK     -> (registry.deleteRootCallback(_, _)),
-        REG_DELETE_CALLBACK          -> (registry.deleteCallback(_, _)),
-        REG_PUBLIC_LOOKUP            -> (registry.publicLookup(_, _)),
+        REG_DELETE_CALLBACK -> (registry.deleteCallback(_, _)),
+        REG_PUBLIC_LOOKUP -> (registry.publicLookup(_, _)),
         REG_PUBLIC_REGISTER_RANDOM   -> (registry.publicRegisterRandom(_, _)),
         REG_PUBLIC_REGISTER_SIGNED   -> (registry.publicRegisterSigned(_, _)),
         REG_NONCE_INSERT_CALLBACK    -> (registry.nonceInsertCallback(_, _)),
-        GET_DEPLOY_PARAMS            -> SystemProcesses.getDeployParams(space, dispatcher, shortLeashParams),
-        GET_TIMESTAMP                -> SystemProcesses.blockTime(space, dispatcher, blockTime)
+        GET_DEPLOY_PARAMS            -> systemProcesses.getDeployParams(shortLeashParams),
+        GET_TIMESTAMP                -> systemProcesses.blockTime(blockTime)
       )
     }
 
