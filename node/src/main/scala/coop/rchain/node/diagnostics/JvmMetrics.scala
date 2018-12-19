@@ -1,9 +1,11 @@
 package coop.rchain.node.diagnostics
 
-import cats._, cats.data._, cats.implicits._
+import cats._
+import cats.data._
+import cats.implicits._
 
-import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.catscontrib.Catscontrib._
+import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.metrics.Metrics
 import coop.rchain.node.model.diagnostics._
 
@@ -16,6 +18,9 @@ trait JvmMetrics[F[_]] {
 }
 
 object JvmMetrics extends JmxMetricsInstances {
+  private implicit val metricsSource: Metrics.Source =
+    Metrics.Source(Metrics.BaseSource, "node.diagnostics.jvm")
+
   def apply[F[_]](implicit M: JvmMetrics[F]): JvmMetrics[F] = M
 
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
@@ -39,46 +44,46 @@ object JvmMetrics extends JmxMetricsInstances {
 
     def reportProcessCpu(processCpu: ProcessCpu): List[F[Unit]] =
       List(
-        g("process-cpu-time", processCpu.time.getOrElse(0)),
-        g("process-cpu-load", processCpu.load.map(_ * 1000).map(_.toLong).getOrElse(0))
+        g("process.cpu.time", processCpu.time.getOrElse(0)),
+        g("process.cpu.load", processCpu.load.map(_ * 1000).map(_.toLong).getOrElse(0))
       )
 
     def reportMemory(memory: Memory, prefix: String): List[F[Unit]] =
       List(
-        g(s"$prefix-commited", memory.committed),
-        g(s"$prefix-init", memory.init),
-        g(s"$prefix-max", memory.max.getOrElse(-1L)),
-        g(s"$prefix-used", memory.used)
+        g(s"$prefix.commited", memory.committed),
+        g(s"$prefix.init", memory.init),
+        g(s"$prefix.max", memory.max.getOrElse(-1L)),
+        g(s"$prefix.used", memory.used)
       )
 
     def reportMemoryUsage(memoryUsage: MemoryUsage): List[F[Unit]] =
-      (memoryUsage.heap.map(reportMemory(_, "memory-heap")).toList ++
-        memoryUsage.nonHeap.map(reportMemory(_, "memory-non-heap")).toList).flatten
+      (memoryUsage.heap.map(reportMemory(_, "memory.heap")).toList ++
+        memoryUsage.nonHeap.map(reportMemory(_, "memory.non-heap")).toList).flatten
 
     def reportGarbageCollector(garbageCollector: GarbageCollector): List[F[Unit]] = {
-      val name = "gc-" + garbageCollector.name.replace(' ', '-').toLowerCase
+      val name = "gc." + garbageCollector.name.replace(' ', '-').toLowerCase
       List(
-        g(s"$name-total-collections", garbageCollector.totalCollections),
-        g(s"$name-total-collection-time", garbageCollector.totalCollectionTime)
+        g(s"$name.total-collections", garbageCollector.totalCollections),
+        g(s"$name.total-collection-time", garbageCollector.totalCollectionTime)
       ) ++ List(
-        garbageCollector.startTime.map(g(s"$name-start-time", _)).toList,
-        garbageCollector.endTime.map(g(s"$name-end-time", _)).toList,
-        garbageCollector.duration.map(g(s"$name-duration", _)).toList
+        garbageCollector.startTime.map(g(s"$name.start-time", _)).toList,
+        garbageCollector.endTime.map(g(s"$name.end-time", _)).toList,
+        garbageCollector.duration.map(g(s"$name.duration", _)).toList
       ).flatten
     }
 
     def reportMemoryPool(memoryPool: MemoryPool): List[F[Unit]] = {
-      val name = "mempool-" + memoryPool.name.replace(' ', '-').toLowerCase
+      val name = "mempool." + memoryPool.name.replace(' ', '-').toLowerCase
       (memoryPool.usage.map(reportMemory(_, name)).toList ++
-        memoryPool.peakUsage.map(reportMemory(_, s"$name-peak")).toList).flatten
+        memoryPool.peakUsage.map(reportMemory(_, s"$name.peak")).toList).flatten
     }
 
     def reportThreads(threads: Threads): List[F[Unit]] =
       List(
-        g("thread-count", threads.threadCount.toLong),
-        g("thread-count-daemon", threads.daemonThreadCount.toLong),
-        g("thread-count-peak", threads.peakThreadCount.toLong),
-        g("thread-total-started", threads.totalStartedThreadCount)
+        g("thread.count", threads.threadCount.toLong),
+        g("thread.count-daemon", threads.daemonThreadCount.toLong),
+        g("thread.count-peak", threads.peakThreadCount.toLong),
+        g("thread.total-started", threads.totalStartedThreadCount)
       )
 
     def join(tasks: Seq[F[Unit]]*): F[List[Unit]] =

@@ -31,6 +31,8 @@ import coop.rchain.casper.util.TestTime
 import scala.util.Success
 
 class ApproveBlockProtocolTest extends FlatSpec with Matchers {
+  private val METRICS_APPROVAL_COUNTER_NAME = "rchain.casper.approve-block.genesis"
+
   "ApproveBlockProtocol" should "add valid signatures it receives to its state" in {
     implicit val ctx         = TestScheduler()
     implicit val logStub     = new LogStub[Task]()
@@ -43,11 +45,11 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
 
     val cancelToken = abp.run().start.runToFuture
     sigsF.get.unsafeRunSync.size should be(0)
-    metricsTest.counters.get(ApproveBlockProtocol.METRICS_APPROVAL_COUNTER_NAME) should be(None)
+    metricsTest.counters.get(METRICS_APPROVAL_COUNTER_NAME) should be(None)
     abp.addApproval(a).unsafeRunSync
     ctx.tick(1.millisecond)
     sigsF.get.unsafeRunSync.size should be(1)
-    metricsTest.counters(ApproveBlockProtocol.METRICS_APPROVAL_COUNTER_NAME) should be(1)
+    metricsTest.counters(METRICS_APPROVAL_COUNTER_NAME) should be(1)
     cancelToken.cancel()
   }
 
@@ -63,15 +65,15 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
 
     val cancelToken = abp.run().start.runToFuture
     sigsF.get.unsafeRunSync.size should be(0)
-    metricsTest.counters.get(ApproveBlockProtocol.METRICS_APPROVAL_COUNTER_NAME) should be(None)
+    metricsTest.counters.get(METRICS_APPROVAL_COUNTER_NAME) should be(None)
     abp.addApproval(a).unsafeRunSync
     ctx.tick(1.millisecond)
     sigsF.get.unsafeRunSync.size should be(1)
-    metricsTest.counters(ApproveBlockProtocol.METRICS_APPROVAL_COUNTER_NAME) should be(1)
+    metricsTest.counters(METRICS_APPROVAL_COUNTER_NAME) should be(1)
     abp.addApproval(a).unsafeRunSync
     ctx.tick(1.millisecond)
     sigsF.get.unsafeRunSync.size should be(1)
-    metricsTest.counters(ApproveBlockProtocol.METRICS_APPROVAL_COUNTER_NAME) should be(1)
+    metricsTest.counters(METRICS_APPROVAL_COUNTER_NAME) should be(1)
     cancelToken.cancel()
   }
 
@@ -88,11 +90,11 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     val cancelToken = abp.run().start.runToFuture
     ctx.tick(1.millisecond)
     sigs.get.unsafeRunSync.size should be(0)
-    metricsTest.counters.get(ApproveBlockProtocol.METRICS_APPROVAL_COUNTER_NAME) should be(None)
+    metricsTest.counters.get(METRICS_APPROVAL_COUNTER_NAME) should be(None)
     abp.addApproval(a).unsafeRunSync
     ctx.tick(1.millisecond)
     sigs.get.unsafeRunSync.size should be(0)
-    metricsTest.counters.get(ApproveBlockProtocol.METRICS_APPROVAL_COUNTER_NAME) should be(None)
+    metricsTest.counters.get(METRICS_APPROVAL_COUNTER_NAME) should be(None)
     cancelToken.cancel()
   }
 
@@ -125,7 +127,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     lab.get.runToFuture.value.nonEmpty should be(true)
     lab.get.runToFuture.value.get should be('success)
     ctx.clockMonotonic(MILLISECONDS) should be(startTime + d.toMillis + 1)
-    metricsTest.counters(ApproveBlockProtocol.METRICS_APPROVAL_COUNTER_NAME) should be(n)
+    metricsTest.counters(METRICS_APPROVAL_COUNTER_NAME) should be(n)
 
     cancelToken.cancel()
   }
@@ -158,7 +160,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     }
 
     lab.get.runToFuture.value.get should be(Success(None))
-    metricsTest.counters(ApproveBlockProtocol.METRICS_APPROVAL_COUNTER_NAME) should be(n / 2)
+    metricsTest.counters(METRICS_APPROVAL_COUNTER_NAME) should be(n / 2)
 
     ((n / 2) to n).foreach { i =>
       val (validatorSk, validatorPk) = sigs(i - 1)
@@ -174,7 +176,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     ctx.tick((d.toMillis - timeElapsed).milliseconds)
     lab.get.runToFuture.value.nonEmpty should be(true)
     lab.get.runToFuture.value.get should be('success)
-    metricsTest.counters(ApproveBlockProtocol.METRICS_APPROVAL_COUNTER_NAME) should be(n)
+    metricsTest.counters(METRICS_APPROVAL_COUNTER_NAME) should be(n)
 
     cancelToken.cancel()
   }
@@ -201,7 +203,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
 
     lab.get.runToFuture.value.nonEmpty should be(true)
     lab.get.runToFuture.value.get should be('success)
-    metricsTest.counters.get(ApproveBlockProtocol.METRICS_APPROVAL_COUNTER_NAME) should be(None)
+    metricsTest.counters.get(METRICS_APPROVAL_COUNTER_NAME) should be(None)
 
     cancelToken.cancel()
   }
@@ -219,11 +221,11 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
 
     val cancelToken = abp.run().start.runToFuture
     sigsF.get.unsafeRunSync.size should be(0)
-    metricsTest.counters.get(ApproveBlockProtocol.METRICS_APPROVAL_COUNTER_NAME) should be(None)
+    metricsTest.counters.get(METRICS_APPROVAL_COUNTER_NAME) should be(None)
     abp.addApproval(a).unsafeRunSync
     ctx.tick(1.millisecond)
     sigsF.get.unsafeRunSync.size should be(0)
-    metricsTest.counters.get(ApproveBlockProtocol.METRICS_APPROVAL_COUNTER_NAME) should be(None)
+    metricsTest.counters.get(METRICS_APPROVAL_COUNTER_NAME) should be(None)
     cancelToken.cancel()
   }
 
@@ -247,14 +249,14 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     ctx.tick(4.millisecond)
     infosContain("APPROVAL: Sent UnapprovedBlock", 1)
     infosContain("APPROVAL: received block approval from", 0)
-    metricsTest.counters.get(ApproveBlockProtocol.METRICS_APPROVAL_COUNTER_NAME) should be(None)
+    metricsTest.counters.get(METRICS_APPROVAL_COUNTER_NAME) should be(None)
 
     val a = ApproveBlockProtocolTest.approval(candidate, validatorSk, validatorPk)
     sigsF.get.unsafeRunSync.size should be(0)
     abp.addApproval(a).unsafeRunSync
     ctx.tick(1.millisecond)
     sigsF.get.unsafeRunSync.size should be(1)
-    metricsTest.counters(ApproveBlockProtocol.METRICS_APPROVAL_COUNTER_NAME) should be(1)
+    metricsTest.counters(METRICS_APPROVAL_COUNTER_NAME) should be(1)
     infosContain("APPROVAL: received block approval from", 1)
     infosContain("APPROVAL: Sent UnapprovedBlock", 2)
     cancelToken.cancel()
@@ -278,7 +280,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     // because we attach `System.currentMillis` to every message.
     logStub.infos.filter(_.startsWith("APPROVAL: received block approval from")).size should be(0)
     logStub.infos.filter(_.startsWith("APPROVAL: Sent ApprovedBlock")).size should be(0)
-    metricsTest.counters.get(ApproveBlockProtocol.METRICS_APPROVAL_COUNTER_NAME) should be(None)
+    metricsTest.counters.get(METRICS_APPROVAL_COUNTER_NAME) should be(None)
 
     val a = ApproveBlockProtocolTest.approval(candidate, validatorSk, validatorPk)
     sigsF.get.unsafeRunSync.size should be(0)
@@ -288,7 +290,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
 
     sigsF.get.unsafeRunSync.size should be(1)
     logStub.infos.filter(_.startsWith("APPROVAL: received block approval from")).size should be(1)
-    metricsTest.counters(ApproveBlockProtocol.METRICS_APPROVAL_COUNTER_NAME) should be(1)
+    metricsTest.counters(METRICS_APPROVAL_COUNTER_NAME) should be(1)
     ctx.tick(1.millisecond)
     logStub.infos.filter(_.startsWith("APPROVAL: Sent ApprovedBlock")).size should be(1)
     cancelToken.cancel()
