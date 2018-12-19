@@ -56,12 +56,10 @@ object Configuration {
   private val DefaultRequiredSigns              = 0
   private val DefaultApprovalProtocolDuration   = 5.minutes
   private val DefaultApprovalProtocolInterval   = 5.seconds
-  // TODO this temporarly makes the allowed message size to be  256 MB on startup
-  // This will be rolled back after CORE-1394 and Kents changes
-  private val DefaultMaxMessageSize: Int = 256 * 1024 * 1024
+  private val DefaultMaxMessageSize: Int        = 256 * 1024 // 0.25 MB
   // within range HTTP2 RFC 7540
-  private val MaxMessageSizeMinimumValue: Int = 10 * 1024 * 1024
-  private val MaxMessageSizeMaximumValue: Int = DefaultMaxMessageSize * 4
+  private val MaxMessageSizeMinimumValue: Int = DefaultMaxMessageSize
+  private val MaxMessageSizeMaximumValue: Int = 10 * 1024 * 1024
   private val DefaultMinimumBond: Long        = 1L
   private val DefaultMaximumBond: Long        = Long.MaxValue
   private val DefaultHasFaucet: Boolean       = false
