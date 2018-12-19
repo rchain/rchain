@@ -18,7 +18,6 @@ import coop.rchain.rspace.internal.Datum
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 import monix.eval.Task
 import monix.execution.Scheduler
-import coop.rchain.catscontrib.TaskContrib._
 
 import scala.collection.immutable
 
@@ -304,6 +303,7 @@ class AbstractRuntimeManager[F[_]: Concurrent: ToAbstractContext] protected (
 
 object RuntimeManager {
   type StateHash = ByteString
+  import coop.rchain.catscontrib.TaskContrib._
 
   def fromRuntime(active: Runtime)(implicit scheduler: Scheduler): RuntimeManager =
     (for {

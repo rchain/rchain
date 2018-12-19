@@ -28,7 +28,6 @@ import monix.execution.Scheduler
 import scodec.Codec
 
 import scala.collection.immutable
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.util.EventConverter
 import coop.rchain.casper._
 import coop.rchain.casper.util.rholang.RuntimeManager

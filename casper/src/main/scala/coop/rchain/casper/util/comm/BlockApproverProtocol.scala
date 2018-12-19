@@ -1,16 +1,16 @@
 package coop.rchain.casper.util.comm
 
 import cats.Monad
+import cats.effect.Concurrent
 import cats.implicits._
 import cats.kernel.Eq
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
-import coop.rchain.catscontrib.Capture
+import coop.rchain.catscontrib.{Capture, ToAbstractContext}
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.protocol.routing.Packet
@@ -43,7 +43,7 @@ class BlockApproverProtocol(
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1) -> e._2)
 
-  def unapprovedBlockPacketHandler[F[_]: Capture: Monad: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
+  def unapprovedBlockPacketHandler[F[_]: Capture: Concurrent: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
       peer: PeerNode,
       u: UnapprovedBlock
   ): F[Option[Packet]] =
@@ -148,7 +148,11 @@ object BlockApproverProtocol {
       _ <- (stateHash == postState.postStateHash)
             .either(())
             .or("Tuplespace hash mismatch.")
-      tuplespaceBonds <- Try(runtimeManager.computeBonds(postState.postStateHash).unsafeRunSync).toEither
+      tuplespaceBonds <- Try(
+                          runtimeManager
+                            .computeBonds(postState.postStateHash)
+                            .runSyncUnsafe(Duration.Inf)
+                        ).toEither
                           .leftMap(_.getMessage)
       tuplespaceBondsMap = tuplespaceBonds.map { case Bond(validator, stake) => validator -> stake }.toMap
       _ <- (tuplespaceBondsMap == bonds)

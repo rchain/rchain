@@ -57,7 +57,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         .use { mgr =>
           mgr
             .computeState(mgr.emptyStateHash, deploys)
-            .map { result =>
+            .flatMap { result =>
               val hash = result._1
               mgr
                 .captureResults(
@@ -71,7 +71,6 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                   ),
                   captureChannel
                 )
-                .unsafeRunSync
             }
         }
         .runSyncUnsafe(10.seconds)
@@ -86,16 +85,13 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val term = ProtoUtil.deployDataToDeploy(ProtoUtil.sourceDeploy(code, 0L, accounting.MAX_VALUE))
     val manyResults =
       runtimeManager
-        .use(mgr => Task.delay { mgr.captureResults(mgr.emptyStateHash, term).unsafeRunSync })
+        .use(mgr => mgr.captureResults(mgr.emptyStateHash, term))
         .runSyncUnsafe(10.seconds)
     val noResults =
       runtimeManager
         .use(
           mgr =>
-            Task.delay {
-              mgr.captureResults(mgr.emptyStateHash, term, "differentName").unsafeRunSync
-            }
-        )
+              mgr.captureResults(mgr.emptyStateHash, term, "differentName"))
         .runSyncUnsafe(10.seconds)
 
     noResults.isEmpty should be(true)

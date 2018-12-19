@@ -92,7 +92,8 @@ class InterpreterUtilTest
           blockCheckpoint                             <- computeBlockCheckpoint(genesis, genesis, dag1, runtimeManager)
           (postGenStateHash, postGenProcessedDeploys) = blockCheckpoint
           _                                           <- injectPostStateHash[Task](0, genesis, postGenStateHash, postGenProcessedDeploys)
-          genPostState                                = runtimeManager.storageRepr(postGenStateHash).unsafeRunSync.get
+          genPostStateT                                <- runtimeManager.storageRepr(postGenStateHash)
+          genPostState = genPostStateT.get
 
           _                                         = genPostState.contains("@{2}!(2)") should be(true)
           _                                         = genPostState.contains("@{123}!(5)") should be(true)
@@ -100,7 +101,8 @@ class InterpreterUtilTest
           blockCheckpointB1                         <- computeBlockCheckpoint(b1, genesis, dag2, runtimeManager)
           (postB1StateHash, postB1ProcessedDeploys) = blockCheckpointB1
           _                                         <- injectPostStateHash[Task](1, b1, postB1StateHash, postB1ProcessedDeploys)
-          b1PostState                               = runtimeManager.storageRepr(postB1StateHash).unsafeRunSync.get
+          b1PostStateT                               <- runtimeManager.storageRepr(postB1StateHash)
+          b1PostState = b1PostStateT.get
           _                                         = b1PostState.contains("@{1}!(1)") should be(true)
           _                                         = b1PostState.contains("@{123}!(5)") should be(true)
           _                                         = b1PostState.contains("@{456}!(10)") should be(true)
@@ -122,7 +124,8 @@ class InterpreterUtilTest
                                 runtimeManager
                               )
           (postb3StateHash, _) = blockCheckpointB4
-          b3PostState          = runtimeManager.storageRepr(postb3StateHash).unsafeRunSync.get
+          b3PostStateT          <- runtimeManager.storageRepr(postb3StateHash)
+          b3PostState = b3PostStateT.get
 
           _      = b3PostState.contains("@{1}!(1)") should be(true)
           _      = b3PostState.contains("@{1}!(15)") should be(true)
