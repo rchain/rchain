@@ -22,14 +22,17 @@ from docker.models.containers import Container
 from docker.models.containers import ExecResult
 
 from .common import (
-    make_tempfile,
+    KeyPair,
+    Network,
     make_tempdir,
+    make_tempfile,
     TestingContext,
     NonZeroExitCodeError,
-    KeyPair,
+    GetBlockError,
 )
 from .wait import (
     wait_for_node_started,
+    wait_for_approved_block_received_handler_state,
 )
 
 
@@ -142,7 +145,10 @@ class Node:
         return extract_block_count_from_show_blocks(show_blocks_output)
 
     def get_block(self, block_hash: str) -> str:
-        return self.rnode_command('show-block', block_hash, stderr=False)
+        try:
+            return self.rnode_command('show-block', block_hash, stderr=False)
+        except NonZeroExitCodeError as e:
+            raise GetBlockError(command=e.command, exit_code=e.exit_code, output=e.output)
 
     # Too low level -- do not use directly.  Prefer shell_out() instead.
     def _exec_run_with_timeout(self, cmd: Tuple[str, ...], stderr=True) -> Tuple[int, str]:
@@ -446,12 +452,12 @@ def make_peer(
 @contextlib.contextmanager
 def started_peer(
     *,
-    context,
-    network,
-    name,
-    bootstrap,
-    key_pair,
-):
+    context: TestingContext,
+    network: Network,
+    name: str,
+    bootstrap: Node,
+    key_pair: KeyPair,
+) -> Generator[Node, None, None]:
     peer = make_peer(
         docker_client=context.docker,
         network=network,
@@ -466,6 +472,25 @@ def started_peer(
         yield peer
     finally:
         peer.cleanup()
+
+
+@contextlib.contextmanager
+def bootstrap_connected_peer(
+    *,
+    context: TestingContext,
+    bootstrap: Node,
+    name: str,
+    keypair: KeyPair,
+) -> Generator[Node, None, None]:
+    with started_peer(
+        context=context,
+        network=bootstrap.network,
+        name=name,
+        bootstrap=bootstrap,
+        key_pair=keypair,
+    ) as peer:
+        wait_for_approved_block_received_handler_state(context, peer)
+        yield peer
 
 
 def create_peer_nodes(
