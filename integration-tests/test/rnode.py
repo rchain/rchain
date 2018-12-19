@@ -452,12 +452,12 @@ def make_peer(
 @contextlib.contextmanager
 def started_peer(
     *,
-    context,
-    network,
-    name,
-    bootstrap,
-    key_pair,
-):
+    context: TestingContext,
+    network: Network,
+    name: str,
+    bootstrap: Node,
+    key_pair: KeyPair,
+) -> Generator[Node, None, None]:
     peer = make_peer(
         docker_client=context.docker,
         network=network,
@@ -481,7 +481,7 @@ def bootstrap_connected_peer(
     bootstrap: Node,
     name: str,
     keypair: KeyPair,
-):
+) -> Generator[Node, None, None]:
     with started_peer(
         context=context,
         network=bootstrap.network,
