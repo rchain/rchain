@@ -169,7 +169,7 @@ object InterpreterUtil {
           Left(err)
       }
 
-  private[rholang] def computeParentsPostState[F[_]: Monad: BlockStore](
+  private def computeParentsPostState[F[_]: Monad: BlockStore](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager,
