@@ -1,6 +1,6 @@
 package coop.rchain.casper
 
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
@@ -609,14 +609,17 @@ object Validate {
     }
   }
 
-  def bondsCache[F[_]: Applicative: Log](b: BlockMessage, runtimeManager: RuntimeManager)(
+  def bondsCache[F[_]: Log: Concurrent: ToAbstractContext](
+      b: BlockMessage,
+      runtimeManager: RuntimeManager
+  )(
       implicit scheduler: Scheduler
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val bonds = ProtoUtil.bonds(b)
     ProtoUtil.tuplespace(b) match {
       case Some(tuplespaceHash) =>
-        Try(runtimeManager.computeBonds(tuplespaceHash).unsafeRunSync) match {
-          case Success(computedBonds) =>
+        ToAbstractContext[F].fromTask(runtimeManager.computeBonds(tuplespaceHash)).attempt.flatMap {
+          case Right(computedBonds) =>
             if (bonds.toSet == computedBonds.toSet) {
               Applicative[F].pure(Right(Valid))
             } else {
@@ -626,7 +629,7 @@ object Validate {
                     )
               } yield Left(InvalidBondsCache)
             }
-          case Failure(ex: Throwable) =>
+          case Left(ex: Throwable) =>
             for {
               _ <- Log[F].warn(s"Failed to compute bonds from tuplespace hash ${ex.getMessage}")
             } yield Left(InvalidBondsCache)

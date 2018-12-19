@@ -4,7 +4,7 @@ import java.nio.file.Files
 
 import cats.Applicative
 import cats.data.EitherT
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
@@ -764,11 +764,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
     import node.casperEff
 
-    implicit val runtimeManager = node.runtimeManager
-    val (sk, pk)                = Ed25519.newKeyPair
-    val pkStr                   = Base16.encode(pk)
-    val amount                  = 314L
-    val forwardCode             = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
+    implicit val runtimeManager  = node.runtimeManager
+    implicit val abstractContext = node.abF
+    val (sk, pk)                 = Ed25519.newKeyPair
+    val pkStr                    = Base16.encode(pk)
+    val amount                   = 314L
+    val forwardCode              = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
     for {
       bondingCode <- BondingUtil.faucetBondDeploy[Effect](amount, "ed25519", pkStr, sk)
       forwardDeploy = ProtoUtil.sourceDeploy(
@@ -810,7 +811,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       pkStr       = Base16.encode(pk)
       forwardCode = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
       bondingCode <- BondingUtil.faucetBondDeploy[Effect](50, "ed25519", pkStr, sk)(
-                      Sync[Effect],
+                      Concurrent[Effect],
+                      nodes.head.abF,
                       rm,
                       global
                     )

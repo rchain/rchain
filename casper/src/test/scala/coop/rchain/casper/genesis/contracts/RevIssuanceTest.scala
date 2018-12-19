@@ -1,18 +1,17 @@
 package coop.rchain.casper.genesis.contracts
 
-import cats.Id
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.HashSetCasperTest.createBonds
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{BondingUtil, ProtoUtil}
-import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting
+import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -102,7 +101,8 @@ object RevIssuanceTest {
       secKey: Array[Byte],
       statusOut: String
   )(implicit runtimeManager: RuntimeManager): DeployData = {
-    val code = BondingUtil.preWalletUnlockDeploy[Id](ethAddress, pubKey, secKey, statusOut)
+    val code =
+      BondingUtil.preWalletUnlockDeploy[Task](ethAddress, pubKey, secKey, statusOut).unsafeRunSync
     ProtoUtil.sourceDeploy(
       code,
       System.currentTimeMillis(),
@@ -118,14 +118,16 @@ object RevIssuanceTest {
       pubKey: String,
       secKey: Array[Byte]
   )(implicit runtimeManager: RuntimeManager): DeployData = {
-    val code = BondingUtil.issuanceWalletTransferDeploy(
-      nonce,
-      amount,
-      destination,
-      transferStatusOut,
-      pubKey,
-      secKey
-    )
+    val code = BondingUtil
+      .issuanceWalletTransferDeploy[Task](
+        nonce,
+        amount,
+        destination,
+        transferStatusOut,
+        pubKey,
+        secKey
+      )
+      .unsafeRunSync
 
     ProtoUtil.sourceDeploy(
       code,
