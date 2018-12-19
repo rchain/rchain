@@ -89,9 +89,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         .runSyncUnsafe(10.seconds)
     val noResults =
       runtimeManager
-        .use(
-          mgr =>
-              mgr.captureResults(mgr.emptyStateHash, term, "differentName"))
+        .use(mgr => mgr.captureResults(mgr.emptyStateHash, term, "differentName"))
         .runSyncUnsafe(10.seconds)
 
     noResults.isEmpty should be(true)

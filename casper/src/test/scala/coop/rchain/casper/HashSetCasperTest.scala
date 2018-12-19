@@ -30,6 +30,8 @@ import coop.rchain.rholang.interpreter.{accounting, Runtime}
 import coop.rchain.models.{Expr, Par}
 import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.Catscontrib._
+import coop.rchain.catscontrib.eitherT._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
@@ -894,20 +896,17 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         accounting.MAX_VALUE
       )
       .withUser(user)
-    val sigData = node.runtimeManager
-      .captureResults(
-        ProtoUtil.postStateHash(genesis),
-        ProtoUtil.deployDataToDeploy(sigDeployData)
-      )
-      .unsafeRunSync
-      .head
-      .exprs
-      .head
-      .getGByteArray
-    val sig   = Base16.encode(Ed25519.sign(sigData.toByteArray, sk))
-    val pkStr = Base16.encode(pk)
-    val paymentCode =
-      s"""new
+    for {
+      capturedResults <- node.runtimeManager
+                          .captureResults(
+                            ProtoUtil.postStateHash(genesis),
+                            ProtoUtil.deployDataToDeploy(sigDeployData)
+                          )
+                          .liftM[HashSetCasperTestNode.CommErrT]
+      sigData     = capturedResults.head.exprs.head.getGByteArray
+      sig         = Base16.encode(Ed25519.sign(sigData.toByteArray, sk))
+      pkStr       = Base16.encode(pk)
+      paymentCode = s"""new
          |  paymentForward, walletCh, rl(`rho:registry:lookup`),
          |  SystemInstancesCh, faucetCh, posCh
          |in {
@@ -924,24 +923,23 @@ class HashSetCasperTest extends FlatSpec with Matchers {
          |    }
          |  }
          |}""".stripMargin
-    val paymentDeployData = ProtoUtil
-      .sourceDeploy(paymentCode, timestamp, accounting.MAX_VALUE)
-      .withPhloPrice(phloPrice)
-      .withUser(user)
+      paymentDeployData = ProtoUtil
+        .sourceDeploy(paymentCode, timestamp, accounting.MAX_VALUE)
+        .withPhloPrice(phloPrice)
+        .withUser(user)
 
-    val paymentQuery = ProtoUtil.sourceDeploy(
-      """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
+      paymentQuery = ProtoUtil.sourceDeploy(
+        """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
         |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
         |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
         |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
         |    for(pos <- posCh){ pos!("lastPayment", "__SCALA__") }
         |  }
         |}""".stripMargin,
-      0L,
-      accounting.MAX_VALUE
-    )
+        0L,
+        accounting.MAX_VALUE
+      )
 
-    for {
       deployQueryResult <- deployAndQuery(
                             node,
                             paymentDeployData,
@@ -1443,12 +1441,9 @@ object HashSetCasperTest {
       createBlockResult <- node.casperEff.deploy(dd) *> node.casperEff.createBlock
       Created(block)    = createBlockResult
       blockStatus       <- node.casperEff.addBlock(block, ignoreDoppelgangerCheck[Effect])
-      queryResult = node.runtimeManager
-        .captureResults(
-          ProtoUtil.postStateHash(block),
-          query
-        )
-        .unsafeRunSync
+      queryResult <- node.runtimeManager
+                      .captureResults(ProtoUtil.postStateHash(block), query)
+                      .liftM[HashSetCasperTestNode.CommErrT]
     } yield (blockStatus, queryResult)
 
   def createBonds(validators: Seq[Array[Byte]]): Map[Array[Byte], Long] =

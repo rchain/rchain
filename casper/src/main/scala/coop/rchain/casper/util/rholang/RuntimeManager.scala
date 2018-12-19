@@ -115,13 +115,16 @@ class AbstractRuntimeManager[F[_]: Concurrent: ToAbstractContext] protected (
 
     val bondsQueryTerm =
       ProtoUtil.deployDataToDeploy(ProtoUtil.sourceDeploy(bondsQuery, 0L, accounting.MAX_VALUE))
-    captureResults(hash, bondsQueryTerm).map { bondsPar =>
-      assert(
-        bondsPar.size == 1,
-        s"Incorrect number of results from query of current bonds: ${bondsPar.size}"
-      )
-      toBondSeq(bondsPar.head)
-    }
+    captureResults(hash, bondsQueryTerm)
+      .ensureOr(
+        bondsPar =>
+          new IllegalArgumentException(
+            s"Incorrect number of results from query of current bonds: ${bondsPar.size}"
+          )
+      )(bondsPar => bondsPar.size == 1)
+      .map { bondsPar =>
+        toBondSeq(bondsPar.head)
+      }
   }
 
   private def withResetRuntime[R](hash: StateHash, block: Runtime => F[R])(
