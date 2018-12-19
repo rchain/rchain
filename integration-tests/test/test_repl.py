@@ -1,6 +1,3 @@
-from .rnode import started_standalone_bootstrap_node
-
-
 def test_repl(started_standalone_bootstrap_node):
     repl_commands = [
         '5',

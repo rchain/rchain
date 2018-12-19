@@ -1,31 +1,19 @@
-import contextlib
 import threading
-from typing import (
-    TYPE_CHECKING,
-    Generator,
-)
 
 from docker.client import DockerClient
 
 from . import conftest
 from .common import (
     CommandLineOptions,
-    TestingContext,
 )
 from .rnode import (
+    bootstrap_connected_peer,
     docker_network_with_started_bootstrap,
-    started_peer,
-    Node,
 )
 from .wait import (
-    wait_for_blocks_count_at_least,
-    wait_for_approved_block_received_handler_state,
     wait_for_peers_count_at_least,
+    wait_for_blocks_count_at_least,
 )
-
-if TYPE_CHECKING:
-    from _pytest.fixtures import SubRequest
-
 
 
 class DeployThread(threading.Thread):
@@ -48,27 +36,14 @@ BONDED_VALIDATOR_KEY_2 = conftest.KeyPair(private_key='f7bfb2b3f2be909dd50beac05
 BONDED_VALIDATOR_KEY_3 = conftest.KeyPair(private_key='2b173084083291ac6850cb734dffb69dfcb280aeb152f0d5be979bea7827c03a', public_key='017f286d499ab1d4a43a0b2efed6f12935e273fb6027daefa1959a8953354d77')
 
 
-@contextlib.contextmanager
-def started_bonded_validator(context: TestingContext, bootstrap_node: Node, no, key_pair) -> Generator["Node", None, None]:
-    with started_peer(
-        context=context,
-        network=bootstrap_node.network,
-        name='bonded-validator-' + str(no),
-        bootstrap=bootstrap_node,
-        key_pair=key_pair,
-    ) as bonded_validator:
-        wait_for_approved_block_received_handler_state(context, bonded_validator)
-        yield bonded_validator
-
-
 def test_multiple_deploys_at_once(command_line_options: CommandLineOptions, docker_client: DockerClient) -> None:
     contract_path = '/opt/docker/examples/shortfast.rho'
     peers_keypairs = [BONDED_VALIDATOR_KEY_1, BONDED_VALIDATOR_KEY_2, BONDED_VALIDATOR_KEY_3]
     with conftest.testing_context(command_line_options, docker_client, bootstrap_keypair=BOOTSTRAP_NODE_KEYS, peers_keypairs=peers_keypairs) as context:
         with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
-            with started_bonded_validator(context, bootstrap_node, 1, BONDED_VALIDATOR_KEY_1) as no1:
-                with started_bonded_validator(context, bootstrap_node, 2, BONDED_VALIDATOR_KEY_2) as no2:
-                    with started_bonded_validator(context, bootstrap_node, 3, BONDED_VALIDATOR_KEY_3) as no3:
+            with bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', keypair=BONDED_VALIDATOR_KEY_1) as no1:
+                with bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2', keypair=BONDED_VALIDATOR_KEY_2) as no2:
+                    with bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-3', keypair=BONDED_VALIDATOR_KEY_3) as no3:
                         wait_for_peers_count_at_least(context, no1, 3)
 
                         deploy1 = DeployThread("node1", no1, contract_path, 1)

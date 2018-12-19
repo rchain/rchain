@@ -20,7 +20,7 @@ main () {
     cp -r resources/* "$TEMP_RESOURCES_DIR/"
 
     ./mypy.sh
-    ./pylint.sh || true
+    ./pylint.sh
     ./run_tests.sh --log-cli-level=ERROR --mount-dir="$TEMP_RESOURCES_DIR"
 }
 

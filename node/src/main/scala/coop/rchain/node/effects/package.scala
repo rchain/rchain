@@ -62,6 +62,7 @@ package object effects {
   )(
       implicit scheduler: Scheduler,
       log: Log[Task],
+      metrics: Metrics[Task],
       cache: ConnectionsCache[Task, TcpConnTag]
   ): TcpTransportLayer = {
     val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)

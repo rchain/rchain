@@ -7,6 +7,9 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.util.{CertificateHelper, CertificatePrinter}
 import coop.rchain.shared.Log
 import java.nio.file._
+
+import coop.rchain.metrics.Metrics
+
 import monix.catnap.MVar
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -16,8 +19,9 @@ class TcpTransportLayerSpec
     extends TransportLayerSpec[Task, TcpTlsEnvironment]
     with BeforeAndAfterEach {
 
-  implicit val log: Log[Task]       = new Log.NOPLog[Task]
-  implicit val scheduler: Scheduler = Scheduler.Implicits.global
+  implicit val log: Log[Task]         = new Log.NOPLog[Task]
+  implicit val scheduler: Scheduler   = Scheduler.Implicits.global
+  implicit val metrics: Metrics[Task] = new Metrics.MetricsNOP
 
   var tempFolder: Path = null
 

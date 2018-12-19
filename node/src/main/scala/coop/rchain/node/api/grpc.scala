@@ -49,9 +49,12 @@ object GrpcServer {
 
   def apply(server: Server): GrpcServer = new GrpcServer(server)
 
+  // 16 MB is max message size allowed by HTTP2 RFC 7540
+  // grpc and netty can however work with bigger values
+  val maxMessageSize: Int = 16 * 1024 * 1024
+
   def acquireInternalServer(
       port: Int,
-      maxMessageSize: Int,
       runtime: Runtime,
       grpcExecutor: Scheduler
   )(
@@ -70,14 +73,13 @@ object GrpcServer {
           .addService(
             ReplGrpcMonix.bindService(new ReplGrpcService(runtime, worker), grpcExecutor)
           )
-          .addService(DiagnosticsGrpcMonix.bindService(diagnostics.grpc, grpcExecutor))
+          .addService(DiagnosticsGrpcMonix.bindService(diagnostics.effects.grpc, grpcExecutor))
           .build
       )
     }
 
   def acquireExternalServer[F[_]: Concurrent: Capture: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable: ToAbstractContext](
       port: Int,
-      maxMessageSize: Int,
       grpcExecutor: Scheduler,
       blockApiLock: Semaphore[F]
   )(implicit worker: Scheduler): F[GrpcServer] =

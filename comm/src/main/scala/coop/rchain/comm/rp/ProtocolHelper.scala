@@ -5,8 +5,7 @@ import com.google.protobuf.any.{Any => AnyProto}
 import coop.rchain.comm.CommError._
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing._
-import com.google.protobuf.ByteString
-import coop.rchain.comm.transport.PacketType
+import coop.rchain.comm.transport.{Blob, PacketType}
 import com.google.protobuf.ByteString
 
 object ProtocolHelper {
@@ -78,5 +77,13 @@ object ProtocolHelper {
     proto.message.disconnect.fold[CommErr[Disconnect]](
       Left(UnknownProtocolError(s"Was expecting Disconnect, got ${proto.message}"))
     )(Right(_))
+
+  def blob(sender: PeerNode, typeId: String, content: Array[Byte]): Blob =
+    Blob(
+      sender,
+      Packet()
+        .withTypeId(typeId)
+        .withContent(ProtocolHelper.toProtocolBytes(content))
+    )
 
 }
