@@ -1,6 +1,6 @@
 # A Rholang tutorial
 
-Rholang is a new programming language designed for use in distributed systems.  Like all newborn things, it is growing and changing rapidly; this document describes the syntax in the latest version of RNode.
+Rholang is a new programming language designed for use in distributed systems.  Like all newborn things, it is growing and changing rapidly; this document describes the syntax in RNode v0.8.1.
 
 Rholang is "process-oriented": all computation is done by means of message passing.  Messages are passed on "channels", which are rather like message queues; however, the channels behave more like bags (multisets) rather than queues, since there is no implicit ordering on messages.  
 
@@ -8,19 +8,20 @@ Rholang is completely asynchronous, in the sense that while you can read a messa
 
 ## Getting started
 
-There is not an IDE for Rholang. Get started with Rholang by selecting one of the options below.
+Get started with Rholang by selecting one of the options below.
 * __Run Rholang on RNode__ - Write Rholang contracts in an editor of your choice and run them on RNode using either the REPL or EVAL modes. [Get started](https://github.com/rchain/rchain/releases) with the latest version of RNode.
 * __Run Rholang on a web interface__ - This [web interface](http://rchain.cloud) was created by a RChain community member.
+* __Run Rholang using Cryptofex IDE__ - This closed source [IDE](http://cryptofex.io/download) was created by Pyrofex.
 * __Write Rholang using an IntelliJ plugin__ - This [Rholang IntelliJ plugin](https://github.com/tgrospic/rholang-idea) was created by a RChain community member.
 
 ## Summary of the language constructs
 Rholang has two kinds of values: processes and names.
 
 ### Names
-A name represents a communication channel. You can send messages to a name or you can receive a message from a name. 
+A name represents a communication channel. You can send messages to a name or you can receive a message from a name.
 
 The names are created with the construct
- 
+
     new someName in {
     //... code using someName
     }
@@ -38,7 +39,7 @@ Receiving messages over a name is done using the `for` construction
     }
 
 ### Processes
-In Rholang everything is a process. Values like strings, booleans or numbers are also processes. 
+In Rholang everything is a process. Values like strings, booleans or numbers are also processes.
 The processes can be aggregated using the operator '|'. Below are a few examples:
 
     1
@@ -53,9 +54,9 @@ The processes can be aggregated using the operator '|'. Below are a few examples
 Rholang currently supports integers, strings, booleans, tuples, lists, sets and maps.
 
 ### Expressions
-Expressions are special because they are evaluated before sending the result to a channel. 
+Expressions are special because they are evaluated before sending the result to a channel.
 
-The following operators are used for building expressions: 
+The following operators are used for building expressions:
 
 #### Arithmetic operators
 The supported arithmetic operators are: `+`, `-`, `/`, `*`.
@@ -65,7 +66,7 @@ The supported relational operators are: `>`, `>=`, `<`, `<=', `==`, `!=`.
 
 #### Logical operators
 The supported logical operators are: `and`, `or`, `not`.
- 
+
 #### Matches expression
 The `p matches q` expression is similar to  
 
@@ -73,7 +74,7 @@ The `p matches q` expression is similar to
     2   q -> true
     3   _ -> false
     4 }
-    
+
 The difference between `matches` and the above is that the former is an expression.
 
 ## Sending and receiving data
@@ -187,7 +188,7 @@ In order to have one message follow after another is known to have been received
      4   chan!(7,8) |
      5   chan!([9, 10], 11) |
      6   chan!(12 | 13) |
-     7   for (@x, @y, @z <= chan) { 
+     7   for (@x, @y, @z <= chan) {
      8     stdout!(["three", x, y, z])
      9   } |
     10   for (@a, @b <= chan) {
@@ -246,13 +247,13 @@ in parallel with the `for` above, `x` will bind to `10` and `y` will bind to `"g
 
 which is incorrect because `x` and `y` are both free. Furthermore, we cannot capture `x` or `y` because we cannot use a binder to capture variables inside a pattern. We will cover this more later on, when we talk about patterns within patterns.
 
-To correct this code, we could write something like 
+To correct this code, we could write something like
 
     for(@{ @"grade"!(10) \/ @"grade"!(11) } <- StudentGradeLevel){ ... }
 
 which waits for a student to register in either grade `10` or `11` before executing the body of the `for`.
 
-We can use both `/\` and `\/` in any given pattern, such as in: 
+We can use both `/\` and `\/` in any given pattern, such as in:
 
     for(@{ 10 \/ 20 /\ x } <- @"chan"){ ... }
 
@@ -272,7 +273,7 @@ This will match with whichever of `StudentGradeLevel!(@"grade"!(10))` and `Stude
 
 ### Patterns in a `for`
 
-The term 
+The term
 
     for (@{x!(P)}, @{for(y <- z) { y!(Q) }} <- chan) { ... }
 
@@ -314,7 +315,7 @@ Finally in the pattern is the subpattern `{@"age"!age | @"name"!name | _}`, whic
 
     @{["Jane", 40]}
     @{["Jack", 50]}
-    
+
 in either order.
 
 10) As noted above, this line updates the sequence number so that rows are not read twice.  If we have multiple readers of the database, each will be assigned a sequence number.  As soon as a row is read, it is put back into the database for the next reader; any processing is done in parallel with the write, so even though this pattern sequentializes the readers, the access is still very fast.
@@ -552,7 +553,7 @@ In the code below, we show an example of iterating through a list.
     22       }
     23     }
     24   } |
-    25 
+    25
     26   // Usage
     27   new ret, get, set in {
     28     MakeCoatCheck!(*ret) |
@@ -664,14 +665,14 @@ new x, y, stdout(`rho:io:stdout`) in {
 1. Let's hash a rholang program and print out it in base16. In rholang:
 
   ```rholang
-  new x, y, stdout(`rho:io:stdout`) in { 
+  new x, y, stdout(`rho:io:stdout`) in {
      x!(@"name"!("Joe") | @"age"!(40)) |  // (1)
      for (@r <- x) { @"keccak256Hash"!(r.toByteArray(), *y) } |  // hash the program from (1)
      for (@h <- y) { stdout!(h) }  // print out the keccak256 hash
   }
   ```
 
-  This will print the hash of our program `(1)` : 
+  This will print the hash of our program `(1)` :
   `a6da46a1dc7ed715d4cd6472a736249a4d11142d160dbef9f20ae493de908c4e`
 
 2. We need a pair of keys; let's generate some with `Ed25519`, available in the project. In the scala console, we enter the following:
@@ -695,24 +696,24 @@ new x, y, stdout(`rho:io:stdout`) in {
   // d0a909078ce8b8706a641b07a0d4fe2108064813ce42009f108f89c2a3f4864aa1a510d6dfccad3b62cd610db0bfe82bcecb08d813997fa7df14972f56017e0b
   ```
 
-4.  Now we can pass the signature and public key to our rholang program to verify it using the available crypto functions. 
+4.  Now we can pass the signature and public key to our rholang program to verify it using the available crypto functions.
 
   The `ed25519Verify` channel expects four arguments as follows:
 
   - data to verify. In our case, this will be the keccak256 hash of our rholang program. The hash is represented in base16, so we need to call `hexToBytes` on it to turn the string into byte array
   - signature. Again, we have hexadecimal string, so we need to turn it into a byte array with `hexToBytes`.
-  - public key. This is the public key corresponding to the private one used to issue the signature. 
+  - public key. This is the public key corresponding to the private one used to issue the signature.
   - channel on which the result of verification will be returned.
 
   So, in rholang we run:
   ```
-  new x, stdout(`rho:io:stdout`) in { 
-    @"ed25519Verify"!("a6da46a1dc7ed715d4cd6472a736249a4d11142d160dbef9f20ae493de908c4e".hexToBytes(), "d0a909078ce8b8706a641b07a0d4fe2108064813ce42009f108f89c2a3f4864aa1a510d6dfccad3b62cd610db0bfe82bcecb08d813997fa7df14972f56017e0b".hexToBytes(),"288755c48c3951f89c5f0ffe885088dc0970fd935bc12adfdd81f81bb63d6219".hexToBytes(), *x) | 
-    for (@v <- x) { stdout!(v) } 
-  } 
+  new x, stdout(`rho:io:stdout`) in {
+    @"ed25519Verify"!("a6da46a1dc7ed715d4cd6472a736249a4d11142d160dbef9f20ae493de908c4e".hexToBytes(), "d0a909078ce8b8706a641b07a0d4fe2108064813ce42009f108f89c2a3f4864aa1a510d6dfccad3b62cd610db0bfe82bcecb08d813997fa7df14972f56017e0b".hexToBytes(),"288755c48c3951f89c5f0ffe885088dc0970fd935bc12adfdd81f81bb63d6219".hexToBytes(), *x) |
+    for (@v <- x) { stdout!(v) }
+  }
 
   ```
-  and we should see: 
+  and we should see:
   ```
   @{true}
   ```
@@ -721,10 +722,10 @@ new x, y, stdout(`rho:io:stdout`) in {
 
   If we, for example, pass in a corrupted hash, changing the initial 'a' to a 'b':
   ```
-  new x, stdout(`rho:io:stdout`) in { 
-     @"ed25519Verify"!("b6da46a1dc7ed615d4cd6472a736249a4d11142d160dbef9f20ae493de908c4e".hexToBytes(), "d0a909078ce8b8706a641b07a0d4fe2108064813ce42009f108f89c2a3f4864aa1a510d6dfccad3b62cd610db0bfe82bcecb08d813997fa7df14972f56017e0b".hexToBytes(),"288755c48c3951f89c5f0ffe885088dc0970fd935bc12adfdd81f81bb63d6219".hexToBytes(), *x) | 
-     for (@v <- x) { stdout!(v) } 
-  } 
+  new x, stdout(`rho:io:stdout`) in {
+     @"ed25519Verify"!("b6da46a1dc7ed615d4cd6472a736249a4d11142d160dbef9f20ae493de908c4e".hexToBytes(), "d0a909078ce8b8706a641b07a0d4fe2108064813ce42009f108f89c2a3f4864aa1a510d6dfccad3b62cd610db0bfe82bcecb08d813997fa7df14972f56017e0b".hexToBytes(),"288755c48c3951f89c5f0ffe885088dc0970fd935bc12adfdd81f81bb63d6219".hexToBytes(), *x) |
+     for (@v <- x) { stdout!(v) }
+  }
   ```
 
   we will get:
@@ -744,8 +745,8 @@ Channels like `get` and `set` are called "facets" of the process.  They encapsul
 
 Note that possession of `get` and `set` is also authority to intercept messages sent to the cell:
 
-    for (@ret <- get) { P } | 
-    for (@ret <- get) { Q } | 
+    for (@ret <- get) { P } |
+    for (@ret <- get) { Q } |
     get!(*ack)
 
 This term has two processes listening on the channel `get` and a single message sent over `get`.  Only one of the two processes will be able to receive the message.
@@ -766,7 +767,7 @@ In the MakeCoatCheck contract, there's only one channel and messages are dispatc
         }
       }
     }
-    
+
 ### Revocation
 
 We can implement revocation by creating a forwarder with a kill switch.
