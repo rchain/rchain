@@ -30,6 +30,7 @@ from .common import (
 )
 from .wait import (
     wait_for_node_started,
+    wait_for_approved_block_received_handler_state,
 )
 
 
@@ -466,6 +467,25 @@ def started_peer(
         yield peer
     finally:
         peer.cleanup()
+
+
+@contextlib.contextmanager
+def bootstrap_connected_peer(
+    *,
+    context: TestingContext,
+    bootstrap: Node,
+    name: str,
+    keypair: KeyPair,
+):
+    with started_peer(
+        context=context,
+        network=bootstrap.network,
+        name=name,
+        bootstrap=bootstrap,
+        key_pair=keypair,
+    ) as peer:
+        wait_for_approved_block_received_handler_state(context, peer)
+        yield peer
 
 
 def create_peer_nodes(
