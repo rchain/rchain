@@ -831,7 +831,7 @@ class InterpreterUtilTest
       }
   }
 
-  "computeMultiParentsBlockHashesForReplay" should "filter out duplicate ancestors of main parent block" in withStorage {
+  "findMultiParentsBlockHashesForReplay" should "filter out duplicate ancestors of main parent block" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val genesisDeploysWithCost = prepareDeploys(Vector.empty, PCost(1))
       val b1DeploysWithCost      = prepareDeploys(Vector("@1!(1)"), PCost(1))
@@ -877,7 +877,7 @@ class InterpreterUtilTest
             _       <- step(1, genesis)
             _       <- step(2, genesis)
             dag     <- blockDagStorage.getRepresentation
-            blockHashes <- InterpreterUtil.computeMultiParentsBlockHashesForReplay(
+            blockHashes <- InterpreterUtil.findMultiParentsBlockHashesForReplay(
                             Seq(b1, b2),
                             dag
                           )

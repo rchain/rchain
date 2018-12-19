@@ -206,7 +206,7 @@ object InterpreterUtil {
       initStateHash: StateHash
   )(implicit scheduler: Scheduler): F[Either[Throwable, StateHash]] =
     for {
-      blockHashesToApply <- computeMultiParentsBlockHashesForReplay(parents, dag)
+      blockHashesToApply <- findMultiParentsBlockHashesForReplay(parents, dag)
       blocksToApply      <- blockHashesToApply.traverse(b => ProtoUtil.unsafeGetBlock[F](b.blockHash))
       deploys            = blocksToApply.flatMap(_.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal))
     } yield
@@ -224,7 +224,7 @@ object InterpreterUtil {
           )
       }
 
-  private[rholang] def computeMultiParentsBlockHashesForReplay[F[_]: Monad](
+  private[rholang] def findMultiParentsBlockHashesForReplay[F[_]: Monad](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F]
   ): F[Vector[BlockMetadata]] =
