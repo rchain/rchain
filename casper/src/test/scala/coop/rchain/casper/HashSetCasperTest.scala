@@ -656,17 +656,14 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         0L,
         accounting.MAX_VALUE
       )
-      validatorBondsAndRanks: Seq[(ByteString, Long, Int)] = runtimeManager
-        .captureResults(
-          ProtoUtil.postStateHash(block1),
-          ProtoUtil.deployDataToDeploy(rankedValidatorQuery)
-        )
-        .unsafeRunSync
-        .head
-        .exprs
-        .head
-        .getEListBody
-        .ps
+      validatorBondsAndRanksT <- runtimeManager
+                                  .captureResults(
+                                    ProtoUtil.postStateHash(block1),
+                                    ProtoUtil.deployDataToDeploy(rankedValidatorQuery)
+                                  )
+                                  .liftM[HashSetCasperTestNode.CommErrT]
+
+      validatorBondsAndRanks: Seq[(ByteString, Long, Int)] = validatorBondsAndRanksT.head.exprs.head.getEListBody.ps
         .map(
           _.exprs.head.getETupleBody.ps match {
             case Seq(a, b, c) =>

@@ -209,7 +209,8 @@ class InterpreterUtilTest
                                 runtimeManager
                               )
           (postb3StateHash, _) = blockCheckpointB3
-          b3PostState          = runtimeManager.storageRepr(postb3StateHash).unsafeRunSync.get
+          b3PostStateT         <- runtimeManager.storageRepr(postb3StateHash)
+          b3PostState          = b3PostStateT.get
 
           _      = b3PostState.contains("@{1}!(15)") should be(true)
           _      = b3PostState.contains("@{5}!(5)") should be(true)
