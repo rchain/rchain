@@ -1,7 +1,6 @@
 import contextlib
 import threading
 from typing import (
-    TYPE_CHECKING,
     Generator,
 )
 
@@ -22,10 +21,6 @@ from .wait import (
     wait_for_approved_block_received_handler_state,
     wait_for_peers_count_at_least,
 )
-
-if TYPE_CHECKING:
-    from _pytest.fixtures import SubRequest
-
 
 
 class DeployThread(threading.Thread):
