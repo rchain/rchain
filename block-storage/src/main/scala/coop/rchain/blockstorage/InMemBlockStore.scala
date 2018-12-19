@@ -41,6 +41,9 @@ class InMemBlockStore[F[_]] private ()(
           }
     } yield ()
 
+  def checkpoint(): F[Unit] =
+    ().pure[F]
+
   def clear(): F[Unit] =
     for {
       _ <- refF.update { _.empty }

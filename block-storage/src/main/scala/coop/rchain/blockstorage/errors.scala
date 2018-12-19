@@ -1,4 +1,6 @@
 package coop.rchain.blockstorage
+import java.nio.file.Path
+
 import coop.rchain.blockstorage.BlockDagFileStorage.Checkpoint
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.codec.Base16
@@ -11,14 +13,14 @@ object errors {
     }
   }
 
-  final case class CheckpointsDoNotStartFromZero(sortedCheckpoints: List[Checkpoint])
+  final case class CheckpointsDoNotStartFromZero(sortedCheckpoints: List[Path])
       extends BlockDagStorageError(
-        s"Checkpoints do not start from block number 0: ${sortedCheckpoints.map(_.path.getFileName).mkString(",")}"
+        s"Checkpoints do not start from block number 0: ${sortedCheckpoints.mkString(",")}"
       )
 
-  final case class CheckpointsAreNotConsecutive(sortedCheckpoints: List[Checkpoint])
+  final case class CheckpointsAreNotConsecutive(sortedCheckpoints: List[Path])
       extends BlockDagStorageError(
-        s"Checkpoints are not consecutive: ${sortedCheckpoints.map(_.path.getFileName).mkString(",")}"
+        s"Checkpoints are not consecutive: ${sortedCheckpoints.mkString(",")}"
       )
 
   final case class TopoSortLengthIsTooBig(length: Long)
