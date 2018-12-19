@@ -38,6 +38,19 @@ case class Tls(
     secureRandomNonBlocking: Boolean
 )
 
+case class Kamon(
+    prometheus: Boolean,
+    influxDb: Option[InfluxDb],
+    zipkin: Boolean,
+    sigar: Boolean
+)
+
+case class InfluxDb(
+    hostname: String,
+    port: Int,
+    database: String
+)
+
 sealed trait Command
 case class Eval(files: List[String]) extends Command
 case object Repl                     extends Command

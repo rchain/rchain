@@ -53,6 +53,10 @@ class NonZeroExitCodeError(Exception):
         self.output = output
 
 
+class GetBlockError(NonZeroExitCodeError):
+    pass
+
+
 def random_string(context: TestingContext, length: int) -> str:
     return ''.join(context.random_generator.choice(string.ascii_letters) for m in range(length))
 

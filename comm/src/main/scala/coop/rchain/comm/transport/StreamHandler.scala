@@ -1,5 +1,10 @@
 package coop.rchain.comm.transport
 
+import java.util.UUID
+import coop.rchain.shared.GracefulClose._
+import coop.rchain.catscontrib.ski._
+import java.io.FileOutputStream
+import java.nio.file.{Files, Path}
 import coop.rchain.shared._, Compression._
 import coop.rchain.comm.{CommError, PeerNode}
 import monix.eval.Task
@@ -11,110 +16,103 @@ import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.comm.protocol.routing._
 import com.google.protobuf.ByteString
 import cats.implicits._
+import coop.rchain.catscontrib.TaskContrib._
 
 object StreamHandler {
+
+  private case class Streamed(
+      sender: Option[PeerNode] = None,
+      typeId: Option[String] = None,
+      contentLength: Option[Int] = None,
+      compressed: Boolean = false,
+      path: Path,
+      fos: FileOutputStream
+  )
+
   def handleStream(
+      folder: Path,
       observable: Observable[Chunk],
       buff: buffer.LimitedBuffer[ServerMessage]
-  )(implicit logger: Log[Task]): Task[ChunkResponse] = {
-
-    case class PartialBlob(
-        peerNode: Option[PeerNode] = None,
-        typeId: Option[String] = None,
-        content: Option[(Array[Byte], Int)] = None,
-        contentLength: Option[Int] = None,
-        compressed: Boolean = false
-    )
-
-    object HeaderReceived {
-      def unapply(chunk: Chunk): Option[(Option[PeerNode], String, Boolean, Int)] =
-        chunk match {
-          case Chunk(Chunk.Content.Header(ChunkHeader(sender, typeId, compressed, cl))) =>
-            Some(sender.map(ProtocolHelper.toPeerNode), typeId, compressed, cl)
-          case _ => None
-        }
-    }
-
-    object FirstDataReceived {
-      def unapply(temp: (PartialBlob, Chunk)): Option[(PartialBlob, Array[Byte], Int)] =
-        temp match {
-          case (
-              partial @ PartialBlob(_, _, None, Some(cl), _),
-              Chunk(Chunk.Content.Data(ChunkData(newData)))
-              ) =>
-            Some((partial, newData.toByteArray, cl))
-          case _ => None
-        }
-    }
-
-    object NextDataReceived {
-      def unapply(
-          temp: (PartialBlob, Chunk)
-      ): Option[(PartialBlob, Array[Byte], Array[Byte], Int)] =
-        temp match {
-          case (
-              partial @ PartialBlob(_, _, Some((content, pointer)), _, _),
-              Chunk(Chunk.Content.Data(ChunkData(newData)))
-              ) =>
-            Some(partial, content, newData.toByteArray, pointer)
-          case _ => None
-        }
-    }
-
-    /**
-      * This is temporary solution.
-      * In order to deal with arbitrary blog sizes, chunks must be stored on disk.
-      * This is not implemented, thus temporaryly we do foldLef and gather partial data
-      */
-    def collect: Task[PartialBlob] = observable.foldLeftL(PartialBlob()) {
-      case (_, HeaderReceived(sender, typeId, compressed, contentLength)) =>
-        PartialBlob(sender, Some(typeId), None, Some(contentLength), compressed)
-      case FirstDataReceived(partial, firstData, contentLength) =>
-        val data = new Array[Byte](contentLength)
-        firstData.copyToArray(data)
-        partial.copy(content = Some((data, data.length)))
-      case NextDataReceived(partial, currentData, newData, pointer) =>
-        newData.copyToArray(currentData, pointer)
-        partial.copy(content = Some((currentData, pointer + newData.length)))
-    }
-
-    (collect >>= {
-      case PartialBlob(
-          Some(peerNode),
-          Some(typeId),
-          Some((content, _)),
-          Some(contentLength),
-          compressed
-          ) =>
-        toContent(content, compressed, contentLength).attempt >>= {
-          case Left(th) => logger.error(th.getMessage)
-          case Right(content) =>
-            Task.delay {
-              val packet = Packet()
-                .withTypeId(typeId)
-                .withContent(content)
-              val blob = Blob(peerNode, packet)
-              buff.pushNext(StreamMessage(blob))
-            }
-        }
-      case incorrect => logger.error(s"Streamed incorrect blob of data. Received $incorrect")
+  )(implicit logger: Log[Task]): Task[ChunkResponse] =
+    (init(folder).attempt >>= {
+      case Left(ex) => logger.error("could not create a file to store incoming stream", ex)
+      case Right(initStmd) =>
+        (collect(initStmd, observable).attempt >>= {
+          case Left(ex)    => logger.error("could not collect incoming streamed data", ex)
+          case Right(stmd) => push(stmd, buff)
+        }) *> gracefullyClose[Task](initStmd.fos).as(())
     }).as(ChunkResponse())
 
+  private def init(folder: Path): Task[Streamed] =
+    for {
+      _        <- Task.delay(folder.toFile.mkdirs())
+      fileName <- Task.delay(UUID.randomUUID.toString + "_packet_streamed.bts")
+      file     = folder.resolve(fileName)
+      fos      <- Task.delay(new FileOutputStream(file.toFile))
+    } yield Streamed(fos = fos, path = file)
+
+  private def collect(init: Streamed, observable: Observable[Chunk]): Task[Streamed] =
+    observable.foldLeftL(init) {
+      case (stmd, Chunk(Chunk.Content.Header(ChunkHeader(sender, typeId, compressed, cl)))) =>
+        stmd.copy(
+          sender = sender.map(ProtocolHelper.toPeerNode(_)),
+          typeId = Some(typeId),
+          compressed = compressed,
+          contentLength = Some(cl)
+        )
+      case (stmd, Chunk(Chunk.Content.Data(ChunkData(newData)))) =>
+        stmd.fos.write(newData.toByteArray)
+        stmd.fos.flush()
+        stmd
+    }
+
+  private def push(stmd: Streamed, buff: buffer.LimitedBuffer[ServerMessage])(
+      implicit logger: Log[Task]
+  ): Task[Boolean] = stmd match {
+    case Streamed(Some(sender), Some(packetType), Some(contentLength), compressed, path, _) =>
+      Task.delay {
+        // TODO what if returns false?
+        buff.pushNext(StreamMessage(sender, packetType, path, compressed, contentLength))
+      }
+    case stmd =>
+      logger
+        .warn(
+          s"received not full stream message, will not process. $stmd"
+        )
+        .as(false)
   }
 
-  private def toContent(
+  def restore(msg: StreamMessage)(implicit logger: Log[Task]): Task[Either[Throwable, Blob]] =
+    (fetchContent(msg.path).attempt >>= {
+      case Left(ex) => logger.error("Could not read streamed data from file", ex).as(Left(ex))
+      case Right(content) =>
+        decompressContent(content, msg.compressed, msg.contentLength).attempt >>= {
+          case Left(ex) => logger.error("Could not decompressed data ").as(Left(ex))
+          case Right(decompressedContent) =>
+            Right(ProtocolHelper.blob(msg.sender, msg.typeId, decompressedContent)).pure[Task]
+        }
+    }) >>= (
+        res =>
+          deleteFile(msg.path).flatMap {
+            case Left(ex) => logger.error(s"Was unable to delete file ${msg.sender}", ex).as(res)
+            case Right(_) => res.pure[Task]
+          }
+      )
+
+  private def fetchContent(path: Path): Task[Array[Byte]] = Task.delay(Files.readAllBytes(path))
+  private def decompressContent(
       raw: Array[Byte],
       compressed: Boolean,
       contentLength: Int
-  ): Task[ByteString] = {
-    val decompressed: Task[Array[Byte]] = if (compressed) {
+  ): Task[Array[Byte]] =
+    if (compressed) {
       raw
         .decompress(contentLength)
         .fold(Task.raiseError[Array[Byte]](new RuntimeException("Could not decompress data")))(
           _.pure[Task]
         )
     } else raw.pure[Task]
-    decompressed map ProtocolHelper.toProtocolBytes
-  }
 
+  private def deleteFile(path: Path): Task[Either[Throwable, Unit]] =
+    Task.delay(path.toFile.delete).as(()).attempt
 }

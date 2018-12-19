@@ -8,7 +8,7 @@ from .common import (
     Node,
     Network,
     TestingContext,
-    NonZeroExitCodeError,
+    GetBlockError,
 )
 
 
@@ -54,7 +54,7 @@ class HasAtLeastPeers:
     def __init__(self, node: Node, minimum_peers_number: int) -> None:
         self.node = node
         self.minimum_peers_number = minimum_peers_number
-        self.metric_regex = re.compile(r"^peers (\d+).0\s*$", re.MULTILINE | re.DOTALL)
+        self.metric_regex = re.compile(r"^rchain_comm_rp_connect_peers (\d+).0\s*$", re.MULTILINE | re.DOTALL)
 
     def __str__(self) -> str:
         args = ', '.join(repr(a) for a in (self.node.name, self.minimum_peers_number))
@@ -81,7 +81,7 @@ class NodeSeesBlock:
         try:
             self.node.get_block(self.block_hash)
             return True
-        except NonZeroExitCodeError:
+        except GetBlockError:
             return False
 
 class BlockContainsString:

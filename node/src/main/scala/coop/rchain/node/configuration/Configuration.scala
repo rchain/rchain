@@ -56,12 +56,10 @@ object Configuration {
   private val DefaultRequiredSigns              = 0
   private val DefaultApprovalProtocolDuration   = 5.minutes
   private val DefaultApprovalProtocolInterval   = 5.seconds
-  // TODO this temporarly makes the allowed message size to be  256 MB on startup
-  // This will be rolled back after CORE-1394 and Kents changes
-  private val DefaultMaxMessageSize: Int = 256 * 1024 * 1024
+  private val DefaultMaxMessageSize: Int        = 256 * 1024 // 0.25 MB
   // within range HTTP2 RFC 7540
-  private val MaxMessageSizeMinimumValue: Int = 10 * 1024 * 1024
-  private val MaxMessageSizeMaximumValue: Int = DefaultMaxMessageSize * 4
+  private val MaxMessageSizeMinimumValue: Int = DefaultMaxMessageSize
+  private val MaxMessageSizeMaximumValue: Int = 10 * 1024 * 1024
   private val DefaultMinimumBond: Long        = 1L
   private val DefaultMaximumBond: Long        = Long.MaxValue
   private val DefaultHasFaucet: Boolean       = false
@@ -73,6 +71,14 @@ object Configuration {
     .right
     .get
   private val DefaultShardId = "rchain"
+
+  private val DefaultKamonPrometheus  = false
+  private val DefaultKamonInfluxDb    = false
+  private val DefaultKamonZipkin      = false
+  private val DefaultKamonSigar       = false
+  private val DefaultInfluxDbHostname = "127.0.0.1"
+  private val DefaultInfluxDbPort     = 8086
+  private val DefaultInfluxDbDatabase = "rnode"
 
   private def loadConfigurationFile(
       configFile: File
@@ -188,6 +194,7 @@ object Configuration {
             dataDir.resolve("casper-block-dag-file-storage-block-metadata-crc"),
             dataDir.resolve("casper-block-dag-file-storage-checkpoints")
           ),
+          Kamon(prometheus = false, None, zipkin = false, sigar = false),
           options
         )
       )
@@ -325,6 +332,22 @@ object Configuration {
 
     val shardId = get(_.run.shardId, _.validators.flatMap(_.shardId), DefaultShardId)
 
+    val kamonPrometheus =
+      get(_.run.prometheus, _.kamon.flatMap(_.prometheus), DefaultKamonPrometheus)
+    val kamonInfluxDb = get(kp(None), _.kamon.flatMap(_.influxDb), DefaultKamonInfluxDb)
+    val kamonZipkin   = get(_.run.zipkin, _.kamon.flatMap(_.zipkin), DefaultKamonZipkin)
+    val sigar         = get(_.run.sigar, _.kamon.flatMap(_.sigar), DefaultKamonSigar)
+
+    val influxDb =
+      if (kamonInfluxDb) {
+        val influxDbHostname =
+          get(kp(None), _.influxDb.flatMap(_.hostname), DefaultInfluxDbHostname)
+        val influxDbPort = get(kp(None), _.influxDb.flatMap(_.port), DefaultInfluxDbPort)
+        val influxDbDatabase =
+          get(kp(None), _.influxDb.flatMap(_.database), DefaultInfluxDbDatabase)
+        Some(InfluxDb(influxDbHostname, influxDbPort, influxDbDatabase))
+      } else None
+
     val server = Server(
       host,
       port,
@@ -376,10 +399,12 @@ object Configuration {
         genesisAppriveDuration,
         deployTimestamp
       )
-    val blockstorage = LMDBBlockStore.Config(
-      dataDir.resolve("casper-block-store"),
-      casperBlockStoreSize
-    )
+
+    val blockstorage =
+      LMDBBlockStore.Config(
+        dataDir.resolve("casper-block-store"),
+        casperBlockStoreSize
+      )
     val blockDagStorage = BlockDagFileStorage.Config(
       dataDir.resolve("casper-block-dag-file-storage-latest-messages-log"),
       dataDir.resolve("casper-block-dag-file-storage-latest-messages-crc"),
@@ -387,6 +412,14 @@ object Configuration {
       dataDir.resolve("casper-block-dag-file-storage-block-metadata-crc"),
       dataDir.resolve("casper-block-dag-file-storage-checkpoints")
     )
+
+    val kamon =
+      Kamon(
+        kamonPrometheus,
+        influxDb,
+        kamonZipkin,
+        sigar
+      )
 
     new Configuration(
       command,
@@ -396,6 +429,7 @@ object Configuration {
       casper,
       blockstorage,
       blockDagStorage,
+      kamon,
       options
     )
   }
@@ -445,6 +479,7 @@ final class Configuration(
     val casper: CasperConf,
     val blockstorage: LMDBBlockStore.Config,
     val blockDagStorage: BlockDagFileStorage.Config,
+    val kamon: Kamon,
     private val options: commandline.Options
 ) {
   def printHelp(): Task[Unit] = Task.delay(options.printHelp())
