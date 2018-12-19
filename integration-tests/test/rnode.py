@@ -4,40 +4,36 @@ import queue
 import shlex
 import string
 import logging
+from logging import Logger
 import threading
+from threading import Event
 import contextlib
 from multiprocessing import Queue, Process
 from typing import (
     Dict,
     List,
     Tuple,
-    TYPE_CHECKING,
     Optional,
     Generator,
 )
 
-import pytest
 from docker.client import DockerClient
+from docker.models.containers import Container
+from docker.models.containers import ExecResult
 
-from . import conftest
 from .common import (
-    make_tempfile,
+    KeyPair,
+    Network,
     make_tempdir,
+    make_tempfile,
     TestingContext,
     NonZeroExitCodeError,
-    CommandLineOptions,
+    GetBlockError,
 )
 from .wait import (
     wait_for_node_started,
+    wait_for_approved_block_received_handler_state,
 )
-
-
-if TYPE_CHECKING:
-    from .conftest import KeyPair
-    from docker.models.containers import Container
-    from logging import Logger
-    from threading import Event
-    from docker.models.containers import ExecResult
 
 
 DEFAULT_IMAGE = os.environ.get("DEFAULT_IMAGE", "rchain-integration-tests:latest")
@@ -102,7 +98,7 @@ def extract_block_hash_from_propose_output(propose_output: str):
 
 
 class Node:
-    def __init__(self, *, container: "Container", deploy_dir: str, command_timeout: int, network: str) -> None:
+    def __init__(self, *, container: Container, deploy_dir: str, command_timeout: int, network: str) -> None:
         self.container = container
         self.local_deploy_dir = deploy_dir
         self.remote_deploy_dir = rnode_deploy_dir
@@ -149,7 +145,10 @@ class Node:
         return extract_block_count_from_show_blocks(show_blocks_output)
 
     def get_block(self, block_hash: str) -> str:
-        return self.rnode_command('show-block', block_hash, stderr=False)
+        try:
+            return self.rnode_command('show-block', block_hash, stderr=False)
+        except NonZeroExitCodeError as e:
+            raise GetBlockError(command=e.command, exit_code=e.exit_code, output=e.output)
 
     # Too low level -- do not use directly.  Prefer shell_out() instead.
     def _exec_run_with_timeout(self, cmd: Tuple[str, ...], stderr=True) -> Tuple[int, str]:
@@ -240,7 +239,7 @@ class Node:
 
 
 class LoggingThread(threading.Thread):
-    def __init__(self, terminate_thread_event: "Event", container: "Container", logger: "Logger") -> None:
+    def __init__(self, terminate_thread_event: Event, container: Container, logger: Logger) -> None:
         super().__init__()
         self.terminate_thread_event = terminate_thread_event
         self.container = container
@@ -350,7 +349,7 @@ def make_bootstrap_node(
     docker_client: DockerClient,
     network: str,
     bonds_file: str,
-    key_pair: "KeyPair",
+    key_pair: KeyPair,
     command_timeout: int,
     allowed_peers: Optional[List[str]] = None,
     mem_limit: Optional[str] = None,
@@ -419,7 +418,7 @@ def make_peer(
     bonds_file: str,
     command_timeout: int,
     bootstrap: Node,
-    key_pair: "KeyPair",
+    key_pair: KeyPair,
     allowed_peers: Optional[List[str]] = None,
     mem_limit: Optional[str] = None,
 ) -> Node:
@@ -455,12 +454,12 @@ def make_peer(
 @contextlib.contextmanager
 def started_peer(
     *,
-    context,
-    network,
-    name,
-    bootstrap,
-    key_pair,
-):
+    context: TestingContext,
+    network: Network,
+    name: str,
+    bootstrap: Node,
+    key_pair: KeyPair,
+) -> Generator[Node, None, None]:
     peer = make_peer(
         docker_client=context.docker,
         network=network,
@@ -477,13 +476,32 @@ def started_peer(
         peer.cleanup()
 
 
+@contextlib.contextmanager
+def bootstrap_connected_peer(
+    *,
+    context: TestingContext,
+    bootstrap: Node,
+    name: str,
+    keypair: KeyPair,
+) -> Generator[Node, None, None]:
+    with started_peer(
+        context=context,
+        network=bootstrap.network,
+        name=name,
+        bootstrap=bootstrap,
+        key_pair=keypair,
+    ) as peer:
+        wait_for_approved_block_received_handler_state(context, peer)
+        yield peer
+
+
 def create_peer_nodes(
     *,
     docker_client: DockerClient,
     bootstrap: Node,
     network: str,
     bonds_file: str,
-    key_pairs: List["KeyPair"],
+    key_pairs: List[KeyPair],
     command_timeout: int,
     allowed_peers: Optional[List[str]] = None,
     mem_limit: Optional[str] = None,
@@ -553,10 +571,3 @@ def docker_network_with_started_bootstrap(context):
     with docker_network(context, context.docker) as network:
         with started_bootstrap_node(context=context, network=network, mount_dir=context.mount_dir) as node:
             yield node
-
-
-@pytest.yield_fixture(scope='module')
-def started_standalone_bootstrap_node(command_line_options: CommandLineOptions, docker_client: DockerClient) -> Node:
-    with conftest.testing_context(command_line_options, docker_client) as context:
-        with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
-            yield bootstrap_node

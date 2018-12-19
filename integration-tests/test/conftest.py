@@ -5,25 +5,25 @@ import tempfile
 import logging
 import contextlib
 from typing import (
-    TYPE_CHECKING,
     List,
-    Optional,
     Generator,
 )
 
 import pytest
+from _pytest.config.argparsing import Parser
 import docker as docker_py
+from docker.client import DockerClient
 
 from .common import (
     KeyPair,
     CommandLineOptions,
     TestingContext,
 )
+from .rnode import (
+    Node,
+    docker_network_with_started_bootstrap,
+)
 from .pregenerated_keypairs import PREGENERATED_KEYPAIRS
-
-if TYPE_CHECKING:
-    from docker.client import DockerClient
-    from _pytest.config.argparsing import Parser
 
 
 # Silence unwanted noise in logs produced at the DEBUG level
@@ -34,7 +34,7 @@ logging.getLogger('docker.auth').setLevel(logging.WARNING)
 
 
 
-def pytest_addoption(parser: "Parser") -> None:
+def pytest_addoption(parser: Parser) -> None:
     parser.addoption("--startup-timeout", type=int, action="store", default=60 * 30, help="timeout in seconds for starting a node")
     parser.addoption("--converge-timeout", type=int, action="store", default=60 * 30, help="timeout in seconds for network converge")
     parser.addoption("--receive-timeout", type=int, action="store", default=30, help="timeout in seconds for receiving a single block")
@@ -79,7 +79,7 @@ def temporary_bonds_file(random_generator: random.Random, validator_keys: List[K
 
 
 @pytest.yield_fixture(scope='session')
-def docker_client() -> Generator["DockerClient", None, None]:
+def docker_client() -> Generator[DockerClient, None, None]:
     docker_client = docker_py.from_env()
     try:
         yield docker_client
@@ -89,14 +89,14 @@ def docker_client() -> Generator["DockerClient", None, None]:
 
 
 @contextlib.contextmanager
-def testing_context(command_line_options: CommandLineOptions, docker_client: 'DockerClient', bootstrap_keypair: KeyPair = None, peers_keypairs: List[KeyPair] = None, network_peers: int = 2) -> Generator[TestingContext, None, None]:
+def testing_context(command_line_options: CommandLineOptions, docker_client: DockerClient, bootstrap_keypair: KeyPair = None, peers_keypairs: List[KeyPair] = None, network_peers: int = 2) -> Generator[TestingContext, None, None]:
     if bootstrap_keypair is None:
         bootstrap_keypair = PREGENERATED_KEYPAIRS[0]
     if peers_keypairs is None:
         peers_keypairs = PREGENERATED_KEYPAIRS[1:][:network_peers]
 
     random_seed = time.time() if command_line_options.random_seed is None else command_line_options.random_seed
-    logging.info("Using tests random number generator seed: %d", random_seed)
+    logging.critical("Using tests random number generator seed: %d", random_seed)
     random_generator = random.Random(random_seed)
 
     bonds_file_keypairs = [bootstrap_keypair] + peers_keypairs
@@ -115,3 +115,13 @@ def testing_context(command_line_options: CommandLineOptions, docker_client: 'Do
         )
 
         yield context
+
+
+testing_context.__test__ = False
+
+
+@pytest.yield_fixture(scope='module')
+def started_standalone_bootstrap_node(command_line_options: CommandLineOptions, docker_client: DockerClient) -> Node:
+    with testing_context(command_line_options, docker_client) as context:
+        with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
+            yield bootstrap_node

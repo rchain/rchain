@@ -1,17 +1,28 @@
+# Common parts
+
+# FYI: There's no merging of arrays in YAML. At least not in the Go library
+# Drone uses to parse YAML. So if you mix in &sbtenv and want to add
+# additional volumes, as in docker-build step, you need to specify all volumes.
+
 # See https://bors.tech/documentation/getting-started/ for why we have trying and staging here:
-branches:
-  - dev
+__branches: &branches
+  # Merges to `dev` are only ever done by bors, using a fast-forward merge, if the `staging` build passes.
+  # This means everything that lands in dev has already been tested in CI. Hence, the `dev` build is redundant.
+  # - dev
   - master
   - release-*
   - testing*
   - trying
   - staging
 
-# Common parts
+__branch_build_condiditions: &branch_build_conditions
+  when:
+    event: [ push, tag ]
+    branch: *branches
 
-# FYI: There's no merging of arrays in YAML. At least not in the Go library
-# Drone uses to parse YAML. So if you mix in &sbtenv and want to add
-# additional volumes, as in docker-build step, you need to specify all volumes.
+__pr_build_condiditions: &pr_build_conditions
+  when:
+    event: [ pull_request ]
 
 __buildenv: &buildenv
   image: rchain/buildenv:latest
@@ -41,16 +52,31 @@ clone:
 
 pipeline:
 
-  # pr
+  # pr build
 
-  compile:
+  pr-compile:
+    <<: *pr_build_conditions
     <<: *sbtenv
     commands:
       - sbt update rholang/bnfc:generate compile
 
-  # push
+  pr-run-unit-tests:
+    <<: *pr_build_conditions
+    group: parallel
+    <<: *sbtenv
+    commands:
+      - sbt test it:test
+
+  # full build
+
+  compile:
+    <<: *branch_build_conditions
+    <<: *sbtenv
+    commands:
+      - sbt update rholang/bnfc:generate compile
 
   docker-build:
+    <<: *branch_build_conditions
     <<: *sbtenv
     commands:
       # Skip the `doc` task - it's being invoked explicitly later
@@ -59,21 +85,17 @@ pipeline:
       - /var/cache/rchain-build/.sbt:/root/.sbt
       - /var/cache/rchain-build/.ivy2:/root/.ivy2
       - /var/run/docker.sock:/var/run/docker.sock
-    when:
-      event: [ push, tag ]
-
-  # pr
 
   run-unit-tests:
+    <<: *branch_build_conditions
     group: parallel
     <<: *sbtenv
     commands:
       - cp -r . ../step.run-unit-tests && cd ../step.run-unit-tests
       - sbt test it:test
 
-  # push
-
   run-integration-tests:
+    <<: *branch_build_conditions
     group: parallel
     <<: *buildenv
     environment:
@@ -84,10 +106,9 @@ pipeline:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp:/tmp
       - /var/tmp/rchain-it:/var/tmp/rchain-it
-    when:
-      event: [ push, tag ]
 
   package:
+    <<: *branch_build_conditions
     group: parallel
     <<: *sbtenv
     commands:
@@ -97,10 +118,9 @@ pipeline:
       - cp node/target/rnode_*_all.deb node/target/universal/*.tgz artifacts/
       - env JAVAC_VERSION=1.8 sbt clean compile doc node/rpm:packageBin
       - cp node/target/rpm/RPMS/noarch/rnode-*.noarch.rpm artifacts/
-    when:
-      event: [ push, tag ]
 
   publish:
+    <<: *branch_build_conditions
     <<: *buildenv
     commands:
       - cd ../step.package
@@ -111,8 +131,7 @@ pipeline:
       - ssh_private_key
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    when:
-      event: [ push, tag ]
+
 
   notify:
     <<: *buildenv
@@ -126,4 +145,5 @@ pipeline:
       - email_sender
     when:
       event: [ push, tag ]
+      branch: [ master, release*, testing* ]
       status: [ changed, failure ]

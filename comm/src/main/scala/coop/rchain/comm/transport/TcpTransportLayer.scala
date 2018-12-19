@@ -260,6 +260,7 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
       dispatch: Protocol => Task[CommunicationResponse],
       handleStreamed: Blob => Task[Unit]
   ): Task[Unit] = {
+
     val dispatchInternal: ServerMessage => Task[Unit] = {
       // TODO: consider logging on failure (Left)
       case Tell(protocol) => dispatch(protocol).attemptAndLog.void
@@ -268,8 +269,13 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
           case Left(e)         => handle.failWith(e)
           case Right(response) => handle.reply(response)
         }.void
-      case StreamMessage(blob) => handleStreamed(blob).attemptAndLog
-      case _                   => Task.unit // sender timeout
+      case (msg: StreamMessage) =>
+        StreamHandler.restore(msg) >>= {
+          case Left(ex) =>
+            Log[Task].error("Could not restore data from file while handling stream", ex)
+          case Right(blob) => handleStreamed(blob)
+        }
+      case _ => Task.unit // sender timeout
     }
 
     cell.modify { s =>
@@ -279,8 +285,12 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
       for {
         server <- initQueue(s.server) {
                    Task.delay {
-                     new TcpServerObservable(port, serverSslContext, maxMessageSize)
-                       .mapParallelUnordered(parallelism)(dispatchInternal)
+                     new TcpServerObservable(
+                       port,
+                       serverSslContext,
+                       maxMessageSize,
+                       tempFolder = tempFolder
+                     ).mapParallelUnordered(parallelism)(dispatchInternal)
                        .subscribe()(queueScheduler)
                    }
 
