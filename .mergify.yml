@@ -1,9 +1,0 @@
-pull_request_rules:
-- name: automatic merge on CI success and review for marked PRs
-  conditions:
-  - label=merge-when-ready
-  - status-success=continuous-integration/drone/pr
-  - "#approved-reviews-by>=1"
-  actions:
-    merge:
-      method: merge

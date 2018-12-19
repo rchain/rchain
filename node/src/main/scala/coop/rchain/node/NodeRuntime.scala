@@ -101,14 +101,12 @@ class NodeRuntime private[node] (
       grpcServerExternal <- GrpcServer
                              .acquireExternalServer[Effect](
                                conf.grpcServer.portExternal,
-                               conf.server.maxMessageSize,
                                grpcScheduler,
                                blockApiLock
                              )
       grpcServerInternal <- GrpcServer
                              .acquireInternalServer(
                                conf.grpcServer.portInternal,
-                               conf.server.maxMessageSize,
                                runtime,
                                grpcScheduler
                              )
