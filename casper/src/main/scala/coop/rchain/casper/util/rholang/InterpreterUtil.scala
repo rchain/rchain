@@ -245,7 +245,7 @@ object InterpreterUtil {
             .sorted // Ensure blocks to apply is topologically sorted to maintain any causal dependencies
         } yield result
       }
-    } yield (blockHashesToApply)
+    } yield blockHashesToApply
 
   private[casper] def computeBlockCheckpointFromDeploys[F[_]: Monad: BlockStore](
       b: BlockMessage,
