@@ -49,7 +49,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
   private val blockBufferDependencyDagState =
     new AtomicMonadState[F, DoublyLinkedDag[BlockHash]](AtomicAny(BlockDependencyDag.empty))
 
-  private val deployHist: mutable.HashSet[Deploy] = new mutable.HashSet[Deploy]()
+  private[casper] val deployHist: mutable.HashSet[Deploy] = new mutable.HashSet[Deploy]()
 
   // Used to keep track of when other validators detect the equivocation consisting of the base block
   // at the sequence number identified by the (validator, base equivocation sequence number) pair of
