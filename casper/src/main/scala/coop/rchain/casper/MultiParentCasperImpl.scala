@@ -279,25 +279,31 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
                          )
                        case _ => ().pure[F]
                      }
-                     .map(_ => {
+                     .flatMap(_ => {
                        val maxBlockNumber: Long =
                          p.foldLeft(-1L) {
                            case (acc, b) => math.max(acc, blockNumber(b))
                          }
 
-                       val newBonds = runtimeManager.computeBonds(postStateHash)
-                       val postState = RChainState()
-                         .withPreStateHash(preStateHash)
-                         .withPostStateHash(postStateHash)
-                         .withBonds(newBonds)
-                         .withBlockNumber(maxBlockNumber + 1)
+                       ToAbstractContext[F]
+                         .fromTask(runtimeManager.computeBonds(postStateHash))
+                         .map {
+                           newBonds =>
+                             val postState = RChainState()
+                               .withPreStateHash(preStateHash)
+                               .withPostStateHash(postStateHash)
+                               .withBonds(newBonds)
+                               .withBlockNumber(maxBlockNumber + 1)
 
-                       val body = Body()
-                         .withState(postState)
-                         .withDeploys(persistableDeploys.map(ProcessedDeployUtil.fromInternal))
-                       val header = blockHeader(body, p.map(_.blockHash), version, now)
-                       val block  = unsignedBlockProto(body, header, justifications, shardId)
-                       CreateBlockStatus.created(block)
+                             val body = Body()
+                               .withState(postState)
+                               .withDeploys(
+                                 persistableDeploys.map(ProcessedDeployUtil.fromInternal)
+                               )
+                             val header = blockHeader(body, p.map(_.blockHash), version, now)
+                             val block  = unsignedBlockProto(body, header, justifications, shardId)
+                             CreateBlockStatus.created(block)
+                         }
                      })
                }
     } yield result
@@ -306,10 +312,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
     BlockDagStorage[F].getRepresentation
 
   def storageContents(hash: StateHash): F[String] =
-    runtimeManager
-      .storageRepr(hash)
-      .getOrElse(s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!")
-      .pure[F]
+    ToAbstractContext[F]
+      .fromTask(
+        runtimeManager
+          .storageRepr(hash)
+      )
+      .map(_.getOrElse(s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!"))
 
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     (equivocationsTracker

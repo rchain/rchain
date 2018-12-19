@@ -1,8 +1,7 @@
 package coop.rchain.casper.util
 
-import cats.effect.{Resource, Sync}
+import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
-
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.ProtoUtil.{deployDataToDeploy, sourceDeploy}
@@ -11,10 +10,10 @@ import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.rholang.interpreter.{accounting, Runtime}
 import coop.rchain.shared.PathOps.RichPath
-
 import java.io.PrintWriter
 import java.nio.file.{Files, Path}
 
+import coop.rchain.catscontrib.ToAbstractContext
 import monix.execution.Scheduler
 
 object BondingUtil {
@@ -35,13 +34,17 @@ object BondingUtil {
        |  }
        |}""".stripMargin
 
-  def unlockDeploy[F[_]: Sync](ethAddress: String, pubKey: String, secKey: String)(
+  def unlockDeploy[F[_]: Concurrent: ToAbstractContext](
+      ethAddress: String,
+      pubKey: String,
+      secKey: String
+  )(
       implicit runtimeManager: RuntimeManager,
       scheduler: Scheduler
   ): F[String] =
     preWalletUnlockDeploy(ethAddress, pubKey, Base16.decode(secKey), s"${ethAddress}_unlockOut")
 
-  def issuanceBondDeploy[F[_]: Sync](
+  def issuanceBondDeploy[F[_]: Concurrent: ToAbstractContext](
       amount: Long,
       ethAddress: String,
       pubKey: String,
@@ -59,7 +62,7 @@ object BondingUtil {
       Base16.decode(secKey)
     )
 
-  def preWalletUnlockDeploy[F[_]: Sync](
+  def preWalletUnlockDeploy[F[_]: Concurrent: ToAbstractContext](
       ethAddress: String,
       pubKey: String,
       secKey: Array[Byte],
@@ -74,15 +77,11 @@ object BondingUtil {
       )
     )
     for {
-      sigBytes <- Sync[F].delay {
-                   runtimeManager
-                     .captureResults(runtimeManager.emptyStateHash, unlockSigDataTerm)
-                     .head
-                     .exprs
-                     .head
-                     .getGByteArray
-                     .toByteArray
-                 }
+      capturedResults <- ToAbstractContext[F].fromTask(
+                          runtimeManager
+                            .captureResults(runtimeManager.emptyStateHash, unlockSigDataTerm)
+                        )
+      sigBytes      = capturedResults.head.exprs.head.getGByteArray.toByteArray
       unlockSigData = Keccak256.hash(sigBytes)
       unlockSig     = Secp256k1.sign(unlockSigData, secKey)
       _             = assert(Secp256k1.verify(unlockSigData, unlockSig, Base16.decode("04" + pubKey)))
@@ -95,7 +94,7 @@ object BondingUtil {
            |}""".stripMargin
   }
 
-  def walletTransferSigData[F[_]: Sync](
+  def walletTransferSigData[F[_]: ToAbstractContext: Concurrent](
       nonce: Int,
       amount: Long,
       destination: String
@@ -109,19 +108,15 @@ object BondingUtil {
     )
 
     for {
-      sigBytes <- Sync[F].delay {
-                   runtimeManager
-                     .captureResults(runtimeManager.emptyStateHash, transferSigDataTerm)
-                     .head
-                     .exprs
-                     .head
-                     .getGByteArray
-                     .toByteArray
-                 }
+      capturedResults <- ToAbstractContext[F].fromTask(
+                          runtimeManager
+                            .captureResults(runtimeManager.emptyStateHash, transferSigDataTerm)
+                        )
+      sigBytes = capturedResults.head.exprs.head.getGByteArray.toByteArray
     } yield Blake2b256.hash(sigBytes)
   }
 
-  def issuanceWalletTransferDeploy[F[_]: Sync](
+  def issuanceWalletTransferDeploy[F[_]: Concurrent: ToAbstractContext](
       nonce: Int,
       amount: Long,
       destination: String,
@@ -142,7 +137,7 @@ object BondingUtil {
                |  }
                |}""".stripMargin
 
-  def faucetBondDeploy[F[_]: Sync](
+  def faucetBondDeploy[F[_]: Concurrent: ToAbstractContext](
       amount: Long,
       sigAlgorithm: String,
       pubKey: String,
@@ -207,7 +202,7 @@ object BondingUtil {
         Resource.make(RuntimeManager.fromRuntime(activeRuntime).pure[F])(_ => Sync[F].unit)
     )
 
-  def writeIssuanceBasedRhoFiles[F[_]: Sync](
+  def writeIssuanceBasedRhoFiles[F[_]: Concurrent: ToAbstractContext](
       bondKey: String,
       ethAddress: String,
       amount: Long,
@@ -230,7 +225,7 @@ object BondingUtil {
     )
   }
 
-  def writeFaucetBasedRhoFiles[F[_]: Sync](
+  def writeFaucetBasedRhoFiles[F[_]: Concurrent: ToAbstractContext](
       amount: Long,
       sigAlgorithm: String,
       secKey: String,

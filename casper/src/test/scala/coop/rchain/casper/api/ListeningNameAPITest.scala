@@ -1,6 +1,5 @@
 package coop.rchain.casper.api
 
-import cats.Id
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.helper.HashSetCasperTestNode
@@ -9,7 +8,6 @@ import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.{Created, HashSetCasperTest}
-import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models.Expr.ExprInstance.GInt
@@ -64,6 +62,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers {
       implicit val nodeZeroSafetyOracleEffect = nodes(0).turanOracleEffect
       implicit val nodeZeroLogEffect          = nodes(0).logEff
       implicit val nodeZeroBlockStoreEffect   = nodes(0).blockStore
+      implicit val abstractCtx                = nodes(0).abF
 
       implicit val timeEff = new LogicalTime[Effect]
       for {

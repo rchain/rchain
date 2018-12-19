@@ -64,7 +64,7 @@ class HashSetCasperTestNode[F[_]](
     val blockStore: BlockStore[F],
     val blockDagStorage: BlockDagStorage[F],
     val metricEff: Metrics[F],
-    abF: ToAbstractContext[F]
+    val abF: ToAbstractContext[F]
 ) {
 
   private val storageDirectory = Files.createTempDirectory(s"hash-set-casper-test-$name")

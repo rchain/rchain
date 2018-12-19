@@ -2,9 +2,11 @@ package coop.rchain.casper.api
 
 import cats.Monad
 import cats.effect.concurrent.Semaphore
-import cats.effect.{Bracket, Concurrent, Sync}
+import cats.effect.Concurrent
 import cats.effect.Sync
-import cats._, cats.data._, cats.implicits._
+import cats._
+import cats.data._
+import cats.implicits._
 import cats.mtl._
 import cats.mtl.implicits._
 import com.google.protobuf.ByteString
@@ -12,33 +14,25 @@ import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
-import coop.rchain.casper._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper._
-import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.graphz._
 import coop.rchain.models.{BindPattern, Par}
-import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rspace.{Serialize, StableHashProvider}
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import coop.rchain.shared.Log
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
-import coop.rchain.rholang.interpreter.{PrettyPrinter => RholangPrettyPrinter}
 import coop.rchain.models.rholang.sorter.Sortable._
 import monix.execution.Scheduler
 import scodec.Codec
 
 import scala.collection.immutable
-import coop.rchain.catscontrib._
-import coop.rchain.catscontrib.ski._
-import coop.rchain.casper.util.{EventConverter, ProtoUtil}
+import coop.rchain.casper.util.EventConverter
 import coop.rchain.casper._
-import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.rholang.InterpreterUtil
+import coop.rchain.catscontrib.ToAbstractContext
 
 object BlockAPI {
 
@@ -90,7 +84,7 @@ object BlockAPI {
       default = DeployServiceResponse(success = false, "Error: Casper instance not available")
     )
 
-  def getListeningNameDataResponse[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+  def getListeningNameDataResponse[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: ToAbstractContext](
       depth: Int,
       listeningName: Par
   )(implicit scheduler: Scheduler): F[ListeningNameDataResponse] = {
@@ -122,7 +116,7 @@ object BlockAPI {
     )
   }
 
-  def getListeningNameContinuationResponse[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+  def getListeningNameContinuationResponse[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: ToAbstractContext](
       depth: Int,
       listeningNames: Seq[Par]
   )(implicit scheduler: Scheduler): F[ListeningNameContinuationResponse] = {
@@ -165,7 +159,7 @@ object BlockAPI {
       mainChain <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[BlockMessage], depth)
     } yield mainChain
 
-  private def getDataWithBlockInfo[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
+  private def getDataWithBlockInfo[F[_]: MultiParentCasper: Log: SafetyOracle: BlockStore: ToAbstractContext: Concurrent](
       runtimeManager: RuntimeManager,
       sortedListeningName: Par,
       block: BlockMessage
@@ -173,16 +167,17 @@ object BlockAPI {
     if (isListeningNameReduced(block, immutable.Seq(sortedListeningName))) {
       val stateHash =
         ProtoUtil.tuplespace(block).get
-      val data =
-        runtimeManager.getData(stateHash, sortedListeningName)
       for {
+        data <- ToAbstractContext[F].fromTask(
+                 runtimeManager.getData(stateHash, sortedListeningName)
+               )
         blockInfo <- getBlockInfoWithoutTuplespace[F](block)
       } yield Option[DataWithBlockInfo](DataWithBlockInfo(data, Some(blockInfo)))
     } else {
       none[DataWithBlockInfo].pure[F]
     }
 
-  private def getContinuationsWithBlockInfo[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
+  private def getContinuationsWithBlockInfo[F[_]: MultiParentCasper: Log: SafetyOracle: BlockStore: Concurrent: ToAbstractContext](
       runtimeManager: RuntimeManager,
       sortedListeningNames: immutable.Seq[Par],
       block: BlockMessage
@@ -193,12 +188,13 @@ object BlockAPI {
     if (isListeningNameReduced(block, sortedListeningNames)) {
       val stateHash =
         ProtoUtil.tuplespace(block).get
-      val continuations: Seq[(Seq[BindPattern], Par)] =
-        runtimeManager.getContinuation(stateHash, sortedListeningNames)
-      val continuationInfos = continuations.map(
-        continuation => WaitingContinuationInfo(continuation._1, Some(continuation._2))
-      )
       for {
+        continuations <- ToAbstractContext[F].fromTask(
+                          runtimeManager.getContinuation(stateHash, sortedListeningNames)
+                        )
+        continuationInfos = continuations.map(
+          continuation => WaitingContinuationInfo(continuation._1, Some(continuation._2))
+        )
         blockInfo <- getBlockInfoWithoutTuplespace[F](block)
       } yield
         Option[ContinuationsWithBlockInfo](
@@ -242,7 +238,7 @@ object BlockAPI {
   ): F[String] = {
 
     type Effect[A] = StateT[Id, StringBuffer, A]
-    implicit val ser = new StringSerializer[Effect]
+    implicit val ser: StringSerializer[Effect] = new StringSerializer[Effect]
 
     def casperResponse(implicit casper: MultiParentCasper[F]): F[String] =
       for {

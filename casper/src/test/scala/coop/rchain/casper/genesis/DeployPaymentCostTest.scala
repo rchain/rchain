@@ -3,6 +3,7 @@ package coop.rchain.casper.genesis
 import cats.implicits._
 import cats.{Id, Monad}
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.genesis.DeployPaymentCostTest._
 import coop.rchain.casper.genesis.contracts.{Faucet, PreWallet}
 import coop.rchain.casper.helper.HashSetCasperTestNode
@@ -202,7 +203,7 @@ object DeployPaymentCostTest {
   ): Effect[Par] =
     for {
       postDeployStateHash <- deploy[Effect](p).map(ProtoUtil.postStateHash)
-      data                = rm.getData(postDeployStateHash, retChannel)
+      data                = rm.getData(postDeployStateHash, retChannel).unsafeRunSync
       _                   = assert(data.size == 1)
     } yield data.head
 
@@ -287,10 +288,12 @@ object DeployPaymentCostTest {
       tuplespaceHash: ByteString,
       statusChannel: GPrivate
   ): Unit = {
-    val transferStatus = node.runtimeManager.getData(
-      tuplespaceHash,
-      statusChannel
-    )
+    val transferStatus = node.runtimeManager
+      .getData(
+        tuplespaceHash,
+        statusChannel
+      )
+      .unsafeRunSync
     assert(transferStatus.size == 1)
     transferStatus.head.exprs.head should be(Expr(GString("Success")))
   }

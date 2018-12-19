@@ -2,6 +2,7 @@ package coop.rchain.casper.util.rholang
 
 import cats.Id
 import cats.effect.Resource
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.protocol.Deploy
 import coop.rchain.casper.util.ProtoUtil
@@ -56,19 +57,20 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         .use { mgr =>
           mgr
             .computeState(mgr.emptyStateHash, deploys)
-            .map { result =>
+            .flatMap { result =>
               val hash = result._1
-              mgr.captureResults(
-                hash,
-                ProtoUtil.deployDataToDeploy(
-                  ProtoUtil.sourceDeploy(
-                    s""" for(nn <- @"nn"){ nn!("value", "$captureChannel") } """,
-                    0L,
-                    accounting.MAX_VALUE
-                  )
-                ),
-                captureChannel
-              )
+              mgr
+                .captureResults(
+                  hash,
+                  ProtoUtil.deployDataToDeploy(
+                    ProtoUtil.sourceDeploy(
+                      s""" for(nn <- @"nn"){ nn!("value", "$captureChannel") } """,
+                      0L,
+                      accounting.MAX_VALUE
+                    )
+                  ),
+                  captureChannel
+                )
             }
         }
         .runSyncUnsafe(10.seconds)
@@ -83,11 +85,11 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val term = ProtoUtil.deployDataToDeploy(ProtoUtil.sourceDeploy(code, 0L, accounting.MAX_VALUE))
     val manyResults =
       runtimeManager
-        .use(mgr => Task.delay { mgr.captureResults(mgr.emptyStateHash, term) })
+        .use(mgr => mgr.captureResults(mgr.emptyStateHash, term))
         .runSyncUnsafe(10.seconds)
     val noResults =
       runtimeManager
-        .use(mgr => Task.delay { mgr.captureResults(mgr.emptyStateHash, term, "differentName") })
+        .use(mgr => mgr.captureResults(mgr.emptyStateHash, term, "differentName"))
         .runSyncUnsafe(10.seconds)
 
     noResults.isEmpty should be(true)
