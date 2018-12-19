@@ -8,7 +8,7 @@ from .common import (
     Node,
     Network,
     TestingContext,
-    NonZeroExitCodeError,
+    GetBlockError,
 )
 
 
@@ -81,7 +81,7 @@ class NodeSeesBlock:
         try:
             self.node.get_block(self.block_hash)
             return True
-        except NonZeroExitCodeError:
+        except GetBlockError:
             return False
 
 class BlockContainsString:

@@ -22,11 +22,13 @@ from docker.models.containers import Container
 from docker.models.containers import ExecResult
 
 from .common import (
-    make_tempfile,
+    KeyPair,
+    Network,
     make_tempdir,
+    make_tempfile,
     TestingContext,
     NonZeroExitCodeError,
-    KeyPair,
+    GetBlockError,
 )
 from .wait import (
     wait_for_node_started,
@@ -143,7 +145,10 @@ class Node:
         return extract_block_count_from_show_blocks(show_blocks_output)
 
     def get_block(self, block_hash: str) -> str:
-        return self.rnode_command('show-block', block_hash, stderr=False)
+        try:
+            return self.rnode_command('show-block', block_hash, stderr=False)
+        except NonZeroExitCodeError as e:
+            raise GetBlockError(command=e.command, exit_code=e.exit_code, output=e.output)
 
     # Too low level -- do not use directly.  Prefer shell_out() instead.
     def _exec_run_with_timeout(self, cmd: Tuple[str, ...], stderr=True) -> Tuple[int, str]:
