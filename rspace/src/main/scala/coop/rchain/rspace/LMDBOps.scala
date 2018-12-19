@@ -30,9 +30,10 @@ trait LMDBOps extends CloseOps {
   protected[this] def databasePath: Path
   protected[this] def env: Env[ByteBuffer]
 
+  protected def MetricsSource: String
   private[this] val gaugeTags    = Map("path" -> databasePath.toString)
-  private[this] val sizeGauge    = Kamon.gauge("size").refine(gaugeTags)
-  private[this] val entriesGauge = Kamon.gauge("entries").refine(gaugeTags)
+  private[this] val sizeGauge    = Kamon.gauge(MetricsSource + ".size").refine(gaugeTags)
+  private[this] val entriesGauge = Kamon.gauge(MetricsSource + ".entries").refine(gaugeTags)
 
   protected[this] def updateGauges() = {
     sizeGauge.set(databasePath.folderSize)
