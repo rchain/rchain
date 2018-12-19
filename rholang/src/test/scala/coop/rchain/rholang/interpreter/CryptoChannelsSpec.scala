@@ -212,7 +212,7 @@ class CryptoChannelsSpec
     val dbDir     = Files.createTempDirectory(s"rchain-storage-test-$randomInt")
     val size      = 1024L * 1024 * 10
     val runtime   = Runtime.create(dbDir, size)
-    runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
+    runtime.reducer.setPhlo(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
 
     try {
       test((runtime.reducer, runtime.space.store))

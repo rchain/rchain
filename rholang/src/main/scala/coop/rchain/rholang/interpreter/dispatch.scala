@@ -72,9 +72,9 @@ object RholangAndScalaDispatcher {
       new RholangAndScalaDispatcher(chargingReducer, dispatchTable)
     implicit lazy val reducer: Reduce[M] =
       new Reduce.DebruijnInterpreter[M, F](tuplespaceAlg, urnMap)
-    implicit lazy val costAlg      = CostAccounting.unsafe[M](CostAccount(0))
-    lazy val chargingReducer       = new ChargingReducer[M]
-    lazy val registry: Registry[M] = new RegistryImpl(chargingRSpace, dispatcher)
+    implicit lazy val costAlg: CostAccounting[M] = CostAccounting.unsafe[M](CostAccount(0))
+    lazy val chargingReducer: ChargingReducer[M] = ChargingReducer[M]
+    lazy val registry: Registry[M]               = new RegistryImpl(chargingRSpace, dispatcher)
     (dispatcher, chargingReducer, registry)
   }
 }

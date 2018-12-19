@@ -16,7 +16,7 @@ import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Context, RSpace}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalacheck.Arbitrary
+import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.Test.Parameters
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
@@ -28,7 +28,7 @@ class CostAccountingPropertyTest extends FlatSpec with PropertyChecks with Match
 
   implicit val params: Parameters = Parameters.defaultVerbose.withMinSuccessfulTests(1000)
 
-  def procGen(maxHeight: Int) =
+  def procGen(maxHeight: Int): Gen[PrettyPrinted[Proc]] =
     ProcGen.topLevelGen(maxHeight).map(PrettyPrinted[Proc](_, PrettyPrinter.print))
   implicit val procArbitrary: Arbitrary[PrettyPrinted[Proc]] = Arbitrary(procGen(5))
 
@@ -62,7 +62,7 @@ class CostAccountingPropertyTest extends FlatSpec with PropertyChecks with Match
   }
 
   it should "repeated executions have the same cost" in {
-    implicit val procListArb =
+    implicit val procListArb: Arbitrary[List[PrettyPrinted[Proc]]] =
       Arbitrary(GenTools.nonemptyLimitedList(5, procGen(5)))
 
     forAll { ps: List[PrettyPrinted[Proc]] =>
@@ -89,9 +89,9 @@ object CostAccountingPropertyTest {
     val initPhlos = Cost(accounting.MAX_VALUE)
 
     for {
-      _         <- reducer.setAvailablePhlos(initPhlos)
+      _         <- reducer.setPhlo(initPhlos)
       _         <- reducer.inj(program)
-      phlosLeft <- reducer.getAvailablePhlos()
+      phlosLeft <- reducer.phlo
     } yield (initPhlos - phlosLeft.cost).value
   }
 

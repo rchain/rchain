@@ -129,10 +129,10 @@ object Interpreter {
     val evaluatePhlosLimit = Cost(Integer.MAX_VALUE) //This is OK because evaluate is not called on deploy
     for {
       checkpoint <- runtime.space.createCheckpoint()
-      _          <- runtime.reducer.setAvailablePhlos(evaluatePhlosLimit)
+      _          <- runtime.reducer.setPhlo(evaluatePhlosLimit)
       _          <- runtime.reducer.inj(normalizedTerm)(rand)
       errors     <- runtime.readAndClearErrorVector()
-      leftPhlos  <- runtime.reducer.getAvailablePhlos()
+      leftPhlos  <- runtime.reducer.phlo
       cost       = leftPhlos.copy(cost = evaluatePhlosLimit - leftPhlos.cost)
       _          <- if (errors.nonEmpty) runtime.space.reset(checkpoint.root) else Task.now(())
     } yield EvaluateResult(cost, errors)
