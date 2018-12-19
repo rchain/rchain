@@ -26,7 +26,7 @@ import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.Time
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{Assertion, FlatSpec, Matchers}
+import org.scalatest._
 
 import scala.concurrent.duration._
 
@@ -830,4 +830,61 @@ class InterpreterUtilTest
         }
       }
   }
+
+  "computeMultiParentsBlockHashesForReplay" should "filter out duplicate ancestors of main parent block" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      val genesisDeploysWithCost = prepareDeploys(Vector.empty, PCost(1))
+      val b1DeploysWithCost      = prepareDeploys(Vector("@1!(1)"), PCost(1))
+      val b2DeploysWithCost      = prepareDeploys(Vector("@2!(2)"), PCost(1))
+      val b3DeploysWithCost      = prepareDeploys(Vector("@3!(3)"), PCost(1))
+
+      /*
+       * DAG Looks like this:
+       *
+       *           b3
+       *          /  \
+       *        b1    b2
+       *         \    /
+       *         genesis
+       */
+
+      mkRuntimeManager("interpreter-util-test")
+        .use { runtimeManager =>
+          def step(index: Int, genesis: BlockMessage) =
+            for {
+              b1  <- blockDagStorage.lookupByIdUnsafe(index)
+              dag <- blockDagStorage.getRepresentation
+              computeBlockCheckpointResult <- computeBlockCheckpoint(
+                                               b1,
+                                               genesis,
+                                               dag,
+                                               runtimeManager
+                                             )
+              (postB1StateHash, postB1ProcessedDeploys) = computeBlockCheckpointResult
+              result <- injectPostStateHash[Task](
+                         index,
+                         b1,
+                         postB1StateHash,
+                         postB1ProcessedDeploys
+                       )
+            } yield result
+          for {
+            genesis <- createBlock[Task](Seq.empty, deploys = genesisDeploysWithCost)
+            b1      <- createBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
+            b2      <- createBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
+            b3      <- createBlock[Task](Seq(b1.blockHash, b2.blockHash), deploys = b3DeploysWithCost)
+            _       <- step(0, genesis)
+            _       <- step(1, genesis)
+            _       <- step(2, genesis)
+            dag     <- blockDagStorage.getRepresentation
+            blockHashes <- InterpreterUtil.computeMultiParentsBlockHashesForReplay(
+                            Seq(b1, b2),
+                            dag
+                          )
+            _ = withClue("Main parent hasn't been filtered out: ") { blockHashes.size shouldBe (1) }
+
+          } yield ()
+        }
+  }
+
 }

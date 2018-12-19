@@ -169,7 +169,7 @@ object InterpreterUtil {
           Left(err)
       }
 
-  private def computeParentsPostState[F[_]: Monad: BlockStore](
+  private[rholang] def computeParentsPostState[F[_]: Monad: BlockStore](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager,
@@ -195,7 +195,6 @@ object InterpreterUtil {
         )
     }
   }
-
   // In the case of multiple parents we need to apply all of the deploys that have been
   // made in all of the branches of the DAG being merged. This is done by computing uncommon ancestors
   // and applying the deploys in those blocks on top of the initial parent.
@@ -206,6 +205,29 @@ object InterpreterUtil {
       time: Option[Long],
       initStateHash: StateHash
   )(implicit scheduler: Scheduler): F[Either[Throwable, StateHash]] =
+    for {
+      blockHashesToApply <- computeMultiParentsBlockHashesForReplay(parents, dag)
+      blocksToApply      <- blockHashesToApply.traverse(b => ProtoUtil.unsafeGetBlock[F](b.blockHash))
+      deploys            = blocksToApply.flatMap(_.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal))
+    } yield
+      runtimeManager
+        .replayComputeState[Task](initStateHash, deploys, time)
+        .runSyncUnsafe(Duration.Inf) match {
+        case result @ Right(_) => result.leftCast[Throwable]
+        case Left((_, status)) =>
+          val parentHashes =
+            parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
+          Left(
+            new Exception(
+              s"Failed status while computing post state of $parentHashes: $status"
+            )
+          )
+      }
+
+  private[rholang] def computeMultiParentsBlockHashesForReplay[F[_]: Monad](
+      parents: Seq[BlockMessage],
+      dag: BlockDagRepresentation[F]
+  ): F[Vector[BlockMetadata]] =
     for {
       parentsMetadata <- parents.toList.traverse(b => dag.lookup(b.blockHash).map(_.get))
       ordering        <- dag.deriveOrdering(0L) // TODO: Replace with an actual starting number
@@ -223,22 +245,7 @@ object InterpreterUtil {
             .sorted // Ensure blocks to apply is topologically sorted to maintain any causal dependencies
         } yield result
       }
-      blocksToApply <- blockHashesToApply.traverse(b => ProtoUtil.unsafeGetBlock[F](b.blockHash))
-      deploys       = blocksToApply.flatMap(_.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal))
-    } yield
-      runtimeManager
-        .replayComputeState[Task](initStateHash, deploys, time)
-        .runSyncUnsafe(Duration.Inf) match {
-        case result @ Right(_) => result.leftCast[Throwable]
-        case Left((_, status)) =>
-          val parentHashes =
-            parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
-          Left(
-            new Exception(
-              s"Failed status while computing post state of $parentHashes: $status"
-            )
-          )
-      }
+    } yield (blockHashesToApply)
 
   private[casper] def computeBlockCheckpointFromDeploys[F[_]: Monad: BlockStore](
       b: BlockMessage,
