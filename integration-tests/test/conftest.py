@@ -96,7 +96,7 @@ def testing_context(command_line_options: CommandLineOptions, docker_client: Doc
         peers_keypairs = PREGENERATED_KEYPAIRS[1:][:network_peers]
 
     random_seed = time.time() if command_line_options.random_seed is None else command_line_options.random_seed
-    logging.info("Using tests random number generator seed: %d", random_seed)
+    logging.critical("Using tests random number generator seed: %d", random_seed)
     random_generator = random.Random(random_seed)
 
     bonds_file_keypairs = [bootstrap_keypair] + peers_keypairs
