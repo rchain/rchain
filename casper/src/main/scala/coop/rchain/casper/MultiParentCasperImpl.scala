@@ -142,10 +142,24 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
                             )
       newFinalizedBlock <- maybeFinalizedChild match {
                             case Some(finalizedChild) =>
-                              updateLastFinalizedBlock(dag, finalizedChild)
+                              removeDeploysInFinalizedBlock(finalizedChild) *> updateLastFinalizedBlock(
+                                dag,
+                                finalizedChild
+                              )
                             case None => lastFinalizedBlockHash.pure[F]
                           }
     } yield newFinalizedBlock
+
+  private def removeDeploysInFinalizedBlock(finalizedChild: BlockHash): F[Unit] =
+    for {
+      b              <- ProtoUtil.unsafeGetBlock[F](finalizedChild)
+      deploys        = b.body.get.deploys.map(_.deploy.get)
+      deploysRemoved = deploys.count(deployHist.remove)
+      _ <- Log[F].info(
+            s"Removed $deploysRemoved deploys from deploy history as we finalized block ${PrettyPrinter
+              .buildString(finalizedChild)}."
+          )
+    } yield ()
 
   private def isGreaterThanFaultToleranceThreshold(
       dag: BlockDagRepresentation[F],
