@@ -4,18 +4,18 @@ import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 
-import coop.rchain.rspace.{Blake2b256Hash, LMDBOps, Serialize}
-import coop.rchain.rspace.internal._
-import coop.rchain.rspace._
-import coop.rchain.shared.Resources.withResource
-import coop.rchain.shared.ByteVectorOps._
-import org.lmdbjava.DbiFlags.MDB_CREATE
-import org.lmdbjava._
-import scodec.Codec
-import scodec.bits.{BitVector, ByteVector}
-
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
+
+import coop.rchain.rspace.{Blake2b256Hash, LMDBOps, Serialize, _}
+import coop.rchain.rspace.internal._
+import coop.rchain.shared.ByteVectorOps._
+import coop.rchain.shared.Resources.withResource
+
+import org.lmdbjava._
+import org.lmdbjava.DbiFlags.MDB_CREATE
+import scodec.Codec
+import scodec.bits.{BitVector, ByteVector}
 
 class LMDBTrieStore[K, V] private (
     val env: Env[ByteBuffer],

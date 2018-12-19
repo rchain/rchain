@@ -1,14 +1,15 @@
 package coop.rchain.rspace
 
+import scala.collection.concurrent.TrieMap
+import scala.collection.immutable.Seq
+
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.canonicalize
 import coop.rchain.shared.SeqOps.{dropIndex, removeFirst}
+
 import kamon._
 import scodec.Codec
-
-import scala.collection.concurrent.TrieMap
-import scala.collection.immutable.Seq
 
 /**
   * This implementation of Transaction exists only to satisfy the requirements of IStore.

@@ -1,21 +1,22 @@
 package coop.rchain.rspace
 
-import scodec.Codec
-
-import cats.effect.{ContextShift, Sync}
-import cats.implicits._
-import com.typesafe.scalalogging.Logger
-import coop.rchain.catscontrib._
-import coop.rchain.rspace.history.Branch
-import coop.rchain.rspace.internal._
-import coop.rchain.rspace.trace.{COMM, Consume, Produce}
-import coop.rchain.shared.SyncVarOps._
-import kamon._
-
 import scala.annotation.tailrec
 import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext
 import scala.util.Random
+
+import cats.effect.{ContextShift, Sync}
+import cats.implicits._
+
+import coop.rchain.catscontrib._
+import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.internal._
+import coop.rchain.rspace.trace._
+import coop.rchain.shared.SyncVarOps._
+
+import com.typesafe.scalalogging.Logger
+import kamon._
+import scodec.Codec
 
 class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
     store: IStore[C, P, A, K],

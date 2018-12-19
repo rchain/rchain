@@ -4,9 +4,9 @@ import cats._
 import cats.data._
 import cats.implicits._
 
-import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.metrics.{Metrics, MetricsSource}
+import coop.rchain.catscontrib.MonadTrans
+import coop.rchain.metrics.Metrics
 import coop.rchain.node.model.diagnostics._
 
 trait JvmMetrics[F[_]] {
@@ -18,8 +18,8 @@ trait JvmMetrics[F[_]] {
 }
 
 object JvmMetrics extends JmxMetricsInstances {
-  private implicit val metricsSource: MetricsSource =
-    MetricsSource(Metrics.source, "node.diagnostics.jvm")
+  private implicit val metricsSource: Metrics.Source =
+    Metrics.Source(Metrics.BaseSource, "node.diagnostics.jvm")
 
   def apply[F[_]](implicit M: JvmMetrics[F]): JvmMetrics[F] = M
 

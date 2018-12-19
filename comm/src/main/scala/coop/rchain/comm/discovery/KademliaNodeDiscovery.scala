@@ -9,7 +9,7 @@ import cats.implicits._
 import coop.rchain.catscontrib._
 import Catscontrib._
 import coop.rchain.comm._
-import coop.rchain.metrics.{Metrics, MetricsSource}
+import coop.rchain.metrics.Metrics
 import coop.rchain.shared._
 
 object KademliaNodeDiscovery {
@@ -30,8 +30,8 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Time: 
 ) extends NodeDiscovery[F] {
 
   private val table = PeerTable[PeerNode](id.key)
-  private implicit val metricsSource: MetricsSource =
-    MetricsSource(CommMetricsSource, "discovery.kademlia")
+  private implicit val metricsSource: Metrics.Source =
+    Metrics.Source(CommMetricsSource, "discovery.kademlia")
 
   // TODO inline usage
   private[discovery] def addNode(peer: PeerNode): F[Unit] =

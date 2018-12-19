@@ -1,5 +1,7 @@
 package coop.rchain.comm
 
+import scala.language.higherKinds
+
 import cats.MonadError
 import cats.effect.Concurrent
 import cats.syntax.applicative._
@@ -7,20 +9,17 @@ import cats.syntax.flatMap._
 import cats.syntax.functor._
 
 import coop.rchain.catscontrib.ski.kp
+import coop.rchain.metrics.Metrics
 import coop.rchain.shared.Cell
 
 import io.grpc.ManagedChannel
-import scala.language.higherKinds
-
-import coop.rchain.metrics.{Metrics, MetricsSource}
-
 import monix.execution.Cancelable
 
 class CachedConnections[F[_]: Metrics, T](cell: Transport.TransportCell[F])(
     clientChannel: PeerNode => F[ManagedChannel]
 )(implicit E: MonadError[F, Throwable]) {
 
-  def connection(peer: PeerNode, enforce: Boolean)(implicit ms: MetricsSource): F[ManagedChannel] =
+  def connection(peer: PeerNode, enforce: Boolean)(implicit ms: Metrics.Source): F[ManagedChannel] =
     modify { s =>
       if (s.shutdown && !enforce)
         E.raiseError(new RuntimeException("The transport layer has been shut down")).as(s)
@@ -30,7 +29,7 @@ class CachedConnections[F[_]: Metrics, T](cell: Transport.TransportCell[F])(
         } yield s.copy(connections = s.connections + (peer -> c))
     } >>= kp(cell.read.map(_.connections.apply(peer)))
 
-  def modify(f: TransportState => F[TransportState])(implicit ms: MetricsSource): F[Unit] =
+  def modify(f: TransportState => F[TransportState])(implicit ms: Metrics.Source): F[Unit] =
     for {
       _ <- cell.modify(f)
       s <- read

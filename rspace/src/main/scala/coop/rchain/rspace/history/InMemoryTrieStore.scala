@@ -1,10 +1,10 @@
 package coop.rchain.rspace.history
 
-import coop.rchain.rspace.{Blake2b256Hash, InMemTransaction, InMemoryOps}
-import kamon.Kamon
-import coop.rchain.rspace._
-
 import scala.collection.immutable.Seq
+
+import coop.rchain.rspace.{Blake2b256Hash, InMemoryOps, InMemTransaction, _}
+
+import kamon.Kamon
 
 case class State[K, V](
     _dbTrie: Map[Blake2b256Hash, Trie[K, V]],

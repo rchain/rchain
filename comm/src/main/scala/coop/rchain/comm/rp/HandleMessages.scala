@@ -13,14 +13,15 @@ import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.rp.Connect.Connections._
 import coop.rchain.comm.transport._
 import coop.rchain.comm.transport.CommunicationResponse._
-import coop.rchain.metrics.{Metrics, MetricsSource}
+import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.effects._
 import coop.rchain.shared._
 
 object HandleMessages {
 
-  private implicit val logSource: LogSource         = LogSource(this.getClass)
-  private implicit val metricsSource: MetricsSource = MetricsSource(CommMetricsSource, "rp.handle")
+  private implicit val logSource: LogSource = LogSource(this.getClass)
+  private implicit val metricsSource: Metrics.Source =
+    Metrics.Source(CommMetricsSource, "rp.handle")
 
   def handle[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
       protocol: Protocol,

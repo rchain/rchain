@@ -1,21 +1,22 @@
 package coop.rchain.comm.rp
 
+import scala.concurrent.duration._
+
 import cats._
 import cats.implicits._
 import cats.mtl._
 
-import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib._
-import coop.rchain.comm.CommError._
+import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm._
+import coop.rchain.comm.CommError._
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.comm.transport._
-import coop.rchain.metrics.{Metrics, MetricsSource}
+import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.implicits._
 import coop.rchain.shared._
-import scala.concurrent.duration._
 
 object Connect {
 
@@ -23,7 +24,8 @@ object Connect {
   type Connections           = List[Connection]
   type ConnectionsCell[F[_]] = Cell[F, Connections]
 
-  private implicit val metricsSource: MetricsSource = MetricsSource(CommMetricsSource, "rp.connect")
+  private implicit val metricsSource: Metrics.Source =
+    Metrics.Source(CommMetricsSource, "rp.connect")
 
   object ConnectionsCell {
     def apply[F[_]](implicit ev: ConnectionsCell[F]): ConnectionsCell[F] = ev

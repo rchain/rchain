@@ -1,21 +1,16 @@
 package coop.rchain.rspace
 
-import java.nio.ByteBuffer
+import scala.collection.immutable.Seq
 
-import internal._
 import cats.implicits._
-import coop.rchain.rspace._
-import coop.rchain.rspace.history.{initialize, Branch, ITrieStore}
+
+import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.canonicalize
 import coop.rchain.shared.SeqOps.{dropIndex, removeFirst}
-import org.lmdbjava.Txn
-import scodec.Codec
-
-import scala.collection.immutable.Seq
-import scala.concurrent.SyncVar
 
 import kamon._
+import scodec.Codec
 
 case class State[C, P, A, K](
     dbGNATs: Map[Blake2b256Hash, GNAT[C, P, A, K]],

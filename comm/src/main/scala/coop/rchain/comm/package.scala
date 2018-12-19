@@ -11,5 +11,5 @@ package object comm {
     def apply[F[_]](implicit ev: ApplicativeAsk[F, PeerNode]): ApplicativeAsk[F, PeerNode] = ev
   }
 
-  val CommMetricsSource: String = Metrics.source + ".comm"
+  val CommMetricsSource: Metrics.Source = Metrics.Source(Metrics.BaseSource, "comm")
 }

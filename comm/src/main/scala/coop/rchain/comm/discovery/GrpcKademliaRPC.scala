@@ -10,7 +10,7 @@ import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.comm.CachedConnections.ConnectionsCache
 import coop.rchain.comm.discovery.KademliaGrpcMonix.KademliaRPCServiceStub
-import coop.rchain.metrics.{Metrics, MetricsSource}
+import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.implicits._
 import coop.rchain.shared.{Log, LogSource}
 
@@ -30,8 +30,8 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
 ) extends KademliaRPC[Task] {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
-  private implicit val metricsSource: MetricsSource =
-    MetricsSource(CommMetricsSource, "discovery.kademlia.grpc")
+  private implicit val metricsSource: Metrics.Source =
+    Metrics.Source(CommMetricsSource, "discovery.kademlia.grpc")
 
   private val cell = connectionsCache(clientChannel)
 

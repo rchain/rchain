@@ -1,20 +1,22 @@
 package coop.rchain.rspace
 
-import cats.effect.{ContextShift, Sync}
-import cats.implicits._
-import com.google.common.collect.Multiset
-import com.typesafe.scalalogging.Logger
-import coop.rchain.catscontrib._
-import coop.rchain.rspace.history.Branch
-import coop.rchain.rspace.internal._
-import coop.rchain.rspace.trace.{Produce, _}
-import kamon._
-import scodec.Codec
-
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext
+
+import cats.effect.{ContextShift, Sync}
+import cats.implicits._
+
+import coop.rchain.catscontrib._
+import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.internal._
+import coop.rchain.rspace.trace.{Produce, _}
+
+import com.google.common.collect.Multiset
+import com.typesafe.scalalogging.Logger
+import kamon._
+import scodec.Codec
 
 class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
     implicit

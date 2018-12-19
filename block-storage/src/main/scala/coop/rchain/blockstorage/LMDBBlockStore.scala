@@ -10,16 +10,15 @@ import cats._
 import cats.effect.{ExitCase, Sync}
 import cats.implicits._
 
-import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.metrics.{Metrics, MetricsSource}
-import coop.rchain.rspace._
+import coop.rchain.metrics.Metrics
+import coop.rchain.shared.Resources.withResource
 
+import com.google.protobuf.ByteString
 import org.lmdbjava._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.Txn.NotReadyException
-import coop.rchain.shared.Resources.withResource
 
 class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks: Dbi[ByteBuffer])(
     implicit
@@ -27,8 +26,8 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
     metricsF: Metrics[F]
 ) extends BlockStore[F] {
 
-  private implicit val metricsSource: MetricsSource =
-    MetricsSource(RSpaceMetricsSource, "block-storage.lmdb")
+  private implicit val metricsSource: Metrics.Source =
+    Metrics.Source(BlockStorageMetricsSource, "lmdb")
 
   implicit class RichBlockHash(byteVector: BlockHash) {
 
@@ -177,8 +176,8 @@ object LMDBBlockStore {
   }
 
   def createWithId(env: Env[ByteBuffer], path: Path): BlockStore[Id] = {
-    import coop.rchain.metrics.Metrics.MetricsNOP
     import coop.rchain.catscontrib.effect.implicits._
+    import coop.rchain.metrics.Metrics.MetricsNOP
     implicit val metrics: Metrics[Id] = new MetricsNOP[Id]()(syncId)
     LMDBBlockStore.create(env, path)(syncId, metrics)
   }

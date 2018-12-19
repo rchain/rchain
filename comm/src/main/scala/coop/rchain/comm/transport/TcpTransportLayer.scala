@@ -17,7 +17,7 @@ import coop.rchain.comm.CommError._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
 import coop.rchain.comm.rp.ProtocolHelper
-import coop.rchain.metrics.{Metrics, MetricsSource}
+import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.implicits._
 import coop.rchain.shared._
 import coop.rchain.shared.Compression._
@@ -40,8 +40,8 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
   private val cell               = connectionsCache(clientChannel)
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
-  private implicit val metricsSource: MetricsSource =
-    MetricsSource(CommMetricsSource, "rp.transport")
+  private implicit val metricsSource: Metrics.Source =
+    Metrics.Source(CommMetricsSource, "rp.transport")
 
   private def certInputStream = new ByteArrayInputStream(cert.getBytes())
   private def keyInputStream  = new ByteArrayInputStream(key.getBytes())

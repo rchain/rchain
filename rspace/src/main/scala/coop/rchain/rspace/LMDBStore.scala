@@ -3,21 +3,19 @@ package coop.rchain.rspace
 import java.nio.ByteBuffer
 import java.nio.file.Path
 
-import internal._
+import scala.collection.JavaConverters._
+import scala.collection.immutable.Seq
+
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.canonicalize
-import coop.rchain.shared.ByteVectorOps._
-import coop.rchain.shared.PathOps._
 import coop.rchain.shared.Resources.withResource
 import coop.rchain.shared.SeqOps._
-import org.lmdbjava.DbiFlags.MDB_CREATE
+
 import org.lmdbjava._
+import org.lmdbjava.DbiFlags.MDB_CREATE
 import scodec.Codec
 import scodec.bits._
-
-import scala.collection.JavaConverters._
-import scala.collection.immutable.Seq
 
 /**
   * The main store class.
