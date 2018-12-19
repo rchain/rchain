@@ -75,9 +75,11 @@ object StreamHandler {
         buff.pushNext(StreamMessage(sender, packetType, path, compressed, contentLength))
       }
     case stmd =>
-      logger.warn(
-        s"received not full stream message, will not process. $stmd"
-      ).as(false)
+      logger
+        .warn(
+          s"received not full stream message, will not process. $stmd"
+        )
+        .as(false)
   }
 
   def restore(msg: StreamMessage)(implicit logger: Log[Task]): Task[Either[Throwable, Blob]] =
@@ -89,7 +91,13 @@ object StreamHandler {
           case Right(decompressedContent) =>
             Right(ProtocolHelper.blob(msg.sender, msg.typeId, decompressedContent)).pure[Task]
         }
-    }) >>= (res => deleteFile(msg.path) *> res.pure[Task])
+    }) >>= (
+        res =>
+          deleteFile(msg.path).flatMap {
+            case Left(ex) => logger.error(s"Was unable to delete file ${msg.sender}", ex).as(res)
+            case Right(_) => res.pure[Task]
+          }
+      )
 
   private def fetchContent(path: Path): Task[Array[Byte]] = Task.delay(Files.readAllBytes(path))
   private def decompressContent(
@@ -105,6 +113,6 @@ object StreamHandler {
         )
     } else raw.pure[Task]
 
-  private def deleteFile(path: Path): Task[Unit] =
-    Task.delay(path.toFile.delete).attemptAndLog.as(())
+  private def deleteFile(path: Path): Task[Either[Throwable, Unit]] =
+    Task.delay(path.toFile.delete).as(()).attempt
 }
