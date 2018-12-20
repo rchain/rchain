@@ -1318,7 +1318,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _               <- nodes(0).receive()
       _               <- nodes(2).receive()
 
-      _ = nodes(0).casperEff.lastFinalizedBlock shouldBeF genesisWithEqualBonds
+      _ <- nodes(0).casperEff.lastFinalizedBlock shouldBeF genesisWithEqualBonds
       _ = nodes(0).casperEff.deployHist.size should be(2)
 
       createBlock6Result <- nodes(2).casperEff
@@ -1328,7 +1328,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _               <- nodes(0).receive()
       _               <- nodes(1).receive()
 
-      _ = nodes(0).casperEff.lastFinalizedBlock shouldBeF block1
+      _ <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block1
       _ = nodes(0).casperEff.deployHist.size should be(1)
 
       createBlock7Result <- nodes(0).casperEff
@@ -1338,7 +1338,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _               <- nodes(1).receive()
       _               <- nodes(2).receive()
 
-      _ = nodes(0).casperEff.lastFinalizedBlock shouldBeF block2
+      _ <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block2
 
       createBlock8Result <- nodes(1).casperEff
                              .deploy(deployDatas(7)) *> nodes(1).casperEff.createBlock
