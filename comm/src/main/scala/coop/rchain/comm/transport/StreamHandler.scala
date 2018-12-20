@@ -32,10 +32,10 @@ object StreamHandler {
 
   def handleStream(
       folder: Path,
-      observable: Observable[Chunk]
-  )(implicit logger: Log[Task]): Task[Either[Throwable, ServerMessage]] =
+      stream: Observable[Chunk]
+  )(implicit logger: Log[Task]): Task[Either[Throwable, StreamMessage]] =
     init(folder).bracket { initStmd =>
-      (collect(initStmd, observable) >>= toResult).value
+      (collect(initStmd, stream) >>= toResult).value
     }(stmd => gracefullyClose[Task](stmd.fos).as(()))
 
   private def init(folder: Path): Task[Streamed] =
@@ -48,10 +48,10 @@ object StreamHandler {
 
   private def collect(
       init: Streamed,
-      observable: Observable[Chunk]
+      stream: Observable[Chunk]
   ): EitherT[Task, Throwable, Streamed] =
     EitherT(
-      (observable
+      (stream
         .foldLeftL(init) {
           case (stmd, Chunk(Chunk.Content.Header(ChunkHeader(sender, typeId, compressed, cl)))) =>
             stmd.copy(
