@@ -163,3 +163,22 @@
 ##### steps:
 
 * TBD
+
+## Contracts
+### As a user, I want to be able to add REV to my wallet so that I have available REV to pay for goods/services
+#### Successfully add funds to a wallet
+##### test: test/test_wallet.py::test_add_funds_success
+##### steps: 
+* given an existing empty wallet 
+* send a message  to the wallet process with the structure **("deposit", purse, returnChannel)** where purse is the unforgeable name of a purse containing the rev to deposit in the wallet
+* expect a response on the return channel with a **true** value
+* expect *purse* to be empty (by calling "getBalance")
+* expect the wallet to have the original purse amount (by calling "getBallance")
+
+#### Failed to add funds to a wallet
+##### test: test/test_wallet.py::test_add_funds_failure
+##### steps: 
+* given an existing empty wallet 
+* send a message  to the wallet process with the structure **("deposit", fakePurse, returnChannel)** where fakePurse is an unforgeable name which doesn't implement the purse protocol
+* expect a response on the return channel with a **false** value
+* expect the wallet to remain empty
