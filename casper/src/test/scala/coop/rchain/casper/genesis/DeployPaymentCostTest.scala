@@ -93,7 +93,7 @@ object DeployPaymentCostTest {
       deploy: Deploy
   )(implicit casperEff: MultiParentCasperImpl[F]): F[BlockMessage] =
     for {
-      _              <- casperEff.deploy(deploy)
+      _              <- casperEff.addDeploy(deploy)
       b              <- casperEff.createBlock
       Created(block) = b
       blockStatus    <- casperEff.addBlock(block, ignoreDoppelgangerCheck[F])
@@ -209,7 +209,7 @@ object DeployPaymentCostTest {
 
   def deploy[F[_]: Monad](par: Par)(implicit casperEff: MultiParentCasperImpl[F]): F[BlockMessage] =
     for {
-      _              <- casperEff.deploy(ProtoUtil.termDeployNow(par))
+      _              <- casperEff.addDeploy(ProtoUtil.termDeployNow(par))
       newBlock       <- casperEff.createBlock
       Created(block) = newBlock
       status         <- casperEff.addBlock(block, ignoreDoppelgangerCheck[F])

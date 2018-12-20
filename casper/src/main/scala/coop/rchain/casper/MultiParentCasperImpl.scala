@@ -49,7 +49,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
   private val blockBufferDependencyDagState =
     new AtomicMonadState[F, DoublyLinkedDag[BlockHash]](AtomicAny(BlockDependencyDag.empty))
 
-  private val deployHist: mutable.HashSet[Deploy] = new mutable.HashSet[Deploy]()
+  private[casper] val deployHist: mutable.HashSet[Deploy] = new mutable.HashSet[Deploy]()
 
   // Used to keep track of when other validators detect the equivocation consisting of the base block
   // at the sequence number identified by the (validator, base equivocation sequence number) pair of
@@ -142,10 +142,30 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
                             )
       newFinalizedBlock <- maybeFinalizedChild match {
                             case Some(finalizedChild) =>
-                              updateLastFinalizedBlock(dag, finalizedChild)
+                              removeDeploysInFinalizedBlock(finalizedChild) *> updateLastFinalizedBlock(
+                                dag,
+                                finalizedChild
+                              )
                             case None => lastFinalizedBlockHash.pure[F]
                           }
     } yield newFinalizedBlock
+
+  private def removeDeploysInFinalizedBlock(finalizedChild: BlockHash): F[Unit] =
+    for {
+      b       <- ProtoUtil.unsafeGetBlock[F](finalizedChild)
+      deploys = b.body.get.deploys.map(_.deploy.get)
+      deploysRemoved <- deploys.toList.foldM(0)(
+                         (count, deploy) =>
+                           Sync[F].ifM(Sync[F].delay { deployHist.remove(deploy) })(
+                             (count + 1).pure[F],
+                             count.pure[F]
+                           )
+                       )
+      _ <- Log[F].info(
+            s"Removed $deploysRemoved deploys from deploy history as we finalized block ${PrettyPrinter
+              .buildString(finalizedChild)}."
+          )
+    } yield ()
 
   private def isGreaterThanFaultToleranceThreshold(
       dag: BlockDagRepresentation[F],
@@ -156,18 +176,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
   def contains(b: BlockMessage): F[Boolean] =
     BlockStore[F].contains(b.blockHash).map(_ || blockBuffer.contains(b))
 
-  def deploy(deploy: Deploy): F[Unit] =
-    for {
-      _ <- Sync[F].delay {
-            deployHist += deploy
-          }
-      _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
-    } yield ()
-
   def deploy(d: DeployData): F[Either[Throwable, Unit]] =
     InterpreterUtil.mkTerm(d.term) match {
       case Right(term) =>
-        deploy(
+        addDeploy(
           Deploy(
             term = Some(term),
             raw = Some(d)
@@ -177,6 +189,14 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       case Left(err) =>
         Applicative[F].pure(Left(new Exception(s"Error in parsing term: \n$err")))
     }
+
+  def addDeploy(deploy: Deploy): F[Unit] =
+    for {
+      _ <- Sync[F].delay {
+            deployHist += deploy
+          }
+      _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
+    } yield ()
 
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockMessage]] =
     for {
