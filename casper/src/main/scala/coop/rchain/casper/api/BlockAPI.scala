@@ -87,8 +87,8 @@ object BlockAPI {
   def getListeningNameDataResponse[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: ToAbstractContext](
       depth: Int,
       listeningName: Par
-  )(implicit scheduler: Scheduler): F[ListeningNameDataResponse] = {
-    def casperResponse(implicit casper: MultiParentCasper[F], channelCodec: Codec[Par]) =
+  ): F[ListeningNameDataResponse] = {
+    def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
         mainChain           <- getMainChainFromTip[F](depth)
         maybeRuntimeManager <- casper.getRuntimeManager
@@ -109,9 +109,8 @@ object BlockAPI {
           length = blocksWithActiveName.length
         )
 
-    implicit val channelCodec: Codec[Par] = Serialize[Par].toCodec
     MultiParentCasperRef.withCasper[F, ListeningNameDataResponse](
-      casperResponse(_, channelCodec),
+      casperResponse(_),
       ListeningNameDataResponse(status = "Error: Casper instance not available")
     )
   }
@@ -119,8 +118,8 @@ object BlockAPI {
   def getListeningNameContinuationResponse[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: ToAbstractContext](
       depth: Int,
       listeningNames: Seq[Par]
-  )(implicit scheduler: Scheduler): F[ListeningNameContinuationResponse] = {
-    def casperResponse(implicit casper: MultiParentCasper[F], channelCodec: Codec[Par]) =
+  ): F[ListeningNameContinuationResponse] = {
+    def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
         mainChain           <- getMainChainFromTip[F](depth)
         maybeRuntimeManager <- casper.getRuntimeManager
@@ -142,9 +141,8 @@ object BlockAPI {
           length = blocksWithActiveName.length
         )
 
-    implicit val channelCodec: Codec[Par] = Serialize[Par].toCodec
     MultiParentCasperRef.withCasper[F, ListeningNameContinuationResponse](
-      casperResponse(_, channelCodec),
+      casperResponse(_),
       ListeningNameContinuationResponse(status = "Error: Casper instance not available")
     )
   }
@@ -163,7 +161,7 @@ object BlockAPI {
       runtimeManager: RuntimeManager,
       sortedListeningName: Par,
       block: BlockMessage
-  )(implicit channelCodec: Codec[Par], scheduler: Scheduler): F[Option[DataWithBlockInfo]] =
+  ): F[Option[DataWithBlockInfo]] =
     if (isListeningNameReduced(block, immutable.Seq(sortedListeningName))) {
       val stateHash =
         ProtoUtil.tuplespace(block).get
@@ -181,9 +179,6 @@ object BlockAPI {
       runtimeManager: RuntimeManager,
       sortedListeningNames: immutable.Seq[Par],
       block: BlockMessage
-  )(
-      implicit channelCodec: Codec[Par],
-      scheduler: Scheduler
   ): F[Option[ContinuationsWithBlockInfo]] =
     if (isListeningNameReduced(block, sortedListeningNames)) {
       val stateHash =
@@ -207,7 +202,7 @@ object BlockAPI {
   private def isListeningNameReduced(
       block: BlockMessage,
       sortedListeningName: immutable.Seq[Par]
-  )(implicit channelCodec: Codec[Par]) = {
+  ) = {
     val serializedLog = for {
       bd    <- block.body.toSeq
       pd    <- bd.deploys

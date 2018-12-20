@@ -39,8 +39,7 @@ object BondingUtil {
       pubKey: String,
       secKey: String
   )(
-      implicit runtimeManager: RuntimeManager,
-      scheduler: Scheduler
+      implicit runtimeManager: RuntimeManager
   ): F[String] =
     preWalletUnlockDeploy(ethAddress, pubKey, Base16.decode(secKey), s"${ethAddress}_unlockOut")
 
@@ -50,8 +49,7 @@ object BondingUtil {
       pubKey: String,
       secKey: String
   )(
-      implicit runtimeManager: RuntimeManager,
-      scheduler: Scheduler
+      implicit runtimeManager: RuntimeManager
   ): F[String] =
     issuanceWalletTransferDeploy(
       0, //nonce
@@ -67,7 +65,7 @@ object BondingUtil {
       pubKey: String,
       secKey: Array[Byte],
       statusOut: String
-  )(implicit runtimeManager: RuntimeManager, scheduler: Scheduler): F[String] = {
+  )(implicit runtimeManager: RuntimeManager): F[String] = {
     require(Base16.encode(Keccak256.hash(Base16.decode(pubKey)).drop(12)) == ethAddress.drop(2))
     val unlockSigDataTerm = deployDataToDeploy(
       sourceDeploy(
@@ -98,7 +96,7 @@ object BondingUtil {
       nonce: Int,
       amount: Long,
       destination: String
-  )(implicit runtimeManager: RuntimeManager, scheduler: Scheduler): F[Array[Byte]] = {
+  )(implicit runtimeManager: RuntimeManager): F[Array[Byte]] = {
     val transferSigDataTerm = deployDataToDeploy(
       sourceDeploy(
         s""" @"__SCALA__"!([$nonce, $amount, "$destination"].toByteArray())""",
@@ -123,7 +121,7 @@ object BondingUtil {
       transferStatusOut: String,
       pubKey: String,
       secKey: Array[Byte]
-  )(implicit runtimeManager: RuntimeManager, scheduler: Scheduler): F[String] =
+  )(implicit runtimeManager: RuntimeManager): F[String] =
     for {
       transferSigData <- walletTransferSigData[F](nonce, amount, destination)
       transferSig     = Secp256k1.sign(transferSigData, secKey)
@@ -142,7 +140,7 @@ object BondingUtil {
       sigAlgorithm: String,
       pubKey: String,
       secKey: Array[Byte]
-  )(implicit runtimeManager: RuntimeManager, scheduler: Scheduler): F[String] =
+  )(implicit runtimeManager: RuntimeManager): F[String] =
     for {
       sigFunc <- sigAlgorithm match {
                   case "ed25519"   => ((d: Array[Byte]) => Ed25519.sign(d, secKey)).pure[F]

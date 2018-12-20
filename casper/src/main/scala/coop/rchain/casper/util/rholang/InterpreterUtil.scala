@@ -4,7 +4,7 @@ import cats.Monad
 import cats.effect._
 import cats.implicits._
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
-import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.ToAbstractContext
 import coop.rchain.casper.{BlockException, PrettyPrinter}
 import coop.rchain.casper.PrettyPrinter.buildString
 import com.google.protobuf.ByteString
@@ -36,8 +36,6 @@ object InterpreterUtil {
       b: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager
-  )(
-      implicit scheduler: Scheduler
   ): F[Either[BlockException, Option[StateHash]]] = {
     val preStateHash    = ProtoUtil.preStateHash(b)
     val tsHash          = ProtoUtil.tuplespace(b)
@@ -70,7 +68,7 @@ object InterpreterUtil {
       internalDeploys: Seq[InternalProcessedDeploy],
       possiblePreStateHash: Either[Throwable, StateHash],
       time: Option[Long]
-  )(implicit scheduler: Scheduler): F[Either[BlockException, Option[StateHash]]] =
+  ): F[Either[BlockException, Option[StateHash]]] =
     possiblePreStateHash match {
       case Left(ex) =>
         Left(BlockException(ex)).rightCast[Option[StateHash]].pure[F]
@@ -99,7 +97,7 @@ object InterpreterUtil {
       internalDeploys: Seq[InternalProcessedDeploy],
       possiblePreStateHash: Either[Throwable, StateHash],
       time: Option[Long]
-  )(implicit scheduler: Scheduler): F[Either[BlockException, Option[StateHash]]] =
+  ): F[Either[BlockException, Option[StateHash]]] =
     ToAbstractContext[F]
       .fromTask(runtimeManager.replayComputeState(preStateHash, internalDeploys, time))
       .flatMap {
@@ -172,7 +170,7 @@ object InterpreterUtil {
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager,
       time: Option[Long]
-  )(implicit scheduler: Scheduler): F[Either[Throwable, StateHash]] = {
+  ): F[Either[Throwable, StateHash]] = {
     val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
 
     parentTuplespaces match {
@@ -202,7 +200,7 @@ object InterpreterUtil {
       runtimeManager: RuntimeManager,
       time: Option[Long],
       initStateHash: StateHash
-  )(implicit scheduler: Scheduler): F[Either[Throwable, StateHash]] =
+  ): F[Either[Throwable, StateHash]] =
     for {
       blockHashesToApply <- findMultiParentsBlockHashesForReplay(parents, dag)
       blocksToApply      <- blockHashesToApply.traverse(b => ProtoUtil.unsafeGetBlock[F](b.blockHash))

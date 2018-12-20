@@ -214,8 +214,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     **/
   private[comm] class StandaloneCasperHandler[F[_]: Sync: Capture: ConnectionsCell: NodeDiscovery: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock](
       approveProtocol: ApproveBlockProtocol[F]
-  )(implicit scheduler: Scheduler)
-      extends CasperPacketHandlerInternal[F] {
+  ) extends CasperPacketHandlerInternal[F] {
 
     private val nonePacket: F[Option[Packet]] = Applicative[F].pure(None: Option[Packet])
 

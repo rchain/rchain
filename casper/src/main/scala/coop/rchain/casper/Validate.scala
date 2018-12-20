@@ -568,7 +568,7 @@ object Validate {
       dag: BlockDagRepresentation[F],
       emptyStateHash: StateHash,
       runtimeManager: RuntimeManager
-  )(implicit scheduler: Scheduler): F[Either[BlockStatus, ValidBlock]] =
+  ): F[Either[BlockStatus, ValidBlock]] =
     for {
       maybeStateHash <- InterpreterUtil
                          .validateBlockCheckpoint[F](
@@ -611,8 +611,6 @@ object Validate {
   def bondsCache[F[_]: Log: Concurrent: ToAbstractContext](
       b: BlockMessage,
       runtimeManager: RuntimeManager
-  )(
-      implicit scheduler: Scheduler
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val bonds = ProtoUtil.bonds(b)
     ProtoUtil.tuplespace(b) match {
