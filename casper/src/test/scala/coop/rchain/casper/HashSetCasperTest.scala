@@ -1347,7 +1347,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _               = nodes(0).receive()
       _               = nodes(2).receive()
 
-      _ = nodes(0).casperEff.lastFinalizedBlock shouldBeF block3
+      _ <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block3
       _ = nodes(0).casperEff.deployHist.size should be(2)
 
       _ = nodes.foreach(_.tearDown())
