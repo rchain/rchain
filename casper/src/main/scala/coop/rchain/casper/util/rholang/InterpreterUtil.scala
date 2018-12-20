@@ -146,7 +146,7 @@ object InterpreterUtil {
           }
       }
 
-  def computeDeploysCheckpoint[F[_]: Monad: BlockStore](
+  def computeDeploysCheckpoint[F[_]: Sync: BlockStore: ToAbstractContext](
       parents: Seq[BlockMessage],
       deploys: Seq[Deploy],
       dag: BlockDagRepresentation[F],
@@ -167,7 +167,7 @@ object InterpreterUtil {
           Left(err)
       }
 
-  private def computeParentsPostState[F[_]: Monad: BlockStore](
+  private def computeParentsPostState[F[_]: Sync: BlockStore: ToAbstractContext](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager,
@@ -196,7 +196,7 @@ object InterpreterUtil {
   // In the case of multiple parents we need to apply all of the deploys that have been
   // made in all of the branches of the DAG being merged. This is done by computing uncommon ancestors
   // and applying the deploys in those blocks on top of the initial parent.
-  private def computeMultiParentsPostState[F[_]: Monad: BlockStore](
+  private def computeMultiParentsPostState[F[_]: Sync: BlockStore: ToAbstractContext](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager,
@@ -207,10 +207,12 @@ object InterpreterUtil {
       blockHashesToApply <- findMultiParentsBlockHashesForReplay(parents, dag)
       blocksToApply      <- blockHashesToApply.traverse(b => ProtoUtil.unsafeGetBlock[F](b.blockHash))
       deploys            = blocksToApply.flatMap(_.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal))
+      replayResult <- ToAbstractContext[F].fromTask(
+                       runtimeManager
+                         .replayComputeState(initStateHash, deploys, time)
+                     )
     } yield
-      runtimeManager
-        .replayComputeState(initStateHash, deploys, time)
-        .runSyncUnsafe(Duration.Inf) match {
+      replayResult match {
         case result @ Right(_) => result.leftCast[Throwable]
         case Left((_, status)) =>
           val parentHashes =
@@ -245,7 +247,7 @@ object InterpreterUtil {
       }
     } yield blockHashesToApply
 
-  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Monad: BlockStore](
+  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStore: ToAbstractContext](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
