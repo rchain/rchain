@@ -15,7 +15,8 @@ import monix.reactive.OverflowStrategy._
 import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.comm.protocol.routing._
 import com.google.protobuf.ByteString
-import cats.implicits._
+import cats._, cats.data._, cats.implicits._
+import cats.effect._
 import coop.rchain.catscontrib.TaskContrib._
 
 object StreamHandler {
@@ -31,17 +32,11 @@ object StreamHandler {
 
   def handleStream(
       folder: Path,
-      observable: Observable[Chunk],
-      buff: buffer.LimitedBuffer[ServerMessage]
-  )(implicit logger: Log[Task]): Task[ChunkResponse] =
-    (init(folder).attempt >>= {
-      case Left(ex) => logger.error("could not create a file to store incoming stream", ex)
-      case Right(initStmd) =>
-        (collect(initStmd, observable).attempt >>= {
-          case Left(ex)    => logger.error("could not collect incoming streamed data", ex)
-          case Right(stmd) => push(stmd, buff)
-        }) *> gracefullyClose[Task](initStmd.fos).as(())
-    }).as(ChunkResponse())
+      observable: Observable[Chunk]
+  )(implicit logger: Log[Task]): Task[Either[Throwable, ServerMessage]] =
+    init(folder).bracket { initStmd =>
+      (collect(initStmd, observable) >>= toResult).value
+    }(stmd => gracefullyClose[Task](stmd.fos).as(()))
 
   private def init(folder: Path): Task[Streamed] =
     for {
@@ -51,36 +46,37 @@ object StreamHandler {
       fos      <- Task.delay(new FileOutputStream(file.toFile))
     } yield Streamed(fos = fos, path = file)
 
-  private def collect(init: Streamed, observable: Observable[Chunk]): Task[Streamed] =
-    observable.foldLeftL(init) {
-      case (stmd, Chunk(Chunk.Content.Header(ChunkHeader(sender, typeId, compressed, cl)))) =>
-        stmd.copy(
-          sender = sender.map(ProtocolHelper.toPeerNode(_)),
-          typeId = Some(typeId),
-          compressed = compressed,
-          contentLength = Some(cl)
-        )
-      case (stmd, Chunk(Chunk.Content.Data(ChunkData(newData)))) =>
-        stmd.fos.write(newData.toByteArray)
-        stmd.fos.flush()
-        stmd
-    }
+  private def collect(
+      init: Streamed,
+      observable: Observable[Chunk]
+  ): EitherT[Task, Throwable, Streamed] =
+    EitherT(
+      (observable
+        .foldLeftL(init) {
+          case (stmd, Chunk(Chunk.Content.Header(ChunkHeader(sender, typeId, compressed, cl)))) =>
+            stmd.copy(
+              sender = sender.map(ProtocolHelper.toPeerNode(_)),
+              typeId = Some(typeId),
+              compressed = compressed,
+              contentLength = Some(cl)
+            )
+          case (stmd, Chunk(Chunk.Content.Data(ChunkData(newData)))) =>
+            stmd.fos.write(newData.toByteArray)
+            stmd.fos.flush()
+            stmd
+        })
+        .attempt
+    )
 
-  private def push(stmd: Streamed, buff: buffer.LimitedBuffer[ServerMessage])(
-      implicit logger: Log[Task]
-  ): Task[Boolean] = stmd match {
-    case Streamed(Some(sender), Some(packetType), Some(contentLength), compressed, path, _) =>
-      Task.delay {
-        // TODO what if returns false?
-        buff.pushNext(StreamMessage(sender, packetType, path, compressed, contentLength))
+  private def toResult(stmd: Streamed): EitherT[Task, Throwable, ServerMessage] =
+    EitherT(Task.delay {
+      stmd match {
+        case Streamed(Some(sender), Some(packetType), Some(contentLength), compressed, path, _) =>
+          Right(StreamMessage(sender, packetType, path, compressed, contentLength))
+        case stmd =>
+          Left(new RuntimeException(s"received not full stream message, will not process. $stmd"))
       }
-    case stmd =>
-      logger
-        .warn(
-          s"received not full stream message, will not process. $stmd"
-        )
-        .as(false)
-  }
+    })
 
   def restore(msg: StreamMessage)(implicit logger: Log[Task]): Task[Either[Throwable, Blob]] =
     (fetchContent(msg.path).attempt >>= {
