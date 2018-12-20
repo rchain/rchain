@@ -226,23 +226,37 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
   def broadcast(peers: Seq[PeerNode], msg: Protocol): Task[Seq[CommErr[Unit]]] =
     innerBroadcast(peers, msg)
 
-  def handleToStream: ToStream => Task[Unit] = {
-    case ToStream(peer, path, sender) =>
-      PacketOps.restore[Task](path) >>= {
-        case Right(packet) =>
-          withClient(peer, enforce = false) { stub =>
-            val blob = Blob(sender, packet)
-            stub.stream(Observable.fromIterator(chunkIt(blob)))
-          }.attempt
-            .flatMap {
-              case Left(error) => log.error(s"Error while streaming packet, error: $error")
-              case Right(_)    => Task.unit
-            }
-        case Left(error) => log.error(s"Error while streaming packet, error: $error")
-      } >>= kp(Task.delay {
-        if (path.toFile.exists)
-          path.toFile.delete
-      })
+  def handleToStream(toStream: ToStream): Task[Unit] = {
+
+    def deleteFile(path: Path): Task[Boolean] =
+      Task.delay {
+        if (path.toFile.exists) path.toFile.delete
+        else false
+      }
+
+    def delay[A](a: => Task[A]): Task[A] =
+      Task.defer(a).delayExecution(1.second)
+
+    def handle(retryCount: Int): Task[Unit] =
+      if (retryCount > 0)
+        PacketOps.restore[Task](toStream.path) >>= {
+          case Right(packet) =>
+            withClient(toStream.peerNode, enforce = false) { stub =>
+              val blob = Blob(toStream.sender, packet)
+              stub.stream(Observable.fromIterator(chunkIt(blob)))
+            }.attempt
+              .flatMap {
+                case Left(error) =>
+                  log.error(s"Error while streaming packet, error: $error") *> delay(
+                    handle(retryCount - 1)
+                  )
+                case Right(_) => Task.unit
+              }
+          case Left(error) => log.error(s"Error while streaming packet, error: $error")
+        } >>= kp(deleteFile(toStream.path).void)
+      else deleteFile(toStream.path).void
+
+    handle(3)
   }
 
   private def initQueue(
