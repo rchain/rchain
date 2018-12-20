@@ -68,7 +68,7 @@ object StreamHandler {
         .attempt
     )
 
-  private def toResult(stmd: Streamed): EitherT[Task, Throwable, ServerMessage] =
+  private def toResult(stmd: Streamed): EitherT[Task, Throwable, StreamMessage] =
     EitherT(Task.delay {
       stmd match {
         case Streamed(Some(sender), Some(packetType), Some(contentLength), compressed, path, _) =>
