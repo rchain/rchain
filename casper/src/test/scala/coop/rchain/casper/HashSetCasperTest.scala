@@ -812,8 +812,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       bondingCode <- BondingUtil.faucetBondDeploy[Effect](50, "ed25519", pkStr, sk)(
                       Concurrent[Effect],
                       nodes.head.abF,
-                      rm,
-                      global
+                      rm
                     )
       forwardDeploy = ProtoUtil.sourceDeploy(
         forwardCode,

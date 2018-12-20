@@ -30,13 +30,10 @@ class AbstractRuntimeManager[F[_]: Concurrent: ToAbstractContext] protected (
     runtimeContainer: MVar[F, Runtime]
 ) {
 
-  def captureResults(start: StateHash, deploy: Deploy, name: String = "__SCALA__")(
-      implicit scheduler: Scheduler
-  ): F[Seq[Par]] = captureResults(start, deploy, Par().withExprs(Seq(Expr(GString(name)))))
+  def captureResults(start: StateHash, deploy: Deploy, name: String = "__SCALA__"): F[Seq[Par]] =
+    captureResults(start, deploy, Par().withExprs(Seq(Expr(GString(name)))))
 
-  def captureResults(start: StateHash, deploy: Deploy, name: Par)(
-      implicit scheduler: Scheduler
-  ): F[Seq[Par]] =
+  def captureResults(start: StateHash, deploy: Deploy, name: Par): F[Seq[Par]] =
     Sync[F]
       .bracket(runtimeContainer.take) { runtime =>
         //TODO: Is better error handling needed here?
@@ -87,9 +84,7 @@ class AbstractRuntimeManager[F[_]: Concurrent: ToAbstractContext] protected (
       case None => ().pure[F]
     }
 
-  def storageRepr(hash: StateHash)(
-      implicit scheduler: Scheduler
-  ): F[Option[String]] =
+  def storageRepr(hash: StateHash): F[Option[String]] =
     Sync[F]
       .bracket(runtimeContainer.take) { runtime =>
         val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
@@ -103,7 +98,7 @@ class AbstractRuntimeManager[F[_]: Concurrent: ToAbstractContext] protected (
         case Left(_)      => None
       }
 
-  def computeBonds(hash: StateHash)(implicit scheduler: Scheduler): F[Seq[Bond]] = {
+  def computeBonds(hash: StateHash): F[Seq[Bond]] = {
     val bondsQuery =
       """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
         |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
@@ -127,9 +122,7 @@ class AbstractRuntimeManager[F[_]: Concurrent: ToAbstractContext] protected (
       }
   }
 
-  private def withResetRuntime[R](hash: StateHash, block: Runtime => F[R])(
-      implicit scheduler: Scheduler
-  ) =
+  private def withResetRuntime[R](hash: StateHash, block: Runtime => F[R]) =
     Sync[F].bracket(runtimeContainer.take) { runtime =>
       val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
       ToAbstractContext[F].fromTask(runtime.space.reset(blakeHash)).flatMap(_ => block(runtime))
@@ -145,9 +138,7 @@ class AbstractRuntimeManager[F[_]: Concurrent: ToAbstractContext] protected (
         Bond(validatorName, stakeAmount)
     }.toList
 
-  def getData(hash: ByteString, channel: Par)(
-      implicit scheduler: Scheduler
-  ): F[Seq[Par]] =
+  def getData(hash: ByteString, channel: Par): F[Seq[Par]] =
     withResetRuntime(hash, runtime => {
       ToAbstractContext[F].fromTask(runtime.space.getData(channel).map(_.flatMap(_.a.pars)))
     })
@@ -155,8 +146,6 @@ class AbstractRuntimeManager[F[_]: Concurrent: ToAbstractContext] protected (
   def getContinuation(
       hash: ByteString,
       channels: immutable.Seq[Par]
-  )(
-      implicit scheduler: Scheduler
   ): F[Seq[(Seq[BindPattern], Par)]] =
     withResetRuntime(
       hash,
