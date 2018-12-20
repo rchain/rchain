@@ -46,7 +46,7 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
   private def certInputStream = new ByteArrayInputStream(cert.getBytes())
   private def keyInputStream  = new ByteArrayInputStream(key.getBytes())
 
-  private val streamObservable = new StreamObservable(100, tempFolder)
+  private val streamObservable = new StreamObservable(1000, tempFolder)
 
   private lazy val serverSslContext: SslContext =
     try {
