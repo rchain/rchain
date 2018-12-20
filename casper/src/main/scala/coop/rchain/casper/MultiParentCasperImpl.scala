@@ -154,7 +154,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
     for {
       b              <- ProtoUtil.unsafeGetBlock[F](finalizedChild)
       deploys        = b.body.get.deploys.map(_.deploy.get)
-      deploysRemoved = deploys.count(deployHist.remove)
+      deploysRemoved <- deploys.toList.foldM(0)((count, deploy) =>
+        Monad[F].ifM(Sync[F].delay { deployHist.remove(deploy) })((count + 1).pure[F], count.pure[F])
+      )
       _ <- Log[F].info(
             s"Removed $deploysRemoved deploys from deploy history as we finalized block ${PrettyPrinter
               .buildString(finalizedChild)}."
