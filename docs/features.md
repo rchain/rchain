@@ -163,3 +163,12 @@
 ##### steps:
 
 * TBD
+
+## Contracts
+### As a user, I want to be able to create a wallet so that I can store REV in it
+#### Create wallet
+##### test: test/test_wallet.py::test_create_wallet
+##### steps: 
+* send a message  to the process registered as 'rho:mint' with the structure **("create", pk, returnChannel)** where pk is the public key of the wallet
+* expect a response on the return channel with the unforgeable name of the wallet
+
