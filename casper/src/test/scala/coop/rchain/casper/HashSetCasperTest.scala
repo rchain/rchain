@@ -1343,9 +1343,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       createBlock8Result <- nodes(1).casperEff
                              .deploy(deployDatas(7)) *> nodes(1).casperEff.createBlock
       Created(block8) = createBlock8Result
-      _               = nodes(1).casperEff.addBlock(block8, ignoreDoppelgangerCheck[Effect])
-      _               = nodes(0).receive()
-      _               = nodes(2).receive()
+      _               <- nodes(1).casperEff.addBlock(block8, ignoreDoppelgangerCheck[Effect])
+      _               <- nodes(0).receive()
+      _               <- nodes(2).receive()
 
       _ <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block3
       _ = nodes(0).casperEff.deployHist.size should be(2)
