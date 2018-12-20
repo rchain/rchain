@@ -1,6 +1,7 @@
 import os
 import shutil
 import contextlib
+from random import Random
 from typing import (
     TYPE_CHECKING,
     Generator,
@@ -84,7 +85,7 @@ def make_expected_string(node, random_token):
     return "<{name}:{random_token}>".format(name=node.container.name, random_token=random_token)
 
 
-def test_casper_propose_and_deploy(command_line_options: 'CommandLineOptions', docker_client: 'DockerClient'):
+def test_casper_propose_and_deploy(command_line_options: 'CommandLineOptions', random_generator: Random, docker_client: 'DockerClient'):
     """Deploy a contract and then checks if all the nodes have received the block
     containing the contract.
     """

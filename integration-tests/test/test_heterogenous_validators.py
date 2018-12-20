@@ -1,3 +1,5 @@
+from random import Random
+
 from docker.client import DockerClient
 
 from . import conftest
@@ -22,7 +24,7 @@ JOINING_VALIDATOR_KEYPAIR = KeyPair(private_key='1f52d0bce0a92f5c79f2a88aae6d391
 READONLY_PEER_KEYPAIR = KeyPair(private_key='2bdedd2e4dd2e7b5f176b7a5bc155f10fafd3fbd9c03fb7556f2ffd22c786f8b', public_key='068e8311fe094e1a33646a1f8dfb50a5c12b49a1e5d0cf4cccf28d31b4a10255')
 
 
-def test_heterogenous_validators(command_line_options: CommandLineOptions, docker_client: DockerClient) -> None:
+def test_heterogenous_validators(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     BONDED_VALIDATOR_BLOCKS = JOINING_VALIDATOR_BLOCKS = 10
     with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_keypair=BOOTSTRAP_NODE_KEYPAIR, peers_keypairs=[BONDED_VALIDATOR_KEYPAIR]) as context:
         with docker_network_with_started_bootstrap(context=context) as bootstrap_node:

@@ -1,3 +1,5 @@
+from random import Random
+
 import pytest
 from docker.client import DockerClient
 
