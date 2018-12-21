@@ -76,18 +76,6 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       // then
       msg.path.getParent shouldBe nonExistingWithPersmission
     }
-
-    it(
-      "should return an error for non-existing folder if there aren't permissions to create that folder or files in it"
-    ) {
-      // given
-      val stream                  = createStream()
-      val nonExistingNoPermission = FileSystems.getDefault().getPath("/does/not/exist")
-      // when
-      val err: Throwable = handleStreamErr(stream, folder = nonExistingNoPermission)
-      // then
-      err shouldBe a[FileNotFoundException]
-    }
   }
 
   private def handleStream(stream: Observable[Chunk], folder: Path = tempFolder): StreamMessage =
