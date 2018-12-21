@@ -16,7 +16,7 @@ import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.models._
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.accounting
-import coop.rchain.shared.Time
+import coop.rchain.shared.{Log, LogSource, Time}
 import java.nio.charset.StandardCharsets
 
 import coop.rchain.casper.protocol.Event.EventInstance.{Comm, Consume, Produce}
@@ -24,6 +24,8 @@ import coop.rchain.casper.protocol.Event.EventInstance.{Comm, Consume, Produce}
 import scala.collection.{immutable, BitSet}
 
 object ProtoUtil {
+  private implicit val logSource: LogSource = LogSource(this.getClass)
+
   /*
    * c is in the blockchain of b iff c == b or c is in the blockchain of the main parent of b
    */
@@ -289,7 +291,7 @@ object ProtoUtil {
    * touches a channel that any of b2's ancestors' (that are not common with b1's ancestors)
    * replay log entries touch.
    */
-  def conflicts[F[_]: Monad: BlockStore](
+  def conflicts[F[_]: Monad: Log: BlockStore](
       b1: BlockMessage,
       b2: BlockMessage,
       dag: BlockDagRepresentation[F]
@@ -308,12 +310,22 @@ object ProtoUtil {
           b2AncestorsMeta    = b2AncestorsMap.keys
           b1AncestorChannels <- buildBlockAncestorChannels[F](b1AncestorsMeta.toList)
           b2AncestorChannels <- buildBlockAncestorChannels[F](b2AncestorsMeta.toList)
-        } yield b1AncestorChannels.intersect(b2AncestorChannels).nonEmpty
+          conflicts          = b1AncestorChannels.intersect(b2AncestorChannels).nonEmpty
+          _ <- if (conflicts) {
+                Log[F].info(
+                  s"Block ${PrettyPrinter.buildString(b1)} and ${PrettyPrinter.buildString(b2)} conflicts."
+                )
+              } else {
+                Log[F].info(s"Block ${PrettyPrinter
+                  .buildString(b1)}'s channels ${b1AncestorChannels.map(_.toString).mkString(",")} and block ${PrettyPrinter
+                  .buildString(b2)}'s channels ${b2AncestorChannels.map(_.toString).mkString(",")}.")
+              }
+        } yield conflicts
     }
 
   private def buildBlockAncestorChannels[F[_]: Monad: BlockStore](
       blockAncestorsMeta: List[BlockMetadata]
-  ): F[Set[BlockHash]] =
+  ): F[Set[ByteString]] =
     for {
       maybeAncestors <- blockAncestorsMeta.traverse(
                          blockAncestorMeta => BlockStore[F].get(blockAncestorMeta.blockHash)
@@ -330,7 +342,7 @@ object ProtoUtil {
       }.toSet
     } yield ancestorChannels
 
-  def chooseNonConflicting[F[_]: Monad: BlockStore](
+  def chooseNonConflicting[F[_]: Monad: Log: BlockStore](
       blocks: Seq[BlockMessage],
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F]

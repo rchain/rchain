@@ -219,9 +219,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
   def createBlock: F[CreateBlockStatus] = validatorId match {
     case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
       for {
-        dag              <- blockDag
-        orderedHeads     <- estimator(dag)
-        p                <- chooseNonConflicting[F](orderedHeads, genesis, dag)
+        dag          <- blockDag
+        orderedHeads <- estimator(dag)
+        p            <- chooseNonConflicting[F](orderedHeads, genesis, dag)
+        _ <- Log[F].info(
+              s"${p.size} parents out of ${orderedHeads.size} latest blocks will be used."
+            )
         r                <- remDeploys(dag, p)
         bondedValidators = bonds(p.head).map(_.validator).toSet
         //We ensure that only the justifications given in the block are those

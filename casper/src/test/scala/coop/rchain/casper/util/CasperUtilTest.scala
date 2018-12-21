@@ -21,8 +21,9 @@ import monix.eval.Task
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.{InterpreterUtil, ProcessedDeployUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.shared.Time
+import coop.rchain.shared.{Log, Time}
 import monix.eval.Task
+
 import scala.concurrent.duration._
 import monix.execution.Scheduler.Implicits.global
 
@@ -114,6 +115,8 @@ class CasperUtilTest
    *         genesis
    */
   "Blocks" should "conflict if they use the same deploys in different histories" in withStorage {
+    implicit val log: Log[Task] = new Log.NOPLog[Task]
+
     implicit blockStore => implicit blockDagStorage =>
       for {
         deploys <- (0 until 6).toList.traverse(basicProcessedDeploy[Task])
