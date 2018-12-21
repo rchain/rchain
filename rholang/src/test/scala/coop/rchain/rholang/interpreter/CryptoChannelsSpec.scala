@@ -11,6 +11,8 @@ import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GString}
 import coop.rchain.models.Var.VarInstance.Wildcard
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
+import coop.rchain.models.serialization.implicits._
+import coop.rchain.models.testImplicits._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.testImplicits._
@@ -44,7 +46,7 @@ class CryptoChannelsSpec
   val serialize: Par => Array[Byte]                    = Serialize[Par].encode(_).toArray
   val byteArrayToByteString: Array[Byte] => ByteString = ba => ByteString.copyFrom(ba)
   val byteStringToExpr: ByteString => Expr             = bs => Expr(GByteArray(bs))
-  val byteArrayToExpr                                  = byteArrayToByteString andThen byteStringToExpr
+  val byteArrayToExpr: Array[Byte] => Expr             = byteArrayToByteString andThen byteStringToExpr
   val parToByteString: Par => ByteString               = serialize andThen (ba => ByteString.copyFrom(ba))
   val parToExpr: Par => Expr                           = parToByteString andThen byteStringToExpr
 
@@ -84,16 +86,16 @@ class CryptoChannelsSpec
     val hashChannel: Par         = GString(channelName)
     val hash: Par => Array[Byte] = serializeAndHash(hashFn)
 
-    val ackChannel        = GString("x")
-    implicit val emptyEnv = Env[Par]()
+    val ackChannel                  = GString("x")
+    implicit val emptyEnv: Env[Par] = Env[Par]()
 
     val storeContainsTest: ListParWithRandom => Assertion =
       assertStoreContains(store)(ackChannel)(_)
 
-    forAll { (par: Par) =>
+    forAll { par: Par =>
       val byteArrayToSend = Expr(GByteArray(par.toByteString))
       val data: List[Par] = List(byteArrayToSend, ackChannel)
-      val send            = Send(hashChannel, data, false, BitSet())
+      val send            = Send(hashChannel, data, persistent = false, BitSet())
       val expected        = (hash andThen byteArrayToByteString andThen byteStringToExpr)(par)
       // Send byte array on hash channel. This should:
       // 1. meet with the system process in the tuplespace
@@ -106,15 +108,15 @@ class CryptoChannelsSpec
   }
 
   "sha256Hash channel" should "hash input data and send result on ack channel" in { fixture =>
-    hashingChannel("sha256Hash", Sha256.hash _, fixture)
+    hashingChannel("sha256Hash", Sha256.hash, fixture)
   }
 
   "blake2b256Hash channel" should "hash input data and send result on ack channel" in { fixture =>
-    hashingChannel("blake2b256Hash", Blake2b256.hash _, fixture)
+    hashingChannel("blake2b256Hash", Blake2b256.hash, fixture)
   }
 
   "keccak256Hash channel" should "hash input data and send result on ack channel" in { fixture =>
-    hashingChannel("keccak256Hash", Keccak256.hash _, fixture)
+    hashingChannel("keccak256Hash", Keccak256.hash, fixture)
 
   }
 
@@ -135,12 +137,12 @@ class CryptoChannelsSpec
       )
       val secKey = Base16.decode("67E56582298859DDAE725F972992A07C6C4FB9F62A8FFF58CE3CA926A1063530")
 
-      val ackChannel        = GString("x")
-      implicit val emptyEnv = Env[Par]()
+      val ackChannel                  = GString("x")
+      implicit val emptyEnv: Env[Par] = Env[Par]()
       val storeContainsTest: ListParWithRandom => Assertion =
-        assertStoreContains(store)(ackChannel) _
+        assertStoreContains(store)(ackChannel)
 
-      forAll { (par: Par) =>
+      forAll { par: Par =>
         val parByteArray: Array[Byte] = Keccak256.hash(serialize(par))
 
         val signature = Secp256k1.sign(parByteArray, secKey)
@@ -170,17 +172,17 @@ class CryptoChannelsSpec
     fixture =>
       implicit val (reduce, store) = fixture
 
-      implicit val rand = Blake2b512Random(Array.empty[Byte])
+      implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
 
       val ed25519VerifyChannel = GString("ed25519Verify")
       val (secKey, pubKey)     = Ed25519.newKeyPair
 
-      val ackChannel        = GString("x")
-      implicit val emptyEnv = Env[Par]()
+      val ackChannel                  = GString("x")
+      implicit val emptyEnv: Env[Par] = Env[Par]()
       val storeContainsTest: ListParWithRandom => Assertion =
-        assertStoreContains(store)(ackChannel) _
+        assertStoreContains(store)(ackChannel)
 
-      forAll { (par: Par) =>
+      forAll { par: Par =>
         val parByteArray: Array[Byte] = serialize(par)
 
         val signature = Ed25519.sign(parByteArray, secKey)
@@ -217,7 +219,7 @@ class CryptoChannelsSpec
       test((runtime.reducer, runtime.space.store))
     } finally {
       runtime.close().unsafeRunSync
-      dbDir.recursivelyDelete
+      dbDir.recursivelyDelete()
     }
   }
 

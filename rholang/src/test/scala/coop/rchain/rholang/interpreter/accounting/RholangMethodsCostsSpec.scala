@@ -805,18 +805,18 @@ class RholangMethodsCostsSpec
     dbDir = Files.createTempDirectory("rholang-interpreter-test-")
     context = Context.createInMemory()
     space = RSpace
-        .create[
-          Task,
-          Par,
-          BindPattern,
-          OutOfPhlogistonsError.type,
-          ListParWithRandom,
-          ListParWithRandomAndPhlos,
-          TaggedContinuation
-        ](
-          context,
-          Branch("rholang-methods-cost-test")
-        )
+      .create[
+        Task,
+        Par,
+        BindPattern,
+        OutOfPhlogistonsError.type,
+        ListParWithRandom,
+        ListParWithRandomAndPhlos,
+        TaggedContinuation
+      ](
+        context,
+        Branch("rholang-methods-cost-test")
+      )
       .unsafeRunSync
   }
 
