@@ -34,15 +34,18 @@ object StreamHandler {
       folder: Path,
       stream: Observable[Chunk]
   )(implicit logger: Log[Task]): Task[Either[Throwable, StreamMessage]] =
-    init(folder).bracket { initStmd =>
-      (collect(initStmd, stream) >>= toResult).value
-    }(stmd => gracefullyClose[Task](stmd.fos).as(()))
+    (init(folder)
+      .bracket { initStmd =>
+        (collect(initStmd, stream) >>= toResult).value
+      }(stmd => gracefullyClose[Task](stmd.fos).as(())))
+      .attempt
+      .map(_.flatten)
 
   private def init(folder: Path): Task[Streamed] =
     for {
       _        <- Task.delay(folder.toFile.mkdirs())
       fileName <- Task.delay(UUID.randomUUID.toString + "_packet_streamed.bts")
-      file     = folder.resolve(fileName)
+      file     <- Task.delay(folder.resolve(fileName))
       fos      <- Task.delay(new FileOutputStream(file.toFile))
     } yield Streamed(fos = fos, path = file)
 

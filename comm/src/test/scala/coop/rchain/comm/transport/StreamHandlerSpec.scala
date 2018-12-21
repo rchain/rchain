@@ -1,7 +1,8 @@
 package coop.rchain.comm.transport
 
-import java.io.File
+import java.io.{File, FileNotFoundException}
 import java.nio.file._
+import java.util.UUID
 import org.scalatest._
 import coop.rchain.comm._
 import coop.rchain.shared.Log
@@ -62,17 +63,38 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       // then
       msg.contentLength shouldBe contentLength
     }
+
+    it(
+      "should create a file in non-existing folder if there are permissions to create that folder or files in it"
+    ) {
+      // given
+      val stream = createStream()
+      val nonExistingWithPersmission =
+        FileSystems.getDefault().getPath("~/.rchaintest/" + UUID.randomUUID.toString + "/")
+      // when
+      val msg: StreamMessage = handleStream(stream, folder = nonExistingWithPersmission)
+      // then
+      msg.path.getParent shouldBe nonExistingWithPersmission
+    }
+
+    it(
+      "should return an error for non-existing folder if there aren't permissions to create that folder or files in it"
+    ) {
+      // given
+      val stream                  = createStream()
+      val nonExistingNoPermission = FileSystems.getDefault().getPath("/does/not/exist")
+      // when
+      val err: Throwable = handleStreamErr(stream, folder = nonExistingNoPermission)
+      // then
+      err shouldBe a[FileNotFoundException]
+    }
   }
 
-  private def handleStream(stream: Observable[Chunk]): StreamMessage =
-    (StreamHandler.handleStream(tempFolder, stream) >>= {
-      case Left(ex) =>
-        Task.delay {
-          ex.printStackTrace
-          Left(ex)
-        }
-      case Right(msg) => Right(msg).pure[Task]
-    }).unsafeRunSync.right.get
+  private def handleStream(stream: Observable[Chunk], folder: Path = tempFolder): StreamMessage =
+    StreamHandler.handleStream(folder, stream).unsafeRunSync.right.get
+
+  private def handleStreamErr(stream: Observable[Chunk], folder: Path): Throwable =
+    StreamHandler.handleStream(folder, stream).unsafeRunSync.left.get
 
   private def createStream(
       messageSize: Int = 10 * 1024,
