@@ -382,7 +382,14 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         peer: PeerNode,
         fctr: ForkChoiceTipRequest
     ): F[Unit] =
-      noop
+      for {
+        _     <- Log[F].info(s"Received ForkChoiceTipRequest from $peer")
+        tip   <- MultiParentCasper.forkChoiceTip
+        local <- RPConfAsk[F].reader(_.local)
+        msg   = Blob(local, Packet(transport.ForkChoiceTipRequest.id, tip.toByteString))
+        _     <- TransportLayer[F].stream(Seq(peer), msg)
+        _     <- Log[F].info(s"Sending Block ${tip.blockHash} to $peer")
+      } yield ()
 
     override def handleApprovedBlockRequest(
         peer: PeerNode,
