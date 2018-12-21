@@ -144,15 +144,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       createBlockResult    <- MultiParentCasper[Effect].createBlock
       Created(signedBlock) = createBlockResult
       _                    <- MultiParentCasper[Effect].addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
-      logMessages = List(
-        "Received Deploy",
-        "Attempting to add Block",
-        "Added",
-        "Sent Block #1",
-        "New fork-choice tip is block"
-      )
       _      = logEff.warns.isEmpty should be(true)
-      _      = logEff.infos.zip(logMessages).forall { case (a, b) => a.startsWith(b) } should be(true)
       dag    <- MultiParentCasper[Effect].blockDag
       result <- MultiParentCasper[Effect].estimator(dag) shouldBeF IndexedSeq(signedBlock)
       _      = node.tearDown()
