@@ -300,7 +300,7 @@ object ProtoUtil {
           b1MetaDataOpt        <- dag.lookup(b1.blockHash)
           b2MetaDataOpt        <- dag.lookup(b2.blockHash)
           blockMetaDataSeq     = Vector(b1MetaDataOpt.get, b2MetaDataOpt.get)
-          uncommonAncestorsMap <- DagOperations.uncommonAncestors(blockMetaDataSeq, dag)
+          uncommonAncestorsMap <- DagOperations.uncommonAncestors[F](blockMetaDataSeq, dag)
           (b1AncestorsMap, b2AncestorsMap) = uncommonAncestorsMap.partition {
             case (_, bitSet) => bitSet == BitSet(0)
           }
