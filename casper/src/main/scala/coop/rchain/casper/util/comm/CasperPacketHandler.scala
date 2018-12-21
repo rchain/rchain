@@ -141,6 +141,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
 
     def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Unit]
 
+    def handleForkChoiceTipRequest(peer: PeerNode, fctr: ForkChoiceTipRequest): F[Unit]
+
     def handleApprovedBlock(ab: ApprovedBlock): F[Option[MultiParentCasper[F]]]
 
     def handleApprovedBlockRequest(peer: PeerNode, br: ApprovedBlockRequest): F[Unit]
@@ -170,6 +172,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     override def handleBlockMessage(peer: PeerNode, bm: BlockMessage): F[Unit] =
       noop
     override def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Unit] =
+      noop
+    override def handleForkChoiceTipRequest(peer: PeerNode, fctr: ForkChoiceTipRequest): F[Unit] =
       noop
     override def handleApprovedBlock(
         ab: ApprovedBlock
@@ -219,6 +223,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     override def handleBlockMessage(peer: PeerNode, bm: BlockMessage): F[Unit] =
       noop
     override def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Unit] =
+      noop
+    override def handleForkChoiceTipRequest(peer: PeerNode, fctr: ForkChoiceTipRequest): F[Unit] =
       noop
     override def handleApprovedBlock(
         ab: ApprovedBlock
@@ -296,6 +302,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       noop
     override def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Unit] =
       noop
+    override def handleForkChoiceTipRequest(peer: PeerNode, fctr: ForkChoiceTipRequest): F[Unit] =
+      noop
     override def handleApprovedBlockRequest(
         peer: PeerNode,
         br: ApprovedBlockRequest
@@ -370,6 +378,12 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
             }
       } yield ()
 
+    override def handleForkChoiceTipRequest(
+        peer: PeerNode,
+        fctr: ForkChoiceTipRequest
+    ): F[Unit] =
+      noop
+
     override def handleApprovedBlockRequest(
         peer: PeerNode,
         br: ApprovedBlockRequest
@@ -395,6 +409,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         .unlift(
           (p: Packet) =>
             packetToBlockRequest(p) orElse
+              packetToForkChoiceTipRequest(p) orElse
               packetToApprovedBlock(p) orElse
               packetToApprovedBlockRequest(p) orElse
               packetToBlockMessage(p) orElse
@@ -407,6 +422,12 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
             for {
               cph <- cphI.get
               res <- cph.handleBlockRequest(peer, br)
+            } yield res
+
+          case fctr: ForkChoiceTipRequest =>
+            for {
+              cph <- cphI.get
+              res <- cph.handleForkChoiceTipRequest(peer, fctr)
             } yield res
 
           case ab: ApprovedBlock =>
@@ -501,6 +522,11 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   private def packetToBlockRequest(msg: Packet): Option[BlockRequest] =
     if (msg.typeId == transport.BlockRequest.id)
       Try(BlockRequest.parseFrom(msg.content.toByteArray)).toOption
+    else None
+
+  private def packetToForkChoiceTipRequest(msg: Packet): Option[ForkChoiceTipRequest] =
+    if (msg.typeId == transport.ForkChoiceTipRequest.id)
+      Try(ForkChoiceTipRequest.parseFrom(msg.content.toByteArray)).toOption
     else None
 
   private def packetToBlockApproval(msg: Packet): Option[BlockApproval] =
