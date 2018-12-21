@@ -14,6 +14,7 @@ import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.rspace.Context
 import coop.rchain.shared
+import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest._
@@ -74,10 +75,10 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
       }
     } {
       case (dagDataDir, blockStoreDataDir) =>
-        val blockStore = createBlockStore(blockStoreDataDir)
         for {
-          result <- f(dagDataDir, blockStore)
-          _      <- blockStore.close()
+          blockStore <- createBlockStore(blockStoreDataDir)
+          result     <- f(dagDataDir, blockStore)
+          _          <- blockStore.close()
         } yield result
     } {
       case (dagDataDir, blockStoreDataDir) =>
@@ -113,10 +114,10 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   private def defaultCheckpointsDir(dagDataDir: Path): Path =
     dagDataDir.resolve("checkpoints")
 
-  private def createBlockStore(blockStoreDataDir: Path): BlockStore[Task] = {
-    val env              = Context.env(blockStoreDataDir, 100L * 1024L * 1024L * 4096L)
+  private def createBlockStore(blockStoreDataDir: Path): Task[BlockStore[Task]] = {
     implicit val metrics = new MetricsNOP[Task]()
-    LMDBBlockStore.create[Task](env, blockStoreDataDir)
+    implicit val log     = new Log.NOPLog[Task]()
+    FileLMDBIndexBlockStore.create[Task](blockStoreDataDir, 100L * 1024L * 1024L * 4096L)
   }
 
   private def createAtDefaultLocation(

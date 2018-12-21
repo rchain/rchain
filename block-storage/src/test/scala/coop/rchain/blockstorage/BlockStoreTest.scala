@@ -15,6 +15,7 @@ import coop.rchain.blockstorage.InMemBlockStore.emptyMapRef
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.anyvals.PosInt
@@ -169,23 +170,16 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
 
   override def withStore[R](f: BlockStore[Task] => Task[R]): R = {
     val dbDir                           = mkTmpDir()
-    val env                             = Context.env(dbDir, mapSize)
     implicit val metrics: Metrics[Task] = new MetricsNOP[Task]()
+    implicit val log: Log[Task]         = new Log.NOPLog[Task]()
     val test = for {
-      store <- FileLMDBIndexBlockStore.create[Task](
-                FileLMDBIndexBlockStore.Config(
-                  dbDir.resolve("block-store-data"),
-                  dbDir.resolve("block-store-index"),
-                  mapSize
-                )
-              )
+      store  <- FileLMDBIndexBlockStore.create[Task](dbDir, mapSize)
       _      <- store.find(_ => true).map(map => assert(map.isEmpty))
       result <- f(store)
     } yield result
     try {
       test.unsafeRunSync
     } finally {
-      env.close()
       dbDir.recursivelyDelete()
     }
   }

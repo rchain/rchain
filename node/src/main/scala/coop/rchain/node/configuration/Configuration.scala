@@ -4,8 +4,7 @@ import java.io.File
 import java.nio.file.{Path, Paths}
 
 import cats.implicits._
-
-import coop.rchain.blockstorage.{BlockDagFileStorage, LMDBBlockStore}
+import coop.rchain.blockstorage.{BlockDagFileStorage, FileLMDBIndexBlockStore}
 import coop.rchain.casper.CasperConf
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
@@ -187,7 +186,12 @@ object Configuration {
             maximumBond = DefaultMaximumBond,
             hasFaucet = DefaultHasFaucet
           ),
-          LMDBBlockStore.Config(dataDir.resolve("casper-block-store"), DefaultCasperBlockStoreSize),
+          FileLMDBIndexBlockStore.Config(
+            dataDir.resolve("casper-block-store").resolve("storage"),
+            dataDir.resolve("casper-block-store").resolve("index"),
+            dataDir.resolve("casper-block-store").resolve("checkpoints"),
+            DefaultCasperBlockStoreSize
+          ),
           BlockDagFileStorage.Config(
             dataDir.resolve("casper-block-dag-file-storage-latest-messages-log"),
             dataDir.resolve("casper-block-dag-file-storage-latest-messages-crc"),
@@ -414,10 +418,11 @@ object Configuration {
         genesisAppriveDuration,
         deployTimestamp
       )
-
     val blockstorage =
-      LMDBBlockStore.Config(
-        dataDir.resolve("casper-block-store"),
+      FileLMDBIndexBlockStore.Config(
+        dataDir.resolve("casper-block-store").resolve("storage"),
+        dataDir.resolve("casper-block-store").resolve("index"),
+        dataDir.resolve("casper-block-store").resolve("checkpoints"),
         casperBlockStoreSize
       )
     val blockDagStorage = BlockDagFileStorage.Config(
@@ -492,7 +497,7 @@ final class Configuration(
     val grpcServer: GrpcServer,
     val tls: Tls,
     val casper: CasperConf,
-    val blockstorage: LMDBBlockStore.Config,
+    val blockstorage: FileLMDBIndexBlockStore.Config,
     val blockDagStorage: BlockDagFileStorage.Config,
     val kamon: Kamon,
     private val options: commandline.Options

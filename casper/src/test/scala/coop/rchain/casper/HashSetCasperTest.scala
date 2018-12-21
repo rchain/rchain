@@ -40,6 +40,7 @@ import org.scalatest.{Assertion, FlatSpec, Matchers}
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.catscontrib.ski.kp2
 import coop.rchain.metrics.Metrics
+import coop.rchain.shared.Log
 import org.scalatest
 
 import scala.collection.immutable
@@ -347,7 +348,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
             validateBlockStore(node) { blockStore =>
               blockStore.get(signedBlock.blockHash) shouldBeF Some(signedBlock)
-            }(nodes(0).metricEff)
+            }(nodes(0).metricEff, nodes(0).logEff)
           }
     } yield result
   }
@@ -366,7 +367,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
             validateBlockStore(node) { blockStore =>
               blockStore.get(signedBlock1Prime.blockHash) shouldBeF Some(signedBlock1Prime)
-            }(nodes(0).metricEff)
+            }(nodes(0).metricEff, nodes(0).logEff)
           }
     } yield result
   }
@@ -1205,7 +1206,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
             _      <- blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
             result <- blockStore.get(signedBlock3.blockHash) shouldBeF Some(signedBlock3)
           } yield result
-        }(nodes(0).metricEff)
+        }(nodes(0).metricEff, nodes(0).logEff)
       }
     } yield result
   }
@@ -1255,7 +1256,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
                 _      <- blockStore.get(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
                 result <- blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
               } yield result
-            }(nodes(0).metricEff)
+            }(nodes(0).metricEff, nodes(0).logEff)
           }
     } yield result
   }
@@ -1384,7 +1385,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
               _      <- blockStore.get(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
               result <- blockStore.get(signedBlock1Prime.blockHash) shouldBeF None
             } yield result
-          }(nodes(0).metricEff)
+          }(nodes(0).metricEff, nodes(0).logEff)
     } yield result
   }
 
@@ -1461,13 +1462,13 @@ class HashSetCasperTest extends FlatSpec with Matchers {
                          signedBlock1Prime
                        )
             } yield result
-          }(nodes(0).metricEff)
+          }(nodes(0).metricEff, nodes(0).logEff)
       _ <- validateBlockStore(nodes(1)) { blockStore =>
             for {
               _      <- blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
               result <- blockStore.get(signedBlock4.blockHash) shouldBeF Some(signedBlock4)
             } yield result
-          }(nodes(1).metricEff)
+          }(nodes(1).metricEff, nodes(1).logEff)
       result <- validateBlockStore(nodes(2)) { blockStore =>
                  for {
                    _ <- blockStore.get(signedBlock3.blockHash) shouldBeF Some(signedBlock3)
@@ -1475,7 +1476,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
                               signedBlock1Prime
                             )
                  } yield result
-               }(nodes(2).metricEff)
+               }(nodes(2).metricEff, nodes(2).logEff)
     } yield result
   }
 
@@ -1704,7 +1705,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 object HashSetCasperTest {
   def validateBlockStore[R](
       node: HashSetCasperTestNode[Effect]
-  )(f: BlockStore[Effect] => Effect[R])(implicit metrics: Metrics[Effect]) =
+  )(f: BlockStore[Effect] => Effect[R])(implicit metrics: Metrics[Effect], log: Log[Effect]) =
     for {
       bs     <- BlockDagStorageTestFixture.createBlockStorage[Effect](node.blockStoreDir)
       result <- f(bs)

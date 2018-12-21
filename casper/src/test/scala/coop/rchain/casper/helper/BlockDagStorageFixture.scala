@@ -93,13 +93,10 @@ object BlockDagStorageTestFixture {
 
   val mapSize: Long = 1024L * 1024L * 100L
 
-  def createBlockStorage[F[_]: Sync: Concurrent: Metrics](
+  def createBlockStorage[F[_]: Concurrent: Metrics: Log](
       blockStorageDir: Path
   ): F[BlockStore[F]] =
-    FileLMDBIndexBlockStore.create[F](
-      FileLMDBIndexBlockStore
-        .Config(blockStorageDir.resolve("data"), blockStorageDir.resolve("index"), mapSize)
-    )
+    FileLMDBIndexBlockStore.create[F](blockStorageDir, mapSize)
 
   def createBlockDagStorage(blockDagStorageDir: Path)(
       implicit metrics: Metrics[Task],
