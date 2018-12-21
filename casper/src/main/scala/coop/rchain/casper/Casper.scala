@@ -62,6 +62,13 @@ object MultiParentCasper extends MultiParentCasperInstances {
   def apply[F[_]](implicit instance: MultiParentCasper[F]): MultiParentCasper[F] = instance
   def ignoreDoppelgangerCheck[F[_]: Applicative]: (BlockMessage, Validator) => F[Unit] =
     kp2(().pure[F])
+
+  def forkChoiceTip[F[_]: MultiParentCasper: Monad]: F[BlockMessage] =
+    for {
+      dag  <- MultiParentCasper[F].blockDag
+      tips <- MultiParentCasper[F].estimator(dag)
+      tip  = tips.head
+    } yield tip
 }
 
 sealed abstract class MultiParentCasperInstances {
