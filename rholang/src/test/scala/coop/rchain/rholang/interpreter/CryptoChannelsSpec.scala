@@ -51,10 +51,9 @@ class CryptoChannelsSpec
   // this should consume from the `ack` channel effectively preparing tuplespace for next test
   def clearStore(
       store: RhoIStore,
-      reduce: ChargingReducer[Task],
       ackChannel: Par,
       timeout: Duration = 3.seconds
-  )(implicit env: Env[Par]): Unit = {
+  )(implicit env: Env[Par], reduce: ChargingReducer[Task]): Unit = {
     val consume = Receive(
       Seq(ReceiveBind(Seq(EVar(Var(Wildcard(WildcardMsg())))), ackChannel)),
       Par()
@@ -77,7 +76,7 @@ class CryptoChannelsSpec
       hashFn: Array[Byte] => Array[Byte],
       fixture: FixtureParam
   ): Any = {
-    val (reduce, store) = fixture
+    implicit val (reduce, store) = fixture
 
     val serializeAndHash: (Array[Byte] => Array[Byte]) => Par => Array[Byte] =
       hashFn => serialize andThen hashFn
@@ -102,7 +101,7 @@ class CryptoChannelsSpec
       // 3. send result on supplied ack channel
       Await.result(reduce.eval(send).runToFuture, 3.seconds)
       storeContainsTest(ListParWithRandom(Seq(expected), rand))
-      clearStore(store, reduce, ackChannel)
+      clearStore(store, ackChannel)
     }
   }
 
@@ -127,7 +126,7 @@ class CryptoChannelsSpec
 
   "secp256k1Verify channel" should "verify integrity of the data and send result on ack channel" in {
     fixture =>
-      val (reduce, store) = fixture
+      implicit val (reduce, store) = fixture
 
       val secp256k1VerifyhashChannel = GString("secp256k1Verify")
 
@@ -163,13 +162,13 @@ class CryptoChannelsSpec
         storeContainsTest(
           ListParWithRandom(Seq(Expr(GBool(true))), rand)
         )
-        clearStore(store, reduce, ackChannel)
+        clearStore(store, ackChannel)
       }
   }
 
   "ed25519Verify channel" should "verify integrity of the data and send result on ack channel" in {
     fixture =>
-      val (reduce, store) = fixture
+      implicit val (reduce, store) = fixture
 
       implicit val rand = Blake2b512Random(Array.empty[Byte])
 
@@ -203,7 +202,7 @@ class CryptoChannelsSpec
         storeContainsTest(
           ListParWithRandom(List(Expr(GBool(true))), rand)
         )
-        clearStore(store, reduce, ackChannel)
+        clearStore(store, ackChannel)
       }
   }
 

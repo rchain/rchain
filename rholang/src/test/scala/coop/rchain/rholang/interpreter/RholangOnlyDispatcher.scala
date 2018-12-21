@@ -28,20 +28,27 @@ object RholangOnlyDispatcher {
       errors.OutOfPhlogistonsError.type,
       ListParWithRandom,
       ListParWithRandomAndPhlos
-    ]                      = matchListPar(Cost(Integer.MAX_VALUE))
-    val pureSpace          = PureRSpace[M].of(tuplespace)
-    lazy val tuplespaceAlg = Tuplespace.rspaceTuplespace(pureSpace, dispatcher)
+    ] = matchListPar(Cost(Integer.MAX_VALUE))
+
+    val pureSpace = PureRSpace[M].of(tuplespace)
+
+    implicit val costAlg: CostAccounting[M] = CostAccounting.unsafe[M](CostAccount(0))
+
     lazy val dispatcher: Dispatch[M, ListParWithRandomAndPhlos, TaggedContinuation] =
-      new RholangOnlyDispatcher(chargingReducer)
-    implicit lazy val costAlg: CostAccounting[M] = CostAccounting.unsafe[M](CostAccount(0))
+      new RholangOnlyDispatcher
+
+    lazy val tuplespaceAlg = Tuplespace.rspaceTuplespace(pureSpace, dispatcher)
+
     implicit lazy val reducer: Reduce[M] =
       new Reduce.DebruijnInterpreter[M, F](tuplespaceAlg, urnMap)
-    lazy val chargingReducer = ChargingReducer[M]
+
+    val chargingReducer: ChargingReducer[M] = ChargingReducer[M]
+
     (dispatcher, chargingReducer)
   }
 }
 
-class RholangOnlyDispatcher[M[_]] private (reducer: => ChargingReducer[M])(implicit s: Sync[M])
+class RholangOnlyDispatcher[M[_]](implicit s: Sync[M], chargingReducer: ChargingReducer[M])
     extends Dispatch[M, ListParWithRandomAndPhlos, TaggedContinuation] {
 
   def dispatch(
@@ -54,7 +61,7 @@ class RholangOnlyDispatcher[M[_]] private (reducer: => ChargingReducer[M])(impli
               case ParBody(parWithRand) =>
                 val env     = Dispatch.buildEnv(dataList)
                 val randoms = parWithRand.randomState +: dataList.toVector.map(_.randomState)
-                reducer.eval(parWithRand.body)(env, Blake2b512Random.merge(randoms))
+                chargingReducer.eval(parWithRand.body)(env, Blake2b512Random.merge(randoms))
               case ScalaBodyRef(_) =>
                 s.unit
               case Empty =>
