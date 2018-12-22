@@ -73,8 +73,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       deploy <- ProtoUtil.basicDeployData[Effect](0)
       _      <- MultiParentCasper[Effect].deploy(deploy)
 
-      _      = logEff.infos.size should be(1)
-      result = logEff.infos.head.contains("Received Deploy") should be(true)
+      _      = logEff.infos.size should be(2)
+      result = logEff.infos(1).contains("Received Deploy") should be(true)
       _      = node.tearDown()
     } yield result
   }
