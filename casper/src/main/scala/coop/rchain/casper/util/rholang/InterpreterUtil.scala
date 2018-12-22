@@ -50,6 +50,7 @@ object InterpreterUtil {
                                runtimeManager,
                                timestamp
                              )
+      _ <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(b)}.")
       result <- processPossiblePreStateHash[F](
                  runtimeManager,
                  preStateHash,

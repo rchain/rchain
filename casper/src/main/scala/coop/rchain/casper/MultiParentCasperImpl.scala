@@ -171,7 +171,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       dag: BlockDagRepresentation[F],
       blockHash: BlockHash
   ): F[Boolean] =
-    SafetyOracle[F].normalizedFaultTolerance(dag, blockHash).map(_ > faultToleranceThreshold)
+    for {
+      faultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, blockHash)
+      _ <- Log[F].info(
+            s"Fault tolerance for block ${PrettyPrinter.buildString(blockHash)} is $faultTolerance."
+          )
+    } yield faultTolerance > faultToleranceThreshold
 
   def contains(b: BlockMessage): F[Boolean] =
     BlockStore[F].contains(b.blockHash).map(_ || blockBuffer.contains(b))

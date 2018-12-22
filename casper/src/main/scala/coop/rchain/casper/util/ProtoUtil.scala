@@ -313,12 +313,15 @@ object ProtoUtil {
           conflicts          = b1AncestorChannels.intersect(b2AncestorChannels).nonEmpty
           _ <- if (conflicts) {
                 Log[F].info(
-                  s"Block ${PrettyPrinter.buildString(b1)} and ${PrettyPrinter.buildString(b2)} conflicts."
+                  s"Block ${PrettyPrinter.buildString(b1.blockHash)} and ${PrettyPrinter
+                    .buildString(b2.blockHash)} conflicts."
                 )
               } else {
-                Log[F].info(s"Block ${PrettyPrinter
-                  .buildString(b1)}'s channels ${b1AncestorChannels.map(_.toString).mkString(",")} and block ${PrettyPrinter
-                  .buildString(b2)}'s channels ${b2AncestorChannels.map(_.toString).mkString(",")}.")
+                Log[F].info(
+                  s"Block ${PrettyPrinter
+                    .buildString(b1.blockHash)}'s channels ${b1AncestorChannels.map(PrettyPrinter.buildString).mkString(",")} and block ${PrettyPrinter
+                    .buildString(b2.blockHash)}'s channels ${b2AncestorChannels.map(PrettyPrinter.buildString).mkString(",")} don't intersect."
+                )
               }
         } yield conflicts
     }
