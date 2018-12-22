@@ -267,10 +267,9 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     implicit val logStub           = new LogStub[Task]()
     implicit val metricsTest       = new MetricsTestImpl[Task]()
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
-    val TestFixture(_, abp, candidate, start, sigsF) =
+    val TestFixture(_, abp, candidate, startTime, sigsF) =
       ApproveBlockProtocolTest.createProtocol(1, 2.milliseconds, 1.millisecond, Set(validatorPk))
 
-    val startTime = start
     ctx.tick(startTime.milliseconds) // align clocks
 
     val cancelToken = abp.run().start.runToFuture
