@@ -2,6 +2,7 @@ package coop.rchain.rspace
 
 import java.nio.file.Files
 
+import coop.rchain.catscontrib.ski._
 import cats.Id
 import cats.effect._
 import com.google.common.collect.Multiset
@@ -15,7 +16,6 @@ import coop.rchain.rspace.trace.{COMM, Consume, IOEvent, Produce}
 import coop.rchain.shared.PathOps._
 import org.scalatest._
 
-import scala.Function.const
 import scala.collection.parallel.ParSeq
 import scala.collection.{immutable, mutable}
 import scala.util.{Random, Right}
@@ -115,7 +115,7 @@ trait ReplayRSpaceTests
         space,
         range,
         shuffle = false,
-        channelCreator = const("ch1"),
+        channelCreator = kp("ch1"),
         datumCreator = i => s"datum$i",
         persist = false
       )
@@ -133,7 +133,7 @@ trait ReplayRSpaceTests
         replaySpace,
         range,
         shuffle = true,
-        channelCreator = const("ch1"),
+        channelCreator = kp("ch1"),
         datumCreator = i => s"datum$i",
         persist = false
       )
@@ -160,7 +160,7 @@ trait ReplayRSpaceTests
         space,
         range,
         shuffle = false,
-        channelCreator = const("ch1"),
+        channelCreator = kp("ch1"),
         datumCreator = i => s"datum$i",
         persist = false
       )
@@ -168,7 +168,7 @@ trait ReplayRSpaceTests
         space,
         range,
         shuffle = false,
-        channelsCreator = const(List("ch1")),
+        channelsCreator = kp(List("ch1")),
         patterns = List(Wildcard),
         continuationCreator = i => s"continuation$i",
         persist = false
@@ -181,7 +181,7 @@ trait ReplayRSpaceTests
         replaySpace,
         range,
         shuffle = true,
-        channelCreator = const("ch1"),
+        channelCreator = kp("ch1"),
         datumCreator = i => s"datum$i",
         persist = false
       )
@@ -189,7 +189,7 @@ trait ReplayRSpaceTests
         replaySpace,
         range,
         shuffle = true,
-        channelsCreator = const(List("ch1")),
+        channelsCreator = kp(List("ch1")),
         patterns = List(Wildcard),
         continuationCreator = i => s"continuation$i",
         persist = false
@@ -211,7 +211,7 @@ trait ReplayRSpaceTests
         space,
         range,
         shuffle = false,
-        channelCreator = const("ch1"),
+        channelCreator = kp("ch1"),
         datumCreator = i => s"datum$i",
         persist = true
       )
@@ -219,7 +219,7 @@ trait ReplayRSpaceTests
         space,
         range,
         shuffle = false,
-        channelsCreator = const(List("ch1")),
+        channelsCreator = kp(List("ch1")),
         patterns = List(Wildcard),
         continuationCreator = i => s"continuation$i",
         persist = false
@@ -232,7 +232,7 @@ trait ReplayRSpaceTests
         replaySpace,
         range,
         shuffle = true,
-        channelCreator = const("ch1"),
+        channelCreator = kp("ch1"),
         datumCreator = i => s"datum$i",
         persist = true
       )
@@ -240,7 +240,7 @@ trait ReplayRSpaceTests
         replaySpace,
         range,
         shuffle = true,
-        channelsCreator = const(List("ch1")),
+        channelsCreator = kp(List("ch1")),
         patterns = List(Wildcard),
         continuationCreator = i => s"continuation$i",
         persist = false
@@ -262,7 +262,7 @@ trait ReplayRSpaceTests
         space,
         range,
         shuffle = false,
-        channelsCreator = const(List("ch1")),
+        channelsCreator = kp(List("ch1")),
         patterns = List(Wildcard),
         continuationCreator = i => s"continuation$i",
         persist = false
@@ -280,7 +280,7 @@ trait ReplayRSpaceTests
         replaySpace,
         range,
         shuffle = true,
-        channelsCreator = const(List("ch1")),
+        channelsCreator = kp(List("ch1")),
         patterns = List(Wildcard),
         continuationCreator = i => s"continuation$i",
         persist = false
@@ -307,7 +307,7 @@ trait ReplayRSpaceTests
         space,
         range,
         shuffle = false,
-        channelsCreator = const(List("ch1")),
+        channelsCreator = kp(List("ch1")),
         patterns = List(Wildcard),
         continuationCreator = i => s"continuation$i",
         persist = false
@@ -316,7 +316,7 @@ trait ReplayRSpaceTests
         space,
         range,
         shuffle = false,
-        channelCreator = const("ch1"),
+        channelCreator = kp("ch1"),
         datumCreator = i => s"datum$i",
         persist = false
       )
@@ -328,7 +328,7 @@ trait ReplayRSpaceTests
         replaySpace,
         range,
         shuffle = true,
-        channelsCreator = const(List("ch1")),
+        channelsCreator = kp(List("ch1")),
         patterns = List(Wildcard),
         continuationCreator = i => s"continuation$i",
         persist = false
@@ -337,7 +337,7 @@ trait ReplayRSpaceTests
         replaySpace,
         range,
         shuffle = true,
-        channelCreator = const("ch1"),
+        channelCreator = kp("ch1"),
         datumCreator = i => s"datum$i",
         persist = false
       )
@@ -358,7 +358,7 @@ trait ReplayRSpaceTests
         space,
         range,
         shuffle = false,
-        channelsCreator = const(List("ch1")),
+        channelsCreator = kp(List("ch1")),
         patterns = List(Wildcard),
         continuationCreator = i => s"continuation$i",
         persist = true
@@ -367,7 +367,7 @@ trait ReplayRSpaceTests
         space,
         range,
         shuffle = false,
-        channelCreator = const("ch1"),
+        channelCreator = kp("ch1"),
         datumCreator = i => s"datum$i",
         persist = false
       )
@@ -379,7 +379,7 @@ trait ReplayRSpaceTests
         replaySpace,
         range,
         shuffle = true,
-        channelsCreator = const(List("ch1")),
+        channelsCreator = kp(List("ch1")),
         patterns = List(Wildcard),
         continuationCreator = i => s"continuation$i",
         persist = true
@@ -388,7 +388,7 @@ trait ReplayRSpaceTests
         replaySpace,
         range,
         shuffle = true,
-        channelCreator = const("ch1"),
+        channelCreator = kp("ch1"),
         datumCreator = i => s"datum$i",
         persist = false
       )
@@ -409,7 +409,7 @@ trait ReplayRSpaceTests
         space,
         range,
         shuffle = false,
-        channelsCreator = const(List("ch1", "ch2")),
+        channelsCreator = kp(List("ch1", "ch2")),
         patterns = List(Wildcard, Wildcard),
         continuationCreator = i => s"continuation$i",
         persist = false
@@ -418,16 +418,16 @@ trait ReplayRSpaceTests
         space,
         range,
         shuffle = false,
-        channelCreator = const("ch1"),
-        datumCreator = const("datum1"),
+        channelCreator = kp("ch1"),
+        datumCreator = kp("datum1"),
         persist = false
       )
       val results = produceMany(
         space,
         range,
         shuffle = false,
-        channelCreator = const("ch2"),
-        datumCreator = const("datum2"),
+        channelCreator = kp("ch2"),
+        datumCreator = kp("datum2"),
         persist = false
       )
       val rigPoint = space.createCheckpoint()
@@ -438,7 +438,7 @@ trait ReplayRSpaceTests
         replaySpace,
         range,
         shuffle = true,
-        channelsCreator = const(List("ch1", "ch2")),
+        channelsCreator = kp(List("ch1", "ch2")),
         patterns = List(Wildcard, Wildcard),
         continuationCreator = i => s"continuation$i",
         persist = false
@@ -447,16 +447,16 @@ trait ReplayRSpaceTests
         replaySpace,
         range,
         shuffle = true,
-        channelCreator = const("ch1"),
-        datumCreator = const("datum1"),
+        channelCreator = kp("ch1"),
+        datumCreator = kp("datum1"),
         persist = false
       )
       val replayResults = produceMany(
         replaySpace,
         range,
         shuffle = true,
-        channelCreator = const("ch2"),
-        datumCreator = const("datum2"),
+        channelCreator = kp("ch2"),
+        datumCreator = kp("datum2"),
         persist = false
       )
       val finalPoint = replaySpace.createCheckpoint()
@@ -474,7 +474,7 @@ trait ReplayRSpaceTests
         space,
         range = 0 until 100,
         shuffle = false,
-        channelCreator = const("ch1"),
+        channelCreator = kp("ch1"),
         datumCreator = i => s"datum$i",
         persist = false
       )
@@ -499,7 +499,7 @@ trait ReplayRSpaceTests
         space,
         range = 0 until 100,
         shuffle = false,
-        channelsCreator = const(List("ch1")),
+        channelsCreator = kp(List("ch1")),
         patterns = List(Wildcard),
         continuationCreator = i => s"continuation$i",
         persist = false
@@ -512,7 +512,7 @@ trait ReplayRSpaceTests
         replaySpace,
         range = 0 until 100,
         shuffle = true,
-        channelCreator = const("ch1"),
+        channelCreator = kp("ch1"),
         datumCreator = i => s"datum$i",
         persist = false
       )
@@ -537,7 +537,7 @@ trait ReplayRSpaceTests
         replaySpace,
         range = 0 until 100,
         shuffle = true,
-        channelsCreator = const(List("ch1")),
+        channelsCreator = kp(List("ch1")),
         patterns = List(Wildcard),
         continuationCreator = i => s"continuation$i",
         persist = false
@@ -566,7 +566,7 @@ trait ReplayRSpaceTests
         space,
         range = 100 until 200,
         shuffle = false,
-        channelCreator = const("ch1"),
+        channelCreator = kp("ch1"),
         datumCreator = i => s"datum$i",
         persist = false
       )
@@ -574,7 +574,7 @@ trait ReplayRSpaceTests
         space,
         range = 200 until 300,
         shuffle = false,
-        channelsCreator = const(List("ch1")),
+        channelsCreator = kp(List("ch1")),
         patterns = List(Wildcard),
         continuationCreator = i => s"continuation$i",
         persist = false
@@ -604,7 +604,7 @@ trait ReplayRSpaceTests
         replaySpace,
         range = 100 until 200,
         shuffle = true,
-        channelCreator = const("ch1"),
+        channelCreator = kp("ch1"),
         datumCreator = i => s"datum$i",
         persist = false
       )
@@ -612,7 +612,7 @@ trait ReplayRSpaceTests
         replaySpace,
         range = 200 until 300,
         shuffle = true,
-        channelsCreator = const(List("ch1")),
+        channelsCreator = kp(List("ch1")),
         patterns = List(Wildcard),
         continuationCreator = i => s"continuation$i",
         persist = false
@@ -647,17 +647,17 @@ trait ReplayRSpaceTests
         space,
         range = 0 to 1,
         shuffle = false,
-        channelsCreator = const(channels),
+        channelsCreator = kp(channels),
         patterns = patterns,
-        continuationCreator = const(k),
+        continuationCreator = kp(k),
         persist = false
       )
       produceMany(
         space,
         range = 0 to 1,
         shuffle = false,
-        channelCreator = const(channels(0)),
-        datumCreator = const(datum),
+        channelCreator = kp(channels(0)),
+        datumCreator = kp(datum),
         persist = false
       )
       val rigPoint = space.createCheckpoint()
