@@ -3,7 +3,7 @@ package coop.rchain.rspace
 import cats.effect.Sync
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
-import coop.rchain.catscontrib._
+import coop.rchain.catscontrib._, ski._
 import coop.rchain.rspace.concurrent.{DefaultTwoStepLock, TwoStepLock}
 import coop.rchain.rspace.history.{Branch, Leaf}
 import coop.rchain.rspace.internal._
@@ -11,8 +11,6 @@ import coop.rchain.rspace.trace.Consume
 import coop.rchain.shared.SyncVarOps._
 import kamon._
 import kamon.trace.Tracer.SpanBuilder
-
-import scala.Function.const
 import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 import scala.util.Random
@@ -147,7 +145,7 @@ abstract class RSpaceOps[F[_], C, P, E, A, R, K](
         store.withTrieTxn(txn) { trieTxn =>
           store.trieStore.validateAndPutRoot(trieTxn, store.trieBranch, root)
           val leaves = store.trieStore.getLeaves(trieTxn, root)
-          eventLog.update(const(Seq.empty))
+          eventLog.update(kp(Seq.empty))
           store.getAndClearTrieUpdates()
           store.clear(txn)
           restoreInstalls(txn)
