@@ -561,6 +561,7 @@ def started_bootstrap_node(*, context: TestingContext, network, mount_dir: str =
     )
     try:
         wait_for_node_started(context, bootstrap_node)
+        wait_for_approved_block_received_handler_state(context, bootstrap_node)
         yield bootstrap_node
     finally:
         bootstrap_node.cleanup()

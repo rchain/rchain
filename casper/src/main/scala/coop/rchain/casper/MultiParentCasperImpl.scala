@@ -171,7 +171,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       dag: BlockDagRepresentation[F],
       blockHash: BlockHash
   ): F[Boolean] =
-    SafetyOracle[F].normalizedFaultTolerance(dag, blockHash).map(_ > faultToleranceThreshold)
+    for {
+      faultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, blockHash)
+      _ <- Log[F].info(
+            s"Fault tolerance for block ${PrettyPrinter.buildString(blockHash)} is $faultTolerance."
+          )
+    } yield faultTolerance > faultToleranceThreshold
 
   def contains(b: BlockMessage): F[Boolean] =
     BlockStore[F].contains(b.blockHash).map(_ || blockBuffer.contains(b))
@@ -219,9 +224,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
   def createBlock: F[CreateBlockStatus] = validatorId match {
     case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
       for {
-        dag              <- blockDag
-        orderedHeads     <- estimator(dag)
-        p                <- chooseNonConflicting[F](orderedHeads, genesis, dag)
+        dag          <- blockDag
+        orderedHeads <- estimator(dag)
+        p            <- chooseNonConflicting[F](orderedHeads, genesis, dag)
+        _ <- Log[F].info(
+              s"${p.size} parents out of ${orderedHeads.size} latest blocks will be used."
+            )
         r                <- remDeploys(dag, p)
         bondedValidators = bonds(p.head).map(_.validator).toSet
         //We ensure that only the justifications given in the block are those

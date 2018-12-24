@@ -73,8 +73,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       deploy <- ProtoUtil.basicDeployData[Effect](0)
       _      <- MultiParentCasper[Effect].deploy(deploy)
 
-      _      = logEff.infos.size should be(1)
-      result = logEff.infos.head.contains("Received Deploy") should be(true)
+      _      = logEff.infos.size should be(2)
+      result = logEff.infos(1).contains("Received Deploy") should be(true)
       _      = node.tearDown()
     } yield result
   }
@@ -144,18 +144,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       createBlockResult    <- MultiParentCasper[Effect].createBlock
       Created(signedBlock) = createBlockResult
       _                    <- MultiParentCasper[Effect].addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
-      logMessages = List(
-        "Received Deploy",
-        "Attempting to add Block",
-        "Added",
-        "Sent Block #1",
-        "New fork-choice tip is block"
-      )
-      _      = logEff.warns.isEmpty should be(true)
-      _      = logEff.infos.zip(logMessages).forall { case (a, b) => a.startsWith(b) } should be(true)
-      dag    <- MultiParentCasper[Effect].blockDag
-      result <- MultiParentCasper[Effect].estimator(dag) shouldBeF IndexedSeq(signedBlock)
-      _      = node.tearDown()
+      _                    = logEff.warns.isEmpty should be(true)
+      dag                  <- MultiParentCasper[Effect].blockDag
+      result               <- MultiParentCasper[Effect].estimator(dag) shouldBeF IndexedSeq(signedBlock)
+      _                    = node.tearDown()
     } yield result
   }
 
