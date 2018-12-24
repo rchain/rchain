@@ -17,14 +17,12 @@ case class Acc[G[_]](timeseries: List[Long] = List.empty, graph: G[Graphz[G]])
 
 object GraphzGenerator {
 
-  private def init[G[_]: Monad: GraphSerializer](name: String): Acc[G] =
-    Acc[G](
-      graph = Graphz[G](
-        name,
-        DiGraph,
-        rankdir = Some(BT),
-        node = Map("width" -> "0", "height" -> "0", "margin" -> "0.03", "fontsize" -> "8")
-      )
+  private def initGraph[G[_]: Monad: GraphSerializer](name: String): G[Graphz[G]] =
+    Graphz[G](
+      name,
+      DiGraph,
+      rankdir = Some(BT),
+      node = Map("width" -> "0", "height" -> "0", "margin" -> "0.03", "fontsize" -> "8")
     )
 
   def generate[
@@ -36,7 +34,7 @@ object GraphzGenerator {
       if (blockHash == lastFinalizedBlockHash) Some(Filled) else None
 
     for {
-      acc <- topoSort.foldM(init[G]("dag")) {
+      acc <- topoSort.foldM(Acc[G](graph = initGraph[G]("dag"))) {
               case (acc, blockHashes) =>
                 for {
                   blocks    <- blockHashes.traverse(ProtoUtil.unsafeGetBlock[F])
