@@ -77,7 +77,10 @@ class TcpServerObservable(
           }
 
       def stream(observable: Observable[Chunk]): Task[ChunkResponse] =
-        StreamHandler.handleStream(tempFolder, observable, bufferBlobMessage)
+        (StreamHandler.handleStream(tempFolder, observable) >>= {
+          case Left(ex)   => logger.error("Could not receive stream! Details: ${ex.getMessage}", ex)
+          case Right(msg) => Task.delay(bufferBlobMessage.pushNext(msg))
+        }).as(ChunkResponse())
 
       private def returnProtocol(protocol: Protocol): TLResponse =
         TLResponse(TLResponse.Payload.Protocol(protocol))
