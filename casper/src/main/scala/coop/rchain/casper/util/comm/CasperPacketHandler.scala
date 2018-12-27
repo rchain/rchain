@@ -280,6 +280,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                      _   <- Log[F].info("Making a transition to ApprovedBlockRecievedHandler state.")
                      abh = new ApprovedBlockReceivedHandler[F](casper, approvedBlock)
                      _   <- capserHandlerInternal.set(abh)
+                     _   <- CommUtil.sendForkChoiceTipRequest[F]
                    } yield ()
                }
       } yield cont
@@ -451,6 +452,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                             )
                         abr = new ApprovedBlockReceivedHandler(casperInstance, ab)
                         _   <- cphI.set(abr)
+                        _   <- CommUtil.sendForkChoiceTipRequest[F]
                       } yield ()
 
                   }
