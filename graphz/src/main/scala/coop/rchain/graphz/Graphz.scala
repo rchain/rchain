@@ -136,7 +136,7 @@ object Graphz {
       case (Graph, _)   => s"graph"
       case (DiGraph, _) => s"digraph"
     }
-    if (name == "") s"$prefix {" else s"$prefix $name {"
+    if (name == "") s"$prefix {" else s"""$prefix "$name" {"""
   }
 
   def quote(str: String): String = str match {
