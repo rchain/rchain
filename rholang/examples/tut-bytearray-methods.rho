@@ -2,7 +2,7 @@ new x, y, stdout(`rho:io:stdout`) in {
 
   stdout!({
     "nth for byte array": "deadbeef".hexToBytes().nth(3),
-    "expected": "expected": 239 // 0xef
+    "expected": 239 // 0xef
   })
   |
   stdout!({
