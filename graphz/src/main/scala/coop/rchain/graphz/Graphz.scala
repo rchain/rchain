@@ -48,6 +48,11 @@ final case object BT extends GraphRankDir
 final case object LR extends GraphRankDir
 final case object RL extends GraphRankDir
 
+sealed trait GraphStyle
+final case object Solid  extends GraphStyle
+final case object Bold   extends GraphStyle
+final case object Filled extends GraphStyle
+
 object Graphz {
 
   implicit val showShape: Show[GraphShape] = new Show[GraphShape] {
@@ -65,6 +70,7 @@ object Graphz {
     def show(a: A): String = a.toString.toLowerCase
   }
 
+  implicit val showStyle: Show[GraphStyle]     = smallToString[GraphStyle]
   implicit val showRank: Show[GraphRank]       = smallToString[GraphRank]
   implicit val showRankDir: Show[GraphRankDir] = Show.fromToString[GraphRankDir]
 
@@ -153,16 +159,18 @@ class Graphz[F[_]: Monad](gtype: GraphType, t: String)(implicit ser: GraphSerial
   def node(
       name: String,
       shape: GraphShape = Circle,
+      style: Option[GraphStyle] = None,
       color: Option[String] = None,
       label: Option[String] = None
   ): F[Unit] = {
-    import Graphz.showShape
+    import Graphz.{showShape, showStyle}
     val attrShape: Map[String, String] =
       if (shape == Graphz.DefaultShape) Map.empty else Map("shape" -> shape.show)
+    val attrStyle: Map[String, String] = style.map(s => Map("style" -> s.show)).getOrElse(Map.empty)
     val attrColor: Map[String, String] = color.map(c => Map("color" -> c)).getOrElse(Map.empty)
     val attrLabel: Map[String, String] = label.map(c => Map("label" -> c)).getOrElse(Map.empty)
 
-    val attrs: Map[String, String] = attrShape |+| attrColor |+| attrLabel
+    val attrs: Map[String, String] = attrShape |+| attrColor |+| attrLabel |+| attrStyle
     ser.push(t + Graphz.quote(name) + Graphz.attrMkStr(attrs).map(a => " " + a).getOrElse(""))
   }
 

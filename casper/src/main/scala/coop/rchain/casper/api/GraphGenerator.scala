@@ -30,7 +30,11 @@ object GraphzGenerator {
   def generate[
       F[_]: Monad: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore,
       G[_]: Monad: GraphSerializer
-  ](topoSort: Vector[Vector[BlockHash]]): F[G[Graphz[G]]] =
+  ](topoSort: Vector[Vector[BlockHash]], lastFinalizedBlockHash: String): F[G[Graphz[G]]] = {
+
+    def styleFor(blockHash: String): Option[GraphStyle] =
+      if (blockHash == lastFinalizedBlockHash) Some(Filled) else None
+
     for {
       acc <- topoSort.foldM(init[G]("dag")) {
               case (acc, blockHashes) =>
@@ -46,6 +50,7 @@ object GraphzGenerator {
                       genesisHash = PrettyPrinter.buildString(genesis)
                       _ <- g.node(
                             name = genesisHash,
+                            style = styleFor(genesisHash),
                             shape = Msquare
                           )
                       _ <- g.close
@@ -61,6 +66,7 @@ object GraphzGenerator {
                             g.node(
                               name = blockHash,
                               shape = Record,
+                              style = styleFor(blockHash),
                               color = Some(hashColor(blockSenderHash)),
                               label = Some(s""""{$blockHash|$blockSenderHash}"""")
                             )
@@ -110,6 +116,7 @@ object GraphzGenerator {
 
                }
     } yield result
+  }
 
   private def hashColor(hash: String): String =
     s""""#${hash.substring(0, 6)}""""
