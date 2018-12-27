@@ -52,6 +52,7 @@ sealed trait GraphStyle
 final case object Solid  extends GraphStyle
 final case object Bold   extends GraphStyle
 final case object Filled extends GraphStyle
+final case object Invis  extends GraphStyle
 
 object Graphz {
 
