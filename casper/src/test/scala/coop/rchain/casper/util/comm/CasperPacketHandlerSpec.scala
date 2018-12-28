@@ -125,9 +125,8 @@ class CasperPacketHandlerSpec extends WordSpec {
         val unapprovedBlock  = BlockApproverProtocolTest.createUnapproved(requiredSigs, genesis)
         val unapprovedPacket = BlockApproverProtocolTest.unapprovedToPacket(unapprovedBlock)
         val test = for {
-          packetResponse <- packetHandler.handle(local).apply(unapprovedPacket)
-          _              = assert(packetResponse.isEmpty)
-          blockApproval  = BlockApproverProtocol.getBlockApproval(expectedCandidate, validatorId)
+          _             <- packetHandler.handle(local).apply(unapprovedPacket)
+          blockApproval = BlockApproverProtocol.getBlockApproval(expectedCandidate, validatorId)
           expectedPacket = ProtocolHelper.packet(
             local,
             transport.BlockApproval,
@@ -166,12 +165,11 @@ class CasperPacketHandlerSpec extends WordSpec {
                 )
               )
           )
-          _               = assert(transportLayer.requests.isEmpty)
-          blockRequest    = BlockRequest("base16Hash", ByteString.copyFromUtf8("base16Hash"))
-          packet2         = Packet(transport.BlockRequest.id, blockRequest.toByteString)
-          packetResponse2 <- packetHandler.handle(local)(packet2)
-          _               = assert(packetResponse2.isEmpty)
-          _               = assert(transportLayer.requests.isEmpty)
+          _            = assert(transportLayer.requests.isEmpty)
+          blockRequest = BlockRequest("base16Hash", ByteString.copyFromUtf8("base16Hash"))
+          packet2      = Packet(transport.BlockRequest.id, blockRequest.toByteString)
+          _            <- packetHandler.handle(local)(packet2)
+          _            = assert(transportLayer.requests.isEmpty)
         } yield ()
         test.unsafeRunSync
         ctx.tick()

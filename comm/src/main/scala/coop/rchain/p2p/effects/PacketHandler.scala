@@ -23,7 +23,7 @@ object PacketHandler extends PacketHandlerInstances {
         C.handlePacket(peer, packet).liftM[T]
     }
 
-  def pf[F[_]](pfForPeer: (PeerNode) => PartialFunction[Packet, F[None.type]])(
+  def pf[F[_]](pfForPeer: (PeerNode) => PartialFunction[Packet, F[Unit]])(
       implicit ev1: Applicative[F],
       ev2: Log[F],
       errorHandler: ApplicativeError_[F, CommError]

@@ -46,11 +46,9 @@ class BlockApproverProtocol(
   def unapprovedBlockPacketHandler[F[_]: Capture: Concurrent: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
       peer: PeerNode,
       u: UnapprovedBlock
-  ): F[None.type] =
+  ): F[Unit] =
     if (u.candidate.isEmpty) {
-      Log[F]
-        .warn("Candidate is not defined.")
-        .map(_ => None)
+      Log[F].warn("Candidate is not defined.")
     } else {
       val candidate = u.candidate.get
       val validCandidate = BlockApproverProtocol.validateCandidate(
@@ -74,11 +72,9 @@ class BlockApproverProtocol(
             msg = Blob(local, Packet(transport.BlockApproval.id, serializedApproval))
             _   <- TransportLayer[F].stream(Seq(peer), msg)
             _   <- Log[F].info(s"Received expected candidate from $peer. Approval sent in response.")
-          } yield None
+          } yield ()
         case Left(errMsg) =>
-          Log[F]
-            .warn(s"Received unexpected candidate from $peer because: $errMsg")
-            .map(_ => None)
+          Log[F].warn(s"Received unexpected candidate from $peer because: $errMsg")
       }
     }
 }
