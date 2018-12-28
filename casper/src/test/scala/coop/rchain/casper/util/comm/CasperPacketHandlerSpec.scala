@@ -153,19 +153,17 @@ class CasperPacketHandlerSpec extends WordSpec {
         val packetHandler = new CasperPacketHandlerImpl[Task](ref)
 
         val approvedBlockRequest = ApprovedBlockRequest("test")
-        val packet               = Packet(transport.ApprovedBlockRequest.id, approvedBlockRequest.toByteString)
+        val packet1              = Packet(transport.ApprovedBlockRequest.id, approvedBlockRequest.toByteString)
         val test = for {
-          packetResponse <- packetHandler.handle(local)(packet)
-          _ = assert(
-            packetResponse ==
-              Some(
-                Packet(
-                  transport.NoApprovedBlockAvailable.id,
-                  NoApprovedBlockAvailable("NoApprovedBlockAvailable", local.toString).toByteString
-                )
-              )
+          _    <- packetHandler.handle(local)(packet1)
+          head = transportLayer.requests.head
+          response = packet(
+            local,
+            transport.NoApprovedBlockAvailable,
+            NoApprovedBlockAvailable(approvedBlockRequest.identifier, local.toString).toByteString
           )
-          _            = assert(transportLayer.requests.isEmpty)
+          _            = assert(head.peer == local && head.msg == response)
+          _            = transportLayer.reset()
           blockRequest = BlockRequest("base16Hash", ByteString.copyFromUtf8("base16Hash"))
           packet2      = Packet(transport.BlockRequest.id, blockRequest.toByteString)
           _            <- packetHandler.handle(local)(packet2)

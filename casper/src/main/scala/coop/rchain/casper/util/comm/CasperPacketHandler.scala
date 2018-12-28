@@ -192,7 +192,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         peer: PeerNode,
         br: ApprovedBlockRequest
     ): F[Unit] =
-      sendNoApprovedBlockAvailable(peer)
+      sendNoApprovedBlockAvailable(peer, br.identifier)
 
     override def handleBlockApproval(ba: BlockApproval): F[Unit] =
       noop
@@ -228,7 +228,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         peer: PeerNode,
         br: ApprovedBlockRequest
     ): F[Unit] =
-      sendNoApprovedBlockAvailable(peer)
+      sendNoApprovedBlockAvailable(peer, br.identifier)
 
     override def handleUnapprovedBlock(peer: PeerNode, ub: UnapprovedBlock): F[Unit] =
       noop
@@ -300,7 +300,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         peer: PeerNode,
         br: ApprovedBlockRequest
     ): F[Unit] =
-      sendNoApprovedBlockAvailable(peer)
+      sendNoApprovedBlockAvailable(peer, br.identifier)
 
     override def handleUnapprovedBlock(peer: PeerNode, ub: UnapprovedBlock): F[Unit] =
       noop
@@ -553,18 +553,19 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     }
 
   private def sendNoApprovedBlockAvailable[F[_]: RPConfAsk: TransportLayer: Monad](
-      peer: PeerNode
+      peer: PeerNode,
+      identifier: String
   ): F[Unit] =
     for {
       local <- RPConfAsk[F].reader(_.local)
       //TODO remove NoApprovedBlockAvailable.nodeIdentifier, use `sender` provided by TransportLayer
-      msg = Blob(local, noApprovedBlockAvailable(local))
+      msg = Blob(local, noApprovedBlockAvailable(local, identifier))
       _   <- TransportLayer[F].stream(Seq(peer), msg)
     } yield ()
 
-  private def noApprovedBlockAvailable(peer: PeerNode): Packet = Packet(
+  private def noApprovedBlockAvailable(peer: PeerNode, identifier: String): Packet = Packet(
     transport.NoApprovedBlockAvailable.id,
-    NoApprovedBlockAvailable("NoApprovedBlockAvailable", peer.toString).toByteString
+    NoApprovedBlockAvailable(identifier, peer.toString).toByteString
   )
 
 }
