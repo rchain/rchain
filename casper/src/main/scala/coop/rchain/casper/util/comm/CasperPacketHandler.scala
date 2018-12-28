@@ -304,7 +304,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         peer: PeerNode,
         br: ApprovedBlockRequest
     ): F[Option[Packet]] =
-      Option(noApprovedBlockAvailable(peer)).pure[F]
+      RPConfAsk[F].reader(_.local).map(noApprovedBlockAvailable(_).some)
 
     override def handleUnapprovedBlock(peer: PeerNode, ub: UnapprovedBlock): F[Option[Packet]] =
       nonePacket
