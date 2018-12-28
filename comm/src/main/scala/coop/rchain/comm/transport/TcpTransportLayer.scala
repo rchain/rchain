@@ -9,6 +9,7 @@ import scala.util._
 
 import cats.implicits._
 
+import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
@@ -187,6 +188,26 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
                })
     } yield result
 
+  private def deleteFile(path: Path): Task[Unit] = {
+    def delete(): Task[Unit] =
+      for {
+        result <- Task.delay(Try(path.toFile.delete).toEither)
+        _ <- result match {
+              case Left(t) =>
+                log.error(s"Can't delete file $path: ${t.getMessage}", t)
+              case Right(false) =>
+                log.warn(s"Can't delete file $path.")
+              case Right(true) =>
+                log.debug(s"Deleted file $path")
+            }
+      } yield ()
+
+    for {
+      exists <- Task.delay(path.toFile.exists)
+      _      <- exists.fold(delete(), log.warn(s"Can't delete file $path. File not found."))
+    } yield ()
+  }
+
   private def innerBroadcast(
       peers: Seq[PeerNode],
       msg: Protocol,
@@ -202,12 +223,6 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
     innerBroadcast(peers, msg)
 
   def handleToStream(toStream: ToStream): Task[Unit] = {
-
-    def deleteFile(path: Path): Task[Boolean] =
-      Task.delay {
-        if (path.toFile.exists) path.toFile.delete
-        else false
-      }
 
     def delay[A](a: => Task[A]): Task[A] =
       Task.defer(a).delayExecution(1.second)
@@ -228,8 +243,11 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
                 case Right(_) => Task.unit
               }
           case Left(error) => log.error(s"Error while streaming packet, error: $error")
-        } >>= kp(deleteFile(toStream.path).void)
-      else deleteFile(toStream.path).void
+        } >>= kp(deleteFile(toStream.path))
+      else
+        log.debug(s"Giving up on streaming packet ${toStream.path} to ${toStream.peerNode}") >>= kp(
+          deleteFile(toStream.path)
+        )
 
     handle(3)
   }
@@ -258,7 +276,7 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
           case Left(e)         => handle.failWith(e)
           case Right(response) => handle.reply(response)
         }.void
-      case (msg: StreamMessage) =>
+      case msg: StreamMessage =>
         StreamHandler.restore(msg) >>= {
           case Left(ex) =>
             Log[Task].error("Could not restore data from file while handling stream", ex)
