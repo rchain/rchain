@@ -4,9 +4,9 @@ package coop.rchain.catscontrib
   * Name ski comes from SKI combinator calculus (https://en.wikipedia.org/wiki/SKI_combinator_calculus)
   * It represents three functions, from which we are using two: constant function (kp) and identity function (id)
   *
-  * Const and identity function are being used frequantly in this code base (in any FP code base to be precise).
-  * Thus we provide an alias for const and indentity.
-  * Inspiried by ski package in slamdata/quasar codebase: κ and ι funcitons.
+  * Const and identity function are being used frequently in this code base (in any FP code base to be precise).
+  * Thus we provide an alias for const and identity.
+  * Inspired by ski package in slamdata/quasar codebase: κ and ι functions.
   */
 package object ski {
 
