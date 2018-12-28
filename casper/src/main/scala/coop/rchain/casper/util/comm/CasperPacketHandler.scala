@@ -192,7 +192,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         peer: PeerNode,
         br: ApprovedBlockRequest
     ): F[Option[Packet]] =
-      RPConfAsk[F].reader(_.local).map(noApprovedBlockAvailable(_).some)
+      sendNoApprovedBlockAvailable(peer)
 
     override def handleBlockApproval(ba: BlockApproval): F[Option[Packet]] =
       nonePacket
@@ -230,7 +230,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         peer: PeerNode,
         br: ApprovedBlockRequest
     ): F[Option[Packet]] =
-      RPConfAsk[F].reader(_.local).map(noApprovedBlockAvailable(_).some)
+      sendNoApprovedBlockAvailable(peer)
 
     override def handleUnapprovedBlock(peer: PeerNode, ub: UnapprovedBlock): F[Option[Packet]] =
       nonePacket
@@ -304,7 +304,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         peer: PeerNode,
         br: ApprovedBlockRequest
     ): F[Option[Packet]] =
-      RPConfAsk[F].reader(_.local).map(noApprovedBlockAvailable(_).some)
+      sendNoApprovedBlockAvailable(peer)
 
     override def handleUnapprovedBlock(peer: PeerNode, ub: UnapprovedBlock): F[Option[Packet]] =
       nonePacket
@@ -562,6 +562,16 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
           C.handle(peer)(p).liftM[T]
         }
     }
+
+  private def sendNoApprovedBlockAvailable[F[_]: RPConfAsk: TransportLayer: Monad](
+      peer: PeerNode
+  ): F[Option[Packet]] =
+    for {
+      local <- RPConfAsk[F].reader(_.local)
+      //TODO remove NoApprovedBlockAvailable.nodeIdentifier, use `sender` provided by TransportLayer
+      msg = Blob(local, noApprovedBlockAvailable(local))
+      _   <- TransportLayer[F].stream(Seq(peer), msg)
+    } yield none[Packet]
 
   private def noApprovedBlockAvailable(peer: PeerNode): Packet = Packet(
     transport.NoApprovedBlockAvailable.id,
