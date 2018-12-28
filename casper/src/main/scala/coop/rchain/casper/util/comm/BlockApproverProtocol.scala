@@ -50,7 +50,7 @@ class BlockApproverProtocol(
     if (u.candidate.isEmpty) {
       Log[F]
         .warn("Candidate is not defined.")
-        .map(_ => none[Packet])
+        .map(_ => None)
     } else {
       val candidate = u.candidate.get
       val validCandidate = BlockApproverProtocol.validateCandidate(
@@ -74,11 +74,11 @@ class BlockApproverProtocol(
             msg = Blob(local, Packet(transport.BlockApproval.id, serializedApproval))
             _   <- TransportLayer[F].stream(Seq(peer), msg)
             _   <- Log[F].info(s"Received expected candidate from $peer. Approval sent in response.")
-          } yield none[Packet]
+          } yield None
         case Left(errMsg) =>
           Log[F]
             .warn(s"Received unexpected candidate from $peer because: $errMsg")
-            .map(_ => none[Packet])
+            .map(_ => None)
       }
     }
 }
