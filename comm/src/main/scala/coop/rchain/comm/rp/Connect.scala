@@ -132,7 +132,7 @@ object Connect {
           }
     } yield peersAndResonses.filter(_._2.isRight).map(_._1)
 
-  def connect[F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
+  def connect[F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: ErrorHandler: ConnectionsCell: RPConfAsk](
       peer: PeerNode,
       timeout: FiniteDuration
   ): F[Unit] =

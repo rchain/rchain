@@ -146,13 +146,7 @@ object ApproveBlockProtocol {
     private def signedByTrustedValidator(a: BlockApproval): Boolean =
       a.sig.fold(false)(s => trustedValidators.contains(s.publicKey))
 
-    private def completeIf(time: Long, signatures: Set[Signature]): F[Unit] =
-      if ((time >= start + duration.toMillis && signatures.size >= requiredSigs) || requiredSigs == 0) {
-        for {
-          _ <- LastApprovedBlock[F].set(ApprovedBlock(Some(candidate), signatures.toSeq))
-          _ <- sendApprovedBlock
-        } yield ()
-      } else Time[F].sleep(interval) >> internalRun()
+    def run(): F[Unit] = internalRun()
 
     private def internalRun(): F[Unit] =
       for {
@@ -162,8 +156,6 @@ object ApproveBlockProtocol {
         _    <- completeIf(t, sigs)
       } yield ()
 
-    def run(): F[Unit] = internalRun()
-
     //TODO: potential optimization, only send to peers we have not
     //      received a valid signature from yet
     private def sendUnapprovedBlock: F[Unit] =
@@ -172,6 +164,14 @@ object ApproveBlockProtocol {
         _ <- CommUtil.streamToPeers[F](transport.UnapprovedBlock, serializedUnapprovedBlock)
         _ <- Log[F].info(s"APPROVAL: Sent UnapprovedBlock $candidateHash to peers.")
       } yield ()
+
+    private def completeIf(time: Long, signatures: Set[Signature]): F[Unit] =
+      if ((time >= start + duration.toMillis && signatures.size >= requiredSigs) || requiredSigs == 0) {
+        for {
+          _ <- LastApprovedBlock[F].set(ApprovedBlock(Some(candidate), signatures.toSeq))
+          _ <- sendApprovedBlock
+        } yield ()
+      } else Time[F].sleep(interval) >> internalRun()
 
     private def sendApprovedBlock: F[Unit] =
       for {
