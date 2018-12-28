@@ -1,5 +1,6 @@
 package coop.rchain.comm.transport
 
+import StreamHandler.CircuitBreaker
 import java.io.{File, FileNotFoundException}
 import java.nio.file._
 import java.util.UUID
@@ -12,6 +13,7 @@ import monix.eval.Task
 import monix.reactive.Observable
 import coop.rchain.catscontrib.TaskContrib._
 import cats._, cats.data._, cats.implicits._
+import coop.rchain.catscontrib.ski._
 import monix.execution.Scheduler.Implicits.global
 import com.google.protobuf.ByteString
 
@@ -35,6 +37,7 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       val msg: StreamMessage = handleStream(stream)
       // then
       msg.path.getParent shouldBe tempFolder
+      msg.path.toFile.exists shouldBe true
     }
 
     it("should contain sender and message type information") {
@@ -76,13 +79,32 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       // then
       msg.path.getParent shouldBe nonExistingWithPersmission
     }
+
+    it("should stop receiving a stream if will not fit in memory") {
+      // given
+      val alwaysBreak: CircuitBreaker = kp(true)
+      val stream                      = createStream()
+      // when
+      val err: Throwable = handleStreamErr(stream, circuitBreaker = alwaysBreak)
+      // then
+      err.getMessage shouldBe ("Circuit was broken")
+    }
+
   }
 
   private def handleStream(stream: Observable[Chunk], folder: Path = tempFolder): StreamMessage =
-    StreamHandler.handleStream(folder, stream).unsafeRunSync.right.get
+    StreamHandler.handleStream(folder, stream, circuitBreaker = kp(false)).unsafeRunSync.right.get
 
-  private def handleStreamErr(stream: Observable[Chunk], folder: Path): Throwable =
-    StreamHandler.handleStream(folder, stream).unsafeRunSync.left.get
+  private def handleStreamErr(
+      stream: Observable[Chunk],
+      folder: Path = tempFolder,
+      circuitBreaker: StreamHandler.CircuitBreaker
+  ): Throwable =
+    StreamHandler
+      .handleStream(folder, stream, circuitBreaker = circuitBreaker)
+      .unsafeRunSync
+      .left
+      .get
 
   private def createStream(
       messageSize: Int = 10 * 1024,

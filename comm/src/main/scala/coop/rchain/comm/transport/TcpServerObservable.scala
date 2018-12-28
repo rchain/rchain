@@ -6,7 +6,7 @@ import scala.concurrent.duration._
 import scala.util.control.NonFatal
 
 import cats.implicits._
-
+import coop.rchain.catscontrib.ski._
 import coop.rchain.shared._, Compression._
 import coop.rchain.comm.{CommError, PeerNode}
 import coop.rchain.comm.protocol.routing._
@@ -76,11 +76,17 @@ class TcpServerObservable(
               }
           }
 
-      def stream(observable: Observable[Chunk]): Task[ChunkResponse] =
-        (StreamHandler.handleStream(tempFolder, observable) >>= {
-          case Left(ex)   => logger.error("Could not receive stream! Details: ${ex.getMessage}", ex)
+      def stream(observable: Observable[Chunk]): Task[ChunkResponse] = {
+
+        // TODO RCHAIN-2792
+        val neverBreak: StreamHandler.CircuitBreaker = kp(false)
+
+        (StreamHandler.handleStream(tempFolder, observable, neverBreak) >>= {
+          case Left(ex)   => logger.error(s"Could not receive stream! Details: ${ex.getMessage}", ex)
           case Right(msg) => Task.delay(bufferBlobMessage.pushNext(msg))
         }).as(ChunkResponse())
+
+      }
 
       private def returnProtocol(protocol: Protocol): TLResponse =
         TLResponse(TLResponse.Payload.Protocol(protocol))

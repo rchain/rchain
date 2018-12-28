@@ -21,22 +21,27 @@ import coop.rchain.catscontrib.TaskContrib._
 
 object StreamHandler {
 
+  type CircuitBreaker = Long => Boolean
+
   private case class Streamed(
       sender: Option[PeerNode] = None,
       typeId: Option[String] = None,
       contentLength: Option[Int] = None,
       compressed: Boolean = false,
+      readSoFar: Long = 0,
+      circuitBroken: Boolean = false,
       path: Path,
       fos: FileOutputStream
   )
 
   def handleStream(
       folder: Path,
-      stream: Observable[Chunk]
-  )(implicit logger: Log[Task]): Task[Either[Throwable, StreamMessage]] =
+      stream: Observable[Chunk],
+      circuitBreaker: CircuitBreaker
+  ): Task[Either[Throwable, StreamMessage]] =
     (init(folder)
       .bracket { initStmd =>
-        (collect(initStmd, stream) >>= toResult).value
+        (collect(initStmd, stream, circuitBreaker) >>= toResult).value
       }(stmd => gracefullyClose[Task](stmd.fos).as(())))
       .attempt
       .map(_.flatten)
@@ -51,30 +56,51 @@ object StreamHandler {
 
   private def collect(
       init: Streamed,
-      stream: Observable[Chunk]
-  ): EitherT[Task, Throwable, Streamed] =
-    EitherT(
-      (stream
-        .foldLeftL(init) {
-          case (stmd, Chunk(Chunk.Content.Header(ChunkHeader(sender, typeId, compressed, cl)))) =>
-            stmd.copy(
-              sender = sender.map(ProtocolHelper.toPeerNode(_)),
-              typeId = Some(typeId),
-              compressed = compressed,
-              contentLength = Some(cl)
-            )
-          case (stmd, Chunk(Chunk.Content.Data(ChunkData(newData)))) =>
-            stmd.fos.write(newData.toByteArray)
-            stmd.fos.flush()
-            stmd
-        })
-        .attempt
-    )
+      stream: Observable[Chunk],
+      circuitBreaker: CircuitBreaker
+  ): EitherT[Task, Throwable, Streamed] = {
+
+    def collectStream = stream.foldWhileLeftL(init) {
+      case (stmd, Chunk(Chunk.Content.Header(ChunkHeader(sender, typeId, compressed, cl)))) =>
+        Left(
+          stmd.copy(
+            sender = sender.map(ProtocolHelper.toPeerNode(_)),
+            typeId = Some(typeId),
+            compressed = compressed,
+            contentLength = Some(cl)
+          )
+        )
+      case (stmd, Chunk(Chunk.Content.Data(ChunkData(newData)))) =>
+        val array = newData.toByteArray
+        stmd.fos.write(array)
+        stmd.fos.flush()
+        val readSoFar = stmd.readSoFar + array.length
+        if (circuitBreaker(readSoFar))
+          Right(stmd.copy(circuitBroken = true))
+        else
+          Left(stmd.copy(readSoFar = readSoFar))
+    }
+
+    EitherT(collectStream.attempt.map {
+      case Right(stmd) if stmd.circuitBroken => Left(new RuntimeException("Circuit was broken"))
+      case res                               => res
+    })
+
+  }
 
   private def toResult(stmd: Streamed): EitherT[Task, Throwable, StreamMessage] =
     EitherT(Task.delay {
       stmd match {
-        case Streamed(Some(sender), Some(packetType), Some(contentLength), compressed, path, _) =>
+        case Streamed(
+            Some(sender),
+            Some(packetType),
+            Some(contentLength),
+            compressed,
+            _,
+            _,
+            path,
+            _
+            ) =>
           Right(StreamMessage(sender, packetType, path, compressed, contentLength))
         case stmd =>
           Left(new RuntimeException(s"received not full stream message, will not process. $stmd"))
