@@ -46,7 +46,7 @@ class BlockApproverProtocol(
   def unapprovedBlockPacketHandler[F[_]: Capture: Concurrent: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
       peer: PeerNode,
       u: UnapprovedBlock
-  ): F[Option[Packet]] =
+  ): F[None.type] =
     if (u.candidate.isEmpty) {
       Log[F]
         .warn("Candidate is not defined.")
