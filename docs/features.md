@@ -23,6 +23,7 @@
 
 ### As a Node Operator, I want to monitor the performance, resource consumption, and status of my node
 
+ * Node is considered up and running if and only if it listens on the port 40400 (the port number can be overriden with the `--port` option)
  * rnode publishes metrics to InfluxDB
     * COMM events per second
     * CPU usage
