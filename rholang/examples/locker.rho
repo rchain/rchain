@@ -1,0 +1,88 @@
+new Locker,
+trace(`rho:io:stderr`),
+stdout(`rho:io:stdout`),
+insertArbitrary(`rho:registry:insertArbitrary`),
+lookup(`rho:registry:lookup`)
+in {
+  new uriCh in {
+    insertArbitrary!(*Locker, *uriCh) | for(@uri <- uriCh) {
+      stdout!({"Locker is registerd at": uri})
+    }
+  }
+  |
+  contract Locker(@{pubKey /\ ByteArray}, return) = {
+    new self, itemsCh, nonceCh in {
+      return!(bundle+{*self}) |
+      itemsCh!({}) |
+
+      nonceCh!(-1) |
+      contract self(@"getNonce", return) = { for(@nonce <- nonceCh) { return!(nonce) } } |
+
+      contract self(@"store", @{sig /\ ByteArray}, @nextNonce, @more, fail, ack) = {
+        trace!("locker.store(...)") |
+        for(@nonce <- nonceCh) {
+          if (nonce + 1 != nextNonce) {
+            fail!({"expected nonce": nonce + 1}) |
+            nonceCh!(nonce)
+          } else {
+            nonceCh!(nextNonce) |
+            // TODO: real sig checking over nonce, more.keys()
+            if ("dead".hexToBytes() ++ sig != pubKey) {
+              fail!("bad signature")
+            } else {
+              for (@items <- itemsCh) {
+                // trace!({"items": items, "more": more}) |
+                itemsCh!(items.union(more)) |
+                ack!(Nil)
+              }
+            }
+          }
+        }
+      }
+      |
+      contract self(@"get", @{sig /\ ByteArray}, @nextNonce, fail, return) = {
+        trace!("locker.get(...)") |
+        for(@nonce <- nonceCh) {
+          if (nonce + 1 != nextNonce) {
+            fail!({"expected nonce": nonce + 1}) |
+            nonceCh!(nonce)
+          } else {
+            nonceCh!(nextNonce) |
+            // TODO: real sig checking over nonce
+            if ("dead".hexToBytes() ++ sig != pubKey) {
+              fail!("bad signature")
+            } else {
+              for (@items <- itemsCh) {
+                // trace!({"get items": items}) |
+                itemsCh!(items) |
+                return!(items)
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  |
+  // Test / demo
+  new lockerCh, ackCh, rx in {
+    Locker!("deadbeef".hexToBytes(), *lockerCh) | for (locker <- lockerCh) {
+      // trace!({"locker": *locker}) |
+
+      new trinket in {
+        trace!({"trinket": *trinket}) |
+        locker!("store", "beef".hexToBytes(), 0, {"trinket": *trinket},
+          *trace, *ackCh)
+      } |
+
+      // trinket has gone out of scope but
+      // we can get it back if we have the locker combo.
+      for(_ <- ackCh) {
+        locker!("get", "beef".hexToBytes(), 1, *trace, *rx) |
+        for(@items <- rx) {
+          trace!({"win! got items": items})
+        }
+      }
+    }
+  }
+}
