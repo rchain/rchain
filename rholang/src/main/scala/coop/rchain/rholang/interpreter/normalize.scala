@@ -1069,6 +1069,42 @@ object ProcNormalizeMatcher {
         normalizeIfElse(p.proc_1, p.proc_2, p.proc_3, input.copy(par = VectorPar()))
           .map(n => n.copy(par = n.par ++ input.par))
 
+      case p: PLet =>
+        // KLUDGE: assume these are distinct from names used elsewhere
+        val idents = 0 until p.listbinding_.length map {
+          case ix => s"let_%{p.line_num}_${p.col_num}_${ix}"
+        }
+        val newNames = {
+          val names = new ListNameDecl()
+          idents foreach { case i => names.add(new NameDeclSimpl(i)) }
+          names
+        }
+        val sends = {
+          var ps: Proc = new PNil()
+          p.listbinding_.zip(idents) foreach {
+            case (b: BindingProcToPat, ident) =>
+              val rhs = new ListProc()
+              rhs.add(b.proc_)
+              val send = new PSend(new NameVar(ident), new SendSingle(), rhs)
+              ps = if (ps == new PNil()) {
+                send
+              } else {
+                new PPar(ps, send)
+              }
+            case (b, _) => throw new RuntimeException("unknown binding:" + b.toString())
+          }
+          ps
+        }
+        val forBindings = new ListLinearBind()
+        p.listbinding_.zip(idents) foreach {
+          case (b: BindingProcToPat, ident) =>
+            forBindings.add(new LinearBindImpl(b.listname_, b.nameremainder_, new NameVar(ident)))
+          case (b, _) => throw new RuntimeException("unknown binding:" + b.toString())
+        }
+        val forProc      = new PInput(new ReceiptLinear(new LinearSimple(forBindings)), p.proc_)
+        val letExpansion = new PNew(newNames, new PPar(sends, forProc))
+        normalizeMatch[M](letExpansion, input)
+
       case _ =>
         sync.raiseError(UnrecognizedNormalizerError("Compilation of construct not yet supported."))
     }
