@@ -60,9 +60,32 @@ object GraphzGenerator {
       result <- Sync[F].delay {
 
                  val timeseries = acc.timeseries.reverse
+                 val firstTs    = timeseries.head
                  val validators = acc.validators
                  for {
                    g <- acc.graph
+                   allAncestors = validators.toList
+                     .flatMap {
+                       case (_, blocks) =>
+                         blocks.get(firstTs).map(_._2).getOrElse(List.empty[String])
+                     }
+                     .toSet
+                     .toList
+                   _ <- allAncestors.traverse(
+                         ancestor =>
+                           g.node(
+                             ancestor,
+                             style = styleFor(ancestor, lastFinalizedBlockHash),
+                             shape = Box
+                           )
+                       )
+                   _ <- validators.toList.traverse {
+                         case (id, blocks) =>
+                           allAncestors.traverse(ancestor => {
+                             val node = nodeForTs(id, firstTs, blocks, lastFinalizedBlockHash)._2
+                             g.edge(ancestor, node, style = Some(Invis))
+                           })
+                       }
                    _ <- validators.toList.traverse {
                          case (id, blocks) =>
                            g.subgraph(
@@ -81,6 +104,17 @@ object GraphzGenerator {
                }
     } yield result
 
+  private def nodeForTs(
+      validatorId: String,
+      ts: Long,
+      blocks: ValidatorsBlocks,
+      lastFinalizedBlockHash: String
+  ): (Option[GraphStyle], String) =
+    blocks.get(ts) match {
+      case Some((blockHash, _)) => (styleFor(blockHash, lastFinalizedBlockHash), blockHash)
+      case None                 => (Some(Invis), s"${ts.show}_$validatorId")
+    }
+
   private def validatorCluster[G[_]: Monad: GraphSerializer](
       id: String,
       blocks: ValidatorsBlocks,
@@ -88,14 +122,8 @@ object GraphzGenerator {
       lastFinalizedBlockHash: String
   ): G[Graphz[G]] =
     for {
-      g <- Graphz.subgraph[G](s"cluster_$id", DiGraph, label = Some(id))
-      nodes = timeseries.map(
-        ts =>
-          blocks.get(ts) match {
-            case Some((blockHash, _)) => (styleFor(blockHash, lastFinalizedBlockHash), blockHash)
-            case None                 => (Some(Invis), s"${ts.show}_$id")
-          }
-      )
+      g     <- Graphz.subgraph[G](s"cluster_$id", DiGraph, label = Some(id))
+      nodes = timeseries.map(ts => nodeForTs(id, ts, blocks, lastFinalizedBlockHash))
       _ <- nodes.traverse {
             case (style, name) => g.node(name, style = style, shape = Box)
           }
