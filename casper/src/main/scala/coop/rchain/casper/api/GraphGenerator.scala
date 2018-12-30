@@ -65,7 +65,9 @@ object GraphzGenerator {
                    g <- acc.graph
                    _ <- validators.toList.traverse {
                          case (id, blocks) =>
-                           g.subgraph(validatorCluster(id, blocks, timeseries))
+                           g.subgraph(
+                             validatorCluster(id, blocks, timeseries, lastFinalizedBlockHash)
+                           )
                        }
                    _ <- validators.values.toList.flatMap(_.values.toList).traverse {
                          case (blockHash, parentsHashes) =>
@@ -82,19 +84,20 @@ object GraphzGenerator {
   private def validatorCluster[G[_]: Monad: GraphSerializer](
       id: String,
       blocks: ValidatorsBlocks,
-      timeseries: List[Long]
+      timeseries: List[Long],
+      lastFinalizedBlockHash: String
   ): G[Graphz[G]] =
     for {
       g <- Graphz.subgraph[G](s"cluster_$id", DiGraph, label = Some(id))
       nodes = timeseries.map(
         ts =>
           blocks.get(ts) match {
-            case Some((blockHash, _)) => (Solid: GraphStyle, blockHash)
-            case None                 => (Invis: GraphStyle, s"${ts.show}_$id")
+            case Some((blockHash, _)) => (styleFor(blockHash, lastFinalizedBlockHash), blockHash)
+            case None                 => (Some(Invis), s"${ts.show}_$id")
           }
       )
       _ <- nodes.traverse {
-            case (style, name) => g.node(name, style = Some(style), shape = Box)
+            case (style, name) => g.node(name, style = style, shape = Box)
           }
       _ <- nodes.zip(nodes.drop(1)).traverse {
             case ((_, n1), (_, n2)) => g.edge(n1, n2, style = Some(Invis))
@@ -102,14 +105,13 @@ object GraphzGenerator {
       _ <- g.close
     } yield g
 
+  private def styleFor(blockHash: String, lastFinalizedBlockHash: String): Option[GraphStyle] =
+    if (blockHash == lastFinalizedBlockHash) Some(Filled) else None
+
   def generate[
       F[_]: Monad: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore,
       G[_]: Monad: GraphSerializer
-  ](topoSort: Vector[Vector[BlockHash]], lastFinalizedBlockHash: String): F[G[Graphz[G]]] = {
-
-    def styleFor(blockHash: String): Option[GraphStyle] =
-      if (blockHash == lastFinalizedBlockHash) Some(Filled) else None
-
+  ](topoSort: Vector[Vector[BlockHash]], lastFinalizedBlockHash: String): F[G[Graphz[G]]] =
     for {
       acc <- topoSort.foldM(Acc[G](graph = initGraph[G]("dag"))) {
               case (acc, blockHashes) =>
@@ -125,7 +127,7 @@ object GraphzGenerator {
                       genesisHash = PrettyPrinter.buildString(genesis)
                       _ <- g.node(
                             name = genesisHash,
-                            style = styleFor(genesisHash),
+                            style = styleFor(genesisHash, lastFinalizedBlockHash),
                             shape = Msquare
                           )
                       _ <- g.close
@@ -141,7 +143,7 @@ object GraphzGenerator {
                             g.node(
                               name = blockHash,
                               shape = Record,
-                              style = styleFor(blockHash),
+                              style = styleFor(blockHash, lastFinalizedBlockHash),
                               color = Some(hashColor(blockSenderHash)),
                               label = Some(s""""{$blockHash|$blockSenderHash}"""")
                             )
@@ -191,7 +193,6 @@ object GraphzGenerator {
 
                }
     } yield result
-  }
 
   private def hashColor(hash: String): String =
     s""""#${hash.substring(0, 6)}""""
