@@ -64,6 +64,7 @@ PInput.          Proc2  ::= "for" "(" Receipt ")" "{" Proc "}" ;
 PChoice.         Proc2  ::= "select" "{" [Branch] "}" ;
 PMatch.          Proc2  ::= "match" Proc4 "{" [Case] "}" ;
 PBundle.         Proc2  ::= Bundle "{" Proc "}" ;
+PLet.            Proc2  ::= "let" [Binding] "in" "{" Proc3 "}";
 PIf.             Proc1  ::= "if" "(" Proc ")" Proc2 ;
 -- Use precedence to force braces around an interior if.
 PIfElse.      Proc1 ::= "if" "(" Proc ")" Proc2 "else" Proc1 ;
@@ -119,6 +120,9 @@ separator nonempty Branch "" ;
 -- Match Cases
 CaseImpl. Case ::= Proc13 "=>" Proc3 ;
 separator nonempty Case "" ;
+
+BindingProcToPat. Binding ::= [Name] NameRemainder "<-" Proc3 ;
+separator nonempty Binding "," ;
 
 -- Name Declarations.
 -- Eventually will have IOPairs.
