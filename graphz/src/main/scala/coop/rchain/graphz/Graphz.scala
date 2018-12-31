@@ -56,6 +56,11 @@ final case object Invis  extends GraphStyle
 final case object Dotted extends GraphStyle
 final case object Dashed extends GraphStyle
 
+sealed trait GraphArrowType
+final case object NormalArrow extends GraphArrowType
+final case object InvArrow    extends GraphArrowType
+final case object NoneArrow   extends GraphArrowType
+
 object Graphz {
 
   implicit val showShape: Show[GraphShape] = new Show[GraphShape] {
@@ -76,6 +81,13 @@ object Graphz {
   implicit val showStyle: Show[GraphStyle]     = smallToString[GraphStyle]
   implicit val showRank: Show[GraphRank]       = smallToString[GraphRank]
   implicit val showRankDir: Show[GraphRankDir] = Show.fromToString[GraphRankDir]
+  implicit val showArrowType: Show[GraphArrowType] = new Show[GraphArrowType] {
+    def show(arrowType: GraphArrowType): String = arrowType match {
+      case NormalArrow => "normal"
+      case InvArrow    => "inv"
+      case NoneArrow   => "none"
+    }
+  }
 
   def DefaultShape = Circle
 
@@ -161,13 +173,16 @@ class Graphz[F[_]: Monad](gtype: GraphType, t: String)(implicit ser: GraphSerial
       src: String,
       dst: String,
       style: Option[GraphStyle] = None,
+      arrowHead: Option[GraphArrowType] = None,
       constraint: Option[Boolean] = None
   ): F[Unit] = {
-    import Graphz.{showShape, showStyle}
+    import Graphz.{showArrowType, showShape, showStyle}
     val attrStyle: Map[String, String] = style.map(s => Map("style" -> s.show)).getOrElse(Map.empty)
+    val attrArrowHead: Map[String, String] =
+      arrowHead.map(s => Map("arrowhead" -> s.show)).getOrElse(Map.empty)
     val attrConstraint: Map[String, String] =
       constraint.map(s => Map("constraint" -> s.show)).getOrElse(Map.empty)
-    val attrs: Map[String, String] = attrStyle |+| attrConstraint
+    val attrs: Map[String, String] = attrStyle |+| attrConstraint |+| attrArrowHead
     ser.push(
       edgeMkStr.format(
         Graphz.quote(src),
