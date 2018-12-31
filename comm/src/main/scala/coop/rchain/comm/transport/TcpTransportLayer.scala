@@ -240,11 +240,13 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
                   log.error(s"Error while streaming packet, error: $error") *> delay(
                     handle(retryCount - 1)
                   )
-                case Right(_) => Task.unit
+                case Right(_) => deleteFile(toStream.path)
               }
-          case Left(error) => log.error(s"Error while streaming packet, error: $error")
-        } >>= kp(deleteFile(toStream.path))
-      else
+          case Left(error) =>
+            log.error(s"Error while streaming packet, error: $error") >>= kp(
+              deleteFile(toStream.path)
+            )
+        } else
         log.debug(s"Giving up on streaming packet ${toStream.path} to ${toStream.peerNode}") >>= kp(
           deleteFile(toStream.path)
         )
