@@ -17,12 +17,27 @@ case class Acc[G[_]](timeseries: List[Long] = List.empty, graph: G[Graphz[G]])
 
 object GraphzGenerator {
 
-  type ValidatorsBlocks = Map[Long, (String, List[String])]
+  case class ValidatorBlock(
+      blockHash: String,
+      parentsHashes: List[String],
+      justifications: List[String]
+  )
+  type ValidatorsBlocks = Map[Long, ValidatorBlock]
   case class Acc2[G[_]](
       validators: Map[String, ValidatorsBlocks] = Map.empty,
       timeseries: List[Long] = List.empty,
       graph: G[Graphz[G]]
   )
+
+  implicit val validatorBlockMonoid: Monoid[ValidatorBlock] = new Monoid[ValidatorBlock] {
+    def empty: ValidatorBlock = ValidatorBlock("", List.empty[String], List.empty[String])
+    def combine(vb1: ValidatorBlock, vb2: ValidatorBlock): ValidatorBlock =
+      ValidatorBlock(
+        vb2.blockHash,
+        vb1.parentsHashes ++ vb2.parentsHashes,
+        vb1.justifications ++ vb2.justifications
+      )
+  }
 
   private def initGraph[G[_]: Monad: GraphSerializer](name: String): G[Graphz[G]] =
     Graphz[G](
@@ -48,7 +63,13 @@ object GraphzGenerator {
                       val blockSenderHash = PrettyPrinter.buildString(b.sender)
                       val parents = b.getHeader.parentsHashList.toList
                         .map(PrettyPrinter.buildString)
-                      val validatorBlocks = Map(timeEntry -> (blockHash, parents))
+                      val justifications = b.justifications
+                        .map(_.latestBlockHash)
+                        .map(PrettyPrinter.buildString)
+                        .toSet
+                        .toList
+                      val validatorBlocks =
+                        Map(timeEntry -> ValidatorBlock(blockHash, parents, justifications))
                       Map(blockSenderHash -> validatorBlocks)
                   }
                 } yield
@@ -67,7 +88,7 @@ object GraphzGenerator {
                    allAncestors = validators.toList
                      .flatMap {
                        case (_, blocks) =>
-                         blocks.get(firstTs).map(_._2).getOrElse(List.empty[String])
+                         blocks.get(firstTs).map(_.parentsHashes).getOrElse(List.empty[String])
                      }
                      .toSet
                      .toList
@@ -93,9 +114,22 @@ object GraphzGenerator {
                            )
                        }
                    _ <- validators.values.toList.flatMap(_.values.toList).traverse {
-                         case (blockHash, parentsHashes) =>
-                           parentsHashes
+                         case ValidatorBlock(blockHash, parentsHashes, justifications) => {
+                           val parentsEdges = parentsHashes
                              .traverse(p => g.edge(blockHash, p, constraint = Some(false)))
+                           val justificationsEdges = justifications
+                             .traverse(
+                               j =>
+                                 g.edge(
+                                   blockHash,
+                                   j,
+                                   style = Some(Dotted),
+                                   constraint = Some(false)
+                                 )
+                             )
+
+                           parentsEdges *> justificationsEdges
+                         }
 
                        }
                    _ <- g.close
@@ -111,8 +145,9 @@ object GraphzGenerator {
       lastFinalizedBlockHash: String
   ): (Option[GraphStyle], String) =
     blocks.get(ts) match {
-      case Some((blockHash, _)) => (styleFor(blockHash, lastFinalizedBlockHash), blockHash)
-      case None                 => (Some(Invis), s"${ts.show}_$validatorId")
+      case Some(ValidatorBlock(blockHash, _, _)) =>
+        (styleFor(blockHash, lastFinalizedBlockHash), blockHash)
+      case None => (Some(Invis), s"${ts.show}_$validatorId")
     }
 
   private def validatorCluster[G[_]: Monad: GraphSerializer](

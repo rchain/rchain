@@ -53,6 +53,8 @@ final case object Solid  extends GraphStyle
 final case object Bold   extends GraphStyle
 final case object Filled extends GraphStyle
 final case object Invis  extends GraphStyle
+final case object Dotted extends GraphStyle
+final case object Dashed extends GraphStyle
 
 object Graphz {
 
