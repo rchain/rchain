@@ -12,6 +12,10 @@ case object BlockRequest extends PacketType {
   val id = "BlockRequest"
 }
 
+case object ForkChoiceTipRequest extends PacketType {
+  val id = "ForkChoiceTipRequest"
+}
+
 case object ApprovedBlock extends PacketType {
   val id = "ApprovedBlock"
 }

@@ -284,6 +284,14 @@ class CasperPacketHandlerSpec extends WordSpec {
           _                   = assert(blockO.contains(genesis))
           handlerInternal     <- refCasper.get
           _                   = assert(handlerInternal.isInstanceOf[ApprovedBlockReceivedHandler[Task]])
+          _ = assert(
+            transportLayer.requests.head.msg == packet(
+              local,
+              transport.ForkChoiceTipRequest,
+              ByteString.EMPTY
+            )
+          )
+          _ = transportLayer.reset()
           // assert that we really serve last approved block
           lastApprovedBlockO <- LastApprovedBlock[Task].get
           _                  = assert(lastApprovedBlockO.isDefined)
