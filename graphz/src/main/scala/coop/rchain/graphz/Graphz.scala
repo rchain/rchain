@@ -52,6 +52,7 @@ sealed trait GraphStyle
 final case object Solid  extends GraphStyle
 final case object Bold   extends GraphStyle
 final case object Filled extends GraphStyle
+final case object Invis  extends GraphStyle
 
 object Graphz {
 
@@ -135,7 +136,7 @@ object Graphz {
       case (Graph, _)   => s"graph"
       case (DiGraph, _) => s"digraph"
     }
-    if (name == "") s"$prefix {" else s"$prefix $name {"
+    if (name == "") s"$prefix {" else s"""$prefix "$name" {"""
   }
 
   def quote(str: String): String = str match {
@@ -154,8 +155,26 @@ object Graphz {
 class Graphz[F[_]: Monad](gtype: GraphType, t: String)(implicit ser: GraphSerializer[F]) {
 
   def edge(edg: (String, String)): F[Unit] = edge(edg._1, edg._2)
-  def edge(src: String, dst: String): F[Unit] =
-    ser.push(edgeMkStr.format(Graphz.quote(src), Graphz.quote(dst), "[]"))
+  def edge(
+      src: String,
+      dst: String,
+      style: Option[GraphStyle] = None,
+      constraint: Option[Boolean] = None
+  ): F[Unit] = {
+    import Graphz.{showShape, showStyle}
+    val attrStyle: Map[String, String] = style.map(s => Map("style" -> s.show)).getOrElse(Map.empty)
+    val attrConstraint: Map[String, String] =
+      constraint.map(s => Map("constraint" -> s.show)).getOrElse(Map.empty)
+    val attrs: Map[String, String] = attrStyle |+| attrConstraint
+    ser.push(
+      edgeMkStr.format(
+        Graphz.quote(src),
+        Graphz.quote(dst),
+        Graphz.attrMkStr(attrs).map(a => " " + a).getOrElse("")
+      )
+    )
+  }
+
   def node(
       name: String,
       shape: GraphShape = Circle,
@@ -178,7 +197,7 @@ class Graphz[F[_]: Monad](gtype: GraphType, t: String)(implicit ser: GraphSerial
   def close: F[Unit]                       = ser.push(s"${t.substring(Graphz.tab.length)}}", suffix = "")
 
   private def edgeMkStr: String = gtype match {
-    case Graph   => s"$t%s -- %s %s"
-    case DiGraph => s"$t%s -> %s %s"
+    case Graph   => s"$t%s -- %s%s"
+    case DiGraph => s"$t%s -> %s%s"
   }
 }
