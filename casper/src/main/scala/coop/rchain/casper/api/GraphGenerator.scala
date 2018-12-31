@@ -124,10 +124,10 @@ object GraphzGenerator {
                                    blockHash,
                                    j,
                                    style = Some(Dotted),
-                                   constraint = Some(false)
+                                   constraint = Some(false),
+                                   arrowHead = Some(NoneArrow)
                                  )
                              )
-
                            parentsEdges *> justificationsEdges
                          }
 
