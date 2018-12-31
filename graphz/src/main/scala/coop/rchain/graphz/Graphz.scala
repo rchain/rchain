@@ -197,7 +197,7 @@ class Graphz[F[_]: Monad](gtype: GraphType, t: String)(implicit ser: GraphSerial
   def close: F[Unit]                       = ser.push(s"${t.substring(Graphz.tab.length)}}", suffix = "")
 
   private def edgeMkStr: String = gtype match {
-    case Graph   => s"$t%s -- %s %s"
-    case DiGraph => s"$t%s -> %s %s"
+    case Graph   => s"$t%s -- %s%s"
+    case DiGraph => s"$t%s -> %s%s"
   }
 }
