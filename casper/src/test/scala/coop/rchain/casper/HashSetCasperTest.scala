@@ -1057,6 +1057,101 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
+  it should "ask peers for blocks it is missing and add them" ignore effectTest {
+    val deployDatasFs = Vector(
+      "@2!(2)",
+      "@1!(1)"
+    ).zipWithIndex
+      .map(
+        d =>
+          () =>
+            ProtoUtil.sourceDeploy(d._1, System.currentTimeMillis() + d._2, accounting.MAX_VALUE)
+      )
+    def deploy(node: HashSetCasperTestNode[Effect], dd: DeployData): Effect[BlockMessage] =
+      for {
+        createBlockResult1    <- node.casperEff.deploy(dd) *> node.casperEff.createBlock
+        Created(signedBlock1) = createBlockResult1
+
+        _ <- node.casperEff.addBlock(signedBlock1, ignoreDoppelgangerCheck[Effect])
+      } yield signedBlock1
+
+    def stepSplit(nodes: Seq[HashSetCasperTestNode[Effect]]) = {
+      for {
+        _ <- deploy(nodes(0), deployDatasFs(0).apply())
+        _ <- deploy(nodes(1), deployDatasFs(1).apply())
+
+        _ <- nodes(0).receive()
+        _ <- nodes(1).receive()
+        _ <- nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) misses this block
+      } yield ()
+    }
+
+    def stepSingle(nodes: Seq[HashSetCasperTestNode[Effect]]) = {
+      for {
+        _ <- deploy(nodes(0), deployDatasFs(0).apply())
+
+        _ <- nodes(0).receive()
+        _ <- nodes(1).receive()
+        _ <- nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) misses this block
+      } yield ()
+    }
+
+    def propagate(nodes: Seq[HashSetCasperTestNode[Effect]]) = {
+      for {
+        _ <- nodes(0).receive()
+        _ <- nodes(1).receive()
+        _ <- nodes(2).receive() //nodes(2) gets the 5th block and starts requesting the dag
+      } yield ()
+    }
+
+    for {
+      nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
+
+      _ <- stepSplit(nodes)
+      _ <- stepSplit(nodes)
+      _ <- stepSplit(nodes)
+
+      _ <- stepSingle(nodes)
+      _ <- stepSingle(nodes)
+
+      _ <- stepSplit(nodes)
+      _ <- stepSplit(nodes)
+
+      br <- deploy(nodes(0), deployDatasFs(0).apply())
+
+      _ <- propagate(nodes)
+      _ <- propagate(nodes)
+      _ <- propagate(nodes)
+      _ <- propagate(nodes)
+      _ <- propagate(nodes)
+      _ <- propagate(nodes)
+      _ <- propagate(nodes)
+      _ <- propagate(nodes)
+      _ <- propagate(nodes)
+      _ <- propagate(nodes)
+      _ <- propagate(nodes)
+      _ <- propagate(nodes)
+      _ <- propagate(nodes)
+      _ <- propagate(nodes)
+      _ <- propagate(nodes)
+      _ <- propagate(nodes)
+      _ <- propagate(nodes)
+      _ <- propagate(nodes)
+      _ <- propagate(nodes)
+      _ <- propagate(nodes)
+      _ <- propagate(nodes)
+      _ <- propagate(nodes)
+      _ <- propagate(nodes)
+
+      c <- nodes(2).casperEff.contains(br)
+      _ = c shouldBe true
+
+      nr <- deploy(nodes(2), deployDatasFs(0).apply())
+      _ = nr.header.get.parentsHashList shouldBe Seq(br.blockHash)
+      _ = nodes.foreach(_.tearDownNode())
+    } yield ()
+  }
+
   it should "ignore adding equivocation blocks" in effectTest {
     for {
       nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
