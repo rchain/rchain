@@ -2,11 +2,59 @@
 
 ## Nodes
 ### As a Node Operator, I want to install software from binary artifacts or a Docker image
-### As a Node Operator, I want to run software on Linux, MacOS, and in Docker
+
+ * A tarball containing latest version of rnode as a runnable .jar file is available at https://github.com/rchain/rchain/releases/
+ * A docker image containing latest version of rnode is available at https://hub.docker.com/r/rchain/rnode
+
+### As a Node Operator, I want to run software on Linux, macOS, and in Docker
+
+ * A .jar file containing latest version of rnode is runnable on Linux and macOS
+ * `docker pull rchain/rnode` followed by `docker run rchain/rnode` starts latest rnode version
+
 ### As a dApp Developer, I want to interface with the Rholang interpreter and evaluate smart contracts independently from the blockchain
 ### As a Node Operator, I want to have a default configuration and the ability to customize the configuration on the command line
+
+ * rnode reads in rnode.toml file at startup
+ * rnode.toml file settings may be passed also via command line, in which case command line ones take priority over the file
+ * Non-exhaustive list of configuration items:
+    * Bootstrap node address
+    * Bonds file path
+    * Wallets file path (in case of a bootstrap node)
+
 ### As a Node Operator, I want to monitor the performance, resource consumption, and status of my node
-### As a Node Operator, I do not want to expose my private wallet key on the command line
+
+ * Node is considered up and running if and only if it listens on the port 40400 (the port number can be overriden with the `--port` option)
+ * rnode publishes metrics to InfluxDB
+    * COMM events per second
+    * CPU usage
+    * Current memory usage
+    * JVM heap size
+    * CPU usage across the entire OS
+    * Memory usage across the entire OS
+    * Total machine's memory size
+    * Amount of free disk space left
+    * Total machine's disk space
+ * `rnode.toml` allows for configuring the address of the InfluxDB instance
+
+```
+[kamon]
+influx-db = true
+
+[influx-db]
+hostname = "localhost"
+port = 8086
+database = "rnode"
+```
+
+ * If the address or the InfluxDB instance isn't configured, metrics are NOT available to the node operator
+ * Metrics published to InfluxDB are available for charting in Chronograf
+ * Chronograf instance address is determined by the configuration of the InfluxDB instance, not the node
+
+### As a Node Operator, I want the wallet key to be stored in a file only
+
+ * The wallet key is stored in a file only (i.e. not passed as a command line argument, due to security concerns)
+ * The path to the file containing the wallet key is passed as an argument on the command line to rnode
+
 ## Peer to Peer Network
 ### As a Node operator, I want to be able to bootstrap to the network by connecting to any known node
 ### As a Node operator, once connected via a bootstrap node, I want to discover and connect to peers

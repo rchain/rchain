@@ -227,23 +227,25 @@ object BlockAPI {
     }
   }
 
-  // TOOD extract common code from show blocks
-  def visualizeBlocks[F[_]: Monad: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
-      d: Option[Int] = None
+  def visualizeDag[
+      F[_]: Monad: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore,
+      G[_]: Monad: GraphSerializer
+  ](
+      d: Option[Int] = None,
+      visualizer: (Vector[Vector[BlockHash]], String) => F[G[Graphz[G]]],
+      stringify: G[Graphz[G]] => String
   ): F[String] = {
-
-    type Effect[A] = StateT[Id, StringBuffer, A]
-    implicit val ser: StringSerializer[Effect] = new StringSerializer[Effect]
 
     def casperResponse(implicit casper: MultiParentCasper[F]): F[String] =
       for {
-        dag         <- MultiParentCasper[F].blockDag
-        maxHeight   <- dag.topoSort(0L).map(_.length - 1)
-        depth       = d.getOrElse(maxHeight)
-        startHeight = math.max(0, maxHeight - depth)
-        topoSort    <- dag.topoSortTail(depth)
-        graph       <- GraphzGenerator.generate[F, Effect](topoSort)
-      } yield graph.runS(new StringBuffer).toString
+        dag                <- MultiParentCasper[F].blockDag
+        maxHeight          <- dag.topoSort(0L).map(_.length - 1)
+        depth              = d.getOrElse(maxHeight)
+        startHeight        = math.max(0, maxHeight - depth)
+        topoSort           <- dag.topoSortTail(depth)
+        lastFinalizedBlock <- MultiParentCasper[F].lastFinalizedBlock
+        graph              <- visualizer(topoSort, PrettyPrinter.buildString(lastFinalizedBlock.blockHash))
+      } yield stringify(graph)
 
     MultiParentCasperRef.withCasper[F, String](
       casperResponse(_),

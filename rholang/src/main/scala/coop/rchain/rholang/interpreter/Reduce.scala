@@ -952,6 +952,14 @@ object Reduce {
                          s.fromEither(localNth(ps, nth))
                        case ETupleBody(ETuple(ps, _, _)) =>
                          s.fromEither(localNth(ps, nth))
+                       case GByteArray(bs) =>
+                         s.fromEither(if (0 <= nth && nth < bs.size) {
+                           val b      = bs.byteAt(nth) & 0xff // convert to unsigned
+                           val p: Par = Expr(GInt(b.toLong))
+                           Right(p)
+                         } else {
+                           Left(ReduceError("Error: index out of bound: " + nth))
+                         })
                        case _ =>
                          s.raiseError(
                            ReduceError(
@@ -1367,6 +1375,8 @@ object Reduce {
         baseExpr.exprInstance match {
           case GString(string) =>
             Applicative[M].pure[Expr](GInt(string.length.toLong))
+          case GByteArray(bytes) =>
+            Applicative[M].pure[Expr](GInt(bytes.size.toLong))
           case EListBody(EList(ps, _, _, _)) =>
             Applicative[M].pure[Expr](GInt(ps.length.toLong))
           case other =>

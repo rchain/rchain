@@ -95,8 +95,11 @@ class BlockContainsString:
         return '<{}({})>'.format(self.__class__.__name__, args)
 
     def is_satisfied(self) -> bool:
-        block = self.node.get_block(self.block_hash)
-        return self.expected_string in block
+        try:
+            block = self.node.get_block(self.block_hash)
+            return self.expected_string in block
+        except GetBlockError:
+            return False
 
 
 class BlocksCountAtLeast:
