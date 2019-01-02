@@ -9,7 +9,7 @@ import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.protocol.{DeployData, DeployServiceResponse, _}
 import coop.rchain.shared._
 import coop.rchain.graphz._
-import coop.rchain.casper.api.GraphzGenerator
+import coop.rchain.casper.api.{GraphConfig, GraphzGenerator}
 import com.google.protobuf.empty.Empty
 
 import cats.mtl._
@@ -54,7 +54,7 @@ private[api] object DeployGrpcService {
           BlockAPI
             .visualizeDag[F, Effect](
               depth,
-              (ts, lfb) => GraphzGenerator.dagAsCluster[F, Effect](ts, lfb),
+              (ts, lfb) => GraphzGenerator.dagAsCluster[F, Effect](ts, lfb, GraphConfig()),
               stringify
             )
             .map(graph => VisualizeBlocksResponse(graph))
