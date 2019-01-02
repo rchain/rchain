@@ -348,12 +348,14 @@ class NodeRuntime private[node] (
     multiParentCasperRef <- MultiParentCasperRef.of[Effect]
     lab                  <- LastApprovedBlock.of[Task].toEffect
     labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
+    commTmpFolder        = conf.server.dataDir.resolve("tmp").resolve("comm")
+    _                    <- Task.delay(commTmpFolder.toFile.delete()).attempt.toEffect
     transport = effects.tcpTransportLayer(
       port,
       conf.tls.certificate,
       conf.tls.key,
       conf.server.maxMessageSize,
-      conf.server.dataDir.resolve("tmp").resolve("comm")
+      commTmpFolder
     )(grpcScheduler, log, metrics, tcpConnections)
     kademliaRPC = effects.kademliaRPC(kademliaPort, defaultTimeout)(
       grpcScheduler,
