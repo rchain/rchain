@@ -17,11 +17,9 @@ import coop.rchain.comm.CachedConnections.ConnectionsCache
 import coop.rchain.comm.CommError._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
-import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.implicits._
 import coop.rchain.shared._
-import coop.rchain.shared.Compression._
 
 import io.grpc._
 import io.grpc.netty._
@@ -30,7 +28,14 @@ import monix.eval._
 import monix.execution._
 import monix.reactive._
 
-class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: Int, tempFolder: Path)(
+class TcpTransportLayer(
+    port: Int,
+    cert: String,
+    key: String,
+    maxMessageSize: Int,
+    tempFolder: Path,
+    clientQueueSize: Int
+)(
     implicit scheduler: Scheduler,
     log: Log[Task],
     metrics: Metrics[Task],
@@ -47,7 +52,7 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
   private def certInputStream = new ByteArrayInputStream(cert.getBytes())
   private def keyInputStream  = new ByteArrayInputStream(key.getBytes())
 
-  private val streamObservable = new StreamObservable(1000, tempFolder)
+  private val streamObservable = new StreamObservable(clientQueueSize, tempFolder)
 
   private lazy val serverSslContext: SslContext =
     try {
@@ -191,7 +196,7 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
   private def deleteFile(path: Path): Task[Unit] = {
     def delete(): Task[Unit] =
       for {
-        result <- Task.delay(Try(path.toFile.delete).toEither)
+        result <- Task.delay(path.toFile.delete).attempt
         _ <- result match {
               case Left(t) =>
                 log.error(s"Can't delete file $path: ${t.getMessage}", t)
