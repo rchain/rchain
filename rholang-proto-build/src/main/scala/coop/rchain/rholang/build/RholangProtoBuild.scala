@@ -45,8 +45,9 @@ object RholangProtoBuild {
 
     val body =
       s"""val resource = getClass.getResourceAsStream(${escape(protoName)})
-         |  override val term: Par = InterpreterUtil.mkTerm(${escapeSourceCode(source)}).right.get
-         |  override val code: String = ${escapeSourceCode(source)}""".stripMargin
+         |  val source : String = ${escapeSourceCode(source)}
+         |  override val term: Par = InterpreterUtil.mkTerm(source).right.get
+         |  override val code: String = source""".stripMargin
 
     s"""$pkgDeclaration
      |

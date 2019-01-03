@@ -11,6 +11,7 @@ import coop.rchain.models.Par
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.collection.ListOps
 import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.Runtime.SystemProcess
 import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.unittest.TestSet
@@ -40,8 +41,10 @@ object TestSetUtil {
 
   }
 
-  def runtime(implicit scheduler: Scheduler): Runtime[Task] = {
-    val runtime = Runtime.create(Paths.get("/not/a/path"), -1, InMem)
+  def runtime(
+      extraServices: Seq[SystemProcess.Definition[Task]] = Seq.empty
+  )(implicit scheduler: Scheduler): Runtime[Task] = {
+    val runtime = Runtime.create(Paths.get("/not/a/path"), -1, InMem, extraServices)
     Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace).unsafeRunSync
     runtime
   }
