@@ -33,8 +33,11 @@ object DeployRuntime {
   def showBlocks[F[_]: Monad: Sync: DeployService](depth: Int): F[Unit] =
     gracefulExit(DeployService[F].showBlocks(BlocksQuery(depth)))
 
-  def visualizeBlocks[F[_]: Monad: Sync: DeployService](depth: Int): F[Unit] =
-    gracefulExit(DeployService[F].visualizeBlocks(BlocksQuery(depth)))
+  def visualizeDag[F[_]: Monad: Sync: DeployService](
+      depth: Int,
+      showJustificationLines: Boolean
+  ): F[Unit] =
+    gracefulExit(DeployService[F].visualizeDag(VisualizeDagQuery(depth, showJustificationLines)))
 
   def listenForDataAtName[F[_]: Sync: DeployService: Time: Capture](
       name: Id[Name]
