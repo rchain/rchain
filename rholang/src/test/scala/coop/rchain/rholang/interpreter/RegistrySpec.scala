@@ -23,7 +23,7 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 
 trait RegistryTester extends PersistentStoreTester {
-  implicit val errorLog = new ErrorLog()
+  implicit val errorLog = new ErrorLog[Task]()
   implicit val costAccounting =
     CostAccounting.unsafe[Task](CostAccount(Integer.MAX_VALUE))
 

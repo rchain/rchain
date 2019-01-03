@@ -33,7 +33,7 @@ import scala.concurrent.duration._
 final case class TestFixture(space: RhoISpace[Task], reducer: ChargingReducer[Task])
 
 trait PersistentStoreTester {
-  def withTestSpace[R](errorLog: ErrorLog)(f: TestFixture => R): R = {
+  def withTestSpace[R](errorLog: ErrorLog[Task])(f: TestFixture => R): R = {
     val dbDir               = Files.createTempDirectory("rholang-interpreter-test-")
     val context: RhoContext = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
     val space = (RSpace
@@ -112,7 +112,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
 
   "evalExpr" should "handle simple addition" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
         val addExpr      = EPlus(GInt(7L), GInt(8L))
@@ -127,7 +127,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "evalExpr" should "handle long addition" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
         val addExpr      = EPlus(GInt(Int.MaxValue), GInt(Int.MaxValue))
@@ -142,7 +142,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "evalExpr" should "leave ground values alone" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
         val groundExpr   = GInt(7L)
@@ -157,7 +157,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "evalExpr" should "handle equality between arbitary processes" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
         val eqExpr       = EEq(GPrivateBuilder("private_name"), GPrivateBuilder("private_name"))
@@ -171,7 +171,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "evalExpr" should "substitute before comparison." in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
         implicit val emptyEnv = Env.makeEnv(Par(), Par())
@@ -185,7 +185,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "eval of Bundle" should "evaluate contents of bundle" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
     val splitRand         = rand.splitByte(0)
     val channel: Par      = GString("channel")
     val result = withTestSpace(errorLog) {
@@ -205,7 +205,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   it should "throw an error if names are used against their polarity" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     /* for (n <- @bundle+ { y } ) { }  -> for (n <- y) { }
      */
@@ -246,7 +246,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "eval of Send" should "place something in the tuplespace." in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
     val channel: Par      = GString("channel")
     val splitRand         = rand.splitByte(0)
     val result = withTestSpace(errorLog) {
@@ -266,7 +266,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   it should "verify that Bundle is writeable before sending on Bundle " in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand = rand.splitByte(0)
     /* @bundle+ { x } !(7) -> x!(7)
@@ -287,7 +287,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "eval of single channel Receive" should "place something in the tuplespace." in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand    = rand.splitByte(0)
     val channel: Par = GString("channel")
@@ -326,7 +326,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   it should "verify that bundle is readable if receiving on Bundle" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand = rand.splitByte(1)
     /* for (@Nil <- @bundle- { y } ) { }  -> for (n <- y) { }
@@ -360,7 +360,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "eval of Send | Receive" should "meet in the tuplespace and proceed." in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand0 = rand.splitByte(0)
     val splitRand1 = rand.splitByte(1)
@@ -411,7 +411,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "eval of Send | Receive" should "when whole list is bound to list remainder, meet in the tuplespace and proceed. (RHOL-422)" in {
     // for(@[...a] <- @"channel") { … } | @"channel"!([7,8,9])
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand0 = rand.splitByte(0)
     val splitRand1 = rand.splitByte(1)
@@ -460,7 +460,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "eval of Send on (7 + 8) | Receive on 15" should "meet in the tuplespace and proceed." in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand0 = rand.splitByte(0)
     val splitRand1 = rand.splitByte(1)
@@ -510,7 +510,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "eval of Send of Receive | Receive" should "meet in the tuplespace and proceed." in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val baseRand   = rand.splitByte(2)
     val splitRand0 = baseRand.splitByte(0)
@@ -588,7 +588,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "Simple match" should "capture and add to the environment." in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand = rand.splitByte(0)
     val result = withTestSpace(errorLog) {
@@ -629,7 +629,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "eval of Send | Send | Receive join" should "meet in the tuplespace and proceed." in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand0 = rand.splitByte(0)
     val splitRand1 = rand.splitByte(1)
@@ -703,7 +703,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "eval of Send with remainder receive" should "capture the remainder." in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand0 = rand.splitByte(0)
     val splitRand1 = rand.splitByte(1)
@@ -733,7 +733,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "eval of nth method" should "pick out the nth item from a list" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand = rand.splitByte(0)
     val nthCall: Expr =
@@ -776,7 +776,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "eval of nth method" should "pick out the nth item from a ByteArray" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val nthCall: Expr =
       EMethod("nth", GByteArray(ByteString.copyFrom(Array[Byte](1, 2, -1))), List[Par](GInt(2L)))
@@ -790,7 +790,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "eval of length method" should "get length of ByteArray" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val nthCall: Expr =
       EMethod("length", GByteArray(ByteString.copyFrom(Array[Byte](1, 2, -1))), List[Par]())
@@ -804,7 +804,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "eval of New" should "use deterministic names and provide urn-based resources" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand   = rand.splitByte(42)
     val resultRand  = rand.splitByte(42)
@@ -865,7 +865,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
   // format: on
   "eval of nth method in send position" should "change what is sent" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand = rand.splitByte(0)
     val nthCallEvalToSend: Expr =
@@ -902,7 +902,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "eval of a method" should "substitute target before evaluating" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val hexToBytesCall: Expr =
       EMethod("hexToBytes", Expr(EVarBody(EVar(Var(BoundVar(0))))))
@@ -918,7 +918,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "eval of `toByteArray` method on any process" should "return that process serialized" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand = rand.splitByte(0)
     import coop.rchain.models.serialization.implicits._
@@ -948,7 +948,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   it should "substitute before serialization" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand = rand.splitByte(0)
     val unsubProc: Par =
@@ -973,7 +973,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   it should "return an error when `toByteArray` is called with arguments" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val toByteArrayWithArgumentsCall: EMethod =
       EMethod(
@@ -999,7 +999,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "eval of hexToBytes" should "transform encoded string to byte array (not the rholang term)" in {
     import coop.rchain.models.serialization.implicits._
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand                 = rand.splitByte(0)
     val testString                = "testing testing"
@@ -1027,7 +1027,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "eval of `toUtf8Bytes`" should "transform string to UTF-8 byte array (not the rholang term)" in {
     import coop.rchain.models.serialization.implicits._
-    implicit val errorLog         = new ErrorLog()
+    implicit val errorLog         = new ErrorLog[Task]()
     val splitRand                 = rand.splitByte(0)
     val testString                = "testing testing"
     val proc: Par                 = GString(testString)
@@ -1052,7 +1052,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   it should "return an error when `toUtf8Bytes` is called with arguments" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
     val toUtfBytesWithArgumentsCall: EMethod =
       EMethod(
         "toUtf8Bytes",
@@ -1076,7 +1076,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   it should "return an error when `toUtf8Bytes` is evaluated on a non String" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
     val toUtfBytesCall    = EMethod("toUtf8Bytes", GInt(44L), List[Par]())
 
     val result = withTestSpace(errorLog) {
@@ -1093,7 +1093,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "variable references" should "be substituted before being used." in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
     val splitRandResult   = rand.splitByte(3)
     val splitRandSrc      = rand.splitByte(3)
     splitRandResult.next()
@@ -1139,7 +1139,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   it should "be substituted before being used in a match." in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
     val splitRandResult   = rand.splitByte(4)
     val splitRandSrc      = rand.splitByte(4)
     splitRandResult.next()
@@ -1170,7 +1170,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   it should "reference a variable that comes from a match in tuplespace" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
     val baseRand          = rand.splitByte(7)
     val splitRand0        = baseRand.splitByte(0)
     val splitRand1        = baseRand.splitByte(1)
@@ -1213,7 +1213,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "1 matches 1" should "return true" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1227,7 +1227,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "1 matches 0" should "return false" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1241,7 +1241,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "1 matches _" should "return true" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1255,7 +1255,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "x matches 1" should "return true when x is bound to 1" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1269,7 +1269,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "1 matches =x" should "return true when x is bound to 1" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1285,7 +1285,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "'abc'.length()" should "return the length of the string" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1298,7 +1298,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "'abcabac'.slice(3, 6)" should "return 'aba'" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1313,7 +1313,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "'abcabcac'.slice(2,1)" should "return empty string" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1328,7 +1328,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "'abcabcac'.slice(8,9)" should "return empty string" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1343,7 +1343,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "'abcabcac'.slice(-2,2)" should "return 'ab'" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1358,7 +1358,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "'Hello, ${name}!' % {'name': 'Alice'}" should "return 'Hello, Alice!" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1378,7 +1378,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "'abc' ++ 'def'" should "return 'abcdef" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1398,7 +1398,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "ByteArray('dead') ++ ByteArray('beef)'" should "return ByteArray('deadbeef')" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1426,7 +1426,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
 
   "'${a} ${b}' % {'a': '1 ${b}', 'b': '2 ${a}'" should "return '1 ${b} 2 ${a}" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1447,7 +1447,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "interpolate" should "interpolate Boolean values" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1469,7 +1469,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "interpolate" should "interpolate URIs" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1491,7 +1491,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "[0, 1, 2, 3].length()" should "return the length of the list" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1506,7 +1506,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "[3, 7, 2, 9, 4, 3, 7].slice(3, 5)" should "return [9, 4]" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1522,7 +1522,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "[3, 7, 2, 9, 4, 3, 7].slice(5, 4)" should "return []" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1538,7 +1538,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "[3, 7, 2, 9, 4, 3, 7].slice(7, 8)" should "return []" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1554,7 +1554,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "[3, 7, 2, 9, 4, 3, 7].slice(-2, 2)" should "return [3, 7]" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1570,7 +1570,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "[3, 2, 9] ++ [6, 1, 7]" should "return [3, 2, 9, 6, 1, 7]" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1593,7 +1593,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "{1: 'a', 2: 'b'}.getOrElse(1, 'c')" should "return 'a'" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1610,7 +1610,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "{1: 'a', 2: 'b'}.getOrElse(3, 'c')" should "return 'c'" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1627,7 +1627,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "{1: 'a', 2: 'b'}.set(3, 'c')" should "return {1: 'a', 2: 'b', 3: 'c'}" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1653,7 +1653,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "{1: 'a', 2: 'b'}.set(2, 'c')" should "return {1: 'a', 2: 'c'}" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1672,7 +1672,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "{1: 'a', 2: 'b', 3: 'c'}.keys()" should "return Set(1, 2, 3)" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1701,7 +1701,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "{1: 'a', 2: 'b', 3: 'c'}.size()" should "return 3" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1725,7 +1725,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "Set(1, 2, 3).size()" should "return 3" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1743,7 +1743,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "Set(1, 2) + 3" should "return Set(1, 2, 3)" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1760,7 +1760,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "{1: 'a', 2: 'b', 3: 'c'} - 3" should "return {1: 'a', 2: 'b'}" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1786,7 +1786,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "Set(1, 2, 3) - 3" should "return Set(1, 2)" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1803,7 +1803,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "Set(1, 2) ++ Set(3, 4)" should "return Set(1, 2, 3, 4)" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1821,7 +1821,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "{1: 'a', 2: 'b'} ++ {3: 'c', 4: 'd'}" should "return union" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1850,7 +1850,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "Set(1, 2, 3, 4) -- Set(1, 2)" should "return Set(3, 4)" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val result = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1868,7 +1868,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "Set(1, 2, 3).get(1)" should "not work" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1883,7 +1883,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "{1: 'a', 2: 'b'}.add(1)" should "not work" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>
@@ -1899,7 +1899,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "Running out of phlogistons" should "stop the evaluation" in {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
 
     val test = withTestSpace(errorLog) {
       case TestFixture(_, reducer) =>

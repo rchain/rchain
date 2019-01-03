@@ -273,7 +273,7 @@ class AbstractRuntimeManager[F[_]: Concurrent: ToAbstractContext] protected (
   private def injAttempt(
       deploy: Deploy,
       reducer: ChargingReducer[Task],
-      errorLog: ErrorLog
+      errorLog: ErrorLog[Task]
   ): F[(PCost, Vector[Throwable])] = {
     implicit val rand: Blake2b512Random = Blake2b512Random(
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy.raw.get))
