@@ -44,7 +44,7 @@ object PathOps {
     }
 
   implicit class PathDelete(path: Path) {
-    def delete[F[_]: Sync: Log](): F[Unit] = {
+    def delete[F[_]: Sync: Log]()(implicit logSource: LogSource): F[Unit] = {
       import java.io.File
       import java.util.Comparator
 
@@ -52,7 +52,7 @@ object PathOps {
 
       import cats.implicits._
 
-      def deleteFile(file: File)(implicit logSource: LogSource): F[Unit] =
+      def deleteFile(file: File): F[Unit] =
         for {
           deleted <- Sync[F].delay(file.delete)
           _ <- if (deleted) Log[F].info(s"Deleted file ${file.getAbsolutePath}")
