@@ -489,23 +489,26 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
         .toSet
       allDependencies = (missingParents union missingJustifications).toList
       missingDependencies <- allDependencies.filterA(
-                              blockHash =>
-                                dag
-                                  .lookup(blockHash)
-                                  .map(_.isEmpty && !blockBuffer.exists(_.blockHash == blockHash))
-                            )
+        blockHash =>
+          dag
+            .lookup(blockHash)
+            .map(_.isEmpty))
+      missingUnseenDependencies = missingDependencies.filter(blockHash => !blockBuffer.exists(_.blockHash == blockHash))
       _ <- missingDependencies.traverse(hash => handleMissingDependency(hash, b))
+      _ <- missingUnseenDependencies.traverse(hash => requestMissingDependency(hash))
     } yield ()
 
-  private def handleMissingDependency(hash: BlockHash, parentBlock: BlockMessage): F[Unit] =
+  private def handleMissingDependency(hash: BlockHash, childBlock: BlockMessage): F[Unit] =
     for {
       _ <- blockBufferDependencyDagState.modify(
-            blockBufferDependencyDag =>
-              DoublyLinkedDagOperations
-                .add[BlockHash](blockBufferDependencyDag, hash, parentBlock.blockHash)
-          )
-      _ <- CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash))
+        blockBufferDependencyDag =>
+          DoublyLinkedDagOperations
+            .add[BlockHash](blockBufferDependencyDag, hash, childBlock.blockHash)
+      )
     } yield ()
+
+  private def requestMissingDependency(hash: BlockHash) =
+    CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash))
 
   private def handleInvalidBlockEffect(status: BlockStatus, block: BlockMessage): F[Unit] =
     for {

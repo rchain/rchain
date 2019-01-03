@@ -1057,7 +1057,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  it should "ask peers for blocks it is missing and add them" ignore effectTest {
+  it should "ask peers for blocks it is missing and add them" in effectTest {
     val deployDatasFs = Vector(
       "@2!(2)",
       "@1!(1)"
