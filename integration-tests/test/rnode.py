@@ -132,6 +132,14 @@ class Node:
     def get_metrics(self):
         return self.shell_out('curl', '-s', 'http://localhost:40403/metrics')
 
+    def get_connected_peers_metric_value(self):
+        try:
+            return self.shell_out('sh', '-c', 'curl -s http://localhost:40403/metrics | grep ^rchain_comm_rp_connect_peers\\ ')
+        except NonZeroExitCodeError as e:
+            if e.exit_code == 1:
+                return ''
+            raise
+
     def cleanup(self) -> None:
         self.container.remove(force=True, v=True)
         self.terminate_background_logging_event.set()

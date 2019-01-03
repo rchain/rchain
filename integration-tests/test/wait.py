@@ -66,7 +66,7 @@ class HasAtLeastPeers:
         return '<{}({})>'.format(self.__class__.__name__, args)
 
     def is_satisfied(self) -> bool:
-        output = self.node.get_metrics()
+        output = self.node.get_connected_peers_metric_value()
         match = self.metric_regex.search(output)
         if match is None:
             return False
