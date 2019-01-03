@@ -502,7 +502,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  it should "not produce UnusedCommEvent while merging non conflicting blocks in the presence of conflicting ones" ignore effectTest {
+  it should "not produce UnusedCommEvent while merging non conflicting blocks in the presence of conflicting ones" in effectTest {
     def defineDeploy(source: String, t: Long) =
       ProtoUtil.sourceDeploy(
         source,
