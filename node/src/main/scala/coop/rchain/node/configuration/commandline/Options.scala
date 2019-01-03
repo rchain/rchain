@@ -389,6 +389,11 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         name = "depth",
         descr = "depth in terms of block height"
       )
+    val showJustificationLines =
+      opt[Boolean](
+        name = "showJustificationlines",
+        descr = "if justification lines should be shown"
+      )
   }
   addSubcommand(visualizeBlocks)
 

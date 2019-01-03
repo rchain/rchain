@@ -34,7 +34,7 @@ service DeployService {
   // Get details about a particular block.
   rpc showBlock(BlockQuery) returns (BlockQueryResponse) {}
   // Get dag
-  rpc visualizeBlocks(BlocksQuery) returns (VisualizeBlocksResponse) {}
+  rpc visualizeDag(VisualizeDagQuery) returns (VisualizeBlocksResponse) {}
   rpc showMainChain(BlocksQuery) returns (stream BlockInfoWithoutTuplespace) {}
   // Get a summary of blocks on the blockchain.
   rpc showBlocks(BlocksQuery) returns (stream BlockInfoWithoutTuplespace) {}
@@ -109,6 +109,11 @@ message MaybeBlockMessage {
 message BlockQueryResponse {
   string status = 1;
   BlockInfo blockInfo = 2;
+}
+
+message VisualizeDagQuery {
+  int32 depth                 = 1;
+  bool showJustificationLines = 2;
 }
 
 message VisualizeBlocksResponse {
