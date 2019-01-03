@@ -1119,32 +1119,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
       br <- deploy(nodes(0), deployDatasFs(0).apply())
 
-      _ <- propagate(nodes)
-      _ <- propagate(nodes)
-      _ <- propagate(nodes)
-      _ <- propagate(nodes)
-      _ <- propagate(nodes)
-      _ <- propagate(nodes)
-      _ <- propagate(nodes)
-      _ <- propagate(nodes)
-      _ <- propagate(nodes)
-      _ <- propagate(nodes)
-      _ <- propagate(nodes)
-      _ <- propagate(nodes)
-      _ <- propagate(nodes)
-      _ <- propagate(nodes)
-      _ <- propagate(nodes)
-      _ <- propagate(nodes)
-      _ <- propagate(nodes)
-      _ <- propagate(nodes)
-      _ <- propagate(nodes)
-      _ <- propagate(nodes)
-      _ <- propagate(nodes)
-      _ <- propagate(nodes)
-      _ <- propagate(nodes)
+      a <- List.fill(22)(propagate(nodes)).sequence//make the network chooch
 
-      c <- nodes(2).casperEff.contains(br)
-      _ = c shouldBe true
+      _ <- nodes(2).casperEff.contains(br) shouldBeF true
 
       nr <- deploy(nodes(2), deployDatasFs(0).apply())
       _ = nr.header.get.parentsHashList shouldBe Seq(br.blockHash)
