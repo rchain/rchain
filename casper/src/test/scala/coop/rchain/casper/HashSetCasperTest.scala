@@ -1119,7 +1119,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
       br <- deploy(nodes(0), deployDatasFs(0).apply())
 
-      a <- List.fill(22)(propagate(nodes)).sequence//make the network chooch
+      _ <- List.fill(22)(propagate(nodes)).sequence//make the network chooch
 
       _ <- nodes(2).casperEff.contains(br) shouldBeF true
 
