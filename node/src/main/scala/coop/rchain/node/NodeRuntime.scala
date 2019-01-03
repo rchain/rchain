@@ -39,6 +39,7 @@ import coop.rchain.node.diagnostics._
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
+import coop.rchain.shared.PathOps._
 
 import com.typesafe.config.ConfigFactory
 import kamon._
@@ -349,7 +350,7 @@ class NodeRuntime private[node] (
     lab                  <- LastApprovedBlock.of[Task].toEffect
     labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
     commTmpFolder        = conf.server.dataDir.resolve("tmp").resolve("comm")
-    _                    <- Task.delay(commTmpFolder.toFile.delete()).attempt.toEffect
+    _                    <- commTmpFolder.delete[Task]().toEffect
     transport = effects.tcpTransportLayer(
       port,
       conf.tls.certificate,
