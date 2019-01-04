@@ -279,19 +279,13 @@ class AbstractRuntimeManager[F[_]: Concurrent: ToAbstractContext] protected (
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy.raw.get))
     )
     ToAbstractContext[F].fromTask(
-      reducer
-        .inj(deploy.term.get)
-        .attempt
-        .flatMap(result => {
-          reducer.getAvailablePhlos().flatMap { phlos =>
-            val oldErrors = errorLog.readAndClearErrorVector()
-            val newErrors = result.swap.toSeq.toVector
-            val allErrors = oldErrors.map { _ |+| newErrors }
-
-            allErrors.map(CostAccount.toProto(phlos) -> _)
-
-          }
-        })
+      for {
+        result    <- reducer.inj(deploy.term.get).attempt
+        phlos     <- reducer.getAvailablePhlos()
+        oldErrors <- errorLog.readAndClearErrorVector()
+        newErrors = result.swap.toSeq.toVector
+        allErrors = oldErrors |+| newErrors
+      } yield (CostAccount.toProto(phlos) -> allErrors)
     )
   }
 }
