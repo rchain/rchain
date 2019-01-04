@@ -30,6 +30,13 @@ The proposed testing initiatives will be conducted within using the Whiteblock S
 | CPU Max MHz | 4000.0000                                      |
 | RAM         | 256GB DDR4                                     |
 
+## Contracts Used
+The following contracts will be deployed within the various test cases outlined in this document:
+
+- [dupe.rho](https://github.com/rchain/rchain/blob/dev/rholang/examples/dupe.rho)
+- [shortslow.rho](https://github.com/rchain/rchain/blob/dev/rholang/examples/shortslow.rho)
+- [shortfast.rho](https://github.com/rchain/rchain/blob/dev/rholang/examples/shortfast.rho)
+
 ## Performance Metrics
 
 Time measurements are expressed in terms of the time passed on the node
@@ -64,7 +71,7 @@ which define the variable to be tested.
 | Validators       | 10          | 20          | 30          |
 | Static Nodes     | 6           | 6           | 6           |
 | Contract         | dupe.rho    | dupe.rho    | dupe.rho    |
-| Bandwidth        | 1GB         | 1Gb         | 1Gb         |
+| Bandwidth        | 1Gb         | 1Gb         | 1Gb         |
 | Network Latency  | 0ms         | 0ms         | 0ms         |
 | Packet Loss      | 0%          | 0%          | 0%          |
 
@@ -75,7 +82,7 @@ which define the variable to be tested.
 | Validators      | 6           | 5           | 5           |
 | Static Nodes    | 10          | 20          | 30          |
 | Contract        | dupe.rho    | dupe.rho    | dupe.rho    |
-| Bandwidth       | 1GB         | 1Gb         | 1Gb         |
+| Bandwidth       | 1Gb         | 1Gb         | 1Gb         |
 | Network Latency | 0ms         | 0ms         | 0ms         |
 | Packet Loss     | 0%          | 0%          | 0%          |
 
@@ -86,7 +93,7 @@ which define the variable to be tested.
 | Validators      | 18          | 18            | 18            |
 | Static Nodes    | 18          | 18            | 18            |
 | Contract        | dupe.rho    | shortfast.rho | shortslow.rho |
-| Bandwidth       | 1GB         | 1Gb           | 1Gb           |
+| Bandwidth       | 1Gb         | 1Gb           | 1Gb           |
 | Network Latency | 0ms         | 0ms           | 0ms           |
 | Packet Loss     | 0%          | 0%            | 0%            |
 
@@ -110,7 +117,7 @@ which define the variable to be tested.
 | Validators      | 18          | 18          | 18          |
 | Static Nodes    | 18          | 18          | 18          |
 | Contract        | dupe.rho    | dupe.rho    | dupe.rho    |
-| Bandwidth       | 1GB         | 1Gb         | 1Gb         |
+| Bandwidth       | 1Gb         | 1Gb         | 1Gb         |
 | Network Latency | 50ms        | 110ms       | 250ms       |
 | Packet Loss     | 0%          | 0%          | 0%          |
 
@@ -121,7 +128,7 @@ which define the variable to be tested.
 | Validators      | 18          | 18          | 18          |
 | Static Nodes    | 18          | 18          | 18          |
 | Contract        | dupe.rho    | dupe.rho    | dupe.rho    |
-| Bandwidth       | 1GB         | 1Gb         | 1Gb         |
+| Bandwidth       | 1Gb         | 1Gb         | 1Gb         |
 | Network Latency | 0ms         | 0ms         | 0ms         |
 | Packet Loss     | 0.01%       | 0.5%        | 1.0%        |
 
