@@ -818,7 +818,7 @@ object Reduce {
                        case (EListBody(lhs), EListBody(rhs)) =>
                          for {
                            _ <- costAccountingAlg.charge(
-                                 listAppendCost(rhs.value.ps.toVector)
+                                 listAppendCost(rhs.ps.toVector)
                                )
                          } yield
                            Expr(

@@ -177,7 +177,7 @@ class AbstractRuntimeManager[F[_]: Concurrent: ToAbstractContext] protected (
           case deploy +: rem =>
             for {
               _              <- ToAbstractContext[F].fromTask(runtime.space.reset(hash))
-              availablePhlos = Cost(deploy.raw.map(_.phloLimit).get.value)
+              availablePhlos = Cost(deploy.raw.map(_.phloLimit).get)
               _              <- ToAbstractContext[F].fromTask(runtime.reducer.setAvailablePhlos(availablePhlos))
               (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(
                 deploy.raw.get
@@ -220,7 +220,7 @@ class AbstractRuntimeManager[F[_]: Concurrent: ToAbstractContext] protected (
       Concurrent[F].defer {
         terms match {
           case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
-            val availablePhlos = Cost(deploy.raw.map(_.phloLimit).get.value)
+            val availablePhlos = Cost(deploy.raw.map(_.phloLimit).get)
             for {
               _ <- ToAbstractContext[F].fromTask(
                     runtime.replayReducer.setAvailablePhlos(availablePhlos)

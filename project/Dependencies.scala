@@ -7,7 +7,7 @@ object Dependencies {
   val circeVersion   = "0.10.0"
   val http4sVersion  = "0.19.0"
   val kamonVersion   = "1.1.3"
-  val catsVersion    = "1.4.0"
+  val catsVersion    = "1.5.0"
   val catsMtlVersion = "0.4.0"
 
   // format: off
@@ -77,6 +77,7 @@ object Dependencies {
   val overrides = Seq(
     catsCore,
     catsEffect,
+    catsLawsTest,
     shapeless,
     guava,
     scodecBits,
