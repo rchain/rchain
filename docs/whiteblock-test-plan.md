@@ -28,7 +28,6 @@ The proposed testing initiatives will be conducted within using the Whiteblock S
 | RAM/Node    | 32GB DDR4                                      |
 | CPU         | Intel Xeon E7 (Intel Core i7-6950X)            |
 | CPU Max MHz | 4000.0000                                      |
-| RAM         | 256GB DDR4                                     |
 
 ## Contracts Used
 The following contracts will be deployed within the various test cases outlined in this document:
