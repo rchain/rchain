@@ -1,11 +1,12 @@
 package coop.rchain.rholang.interpreter
 
-import cats.MonadError
+import cats.{Alternative, MonadError, Monoid, MonoidK}
 import cats.arrow.FunctionK
 import cats.data.{OptionT, StateT}
 import cats.implicits._
 import cats.mtl.implicits._
 import cats.mtl.MonadState
+import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
@@ -79,7 +80,7 @@ package object matcher {
       })
 
     def empty[A]: OptionalFreeMapWithCost[A] =
-      StateT.liftF(OptionT.fromOption(None))
+      MonadTrans[StateT[?[_], FreeMap, ?]].liftM(MonoidK[OptionWithCost].empty)
 
     def fromOption[A](option: Option[A]): OptionalFreeMapWithCost[A] =
       StateT.liftF(OptionT.fromOption(option))
@@ -108,7 +109,7 @@ package object matcher {
       new NonDetFreeMapWithCostOps[A](s)
 
     def empty[A]: NonDetFreeMapWithCost[A] =
-      StateT.liftF(StreamT.empty)
+      MonadTrans[StateT[?[_], FreeMap, ?]].liftM(MonoidK[StreamWithCost].empty)
 
     def fromStream[A](stream: Stream[A]): NonDetFreeMapWithCost[A] =
       StateT.liftF(StreamT.fromStream(StateT.pure(stream)))
