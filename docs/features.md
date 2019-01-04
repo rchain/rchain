@@ -143,6 +143,8 @@ database = "rnode"
 * compare data sent and restored
 
 ## Bonding/Unbonding
+This section is WIP 
+See https://rchain.atlassian.net/wiki/spaces/CORE/pages/647856129/Validator+Incentives+and+Casper
 ### As a Node Validator, I want to be able to add my stake to the network and be recognized as a validator so I can participate in proof of stake consensus and be eligible to earn rewards (validating)
 ### As a Node Validator, I want to be able to retrieve my stake from the network and no longer be recognized a as validator
 ### As an incoming Node Validator, I need confirmation of my request to bond
