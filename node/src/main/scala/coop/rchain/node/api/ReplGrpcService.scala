@@ -38,7 +38,8 @@ import Interpreter._
 import coop.rchain.rholang.interpreter.accounting.CostAccount
 import storage.StoragePrinter
 
-private[api] class ReplGrpcService(runtime: Runtime, worker: Scheduler) extends ReplGrpcMonix.Repl {
+private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
+    extends ReplGrpcMonix.Repl {
 
   def exec(reader: Reader): Task[ReplResponse] =
     Task
@@ -76,7 +77,7 @@ private[api] class ReplGrpcService(runtime: Runtime, worker: Scheduler) extends 
   def eval(request: EvalRequest): Task[ReplResponse] =
     defer(exec(new StringReader(request.program)))
 
-  def runEvaluate(runtime: Runtime, term: Par): Task[EvaluateResult] =
+  def runEvaluate(runtime: Runtime[Task], term: Par): Task[EvaluateResult] =
     for {
       _      <- Task.now(printNormalizedTerm(term))
       result <- evaluate(runtime, term)

@@ -11,8 +11,10 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoIStore
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.shared.PathOps._
+import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{fixture, Assertion, Matchers, Outcome}
+
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
@@ -39,7 +41,7 @@ class DeployParamsSpec extends fixture.FlatSpec with Matchers {
     assert(!datum.persist)
   }
 
-  override type FixtureParam = Runtime
+  override type FixtureParam = Runtime[Task]
 
   "rho:deploy:params" should "return the parameters that are set." in { runtime =>
     implicit val rand     = Blake2b512Random(Array.empty[Byte])

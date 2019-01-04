@@ -55,7 +55,7 @@ object GrpcServer {
 
   def acquireInternalServer(
       port: Int,
-      runtime: Runtime,
+      runtime: Runtime[Task],
       grpcExecutor: Scheduler
   )(
       implicit worker: Scheduler,

@@ -205,7 +205,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
   }
 
   it should "parse the wallets file and include it in the genesis state" in withRawGenResources {
-    (runtime: Runtime, genesisPath: Path, log: LogStub[Task], time: LogicalTime[Task]) =>
+    (runtime: Runtime[Task], genesisPath: Path, log: LogStub[Task], time: LogicalTime[Task]) =>
       val walletsFile = genesisPath.resolve("wallets.txt").toString
       printWallets(walletsFile)
 
@@ -255,7 +255,7 @@ object GenesisTest {
       )
 
   def withRawGenResources(
-      body: (Runtime, Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
+      body: (Runtime[Task], Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
   ): Task[Unit] = {
     val storePath = storageLocation
     val runtime   = Runtime.create(storePath, storageSize)
@@ -275,7 +275,7 @@ object GenesisTest {
       body: (RuntimeManager[Task], Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
   ): Task[Unit] =
     withRawGenResources {
-      (runtime: Runtime, genesisPath: Path, log: LogStub[Task], time: LogicalTime[Task]) =>
+      (runtime: Runtime[Task], genesisPath: Path, log: LogStub[Task], time: LogicalTime[Task]) =>
         val runtimeManager = RuntimeManager.fromRuntime(runtime)
         body(runtimeManager, genesisPath, log, time)
     }

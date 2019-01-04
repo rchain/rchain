@@ -90,7 +90,7 @@ class NodeRuntime private[node] (
       httpServer: Fiber[Task, Unit]
   )
 
-  def acquireServers(runtime: Runtime, blockApiLock: Semaphore[Effect])(
+  def acquireServers(runtime: Runtime[Task], blockApiLock: Semaphore[Effect])(
       implicit
       nodeDiscovery: NodeDiscovery[Task],
       blockStore: BlockStore[Effect],
@@ -172,7 +172,7 @@ class NodeRuntime private[node] (
     } yield Servers(grpcServerExternal, grpcServerInternal, httpServerFiber)
   }
 
-  def clearResources(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
+  def clearResources(servers: Servers, runtime: Runtime[Task], casperRuntime: Runtime[Task])(
       implicit
       transport: TransportLayer[Task],
       kademliaRPC: KademliaRPC[Task],
@@ -200,7 +200,7 @@ class NodeRuntime private[node] (
       _   <- log.info("Goodbye.")
     } yield ()).unsafeRunSync(scheduler)
 
-  def addShutdownHook(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
+  def addShutdownHook(servers: Servers, runtime: Runtime[Task], casperRuntime: Runtime[Task])(
       implicit transport: TransportLayer[Task],
       kademliaRPC: KademliaRPC[Task],
       blockStore: BlockStore[Effect],
@@ -210,7 +210,7 @@ class NodeRuntime private[node] (
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
-  private def nodeProgram(runtime: Runtime, casperRuntime: Runtime)(
+  private def nodeProgram(runtime: Runtime[Task], casperRuntime: Runtime[Task])(
       implicit
       time: Time[Task],
       rpConfState: RPConfState[Task],

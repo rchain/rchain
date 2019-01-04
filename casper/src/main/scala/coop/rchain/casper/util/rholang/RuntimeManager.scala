@@ -23,7 +23,7 @@ import scala.collection.immutable
 
 class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
     val emptyStateHash: ByteString,
-    runtimeContainer: MVar[F, Runtime]
+    runtimeContainer: MVar[F, Runtime[Task]]
 ) {
 
   def captureResults(start: StateHash, deploy: Deploy, name: String = "__SCALA__"): F[Seq[Par]] =
@@ -71,7 +71,7 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
 
   private def setTimestamp(
       time: Option[Long],
-      runtime: Runtime
+      runtime: Runtime[Task]
   ): F[Unit] =
     time match {
       case Some(t) =>
@@ -118,7 +118,7 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
       }
   }
 
-  private def withResetRuntime[R](hash: StateHash, block: Runtime => F[R]) =
+  private def withResetRuntime[R](hash: StateHash, block: Runtime[Task] => F[R]) =
     Sync[F].bracket(runtimeContainer.take) { runtime =>
       val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
       ToAbstractContext[F].fromTask(runtime.space.reset(blakeHash)).flatMap(_ => block(runtime))
@@ -159,7 +159,7 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
 
   private def newEval(
       terms: Seq[Deploy],
-      runtime: Runtime,
+      runtime: Runtime[Task],
       initHash: StateHash
   ): F[(StateHash, Seq[InternalProcessedDeploy])] = {
 
@@ -205,7 +205,7 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
 
   private def replayEval(
       terms: Seq[InternalProcessedDeploy],
-      runtime: Runtime,
+      runtime: Runtime[Task],
       initHash: StateHash
   ): F[Either[(Option[Deploy], Failed), StateHash]] = {
 
@@ -290,7 +290,7 @@ object RuntimeManager {
   type StateHash = ByteString
   import coop.rchain.catscontrib.TaskContrib._
 
-  def fromRuntime(active: Runtime)(implicit scheduler: Scheduler): RuntimeManager[Task] =
+  def fromRuntime(active: Runtime[Task])(implicit scheduler: Scheduler): RuntimeManager[Task] =
     (for {
       _                <- active.space.clear()
       _                <- active.replaySpace.clear()
