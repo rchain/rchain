@@ -1,8 +1,10 @@
 package coop.rchain.rholang.interpreter
 
+import cats.MonadError
 import cats.arrow.FunctionK
 import cats.data.{OptionT, StateT}
 import cats.implicits._
+import cats.mtl.MonadState
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
@@ -23,6 +25,14 @@ package object matcher {
   //FreeMap => Cost => Either[OOPE, (Cost, Stream[(FreeMap, A)])]
   type NonDetFreeMapWithCost[A] = StateT[StreamWithCost, FreeMap, A]
   type StreamWithCost[A]        = StreamT[ErroredOrCostA, A]
+
+  // The naming convention means: this is an effect-type alias.
+  // Will be used similarly to capabilities, but for more generic and probably low-level/implementation stuff.
+  // Adopted from: http://atnos-org.github.io/eff/org.atnos.site.Tutorial.html#write-an-interpreter-for-your-program
+  type _freeMap[F[_]] = MonadState[F, FreeMap]
+  type _cost[F[_]]    = MonadState[F, Cost]
+  type _error[F[_]]   = MonadError[F, OutOfPhlogistonsError.type]
+  type _short[F[_]]   = MonadError[F, Unit] //arises from and corresponds to the OptionT/StreamT in the stack
 
   object OptionalFreeMapWithCost {
 
