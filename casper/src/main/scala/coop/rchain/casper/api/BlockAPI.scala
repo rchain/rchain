@@ -33,6 +33,7 @@ import coop.rchain.casper._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.catscontrib.ToAbstractContext
+import monix.eval.Task
 
 object BlockAPI {
 
@@ -158,7 +159,7 @@ object BlockAPI {
     } yield mainChain
 
   private def getDataWithBlockInfo[F[_]: MultiParentCasper: Log: SafetyOracle: BlockStore: ToAbstractContext: Concurrent](
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       sortedListeningName: Par,
       block: BlockMessage
   ): F[Option[DataWithBlockInfo]] =
@@ -176,7 +177,7 @@ object BlockAPI {
     }
 
   private def getContinuationsWithBlockInfo[F[_]: MultiParentCasper: Log: SafetyOracle: BlockStore: Concurrent: ToAbstractContext](
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       sortedListeningNames: immutable.Seq[Par],
       block: BlockMessage
   ): F[Option[ContinuationsWithBlockInfo]] =

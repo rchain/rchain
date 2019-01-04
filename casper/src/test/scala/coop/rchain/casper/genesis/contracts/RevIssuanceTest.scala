@@ -21,7 +21,7 @@ import scala.concurrent.duration._
 class RevIssuanceTest extends FlatSpec with Matchers {
 
   private def getDataUnsafe(
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       postTransferHash: StateHash,
       transferStatusOut: String
   ) = {
@@ -99,7 +99,7 @@ object RevIssuanceTest {
       pubKey: String,
       secKey: Array[Byte],
       statusOut: String
-  )(implicit runtimeManager: RuntimeManager): DeployData = {
+  )(implicit runtimeManager: RuntimeManager[Task]): DeployData = {
     val code =
       BondingUtil.preWalletUnlockDeploy[Task](ethAddress, pubKey, secKey, statusOut).unsafeRunSync
     ProtoUtil.sourceDeploy(
@@ -116,7 +116,7 @@ object RevIssuanceTest {
       transferStatusOut: String,
       pubKey: String,
       secKey: Array[Byte]
-  )(implicit runtimeManager: RuntimeManager): DeployData = {
+  )(implicit runtimeManager: RuntimeManager[Task]): DeployData = {
     val code = BondingUtil
       .issuanceWalletTransferDeploy[Task](
         nonce,

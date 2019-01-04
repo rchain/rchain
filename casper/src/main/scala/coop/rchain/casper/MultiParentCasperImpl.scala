@@ -19,13 +19,14 @@ import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.shared._
+import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.atomic.AtomicAny
 
 import scala.collection.mutable
 
 class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ToAbstractContext](
-    runtimeManager: RuntimeManager,
+    runtimeManager: RuntimeManager[Task],
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
@@ -583,7 +584,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       }
     )
 
-  def getRuntimeManager: F[Option[RuntimeManager]] = Applicative[F].pure(Some(runtimeManager))
+  def getRuntimeManager: F[Option[RuntimeManager[Task]]] = Applicative[F].pure(Some(runtimeManager))
 
   def fetchDependencies: F[Unit] =
     for {
