@@ -410,20 +410,18 @@ object SpatialMatcher extends SpatialMatcherInstances {
       updatedFreeMap = freeMaps.fold(currentFreeMap)(_ ++ _)
     } yield updatedFreeMap
 
-  private def handleRemainder[F[_]: MonadState[?[_], FreeMap]: Monad, T](
+  private def handleRemainder[F[_]: Monad, T](
       remainderTargets: Seq[T],
       level: Int,
       merger: (Par, Seq[T]) => Par
+  )(
+      implicit freeMap: _freeMap[F]
   ): F[Unit] =
     for {
-      remainderPar <- MonadState[F, FreeMap].inspect[Par](
-                       (m: FreeMap) => m.getOrElse(level, VectorPar())
-                     )
+      remainderPar <- freeMap.inspect[Par](_.getOrElse(level, VectorPar()))
       //TODO: enforce sorted-ness of returned terms using types / by verifying the sorted-ness here
       remainderParUpdated = merger(remainderPar, remainderTargets)
-      _ <- MonadState[F, FreeMap].modify(
-            (m: FreeMap) => m + (level -> remainderParUpdated)
-          )
+      _                   <- freeMap.modify(_ + (level -> remainderParUpdated))
     } yield Unit
 
   case class ParCount(
