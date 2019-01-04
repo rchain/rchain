@@ -28,7 +28,7 @@ abstract class WideBenchBaseState {
   lazy val dbDir: Path              = Files.createTempDirectory(BenchStorageDirPrefix)
   val mapSize: Long                 = 1024L * 1024L * 1024L * 10L
 
-  var runtime: Runtime       = null
+  var runtime: Runtime[Task] = null
   var setupTerm: Option[Par] = None
   var term: Option[Par]      = None
 
@@ -36,7 +36,7 @@ abstract class WideBenchBaseState {
 
   implicit def readErrors = () => runtime.readAndClearErrorVector().unsafeRunSync
 
-  def createRuntime(): Runtime = Runtime.create(dbDir, mapSize)
+  def createRuntime(): Runtime[Task] = Runtime.create(dbDir, mapSize)
 
   @Setup(value = Level.Iteration)
   def doSetup(): Unit = {

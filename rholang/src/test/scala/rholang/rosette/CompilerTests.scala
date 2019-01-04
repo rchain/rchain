@@ -41,7 +41,7 @@ class CompilerTests extends FunSuite with Matchers {
     }
   }
 
-  private def execute(file: Path): Either[Throwable, Runtime] =
+  private def execute(file: Path): Either[Throwable, Runtime[Task]] =
     mkRuntime(tmpPrefix, mapSize)
       .use { runtime =>
         Interpreter.execute(runtime, new FileReader(file.toString)).attempt

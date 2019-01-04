@@ -1171,7 +1171,6 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-
   /*
    *  DAG Looks like this:
    *
@@ -1214,7 +1213,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         _ <- node.casperEff.addBlock(signedBlock1, ignoreDoppelgangerCheck[Effect])
       } yield signedBlock1
 
-    def stepSplit(nodes: Seq[HashSetCasperTestNode[Effect]]) = {
+    def stepSplit(nodes: Seq[HashSetCasperTestNode[Effect]]) =
       for {
         _ <- deploy(nodes(0), deployDatasFs(0).apply())
         _ <- deploy(nodes(1), deployDatasFs(1).apply())
@@ -1223,9 +1222,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         _ <- nodes(1).receive()
         _ <- nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) misses this block
       } yield ()
-    }
 
-    def stepSingle(nodes: Seq[HashSetCasperTestNode[Effect]]) = {
+    def stepSingle(nodes: Seq[HashSetCasperTestNode[Effect]]) =
       for {
         _ <- deploy(nodes(0), deployDatasFs(0).apply())
 
@@ -1233,15 +1231,13 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         _ <- nodes(1).receive()
         _ <- nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) misses this block
       } yield ()
-    }
 
-    def propagate(nodes: Seq[HashSetCasperTestNode[Effect]]) = {
+    def propagate(nodes: Seq[HashSetCasperTestNode[Effect]]) =
       for {
         _ <- nodes(0).receive()
         _ <- nodes(1).receive()
         _ <- nodes(2).receive()
       } yield ()
-    }
 
     for {
       nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
@@ -1264,8 +1260,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _ <- nodes(2).casperEff.contains(br) shouldBeF true
 
       nr <- deploy(nodes(2), deployDatasFs(0).apply())
-      _ = nr.header.get.parentsHashList shouldBe Seq(br.blockHash)
-      _ = nodes.foreach(_.tearDownNode())
+      _  = nr.header.get.parentsHashList shouldBe Seq(br.blockHash)
+      _  = nodes.foreach(_.tearDownNode())
     } yield ()
   }
 

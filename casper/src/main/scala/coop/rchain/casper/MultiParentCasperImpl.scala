@@ -490,11 +490,14 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
         .toSet
       allDependencies = (missingParents union missingJustifications).toList
       missingDependencies <- allDependencies.filterA(
-        blockHash =>
-          dag
-            .lookup(blockHash)
-            .map(_.isEmpty))
-      missingUnseenDependencies = missingDependencies.filter(blockHash => !blockBuffer.exists(_.blockHash == blockHash))
+                              blockHash =>
+                                dag
+                                  .lookup(blockHash)
+                                  .map(_.isEmpty)
+                            )
+      missingUnseenDependencies = missingDependencies.filter(
+        blockHash => !blockBuffer.exists(_.blockHash == blockHash)
+      )
       _ <- missingDependencies.traverse(hash => handleMissingDependency(hash, b))
       _ <- missingUnseenDependencies.traverse(hash => requestMissingDependency(hash))
     } yield ()
@@ -502,10 +505,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
   private def handleMissingDependency(hash: BlockHash, childBlock: BlockMessage): F[Unit] =
     for {
       _ <- dependencyDagState.modify(
-        dependencyDag =>
-          DoublyLinkedDagOperations
-            .add[BlockHash](dependencyDag, hash, childBlock.blockHash)
-      )
+            dependencyDag =>
+              DoublyLinkedDagOperations
+                .add[BlockHash](dependencyDag, hash, childBlock.blockHash)
+          )
     } yield ()
 
   private def requestMissingDependency(hash: BlockHash) =
@@ -528,8 +531,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
 
   private def reAttemptBuffer: F[Unit] =
     for {
-      dependencyDag <- dependencyDagState.get
-      dependencyFree           = dependencyDag.dependencyFree
+      dependencyDag  <- dependencyDagState.get
+      dependencyFree = dependencyDag.dependencyFree
       dependencyFreeBlocks = blockBuffer
         .filter(block => dependencyFree.contains(block.blockHash))
         .toList

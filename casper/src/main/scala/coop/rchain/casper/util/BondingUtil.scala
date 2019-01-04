@@ -184,7 +184,7 @@ object BondingUtil {
 
   def makeRuntimeResource[F[_]: Sync](
       runtimeDirResource: Resource[F, Path]
-  )(implicit scheduler: Scheduler): Resource[F, Runtime] =
+  )(implicit scheduler: Scheduler): Resource[F, Runtime[Task]] =
     runtimeDirResource.flatMap(
       runtimeDir =>
         Resource
@@ -194,7 +194,7 @@ object BondingUtil {
     )
 
   def makeRuntimeManagerResource[F[_]: Sync](
-      runtimeResource: Resource[F, Runtime]
+      runtimeResource: Resource[F, Runtime[Task]]
   )(implicit scheduler: Scheduler): Resource[F, RuntimeManager[Task]] =
     runtimeResource.flatMap(
       activeRuntime =>
