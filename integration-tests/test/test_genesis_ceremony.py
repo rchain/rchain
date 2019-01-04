@@ -12,9 +12,6 @@ from .rnode import (
     started_peer,
     ready_bootstrap,
 )
-from .wait import (
-    wait_for_sent_unapproved_block,
-)
 
 
 

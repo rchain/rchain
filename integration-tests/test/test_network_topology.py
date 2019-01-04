@@ -90,7 +90,7 @@ def test_casper_propose_and_deploy(command_line_options: 'CommandLineOptions', r
     containing the contract.
     """
 
-    with conftest.testing_context(command_line_options, docker_client) as context:
+    with conftest.testing_context(command_line_options, random_generator, docker_client) as context:
         with complete_network(context) as network:
             token_size = 20
             contract_name = 'contract.rho'
