@@ -35,7 +35,7 @@ object InterpreterUtil {
   def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: ToAbstractContext](
       b: BlockMessage,
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager
+      runtimeManager: RuntimeManager[Task]
   ): F[Either[BlockException, Option[StateHash]]] = {
     val preStateHash    = ProtoUtil.preStateHash(b)
     val tsHash          = ProtoUtil.tuplespace(b)
@@ -62,7 +62,7 @@ object InterpreterUtil {
   }
 
   private def processPossiblePreStateHash[F[_]: Sync: Log: BlockStore: ToAbstractContext](
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       preStateHash: StateHash,
       tsHash: Option[StateHash],
       internalDeploys: Seq[InternalProcessedDeploy],
@@ -91,7 +91,7 @@ object InterpreterUtil {
     }
 
   private def processPreStateHash[F[_]: Sync: Log: BlockStore: ToAbstractContext](
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       preStateHash: StateHash,
       tsHash: Option[StateHash],
       internalDeploys: Seq[InternalProcessedDeploy],
@@ -148,7 +148,7 @@ object InterpreterUtil {
       parents: Seq[BlockMessage],
       deploys: Seq[Deploy],
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       time: Option[Long] = None
   )(
       implicit scheduler: Scheduler
@@ -168,7 +168,7 @@ object InterpreterUtil {
   private def computeParentsPostState[F[_]: Sync: BlockStore: ToAbstractContext](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager
+      runtimeManager: RuntimeManager[Task]
   ): F[Either[Throwable, StateHash]] = {
     val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
 
@@ -195,7 +195,7 @@ object InterpreterUtil {
   private def computeMultiParentsPostState[F[_]: Sync: BlockStore: ToAbstractContext](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       initStateHash: StateHash
   ): F[Either[Throwable, StateHash]] =
     for {
@@ -259,7 +259,7 @@ object InterpreterUtil {
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager
+      runtimeManager: RuntimeManager[Task]
   )(
       implicit scheduler: Scheduler
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =

@@ -26,6 +26,7 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.catscontrib.ski.kp2
+import monix.eval.Task
 
 import scala.collection.immutable.BitSet
 
@@ -180,7 +181,7 @@ object DeployPaymentCostTest {
   }
 
   def createWallet(
-      rm: RuntimeManager
+      rm: RuntimeManager[Task]
   )(implicit casper: MultiParentCasperImpl[Effect]): Effect[Par] = {
     // Create new wallet
     val walletRetCh = GPrivateBuilder()
@@ -198,7 +199,7 @@ object DeployPaymentCostTest {
       )
   }
 
-  def deployAndCapture(p: Par, retChannel: Par, rm: RuntimeManager)(
+  def deployAndCapture(p: Par, retChannel: Par, rm: RuntimeManager[Task])(
       implicit casper: MultiParentCasperImpl[Effect]
   ): Effect[Par] =
     for {
@@ -259,7 +260,7 @@ object DeployPaymentCostTest {
       walletAddress: Par,
       secKey: Array[Byte],
       pubKey: Array[Byte],
-      rm: RuntimeManager
+      rm: RuntimeManager[Task]
   )(implicit casper: MultiParentCasperImpl[Effect]): Effect[String] = {
     val registerWalletTuple: Par = ETuple(Seq(GInt(1), walletAddress))
     val registrySig              = Ed25519.sign(registerWalletTuple.toByteArray, secKey)

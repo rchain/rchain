@@ -388,7 +388,7 @@ class InterpreterUtilTest
   }
 
   def computeSingleProcessedDeploy(
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       dag: BlockDagRepresentation[Task],
       deploy: Deploy*
   )(implicit blockStore: BlockStore[Task]): Task[Seq[InternalProcessedDeploy]] =

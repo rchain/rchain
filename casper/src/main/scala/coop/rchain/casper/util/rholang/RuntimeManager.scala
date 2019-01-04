@@ -21,11 +21,7 @@ import monix.execution.Scheduler
 
 import scala.collection.immutable
 
-class RuntimeManager private (emptyStateHash: ByteString, runtimeContainer: MVar[Task, Runtime])
-    extends AbstractRuntimeManager[Task](emptyStateHash, runtimeContainer)
-
-//runtime is a SyncVar for thread-safety, as all checkpoints share the same "hot store"
-class AbstractRuntimeManager[F[_]: Concurrent: ToAbstractContext] protected (
+class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
     val emptyStateHash: ByteString,
     runtimeContainer: MVar[F, Runtime]
 ) {
@@ -297,7 +293,7 @@ object RuntimeManager {
   type StateHash = ByteString
   import coop.rchain.catscontrib.TaskContrib._
 
-  def fromRuntime(active: Runtime)(implicit scheduler: Scheduler): RuntimeManager =
+  def fromRuntime(active: Runtime)(implicit scheduler: Scheduler): RuntimeManager[Task] =
     (for {
       _                <- active.space.clear()
       _                <- active.replaySpace.clear()
@@ -308,5 +304,5 @@ object RuntimeManager {
       replayHash       = ByteString.copyFrom(replayCheckpoint.root.bytes.toArray)
       _                = assert(hash == replayHash)
       runtime          <- MVar[Task].of(active)
-    } yield (new RuntimeManager(hash, runtime))).unsafeRunSync
+    } yield new RuntimeManager(hash, runtime)).unsafeRunSync
 }
