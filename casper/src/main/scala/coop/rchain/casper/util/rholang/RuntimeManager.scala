@@ -273,22 +273,19 @@ class AbstractRuntimeManager[F[_]: Concurrent: ToAbstractContext] protected (
   private def injAttempt(
       deploy: Deploy,
       reducer: ChargingReducer[Task],
-      errorLog: ErrorLog
+      errorLog: ErrorLog[Task]
   ): F[(PCost, Vector[Throwable])] = {
     implicit val rand: Blake2b512Random = Blake2b512Random(
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy.raw.get))
     )
     ToAbstractContext[F].fromTask(
-      reducer
-        .inj(deploy.term.get)
-        .attempt
-        .flatMap(result => {
-          val oldErrors = errorLog.readAndClearErrorVector()
-          val newErrors = result.swap.toSeq.toVector
-          val allErrors = oldErrors |+| newErrors
-
-          reducer.getAvailablePhlos().map(phlos => CostAccount.toProto(phlos) -> allErrors)
-        })
+      for {
+        result    <- reducer.inj(deploy.term.get).attempt
+        phlos     <- reducer.getAvailablePhlos()
+        oldErrors <- errorLog.readAndClearErrorVector()
+        newErrors = result.swap.toSeq.toVector
+        allErrors = oldErrors |+| newErrors
+      } yield (CostAccount.toProto(phlos) -> allErrors)
     )
   }
 }

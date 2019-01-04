@@ -54,7 +54,7 @@ class RholangMethodsCostsSpec
           (listN(0), 1L)
         )
         forAll(table) { (pars, n) =>
-          implicit val errLog = new ErrorLog()
+          implicit val errLog = new ErrorLog[Task]()
           implicit val env    = Env[Par]()
           val method          = methodCall("nth", EList(pars), List(GInt(n)))
           withReducer[Assertion] { reducer =>
@@ -88,7 +88,7 @@ class RholangMethodsCostsSpec
           (listN(0), 1L)
         )
         forAll(table) { (pars, n) =>
-          implicit val errLog = new ErrorLog()
+          implicit val errLog = new ErrorLog[Task]()
           implicit val env    = Env[Par]()
           val method          = methodCall("nth", EList(pars), List(GInt(n)))
           withReducer[Assertion] { reducer =>
@@ -111,7 +111,7 @@ class RholangMethodsCostsSpec
       factor: Double,
       method: Expr
   ): Assertion = {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
     implicit val env      = Env[Par]()
     withReducer { reducer =>
       for {
@@ -778,7 +778,7 @@ class RholangMethodsCostsSpec
   def emptyString: String = ""
 
   def test(method: Expr, expectedCost: Cost): Assertion = {
-    implicit val errLog = new ErrorLog()
+    implicit val errLog = new ErrorLog[Task]()
     implicit val env    = Env[Par]()
     withReducer[Assertion] { reducer =>
       for {
@@ -787,7 +787,7 @@ class RholangMethodsCostsSpec
       } yield assert(cost === expectedCost)
     }
   }
-  def withReducer[R](f: ChargingReducer[Task] => Task[R])(implicit errLog: ErrorLog): R = {
+  def withReducer[R](f: ChargingReducer[Task] => Task[R])(implicit errLog: ErrorLog[Task]): R = {
     val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space)._2
     val test = for {
       _   <- reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE))

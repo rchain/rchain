@@ -1,39 +1,36 @@
 package coop.rchain.rholang.interpreter
 
-import cats.Functor
+import cats._
+import cats.effect._
+import cats.implicits._
 import cats.mtl.FunctorTell
-import monix.eval.Task
 
-class ErrorLog extends FunctorTell[Task, Throwable] {
+class ErrorLog[F[_]: Sync] extends FunctorTell[F, Throwable] {
   private var errorVector: Vector[Throwable] = Vector.empty
-  val functor                                = implicitly[Functor[Task]]
-  override def tell(e: Throwable): Task[Unit] =
-    Task.now {
-      this.synchronized {
-        errorVector = errorVector :+ e
-      }
+  val functor                                = implicitly[Functor[F]]
+  override def tell(e: Throwable): F[Unit] = Sync[F].delay {
+    this.synchronized {
+      errorVector = errorVector :+ e
     }
+  }
 
-  override def writer[A](a: A, e: Throwable): Task[A] =
-    Task.now {
-      this.synchronized {
-        errorVector = errorVector :+ e
-      }
-      a
-    }
+  override def writer[A](a: A, e: Throwable): F[A] = Sync[F].delay {
+    this.synchronized {
+      errorVector = errorVector :+ e
+    }; a
+  }
 
-  override def tuple[A](ta: (Throwable, A)): Task[A] =
-    Task.now {
-      this.synchronized {
-        errorVector = errorVector :+ ta._1
-      }
-      ta._2
-    }
+  override def tuple[A](ta: (Throwable, A)): F[A] = Sync[F].delay {
+    this.synchronized {
+      errorVector = errorVector :+ ta._1
+    }; ta._2
+  }
 
-  def readAndClearErrorVector(): Vector[Throwable] =
+  def readAndClearErrorVector(): F[Vector[Throwable]] = Sync[F].delay {
     this.synchronized {
       val ret = errorVector
       errorVector = Vector.empty
       ret
     }
+  }
 }

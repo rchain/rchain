@@ -131,7 +131,7 @@ object Interpreter {
       checkpoint <- runtime.space.createCheckpoint()
       _          <- runtime.reducer.setAvailablePhlos(evaluatePhlosLimit)
       _          <- runtime.reducer.inj(normalizedTerm)(rand)
-      errors     <- Task.now(runtime.readAndClearErrorVector())
+      errors     <- runtime.readAndClearErrorVector()
       leftPhlos  <- runtime.reducer.getAvailablePhlos()
       cost       = leftPhlos.copy(cost = evaluatePhlosLimit - leftPhlos.cost)
       _          <- if (errors.nonEmpty) runtime.space.reset(checkpoint.root) else Task.now(())
