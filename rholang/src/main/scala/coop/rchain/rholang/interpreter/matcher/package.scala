@@ -45,6 +45,9 @@ package object matcher {
       _           <- error.ensure(cost.get)(OutOfPhlogistonsError)(_.value >= 0)
     } yield ()
 
+  private[matcher] def attemptOpt[F[_], A](f: F[A])(implicit short: _short[F]): F[Option[A]] =
+    short.attempt(f).map(_.fold(_ => None, Some(_)))
+
   object OptionalFreeMapWithCost {
 
     class OptionalFreeMapWithCostOps[A](s: OptionalFreeMapWithCost[A]) {
@@ -53,19 +56,7 @@ package object matcher {
         s.flatMap(matcher.charge[OptionalFreeMapWithCost](amount).as)
 
       def attemptOpt: OptionalFreeMapWithCost[Option[A]] =
-        StateT((m: FreeMap) => {
-          OptionT(StateT((c: Cost) => {
-            s.run(m).value.run(c).map {
-              case (cost, result) =>
-                val recovered: Option[(FreeMap, Option[A])] = result match {
-                  case None          => Some((m, None))
-                  case Some((m1, a)) => Some((m1, Some(a)))
-                }
-
-                (cost, recovered)
-            }
-          }))
-        })
+        matcher.attemptOpt(s)
 
       def runWithCost(
           initCost: Cost
