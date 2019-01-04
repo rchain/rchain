@@ -61,7 +61,7 @@ trait RegistryTester extends PersistentStoreTester {
   ): R =
     withTestSpace(errorLog) {
       case TestFixture(space, _) =>
-        val _                                  = errorLog.readAndClearErrorVector()
+        val _                                  = errorLog.readAndClearErrorVector().runSyncUnsafe(1.second)
         lazy val dispatchTable: RhoDispatchMap = dispatchTableCreator(registry)
         lazy val (dispatcher @ _, reducer, registry) =
           RholangAndScalaDispatcher

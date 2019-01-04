@@ -26,10 +26,10 @@ class ErrorLog[F[_]: Applicative] extends FunctorTell[F, Throwable] {
     }; ta._2
   }.pure[F]
 
-  def readAndClearErrorVector(): Vector[Throwable] =
+  def readAndClearErrorVector(): F[Vector[Throwable]] =
     this.synchronized {
       val ret = errorVector
       errorVector = Vector.empty
-      ret
+      ret.pure[F]
     }
 }

@@ -41,7 +41,7 @@ class Runtime private (
     val shortLeashParams: Runtime.ShortLeashParams[Task],
     val blockTime: Runtime.BlockTime[Task]
 ) {
-  def readAndClearErrorVector(): Vector[Throwable] = errorLog.readAndClearErrorVector()
+  def readAndClearErrorVector(): Task[Vector[Throwable]] = errorLog.readAndClearErrorVector()
   def close(): Task[Unit] =
     for {
       _ <- space.close()

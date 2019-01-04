@@ -123,7 +123,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val expected = Seq(Expr(GInt(15L)))
     result.exprs should be(expected)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "evalExpr" should "handle long addition" in {
@@ -138,7 +138,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val expected = Seq(Expr(GInt(2 * Int.MaxValue.toLong)))
     result.exprs should be(expected)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "evalExpr" should "leave ground values alone" in {
@@ -153,7 +153,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val expected = Seq(Expr(GInt(7L)))
     result.exprs should be(expected)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "evalExpr" should "handle equality between arbitary processes" in {
@@ -167,7 +167,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
     val expected = Seq(Expr(GBool(true)))
     result.exprs should be(expected)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "evalExpr" should "substitute before comparison." in {
@@ -181,7 +181,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
     val expected = Seq(Expr(GBool(true)))
     result.exprs should be(expected)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of Bundle" should "evaluate contents of bundle" in {
@@ -201,7 +201,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
 
     checkData(result)(channel, Seq(GInt(7L), GInt(8L), GInt(9L)), splitRand)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   it should "throw an error if names are used against their polarity" in {
@@ -222,7 +222,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(task.runToFuture, 3.seconds)
     }
     receiveResult should be(HashMap.empty)
-    errorLog.readAndClearErrorVector should be(
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(
       Vector(ReduceError("Trying to read from non-readable channel."))
     )
 
@@ -240,7 +240,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(task.runToFuture, 3.seconds)
     }
     sendResult should be(HashMap.empty)
-    errorLog.readAndClearErrorVector should be(
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(
       Vector(ReduceError("Trying to send on non-writeable channel."))
     )
   }
@@ -262,7 +262,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
 
     checkData(result)(channel, Seq(GInt(7L), GInt(8L), GInt(9L)), splitRand)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   it should "verify that Bundle is writeable before sending on Bundle " in {
@@ -283,7 +283,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
 
     checkData(result)(channel, Seq(GInt(7L)), splitRand)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of single channel Receive" should "place something in the tuplespace." in {
@@ -322,7 +322,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       None
     )
     checkContinuation(result)(List(channel), List(bindPattern), ParWithRandom(Par(), splitRand))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   it should "verify that bundle is readable if receiving on Bundle" in {
@@ -356,7 +356,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       List(BindPattern(List(Par()), None)),
       ParWithRandom(Par(), splitRand)
     )
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of Send | Receive" should "meet in the tuplespace and proceed." in {
@@ -393,7 +393,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val channel: Par = GString("result")
 
     checkData(sendFirstResult)(channel, Seq(GString("Success")), mergeRand)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
 
     val receiveFirstResult = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
@@ -406,7 +406,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
 
     checkData(receiveFirstResult)(channel, Seq(GString("Success")), mergeRand)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of Send | Receive" should "when whole list is bound to list remainder, meet in the tuplespace and proceed. (RHOL-422)" in {
@@ -443,7 +443,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val channel: Par = GString("result")
 
     checkData(sendFirstResult)(channel, Seq(GString("Success")), mergeRand)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
 
     val receiveFirstResult = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
@@ -456,7 +456,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
 
     checkData(receiveFirstResult)(channel, Seq(GString("Success")), mergeRand)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of Send on (7 + 8) | Receive on 15" should "meet in the tuplespace and proceed." in {
@@ -494,7 +494,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val channel: Par = GString("result")
 
     checkData(sendFirstResult)(channel, Seq(GString("Success")), mergeRand)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
 
     val receiveFirstResult = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
@@ -506,7 +506,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTaskReceiveFirst.runToFuture, 3.seconds)
     }
     checkData(receiveFirstResult)(channel, Seq(GString("Success")), mergeRand)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of Send of Receive | Receive" should "meet in the tuplespace and proceed." in {
@@ -551,7 +551,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       List(BindPattern(List(GInt(2L)))),
       ParWithRandom(Par(), mergeRand)
     )
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
 
     val receiveFirstResult = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
@@ -568,7 +568,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       List(BindPattern(List(GInt(2L)))),
       ParWithRandom(Par(), mergeRand)
     )
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
 
     val bothResult = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
@@ -584,7 +584,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       List(BindPattern(List(GInt(2L)))),
       ParWithRandom(Par(), mergeRand)
     )
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "Simple match" should "capture and add to the environment." in {
@@ -625,7 +625,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val channel: Par = GString("result")
 
     checkData(result)(channel, Seq(GPrivateBuilder("one"), GPrivateBuilder("zero")), splitRand)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of Send | Send | Receive join" should "meet in the tuplespace and proceed." in {
@@ -671,7 +671,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val channel: Par = GString("result")
 
     checkData(sendFirstResult)(channel, Seq(GString("Success")), mergeRand)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
 
     val receiveFirstResult = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
@@ -685,7 +685,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
 
     checkData(receiveFirstResult)(channel, Seq(GString("Success")), mergeRand)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
 
     val interleavedResult = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
@@ -699,7 +699,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
 
     checkData(interleavedResult)(channel, Seq(GString("Success")), mergeRand)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of Send with remainder receive" should "capture the remainder." in {
@@ -729,7 +729,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val channel: Par = GString("result")
 
     checkData(result)(channel, Seq(EList(List(GInt(7L), GInt(8L), GInt(9L)))), mergeRand)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of nth method" should "pick out the nth item from a list" in {
@@ -772,7 +772,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val channel: Par = GString("result")
 
     checkData(indirectResult)(channel, Seq(GString("Success")), splitRand)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of nth method" should "pick out the nth item from a ByteArray" in {
@@ -898,7 +898,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     // format: off
     checkData(result)(channel, Seq(Send(GString("result"), List(GString("Success")), false, BitSet())), splitRand)
     // format: on
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of a method" should "substitute target before evaluating" in {
@@ -914,7 +914,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val expectedResult: Par = Expr(GByteArray(ByteString.copyFrom(Base16.decode("deadbeef"))))
     directResult should be(expectedResult)
 
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of `toByteArray` method on any process" should "return that process serialized" in {
@@ -944,7 +944,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val channel: Par = GString("result")
 
     checkData(result)(channel, Seq(Expr(GByteArray(serializedProcess))), splitRand)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   it should "substitute before serialization" in {
@@ -969,7 +969,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
 
     checkData(result)(channel, Seq(Expr(GByteArray(serializedProcess))), splitRand)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   it should "return an error when `toByteArray` is called with arguments" in {
@@ -992,7 +992,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result should be(HashMap.empty)
-    errorLog.readAndClearErrorVector should be(
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(
       Vector(MethodArgumentNumberMismatch("toByteArray", 0, 1))
     )
   }
@@ -1022,7 +1022,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       Seq(Expr(GByteArray(ByteString.copyFrom(testString.getBytes)))),
       splitRand
     )
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "eval of `toUtf8Bytes`" should "transform string to UTF-8 byte array (not the rholang term)" in {
@@ -1048,7 +1048,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       Seq(Expr(GByteArray(ByteString.copyFrom(testString.getBytes)))),
       splitRand
     )
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   it should "return an error when `toUtf8Bytes` is called with arguments" in {
@@ -1070,7 +1070,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result should be(HashMap.empty)
-    errorLog.readAndClearErrorVector should be(
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(
       Vector(MethodArgumentNumberMismatch("toUtf8Bytes", 0, 1))
     )
   }
@@ -1089,7 +1089,9 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result should be(HashMap.empty)
-    errorLog.readAndClearErrorVector should be(Vector(MethodNotDefined("toUtf8Bytes", "Int")))
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(
+      Vector(MethodNotDefined("toUtf8Bytes", "Int"))
+    )
   }
 
   "variable references" should "be substituted before being used." in {
@@ -1135,7 +1137,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val channel: Par = GString("result")
     checkData(result)(channel, Seq(GString("true")), mergeRand)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   it should "be substituted before being used in a match." in {
@@ -1166,7 +1168,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val channel: Par = GString("result")
 
     checkData(result)(channel, Seq(GString("true")), splitRandResult)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   it should "reference a variable that comes from a match in tuplespace" in {
@@ -1209,7 +1211,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val channel: Par = GString("result")
     checkData(result)(channel, Seq(GString("true")), mergeRand)
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "1 matches 1" should "return true" in {
@@ -1223,7 +1225,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
 
     result.exprs should be(Seq(Expr(GBool(true))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "1 matches 0" should "return false" in {
@@ -1237,7 +1239,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
 
     result.exprs should be(Seq(Expr(GBool(false))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "1 matches _" should "return true" in {
@@ -1251,7 +1253,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
 
     result.exprs should be(Seq(Expr(GBool(true))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "x matches 1" should "return true when x is bound to 1" in {
@@ -1265,7 +1267,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
 
     result.exprs should be(Seq(Expr(GBool(true))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "1 matches =x" should "return true when x is bound to 1" in {
@@ -1281,7 +1283,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
 
     result.exprs should be(Seq(Expr(GBool(true))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "'abc'.length()" should "return the length of the string" in {
@@ -1294,7 +1296,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GInt(3L))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "'abcabac'.slice(3, 6)" should "return 'aba'" in {
@@ -1309,7 +1311,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("aba"))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "'abcabcac'.slice(2,1)" should "return empty string" in {
@@ -1324,7 +1326,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString(""))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "'abcabcac'.slice(8,9)" should "return empty string" in {
@@ -1339,7 +1341,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString(""))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "'abcabcac'.slice(-2,2)" should "return 'ab'" in {
@@ -1354,7 +1356,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("ab"))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "'Hello, ${name}!' % {'name': 'Alice'}" should "return 'Hello, Alice!" in {
@@ -1374,7 +1376,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("Hello, Alice!"))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "'abc' ++ 'def'" should "return 'abcdef" in {
@@ -1394,7 +1396,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("abcdef"))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "ByteArray('dead') ++ ByteArray('beef)'" should "return ByteArray('deadbeef')" in {
@@ -1414,7 +1416,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GByteArray(ByteString.copyFrom(Base16.decode("deadbeef"))))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   def interpolate(base: String, substitutes: Seq[(Par, Par)]): Expr =
@@ -1443,7 +1445,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("1 ${b} 2 ${a}"))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "interpolate" should "interpolate Boolean values" in {
@@ -1465,7 +1467,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
 
     result.exprs should be(Seq(Expr(GString("false true"))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "interpolate" should "interpolate URIs" in {
@@ -1487,7 +1489,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
 
     result.exprs should be(Seq(Expr(GString("testUriA testUriB"))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "[0, 1, 2, 3].length()" should "return the length of the list" in {
@@ -1502,7 +1504,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GInt(4L))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "[3, 7, 2, 9, 4, 3, 7].slice(3, 5)" should "return [9, 4]" in {
@@ -1518,7 +1520,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(EListBody(EList(List(GInt(9L), GInt(4L)))))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "[3, 7, 2, 9, 4, 3, 7].slice(5, 4)" should "return []" in {
@@ -1534,7 +1536,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(EListBody(EList(List())))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "[3, 7, 2, 9, 4, 3, 7].slice(7, 8)" should "return []" in {
@@ -1550,7 +1552,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(EListBody(EList(List())))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "[3, 7, 2, 9, 4, 3, 7].slice(-2, 2)" should "return [3, 7]" in {
@@ -1566,7 +1568,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(EListBody(EList(List(GInt(3L), GInt(7L)))))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "[3, 2, 9] ++ [6, 1, 7]" should "return [3, 2, 9, 6, 1, 7]" in {
@@ -1589,7 +1591,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
     val resultList = EList(List(GInt(3L), GInt(2L), GInt(9L), GInt(6L), GInt(1L), GInt(7L)))
     result.exprs should be(Seq(Expr(EListBody(resultList))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "{1: 'a', 2: 'b'}.getOrElse(1, 'c')" should "return 'a'" in {
@@ -1606,7 +1608,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("a"))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "{1: 'a', 2: 'b'}.getOrElse(3, 'c')" should "return 'c'" in {
@@ -1623,7 +1625,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("c"))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "{1: 'a', 2: 'b'}.set(3, 'c')" should "return {1: 'a', 2: 'b', 3: 'c'}" in {
@@ -1649,7 +1651,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       )
     )
     result.exprs should be(Seq(Expr(resultMap)))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "{1: 'a', 2: 'b'}.set(2, 'c')" should "return {1: 'a', 2: 'c'}" in {
@@ -1668,7 +1670,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val resultMap =
       EMapBody(ParMap(List[(Par, Par)]((GInt(1L), GString("a")), (GInt(2L), GString("c")))))
     result.exprs should be(Seq(Expr(resultMap)))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "{1: 'a', 2: 'b', 3: 'c'}.keys()" should "return Set(1, 2, 3)" in {
@@ -1697,7 +1699,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       )
     )
     result.exprs should be(Seq(Expr(resultSet)))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "{1: 'a', 2: 'b', 3: 'c'}.size()" should "return 3" in {
@@ -1721,7 +1723,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GInt(3L))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "Set(1, 2, 3).size()" should "return 3" in {
@@ -1739,7 +1741,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GInt(3L))))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "Set(1, 2) + 3" should "return Set(1, 2, 3)" in {
@@ -1756,7 +1758,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
     val resultSet = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L), GInt(3L))))
     result.exprs should be(Seq(Expr(resultSet)))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "{1: 'a', 2: 'b', 3: 'c'} - 3" should "return {1: 'a', 2: 'b'}" in {
@@ -1782,7 +1784,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val resultMap =
       EMapBody(ParMap(List[(Par, Par)]((GInt(1L), GString("a")), (GInt(2L), GString("b")))))
     result.exprs should be(Seq(Expr(resultMap)))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "Set(1, 2, 3) - 3" should "return Set(1, 2)" in {
@@ -1799,7 +1801,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
     val resultSet = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L))))
     result.exprs should be(Seq(Expr(resultSet)))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "Set(1, 2) ++ Set(3, 4)" should "return Set(1, 2, 3, 4)" in {
@@ -1817,7 +1819,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
     val resultSet = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L), GInt(3L), GInt(4L))))
     result.exprs should be(Seq(Expr(resultSet)))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "{1: 'a', 2: 'b'} ++ {3: 'c', 4: 'd'}" should "return union" in {
@@ -1846,7 +1848,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       )
     )
     result.exprs should be(Seq(Expr(resultMap)))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "Set(1, 2, 3, 4) -- Set(1, 2)" should "return Set(3, 4)" in {
@@ -1864,7 +1866,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
     val resultSet = ESetBody(ParSet(List[Par](GInt(3L), GInt(4L))))
     result.exprs should be(Seq(Expr(resultSet)))
-    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
   "Set(1, 2, 3).get(1)" should "not work" in {
@@ -1877,7 +1879,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val inspectTask  = reducer.eval(EMethodBody(EMethod("get", set, List(GInt(1L)))))
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
-    errorLog.readAndClearErrorVector should be(
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(
       Vector(MethodNotDefined("get", "Set"))
     )
   }
@@ -1893,7 +1895,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val inspectTask = reducer.eval(EMethodBody(EMethod("add", map, List(GInt(1L)))))
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
-    errorLog.readAndClearErrorVector should be(
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(
       Vector(MethodNotDefined("add", "Map"))
     )
   }
@@ -1925,6 +1927,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val result = test.attempt.runSyncUnsafe(1.second)
     assert(result === Left(OutOfPhlogistonsError))
-    errorLog.readAndClearErrorVector() should be(Vector.empty)
+    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty)
   }
 }

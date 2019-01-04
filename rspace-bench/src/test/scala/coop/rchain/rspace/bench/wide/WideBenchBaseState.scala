@@ -34,7 +34,7 @@ abstract class WideBenchBaseState {
 
   var runTask: Task[Vector[Throwable]] = null
 
-  implicit def readErrors = () => runtime.readAndClearErrorVector()
+  implicit def readErrors = () => runtime.readAndClearErrorVector().unsafeRunSync
 
   def createRuntime(): Runtime = Runtime.create(dbDir, mapSize)
 

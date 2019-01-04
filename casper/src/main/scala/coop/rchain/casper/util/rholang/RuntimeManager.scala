@@ -283,11 +283,14 @@ class AbstractRuntimeManager[F[_]: Concurrent: ToAbstractContext] protected (
         .inj(deploy.term.get)
         .attempt
         .flatMap(result => {
-          val oldErrors = errorLog.readAndClearErrorVector()
-          val newErrors = result.swap.toSeq.toVector
-          val allErrors = oldErrors |+| newErrors
+          reducer.getAvailablePhlos().flatMap { phlos =>
+            val oldErrors = errorLog.readAndClearErrorVector()
+            val newErrors = result.swap.toSeq.toVector
+            val allErrors = oldErrors.map { _ |+| newErrors }
 
-          reducer.getAvailablePhlos().map(phlos => CostAccount.toProto(phlos) -> allErrors)
+            allErrors.map(CostAccount.toProto(phlos) -> _)
+
+          }
         })
     )
   }

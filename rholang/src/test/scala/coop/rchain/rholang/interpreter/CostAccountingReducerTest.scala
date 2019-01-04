@@ -129,7 +129,9 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
         .use(testImplementation(_))
         .runSyncUnsafe(5.seconds)
 
-    val errors = errLog.readAndClearErrorVector()
+    val errors = errLog
+      .readAndClearErrorVector()
+      .runSyncUnsafe(1.second)
 
     def data(p: Par, rand: Blake2b512Random) = Row(
       List(
