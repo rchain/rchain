@@ -1079,6 +1079,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
    *            \  /
    *          genesis
    *
+   * f2 has in its justifications list c2. This should be handled properly.
+   *
    */
   it should "ask peers for blocks it is missing and add them" in effectTest {
     val deployDatasFs = Vector(
