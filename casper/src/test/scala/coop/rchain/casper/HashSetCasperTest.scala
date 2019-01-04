@@ -1057,6 +1057,29 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
+
+  /*
+   *  DAG Looks like this:
+   *
+   *             h1
+   *            /  \
+   *           g1   g2
+   *           |  X |
+   *           f1   f2
+   *            \  /
+   *             e1
+   *             |
+   *             d1
+   *            /  \
+   *           c1   c2
+   *           |  X |
+   *           b1   b2
+   *           |  X |
+   *           a1   a2
+   *            \  /
+   *          genesis
+   *
+   */
   it should "ask peers for blocks it is missing and add them" in effectTest {
     val deployDatasFs = Vector(
       "@2!(2)",
@@ -1100,26 +1123,27 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       for {
         _ <- nodes(0).receive()
         _ <- nodes(1).receive()
-        _ <- nodes(2).receive() //nodes(2) gets the 5th block and starts requesting the dag
+        _ <- nodes(2).receive()
       } yield ()
     }
 
     for {
       nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
 
-      _ <- stepSplit(nodes)
-      _ <- stepSplit(nodes)
-      _ <- stepSplit(nodes)
+      _ <- stepSplit(nodes) // blocks a1 a2
+      _ <- stepSplit(nodes) // blocks b1 b2
+      _ <- stepSplit(nodes) // blocks c1 c2
 
-      _ <- stepSingle(nodes)
-      _ <- stepSingle(nodes)
+      _ <- stepSingle(nodes) // block d1
+      _ <- stepSingle(nodes) // block e1
 
-      _ <- stepSplit(nodes)
-      _ <- stepSplit(nodes)
+      _ <- stepSplit(nodes) // blocks f1 f2
+      _ <- stepSplit(nodes) // blocks g1 g2
 
-      br <- deploy(nodes(0), deployDatasFs(0).apply())
+      // this block will be propagated to all nodes and force nodes(2) to ask for missing blocks.
+      br <- deploy(nodes(0), deployDatasFs(0).apply()) // block h1
 
-      _ <- List.fill(22)(propagate(nodes)).sequence//make the network chooch
+      _ <- List.fill(22)(propagate(nodes)).sequence // force the network to communicate
 
       _ <- nodes(2).casperEff.contains(br) shouldBeF true
 
