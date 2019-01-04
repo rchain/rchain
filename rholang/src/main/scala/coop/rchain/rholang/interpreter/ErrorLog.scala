@@ -3,7 +3,6 @@ package coop.rchain.rholang.interpreter
 import cats._
 import cats.implicits._
 import cats.mtl.FunctorTell
-import monix.eval.Task
 
 class ErrorLog[F[_]: Applicative] extends FunctorTell[F, Throwable] {
   private var errorVector: Vector[Throwable] = Vector.empty
