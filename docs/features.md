@@ -129,6 +129,7 @@ database = "rnode"
 ### As a wallet dApp developer, I want to discover and connect to rNodes that support a particular version (release number and hash) and have a minimum number of active connections, so that user risks due to interoperability issues and sybil actors are minimized
 ### As a wallet user, I need a command line interface for interacting with wallets.
 ### As a dApp organization, I need to have multiple approvers for any send transaction.
+
 ## Storage
 ### As a user I want to be able to store data using a rholang contract in the tuplespace. 
 #### A contract pointing to some data gets deployed, the data gets fetched and asserted.
@@ -142,10 +143,29 @@ database = "rnode"
 * assert success on std out
 * compare data sent and restored
 
-## Bonding/Unbonding
-### As a Node Validator, I want to be able to add my stake to the network and be recognized as a validator so I can participate in proof of stake consensus and be eligible to earn rewards (validating)
-### As a Node Validator, I want to be able to retrieve my stake from the network and no longer be recognized a as validator
-### As an incoming Node Validator, I need confirmation of my request to bond
+## Validation
+### As a RChain validator, I want my validator identity to be different from the identity of my node and from the identity of my wallet.
+### As a RChain validator, I want to know when a block I propose is finalized and with what degree of confidence.
+### As a RChain validator, I want to expose to the internet only those methods needed for production dApps.
+### Validator bonding and unbonding
+### As an RChain validator, I want to be able to add my stake to the network and be recognized as a validator so I can participate in proof of stake consensus and be eligible to earn rewards (validating)
+### As an incoming RChain validator, I need confirmation of my request to bond
+### As an RChain validator, I want to be able to retrieve my stake from the network and no longer be recognized as validator
+### As a platform stakeholder, I want to know only bonded validators are able to validate.
+	
+## Validator rewards
+### As a RChain validator, I want to earn by validating on the RChain network.
+### As a RChain validator, I want to receive the rewards I earn by validating on the RChain network.
+### As a RChain validator, I want to retrieve the rewards I earn by validating on the RChain network.
+	
+## Validator slashing and ejection
+### As a RChain validator and as a platform stakeholder, I want to know that other validators who do not validate according to the slashing API will be slashed (removed as a validator and lose stake) in a process observable to other validators.
+### As a RChain validator, I want to know that if I am slashed then the Coop will hold my bond amount and not distribute it to other validators for a specified period of reconcilliation in the event that my slashing was unjustified.
+### As a platform stakeholder, I want to see the stake of a slashed validator distributed to other validators after the time specified for a hold for reconciliation.
+### As a platform stakeholder, I want to know that a validator that has been slashed is no longer able to validate.
+### As a RChain validator, I want to update my RNode software without being slashed.
+### As a RChain validator, I want to know that I will not be slashed and that I will be ejected if I meet the criteria as an underperforming validator and not the criteria for slashing.
+
 ## Consensus
 ### As a dApp developer I want to be able to deploy my rholang contract to a validator
 #### A correct contract gets deployed successfully
