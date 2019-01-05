@@ -192,6 +192,22 @@ database = "rnode"
 * user executes rholang code that is "foo"
 * program exists with 1 and prints out coop.rchain.rholang.interpreter.errorsTopLevelFreeVariablesNotAllowedError
 
+## Documentation
+## As a any type of platform stakeholder, I want a single-source of indexed documenation.
+## As a any type of platform stakeholder, I want to know what I can expect for the performance and reliability of the RChain platform im the form of a production engineering plan.
+## As a node operator, I want to learn how to install, run, operate, and monitor my node.
+## As a validator, I want to learn the minimum hardware, infrastructure, and networking requirements to participate as a validator.
+## As a validator, I want to learn about the slashing API, the conditions and process for slashing, and the conditions and process for ejection.
+## As a dApp developer, I want to learn how to use and write smart contracts in Rholang.
+## As a dApp developer, I want to formally verify my Rholang contracts.
+## As a dApp developer, I need to learn about COMM events (ex what are they? how are they measured? how are they part of the platform performance benchmark metric?) and how to optimize them in my smart contracts.
+## As a dApp developer, I need to learn how unforgeable names are generated, how to determine unforgeable names, and how to retrieve the UUID of the unforgeable names.
+## As a dApp developer, I need a reference for gRPC calls and a description of what they do.
+## As a dApp developer, want to know how to calculate the costs for the execution of my contracts, including accounting for non-determinism.
+## As an Ehtereum developer familiar with the Infura API, I want to learn how to use the RChain platform.
+
+	
+
 ## Not_Grouped
 ### All existing tests that need proper user story
 #### Heterogeneous validators
