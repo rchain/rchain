@@ -1,40 +1,110 @@
 /// @title Voting with delegation.
 
-new Ballot, require, trace(`rho:io:stderr`) in {
-  // ISSUE: signature checking for msg.sender equivalent.
-  contract Ballot(@{proposalNames /\ Set(hd, ...tail)}, @{chairPk /\ ByteArray}, return) = {
-    new chairperson, winningProposalName, voterWeightCh, votedCh, countCh in {
+new Ballot,
+trace(`rho:io:stderr`),
+stdout(`rho:io:stdout`),
+insertArbitrary(`rho:registry:insertArbitrary`)
+in {
+  new uriCh in {
+    insertArbitrary!(*Ballot, *uriCh) | for(@uri <- uriCh) {
+      stdout!({"Ballot is registerd at": uri})
+    }
+  }
+  |
+
+  // See example / demo below.
+  contract Ballot(@{proposalNames /\ Set(hd, ...tail)}, return) = {
+    new chairperson, winningProposalName, voterWeightCh, votedCh, countCh, delegateCh in {
       return!(bundle+{*chairperson}, bundle+{*winningProposalName}) |
 
-      voterWeightCh!({}) | votedCh!(Set()) | countCh!({}) |
+      voterWeightCh!({}) | votedCh!({}) | countCh!({}) | delegateCh!({}) |
 
-      contract chairperson(@"giveRightToVote", @{voterPk /\ ByteArray}, eject, return) = {
-        trace!({"give right to vote": voterPk}) |
-        for (@voterWeight <- voterWeightCh) {
-          // oops: is voterWeight keyed by pk or voter?
-          if (voterWeight.contains(voterPk)) {
-            eject!("voter already registered") |
-            voterWeightCh!(voterWeight)
-          } else {
-            new voter in {
-              return!(bundle+{*voter}) |
-              voterWeightCh!(voterWeight.set(*voter, 1)) |
-              contract voter(@"vote", @proposal, eject, ack) = {
-                trace!({"voter": voterPk, "for": proposal}) |
-                if(proposalNames.contains(proposal) == false) { eject!({"unknown proposal": proposal}) }
-                else {
-                  for (@voted <- votedCh) {
-                    if (voted.contains(*voter)) {
-                      votedCh!(voted) |
-                      eject!({"already voted": voterPk})
-                    } else {
-                      for(@count <- countCh; @voterWeight <- voterWeightCh) {
-                        // trace!({"voted": voted.union(Set(*voter))}) |
-                        voterWeightCh!(voterWeight) |
+      contract chairperson(@"giveRightToVote", return) = {
+        // "voter" is perhaps a mis-nomer. "votingRight" might be better.
+        new voter in {
+          trace!({"chair": *chairperson, "gives right to vote": *voter}) |
+          return!(bundle+{*voter}) |
+
+          for (@voterWeight <- voterWeightCh) {
+            voterWeightCh!(voterWeight.set(bundle0{*voter}, 1))
+          }|
+
+          contract voter(@"vote", @proposal, eject, ack) = {
+            // trace!({"voter": *voter, "for": proposal}) |
+            if(proposalNames.contains(proposal) == false) { eject!({"unknown proposal": proposal}) }
+            else {
+              for (@votedFor <- votedCh) {
+                if (votedFor.contains(bundle0{*voter})) {
+                  votedCh!(votedFor) |
+                  eject!("already voted")
+                } else {
+                  for(@count <- countCh; @voterWeight <- voterWeightCh) {
+                    trace!({"voter": *voter, "weight": voterWeight.get(bundle0{*voter}),
+                      "proposal": proposal}) |
+                    voterWeightCh!(voterWeight) |
+                    ack!(Nil) |
+                    votedCh!(votedFor.set(bundle0{*voter}, proposal)) |
+                    countCh!(count.set(proposal,
+                      count.getOrElse(proposal, 0) +
+                        voterWeight.getOrElse(bundle0{*voter}, 0)))
+                  }
+                }
+              }
+            }
+          } |
+          contract voter(@"delegate", @to, eject, ack) = {
+            // ISSUE: precedence of {bundle{}} around ==
+            if ({bundle0{to}} == {bundle0{*voter}}) {
+              eject!("Self-delegation is disallowed.")
+            } else {
+              for (@votedFor <- votedCh) {
+                // trace!({"delegate already voted?": votedFor, "voter": *voter}) |
+                votedCh!(votedFor) | // ISSUE: peek
+
+                if(votedFor.contains(bundle0{*voter})) {
+                  eject!("You already voted.")
+                } else {
+                  for (@delegateOf <- delegateCh) {
+                    new loop, finish in {
+                      loop!(bundle0{to}) |
+                      contract loop(@whom) = {
+                        // trace!({"delegate loop": whom}) |
+                        if (whom == {bundle0{*voter}}) {
+                          eject!("Found loop in delegation.") |
+                          delegateCh!(delegateOf)
+                        } else {
+                          if (delegateOf.contains(whom)) {
+                            loop!(delegateOf.get(whom))
+                          } else {
+                            finish!(whom)
+                          }
+                        }
+                      } |
+                      contract finish(@whom) = {
+                        // trace!({"delegate finish": whom, "voter": *voter}) |
+                        delegateCh!(delegateOf.set(bundle0{*voter}, whom)) |
                         ack!(Nil) |
-                        votedCh!(voted.union(Set(*voter))) |
-                        countCh!(count.set(proposal,
-                          count.getOrElse(proposal, 0) + voterWeight.get(*voter)))
+
+                        for (@count <- countCh; @voterWeight <- voterWeightCh) {
+                          if (votedFor.contains(whom)) {
+                            trace!({"delegate already voted": whom}) |
+                            // If the delegate already voted,
+                            // directly add to the number of votes
+                            countCh!(count.set(votedFor.get(whom),
+                              count.getOrElse(votedFor.get(whom), 0) +
+                                voterWeight.getOrElse(bundle0{*voter}, 1))) |
+                            voterWeightCh!(voterWeight)
+                          } else {
+                            trace!({"add voter weight": voterWeight.get(bundle0{*voter}),
+                              "to delegate weight": voterWeight.get(whom)}) |
+                            // If the delegate did not vote yet,
+                            // add to her weight.
+                            voterWeightCh!(voterWeight.set(whom,
+                              voterWeight.getOrElse(whom, 1) +
+                                voterWeight.getOrElse(bundle0{*voter}, 1))) |
+                            countCh!(count)
+                          }
+                        }
                       }
                     }
                   }
@@ -69,22 +139,27 @@ new Ballot, require, trace(`rho:io:stderr`) in {
     }
   }
   |
-  new bCh, v1Ch, v2Ch in {
-    Ballot!(Set("Lincoln", "Douglas"), "deadbeef".hexToBytes(), *bCh) |
+  new bCh, v1Ch, v2Ch, v3Ch in {
+    Ballot!(Set("Lincoln", "Douglas"), *bCh) |
     for (chairperson, winningProposalName <- bCh) {
       trace!({"Ballot returned": *chairperson}) |
-      chairperson!("giveRightToVote", "deadbeef".hexToBytes(), *trace, *v1Ch) |
-      chairperson!("giveRightToVote", "beefdead".hexToBytes(), *trace, *v2Ch) |
-      for(v1 <- v1Ch; v2 <- v2Ch) {
-        v1!("vote", "Lincoln", *trace, *v1Ch) |
-        v1!("vote", "Lincoln", *trace, *v1Ch) |
-        v1!("vote", "Abe Lincoln", *trace, *v1Ch) |
-        v2!("vote", "Lincoln", *trace, *v2Ch) |
-        for(_ <- v1Ch; _ <- v2Ch) {
-          // trace!("votes done") |
-          winningProposalName!(*bCh) |
-          for(@w <- bCh) {
-            trace!({"winner": w})
+      chairperson!("giveRightToVote", *v1Ch) |
+      chairperson!("giveRightToVote", *v2Ch) |
+      chairperson!("giveRightToVote", *v3Ch) |
+      for(v1 <- v1Ch; v2 <- v2Ch; v3 <- v3Ch) {
+        v3!("delegate", bundle0{*v2}, *trace, *v3Ch) |
+        v3!("delegate", bundle0{*v3}, *trace, *v3Ch) |
+        for(_ <- v3Ch) {
+          v1!("vote", "Douglas", *trace, *v1Ch) |
+          v1!("vote", "Lincoln", *trace, *v1Ch) |
+          v1!("vote", "Abe Lincoln", *trace, *v1Ch) |
+          v2!("vote", "Lincoln", *trace, *v2Ch) |
+          for(_ <- v1Ch; _ <- v2Ch) {
+            // trace!("votes done") |
+            winningProposalName!(*bCh) |
+            for(@w <- bCh) {
+              trace!({"winner": w})
+            }
           }
         }
       }
