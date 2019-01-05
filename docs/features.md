@@ -117,18 +117,22 @@ database = "rnode"
 * `validatorC` tip points to block (genesis) where it has no parent and Bonds holds `validatorA` and `validatorB`
 
 ## Wallets
-### As a user, I want to be able to create a wallet so that I can store REV in it
-### As a user, I want to be able to add REV to my wallet so that I have available REV to pay for goods/services
-### As a user, I want to be able to remove REV from my wallet so that I can pay for goods/services
-### Expose purses inside a wallet
-### As a wallet application, I want to query a wallet contract (or the blocks) for the history of all Rev transfers to/from it
-### As a REV holder, I can move some of my REV to the control another user’s public key (or address) via a co-op supplied dApp wallet
-### As a recipient of REV (other than Genesis REV), I can use a co-op supplied dApp to view my REV balance
-### As a validator, I can move Rev to/from the key-pair for one validator node to the key-pair for another validator node or that of the co-op supplied wallet dApp
-### As a wallet dApp developer, I want to use Ethereum-style addresses for send transactions to specify the recipient, so that a) I can reuse available Ethereum utility libraries; b) so the QR code is smaller and thus faster to scan than it would be for a full public key; c) it is easier for users to verbally confirm their address versus public key; and d) so RChain is more palatable for the Ethereum community
-### As a wallet dApp developer, I want to discover and connect to rNodes that support a particular version (release number and hash) and have a minimum number of active connections, so that user risks due to interoperability issues and sybil actors are minimized
-### As a wallet user, I need a command line interface for interacting with wallets.
-### As a dApp organization, I need to have multiple approvers for any send transaction.
+## As a user, I want to be able to configure a coop-supplied wallet so that I can store REV in it
+## As a user, I want to be able to interface with the coop-supplied wallet at the command line.
+## As a user, I want to be able to add REV to my coop-supplied wallet so that I have available REV to pay for goods/services
+## As a user, I want to be able to remove REV from my coop-supplied wallet so that I can pay for goods/services
+## As a user, I want to be able to receive REV from another user by providing that user with the public key for my coop-supplied-wallet.
+## As a user, I want to be able to send REV to the coop-supplied wallet of another user by specifying the public key to the coop-supplied wallet of that user.
+## As a user of a coop-supplied wallet, I want to query a wallet contract (or the blocks) for my public address to get the history of all REV transfers to and/or from it
+## As a recipient of REV (other than REV at mainnet launch 'genesis'), I can use a co-op supplied dApp to view my REV balance
+## As a recipient of REV at mainnet launch 'genesis', I can use a co-op supplied wallet to view my REV balance after launch.
+## As an organization holding REV, I need to have multiple approviesr for any REV transaction.
+## As a validator, I can move Rev to/from the key-pair for one validator node to the key-pair for another validator node or that of the co-op supplied wallet dApp
+## As a wallet dApp developer, I want to use Ethereum-style addresses for send transactions to specify the recipient, so that a) I can reuse available Ethereum utility libraries; b) so the QR code is smaller and thus faster to scan than it would be for a full public key; c) it is easier for users to verbally confirm their address versus public key; and d) so RChain is more palatable for the Ethereum community
+## As a wallet dApp developer, I want to discover and connect to rNodes that support a particular version (release number and hash) and have a minimum number of active connections, so that user risks due to interoperability issues and sybil actors are minimized
+## As a wallet user, I need a command line interface for interacting with wallets.
+## As a dApp organization, I need to have multiple approvers for any send transaction.
+	
 ## Storage
 ### As a user I want to be able to store data using a rholang contract in the tuplespace. 
 #### A contract pointing to some data gets deployed, the data gets fetched and asserted.
