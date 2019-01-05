@@ -4,6 +4,27 @@ stdout(`rho:io:stdout`),
 insertArbitrary(`rho:registry:insertArbitrary`),
 lookup(`rho:registry:lookup`)
 in {
+  // Test / demo
+  new lockerCh, ackCh, rx in {
+    Locker!("deadbeef".hexToBytes(), *lockerCh) | for (locker <- lockerCh) {
+      // trace!({"locker": *locker}) |
+
+      new trinket, updateCh in {
+        trace!({"trinket": *trinket}) |
+        locker!("update", "beef".hexToBytes(), 0, {"trinket": *trinket}, *trace, *ackCh)
+      } |
+
+      // trinket has gone out of scope but
+      // we can get it back if we have the locker combo.
+      for(_ <- ackCh) {
+        locker!("get", "beef".hexToBytes(), 1, *trace, *rx) |
+        for(@{"trinket": trinket} <- rx) {
+          trace!({"win! got trinket": trinket})
+        }
+      }
+    }
+  }
+  |
   new uriCh in {
     insertArbitrary!(*Locker, *uriCh) | for(@uri <- uriCh) {
       stdout!({"Locker is registerd at": uri})
@@ -18,8 +39,8 @@ in {
       nonceCh!(-1) |
       contract self(@"getNonce", return) = { for(@nonce <- nonceCh) { return!(nonce) } } |
 
-      contract self(@"store", @{sig /\ ByteArray}, @nextNonce, @more, fail, ack) = {
-        trace!("locker.store(...)") |
+      contract self(@"update", @{sig /\ ByteArray}, @{nextNonce /\ Int}, @{more /\ {..._}}, fail, ack) = {
+        trace!({"locker.update": more}) |
         for(@nonce <- nonceCh) {
           if (nonce + 1 != nextNonce) {
             fail!({"expected nonce": nonce + 1}) |
@@ -59,28 +80,6 @@ in {
               }
             }
           }
-        }
-      }
-    }
-  }
-  |
-  // Test / demo
-  new lockerCh, ackCh, rx in {
-    Locker!("deadbeef".hexToBytes(), *lockerCh) | for (locker <- lockerCh) {
-      // trace!({"locker": *locker}) |
-
-      new trinket in {
-        trace!({"trinket": *trinket}) |
-        locker!("store", "beef".hexToBytes(), 0, {"trinket": *trinket},
-          *trace, *ackCh)
-      } |
-
-      // trinket has gone out of scope but
-      // we can get it back if we have the locker combo.
-      for(_ <- ackCh) {
-        locker!("get", "beef".hexToBytes(), 1, *trace, *rx) |
-        for(@items <- rx) {
-          trace!({"win! got items": items})
         }
       }
     }
