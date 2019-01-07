@@ -59,6 +59,21 @@ database = "rnode"
 ### As a Node operator, I want to be able to bootstrap to the network by connecting to any known node
 ### As a Node operator, once connected via a bootstrap node, I want to discover and connect to peers
 ### As a Node operator, I want to know how many peers I am connected to
+#### number of protocol peers
+##### test: test/test_p2p.py::test_number_of_protocol_peers
+##### steps:
+
+* create a p2p network with 3 nodes `nodaA`, `nodeB` and `nodeC`
+* access `nodeA` http endpoint under `/info` should print `connected_peers = 2`
+* access `nodeA` http endpoint under `/peers` to list `nodeB` and `nodeC` in JSON format
+
+#### number of protocol peers
+##### test: test/test_p2p.py::test_number_of_discovery_peers
+##### steps:
+
+* create a p2p network with 3 nodes `nodaA`, `nodeB` and `nodeC`
+* access `nodeA` http endpoint under `/info` should print `discovered_peers = 2`
+* access `nodeA` http endpoint under `/discovered-peers` to list `nodeB` and `nodeC` in JSON format
 
 ## Network Launch
 ## As a platform stakeholder, I want a Coop-governed, community-driven, and independently verifiable validation of the genesis block used to launch a network.
