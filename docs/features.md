@@ -57,12 +57,53 @@ database = "rnode"
 
 ## Peer to Peer Network
 ### As a Node operator, I want to be able to bootstrap to the network by connecting to any known node
+#### connecting to existing node
+##### test: test/test_p2p.py::test_connecting_to_existing_node
+##### steps:
+
+* given that `standalone` is a running node in a standalone mode
+* start new node with `--bootstrap` pointing to `standalone`
+* node should succesfully start and connect to `standalone` via protocol handshake
+
+#### connecting to non-existing node
+##### test: test/test_p2p.py::test_connecting_to_non_existing_node
+##### steps:
+
+* start new node with `--bootstrap` pointing to some non-existing address
+* node should exit
+* exit code should be 1
+* node should log that bootstrap could not been found
+
 ### As a Node operator, once connected via a bootstrap node, I want to discover and connect to peers
+#### discover other nodes
+##### test: test/test_p2p.py::test_discover_other_nodes
+##### steps:
+
+* create a p2p network with 3 nodes `nodaA`, `nodeB` and `nodeC`
+* join p2p network as described in "As a Node operator, I want to be able to bootstrap to the network by connecting to any known node" bootstaping from `nodeA`
+* after a period of time new node discovers `nodeB` and `nodeC`
+* after a period of time new node connects (via protocol handshake) with `nodeB` and `nodeC`
+
 ### As a Node operator, I want to know how many peers I am connected to
+#### number of protocol peers
+##### test: test/test_p2p.py::test_number_of_protocol_peers
+##### steps:
+
+* create a p2p network with 3 nodes `nodaA`, `nodeB` and `nodeC`
+* access `nodeA` http endpoint under `/info` should print `connected_peers = 2`
+* access `nodeA` http endpoint under `/peers` to list `nodeB` and `nodeC` in JSON format
+
+#### number of protocol peers
+##### test: test/test_p2p.py::test_number_of_discovery_peers
+##### steps:
+
+* create a p2p network with 3 nodes `nodaA`, `nodeB` and `nodeC`
+* access `nodeA` http endpoint under `/info` should print `discovered_peers = 2`
+* access `nodeA` http endpoint under `/discovered-peers` to list `nodeB` and `nodeC` in JSON format
+
 ## Network Launch
 ### As a Coop SRE I want to launch a network
 #### A successful genesis ceremony 
-
 ##### test: test/test_genesis_ceremony.py::test_successful_genesis_ceremony 
 ##### steps:
 
