@@ -226,19 +226,37 @@ object FileLMDBIndexBlockStore {
                }
     } yield result
 
-  def create[F[_]: Concurrent: Log](blockStoreDataDir: Path, mapSize: Long): F[BlockStore[F]] =
-    create(
-      Config(
-        blockStoreDataDir.resolve("storage"),
-        blockStoreDataDir.resolve("index"),
-        blockStoreDataDir.resolve("checkpoints"),
-        mapSize
+  def create[F[_]: Concurrent: Log](
+      env: Env[ByteBuffer],
+      blockStoreDataDir: Path
+  ): F[BlockStore[F]] =
+    create(env, blockStoreDataDir.resolve("storage"), blockStoreDataDir.resolve("checkpoints"))
+
+  def create[F[_]: Monad: Concurrent: Log](
+      env: Env[ByteBuffer],
+      storagePath: Path,
+      checkpointsDirPath: Path
+  ): F[BlockStore[F]] =
+    for {
+      lock  <- Semaphore[F](1)
+      index <- Sync[F].delay { env.openDbi(s"block_store_index", MDB_CREATE) }
+      blockMessageRandomAccessFile <- Sync[F].delay {
+                                       new RandomAccessFile(storagePath.toFile, "rw")
+                                     }
+      blockMessageRandomAccessFileRef <- Ref.of[F, RandomAccessFile](blockMessageRandomAccessFile)
+      sortedCheckpoints               <- loadCheckpoints(checkpointsDirPath)
+      checkPointsRef                  <- Ref.of[F, List[Checkpoint]](sortedCheckpoints)
+    } yield
+      new FileLMDBIndexBlockStore[F](
+        lock,
+        env,
+        index,
+        blockMessageRandomAccessFileRef,
+        checkPointsRef
       )
-    )
 
   def create[F[_]: Monad: Concurrent: Log](config: Config): F[BlockStore[F]] =
     for {
-      lock <- Semaphore[F](1)
       env <- Sync[F].delay {
               if (Files.notExists(config.indexPath)) Files.createDirectories(config.indexPath)
               val flags = if (config.noTls) List(EnvFlags.MDB_NOTLS) else List.empty
@@ -249,19 +267,6 @@ object FileLMDBIndexBlockStore {
                 .setMaxReaders(config.maxReaders)
                 .open(config.indexPath.toFile, flags: _*)
             }
-      index <- Sync[F].delay { env.openDbi(s"block_store_index", MDB_CREATE) }
-      blockMessageRandomAccessFile <- Sync[F].delay {
-                                       new RandomAccessFile(config.storagePath.toFile, "rw")
-                                     }
-      blockMessageRandomAccessFileRef <- Ref.of[F, RandomAccessFile](blockMessageRandomAccessFile)
-      sortedCheckpoints               <- loadCheckpoints(config.checkpointsDirPath)
-      checkPointsRef                  <- Ref.of[F, List[Checkpoint]](sortedCheckpoints)
-    } yield
-      new FileLMDBIndexBlockStore[F](
-        lock,
-        env,
-        index,
-        blockMessageRandomAccessFileRef,
-        checkPointsRef
-      )
+      result <- create[F](env, config.storagePath, config.checkpointsDirPath)
+    } yield result
 }

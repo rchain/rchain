@@ -13,6 +13,7 @@ import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.MetricsNOP
+import coop.rchain.rspace.Context
 import coop.rchain.shared.Log
 import org.scalatest.{BeforeAndAfter, Suite}
 import coop.rchain.shared.PathOps.RichPath
@@ -95,8 +96,10 @@ object BlockDagStorageTestFixture {
 
   def createBlockStorage[F[_]: Concurrent: Metrics: Log](
       blockStorageDir: Path
-  ): F[BlockStore[F]] =
-    FileLMDBIndexBlockStore.create[F](blockStorageDir, mapSize)
+  ): F[BlockStore[F]] = {
+    val env = Context.env(blockStorageDir, mapSize)
+    FileLMDBIndexBlockStore.create[F](env, blockStorageDir)
+  }
 
   def createBlockDagStorage(blockDagStorageDir: Path)(
       implicit metrics: Metrics[Task],

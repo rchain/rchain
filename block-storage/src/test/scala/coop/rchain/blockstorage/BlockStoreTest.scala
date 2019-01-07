@@ -172,14 +172,16 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
     val dbDir                           = mkTmpDir()
     implicit val metrics: Metrics[Task] = new MetricsNOP[Task]()
     implicit val log: Log[Task]         = new Log.NOPLog[Task]()
+    val env                             = Context.env(dbDir, mapSize)
     val test = for {
-      store  <- FileLMDBIndexBlockStore.create[Task](dbDir, mapSize)
+      store  <- FileLMDBIndexBlockStore.create[Task](env, dbDir)
       _      <- store.find(_ => true).map(map => assert(map.isEmpty))
       result <- f(store)
     } yield result
     try {
       test.unsafeRunSync
     } finally {
+      env.close()
       dbDir.recursivelyDelete()
     }
   }
