@@ -343,7 +343,11 @@ object FileLMDBIndexBlockStore {
       )
     } yield result: BlockStore[F]).value
 
-  def create[F[_]: Monad: Concurrent: Log](config: Config): F[StorageErr[BlockStore[F]]] =
+  def create[F[_]: Monad: Concurrent: Log](
+      env: Env[ByteBuffer],
+      storagePath: Path,
+      checkpointsDirPath: Path
+  ): F[StorageErr[BlockStore[F]]] =
     for {
       env <- Sync[F].delay {
               if (Files.notExists(config.indexPath)) Files.createDirectories(config.indexPath)
