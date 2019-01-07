@@ -220,7 +220,7 @@ database = "rnode"
 ### As a validator, I will yield 0.01% of all transaction fees received to accounts controlled by the Coop.
 ### As the RChain coop, I want to receive 0.01% of all transaction fees to accounts controlled by the Coop.
 
-## Performances
+## Performance
 ### As a user of the platform, I want to know the current performance of the network in terms of COMM events per second.
 
 ## Platform administration
