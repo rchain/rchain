@@ -166,8 +166,12 @@ sig-algorithm = "ed25519"
 # private-key = ""
 ```
 
-### Running from the tar-ball
+### Configuration flags
 TBD
+
+### Installing and running on Docker
+TBD
+
 
 ### Installing and running on Debian from DEB package
 TBD
@@ -186,6 +190,52 @@ TBD
 ```bash
 > brew install rchain/rchain/rnode
 ```
+
+### Running from the tar-ball
+TBD
+
+### Starting node as a validator
+TBD
+
+## Monitor performance
+
+## Monitor resource consumption
+
+ * Node is considered up and running if and only if it listens on the port 40400 (the port number can be overriden with the `--port` option)
+ * rnode publishes metrics to InfluxDB
+    * COMM events per second
+    * CPU usage
+    * Current memory usage
+    * JVM heap size
+    * CPU usage across the entire OS
+    * Memory usage across the entire OS
+    * Total machine's memory size
+    * Amount of free disk space left
+    * Total machine's disk space
+ * `rnode.toml` allows for configuring the address of the InfluxDB instance
+
+```
+[kamon]
+influx-db = true
+
+[influx-db]
+hostname = "localhost"
+port = 8086
+database = "rnode"
+```
+
+ * If the address or the InfluxDB instance isn't configured, metrics are NOT available to the node operator
+ * Metrics published to InfluxDB are available for charting in Chronograf
+ * Chronograf instance address is determined by the configuration of the InfluxDB instance, not the node
+
+## Validation
+
+### Identities
+
+TBD (node identity, validator identity, wallet identity)
+
+## External and internal API
+
 ## Deverloper guide
 
 For getting started with development of RChain please refer to the [Developer guide](DEVELOPER.md)

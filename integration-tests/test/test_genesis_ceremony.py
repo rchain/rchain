@@ -36,3 +36,15 @@ def test_successful_genesis_ceremony(command_line_options: CommandLineOptions, r
             with started_peer(context=context, network=bootstrap.network, bootstrap=bootstrap, name='validator-a', keypair=VALIDATOR_A_KEYPAIR):
                 with started_peer(context=context, network=bootstrap.network, bootstrap=bootstrap, name='validator-b', keypair=VALIDATOR_B_KEYPAIR):
                     assert False
+
+@pytest.mark.xfail
+def test_successful_genesis_ceremony_with_read_only(docker_client_session: DockerClient):
+    assert False
+
+@pytest.mark.xfail
+def test_not_successful_genesis_ceremony(docker_client_session: DockerClient):
+    assert False
+
+@pytest.mark.xfail
+def test_validator_catching_up(docker_client_session: DockerClient):
+    assert False    
