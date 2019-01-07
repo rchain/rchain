@@ -50,6 +50,11 @@ class ApprovedBlockReceived(LogsContainMessage):
         super().__init__(node, 'Valid ApprovedBlock received!')
 
 
+class SentUnapprovedBlock(LogsContainMessage):
+    def __init__(self, node: Node) -> None:
+        super().__init__(node, 'c.r.c.u.c.ApproveBlockProtocol$ApproveBlockProtocolImpl - APPROVAL: Sent UnapprovedBlock')
+
+
 class HasAtLeastPeers:
     def __init__(self, node: Node, minimum_peers_number: int) -> None:
         self.node = node
@@ -61,12 +66,13 @@ class HasAtLeastPeers:
         return '<{}({})>'.format(self.__class__.__name__, args)
 
     def is_satisfied(self) -> bool:
-        output = self.node.get_metrics()
+        output = self.node.get_connected_peers_metric_value()
         match = self.metric_regex.search(output)
         if match is None:
             return False
         peers = int(match[1])
         return peers >= self.minimum_peers_number
+
 
 class NodeSeesBlock:
     def __init__(self, node: Node, block_hash: str) -> None:
@@ -186,6 +192,12 @@ def wait_for_converged_network(context: TestingContext, network: Network, peer_c
         peer_predicate = HasAtLeastPeers(peer, peer_connections)
         wait_on_using_wall_clock_time(peer_predicate, context.network_converge_timeout)
 
+
 def wait_for_peers_count_at_least(context: TestingContext, node: Node, npeers: int) -> None:
     predicate = HasAtLeastPeers(node, npeers)
+    wait_on_using_wall_clock_time(predicate, context.network_converge_timeout)
+
+
+def wait_for_sent_unapproved_block(context: TestingContext, node: Node) -> None:
+    predicate = SentUnapprovedBlock(node)
     wait_on_using_wall_clock_time(predicate, context.network_converge_timeout)
