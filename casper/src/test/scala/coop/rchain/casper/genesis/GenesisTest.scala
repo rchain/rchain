@@ -63,7 +63,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
 
   "Genesis.fromInputFiles" should "generate random validators when no bonds file is given" in withGenResources {
     (
-        runtimeManager: RuntimeManager,
+        runtimeManager: RuntimeManager[Task],
         genesisPath: Path,
         log: LogStub[Task],
         time: LogicalTime[Task]
@@ -77,7 +77,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
 
   it should "generate random validators, with a warning, when bonds file does not exist" in withGenResources {
     (
-        runtimeManager: RuntimeManager,
+        runtimeManager: RuntimeManager[Task],
         genesisPath: Path,
         log: LogStub[Task],
         time: LogicalTime[Task]
@@ -100,7 +100,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
 
   it should "generate random validators, with a warning, when bonds file cannot be parsed" in withGenResources {
     (
-        runtimeManager: RuntimeManager,
+        runtimeManager: RuntimeManager[Task],
         genesisPath: Path,
         log: LogStub[Task],
         time: LogicalTime[Task]
@@ -129,7 +129,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
 
   it should "create a genesis block with the right bonds when a proper bonds file is given" in withGenResources {
     (
-        runtimeManager: RuntimeManager,
+        runtimeManager: RuntimeManager[Task],
         genesisPath: Path,
         log: LogStub[Task],
         time: LogicalTime[Task]
@@ -160,7 +160,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
     implicit blockStore => implicit blockDagStorage =>
       withGenResources {
         (
-            runtimeManager: RuntimeManager,
+            runtimeManager: RuntimeManager[Task],
             genesisPath: Path,
             log: LogStub[Task],
             time: LogicalTime[Task]
@@ -182,7 +182,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
 
   it should "detect an existing bonds file in the default location" in withGenResources {
     (
-        runtimeManager: RuntimeManager,
+        runtimeManager: RuntimeManager[Task],
         genesisPath: Path,
         log: LogStub[Task],
         time: LogicalTime[Task]
@@ -205,7 +205,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
   }
 
   it should "parse the wallets file and include it in the genesis state" in withRawGenResources {
-    (runtime: Runtime, genesisPath: Path, log: LogStub[Task], time: LogicalTime[Task]) =>
+    (runtime: Runtime[Task], genesisPath: Path, log: LogStub[Task], time: LogicalTime[Task]) =>
       val walletsFile = genesisPath.resolve("wallets.txt").toString
       printWallets(walletsFile)
 
@@ -235,7 +235,7 @@ object GenesisTest {
       shardId: String = rchainShardId,
       deployTimestamp: Option[Long] = Some(System.currentTimeMillis())
   )(
-      implicit runtimeManager: RuntimeManager,
+      implicit runtimeManager: RuntimeManager[Task],
       genesisPath: Path,
       log: LogStub[Task],
       time: LogicalTime[Task]
@@ -255,7 +255,7 @@ object GenesisTest {
       )
 
   def withRawGenResources(
-      body: (Runtime, Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
+      body: (Runtime[Task], Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
   ): Task[Unit] = {
     val storePath = storageLocation
     val runtime   = Runtime.create(storePath, storageSize)
@@ -272,10 +272,10 @@ object GenesisTest {
   }
 
   def withGenResources(
-      body: (RuntimeManager, Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
+      body: (RuntimeManager[Task], Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
   ): Task[Unit] =
     withRawGenResources {
-      (runtime: Runtime, genesisPath: Path, log: LogStub[Task], time: LogicalTime[Task]) =>
+      (runtime: Runtime[Task], genesisPath: Path, log: LogStub[Task], time: LogicalTime[Task]) =>
         val runtimeManager = RuntimeManager.fromRuntime(runtime)
         body(runtimeManager, genesisPath, log, time)
     }

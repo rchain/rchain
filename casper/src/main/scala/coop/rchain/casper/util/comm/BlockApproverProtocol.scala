@@ -1,6 +1,7 @@
 package coop.rchain.casper.util.comm
 
 import cats.Monad
+import cats.effect.Concurrent
 import cats.implicits._
 import cats.kernel.Eq
 import com.google.protobuf.ByteString
@@ -9,7 +10,7 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
-import coop.rchain.catscontrib.Capture
+import coop.rchain.catscontrib.{Capture, ToAbstractContext}
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.protocol.routing.Packet
@@ -19,6 +20,7 @@ import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.shared._
+import monix.eval.Task
 import monix.execution.Scheduler
 
 import scala.util.Try
@@ -31,7 +33,7 @@ import scala.concurrent.duration.Duration
 class BlockApproverProtocol(
     validatorId: ValidatorIdentity,
     deployTimestamp: Long,
-    runtimeManager: RuntimeManager,
+    runtimeManager: RuntimeManager[Task],
     bonds: Map[Array[Byte], Long],
     wallets: Seq[PreWallet],
     minimumBond: Long,
@@ -42,14 +44,12 @@ class BlockApproverProtocol(
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1) -> e._2)
 
-  def unapprovedBlockPacketHandler[F[_]: Capture: Monad: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
+  def unapprovedBlockPacketHandler[F[_]: Capture: Concurrent: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
       peer: PeerNode,
       u: UnapprovedBlock
-  ): F[Option[Packet]] =
+  ): F[Unit] =
     if (u.candidate.isEmpty) {
-      Log[F]
-        .warn("Candidate is not defined.")
-        .map(_ => none[Packet])
+      Log[F].warn("Candidate is not defined.")
     } else {
       val candidate = u.candidate.get
       val validCandidate = BlockApproverProtocol.validateCandidate(
@@ -73,11 +73,9 @@ class BlockApproverProtocol(
             msg = Blob(local, Packet(transport.BlockApproval.id, serializedApproval))
             _   <- TransportLayer[F].stream(Seq(peer), msg)
             _   <- Log[F].info(s"Received expected candidate from $peer. Approval sent in response.")
-          } yield none[Packet]
+          } yield ()
         case Left(errMsg) =>
-          Log[F]
-            .warn(s"Received unexpected candidate from $peer because: $errMsg")
-            .map(_ => none[Packet])
+          Log[F].warn(s"Received unexpected candidate from $peer because: $errMsg")
       }
     }
 }
@@ -99,7 +97,7 @@ object BlockApproverProtocol {
     getBlockApproval(candidate, validatorId)
 
   def validateCandidate(
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       candidate: ApprovedBlockCandidate,
       requiredSigs: Int,
       timestamp: Long,
@@ -147,7 +145,11 @@ object BlockApproverProtocol {
       _ <- (stateHash == postState.postStateHash)
             .either(())
             .or("Tuplespace hash mismatch.")
-      tuplespaceBonds <- Try(runtimeManager.computeBonds(postState.postStateHash)).toEither
+      tuplespaceBonds <- Try(
+                          runtimeManager
+                            .computeBonds(postState.postStateHash)
+                            .runSyncUnsafe(Duration.Inf)
+                        ).toEither
                           .leftMap(_.getMessage)
       tuplespaceBondsMap = tuplespaceBonds.map { case Bond(validator, stake) => validator -> stake }.toMap
       _ <- (tuplespaceBondsMap == bonds)

@@ -1,20 +1,23 @@
 import os
 import shutil
-import logging
 import contextlib
+from random import Random
 from typing import (
-    TYPE_CHECKING,
     Generator,
 )
 
-import pytest
-
+from docker.client import DockerClient
 
 from . import conftest
-from .common import TestingContext, Network
+from .common import (
+    Network,
+    TestingContext,
+    CommandLineOptions,
+)
 from .rnode import (
-    docker_network_with_started_bootstrap,
+    Node,
     create_peer_nodes,
+    docker_network_with_started_bootstrap,
 )
 from .common import random_string
 from .wait import (
@@ -25,12 +28,9 @@ from .wait import (
     wait_for_approved_block_received,
 )
 
-if TYPE_CHECKING:
-    from .rnode import Node
-
 
 @contextlib.contextmanager
-def start_network(*, context: TestingContext, bootstrap: 'Node', allowed_peers=None) -> Generator[Network, None, None]:
+def start_network(*, context: TestingContext, bootstrap: Node, allowed_peers=None) -> Generator[Network, None, None]:
     peers = create_peer_nodes(
         docker_client=context.docker,
         bootstrap=bootstrap,
@@ -52,19 +52,19 @@ def start_network(*, context: TestingContext, bootstrap: 'Node', allowed_peers=N
 def star_network(context: TestingContext) -> Generator[Network, None, None]:
     with docker_network_with_started_bootstrap(context) as bootstrap_node:
         with start_network(context=context, bootstrap=bootstrap_node, allowed_peers=[bootstrap_node.name]) as network:
-            wait_for_started_network(context.node_startup_timeout, network)
-            wait_for_converged_network(context.network_converge_timeout, network, 1)
+            wait_for_started_network(context, network)
+            wait_for_converged_network(context, network, 1)
             yield network
 
 
 @contextlib.contextmanager
 def complete_network(context: TestingContext) -> Generator[Network, None, None]:
     with docker_network_with_started_bootstrap(context) as bootstrap_node:
-        wait_for_approved_block_received_handler_state(bootstrap_node, context.node_startup_timeout)
+        wait_for_approved_block_received_handler_state(context, bootstrap_node)
         with start_network(context=context, bootstrap=bootstrap_node) as network:
-            wait_for_started_network(context.node_startup_timeout, network)
-            wait_for_converged_network(context.network_converge_timeout, network, len(network.peers))
-            wait_for_approved_block_received(network, context.node_startup_timeout)
+            wait_for_started_network(context, network)
+            wait_for_converged_network(context, network, len(network.peers))
+            wait_for_approved_block_received(context, network)
             yield network
 
 
@@ -87,17 +87,17 @@ def make_expected_string(node, random_token):
     return "<{name}:{random_token}>".format(name=node.container.name, random_token=random_token)
 
 
-def test_casper_propose_and_deploy(command_line_options_fixture, docker_client_fixture):
+def test_casper_propose_and_deploy(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient):
     """Deploy a contract and then checks if all the nodes have received the block
     containing the contract.
     """
 
-    with conftest.testing_context(command_line_options_fixture, docker_client_fixture) as context:
+    with conftest.testing_context(command_line_options, random_generator, docker_client) as context:
         with complete_network(context) as network:
             token_size = 20
             contract_name = 'contract.rho'
             for node in network.nodes:
-                random_token = random_string(token_size)
+                random_token = random_string(context, token_size)
 
                 expected_string = make_expected_string(node, random_token)
                 block_hash = deploy_block(node, expected_string, contract_name)
@@ -105,4 +105,4 @@ def test_casper_propose_and_deploy(command_line_options_fixture, docker_client_f
                 expected_string = make_expected_string(node, random_token)
                 other_nodes = [n for n in network.nodes if n.container.name != node.container.name]
                 for node in other_nodes:
-                    wait_for_block_contains(node, block_hash, expected_string, context.receive_timeout)
+                    wait_for_block_contains(context, node, block_hash, expected_string)

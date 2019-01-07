@@ -1,5 +1,6 @@
 package coop.rchain.comm.transport
 
+import coop.rchain.shared.GracefulClose._
 import coop.rchain.comm.{CommError, PeerNode}, CommError._
 import coop.rchain.comm.protocol.routing._
 import java.nio.file._
@@ -21,9 +22,6 @@ object PacketOps {
                  case Right(packet) => gracefullyClose(fin) *> Right(packet).pure[F]
                }
     } yield resErr
-
-  def gracefullyClose[F[_]: Sync](closable: AutoCloseable): F[Either[Throwable, Unit]] =
-    Sync[F].delay(closable.close).attempt
 
   implicit class RichPacket(packet: Packet) {
     def store[F[_]: Sync](folder: Path): F[CommErr[Path]] =

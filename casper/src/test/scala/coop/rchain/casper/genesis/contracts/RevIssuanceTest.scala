@@ -1,25 +1,41 @@
 package coop.rchain.casper.genesis.contracts
 
-import cats.Id
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.HashSetCasperTest.createBonds
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{BondingUtil, ProtoUtil}
-import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting
+import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.concurrent.duration._
 
 class RevIssuanceTest extends FlatSpec with Matchers {
+
+  private def getDataUnsafe(
+      runtimeManager: RuntimeManager[Task],
+      postTransferHash: StateHash,
+      transferStatusOut: String
+  ) = {
+    val transferSuccess = runtimeManager
+      .getData(
+        postTransferHash,
+        Par().copy(exprs = Seq(Expr(GString(transferStatusOut))))
+      )
+      .unsafeRunSync
+    transferSuccess
+  }
+
   "Rev" should "be issued and accessible based on inputs from Ethereum" in {
-    val activeRuntime  = TestSetUtil.runtime
+    val activeRuntime  = TestSetUtil.runtime()
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
     val emptyHash      = runtimeManager.emptyStateHash
 
@@ -63,24 +79,13 @@ class RevIssuanceTest extends FlatSpec with Matchers {
       runtimeManager.computeState(emptyHash, genesisDeploys).runSyncUnsafe(10.seconds)
     val (postUnlockHash, _) =
       runtimeManager.computeState(postGenHash, unlockDeploy :: Nil).runSyncUnsafe(10.seconds)
-    val unlockResult =
-      runtimeManager.getData(
-        postUnlockHash,
-        Par().copy(exprs = Seq(Expr(GString(statusOut))))
-      )
+    val unlockResult = getDataUnsafe(runtimeManager, postUnlockHash, statusOut)
     assert(unlockResult.head.exprs.head.getETupleBody.ps.head.exprs.head.getGBool) //assert unlock success
 
     val (postTransferHash, _) =
       runtimeManager.computeState(postUnlockHash, transferDeploy :: Nil).runSyncUnsafe(10.seconds)
-    val transferSuccess = runtimeManager.getData(
-      postTransferHash,
-      Par().copy(exprs = Seq(Expr(GString(transferStatusOut))))
-    )
-    val transferResult =
-      runtimeManager.getData(
-        postTransferHash,
-        Par().copy(exprs = Seq(Expr(GString(destination))))
-      )
+    val transferSuccess = getDataUnsafe(runtimeManager, postTransferHash, transferStatusOut)
+    val transferResult  = getDataUnsafe(runtimeManager, postTransferHash, destination)
     assert(transferSuccess.head.exprs.head.getGString == "Success") //assert transfer success
     assert(transferResult.nonEmpty)
 
@@ -94,8 +99,9 @@ object RevIssuanceTest {
       pubKey: String,
       secKey: Array[Byte],
       statusOut: String
-  )(implicit runtimeManager: RuntimeManager): DeployData = {
-    val code = BondingUtil.preWalletUnlockDeploy[Id](ethAddress, pubKey, secKey, statusOut)
+  )(implicit runtimeManager: RuntimeManager[Task]): DeployData = {
+    val code =
+      BondingUtil.preWalletUnlockDeploy[Task](ethAddress, pubKey, secKey, statusOut).unsafeRunSync
     ProtoUtil.sourceDeploy(
       code,
       System.currentTimeMillis(),
@@ -110,15 +116,17 @@ object RevIssuanceTest {
       transferStatusOut: String,
       pubKey: String,
       secKey: Array[Byte]
-  )(implicit runtimeManager: RuntimeManager): DeployData = {
-    val code = BondingUtil.issuanceWalletTransferDeploy(
-      nonce,
-      amount,
-      destination,
-      transferStatusOut,
-      pubKey,
-      secKey
-    )
+  )(implicit runtimeManager: RuntimeManager[Task]): DeployData = {
+    val code = BondingUtil
+      .issuanceWalletTransferDeploy[Task](
+        nonce,
+        amount,
+        destination,
+        transferStatusOut,
+        pubKey,
+        secKey
+      )
+      .unsafeRunSync
 
     ProtoUtil.sourceDeploy(
       code,

@@ -29,6 +29,7 @@ import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.ski.kp2
 import coop.rchain.rspace.Checkpoint
+import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.atomic.AtomicAny
 
@@ -55,26 +56,33 @@ trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]] {
   def lastFinalizedBlock: F[BlockMessage]
   def storageContents(hash: ByteString): F[String]
   // TODO: Refactor hashSetCasper to take a RuntimeManager[F] just like BlockStore[F]
-  def getRuntimeManager: F[Option[RuntimeManager]]
+  def getRuntimeManager: F[Option[RuntimeManager[Task]]]
 }
 
 object MultiParentCasper extends MultiParentCasperInstances {
   def apply[F[_]](implicit instance: MultiParentCasper[F]): MultiParentCasper[F] = instance
   def ignoreDoppelgangerCheck[F[_]: Applicative]: (BlockMessage, Validator) => F[Unit] =
     kp2(().pure[F])
+
+  def forkChoiceTip[F[_]: MultiParentCasper: Monad]: F[BlockMessage] =
+    for {
+      dag  <- MultiParentCasper[F].blockDag
+      tips <- MultiParentCasper[F].estimator(dag)
+      tip  = tips.head
+    } yield tip
 }
 
 sealed abstract class MultiParentCasperInstances {
 
-  def hashSetCasper[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage](
-      runtimeManager: RuntimeManager,
+  def hashSetCasper[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ToAbstractContext](
+      runtimeManager: RuntimeManager[Task],
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       shardId: String
   )(implicit scheduler: Scheduler): F[MultiParentCasper[F]] =
     for {
       // Initialize DAG storage with genesis block in case it is empty
-      _   <- BlockDagStorage[F].insertGenesis(genesis)
+      _   <- BlockDagStorage[F].insert(genesis)
       dag <- BlockDagStorage[F].getRepresentation
       maybePostGenesisStateHash <- InterpreterUtil
                                     .validateBlockCheckpoint[F](
@@ -90,7 +98,7 @@ sealed abstract class MultiParentCasperInstances {
                                  )
                                case Right(Some(hash)) => hash.pure[F]
                              }
-      semaphore <- Semaphore[F](1)
+      blockProcessingLock <- Semaphore[F](1)
     } yield
       new MultiParentCasperImpl[F](
         runtimeManager,
@@ -98,6 +106,6 @@ sealed abstract class MultiParentCasperInstances {
         genesis,
         postGenesisStateHash,
         shardId,
-        semaphore
+        blockProcessingLock
       )
 }

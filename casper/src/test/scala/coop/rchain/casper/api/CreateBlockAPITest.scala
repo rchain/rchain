@@ -3,6 +3,7 @@ package coop.rchain.casper.api
 import scala.concurrent.duration._
 import cats.Monad
 import cats.data.EitherT
+import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import coop.rchain.casper._
 import coop.rchain.casper.helper.HashSetCasperTestNode
@@ -50,23 +51,25 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
     ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
 
     implicit val logEff = new LogStub[Effect]
-    def testProgram(
+    def testProgram(blockApiLock: Semaphore[Effect])(
         implicit casperRef: MultiParentCasperRef[Effect]
     ): Effect[(DeployServiceResponse, DeployServiceResponse)] = EitherT.liftF(
       for {
-        t1 <- (BlockAPI.deploy[Effect](deploys.head) *> BlockAPI.createBlock[Effect]).value.start
-        _  <- Time[Task].sleep(2.second)
+        t1 <- (BlockAPI.deploy[Effect](deploys.head) *> BlockAPI
+               .createBlock[Effect](blockApiLock)).value.start
+        _ <- Time[Task].sleep(2.second)
         t2 <- (BlockAPI.deploy[Effect](deploys.last) *> BlockAPI
-               .createBlock[Effect]).value.start //should fail because other not done
+               .createBlock[Effect](blockApiLock)).value.start //should fail because other not done
         r1 <- t1.join
         r2 <- t2.join
       } yield (r1.right.get, r2.right.get)
     )
 
     val (response1, response2) = (for {
-      casperRef <- MultiParentCasperRef.of[Effect]
-      _         <- casperRef.set(casper)
-      result    <- testProgram(casperRef)
+      casperRef    <- MultiParentCasperRef.of[Effect]
+      _            <- casperRef.set(casper)
+      blockApiLock <- Semaphore[Effect](1)
+      result       <- testProgram(blockApiLock)(casperRef)
     } yield result).value.unsafeRunSync.right.get
 
     response1.success shouldBe true
@@ -91,10 +94,10 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def blockDag: F[BlockDagRepresentation[F]] = underlying.blockDag
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     underlying.normalizedInitialFault(weights)
-  def lastFinalizedBlock: F[BlockMessage]          = underlying.lastFinalizedBlock
-  def storageContents(hash: ByteString): F[String] = underlying.storageContents(hash)
-  def getRuntimeManager: F[Option[RuntimeManager]] = underlying.getRuntimeManager
-  def fetchDependencies: F[Unit]                   = underlying.fetchDependencies
+  def lastFinalizedBlock: F[BlockMessage]                = underlying.lastFinalizedBlock
+  def storageContents(hash: ByteString): F[String]       = underlying.storageContents(hash)
+  def getRuntimeManager: F[Option[RuntimeManager[Task]]] = underlying.getRuntimeManager
+  def fetchDependencies: F[Unit]                         = underlying.fetchDependencies
 
   override def createBlock: F[CreateBlockStatus] =
     for {

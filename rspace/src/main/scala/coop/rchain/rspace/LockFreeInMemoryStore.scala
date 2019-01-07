@@ -1,14 +1,15 @@
 package coop.rchain.rspace
 
+import scala.collection.concurrent.TrieMap
+import scala.collection.immutable.Seq
+
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.canonicalize
 import coop.rchain.shared.SeqOps.{dropIndex, removeFirst}
+
 import kamon._
 import scodec.Codec
-
-import scala.collection.concurrent.TrieMap
-import scala.collection.immutable.Seq
 
 /**
   * This implementation of Transaction exists only to satisfy the requirements of IStore.
@@ -60,8 +61,9 @@ class LockFreeInMemoryStore[T, C, P, A, K](
     TrieMap[Blake2b256Hash, GNAT[C, P, A, K]]()
   private val stateJoin: TrieMap[C, Seq[Seq[C]]] = TrieMap[C, Seq[Seq[C]]]()
 
-  private[this] val refine       = Map("path" -> "inmem")
-  private[this] val entriesGauge = Kamon.gauge("entries").refine(refine)
+  private[this] val MetricsSource = RSpaceMetricsSource + ".lock-free-in-mem"
+  private[this] val refine        = Map("path" -> "inmem")
+  private[this] val entriesGauge  = Kamon.gauge(MetricsSource + ".entries").refine(refine)
 
   private[rspace] def updateGauges() =
     entriesGauge.set(stateGNAT.readOnlySnapshot.size.toLong)

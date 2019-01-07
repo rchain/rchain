@@ -1,23 +1,31 @@
 package coop.rchain.node.api
 
-import cats.effect.Sync
-import cats.implicits._
+import cats.effect.concurrent.Semaphore
+import cats.effect.Concurrent
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.api.BlockAPI
-import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.casper.protocol.{DeployData, DeployServiceResponse, _}
-import coop.rchain.catscontrib.Taskable
 import coop.rchain.shared._
-import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.graphz._
+import coop.rchain.casper.api.{GraphConfig, GraphzGenerator}
 import com.google.protobuf.empty.Empty
+
+import cats.mtl._
+import cats.mtl.implicits._
+import cats._, cats.data._, cats.implicits._
+import coop.rchain.catscontrib.Catscontrib._
+import coop.rchain.catscontrib.{Taskable, ToAbstractContext}
+import coop.rchain.catscontrib.TaskContrib._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.reactive.Observable
 
 private[api] object DeployGrpcService {
-  def instance[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
+  def instance[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable: ToAbstractContext](
+      blockApiLock: Semaphore[F]
+  )(
       implicit worker: Scheduler
   ): CasperMessageGrpcMonix.DeployService =
     new CasperMessageGrpcMonix.DeployService {
@@ -29,10 +37,30 @@ private[api] object DeployGrpcService {
         defer(BlockAPI.deploy[F](d))
 
       override def createBlock(e: Empty): Task[DeployServiceResponse] =
-        defer(BlockAPI.createBlock[F])
+        defer(BlockAPI.createBlock[F](blockApiLock))
 
       override def showBlock(q: BlockQuery): Task[BlockQueryResponse] =
         defer(BlockAPI.showBlock[F](q))
+
+      // TODO handle potentiall errors (at least by returning proper response)
+      override def visualizeDag(q: VisualizeDagQuery): Task[VisualizeBlocksResponse] = {
+        type Effect[A] = StateT[Id, StringBuffer, A]
+        implicit val ser: StringSerializer[Effect]      = new StringSerializer[Effect]
+        val stringify: Effect[Graphz[Effect]] => String = _.runS(new StringBuffer).toString
+
+        val depth  = if (q.depth <= 0) None else Some(q.depth)
+        val config = GraphConfig(q.showJustificationLines)
+
+        defer(
+          BlockAPI
+            .visualizeDag[F, Effect](
+              depth,
+              (ts, lfb) => GraphzGenerator.dagAsCluster[F, Effect](ts, lfb, config),
+              stringify
+            )
+            .map(graph => VisualizeBlocksResponse(graph))
+        )
+      }
 
       override def showBlocks(request: BlocksQuery): Observable[BlockInfoWithoutTuplespace] =
         Observable

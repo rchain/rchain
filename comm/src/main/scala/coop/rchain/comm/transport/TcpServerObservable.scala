@@ -1,5 +1,6 @@
 package coop.rchain.comm.transport
 
+import java.nio.file.Path
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
@@ -27,7 +28,8 @@ class TcpServerObservable(
     tellBufferSize: Int = 1024,
     askBufferSize: Int = 1024,
     blobBufferSize: Int = 32,
-    askTimeout: FiniteDuration = 5.second
+    askTimeout: FiniteDuration = 5.second,
+    tempFolder: Path
 )(implicit scheduler: Scheduler, logger: Log[Task])
     extends Observable[ServerMessage] {
 
@@ -75,7 +77,10 @@ class TcpServerObservable(
           }
 
       def stream(observable: Observable[Chunk]): Task[ChunkResponse] =
-        StreamHandler.handleStream(observable, bufferBlobMessage)
+        (StreamHandler.handleStream(tempFolder, observable) >>= {
+          case Left(ex)   => logger.error("Could not receive stream! Details: ${ex.getMessage}", ex)
+          case Right(msg) => Task.delay(bufferBlobMessage.pushNext(msg))
+        }).as(ChunkResponse())
 
       private def returnProtocol(protocol: Protocol): TLResponse =
         TLResponse(TLResponse.Payload.Protocol(protocol))

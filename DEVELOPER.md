@@ -5,7 +5,7 @@ Pre-release versions of the RChain software are now available. We plan to launch
 __Note__ Successfully building from source requires attending to all of the prerequisites shown below. When users experience errors, it is typically related to failure to assure all prerequisites are met. Work is in progress to improve this experience.
 
 ### Prerequisites
-* Java Development Kit (JDK), version 8. We recommend using the OpenJDK
+* Java Development Kit (JDK), version 10. We recommend using the OpenJDK
 * [sbt](https://www.scala-sbt.org/download.html)
 * For Rholang
      - [jflex](http://jflex.de/)

@@ -173,12 +173,12 @@ object Reduce {
               (for {
                 varref <- eval(v)(env, costAccountingAlg)
                 _      <- eval(varref)(env, rand, sequenceNumber, costAccountingAlg)
-              } yield ()).handleError(fTell.tell)
+              } yield ()).handleErrorWith(fTell.tell)
             case e: EMethodBody =>
               (for {
                 p <- evalExprToPar(Expr(e))(env, costAccountingAlg)
                 _ <- eval(p)(env, rand, sequenceNumber, costAccountingAlg)
-              } yield ()).handleError(fTell.tell)
+              } yield ()).handleErrorWith(fTell.tell)
             case _ => s.unit
           }
 
@@ -818,7 +818,7 @@ object Reduce {
                        case (EListBody(lhs), EListBody(rhs)) =>
                          for {
                            _ <- costAccountingAlg.charge(
-                                 listAppendCost(rhs.value.ps.toVector)
+                                 listAppendCost(rhs.ps.toVector)
                                )
                          } yield
                            Expr(
@@ -894,7 +894,7 @@ object Reduce {
 
         case EMapBody(map) =>
           for {
-            evaledPs <- map.ps.sortedMap.toList.traverse {
+            evaledPs <- map.ps.sortedList.traverse {
                          case (key, value) =>
                            for {
                              eKey   <- evalExpr(key).map(updateLocallyFree)
@@ -952,6 +952,14 @@ object Reduce {
                          s.fromEither(localNth(ps, nth))
                        case ETupleBody(ETuple(ps, _, _)) =>
                          s.fromEither(localNth(ps, nth))
+                       case GByteArray(bs) =>
+                         s.fromEither(if (0 <= nth && nth < bs.size) {
+                           val b      = bs.byteAt(nth) & 0xff // convert to unsigned
+                           val p: Par = Expr(GInt(b.toLong))
+                           Right(p)
+                         } else {
+                           Left(ReduceError("Error: index out of bound: " + nth))
+                         })
                        case _ =>
                          s.raiseError(
                            ReduceError(
@@ -1069,7 +1077,7 @@ object Reduce {
               Applicative[M].pure[Expr](
                 EMapBody(
                   ParMap(
-                    (baseMap ++ otherMap.sortedMap).toSeq,
+                    (baseMap ++ otherMap).toSeq,
                     base.connectiveUsed || other.connectiveUsed,
                     locallyFreeUnion(base.locallyFree, other.locallyFree),
                     None
@@ -1367,6 +1375,8 @@ object Reduce {
         baseExpr.exprInstance match {
           case GString(string) =>
             Applicative[M].pure[Expr](GInt(string.length.toLong))
+          case GByteArray(bytes) =>
+            Applicative[M].pure[Expr](GInt(bytes.size.toLong))
           case EListBody(EList(ps, _, _, _)) =>
             Applicative[M].pure[Expr](GInt(ps.length.toLong))
           case other =>

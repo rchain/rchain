@@ -16,6 +16,7 @@ trait KademliaRPC[F[_]] {
       pingHandler: PeerNode => F[Unit],
       lookupHandler: (PeerNode, Array[Byte]) => F[Seq[PeerNode]]
   ): F[Unit]
+  def shutdown(): F[Unit]
 }
 
 object KademliaRPC {

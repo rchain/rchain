@@ -63,7 +63,16 @@ disable=
     # handled by black
     format,
     line-too-long,
-    logging-format-interpolation
+    logging-format-interpolation,
+
+    # pytest fixtures generate this
+    redefined-outer-name,
+
+    # pytest fixture generate this
+    unused-argument,
+
+    # does not seem useful
+    redefined-builtin
 
 
 [REPORTS]

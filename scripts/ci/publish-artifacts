@@ -6,6 +6,13 @@ if [[ -n $DRONE_TAG ]]; then
 	TAG=1
 elif [[ -n $DRONE_BRANCH ]]; then
 	REF=$DRONE_BRANCH
+	if [[ $DRONE_BRANCH = "staging" ]]; then
+	  # Staging is a branch used by bors for building pull requests before merging.
+	  # All artifacts produced in those builds should be uploaded as if they were built on the PR's base/target branch.
+	  COMMIT_MSG=$( git log -1 --pretty=format:%s )
+	  PR_NUMBER=$( echo "$COMMIT_MSG" | sed -r 's/^Merge #([0-9]+).*$/\1/' )
+	  REF=$( curl -s https://api.github.com/repos/rchain/rchain/pulls/$PR_NUMBER | jq -r '.base.ref' )
+	fi
 	TAG=0
 else
 	# Like, really. It'll overwrite your SSH key.

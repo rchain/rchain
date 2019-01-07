@@ -6,6 +6,7 @@ import cats.Id
 
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.catscontrib._, Catscontrib._
+import coop.rchain.catscontrib.TestOutlaws._
 import coop.rchain.comm._
 
 import org.scalatest._
@@ -166,7 +167,8 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
     def receive(
         pingHandler: PeerNode => Id[Unit],
         lookupHandler: (PeerNode, Array[Byte]) => Id[Seq[PeerNode]]
-    ): Id[Unit] = ()
+    ): Id[Unit]              = ()
+    def shutdown(): Id[Unit] = ()
   }
 
   private def createPeer(id: String): PeerNode =

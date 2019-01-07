@@ -1,6 +1,7 @@
 package coop.rchain.casper.helper
 
 import cats._
+import cats.effect._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
@@ -9,7 +10,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.{InterpreterUtil, ProcessedDeployUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.catscontrib.Capture
+import coop.rchain.catscontrib._
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Time
@@ -22,10 +23,10 @@ import scala.language.higherKinds
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]()(Capture.taskCapture)
 
-  def updateChainWithBlockStateUpdate[F[_]: Monad: BlockStore: IndexedBlockDagStorage](
+  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage: ToAbstractContext](
       id: Int,
       genesis: BlockMessage,
-      runtimeManager: RuntimeManager
+      runtimeManager: RuntimeManager[Task]
   ): F[BlockMessage] =
     for {
       b   <- IndexedBlockDagStorage[F].lookupByIdUnsafe(id)
@@ -40,11 +41,11 @@ object BlockGenerator {
       _                                 <- injectPostStateHash[F](id, b, postStateHash, processedDeploys)
     } yield b
 
-  def computeBlockCheckpoint[F[_]: Monad: BlockStore](
+  def computeBlockCheckpoint[F[_]: Sync: BlockStore: ToAbstractContext](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager
+      runtimeManager: RuntimeManager[Task]
   ): F[(StateHash, Seq[ProcessedDeploy])] =
     for {
       result <- InterpreterUtil

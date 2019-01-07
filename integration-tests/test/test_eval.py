@@ -1,7 +1,5 @@
 import os
 
-from .rnode import started_standalone_bootstrap_node
-
 
 def test_eval(started_standalone_bootstrap_node):
     relative_paths = started_standalone_bootstrap_node.shell_out('sh', '-c', 'ls /opt/docker/examples/*.rho').splitlines()

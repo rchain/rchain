@@ -3,9 +3,7 @@ package coop.rchain.node
 import scala.collection.JavaConverters._
 import scala.tools.jline.console._
 import completer.StringsCompleter
-
 import cats.implicits._
-
 import coop.rchain.casper.util.comm._
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
@@ -16,7 +14,6 @@ import coop.rchain.node.diagnostics.client.GrpcDiagnosticsService
 import coop.rchain.node.effects._
 import coop.rchain.shared._
 import coop.rchain.shared.StringOps._
-
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -74,6 +71,8 @@ object Main {
       case Propose           => DeployRuntime.propose[Task]()
       case ShowBlock(hash)   => DeployRuntime.showBlock[Task](hash)
       case ShowBlocks(depth) => DeployRuntime.showBlocks[Task](depth)
+      case VisualizeDag(depth, showJustificationLines) =>
+        DeployRuntime.visualizeDag[Task](depth, showJustificationLines)
       case DataAtName(name)  => DeployRuntime.listenForDataAtName[Task](name)
       case ContAtName(names) => DeployRuntime.listenForContinuationAtName[Task](names)
       case Run               => nodeProgram(conf)
@@ -118,7 +117,8 @@ object Main {
   implicit private def consoleIO: ConsoleIO[Task] = {
     val console = new ConsoleReader()
     console.setHistoryEnabled(true)
-    console.setPrompt("rholang $ ".green)
+    if (TerminalMode.readMode)
+      console.setPrompt("rholang $ ".green.colorize)
     console.addCompleter(new StringsCompleter(ReplRuntime.keywords.asJava))
     effects.consoleIO(console)
   }

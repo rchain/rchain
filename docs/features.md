@@ -2,19 +2,108 @@
 
 ## Nodes
 ### As a Node Operator, I want to install software from binary artifacts or a Docker image
-### As a Node Operator, I want to run software on Linux, MacOS, and in Docker
+
+ * A tarball containing latest version of rnode as a runnable .jar file is available at https://github.com/rchain/rchain/releases/
+ * A docker image containing latest version of rnode is available at https://hub.docker.com/r/rchain/rnode
+
+### As a Node Operator, I want to run software on Linux, macOS, and in Docker
+
+ * A .jar file containing latest version of rnode is runnable on Linux and macOS
+ * `docker pull rchain/rnode` followed by `docker run rchain/rnode` starts latest rnode version
+
 ### As a dApp Developer, I want to interface with the Rholang interpreter and evaluate smart contracts independently from the blockchain
 ### As a Node Operator, I want to have a default configuration and the ability to customize the configuration on the command line
+
+ * rnode reads in rnode.toml file at startup
+ * rnode.toml file settings may be passed also via command line, in which case command line ones take priority over the file
+ * Non-exhaustive list of configuration items:
+    * Bootstrap node address
+    * Bonds file path
+    * Wallets file path (in case of a bootstrap node)
+
 ### As a Node Operator, I want to monitor the performance, resource consumption, and status of my node
-### As a Node Operator, I do not want to expose my private wallet key on the command line
+
+ * Node is considered up and running if and only if it listens on the port 40400 (the port number can be overriden with the `--port` option)
+ * rnode publishes metrics to InfluxDB
+    * COMM events per second
+    * CPU usage
+    * Current memory usage
+    * JVM heap size
+    * CPU usage across the entire OS
+    * Memory usage across the entire OS
+    * Total machine's memory size
+    * Amount of free disk space left
+    * Total machine's disk space
+ * `rnode.toml` allows for configuring the address of the InfluxDB instance
+
+```
+[kamon]
+influx-db = true
+
+[influx-db]
+hostname = "localhost"
+port = 8086
+database = "rnode"
+```
+
+ * If the address or the InfluxDB instance isn't configured, metrics are NOT available to the node operator
+ * Metrics published to InfluxDB are available for charting in Chronograf
+ * Chronograf instance address is determined by the configuration of the InfluxDB instance, not the node
+
+### As a Node Operator, I want the wallet key to be stored in a file only
+
+ * The wallet key is stored in a file only (i.e. not passed as a command line argument, due to security concerns)
+ * The path to the file containing the wallet key is passed as an argument on the command line to rnode
+
 ## Peer to Peer Network
 ### As a Node operator, I want to be able to bootstrap to the network by connecting to any known node
+#### connecting to existing node
+##### test: test/test_p2p.py::test_connecting_to_existing_node
+##### steps:
+
+* given that `standalone` is a running node in a standalone mode
+* start new node with `--bootstrap` pointing to `standalone`
+* node should succesfully start and connect to `standalone` via protocol handshake
+
+#### connecting to non-existing node
+##### test: test/test_p2p.py::test_connecting_to_non_existing_node
+##### steps:
+
+* start new node with `--bootstrap` pointing to some non-existing address
+* node should exit
+* exit code should be 1
+* node should log that bootstrap could not been found
+
 ### As a Node operator, once connected via a bootstrap node, I want to discover and connect to peers
+#### discover other nodes
+##### test: test/test_p2p.py::test_discover_other_nodes
+##### steps:
+
+* create a p2p network with 3 nodes `nodaA`, `nodeB` and `nodeC`
+* join p2p network as described in "As a Node operator, I want to be able to bootstrap to the network by connecting to any known node" bootstaping from `nodeA`
+* after a period of time new node discovers `nodeB` and `nodeC`
+* after a period of time new node connects (via protocol handshake) with `nodeB` and `nodeC`
+
 ### As a Node operator, I want to know how many peers I am connected to
+#### number of protocol peers
+##### test: test/test_p2p.py::test_number_of_protocol_peers
+##### steps:
+
+* create a p2p network with 3 nodes `nodaA`, `nodeB` and `nodeC`
+* access `nodeA` http endpoint under `/info` should print `connected_peers = 2`
+* access `nodeA` http endpoint under `/peers` to list `nodeB` and `nodeC` in JSON format
+
+#### number of protocol peers
+##### test: test/test_p2p.py::test_number_of_discovery_peers
+##### steps:
+
+* create a p2p network with 3 nodes `nodaA`, `nodeB` and `nodeC`
+* access `nodeA` http endpoint under `/info` should print `discovered_peers = 2`
+* access `nodeA` http endpoint under `/discovered-peers` to list `nodeB` and `nodeC` in JSON format
+
 ## Network Launch
 ### As a Coop SRE I want to launch a network
 #### A successful genesis ceremony 
-
 ##### test: test/test_genesis_ceremony.py::test_successful_genesis_ceremony 
 ##### steps:
 
@@ -82,8 +171,18 @@
 ### As a wallet user, I need a command line interface for interacting with wallets.
 ### As a dApp organization, I need to have multiple approvers for any send transaction.
 ## Storage
-### As a user, I want to be able to store transaction data on the blockchain so that it is available and accessible to users
-### As a user, I want to be able to store non-transaction data on the blockchain so that it is available and accessible to users
+### As a user I want to be able to store data using a rholang contract in the tuplespace. 
+#### A contract pointing to some data gets deployed, the data gets fetched and asserted.
+##### test: test/test_storage.py::test_data_is_stored_and_served_by_node
+##### steps:
+
+* instantiate p2p network with single `ceremonyMaster` that transitions to `ApprovedBlockReceivedhandler` (`--required-sig 0`)
+* call `rnode deploy` & `rnode propose` with `integration-tests/features/contracts/storage/store-data.rho` on `ceremonyMaster`
+* assert success on std out
+* call `rnode deploy` & `rnode propose` with `integration-tests/features/contracts/storage/read-data.rho` on `ceremonyMaster`
+* assert success on std out
+* compare data sent and restored
+
 ## Bonding/Unbonding
 ### As a Node Validator, I want to be able to add my stake to the network and be recognized as a validator so I can participate in proof of stake consensus and be eligible to earn rewards (validating)
 ### As a Node Validator, I want to be able to retrieve my stake from the network and no longer be recognized a as validator

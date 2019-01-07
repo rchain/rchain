@@ -1,10 +1,11 @@
 package coop.rchain.casper
 
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
+import coop.rchain.catscontrib._
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
@@ -16,6 +17,7 @@ import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.shared._
+import monix.eval.Task
 import monix.execution.Scheduler
 
 import scala.util.{Failure, Success, Try}
@@ -562,12 +564,12 @@ object Validate {
         false
       }
 
-  def transactions[F[_]: Sync: Log: BlockStore](
+  def transactions[F[_]: Sync: Log: BlockStore: ToAbstractContext](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       emptyStateHash: StateHash,
-      runtimeManager: RuntimeManager
-  )(implicit scheduler: Scheduler): F[Either[BlockStatus, ValidBlock]] =
+      runtimeManager: RuntimeManager[Task]
+  ): F[Either[BlockStatus, ValidBlock]] =
     for {
       maybeStateHash <- InterpreterUtil
                          .validateBlockCheckpoint[F](
@@ -607,14 +609,15 @@ object Validate {
     }
   }
 
-  def bondsCache[F[_]: Applicative: Log](b: BlockMessage, runtimeManager: RuntimeManager)(
-      implicit scheduler: Scheduler
+  def bondsCache[F[_]: Log: Concurrent: ToAbstractContext](
+      b: BlockMessage,
+      runtimeManager: RuntimeManager[Task]
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val bonds = ProtoUtil.bonds(b)
     ProtoUtil.tuplespace(b) match {
       case Some(tuplespaceHash) =>
-        Try(runtimeManager.computeBonds(tuplespaceHash)) match {
-          case Success(computedBonds) =>
+        ToAbstractContext[F].fromTask(runtimeManager.computeBonds(tuplespaceHash)).attempt.flatMap {
+          case Right(computedBonds) =>
             if (bonds.toSet == computedBonds.toSet) {
               Applicative[F].pure(Right(Valid))
             } else {
@@ -624,7 +627,7 @@ object Validate {
                     )
               } yield Left(InvalidBondsCache)
             }
-          case Failure(ex: Throwable) =>
+          case Left(ex: Throwable) =>
             for {
               _ <- Log[F].warn(s"Failed to compute bonds from tuplespace hash ${ex.getMessage}")
             } yield Left(InvalidBondsCache)

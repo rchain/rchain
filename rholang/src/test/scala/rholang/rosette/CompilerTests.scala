@@ -3,6 +3,7 @@ package rholang.rosette
 import java.io.FileReader
 import java.nio.file.{Files, Path, Paths}
 
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
 import monix.execution.Scheduler.Implicits.global
 import coop.rchain.rholang.Resources.mkRuntime
@@ -28,7 +29,7 @@ class CompilerTests extends FunSuite with Matchers {
       val result = execute(file)
       assert(result.isRight)
       val resRuntime = result.right.get
-      val errorLog   = resRuntime.readAndClearErrorVector()
+      val errorLog   = resRuntime.readAndClearErrorVector().unsafeRunSync
       assert(errorLog.isEmpty)
     }
   }
@@ -40,7 +41,7 @@ class CompilerTests extends FunSuite with Matchers {
     }
   }
 
-  private def execute(file: Path): Either[Throwable, Runtime] =
+  private def execute(file: Path): Either[Throwable, Runtime[Task]] =
     mkRuntime(tmpPrefix, mapSize)
       .use { runtime =>
         Interpreter.execute(runtime, new FileReader(file.toString)).attempt

@@ -1,0 +1,3 @@
+new channel1 in {
+    channel1!("The most important piece of data ever.")
+}

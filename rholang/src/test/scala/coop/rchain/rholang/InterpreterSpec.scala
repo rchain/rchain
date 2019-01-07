@@ -102,18 +102,21 @@ class InterpreterSpec extends FlatSpec with Matchers {
     )
   }
 
-  private def storageContents(runtime: Runtime): String =
+  private def storageContents(runtime: Runtime[Task]): String =
     StoragePrinter.prettyPrint(runtime.space.store)
 
-  private def success(runtime: Runtime, rho: String): Task[Unit] =
+  private def success(runtime: Runtime[Task], rho: String): Task[Unit] =
     execute(runtime, rho).map(_.swap.foreach(error => fail(s"""Execution failed for: $rho
                                                |Cause:
                                                |$error""".stripMargin)))
 
-  private def failure(runtime: Runtime, rho: String): Task[Throwable] =
+  private def failure(runtime: Runtime[Task], rho: String): Task[Throwable] =
     execute(runtime, rho).map(_.swap.getOrElse(fail(s"Expected $rho to fail - it didn't.")))
 
-  private def execute(runtime: Runtime, source: String): Task[Either[Throwable, Runtime]] =
+  private def execute(
+      runtime: Runtime[Task],
+      source: String
+  ): Task[Either[Throwable, Runtime[Task]]] =
     Interpreter.execute(runtime, new StringReader(source)).attempt
 
 }

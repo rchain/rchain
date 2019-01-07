@@ -1,21 +1,22 @@
 package coop.rchain.rspace
 
-import scodec.Codec
-
-import cats.effect.{ContextShift, Sync}
-import cats.implicits._
-import com.typesafe.scalalogging.Logger
-import coop.rchain.catscontrib._
-import coop.rchain.rspace.history.Branch
-import coop.rchain.rspace.internal._
-import coop.rchain.rspace.trace.{COMM, Consume, Produce}
-import coop.rchain.shared.SyncVarOps._
-import kamon._
-
 import scala.annotation.tailrec
 import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext
 import scala.util.Random
+
+import cats.effect.{ContextShift, Sync}
+import cats.implicits._
+
+import coop.rchain.catscontrib._
+import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.internal._
+import coop.rchain.rspace.trace._
+import coop.rchain.shared.SyncVarOps._
+
+import com.typesafe.scalalogging.Logger
+import kamon._
+import scodec.Codec
 
 class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
     store: IStore[C, P, A, K],
@@ -34,12 +35,13 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
 
   override protected[this] val logger: Logger = Logger[this.type]
 
-  private[this] val consumeCommCounter = Kamon.counter("rspace.comm.consume")
-  private[this] val produceCommCounter = Kamon.counter("rspace.comm.produce")
+  private[this] val MetricsSource      = RSpaceMetricsSource
+  private[this] val consumeCommCounter = Kamon.counter(MetricsSource + ".comm.consume")
+  private[this] val produceCommCounter = Kamon.counter(MetricsSource + ".comm.produce")
 
-  private[this] val consumeSpan   = Kamon.buildSpan("rspace.consume")
-  private[this] val produceSpan   = Kamon.buildSpan("rspace.produce")
-  protected[this] val installSpan = Kamon.buildSpan("rspace.install")
+  private[this] val consumeSpan   = Kamon.buildSpan(MetricsSource + ".consume")
+  private[this] val produceSpan   = Kamon.buildSpan(MetricsSource + ".produce")
+  protected[this] val installSpan = Kamon.buildSpan(MetricsSource + ".install")
 
   override def consume(
       channels: Seq[C],

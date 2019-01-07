@@ -33,6 +33,8 @@ service DeployService {
   rpc createBlock(google.protobuf.Empty) returns (DeployServiceResponse) {}
   // Get details about a particular block.
   rpc showBlock(BlockQuery) returns (BlockQueryResponse) {}
+  // Get dag
+  rpc visualizeDag(VisualizeDagQuery) returns (VisualizeBlocksResponse) {}
   rpc showMainChain(BlocksQuery) returns (stream BlockInfoWithoutTuplespace) {}
   // Get a summary of blocks on the blockchain.
   rpc showBlocks(BlocksQuery) returns (stream BlockInfoWithoutTuplespace) {}
@@ -72,6 +74,9 @@ message BlockRequest {
   bytes  hash       = 2;
 }
 
+message ForkChoiceTipRequest {
+}
+
 message FindDeployInBlockQuery {
   bytes user = 1;
   int64 timestamp = 2;
@@ -107,6 +112,16 @@ message MaybeBlockMessage {
 message BlockQueryResponse {
   string status = 1;
   BlockInfo blockInfo = 2;
+}
+
+message VisualizeDagQuery {
+  int32 depth                 = 1;
+  bool showJustificationLines = 2;
+}
+
+message VisualizeBlocksResponse {
+  string status =  1;
+  string content = 2;
 }
 
 message ListeningNameDataResponse {

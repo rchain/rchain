@@ -8,7 +8,6 @@ import coop.rchain.casper.protocol.BlockMessage
 trait BlockDagStorage[F[_]] {
   def getRepresentation: F[BlockDagRepresentation[F]]
   def insert(block: BlockMessage): F[Unit]
-  def insertGenesis(genesis: BlockMessage): F[Unit]
   def checkpoint(): F[Unit]
   def clear(): F[Unit]
   def close(): F[Unit]

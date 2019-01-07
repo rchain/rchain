@@ -4,7 +4,7 @@ import org.scalatest._
 
 import cats._
 import coop.rchain.comm.protocol.routing._
-import coop.rchain.catscontrib.Capture
+import coop.rchain.catscontrib.TestOutlaws._
 import coop.rchain.comm._
 import coop.rchain.crypto.codec.Base16
 
@@ -28,11 +28,8 @@ class DistanceSpec extends FlatSpec with Matchers {
     def receive(
         pingHandler: PeerNode => Id[Unit],
         lookupHandler: (PeerNode, Array[Byte]) => Id[Seq[PeerNode]]
-    ): Id[Unit] = ()
-  }
-  implicit val capture: Capture[Id] = new Capture[Id] {
-    def capture[A](a: => A): Id[A]       = a
-    def unsafeUncapture[A](fa: Id[A]): A = fa
+    ): Id[Unit]              = ()
+    def shutdown(): Id[Unit] = ()
   }
 
   "A PeerNode of width n bytes" should "have distance to itself equal to 8n" in {

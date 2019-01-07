@@ -24,6 +24,7 @@ import scala.io.Source
 import scala.util.{Failure, Success, Try}
 import coop.rchain.casper.util.Sorting.byteArrayOrdering
 import coop.rchain.rholang.interpreter.accounting
+import monix.eval.Task
 
 import scala.concurrent.duration.Duration
 
@@ -56,7 +57,7 @@ object Genesis {
       wallets: Seq[PreWallet],
       faucetCode: String => String,
       startHash: StateHash,
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       timestamp: Long
   )(implicit scheduler: Scheduler): BlockMessage =
     withContracts(
@@ -70,7 +71,7 @@ object Genesis {
       blessedTerms: List[Deploy],
       initial: BlockMessage,
       startHash: StateHash,
-      runtimeManager: RuntimeManager
+      runtimeManager: RuntimeManager[Task]
   )(implicit scheduler: Scheduler): BlockMessage = {
     val (stateHash, processedDeploys) =
       runtimeManager.computeState(startHash, blessedTerms).runSyncUnsafe(Duration.Inf)
@@ -126,7 +127,7 @@ object Genesis {
       minimumBond: Long,
       maximumBond: Long,
       faucet: Boolean,
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       shardId: String,
       deployTimestamp: Option[Long]
   )(implicit scheduler: Scheduler): F[BlockMessage] =

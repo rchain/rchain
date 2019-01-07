@@ -34,7 +34,7 @@ object PrettyPrinter {
         s"-- Shard ID ${limit(b.shardId, 10)}"
     blockString match {
       case Some(str) => str
-      case None      => "Block with missing elements"
+      case None      => s"Block ${buildString(b.blockHash)} with missing elements"
     }
   }
 

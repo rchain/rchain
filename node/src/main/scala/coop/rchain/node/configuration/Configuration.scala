@@ -1,7 +1,6 @@
 package coop.rchain.node.configuration
 
 import java.io.File
-import java.net.InetAddress
 import java.nio.file.{Path, Paths}
 
 import cats.implicits._
@@ -10,7 +9,6 @@ import coop.rchain.blockstorage.{BlockDagFileStorage, LMDBBlockStore}
 import coop.rchain.casper.CasperConf
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
-import coop.rchain.node.IpChecker
 import coop.rchain.node.configuration.toml.error._
 import coop.rchain.node.configuration.toml.{Configuration => TomlConfiguration}
 import coop.rchain.shared.{Log, LogSource}
@@ -58,12 +56,10 @@ object Configuration {
   private val DefaultRequiredSigns              = 0
   private val DefaultApprovalProtocolDuration   = 5.minutes
   private val DefaultApprovalProtocolInterval   = 5.seconds
-  // TODO this temporarly makes the allowed message size to be  256 MB on startup
-  // This will be rolled back after CORE-1394 and Kents changes
-  private val DefaultMaxMessageSize: Int = 256 * 1024 * 1024
+  private val DefaultMaxMessageSize: Int        = 256 * 1024 // 0.25 MB
   // within range HTTP2 RFC 7540
-  private val MaxMessageSizeMinimumValue: Int = 10 * 1024 * 1024
-  private val MaxMessageSizeMaximumValue: Int = DefaultMaxMessageSize * 4
+  private val MaxMessageSizeMinimumValue: Int = DefaultMaxMessageSize
+  private val MaxMessageSizeMaximumValue: Int = 10 * 1024 * 1024
   private val DefaultMinimumBond: Long        = 1L
   private val DefaultMaximumBond: Long        = Long.MaxValue
   private val DefaultHasFaucet: Boolean       = false
@@ -75,6 +71,14 @@ object Configuration {
     .right
     .get
   private val DefaultShardId = "rchain"
+
+  private val DefaultKamonPrometheus  = false
+  private val DefaultKamonInfluxDb    = false
+  private val DefaultKamonZipkin      = false
+  private val DefaultKamonSigar       = false
+  private val DefaultInfluxDbHostname = "127.0.0.1"
+  private val DefaultInfluxDbPort     = 8086
+  private val DefaultInfluxDbDatabase = "rnode"
 
   private def loadConfigurationFile(
       configFile: File
@@ -190,6 +194,7 @@ object Configuration {
             dataDir.resolve("casper-block-dag-file-storage-block-metadata-crc"),
             dataDir.resolve("casper-block-dag-file-storage-checkpoints")
           ),
+          Kamon(prometheus = false, None, zipkin = false, sigar = false),
           options
         )
       )
@@ -327,6 +332,22 @@ object Configuration {
 
     val shardId = get(_.run.shardId, _.validators.flatMap(_.shardId), DefaultShardId)
 
+    val kamonPrometheus =
+      get(_.run.prometheus, _.kamon.flatMap(_.prometheus), DefaultKamonPrometheus)
+    val kamonInfluxDb = get(kp(None), _.kamon.flatMap(_.influxDb), DefaultKamonInfluxDb)
+    val kamonZipkin   = get(_.run.zipkin, _.kamon.flatMap(_.zipkin), DefaultKamonZipkin)
+    val sigar         = get(_.run.sigar, _.kamon.flatMap(_.sigar), DefaultKamonSigar)
+
+    val influxDb =
+      if (kamonInfluxDb) {
+        val influxDbHostname =
+          get(kp(None), _.influxDb.flatMap(_.hostname), DefaultInfluxDbHostname)
+        val influxDbPort = get(kp(None), _.influxDb.flatMap(_.port), DefaultInfluxDbPort)
+        val influxDbDatabase =
+          get(kp(None), _.influxDb.flatMap(_.database), DefaultInfluxDbDatabase)
+        Some(InfluxDb(influxDbHostname, influxDbPort, influxDbDatabase))
+      } else None
+
     val server = Server(
       host,
       port,
@@ -378,10 +399,12 @@ object Configuration {
         genesisAppriveDuration,
         deployTimestamp
       )
-    val blockstorage = LMDBBlockStore.Config(
-      dataDir.resolve("casper-block-store"),
-      casperBlockStoreSize
-    )
+
+    val blockstorage =
+      LMDBBlockStore.Config(
+        dataDir.resolve("casper-block-store"),
+        casperBlockStoreSize
+      )
     val blockDagStorage = BlockDagFileStorage.Config(
       dataDir.resolve("casper-block-dag-file-storage-latest-messages-log"),
       dataDir.resolve("casper-block-dag-file-storage-latest-messages-crc"),
@@ -389,6 +412,14 @@ object Configuration {
       dataDir.resolve("casper-block-dag-file-storage-block-metadata-crc"),
       dataDir.resolve("casper-block-dag-file-storage-checkpoints")
     )
+
+    val kamon =
+      Kamon(
+        kamonPrometheus,
+        influxDb,
+        kamonZipkin,
+        sigar
+      )
 
     new Configuration(
       command,
@@ -398,6 +429,7 @@ object Configuration {
       casper,
       blockstorage,
       blockDagStorage,
+      kamon,
       options
     )
   }
@@ -423,6 +455,9 @@ object Configuration {
       case Some(options.showBlocks) =>
         import options.showBlocks._
         ShowBlocks(depth.getOrElse(1))
+      case Some(options.visualizeBlocks) =>
+        import options.visualizeBlocks._
+        VisualizeDag(depth.getOrElse(-1), showJustificationLines.getOrElse(false))
       case Some(options.run)        => Run
       case Some(options.dataAtName) => DataAtName(options.dataAtName.name())
       case Some(options.contAtName) => ContAtName(options.contAtName.name())
@@ -444,74 +479,10 @@ final class Configuration(
     val casper: CasperConf,
     val blockstorage: LMDBBlockStore.Config,
     val blockDagStorage: BlockDagFileStorage.Config,
+    val kamon: Kamon,
     private val options: commandline.Options
 ) {
-  import coop.rchain.catscontrib.Capture._
-  private implicit val logSource: LogSource = LogSource(this.getClass)
-
   def printHelp(): Task[Unit] = Task.delay(options.printHelp())
-
-  def fetchLocalPeerNode(
-      id: NodeIdentifier
-  )(implicit log: Log[Task]): Task[PeerNode] =
-    for {
-      externalAddress <- retriveExternalAddress
-      host            <- fetchHost(externalAddress)
-      peerNode        = PeerNode.from(id, host, server.port, server.kademliaPort)
-    } yield peerNode
-
-  def checkLocalPeerNode(
-      peerNode: PeerNode
-  )(implicit log: Log[Task]): Task[Option[PeerNode]] =
-    for {
-      r      <- checkAll()
-      (_, a) = r
-      host <- if (a == peerNode.endpoint.host) Task.now(Option.empty[String])
-             else log.info(s"external IP address has changed to $a").map(kp(Some(a)))
-    } yield host.map(h => PeerNode.from(peerNode.id, h, server.port, server.kademliaPort))
-
-  private def fetchHost(externalAddress: Option[String])(implicit log: Log[Task]): Task[String] =
-    server.host match {
-      case Some(h) => Task.pure(h)
-      case None    => whoAmI(externalAddress)
-    }
-
-  private def retriveExternalAddress(implicit log: Log[Task]): Task[Option[String]] =
-    if (server.noUpnp) None.pure[Task]
-    else UPnP.assurePortForwarding[Task](List(server.port))
-
-  private def check(source: String, from: String): Task[(String, Option[String])] =
-    IpChecker.checkFrom[Task](from).map((source, _))
-
-  private def checkNext(
-      prev: (String, Option[String]),
-      next: => Task[(String, Option[String])]
-  ): Task[(String, Option[String])] =
-    prev._2.fold(next)(_ => Task.pure(prev))
-
-  private def upnpIpCheck(externalAddress: Option[String]): Task[(String, Option[String])] =
-    Task.delay(("UPnP", externalAddress.map(InetAddress.getByName(_).getHostAddress)))
-
-  private def checkAll(externalAddress: Option[String] = None): Task[(String, String)] =
-    for {
-      r1 <- check("AmazonAWS service", "http://checkip.amazonaws.com")
-      r2 <- checkNext(r1, check("WhatIsMyIP service", "http://bot.whatismyipaddress.com"))
-      r3 <- checkNext(r2, upnpIpCheck(externalAddress))
-      r4 <- checkNext(r3, Task.pure("failed to guess", Some("localhost")))
-    } yield {
-      val (s, Some(a)) = r4
-      (s, a)
-    }
-
-  private def whoAmI(externalAddress: Option[String])(
-      implicit log: Log[Task]
-  ): Task[String] =
-    for {
-      _      <- log.info("flag --host was not provided, guessing your external IP address")
-      r      <- checkAll(externalAddress)
-      (s, a) = r
-      _      <- log.info(s"guessed $a from source: $s")
-    } yield a
 }
 
 case class Profile(name: String, dataDir: (() => Path, String))

@@ -114,7 +114,7 @@ object Interpreter {
       } else normalizedTerm.pure[M]
     }
 
-  def execute(runtime: Runtime, reader: Reader): Task[Runtime] =
+  def execute(runtime: Runtime[Task], reader: Reader): Task[Runtime[Task]] =
     for {
       term   <- Task.coeval(buildNormalizedTerm(reader)).attempt.raiseOnLeft
       errors <- evaluate(runtime, term).map(_.errors).attempt.raiseOnLeft
@@ -124,14 +124,14 @@ object Interpreter {
                  Task.raiseError(new RuntimeException(mkErrorMsg(errors)))
     } yield result
 
-  def evaluate(runtime: Runtime, normalizedTerm: Par): Task[EvaluateResult] = {
+  def evaluate(runtime: Runtime[Task], normalizedTerm: Par): Task[EvaluateResult] = {
     implicit val rand      = Blake2b512Random(128)
     val evaluatePhlosLimit = Cost(Integer.MAX_VALUE) //This is OK because evaluate is not called on deploy
     for {
       checkpoint <- runtime.space.createCheckpoint()
       _          <- runtime.reducer.setAvailablePhlos(evaluatePhlosLimit)
       _          <- runtime.reducer.inj(normalizedTerm)(rand)
-      errors     <- Task.now(runtime.readAndClearErrorVector())
+      errors     <- runtime.readAndClearErrorVector()
       leftPhlos  <- runtime.reducer.getAvailablePhlos()
       cost       = leftPhlos.copy(cost = evaluatePhlosLimit - leftPhlos.cost)
       _          <- if (errors.nonEmpty) runtime.space.reset(checkpoint.root) else Task.now(())
