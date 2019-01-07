@@ -121,11 +121,11 @@ def testing_context(command_line_options: CommandLineOptions, random_generator: 
         yield context
 
 
-testing_context.__test__ = False
+testing_context.__test__ = False # type: ignore
 
 
 @pytest.yield_fixture(scope='module')
-def started_standalone_bootstrap_node(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> Node:
+def started_standalone_bootstrap_node(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> Generator[Node, None, None]:
     with testing_context(command_line_options, random_generator, docker_client) as context:
         with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
             yield bootstrap_node

@@ -3,16 +3,21 @@ import shutil
 import contextlib
 from random import Random
 from typing import (
-    TYPE_CHECKING,
     Generator,
 )
 
+from docker.client import DockerClient
 
 from . import conftest
-from .common import TestingContext, Network
+from .common import (
+    Network,
+    TestingContext,
+    CommandLineOptions,
+)
 from .rnode import (
-    docker_network_with_started_bootstrap,
+    Node,
     create_peer_nodes,
+    docker_network_with_started_bootstrap,
 )
 from .common import random_string
 from .wait import (
@@ -23,12 +28,9 @@ from .wait import (
     wait_for_approved_block_received,
 )
 
-if TYPE_CHECKING:
-    from .rnode import Node
-
 
 @contextlib.contextmanager
-def start_network(*, context: TestingContext, bootstrap: 'Node', allowed_peers=None) -> Generator[Network, None, None]:
+def start_network(*, context: TestingContext, bootstrap: Node, allowed_peers=None) -> Generator[Network, None, None]:
     peers = create_peer_nodes(
         docker_client=context.docker,
         bootstrap=bootstrap,
@@ -85,7 +87,7 @@ def make_expected_string(node, random_token):
     return "<{name}:{random_token}>".format(name=node.container.name, random_token=random_token)
 
 
-def test_casper_propose_and_deploy(command_line_options: 'CommandLineOptions', random_generator: Random, docker_client: 'DockerClient'):
+def test_casper_propose_and_deploy(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient):
     """Deploy a contract and then checks if all the nodes have received the block
     containing the contract.
     """

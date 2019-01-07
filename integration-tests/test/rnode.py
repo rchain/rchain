@@ -46,6 +46,7 @@ rnode_bonds_file = '{}/genesis/bonds.txt'.format(rnode_directory)
 rnode_certificate = '{}/node.certificate.pem'.format(rnode_directory)
 rnode_key = '{}/node.key.pem'.format(rnode_directory)
 
+
 class RNodeAddressNotFoundError(Exception):
     def __init__(self, regex):
         super().__init__()
@@ -463,7 +464,7 @@ def make_peer(
 def started_peer(
     *,
     context: TestingContext,
-    network: Network,
+    network: str,
     name: str,
     bootstrap: Node,
     keypair: KeyPair,
@@ -558,7 +559,7 @@ def docker_network(context: TestingContext, docker_client: DockerClient) -> Gene
 
 
 @contextlib.contextmanager
-def started_bootstrap(*, context: TestingContext, network: Network, mount_dir: str = None, cli_options: Optional[Dict] = None) -> Generator[Node, None, None]:
+def started_bootstrap(*, context: TestingContext, network: str, mount_dir: str = None, cli_options: Optional[Dict] = None) -> Generator[Node, None, None]:
     bootstrap_node = make_bootstrap_node(
         docker_client=context.docker,
         network=network,
@@ -577,14 +578,14 @@ def started_bootstrap(*, context: TestingContext, network: Network, mount_dir: s
 
 
 @contextlib.contextmanager
-def docker_network_with_started_bootstrap(context: TestingContext) -> Node:
+def docker_network_with_started_bootstrap(context: TestingContext) -> Generator[Node, None, None]:
     with docker_network(context, context.docker) as network:
         with started_bootstrap(context=context, network=network, mount_dir=context.mount_dir) as node:
             yield node
 
 
 @contextlib.contextmanager
-def ready_bootstrap(context: TestingContext, cli_options: Optional[Dict] = None) -> Node:
+def ready_bootstrap(context: TestingContext, cli_options: Optional[Dict] = None) -> Generator[Node, None, None]:
     with docker_network(context, context.docker) as network:
         with started_bootstrap(context=context, network=network, mount_dir=context.mount_dir, cli_options=cli_options) as node:
             yield node
