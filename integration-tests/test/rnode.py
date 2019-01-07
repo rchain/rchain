@@ -23,7 +23,6 @@ from docker.models.containers import ExecResult
 
 from .common import (
     KeyPair,
-    Network,
     make_tempdir,
     make_tempfile,
     TestingContext,

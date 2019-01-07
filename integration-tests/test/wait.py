@@ -1,9 +1,10 @@
 import re
 import time
 import logging
-import pytest
 from typing import TYPE_CHECKING
 import typing_extensions
+
+import pytest
 
 from .common import (
     Network,
@@ -12,6 +13,7 @@ from .common import (
 )
 
 if TYPE_CHECKING:
+    # pylint: disable=cyclic-import
     from .rnode import Node
 
 
