@@ -29,6 +29,7 @@ import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.ski.kp2
 import coop.rchain.rspace.Checkpoint
+import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.atomic.AtomicAny
 
@@ -55,7 +56,7 @@ trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]] {
   def lastFinalizedBlock: F[BlockMessage]
   def storageContents(hash: ByteString): F[String]
   // TODO: Refactor hashSetCasper to take a RuntimeManager[F] just like BlockStore[F]
-  def getRuntimeManager: F[Option[RuntimeManager]]
+  def getRuntimeManager: F[Option[RuntimeManager[Task]]]
 }
 
 object MultiParentCasper extends MultiParentCasperInstances {
@@ -74,7 +75,7 @@ object MultiParentCasper extends MultiParentCasperInstances {
 sealed abstract class MultiParentCasperInstances {
 
   def hashSetCasper[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ToAbstractContext](
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       shardId: String

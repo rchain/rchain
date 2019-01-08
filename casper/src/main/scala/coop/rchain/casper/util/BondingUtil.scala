@@ -14,6 +14,7 @@ import java.io.PrintWriter
 import java.nio.file.{Files, Path}
 
 import coop.rchain.catscontrib.ToAbstractContext
+import monix.eval.Task
 import monix.execution.Scheduler
 
 object BondingUtil {
@@ -39,7 +40,7 @@ object BondingUtil {
       pubKey: String,
       secKey: String
   )(
-      implicit runtimeManager: RuntimeManager
+      implicit runtimeManager: RuntimeManager[Task]
   ): F[String] =
     preWalletUnlockDeploy(ethAddress, pubKey, Base16.decode(secKey), s"${ethAddress}_unlockOut")
 
@@ -49,7 +50,7 @@ object BondingUtil {
       pubKey: String,
       secKey: String
   )(
-      implicit runtimeManager: RuntimeManager
+      implicit runtimeManager: RuntimeManager[Task]
   ): F[String] =
     issuanceWalletTransferDeploy(
       0, //nonce
@@ -65,7 +66,7 @@ object BondingUtil {
       pubKey: String,
       secKey: Array[Byte],
       statusOut: String
-  )(implicit runtimeManager: RuntimeManager): F[String] = {
+  )(implicit runtimeManager: RuntimeManager[Task]): F[String] = {
     require(Base16.encode(Keccak256.hash(Base16.decode(pubKey)).drop(12)) == ethAddress.drop(2))
     val unlockSigDataTerm = deployDataToDeploy(
       sourceDeploy(
@@ -96,7 +97,7 @@ object BondingUtil {
       nonce: Int,
       amount: Long,
       destination: String
-  )(implicit runtimeManager: RuntimeManager): F[Array[Byte]] = {
+  )(implicit runtimeManager: RuntimeManager[Task]): F[Array[Byte]] = {
     val transferSigDataTerm = deployDataToDeploy(
       sourceDeploy(
         s""" @"__SCALA__"!([$nonce, $amount, "$destination"].toByteArray())""",
@@ -121,7 +122,7 @@ object BondingUtil {
       transferStatusOut: String,
       pubKey: String,
       secKey: Array[Byte]
-  )(implicit runtimeManager: RuntimeManager): F[String] =
+  )(implicit runtimeManager: RuntimeManager[Task]): F[String] =
     for {
       transferSigData <- walletTransferSigData[F](nonce, amount, destination)
       transferSig     = Secp256k1.sign(transferSigData, secKey)
@@ -140,7 +141,7 @@ object BondingUtil {
       sigAlgorithm: String,
       pubKey: String,
       secKey: Array[Byte]
-  )(implicit runtimeManager: RuntimeManager): F[String] =
+  )(implicit runtimeManager: RuntimeManager[Task]): F[String] =
     for {
       sigFunc <- sigAlgorithm match {
                   case "ed25519"   => ((d: Array[Byte]) => Ed25519.sign(d, secKey)).pure[F]
@@ -183,7 +184,7 @@ object BondingUtil {
 
   def makeRuntimeResource[F[_]: Sync](
       runtimeDirResource: Resource[F, Path]
-  )(implicit scheduler: Scheduler): Resource[F, Runtime] =
+  )(implicit scheduler: Scheduler): Resource[F, Runtime[Task]] =
     runtimeDirResource.flatMap(
       runtimeDir =>
         Resource
@@ -193,8 +194,8 @@ object BondingUtil {
     )
 
   def makeRuntimeManagerResource[F[_]: Sync](
-      runtimeResource: Resource[F, Runtime]
-  )(implicit scheduler: Scheduler): Resource[F, RuntimeManager] =
+      runtimeResource: Resource[F, Runtime[Task]]
+  )(implicit scheduler: Scheduler): Resource[F, RuntimeManager[Task]] =
     runtimeResource.flatMap(
       activeRuntime =>
         Resource.make(RuntimeManager.fromRuntime(activeRuntime).pure[F])(_ => Sync[F].unit)

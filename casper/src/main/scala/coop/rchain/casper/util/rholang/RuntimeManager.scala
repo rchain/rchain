@@ -21,13 +21,9 @@ import monix.execution.Scheduler
 
 import scala.collection.immutable
 
-class RuntimeManager private (emptyStateHash: ByteString, runtimeContainer: MVar[Task, Runtime])
-    extends AbstractRuntimeManager[Task](emptyStateHash, runtimeContainer)
-
-//runtime is a SyncVar for thread-safety, as all checkpoints share the same "hot store"
-class AbstractRuntimeManager[F[_]: Concurrent: ToAbstractContext] protected (
+class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
     val emptyStateHash: ByteString,
-    runtimeContainer: MVar[F, Runtime]
+    runtimeContainer: MVar[F, Runtime[Task]]
 ) {
 
   def captureResults(start: StateHash, deploy: Deploy, name: String = "__SCALA__"): F[Seq[Par]] =
@@ -75,7 +71,7 @@ class AbstractRuntimeManager[F[_]: Concurrent: ToAbstractContext] protected (
 
   private def setTimestamp(
       time: Option[Long],
-      runtime: Runtime
+      runtime: Runtime[Task]
   ): F[Unit] =
     time match {
       case Some(t) =>
@@ -122,7 +118,7 @@ class AbstractRuntimeManager[F[_]: Concurrent: ToAbstractContext] protected (
       }
   }
 
-  private def withResetRuntime[R](hash: StateHash, block: Runtime => F[R]) =
+  private def withResetRuntime[R](hash: StateHash, block: Runtime[Task] => F[R]) =
     Sync[F].bracket(runtimeContainer.take) { runtime =>
       val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
       ToAbstractContext[F].fromTask(runtime.space.reset(blakeHash)).flatMap(_ => block(runtime))
@@ -163,7 +159,7 @@ class AbstractRuntimeManager[F[_]: Concurrent: ToAbstractContext] protected (
 
   private def newEval(
       terms: Seq[Deploy],
-      runtime: Runtime,
+      runtime: Runtime[Task],
       initHash: StateHash
   ): F[(StateHash, Seq[InternalProcessedDeploy])] = {
 
@@ -177,7 +173,7 @@ class AbstractRuntimeManager[F[_]: Concurrent: ToAbstractContext] protected (
           case deploy +: rem =>
             for {
               _              <- ToAbstractContext[F].fromTask(runtime.space.reset(hash))
-              availablePhlos = Cost(deploy.raw.map(_.phloLimit).get.value)
+              availablePhlos = Cost(deploy.raw.map(_.phloLimit).get)
               _              <- ToAbstractContext[F].fromTask(runtime.reducer.setAvailablePhlos(availablePhlos))
               (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(
                 deploy.raw.get
@@ -209,7 +205,7 @@ class AbstractRuntimeManager[F[_]: Concurrent: ToAbstractContext] protected (
 
   private def replayEval(
       terms: Seq[InternalProcessedDeploy],
-      runtime: Runtime,
+      runtime: Runtime[Task],
       initHash: StateHash
   ): F[Either[(Option[Deploy], Failed), StateHash]] = {
 
@@ -220,7 +216,7 @@ class AbstractRuntimeManager[F[_]: Concurrent: ToAbstractContext] protected (
       Concurrent[F].defer {
         terms match {
           case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
-            val availablePhlos = Cost(deploy.raw.map(_.phloLimit).get.value)
+            val availablePhlos = Cost(deploy.raw.map(_.phloLimit).get)
             for {
               _ <- ToAbstractContext[F].fromTask(
                     runtime.replayReducer.setAvailablePhlos(availablePhlos)
@@ -273,22 +269,19 @@ class AbstractRuntimeManager[F[_]: Concurrent: ToAbstractContext] protected (
   private def injAttempt(
       deploy: Deploy,
       reducer: ChargingReducer[Task],
-      errorLog: ErrorLog
+      errorLog: ErrorLog[Task]
   ): F[(PCost, Vector[Throwable])] = {
     implicit val rand: Blake2b512Random = Blake2b512Random(
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy.raw.get))
     )
     ToAbstractContext[F].fromTask(
-      reducer
-        .inj(deploy.term.get)
-        .attempt
-        .flatMap(result => {
-          val oldErrors = errorLog.readAndClearErrorVector()
-          val newErrors = result.swap.toSeq.toVector
-          val allErrors = oldErrors |+| newErrors
-
-          reducer.getAvailablePhlos().map(phlos => CostAccount.toProto(phlos) -> allErrors)
-        })
+      for {
+        result    <- reducer.inj(deploy.term.get).attempt
+        phlos     <- reducer.getAvailablePhlos()
+        oldErrors <- errorLog.readAndClearErrorVector()
+        newErrors = result.swap.toSeq.toVector
+        allErrors = oldErrors |+| newErrors
+      } yield (CostAccount.toProto(phlos) -> allErrors)
     )
   }
 }
@@ -297,7 +290,7 @@ object RuntimeManager {
   type StateHash = ByteString
   import coop.rchain.catscontrib.TaskContrib._
 
-  def fromRuntime(active: Runtime)(implicit scheduler: Scheduler): RuntimeManager =
+  def fromRuntime(active: Runtime[Task])(implicit scheduler: Scheduler): RuntimeManager[Task] =
     (for {
       _                <- active.space.clear()
       _                <- active.replaySpace.clear()
@@ -308,5 +301,5 @@ object RuntimeManager {
       replayHash       = ByteString.copyFrom(replayCheckpoint.root.bytes.toArray)
       _                = assert(hash == replayHash)
       runtime          <- MVar[Task].of(active)
-    } yield (new RuntimeManager(hash, runtime))).unsafeRunSync
+    } yield new RuntimeManager(hash, runtime)).unsafeRunSync
 }

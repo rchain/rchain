@@ -39,6 +39,7 @@ import coop.rchain.node.diagnostics._
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
+import coop.rchain.shared.PathOps._
 
 import com.typesafe.config.ConfigFactory
 import kamon._
@@ -90,7 +91,7 @@ class NodeRuntime private[node] (
       httpServer: Fiber[Task, Unit]
   )
 
-  def acquireServers(runtime: Runtime, blockApiLock: Semaphore[Effect])(
+  def acquireServers(runtime: Runtime[Task], blockApiLock: Semaphore[Effect])(
       implicit
       nodeDiscovery: NodeDiscovery[Task],
       blockStore: BlockStore[Effect],
@@ -172,7 +173,7 @@ class NodeRuntime private[node] (
     } yield Servers(grpcServerExternal, grpcServerInternal, httpServerFiber)
   }
 
-  def clearResources(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
+  def clearResources(servers: Servers, runtime: Runtime[Task], casperRuntime: Runtime[Task])(
       implicit
       transport: TransportLayer[Task],
       kademliaRPC: KademliaRPC[Task],
@@ -200,7 +201,7 @@ class NodeRuntime private[node] (
       _   <- log.info("Goodbye.")
     } yield ()).unsafeRunSync(scheduler)
 
-  def addShutdownHook(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
+  def addShutdownHook(servers: Servers, runtime: Runtime[Task], casperRuntime: Runtime[Task])(
       implicit transport: TransportLayer[Task],
       kademliaRPC: KademliaRPC[Task],
       blockStore: BlockStore[Effect],
@@ -210,7 +211,7 @@ class NodeRuntime private[node] (
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
-  private def nodeProgram(runtime: Runtime, casperRuntime: Runtime)(
+  private def nodeProgram(runtime: Runtime[Task], casperRuntime: Runtime[Task])(
       implicit
       time: Time[Task],
       rpConfState: RPConfState[Task],
@@ -348,12 +349,14 @@ class NodeRuntime private[node] (
     multiParentCasperRef <- MultiParentCasperRef.of[Effect]
     lab                  <- LastApprovedBlock.of[Task].toEffect
     labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
+    commTmpFolder        = conf.server.dataDir.resolve("tmp").resolve("comm")
+    _                    <- commTmpFolder.deleteDirectory[Task]().toEffect
     transport = effects.tcpTransportLayer(
       port,
       conf.tls.certificate,
       conf.tls.key,
       conf.server.maxMessageSize,
-      conf.server.dataDir.resolve("tmp").resolve("comm")
+      commTmpFolder
     )(grpcScheduler, log, metrics, tcpConnections)
     kademliaRPC = effects.kademliaRPC(kademliaPort, defaultTimeout)(
       grpcScheduler,

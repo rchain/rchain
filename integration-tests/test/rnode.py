@@ -23,7 +23,6 @@ from docker.models.containers import ExecResult
 
 from .common import (
     KeyPair,
-    Network,
     make_tempdir,
     make_tempfile,
     TestingContext,
@@ -45,6 +44,7 @@ rnode_deploy_dir = "{}/deploy".format(rnode_directory)
 rnode_bonds_file = '{}/genesis/bonds.txt'.format(rnode_directory)
 rnode_certificate = '{}/node.certificate.pem'.format(rnode_directory)
 rnode_key = '{}/node.key.pem'.format(rnode_directory)
+
 
 class RNodeAddressNotFoundError(Exception):
     def __init__(self, regex):
@@ -131,6 +131,14 @@ class Node:
 
     def get_metrics(self):
         return self.shell_out('curl', '-s', 'http://localhost:40403/metrics')
+
+    def get_connected_peers_metric_value(self):
+        try:
+            return self.shell_out('sh', '-c', 'curl -s http://localhost:40403/metrics | grep ^rchain_comm_rp_connect_peers\\ ')
+        except NonZeroExitCodeError as e:
+            if e.exit_code == 1:
+                return ''
+            raise
 
     def cleanup(self) -> None:
         self.container.remove(force=True, v=True)
@@ -349,7 +357,7 @@ def make_bootstrap_node(
     docker_client: DockerClient,
     network: str,
     bonds_file: str,
-    key_pair: KeyPair,
+    keypair: KeyPair,
     command_timeout: int,
     allowed_peers: Optional[List[str]] = None,
     mem_limit: Optional[str] = None,
@@ -364,8 +372,8 @@ def make_bootstrap_node(
     container_command_options = {
         "--port":                   40400,
         "--standalone":             "",
-        "--validator-private-key":  key_pair.private_key,
-        "--validator-public-key":   key_pair.public_key,
+        "--validator-private-key":  keypair.private_key,
+        "--validator-public-key":   keypair.public_key,
         "--has-faucet":             "",
         "--host":                   container_name,
         "--prometheus":             ""
@@ -418,7 +426,7 @@ def make_peer(
     bonds_file: str,
     command_timeout: int,
     bootstrap: Node,
-    key_pair: KeyPair,
+    keypair: KeyPair,
     allowed_peers: Optional[List[str]] = None,
     mem_limit: Optional[str] = None,
 ) -> Node:
@@ -430,8 +438,8 @@ def make_peer(
 
     container_command_options = {
         "--bootstrap":              bootstrap_address,
-        "--validator-private-key":  key_pair.private_key,
-        "--validator-public-key":   key_pair.public_key,
+        "--validator-private-key":  keypair.private_key,
+        "--validator-public-key":   keypair.public_key,
         "--host":                   name,
         "--prometheus":             ""
     }
@@ -455,10 +463,10 @@ def make_peer(
 def started_peer(
     *,
     context: TestingContext,
-    network: Network,
+    network: str,
     name: str,
     bootstrap: Node,
-    key_pair: KeyPair,
+    keypair: KeyPair,
 ) -> Generator[Node, None, None]:
     peer = make_peer(
         docker_client=context.docker,
@@ -466,7 +474,7 @@ def started_peer(
         name=name,
         bonds_file=context.bonds_file,
         bootstrap=bootstrap,
-        key_pair=key_pair,
+        keypair=keypair,
         command_timeout=context.command_timeout,
     )
     try:
@@ -489,7 +497,7 @@ def bootstrap_connected_peer(
         network=bootstrap.network,
         name=name,
         bootstrap=bootstrap,
-        key_pair=keypair,
+        keypair=keypair,
     ) as peer:
         wait_for_approved_block_received_handler_state(context, peer)
         yield peer
@@ -513,7 +521,7 @@ def create_peer_nodes(
 
     result = []
     try:
-        for i, key_pair in enumerate(key_pairs):
+        for i, keypair in enumerate(key_pairs):
             peer_node = make_peer(
                 docker_client=docker_client,
                 network=network,
@@ -521,7 +529,7 @@ def create_peer_nodes(
                 bonds_file=bonds_file,
                 command_timeout=command_timeout,
                 bootstrap=bootstrap,
-                key_pair=key_pair,
+                keypair=keypair,
                 allowed_peers=allowed_peers,
                 mem_limit=mem_limit if mem_limit is not None else '4G',
             )
@@ -550,14 +558,15 @@ def docker_network(context: TestingContext, docker_client: DockerClient) -> Gene
 
 
 @contextlib.contextmanager
-def started_bootstrap_node(*, context: TestingContext, network, mount_dir: str = None) -> Generator[Node, None, None]:
+def started_bootstrap(*, context: TestingContext, network: str, mount_dir: str = None, cli_options: Optional[Dict] = None) -> Generator[Node, None, None]:
     bootstrap_node = make_bootstrap_node(
         docker_client=context.docker,
         network=network,
         bonds_file=context.bonds_file,
-        key_pair=context.bootstrap_keypair,
+        keypair=context.bootstrap_keypair,
         command_timeout=context.command_timeout,
         mount_dir=mount_dir,
+        cli_options=cli_options,
     )
     try:
         wait_for_node_started(context, bootstrap_node)
@@ -568,7 +577,14 @@ def started_bootstrap_node(*, context: TestingContext, network, mount_dir: str =
 
 
 @contextlib.contextmanager
-def docker_network_with_started_bootstrap(context):
+def docker_network_with_started_bootstrap(context: TestingContext) -> Generator[Node, None, None]:
     with docker_network(context, context.docker) as network:
-        with started_bootstrap_node(context=context, network=network, mount_dir=context.mount_dir) as node:
+        with started_bootstrap(context=context, network=network, mount_dir=context.mount_dir) as node:
+            yield node
+
+
+@contextlib.contextmanager
+def ready_bootstrap(context: TestingContext, cli_options: Optional[Dict] = None) -> Generator[Node, None, None]:
+    with docker_network(context, context.docker) as network:
+        with started_bootstrap(context=context, network=network, mount_dir=context.mount_dir, cli_options=cli_options) as node:
             yield node

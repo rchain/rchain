@@ -14,7 +14,7 @@ Global / dependencyOverrides := Dependencies.overrides
 
 lazy val projectSettings = Seq(
   organization := "coop.rchain",
-  scalaVersion := "2.12.7",
+  scalaVersion := "2.12.8",
   version := "0.1.0-SNAPSHOT",
   resolvers ++= Seq(
     Resolver.sonatypeRepo("releases"),
@@ -37,6 +37,15 @@ lazy val projectSettings = Seq(
   IntegrationTest / fork := true,
   IntegrationTest / parallelExecution := false,
   IntegrationTest / testForkedParallel := false,
+  assemblyMergeStrategy in assembly := {
+    // For some reason, all artifacts from 'io.netty' group contain this file with different contents.
+    // Discarding it as it's not needed.
+    case path if path.endsWith("io.netty.versions.properties") => MergeStrategy.discard
+    // The scala compiler includes native bindings for jansi under the same path jansi does.
+    // This should pick the ones provided by jansi.
+    case path if path.startsWith("META-INF/native/") && path.contains("jansi") => MergeStrategy.last
+    case path => MergeStrategy.defaultMergeStrategy(path)
+  }
 ) ++
 // skip api doc generation if SKIP_DOC env variable is defined 
 Seq(sys.env.get("SKIP_DOC")).flatMap { _ =>
@@ -191,7 +200,7 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.8.1",
+    version := "0.8.2",
     name := "rnode",
     maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary := "RChain Node",

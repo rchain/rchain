@@ -17,7 +17,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.ShortLeashParams.ShortLeashParameters
 import coop.rchain.rholang.interpreter.Runtime._
-import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
 import coop.rchain.rholang.interpreter.errors.{OutOfPhlogistonsError, SetupError}
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
@@ -31,18 +31,18 @@ import monix.execution.Scheduler
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 
-class Runtime private (
-    val reducer: ChargingReducer[Task],
-    val replayReducer: ChargingReducer[Task],
-    val space: RhoISpace[Task],
-    val replaySpace: RhoReplayISpace[Task],
-    val errorLog: ErrorLog,
+class Runtime[F[_]: Sync] private (
+    val reducer: ChargingReducer[F],
+    val replayReducer: ChargingReducer[F],
+    val space: RhoISpace[F],
+    val replaySpace: RhoReplayISpace[F],
+    val errorLog: ErrorLog[F],
     val context: RhoContext,
-    val shortLeashParams: Runtime.ShortLeashParams[Task],
-    val blockTime: Runtime.BlockTime[Task]
+    val shortLeashParams: Runtime.ShortLeashParams[F],
+    val blockTime: Runtime.BlockTime[F]
 ) {
-  def readAndClearErrorVector(): Vector[Throwable] = errorLog.readAndClearErrorVector()
-  def close(): Task[Unit] =
+  def readAndClearErrorVector(): F[Vector[Throwable]] = errorLog.readAndClearErrorVector()
+  def close(): F[Unit] =
     for {
       _ <- space.close()
       _ <- replaySpace.close()
@@ -296,8 +296,8 @@ object Runtime {
       extraSystemProcesses: Seq[SystemProcess.Definition[Task]] = Seq.empty
   )(
       implicit scheduler: Scheduler
-  ): Runtime = {
-    val errorLog                                  = new ErrorLog()
+  ): Runtime[Task] = {
+    val errorLog                                  = new ErrorLog[Task]()
     implicit val ft: FunctorTell[Task, Throwable] = errorLog
 
     def dispatchTableCreator(
@@ -379,7 +379,7 @@ object Runtime {
       res <- introduceSystemProcesses(space, replaySpace, procDefs)
     } yield {
       assert(res.forall(_.isEmpty))
-      new Runtime(
+      new Runtime[Task](
         reducer,
         replayReducer,
         space,

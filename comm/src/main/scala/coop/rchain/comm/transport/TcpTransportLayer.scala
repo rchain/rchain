@@ -20,6 +20,7 @@ import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.implicits._
 import coop.rchain.shared._
+import coop.rchain.shared.PathOps._
 
 import io.grpc._
 import io.grpc.netty._

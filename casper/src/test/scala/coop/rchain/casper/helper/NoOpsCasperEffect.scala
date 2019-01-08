@@ -8,6 +8,7 @@ import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.{BlockStatus, CreateBlockStatus, MultiParentCasper}
+import monix.eval.Task
 
 import scala.collection.mutable.{Map => MutableMap}
 
@@ -35,7 +36,7 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] = 0f.pure[F]
   def lastFinalizedBlock: F[BlockMessage]                             = BlockMessage().pure[F]
   def storageContents(hash: BlockHash): F[String]                     = "".pure[F]
-  def getRuntimeManager: F[Option[RuntimeManager]]                    = none[RuntimeManager].pure[F]
+  def getRuntimeManager: F[Option[RuntimeManager[Task]]]              = none[RuntimeManager[Task]].pure[F]
   def fetchDependencies: F[Unit]                                      = ().pure[F]
 }
 
