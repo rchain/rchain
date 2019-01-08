@@ -132,13 +132,26 @@ class NodeRuntime private[node] (
                           .toEffect
 
       _ <- Task.delay {
-            val influxdbConf = conf.kamon.influxDb
+            val influxdb = conf.kamon.influxDb
               .map { i =>
+                val authentication = i.authentication
+                  .map { a =>
+                    s"""
+                    |    authentication {
+                    |      user = "${a.user}"
+                    |      password = "${a.password}"
+                    |    }
+                    |""".stripMargin
+                  }
+                  .getOrElse("")
+
                 s"""
                 |  influxdb {
                 |    hostname = "${i.hostname}"
                 |    port = ${i.port}
                 |    database = "${i.database}"
+                |    protocol = "${i.protocol}"
+                |    $authentication
                 |  }
                 |""".stripMargin
               }
@@ -159,7 +172,7 @@ class NodeRuntime private[node] (
                |      sigar-native-folder = ${conf.server.dataDir.resolve("native")}
                |    }
                |  }
-               |  $influxdbConf
+               |  $influxdb
                |}
                |""".stripMargin
             Kamon.reconfigure(ConfigFactory.parseString(kamonConf).withFallback(Kamon.config()))

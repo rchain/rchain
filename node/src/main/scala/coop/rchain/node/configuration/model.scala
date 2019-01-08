@@ -48,7 +48,14 @@ case class Kamon(
 case class InfluxDb(
     hostname: String,
     port: Int,
-    database: String
+    database: String,
+    protocol: String,
+    authentication: Option[InfluxDBAuthentication]
+)
+
+case class InfluxDBAuthentication(
+    user: String,
+    password: String
 )
 
 sealed trait Command

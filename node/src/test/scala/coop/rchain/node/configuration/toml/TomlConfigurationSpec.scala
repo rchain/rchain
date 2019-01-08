@@ -60,6 +60,9 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
       |hostname = "0.0.0.0"
       |port = 14
       |database = "test"
+      |protocol = "https"
+      |user = "user"
+      |password = "password"
       |
       |""".stripMargin
 
@@ -123,6 +126,9 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
     root.influxDb.flatMap(_.hostname) shouldEqual Some("0.0.0.0")
     root.influxDb.flatMap(_.port) shouldEqual Some(14)
     root.influxDb.flatMap(_.database) shouldEqual Some("test")
+    root.influxDb.flatMap(_.protocol) shouldEqual Some("https")
+    root.influxDb.flatMap(_.user) shouldEqual Some("user")
+    root.influxDb.flatMap(_.password) shouldEqual Some("password")
   }
 
 }

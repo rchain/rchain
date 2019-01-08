@@ -79,6 +79,7 @@ object Configuration {
   private val DefaultInfluxDbHostname = "127.0.0.1"
   private val DefaultInfluxDbPort     = 8086
   private val DefaultInfluxDbDatabase = "rnode"
+  private val DefaultInfluxDbProtocol = "http"
 
   private def loadConfigurationFile(
       configFile: File
@@ -345,7 +346,30 @@ object Configuration {
         val influxDbPort = get(kp(None), _.influxDb.flatMap(_.port), DefaultInfluxDbPort)
         val influxDbDatabase =
           get(kp(None), _.influxDb.flatMap(_.database), DefaultInfluxDbDatabase)
-        Some(InfluxDb(influxDbHostname, influxDbPort, influxDbDatabase))
+        val influxDbProtocol =
+          get(kp(None), _.influxDb.flatMap(_.protocol), DefaultInfluxDbProtocol)
+
+        val infulxDbUsername = get(kp(None), _.influxDb.map(_.user), None)
+        val infulxDbPassword = get(kp(None), _.influxDb.map(_.password), None)
+        val influxDBAuthentication =
+          if (infulxDbUsername.isDefined || infulxDbPassword.isDefined)
+            Some(
+              InfluxDBAuthentication(
+                infulxDbUsername.getOrElse("user"),
+                infulxDbPassword.getOrElse("password")
+              )
+            )
+          else None
+
+        Some(
+          InfluxDb(
+            influxDbHostname,
+            influxDbPort,
+            influxDbDatabase,
+            influxDbProtocol,
+            influxDBAuthentication
+          )
+        )
       } else None
 
     val server = Server(
