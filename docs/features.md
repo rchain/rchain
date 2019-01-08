@@ -156,7 +156,7 @@
 * `validatorC` transitions to `ApprovedBlockReceivedHandler`
 * `validatorC` tip points to block (genesis) where it has no parent and Bonds holds `validatorA` and `validatorB`
 
-## Deployment
+## Contract deployment
 ### As a dApp developer I want to be able to deploy my rholang contract to a validator
 #### A correct contract gets deployed successfully
 ##### test: test/test_deployment.py::test_simple_deploy
@@ -189,6 +189,13 @@
 * compare data sent and restored
 
 ### As a user I want to know how much REV my deployment will cost
+
+### As a dApp developer, I want a contract to be able to call another contract so that I can take advantage of another contract's functionality
+### As a dApp developer, I want contract definition inside another contract (ex WIDE, persisting contracts).
+### As a dApp developer, I want support for including binary files as part of deployments.
+### As a dApp developer, I want STDOUT to go back to gRPC response and not the log.
+### As a dApp developer, when I make one or more deployments, I want a receipt of the transaction.
+
 ## REV
 ### As a platform stakeholder, I want REV to be the currency token for the RChain platform
 ### As a REV holder, assuming I maintain control of my keys and properly use the wallet where I store REV, I expect my REV to never be lost
@@ -233,11 +240,19 @@
 
 * TBD
 
-### As a Node Validator, I want to be able to retrieve my stake from the network and no longer be recognized a as validator
-### As an incoming Node Validator, I need confirmation of my request to bond
-### As a platform stakeholder, I want to know only bonded validators are able to propose
-#### TBD
-##### documentation
+## Validator rewards
+### As a RChain validator, I want to earn by validating on the RChain network.
+### As a RChain validator, I want to receive the rewards I earn by validating on the RChain network.
+### As a RChain validator, I want to retrieve the rewards I earn by validating on the RChain network.
+
+## Validator slashing and ejection
+### As a RChain validator and as a platform stakeholder, I want to know that other validators who do not validate according to the slashing API will be slashed (removed as a validator and lose stake) in a process observable to other validators.
+### As a RChain validator, I want to know that if I am slashed then the Coop will hold my bond amount and not distribute it to other validators for a specified period of reconcilliation in the event that my slashing was unjustified.
+### As a platform stakeholder, I want to see the stake of a slashed validator distributed to other validators after the time specified for a hold for reconciliation.
+### As a platform stakeholder, I want to know that a validator that has been slashed is no longer able to validate.
+### As a RChain validator, I want to update my RNode software without being slashed.
+### As a RChain validator, I want to know that I will not be slashed and that I will be ejected if I meet the criteria as an underperforming validator and not the criteria for slashing.
+
 ## Consensus
 ### As a Node Validator, who joins existing network, my node can catch up and finalize the same set of blocks that other nodes are finalizing
 #### Catch up triggerd by next round from other validator
@@ -272,6 +287,43 @@
 * each validator runs 200 rounds of deploy and propose
 * wait graceful period of 30 seconds
 * each validator should output exactly same DAG
+
+# Cost accounting
+### As a node operator, I want to get the list of deploys and their costs when I run `show-blocks`.
+### As a node operator, I want to be compensated for storing, running, and processing transactions against smart contracts based on the computational intensity required.
+### As a node operator, I want to be compensated 
+### As a validator, I want to receive interest in phlo on my bond amount as defined by the schedule in the mint.
+### As a validator, having an absolute minimum phlo cost to deploy a contract helps support my resources and mitigate against DOS attacks.
+### As a validator, to support management of my resources I want to receive as a fee either a minimum charge for a deployment or a charge determined as a percentage of the size of the contract. The fee will be whichever is greater: the absolute minimum charge or the calculated minimum.
+### As a dApp developer, I use phlo to pay the cost to deploy smart contracts on the RChain platform.
+### As a dApp developer, I need to know the minimum cost it will take to deploy my contract. The cost will be whichever is greater: the absolute minimum charge or the calculated minimum.
+### As a dApp developer, I need to know how much it will cost to execute my contract.
+### As a dApp developer, I want the phlo cost to execute a contract a contract once it's on chain to be consistent given the asm REV to phlo price and accounting for non-determinism.
+### As a client of a contract already deployed on the blockchain, I need to know how much it will cost to execute the contract.
+### As a validator, I will yield 0.01% of all transaction fees received to accounts controlled by the Coop.
+### As the RChain coop, I want to receive 0.01% of all transaction fees to accounts controlled by the Coop.
+
+## Name registry
+### As a dApp developer, I want to predict registry names using readily available crypto libraries.
+
+## Performance
+### As a user of the platform, I want to know the current performance of the network in terms of COMM events per second.
+
+## Platform administration
+### As the RChain coop, I need to verify how much total phlo over a period of time was paid out of a sending address.
+## Documentation
+### As a any type of platform stakeholder, I want a single-source of indexed documenation.
+### As a any type of platform stakeholder, I want to know what I can expect for the performance and reliability of the RChain platform im the form of a production engineering plan.
+### As a node operator, I want to learn how to install, run, operate, and monitor my node.
+### As a validator, I want to learn the minimum hardware, infrastructure, and networking requirements to participate as a validator.
+### As a validator, I want to learn about the slashing API, the conditions and process for slashing, and the conditions and process for ejection.
+### As a dApp developer, I want to learn how to use and write smart contracts in Rholang.
+### As a dApp developer, I want to formally verify my Rholang contracts.
+### As a dApp developer, I need to learn about COMM events (ex what are they? how are they measured? how are they part of the platform performance benchmark metric?) and how to optimize them in my smart contracts.
+### As a dApp developer, I need to learn how unforgeable names are generated, how to determine unforgeable names, and how to retrieve the UUID of the unforgeable names.
+### As a dApp developer, I need a reference for gRPC calls and a description of what they do.
+### As a dApp developer, want to know how to calculate the costs for the execution of my contracts, including accounting for non-determinism.
+### As an Ehtereum developer familiar with the Infura API, I want to learn how to use the RChain platform.
 
 ## Not_Grouped
 ### Counting blocks?
