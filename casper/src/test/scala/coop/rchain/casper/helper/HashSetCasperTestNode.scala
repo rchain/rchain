@@ -34,7 +34,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.shared.{Cell, Log}
+import coop.rchain.shared.{Cell, Log, StoreType}
 import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -76,7 +76,7 @@ class HashSetCasperTestNode[F[_]](
   implicit val turanOracleEffect = SafetyOracle.turanOracle[F]
   implicit val rpConfAsk         = createRPConfAsk[F](local)
 
-  val activeRuntime                  = Runtime.create(storageDirectory, storageSize)
+  val activeRuntime                  = Runtime.create(storageDirectory, storageSize, StoreType.LMDB)
   val runtimeManager                 = RuntimeManager.fromRuntime(activeRuntime)
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
 

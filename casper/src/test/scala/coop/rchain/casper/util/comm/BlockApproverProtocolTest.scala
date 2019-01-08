@@ -12,6 +12,7 @@ import coop.rchain.comm.transport
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.casper.scalatestcontrib._
+import coop.rchain.shared.StoreType
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -79,7 +80,7 @@ object BlockApproverProtocolTest {
     import monix.execution.Scheduler.Implicits.global
 
     val runtimeDir     = BlockDagStorageTestFixture.blockStorageDir
-    val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024)
+    val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024, StoreType.LMDB)
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
 
     val deployTimestamp = 1L

@@ -291,8 +291,8 @@ object Runtime {
       dataDir: Path,
       mapSize: Long,
       storeType: StoreType,
-      extraSystemProcesses: Seq[SystemProcess.Definition[F]]
-  )(implicit P: Parallel[F, M], scheduler: Scheduler): F[Runtime[F]] = {
+      extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
+  )(implicit P: Parallel[F, M], executionContext: ExecutionContext): F[Runtime[F]] = {
     val errorLog                               = new ErrorLog[F]()
     implicit val ft: FunctorTell[F, Throwable] = errorLog
 
@@ -388,18 +388,15 @@ object Runtime {
     })
   }
 
-  // TODO: remove default store type
   def create(
       dataDir: Path,
       mapSize: Long,
-      storeType: StoreType = LMDB,
-      extraSystemProcesses: Seq[SystemProcess.Definition[Task]] = Seq.empty
+      storeType: StoreType
   )(
       implicit scheduler: Scheduler
   ): Runtime[Task] = {
-
     import coop.rchain.catscontrib.TaskContrib._
-    create[Task, Task.Par](dataDir, mapSize, storeType, extraSystemProcesses).unsafeRunSync
+    create[Task, Task.Par](dataDir, mapSize, storeType).unsafeRunSync
   }
 
   def injectEmptyRegistryRoot[F[_]](space: RhoISpace[F], replaySpace: RhoReplayISpace[F])(

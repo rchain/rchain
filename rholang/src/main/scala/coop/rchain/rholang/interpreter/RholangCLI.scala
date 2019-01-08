@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter
 
+import coop.rchain.shared.StoreType
 import java.io.{BufferedOutputStream, FileOutputStream, FileReader, StringReader}
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
@@ -52,7 +53,7 @@ object RholangCLI {
 
     val conf = new Conf(args)
 
-    val runtime = Runtime.create(conf.dataDir(), conf.mapSize())
+    val runtime = Runtime.create(conf.dataDir(), conf.mapSize(), StoreType.LMDB)
     Await.result(
       Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace).runToFuture,
       5.seconds

@@ -38,7 +38,7 @@ import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.shared.Cell
+import coop.rchain.shared.{Cell, StoreType}
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
@@ -52,7 +52,7 @@ class CasperPacketHandlerSpec extends WordSpec {
   private def setup() = new {
     val scheduler      = Scheduler.io("test")
     val runtimeDir     = BlockDagStorageTestFixture.blockStorageDir
-    val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024)
+    val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024, StoreType.LMDB)
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)(scheduler)
 
     implicit val captureTask       = Capture.taskCapture

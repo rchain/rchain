@@ -11,6 +11,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoIStore
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.shared.PathOps._
+import coop.rchain.shared.StoreType
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{fixture, Assertion, Matchers, Outcome}
@@ -23,7 +24,7 @@ class DeployParamsSpec extends fixture.FlatSpec with Matchers {
     val randomInt = scala.util.Random.nextInt
     val dbDir     = Files.createTempDirectory(s"rchain-storage-test-$randomInt")
     val size      = 1024L * 1024 * 10
-    val runtime   = Runtime.create(dbDir, size)
+    val runtime   = Runtime.create(dbDir, size, StoreType.LMDB)
     runtime.reducer.setPhlo(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
 
     try {

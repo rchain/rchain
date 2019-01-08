@@ -28,6 +28,7 @@ import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.{accounting, Runtime}
 import coop.rchain.models.{Expr, Par}
+import coop.rchain.shared.StoreType
 import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.Catscontrib._
@@ -1662,7 +1663,7 @@ object HashSetCasperTest {
     val initial           = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "rchain")
     val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
     val storageSize: Long = 1024L * 1024
-    val activeRuntime     = Runtime.create(storageDirectory, storageSize)
+    val activeRuntime     = Runtime.create(storageDirectory, storageSize, StoreType.LMDB)
     val runtimeManager    = RuntimeManager.fromRuntime(activeRuntime)
     val emptyStateHash    = runtimeManager.emptyStateHash
     val validators        = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq

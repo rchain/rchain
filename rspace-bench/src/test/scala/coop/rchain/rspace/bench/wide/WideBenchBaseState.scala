@@ -36,7 +36,7 @@ abstract class WideBenchBaseState {
 
   implicit def readErrors = () => runtime.readAndClearErrorVector().unsafeRunSync
 
-  def createRuntime(): Runtime[Task] = Runtime.create(dbDir, mapSize)
+  def createRuntime(): Runtime[Task] = Runtime.create(dbDir, mapSize, StoreType.LMDB)
 
   @Setup(value = Level.Iteration)
   def doSetup(): Unit = {

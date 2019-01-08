@@ -10,6 +10,7 @@ import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.rholang.interpreter.{accounting, Runtime}
 import coop.rchain.shared.PathOps.RichPath
+import coop.rchain.shared.StoreType
 import java.io.PrintWriter
 import java.nio.file.{Files, Path}
 
@@ -188,7 +189,7 @@ object BondingUtil {
     runtimeDirResource.flatMap(
       runtimeDir =>
         Resource
-          .make(Sync[F].delay { Runtime.create(runtimeDir, 1024L * 1024 * 1024) })(
+          .make(Sync[F].delay { Runtime.create(runtimeDir, 1024L * 1024 * 1024, StoreType.LMDB) })(
             runtime => Sync[F].delay { runtime.close().unsafeRunSync }
           )
     )

@@ -19,7 +19,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.shared.Time
+import coop.rchain.shared.{StoreType, Time}
 import coop.rchain.casper.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -591,7 +591,7 @@ class ValidateTest
 
       val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
       val storageSize: Long = 1024L * 1024
-      val activeRuntime     = Runtime.create(storageDirectory, storageSize)
+      val activeRuntime     = Runtime.create(storageDirectory, storageSize, StoreType.LMDB)
       val runtimeManager    = RuntimeManager.fromRuntime(activeRuntime)
       for {
         dag               <- blockDagStorage.getRepresentation
