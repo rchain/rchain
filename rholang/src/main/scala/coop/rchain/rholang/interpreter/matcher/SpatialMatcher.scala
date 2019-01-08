@@ -556,14 +556,11 @@ trait SpatialMatcherInstances {
           firstMatch(target, ps)
         }
         case ConnNotBody(p) =>
-          OptionalFreeMapWithCost[Unit]((s: FreeMap) => {
-            OptionT(StateT((c: Cost) => {
-              spatialMatch(target, p).run(s).value.run(c).map {
-                case (cost, None)         => (cost, Some((s, Unit)))
-                case (cost, Some((_, _))) => (cost, None)
-              }
-            }))
-          })
+          spatialMatch(target, p).attemptOpt.flatMap {
+            case None    => ().pure[OptionalFreeMapWithCost]
+            case Some(_) => OptionalFreeMapWithCost.empty
+          }
+
         case _: VarRefBody =>
           // this should never happen because variable references should be substituted
           OptionalFreeMapWithCost.empty[Unit]
