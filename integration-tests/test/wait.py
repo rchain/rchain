@@ -7,9 +7,11 @@ import typing_extensions
 import pytest
 
 from .common import (
-    Network,
     TestingContext,
     GetBlockError,
+)
+from .network import (
+    Network,
 )
 
 if TYPE_CHECKING:

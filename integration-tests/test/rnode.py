@@ -47,7 +47,7 @@ rnode_key = '{}/node.key.pem'.format(rnode_directory)
 
 
 class RNodeAddressNotFoundError(Exception):
-    def __init__(self, regex):
+    def __init__(self, regex: str) -> None:
         super().__init__()
         self.regex = regex
 
@@ -86,7 +86,7 @@ def extract_block_count_from_show_blocks(show_blocks_output: str) -> int:
     return result
 
 
-def extract_block_hash_from_propose_output(propose_output: str):
+def extract_block_hash_from_propose_output(propose_output: str) -> str:
     """We're getting back something along the lines of:
 
     Response: Success! Block a91208047c... created and added.\n
@@ -129,10 +129,10 @@ class Node:
         address = match.group(1)
         return address
 
-    def get_metrics(self):
+    def get_metrics(self) -> str:
         return self.shell_out('curl', '-s', 'http://localhost:40403/metrics')
 
-    def get_connected_peers_metric_value(self):
+    def get_connected_peers_metric_value(self) -> str:
         try:
             return self.shell_out('sh', '-c', 'curl -s http://localhost:40403/metrics | grep ^rchain_comm_rp_connect_peers\\ ')
         except NonZeroExitCodeError as e:
@@ -159,10 +159,10 @@ class Node:
             raise GetBlockError(command=e.command, exit_code=e.exit_code, output=e.output)
 
     # Too low level -- do not use directly.  Prefer shell_out() instead.
-    def _exec_run_with_timeout(self, cmd: Tuple[str, ...], stderr=True) -> Tuple[int, str]:
+    def _exec_run_with_timeout(self, cmd: Tuple[str, ...], stderr: bool = True) -> Tuple[int, str]:
         control_queue: queue.Queue = Queue(1)
 
-        def command_process():
+        def command_process() -> None:
             exec_result: ExecResult = self.container.exec_run(cmd, stderr=stderr)
             control_queue.put((exec_result.exit_code, exec_result.output.decode('utf-8')))
 
@@ -187,7 +187,7 @@ class Node:
             logging.debug("EXITED {} {} {}".format(self.name, cmd, exit_code))
         return exit_code, output
 
-    def shell_out(self, *cmd: str, stderr=True) -> str:
+    def shell_out(self, *cmd: str, stderr: bool = True) -> str:
         exit_code, output = self._exec_run_with_timeout(cmd, stderr=stderr)
         if exit_code != 0:
             raise NonZeroExitCodeError(command=cmd, exit_code=exit_code, output=output)
