@@ -27,7 +27,7 @@ trait RegistryTester extends PersistentStoreTester {
   implicit val costAccounting =
     CostAccounting.unsafe[Task](CostAccount(Integer.MAX_VALUE))
 
-  private[this] def dispatchTableCreator(registry: Registry[Task]): RhoDispatchMap = {
+  private[this] def dispatchTableCreator(registry: Registry[Task]): RhoDispatchMap[Task] = {
     import coop.rchain.rholang.interpreter.Runtime.BodyRefs._
     Map(
       REG_LOOKUP                   -> registry.lookup,
@@ -61,8 +61,8 @@ trait RegistryTester extends PersistentStoreTester {
   ): R =
     withTestSpace(errorLog) {
       case TestFixture(space, _) =>
-        val _                                  = errorLog.readAndClearErrorVector().runSyncUnsafe(1.second)
-        lazy val dispatchTable: RhoDispatchMap = dispatchTableCreator(registry)
+        val _                                        = errorLog.readAndClearErrorVector().runSyncUnsafe(1.second)
+        lazy val dispatchTable: RhoDispatchMap[Task] = dispatchTableCreator(registry)
         lazy val (dispatcher @ _, reducer, registry) =
           RholangAndScalaDispatcher
             .create(space, dispatchTable, Registry.testingUrnMap)

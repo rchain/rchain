@@ -2,13 +2,12 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.{Files, Path}
 
-import cats.Applicative
+import cats._
 import cats.effect.concurrent.Ref
 import cats.effect.{ContextShift, Sync}
 import cats.implicits._
 import cats.mtl.FunctorTell
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
@@ -58,9 +57,9 @@ object Runtime {
   type RhoIStore  = CPAK[IStore]
   type RhoContext = CPAK[Context]
 
-  type RhoDispatch[F[_]] = Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
-  type RhoSysFunction    = (Seq[ListParWithRandomAndPhlos], Int) => Task[Unit]
-  type RhoDispatchMap    = Map[Long, RhoSysFunction]
+  type RhoDispatch[F[_]]    = Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
+  type RhoSysFunction[F[_]] = (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
+  type RhoDispatchMap[F[_]] = Map[Long, RhoSysFunction[F]]
 
   type CPAK[F[_, _, _, _]] =
     F[Par, BindPattern, ListParWithRandom, TaggedContinuation]
@@ -288,26 +287,23 @@ object Runtime {
     )
   )
 
-  // TODO: remove default store type
-  def create(
+  def create[F[_]: ContextShift: Sync, M[_]](
       dataDir: Path,
       mapSize: Long,
-      storeType: StoreType = LMDB,
-      extraSystemProcesses: Seq[SystemProcess.Definition[Task]] = Seq.empty
-  )(
-      implicit scheduler: Scheduler
-  ): Runtime[Task] = {
-    val errorLog                                  = new ErrorLog[Task]()
-    implicit val ft: FunctorTell[Task, Throwable] = errorLog
+      storeType: StoreType,
+      extraSystemProcesses: Seq[SystemProcess.Definition[F]]
+  )(implicit P: Parallel[F, M], scheduler: Scheduler): F[Runtime[F]] = {
+    val errorLog                               = new ErrorLog[F]()
+    implicit val ft: FunctorTell[F, Throwable] = errorLog
 
     def dispatchTableCreator(
-        space: RhoISpace[Task],
-        dispatcher: RhoDispatch[Task],
-        registry: Registry[Task],
-        shortLeashParams: ShortLeashParams[Task],
-        blockTime: BlockTime[Task]
-    ): RhoDispatchMap = {
-      val systemProcesses = SystemProcesses[Task](dispatcher, space)
+        space: RhoISpace[F],
+        dispatcher: RhoDispatch[F],
+        registry: Registry[F],
+        shortLeashParams: ShortLeashParams[F],
+        blockTime: BlockTime[F]
+    ): RhoDispatchMap[F] = {
+      val systemProcesses = SystemProcesses[F](dispatcher, space)
       import BodyRefs._
       Map(
         ED25519_VERIFY               -> systemProcesses.ed25519Verify,
@@ -326,7 +322,7 @@ object Runtime {
         REG_PUBLIC_LOOKUP            -> (registry.publicLookup(_, _)),
         REG_NONCE_INSERT_CALLBACK    -> (registry.nonceInsertCallback(_, _))
       ) ++
-        (stdSystemProcesses[Task] ++ extraSystemProcesses)
+        (stdSystemProcesses[F] ++ extraSystemProcesses)
           .map(
             _.toDispatchTable(
               SystemProcess.Context(space, dispatcher, registry, shortLeashParams, blockTime)
@@ -336,10 +332,10 @@ object Runtime {
 
     val urnMap: Map[String, Par] = Map[String, Par](
       "rho:registry:lookup" -> Bundle(FixedChannels.REG_LOOKUP, writeFlag = true)
-    ) ++ (stdSystemProcesses[Task] ++ extraSystemProcesses).map(_.toUrnMap)
+    ) ++ (stdSystemProcesses[F] ++ extraSystemProcesses).map(_.toUrnMap)
 
-    val shortLeashParams = ShortLeashParams.unsafe[Task]()
-    val blockTime        = BlockTime.unsafe[Task]()
+    val shortLeashParams = ShortLeashParams.unsafe[F]()
+    val blockTime        = BlockTime.unsafe[F]()
 
     val procDefs: List[(Name, Arity, Remainder, BodyRef)] = {
       import BodyRefs._
@@ -350,14 +346,14 @@ object Runtime {
         (FixedChannels.BLAKE2B256_HASH, 2, None, BLAKE2B256_HASH),
         (FixedChannels.SECP256K1_VERIFY, 4, None, SECP256K1_VERIFY),
         (FixedChannels.REG_LOOKUP, 2, None, REG_PUBLIC_LOOKUP)
-      ) ++ (stdSystemProcesses[Task] ++ extraSystemProcesses).map(_.toProcDefs)
+      ) ++ (stdSystemProcesses[F] ++ extraSystemProcesses).map(_.toProcDefs)
     }
 
     (for {
-      setup                         <- setupRSpace[Task](dataDir, mapSize, storeType)
+      setup                         <- setupRSpace[F](dataDir, mapSize, storeType)
       (context, space, replaySpace) = setup
       (reducer, replayReducer) = {
-        lazy val replayDispatchTable: RhoDispatchMap =
+        lazy val replayDispatchTable: RhoDispatchMap[F] =
           dispatchTableCreator(
             replaySpace,
             replayDispatcher,
@@ -366,7 +362,7 @@ object Runtime {
             blockTime
           )
 
-        lazy val dispatchTable: RhoDispatchMap =
+        lazy val dispatchTable: RhoDispatchMap[F] =
           dispatchTableCreator(space, dispatcher, registry, shortLeashParams, blockTime)
 
         lazy val (dispatcher, reducer, registry) =
@@ -379,7 +375,7 @@ object Runtime {
       res <- introduceSystemProcesses(space, replaySpace, procDefs)
     } yield {
       assert(res.forall(_.isEmpty))
-      new Runtime[Task](
+      new Runtime[F](
         reducer,
         replayReducer,
         space,
@@ -389,7 +385,21 @@ object Runtime {
         shortLeashParams,
         blockTime
       )
-    }).unsafeRunSync
+    })
+  }
+
+  // TODO: remove default store type
+  def create(
+      dataDir: Path,
+      mapSize: Long,
+      storeType: StoreType = LMDB,
+      extraSystemProcesses: Seq[SystemProcess.Definition[Task]] = Seq.empty
+  )(
+      implicit scheduler: Scheduler
+  ): Runtime[Task] = {
+
+    import coop.rchain.catscontrib.TaskContrib._
+    create[Task, Task.Par](dataDir, mapSize, storeType, extraSystemProcesses).unsafeRunSync
   }
 
   def injectEmptyRegistryRoot[F[_]](space: RhoISpace[F], replaySpace: RhoReplayISpace[F])(
