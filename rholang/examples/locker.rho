@@ -1,47 +1,65 @@
-new Locker, verify,
+new Locker, verify, toyVerify,
 trace(`rho:io:stderr`), stdout(`rho:io:stdout`),
 insertArbitrary(`rho:registry:insertArbitrary`), lookup(`rho:registry:lookup`)
 in {
   // Test / demo
-  new lockerCh, ackCh, rx in {
-    Locker!("Trinket", ("288755c48c3951f89c5f0ffe885088dc0970fd935bc12adfdd81f81bb63d6219").hexToBytes(), *lockerCh) |
-    for (locker <- lockerCh) {
-      // trace!({"locker": *locker}) |
-
-      new trinket, updateCh in {
-        trace!({"trinket": *trinket}) |
-        locker!("update",
-          "47bab66eedc208057d5a51c855fc199551b6a1934264bb4d3e81749e445570b77f89810d61f62006c9326dcc5b1a6cc81e8b6674be7484f2f2eb333e439a8309".hexToBytes(), 0,
-          {"trinket": *trinket}, *trace, *ackCh)
-      } |
-
-      // `trinket` has gone out of scope but
-      // we can get it back since we have the locker combo
-      // (i.e. the private key).
-      for(_ <- ackCh) {
-        locker!("get", "800f5e1ecd554adc523817674098020d1982bfedafba2ec0a752df5717a90a17b86b9e349852e182029ebd9a0115601500716462acdb1c5d302662701826270a".hexToBytes(), 1, *trace, *rx) |
-        for(@{"trinket": trinket} <- rx) {
-          trace!({"win! got trinket": trinket})
+  new seed, echo, lockerCh, ackCh in {
+    Locker!("echoTick", "aabb".hexToBytes(),
+      // Note we're _sending_ this contract / for process,
+      // not running it.
+      for(return <- seed) {
+        new tickCh in {
+          tickCh!(0) |
+          contract echo(@"echo", @input, ej, ack) = {
+            for(@tick <- tickCh) {
+              tickCh!(tick + 1) |
+              trace!({"input": input, "tick": tick}) |
+              ack!(Nil)
+            }
+          }
+        } |
+        return!(*echo)
+      },
+      *seed,
+      *lockerCh) |
+    // echo is unary (after method name), partial
+    for (lockedEcho <- lockerCh) {
+      lockedEcho!("aabbaabb".hexToBytes(), 0, "echo", 123, *trace, *ackCh) |
+      for(@ack <- ackCh) {
+        trace!({"ack1": ack}) |
+        lockedEcho!("aabbaabb".hexToBytes(), 1, "echo", 456, *trace, *ackCh) |
+        for(@ack <- ackCh) {
+          trace!({"ack2": ack})
         }
       }
     }
-  }
-  |
+  } |
+
   new uriCh in {
     insertArbitrary!(bundle+{*Locker}, *uriCh) | for(@uri <- uriCh) {
       stdout!({"Locker registry uri": uri})
     }
   }
   |
+
   // WARNING: if sig is the wrong size, we get a java.lang.RuntimeException,
   // and our nonceCh is stuck.
-  contract verify(@{sig /\ ByteArray}, @{pk /\ ByteArray}, @{nonce /\ Int}, nonceCh, eject, ack) = {
+  contract verify(
+    @{sig /\ ByteArray},  // ed25519 signature of blakeb256Hash of nextNonce.toByteArray()
+    @{pk /\ ByteArray},
+    @{nonce /\ Int},  // claimed next nonce
+    nonceCh,              // real nonce storage
+    @data,                // data to be signed (along with nonce)
+    eject,                // failure path (bad nonce or signature)
+    ack                   // sig OK path
+  ) = {
     // trace!({"verify sig": sig, "pk": pk, "nonce": nonce}) |
     for(@prevNonce <- nonceCh) {
       // trace!({"prevNonce": prevNonce}) |
       if (nonce == (prevNonce + 1)) {
         new result, hashOut in {
-          @"blake2b256Hash"!(nonce.toByteArray(), *hashOut) | for(@hash <- hashOut) {
+          @"blake2b256Hash"!((nonce, data).toByteArray(), *hashOut) |
+          for(@hash <- hashOut) {
             // trace!({"hash": hash}) |
             @"ed25519Verify"!(hash, sig, pk, *result) | for(@r <- result) {
               // trace!({"verify": r}) |
@@ -56,51 +74,57 @@ in {
     }
   } |
 
-  contract Locker(@{nickname /\ String}, @{pubKey /\ ByteArray}, return) = {
-    new self, itemsCh, nonceCh in {
-      return!(bundle+{*self}) |
+  // toy signature verification: checks that sig == pk ++ pk
+  contract toyVerify(
+    @{sig /\ ByteArray}, @{pk /\ ByteArray}, @{nonce /\ Int}, nonceCh,
+    @data,
+    eject, ack) = {
+    // trace!({"verify sig": sig, "pk": pk, "data": data}) |
+    for(@prevNonce <- nonceCh) {
+      // trace!({"prevNonce": prevNonce}) |
+      if (nonce == (prevNonce + 1)) {
+        if (pk ++ pk == sig) { nonceCh!(nonce) | ack!(Nil) }
+        else { nonceCh!(prevNonce) | eject!("bad ++ sig") }
+      } else {
+        nonceCh!(prevNonce) | eject!({"expected nonce": prevNonce + 1})
+      }
+    }
+  } |
 
-      itemsCh!({}) | nonceCh!(-1) |
+  contract Locker(
+    @{label /\ String},
+    @{pubKey /\ ByteArray},
+    @seedCode, seedEntry,
+    return) = {
+    trace!({"Locker": label, "pubKey": pubKey}) |
+
+    new self, seedCh, nonceCh in {
+      nonceCh!(-1) |
+
+      return!(*self) |
 
       contract self(@"getNonce", return) = { for(@nonce <- nonceCh) {
         nonceCh!(nonce) | // peek
         return!(nonce)
       } } |
 
-      contract self(@"nickname", return) = { return!(nickname) } |
+      seedCode |
+      seedEntry!(*seedCh) | for (seed <- seedCh) {
+        // trace!({"seed": *seed}) |
 
-      contract self(@"update",
-        @{sig /\ ByteArray},  // ed25519 signature of blakeb256Hash of nextNonce.toByteArray()
-        @{nextNonce /\ Int},  // serial number to prevent replay
-        @{more /\ {..._}},    // map of bindings to add / update
-        fail,                 // failure path (bad signature)
-        ack                   // success
-      ) = {
-        trace!({nickname ++ " locker.update": more.keys()}) |
-        new sigOk in {
-          verify!(sig, pubKey, nextNonce, *nonceCh, *fail, *sigOk) | for (_ <- sigOk) {
-            for (@items <- itemsCh) {
-              // trace!({"items": items, "more": more}) |
-              itemsCh!(items.union(more)) |
-              ack!(Nil)
-            }
-          }
-        }
-      }
-      |
-      contract self(@"get",
-        @{sig /\ ByteArray},  // ed25519 signature of blakeb256Hash of nextNonce.toByteArray()
-        @{nextNonce /\ Int},  // serial number to prevent replay
-        fail,                 // failure path (bad signature)
-        return                // contents of locker (a map) are returned
-      ) = {
-        new sigOk in {
-          verify!(sig, pubKey, nextNonce, *nonceCh, *fail, *sigOk) | for (_ <- sigOk) {
-            for (@items <- itemsCh) {
-              trace!({nickname ++ " locker.get": items.keys() }) |
-              // trace!({"get items": items}) |
-              itemsCh!(items) |
-              return!(items)
+        // unary, partial
+        contract self(
+          @{sig /\ ByteArray}, @{nonce /\ Int},
+          @{method /\ String}, @arg, eject, ret
+        ) = {
+          // trace!({"gateway1p": method, "arg": arg}) |
+          new okCh in {
+            // TODO: replace toyVerify by real verify
+            toyVerify!(sig, pubKey, nonce, *nonceCh,
+              (method, arg, *eject, *ret), *eject, *okCh) |
+            for(_ <- okCh) {
+              // trace!({"sig ok": sig}) |
+              seed!(method, arg, *eject, *ret)
             }
           }
         }
