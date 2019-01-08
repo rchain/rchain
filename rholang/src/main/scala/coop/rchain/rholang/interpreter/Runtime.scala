@@ -388,6 +388,7 @@ object Runtime {
     })
   }
 
+  // TODO: move somewhere under src/test when possible
   def create(
       dataDir: Path,
       mapSize: Long,
