@@ -6,6 +6,7 @@ import coop.rchain.blockstorage.{BlockDagRepresentation, BlockMetadata}
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.{Clique, DagOperations, ProtoUtil}
+import coop.rchain.shared.Log
 
 /*
  * Implementation inspired by Ethereum's CBC casper simulator's Turan oracle implementation.
@@ -49,7 +50,7 @@ object SafetyOracle extends SafetyOracleInstances {
 }
 
 sealed abstract class SafetyOracleInstances {
-  def turanOracle[F[_]: Monad]: SafetyOracle[F] =
+  def turanOracle[F[_]: Monad: Log]: SafetyOracle[F] =
     new SafetyOracle[F] {
       def normalizedFaultTolerance(
           blockDag: BlockDagRepresentation[F],
@@ -240,6 +241,48 @@ sealed abstract class SafetyOracleInstances {
                                                                   _.filter(_.sender == second).toList
                                                                 )
                                                           }
+                           _ <- Monad[F].ifM((justificationBlockSecondList.length != 1).pure[F])(
+                                 for {
+                                   _ <- Log[F].info(
+                                         "f: " + PrettyPrinter
+                                           .buildString(first) + " -- s: " + PrettyPrinter
+                                           .buildString(second)
+                                       )
+                                   _ <- Log[F].info(
+                                         "firstLatestBlock: " + PrettyPrinter.buildString(
+                                           firstLatestBlock.blockHash
+                                         ) + " parents: " + firstLatestBlock.parents
+                                           .map(PrettyPrinter.buildString)
+                                           .mkString(";") + " justifications " + firstLatestBlock.justifications
+                                           .map(
+                                             j =>
+                                               "V: " + PrettyPrinter
+                                                 .buildString(j.validator) + " LBH " + PrettyPrinter
+                                                 .buildString(j.latestBlockHash)
+                                           )
+                                           .mkString(";")
+                                       )
+                                   _ <- Log[F].info(
+                                         "justifications 2nd list: " + justificationBlockSecondList
+                                           .map(
+                                             j =>
+                                               PrettyPrinter
+                                                 .buildString(j.blockHash) + " parents: " + j.parents
+                                                 .map(PrettyPrinter.buildString)
+                                                 .mkString(";") + " justifications " + j.justifications
+                                                 .map(
+                                                   _j =>
+                                                     "V: " + PrettyPrinter
+                                                       .buildString(_j.validator) + " LBH " + PrettyPrinter
+                                                       .buildString(_j.latestBlockHash)
+                                                 )
+                                                 .mkString(";")
+                                           )
+                                           .mkString(" <<>> ")
+                                       )
+                                 } yield (),
+                                 ().pure[F]
+                               )
                            _                        = assert(justificationBlockSecondList.length == 1)
                            justificationBlockSecond = justificationBlockSecondList.head
                            potentialDisagreements <- filterChildren(

@@ -6,6 +6,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
+import coop.rchain.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
 
 import scala.collection.immutable.{HashMap, HashSet}
@@ -17,6 +18,8 @@ class CliqueOracleTest
     with BlockDagStorageFixture {
 
   behavior of "Turan Oracle"
+
+  implicit val logEff = new LogStub[Task]
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   it should "detect finality as appropriate" in withStorage {

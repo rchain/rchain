@@ -30,6 +30,8 @@ object PrettyPrinter {
       s"Block #${postState.blockNumber} (${buildString(b.blockHash)}) " +
         s"-- Sender ID ${buildString(b.sender)} " +
         s"-- M Parent Hash ${buildString(mainParent)} " +
+        s"-- M Parents ${header.parentsHashList.map(PrettyPrinter.buildString).mkString(";")} " +
+        s"-- M Justifications ${b.justifications.map(j => "V: " + PrettyPrinter.buildString(j.validator) + " LBH " + PrettyPrinter.buildString(j.latestBlockHash)).mkString(";")} " +
         s"-- Contents ${buildString(postState)}" +
         s"-- Shard ID ${limit(b.shardId, 10)}"
     blockString match {

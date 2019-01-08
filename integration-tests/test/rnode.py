@@ -140,6 +140,9 @@ class Node:
     def show_blocks_with_depth(self, depth: int) -> str:
         return self.rnode_command('show-blocks', '--depth', str(depth))
 
+    def show_block(self, hash: str) -> str:
+        return self.rnode_command('show-block', hash)
+
     def get_blocks_count(self, depth: int) -> int:
         show_blocks_output = self.show_blocks_with_depth(depth)
         return extract_block_count_from_show_blocks(show_blocks_output)

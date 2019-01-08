@@ -16,6 +16,7 @@ import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.Capture._
+import coop.rchain.shared.Log
 import monix.eval.Task
 
 import scala.collection.immutable.HashMap
@@ -183,7 +184,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
       logEff            = new LogStub[Task]()
       casperRef         <- MultiParentCasperRef.of[Task]
       _                 <- casperRef.set(casperEffect)
-      turanOracleEffect = SafetyOracle.turanOracle[Task]
+      turanOracleEffect = SafetyOracle.turanOracle[Task](Sync[Task], logEff)
     } yield (logEff, casperRef, turanOracleEffect)
 
   private def emptyEffects(
@@ -200,6 +201,6 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
       logEff            = new LogStub[Task]()
       casperRef         <- MultiParentCasperRef.of[Task]
       _                 <- casperRef.set(casperEffect)
-      turanOracleEffect = SafetyOracle.turanOracle[Task]
+      turanOracleEffect = SafetyOracle.turanOracle[Task](Sync[Task], logEff)
     } yield (logEff, casperRef, turanOracleEffect)
 }

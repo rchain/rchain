@@ -86,7 +86,7 @@ class BlocksResponseAPITest
         logEff            = new LogStub[Task]
         casperRef         <- MultiParentCasperRef.of[Task]
         _                 <- casperRef.set(casperEffect)
-        turanOracleEffect = SafetyOracle.turanOracle[Task]
+        turanOracleEffect = SafetyOracle.turanOracle[Task](Sync[Task], logEff)
         blocksResponse <- BlockAPI.showMainChain[Task](Int.MaxValue)(
                            Sync[Task],
                            casperRef,
@@ -152,7 +152,7 @@ class BlocksResponseAPITest
         logEff            = new LogStub[Task]
         casperRef         <- MultiParentCasperRef.of[Task]
         _                 <- casperRef.set(casperEffect)
-        turanOracleEffect = SafetyOracle.turanOracle[Task]
+        turanOracleEffect = SafetyOracle.turanOracle[Task](Sync[Task], logEff)
         blocksResponse <- BlockAPI.showBlocks[Task](Int.MaxValue)(
                            Sync[Task],
                            casperRef,
@@ -218,7 +218,7 @@ class BlocksResponseAPITest
       logEff            = new LogStub[Task]
       casperRef         <- MultiParentCasperRef.of[Task]
       _                 <- casperRef.set(casperEffect)
-      turanOracleEffect = SafetyOracle.turanOracle[Task]
+      turanOracleEffect = SafetyOracle.turanOracle[Task](Sync[Task], logEff)
       blocksResponse <- BlockAPI.showBlocks[Task](2)(
                          Sync[Task],
                          casperRef,
