@@ -3,121 +3,147 @@ trace(`rho:io:stderr`), stdout(`rho:io:stdout`),
 insertArbitrary(`rho:registry:insertArbitrary`), lookup(`rho:registry:lookup`)
 in {
   // Test / demo
-  new chairUriCh, voterUriCh, inboxUriCh, votedCh in {
-    // Chair behavior from off-chain
-    for(@chairURI <- chairUriCh; @inboxURI <- inboxUriCh) {
-      trace!({"chairURI": chairURI, "inboxURI": inboxURI}) |
+  new chair, voter in {
+    new chairUriCh, voterUrisCh, votedCh in {
+      chair!("makeLocker", "Chip the chair", "cc".hexToBytes(),
+        Set("Rick", "Morty"), *chairUriCh) |
+      voter!("makeLocker", "Vick the voter", "dd".hexToBytes(), *voterUrisCh) |
+
+      for(@chairURI <- chairUriCh;
+        @{"locker": voterURI, "inbox": inboxURI} <- voterUrisCh) {
+        stdout!({"Vick's inbox registerd at": inboxURI}) |
+        chair!("start", chairURI, inboxURI,
+          "cccc".hexToBytes(), *trace, Nil) |
+        voter!("castVote", voterURI, "dddd".hexToBytes(), "Rick",
+          *trace, *votedCh) |
+        for(_ <- votedCh) {
+          chair!("finish", chairURI,
+            "cccc".hexToBytes(), *trace, Nil)
+        }
+      }
+    } |
+
+
+    // Chair starts ballot (set up below).
+    // Since args (except return channels) are JSON / RSON data,
+    // this is callable from off-chain*.
+    // *TODO: insertArbitrary(*chair, ...)
+    contract chair(@"start", @chairURI, @voterInboxURI, @sig, eject, ack) = {
+      trace!({"chairURI": chairURI, "inboxURI": voterInboxURI}) |
       new clCh, inlCh, ch in {
         lookup!(chairURI, *clCh) |
-        lookup!(inboxURI, *inlCh) |
+        lookup!(voterInboxURI, *inlCh) |
 
         for(chairLocker <- clCh; inbox <- inlCh) {
           // trace!({"chairLocker": *chairLocker}) |
-          chairLocker!("cccc".hexToBytes(), 0,
-            "giveRightToVote", Nil, *trace, *inbox) |
-          for(_ <- votedCh) {
-            chairLocker!("cccc".hexToBytes(), 1,
-              "getWinner", Nil, *trace, *ch) | for(@(winner, tally) <- ch) {
-              trace!({"winner": winner, "tally": tally})
-            }
+          chairLocker!(sig, 0,
+            "giveRightToVote", Nil, *eject, *ch) | for(rightToVote <- ch) {
+            inbox!(*rightToVote) |
+            ack!(Nil)
+          }
+        }
+      }
+    } |
+    // Chair finishes ballot.
+    contract chair(@"finish", @chairURI, @sig, eject, ack) = {
+      new clCh, ch in {
+        lookup!(chairURI, *clCh) |
+
+        for(chairLocker <- clCh) {
+          // trace!({"chairLocker": *chairLocker}) |
+          chairLocker!("cccc".hexToBytes(), 1,
+            "getWinner", Nil, *trace, *ch) | for(@(winner, tally) <- ch) {
+            trace!({"winner": winner, "tally": tally}) |
+            ack!(Nil)
           }
         }
       }
     } |
 
     // Voter behavior from off-chain.
-    new vlCh, ch in {
-      for(@voterURI <- voterUriCh) {
-        trace!({"voterURI": voterURI}) |
+    contract voter(@"castVote", @voterURI, @sig, @choice, eject, ack) = {
+      new vlCh in {
         lookup!(voterURI, *vlCh) |
         for(voterLocker <- vlCh) {
-          // trace!({"voter locker": *voterLocker}) |
-          voterLocker!("dddd".hexToBytes(), 1,
-            "voteFor", "Rick", *trace, *ch) | for (_ <- ch) {
-            votedCh!(Nil)
-          }
+          voterLocker!(sig, 0,
+            "voteFor", "Rick", *eject, *ack)
         }
       }
     } |
 
-    // Chair on-chain set-up.
-    new seed, lockerCh, lookupCh, ackCh in {
-      // ISSUE: how to manage registry URIs in eval mode?
-      lookup!(`rho:id:sotmfszrhw7frtkd8e4i4gbderxi8aobh9w4zggxydnfuhwbbn1srx`,
-        *lookupCh) | for(Ballot <- lookupCh) {
+    // Make and register chair locker; return URI.
+    contract chair(@"makeLocker", @nickname, @pubKey, @choices, return) = {
+      new seed, lockerCh, lookupCh, ackCh in {
+        // ISSUE: how to manage registry URIs in eval mode?
+        lookup!(`rho:id:6s5xtg5d78a3qz9sp1nimqefhggznycwjwjyesij3fy9c6au7up9dp`,
+          *lookupCh) | for(Ballot <- lookupCh) {
 
-        Locker!("Chip the Chair's locker", "cc".hexToBytes(),
+          Locker!(nickname, pubKey,
+
+            // Note we're _sending_ this contract / for process,
+            // not running it.
+            for(return <- seed) {
+              new bCh, self in {
+                Ballot!(choices, *bCh) | for(chair, winner <- bCh) {
+
+                  // These are 0-ary and total, but they fit in
+                  // the 1-ary partial gateway
+                  contract self(@"giveRightToVote", _, ej, return) = {
+                    chair!("giveRightToVote", *return)
+                  } |
+
+                  contract self(@"getWinner", _, ej, return) = {
+                    winner!(*return)
+                  }
+                } |
+                return!(bundle+{*self})
+              }
+            },
+            *seed,
+            *lockerCh)
+        } |
+
+        for (@chairLocker <- lockerCh) {
+          insertArbitrary!(bundle+{chairLocker}, *return)
+        }
+      }
+    } |
+
+    contract voter(@"makeLocker", @nickname, @pubKey, return) = {
+      // trace!({"voter MakeLocker": nickname}) |
+      new seed, lockerCh, inboxUriCh, ch in {
+        Locker!(nickname, pubKey,
 
           // Note we're _sending_ this contract / for process,
           // not running it.
           for(return <- seed) {
-            new bCh, self in {
-              Ballot!(Set("Rick", "Morty"), *bCh) | for(chair, winner <- bCh) {
+            new self, rCh, inbox in {
+              insertArbitrary!(bundle+{*inbox}, *rCh) |
+              for(@uri <- rCh) {
+                inboxUriCh!(uri) |
 
-                // These are 0-ary and total, but they fit in
-                // the 1-ary partial gateway
-                contract self(@"giveRightToVote", _, ej, return) = {
-                  chair!("giveRightToVote", *return)
-                } |
-
-                contract self(@"getWinner", _, ej, return) = {
-                  winner!(*return)
+                contract self(@"voteFor", @choice, ej, ack) = {
+                  for(rightToVote <- inbox) {
+                    rightToVote!("vote", choice, *ej, *ack)
+                  }
                 }
               } |
               return!(bundle+{*self})
             }
           },
           *seed,
-          *lockerCh)
-      } |
-
-      for (@chairLocker <- lockerCh) {
-        insertArbitrary!(bundle+{chairLocker}, *chairUriCh)
-      }
-    } |
-
-    new seed, lockerCh in {
-      Locker!("Vick the Voter's locker", "dd".hexToBytes(),
-
-        // Note we're _sending_ this contract / for process,
-        // not running it.
-        for(return <- seed) {
-          new self, rCh, inbox in {
-            insertArbitrary!(bundle+{*inbox}, *rCh) | for(@uri <- rCh) {
-              stdout!({"Vick's inbox registerd at": uri}) |
-
-              contract self(@"voteFor", @choice, ej, ack) = {
-                trace!({"voteFor": choice}) |
-                for(rightToVote <- inbox) {
-                  rightToVote!("vote", choice, *ej, *ack)
-                }
-              } |
-
-              // These two could / should be public,
-              // i.e. callable without a signature.
-              // The caller / owner can expose it.
-              contract self(@"inbox", _, _ej, return) = {
-                return!(bundle+{*inbox})
-              } |
-              contract self(@"inboxAddress", _, _ej, return) = {
-                // trace!({"getting inbox address": uri}) |
-                return!(uri)
-              }
-            } |
-            return!(bundle+{*self})
+          *lockerCh) |
+        for (voterLocker <- lockerCh) {
+          insertArbitrary!(bundle+{*voterLocker}, *ch) |
+          for(@lockerURI <- ch; @inboxURI <- inboxUriCh) {
+            trace!({"made voter locker": lockerURI, "inbox": inboxURI}) |
+            return!({"locker": lockerURI, "inbox": inboxURI})
           }
-        },
-        *seed,
-        *lockerCh) |
-      for (voterLocker <- lockerCh) {
-        insertArbitrary!(bundle+{*voterLocker}, *voterUriCh) |
-        voterLocker!("dddd".hexToBytes(), 0,
-          "inboxAddress", Nil, *trace, *inboxUriCh)
+        }
       }
     }
   } |
   // end test / demo
-
 
   new uriCh in {
     insertArbitrary!(bundle+{*Locker}, *uriCh) | for(@uri <- uriCh) {
@@ -202,7 +228,7 @@ in {
           @{sig /\ ByteArray}, @{nonce /\ Int},
           @{method /\ String}, @arg, eject, ret
         ) = {
-          // trace!({"gateway1p": method, "arg": arg}) |
+          trace!({"Locker": label, "method": method, "param": arg }) |
           new okCh in {
             // TODO: replace toyVerify by real verify
             toyVerify!(sig, pubKey, nonce, *nonceCh,
