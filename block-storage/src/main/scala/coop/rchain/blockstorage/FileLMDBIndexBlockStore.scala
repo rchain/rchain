@@ -17,6 +17,7 @@ import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.shared.Resources.withResource
 import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.shared.Log
+import coop.rchain.shared.ByteStringOps._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.Txn.NotReadyException
 import org.lmdbjava._
@@ -32,17 +33,6 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync] private (
     blockMessageRandomAccessFileRef: Ref[F, RandomAccessFile],
     checkpointsRef: Ref[F, List[Checkpoint]]
 ) extends BlockStore[F] {
-  implicit class RichBlockHash(byteVector: BlockHash) {
-
-    def toDirectByteBuffer: ByteBuffer = {
-      val buffer: ByteBuffer = ByteBuffer.allocateDirect(byteVector.size)
-      byteVector.copyTo(buffer)
-      // TODO: get rid of this:
-      buffer.flip()
-      buffer
-    }
-  }
-
   private[this] def withTxn[R](txnThunk: => Txn[ByteBuffer])(f: Txn[ByteBuffer] => R): F[R] =
     Sync[F].bracketCase(Sync[F].delay(txnThunk)) { txn =>
       Sync[F].delay {
