@@ -3,37 +3,121 @@ trace(`rho:io:stderr`), stdout(`rho:io:stdout`),
 insertArbitrary(`rho:registry:insertArbitrary`), lookup(`rho:registry:lookup`)
 in {
   // Test / demo
-  new seed, echo, lockerCh, ackCh in {
-    Locker!("echoTick", "aabb".hexToBytes(),
-      // Note we're _sending_ this contract / for process,
-      // not running it.
-      for(return <- seed) {
-        new tickCh in {
-          tickCh!(0) |
-          contract echo(@"echo", @input, ej, ack) = {
-            for(@tick <- tickCh) {
-              tickCh!(tick + 1) |
-              trace!({"input": input, "tick": tick}) |
-              ack!(Nil)
+  new chairUriCh, voterUriCh, inboxUriCh, votedCh in {
+    // Chair behavior from off-chain
+    for(@chairURI <- chairUriCh; @inboxURI <- inboxUriCh) {
+      trace!({"chairURI": chairURI, "inboxURI": inboxURI}) |
+      new clCh, inlCh, ch in {
+        lookup!(chairURI, *clCh) |
+        lookup!(inboxURI, *inlCh) |
+
+        for(chairLocker <- clCh; inbox <- inlCh) {
+          // trace!({"chairLocker": *chairLocker}) |
+          chairLocker!("cccc".hexToBytes(), 0,
+            "giveRightToVote", Nil, *trace, *inbox) |
+          for(_ <- votedCh) {
+            chairLocker!("cccc".hexToBytes(), 1,
+              "getWinner", Nil, *trace, *ch) | for(@(winner, tally) <- ch) {
+              trace!({"winner": winner, "tally": tally})
             }
           }
-        } |
-        return!(*echo)
-      },
-      *seed,
-      *lockerCh) |
-    // echo is unary (after method name), partial
-    for (lockedEcho <- lockerCh) {
-      lockedEcho!("aabbaabb".hexToBytes(), 0, "echo", 123, *trace, *ackCh) |
-      for(@ack <- ackCh) {
-        trace!({"ack1": ack}) |
-        lockedEcho!("aabbaabb".hexToBytes(), 1, "echo", 456, *trace, *ackCh) |
-        for(@ack <- ackCh) {
-          trace!({"ack2": ack})
         }
+      }
+    } |
+
+    // Voter behavior from off-chain.
+    new vlCh, ch in {
+      for(@voterURI <- voterUriCh) {
+        trace!({"voterURI": voterURI}) |
+        lookup!(voterURI, *vlCh) |
+        for(voterLocker <- vlCh) {
+          // trace!({"voter locker": *voterLocker}) |
+          voterLocker!("dddd".hexToBytes(), 1,
+            "voteFor", "Rick", *trace, *ch) | for (_ <- ch) {
+            votedCh!(Nil)
+          }
+        }
+      }
+    } |
+
+    // Chair on-chain set-up.
+    new seed, lockerCh, lookupCh, ackCh in {
+      // ISSUE: how to manage registry URIs in eval mode?
+      lookup!(`rho:id:sotmfszrhw7frtkd8e4i4gbderxi8aobh9w4zggxydnfuhwbbn1srx`,
+        *lookupCh) | for(Ballot <- lookupCh) {
+
+        Locker!("Chip the Chair's locker", "cc".hexToBytes(),
+
+          // Note we're _sending_ this contract / for process,
+          // not running it.
+          for(return <- seed) {
+            new bCh, self in {
+              Ballot!(Set("Rick", "Morty"), *bCh) | for(chair, winner <- bCh) {
+
+                // These are 0-ary and total, but they fit in
+                // the 1-ary partial gateway
+                contract self(@"giveRightToVote", _, ej, return) = {
+                  chair!("giveRightToVote", *return)
+                } |
+
+                contract self(@"getWinner", _, ej, return) = {
+                  winner!(*return)
+                }
+              } |
+              return!(bundle+{*self})
+            }
+          },
+          *seed,
+          *lockerCh)
+      } |
+
+      for (@chairLocker <- lockerCh) {
+        insertArbitrary!(bundle+{chairLocker}, *chairUriCh)
+      }
+    } |
+
+    new seed, lockerCh in {
+      Locker!("Vick the Voter's locker", "dd".hexToBytes(),
+
+        // Note we're _sending_ this contract / for process,
+        // not running it.
+        for(return <- seed) {
+          new self, rCh, inbox in {
+            insertArbitrary!(bundle+{*inbox}, *rCh) | for(@uri <- rCh) {
+              stdout!({"Vick's inbox registerd at": uri}) |
+
+              contract self(@"voteFor", @choice, ej, ack) = {
+                trace!({"voteFor": choice}) |
+                for(rightToVote <- inbox) {
+                  rightToVote!("vote", choice, *ej, *ack)
+                }
+              } |
+
+              // These two could / should be public,
+              // i.e. callable without a signature.
+              // The caller / owner can expose it.
+              contract self(@"inbox", _, _ej, return) = {
+                return!(bundle+{*inbox})
+              } |
+              contract self(@"inboxAddress", _, _ej, return) = {
+                // trace!({"getting inbox address": uri}) |
+                return!(uri)
+              }
+            } |
+            return!(bundle+{*self})
+          }
+        },
+        *seed,
+        *lockerCh) |
+      for (voterLocker <- lockerCh) {
+        insertArbitrary!(bundle+{*voterLocker}, *voterUriCh) |
+        voterLocker!("dddd".hexToBytes(), 0,
+          "inboxAddress", Nil, *trace, *inboxUriCh)
       }
     }
   } |
+  // end test / demo
+
 
   new uriCh in {
     insertArbitrary!(bundle+{*Locker}, *uriCh) | for(@uri <- uriCh) {
@@ -69,6 +153,7 @@ in {
           }
         }
       } else {
+        // ISSUE: having the locker's nickname in the diagnostic would be nice
         nonceCh!(prevNonce) | eject!({"expected nonce": prevNonce + 1})
       }
     }
