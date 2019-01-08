@@ -56,7 +56,6 @@ trait BlockStoreTest
                   store.get(k).map(_ shouldBe Some(v))
               }
           result <- store.find(_ => true).map(_.size shouldEqual items.size)
-          _      <- store.clear()
         } yield result
       }
     }
@@ -76,7 +75,6 @@ trait BlockStoreTest
                   }
               }
           result <- store.find(_ => true).map(_.size shouldEqual items.size)
-          _      <- store.clear()
         } yield result
       }
     }
@@ -99,7 +97,6 @@ trait BlockStoreTest
                 case (k, _, v2) => store.get(k).map(_ shouldBe Some(v2))
               }
           result <- store.find(_ => true).map(_.size shouldEqual items.size)
-          _      <- store.clear()
         } yield result
       }
     }
