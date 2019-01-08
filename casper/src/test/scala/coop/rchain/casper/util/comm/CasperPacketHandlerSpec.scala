@@ -326,7 +326,7 @@ class CasperPacketHandlerSpec extends WordSpec {
         )
       )
 
-      val casper = NoOpsCasperEffect[Task]().unsafeRunSync
+      implicit val casper = NoOpsCasperEffect[Task]().unsafeRunSync
 
       val refCasper = Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
         new ApprovedBlockReceivedHandler[Task](casper, approvedBlock)
@@ -375,6 +375,25 @@ class CasperPacketHandlerSpec extends WordSpec {
           _ = assert(
             ApprovedBlock
               .parseFrom(head.msg.message.packet.get.content.toByteArray) == approvedBlock
+          )
+        } yield ()
+
+        test.unsafeRunSync
+        transportLayer.reset()
+      }
+
+      "respond to ForkChoiceTipRequest messages" in {
+        val request = ForkChoiceTipRequest()
+        val requestPacket =
+          Packet(transport.ForkChoiceTipRequest.id, request.toByteString)
+
+        val test: Task[Unit] = for {
+          tip  <- MultiParentCasper.forkChoiceTip[Task]
+          _    <- casperPacketHandler.handle(local)(requestPacket)
+          head = transportLayer.requests.head
+          _    = assert(head.peer == local)
+          _ = assert(
+            head.msg.message.packet.get == Packet(transport.BlockMessage.id, tip.toByteString)
           )
         } yield ()
 
