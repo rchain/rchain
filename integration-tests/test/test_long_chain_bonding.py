@@ -51,9 +51,9 @@ def test_long_chain_bonding(command_line_options: CommandLineOptions, docker_cli
             with bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator', keypair=BONDED_VALIDATOR_KEYPAIR) as bonded_validator:
                 with bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator2', keypair=BONDED_VALIDATOR_KEYPAIR2) as bonded_validator2:
                     with bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator3', keypair=BONDED_VALIDATOR_KEYPAIR3) as bonded_validator3:
-                    #     with bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator4', keypair=BONDED_VALIDATOR_KEYPAIR4) as bonded_validator4:
+                        with bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator4', keypair=BONDED_VALIDATOR_KEYPAIR4) as bonded_validator4:
                     #         with bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator5', keypair=BONDED_VALIDATOR_KEYPAIR5) as bonded_validator5:
-                                peer_amount = 3
+                                peer_amount = 4
                                 wait_for_peers_count_at_least(context, bonded_validator, peer_amount)
                                 contract_path = '/opt/docker/examples/hello_world_again.rho'
                                 non_conflicting_contract_path = '/opt/docker/examples/shortfast.rho'
@@ -73,8 +73,8 @@ def test_long_chain_bonding(command_line_options: CommandLineOptions, docker_cli
                                 deploy3 = DeployRandomThread("node3", bonded_validator3, 30)
                                 deploy3.start()
 
-                                # deploy4 = DeployRandomThread("node4", bonded_validator4, 30)
-                                # deploy4.start()
+                                deploy4 = DeployRandomThread("node4", bonded_validator4, 30)
+                                deploy4.start()
 
                                 # deploy5 = DeployRandomThread("node5", bonded_validator5, 30)
                                 # deploy5.start()
