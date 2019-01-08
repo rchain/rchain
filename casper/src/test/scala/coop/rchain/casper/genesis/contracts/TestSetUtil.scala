@@ -46,7 +46,7 @@ object TestSetUtil {
   )(implicit scheduler: Scheduler): Runtime[Task] =
     (for {
       runtime <- Runtime.create[Task, Task.Par](Paths.get("/not/a/path"), -1, InMem, extraServices)
-      _       = Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
+      _       <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
     } yield (runtime)).unsafeRunSync
 
   def evalDeploy(deploy: Deploy, runtime: Runtime[Task])(implicit scheduler: Scheduler): Unit = {
