@@ -349,18 +349,9 @@ object Configuration {
         val influxDbProtocol =
           get(kp(None), _.influxDb.flatMap(_.protocol), DefaultInfluxDbProtocol)
 
-        val infulxDbUsername = get(kp(None), _.influxDb.map(_.user), None)
-        val infulxDbPassword = get(kp(None), _.influxDb.map(_.password), None)
+        val influxDBAuth = get(kp(None), _.influxDb.map(_.authentication), None)
         val influxDBAuthentication =
-          if (infulxDbUsername.isDefined || infulxDbPassword.isDefined)
-            Some(
-              InfluxDBAuthentication(
-                infulxDbUsername.getOrElse("user"),
-                infulxDbPassword.getOrElse("password")
-              )
-            )
-          else None
-
+          influxDBAuth.map(a => InfluxDBAuthentication(a.user, a.password))
         Some(
           InfluxDb(
             influxDbHostname,

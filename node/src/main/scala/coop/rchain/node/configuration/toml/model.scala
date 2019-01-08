@@ -77,6 +77,10 @@ case class InfluxDb(
     port: Option[Int],
     database: Option[String],
     protocol: Option[String],
-    user: Option[String],
-    password: Option[String]
+    authentication: Option[InfluxDbAuthentication]
+)
+
+case class InfluxDbAuthentication(
+    user: String,
+    password: String
 )

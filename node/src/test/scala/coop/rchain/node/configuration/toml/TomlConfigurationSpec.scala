@@ -61,6 +61,8 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
       |port = 14
       |database = "test"
       |protocol = "https"
+      |
+      |[influx-db.authentication]
       |user = "user"
       |password = "password"
       |
@@ -127,8 +129,8 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
     root.influxDb.flatMap(_.port) shouldEqual Some(14)
     root.influxDb.flatMap(_.database) shouldEqual Some("test")
     root.influxDb.flatMap(_.protocol) shouldEqual Some("https")
-    root.influxDb.flatMap(_.user) shouldEqual Some("user")
-    root.influxDb.flatMap(_.password) shouldEqual Some("password")
+    root.influxDb.flatMap(_.authentication.map(_.user)) shouldEqual Some("user")
+    root.influxDb.flatMap(_.authentication.map(_.password)) shouldEqual Some("password")
   }
 
 }
