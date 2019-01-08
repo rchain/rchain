@@ -49,7 +49,7 @@ trait PersistentStoreTester {
       .unsafeRunSync
     implicit val errLog = errorLog
     val reducer         = RholangOnlyDispatcher.create[Task, Task.Par](space)._2
-    reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
+    reducer.setPhlo(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
     try {
       f(TestFixture(space, reducer))
     } finally {
@@ -830,7 +830,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val reducer = RholangOnlyDispatcher
           .create[Task, Task.Par](space, Map("rho:test:foo" -> byteName(42)))
           ._2
-        reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
+        reducer.setPhlo(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
         implicit val env = Env[Par]()
         val nthTask      = reducer.eval(newProc)(env, splitRand)
         val inspectTask = for {
@@ -1907,7 +1907,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       case TestFixture(_, reducer) =>
         implicit val env   = Env.makeEnv[Par]()
         val notEnoughPhlos = Cost(5)
-        reducer.setAvailablePhlos(notEnoughPhlos).runSyncUnsafe(1.second)
+        reducer.setPhlo(notEnoughPhlos).runSyncUnsafe(1.second)
         val splitRand = rand.splitByte(0)
         val receive =
           Receive(
