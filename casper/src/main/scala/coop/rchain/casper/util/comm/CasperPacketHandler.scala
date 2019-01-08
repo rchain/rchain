@@ -387,7 +387,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         _     <- Log[F].info(s"Received ForkChoiceTipRequest from $peer")
         tip   <- MultiParentCasper.forkChoiceTip
         local <- RPConfAsk[F].reader(_.local)
-        msg   = Blob(local, Packet(transport.ForkChoiceTipRequest.id, tip.toByteString))
+        msg   = Blob(local, Packet(transport.BlockMessage.id, tip.toByteString))
         _     <- TransportLayer[F].stream(Seq(peer), msg)
         _     <- Log[F].info(s"Sending Block ${tip.blockHash} to $peer")
       } yield ()
