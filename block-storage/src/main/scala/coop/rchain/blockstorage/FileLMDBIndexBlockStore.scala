@@ -19,11 +19,11 @@ import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.shared.Log
 import coop.rchain.shared.ByteStringOps._
 import org.lmdbjava.DbiFlags.MDB_CREATE
-import org.lmdbjava.Txn.NotReadyException
 import org.lmdbjava._
 
 import scala.collection.JavaConverters._
 import scala.ref.WeakReference
+import scala.util.control.NonFatal
 import scala.util.matching.Regex
 
 class FileLMDBIndexBlockStore[F[_]: Monad: Sync] private (
@@ -41,19 +41,12 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync] private (
         r
       }
     } {
-      case (txn, ExitCase.Completed) => Sync[F].delay(txn.close())
-      case (txn, _) =>
+      case (txn, ExitCase.Error(NonFatal(ex))) =>
         Sync[F].delay {
-          try {
-            txn.abort()
-          } catch {
-            case ex: NotReadyException =>
-              ex.printStackTrace()
-              TxnOps.manuallyAbortTxn(txn)
-            // vide: rchain/rspace/src/main/scala/coop/rchain/rspace/LMDBOps.scala
-          }
+          ex.printStackTrace()
           txn.close()
-        }
+        } *> Sync[F].raiseError(ex)
+      case (txn, _) => Sync[F].delay(txn.close())
     }
 
   private[this] def withWriteTxn(f: Txn[ByteBuffer] => Unit): F[Unit] =
