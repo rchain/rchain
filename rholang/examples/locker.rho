@@ -1,3 +1,49 @@
+/** Locker - attenuate capabilities with digital signatures.
+
+Given a "callback function", that is: a process and an entry point
+name, we can ask the Locker contract to run the process in an
+encapsulated scope and send to the entry point, which returns a seed
+capability. The locker gives back an attenuated capability where only
+messages signed with the given public key are passed on to the seed.
+
+    contract Locker(
+      @{label /\ String},
+      @{pubKey /\ ByteArray},
+      @seedCode, seedEntry,
+      return)
+
+The resulting locker can be published in the registry and hence
+used in dApps with off-chain components.
+
+In the test / demo below, for example, we call:
+
+    voterLocker!(sig, 0,
+      "voteFor", "Rick", *eject, *ack)
+
+The ack / return channel and the 0 nonce are as usual; the eject
+channel allows for partial methods (inspired by the ejector pattern
+from E); in particular, signatures may fail to verify.
+
+Provided the signature verifies, the seed capability is called as:
+
+    seed!("voteFor", "Rick", *eject, *ack)
+
+TODO: work out how seed, arg are packaged for signature. Currently,
+the signature checking algorigthm is a toy: sig == pk ++ pk.
+
+The demo below uses the Locker for two different roles in a voting
+protocol: the chair and a voter. The voter's seed process creates an
+inbox channel and shares a write-only bundle of it with the chair via
+the registry.  The chair sends a right to vote on this channel and the
+voter then excercises the vote.
+*TODO: more than one voter*
+
+The demo is also factored for use by off-chain components that pass
+plain data in and out (with the exception of return channels).
+*TODO: insertArbitrary(*chair, ...)*
+
+*/
+
 new Locker, verify, toyVerify,
 trace(`rho:io:stderr`), stdout(`rho:io:stdout`),
 insertArbitrary(`rho:registry:insertArbitrary`), lookup(`rho:registry:lookup`)
@@ -5,47 +51,56 @@ in {
   // Test / demo
   new chair, voter in {
     new chairUriCh, voterUrisCh, votedCh in {
-      chair!("makeLocker", "Chip the chair", "cc".hexToBytes(),
-        Set("Rick", "Morty"), *chairUriCh) |
-      voter!("makeLocker", "Vick the voter", "dd".hexToBytes(), *voterUrisCh) |
+      chair!("makeLocker", "Chip the chair",
+        "cc".hexToBytes(),     // Chip's (toy) public key
+        Set("Rick", "Morty"),  // ballot proposal names
+        *chairUriCh            // URI - plain data
+      ) |
+      voter!("makeLocker", "Vick the voter",
+        "dd".hexToBytes(),     // Vick's (toy) public keyed
+        *voterUrisCh           // map with two URIs
+      ) |
 
       for(@chairURI <- chairUriCh;
         @{"locker": voterURI, "inbox": inboxURI} <- voterUrisCh) {
         stdout!({"Vick's inbox registerd at": inboxURI}) |
+
         chair!("start", chairURI, inboxURI,
-          "cccc".hexToBytes(), *trace, Nil) |
+          "cccc".hexToBytes(), // toy signature
+          *trace,              // failures get logged
+          Nil                  // no need to synchronize here
+        ) |
         voter!("castVote", voterURI, "dddd".hexToBytes(), "Rick",
           *trace, *votedCh) |
         for(_ <- votedCh) {
-          chair!("finish", chairURI,
-            "cccc".hexToBytes(), *trace, Nil)
+          chair!("finish", chairURI, "cccc".hexToBytes(), *trace, Nil)
         }
       }
     } |
 
 
-    // Chair starts ballot (set up below).
-    // Since args (except return channels) are JSON / RSON data,
-    // this is callable from off-chain*.
-    // *TODO: insertArbitrary(*chair, ...)
-    contract chair(@"start", @chairURI, @voterInboxURI, @sig, eject, ack) = {
+    // Chair starts ballot; i.e. sends voter a right to vote.
+    contract chair(@"start",
+      @chairURI,       // from makeLocker below
+      @voterInboxURI,  // from voter(@"makeLocker", ...) below
+      @sig, eject, ack) = {
       trace!({"chairURI": chairURI, "inboxURI": voterInboxURI}) |
+
       new clCh, inlCh, ch in {
         lookup!(chairURI, *clCh) |
         lookup!(voterInboxURI, *inlCh) |
-
         for(chairLocker <- clCh; inbox <- inlCh) {
           // trace!({"chairLocker": *chairLocker}) |
-          chairLocker!(sig, 0,
-            "giveRightToVote", Nil, *eject, *ch) | for(rightToVote <- ch) {
+          chairLocker!(sig, 0, "giveRightToVote", Nil, *eject, *ch) |
+          for(rightToVote <- ch) {
             inbox!(*rightToVote) |
             ack!(Nil)
           }
         }
       }
     } |
-    // Chair finishes ballot.
-    contract chair(@"finish", @chairURI, @sig, eject, ack) = {
+    // Chair finishes ballot; i.e. announces winner
+    contract chair(@"finish", @chairURI, @sig, eject, return) = {
       new clCh, ch in {
         lookup!(chairURI, *clCh) |
 
@@ -54,13 +109,14 @@ in {
           chairLocker!("cccc".hexToBytes(), 1,
             "getWinner", Nil, *trace, *ch) | for(@(winner, tally) <- ch) {
             trace!({"winner": winner, "tally": tally}) |
-            ack!(Nil)
+            return!(winner)
           }
         }
       }
     } |
 
-    // Voter behavior from off-chain.
+    // Voter casts vote.
+    // note plain (off-chain suitable) data args
     contract voter(@"castVote", @voterURI, @sig, @choice, eject, ack) = {
       new vlCh in {
         lookup!(voterURI, *vlCh) |
@@ -73,16 +129,15 @@ in {
 
     // Make and register chair locker; return URI.
     contract chair(@"makeLocker", @nickname, @pubKey, @choices, return) = {
-      new seed, lockerCh, lookupCh, ackCh in {
+      new seedEntry, lockerCh, lookupCh, ackCh in {
         // ISSUE: how to manage registry URIs in eval mode?
         lookup!(`rho:id:6s5xtg5d78a3qz9sp1nimqefhggznycwjwjyesij3fy9c6au7up9dp`,
           *lookupCh) | for(Ballot <- lookupCh) {
 
           Locker!(nickname, pubKey,
 
-            // Note we're _sending_ this contract / for process,
-            // not running it.
-            for(return <- seed) {
+            // Note we're _sending_ this ballot seed code, not running it.
+            for(return <- seedEntry) {
               new bCh, self in {
                 Ballot!(choices, *bCh) | for(chair, winner <- bCh) {
 
@@ -99,7 +154,7 @@ in {
                 return!(bundle+{*self})
               }
             },
-            *seed,
+            *seedEntry,
             *lockerCh)
         } |
 
@@ -111,12 +166,11 @@ in {
 
     contract voter(@"makeLocker", @nickname, @pubKey, return) = {
       // trace!({"voter MakeLocker": nickname}) |
-      new seed, lockerCh, inboxUriCh, ch in {
+      new seedEntry, lockerCh, inboxUriCh, ch in {
         Locker!(nickname, pubKey,
 
-          // Note we're _sending_ this contract / for process,
-          // not running it.
-          for(return <- seed) {
+          // Note we're _sending_ this voter seed code, not running it.
+          for(return <- seedEntry) {
             new self, rCh, inbox in {
               insertArbitrary!(bundle+{*inbox}, *rCh) |
               for(@uri <- rCh) {
@@ -131,7 +185,7 @@ in {
               return!(bundle+{*self})
             }
           },
-          *seed,
+          *seedEntry,
           *lockerCh) |
         for (voterLocker <- lockerCh) {
           insertArbitrary!(bundle+{*voterLocker}, *ch) |
@@ -155,9 +209,9 @@ in {
   // WARNING: if sig is the wrong size, we get a java.lang.RuntimeException,
   // and our nonceCh is stuck.
   contract verify(
-    @{sig /\ ByteArray},  // ed25519 signature of blakeb256Hash of nextNonce.toByteArray()
-    @{pk /\ ByteArray},
-    @{nonce /\ Int},  // claimed next nonce
+    @{sig /\ ByteArray},  // ed25519 signature of blakeb256Hash of ... TODO
+    @{pk /\ ByteArray},   // public key
+    @{nonce /\ Int},      // claimed next nonce
     nonceCh,              // real nonce storage
     @data,                // data to be signed (along with nonce)
     eject,                // failure path (bad nonce or signature)
@@ -168,6 +222,8 @@ in {
       // trace!({"prevNonce": prevNonce}) |
       if (nonce == (prevNonce + 1)) {
         new result, hashOut in {
+          // ISSUE: how to package nonce, data? tuples are nice,
+          // but they don't map easily to JSON.
           @"blake2b256Hash"!((nonce, data).toByteArray(), *hashOut) |
           for(@hash <- hashOut) {
             // trace!({"hash": hash}) |
