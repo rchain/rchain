@@ -5,6 +5,7 @@ import tempfile
 import logging
 import contextlib
 from typing import (
+    Any,
     List,
     Generator,
 )
@@ -44,7 +45,7 @@ def pytest_addoption(parser: Parser) -> None:
 
 
 @pytest.yield_fixture(scope='session')
-def command_line_options(request) -> Generator[CommandLineOptions, None, None]:
+def command_line_options(request: Any) -> Generator[CommandLineOptions, None, None]:
     startup_timeout = int(request.config.getoption("--startup-timeout"))
     converge_timeout = int(request.config.getoption("--converge-timeout"))
     receive_timeout = int(request.config.getoption("--receive-timeout"))
