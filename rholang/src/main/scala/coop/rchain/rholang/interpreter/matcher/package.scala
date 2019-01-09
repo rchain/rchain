@@ -36,6 +36,12 @@ package object matcher {
   type _error[F[_]]   = MonadError[F, OutOfPhlogistonsError.type]
   type _short[F[_]]   = MonadError[F, Unit] //arises from and corresponds to the OptionT/StreamT in the stack
 
+  // Implicit summoner methods, just like `Monad.apply` on `Monad`'s companion object.
+  def _freeMap[F[_]](implicit ev: _freeMap[F]): _freeMap[F] = ev
+  def _cost[F[_]](implicit ev: _cost[F]): _cost[F]          = ev
+  def _error[F[_]](implicit ev: _error[F]): _error[F]       = ev
+  def _short[F[_]](implicit ev: _short[F]): _short[F]       = ev
+
   private[matcher] def charge[F[_]](
       amount: Cost
   )(implicit cost: _cost[F], error: _error[F]): F[Unit] =
