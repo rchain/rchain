@@ -537,24 +537,17 @@ trait SpatialMatcherInstances {
       pattern.connectiveInstance match {
         case ConnAndBody(ConnectiveBody(ps)) =>
           ps.toList.traverse_(p => spatialMatch(target, p))
-        case ConnOrBody(ConnectiveBody(ps)) => {
-          def firstMatch(target: Par, patterns: Seq[Par]): OptionalFreeMapWithCost[Unit] =
-            patterns match {
-              case Nil => OptionalFreeMapWithCost.empty
-              case p +: rem =>
-                OptionalFreeMapWithCost[Unit]((s: FreeMap) => {
-                  OptionT(StateT((c: Cost) => {
-                    spatialMatch(target, p).run(s).value.run(c).flatMap {
-                      case (cost, None) =>
-                        firstMatch(target, rem).run(s).value.run(cost)
-                      case (cost, Some((_, _: Unit))) =>
-                        Right((cost, Some((s, Unit))))
-                    }
-                  }))
-                })
-            }
-          firstMatch(target, ps)
-        }
+        case ConnOrBody(ConnectiveBody(ps)) =>
+          val freeMap = _freeMap[NonDetFreeMapWithCost]
+          val allMatches = for {
+            p       <- NonDetFreeMapWithCost.fromStream(ps.toStream)
+            matches <- freeMap.get
+            _       <- nonDetMatch(target, p)
+            _       <- freeMap.set(matches)
+          } yield ()
+          val firstMatch = allMatches.toDet()
+          firstMatch
+
         case ConnNotBody(p) =>
           spatialMatch(target, p).attemptOpt.flatMap {
             case None    => ().pure[OptionalFreeMapWithCost]
