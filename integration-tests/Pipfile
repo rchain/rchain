@@ -10,5 +10,6 @@ pytest-json = "*"
 pytest-pylint = "*"
 typing-extensions = "*"
 dataclasses = "*"
+mypy = "*"
 
 [dev-packages]
