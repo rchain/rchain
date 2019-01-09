@@ -903,6 +903,85 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
+  it should "allow bonding in an existing network" in effectTest {
+    val deployDatasFs = Vector(
+      "@2!(2)",
+      "@1!(1)",
+      "@3!(3)"
+    ).zipWithIndex
+      .map(
+        d =>
+          () =>
+            ProtoUtil.sourceDeploy(d._1, System.currentTimeMillis() + d._2, accounting.MAX_VALUE)
+      )
+    def deploy(node: HashSetCasperTestNode[Effect], dd: DeployData): Effect[(BlockMessage, BlockStatus)] =
+      for {
+        createBlockResult1    <- node.casperEff.deploy(dd) *> node.casperEff.createBlock
+        Created(signedBlock1) = createBlockResult1
+
+        status <- node.casperEff.addBlock(signedBlock1, ignoreDoppelgangerCheck[Effect])
+      } yield (signedBlock1, status)
+
+    def stepSplit(nodes: Seq[HashSetCasperTestNode[Effect]]) =
+      for {
+        _ <- deploy(nodes(0), deployDatasFs(0).apply())
+        _ <- deploy(nodes(1), deployDatasFs(1).apply())
+        _ <- deploy(nodes(2), deployDatasFs(2).apply())
+
+        _ <- nodes(0).receive()
+        _ <- nodes(1).receive()
+        _ <- nodes(2).receive()
+      } yield ()
+
+    def propagate(nodes: Seq[HashSetCasperTestNode[Effect]]) =
+      for {
+        _ <- nodes(0).receive()
+        _ <- nodes(1).receive()
+        _ <- nodes(2).receive()
+      } yield ()
+
+    def bond(node: HashSetCasperTestNode[Effect]) = {
+      import node.casperEff
+
+      implicit val runtimeManager  = node.runtimeManager
+      implicit val abstractContext = node.abF
+      val (sk, pk)                 = Ed25519.newKeyPair
+      val pkStr                    = Base16.encode(pk)
+      val amount                   = 314L
+      val forwardCode              = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
+      for {
+        bondingCode <- BondingUtil.faucetBondDeploy[Effect](amount, "ed25519", pkStr, sk)
+        forwardDeploy = ProtoUtil.sourceDeploy(
+          forwardCode,
+          System.currentTimeMillis(),
+          accounting.MAX_VALUE
+        )
+        bondingDeploy = ProtoUtil.sourceDeploy(
+          bondingCode,
+          forwardDeploy.timestamp + 1,
+          accounting.MAX_VALUE
+        )
+        fr <- deploy(node, forwardDeploy)
+        br <- deploy(node, bondingDeploy)
+        oldBonds           = fr._1.getBody.getState.bonds
+        newBonds           = br._1.getBody.getState.bonds
+        _                  = fr._2 shouldBe Valid
+        _                  = br._2 shouldBe Valid
+        result             = (oldBonds.size + 1) shouldBe newBonds.size
+      } yield ()
+    }
+
+    for {
+      nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
+      _     <- stepSplit(nodes)
+      _     <- stepSplit(nodes)
+      _     <- bond(nodes(0))
+      _     <- propagate(nodes)
+      _     <- stepSplit(nodes)
+      _     = nodes.foreach(_.tearDown())
+    } yield ()
+  }
+
   it should "not fail if the forkchoice changes after a bonding event" in effectTest {
     val localValidators = validatorKeys.take(3)
     val localBonds      = localValidators.map(Ed25519.toPublic).zip(List(10L, 30L, 5000L)).toMap

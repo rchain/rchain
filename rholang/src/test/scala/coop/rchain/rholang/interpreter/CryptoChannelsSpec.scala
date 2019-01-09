@@ -46,7 +46,7 @@ class CryptoChannelsSpec
   val serialize: Par => Array[Byte]                    = Serialize[Par].encode(_).toArray
   val byteArrayToByteString: Array[Byte] => ByteString = ba => ByteString.copyFrom(ba)
   val byteStringToExpr: ByteString => Expr             = bs => Expr(GByteArray(bs))
-  val byteArrayToExpr: Array[Byte] => Expr = byteArrayToByteString andThen byteStringToExpr
+  val byteArrayToExpr: Array[Byte] => Expr             = byteArrayToByteString andThen byteStringToExpr
   val parToByteString: Par => ByteString               = serialize andThen (ba => ByteString.copyFrom(ba))
   val parToExpr: Par => Expr                           = parToByteString andThen byteStringToExpr
 
