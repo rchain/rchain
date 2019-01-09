@@ -218,8 +218,7 @@ class RuntimeManager[F[_]: Concurrent] private (
               (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(
                 deploy.raw.get
               )
-              _ <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
-
+              _         <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
               _         <- runtime.replaySpace.rig(hash, log.toList)
               injResult <- injAttempt(deploy, runtime.replayReducer, runtime.errorLog)
               //TODO: compare replay deploy cost to given deploy cost
