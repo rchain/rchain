@@ -100,7 +100,6 @@
 * access `nodeA` http endpoint under `/discovered-peers` to list `nodeB` and `nodeC` in JSON format
 
 ## Network Launch
-### As a platform stakeholder, I want a Coop-governed, community-driven, and independently verifiable validation of the genesis block used to launch a network
 ### As a platform stakeholder, I want a Coop-goverend, community-driven, and independently verifiable successful genesis ceremony
 #### A successful genesis ceremony 
 ##### test: test/test_genesis_ceremony.py::test_successful_genesis_ceremony 
@@ -237,11 +236,13 @@
 #### Bonding a validator
 ##### test: test/test_heterogenous_validators.py::test_heterogenous_validators
 ##### steps:
+### As a Node Validator, I want to be able to remove and retrieve my stake to the network.
+#### Unbonding a validator
 
 * TBD
 
 ## Validator rewards
-### As a RChain validator, I want to earn by validating on the RChain network.
+### As a RChain validator, I want to earn rewards by validating on the RChain network.
 ### As a RChain validator, I want to receive the rewards I earn by validating on the RChain network.
 ### As a RChain validator, I want to retrieve the rewards I earn by validating on the RChain network.
 
