@@ -97,6 +97,7 @@ object Graphz {
       subgraph: Boolean = false,
       comment: Option[String] = None,
       label: Option[String] = None,
+      splines: Option[String] = None,
       rank: Option[GraphRank] = None,
       rankdir: Option[GraphRankDir] = None,
       style: Option[String] = None,
@@ -121,6 +122,7 @@ object Graphz {
       _ <- insert(rank.map(_.show), r => s"rank=$r")
       _ <- insert(rankdir.map(_.show), r => s"rankdir=$r")
       _ <- insert(attrMkStr(node), n => s"node $n")
+      _ <- insert(splines.map(_.show), s => s"splines=$s")
     } yield new Graphz[F](gtype, t)
   }
 
