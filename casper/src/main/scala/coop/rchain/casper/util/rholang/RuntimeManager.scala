@@ -16,10 +16,9 @@ import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{accounting, ChargingReducer, ErrorLog, Runtime}
 import coop.rchain.rspace.internal.Datum
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
-import monix.eval.Task
-import monix.execution.Scheduler
 
 import scala.collection.immutable
+import scala.concurrent.ExecutionContext
 
 class RuntimeManager[F[_]: Concurrent] private (
     val emptyStateHash: ByteString,
@@ -280,6 +279,9 @@ class RuntimeManager[F[_]: Concurrent] private (
 
 object RuntimeManager {
   type StateHash = ByteString
+
+  import monix.eval.Task
+  import monix.execution.Scheduler
   import coop.rchain.catscontrib.TaskContrib._
 
   def fromRuntime(active: Runtime[Task])(implicit scheduler: Scheduler): RuntimeManager[Task] =
@@ -287,7 +289,7 @@ object RuntimeManager {
 
   def fromRuntime[F[_]: Concurrent: Sync](
       active: Runtime[F]
-  )(implicit scheduler: Scheduler): F[RuntimeManager[F]] =
+  )(implicit scheduler: ExecutionContext): F[RuntimeManager[F]] =
     (for {
       _                <- active.space.clear()
       _                <- active.replaySpace.clear()
