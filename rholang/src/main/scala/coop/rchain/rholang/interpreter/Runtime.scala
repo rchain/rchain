@@ -24,8 +24,6 @@ import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.pure.PureRSpace
 import coop.rchain.shared.StoreType
 import coop.rchain.shared.StoreType._
-import monix.eval.Task
-import monix.execution.Scheduler
 
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
