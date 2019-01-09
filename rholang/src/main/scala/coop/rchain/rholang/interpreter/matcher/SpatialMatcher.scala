@@ -613,7 +613,7 @@ trait SpatialMatcherInstances {
       if (!pattern.connectiveUsed) {
         val cost = equalityCheckCost(pattern, target)
         if (pattern == target)
-          NonDetFreeMapWithCost.pure(()).charge(cost)
+          ().pure[NonDetFreeMapWithCost].charge(cost)
         else {
           NonDetFreeMapWithCost.empty[Unit].charge(cost)
         }

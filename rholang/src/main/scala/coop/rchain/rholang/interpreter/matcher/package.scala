@@ -113,9 +113,6 @@ package object matcher {
     def empty[A]: NonDetFreeMapWithCost[A] =
       StateT.liftF(StreamT.empty)
 
-    def pure[A](value: A): NonDetFreeMapWithCost[A] =
-      StateT.pure[StreamWithCost, FreeMap, A](value)
-
     def fromStream[A](stream: Stream[A]): NonDetFreeMapWithCost[A] =
       StateT.liftF(StreamT.fromStream(StateT.pure(stream)))
   }
