@@ -174,7 +174,7 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
             for {
               _              <- ToAbstractContext[F].fromTask(runtime.space.reset(hash))
               availablePhlos = Cost(deploy.raw.map(_.phloLimit).get)
-              _              <- ToAbstractContext[F].fromTask(runtime.reducer.setAvailablePhlos(availablePhlos))
+              _              <- ToAbstractContext[F].fromTask(runtime.reducer.setPhlo(availablePhlos))
               (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(
                 deploy.raw.get
               )
@@ -219,7 +219,7 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
             val availablePhlos = Cost(deploy.raw.map(_.phloLimit).get)
             for {
               _ <- ToAbstractContext[F].fromTask(
-                    runtime.replayReducer.setAvailablePhlos(availablePhlos)
+                    runtime.replayReducer.setPhlo(availablePhlos)
                   )
               (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(
                 deploy.raw.get
@@ -277,7 +277,7 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
     ToAbstractContext[F].fromTask(
       for {
         result    <- reducer.inj(deploy.term.get).attempt
-        phlos     <- reducer.getAvailablePhlos()
+        phlos     <- reducer.phlo
         oldErrors <- errorLog.readAndClearErrorVector()
         newErrors = result.swap.toSeq.toVector
         allErrors = oldErrors |+| newErrors

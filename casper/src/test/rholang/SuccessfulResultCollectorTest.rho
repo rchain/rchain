@@ -1,0 +1,8 @@
+//scalapackage coop.rchain.rholang
+
+new assert(`rho:test:assert`), assertEquals(`rho:test:assertEquals`)  in {
+
+  assert!("true forever", true) |
+
+  assertEquals!("basic arithmetic", 1, "==", 1)
+}

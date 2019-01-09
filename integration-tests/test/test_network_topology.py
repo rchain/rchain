@@ -1,18 +1,25 @@
 import os
 import shutil
 import contextlib
+from random import Random
 from typing import (
-    TYPE_CHECKING,
+    List,
     Generator,
 )
 
+from docker.client import DockerClient
 
 from . import conftest
-from .common import TestingContext, Network
-from .rnode import (
-    docker_network_with_started_bootstrap,
-    create_peer_nodes,
+from .common import (
+    TestingContext,
+    CommandLineOptions,
 )
+from .rnode import (
+    Node,
+    create_peer_nodes,
+    docker_network_with_started_bootstrap,
+)
+from .network import Network
 from .common import random_string
 from .wait import (
     wait_for_block_contains,
@@ -22,12 +29,9 @@ from .wait import (
     wait_for_approved_block_received,
 )
 
-if TYPE_CHECKING:
-    from .rnode import Node
-
 
 @contextlib.contextmanager
-def start_network(*, context: TestingContext, bootstrap: 'Node', allowed_peers=None) -> Generator[Network, None, None]:
+def start_network(*, context: TestingContext, bootstrap: Node, allowed_peers: List[str] = None) -> Generator[Network, None, None]:
     peers = create_peer_nodes(
         docker_client=context.docker,
         bootstrap=bootstrap,
@@ -65,7 +69,7 @@ def complete_network(context: TestingContext) -> Generator[Network, None, None]:
             yield network
 
 
-def deploy_block(node, expected_string, contract_name):
+def deploy_block(node: Node, expected_string: str, contract_name: str) -> str:
     local_contract_file_path = os.path.join('resources', contract_name)
     shutil.copyfile(local_contract_file_path, f"{node.local_deploy_dir}/{contract_name}")
     container_contract_file_path = '{}/{}'.format(node.remote_deploy_dir, contract_name)
@@ -80,16 +84,16 @@ def deploy_block(node, expected_string, contract_name):
     return block_hash
 
 
-def make_expected_string(node, random_token):
+def make_expected_string(node: Node, random_token: str) -> str:
     return "<{name}:{random_token}>".format(name=node.container.name, random_token=random_token)
 
 
-def test_casper_propose_and_deploy(command_line_options: 'CommandLineOptions', docker_client: 'DockerClient'):
+def test_casper_propose_and_deploy(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     """Deploy a contract and then checks if all the nodes have received the block
     containing the contract.
     """
 
-    with conftest.testing_context(command_line_options, docker_client) as context:
+    with conftest.testing_context(command_line_options, random_generator, docker_client) as context:
         with complete_network(context) as network:
             token_size = 20
             contract_name = 'contract.rho'

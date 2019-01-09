@@ -20,6 +20,7 @@ import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.implicits._
 import coop.rchain.shared._
+import coop.rchain.shared.PathOps._
 
 import io.grpc._
 import io.grpc.netty._
@@ -193,26 +194,6 @@ class TcpTransportLayer(
                })
     } yield result
 
-  private def deleteFile(path: Path): Task[Unit] = {
-    def delete(): Task[Unit] =
-      for {
-        result <- Task.delay(path.toFile.delete).attempt
-        _ <- result match {
-              case Left(t) =>
-                log.error(s"Can't delete file $path: ${t.getMessage}", t)
-              case Right(false) =>
-                log.warn(s"Can't delete file $path.")
-              case Right(true) =>
-                log.debug(s"Deleted file $path")
-            }
-      } yield ()
-
-    for {
-      exists <- Task.delay(path.toFile.exists)
-      _      <- exists.fold(delete(), log.warn(s"Can't delete file $path. File not found."))
-    } yield ()
-  }
-
   private def innerBroadcast(
       peers: Seq[PeerNode],
       msg: Protocol,
@@ -245,15 +226,15 @@ class TcpTransportLayer(
                   log.error(s"Error while streaming packet, error: $error") *> delay(
                     handle(retryCount - 1)
                   )
-                case Right(_) => deleteFile(toStream.path)
+                case Right(_) => toStream.path.delete[Task]()
               }
           case Left(error) =>
             log.error(s"Error while streaming packet, error: $error") >>= kp(
-              deleteFile(toStream.path)
+              toStream.path.delete[Task]()
             )
         } else
         log.debug(s"Giving up on streaming packet ${toStream.path} to ${toStream.peerNode}") >>= kp(
-          deleteFile(toStream.path)
+          toStream.path.delete[Task]()
         )
 
     handle(3)

@@ -66,7 +66,7 @@ trait RegistryTester extends PersistentStoreTester {
         lazy val (dispatcher @ _, reducer, registry) =
           RholangAndScalaDispatcher
             .create(space, dispatchTable, Registry.testingUrnMap)
-        reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
+        reducer.setPhlo(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
         registry.testInstall().runSyncUnsafe(1.second)
         f(reducer, space)
     }

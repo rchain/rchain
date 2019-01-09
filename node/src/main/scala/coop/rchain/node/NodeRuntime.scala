@@ -39,6 +39,7 @@ import coop.rchain.node.diagnostics._
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
+import coop.rchain.shared.PathOps._
 
 import com.typesafe.config.ConfigFactory
 import kamon._
@@ -131,13 +132,26 @@ class NodeRuntime private[node] (
                           .toEffect
 
       _ <- Task.delay {
-            val influxdbConf = conf.kamon.influxDb
+            val influxdb = conf.kamon.influxDb
               .map { i =>
+                val authentication = i.authentication
+                  .map { a =>
+                    s"""
+                    |    authentication {
+                    |      user = "${a.user}"
+                    |      password = "${a.password}"
+                    |    }
+                    |""".stripMargin
+                  }
+                  .getOrElse("")
+
                 s"""
                 |  influxdb {
                 |    hostname = "${i.hostname}"
                 |    port = ${i.port}
                 |    database = "${i.database}"
+                |    protocol = "${i.protocol}"
+                |    $authentication
                 |  }
                 |""".stripMargin
               }
@@ -158,7 +172,7 @@ class NodeRuntime private[node] (
                |      sigar-native-folder = ${conf.server.dataDir.resolve("native")}
                |    }
                |  }
-               |  $influxdbConf
+               |  $influxdb
                |}
                |""".stripMargin
             Kamon.reconfigure(ConfigFactory.parseString(kamonConf).withFallback(Kamon.config()))
@@ -348,12 +362,14 @@ class NodeRuntime private[node] (
     multiParentCasperRef <- MultiParentCasperRef.of[Effect]
     lab                  <- LastApprovedBlock.of[Task].toEffect
     labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
+    commTmpFolder        = conf.server.dataDir.resolve("tmp").resolve("comm")
+    _                    <- commTmpFolder.delete[Task]().toEffect
     transport = effects.tcpTransportLayer(
       port,
       conf.tls.certificate,
       conf.tls.key,
       conf.server.maxMessageSize,
-      conf.server.dataDir.resolve("tmp").resolve("comm")
+      commTmpFolder
     )(grpcScheduler, log, metrics, tcpConnections)
     kademliaRPC = effects.kademliaRPC(kademliaPort, defaultTimeout)(
       grpcScheduler,

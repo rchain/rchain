@@ -75,5 +75,12 @@ case class Kamon(
 case class InfluxDb(
     hostname: Option[String],
     port: Option[Int],
-    database: Option[String]
+    database: Option[String],
+    protocol: Option[String],
+    authentication: Option[InfluxDbAuthentication]
+)
+
+case class InfluxDbAuthentication(
+    user: String,
+    password: String
 )

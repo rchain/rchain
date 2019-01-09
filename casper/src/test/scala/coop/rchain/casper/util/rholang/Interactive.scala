@@ -94,6 +94,6 @@ object Interactive {
   def apply(): Interactive = {
     implicit val scheduler = Scheduler.io("rhoang-interpreter")
 
-    new Interactive(TestSetUtil.runtime)
+    new Interactive(TestSetUtil.runtime())
   }
 }

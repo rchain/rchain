@@ -1,7 +1,11 @@
 package coop.rchain.shared
 
+import java.nio.file._
 import java.nio.file.attribute.BasicFileAttributes
-import java.nio.file.{FileVisitResult, Files, Path, SimpleFileVisitor}
+
+import scala.util.Left
+
+import cats.effect.Sync
 
 object PathOps {
 
@@ -38,4 +42,49 @@ object PathOps {
         FileVisitResult.CONTINUE
       }
     }
+
+  implicit class PathDelete(path: Path) {
+    def delete[F[_]: Sync: Log]()(implicit logSource: LogSource): F[Unit] = {
+      import java.io.File
+      import java.util.Comparator
+
+      import scala.collection.JavaConverters._
+
+      import cats.implicits._
+
+      def deleteFile(file: File): F[Unit] =
+        for {
+          deleted <- Sync[F].delay(file.delete)
+          _ <- if (deleted) Log[F].info(s"Deleted file ${file.getAbsolutePath}")
+              else Log[F].warn(s"Can't delete file ${file.getAbsolutePath}")
+        } yield ()
+
+      def getFiles: F[List[Path]] =
+        Sync[F].delay(
+          Files
+            .walk(path)
+            .sorted(Comparator.reverseOrder())
+            .iterator()
+            .asScala
+            .toList
+        )
+
+      def delete0(): F[Unit] =
+        for {
+          files <- getFiles
+          _     <- files.traverse(p => deleteFile(p.toFile))
+        } yield ()
+
+      for {
+        result <- delete0().attempt
+        _ <- result match {
+              case Left(_: NoSuchFileException) =>
+                Log[F].warn(s"Can't delete file or directory $path: No such file")
+              case Left(t) =>
+                Log[F].error(s"Can't delete file or directory $path: ${t.getMessage}", t)
+              case _ => ().pure[F]
+            }
+      } yield ()
+    }
+  }
 }
