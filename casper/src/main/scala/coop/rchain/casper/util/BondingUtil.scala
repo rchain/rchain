@@ -1,6 +1,7 @@
 package coop.rchain.casper.util
 
-import cats.effect.{Concurrent, Resource, Sync}
+import cats._
+import cats.effect._
 import cats.implicits._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -10,12 +11,11 @@ import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.rholang.interpreter.{accounting, Runtime}
 import coop.rchain.shared.PathOps.RichPath
+import coop.rchain.shared.StoreType
 import java.io.PrintWriter
 import java.nio.file.{Files, Path}
 
-import coop.rchain.catscontrib.ToAbstractContext
-import monix.eval.Task
-import monix.execution.Scheduler
+import scala.concurrent.ExecutionContext
 
 object BondingUtil {
   def bondingForwarderAddress(ethAddress: String): String = s"${ethAddress}_bondingForwarder"
@@ -35,22 +35,22 @@ object BondingUtil {
        |  }
        |}""".stripMargin
 
-  def unlockDeploy[F[_]: Concurrent: ToAbstractContext](
+  def unlockDeploy[F[_]: Concurrent](
       ethAddress: String,
       pubKey: String,
       secKey: String
   )(
-      implicit runtimeManager: RuntimeManager[Task]
+      implicit runtimeManager: RuntimeManager[F]
   ): F[String] =
     preWalletUnlockDeploy(ethAddress, pubKey, Base16.decode(secKey), s"${ethAddress}_unlockOut")
 
-  def issuanceBondDeploy[F[_]: Concurrent: ToAbstractContext](
+  def issuanceBondDeploy[F[_]: Concurrent](
       amount: Long,
       ethAddress: String,
       pubKey: String,
       secKey: String
   )(
-      implicit runtimeManager: RuntimeManager[Task]
+      implicit runtimeManager: RuntimeManager[F]
   ): F[String] =
     issuanceWalletTransferDeploy(
       0, //nonce
@@ -61,12 +61,12 @@ object BondingUtil {
       Base16.decode(secKey)
     )
 
-  def preWalletUnlockDeploy[F[_]: Concurrent: ToAbstractContext](
+  def preWalletUnlockDeploy[F[_]: Concurrent](
       ethAddress: String,
       pubKey: String,
       secKey: Array[Byte],
       statusOut: String
-  )(implicit runtimeManager: RuntimeManager[Task]): F[String] = {
+  )(implicit runtimeManager: RuntimeManager[F]): F[String] = {
     require(Base16.encode(Keccak256.hash(Base16.decode(pubKey)).drop(12)) == ethAddress.drop(2))
     val unlockSigDataTerm = deployDataToDeploy(
       sourceDeploy(
@@ -76,10 +76,9 @@ object BondingUtil {
       )
     )
     for {
-      capturedResults <- ToAbstractContext[F].fromTask(
-                          runtimeManager
-                            .captureResults(runtimeManager.emptyStateHash, unlockSigDataTerm)
-                        )
+      capturedResults <- runtimeManager
+                          .captureResults(runtimeManager.emptyStateHash, unlockSigDataTerm)
+
       sigBytes      = capturedResults.head.exprs.head.getGByteArray.toByteArray
       unlockSigData = Keccak256.hash(sigBytes)
       unlockSig     = Secp256k1.sign(unlockSigData, secKey)
@@ -93,11 +92,11 @@ object BondingUtil {
            |}""".stripMargin
   }
 
-  def walletTransferSigData[F[_]: ToAbstractContext: Concurrent](
+  def walletTransferSigData[F[_]: Concurrent](
       nonce: Int,
       amount: Long,
       destination: String
-  )(implicit runtimeManager: RuntimeManager[Task]): F[Array[Byte]] = {
+  )(implicit runtimeManager: RuntimeManager[F]): F[Array[Byte]] = {
     val transferSigDataTerm = deployDataToDeploy(
       sourceDeploy(
         s""" @"__SCALA__"!([$nonce, $amount, "$destination"].toByteArray())""",
@@ -107,22 +106,21 @@ object BondingUtil {
     )
 
     for {
-      capturedResults <- ToAbstractContext[F].fromTask(
-                          runtimeManager
-                            .captureResults(runtimeManager.emptyStateHash, transferSigDataTerm)
-                        )
+      capturedResults <- runtimeManager
+                          .captureResults(runtimeManager.emptyStateHash, transferSigDataTerm)
+
       sigBytes = capturedResults.head.exprs.head.getGByteArray.toByteArray
     } yield Blake2b256.hash(sigBytes)
   }
 
-  def issuanceWalletTransferDeploy[F[_]: Concurrent: ToAbstractContext](
+  def issuanceWalletTransferDeploy[F[_]: Concurrent](
       nonce: Int,
       amount: Long,
       destination: String,
       transferStatusOut: String,
       pubKey: String,
       secKey: Array[Byte]
-  )(implicit runtimeManager: RuntimeManager[Task]): F[String] =
+  )(implicit runtimeManager: RuntimeManager[F]): F[String] =
     for {
       transferSigData <- walletTransferSigData[F](nonce, amount, destination)
       transferSig     = Secp256k1.sign(transferSigData, secKey)
@@ -136,12 +134,12 @@ object BondingUtil {
                |  }
                |}""".stripMargin
 
-  def faucetBondDeploy[F[_]: Concurrent: ToAbstractContext](
+  def faucetBondDeploy[F[_]: Concurrent](
       amount: Long,
       sigAlgorithm: String,
       pubKey: String,
       secKey: Array[Byte]
-  )(implicit runtimeManager: RuntimeManager[Task]): F[String] =
+  )(implicit runtimeManager: RuntimeManager[F]): F[String] =
     for {
       sigFunc <- sigAlgorithm match {
                   case "ed25519"   => ((d: Array[Byte]) => Ed25519.sign(d, secKey)).pure[F]
@@ -182,34 +180,36 @@ object BondingUtil {
       runtimeDir => Sync[F].delay { runtimeDir.recursivelyDelete() }
     )
 
-  def makeRuntimeResource[F[_]: Sync](
+  def makeRuntimeResource[F[_]: Sync: ContextShift, M[_]](
       runtimeDirResource: Resource[F, Path]
-  )(implicit scheduler: Scheduler): Resource[F, Runtime[Task]] =
+  )(implicit P: Parallel[F, M], scheduler: ExecutionContext): Resource[F, Runtime[F]] =
     runtimeDirResource.flatMap(
       runtimeDir =>
         Resource
-          .make(Sync[F].delay { Runtime.create(runtimeDir, 1024L * 1024 * 1024) })(
-            runtime => Sync[F].delay { runtime.close().unsafeRunSync }
+          .make(
+            Runtime.create[F, M](runtimeDir, 1024L * 1024 * 1024, StoreType.LMDB)
+          )(
+            runtime => runtime.close()
           )
     )
 
-  def makeRuntimeManagerResource[F[_]: Sync](
-      runtimeResource: Resource[F, Runtime[Task]]
-  )(implicit scheduler: Scheduler): Resource[F, RuntimeManager[Task]] =
+  def makeRuntimeManagerResource[F[_]: Sync: Concurrent](
+      runtimeResource: Resource[F, Runtime[F]]
+  )(implicit scheduler: ExecutionContext): Resource[F, RuntimeManager[F]] =
     runtimeResource.flatMap(
       activeRuntime =>
-        Resource.make(RuntimeManager.fromRuntime(activeRuntime).pure[F])(_ => Sync[F].unit)
+        Resource.make(RuntimeManager.fromRuntime[F](activeRuntime))(_ => Sync[F].unit)
     )
 
-  def writeIssuanceBasedRhoFiles[F[_]: Concurrent: ToAbstractContext](
+  def writeIssuanceBasedRhoFiles[F[_]: Concurrent: ContextShift, M[_]](
       bondKey: String,
       ethAddress: String,
       amount: Long,
       secKey: String,
       pubKey: String
-  )(implicit scheduler: Scheduler): F[Unit] = {
+  )(implicit P: Parallel[F, M], scheduler: ExecutionContext): F[Unit] = {
     val runtimeDirResource     = makeRuntimeDir[F]
-    val runtimeResource        = makeRuntimeResource[F](runtimeDirResource)
+    val runtimeResource        = makeRuntimeResource[F, M](runtimeDirResource)
     val runtimeManagerResource = makeRuntimeManagerResource[F](runtimeResource)
     runtimeManagerResource.use(
       implicit runtimeManager =>
@@ -224,14 +224,14 @@ object BondingUtil {
     )
   }
 
-  def writeFaucetBasedRhoFiles[F[_]: Concurrent: ToAbstractContext](
+  def writeFaucetBasedRhoFiles[F[_]: Concurrent: ContextShift, M[_]](
       amount: Long,
       sigAlgorithm: String,
       secKey: String,
       pubKey: String
-  )(implicit scheduler: Scheduler): F[Unit] = {
+  )(implicit P: Parallel[F, M], scheduler: ExecutionContext): F[Unit] = {
     val runtimeDirResource     = makeRuntimeDir[F]
-    val runtimeResource        = makeRuntimeResource[F](runtimeDirResource)
+    val runtimeResource        = makeRuntimeResource[F, M](runtimeDirResource)
     val runtimeManagerResource = makeRuntimeManagerResource[F](runtimeResource)
     runtimeManagerResource.use(
       implicit runtimeManager =>

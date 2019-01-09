@@ -17,6 +17,7 @@ import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.shared.PathOps.RichPath
+import coop.rchain.shared.StoreType
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 import java.nio.file.Path
@@ -258,16 +259,16 @@ object GenesisTest {
       body: (Runtime[Task], Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
   ): Task[Unit] = {
     val storePath = storageLocation
-    val runtime   = Runtime.create(storePath, storageSize)
     val gp        = genesisPath
     val log       = new LogStub[Task]
     val time      = new LogicalTime[Task]
 
     for {
-      result <- body(runtime, genesisPath, log, time)
-      _      <- runtime.close()
-      _      <- Sync[Task].delay { storePath.recursivelyDelete() }
-      _      <- Sync[Task].delay { gp.recursivelyDelete() }
+      runtime <- Runtime.create[Task, Task.Par](storePath, storageSize, StoreType.LMDB)
+      result  <- body(runtime, genesisPath, log, time)
+      _       <- runtime.close()
+      _       <- Sync[Task].delay { storePath.recursivelyDelete() }
+      _       <- Sync[Task].delay { gp.recursivelyDelete() }
     } yield result
   }
 
