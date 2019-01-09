@@ -145,6 +145,7 @@ object GraphzGenerator {
       name,
       DiGraph,
       rankdir = Some(BT),
+      splines = Some("false"),
       node = Map("width" -> "0", "height" -> "0", "margin" -> "0.03", "fontsize" -> "8")
     )
 
