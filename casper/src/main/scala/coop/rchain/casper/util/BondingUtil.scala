@@ -186,10 +186,10 @@ object BondingUtil {
     runtimeDirResource.flatMap(
       runtimeDir =>
         Resource
-          .make(Sync[F].suspend {
+          .make(
             Runtime.create[F, M](runtimeDir, 1024L * 1024 * 1024, StoreType.LMDB)
-          })(
-            runtime => Sync[F].suspend { runtime.close() }
+          )(
+            runtime => runtime.close()
           )
     )
 
