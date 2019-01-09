@@ -38,8 +38,9 @@ class InterpreterUtilTest
     with BlockDagStorageFixture {
   val storageSize      = 1024L * 1024
   val storageDirectory = Files.createTempDirectory("casper-interp-util-test")
-  val activeRuntime    = Runtime.create(storageDirectory, storageSize, StoreType.LMDB)
-  val runtimeManager   = RuntimeManager.fromRuntime(activeRuntime)
+  val activeRuntime =
+    Runtime.create[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB).unsafeRunSync
+  val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
 
   implicit val logEff = new LogStub[Task]
 

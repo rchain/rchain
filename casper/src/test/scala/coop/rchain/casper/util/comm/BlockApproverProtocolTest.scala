@@ -7,12 +7,14 @@ import coop.rchain.casper.helper.{BlockDagStorageTestFixture, HashSetCasperTestN
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Capture._
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.transport
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.shared.StoreType
+import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -79,8 +81,9 @@ object BlockApproverProtocolTest {
   ): Effect[(BlockApproverProtocol, HashSetCasperTestNode[Effect])] = {
     import monix.execution.Scheduler.Implicits.global
 
-    val runtimeDir     = BlockDagStorageTestFixture.blockStorageDir
-    val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024, StoreType.LMDB)
+    val runtimeDir = BlockDagStorageTestFixture.blockStorageDir
+    val activeRuntime =
+      Runtime.create[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB).unsafeRunSync
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
 
     val deployTimestamp = 1L

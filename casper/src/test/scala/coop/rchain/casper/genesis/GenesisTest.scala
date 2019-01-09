@@ -259,16 +259,16 @@ object GenesisTest {
       body: (Runtime[Task], Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
   ): Task[Unit] = {
     val storePath = storageLocation
-    val runtime   = Runtime.create(storePath, storageSize, StoreType.LMDB)
     val gp        = genesisPath
     val log       = new LogStub[Task]
     val time      = new LogicalTime[Task]
 
     for {
-      result <- body(runtime, genesisPath, log, time)
-      _      <- runtime.close()
-      _      <- Sync[Task].delay { storePath.recursivelyDelete() }
-      _      <- Sync[Task].delay { gp.recursivelyDelete() }
+      runtime <- Runtime.create[Task, Task.Par](storePath, storageSize, StoreType.LMDB)
+      result  <- body(runtime, genesisPath, log, time)
+      _       <- runtime.close()
+      _       <- Sync[Task].delay { storePath.recursivelyDelete() }
+      _       <- Sync[Task].delay { gp.recursivelyDelete() }
     } yield result
   }
 

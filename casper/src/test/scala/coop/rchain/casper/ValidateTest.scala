@@ -591,9 +591,11 @@ class ValidateTest
 
       val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
       val storageSize: Long = 1024L * 1024
-      val activeRuntime     = Runtime.create(storageDirectory, storageSize, StoreType.LMDB)
-      val runtimeManager    = RuntimeManager.fromRuntime(activeRuntime)
       for {
+        activeRuntime <- Runtime
+                          .create[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB)
+        runtimeManager <- RuntimeManager.fromRuntime[Task](activeRuntime)
+
         dag               <- blockDagStorage.getRepresentation
         _                 <- InterpreterUtil.validateBlockCheckpoint[Task](genesis, dag, runtimeManager)
         _                 <- Validate.bondsCache[Task](genesis, runtimeManager) shouldBeF Right(Valid)

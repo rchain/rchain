@@ -50,9 +50,10 @@ import scala.concurrent.duration._
 
 class CasperPacketHandlerSpec extends WordSpec {
   private def setup() = new {
-    val scheduler      = Scheduler.io("test")
-    val runtimeDir     = BlockDagStorageTestFixture.blockStorageDir
-    val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024, StoreType.LMDB)
+    val scheduler  = Scheduler.io("test")
+    val runtimeDir = BlockDagStorageTestFixture.blockStorageDir
+    val activeRuntime =
+      Runtime.create[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB).unsafeRunSync
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)(scheduler)
 
     implicit val captureTask       = Capture.taskCapture

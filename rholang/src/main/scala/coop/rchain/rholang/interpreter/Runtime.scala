@@ -388,18 +388,6 @@ object Runtime {
     })
   }
 
-  // TODO: move somewhere under src/test when possible
-  def create(
-      dataDir: Path,
-      mapSize: Long,
-      storeType: StoreType
-  )(
-      implicit scheduler: Scheduler
-  ): Runtime[Task] = {
-    import coop.rchain.catscontrib.TaskContrib._
-    create[Task, Task.Par](dataDir, mapSize, storeType).unsafeRunSync
-  }
-
   def injectEmptyRegistryRoot[F[_]](space: RhoISpace[F], replaySpace: RhoReplayISpace[F])(
       implicit F: Sync[F]
   ): F[Unit] = {

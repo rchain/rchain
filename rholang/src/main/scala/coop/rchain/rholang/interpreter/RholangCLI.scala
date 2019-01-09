@@ -53,11 +53,10 @@ object RholangCLI {
 
     val conf = new Conf(args)
 
-    val runtime = Runtime.create(conf.dataDir(), conf.mapSize(), StoreType.LMDB)
-    Await.result(
-      Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace).runToFuture,
-      5.seconds
-    )
+    val runtime = (for {
+      runtime <- Runtime.create[Task, Task.Par](conf.dataDir(), conf.mapSize(), StoreType.LMDB)
+      _       <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
+    } yield (runtime)).unsafeRunSync
 
     try {
       if (conf.files.supplied) {

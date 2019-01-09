@@ -76,7 +76,8 @@ class HashSetCasperTestNode[F[_]](
   implicit val turanOracleEffect = SafetyOracle.turanOracle[F]
   implicit val rpConfAsk         = createRPConfAsk[F](local)
 
-  val activeRuntime                  = Runtime.create(storageDirectory, storageSize, StoreType.LMDB)
+  val activeRuntime =
+    Runtime.create[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB).unsafeRunSync
   val runtimeManager                 = RuntimeManager.fromRuntime(activeRuntime)
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
 
