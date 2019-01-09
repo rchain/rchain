@@ -15,6 +15,7 @@ from typing import (
     Tuple,
     Optional,
     Generator,
+    AbstractSet,
 )
 
 from docker.client import DockerClient
@@ -268,9 +269,10 @@ class LoggingThread(threading.Thread):
             pass
 
 
-def make_container_command(container_command: str, container_command_options: Dict) -> str:
+def make_container_command(container_command: str, container_command_flags: AbstractSet, container_command_options: Dict) -> str:
     opts = ['{} {}'.format(option, argument) for option, argument in container_command_options.items()]
-    result = '{} {}'.format(container_command, ' '.join(opts))
+    flags = ' '.join(container_command_flags)
+    result = '{} {} {}'.format(container_command, flags, ' '.join(opts))
     return result
 
 
@@ -281,6 +283,7 @@ def make_node(
     network: str,
     bonds_file: str,
     container_command: str,
+    container_command_flags: AbstractSet,
     container_command_options: Dict,
     command_timeout: int,
     extra_volumes: List[str],
@@ -298,7 +301,7 @@ def make_node(
     hosts_allow_file = make_tempfile("hosts-allow-{}".format(name), hosts_allow_file_content)
     hosts_deny_file = make_tempfile("hosts-deny-{}".format(name), "ALL: ALL")
 
-    command = make_container_command(container_command, container_command_options)
+    command = make_container_command(container_command, container_command_flags, container_command_options)
 
     env = {}
     java_options = os.environ.get('_JAVA_OPTIONS')
@@ -313,6 +316,7 @@ def make_node(
         "{}:{}".format(deploy_dir, rnode_deploy_dir),
     ]
 
+    logging.info('STARTING %s %s', name, command)
     container = docker_client.containers.run(
         image,
         name=name,
@@ -364,6 +368,7 @@ def make_bootstrap_node(
     command_timeout: int,
     allowed_peers: Optional[List[str]] = None,
     mem_limit: Optional[str] = None,
+    cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict] = None,
     mount_dir: Optional[str] = None,
 ) -> Node:
@@ -372,15 +377,21 @@ def make_bootstrap_node(
 
     container_name = make_bootstrap_name(network)
 
+    container_command_flags = set([
+        "--standalone",
+        "--has-faucet",
+        "--prometheus",
+    ])
+
     container_command_options = {
         "--port":                   40400,
-        "--standalone":             "",
         "--validator-private-key":  keypair.private_key,
         "--validator-public-key":   keypair.public_key,
-        "--has-faucet":             "",
         "--host":                   container_name,
-        "--prometheus":             ""
     }
+
+    if cli_flags is not None:
+        container_command_flags.update(cli_flags)
 
     if cli_options is not None:
         container_command_options.update(cli_options)
@@ -396,6 +407,7 @@ def make_bootstrap_node(
         network=network,
         bonds_file=bonds_file,
         container_command='run',
+        container_command_flags=container_command_flags,
         container_command_options=container_command_options,
         command_timeout=command_timeout,
         extra_volumes=volumes,
@@ -439,12 +451,15 @@ def make_peer(
 
     bootstrap_address = bootstrap.get_rnode_address()
 
+    container_command_flags = set([
+        "--prometheus",
+    ])
+
     container_command_options = {
         "--bootstrap":              bootstrap_address,
         "--validator-private-key":  keypair.private_key,
         "--validator-public-key":   keypair.public_key,
         "--host":                   name,
-        "--prometheus":             ""
     }
 
     container = make_node(
@@ -453,6 +468,7 @@ def make_peer(
         network=network,
         bonds_file=bonds_file,
         container_command='run',
+        container_command_flags=container_command_flags,
         container_command_options=container_command_options,
         command_timeout=command_timeout,
         extra_volumes=[],
@@ -561,7 +577,14 @@ def docker_network(context: TestingContext, docker_client: DockerClient) -> Gene
 
 
 @contextlib.contextmanager
-def started_bootstrap(*, context: TestingContext, network: str, mount_dir: str = None, cli_options: Optional[Dict] = None) -> Generator[Node, None, None]:
+def started_bootstrap(
+    *,
+    context: TestingContext,
+    network: str,
+    mount_dir: str = None,
+    cli_flags: Optional[AbstractSet] = None,
+    cli_options: Optional[Dict] = None,
+) -> Generator[Node, None, None]:
     bootstrap_node = make_bootstrap_node(
         docker_client=context.docker,
         network=network,
@@ -569,11 +592,11 @@ def started_bootstrap(*, context: TestingContext, network: str, mount_dir: str =
         keypair=context.bootstrap_keypair,
         command_timeout=context.command_timeout,
         mount_dir=mount_dir,
+        cli_flags=cli_flags,
         cli_options=cli_options,
     )
     try:
         wait_for_node_started(context, bootstrap_node)
-        wait_for_approved_block_received_handler_state(context, bootstrap_node)
         yield bootstrap_node
     finally:
         bootstrap_node.cleanup()
@@ -583,11 +606,12 @@ def started_bootstrap(*, context: TestingContext, network: str, mount_dir: str =
 def docker_network_with_started_bootstrap(context: TestingContext) -> Generator[Node, None, None]:
     with docker_network(context, context.docker) as network:
         with started_bootstrap(context=context, network=network, mount_dir=context.mount_dir) as node:
+            wait_for_approved_block_received_handler_state(context, bootstrap_node)
             yield node
 
 
 @contextlib.contextmanager
-def ready_bootstrap(context: TestingContext, cli_options: Optional[Dict] = None) -> Generator[Node, None, None]:
+def ready_bootstrap(context: TestingContext, cli_flags: Optional[AbstractSet] = None, cli_options: Optional[Dict] = None) -> Generator[Node, None, None]:
     with docker_network(context, context.docker) as network:
-        with started_bootstrap(context=context, network=network, mount_dir=context.mount_dir, cli_options=cli_options) as node:
+        with started_bootstrap(context=context, network=network, mount_dir=context.mount_dir, cli_flags=cli_flags, cli_options=cli_options) as node:
             yield node

@@ -12,6 +12,10 @@ from .rnode import (
     started_peer,
     ready_bootstrap,
 )
+from .wait import (
+    wait_for_sent_unapproved_block,
+    wait_for_block_approval,
+)
 
 
 
@@ -20,8 +24,10 @@ VALIDATOR_A_KEYPAIR = KeyPair(private_key='120d42175739387af0264921bb117e4c4c05f
 VALIDATOR_B_KEYPAIR = KeyPair(private_key='1f52d0bce0a92f5c79f2a88aae6d391ddf853e2eb8e688c5aa68002205f92dad', public_key='043c56051a613623cd024976427c073fe9c198ac2b98315a4baff9d333fbb42e')
 
 
-@pytest.mark.xfail
 def test_successful_genesis_ceremony(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
+    """
+    https://docs.google.com/document/d/1Z5Of7OVVeMGl2Fw054xrwpRmDmKCC-nAoIxtIIHD-Tc/
+    """
     bootstrap_cli_options = {
         '--required-sigs':  '2',
         '--duration':       '5min',
@@ -33,9 +39,11 @@ def test_successful_genesis_ceremony(command_line_options: CommandLineOptions, r
     ]
     with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_keypair=CEREMONY_MASTER_KEYPAIR, peers_keypairs=peers_keypairs) as context:
         with ready_bootstrap(context=context, cli_options=bootstrap_cli_options) as bootstrap:
-            with started_peer(context=context, network=bootstrap.network, bootstrap=bootstrap, name='validator-a', keypair=VALIDATOR_A_KEYPAIR):
-                with started_peer(context=context, network=bootstrap.network, bootstrap=bootstrap, name='validator-b', keypair=VALIDATOR_B_KEYPAIR):
-                    assert False
+            with started_peer(context=context, network=bootstrap.network, bootstrap=bootstrap, name='validator-a', keypair=VALIDATOR_A_KEYPAIR) as validator_a:
+                with started_peer(context=context, network=bootstrap.network, bootstrap=bootstrap, name='validator-b', keypair=VALIDATOR_B_KEYPAIR) as validator_b:
+                    wait_for_sent_unapproved_block(context, bootstrap)
+                    wait_for_block_approval(context, validator_a)
+                    wait_for_block_approval(context, validator_b)
 
 
 @pytest.mark.xfail
