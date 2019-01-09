@@ -11,6 +11,7 @@ import cats.effect.Sync
 import cats._, cats.data._, cats.implicits._
 import cats.mtl._
 import cats.mtl.implicits._
+import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.ski._
 
 case class ValidatorBlock(
@@ -58,18 +59,20 @@ object GraphzGenerator {
       acc <- topoSort.foldM(DagInfo.empty[G])(accumulateDagInfo[F, G](_, _))
     } yield {
 
-      val timeseries = acc.timeseries.reverse
-      val firstTs    = timeseries.head
-      val validators = acc.validators
+      val timeseries     = acc.timeseries.reverse
+      val firstTs        = timeseries.head
+      val validators     = acc.validators
+      val validatorsList = validators.toList.sortBy(_._1)
       for {
         g <- initGraph[G]("dag")
-        allAncestors = validators.toList
+        allAncestors = validatorsList
           .flatMap {
             case (_, blocks) =>
               blocks.get(firstTs).map(_.parentsHashes).getOrElse(List.empty[String])
           }
           .toSet
           .toList
+          .sorted
         // draw ancesotrs first
         _ <- allAncestors.traverse(
               ancestor =>
@@ -80,7 +83,7 @@ object GraphzGenerator {
                 )
             )
         // create invisible edges from ancestors to first node in each cluster for proper alligment
-        _ <- validators.toList.traverse {
+        _ <- validatorsList.traverse {
               case (id, blocks) =>
                 allAncestors.traverse(ancestor => {
                   val node = nodeForTs(id, firstTs, blocks, lastFinalizedBlockHash)._2
@@ -88,32 +91,19 @@ object GraphzGenerator {
                 })
             }
         // draw clusters per validator
-        _ <- validators.toList.traverse {
+        _ <- validatorsList.traverse {
               case (id, blocks) =>
                 g.subgraph(
                   validatorCluster(id, blocks, timeseries, lastFinalizedBlockHash)
                 )
             }
+        // draw parent dependencies
+        _ <- drawParentDependencies[G](g, validatorsList)
         // draw justification dotted lines
-        _ <- validators.values.toList.flatMap(_.values.toList).traverse {
-              case ValidatorBlock(blockHash, parentsHashes, justifications) => {
-                val parentsEdges = parentsHashes
-                  .traverse(p => g.edge(blockHash, p, constraint = Some(false)))
-                val justificationsEdges = justifications
-                  .traverse(
-                    j =>
-                      g.edge(
-                        blockHash,
-                        j,
-                        style = Some(Dotted),
-                        constraint = Some(false),
-                        arrowHead = Some(NoneArrow)
-                      )
-                  )
-                parentsEdges *> justificationsEdges
-              }
-
-            }
+        _ <- config.showJustificationLines.fold(
+              drawJustificationDottedLines[G](g, validators),
+              ().pure[G]
+            )
         _ <- g.close
       } yield g
 
@@ -157,6 +147,47 @@ object GraphzGenerator {
       rankdir = Some(BT),
       node = Map("width" -> "0", "height" -> "0", "margin" -> "0.03", "fontsize" -> "8")
     )
+
+  private def drawParentDependencies[G[_]: Applicative](
+      g: Graphz[G],
+      validators: List[(String, ValidatorsBlocks)]
+  ): G[Unit] =
+    validators
+      .map(_._2)
+      .toList
+      .flatMap(_.values.toList)
+      .traverse {
+        case ValidatorBlock(blockHash, parentsHashes, _) => {
+          parentsHashes
+            .traverse(p => g.edge(blockHash, p, constraint = Some(false)))
+        }
+      }
+      .as(())
+
+  private def drawJustificationDottedLines[G[_]: Applicative](
+      g: Graphz[G],
+      validators: Map[String, ValidatorsBlocks]
+  ): G[Unit] =
+    validators.values.toList
+      .flatMap(_.values.toList)
+      .traverse {
+        case ValidatorBlock(blockHash, _, justifications) => {
+          justifications
+            .traverse(
+              j =>
+                g.edge(
+                  blockHash,
+                  j,
+                  style = Some(Dotted),
+                  constraint = Some(false),
+                  arrowHead = Some(NoneArrow)
+                )
+            )
+
+        }
+
+      }
+      .as(())
 
   private def nodeForTs(
       validatorId: String,
