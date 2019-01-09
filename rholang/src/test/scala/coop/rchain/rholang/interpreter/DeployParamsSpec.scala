@@ -24,17 +24,16 @@ class DeployParamsSpec extends fixture.FlatSpec with Matchers {
     val randomInt = scala.util.Random.nextInt
     val dbDir     = Files.createTempDirectory(s"rchain-storage-test-$randomInt")
     val size      = 1024L * 1024 * 10
-    val runtime = (for {
+    (for {
       runtime <- Runtime.create[Task, Task.Par](dbDir, size, StoreType.LMDB)
       _       <- runtime.reducer.setPhlo(Cost(Integer.MAX_VALUE))
-    } yield (runtime)).unsafeRunSync
-
-    try {
-      test(runtime)
-    } finally {
-      runtime.close().unsafeRunSync
-      dbDir.recursivelyDelete
-    }
+      outcome = try {
+        test(runtime)
+      } finally {
+        runtime.close()
+        dbDir.recursivelyDelete
+      }
+    } yield (outcome)).unsafeRunSync
   }
 
   def assertStoreContains(store: RhoIStore, ackChannel: Par, data: ListParWithRandom): Assertion = {
