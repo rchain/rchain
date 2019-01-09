@@ -80,11 +80,6 @@ package object matcher {
     implicit def toOptionalFreeMapWithCostOps[A](s: OptionalFreeMapWithCost[A]) =
       new OptionalFreeMapWithCostOps[A](s)
 
-    def apply[A](f: FreeMap => OptionWithCost[(FreeMap, A)]): OptionalFreeMapWithCost[A] =
-      StateT((m: FreeMap) => {
-        f(m)
-      })
-
     def empty[A]: OptionalFreeMapWithCost[A] =
       MonadTrans[StateT[?[_], FreeMap, ?]].liftM(MonoidK[OptionWithCost].empty)
 
