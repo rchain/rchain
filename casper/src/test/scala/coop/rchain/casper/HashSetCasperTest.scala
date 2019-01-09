@@ -876,18 +876,20 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val pkStr                    = Base16.encode(pk)
     val amount                   = 314L
     val forwardCode              = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
+    val bondingCode              = BondingUtil.faucetBondDeploy[Task](amount, "ed25519", pkStr, sk).unsafeRunSync
+    val forwardDeploy = ProtoUtil.sourceDeploy(
+      forwardCode,
+      System.currentTimeMillis(),
+      accounting.MAX_VALUE
+    )
+    val bondingDeploy = ProtoUtil.sourceDeploy(
+      bondingCode,
+      forwardDeploy.timestamp + 1,
+      accounting.MAX_VALUE
+    )
+
     for {
-      bondingCode <- BondingUtil.faucetBondDeploy[Effect](amount, "ed25519", pkStr, sk)
-      forwardDeploy = ProtoUtil.sourceDeploy(
-        forwardCode,
-        System.currentTimeMillis(),
-        accounting.MAX_VALUE
-      )
-      bondingDeploy = ProtoUtil.sourceDeploy(
-        bondingCode,
-        forwardDeploy.timestamp + 1,
-        accounting.MAX_VALUE
-      )
+
       createBlockResult1 <- casperEff.deploy(forwardDeploy) *> casperEff.createBlock
       Created(block1)    = createBlockResult1
       block1Status       <- casperEff.addBlock(block1, ignoreDoppelgangerCheck[Effect])
@@ -916,11 +918,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       (sk, pk)    = Ed25519.newKeyPair
       pkStr       = Base16.encode(pk)
       forwardCode = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
-      bondingCode <- BondingUtil.faucetBondDeploy[Effect](50, "ed25519", pkStr, sk)(
-                      Concurrent[Effect],
-                      nodes.head.abF,
-                      rm
-                    )
+      bondingCode = BondingUtil
+        .faucetBondDeploy[Task](50, "ed25519", pkStr, sk)(
+          Concurrent[Task],
+          rm
+        )
+        .unsafeRunSync
       forwardDeploy = ProtoUtil.sourceDeploy(
         forwardCode,
         System.currentTimeMillis(),
