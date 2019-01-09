@@ -18,7 +18,7 @@ def test_propose(command_line_options: CommandLineOptions, random_generator: Ran
         with docker_network_with_started_bootstrap(context=context) as bootstrap_node:
             wait_for_approved_block_received_handler_state(context, bootstrap_node)
             relative_paths = bootstrap_node.shell_out('sh', '-c', 'ls /opt/docker/examples/*.rho').splitlines()
-            for relative_path in relative_paths:
-                full_path = os.path.join('/opt/docker/examples', relative_path)
-                bootstrap_node.deploy(full_path)
-                bootstrap_node.propose()
+            relative_path = random_generator.choice(relative_paths)
+            full_path = os.path.join('/opt/docker/examples', relative_path)
+            bootstrap_node.deploy(full_path)
+            bootstrap_node.propose()

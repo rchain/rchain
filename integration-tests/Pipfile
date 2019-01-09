@@ -7,9 +7,9 @@ name = "pypi"
 docker = "*"
 pytest = "*"
 pytest-json = "*"
-pytest-mypy = "*"
 pytest-pylint = "*"
 typing-extensions = "*"
 dataclasses = "*"
+mypy = "*"
 
 [dev-packages]
