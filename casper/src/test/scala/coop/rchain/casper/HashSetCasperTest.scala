@@ -977,7 +977,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _     <- stepSplit(nodes)
       _     <- bond(nodes(0))
       _     <- propagate(nodes)
-      _     <- stepSplit(nodes)
+      _     <- propagate(nodes)
+
+      _ <- deploy(nodes(0), deployDatasFs(0).apply())
+      _ <- deploy(nodes(2), deployDatasFs(2).apply())
+      _ <- nodes(2).receive()
       _     = nodes.foreach(_.tearDown())
     } yield ()
   }
