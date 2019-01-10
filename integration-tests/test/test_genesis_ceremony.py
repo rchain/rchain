@@ -32,9 +32,13 @@ def test_successful_genesis_ceremony(command_line_options: CommandLineOptions, r
     https://docs.google.com/document/d/1Z5Of7OVVeMGl2Fw054xrwpRmDmKCC-nAoIxtIIHD-Tc/
     """
     bootstrap_cli_options = {
-        '--required-sigs':  '2',
-        '--duration':       '5min',
-        '--interval':       '10sec',
+        '--deploy-timestamp':   1,
+        '--required-sigs':      '2',
+        '--duration':           '5min',
+        '--interval':           '10sec',
+    }
+    peers_cli_options = {
+        '--deploy-timestamp':   1,
     }
     peers_keypairs = [
         VALIDATOR_A_KEYPAIR,
@@ -43,8 +47,8 @@ def test_successful_genesis_ceremony(command_line_options: CommandLineOptions, r
     with testing_context(command_line_options, random_generator, docker_client, bootstrap_keypair=CEREMONY_MASTER_KEYPAIR, peers_keypairs=peers_keypairs) as context:
         with temporary_wallets_file(context.random_generator, [context.bootstrap_keypair] + context.peers_keypairs) as wallets:
             with ready_bootstrap(context=context, cli_options=bootstrap_cli_options, wallets_file=wallets) as bootstrap:
-                with started_peer(context=context, network=bootstrap.network, bootstrap=bootstrap, name='validator-a', keypair=VALIDATOR_A_KEYPAIR, wallets_file=wallets) as validator_a:
-                    with started_peer(context=context, network=bootstrap.network, bootstrap=bootstrap, name='validator-b', keypair=VALIDATOR_B_KEYPAIR, wallets_file=wallets) as validator_b:
+                with started_peer(context=context, network=bootstrap.network, bootstrap=bootstrap, name='validator-a', keypair=VALIDATOR_A_KEYPAIR, wallets_file=wallets, cli_options=peers_cli_options) as validator_a:
+                    with started_peer(context=context, network=bootstrap.network, bootstrap=bootstrap, name='validator-b', keypair=VALIDATOR_B_KEYPAIR, wallets_file=wallets, cli_options=peers_cli_options) as validator_b:
                         wait_for_sent_unapproved_block(context, bootstrap)
                         wait_for_block_approval(context, validator_a)
                         wait_for_block_approval(context, validator_b)

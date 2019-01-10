@@ -452,6 +452,7 @@ def make_peer(
     allowed_peers: Optional[List[str]] = None,
     mem_limit: Optional[str] = None,
     wallets_file: Optional[str] = None,
+    cli_options: Optional[Dict] = None,
 ) -> Node:
     assert isinstance(name, str)
     assert '_' not in name, 'Underscore is not allowed in host name'
@@ -469,6 +470,9 @@ def make_peer(
         "--validator-public-key":   keypair.public_key,
         "--host":                   name,
     }
+
+    if cli_options is not None:
+        container_command_options.update(cli_options)
 
     container = make_node(
         docker_client=docker_client,
@@ -496,6 +500,7 @@ def started_peer(
     bootstrap: Node,
     keypair: KeyPair,
     wallets_file: Optional[str] = None,
+    cli_options: Optional[Dict] = None,
 ) -> Generator[Node, None, None]:
     peer = make_peer(
         docker_client=context.docker,
@@ -506,6 +511,7 @@ def started_peer(
         keypair=keypair,
         command_timeout=context.command_timeout,
         wallets_file=wallets_file,
+        cli_options=cli_options,
     )
     try:
         wait_for_node_started(context, peer)
