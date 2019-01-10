@@ -3,7 +3,6 @@ package coop.rchain.node.diagnostics
 import java.time.Duration
 
 import com.typesafe.config.{Config, ConfigUtil}
-import coop.rchain.node.Ok
 import kamon._
 import kamon.metric._
 import monix.eval.Task
@@ -79,7 +78,9 @@ object NewPrometheusReporter {
       )
     }
 
-    def environmentTags(reporterConfiguration: NewPrometheusReporter.Configuration) =
+    def environmentTags(
+        reporterConfiguration: NewPrometheusReporter.Configuration
+    ): Map[String, String] =
       if (reporterConfiguration.includeEnvironmentTags) Kamon.environment.tags
       else Map.empty[String, String]
 
@@ -89,7 +90,9 @@ object NewPrometheusReporter {
         .toMap
   }
 
-  def service(reporter: NewPrometheusReporter) = HttpRoutes.of[Task] {
-    case GET -> Root => Ok(reporter.scrapeData())
-  }
+  import coop.rchain.node.Http4sDsl.Ok
+  def service(reporter: NewPrometheusReporter): HttpRoutes[Task] =
+    HttpRoutes.of[Task] {
+      case GET -> Root => Ok(reporter.scrapeData())
+    }
 }
