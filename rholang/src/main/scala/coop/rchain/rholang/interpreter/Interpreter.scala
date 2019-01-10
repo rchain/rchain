@@ -12,6 +12,7 @@ import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
 import coop.rchain.rholang.interpreter.errors.{
   LexerError,
+  ParserError,
   SyntaxError,
   TopLevelFreeVariablesNotAllowedError,
   TopLevelLogicalConnectivesNotAllowedError,
@@ -51,17 +52,14 @@ object Interpreter {
         }
     }
 
-    def buildNormalizedTerm(source: String): F[Par] = buildNormalizedTerm(new StringReader(source))
+    def buildNormalizedTerm(source: String): F[Par] =
+      buildNormalizedTerm(new StringReader(source))
 
     def buildNormalizedTerm(reader: Reader): F[Par] =
-      try {
-        for {
-          term <- buildAST(reader)
-          par  <- buildPar(term)
-        } yield par
-      } catch {
-        case th: Throwable => F.raiseError(UnrecognizedInterpreterError(th))
-      }
+      for {
+        term <- buildAST(reader)
+        par  <- buildPar(term)
+      } yield par
 
     def buildPar(proc: Proc): F[Par] =
       for {
@@ -94,21 +92,22 @@ object Interpreter {
     }
 
     private def buildAST(reader: Reader): F[Proc] =
-      F.delay {
-          val lxr = lexer(reader)
-          val ast = parser(lxr)
-          ast.pProc()
-        }
-        .adaptError {
-          case ex: Exception if ex.getMessage.toLowerCase.contains("syntax") =>
-            SyntaxError(ex.getMessage)
-          case e: Error if e.getMessage.startsWith("Unterminated string at EOF, beginning at") =>
-            LexerError(e.getMessage)
-          case e: Error if e.getMessage.startsWith("Illegal Character") => LexerError(e.getMessage)
-          case e: Error if e.getMessage.startsWith("Unterminated string on line") =>
-            LexerError(e.getMessage)
-          case th => UnrecognizedInterpreterError(th)
-        }
+      for {
+        lexer  <- lexer(reader)
+        parser <- parser(lexer)
+        proc <- F.delay(parser.pProc()).adaptError {
+                 case ex: Exception if ex.getMessage.startsWith("Syntax error") =>
+                   SyntaxError(ex.getMessage)
+                 case er: Error
+                     if er.getMessage.startsWith("Unterminated string at EOF, beginning at") =>
+                   LexerError(er.getMessage)
+                 case er: Error if er.getMessage.startsWith("Illegal Character") =>
+                   LexerError(er.getMessage)
+                 case er: Error if er.getMessage.startsWith("Unterminated string on line") =>
+                   LexerError(er.getMessage)
+                 case th: Throwable => UnrecognizedInterpreterError(th)
+               }
+      } yield proc
 
     private def normalizeTerm(term: Proc): F[ProcVisitOutputs] =
       ProcNormalizeMatcher
@@ -150,9 +149,20 @@ object Interpreter {
           } else normalizedTerm.pure[F]
         }
 
-    private def lexer(fileReader: Reader): Yylex = new Yylex(fileReader)
+    /**
+      * @note In lieu of a purely functional wrapper around the lexer and parser
+      *       [[F.adaptError]] is used as a catch-all for errors thrown in their
+      *       constructors.
+      */
+    private def lexer(fileReader: Reader): F[Yylex] =
+      F.delay(new Yylex(fileReader)).adaptError {
+        case th: Throwable => LexerError("Lexer construction error: " + th.getMessage)
+      }
 
-    private def parser(lexer: Yylex): parser = new parser(lexer, lexer.getSymbolFactory)
+    private def parser(lexer: Yylex): F[parser] =
+      F.delay(new parser(lexer, lexer.getSymbolFactory)).adaptError {
+        case th: Throwable => ParserError("Parser construction error: " + th.getMessage)
+      }
 
     private def mkErrorMsg(errors: Vector[Throwable]) =
       errors
