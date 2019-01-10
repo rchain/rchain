@@ -63,9 +63,9 @@ object Interpreter {
 
     def buildPar(proc: Proc): F[Par] =
       for {
-        outputs <- normalizeTerm(proc)
-        sorted  <- Sortable[Par].sortMatch(outputs.par)
-      } yield sorted.term
+        par       <- normalizeTerm(proc)
+        sortedPar <- Sortable[Par].sortMatch(par)
+      } yield sortedPar.term
 
     def execute(runtime: Runtime[F], reader: Reader): F[Runtime[F]] =
       for {
@@ -109,7 +109,7 @@ object Interpreter {
                }
       } yield proc
 
-    private def normalizeTerm(term: Proc): F[ProcVisitOutputs] =
+    private def normalizeTerm(term: Proc): F[Par] =
       ProcNormalizeMatcher
         .normalizeMatch[F](
           term,
@@ -146,7 +146,7 @@ object Interpreter {
                 TopLevelWildcardsNotAllowedError(topLevelWildcardList.mkString("", ", ", ""))
               )
             }
-          } else normalizedTerm.pure[F]
+          } else normalizedTerm.pure[F].map(_.par)
         }
 
     /**
