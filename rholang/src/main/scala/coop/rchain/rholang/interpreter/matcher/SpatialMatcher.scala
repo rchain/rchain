@@ -354,7 +354,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
       matches                <- F.fromOption(matchesOpt)
       freeMaps               = matches.map(_._3)
       updatedFreeMap         <- aggregateUpdates(freeMaps)
-      _                      <- StateT.set[OptionWithCost, FreeMap](updatedFreeMap)
+      _                      <- _freeMap[F].set(updatedFreeMap)
       remainderTargets       = matches.collect { case (target, _: Remainder, _) => target }
       remainderTargetsSet    = remainderTargets.toSet
       remainderTargetsSorted = targets.filter(remainderTargetsSet.contains)
@@ -400,7 +400,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
 
   private def aggregateUpdates(freeMaps: Seq[FreeMap]): F[FreeMap] =
     for {
-      currentFreeMap <- StateT.get[OptionWithCost, FreeMap]
+      currentFreeMap <- _freeMap[F].get
       _ <- guardMatch[StateT[?[_], FreeMap, ?], OptionWithCost] {
             //The correctness of isolating MBM from changing FreeMap relies
             //on our ability to aggregate the var assignments from subsequent matches.
@@ -749,7 +749,7 @@ trait SpatialMatcherInstances {
             matchedRem <- foldMatch(tlist, plist, rem)
             _ <- rem match {
                   case Some(Var(FreeVar(level))) =>
-                    StateT.modify[OptionWithCost, FreeMap](m => m + (level -> EList(matchedRem)))
+                    _freeMap[F].modify(m => m + (level -> EList(matchedRem)))
                   case _ => ().pure[F]
                 }
           } yield Unit
