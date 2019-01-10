@@ -94,6 +94,9 @@ package object matcher {
       def charge(amount: Cost): NonDetFreeMapWithCost[A] =
         s.flatMap(matcher.charge[NonDetFreeMapWithCost](amount).as)
 
+      def attemptOpt: NonDetFreeMapWithCost[Option[A]] =
+        matcher.attemptOpt(s)
+
       def runWithCost(
           initCost: Cost
       ): Either[OutOfPhlogistonsError.type, (Cost, Stream[(FreeMap, A)])] =
