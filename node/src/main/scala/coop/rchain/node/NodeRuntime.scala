@@ -395,7 +395,7 @@ class NodeRuntime private[node] (
                         blockStore
                       )
     _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
-    oracle = SafetyOracle.turanOracle[Effect](Monad[Effect])
+    oracle = SafetyOracle.turanOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
     runtime <- {
       implicit val s = rspaceScheduler
       Runtime.create[Task, Task.Par](storagePath, storageSize, storeType, Seq.empty).toEffect
