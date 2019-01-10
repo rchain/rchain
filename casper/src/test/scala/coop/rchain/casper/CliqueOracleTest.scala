@@ -147,11 +147,11 @@ class CliqueOracleTest
         genesisFaultTolerance <- SafetyOracle[Task].normalizedFaultTolerance(dag, genesis.blockHash)
         _                     = assert(genesisFaultTolerance == 1)
         b2FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b2.blockHash)
-        _                     = assert(b2FaultTolerance == -0.5f)
+        _                     = assert(b2FaultTolerance == -1f / 6)
         b3FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b3.blockHash)
         _                     = assert(b3FaultTolerance == -1f)
         b4FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b4.blockHash)
-        result                = assert(b4FaultTolerance == -0.5f)
+        result                = assert(b4FaultTolerance == -1f / 6)
       } yield result
   }
 }
