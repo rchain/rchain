@@ -1,11 +1,10 @@
 package coop.rchain.rholang.interpreter.matcher
 
-import cats.data.{OptionT, StateT}
 import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.MonadState
 import cats.mtl.implicits._
-import cats.{Applicative, FunctorFilter, Monad, Eval => _}
+import cats.{Alternative, Monad, Eval => _}
 import coop.rchain.catscontrib._
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
@@ -32,8 +31,7 @@ import scala.collection.mutable
 // to help cut down on backtracking, wherever one of several possible matches
 // will do, we just take one.
 trait SpatialMatcher[T, P] {
-  def spatialMatch(target: T, pattern: P): OptionalFreeMapWithCost[Unit]
-  def nonDetMatch(target: T, pattern: P): NonDetFreeMapWithCost[Unit]
+  def spatialMatch(target: T, pattern: P): NonDetFreeMapWithCost[Unit]
 }
 
 object SpatialMatcher extends SpatialMatcherInstances {
@@ -48,7 +46,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
                  .fromEither(
                    SpatialMatcher
                      .spatialMatch(target, pattern)
-                     .runWithCost(phlosAvailable.cost)
+                     .runFirstWithCost(phlosAvailable.cost)
                  )
                  .flatMap {
                    case (phlosLeft, result) =>
@@ -64,13 +62,8 @@ object SpatialMatcher extends SpatialMatcherInstances {
 
   def spatialMatch[T, P](target: T, pattern: P)(
       implicit sm: SpatialMatcher[T, P]
-  ): OptionalFreeMapWithCost[Unit] =
-    SpatialMatcher[T, P].spatialMatch(target, pattern)
-
-  def nonDetMatch[T, P](target: T, pattern: P)(
-      implicit sm: SpatialMatcher[T, P]
   ): NonDetFreeMapWithCost[Unit] =
-    SpatialMatcher[T, P].nonDetMatch(target, pattern)
+    SpatialMatcher[T, P].spatialMatch(target, pattern)
 
   def apply[T, P](implicit sm: SpatialMatcher[T, P]) = sm
 
@@ -78,27 +71,14 @@ object SpatialMatcher extends SpatialMatcherInstances {
       implicit matcherAC: SpatialMatcher[A, C],
       matcherBD: SpatialMatcher[B, D]
   ): SpatialMatcher[(A, B), (C, D)] = new SpatialMatcher[(A, B), (C, D)] {
-    override def spatialMatch(target: (A, B), pattern: (C, D)): OptionalFreeMapWithCost[Unit] =
+    override def spatialMatch(target: (A, B), pattern: (C, D)): NonDetFreeMapWithCost[Unit] =
       matcherAC.spatialMatch(target._1, pattern._1) >> matcherBD.spatialMatch(target._2, pattern._2)
-
-    override def nonDetMatch(target: (A, B), pattern: (C, D)): NonDetFreeMapWithCost[Unit] =
-      matcherAC.nonDetMatch(target._1, pattern._1) >> matcherBD.nonDetMatch(target._2, pattern._2)
   }
 
-  def fromFunction[T, P](fn: (T, P) => OptionalFreeMapWithCost[Unit]): SpatialMatcher[T, P] =
+  def fromFunction[T, P](fn: (T, P) => NonDetFreeMapWithCost[Unit]): SpatialMatcher[T, P] =
     new SpatialMatcher[T, P] {
-      override def spatialMatch(target: T, pattern: P): OptionalFreeMapWithCost[Unit] =
+      override def spatialMatch(target: T, pattern: P): NonDetFreeMapWithCost[Unit] =
         fn(target, pattern)
-      override def nonDetMatch(target: T, pattern: P): NonDetFreeMapWithCost[Unit] =
-        fn(target, pattern).toNonDet()
-    }
-
-  def fromNonDetFunction[T, P](fn: (T, P) => NonDetFreeMapWithCost[Unit]): SpatialMatcher[T, P] =
-    new SpatialMatcher[T, P] {
-      override def nonDetMatch(target: T, pattern: P): NonDetFreeMapWithCost[Unit] =
-        fn(target, pattern)
-      override def spatialMatch(target: T, pattern: P): OptionalFreeMapWithCost[Unit] =
-        fn(target, pattern).toDet()
     }
 
   def noFrees(par: Par): Par =
@@ -222,8 +202,8 @@ object SpatialMatcher extends SpatialMatcherInstances {
     worker(as, minSize, maxSize).map(x => (x._1, x._2))
   }
 
-  private[matcher] type F[A] = OptionalFreeMapWithCost[A]
-  private[matcher] val F = OptionalFreeMapWithCost
+  private[matcher] type F[A] = NonDetFreeMapWithCost[A]
+  private[matcher] val F = NonDetFreeMapWithCost
 
   // This helper function is useful in several productions
   def foldMatch[T, P](tlist: Seq[T], plist: Seq[P], remainder: Option[Var] = None)(
@@ -335,14 +315,15 @@ object SpatialMatcher extends SpatialMatcherInstances {
           case Term(p) =>
             if (!lf.connectiveUsed(p)) {
               //match using `==` if pattern is a concrete term
-              guardMatch[StateT[?[_], FreeMap, ?], OptionWithCost](t == p).charge(COMPARISON_COST)
+              Alternative[F].guard(t == p).charge(COMPARISON_COST)
             } else {
               spatialMatch(t, p)
             }
           case Remainder(_) =>
             //Remainders can't match non-concrete terms, because they can't be captured.
             //They match everything that's concrete though.
-            guardMatch[StateT[?[_], FreeMap, ?], OptionWithCost](lf.locallyFree(t, 0).isEmpty)
+            Alternative[F]
+              .guard(lf.locallyFree(t, 0).isEmpty)
               .charge(COMPARISON_COST)
         }
         isolateState[F, FreeMap](matchEffect).attemptOpt
@@ -351,7 +332,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
 
     for {
       matchesOpt             <- maximumBipartiteMatch.findMatches(allPatterns, targets)
-      matches                <- F.fromOption(matchesOpt)
+      matches                <- F.fromStream(matchesOpt.toStream)
       freeMaps               = matches.map(_._3)
       updatedFreeMap         <- aggregateUpdates(freeMaps)
       _                      <- _freeMap[F].set(updatedFreeMap)
@@ -375,16 +356,6 @@ object SpatialMatcher extends SpatialMatcherInstances {
     } yield Unit
   }
 
-  private def guardMatch[H[_[_], _]: MonadTrans, G[_]: Monad: FunctorFilter](
-      predicate: => Boolean
-  ): H[G, Unit] =
-    MonadTrans[H].liftM(guard[G](predicate))
-
-  private def guard[H[_]: FunctorFilter: Applicative](predicate: => Boolean): H[Unit] =
-    FunctorFilter[H].mapFilter(Applicative[H].unit) { _ =>
-      if (predicate) Some(()) else None
-    }
-
   private def isolateState[H[_]: MonadState[?[_], S]: Monad, S](f: H[_]): H[S] =
     for {
       initState   <- MonadState[H, S].get
@@ -401,7 +372,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
   private def aggregateUpdates(freeMaps: Seq[FreeMap]): F[FreeMap] =
     for {
       currentFreeMap <- _freeMap[F].get
-      _ <- guardMatch[StateT[?[_], FreeMap, ?], OptionWithCost] {
+      _ <- Alternative[F].guard {
             //The correctness of isolating MBM from changing FreeMap relies
             //on our ability to aggregate the var assignments from subsequent matches.
             //This means all the variables populated by MBM must not duplicate each other.
@@ -545,11 +516,10 @@ trait SpatialMatcherInstances {
           val allMatches = for {
             p       <- NonDetFreeMapWithCost.fromStream(ps.toStream)
             matches <- freeMap.get
-            _       <- nonDetMatch(target, p)
+            _       <- spatialMatch(target, p)
             _       <- freeMap.set(matches)
           } yield ()
-          val firstMatch = allMatches.toDet()
-          firstMatch
+          allMatches.takeFirst()
 
         case ConnNotBody(p) =>
           spatialMatch(target, p).attemptOpt.flatMap {
@@ -601,7 +571,7 @@ trait SpatialMatcherInstances {
       }
     }
 
-  implicit val parSpatialMatcherInstance: SpatialMatcher[Par, Par] = fromNonDetFunction[Par, Par] {
+  implicit val parSpatialMatcherInstance: SpatialMatcher[Par, Par] = fromFunction[Par, Par] {
     (target, pattern) =>
       if (!pattern.connectiveUsed) {
         val cost = equalityCheckCost(pattern, target)
@@ -643,7 +613,7 @@ trait SpatialMatcherInstances {
             sp <- NonDetFreeMapWithCost.fromStream(
                    subPars(target, bounds._1, bounds._2, remainders._1, remainders._2)
                  )
-            _ <- nonDetMatch(sp._1, con)
+            _ <- spatialMatch(sp._1, con)
           } yield sp._2
         }
         for {
@@ -654,49 +624,49 @@ trait SpatialMatcherInstances {
                 (p, s) => p.withSends(s),
                 varLevel,
                 wildcard
-              ).toNonDet()
+              )
           _ <- listMatchSingle_[Receive](
                 remainder.receives,
                 pattern.receives,
                 (p, s) => p.withReceives(s),
                 varLevel,
                 wildcard
-              ).toNonDet()
+              )
           _ <- listMatchSingle_[New](
                 remainder.news,
                 pattern.news,
                 (p, s) => p.withNews(s),
                 varLevel,
                 wildcard
-              ).toNonDet()
+              )
           _ <- listMatchSingle_[Expr](
                 remainder.exprs,
                 noFrees(pattern.exprs),
                 (p, e) => p.withExprs(e),
                 varLevel,
                 wildcard
-              ).toNonDet()
+              )
           _ <- listMatchSingle_[Match](
                 remainder.matches,
                 pattern.matches,
                 (p, e) => p.withMatches(e),
                 varLevel,
                 wildcard
-              ).toNonDet()
+              )
           _ <- listMatchSingle_[Bundle](
                 remainder.bundles,
                 pattern.bundles,
                 (p, b) => p.withBundles(b),
                 varLevel,
                 wildcard
-              ).toNonDet()
+              )
           _ <- listMatchSingle_[GPrivate](
                 remainder.ids,
                 pattern.ids,
                 (p, i) => p.withIds(i),
                 varLevel,
                 wildcard
-              ).toNonDet()
+              )
         } yield Unit
       }
   }
