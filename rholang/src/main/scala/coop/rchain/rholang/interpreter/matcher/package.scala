@@ -1,8 +1,12 @@
 package coop.rchain.rholang.interpreter
 
+import cats.{Alternative, MonadError, Monoid, MonoidK}
 import cats.arrow.FunctionK
 import cats.data.{OptionT, StateT}
 import cats.implicits._
+import cats.mtl.implicits._
+import cats.mtl.MonadState
+import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
@@ -24,37 +28,42 @@ package object matcher {
   type NonDetFreeMapWithCost[A] = StateT[StreamWithCost, FreeMap, A]
   type StreamWithCost[A]        = StreamT[ErroredOrCostA, A]
 
+  // The naming convention means: this is an effect-type alias.
+  // Will be used similarly to capabilities, but for more generic and probably low-level/implementation stuff.
+  // Adopted from: http://atnos-org.github.io/eff/org.atnos.site.Tutorial.html#write-an-interpreter-for-your-program
+  type _freeMap[F[_]] = MonadState[F, FreeMap]
+  type _cost[F[_]]    = MonadState[F, Cost]
+  type _error[F[_]]   = MonadError[F, OutOfPhlogistonsError.type]
+  type _short[F[_]]   = MonadError[F, Unit] //arises from and corresponds to the OptionT/StreamT in the stack
+
+  // Implicit summoner methods, just like `Monad.apply` on `Monad`'s companion object.
+  def _freeMap[F[_]](implicit ev: _freeMap[F]): _freeMap[F] = ev
+  def _cost[F[_]](implicit ev: _cost[F]): _cost[F]          = ev
+  def _error[F[_]](implicit ev: _error[F]): _error[F]       = ev
+  def _short[F[_]](implicit ev: _short[F]): _short[F]       = ev
+
+  private[matcher] def charge[F[_]](
+      amount: Cost
+  )(implicit cost: _cost[F], error: _error[F]): F[Unit] =
+    for {
+      currentCost <- cost.get
+      newCost     = currentCost - amount
+      _           <- cost.set(newCost)
+      _           <- error.ensure(cost.get)(OutOfPhlogistonsError)(_.value >= 0)
+    } yield ()
+
+  private[matcher] def attemptOpt[F[_], A](f: F[A])(implicit short: _short[F]): F[Option[A]] =
+    short.attempt(f).map(_.fold(_ => None, Some(_)))
+
   object OptionalFreeMapWithCost {
 
     class OptionalFreeMapWithCostOps[A](s: OptionalFreeMapWithCost[A]) {
+
       def charge(amount: Cost): OptionalFreeMapWithCost[A] =
-        StateT((m: FreeMap) => {
-          OptionT(StateT((c: Cost) => {
-            s.run(m).value.run(c).flatMap {
-              case (cost, result) =>
-                val newCost = cost - amount
-                if (newCost.value < 0)
-                  Left(OutOfPhlogistonsError)
-                else
-                  Right((newCost, result))
-            }
-          }))
-        })
+        s.flatMap(matcher.charge[OptionalFreeMapWithCost](amount).as)
 
       def attemptOpt: OptionalFreeMapWithCost[Option[A]] =
-        StateT((m: FreeMap) => {
-          OptionT(StateT((c: Cost) => {
-            s.run(m).value.run(c).map {
-              case (cost, result) =>
-                val recovered: Option[(FreeMap, Option[A])] = result match {
-                  case None          => Some((m, None))
-                  case Some((m1, a)) => Some((m1, Some(a)))
-                }
-
-                (cost, recovered)
-            }
-          }))
-        })
+        matcher.attemptOpt(s)
 
       def runWithCost(
           initCost: Cost
@@ -71,36 +80,19 @@ package object matcher {
     implicit def toOptionalFreeMapWithCostOps[A](s: OptionalFreeMapWithCost[A]) =
       new OptionalFreeMapWithCostOps[A](s)
 
-    def apply[A](f: FreeMap => OptionWithCost[(FreeMap, A)]): OptionalFreeMapWithCost[A] =
-      StateT((m: FreeMap) => {
-        f(m)
-      })
-
     def empty[A]: OptionalFreeMapWithCost[A] =
-      StateT.liftF(OptionT.fromOption(None))
-
-    def pure[A](value: A): OptionalFreeMapWithCost[A] =
-      StateT.pure[OptionWithCost, FreeMap, A](value)
+      MonadTrans[StateT[?[_], FreeMap, ?]].liftM(MonoidK[OptionWithCost].empty)
 
     def fromOption[A](option: Option[A]): OptionalFreeMapWithCost[A] =
       StateT.liftF(OptionT.fromOption(option))
   }
 
   object NonDetFreeMapWithCost {
+
     class NonDetFreeMapWithCostOps[A](s: NonDetFreeMapWithCost[A]) {
+
       def charge(amount: Cost): NonDetFreeMapWithCost[A] =
-        StateT((m: FreeMap) => {
-          StreamT(StateT((c: Cost) => {
-            s.run(m).next.run(c).flatMap {
-              case (cost, result) =>
-                val newCost = cost - amount
-                if (newCost.value < 0)
-                  Left(OutOfPhlogistonsError)
-                else
-                  Right((newCost, result))
-            }
-          }))
-        })
+        s.flatMap(matcher.charge[NonDetFreeMapWithCost](amount).as)
 
       def runWithCost(
           initCost: Cost
@@ -118,10 +110,7 @@ package object matcher {
       new NonDetFreeMapWithCostOps[A](s)
 
     def empty[A]: NonDetFreeMapWithCost[A] =
-      StateT.liftF(StreamT.empty)
-
-    def pure[A](value: A): NonDetFreeMapWithCost[A] =
-      StateT.pure[StreamWithCost, FreeMap, A](value)
+      MonadTrans[StateT[?[_], FreeMap, ?]].liftM(MonoidK[StreamWithCost].empty)
 
     def fromStream[A](stream: Stream[A]): NonDetFreeMapWithCost[A] =
       StateT.liftF(StreamT.fromStream(StateT.pure(stream)))
