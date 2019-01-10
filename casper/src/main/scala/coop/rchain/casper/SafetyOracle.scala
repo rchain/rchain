@@ -73,15 +73,7 @@ sealed abstract class SafetyOracleInstances {
           result <- if (2L * candidateWeights.values.sum < totalWeight) {
                      0L.pure[F]
                    } else {
-                     val vertexCount = candidateWeights.keys.size
-                     agreementGraphEdgeCount(blockDag, estimateBlockHash, candidateWeights)
-                       .flatMap { edgeCount =>
-                         minTotalValidatorWeight(
-                           blockDag,
-                           estimateBlockHash,
-                           maxCliqueMinSize(vertexCount, edgeCount)
-                         )
-                       }
+                     agreementGraphMaxCliqueWeight(blockDag, estimateBlockHash, candidateWeights)
                    }
         } yield result
 
@@ -134,27 +126,26 @@ sealed abstract class SafetyOracleInstances {
 
       private def findMaximumClique(
           edges: List[(Validator, Validator)],
-          candidates: Map[Validator, Long]
-      ): (List[Validator], Long) =
+          candidates: Map[Validator, Long],
+          largestCandidate: Long
+      ): Long =
         Clique
           .findCliquesRecursive(edges)
-          .foldLeft((List[Validator](), 0L)) {
-            case ((maxClique, maxWeight), clique) =>
+          .foldLeft(largestCandidate) {
+            case (maxWeight, clique) =>
               val weight = clique.map(candidates.getOrElse(_, 0L)).sum
               if (weight > maxWeight) {
-                (clique, weight)
-              } else if (weight == maxWeight && clique.size > maxClique.size) {
-                (clique, weight)
+                weight
               } else {
-                (maxClique, maxWeight)
+                maxWeight
               }
           }
 
-      private def agreementGraphEdgeCount(
+      private def agreementGraphMaxCliqueWeight(
           blockDag: BlockDagRepresentation[F],
           estimateBlockHash: BlockHash,
           candidates: Map[Validator, Long]
-      ): F[Int] = {
+      ): F[Long] = {
         def findAgreeingJustificationHash(
             justificationHashes: List[BlockHash],
             validator: Validator
@@ -277,8 +268,9 @@ sealed abstract class SafetyOracleInstances {
                 false.pure[F]
               )
           }
+
         computeAgreementGraphEdges.map { edges =>
-          findMaximumClique(edges, candidates)._1.size
+          findMaximumClique(edges, candidates, candidates.values.max)
         }
       }
 
@@ -289,11 +281,5 @@ sealed abstract class SafetyOracleInstances {
           targetBlockHash: BlockHash
       ): F[Boolean] =
         isInMainChain(blockDag, candidateBlockHash, targetBlockHash)
-
-      // See Turan's theorem (https://en.wikipedia.org/wiki/Tur%C3%A1n%27s_theorem)
-      private def maxCliqueMinSize(vertices: Int, edges: Int) = {
-        val verticesSquared = vertices * vertices
-        math.ceil(verticesSquared.toDouble / (verticesSquared - 2 * edges).toDouble).toInt
-      }
     }
 }

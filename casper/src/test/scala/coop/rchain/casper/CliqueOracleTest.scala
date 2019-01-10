@@ -81,7 +81,7 @@ class CliqueOracleTest
         b3FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b3.blockHash)
         _                     = assert(b3FaultTolerance == -1)
         b4FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b4.blockHash)
-        result                = assert(b4FaultTolerance == -0.2f) // Clique oracle would be 0.2f
+        result                = assert(b4FaultTolerance == 0.2f)
       } yield result
   }
 
