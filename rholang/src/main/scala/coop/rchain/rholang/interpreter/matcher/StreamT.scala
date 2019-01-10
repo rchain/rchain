@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter.matcher
 import cats.mtl.lifting.MonadLayerControl
-import cats.{~>, Applicative, Functor, Monad, MonadError, MonoidK}
+import cats.{~>, Alternative, Applicative, Functor, Monad, MonadError, MonoidK}
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, SNil, Step}
 
@@ -83,23 +83,24 @@ trait StreamTInstances0 extends StreamTInstances1 {
       streamTMonad[G]
   }
 
-  implicit def streamTMonoidK[F[_]: Monad]: MonoidK[StreamT[F, ?]] = new MonoidK[StreamT[F, ?]] {
+  implicit def streamTAlternative[F[_]: Monad]: Alternative[StreamT[F, ?]] =
+    new Alternative[StreamT[F, ?]] with StreamTMonad[F] {
 
-    private val F = Monad[F]
+      override val F = Monad[F]
 
-    override def empty[A]: StreamT[F, A] = StreamT.empty
+      override def empty[A]: StreamT[F, A] = StreamT.empty
 
-    override def combineK[A](x: StreamT[F, A], y: StreamT[F, A]): StreamT[F, A] = {
-      val next: F[Step[F, A]] = F.flatMap(x.next) {
-        case SNil()            => y.next
-        case SCons(head, tail) => F.pure(SCons(head, combineK(tail, y)))
+      override def combineK[A](x: StreamT[F, A], y: StreamT[F, A]): StreamT[F, A] = {
+        val next: F[Step[F, A]] = F.flatMap(x.next) {
+          case SNil()            => y.next
+          case SCons(head, tail) => F.pure(SCons(head, combineK(tail, y)))
+        }
+        StreamT(next)
       }
-      StreamT(next)
+
     }
 
-  }
-
-  implicit def streamTMonad[F[_]](implicit F0: Monad[F]): Monad[StreamT[F, ?]] =
+  private[matcher] def streamTMonad[F[_]](implicit F0: Monad[F]): Monad[StreamT[F, ?]] =
     new StreamTMonad[F]() {
       implicit val F = F0
     }

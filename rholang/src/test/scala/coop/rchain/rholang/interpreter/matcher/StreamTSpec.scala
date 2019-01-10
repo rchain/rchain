@@ -3,8 +3,8 @@ package coop.rchain.rholang.interpreter.matcher
 import cats.arrow.FunctionK
 import cats.data.{EitherT, WriterT}
 import cats.implicits._
-import cats.laws.discipline.{MonadErrorTests, MonadTests, MonoidKTests}
-import cats.mtl.laws.discipline.{FunctorListenTests, MonadLayerControlTests}
+import cats.laws.discipline.{AlternativeTests, MonadErrorTests, MonadTests}
+import cats.mtl.laws.discipline.MonadLayerControlTests
 import cats.tests.CatsSuite
 import cats.{~>, Eq, Monad}
 import coop.rchain.catscontrib.laws.discipline.MonadTransTests
@@ -140,8 +140,8 @@ class StreamTLawsSpec extends CatsSuite with LowPriorityDerivations {
     MonadTests[StreamTEffect].monad[Int, Int, String]
   )
   checkAll(
-    "StreamT.MonoidKLaws",
-    MonoidKTests[StreamTEffect].monoidK[Int]
+    "StreamT.AlternativeLaws",
+    AlternativeTests[StreamTEffect].alternative[Int, Int, String]
   )
   checkAll(
     "StreamT.MonadTransLaws",
