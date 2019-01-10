@@ -3,13 +3,14 @@ import java.io.StringReader
 
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.errors.LexerError
+import monix.eval.Coeval
 import org.scalatest.EitherValues._
 import org.scalatest.{FlatSpec, Matchers}
 
 class LexerTest extends FlatSpec with Matchers {
 
   def attemptMkTerm(input: String): Either[Throwable, Par] =
-    Interpreter.buildNormalizedTerm(input).runAttempt()
+    Interpreter[Coeval].buildNormalizedTerm(input).runAttempt()
 
   "Lexer" should "return LexerError for unterminated string at EOF" in {
     val attempt = attemptMkTerm("""{{ @"ack!(0) }}""")

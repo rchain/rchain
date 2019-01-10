@@ -180,11 +180,11 @@ class StackSafetySpec extends FlatSpec with TableDrivenPropertyChecks with Match
          |""".stripMargin
 
     isolateStackOverflow {
-      val ast = Interpreter.buildNormalizedTerm(rho).value()
+      val ast = Interpreter[Coeval].buildNormalizedTerm(rho).value()
       PrettyPrinter().buildString(ast)
       checkSuccess(rho) {
         mkRuntime(tmpPrefix, mapSize).use { runtime =>
-          Interpreter.evaluate(runtime, ast)
+          Interpreter[Task].evaluate(runtime, ast)
         }
       }
     }

@@ -14,7 +14,7 @@ import coop.rchain.rholang.syntax.rholang_mercury.PrettyPrinter
 import coop.rchain.rholang.{GenTools, ProcGen}
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Context, RSpace}
-import monix.eval.Task
+import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.Test.Parameters
@@ -34,7 +34,7 @@ class CostAccountingPropertyTest extends FlatSpec with PropertyChecks with Match
 
   implicit val taskExecutionDuration: FiniteDuration = 5.seconds
 
-  def cost(proc: Proc): Cost = Cost(Interpreter.buildPar(proc).apply)
+  def cost(proc: Proc): Cost = Cost(Interpreter[Coeval].buildPar(proc).apply)
 
   behavior of "Cost accounting in Reducer"
 
@@ -84,7 +84,7 @@ object CostAccountingPropertyTest {
   def execute(reducer: ChargingReducer[Task], p: Proc)(
       implicit rand: Blake2b512Random
   ): Task[Long] = {
-    val program = Interpreter.buildPar(p).apply
+    val program = Interpreter[Coeval].buildPar(p).apply
 
     val initPhlos = Cost(accounting.MAX_VALUE)
 

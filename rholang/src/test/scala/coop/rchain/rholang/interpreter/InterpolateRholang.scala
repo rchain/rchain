@@ -42,5 +42,5 @@ object InterpolateRholang {
     * @return term after interpolation
     */
   def interpolate(term: String, interpolateMap: Map[String, Par]): Coeval[Par] =
-    Interpreter.buildNormalizedTerm(term).map(Interpolate.interpolate(_, interpolateMap))
+    Interpreter[Coeval].buildNormalizedTerm(term).map(Interpolate.interpolate(_, interpolateMap))
 }

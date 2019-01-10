@@ -21,7 +21,7 @@ import coop.rchain.node.model.repl._
 import coop.rchain.node.model.diagnostics._
 import coop.rchain.rholang.interpreter.{RholangCLI, Runtime}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import monix.eval.Task
+import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler
 import com.google.protobuf.ByteString
 import java.io.{Reader, StringReader}
@@ -43,7 +43,7 @@ private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
 
   def exec(reader: Reader): Task[ReplResponse] =
     Task
-      .coeval(buildNormalizedTerm(reader))
+      .coeval(Interpreter[Coeval].buildNormalizedTerm(reader))
       .attempt
       .flatMap {
         case Left(er) =>
@@ -80,7 +80,7 @@ private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
   def runEvaluate(runtime: Runtime[Task], term: Par): Task[EvaluateResult] =
     for {
       _      <- Task.now(printNormalizedTerm(term))
-      result <- evaluate(runtime, term)
+      result <- Interpreter[Task].evaluate(runtime, term)
     } yield result
 
   private def printNormalizedTerm(normalizedTerm: Par): Unit = {

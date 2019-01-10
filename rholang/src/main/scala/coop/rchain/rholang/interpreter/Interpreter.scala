@@ -11,7 +11,6 @@ import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
 import coop.rchain.rholang.interpreter.errors.{
-  InterpreterError,
   LexerError,
   SyntaxError,
   TopLevelFreeVariablesNotAllowedError,
@@ -21,128 +20,141 @@ import coop.rchain.rholang.interpreter.errors.{
 }
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
-import monix.eval.{Coeval, Task}
 
-private class FailingTask[T](task: Task[Either[Throwable, T]]) {
-  def raiseOnLeft =
-    task.flatMap {
-      case Left(err) => Task.raiseError(err)
-      case Right(v)  => Task.now(v)
-    }
+final case class EvaluateResult(cost: CostAccount, errors: Vector[Throwable])
+
+trait Interpreter[F[_]] {
+
+  def buildNormalizedTerm(source: String): F[Par]
+
+  def buildNormalizedTerm(reader: Reader): F[Par]
+
+  def buildPar(proc: Proc): F[Par]
+
+  def execute(runtime: Runtime[F], reader: Reader): F[Runtime[F]]
+
+  def evaluate(runtime: Runtime[F], par: Par): F[EvaluateResult]
+
 }
 
 object Interpreter {
-  implicit private def toFailingTask[T](task: Task[Either[Throwable, T]]) = new FailingTask(task)
 
-  private def lexer(fileReader: Reader): Yylex = new Yylex(fileReader)
-  private def parser(lexer: Yylex): parser     = new parser(lexer, lexer.getSymbolFactory())
+  def apply[F[_]](implicit interpreter: Interpreter[F]): Interpreter[F] = interpreter
 
-  implicit lazy val sync = implicitly[Sync[Coeval]]
+  implicit def interpreter[F[_]](implicit F: Sync[F]): Interpreter[F] = new Interpreter[F] {
 
-  def buildNormalizedTerm(rho: String): Coeval[Par] = buildNormalizedTerm(new StringReader(rho))
-
-  def buildNormalizedTerm(source: Reader): Coeval[Par] =
-    try {
-      for {
-        term <- buildAST(source)
-        par  <- buildPar(term)
-      } yield par
-    } catch {
-      case th: Throwable => Coeval.raiseError(UnrecognizedInterpreterError(th))
-    }
-
-  def buildPar(proc: Proc): Coeval[Par] = {
-
-    val inputs = ProcVisitInputs(VectorPar(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
-    for {
-      outputs <- normalizeTerm(proc, inputs)
-      sorted  <- Sortable[Par].sortMatch(outputs.par)
-    } yield sorted.term
-  }
-
-  private def buildAST(source: Reader): Coeval[Proc] =
-    Coeval
-      .delay {
-        val lxr = lexer(source)
-        val ast = parser(lxr)
-        ast.pProc()
-      }
-      .adaptError {
-        case ex: Exception if ex.getMessage.toLowerCase.contains("syntax") =>
-          SyntaxError(ex.getMessage)
-        case e: Error if e.getMessage.startsWith("Unterminated string at EOF, beginning at") =>
-          LexerError(e.getMessage)
-        case e: Error if e.getMessage.startsWith("Illegal Character") => LexerError(e.getMessage)
-        case e: Error if e.getMessage.startsWith("Unterminated string on line") =>
-          LexerError(e.getMessage)
-        case th => UnrecognizedInterpreterError(th)
-      }
-
-  private def normalizeTerm[M[_]](term: Proc, inputs: ProcVisitInputs)(
-      implicit sync: Sync[M]
-  ): M[ProcVisitOutputs] =
-    ProcNormalizeMatcher.normalizeMatch[M](term, inputs).flatMap { normalizedTerm =>
-      if (normalizedTerm.knownFree.count > 0) {
-        if (normalizedTerm.knownFree.wildcards.isEmpty && normalizedTerm.knownFree.logicalConnectives.isEmpty) {
-          val topLevelFreeList = normalizedTerm.knownFree.env.map {
-            case (name, (_, _, line, col)) => s"$name at $line:$col"
-          }
-          sync.raiseError(
-            TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString("", ", ", ""))
-          )
-        } else if (normalizedTerm.knownFree.logicalConnectives.nonEmpty) {
-          def connectiveInstanceToString(conn: ConnectiveInstance): String =
-            if (conn.isConnAndBody) "/\\ (conjunction)"
-            else if (conn.isConnOrBody) "\\/ (disjunction)"
-            else if (conn.isConnNotBody) "~ (negation)"
-            else conn.toString
-
-          val connectives = normalizedTerm.knownFree.logicalConnectives
-            .map {
-              case (connType, line, col) => s"${connectiveInstanceToString(connType)} at $line:$col"
-            }
-            .mkString("", ", ", "")
-          sync.raiseError(TopLevelLogicalConnectivesNotAllowedError(connectives))
-        } else {
-          val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map {
-            case (line, col) => s"_ (wildcard) at $line:$col"
-          }
-          sync.raiseError(
-            TopLevelWildcardsNotAllowedError(topLevelWildcardList.mkString("", ", ", ""))
-          )
+    private implicit class FailingF[T](eff: F[Either[Throwable, T]]) {
+      def raiseOnLeft: F[T] =
+        eff.flatMap {
+          case Left(err) => F.raiseError(err)
+          case Right(v)  => F.pure(v)
         }
-      } else normalizedTerm.pure[M]
     }
 
-  def execute(runtime: Runtime[Task], reader: Reader): Task[Runtime[Task]] =
-    for {
-      term   <- Task.coeval(buildNormalizedTerm(reader)).attempt.raiseOnLeft
-      errors <- evaluate(runtime, term).map(_.errors).attempt.raiseOnLeft
-      result <- if (errors.isEmpty)
-                 Task.now(runtime)
-               else
-                 Task.raiseError(new RuntimeException(mkErrorMsg(errors)))
-    } yield result
+    def buildNormalizedTerm(source: String): F[Par] = buildNormalizedTerm(new StringReader(source))
 
-  def evaluate(runtime: Runtime[Task], normalizedTerm: Par): Task[EvaluateResult] = {
-    implicit val rand      = Blake2b512Random(128)
-    val evaluatePhlosLimit = Cost(Integer.MAX_VALUE) //This is OK because evaluate is not called on deploy
-    for {
-      checkpoint <- runtime.space.createCheckpoint()
-      _          <- runtime.reducer.setPhlo(evaluatePhlosLimit)
-      _          <- runtime.reducer.inj(normalizedTerm)(rand)
-      errors     <- runtime.readAndClearErrorVector()
-      leftPhlos  <- runtime.reducer.phlo
-      cost       = leftPhlos.copy(cost = evaluatePhlosLimit - leftPhlos.cost)
-      _          <- if (errors.nonEmpty) runtime.space.reset(checkpoint.root) else Task.now(())
-    } yield EvaluateResult(cost, errors)
+    def buildNormalizedTerm(reader: Reader): F[Par] =
+      try {
+        for {
+          term <- buildAST(reader)
+          par  <- buildPar(term)
+        } yield par
+      } catch {
+        case th: Throwable => F.raiseError(UnrecognizedInterpreterError(th))
+      }
+
+    def buildPar(proc: Proc): F[Par] = {
+      val inputs =
+        ProcVisitInputs(VectorPar(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
+      for {
+        outputs <- normalizeTerm(proc, inputs)
+        sorted  <- Sortable[Par].sortMatch(outputs.par)
+      } yield sorted.term
+    }
+
+    def execute(runtime: Runtime[F], reader: Reader): F[Runtime[F]] =
+      for {
+        term   <- buildNormalizedTerm(reader).attempt.raiseOnLeft
+        errors <- evaluate(runtime, term).map(_.errors).attempt.raiseOnLeft
+        result <- if (errors.isEmpty)
+                   F.pure(runtime)
+                 else
+                   F.raiseError(new RuntimeException(mkErrorMsg(errors)))
+      } yield result
+
+    def evaluate(runtime: Runtime[F], par: Par): F[EvaluateResult] = {
+      implicit val rand      = Blake2b512Random(128)
+      val evaluatePhlosLimit = Cost(Integer.MAX_VALUE) //This is OK because evaluate is not called on deploy
+      for {
+        checkpoint <- runtime.space.createCheckpoint()
+        _          <- runtime.reducer.setPhlo(evaluatePhlosLimit)
+        _          <- runtime.reducer.inj(par)(rand)
+        errors     <- runtime.readAndClearErrorVector()
+        leftPhlos  <- runtime.reducer.phlo
+        cost       = leftPhlos.copy(cost = evaluatePhlosLimit - leftPhlos.cost)
+        _          <- if (errors.nonEmpty) runtime.space.reset(checkpoint.root) else F.unit
+      } yield EvaluateResult(cost, errors)
+    }
+
+    private def buildAST(reader: Reader): F[Proc] =
+      F.delay {
+          val lxr = lexer(reader)
+          val ast = parser(lxr)
+          ast.pProc()
+        }
+        .adaptError {
+          case ex: Exception if ex.getMessage.toLowerCase.contains("syntax") =>
+            SyntaxError(ex.getMessage)
+          case e: Error if e.getMessage.startsWith("Unterminated string at EOF, beginning at") =>
+            LexerError(e.getMessage)
+          case e: Error if e.getMessage.startsWith("Illegal Character") => LexerError(e.getMessage)
+          case e: Error if e.getMessage.startsWith("Unterminated string on line") =>
+            LexerError(e.getMessage)
+          case th => UnrecognizedInterpreterError(th)
+        }
+
+    private def normalizeTerm(term: Proc, inputs: ProcVisitInputs): F[ProcVisitOutputs] =
+      ProcNormalizeMatcher.normalizeMatch[F](term, inputs).flatMap { normalizedTerm =>
+        if (normalizedTerm.knownFree.count > 0) {
+          if (normalizedTerm.knownFree.wildcards.isEmpty && normalizedTerm.knownFree.logicalConnectives.isEmpty) {
+            val topLevelFreeList = normalizedTerm.knownFree.env.map {
+              case (name, (_, _, line, col)) => s"$name at $line:$col"
+            }
+            F.raiseError(
+              TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString("", ", ", ""))
+            )
+          } else if (normalizedTerm.knownFree.logicalConnectives.nonEmpty) {
+            def connectiveInstanceToString(conn: ConnectiveInstance): String =
+              if (conn.isConnAndBody) "/\\ (conjunction)"
+              else if (conn.isConnOrBody) "\\/ (disjunction)"
+              else if (conn.isConnNotBody) "~ (negation)"
+              else conn.toString
+
+            val connectives = normalizedTerm.knownFree.logicalConnectives
+              .map {
+                case (connType, line, col) =>
+                  s"${connectiveInstanceToString(connType)} at $line:$col"
+              }
+              .mkString("", ", ", "")
+            F.raiseError(TopLevelLogicalConnectivesNotAllowedError(connectives))
+          } else {
+            val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map {
+              case (line, col) => s"_ (wildcard) at $line:$col"
+            }
+            F.raiseError(
+              TopLevelWildcardsNotAllowedError(topLevelWildcardList.mkString("", ", ", ""))
+            )
+          }
+        } else normalizedTerm.pure[F]
+      }
+
+    private def lexer(fileReader: Reader): Yylex = new Yylex(fileReader)
+
+    private def parser(lexer: Yylex): parser = new parser(lexer, lexer.getSymbolFactory)
+
+    private def mkErrorMsg(errors: Vector[Throwable]) =
+      errors
+        .map(_.toString())
+        .mkString("Errors received during evaluation:\n", "\n", "\n")
   }
-
-  private def mkErrorMsg(errors: Vector[Throwable]) =
-    errors
-      .map(_.toString())
-      .mkString("Errors received during evaluation:\n", "\n", "\n")
-
-  final case class EvaluateResult(cost: CostAccount, errors: Vector[Throwable])
-
 }
