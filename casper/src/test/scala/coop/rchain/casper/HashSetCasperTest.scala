@@ -928,7 +928,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         status <- node.casperEff.addBlock(signedBlock1, ignoreDoppelgangerCheck[Effect])
       } yield (signedBlock1, status)
 
-    def stepSplit(nodes: Seq[HashSetCasperTestNode[Effect]]) =
+    def stepSplit(nodes: Seq[HashSetCasperTestNode[Effect]]): Effect[Unit] =
       for {
         _ <- deploy(nodes(0), deployDatasFs(0).apply())
         _ <- deploy(nodes(1), deployDatasFs(1).apply())
@@ -939,41 +939,40 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         _ <- nodes(2).receive()
       } yield ()
 
-    def propagate(nodes: Seq[HashSetCasperTestNode[Effect]]) =
+    def propagate(nodes: Seq[HashSetCasperTestNode[Effect]]): Effect[Unit] =
       for {
         _ <- nodes(0).receive()
         _ <- nodes(1).receive()
         _ <- nodes(2).receive()
       } yield ()
 
-    def bond(node: HashSetCasperTestNode[Effect]) = {
-      import node.casperEff
-
+    def bond(node: HashSetCasperTestNode[Effect]): Effect[Unit] = {
       implicit val runtimeManager  = node.runtimeManager
       implicit val abstractContext = node.abF
       val (sk, pk)                 = Ed25519.newKeyPair
       val pkStr                    = Base16.encode(pk)
       val amount                   = 314L
       val forwardCode              = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
+      val bondingCode =
+        BondingUtil.faucetBondDeploy[Task](amount, "ed25519", pkStr, sk).unsafeRunSync
+      val forwardDeploy = ProtoUtil.sourceDeploy(
+        forwardCode,
+        System.currentTimeMillis(),
+        accounting.MAX_VALUE
+      )
+      val bondingDeploy = ProtoUtil.sourceDeploy(
+        bondingCode,
+        forwardDeploy.timestamp + 1,
+        accounting.MAX_VALUE
+      )
       for {
-        bondingCode <- BondingUtil.faucetBondDeploy[Effect](amount, "ed25519", pkStr, sk)
-        forwardDeploy = ProtoUtil.sourceDeploy(
-          forwardCode,
-          System.currentTimeMillis(),
-          accounting.MAX_VALUE
-        )
-        bondingDeploy = ProtoUtil.sourceDeploy(
-          bondingCode,
-          forwardDeploy.timestamp + 1,
-          accounting.MAX_VALUE
-        )
         fr       <- deploy(node, forwardDeploy)
         br       <- deploy(node, bondingDeploy)
         oldBonds = fr._1.getBody.getState.bonds
         newBonds = br._1.getBody.getState.bonds
         _        = fr._2 shouldBe Valid
         _        = br._2 shouldBe Valid
-        result   = (oldBonds.size + 1) shouldBe newBonds.size
+        _        = (oldBonds.size + 1) shouldBe newBonds.size
       } yield ()
     }
 
