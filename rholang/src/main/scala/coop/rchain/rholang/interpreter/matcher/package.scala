@@ -17,10 +17,6 @@ package object matcher {
 
   type FreeMap = Map[Int, Par]
 
-  //FreeMap => Cost => Either[OOPE, (Cost, Option[(FreeMap, A)])]
-  type OptionalFreeMapWithCost[A] = StateT[OptionWithCost, FreeMap, A]
-  type OptionWithCost[A]          = OptionT[ErroredOrCostA, A]
-
   type OOPE[A]           = Either[OutOfPhlogistonsError.type, A]
   type ErroredOrCostA[A] = StateT[OOPE, Cost, A]
 
@@ -54,38 +50,6 @@ package object matcher {
 
   private[matcher] def attemptOpt[F[_], A](f: F[A])(implicit short: _short[F]): F[Option[A]] =
     short.attempt(f).map(_.fold(_ => None, Some(_)))
-
-  object OptionalFreeMapWithCost {
-
-    class OptionalFreeMapWithCostOps[A](s: OptionalFreeMapWithCost[A]) {
-
-      def charge(amount: Cost): OptionalFreeMapWithCost[A] =
-        s.flatMap(matcher.charge[OptionalFreeMapWithCost](amount).as)
-
-      def attemptOpt: OptionalFreeMapWithCost[Option[A]] =
-        matcher.attemptOpt(s)
-
-      def runWithCost(
-          initCost: Cost
-      ): Either[OutOfPhlogistonsError.type, (Cost, Option[(FreeMap, A)])] =
-        s.run(Map.empty).value.run(initCost)
-
-      def toNonDet(): NonDetFreeMapWithCost[A] =
-        s.mapK[StreamWithCost](new FunctionK[OptionWithCost, StreamWithCost] {
-          override def apply[T](fa: OptionWithCost[T]): StreamWithCost[T] =
-            StreamT.fromStream(fa.fold(Stream.empty[T])(single => Stream(single)))
-        })
-    }
-
-    implicit def toOptionalFreeMapWithCostOps[A](s: OptionalFreeMapWithCost[A]) =
-      new OptionalFreeMapWithCostOps[A](s)
-
-    def empty[A]: OptionalFreeMapWithCost[A] =
-      MonadTrans[StateT[?[_], FreeMap, ?]].liftM(MonoidK[OptionWithCost].empty)
-
-    def fromOption[A](option: Option[A]): OptionalFreeMapWithCost[A] =
-      StateT.liftF(OptionT.fromOption(option))
-  }
 
   object NonDetFreeMapWithCost {
 

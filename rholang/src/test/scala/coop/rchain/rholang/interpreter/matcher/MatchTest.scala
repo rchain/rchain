@@ -11,7 +11,6 @@ import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rholang.interpreter.PrettyPrinter
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
-import coop.rchain.rholang.interpreter.matcher.OptionalFreeMapWithCost.toOptionalFreeMapWithCostOps
 import coop.rchain.rholang.interpreter.matcher.NonDetFreeMapWithCost.toNonDetFreeMapWithCostOps
 import monix.eval.Coeval
 import org.scalactic.TripleEqualsSupport
