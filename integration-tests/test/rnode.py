@@ -452,6 +452,7 @@ def make_peer(
     allowed_peers: Optional[List[str]] = None,
     mem_limit: Optional[str] = None,
     wallets_file: Optional[str] = None,
+    cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict] = None,
 ) -> Node:
     assert isinstance(name, str)
@@ -463,6 +464,9 @@ def make_peer(
     container_command_flags = set([
         "--prometheus",
     ])
+
+    if cli_flags is not None:
+        container_command_flags.update(cli_flags)
 
     container_command_options = {
         "--bootstrap":              bootstrap_address,
@@ -500,6 +504,7 @@ def started_peer(
     bootstrap: Node,
     keypair: KeyPair,
     wallets_file: Optional[str] = None,
+    cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict] = None,
 ) -> Generator[Node, None, None]:
     peer = make_peer(
@@ -511,6 +516,7 @@ def started_peer(
         keypair=keypair,
         command_timeout=context.command_timeout,
         wallets_file=wallets_file,
+        cli_flags=cli_flags,
         cli_options=cli_options,
     )
     try:
