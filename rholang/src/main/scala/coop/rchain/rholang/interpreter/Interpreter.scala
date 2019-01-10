@@ -44,14 +44,6 @@ object Interpreter {
 
   implicit def interpreter[F[_]](implicit F: Sync[F]): Interpreter[F] = new Interpreter[F] {
 
-    private implicit class FailingF[T](eff: F[Either[Throwable, T]]) {
-      def raiseOnLeft: F[T] =
-        eff.flatMap {
-          case Left(err) => F.raiseError(err)
-          case Right(v)  => F.pure(v)
-        }
-    }
-
     def buildNormalizedTerm(source: String): F[Par] =
       buildNormalizedTerm(new StringReader(source))
 
@@ -69,12 +61,10 @@ object Interpreter {
 
     def execute(runtime: Runtime[F], reader: Reader): F[Runtime[F]] =
       for {
-        term   <- buildNormalizedTerm(reader).attempt.raiseOnLeft
-        errors <- evaluate(runtime, term).map(_.errors).attempt.raiseOnLeft
-        result <- if (errors.isEmpty)
-                   F.pure(runtime)
-                 else
-                   F.raiseError(new RuntimeException(mkErrorMsg(errors)))
+        par    <- buildNormalizedTerm(reader)
+        errors <- evaluate(runtime, par).map(_.errors)
+        result <- if (errors.isEmpty) F.pure(runtime)
+                 else F.raiseError(new RuntimeException(mkErrorMsg(errors)))
       } yield result
 
     def evaluate(runtime: Runtime[F], par: Par): F[EvaluateResult] = {
