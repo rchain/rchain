@@ -120,12 +120,12 @@ class NodeRuntime private[node] (
                              .toEffect
 
       prometheusReporter = new NewPrometheusReporter()
-      prometheusService  = NewPrometheusReporter.service(prometheusReporter)
+      prometheusService  = NewPrometheusReporter.service[Task](prometheusReporter)
 
       httpServerFiber <- BlazeBuilder[Task]
                           .bindHttp(conf.server.httpPort, "0.0.0.0")
                           .mountService(prometheusService, "/metrics")
-                          .mountService(VersionInfo.service, "/version")
+                          .mountService(VersionInfo.service[Task], "/version")
                           .mountService(StatusInfo.service[Task], "/status")
                           .resource
                           .use(_ => Task.never[Unit])

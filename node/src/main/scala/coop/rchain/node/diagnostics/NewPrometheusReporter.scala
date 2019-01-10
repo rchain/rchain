@@ -2,14 +2,11 @@ package coop.rchain.node.diagnostics
 
 import java.time.Duration
 
+import scala.collection.JavaConverters._
+
 import com.typesafe.config.{Config, ConfigUtil}
 import kamon._
 import kamon.metric._
-import monix.eval.Task
-import org.http4s._
-import org.http4s.dsl.io._
-
-import scala.collection.JavaConverters._
 
 /**
   * Based on kamon-prometheus but without the embedded server
@@ -90,9 +87,15 @@ object NewPrometheusReporter {
         .toMap
   }
 
-  import coop.rchain.node.Http4sDsl.Ok
-  def service(reporter: NewPrometheusReporter): HttpRoutes[Task] =
-    HttpRoutes.of[Task] {
-      case GET -> Root => Ok(reporter.scrapeData())
+  import cats.effect.Sync
+  import org.http4s.HttpRoutes
+
+  def service[F[_]: Sync](reporter: NewPrometheusReporter): HttpRoutes[F] = {
+    val dsl = org.http4s.dsl.Http4sDsl[F]
+    import dsl._
+
+    HttpRoutes.of[F] {
+      case GET -> Root => Ok(Sync[F].delay(reporter.scrapeData()))
     }
+  }
 }

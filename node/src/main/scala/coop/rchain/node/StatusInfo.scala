@@ -27,9 +27,9 @@ object StatusInfo {
     import io.circe.generic.auto._
     import io.circe.syntax._
     import org.http4s.circe.CirceEntityEncoder._
-    import org.http4s.dsl.io._
 
-    val Ok = Http4sDsl.OkF[F]
+    val dsl = org.http4s.dsl.Http4sDsl[F]
+    import dsl._
 
     HttpRoutes.of[F] {
       case GET -> Root => Ok(status.map(_.asJson))
