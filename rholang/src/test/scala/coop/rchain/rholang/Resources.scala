@@ -68,8 +68,8 @@ object Resources {
   )(implicit scheduler: Scheduler): Resource[Task, Runtime[Task]] =
     mkTempDir[Task](prefix)
       .flatMap { tmpDir =>
-        Resource.make[Task, Runtime[Task]](Task.delay {
-          Runtime.create(tmpDir, storageSize, storeType)
+        Resource.make[Task, Runtime[Task]](Task.suspend {
+          Runtime.create[Task, Task.Par](tmpDir, storageSize, storeType)
         })(
           rt => rt.close()
         )

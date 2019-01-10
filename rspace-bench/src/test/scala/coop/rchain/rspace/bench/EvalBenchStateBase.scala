@@ -10,6 +10,7 @@ import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccounting}
 import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
 import coop.rchain.shared.PathOps.RichPath
+import coop.rchain.shared.StoreType
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 
@@ -18,8 +19,9 @@ trait EvalBenchStateBase {
   private val mapSize: Long    = 1024L * 1024L * 1024L
 
   val rhoScriptSource: String
-  lazy val runtime: Runtime[Task] = Runtime.create(dbDir, mapSize)
-  val rand: Blake2b512Random      = Blake2b512Random(128)
+  lazy val runtime: Runtime[Task] =
+    Runtime.create[Task, Task.Par](dbDir, mapSize, StoreType.LMDB).unsafeRunSync
+  val rand: Blake2b512Random = Blake2b512Random(128)
   val costAccountAlg: CostAccounting[Task] =
     CostAccounting.unsafe[Task](CostAccount(Integer.MAX_VALUE))
   var term: Option[Par] = None

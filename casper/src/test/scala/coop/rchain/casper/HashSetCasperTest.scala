@@ -28,6 +28,7 @@ import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.{accounting, Runtime}
 import coop.rchain.models.{Expr, Par}
+import coop.rchain.shared.StoreType
 import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.Catscontrib._
@@ -875,18 +876,20 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val pkStr                    = Base16.encode(pk)
     val amount                   = 314L
     val forwardCode              = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
+    val bondingCode              = BondingUtil.faucetBondDeploy[Task](amount, "ed25519", pkStr, sk).unsafeRunSync
+    val forwardDeploy = ProtoUtil.sourceDeploy(
+      forwardCode,
+      System.currentTimeMillis(),
+      accounting.MAX_VALUE
+    )
+    val bondingDeploy = ProtoUtil.sourceDeploy(
+      bondingCode,
+      forwardDeploy.timestamp + 1,
+      accounting.MAX_VALUE
+    )
+
     for {
-      bondingCode <- BondingUtil.faucetBondDeploy[Effect](amount, "ed25519", pkStr, sk)
-      forwardDeploy = ProtoUtil.sourceDeploy(
-        forwardCode,
-        System.currentTimeMillis(),
-        accounting.MAX_VALUE
-      )
-      bondingDeploy = ProtoUtil.sourceDeploy(
-        bondingCode,
-        forwardDeploy.timestamp + 1,
-        accounting.MAX_VALUE
-      )
+
       createBlockResult1 <- casperEff.deploy(forwardDeploy) *> casperEff.createBlock
       Created(block1)    = createBlockResult1
       block1Status       <- casperEff.addBlock(block1, ignoreDoppelgangerCheck[Effect])
@@ -1001,11 +1004,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       (sk, pk)    = Ed25519.newKeyPair
       pkStr       = Base16.encode(pk)
       forwardCode = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
-      bondingCode <- BondingUtil.faucetBondDeploy[Effect](50, "ed25519", pkStr, sk)(
-                      Concurrent[Effect],
-                      nodes.head.abF,
-                      rm
-                    )
+      bondingCode = BondingUtil
+        .faucetBondDeploy[Task](50, "ed25519", pkStr, sk)(
+          Concurrent[Task],
+          rm
+        )
+        .unsafeRunSync
       forwardDeploy = ProtoUtil.sourceDeploy(
         forwardCode,
         System.currentTimeMillis(),
@@ -1748,10 +1752,12 @@ object HashSetCasperTest {
     val initial           = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "rchain")
     val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
     val storageSize: Long = 1024L * 1024
-    val activeRuntime     = Runtime.create(storageDirectory, storageSize)
-    val runtimeManager    = RuntimeManager.fromRuntime(activeRuntime)
-    val emptyStateHash    = runtimeManager.emptyStateHash
-    val validators        = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
+
+    val activeRuntime =
+      Runtime.create[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB).unsafeRunSync
+    val runtimeManager = RuntimeManager.fromRuntime[Task](activeRuntime).unsafeRunSync
+    val emptyStateHash = runtimeManager.emptyStateHash
+    val validators     = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
     val genesis = Genesis.withContracts(
       initial,
       ProofOfStakeParams(minimumBond, maximumBond, validators),
