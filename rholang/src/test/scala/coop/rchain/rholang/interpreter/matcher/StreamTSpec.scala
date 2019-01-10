@@ -142,6 +142,10 @@ class StreamTLawsSpec extends CatsSuite with LowPriorityDerivations {
     "StreamT.MonadErrorLaws",
     MonadErrorTests[StreamTEffect, String].monadError[Int, Int, String]
   )
+  checkAll(
+    "StreamT.MonadErrorUnitLaws",
+    MonadErrorTests[StreamTEffect, Unit].monadError[Int, Int, String]
+  )
 
 }
 
