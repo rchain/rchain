@@ -372,22 +372,22 @@ object SpatialMatcher extends SpatialMatcherInstances {
     } yield Unit
   }
 
-  private def guardMatch[F[_[_], _]: MonadTrans, G[_]: Monad: FunctorFilter](
+  private def guardMatch[H[_[_], _]: MonadTrans, G[_]: Monad: FunctorFilter](
       predicate: => Boolean
-  ): F[G, Unit] =
-    MonadTrans[F].liftM(guard[G](predicate))
+  ): H[G, Unit] =
+    MonadTrans[H].liftM(guard[G](predicate))
 
-  private def guard[F[_]: FunctorFilter: Applicative](predicate: => Boolean): F[Unit] =
-    FunctorFilter[F].mapFilter(Applicative[F].unit) { _ =>
+  private def guard[H[_]: FunctorFilter: Applicative](predicate: => Boolean): H[Unit] =
+    FunctorFilter[H].mapFilter(Applicative[H].unit) { _ =>
       if (predicate) Some(()) else None
     }
 
-  private def isolateState[F[_]: MonadState[?[_], S]: Monad, S](f: F[_]): F[S] =
+  private def isolateState[H[_]: MonadState[?[_], S]: Monad, S](f: H[_]): H[S] =
     for {
-      initState   <- MonadState[F, S].get
+      initState   <- MonadState[H, S].get
       _           <- f
-      resultState <- MonadState[F, S].get
-      _           <- MonadState[F, S].set(initState)
+      resultState <- MonadState[H, S].get
+      _           <- MonadState[H, S].set(initState)
     } yield resultState
 
   private def memoizeInHashMap[A, B, C](f: (A, B) => C): (A, B) => C = {
@@ -410,13 +410,13 @@ object SpatialMatcher extends SpatialMatcherInstances {
       updatedFreeMap = freeMaps.fold(currentFreeMap)(_ ++ _)
     } yield updatedFreeMap
 
-  private def handleRemainder[F[_]: Monad, T](
+  private def handleRemainder[G[_]: Monad, T](
       remainderTargets: Seq[T],
       level: Int,
       merger: (Par, Seq[T]) => Par
   )(
-      implicit freeMap: _freeMap[F]
-  ): F[Unit] =
+      implicit freeMap: _freeMap[G]
+  ): G[Unit] =
     for {
       remainderPar <- freeMap.inspect[Par](_.getOrElse(level, VectorPar()))
       //TODO: enforce sorted-ness of returned terms using types / by verifying the sorted-ness here
