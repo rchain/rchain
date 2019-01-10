@@ -43,6 +43,7 @@ rnode_binary = '/opt/docker/bin/rnode'
 rnode_directory = "/var/lib/rnode"
 rnode_deploy_dir = "{}/deploy".format(rnode_directory)
 rnode_bonds_file = '{}/genesis/bonds.txt'.format(rnode_directory)
+rnode_wallets_file = '{}/genesis/wallets.txt'.format(rnode_directory)
 rnode_certificate = '{}/node.certificate.pem'.format(rnode_directory)
 rnode_key = '{}/node.key.pem'.format(rnode_directory)
 
@@ -290,6 +291,7 @@ def make_node(
     allowed_peers: Optional[List[str]],
     image: str = DEFAULT_IMAGE,
     mem_limit: Optional[str] = None,
+    wallets_file: Optional[str] = None,
 ) -> Node:
     assert isinstance(name, str)
     assert '_' not in name, 'Underscore is not allowed in host name'
@@ -315,6 +317,9 @@ def make_node(
         "{}:{}".format(bonds_file, rnode_bonds_file),
         "{}:{}".format(deploy_dir, rnode_deploy_dir),
     ]
+
+    if wallets_file is not None:
+        volumes.append('{}:{}'.format(wallets_file, rnode_wallets_file))
 
     logging.info('STARTING %s %s', name, command)
     container = docker_client.containers.run(
@@ -371,6 +376,7 @@ def make_bootstrap_node(
     cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict] = None,
     mount_dir: Optional[str] = None,
+    wallets_file: Optional[str] = None,
 ) -> Node:
     key_file = get_absolute_path_for_mounting("bootstrap_certificate/node.key.pem", mount_dir=mount_dir)
     cert_file = get_absolute_path_for_mounting("bootstrap_certificate/node.certificate.pem", mount_dir=mount_dir)
@@ -413,6 +419,7 @@ def make_bootstrap_node(
         extra_volumes=volumes,
         allowed_peers=allowed_peers,
         mem_limit=mem_limit if mem_limit is not None else '4G',
+        wallets_file=wallets_file,
     )
     return container
 
@@ -444,6 +451,7 @@ def make_peer(
     keypair: KeyPair,
     allowed_peers: Optional[List[str]] = None,
     mem_limit: Optional[str] = None,
+    wallets_file: Optional[str] = None,
 ) -> Node:
     assert isinstance(name, str)
     assert '_' not in name, 'Underscore is not allowed in host name'
@@ -474,6 +482,7 @@ def make_peer(
         extra_volumes=[],
         allowed_peers=allowed_peers,
         mem_limit=mem_limit if not None else '4G',
+        wallets_file=wallets_file,
     )
     return container
 
@@ -486,6 +495,7 @@ def started_peer(
     name: str,
     bootstrap: Node,
     keypair: KeyPair,
+    wallets_file: Optional[str] = None,
 ) -> Generator[Node, None, None]:
     peer = make_peer(
         docker_client=context.docker,
@@ -495,6 +505,7 @@ def started_peer(
         bootstrap=bootstrap,
         keypair=keypair,
         command_timeout=context.command_timeout,
+        wallets_file=wallets_file,
     )
     try:
         wait_for_node_started(context, peer)
@@ -584,6 +595,7 @@ def started_bootstrap(
     mount_dir: str = None,
     cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict] = None,
+    wallets_file: Optional[str] = None,
 ) -> Generator[Node, None, None]:
     bootstrap_node = make_bootstrap_node(
         docker_client=context.docker,
@@ -594,6 +606,7 @@ def started_bootstrap(
         mount_dir=mount_dir,
         cli_flags=cli_flags,
         cli_options=cli_options,
+        wallets_file=wallets_file,
     )
     try:
         wait_for_node_started(context, bootstrap_node)
@@ -605,13 +618,18 @@ def started_bootstrap(
 @contextlib.contextmanager
 def docker_network_with_started_bootstrap(context: TestingContext) -> Generator[Node, None, None]:
     with docker_network(context, context.docker) as network:
-        with started_bootstrap(context=context, network=network, mount_dir=context.mount_dir) as node:
-            wait_for_approved_block_received_handler_state(context, bootstrap_node)
-            yield node
+        with started_bootstrap(context=context, network=network, mount_dir=context.mount_dir) as bootstrap:
+            wait_for_approved_block_received_handler_state(context, bootstrap)
+            yield bootstrap
 
 
 @contextlib.contextmanager
-def ready_bootstrap(context: TestingContext, cli_flags: Optional[AbstractSet] = None, cli_options: Optional[Dict] = None) -> Generator[Node, None, None]:
+def ready_bootstrap(
+    context: TestingContext,
+    cli_flags: Optional[AbstractSet] = None,
+    cli_options: Optional[Dict] = None,
+    wallets_file: Optional[str] = None,
+) -> Generator[Node, None, None]:
     with docker_network(context, context.docker) as network:
-        with started_bootstrap(context=context, network=network, mount_dir=context.mount_dir, cli_flags=cli_flags, cli_options=cli_options) as node:
+        with started_bootstrap(context=context, network=network, mount_dir=context.mount_dir, cli_flags=cli_flags, cli_options=cli_options, wallets_file=wallets_file) as node:
             yield node

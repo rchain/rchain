@@ -3,7 +3,10 @@ from random import Random
 import pytest
 from docker.client import DockerClient
 
-from . import conftest
+from .conftest import (
+    testing_context,
+    temporary_wallets_file,
+)
 from .common import (
     KeyPair,
     CommandLineOptions,
@@ -37,13 +40,14 @@ def test_successful_genesis_ceremony(command_line_options: CommandLineOptions, r
         VALIDATOR_A_KEYPAIR,
         VALIDATOR_B_KEYPAIR,
     ]
-    with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_keypair=CEREMONY_MASTER_KEYPAIR, peers_keypairs=peers_keypairs) as context:
-        with ready_bootstrap(context=context, cli_options=bootstrap_cli_options) as bootstrap:
-            with started_peer(context=context, network=bootstrap.network, bootstrap=bootstrap, name='validator-a', keypair=VALIDATOR_A_KEYPAIR) as validator_a:
-                with started_peer(context=context, network=bootstrap.network, bootstrap=bootstrap, name='validator-b', keypair=VALIDATOR_B_KEYPAIR) as validator_b:
-                    wait_for_sent_unapproved_block(context, bootstrap)
-                    wait_for_block_approval(context, validator_a)
-                    wait_for_block_approval(context, validator_b)
+    with testing_context(command_line_options, random_generator, docker_client, bootstrap_keypair=CEREMONY_MASTER_KEYPAIR, peers_keypairs=peers_keypairs) as context:
+        with temporary_wallets_file(context.random_generator, [context.bootstrap_keypair] + context.peers_keypairs) as wallets:
+            with ready_bootstrap(context=context, cli_options=bootstrap_cli_options, wallets_file=wallets) as bootstrap:
+                with started_peer(context=context, network=bootstrap.network, bootstrap=bootstrap, name='validator-a', keypair=VALIDATOR_A_KEYPAIR, wallets_file=wallets) as validator_a:
+                    with started_peer(context=context, network=bootstrap.network, bootstrap=bootstrap, name='validator-b', keypair=VALIDATOR_B_KEYPAIR, wallets_file=wallets) as validator_b:
+                        wait_for_sent_unapproved_block(context, bootstrap)
+                        wait_for_block_approval(context, validator_a)
+                        wait_for_block_approval(context, validator_b)
 
 
 @pytest.mark.xfail
