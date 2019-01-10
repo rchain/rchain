@@ -289,14 +289,15 @@ object DeployPaymentCostTest {
       tuplespaceHash: ByteString,
       statusChannel: GPrivate
   ): Unit = {
-    val transferStatus = node.runtimeManager
+    node.runtimeManager
       .getData(
         tuplespaceHash,
         statusChannel
-      )
-      .unsafeRunSync
-    assert(transferStatus.size == 1)
-    transferStatus.head.exprs.head should be(Expr(GString("Success")))
+      ).map { transferStatus =>
+      assert(transferStatus.size == 1)
+      transferStatus.head.exprs.head should be(Expr(GString("Success")))
+    }.unsafeRunSync
+
   }
 
 }
