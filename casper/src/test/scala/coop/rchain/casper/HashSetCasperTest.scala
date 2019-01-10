@@ -914,7 +914,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
           () =>
             ProtoUtil.sourceDeploy(d._1, System.currentTimeMillis() + d._2, accounting.MAX_VALUE)
       )
-    def deploy(node: HashSetCasperTestNode[Effect], dd: DeployData): Effect[(BlockMessage, BlockStatus)] =
+    def deploy(
+        node: HashSetCasperTestNode[Effect],
+        dd: DeployData
+    ): Effect[(BlockMessage, BlockStatus)] =
       for {
         createBlockResult1    <- node.casperEff.deploy(dd) *> node.casperEff.createBlock
         Created(signedBlock1) = createBlockResult1
@@ -961,13 +964,13 @@ class HashSetCasperTest extends FlatSpec with Matchers {
           forwardDeploy.timestamp + 1,
           accounting.MAX_VALUE
         )
-        fr <- deploy(node, forwardDeploy)
-        br <- deploy(node, bondingDeploy)
-        oldBonds           = fr._1.getBody.getState.bonds
-        newBonds           = br._1.getBody.getState.bonds
-        _                  = fr._2 shouldBe Valid
-        _                  = br._2 shouldBe Valid
-        result             = (oldBonds.size + 1) shouldBe newBonds.size
+        fr       <- deploy(node, forwardDeploy)
+        br       <- deploy(node, bondingDeploy)
+        oldBonds = fr._1.getBody.getState.bonds
+        newBonds = br._1.getBody.getState.bonds
+        _        = fr._2 shouldBe Valid
+        _        = br._2 shouldBe Valid
+        result   = (oldBonds.size + 1) shouldBe newBonds.size
       } yield ()
     }
 
@@ -982,7 +985,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _ <- deploy(nodes(0), deployDatasFs(0).apply())
       _ <- deploy(nodes(2), deployDatasFs(2).apply())
       _ <- nodes(2).receive()
-      _     = nodes.foreach(_.tearDown())
+      _ = nodes.foreach(_.tearDown())
     } yield ()
   }
 

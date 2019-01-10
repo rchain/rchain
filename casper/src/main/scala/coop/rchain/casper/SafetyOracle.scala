@@ -241,50 +241,11 @@ sealed abstract class SafetyOracleInstances {
                                                                   _.filter(_.sender == second).toList
                                                                 )
                                                           }
-                           _ <- Monad[F].ifM((justificationBlockSecondList.length != 1).pure[F])(
-                                 for {
-                                   _ <- Log[F].info(
-                                         "f: " + PrettyPrinter
-                                           .buildString(first) + " -- s: " + PrettyPrinter
-                                           .buildString(second)
-                                       )
-                                   _ <- Log[F].info(
-                                         "firstLatestBlock: " + PrettyPrinter.buildString(
-                                           firstLatestBlock.blockHash
-                                         ) + " parents: " + firstLatestBlock.parents
-                                           .map(PrettyPrinter.buildString)
-                                           .mkString(";") + " justifications " + firstLatestBlock.justifications
-                                           .map(
-                                             j =>
-                                               "V: " + PrettyPrinter
-                                                 .buildString(j.validator) + " LBH " + PrettyPrinter
-                                                 .buildString(j.latestBlockHash)
-                                           )
-                                           .mkString(";")
-                                       )
-                                   _ <- Log[F].info(
-                                         "justifications 2nd list: " + justificationBlockSecondList
-                                           .map(
-                                             j =>
-                                               PrettyPrinter
-                                                 .buildString(j.blockHash) + " parents: " + j.parents
-                                                 .map(PrettyPrinter.buildString)
-                                                 .mkString(";") + " justifications " + j.justifications
-                                                 .map(
-                                                   _j =>
-                                                     "V: " + PrettyPrinter
-                                                       .buildString(_j.validator) + " LBH " + PrettyPrinter
-                                                       .buildString(_j.latestBlockHash)
-                                                 )
-                                                 .mkString(";")
-                                           )
-                                           .mkString(" <<>> ")
-                                       )
-                                 } yield (),
-                                 ().pure[F]
-                               )
-                           _                        = assert(justificationBlockSecondList.length == 1)
                            justificationBlockSecond = justificationBlockSecondList.head
+                           _ = assert(
+                             justificationBlockSecondList
+                               .forall(b => b.blockHash == justificationBlockSecond.blockHash)
+                           )
                            potentialDisagreements <- filterChildren(
                                                       justificationBlockSecond,
                                                       second
