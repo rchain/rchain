@@ -63,14 +63,11 @@ object Interpreter {
         case th: Throwable => F.raiseError(UnrecognizedInterpreterError(th))
       }
 
-    def buildPar(proc: Proc): F[Par] = {
-      val inputs =
-        ProcVisitInputs(VectorPar(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
+    def buildPar(proc: Proc): F[Par] =
       for {
-        outputs <- normalizeTerm(proc, inputs)
+        outputs <- normalizeTerm(proc)
         sorted  <- Sortable[Par].sortMatch(outputs.par)
       } yield sorted.term
-    }
 
     def execute(runtime: Runtime[F], reader: Reader): F[Runtime[F]] =
       for {
@@ -113,40 +110,45 @@ object Interpreter {
           case th => UnrecognizedInterpreterError(th)
         }
 
-    private def normalizeTerm(term: Proc, inputs: ProcVisitInputs): F[ProcVisitOutputs] =
-      ProcNormalizeMatcher.normalizeMatch[F](term, inputs).flatMap { normalizedTerm =>
-        if (normalizedTerm.knownFree.count > 0) {
-          if (normalizedTerm.knownFree.wildcards.isEmpty && normalizedTerm.knownFree.logicalConnectives.isEmpty) {
-            val topLevelFreeList = normalizedTerm.knownFree.env.map {
-              case (name, (_, _, line, col)) => s"$name at $line:$col"
-            }
-            F.raiseError(
-              TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString("", ", ", ""))
-            )
-          } else if (normalizedTerm.knownFree.logicalConnectives.nonEmpty) {
-            def connectiveInstanceToString(conn: ConnectiveInstance): String =
-              if (conn.isConnAndBody) "/\\ (conjunction)"
-              else if (conn.isConnOrBody) "\\/ (disjunction)"
-              else if (conn.isConnNotBody) "~ (negation)"
-              else conn.toString
-
-            val connectives = normalizedTerm.knownFree.logicalConnectives
-              .map {
-                case (connType, line, col) =>
-                  s"${connectiveInstanceToString(connType)} at $line:$col"
+    private def normalizeTerm(term: Proc): F[ProcVisitOutputs] =
+      ProcNormalizeMatcher
+        .normalizeMatch[F](
+          term,
+          ProcVisitInputs(VectorPar(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
+        )
+        .flatMap { normalizedTerm =>
+          if (normalizedTerm.knownFree.count > 0) {
+            if (normalizedTerm.knownFree.wildcards.isEmpty && normalizedTerm.knownFree.logicalConnectives.isEmpty) {
+              val topLevelFreeList = normalizedTerm.knownFree.env.map {
+                case (name, (_, _, line, col)) => s"$name at $line:$col"
               }
-              .mkString("", ", ", "")
-            F.raiseError(TopLevelLogicalConnectivesNotAllowedError(connectives))
-          } else {
-            val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map {
-              case (line, col) => s"_ (wildcard) at $line:$col"
+              F.raiseError(
+                TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString("", ", ", ""))
+              )
+            } else if (normalizedTerm.knownFree.logicalConnectives.nonEmpty) {
+              def connectiveInstanceToString(conn: ConnectiveInstance): String =
+                if (conn.isConnAndBody) "/\\ (conjunction)"
+                else if (conn.isConnOrBody) "\\/ (disjunction)"
+                else if (conn.isConnNotBody) "~ (negation)"
+                else conn.toString
+
+              val connectives = normalizedTerm.knownFree.logicalConnectives
+                .map {
+                  case (connType, line, col) =>
+                    s"${connectiveInstanceToString(connType)} at $line:$col"
+                }
+                .mkString("", ", ", "")
+              F.raiseError(TopLevelLogicalConnectivesNotAllowedError(connectives))
+            } else {
+              val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map {
+                case (line, col) => s"_ (wildcard) at $line:$col"
+              }
+              F.raiseError(
+                TopLevelWildcardsNotAllowedError(topLevelWildcardList.mkString("", ", ", ""))
+              )
             }
-            F.raiseError(
-              TopLevelWildcardsNotAllowedError(topLevelWildcardList.mkString("", ", ", ""))
-            )
-          }
-        } else normalizedTerm.pure[F]
-      }
+          } else normalizedTerm.pure[F]
+        }
 
     private def lexer(fileReader: Reader): Yylex = new Yylex(fileReader)
 
