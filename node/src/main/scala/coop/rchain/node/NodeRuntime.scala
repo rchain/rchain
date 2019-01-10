@@ -126,6 +126,7 @@ class NodeRuntime private[node] (
                           .bindHttp(conf.server.httpPort, "0.0.0.0")
                           .mountService(prometheusService, "/metrics")
                           .mountService(VersionInfo.service, "/version")
+                          .mountService(StatusInfo.service[Task], "/status")
                           .resource
                           .use(_ => Task.never[Unit])
                           .start
