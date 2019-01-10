@@ -683,7 +683,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         pubKey,
         secKey,
         "unlockOut"
-      )(runtimeManager)
+      )(Concurrent[Effect], runtimeManager)
       bondingForwarderAddress = BondingUtil.bondingForwarderAddress(ethAddress)
       bondingForwarderDeploy = ProtoUtil.sourceDeploy(
         BondingUtil.bondingForwarderDeploy(bondKey, ethAddress),
@@ -698,7 +698,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         transferStatusOut,
         pubKey,
         secKey
-      )(runtimeManager)
+      )(Concurrent[Effect], runtimeManager)
 
       createBlock1Result <- nodes(0).casperEff.deploy(walletUnlockDeploy) *> nodes(0).casperEff
                              .deploy(bondingForwarderDeploy) *> nodes(0).casperEff.createBlock
@@ -768,7 +768,6 @@ class HashSetCasperTest extends FlatSpec with Matchers {
                                     ProtoUtil.postStateHash(block1),
                                     ProtoUtil.deployDataToDeploy(rankedValidatorQuery)
                                   )
-                                  .liftM[HashSetCasperTestNode.CommErrT]
 
       validatorBondsAndRanks: Seq[(ByteString, Long, Int)] = validatorBondsAndRanksT.head.exprs.head.getEListBody.ps
         .map(
@@ -853,12 +852,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         0L,
         accounting.MAX_VALUE
       )
-      newWalletBalance = node.runtimeManager
-        .captureResults(
-          ProtoUtil.postStateHash(block),
-          ProtoUtil.deployDataToDeploy(balanceQuery)
-        )
-        .unsafeRunSync
+      newWalletBalance <- node.runtimeManager
+                           .captureResults(
+                             ProtoUtil.postStateHash(block),
+                             ProtoUtil.deployDataToDeploy(balanceQuery)
+                           )
       _      = blockStatus shouldBe Valid
       result = newWalletBalance.head.exprs.head.getGInt shouldBe amount
 
@@ -876,7 +874,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val pkStr                    = Base16.encode(pk)
     val amount                   = 314L
     val forwardCode              = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
-    val bondingCode              = BondingUtil.faucetBondDeploy[Task](amount, "ed25519", pkStr, sk).unsafeRunSync
+    val bondingCode = BondingUtil
+      .faucetBondDeploy[Effect](amount, "ed25519", pkStr, sk)
+      .value
+      .unsafeRunSync
+      .right
+      .get
     val forwardDeploy = ProtoUtil.sourceDeploy(
       forwardCode,
       System.currentTimeMillis(),
@@ -919,11 +922,14 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       pkStr       = Base16.encode(pk)
       forwardCode = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
       bondingCode = BondingUtil
-        .faucetBondDeploy[Task](50, "ed25519", pkStr, sk)(
-          Concurrent[Task],
+        .faucetBondDeploy[Effect](50, "ed25519", pkStr, sk)(
+          Concurrent[Effect],
           rm
         )
+        .value
         .unsafeRunSync
+        .right
+        .get
       forwardDeploy = ProtoUtil.sourceDeploy(
         forwardCode,
         System.currentTimeMillis(),
@@ -1008,7 +1014,6 @@ class HashSetCasperTest extends FlatSpec with Matchers {
                             ProtoUtil.postStateHash(genesis),
                             ProtoUtil.deployDataToDeploy(sigDeployData)
                           )
-                          .liftM[HashSetCasperTestNode.CommErrT]
       sigData     = capturedResults.head.exprs.head.getGByteArray
       sig         = Base16.encode(Ed25519.sign(sigData.toByteArray, sk))
       pkStr       = Base16.encode(pk)
@@ -1646,7 +1651,6 @@ object HashSetCasperTest {
       blockStatus       <- node.casperEff.addBlock(block, ignoreDoppelgangerCheck[Effect])
       queryResult <- node.runtimeManager
                       .captureResults(ProtoUtil.postStateHash(block), query)
-                      .liftM[HashSetCasperTestNode.CommErrT]
     } yield (blockStatus, queryResult)
 
   def createBonds(validators: Seq[Array[Byte]]): Map[Array[Byte], Long] =
@@ -1672,15 +1676,17 @@ object HashSetCasperTest {
     val runtimeManager = RuntimeManager.fromRuntime[Task](activeRuntime).unsafeRunSync
     val emptyStateHash = runtimeManager.emptyStateHash
     val validators     = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
-    val genesis = Genesis.withContracts(
-      initial,
-      ProofOfStakeParams(minimumBond, maximumBond, validators),
-      wallets,
-      faucetCode,
-      emptyStateHash,
-      runtimeManager,
-      deployTimestamp
-    )
+    val genesis = Genesis
+      .withContracts(
+        initial,
+        ProofOfStakeParams(minimumBond, maximumBond, validators),
+        wallets,
+        faucetCode,
+        emptyStateHash,
+        runtimeManager,
+        deployTimestamp
+      )
+      .unsafeRunSync
     activeRuntime.close().unsafeRunSync
     genesis
   }

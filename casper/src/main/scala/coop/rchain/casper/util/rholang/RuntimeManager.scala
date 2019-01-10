@@ -1,5 +1,6 @@
 package coop.rchain.casper.util.rholang
 
+import cats.Monad
 import cats.effect._
 import cats.effect.concurrent.MVar
 import cats.implicits._
@@ -18,12 +19,34 @@ import coop.rchain.rspace.internal.Datum
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 
 import scala.collection.immutable
-import scala.concurrent.ExecutionContext
 
-class RuntimeManager[F[_]: Concurrent] private (
+abstract class RuntimeManager[F[_]: Concurrent] {
+  def captureResults(start: StateHash, deploy: Deploy, name: String = "__SCALA__"): F[Seq[Par]]
+  def captureResults(start: StateHash, deploy: Deploy, name: Par): F[Seq[Par]]
+  def replayComputeState(
+      hash: StateHash,
+      terms: Seq[InternalProcessedDeploy],
+      time: Option[Long] = None
+  ): F[Either[(Option[Deploy], Failed), StateHash]]
+  def computeState(
+      hash: StateHash,
+      terms: Seq[Deploy],
+      time: Option[Long] = None
+  ): F[(StateHash, Seq[InternalProcessedDeploy])]
+  def storageRepr(hash: StateHash): F[Option[String]]
+  def computeBonds(hash: StateHash): F[Seq[Bond]]
+  def getData(hash: ByteString, channel: Par): F[Seq[Par]]
+  def getContinuation(
+      hash: ByteString,
+      channels: immutable.Seq[Par]
+  ): F[Seq[(Seq[BindPattern], Par)]]
+  def emptyStateHash: ByteString
+}
+
+class RuntimeManagerImpl[F[_]: Concurrent](
     val emptyStateHash: ByteString,
     runtimeContainer: MVar[F, Runtime[F]]
-) {
+) extends RuntimeManager {
 
   def captureResults(start: StateHash, deploy: Deploy, name: String = "__SCALA__"): F[Seq[Par]] =
     captureResults(start, deploy, Par().withExprs(Seq(Expr(GString(name)))))
@@ -279,17 +302,8 @@ class RuntimeManager[F[_]: Concurrent] private (
 object RuntimeManager {
   type StateHash = ByteString
 
-  import monix.eval.Task
-  import monix.execution.Scheduler
-  import coop.rchain.catscontrib.TaskContrib._
-
-  def fromRuntime(active: Runtime[Task])(implicit scheduler: Scheduler): RuntimeManager[Task] =
-    fromRuntime[Task](active).unsafeRunSync
-
-  def fromRuntime[F[_]: Concurrent: Sync](
-      active: Runtime[F]
-  )(implicit scheduler: ExecutionContext): F[RuntimeManager[F]] =
-    (for {
+  def fromRuntime[F[_]: Concurrent](active: Runtime[F]): F[RuntimeManager[F]] =
+    for {
       _                <- active.space.clear()
       _                <- active.replaySpace.clear()
       _                <- Runtime.injectEmptyRegistryRoot(active.space, active.replaySpace)
@@ -299,5 +313,5 @@ object RuntimeManager {
       replayHash       = ByteString.copyFrom(replayCheckpoint.root.bytes.toArray)
       _                = assert(hash == replayHash)
       runtime          <- MVar[F].of(active)
-    } yield new RuntimeManager(hash, runtime))
+    } yield new RuntimeManagerImpl[F](hash, runtime)
 }

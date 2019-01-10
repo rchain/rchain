@@ -53,8 +53,10 @@ class CasperPacketHandlerSpec extends WordSpec {
     val scheduler  = Scheduler.io("test")
     val runtimeDir = BlockDagStorageTestFixture.blockStorageDir
     val activeRuntime =
-      Runtime.create[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB).unsafeRunSync
-    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)(scheduler)
+      Runtime
+        .create[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB)
+        .unsafeRunSync(scheduler)
+    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync(scheduler)
 
     implicit val captureTask       = Capture.taskCapture
     val (genesisSk, genesisPk)     = Ed25519.newKeyPair
@@ -64,19 +66,8 @@ class CasperPacketHandlerSpec extends WordSpec {
     val deployTimestamp            = 1L
     val genesis                    = buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, Faucet.noopFaucet, 1L)
     val validatorId                = ValidatorIdentity(validatorPk, validatorSk, "ed25519")
-    val bap = new BlockApproverProtocol(
-      validatorId,
-      deployTimestamp,
-      runtimeManager,
-      bonds,
-      Seq.empty,
-      1L,
-      Long.MaxValue,
-      false,
-      requiredSigs
-    )(scheduler)
-    val local: PeerNode = peerNode("src", 40400)
-    val shardId         = "test-shardId"
+    val local: PeerNode            = peerNode("src", 40400)
+    val shardId                    = "test-shardId"
 
     implicit val nodeDiscovery = new NodeDiscoveryStub[Task]
     implicit val connectionsCell: ConnectionsCell[Task] =
@@ -106,6 +97,17 @@ class CasperPacketHandlerSpec extends WordSpec {
           estimateBlockHash: BlockHash
       ): Task[Float] = Task.pure(1.0f)
     }
+    val bap = new BlockApproverProtocol(
+      validatorId,
+      deployTimestamp,
+      runtimeManager,
+      bonds,
+      Seq.empty,
+      1L,
+      Long.MaxValue,
+      false,
+      requiredSigs
+    )
   }
 
   "CasperPacketHandler" when {

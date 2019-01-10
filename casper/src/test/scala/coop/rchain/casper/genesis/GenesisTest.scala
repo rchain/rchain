@@ -210,8 +210,8 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
       val walletsFile = genesisPath.resolve("wallets.txt").toString
       printWallets(walletsFile)
 
-      val runtimeManager = RuntimeManager.fromRuntime(runtime)
       for {
+        runtimeManager  <- RuntimeManager.fromRuntime(runtime)
         _               <- fromInputFiles()(runtimeManager, genesisPath, log, time)
         storageContents = StoragePrinter.prettyPrint(runtime.space.store)
       } yield walletAddresses.forall(storageContents contains _._1) should be(true)
@@ -277,7 +277,8 @@ object GenesisTest {
   ): Task[Unit] =
     withRawGenResources {
       (runtime: Runtime[Task], genesisPath: Path, log: LogStub[Task], time: LogicalTime[Task]) =>
-        val runtimeManager = RuntimeManager.fromRuntime(runtime)
-        body(runtimeManager, genesisPath, log, time)
+        RuntimeManager
+          .fromRuntime(runtime)
+          .flatMap(body(_, genesisPath, log, time))
     }
 }

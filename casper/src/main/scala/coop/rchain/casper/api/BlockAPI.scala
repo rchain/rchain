@@ -159,7 +159,7 @@ object BlockAPI {
     } yield mainChain
 
   private def getDataWithBlockInfo[F[_]: MultiParentCasper: Log: SafetyOracle: BlockStore: ToAbstractContext: Concurrent](
-      runtimeManager: RuntimeManager[Task],
+      runtimeManager: RuntimeManager[F],
       sortedListeningName: Par,
       block: BlockMessage
   ): F[Option[DataWithBlockInfo]] =
@@ -167,9 +167,7 @@ object BlockAPI {
       val stateHash =
         ProtoUtil.tuplespace(block).get
       for {
-        data <- ToAbstractContext[F].fromTask(
-                 runtimeManager.getData(stateHash, sortedListeningName)
-               )
+        data      <- runtimeManager.getData(stateHash, sortedListeningName)
         blockInfo <- getBlockInfoWithoutTuplespace[F](block)
       } yield Option[DataWithBlockInfo](DataWithBlockInfo(data, Some(blockInfo)))
     } else {
@@ -177,7 +175,7 @@ object BlockAPI {
     }
 
   private def getContinuationsWithBlockInfo[F[_]: MultiParentCasper: Log: SafetyOracle: BlockStore: Concurrent: ToAbstractContext](
-      runtimeManager: RuntimeManager[Task],
+      runtimeManager: RuntimeManager[F],
       sortedListeningNames: immutable.Seq[Par],
       block: BlockMessage
   ): F[Option[ContinuationsWithBlockInfo]] =
@@ -185,9 +183,7 @@ object BlockAPI {
       val stateHash =
         ProtoUtil.tuplespace(block).get
       for {
-        continuations <- ToAbstractContext[F].fromTask(
-                          runtimeManager.getContinuation(stateHash, sortedListeningNames)
-                        )
+        continuations <- runtimeManager.getContinuation(stateHash, sortedListeningNames)
         continuationInfos = continuations.map(
           continuation => WaitingContinuationInfo(continuation._1, Some(continuation._2))
         )

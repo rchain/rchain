@@ -1,27 +1,30 @@
 package coop.rchain.casper.util.comm
 
 import cats.Monad
+import cats.data.EitherT
 import cats.effect.Concurrent
 import cats.implicits._
 import cats.kernel.Eq
 import com.google.protobuf.ByteString
+import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
-import coop.rchain.catscontrib.{Capture, ToAbstractContext}
+import coop.rchain.casper.util.rholang.{
+  InternalProcessedDeploy,
+  ProcessedDeployUtil,
+  RuntimeManager
+}
+import coop.rchain.catscontrib.Capture
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.RPConfAsk
-import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.shared._
-import monix.eval.Task
-import monix.execution.Scheduler
 
 import scala.util.Try
 import scala.concurrent.duration.Duration
@@ -30,21 +33,21 @@ import scala.concurrent.duration.Duration
   * Validator side of the protocol defined in
   * https://rchain.atlassian.net/wiki/spaces/CORE/pages/485556483/Initializing+the+Blockchain+--+Protocol+for+generating+the+Genesis+block
   */
-class BlockApproverProtocol(
+class BlockApproverProtocol[F[_]: Capture: Concurrent: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
     validatorId: ValidatorIdentity,
     deployTimestamp: Long,
-    runtimeManager: RuntimeManager[Task],
+    runtimeManager: RuntimeManager[F],
     bonds: Map[Array[Byte], Long],
     wallets: Seq[PreWallet],
     minimumBond: Long,
     maximumBond: Long,
     faucet: Boolean,
     requiredSigs: Int
-)(implicit scheduler: Scheduler) {
+) {
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1) -> e._2)
 
-  def unapprovedBlockPacketHandler[F[_]: Capture: Concurrent: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
+  def unapprovedBlockPacketHandler(
       peer: PeerNode,
       u: UnapprovedBlock
   ): F[Unit] =
@@ -52,31 +55,35 @@ class BlockApproverProtocol(
       Log[F].warn("Candidate is not defined.")
     } else {
       val candidate = u.candidate.get
-      val validCandidate = BlockApproverProtocol.validateCandidate(
-        runtimeManager,
-        candidate,
-        requiredSigs,
-        deployTimestamp,
-        wallets,
-        _bonds,
-        minimumBond,
-        maximumBond,
-        faucet
-      )
-      validCandidate match {
-        case Right(_) =>
-          for {
-            local <- RPConfAsk[F].reader(_.local)
-            serializedApproval = BlockApproverProtocol
-              .getApproval(candidate, validatorId)
-              .toByteString
-            msg = Blob(local, Packet(transport.BlockApproval.id, serializedApproval))
-            _   <- TransportLayer[F].stream(Seq(peer), msg)
-            _   <- Log[F].info(s"Received expected candidate from $peer. Approval sent in response.")
-          } yield ()
-        case Left(errMsg) =>
-          Log[F].warn(s"Received unexpected candidate from $peer because: $errMsg")
-      }
+      for {
+        validCandidate <- BlockApproverProtocol.validateCandidate(
+                           runtimeManager,
+                           candidate,
+                           requiredSigs,
+                           deployTimestamp,
+                           wallets,
+                           _bonds,
+                           minimumBond,
+                           maximumBond,
+                           faucet
+                         )
+      } yield
+        validCandidate match {
+          case Right(_) =>
+            for {
+              local <- RPConfAsk[F].reader(_.local)
+              serializedApproval = BlockApproverProtocol
+                .getApproval(candidate, validatorId)
+                .toByteString
+              msg = Blob(local, Packet(transport.BlockApproval.id, serializedApproval))
+              _   <- TransportLayer[F].stream(Seq(peer), msg)
+              _ <- Log[F].info(
+                    s"Received expected candidate from $peer. Approval sent in response."
+                  )
+            } yield ()
+          case Left(errMsg) =>
+            Log[F].warn(s"Received unexpected candidate from $peer because: $errMsg")
+        }
     }
 }
 
@@ -96,8 +103,7 @@ object BlockApproverProtocol {
   ): BlockApproval =
     getBlockApproval(candidate, validatorId)
 
-  def validateCandidate(
-      runtimeManager: RuntimeManager[Task],
+  def validateStatic(
       candidate: ApprovedBlockCandidate,
       requiredSigs: Int,
       timestamp: Long,
@@ -106,7 +112,7 @@ object BlockApproverProtocol {
       minimumBond: Long,
       maximumBond: Long,
       faucet: Boolean
-  )(implicit scheduler: Scheduler): Either[String, Unit] =
+  ): Either[String, (Seq[InternalProcessedDeploy], RChainState)] =
     for {
       _ <- (candidate.requiredSigs == requiredSigs)
             .either(())
@@ -138,24 +144,57 @@ object BlockApproverProtocol {
       _ <- (blockDeploys.size == genesisBlessedContracts.size)
             .either(())
             .or("Mismatch between number of candidate deploys and expected number of deploys.")
-      stateHash <- runtimeManager
-                    .replayComputeState(runtimeManager.emptyStateHash, blockDeploys)
-                    .runSyncUnsafe(Duration.Inf)
-                    .leftMap { case (_, status) => s"Failed status during replay: $status." }
-      _ <- (stateHash == postState.postStateHash)
-            .either(())
-            .or("Tuplespace hash mismatch.")
-      tuplespaceBonds <- Try(
-                          runtimeManager
-                            .computeBonds(postState.postStateHash)
-                            .runSyncUnsafe(Duration.Inf)
-                        ).toEither
-                          .leftMap(_.getMessage)
-      tuplespaceBondsMap = tuplespaceBonds.map { case Bond(validator, stake) => validator -> stake }.toMap
-      _ <- (tuplespaceBondsMap == bonds)
-            .either(())
-            .or("Tuplespace bonds don't match expected ones.")
-    } yield ()
+    } yield (blockDeploys, postState)
+
+  def validateCandidate[F[_]: Concurrent](
+      runtimeManager: RuntimeManager[F],
+      candidate: ApprovedBlockCandidate,
+      requiredSigs: Int,
+      timestamp: Long,
+      wallets: Seq[PreWallet],
+      bonds: Map[ByteString, Long],
+      minimumBond: Long,
+      maximumBond: Long,
+      faucet: Boolean
+  ): F[Either[String, Unit]] =
+    (validateStatic(
+      candidate,
+      requiredSigs,
+      timestamp,
+      wallets,
+      bonds,
+      minimumBond,
+      maximumBond,
+      faucet
+    ) match {
+      case Right((blockDeploys, postState)) =>
+        for {
+          stateHash <- EitherT(
+                        runtimeManager
+                          .replayComputeState(runtimeManager.emptyStateHash, blockDeploys)
+                      ).leftMap { case (_, status) => s"Failed status during replay: $status." }
+          _ <- EitherT(
+                (stateHash == postState.postStateHash)
+                  .either(())
+                  .or("Tuplespace hash mismatch.")
+                  .pure[F]
+              )
+          tuplespaceBonds <- EitherT(
+                              Concurrent[F]
+                                .attempt(runtimeManager.computeBonds(postState.postStateHash))
+                            ).leftMap(_.getMessage)
+          tuplespaceBondsMap = tuplespaceBonds.map {
+            case Bond(validator, stake) => validator -> stake
+          }.toMap
+          _ <- EitherT(
+                (tuplespaceBondsMap == bonds)
+                  .either(())
+                  .or("Tuplespace bonds don't match expected ones.")
+                  .pure[F]
+              )
+        } yield ()
+      case Left(v) => EitherT(v.asLeft[Unit].pure[F])
+    }).value
 
   def packetToUnapprovedBlock(msg: Packet): Option[UnapprovedBlock] =
     if (msg.typeId == transport.UnapprovedBlock.id)

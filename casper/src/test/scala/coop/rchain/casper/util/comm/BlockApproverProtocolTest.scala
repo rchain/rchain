@@ -78,7 +78,7 @@ object BlockApproverProtocolTest {
       wallets: Seq[PreWallet],
       sk: Array[Byte],
       bonds: Map[Array[Byte], Long]
-  ): Effect[(BlockApproverProtocol, HashSetCasperTestNode[Effect])] = {
+  ): Effect[(BlockApproverProtocol[Effect], HashSetCasperTestNode[Effect])] = {
     import monix.execution.Scheduler.Implicits.global
 
     val runtimeDir = BlockDagStorageTestFixture.blockStorageDir

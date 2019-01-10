@@ -26,7 +26,7 @@ import monix.execution.atomic.AtomicAny
 import scala.collection.mutable
 
 class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ToAbstractContext](
-    runtimeManager: RuntimeManager[Task],
+    runtimeManager: RuntimeManager[F],
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
@@ -313,9 +313,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
                          p.foldLeft(-1L) {
                            case (acc, b) => math.max(acc, blockNumber(b))
                          }
-
-                       ToAbstractContext[F]
-                         .fromTask(runtimeManager.computeBonds(postStateHash))
+                       runtimeManager
+                         .computeBonds(postStateHash)
                          .map {
                            newBonds =>
                              val postState = RChainState()
@@ -341,11 +340,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
     BlockDagStorage[F].getRepresentation
 
   def storageContents(hash: StateHash): F[String] =
-    ToAbstractContext[F]
-      .fromTask(
-        runtimeManager
-          .storageRepr(hash)
-      )
+    runtimeManager
+      .storageRepr(hash)
       .map(_.getOrElse(s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!"))
 
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
@@ -587,7 +583,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       }
     )
 
-  def getRuntimeManager: F[Option[RuntimeManager[Task]]] = Applicative[F].pure(Some(runtimeManager))
+  def getRuntimeManager: F[Option[RuntimeManager[F]]] = Applicative[F].pure(Some(runtimeManager))
 
   def fetchDependencies: F[Unit] =
     for {

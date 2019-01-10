@@ -568,7 +568,7 @@ object Validate {
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       emptyStateHash: StateHash,
-      runtimeManager: RuntimeManager[Task]
+      runtimeManager: RuntimeManager[F]
   ): F[Either[BlockStatus, ValidBlock]] =
     for {
       maybeStateHash <- InterpreterUtil
@@ -611,12 +611,12 @@ object Validate {
 
   def bondsCache[F[_]: Log: Concurrent: ToAbstractContext](
       b: BlockMessage,
-      runtimeManager: RuntimeManager[Task]
+      runtimeManager: RuntimeManager[F]
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val bonds = ProtoUtil.bonds(b)
     ProtoUtil.tuplespace(b) match {
       case Some(tuplespaceHash) =>
-        ToAbstractContext[F].fromTask(runtimeManager.computeBonds(tuplespaceHash)).attempt.flatMap {
+        runtimeManager.computeBonds(tuplespaceHash).attempt.flatMap {
           case Right(computedBonds) =>
             if (bonds.toSet == computedBonds.toSet) {
               Applicative[F].pure(Right(Valid))

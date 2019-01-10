@@ -48,7 +48,7 @@ class DeployPaymentCostTest extends FlatSpec {
       timestamp         = System.currentTimeMillis()
       paymentBlock      <- paymentDeploy(paymentPar, user, timestamp)
       paymentDeployCost = deployCost(paymentBlock, user, timestamp)
-      _                 = assertSuccessfulTransfer(node, ProtoUtil.postStateHash(paymentBlock), statusChannel)
+      _                 <- assertSuccessfulTransfer(node, ProtoUtil.postStateHash(paymentBlock), statusChannel)
     } yield println(s"Cost of deploying payment contract is at minimum: $paymentDeployCost")
   }
 
@@ -181,7 +181,7 @@ object DeployPaymentCostTest {
   }
 
   def createWallet(
-      rm: RuntimeManager[Task]
+      rm: RuntimeManager[Effect]
   )(implicit casper: MultiParentCasperImpl[Effect]): Effect[Par] = {
     // Create new wallet
     val walletRetCh = GPrivateBuilder()
@@ -199,12 +199,12 @@ object DeployPaymentCostTest {
       )
   }
 
-  def deployAndCapture(p: Par, retChannel: Par, rm: RuntimeManager[Task])(
+  def deployAndCapture(p: Par, retChannel: Par, rm: RuntimeManager[Effect])(
       implicit casper: MultiParentCasperImpl[Effect]
   ): Effect[Par] =
     for {
       postDeployStateHash <- deploy[Effect](p).map(ProtoUtil.postStateHash)
-      data                = rm.getData(postDeployStateHash, retChannel).unsafeRunSync
+      data                <- rm.getData(postDeployStateHash, retChannel)
       _                   = assert(data.size == 1)
     } yield data.head
 
@@ -260,7 +260,7 @@ object DeployPaymentCostTest {
       walletAddress: Par,
       secKey: Array[Byte],
       pubKey: Array[Byte],
-      rm: RuntimeManager[Task]
+      rm: RuntimeManager[Effect]
   )(implicit casper: MultiParentCasperImpl[Effect]): Effect[String] = {
     val registerWalletTuple: Par = ETuple(Seq(GInt(1), walletAddress))
     val registrySig              = Ed25519.sign(registerWalletTuple.toByteArray, secKey)
@@ -288,15 +288,12 @@ object DeployPaymentCostTest {
       node: HashSetCasperTestNode[F],
       tuplespaceHash: ByteString,
       statusChannel: GPrivate
-  ): Unit = {
-    val transferStatus = node.runtimeManager
-      .getData(
-        tuplespaceHash,
-        statusChannel
-      )
-      .unsafeRunSync
-    assert(transferStatus.size == 1)
-    transferStatus.head.exprs.head should be(Expr(GString("Success")))
-  }
+  ): F[Unit] =
+    for {
+      transferStatus <- node.runtimeManager.getData(tuplespaceHash, statusChannel)
+    } yield {
+      transferStatus.size sholdBe 1
+      transferStatus.head.exprs.head should be(Expr(GString("Success")))
+    }
 
 }

@@ -1,15 +1,13 @@
 package coop.rchain.node
 
 import scala.concurrent.duration._
-
 import cats._
 import cats.data._
-import cats.effect._
+import cats.effect.{Effect, _}
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.functor._
-
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.{
   BlockDagFileStorage,
@@ -40,8 +38,8 @@ import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
 import coop.rchain.shared.PathOps._
-
 import com.typesafe.config.ConfigFactory
+import coop.rchain.node.effects.EitherTRuntimeManager
 import kamon._
 import kamon.system.SystemMetrics
 import kamon.zipkin.ZipkinReporter
@@ -407,15 +405,18 @@ class NodeRuntime private[node] (
       implicit val s = rspaceScheduler
       Runtime.create[Task, Task.Par](casperStoragePath, storageSize, storeType, Seq.empty).toEffect
     }
-    runtimeManager <- {
-      implicit val s = scheduler
-      RuntimeManager.fromRuntime[Task](casperRuntime).toEffect
-    }
+    runtimeManager <- RuntimeManager.fromRuntime[Task](casperRuntime).toEffect
     abs = new ToAbstractContext[Effect] {
       def fromTask[A](fa: Task[A]): Effect[A] = fa.toEffect
     }
     casperPacketHandler <- CasperPacketHandler
-                            .of[Effect](conf.casper, defaultTimeout, runtimeManager, _.value)(
+                            .of[Effect](
+                              conf.casper,
+                              defaultTimeout,
+                              EitherTRuntimeManager
+                                .eitherTRuntimeManager(Monad[Task], runtimeManager),
+                              _.value
+                            )(
                               labEff,
                               Metrics.eitherT(Monad[Task], metrics),
                               blockStore,
