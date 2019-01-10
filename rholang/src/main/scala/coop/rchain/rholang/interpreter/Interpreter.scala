@@ -49,8 +49,8 @@ object Interpreter {
 
     def buildNormalizedTerm(reader: Reader): F[Par] =
       for {
-        term <- buildAST(reader)
-        par  <- buildPar(term)
+        proc <- buildAST(reader)
+        par  <- buildPar(proc)
       } yield par
 
     def buildPar(proc: Proc): F[Par] =
@@ -68,16 +68,16 @@ object Interpreter {
       } yield result
 
     def evaluate(runtime: Runtime[F], par: Par): F[EvaluateResult] = {
-      implicit val rand      = Blake2b512Random(128)
-      val evaluatePhlosLimit = Cost(Integer.MAX_VALUE) //This is OK because evaluate is not called on deploy
+      implicit val rand: Blake2b512Random = Blake2b512Random(128)
+      val initialPhlo                     = Cost(Integer.MAX_VALUE) //This is OK because evaluate is not called on deploy
       for {
-        checkpoint <- runtime.space.createCheckpoint()
-        _          <- runtime.reducer.setPhlo(evaluatePhlosLimit)
-        _          <- runtime.reducer.inj(par)(rand)
-        errors     <- runtime.readAndClearErrorVector()
-        leftPhlos  <- runtime.reducer.phlo
-        cost       = leftPhlos.copy(cost = evaluatePhlosLimit - leftPhlos.cost)
-        _          <- if (errors.nonEmpty) runtime.space.reset(checkpoint.root) else F.unit
+        checkpoint    <- runtime.space.createCheckpoint()
+        _             <- runtime.reducer.setPhlo(initialPhlo)
+        _             <- runtime.reducer.inj(par)(rand)
+        errors        <- runtime.readAndClearErrorVector()
+        remainingPhlo <- runtime.reducer.phlo
+        cost          = remainingPhlo.copy(cost = initialPhlo - remainingPhlo.cost)
+        _             <- if (errors.nonEmpty) runtime.space.reset(checkpoint.root) else F.unit
       } yield EvaluateResult(cost, errors)
     }
 
