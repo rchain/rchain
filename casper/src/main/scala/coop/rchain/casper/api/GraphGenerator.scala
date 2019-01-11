@@ -98,7 +98,7 @@ object GraphzGenerator {
                 )
             }
         // draw parent dependencies
-        _ <- drawParentDependencies[G](g, validatorsList)
+        _ <- drawParentDependencies[G](g, validatorsList.map(_._2))
         // draw justification dotted lines
         _ <- config.showJustificationLines.fold(
               drawJustificationDottedLines[G](g, validators),
@@ -145,16 +145,15 @@ object GraphzGenerator {
       name,
       DiGraph,
       rankdir = Some(BT),
+      splines = Some("false"),
       node = Map("width" -> "0", "height" -> "0", "margin" -> "0.03", "fontsize" -> "8")
     )
 
   private def drawParentDependencies[G[_]: Applicative](
       g: Graphz[G],
-      validators: List[(String, ValidatorsBlocks)]
+      validators: List[ValidatorsBlocks]
   ): G[Unit] =
     validators
-      .map(_._2)
-      .toList
       .flatMap(_.values.toList)
       .traverse {
         case ValidatorBlock(blockHash, parentsHashes, _) => {
