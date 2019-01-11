@@ -107,6 +107,13 @@ package object matcher {
           override def apply[T](fa: StreamWithCost[T]): OptionWithCost[T] =
             OptionT(StreamT.run(fa).map(_.headOption))
         })
+
+      def takeFirst(): NonDetFreeMapWithCost[A] =
+        s.mapK[StreamWithCost](new FunctionK[StreamWithCost, StreamWithCost] {
+          override def apply[T](fa: StreamWithCost[T]): StreamWithCost[T] =
+            StreamT.dropTail(fa)
+        })
+
     }
 
     implicit def toNonDetFreeMapWithCostOps[A](s: NonDetFreeMapWithCost[A]) =
