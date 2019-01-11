@@ -46,15 +46,16 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
 
   private val emptyStateHash = runtimeManager.emptyStateHash
 
-  private[this] type BlockBuffer = Set[BlockMessage]
+  case class CasperState(blockBuffer: Set[BlockMessage])
 
   // TODO: move this outside so MultiParentCasperImpl can become a type class
-  private implicit val casperState = new DefaultMonadState[F, BlockBuffer] {
-    val monad: Monad[F]                         = implicitly[Monad[F]]
-    private var mutableBlockBuffer: BlockBuffer = Set.empty[BlockMessage]
+  private implicit val casperState = new DefaultMonadState[F, CasperState] {
+    val monad: Monad[F] = implicitly[Monad[F]]
+    // TODO: move other mutable collections inside
+    private var state = CasperState(Set.empty[BlockMessage])
 
-    def get: F[BlockBuffer]          = mutableBlockBuffer.pure[F]
-    def set(s: BlockBuffer): F[Unit] = (mutableBlockBuffer = s).pure[F].map(_ => ())
+    def get: F[CasperState]          = state.pure[F]
+    def set(s: CasperState): F[Unit] = (state = s).pure[F].map(_ => ())
   }
 
   private val dependencyDagState =
@@ -84,8 +85,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
           dag            <- blockDag
           blockHash      = b.blockHash
           containsResult <- dag.contains(blockHash)
-          blockBuffer    <- casperState.get
-          result <- if (containsResult || blockBuffer.exists(
+          state          <- casperState.get
+          result <- if (containsResult || state.blockBuffer.exists(
                           _.blockHash == blockHash
                         )) {
                      Log[F]
@@ -121,10 +122,13 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       _ <- attempt match {
             case MissingBlocks => ().pure[F]
             case _ =>
-              casperState.modify { _ - b } *> dependencyDagState.modify(
-                blockBufferDependencyDag =>
-                  DoublyLinkedDagOperations.remove(blockBufferDependencyDag, b.blockHash)
-              )
+              casperState.modify { s =>
+                s.copy(blockBuffer = (s.blockBuffer - b))
+              } *> dependencyDagState
+                .modify(
+                  blockBufferDependencyDag =>
+                    DoublyLinkedDagOperations.remove(blockBufferDependencyDag, b.blockHash)
+                )
           }
       _ <- attempt match {
             case MissingBlocks           => ().pure[F]
@@ -197,8 +201,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
   ): F[Boolean] =
     for {
       blockStoreContains  <- BlockStore[F].contains(b.blockHash)
-      blockBuffer         <- casperState.get
-      blockBufferContains = blockBuffer.contains(b)
+      state               <- casperState.get
+      blockBufferContains = state.blockBuffer.contains(b)
     } yield (blockStoreContains || blockBufferContains)
 
   def deploy(d: DeployData): F[Either[Throwable, Unit]] =
@@ -438,7 +442,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
           s"Added ${PrettyPrinter.buildString(block.blockHash)}"
         )
       case MissingBlocks => {
-        casperState.modify { _ + block } *> fetchMissingDependencies(block)
+        casperState.modify { s =>
+          s.copy(blockBuffer = s.blockBuffer + block)
+        } *> fetchMissingDependencies(block)
       }
       case AdmissibleEquivocation =>
         Capture[F].capture {
@@ -517,9 +523,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
                                   .lookup(blockHash)
                                   .map(_.isEmpty)
                             )
-      blockBuffer <- casperState.get
+      state <- casperState.get
       missingUnseenDependencies = missingDependencies.filter(
-        blockHash => !blockBuffer.exists(_.blockHash == blockHash)
+        blockHash => !state.blockBuffer.exists(_.blockHash == blockHash)
       )
       _ <- missingDependencies.traverse(hash => handleMissingDependency(hash, b))
       _ <- missingUnseenDependencies.traverse(hash => requestMissingDependency(hash))
@@ -552,12 +558,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       _ <- BlockDagStorage[F].insert(block)
     } yield ()
 
-  private def reAttemptBuffer(implicit casperState: MonadState[F, BlockBuffer]): F[Unit] =
+  private def reAttemptBuffer: F[Unit] =
     for {
       dependencyDag  <- dependencyDagState.get
       dependencyFree = dependencyDag.dependencyFree
-      blockBuffer    <- casperState.get
-      dependencyFreeBlocks = blockBuffer
+      state          <- casperState.get
+      dependencyFreeBlocks = state.blockBuffer
         .filter(block => dependencyFree.contains(block.blockHash))
         .toList
       attempts <- dependencyFreeBlocks.traverse { b =>
@@ -593,7 +599,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       successfulAdds: List[(BlockMessage, BlockStatus)]
   ): F[Unit] = {
     val addedBlocks = successfulAdds.map(_._1)
-    casperState.modify { _ -- addedBlocks }
+    casperState.modify { s =>
+      s.copy(blockBuffer = s.blockBuffer -- addedBlocks)
+    }
   }
 
   private def removeFromBlockBufferDependencyDag(
