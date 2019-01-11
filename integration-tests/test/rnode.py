@@ -88,6 +88,42 @@ def extract_block_count_from_show_blocks(show_blocks_output: str) -> int:
     return result
 
 
+def parse_show_blocks_key_value_line(line: str) -> Tuple[str, str]:
+    match = re.match(r'(?P<key>[^:]*): (?P<value>.*)', line.strip())
+    if match is None:
+        raise UnexpectedShowBlocksOutputFormatError(line)
+    return (match.group('key'), match.group('value'))
+
+
+def parse_show_blocks_output(show_blocks_output: str) -> List[Dict[str, str]]:
+    result = []
+
+    lines = show_blocks_output.splitlines()
+
+    i = 0
+    while True:
+        if i >= len(lines):
+            break
+        if lines[i].startswith('------------- block '):
+            block = {}
+            j = i + 1
+            while True:
+                if j >= len(lines):
+                    break
+                if lines[j].strip() == "":
+                    break
+                key, value = parse_show_blocks_key_value_line(lines[j])
+                block[key] = value
+                j += 1
+            result.append(block)
+            i = j
+        else:
+            i += 1
+
+    return result
+
+
+
 def extract_block_hash_from_propose_output(propose_output: str) -> str:
     """We're getting back something along the lines of:
 
@@ -156,6 +192,10 @@ class Node:
     def get_blocks_count(self, depth: int) -> int:
         show_blocks_output = self.show_blocks_with_depth(depth)
         return extract_block_count_from_show_blocks(show_blocks_output)
+
+    def show_blocks_parsed(self, depth: int) -> List[Dict[str, str]]:
+        show_blocks_output = self.show_blocks_with_depth(depth)
+        return parse_show_blocks_output(show_blocks_output)
 
     def get_block(self, block_hash: str) -> str:
         try:
@@ -385,7 +425,6 @@ def make_bootstrap_node(
 
     container_command_flags = set([
         "--standalone",
-        "--has-faucet",
         "--prometheus",
     ])
 
@@ -628,9 +667,9 @@ def started_bootstrap(
 
 
 @contextlib.contextmanager
-def docker_network_with_started_bootstrap(context: TestingContext) -> Generator[Node, None, None]:
+def docker_network_with_started_bootstrap(context: TestingContext, cli_flags: Optional[AbstractSet] = None) -> Generator[Node, None, None]:
     with docker_network(context, context.docker) as network:
-        with started_bootstrap(context=context, network=network, mount_dir=context.mount_dir) as bootstrap:
+        with started_bootstrap(context=context, network=network, mount_dir=context.mount_dir, cli_flags=cli_flags) as bootstrap:
             wait_for_approved_block_received_handler_state(context, bootstrap)
             yield bootstrap
 

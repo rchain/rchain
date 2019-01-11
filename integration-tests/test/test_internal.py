@@ -8,6 +8,8 @@ from .common import (
 from .rnode import (
     extract_block_hash_from_propose_output,
     extract_block_count_from_show_blocks,
+    parse_show_blocks_key_value_line,
+    parse_show_blocks_output,
 )
 from .conftest import (
     make_wallets_file_lines,
@@ -34,8 +36,56 @@ sender: ""
 count: 123
 
 '''
-
     assert extract_block_count_from_show_blocks(show_blocks_output) == 123
+
+
+def test_parse_show_blocks_key_value_line() -> None:
+    assert parse_show_blocks_key_value_line('''blockHash: "cf42c994ff30189c35cbd007719c6bdb361b28c70ae88889a6e54b5431b8f7eb"''') == ('blockHash', '"cf42c994ff30189c35cbd007719c6bdb361b28c70ae88889a6e54b5431b8f7eb"')
+    assert parse_show_blocks_key_value_line('''blockSize: "111761"''') == ('blockSize', '"111761"')
+    assert parse_show_blocks_key_value_line('''blockNumber: 0''') == ('blockNumber', '0')
+    assert parse_show_blocks_key_value_line('''version: 1''') == ('version', '1')
+    assert parse_show_blocks_key_value_line('''deployCount: 10''') == ('deployCount', '10')
+    assert parse_show_blocks_key_value_line('''tupleSpaceHash: "dcd6e349d5b4ca45a11811808ad7757bdfb856b093e02c7e4a2930817f179cdb"''') == ('tupleSpaceHash', '"dcd6e349d5b4ca45a11811808ad7757bdfb856b093e02c7e4a2930817f179cdb"')
+    assert parse_show_blocks_key_value_line('''timestamp: 1''') == ('timestamp', '1')
+    assert parse_show_blocks_key_value_line('''faultTolerance: -0.6666667''') == ('faultTolerance', '-0.6666667')
+    assert parse_show_blocks_key_value_line('''mainParentHash: ""''') == ('mainParentHash', '""')
+    assert parse_show_blocks_key_value_line('''sender: ""''') == ('sender', '""')
+
+
+def test_parse_show_blocks_output() -> None:
+    input = '''
+------------- block 0 ---------------
+blockHash: "cf42c994ff30189c35cbd007719c6bdb361b28c70ae88889a6e54b5431b8f7eb"
+blockSize: "111761"
+blockNumber: 0
+version: 1
+deployCount: 10
+tupleSpaceHash: "dcd6e349d5b4ca45a11811808ad7757bdfb856b093e02c7e4a2930817f179cdb"
+timestamp: 1
+faultTolerance: -0.6666667
+mainParentHash: ""
+sender: ""
+
+-----------------------------------------------------
+
+
+count: 1
+
+'''
+
+    output = parse_show_blocks_output(input)
+    assert len(output) == 1
+    block = output[0]
+    assert block['blockHash'] == '"cf42c994ff30189c35cbd007719c6bdb361b28c70ae88889a6e54b5431b8f7eb"'
+    assert block['blockSize'] == '"111761"'
+    assert block['blockNumber'] == '0'
+    assert block['version'] == '1'
+    assert block['deployCount'] == '10'
+    assert block['tupleSpaceHash'] == '"dcd6e349d5b4ca45a11811808ad7757bdfb856b093e02c7e4a2930817f179cdb"'
+    assert block['timestamp'] == '1'
+    assert block['faultTolerance'] == '-0.6666667'
+    assert block['mainParentHash'] == '""'
+    assert block['sender'] == '""'
 
 
 def test_extract_block_hash_from_propose_output() -> None:

@@ -16,8 +16,9 @@ from .rnode import (
     ready_bootstrap,
 )
 from .wait import (
-    wait_for_sent_unapproved_block,
     wait_for_block_approval,
+    wait_for_approved_block_received_handler_state,
+    wait_for_sent_approved_block,
 )
 
 
@@ -48,12 +49,36 @@ def test_successful_genesis_ceremony(command_line_options: CommandLineOptions, r
     ]
     with testing_context(command_line_options, random_generator, docker_client, bootstrap_keypair=CEREMONY_MASTER_KEYPAIR, peers_keypairs=peers_keypairs) as context:
         with temporary_wallets_file(context.random_generator, [context.bootstrap_keypair] + context.peers_keypairs) as wallets:
-            with ready_bootstrap(context=context, cli_options=bootstrap_cli_options, wallets_file=wallets) as bootstrap:
-                with started_peer(context=context, network=bootstrap.network, bootstrap=bootstrap, name='validator-a', keypair=VALIDATOR_A_KEYPAIR, wallets_file=wallets, cli_flags=peers_cli_flags, cli_options=peers_cli_options) as validator_a:
-                    with started_peer(context=context, network=bootstrap.network, bootstrap=bootstrap, name='validator-b', keypair=VALIDATOR_B_KEYPAIR, wallets_file=wallets, cli_flags=peers_cli_flags, cli_options=peers_cli_options) as validator_b:
-                        wait_for_sent_unapproved_block(context, bootstrap)
-                        wait_for_block_approval(context, validator_a)
-                        wait_for_block_approval(context, validator_b)
+            with ready_bootstrap(context=context, cli_options=bootstrap_cli_options, wallets_file=wallets) as ceremony_master:
+                with started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-a', keypair=VALIDATOR_A_KEYPAIR, wallets_file=wallets, cli_flags=peers_cli_flags, cli_options=peers_cli_options) as validator_a:
+                    with started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-b', keypair=VALIDATOR_B_KEYPAIR, wallets_file=wallets, cli_flags=peers_cli_flags, cli_options=peers_cli_options) as validator_b:
+                        wait_for_block_approval(context, ceremony_master)
+                        wait_for_approved_block_received_handler_state(context, ceremony_master)
+                        wait_for_sent_approved_block(context, ceremony_master)
+                        wait_for_approved_block_received_handler_state(context, validator_a)
+                        wait_for_approved_block_received_handler_state(context, validator_b)
+
+                        assert ceremony_master.get_blocks_count(2) == 1
+                        assert validator_a.get_blocks_count(2) == 1
+                        assert validator_b.get_blocks_count(2) == 1
+
+                        ceremony_master_blocks = ceremony_master.show_blocks_parsed(2)
+                        assert len(ceremony_master_blocks) == 1
+                        ceremony_master_genesis_block = ceremony_master_blocks[0]
+                        assert ceremony_master_genesis_block['mainParentHash'] == '""'
+
+                        validator_a_blocks = validator_a.show_blocks_parsed(2)
+                        assert len(validator_a_blocks) == 1
+                        validator_a_genesis_block = validator_a_blocks[0]
+                        assert validator_a_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
+                        assert validator_a_genesis_block['mainParentHash'] == '""'
+
+                        validator_b_blocks = validator_a.show_blocks_parsed(2)
+                        assert len(validator_b_blocks) == 1
+                        validator_b_genesis_block = validator_b_blocks[0]
+                        assert validator_b_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
+                        assert validator_b_genesis_block['mainParentHash'] == '""'
+
 
 
 @pytest.mark.xfail
