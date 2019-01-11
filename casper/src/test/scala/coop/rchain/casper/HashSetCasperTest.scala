@@ -1757,15 +1757,17 @@ object HashSetCasperTest {
     val runtimeManager = RuntimeManager.fromRuntime[Task](activeRuntime).unsafeRunSync
     val emptyStateHash = runtimeManager.emptyStateHash
     val validators     = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
-    val genesis = Genesis.withContracts(
-      initial,
-      ProofOfStakeParams(minimumBond, maximumBond, validators),
-      wallets,
-      faucetCode,
-      emptyStateHash,
-      runtimeManager,
-      deployTimestamp
-    )
+    val genesis = Genesis
+      .withContracts(
+        initial,
+        ProofOfStakeParams(minimumBond, maximumBond, validators),
+        wallets,
+        faucetCode,
+        emptyStateHash,
+        runtimeManager,
+        deployTimestamp
+      )
+      .unsafeRunSync
     activeRuntime.close().unsafeRunSync
     genesis
   }
