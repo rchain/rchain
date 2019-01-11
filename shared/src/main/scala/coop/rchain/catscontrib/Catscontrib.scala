@@ -3,6 +3,7 @@ package coop.rchain.catscontrib
 trait Opses
     extends ToMonadOps
     with ToBooleanOps
+    with ToBooleanF
     with ToFlatMapBooleanOps
     with ToOptionOps
     with ToApplicativeError_Ops
