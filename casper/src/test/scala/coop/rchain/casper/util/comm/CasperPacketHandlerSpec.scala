@@ -53,8 +53,10 @@ class CasperPacketHandlerSpec extends WordSpec {
     val scheduler  = Scheduler.io("test")
     val runtimeDir = BlockDagStorageTestFixture.blockStorageDir
     val activeRuntime =
-      Runtime.create[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB).unsafeRunSync
-    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)(scheduler)
+      Runtime
+        .create[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB)
+        .unsafeRunSync(scheduler)
+    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync(scheduler)
 
     implicit val captureTask       = Capture.taskCapture
     val (genesisSk, genesisPk)     = Ed25519.newKeyPair

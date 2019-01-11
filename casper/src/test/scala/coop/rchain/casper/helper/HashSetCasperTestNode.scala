@@ -78,7 +78,7 @@ class HashSetCasperTestNode[F[_]](
 
   val activeRuntime =
     Runtime.create[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB).unsafeRunSync
-  val runtimeManager                 = RuntimeManager.fromRuntime(activeRuntime)
+  val runtimeManager                 = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
 
   val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
