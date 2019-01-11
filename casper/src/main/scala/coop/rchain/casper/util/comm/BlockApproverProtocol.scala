@@ -1,6 +1,7 @@
 package coop.rchain.casper.util.comm
 
 import cats.Monad
+import cats.data.EitherT
 import cats.effect.Concurrent
 import cats.implicits._
 import cats.kernel.Eq
@@ -56,17 +57,19 @@ class BlockApproverProtocol(
       Log[F].warn("Candidate is not defined.")
     } else {
       val candidate = u.candidate.get
-      val validCandidate = BlockApproverProtocol.validateCandidate(
-        runtimeManager,
-        candidate,
-        requiredSigs,
-        deployTimestamp,
-        wallets,
-        _bonds,
-        minimumBond,
-        maximumBond,
-        faucet
-      )
+      val validCandidate = BlockApproverProtocol
+        .validateCandidate(
+          runtimeManager,
+          candidate,
+          requiredSigs,
+          deployTimestamp,
+          wallets,
+          _bonds,
+          minimumBond,
+          maximumBond,
+          faucet
+        )
+        .runSyncUnsafe(Duration.Inf)
       validCandidate match {
         case Right(_) =>
           for {
@@ -100,8 +103,8 @@ object BlockApproverProtocol {
   ): BlockApproval =
     getBlockApproval(candidate, validatorId)
 
-  def validateCandidate(
-      runtimeManager: RuntimeManager[Task],
+  def validateCandidate[F[_]: Concurrent](
+      runtimeManager: RuntimeManager[F],
       candidate: ApprovedBlockCandidate,
       requiredSigs: Int,
       timestamp: Long,
@@ -110,7 +113,7 @@ object BlockApproverProtocol {
       minimumBond: Long,
       maximumBond: Long,
       faucet: Boolean
-  )(implicit scheduler: Scheduler): Either[String, Unit] = {
+  )(implicit scheduler: Scheduler): F[Either[String, Unit]] = {
 
     def validate: Either[String, (Seq[InternalProcessedDeploy], RChainState)] =
       for {
@@ -146,27 +149,35 @@ object BlockApproverProtocol {
               .or("Mismatch between number of candidate deploys and expected number of deploys.")
       } yield (blockDeploys, postState)
 
-    for {
-      r                         <- validate
-      (blockDeploys, postState) = r
-      stateHash <- runtimeManager
-                    .replayComputeState(runtimeManager.emptyStateHash, blockDeploys)
-                    .runSyncUnsafe(Duration.Inf)
-                    .leftMap { case (_, status) => s"Failed status during replay: $status." }
-      _ <- (stateHash == postState.postStateHash)
-            .either(())
-            .or("Tuplespace hash mismatch.")
-      tuplespaceBonds <- Try(
-                          runtimeManager
-                            .computeBonds(postState.postStateHash)
-                            .runSyncUnsafe(Duration.Inf)
-                        ).toEither
-                          .leftMap(_.getMessage)
-      tuplespaceBondsMap = tuplespaceBonds.map { case Bond(validator, stake) => validator -> stake }.toMap
-      _ <- (tuplespaceBondsMap == bonds)
-            .either(())
-            .or("Tuplespace bonds don't match expected ones.")
-    } yield ()
+    (validate match {
+      case Right((blockDeploys, postState)) =>
+        for {
+          stateHash <- EitherT(
+                        runtimeManager
+                          .replayComputeState(runtimeManager.emptyStateHash, blockDeploys)
+                      ).leftMap { case (_, status) => s"Failed status during replay: $status." }
+          _ <- EitherT(
+                (stateHash == postState.postStateHash)
+                  .either(())
+                  .or("Tuplespace hash mismatch.")
+                  .pure[F]
+              )
+          tuplespaceBonds <- EitherT(
+                              Concurrent[F]
+                                .attempt(runtimeManager.computeBonds(postState.postStateHash))
+                            ).leftMap(_.getMessage)
+          tuplespaceBondsMap = tuplespaceBonds.map {
+            case Bond(validator, stake) => validator -> stake
+          }.toMap
+          _ <- EitherT(
+                (tuplespaceBondsMap == bonds)
+                  .either(())
+                  .or("Tuplespace bonds don't match expected ones.")
+                  .pure[F]
+              )
+        } yield ()
+      case Left(v) => EitherT(v.asLeft[Unit].pure[F])
+    }).value
   }
 
   def packetToUnapprovedBlock(msg: Packet): Option[UnapprovedBlock] =
