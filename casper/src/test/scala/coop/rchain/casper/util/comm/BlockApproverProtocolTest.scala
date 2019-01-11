@@ -84,7 +84,7 @@ object BlockApproverProtocolTest {
     val runtimeDir = BlockDagStorageTestFixture.blockStorageDir
     val activeRuntime =
       Runtime.create[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB).unsafeRunSync
-    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
+    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
 
     val deployTimestamp = 1L
     val validators      = bonds.map(b => ProofOfStakeValidator(b._1, b._2)).toSeq
