@@ -3,7 +3,7 @@ package coop.rchain.casper.genesis
 import java.io.{File, PrintWriter}
 import java.nio.file.Path
 
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.{Applicative, Foldable, Monad}
 import com.google.protobuf.ByteString
@@ -51,15 +51,15 @@ object Genesis {
       StandardDeploys.rev(wallets, faucetCode, posParams)
     )
 
-  def withContracts(
+  def withContracts[F[_]: Concurrent](
       initial: BlockMessage,
       posParams: ProofOfStakeParams,
       wallets: Seq[PreWallet],
       faucetCode: String => String,
       startHash: StateHash,
-      runtimeManager: RuntimeManager[Task],
+      runtimeManager: RuntimeManager[F],
       timestamp: Long
-  )(implicit scheduler: Scheduler): BlockMessage =
+  )(implicit scheduler: Scheduler): F[BlockMessage] =
     withContracts(
       defaultBlessedTerms(timestamp, posParams, wallets, faucetCode),
       initial,
@@ -67,12 +67,12 @@ object Genesis {
       runtimeManager
     )
 
-  def withContracts(
+  def withContracts[F[_]: Concurrent](
       blessedTerms: List[Deploy],
       initial: BlockMessage,
       startHash: StateHash,
-      runtimeManager: RuntimeManager[Task]
-  )(implicit scheduler: Scheduler): BlockMessage =
+      runtimeManager: RuntimeManager[F]
+  )(implicit scheduler: Scheduler): F[BlockMessage] =
     runtimeManager
       .computeState(startHash, blessedTerms)
       .map {
@@ -94,7 +94,6 @@ object Genesis {
 
           unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
       }
-      .runSyncUnsafe(Duration.Inf)
 
   def withoutContracts(
       bonds: Map[Array[Byte], Long],
@@ -158,7 +157,7 @@ object Genesis {
         runtimeManager.emptyStateHash,
         runtimeManager,
         timestamp
-      )
+      ).runSyncUnsafe(Duration.Inf)
     } yield withContr
 
   def toFile[F[_]: Applicative: Log](
