@@ -17,12 +17,11 @@ package object matcher {
 
   type FreeMap = Map[Int, Par]
 
-  type OOPE[A]           = Either[OutOfPhlogistonsError.type, A]
-  type ErroredOrCostA[A] = StateT[OOPE, Cost, A]
-
-  //FreeMap => Cost => Either[OOPE, (Cost, Stream[(FreeMap, A)])]
+  //FreeMap => Cost => Either[OutOfPhlogistonsError.type, (Cost, Stream[(FreeMap, A)])]
   type NonDetFreeMapWithCost[A] = StateT[StreamWithCost, FreeMap, A]
   type StreamWithCost[A]        = StreamT[ErroredOrCostA, A]
+  type ErroredOrCostA[A]        = StateT[OOPE, Cost, A]
+  type OOPE[A]                  = Either[OutOfPhlogistonsError.type, A]
 
   // The naming convention means: this is an effect-type alias.
   // Will be used similarly to capabilities, but for more generic and probably low-level/implementation stuff.
