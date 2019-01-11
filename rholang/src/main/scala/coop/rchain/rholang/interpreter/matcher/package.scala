@@ -74,12 +74,6 @@ package object matcher {
       private def runFreeMapAndStream: ErroredOrCostA[Stream[(FreeMap, A)]] =
         StreamT.run(s.run(Map.empty))
 
-      def toDet(): OptionalFreeMapWithCost[A] =
-        s.mapK[OptionWithCost](new FunctionK[StreamWithCost, OptionWithCost] {
-          override def apply[T](fa: StreamWithCost[T]): OptionWithCost[T] =
-            OptionT(StreamT.run(fa).map(_.headOption))
-        })
-
       def takeFirst(): NonDetFreeMapWithCost[A] =
         s.mapK[StreamWithCost](new FunctionK[StreamWithCost, StreamWithCost] {
           override def apply[T](fa: StreamWithCost[T]): StreamWithCost[T] =
