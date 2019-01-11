@@ -80,6 +80,19 @@ class StreamTSpec extends FlatSpec with Matchers {
 
     assert(StreamT.run(combined).value() == (reference ++ reference))
   }
+
+  it must "be stacksafe and lazy for a stacksafe F when calling dropTail" in {
+    type StreamTCoeval[A] = StreamT[Coeval, A]
+
+    val reference                    = Stream(1)
+    val head: StreamTCoeval[Int]     = StreamT.fromStream(Coeval.now(reference))
+    val throwing: StreamTCoeval[Int] = StreamT.liftF[Coeval, Int](Coeval.delay(???))
+    val combined                     = head.combineK(throwing)
+
+    val noTail = StreamT.dropTail(combined)
+
+    assert(StreamT.run(noTail).value() == reference)
+  }
 }
 
 class StreamTLawsSpec extends CatsSuite with LowPriorityDerivations {

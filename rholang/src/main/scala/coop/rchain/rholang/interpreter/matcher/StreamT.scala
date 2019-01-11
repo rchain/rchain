@@ -62,6 +62,15 @@ object StreamT extends StreamTInstances0 {
       case SCons(head, tail) => F.map(run(tail))(t => head +: t)
     }
   }
+
+  def dropTail[F[_]: Monad, A](fa: StreamT[F, A]): StreamT[F, A] = {
+    val F = Monad[F]
+    val next: F[Step[F, A]] = F.map(fa.next) {
+      case SCons(head, _) => SCons(head, empty)
+      case nil @ SNil()   => nil
+    }
+    StreamT(next)
+  }
 }
 
 trait StreamTInstances0 extends StreamTInstances1 {
