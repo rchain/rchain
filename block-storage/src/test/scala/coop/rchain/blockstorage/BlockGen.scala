@@ -18,25 +18,21 @@ object BlockGen {
   def distinctListOf[T: Arbitrary] =
     distinctListOfGen(arbitrary[T])(_ == _)
 
-  val blockHashGen: Gen[BlockHash] = for {
-    byteArray <- listOfN(32, arbitrary[Byte])
-  } yield ByteString.copyFrom(byteArray.toArray)
-
-  implicit val arbitraryHash: Arbitrary[BlockHash] = Arbitrary(blockHashGen)
+  def byteStringGen(size: Int): Gen[ByteString] =
+    for {
+      byteArray <- listOfN(size, arbitrary[Byte])
+    } yield ByteString.copyFrom(byteArray.toArray)
 
   val blockElementGen: Gen[BlockMessage] =
     for {
-      hash      <- arbitrary[BlockHash]
-      validator <- arbitrary[Validator]
+      hash      <- byteStringGen(32)
+      validator <- byteStringGen(32)
       version   <- arbitrary[Long]
       timestamp <- arbitrary[Long]
     } yield
       BlockMessage(blockHash = hash)
         .withHeader(Header().withVersion(version).withTimestamp(timestamp))
         .withSender(validator)
-
-  val blockHashElementGen: Gen[(String, BlockMessage)] =
-    blockElementGen.map(block => (block.blockHash.toStringUtf8, block))
 
   /**
   Distinct list of elements from a given generator
@@ -61,10 +57,13 @@ object BlockGen {
     }
   }
 
-  val blockHashElementsGen: Gen[List[(String, BlockMessage)]] =
-    distinctListOfGen(blockHashElementGen)(_._1 == _._1)
+  val blockElementsGen: Gen[List[BlockMessage]] =
+    Gen.listOf(blockElementGen)
 
-  def blockElementsGen: Gen[List[BlockMessage]] =
+  val blockBatchesGen: Gen[List[List[BlockMessage]]] =
+    Gen.listOf(blockElementsGen)
+
+  def blockElementsWithParentsGen: Gen[List[BlockMessage]] =
     Gen.sized { size =>
       (0 until size).foldLeft(Gen.listOfN(0, blockElementGen)) {
         case (gen, _) =>
@@ -79,7 +78,7 @@ object BlockGen {
     }
 
   def blockWithNewHashesGen(blockElements: List[BlockMessage]): Gen[List[BlockMessage]] =
-    Gen.listOfN(blockElements.size, blockHashGen).map { blockHashes =>
+    Gen.listOfN(blockElements.size, byteStringGen(32)).map { blockHashes =>
       blockElements.zip(blockHashes).map {
         case (b, hash) => b.withBlockHash(hash)
       }

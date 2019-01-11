@@ -38,8 +38,11 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
 ) extends BlockStore[F] {
   private case class IndexEntry(checkpointIndex: Int, offset: Long)
   private object IndexEntry {
-    def load(byteBuffer: ByteBuffer): IndexEntry =
-      IndexEntry(byteBuffer.getInt, byteBuffer.getLong)
+    def load(byteBuffer: ByteBuffer): IndexEntry = {
+      val index  = byteBuffer.getInt()
+      val offset = byteBuffer.getLong()
+      IndexEntry(index, offset)
+    }
   }
 
   private[this] def withTxn[R](txnThunk: => Txn[ByteBuffer])(f: Txn[ByteBuffer] => R): F[R] =
@@ -95,7 +98,7 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
       else
         for {
           checkpoints <- checkpointsRef.get
-          result <- checkpoints.get(currentIndex) match {
+          result <- checkpoints.get(indexEntry.checkpointIndex) match {
             case Some(checkpoint) =>
               Sync[F].bracket {
                 Sync[F].delay {
@@ -291,6 +294,12 @@ object FileLMDBIndexBlockStore {
       case t                    => UnexpectedIOStorageError(t)
     }
 
+  private def isRegularFile[F[_]: Sync](path: Path): StorageErrT[F, Boolean] =
+    EitherT(Sync[F].delay { Files.isRegularFile(path) }.attempt).leftMap[StorageError] {
+      case e: SecurityException => FileSecurityViolation(e)
+      case t                    => UnexpectedIOStorageError(t)
+    }
+
   private def listInDirectory[F[_]: Sync](dirPath: Path): StorageErrT[F, List[Path]] =
     for {
       _ <- EitherT(Sync[F].delay { dirPath.toFile.mkdir() }.attempt).leftMap[StorageError] {
@@ -308,11 +317,11 @@ object FileLMDBIndexBlockStore {
         .toList
     } yield filesList
 
-  private def listDirectories[F[_]: Sync](dirPath: Path): StorageErrT[F, List[Path]] = {
+  private def listFiles[F[_]: Sync](dirPath: Path): StorageErrT[F, List[Path]] = {
     type TEMP[A] = StorageErrT[F, A]
     for {
       inDirectoryList <- listInDirectory(dirPath)
-      directoryList   <- inDirectoryList.filterA[TEMP](isDirectory)
+      directoryList   <- inDirectoryList.filterA[TEMP](isRegularFile)
     } yield directoryList
   }
 
@@ -320,9 +329,9 @@ object FileLMDBIndexBlockStore {
       checkpointsDirPath: Path
   ): StorageErrT[F, List[Checkpoint]] =
     for {
-      checkpointDirectoriesList <- listDirectories(checkpointsDirPath)
+      checkpointFilesList <- listFiles(checkpointsDirPath)
       checkpoints <- EitherT.liftF[F, StorageError, List[Checkpoint]](
-                      checkpointDirectoriesList.flatTraverse { filePath =>
+                      checkpointFilesList.flatTraverse { filePath =>
                         filePath.getFileName.toString match {
                           case checkpointPattern(index) =>
                             List(Checkpoint(index.toInt, filePath)).pure[F]
