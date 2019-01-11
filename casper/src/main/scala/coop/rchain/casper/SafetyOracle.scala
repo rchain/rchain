@@ -48,7 +48,7 @@ object SafetyOracle extends SafetyOracleInstances {
 }
 
 sealed abstract class SafetyOracleInstances {
-  def turanOracle[F[_]: Monad: Log]: SafetyOracle[F] =
+  def cliqueOracle[F[_]: Monad: Log]: SafetyOracle[F] =
     new SafetyOracle[F] {
       def normalizedFaultTolerance(
           blockDag: BlockDagRepresentation[F],

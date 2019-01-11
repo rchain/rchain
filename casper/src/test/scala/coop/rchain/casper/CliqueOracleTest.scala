@@ -17,7 +17,7 @@ class CliqueOracleTest
     with BlockGenerator
     with BlockDagStorageFixture {
 
-  behavior of "Turan Oracle"
+  behavior of "Clique Oracle"
 
   implicit val logEff = new LogStub[Task]
 
@@ -30,7 +30,7 @@ class CliqueOracleTest
       val v2Bond = Bond(v2, 3)
       val bonds  = Seq(v1Bond, v2Bond)
 
-      implicit val turanOracleEffect = SafetyOracle.turanOracle[Task]
+      implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
 
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
@@ -99,7 +99,7 @@ class CliqueOracleTest
       val v3Bond = Bond(v3, 15)
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
-      implicit val turanOracleEffect = SafetyOracle.turanOracle[Task]
+      implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
         b2 <- createBlock[Task](

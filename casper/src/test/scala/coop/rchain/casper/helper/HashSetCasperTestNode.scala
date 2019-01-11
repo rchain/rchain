@@ -69,12 +69,12 @@ class HashSetCasperTestNode[F[_]](
 
   private val storageDirectory = Files.createTempDirectory(s"hash-set-casper-test-$name")
 
-  implicit val logEff            = new LogStub[F]
-  implicit val timeEff           = logicalTime
-  implicit val connectionsCell   = Cell.unsafe[F, Connections](Connect.Connections.empty)
-  implicit val transportLayerEff = tle
-  implicit val turanOracleEffect = SafetyOracle.turanOracle[F]
-  implicit val rpConfAsk         = createRPConfAsk[F](local)
+  implicit val logEff             = new LogStub[F]
+  implicit val timeEff            = logicalTime
+  implicit val connectionsCell    = Cell.unsafe[F, Connections](Connect.Connections.empty)
+  implicit val transportLayerEff  = tle
+  implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[F]
+  implicit val rpConfAsk          = createRPConfAsk[F](local)
 
   val activeRuntime =
     Runtime.create[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB).unsafeRunSync
