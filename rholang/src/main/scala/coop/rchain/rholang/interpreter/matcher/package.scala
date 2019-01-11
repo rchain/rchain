@@ -19,8 +19,8 @@ package object matcher {
 
   //FreeMap => Cost => Either[OutOfPhlogistonsError.type, (Cost, Stream[(FreeMap, A)])]
   type NonDetFreeMapWithCost[A] = StateT[StreamWithCost, FreeMap, A]
-  type StreamWithCost[A]        = StreamT[ErroredOrCostA, A]
-  type ErroredOrCostA[A]        = StateT[OOPE, Cost, A]
+  type StreamWithCost[A]        = StreamT[ErroredOrCost, A]
+  type ErroredOrCost[A]         = StateT[OOPE, Cost, A]
   type OOPE[A]                  = Either[OutOfPhlogistonsError.type, A]
 
   // The naming convention means: this is an effect-type alias.
@@ -70,7 +70,7 @@ package object matcher {
       ): Either[OutOfPhlogistonsError.type, (Cost, Option[(FreeMap, A)])] =
         runFreeMapAndStream.map(_.headOption).run(initCost)
 
-      private def runFreeMapAndStream: ErroredOrCostA[Stream[(FreeMap, A)]] =
+      private def runFreeMapAndStream: ErroredOrCost[Stream[(FreeMap, A)]] =
         StreamT.run(s.run(Map.empty))
 
       def takeFirst(): NonDetFreeMapWithCost[A] =
