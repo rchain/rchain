@@ -100,7 +100,15 @@ package object matcher {
       def runWithCost(
           initCost: Cost
       ): Either[OutOfPhlogistonsError.type, (Cost, Stream[(FreeMap, A)])] =
-        StreamT.run(s.run(Map.empty)).run(initCost)
+        runFreeMapAndStream.run(initCost)
+
+      def runFirstWithCost(
+          initCost: Cost
+      ): Either[OutOfPhlogistonsError.type, (Cost, Option[(FreeMap, A)])] =
+        runFreeMapAndStream.map(_.headOption).run(initCost)
+
+      private def runFreeMapAndStream: ErroredOrCostA[Stream[(FreeMap, A)]] =
+        StreamT.run(s.run(Map.empty))
 
       def toDet(): OptionalFreeMapWithCost[A] =
         s.mapK[OptionWithCost](new FunctionK[StreamWithCost, OptionWithCost] {
