@@ -111,6 +111,7 @@ object BlockApproverProtocol {
       maximumBond: Long,
       faucet: Boolean
   )(implicit scheduler: Scheduler): Either[String, Unit] = {
+
     def validate: Either[String, (Seq[InternalProcessedDeploy], RChainState)] =
       for {
         _ <- (candidate.requiredSigs == requiredSigs)
@@ -144,6 +145,7 @@ object BlockApproverProtocol {
               .either(())
               .or("Mismatch between number of candidate deploys and expected number of deploys.")
       } yield (blockDeploys, postState)
+
     for {
       r                         <- validate
       (blockDeploys, postState) = r
