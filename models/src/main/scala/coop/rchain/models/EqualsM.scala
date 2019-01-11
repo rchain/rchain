@@ -69,7 +69,7 @@ object EqualM extends EqualMDerivation {
 
     override def equal[F[_]: Sync](self: Seq[A], other: Seq[A]): F[Boolean] = {
       val pairs = self.toStream.zip(other)
-      Sync[F].delay(self.length == other.length) <&&>
+      Sync[F].delay(self.length == other.length) &&^
         pairs.forallM(tupled(EqualM[A].equal[F]))
     }
 

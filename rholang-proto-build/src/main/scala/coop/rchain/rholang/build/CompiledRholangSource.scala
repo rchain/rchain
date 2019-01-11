@@ -2,8 +2,9 @@ package coop.rchain.rholang.build
 
 import coop.rchain.rholang.interpreter.Interpreter
 import coop.rchain.models.Par
-
 import java.io.{File, FileInputStream, FileReader}
+
+import monix.eval.Coeval
 
 trait CompiledRholangSource {
   val term: Par
@@ -14,7 +15,7 @@ object CompiledRholangSource {
   def fromSourceFile(file: File): Either[Throwable, Par] = {
     val reader = new FileReader(file)
 
-    Interpreter.buildNormalizedTerm(reader).runAttempt
+    Interpreter[Coeval].buildNormalizedTerm(reader).runAttempt
   }
 
   def fromProtoFile(path: String): Par = {

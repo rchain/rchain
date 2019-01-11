@@ -7,12 +7,11 @@ import java.util.concurrent.TimeoutException
 
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.Interpreter.EvaluateResult
 import coop.rchain.rholang.interpreter.Runtime.RhoIStore
 import coop.rchain.rholang.interpreter.accounting.CostAccount
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import monix.eval.Task
+import monix.eval.{Coeval, Task}
 import monix.execution.{CancelableFuture, Scheduler}
 import org.rogach.scallop.{stringListConverter, ScallopConf}
 
@@ -101,7 +100,7 @@ object RholangCLI {
     printPrompt()
     Option(scala.io.StdIn.readLine()) match {
       case Some(line) =>
-        Interpreter.buildNormalizedTerm(line).runAttempt match {
+        Interpreter[Coeval].buildNormalizedTerm(line).runAttempt match {
           case Right(par)                 => evaluatePar(runtime)(par)
           case Left(ie: InterpreterError) =>
             // we don't want to print stack trace for user errors
@@ -126,7 +125,7 @@ object RholangCLI {
 
     val source = reader(fileName)
 
-    Interpreter
+    Interpreter[Coeval]
       .buildNormalizedTerm(source)
       .runAttempt
       .fold(_.printStackTrace(Console.err), processTerm)
@@ -171,7 +170,7 @@ object RholangCLI {
     val evaluatorTask =
       for {
         _      <- Task.now(printNormalizedTerm(par))
-        result <- Interpreter.evaluate(runtime, par)
+        result <- Interpreter[Task].evaluate(runtime, par)
       } yield result
 
     waitForSuccess(evaluatorTask.runToFuture)
