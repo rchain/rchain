@@ -1,125 +1,116 @@
 //scalapackage coop.rchain.rholang.mint
 
-//requires MakeMint, TestSet
+//requires MakeMint, RhoSpec
 new
-  rl(`rho:registry:lookup`), TestSetCh, MakeMintCh,
-  test1, test2, test3, test4, mintACh, mintBCh,
-  getBalance, deposit, split, aliceAPurse, aliceBPurse,
-  bobAPurse, bobBPurse, aliceAPurseBalance, bobBPurseBalance,
-  ccDep1, ccDep2, aliceBPurseBalance, bobAPurseBalance,
-  bDep, aDep1, aDep2, failPurse, splitFail, aliceAPurse5Ch,
-  aliceAPurse5Balance
+  rl(`rho:registry:lookup`),
+  setup,
+test_create_purse, test_cross_currency_deposit, test_deposit, test_split,
+  split, getBalance, deposit
 in {
-  rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *TestSetCh) |
-  rl!(`rho:id:exunyijimapk7z43g3bbr69awqdz54kyroj9q43jgu3dh567fxsftx`, *MakeMintCh) |
-  for(@(_, TestSet) <- TestSetCh; @(_, MakeMint) <- MakeMintCh) {
-    contract getBalance(purse, return) = {
-      new getBalance in {
-        contract getBalance(return) = {
-          purse!("getBalance", *return)
-        } |
-        return!(*getBalance)
+  new RhoSpecCh in {
+    rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *RhoSpecCh) |
+    for(@(_, RhoSpec) <- RhoSpecCh) {
+      @RhoSpec!("testSuite", *setup,
+        [
+          ("Purses should be created with the given balance", *test_create_purse),
+          // ("Cross-currency deposits should fail.", *test_cross_currency_deposit)
+          ("Deposit should work as expected", *test_deposit),
+          ("Split should work as expected", *test_split)
+        ])
+    }
+  } |
+  
+  contract setup(retCh) = {
+    new MakeMintCh, mintACh, mintBCh in {
+      rl!(`rho:id:exunyijimapk7z43g3bbr69awqdz54kyroj9q43jgu3dh567fxsftx`, *MakeMintCh) |
+      for(@(_, MakeMint) <- MakeMintCh) {
+        @MakeMint!(*mintACh) | @MakeMint!(*mintBCh) |
+        for(mintA <- mintACh; mintB <- mintBCh) {
+          retCh ! ((*mintA, *mintB))
+        }
       }
-    } |
-    contract deposit(dest, @amount, @src, return) = {
-      new deposit in {
-        contract deposit(return) = {
-          dest!("deposit", amount, src, *return)
-        } |
-        return!(*deposit)
-      }
-    } |
-    contract split(purse, @amount, destCh, return) = {
-      new split in {
-        contract split(return) = {
-          purse!("split", amount, *destCh) |
-          for(@value <- destCh) {
-            match value {
-              [] => { return!(false) }
-              _  => { return!(true) }
-            } |
-            destCh!(value)
-          }
-        } |
-        return!(*split)
-      }
-    } |
-    @MakeMint!(*mintACh) | @MakeMint!(*mintBCh) |
-    for(mintA <- mintACh; mintB <- mintBCh) {
-      mintA!("makePurse", 100, *aliceAPurse) | mintB!("makePurse", 50, *bobBPurse) |
-      for(@aliceAPurse <- aliceAPurse; @bobBPurse <- bobBPurse) {
-        getBalance!(aliceAPurse, *aliceAPurseBalance) |
-        getBalance!(bobBPurse, *bobBPurseBalance) |
-        @TestSet!("define",
-          "Purses should be created with the given balance.",
+    }
+  } |
+
+  contract test_create_purse(rhoSpec, @(mintA, mintB), ackCh) = {
+    new aliceAPurse, bobBPurse, aliceAPurseBalance, bobBPurseBalance in {
+      @mintA!("makePurse", 100, *aliceAPurse) |
+      @mintB!("makePurse", 50, *bobBPurse) |
+      for(aliceAPurse <- aliceAPurse; bobBPurse <- bobBPurse) {
+        aliceAPurse!("getBalance", *aliceAPurseBalance) |
+        bobBPurse!("getBalance", *bobBPurseBalance) |
+        rhoSpec!("assertMany",
           [
-            [*aliceAPurseBalance, 100],
-            [*bobBPurseBalance, 50]
-          ],
-          *test1
-        ) |
-        
-        
-        @TestSet!("after", *test1, {
-          deposit!(aliceAPurse, 10, bobBPurse, *ccDep1) |
-          deposit!(bobBPurse, 10, aliceAPurse, *ccDep2) |
-          @TestSet!("define", //cannot deposit tokens across different mints
-            "Cross-currency deposits should fail.",
+            ((100, "== <-", *aliceAPurseBalance), "alice should have the initial balance"),
+            ((50, "== <-", *bobBPurseBalance), "bob should have the initial balance")
+          ], *ackCh)
+      }
+    }
+  } |
+
+  contract test_cross_currency_deposit(rhoSpec, @(mintA, mintB), ackCh) = {
+    new aliceAPurse, bobBPurse, ccDep1, ccDep2 in {
+      @mintA!("makePurse", 100, *aliceAPurse) |
+      @mintB!("makePurse", 50, *bobBPurse) |
+      for(aliceAPurse <- aliceAPurse;
+          bobBPurse <- bobBPurse) {
+        aliceAPurse!("deposit", 10, *bobBPurse, *ccDep1) |
+        bobBPurse!("deposit", 10, *aliceAPurse, *ccDep2) |
+        rhoSpec!("assertMany",
+          [
+            ((false, *ccDep1), "deposit from bob to alice should fail"),
+            ((false, *ccDep2), "deposit from alice to bob should fail")
+          ], *ackCh)
+      }
+    }
+  } |
+
+  contract test_deposit(rhoSpec, @(mintA, _), ackCh) = {
+    new aliceAPurse, aliceAPurseBalance,
+        bobAPurse, bobAPurseBalance,
+        depositSuccess in {
+      @mintA!("makePurse", 0, *aliceAPurse) |
+      @mintA!("makePurse", 50, *bobAPurse) |
+      for(aliceAPurse <- aliceAPurse;
+          bobAPurse <- bobAPurse) {
+        aliceAPurse!("deposit", 10, *bobAPurse, *depositSuccess) |
+        for (@depositResult <- depositSuccess) {
+          aliceAPurse!("getBalance", *aliceAPurseBalance) |
+          bobAPurse!("getBalance", *bobAPurseBalance) |
+
+          rhoSpec!("assertMany",
             [
-              [*ccDep1, "hanging return"],
-              [*ccDep2, "hanging return"],
+              (depositResult, "deposit should succeed"),
+              ((10, "== <-", *aliceAPurseBalance), "0 + 10 = 10"),
+              ((40, "== <-", *bobAPurseBalance), "50 - 10 = 40"),
             ],
-            *test2
+            *ackCh)
+        }
+      }
+    }
+  } |
+
+  contract test_split(rhoSpec, @(mintA, _), ackCh) = {
+    new aliceAPurse, bobAPurse, aliceAPurse5,
+        aliceAPurseBalance, aliceAPurse5Ch, aliceAPurse5Balance,
+        splitFail, splitResult, failPurse in {
+      @mintA!("makePurse", 50, *aliceAPurse) |
+      for(aliceAPurse <- aliceAPurse) {
+        aliceAPurse!("split", 500, *failPurse, *splitFail) |
+        rhoSpec!("assert", (false, "== <-", *splitFail), "cannot split with more what you have") |
+
+        aliceAPurse!("split", 5, *splitResult) |
+        for (@[aliceAPurse5] <- splitResult) {
+          aliceAPurse!("getBalance", *aliceAPurseBalance) |
+          @aliceAPurse5!("getBalance", *aliceAPurse5Balance) |
+          rhoSpec!("assertMany",
+            [
+              ((5, "== <-", *aliceAPurse5Balance), "0 + 5 = 5"),
+              ((45, "== <-", *aliceAPurseBalance), "50 - 5 = 45")
+            ],
+            *ackCh
           )
-        }) |
-        
-        
-        @TestSet!("after", *test2, {
-          @aliceAPurse!("sprout", *bobAPurse) |
-          @bobBPurse!("sprout", *aliceBPurse) |
-          for(@aliceBPurse <- aliceBPurse; @bobAPurse <- bobAPurse) {
-            getBalance!(aliceBPurse, *aliceBPurseBalance) |
-            getBalance!(bobAPurse, *bobAPurseBalance) |
-            deposit!(aliceBPurse, 10, bobBPurse, *bDep) |
-            deposit!(bobAPurse, 20, aliceAPurse, *aDep1) |
-            deposit!(bobAPurse, 30, aliceAPurse, *aDep2) |
-            @TestSet!("define",
-              "Deposit should work as expected.",
-              [
-                [*bDep, true], //10 from Bob to Alice
-                [*aliceBPurseBalance, 10], //0 + 10 = 10
-                [*bobBPurseBalance, 40], // 50 - 10 = 40
-                
-                [*aDep1, true], //20 from Alice to Bob
-                [*bobAPurseBalance, 20], //0 + 20 = 20
-                [*aliceAPurseBalance, 80], // 100 - 20 = 80
-                
-                [*aDep2, true], //30 from Alice to Bob again
-                [*bobAPurseBalance, 50], //20 + 30 = 50
-                [*aliceAPurseBalance, 50], // 80 - 30 = 50
-              ],
-              *test3
-            )
-          } |
-          
-          @TestSet!("after", *test3, {
-            split!(aliceAPurse, 500, *failPurse, *splitFail) |
-            @aliceAPurse!("split", 5, *aliceAPurse5Ch) |
-            for(@[aliceAPurse5] <- aliceAPurse5Ch){
-              aliceAPurse5Ch!([aliceAPurse5]) |
-              getBalance!(aliceAPurse5, *aliceAPurse5Balance) |
-              @TestSet!("define",
-                "Split should work as expected.",
-                [
-                  [*splitFail, false], //cannot split with more than you have
-                  [*aliceAPurse5Balance, 5], //0 + 5 = 5
-                  [*aliceAPurseBalance, 45] // 50 - 5 = 45
-                ],
-                *test4
-              )
-            }
-          })
-        })
+        }
       }
     }
   }

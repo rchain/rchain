@@ -1,7 +1,7 @@
 package coop.rchain.casper.util.rholang
 
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.casper.genesis.contracts.TestSetUtil
+import coop.rchain.casper.genesis.contracts.TestUtil
 import monix.execution.Scheduler
 import monix.eval.Task
 import coop.rchain.catscontrib.TaskContrib._
@@ -53,7 +53,7 @@ class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler
   def tuplespace: String = StoragePrinter.prettyPrint(runtime.space.store)
 
   def eval(code: String): Unit = {
-    TestSetUtil.eval(code, runtime)
+    TestUtil.eval(code, runtime)
     val errors = runtime.errorLog.readAndClearErrorVector().unsafeRunSync
     if (errors.nonEmpty) {
       println("Errors during execution:")
@@ -95,6 +95,6 @@ object Interactive {
   def apply(): Interactive = {
     implicit val scheduler = Scheduler.io("rhoang-interpreter")
     implicit val log       = new Log.NOPLog[Task]
-    new Interactive(TestSetUtil.runtime())
+    new Interactive(TestUtil.runtime())
   }
 }
