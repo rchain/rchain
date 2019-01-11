@@ -120,12 +120,13 @@ class NodeRuntime private[node] (
                              .toEffect
 
       prometheusReporter = new NewPrometheusReporter()
-      prometheusService  = NewPrometheusReporter.service(prometheusReporter)
+      prometheusService  = NewPrometheusReporter.service[Task](prometheusReporter)
 
       httpServerFiber <- BlazeBuilder[Task]
                           .bindHttp(conf.server.httpPort, "0.0.0.0")
                           .mountService(prometheusService, "/metrics")
-                          .mountService(VersionInfo.service, "/version")
+                          .mountService(VersionInfo.service[Task], "/version")
+                          .mountService(StatusInfo.service[Task], "/status")
                           .resource
                           .use(_ => Task.never[Unit])
                           .start
@@ -363,7 +364,7 @@ class NodeRuntime private[node] (
     lab                  <- LastApprovedBlock.of[Task].toEffect
     labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
     commTmpFolder        = conf.server.dataDir.resolve("tmp").resolve("comm")
-    _                    <- commTmpFolder.delete[Task]().toEffect
+    _                    <- commTmpFolder.deleteDirectory[Task]().toEffect
     transport = effects.tcpTransportLayer(
       port,
       conf.tls.certificate,
@@ -395,7 +396,7 @@ class NodeRuntime private[node] (
                         blockStore
                       )
     _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
-    oracle = SafetyOracle.turanOracle[Effect](Monad[Effect])
+    oracle = SafetyOracle.turanOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
     runtime <- {
       implicit val s = rspaceScheduler
       Runtime.create[Task, Task.Par](storagePath, storageSize, storeType, Seq.empty).toEffect

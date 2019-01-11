@@ -18,7 +18,7 @@ import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.Interpreter
 import coop.rchain.rspace.ReplayException
 import coop.rchain.shared.{Log, LogSource}
-import monix.eval.Task
+import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler
 
 import scala.concurrent.duration._
@@ -28,7 +28,7 @@ object InterpreterUtil {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def mkTerm(rho: String): Either[Throwable, Par] =
-    Interpreter.buildNormalizedTerm(rho).runAttempt
+    Interpreter[Coeval].buildNormalizedTerm(rho).runAttempt
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys

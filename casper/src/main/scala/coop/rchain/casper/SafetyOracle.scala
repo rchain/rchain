@@ -6,6 +6,7 @@ import coop.rchain.blockstorage.{BlockDagRepresentation, BlockMetadata}
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.{Clique, DagOperations, ProtoUtil}
+import coop.rchain.shared.Log
 
 /*
  * Implementation inspired by Ethereum's CBC casper simulator's clique oracle implementation.
@@ -47,7 +48,7 @@ object SafetyOracle extends SafetyOracleInstances {
 }
 
 sealed abstract class SafetyOracleInstances {
-  def turanOracle[F[_]: Monad]: SafetyOracle[F] =
+  def turanOracle[F[_]: Monad: Log]: SafetyOracle[F] =
     new SafetyOracle[F] {
       def normalizedFaultTolerance(
           blockDag: BlockDagRepresentation[F],
@@ -212,8 +213,11 @@ sealed abstract class SafetyOracleInstances {
                                                                   _.filter(_.sender == second).toList
                                                                 )
                                                           }
-                           _                        = assert(justificationBlockSecondList.length == 1)
                            justificationBlockSecond = justificationBlockSecondList.head
+                           _ = assert(
+                             justificationBlockSecondList
+                               .forall(b => b.blockHash == justificationBlockSecond.blockHash)
+                           )
                            potentialDisagreements <- filterChildren(
                                                       justificationBlockSecond,
                                                       second

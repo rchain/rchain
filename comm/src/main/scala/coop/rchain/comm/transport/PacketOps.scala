@@ -1,14 +1,18 @@
 package coop.rchain.comm.transport
 
 import coop.rchain.shared.GracefulClose._
-import coop.rchain.comm.{CommError, PeerNode}, CommError._
+import coop.rchain.comm.CommError, CommError._
 import coop.rchain.comm.protocol.routing._
 import java.nio.file._
-import com.google.protobuf.CodedOutputStream
 import java.io._
 import cats._, cats.data._, cats.implicits._
 import cats.effect.Sync
-import java.util.UUID
+import java.util.Date
+import java.text.SimpleDateFormat
+
+import scala.util.Random
+
+import coop.rchain.crypto.codec.Base16
 
 object PacketOps {
 
@@ -26,10 +30,9 @@ object PacketOps {
   implicit class RichPacket(packet: Packet) {
     def store[F[_]: Sync](folder: Path): F[CommErr[Path]] =
       for {
-        _        <- Sync[F].delay(folder.toFile.mkdirs())
-        fileName <- Sync[F].delay(UUID.randomUUID.toString + "_packet.bts")
-        file     = folder.resolve(fileName)
-        fos      <- Sync[F].delay(new FileOutputStream(file.toFile))
+        packetFile <- createPacketFile[F](folder, "_packet.bts")
+        file       = packetFile.file
+        fos        = packetFile.fos
         orErr <- Sync[F].delay {
                   fos.write(packet.toByteArray)
                   fos.flush()
@@ -44,5 +47,26 @@ object PacketOps {
                      }
                  }
       } yield resErr
+  }
+
+  case class PacketFile(file: Path, fos: FileOutputStream)
+
+  def createPacketFile[F[_]: Sync](folder: Path, postfix: String): F[PacketFile] =
+    for {
+      _        <- Sync[F].delay(folder.toFile.mkdirs())
+      fileName <- Sync[F].delay(timestamp + postfix)
+      file     <- Sync[F].delay(folder.resolve(fileName))
+      fos      <- Sync[F].delay(new FileOutputStream(file.toFile))
+    } yield PacketFile(file, fos)
+
+  private val TS_FORMAT = "yyyyMMddHHmmss"
+
+  private def timestamp: String = {
+    val dateFormat = new SimpleDateFormat(TS_FORMAT)
+    val bytes      = Array.ofDim[Byte](4)
+    Random.nextBytes(bytes)
+    val date = dateFormat.format(new Date())
+    val hex  = Base16.encode(bytes)
+    s"${date}_$hex"
   }
 }

@@ -72,27 +72,29 @@ object Genesis {
       initial: BlockMessage,
       startHash: StateHash,
       runtimeManager: RuntimeManager[Task]
-  )(implicit scheduler: Scheduler): BlockMessage = {
-    val (stateHash, processedDeploys) =
-      runtimeManager.computeState(startHash, blessedTerms).runSyncUnsafe(Duration.Inf)
+  )(implicit scheduler: Scheduler): BlockMessage =
+    runtimeManager
+      .computeState(startHash, blessedTerms)
+      .map {
+        case (stateHash, processedDeploys) =>
+          val stateWithContracts = for {
+            bd <- initial.body
+            ps <- bd.state
+          } yield ps.withPreStateHash(runtimeManager.emptyStateHash).withPostStateHash(stateHash)
+          val version   = initial.header.get.version
+          val timestamp = initial.header.get.timestamp
 
-    val stateWithContracts = for {
-      bd <- initial.body
-      ps <- bd.state
-    } yield ps.withPreStateHash(runtimeManager.emptyStateHash).withPostStateHash(stateHash)
-    val version   = initial.header.get.version
-    val timestamp = initial.header.get.timestamp
+          val blockDeploys =
+            processedDeploys.filterNot(_.status.isFailed).map(ProcessedDeployUtil.fromInternal)
+          val sortedDeploys = blockDeploys.map(d => d.copy(log = d.log.sortBy(_.toByteArray)))
 
-    val blockDeploys =
-      processedDeploys.filterNot(_.status.isFailed).map(ProcessedDeployUtil.fromInternal)
-    val sortedDeploys = blockDeploys.map(d => d.copy(log = d.log.sortBy(_.toByteArray)))
+          val body = Body(state = stateWithContracts, deploys = sortedDeploys)
 
-    val body = Body(state = stateWithContracts, deploys = sortedDeploys)
+          val header = blockHeader(body, List.empty[ByteString], version, timestamp)
 
-    val header = blockHeader(body, List.empty[ByteString], version, timestamp)
-
-    unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
-  }
+          unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
+      }
+      .runSyncUnsafe(Duration.Inf)
 
   def withoutContracts(
       bonds: Map[Array[Byte], Long],

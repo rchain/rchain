@@ -18,6 +18,7 @@ import com.google.protobuf.ByteString
 import cats._, cats.data._, cats.implicits._
 import cats.effect._
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.comm.transport.PacketOps._
 
 object StreamHandler {
 
@@ -33,7 +34,7 @@ object StreamHandler {
   def handleStream(
       folder: Path,
       stream: Observable[Chunk]
-  )(implicit logger: Log[Task]): Task[Either[Throwable, StreamMessage]] =
+  ): Task[Either[Throwable, StreamMessage]] =
     (init(folder)
       .bracket { initStmd =>
         (collect(initStmd, stream) >>= toResult).value
@@ -43,10 +44,9 @@ object StreamHandler {
 
   private def init(folder: Path): Task[Streamed] =
     for {
-      _        <- Task.delay(folder.toFile.mkdirs())
-      fileName <- Task.delay(UUID.randomUUID.toString + "_packet_streamed.bts")
-      file     <- Task.delay(folder.resolve(fileName))
-      fos      <- Task.delay(new FileOutputStream(file.toFile))
+      packetFile <- createPacketFile[Task](folder, "_packet_streamed.bts")
+      file       = packetFile.file
+      fos        = packetFile.fos
     } yield Streamed(fos = fos, path = file)
 
   private def collect(

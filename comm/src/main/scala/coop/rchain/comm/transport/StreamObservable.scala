@@ -11,38 +11,41 @@ import monix.reactive.Observable
 import monix.reactive.observers.Subscriber
 import java.nio.file._
 import scala.concurrent.duration._
+import coop.rchain.catscontrib.Catscontrib._
 
-case class ToStream(peerNode: PeerNode, path: Path, sender: PeerNode)
+case class StreamToPeers(peers: Seq[PeerNode], path: Path, sender: PeerNode)
 
 class StreamObservable(bufferSize: Int, folder: Path)(implicit log: Log[Task], scheduler: Scheduler)
-    extends Observable[ToStream] {
+    extends Observable[StreamToPeers] {
 
-  private val subject = buffer.LimitedBufferObservable.dropNew[ToStream](bufferSize)
+  private val subject = buffer.LimitedBufferObservable.dropNew[StreamToPeers](bufferSize)
 
   def stream(peers: List[PeerNode], blob: Blob): Task[Unit] = {
-    def push(peer: PeerNode): Task[Boolean] =
+
+    val storeBlob: Task[Option[Path]] =
       blob.packet.store[Task](folder) >>= {
-        case Right(file) => Task.delay(subject.pushNext(ToStream(peer, file, blob.sender)))
+        case Right(file) => Task.pure(Some(file))
         case Left(UnableToStorePacket(p, er)) =>
-          log.error(s"Could not serialize packet $p. Error message: $er") *> true.pure[Task]
+          log.error(s"Could not serialize packet $p. Error message: $er") *> None.pure[Task]
         case Left(er) =>
-          log.error(s"Could not serialize packet ${blob.packet}. Error: $er") *> true.pure[Task]
+          log.error(s"Could not serialize packet ${blob.packet}. Error: $er") *> None.pure[Task]
       }
 
-    def retry(failed: List[PeerNode]): Task[Unit] =
-      Task
-        .defer(log.debug(s"Retrying for $failed") *> stream(failed, blob))
-        .delayExecution(100.millis)
+    def push(file: Path): Task[Boolean] =
+      Task.delay(subject.pushNext(StreamToPeers(peers, file, blob.sender)))
 
-    for {
-      results     <- peers.traverse(push _)
-      paired      = peers.zip(results)
-      (_, failed) = paired.partition(_._2)
-      _           <- if (failed.nonEmpty) retry(failed.map(_._1)) else Task.unit
-    } yield ()
+    def propose(file: Path): Task[Unit] =
+      push(file) >>= (_.fold(Task.unit, retry(file)))
+
+    def retry(file: Path): Task[Unit] =
+      Task
+        .defer(log.warn("Retrying push to client stream") *> propose(file))
+        .delayExecution(1.second)
+
+    storeBlob >>= (_.fold(Task.unit)(propose))
   }
 
-  def unsafeSubscribeFn(subscriber: Subscriber[ToStream]): Cancelable = {
+  def unsafeSubscribeFn(subscriber: Subscriber[StreamToPeers]): Cancelable = {
     val subscription = subject.subscribe(subscriber)
     () => subscription.cancel()
   }

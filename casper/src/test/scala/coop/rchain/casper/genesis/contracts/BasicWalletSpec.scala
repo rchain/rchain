@@ -14,9 +14,9 @@ import coop.rchain.rholang.math.NonNegativeNumber
 import coop.rchain.rholang.mint.MakeMint
 import coop.rchain.rholang.wallet.{BasicWallet, BasicWalletTest}
 import coop.rchain.rspace.Serialize
+import monix.eval.Coeval
 import monix.execution.Scheduler.Implicits.global
 import org.abstractj.kalium.NaCl
-
 import org.scalatest.{FlatSpec, Matchers}
 
 class BasicWalletSpec extends FlatSpec with Matchers {
@@ -60,7 +60,7 @@ object Signer {
 
   private def signWithdrawal(nonce: Int, amount: Int, sigKey: String): String = {
     def parse(rho: String): Par =
-      Interpreter
+      Interpreter[Coeval]
         .buildNormalizedTerm(rho)
         .value
 

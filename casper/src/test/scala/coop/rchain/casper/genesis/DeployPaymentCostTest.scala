@@ -288,15 +288,16 @@ object DeployPaymentCostTest {
       node: HashSetCasperTestNode[F],
       tuplespaceHash: ByteString,
       statusChannel: GPrivate
-  ): Unit = {
-    val transferStatus = node.runtimeManager
+  ): Unit =
+    node.runtimeManager
       .getData(
         tuplespaceHash,
         statusChannel
       )
+      .map { transferStatus =>
+        assert(transferStatus.size == 1)
+        transferStatus.head.exprs.head should be(Expr(GString("Success")))
+      }
       .unsafeRunSync
-    assert(transferStatus.size == 1)
-    transferStatus.head.exprs.head should be(Expr(GString("Success")))
-  }
 
 }
