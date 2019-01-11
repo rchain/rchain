@@ -11,7 +11,7 @@ import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccounting}
 import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
 import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.shared.StoreType
-import monix.eval.Task
+import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 
 trait EvalBenchStateBase {
@@ -30,7 +30,9 @@ trait EvalBenchStateBase {
   def doSetup(): Unit = {
     deleteOldStorage(dbDir)
 
-    term = Interpreter.buildNormalizedTerm(resourceFileReader(rhoScriptSource)).runAttempt match {
+    term = Interpreter[Coeval]
+      .buildNormalizedTerm(resourceFileReader(rhoScriptSource))
+      .runAttempt match {
       case Right(par) => Some(par)
       case Left(err)  => throw err
     }
