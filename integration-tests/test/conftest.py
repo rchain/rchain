@@ -79,6 +79,27 @@ def temporary_bonds_file(random_generator: Random, validator_keys: List[KeyPair]
         os.unlink(file)
 
 
+def make_wallets_file_lines(random_generator: Random, validator_keys: List[KeyPair]) -> List[str]:
+    result = []
+    for keypair in validator_keys:
+        token_amount = random_generator.randint(1, 100)
+        line = '0x{},{},0'.format(keypair.public_key, token_amount)
+        result.append(line)
+    return result
+
+
+@contextlib.contextmanager
+def temporary_wallets_file(random_generator: Random, validator_keys: List[KeyPair]) -> Generator[str, None, None]:
+    lines = make_wallets_file_lines(random_generator, validator_keys)
+    (fd, file) = tempfile.mkstemp(prefix="rchain-wallets-file-", suffix=".txt", dir="/tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.writelines('{}\n'.format(l) for l in lines)
+        yield file
+    finally:
+        os.unlink(file)
+
+
 @pytest.yield_fixture(scope='session')
 def docker_client() -> Generator[DockerClient, None, None]:
     docker_client = docker_py.from_env()
