@@ -59,7 +59,7 @@ object Genesis {
       startHash: StateHash,
       runtimeManager: RuntimeManager[F],
       timestamp: Long
-  )(implicit scheduler: Scheduler): F[BlockMessage] =
+  ): F[BlockMessage] =
     withContracts(
       defaultBlessedTerms(timestamp, posParams, wallets, faucetCode),
       initial,
@@ -72,7 +72,7 @@ object Genesis {
       initial: BlockMessage,
       startHash: StateHash,
       runtimeManager: RuntimeManager[F]
-  )(implicit scheduler: Scheduler): F[BlockMessage] =
+  ): F[BlockMessage] =
     runtimeManager
       .computeState(startHash, blessedTerms)
       .map {
