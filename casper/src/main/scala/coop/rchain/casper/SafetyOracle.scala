@@ -257,21 +257,8 @@ sealed abstract class SafetyOracleInstances {
               )
           }
 
-        def findMaximumClique(
-            edges: List[(Validator, Validator)],
-            agreeingValidatorToWeight: Map[Validator, Long],
-            largestCandidate: Long
-        ): Long =
-          Clique
-            .findCliquesRecursive(edges)
-            .foldLeft(largestCandidate) {
-              case (largestWeight, clique: Seq[Validator]) =>
-                val weight = clique.map(agreeingValidatorToWeight.getOrElse(_, 0L)).sum
-                Math.max(weight, largestWeight)
-            }
-
         computeAgreementGraphEdges.map { edges =>
-          findMaximumClique(edges, agreeingValidatorToWeight, agreeingValidatorToWeight.values.max)
+          Clique.findMaximumCliqueByWeight[Validator](edges, agreeingValidatorToWeight)
         }
       }
 
