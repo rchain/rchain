@@ -100,7 +100,7 @@ def temporary_wallets_file(random_generator: Random, validator_keys: List[KeyPai
         os.unlink(file)
 
 
-@pytest.yield_fixture(scope='session')
+@pytest.yield_fixture(scope='module')
 def docker_client() -> Generator[DockerClient, None, None]:
     docker_client = docker_py.from_env()
     try:
