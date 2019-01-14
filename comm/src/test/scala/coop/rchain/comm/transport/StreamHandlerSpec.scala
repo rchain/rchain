@@ -105,6 +105,18 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       err.getMessage should startWith("received not full stream message, will not process")
     }
 
+    it("should stop processing a stream if stream brought incomplete data") {
+      // given
+      val incompleteStream: Observable[Chunk] =
+        Observable.fromIterator(createStreamIterator().map(_.toList).map {
+          case header :: data1 :: data2 => (header :: data2).toIterator
+        })
+      // when
+      val err: Throwable = handleStreamErr(incompleteStream)
+      // then
+      err.getMessage should startWith("received not full stream message, will not process")
+    }
+
   }
 
   private def handleStream(stream: Observable[Chunk], folder: Path = tempFolder): StreamMessage =
