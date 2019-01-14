@@ -20,6 +20,15 @@ class StreamTSpec extends FlatSpec with Matchers {
 
   behavior of "StreamT"
 
+  it must "allow for lazy computation of the stream's head and shape" in {
+    val stack  = StreamT.liftF[Coeval, Int](Coeval.delay(???))
+    val result = StreamT.run(stack)
+
+    assertThrows[NotImplementedError] {
+      result.value()
+    }
+  }
+
   it must "not trigger spurious evaluation of underlying stream for a lazy monad" in {
     val stream: Stream[Int] = Stream.cons(1, ???)
 
