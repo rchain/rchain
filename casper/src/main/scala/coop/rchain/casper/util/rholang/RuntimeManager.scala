@@ -1,6 +1,7 @@
 package coop.rchain.casper.util.rholang
 
 import cats.Monad
+import cats.data.EitherT
 import cats.effect._
 import cats.effect.concurrent.MVar
 import cats.implicits._
@@ -369,4 +370,9 @@ object RuntimeManager {
 
       override def emptyStateHash: ByteString = runtimeManager.emptyStateHash
     }
+
+  def eitherTRuntimeManager[E, F[_]: Monad](
+      rm: RuntimeManager[F]
+  ): RuntimeManager[EitherT[F, E, ?]] =
+    RuntimeManager.forTrans[F, EitherT[?[_], E, ?]](rm)
 }
