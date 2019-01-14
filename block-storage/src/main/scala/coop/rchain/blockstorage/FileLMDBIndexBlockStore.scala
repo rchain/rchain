@@ -161,24 +161,45 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
   override def checkpoint(): F[Unit] =
     ().pure[F]
 
-  override def clear(): F[Unit] =
+  override def clear(): F[StorageIOErr[Unit]] =
     lock.withPermit(
       for {
         blockMessageRandomAccessFile <- blockMessageRandomAccessFileRef.get
-        _                            <- Sync[F].delay { blockMessageRandomAccessFile.setLength(0) }
         _ <- withWriteTxn { txn =>
               index.drop(txn)
             }
-      } yield ()
+        storageFileClearAttempt <- Sync[F].delay { blockMessageRandomAccessFile.setLength(0) }.attempt
+        result = storageFileClearAttempt match {
+          case Left(e: IOException) =>
+            Left(ClearFileFailed(e))
+          case Left(t) =>
+            Left(UnexpectedIOStorageError(t))
+          case Right(_) =>
+            Right(())
+        }
+      } yield result
     )
 
-  override def close(): F[Unit] =
+  override def close(): F[StorageIOErr[Unit]] =
     lock.withPermit(
-      for {
-        blockMessageRandomAccessFile <- blockMessageRandomAccessFileRef.get
-        _                            <- Sync[F].delay { blockMessageRandomAccessFile.close() }
-        _                            <- Sync[F].delay { env.close() }
-      } yield ()
+      (for {
+        blockMessageRandomAccessFile <- EitherT.liftF[F, StorageIOError, RandomAccessFile](
+                                         blockMessageRandomAccessFileRef.get
+                                       )
+        _ <- EitherT(Sync[F].delay { blockMessageRandomAccessFile.close() }.attempt)
+              .leftMap[StorageIOError] {
+                case e: IOException =>
+                  ClosingFailed(e)
+                case t =>
+                  UnexpectedIOStorageError(t)
+              }
+        _ <- EitherT(Sync[F].delay { env.close() }.attempt).leftMap[StorageIOError] {
+              case e: IOException =>
+                ClosingFailed(e)
+              case t =>
+                UnexpectedIOStorageError(t)
+            }
+      } yield ()).value
     )
 }
 

@@ -45,12 +45,12 @@ class InMemBlockStore[F[_]] private ()(
   def checkpoint(): F[Unit] =
     ().pure[F]
 
-  def clear(): F[Unit] =
+  def clear(): F[StorageIOErr[Unit]] =
     for {
       _ <- refF.update { _.empty }
-    } yield ()
+    } yield Right(())
 
-  override def close(): F[Unit] = monadF.pure(())
+  override def close(): F[StorageIOErr[Unit]] = monadF.pure(Right(()))
 }
 
 object InMemBlockStore {

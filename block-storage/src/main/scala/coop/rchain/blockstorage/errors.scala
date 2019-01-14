@@ -20,6 +20,8 @@ final case class IntReadFailed(exception: IOException)          extends StorageI
 final case class ByteArrayReadFailed(exception: IOException)    extends StorageIOError
 final case class IntWriteFailed(exception: IOException)         extends StorageIOError
 final case class ByteArrayWriteFailed(exception: IOException)   extends StorageIOError
+final case class ClearFileFailed(exception: IOException)        extends StorageIOError
+final case class ClosingFailed(exception: IOException)          extends StorageIOError
 final case class UnexpectedIOStorageError(throwable: Throwable) extends StorageIOError
 
 object StorageError {

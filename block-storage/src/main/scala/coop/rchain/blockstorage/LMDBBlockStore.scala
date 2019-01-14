@@ -110,15 +110,15 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
   def checkpoint(): F[Unit] =
     ().pure[F]
 
-  def clear(): F[Unit] =
+  def clear(): F[StorageIOErr[Unit]] =
     for {
       ret <- withWriteTxn { txn =>
               blocks.drop(txn)
             }
-    } yield ()
+    } yield Right(())
 
-  override def close(): F[Unit] =
-    syncF.delay { env.close() }
+  override def close(): F[StorageIOErr[Unit]] =
+    syncF.delay { Right(env.close()) }
 }
 
 object LMDBBlockStore {

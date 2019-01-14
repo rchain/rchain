@@ -28,9 +28,9 @@ trait BlockStore[F[_]] {
 
   def checkpoint(): F[Unit]
 
-  def clear(): F[Unit]
+  def clear(): F[StorageIOErr[Unit]]
 
-  def close(): F[Unit]
+  def close(): F[StorageIOErr[Unit]]
 }
 
 object BlockStore {
