@@ -10,6 +10,7 @@ import cats.{Applicative, ApplicativeError, Id, Monad}
 import coop.rchain.blockstorage._
 import coop.rchain.catscontrib._
 import coop.rchain.casper._
+import coop.rchain.casper.helper.HashSetCasperTestNode.Close
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CasperPacketHandler.{
@@ -56,7 +57,7 @@ class HashSetCasperTestNode[F[_]](
     val blockStoreDir: Path,
     blockProcessingLock: Semaphore[F],
     shardId: String = "rchain",
-    createRuntime: (Path, Long) => (RuntimeManager[Task], () => Task[Unit])
+    createRuntime: (Path, Long) => (RuntimeManager[Task], Close[Task])
 )(
     implicit scheduler: Scheduler,
     syncF: Sync[F],
@@ -136,6 +137,8 @@ class HashSetCasperTestNode[F[_]](
 }
 
 object HashSetCasperTestNode {
+  type Close[F[_]] = () => F[Unit] //TODO replace with Resource
+
   type CommErrT[F[_], A] = EitherT[F, CommError, A]
   type Effect[A]         = CommErrT[Task, A]
 
@@ -147,7 +150,7 @@ object HashSetCasperTestNode {
 
   def createRuntime(storageDirectory: Path, storageSize: Long)(
       implicit scheduler: Scheduler
-  ): (RuntimeManager[Task], () => Task[Unit]) = {
+  ): (RuntimeManager[Task], Close[Task]) = {
     val activeRuntime =
       Runtime.create[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB).unsafeRunSync
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
@@ -158,7 +161,7 @@ object HashSetCasperTestNode {
       genesis: BlockMessage,
       sk: Array[Byte],
       storageSize: Long = 1024L * 1024 * 10,
-      createRuntime: (Path, Long) => (RuntimeManager[Task], () => Task[Unit])
+      createRuntime: (Path, Long) => (RuntimeManager[Task], Close[Task])
   )(
       implicit scheduler: Scheduler,
       errorHandler: ErrorHandler[F],
@@ -227,7 +230,7 @@ object HashSetCasperTestNode {
       sks: IndexedSeq[Array[Byte]],
       genesis: BlockMessage,
       storageSize: Long = 1024L * 1024 * 10,
-      createRuntime: (Path, Long) => (RuntimeManager[Task], () => Task[Unit])
+      createRuntime: (Path, Long) => (RuntimeManager[Task], Close[Task])
   )(
       implicit scheduler: Scheduler,
       errorHandler: ErrorHandler[F],

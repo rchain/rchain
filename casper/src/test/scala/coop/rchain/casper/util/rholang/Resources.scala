@@ -14,6 +14,8 @@ object Resources {
   )(implicit scheduler: Scheduler): Resource[Task, RuntimeManager[Task]] =
     mkRuntime(prefix)
       .flatMap { runtime =>
-        Resource.pure(RuntimeManager.fromRuntime(runtime).unsafeRunSync)
+        Resource.make(RuntimeManager.fromRuntime[Task](runtime))(
+          _ => Task.unit /* FIXME close the manager */
+        )
       }
 }

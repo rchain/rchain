@@ -149,35 +149,33 @@ object BlockApproverProtocol {
               .or("Mismatch between number of candidate deploys and expected number of deploys.")
       } yield (blockDeploys, postState)
 
-    (validate match {
-      case Right((blockDeploys, postState)) =>
-        for {
-          stateHash <- EitherT(
-                        runtimeManager
-                          .replayComputeState(runtimeManager.emptyStateHash, blockDeploys)
-                      ).leftMap { case (_, status) => s"Failed status during replay: $status." }
-          _ <- EitherT(
-                (stateHash == postState.postStateHash)
-                  .either(())
-                  .or("Tuplespace hash mismatch.")
-                  .pure[F]
-              )
-          tuplespaceBonds <- EitherT(
-                              Concurrent[F]
-                                .attempt(runtimeManager.computeBonds(postState.postStateHash))
-                            ).leftMap(_.getMessage)
-          tuplespaceBondsMap = tuplespaceBonds.map {
-            case Bond(validator, stake) => validator -> stake
-          }.toMap
-          _ <- EitherT(
-                (tuplespaceBondsMap == bonds)
-                  .either(())
-                  .or("Tuplespace bonds don't match expected ones.")
-                  .pure[F]
-              )
-        } yield ()
-      case Left(v) => EitherT(v.asLeft[Unit].pure[F])
-    }).value
+    (for {
+      result                    <- EitherT(validate.pure[F])
+      (blockDeploys, postState) = result
+      stateHash <- EitherT(
+                    runtimeManager
+                      .replayComputeState(runtimeManager.emptyStateHash, blockDeploys)
+                  ).leftMap { case (_, status) => s"Failed status during replay: $status." }
+      _ <- EitherT(
+            (stateHash == postState.postStateHash)
+              .either(())
+              .or("Tuplespace hash mismatch.")
+              .pure[F]
+          )
+      tuplespaceBonds <- EitherT(
+                          Concurrent[F]
+                            .attempt(runtimeManager.computeBonds(postState.postStateHash))
+                        ).leftMap(_.getMessage)
+      tuplespaceBondsMap = tuplespaceBonds.map {
+        case Bond(validator, stake) => validator -> stake
+      }.toMap
+      _ <- EitherT(
+            (tuplespaceBondsMap == bonds)
+              .either(())
+              .or("Tuplespace bonds don't match expected ones.")
+              .pure[F]
+          )
+    } yield ()).value
   }
 
   def packetToUnapprovedBlock(msg: Packet): Option[UnapprovedBlock] =
