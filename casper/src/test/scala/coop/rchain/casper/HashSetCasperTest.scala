@@ -76,7 +76,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
       _      = logEff.infos.size should be(2)
       result = logEff.infos(1).contains("Received Deploy") should be(true)
-      _      = node.tearDown()
+      _      <- node.tearDown()
     } yield result
   }
 
@@ -108,7 +108,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       testProgram.value.unsafeRunSync(scheduler).right.get
 
     threadStatuses should matchPattern { case (Processing, Valid) | (Valid, Processing) => }
-    node.tearDown()
+    node.tearDown().value.unsafeRunSync
   }
 
   it should "create blocks based on deploys" in effectTest {
@@ -130,7 +130,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _      = deploys.size should be(1)
       _      = deploys.head.raw should be(Some(deploy))
       result = storage.contains("@{0}!(0)") should be(true)
-      _      = node.tearDown()
+      _      <- node.tearDown()
     } yield result
   }
 
@@ -148,7 +148,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _                    = logEff.warns.isEmpty should be(true)
       dag                  <- MultiParentCasper[Effect].blockDag
       result               <- MultiParentCasper[Effect].estimator(dag) shouldBeF IndexedSeq(signedBlock)
-      _                    = node.tearDown()
+      _                    <- node.tearDown()
     } yield result
   }
 
@@ -204,7 +204,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
                  .storageContents(ProtoUtil.postStateHash(block2))
                  .map(_.contains("Hello, World!")) shouldBeF true
 
-      _ = node.tearDown()
+      _ <- node.tearDown()
     } yield result
   }
 
@@ -237,7 +237,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       dag    <- MultiParentCasper[Effect].blockDag
       _      <- MultiParentCasper[Effect].estimator(dag) shouldBeF IndexedSeq(signedBlock2)
       result = storage.contains("!(12)") should be(true)
-      _      = node.tearDown()
+      _      <- node.tearDown()
     } yield result
   }
 
@@ -255,7 +255,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       Created(block)    = createBlockResult
       _                 <- MultiParentCasper[Effect].addBlock(block, ignoreDoppelgangerCheck[Effect])
       result            <- MultiParentCasper[Effect].contains(block) shouldBeF true
-      _                 = node.tearDown()
+      _                 <- node.tearDown()
     } yield result
   }
 
@@ -275,7 +275,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
       _ <- node.casperEff.contains(invalidBlock) shouldBeF false
       _ = logEff.warns.head.contains("Ignoring block") should be(true)
-      _ = node.tearDownNode()
+      _ <- node.tearDownNode()
       result <- validateBlockStore(node) { blockStore =>
                  blockStore.get(block.blockHash) shouldBeF None
                }
@@ -327,7 +327,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       Created(signedBlock) = createBlockResult
       _                    <- MultiParentCasper[Effect].addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
       _                    = logEff.warns.head.contains("Ignoring block") should be(true)
-      _                    = node.tearDownNode()
+      _                    <- node.tearDownNode()
       result <- validateBlockStore(node) { blockStore =>
                  blockStore.get(signedBlock.blockHash) shouldBeF None
                }
@@ -343,7 +343,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _                    <- nodes(0).casperEff.addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
       _                    <- nodes(1).receive()
       result               <- nodes(1).casperEff.contains(signedBlock) shouldBeF true
-      _                    = nodes.foreach(_.tearDownNode())
+      _                    <- nodes.map(_.tearDownNode()).toList.sequence
       _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
             validateBlockStore(node) { blockStore =>
               blockStore.get(signedBlock.blockHash) shouldBeF Some(signedBlock)
@@ -362,7 +362,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _                          <- nodes(1).receive()
       _                          = nodes(1).logEff.infos.count(_ startsWith "Added") should be(1)
       result                     = nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(0)
-      _                          = nodes.foreach(_.tearDownNode())
+      _                          <- nodes.map(_.tearDownNode()).toList.sequence
       _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
             validateBlockStore(node) { blockStore =>
               blockStore.get(signedBlock1Prime.blockHash) shouldBeF Some(signedBlock1Prime)
@@ -415,7 +415,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _      = finalTuplespace.contains("@{1}!(1)") shouldBe true
       result = finalTuplespace.contains("@{2}!(2)") shouldBe true
 
-      _ = nodes.foreach(_.tearDown())
+      _ <- nodes.map(_.tearDown()).toList.sequence
     } yield result
   }
 
@@ -451,7 +451,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _ = multiparentBlock.header.get.parentsHashList.size shouldBe 2
       _ = nodes(0).casperEff.contains(multiparentBlock) shouldBeF true
       _ = nodes(1).casperEff.contains(multiparentBlock) shouldBeF true
-      _ = nodes.foreach(_.tearDown())
+      _ <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
   }
 
@@ -499,7 +499,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _      <- nodes(0).casperEff.contains(singleParentBlock) shouldBeF true
       result <- nodes(1).casperEff.contains(singleParentBlock) shouldBeF true
 
-      _ = nodes.foreach(_.tearDown())
+      _ <- nodes.map(_.tearDown()).toList.sequence
     } yield result
   }
 
@@ -613,7 +613,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       cB2N2Result   <- n2.casperEff.deploy(reg) *> n2.casperEff.createBlock
       Created(b2n2) = cB2N2Result
 
-      _ = nodes.foreach(_.tearDown())
+      _ <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
   }
 
@@ -662,7 +662,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _      <- nodes(0).casperEff.contains(singleParentBlock) shouldBeF true
       result <- nodes(1).casperEff.contains(singleParentBlock) shouldBeF true
 
-      _ = nodes.foreach(_.tearDown())
+      _ <- nodes.map(_.tearDown()).toList.sequence
     } yield result
   }
 
@@ -799,7 +799,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       newBonds = block2.getBody.getState.bonds
       result   = newBonds.toSet shouldBe correctBonds
 
-      _ = nodes.foreach(_.tearDown())
+      _ <- nodes.map(_.tearDown()).toList.sequence
     } yield result
   }
 
@@ -862,7 +862,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _      = blockStatus shouldBe Valid
       result = newWalletBalance.head.exprs.head.getGInt shouldBe amount
 
-      _ = node.tearDown()
+      _ <- node.tearDown()
     } yield result
   }
 
@@ -902,7 +902,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _                  = block2Status shouldBe Valid
       result             = (oldBonds.size + 1) shouldBe newBonds.size
 
-      _ = node.tearDown()
+      _ <- node.tearDown()
     } yield result
   }
 
@@ -987,7 +987,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _ <- deploy(nodes(0), deployDatasFs(0).apply())
       _ <- deploy(nodes(2), deployDatasFs(2).apply())
       _ <- nodes(2).receive()
-      _ = nodes.foreach(_.tearDown())
+      _ <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
   }
 
@@ -1069,7 +1069,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       result = status4 shouldBe Valid
       _      = nodes.foreach(_.logEff.warns shouldBe Nil)
 
-      _ = nodes.foreach(_.tearDown())
+      _ <- nodes.map(_.tearDown()).toList.sequence
     } yield result
   }
 
@@ -1148,7 +1148,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         timestampPar,
         phloPurchasedPar
       )
-      _ = node.tearDown()
+      _ <- node.tearDown()
     } yield result
   }
 
@@ -1196,7 +1196,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       //   .count(_ contains "found deploy by the same (user, millisecond timestamp) produced") should be(
       //   1
       // )
-      _ = nodes.foreach(_.tearDownNode())
+      _ <- nodes.map(_.tearDownNode()).toList.sequence
 
       _ = nodes.toList.traverse_[Effect, Assertion] { node =>
         validateBlockStore(node) { blockStore =>
@@ -1248,7 +1248,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         s => (s startsWith "Received request for block") && (s endsWith "Response sent.")
       ) should be(1)
 
-      _ = nodes.foreach(_.tearDownNode())
+      _ <- nodes.map(_.tearDownNode()).toList.sequence
       _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
             validateBlockStore(node) { blockStore =>
               for {
@@ -1344,13 +1344,13 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       // this block will be propagated to all nodes and force nodes(2) to ask for missing blocks.
       br <- deploy(nodes(0), deployDatasFs(0).apply()) // block h1
 
-      _ <- List.fill(22)(propagate(nodes)).sequence // force the network to communicate
+      _ <- List.fill(22)(propagate(nodes)).toList.sequence // force the network to communicate
 
       _ <- nodes(2).casperEff.contains(br) shouldBeF true
 
       nr <- deploy(nodes(2), deployDatasFs(0).apply())
       _  = nr.header.get.parentsHashList shouldBe Seq(br.blockHash)
-      _  = nodes.foreach(_.tearDownNode())
+      _  <- nodes.map(_.tearDownNode()).toList.sequence
     } yield ()
   }
 
@@ -1377,8 +1377,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       result <- nodes(1).casperEff
                  .contains(signedBlock1Prime) shouldBeF false // we still add the equivocation pair
 
-      _ = nodes(0).tearDownNode()
-      _ = nodes(1).tearDownNode()
+      _ <- nodes(0).tearDownNode()
+      _ <- nodes(1).tearDownNode()
       _ <- validateBlockStore(nodes(1)) { blockStore =>
             for {
               _      <- blockStore.get(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
@@ -1452,7 +1452,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
       _ <- nodes(1).casperEff
             .normalizedInitialFault(ProtoUtil.weightMap(genesis)) shouldBeF 1f / (1f + 3f + 5f + 7f)
-      _ = nodes.foreach(_.tearDownNode())
+      _ <- nodes.map(_.tearDownNode()).toList.sequence
 
       _ <- validateBlockStore(nodes(0)) { blockStore =>
             for {
@@ -1513,7 +1513,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _ <- nodes(1).receive() // receives signedInvalidBlock; attempts to add both blocks
 
       result = nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
-      _      = nodes.foreach(_.tearDown())
+      _      <- nodes.map(_.tearDown()).toList.sequence
     } yield result
   }
 
@@ -1559,7 +1559,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         s => (s startsWith "Received request for block") && (s endsWith "Response sent.")
       ) should be(10)
 
-      _ = nodes.foreach(_.tearDown())
+      _ <- nodes.map(_.tearDown()).toList.sequence
     } yield result
   }
 
@@ -1639,7 +1639,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _ <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block3
       _ = nodes(0).casperEff.deployHist.size should be(2)
 
-      _ = nodes.foreach(_.tearDown())
+      _ <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
   }
 
@@ -1757,15 +1757,17 @@ object HashSetCasperTest {
     val runtimeManager = RuntimeManager.fromRuntime[Task](activeRuntime).unsafeRunSync
     val emptyStateHash = runtimeManager.emptyStateHash
     val validators     = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
-    val genesis = Genesis.withContracts(
-      initial,
-      ProofOfStakeParams(minimumBond, maximumBond, validators),
-      wallets,
-      faucetCode,
-      emptyStateHash,
-      runtimeManager,
-      deployTimestamp
-    )
+    val genesis = Genesis
+      .withContracts(
+        initial,
+        ProofOfStakeParams(minimumBond, maximumBond, validators),
+        wallets,
+        faucetCode,
+        emptyStateHash,
+        runtimeManager,
+        deployTimestamp
+      )
+      .unsafeRunSync
     activeRuntime.close().unsafeRunSync
     genesis
   }

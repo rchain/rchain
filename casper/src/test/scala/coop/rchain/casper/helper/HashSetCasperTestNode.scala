@@ -10,6 +10,7 @@ import cats.{Applicative, ApplicativeError, Id, Monad}
 import coop.rchain.blockstorage._
 import coop.rchain.catscontrib._
 import coop.rchain.casper._
+import coop.rchain.casper.helper.HashSetCasperTestNode.Close
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CasperPacketHandler.{
@@ -55,7 +56,8 @@ class HashSetCasperTestNode[F[_]](
     val blockDagDir: Path,
     val blockStoreDir: Path,
     blockProcessingLock: Semaphore[F],
-    shardId: String = "rchain"
+    shardId: String = "rchain",
+    createRuntime: (Path, Long) => (RuntimeManager[Task], Close[Task])
 )(
     implicit scheduler: Scheduler,
     syncF: Sync[F],
@@ -76,9 +78,8 @@ class HashSetCasperTestNode[F[_]](
   implicit val turanOracleEffect = SafetyOracle.turanOracle[F]
   implicit val rpConfAsk         = createRPConfAsk[F](local)
 
-  val activeRuntime =
-    Runtime.create[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB).unsafeRunSync
-  val runtimeManager                 = RuntimeManager.fromRuntime(activeRuntime)
+  val (runtimeManager, closeRuntime) = createRuntime(storageDirectory, storageSize)
+
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
 
   val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
@@ -121,20 +122,23 @@ class HashSetCasperTestNode[F[_]](
 
   def receive(): F[Unit] = tle.receive(p => handle[F](p, defaultTimeout), kp(().pure[F]))
 
-  def tearDown(): Unit = {
-    tearDownNode()
-    blockStoreDir.recursivelyDelete()
-    blockDagDir.recursivelyDelete()
-  }
+  def tearDown(): F[Unit] =
+    tearDownNode().map { _ =>
+      blockStoreDir.recursivelyDelete()
+      blockDagDir.recursivelyDelete()
+    }
 
-  def tearDownNode(): Unit = {
-    activeRuntime.close().unsafeRunSync
-    blockStore.close()
-    blockDagStorage.close()
-  }
+  def tearDownNode(): F[Unit] =
+    for {
+      _ <- blockStore.close()
+      _ <- blockDagStorage.close()
+      _ = closeRuntime.apply().unsafeRunSync
+    } yield ()
 }
 
 object HashSetCasperTestNode {
+  type Close[F[_]] = () => F[Unit] //TODO replace with Resource
+
   type CommErrT[F[_], A] = EitherT[F, CommError, A]
   type Effect[A]         = CommErrT[Task, A]
 
@@ -144,10 +148,20 @@ object HashSetCasperTestNode {
     def fromTask[A](fa: Task[A]): Effect[A] = new MonadOps(fa).liftM[CommErrT]
   }
 
+  def createRuntime(storageDirectory: Path, storageSize: Long)(
+      implicit scheduler: Scheduler
+  ): (RuntimeManager[Task], Close[Task]) = {
+    val activeRuntime =
+      Runtime.create[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB).unsafeRunSync
+    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
+    (runtimeManager, activeRuntime.close)
+  }
+
   def standaloneF[F[_]](
       genesis: BlockMessage,
       sk: Array[Byte],
-      storageSize: Long = 1024L * 1024 * 10
+      storageSize: Long = 1024L * 1024 * 10,
+      createRuntime: (Path, Long) => (RuntimeManager[Task], Close[Task])
   )(
       implicit scheduler: Scheduler,
       errorHandler: ErrorHandler[F],
@@ -194,7 +208,8 @@ object HashSetCasperTestNode {
         blockDagDir,
         blockStoreDir,
         blockProcessingLock,
-        "rchain"
+        "rchain",
+        createRuntime
       )(scheduler, syncF, captureF, concurrentF, blockStore, blockDagStorage, metricEff, absF)
       result <- node.initialize.map(_ => node)
     } yield result
@@ -202,7 +217,7 @@ object HashSetCasperTestNode {
   def standaloneEff(genesis: BlockMessage, sk: Array[Byte], storageSize: Long = 1024L * 1024 * 10)(
       implicit scheduler: Scheduler
   ): HashSetCasperTestNode[Effect] =
-    standaloneF[Effect](genesis, sk, storageSize)(
+    standaloneF[Effect](genesis, sk, storageSize, createRuntime)(
       scheduler,
       ApplicativeError_[Effect, CommError],
       syncEffectInstance,
@@ -214,7 +229,8 @@ object HashSetCasperTestNode {
   def networkF[F[_]](
       sks: IndexedSeq[Array[Byte]],
       genesis: BlockMessage,
-      storageSize: Long = 1024L * 1024 * 10
+      storageSize: Long = 1024L * 1024 * 10,
+      createRuntime: (Path, Long) => (RuntimeManager[Task], Close[Task])
   )(
       implicit scheduler: Scheduler,
       errorHandler: ErrorHandler[F],
@@ -273,7 +289,8 @@ object HashSetCasperTestNode {
                 blockDagDir,
                 blockStoreDir,
                 semaphore,
-                "rchain"
+                "rchain",
+                createRuntime
               )(
                 scheduler,
                 syncF,
@@ -312,7 +329,7 @@ object HashSetCasperTestNode {
       genesis: BlockMessage,
       storageSize: Long = 1024L * 1024 * 10
   )(implicit scheduler: Scheduler): Effect[IndexedSeq[HashSetCasperTestNode[Effect]]] =
-    networkF[Effect](sks, genesis, storageSize)(
+    networkF[Effect](sks, genesis, storageSize, createRuntime)(
       scheduler,
       ApplicativeError_[Effect, CommError],
       syncEffectInstance,
