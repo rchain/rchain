@@ -171,7 +171,7 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
     implicit val log: Log[Task]         = new Log.NOPLog[Task]()
     val env                             = Context.env(dbDir, mapSize)
     val test = for {
-      store  <- FileLMDBIndexBlockStore.create[Task](env, dbDir)
+      store  <- FileLMDBIndexBlockStore.create[Task](env, dbDir).map(_.right.get)
       _      <- store.find(_ => true).map(map => assert(map.isEmpty))
       result <- f(store)
     } yield result

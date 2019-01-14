@@ -12,7 +12,7 @@ import cats.effect.concurrent.{Ref, Semaphore}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.FileLMDBIndexBlockStore.Checkpoint
-import coop.rchain.blockstorage.errors.{CheckpointsAreNotConsecutive, CheckpointsDoNotStartFromZero}
+import coop.rchain.blockstorage.StorageError.StorageErr
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.shared.Resources.withResource
 import coop.rchain.blockstorage.util.byteOps._
@@ -164,7 +164,9 @@ object FileLMDBIndexBlockStore {
       index: Option[WeakReference[CheckpointIndex]]
   )
 
-  private def loadCheckpoints[F[_]: Sync: Log](checkpointsDirPath: Path): F[List[Checkpoint]] =
+  private def loadCheckpoints[F[_]: Sync: Log](
+      checkpointsDirPath: Path
+  ): F[Either[StorageError, List[Checkpoint]]] =
     for {
       checkpointDirectories <- Sync[F].delay {
                                 checkpointsDirPath.toFile.mkdir()
@@ -193,33 +195,31 @@ object FileLMDBIndexBlockStore {
                       }
                     }
       sortedCheckpoints = checkpoints.sortBy(_.start)
-      result <- if (sortedCheckpoints.headOption.forall(_.start == 0)) {
-                 if (sortedCheckpoints.isEmpty ||
-                     sortedCheckpoints.zip(sortedCheckpoints.tail).forall {
-                       case (current, next) => current.end == next.start
-                     }) {
-                   sortedCheckpoints.pure[F]
-                 } else {
-                   Sync[F].raiseError(
-                     CheckpointsAreNotConsecutive(sortedCheckpoints.map(_.dirPath))
-                   )
-                 }
-               } else {
-                 Sync[F].raiseError(CheckpointsDoNotStartFromZero(sortedCheckpoints.map(_.dirPath)))
-               }
+      result = if (sortedCheckpoints.headOption.forall(_.start == 0)) {
+        if (sortedCheckpoints.isEmpty ||
+            sortedCheckpoints.zip(sortedCheckpoints.tail).forall {
+              case (current, next) => current.end == next.start
+            }) {
+          sortedCheckpoints.asRight[StorageError]
+        } else {
+          CheckpointsAreNotConsecutive(sortedCheckpoints.map(_.dirPath)).asLeft[List[Checkpoint]]
+        }
+      } else {
+        CheckpointsDoNotStartFromZero(sortedCheckpoints.map(_.dirPath)).asLeft[List[Checkpoint]]
+      }
     } yield result
 
   def create[F[_]: Concurrent: Log](
       env: Env[ByteBuffer],
       blockStoreDataDir: Path
-  ): F[BlockStore[F]] =
+  ): F[StorageErr[BlockStore[F]]] =
     create(env, blockStoreDataDir.resolve("storage"), blockStoreDataDir.resolve("checkpoints"))
 
   def create[F[_]: Monad: Concurrent: Log](
       env: Env[ByteBuffer],
       storagePath: Path,
       checkpointsDirPath: Path
-  ): F[BlockStore[F]] =
+  ): F[StorageErr[BlockStore[F]]] =
     for {
       lock  <- Semaphore[F](1)
       index <- Sync[F].delay { env.openDbi(s"block_store_index", MDB_CREATE) }
@@ -228,17 +228,19 @@ object FileLMDBIndexBlockStore {
                                      }
       blockMessageRandomAccessFileRef <- Ref.of[F, RandomAccessFile](blockMessageRandomAccessFile)
       sortedCheckpoints               <- loadCheckpoints(checkpointsDirPath)
-      checkPointsRef                  <- Ref.of[F, List[Checkpoint]](sortedCheckpoints)
-    } yield
-      new FileLMDBIndexBlockStore[F](
-        lock,
-        env,
-        index,
-        blockMessageRandomAccessFileRef,
-        checkPointsRef
-      )
+      checkpointsRef                  <- sortedCheckpoints.traverse(Ref.of[F, List[Checkpoint]])
+      result = checkpointsRef.map { ref =>
+        new FileLMDBIndexBlockStore[F](
+          lock,
+          env,
+          index,
+          blockMessageRandomAccessFileRef,
+          ref
+        )
+      }
+    } yield result
 
-  def create[F[_]: Monad: Concurrent: Log](config: Config): F[BlockStore[F]] =
+  def create[F[_]: Monad: Concurrent: Log](config: Config): F[StorageErr[BlockStore[F]]] =
     for {
       env <- Sync[F].delay {
               if (Files.notExists(config.indexPath)) Files.createDirectories(config.indexPath)
