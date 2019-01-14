@@ -113,7 +113,7 @@ object BlockApproverProtocol {
       minimumBond: Long,
       maximumBond: Long,
       faucet: Boolean
-  )(implicit scheduler: Scheduler): F[Either[String, Unit]] = {
+  ): F[Either[String, Unit]] = {
 
     def validate: Either[String, (Seq[InternalProcessedDeploy], RChainState)] =
       for {

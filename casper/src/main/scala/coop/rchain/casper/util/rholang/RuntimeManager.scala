@@ -17,7 +17,6 @@ import coop.rchain.rspace.internal.Datum
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 
 import scala.collection.immutable
-import scala.concurrent.ExecutionContext
 
 abstract class RuntimeManager[F[_]: Concurrent] {
   def captureResults(start: StateHash, deploy: Deploy, name: String = "__SCALA__"): F[Seq[Par]]
@@ -303,7 +302,7 @@ object RuntimeManager {
 
   def fromRuntime[F[_]: Concurrent: Sync](
       active: Runtime[F]
-  )(implicit scheduler: ExecutionContext): F[RuntimeManager[F]] =
+  ): F[RuntimeManager[F]] =
     for {
       _                <- active.space.clear()
       _                <- active.replaySpace.clear()
