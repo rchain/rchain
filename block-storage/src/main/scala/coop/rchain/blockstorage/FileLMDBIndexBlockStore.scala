@@ -177,6 +177,7 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
       for {
         blockMessageRandomAccessFile <- blockMessageRandomAccessFileRef.get
         _                            <- Sync[F].delay { blockMessageRandomAccessFile.close() }
+        _                            <- Sync[F].delay { env.close() }
       } yield ()
     )
 }
