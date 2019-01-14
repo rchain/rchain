@@ -6,6 +6,7 @@ import java.util.zip.CRC32
 
 import cats.Id
 import cats.effect.{Concurrent, Sync}
+import cats.syntax.functor._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.blockstorage._
@@ -98,7 +99,7 @@ object BlockDagStorageTestFixture {
       blockStorageDir: Path
   ): F[BlockStore[F]] = {
     val env = Context.env(blockStorageDir, mapSize)
-    FileLMDBIndexBlockStore.create[F](env, blockStorageDir)
+    FileLMDBIndexBlockStore.create[F](env, blockStorageDir).map(_.right.get)
   }
 
   def createBlockDagStorage(blockDagStorageDir: Path)(

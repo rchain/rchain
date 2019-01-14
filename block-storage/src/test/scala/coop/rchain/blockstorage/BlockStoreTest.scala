@@ -12,6 +12,7 @@ import coop.rchain.rspace.Context
 import coop.rchain.shared.PathOps._
 import BlockGen.blockHashElementsGen
 import coop.rchain.blockstorage.InMemBlockStore.emptyMapRef
+import coop.rchain.blockstorage.StorageError.StorageIOErr
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.catscontrib.TaskContrib._
@@ -88,11 +89,11 @@ trait BlockStoreTest
             (hash, elem, toBlockMessage(hash, 200L, 20000L))
         }
         for {
-          _ <- items.traverse_[Task, Unit] { case (k, v1, _) => store.put(k, v1) }
+          _ <- items.traverse_[Task, StorageIOErr[Unit]] { case (k, v1, _) => store.put(k, v1) }
           _ <- items.traverse_[Task, Assertion] {
                 case (k, v1, _) => store.get(k).map(_ shouldBe Some(v1))
               }
-          _ <- items.traverse_[Task, Unit] { case (k, _, v2) => store.put(k, v2) }
+          _ <- items.traverse_[Task, StorageIOErr[Unit]] { case (k, _, v2) => store.put(k, v2) }
           _ <- items.traverse_[Task, Assertion] {
                 case (k, _, v2) => store.get(k).map(_ shouldBe Some(v2))
               }

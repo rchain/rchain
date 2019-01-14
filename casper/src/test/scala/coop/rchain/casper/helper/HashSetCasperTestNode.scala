@@ -184,7 +184,7 @@ object HashSetCasperTestNode {
     val blockStoreDir = BlockDagStorageTestFixture.blockStorageDir
     val env           = Context.env(blockStoreDir, mapSize)
     for {
-      blockStore <- FileLMDBIndexBlockStore.create[F](env, blockStoreDir)
+      blockStore <- FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
       blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
                           BlockDagFileStorage.Config(
                             blockDagDir.resolve("latest-messages-data"),
@@ -263,7 +263,7 @@ object HashSetCasperTestNode {
             val blockStoreDir = BlockDagStorageTestFixture.blockStorageDir
             val env           = Context.env(blockStoreDir, mapSize)
             for {
-              blockStore <- FileLMDBIndexBlockStore.create[F](env, blockStoreDir)
+              blockStore <- FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
               blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
                                   BlockDagFileStorage.Config(
                                     blockDagDir.resolve("latest-messages-data"),
