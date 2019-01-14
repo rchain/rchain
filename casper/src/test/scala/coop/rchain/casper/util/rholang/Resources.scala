@@ -10,7 +10,7 @@ object Resources {
       prefix: String,
       storageSize: Int = 1024 * 1024,
       storeType: StoreType = StoreType.LMDB
-  )(implicit scheduler: Scheduler): Resource[Task, RuntimeManager] =
+  )(implicit scheduler: Scheduler): Resource[Task, RuntimeManager[Task]] =
     mkRuntime(prefix)
       .flatMap { runtime =>
         Resource.pure(RuntimeManager.fromRuntime(runtime))

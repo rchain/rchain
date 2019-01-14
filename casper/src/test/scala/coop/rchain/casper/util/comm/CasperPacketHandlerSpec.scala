@@ -38,7 +38,7 @@ import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.shared.Cell
+import coop.rchain.shared.{Cell, StoreType}
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
@@ -50,9 +50,10 @@ import scala.concurrent.duration._
 
 class CasperPacketHandlerSpec extends WordSpec {
   private def setup() = new {
-    val scheduler      = Scheduler.io("test")
-    val runtimeDir     = BlockDagStorageTestFixture.blockStorageDir
-    val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024)
+    val scheduler  = Scheduler.io("test")
+    val runtimeDir = BlockDagStorageTestFixture.blockStorageDir
+    val activeRuntime =
+      Runtime.create[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB).unsafeRunSync
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)(scheduler)
 
     implicit val captureTask       = Capture.taskCapture
@@ -125,9 +126,8 @@ class CasperPacketHandlerSpec extends WordSpec {
         val unapprovedBlock  = BlockApproverProtocolTest.createUnapproved(requiredSigs, genesis)
         val unapprovedPacket = BlockApproverProtocolTest.unapprovedToPacket(unapprovedBlock)
         val test = for {
-          packetResponse <- packetHandler.handle(local).apply(unapprovedPacket)
-          _              = assert(packetResponse.isEmpty)
-          blockApproval  = BlockApproverProtocol.getBlockApproval(expectedCandidate, validatorId)
+          _             <- packetHandler.handle(local).apply(unapprovedPacket)
+          blockApproval = BlockApproverProtocol.getBlockApproval(expectedCandidate, validatorId)
           expectedPacket = ProtocolHelper.packet(
             local,
             transport.BlockApproval,
@@ -154,24 +154,21 @@ class CasperPacketHandlerSpec extends WordSpec {
         val packetHandler = new CasperPacketHandlerImpl[Task](ref)
 
         val approvedBlockRequest = ApprovedBlockRequest("test")
-        val packet               = Packet(transport.ApprovedBlockRequest.id, approvedBlockRequest.toByteString)
+        val packet1              = Packet(transport.ApprovedBlockRequest.id, approvedBlockRequest.toByteString)
         val test = for {
-          packetResponse <- packetHandler.handle(local)(packet)
-          _ = assert(
-            packetResponse ==
-              Some(
-                Packet(
-                  transport.NoApprovedBlockAvailable.id,
-                  NoApprovedBlockAvailable("NoApprovedBlockAvailable", local.toString).toByteString
-                )
-              )
+          _    <- packetHandler.handle(local)(packet1)
+          head = transportLayer.requests.head
+          response = packet(
+            local,
+            transport.NoApprovedBlockAvailable,
+            NoApprovedBlockAvailable(approvedBlockRequest.identifier, local.toString).toByteString
           )
-          _               = assert(transportLayer.requests.isEmpty)
-          blockRequest    = BlockRequest("base16Hash", ByteString.copyFromUtf8("base16Hash"))
-          packet2         = Packet(transport.BlockRequest.id, blockRequest.toByteString)
-          packetResponse2 <- packetHandler.handle(local)(packet2)
-          _               = assert(packetResponse2.isEmpty)
-          _               = assert(transportLayer.requests.isEmpty)
+          _            = assert(head.peer == local && head.msg == response)
+          _            = transportLayer.reset()
+          blockRequest = BlockRequest("base16Hash", ByteString.copyFromUtf8("base16Hash"))
+          packet2      = Packet(transport.BlockRequest.id, blockRequest.toByteString)
+          _            <- packetHandler.handle(local)(packet2)
+          _            = assert(transportLayer.requests.isEmpty)
         } yield ()
         test.unsafeRunSync
         ctx.tick()
@@ -288,6 +285,14 @@ class CasperPacketHandlerSpec extends WordSpec {
           _                   = assert(blockO.contains(genesis))
           handlerInternal     <- refCasper.get
           _                   = assert(handlerInternal.isInstanceOf[ApprovedBlockReceivedHandler[Task]])
+          _ = assert(
+            transportLayer.requests.head.msg == packet(
+              local,
+              transport.ForkChoiceTipRequest,
+              ByteString.EMPTY
+            )
+          )
+          _ = transportLayer.reset()
           // assert that we really serve last approved block
           lastApprovedBlockO <- LastApprovedBlock[Task].get
           _                  = assert(lastApprovedBlockO.isDefined)
@@ -322,7 +327,7 @@ class CasperPacketHandlerSpec extends WordSpec {
         )
       )
 
-      val casper = NoOpsCasperEffect[Task]().unsafeRunSync
+      implicit val casper = NoOpsCasperEffect[Task]().unsafeRunSync
 
       val refCasper = Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
         new ApprovedBlockReceivedHandler[Task](casper, approvedBlock)
@@ -371,6 +376,25 @@ class CasperPacketHandlerSpec extends WordSpec {
           _ = assert(
             ApprovedBlock
               .parseFrom(head.msg.message.packet.get.content.toByteArray) == approvedBlock
+          )
+        } yield ()
+
+        test.unsafeRunSync
+        transportLayer.reset()
+      }
+
+      "respond to ForkChoiceTipRequest messages" in {
+        val request = ForkChoiceTipRequest()
+        val requestPacket =
+          Packet(transport.ForkChoiceTipRequest.id, request.toByteString)
+
+        val test: Task[Unit] = for {
+          tip  <- MultiParentCasper.forkChoiceTip[Task]
+          _    <- casperPacketHandler.handle(local)(requestPacket)
+          head = transportLayer.requests.head
+          _    = assert(head.peer == local)
+          _ = assert(
+            head.msg.message.packet.get == Packet(transport.BlockMessage.id, tip.toByteString)
           )
         } yield ()
 

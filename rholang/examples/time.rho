@@ -1,0 +1,9 @@
+new timestamp(`rho:block:timestamp`), stdout(`rho:io:stdout`), tCh in {
+  timestamp!(*tCh) |
+  for(@t <- tCh) {
+    match t {
+      Nil => { stdout!("no block time; no blocks yet? Not connected to Casper network?") }
+      _ => { stdout!({"block time": t}) }
+    }
+  }
+}

@@ -21,7 +21,7 @@ import coop.rchain.node.model.repl._
 import coop.rchain.node.model.diagnostics._
 import coop.rchain.rholang.interpreter.{RholangCLI, Runtime}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import monix.eval.Task
+import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler
 import com.google.protobuf.ByteString
 import java.io.{Reader, StringReader}
@@ -38,11 +38,12 @@ import Interpreter._
 import coop.rchain.rholang.interpreter.accounting.CostAccount
 import storage.StoragePrinter
 
-private[api] class ReplGrpcService(runtime: Runtime, worker: Scheduler) extends ReplGrpcMonix.Repl {
+private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
+    extends ReplGrpcMonix.Repl {
 
   def exec(reader: Reader): Task[ReplResponse] =
     Task
-      .coeval(buildNormalizedTerm(reader))
+      .coeval(Interpreter[Coeval].buildNormalizedTerm(reader))
       .attempt
       .flatMap {
         case Left(er) =>
@@ -76,10 +77,10 @@ private[api] class ReplGrpcService(runtime: Runtime, worker: Scheduler) extends 
   def eval(request: EvalRequest): Task[ReplResponse] =
     defer(exec(new StringReader(request.program)))
 
-  def runEvaluate(runtime: Runtime, term: Par): Task[EvaluateResult] =
+  def runEvaluate(runtime: Runtime[Task], term: Par): Task[EvaluateResult] =
     for {
       _      <- Task.now(printNormalizedTerm(term))
-      result <- evaluate(runtime, term)
+      result <- Interpreter[Task].evaluate(runtime, term)
     } yield result
 
   private def printNormalizedTerm(normalizedTerm: Par): Unit = {

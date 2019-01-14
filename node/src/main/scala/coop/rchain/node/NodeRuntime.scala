@@ -39,6 +39,7 @@ import coop.rchain.node.diagnostics._
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
+import coop.rchain.shared.PathOps._
 
 import com.typesafe.config.ConfigFactory
 import kamon._
@@ -90,7 +91,7 @@ class NodeRuntime private[node] (
       httpServer: Fiber[Task, Unit]
   )
 
-  def acquireServers(runtime: Runtime, blockApiLock: Semaphore[Effect])(
+  def acquireServers(runtime: Runtime[Task], blockApiLock: Semaphore[Effect])(
       implicit
       nodeDiscovery: NodeDiscovery[Task],
       blockStore: BlockStore[Effect],
@@ -119,25 +120,39 @@ class NodeRuntime private[node] (
                              .toEffect
 
       prometheusReporter = new NewPrometheusReporter()
-      prometheusService  = NewPrometheusReporter.service(prometheusReporter)
+      prometheusService  = NewPrometheusReporter.service[Task](prometheusReporter)
 
       httpServerFiber <- BlazeBuilder[Task]
                           .bindHttp(conf.server.httpPort, "0.0.0.0")
                           .mountService(prometheusService, "/metrics")
-                          .mountService(VersionInfo.service, "/version")
+                          .mountService(VersionInfo.service[Task], "/version")
+                          .mountService(StatusInfo.service[Task], "/status")
                           .resource
                           .use(_ => Task.never[Unit])
                           .start
                           .toEffect
 
       _ <- Task.delay {
-            val influxdbConf = conf.kamon.influxDb
+            val influxdb = conf.kamon.influxDb
               .map { i =>
+                val authentication = i.authentication
+                  .map { a =>
+                    s"""
+                    |    authentication {
+                    |      user = "${a.user}"
+                    |      password = "${a.password}"
+                    |    }
+                    |""".stripMargin
+                  }
+                  .getOrElse("")
+
                 s"""
                 |  influxdb {
                 |    hostname = "${i.hostname}"
                 |    port = ${i.port}
                 |    database = "${i.database}"
+                |    protocol = "${i.protocol}"
+                |    $authentication
                 |  }
                 |""".stripMargin
               }
@@ -158,7 +173,7 @@ class NodeRuntime private[node] (
                |      sigar-native-folder = ${conf.server.dataDir.resolve("native")}
                |    }
                |  }
-               |  $influxdbConf
+               |  $influxdb
                |}
                |""".stripMargin
             Kamon.reconfigure(ConfigFactory.parseString(kamonConf).withFallback(Kamon.config()))
@@ -172,7 +187,7 @@ class NodeRuntime private[node] (
     } yield Servers(grpcServerExternal, grpcServerInternal, httpServerFiber)
   }
 
-  def clearResources(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
+  def clearResources(servers: Servers, runtime: Runtime[Task], casperRuntime: Runtime[Task])(
       implicit
       transport: TransportLayer[Task],
       kademliaRPC: KademliaRPC[Task],
@@ -200,7 +215,7 @@ class NodeRuntime private[node] (
       _   <- log.info("Goodbye.")
     } yield ()).unsafeRunSync(scheduler)
 
-  def addShutdownHook(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
+  def addShutdownHook(servers: Servers, runtime: Runtime[Task], casperRuntime: Runtime[Task])(
       implicit transport: TransportLayer[Task],
       kademliaRPC: KademliaRPC[Task],
       blockStore: BlockStore[Effect],
@@ -210,7 +225,7 @@ class NodeRuntime private[node] (
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
-  private def nodeProgram(runtime: Runtime, casperRuntime: Runtime)(
+  private def nodeProgram(runtime: Runtime[Task], casperRuntime: Runtime[Task])(
       implicit
       time: Time[Task],
       rpConfState: RPConfState[Task],
@@ -348,12 +363,14 @@ class NodeRuntime private[node] (
     multiParentCasperRef <- MultiParentCasperRef.of[Effect]
     lab                  <- LastApprovedBlock.of[Task].toEffect
     labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
+    commTmpFolder        = conf.server.dataDir.resolve("tmp").resolve("comm")
+    _                    <- commTmpFolder.deleteDirectory[Task]().toEffect
     transport = effects.tcpTransportLayer(
       port,
       conf.tls.certificate,
       conf.tls.key,
       conf.server.maxMessageSize,
-      conf.server.dataDir.resolve("tmp").resolve("comm")
+      commTmpFolder
     )(grpcScheduler, log, metrics, tcpConnections)
     kademliaRPC = effects.kademliaRPC(kademliaPort, defaultTimeout)(
       grpcScheduler,
@@ -378,14 +395,23 @@ class NodeRuntime private[node] (
                         Log.eitherTLog(Monad[Task], log),
                         blockStore
                       )
-    _       <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
-    oracle  = SafetyOracle.turanOracle[Effect](Monad[Effect])
-    runtime = Runtime.create(storagePath, storageSize, storeType)(rspaceScheduler)
+    _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
+    oracle = SafetyOracle.turanOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
+    runtime <- {
+      implicit val s = rspaceScheduler
+      Runtime.create[Task, Task.Par](storagePath, storageSize, storeType, Seq.empty).toEffect
+    }
     _ <- Runtime
           .injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
           .toEffect
-    casperRuntime  = Runtime.create(casperStoragePath, storageSize, storeType)(rspaceScheduler)
-    runtimeManager = RuntimeManager.fromRuntime(casperRuntime)(scheduler)
+    casperRuntime <- {
+      implicit val s = rspaceScheduler
+      Runtime.create[Task, Task.Par](casperStoragePath, storageSize, storeType, Seq.empty).toEffect
+    }
+    runtimeManager <- {
+      implicit val s = scheduler
+      RuntimeManager.fromRuntime[Task](casperRuntime).toEffect
+    }
     abs = new ToAbstractContext[Effect] {
       def fromTask[A](fa: Task[A]): Effect[A] = fa.toEffect
     }

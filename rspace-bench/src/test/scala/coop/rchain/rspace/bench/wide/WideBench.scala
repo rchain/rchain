@@ -12,6 +12,8 @@ import org.openjdk.jmh.infra.Blackhole
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 
+import monix.eval.Task
+
 class WideBench {
 
   @Benchmark
@@ -43,12 +45,14 @@ class WideBench {
 
 @State(Scope.Benchmark)
 class FineBenchState extends WideBenchState {
-  override def createRuntime() = Runtime.create(dbDir, mapSize, StoreType.LMDB)
+  override def createRuntime() =
+    Runtime.create[Task, Task.Par](dbDir, mapSize, StoreType.LMDB).unsafeRunSync
 }
 
 @State(Scope.Benchmark)
 class InMemBenchState extends WideBenchState {
-  override def createRuntime() = Runtime.create(dbDir, mapSize, StoreType.Mixed)
+  override def createRuntime() =
+    Runtime.create[Task, Task.Par](dbDir, mapSize, StoreType.Mixed).unsafeRunSync
 }
 
 abstract class WideBenchState extends WideBenchBaseState {
@@ -61,7 +65,10 @@ abstract class WideBenchState extends WideBenchBaseState {
     //make sure we always start from clean rspace
     runtime.replaySpace.clear()
     runtime.space.clear()
-    processErrors(Await.result(createTest(setupTerm, runtime.reducer).runToFuture, Duration.Inf))
-    runTask = createTest(term, runtime.reducer)
+    processErrors(
+      Await
+        .result(createTest(setupTerm)(readErrors, runtime.reducer, rand).runToFuture, Duration.Inf)
+    )
+    runTask = createTest(setupTerm)(readErrors, runtime.reducer, rand)
   }
 }

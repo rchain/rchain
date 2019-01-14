@@ -2,10 +2,12 @@ package coop.rchain.casper
 
 import cats.Monad
 import cats.implicits._
+import coop.rchain.catscontrib._, Catscontrib._
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockMetadata}
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.{Clique, DagOperations, ProtoUtil}
+import coop.rchain.shared.Log
 
 /*
  * Implementation inspired by Ethereum's CBC casper simulator's Turan oracle implementation.
@@ -49,7 +51,7 @@ object SafetyOracle extends SafetyOracleInstances {
 }
 
 sealed abstract class SafetyOracleInstances {
-  def turanOracle[F[_]: Monad]: SafetyOracle[F] =
+  def turanOracle[F[_]: Monad: Log]: SafetyOracle[F] =
     new SafetyOracle[F] {
       def normalizedFaultTolerance(
           blockDag: BlockDagRepresentation[F],
@@ -240,8 +242,11 @@ sealed abstract class SafetyOracleInstances {
                                                                   _.filter(_.sender == second).toList
                                                                 )
                                                           }
-                           _                        = assert(justificationBlockSecondList.length == 1)
                            justificationBlockSecond = justificationBlockSecondList.head
+                           _ = assert(
+                             justificationBlockSecondList
+                               .forall(b => b.blockHash == justificationBlockSecond.blockHash)
+                           )
                            potentialDisagreements <- filterChildren(
                                                       justificationBlockSecond,
                                                       second
@@ -265,17 +270,10 @@ sealed abstract class SafetyOracleInstances {
             if x.toString > y.toString // TODO: Order ByteString
           } yield (x, y)).toList.filterA {
             case (first: Validator, second: Validator) =>
-              // TODO: Replace with equivalent of <&&>
-              Monad[F].ifM(seesAgreement(first, second))(
-                Monad[F].ifM(seesAgreement(second, first))(
-                  Monad[F].ifM(neverEventuallySeeDisagreement(first, second))(
-                    neverEventuallySeeDisagreement(second, first),
-                    false.pure[F]
-                  ),
-                  false.pure[F]
-                ),
-                false.pure[F]
-              )
+              seesAgreement(first, second) &&^ seesAgreement(second, first) &&^ neverEventuallySeeDisagreement(
+                first,
+                second
+              ) &&^ neverEventuallySeeDisagreement(second, first)
           }
         computeAgreementGraphEdges.map { edges =>
           findMaximumClique(edges, candidates)._1.size

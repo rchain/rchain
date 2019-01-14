@@ -10,7 +10,7 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
 class MakeMintSpec extends FlatSpec with Matchers {
-  val runtime = TestSetUtil.runtime
+  val runtime = TestSetUtil.runtime()
   val tests   = TestSetUtil.getTests("../casper/src/test/rholang/MakeMintTest.rho").toList
 
   val deploys = List(

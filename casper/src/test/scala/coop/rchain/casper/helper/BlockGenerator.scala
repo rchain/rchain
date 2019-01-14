@@ -26,7 +26,7 @@ object BlockGenerator {
   def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage: ToAbstractContext](
       id: Int,
       genesis: BlockMessage,
-      runtimeManager: RuntimeManager
+      runtimeManager: RuntimeManager[Task]
   ): F[BlockMessage] =
     for {
       b   <- IndexedBlockDagStorage[F].lookupByIdUnsafe(id)
@@ -45,7 +45,7 @@ object BlockGenerator {
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager
+      runtimeManager: RuntimeManager[Task]
   ): F[(StateHash, Seq[ProcessedDeploy])] =
     for {
       result <- InterpreterUtil

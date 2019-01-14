@@ -54,7 +54,7 @@ class RholangMethodsCostsSpec
           (listN(0), 1L)
         )
         forAll(table) { (pars, n) =>
-          implicit val errLog = new ErrorLog()
+          implicit val errLog = new ErrorLog[Task]()
           implicit val env    = Env[Par]()
           val method          = methodCall("nth", EList(pars), List(GInt(n)))
           withReducer[Assertion] { reducer =>
@@ -88,7 +88,7 @@ class RholangMethodsCostsSpec
           (listN(0), 1L)
         )
         forAll(table) { (pars, n) =>
-          implicit val errLog = new ErrorLog()
+          implicit val errLog = new ErrorLog[Task]()
           implicit val env    = Env[Par]()
           val method          = methodCall("nth", EList(pars), List(GInt(n)))
           withReducer[Assertion] { reducer =>
@@ -111,7 +111,7 @@ class RholangMethodsCostsSpec
       factor: Double,
       method: Expr
   ): Assertion = {
-    implicit val errorLog = new ErrorLog()
+    implicit val errorLog = new ErrorLog[Task]()
     implicit val env      = Env[Par]()
     withReducer { reducer =>
       for {
@@ -745,8 +745,7 @@ class RholangMethodsCostsSpec
     EMethod(method, target, arguments)
 
   def methodCallCost(reducer: ChargingReducer[Task]): Task[Cost] =
-    reducer
-      .getAvailablePhlos()
+    reducer.phlo
       .map(ca => Cost(Integer.MAX_VALUE) - ca.cost - METHOD_CALL_COST)
 
   def map(pairs: Seq[(Par, Par)]): Map[Par, Par] = Map(pairs: _*)
@@ -778,7 +777,7 @@ class RholangMethodsCostsSpec
   def emptyString: String = ""
 
   def test(method: Expr, expectedCost: Cost): Assertion = {
-    implicit val errLog = new ErrorLog()
+    implicit val errLog = new ErrorLog[Task]()
     implicit val env    = Env[Par]()
     withReducer[Assertion] { reducer =>
       for {
@@ -787,10 +786,10 @@ class RholangMethodsCostsSpec
       } yield assert(cost === expectedCost)
     }
   }
-  def withReducer[R](f: ChargingReducer[Task] => Task[R])(implicit errLog: ErrorLog): R = {
+  def withReducer[R](f: ChargingReducer[Task] => Task[R])(implicit errLog: ErrorLog[Task]): R = {
     val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space)._2
     val test = for {
-      _   <- reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE))
+      _   <- reducer.setPhlo(Cost(Integer.MAX_VALUE))
       res <- f(reducer)
     } yield res
     test.runSyncUnsafe(5.seconds)
@@ -805,20 +804,18 @@ class RholangMethodsCostsSpec
     import coop.rchain.rholang.interpreter.storage.implicits._
     dbDir = Files.createTempDirectory("rholang-interpreter-test-")
     context = Context.createInMemory()
-    space = (
-      RSpace
-        .create[
-          Task,
-          Par,
-          BindPattern,
-          OutOfPhlogistonsError.type,
-          ListParWithRandom,
-          ListParWithRandomAndPhlos,
-          TaggedContinuation
-        ](
-          context,
-          Branch("rholang-methods-cost-test")
-        )
+    space = RSpace
+      .create[
+        Task,
+        Par,
+        BindPattern,
+        OutOfPhlogistonsError.type,
+        ListParWithRandom,
+        ListParWithRandomAndPhlos,
+        TaggedContinuation
+      ](
+        context,
+        Branch("rholang-methods-cost-test")
       )
       .unsafeRunSync
   }

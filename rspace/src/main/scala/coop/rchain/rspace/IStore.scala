@@ -1,10 +1,9 @@
 package coop.rchain.rspace
 
+import coop.rchain.catscontrib.ski._
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import monix.execution.atomic.AtomicAny
-
-import scala.Function.const
 import scala.collection.immutable.Seq
 
 /** The interface for the underlying store
@@ -106,7 +105,7 @@ trait IStore[C, P, A, K] {
   protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): Unit
 
   private[rspace] def getAndClearTrieUpdates(): Seq[TrieUpdate[C, P, A, K]] =
-    _trieUpdates.getAndTransform(const((0L, Nil)))._2
+    _trieUpdates.getAndTransform(kp((0L, Nil)))._2
 
   def createCheckpoint(): Blake2b256Hash = {
     val trieUpdates = getAndClearTrieUpdates()

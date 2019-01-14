@@ -50,10 +50,10 @@ class RuntimeSpec extends FlatSpec with Matchers {
   private def failure(rho: String): Throwable =
     execute(rho).swap.getOrElse(fail(s"Expected $rho to fail - it didn't."))
 
-  private def execute(source: String): Either[Throwable, Runtime] =
+  private def execute(source: String): Either[Throwable, Runtime[Task]] =
     mkRuntime(tmpPrefix, mapSize)
       .use { runtime =>
-        Interpreter
+        Interpreter[Task]
           .execute(runtime, new StringReader(source))
           .attempt
       }

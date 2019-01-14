@@ -9,6 +9,7 @@ import scala.util._
 
 import cats.implicits._
 
+import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
@@ -16,11 +17,10 @@ import coop.rchain.comm.CachedConnections.ConnectionsCache
 import coop.rchain.comm.CommError._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
-import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.implicits._
 import coop.rchain.shared._
-import coop.rchain.shared.Compression._
+import coop.rchain.shared.PathOps._
 
 import io.grpc._
 import io.grpc.netty._
@@ -29,7 +29,14 @@ import monix.eval._
 import monix.execution._
 import monix.reactive._
 
-class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: Int, tempFolder: Path)(
+class TcpTransportLayer(
+    port: Int,
+    cert: String,
+    key: String,
+    maxMessageSize: Int,
+    tempFolder: Path,
+    clientQueueSize: Int
+)(
     implicit scheduler: Scheduler,
     log: Log[Task],
     metrics: Metrics[Task],
@@ -46,7 +53,7 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
   private def certInputStream = new ByteArrayInputStream(cert.getBytes())
   private def keyInputStream  = new ByteArrayInputStream(key.getBytes())
 
-  private val streamObservable = new StreamObservable(100, tempFolder)
+  private val streamObservable = new StreamObservable(clientQueueSize, tempFolder)
 
   private lazy val serverSslContext: SslContext =
     try {
@@ -201,23 +208,31 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
   def broadcast(peers: Seq[PeerNode], msg: Protocol): Task[Seq[CommErr[Unit]]] =
     innerBroadcast(peers, msg)
 
-  def handleToStream: ToStream => Task[Unit] = {
-    case ToStream(peer, path, sender) =>
-      PacketOps.restore[Task](path) >>= {
-        case Right(packet) =>
-          withClient(peer, enforce = false) { stub =>
-            val blob = Blob(sender, packet)
-            stub.stream(Observable.fromIterator(Chunker.chunkIt(blob, maxMessageSize)))
-          }.attempt
-            .flatMap {
-              case Left(error) => log.error(s"Error while streaming packet, error: $error")
-              case Right(_)    => Task.unit
-            }
-        case Left(error) => log.error(s"Error while streaming packet, error: $error")
-      } >>= kp(Task.delay {
-        if (path.toFile.exists)
-          path.toFile.delete
-      })
+  private def streamToPeer(peer: PeerNode, path: Path, sender: PeerNode): Task[Unit] = {
+
+    def delay[A](a: => Task[A]): Task[A] =
+      Task.defer(a).delayExecution(1.second)
+
+    def handle(retryCount: Int): Task[Unit] =
+      if (retryCount > 0)
+        PacketOps.restore[Task](path) >>= {
+          case Right(packet) =>
+            withClient(peer, enforce = false) { stub =>
+              val blob = Blob(sender, packet)
+              stub.stream(Observable.fromIterator(Chunker.chunkIt(blob, maxMessageSize)))
+            }.attempt
+              .flatMap {
+                case Left(error) =>
+                  log.error(s"Error while streaming packet, error: $error") *> delay(
+                    handle(retryCount - 1)
+                  )
+                case Right(_) =>
+                  log.info(s"Streamed packet $path to $peer")
+              }
+          case Left(error) => log.error(s"Error while streaming packet, error: $error")
+        } else log.debug(s"Giving up on streaming packet $path to $peer")
+
+    handle(3)
   }
 
   private def initQueue(
@@ -244,7 +259,7 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
           case Left(e)         => handle.failWith(e)
           case Right(response) => handle.reply(response)
         }.void
-      case (msg: StreamMessage) =>
+      case msg: StreamMessage =>
         StreamHandler.restore(msg) >>= {
           case Left(ex) =>
             Log[Task].error("Could not restore data from file while handling stream", ex)
@@ -268,12 +283,19 @@ class TcpTransportLayer(port: Int, cert: String, key: String, maxMessageSize: In
                      ).mapParallelUnordered(parallelism)(dispatchInternal)
                        .subscribe()(queueScheduler)
                    }
-
                  }
         clientQueue <- initQueue(s.clientQueue) {
+                        import coop.rchain.shared.PathOps.PathDelete
                         Task.delay {
                           streamObservable
-                            .mapParallelUnordered(parallelism)(handleToStream)
+                            .flatMap { s =>
+                              Observable
+                                .fromIterable(s.peers)
+                                .mapParallelUnordered(parallelism)(
+                                  streamToPeer(_, s.path, s.sender)
+                                )
+                                .guarantee(s.path.deleteSingleFile[Task]())
+                            }
                             .subscribe()(queueScheduler)
                         }
                       }

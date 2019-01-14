@@ -29,7 +29,7 @@ class EvalBench {
     val par = state.term.getOrElse(throw new Error("Failed to prepare executable rholang term"))
     state.runtime.reducer
       .inj(par)(state.rand)
-      .map(_ => state.runtime.readAndClearErrorVector())
+      .flatMap(_ => state.runtime.readAndClearErrorVector())
   }
 
   //if we run multiple tests on a single-threaded scheduler

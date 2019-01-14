@@ -54,32 +54,6 @@ trait Reduce[M[_]] {
   )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Par]
 }
 
-// TODO:
-// In a perfect world we would an algebra of an interpreter encoded in the terms of
-// rholang's elimination and have the `ChargingReducer` forward the calls to the plain algebra
-// and charge accordingly. This would eliminate the "charge" calls from the algebra of a language.
-class ChargingReducer[M[_]](implicit R: Reduce[M], C: CostAccounting[M]) {
-  def getAvailablePhlos(): M[CostAccount] =
-    C.get()
-
-  def setAvailablePhlos(limit: Cost): M[Unit] =
-    C.set(CostAccount(0, limit))
-
-  def eval(
-      par: Par
-  )(implicit env: Env[Par], rand: Blake2b512Random, sequenceNumber: Int = 0): M[Unit] =
-    R.eval(par)
-
-  def inj(par: Par)(implicit rand: Blake2b512Random): M[Unit] =
-    R.inj(par)
-
-  def evalExpr(par: Par)(implicit env: Env[Par]): M[Par] =
-    R.evalExpr(par)
-
-  def evalExprToPar(expr: Expr)(implicit env: Env[Par]): M[Par] =
-    R.evalExprToPar(expr)
-}
-
 object Reduce {
 
   class DebruijnInterpreter[M[_], F[_]](
@@ -173,12 +147,12 @@ object Reduce {
               (for {
                 varref <- eval(v)(env, costAccountingAlg)
                 _      <- eval(varref)(env, rand, sequenceNumber, costAccountingAlg)
-              } yield ()).handleError(fTell.tell)
+              } yield ()).handleErrorWith(fTell.tell)
             case e: EMethodBody =>
               (for {
                 p <- evalExprToPar(Expr(e))(env, costAccountingAlg)
                 _ <- eval(p)(env, rand, sequenceNumber, costAccountingAlg)
-              } yield ()).handleError(fTell.tell)
+              } yield ()).handleErrorWith(fTell.tell)
             case _ => s.unit
           }
 
@@ -818,7 +792,7 @@ object Reduce {
                        case (EListBody(lhs), EListBody(rhs)) =>
                          for {
                            _ <- costAccountingAlg.charge(
-                                 listAppendCost(rhs.value.ps.toVector)
+                                 listAppendCost(rhs.ps.toVector)
                                )
                          } yield
                            Expr(
@@ -952,6 +926,14 @@ object Reduce {
                          s.fromEither(localNth(ps, nth))
                        case ETupleBody(ETuple(ps, _, _)) =>
                          s.fromEither(localNth(ps, nth))
+                       case GByteArray(bs) =>
+                         s.fromEither(if (0 <= nth && nth < bs.size) {
+                           val b      = bs.byteAt(nth) & 0xff // convert to unsigned
+                           val p: Par = Expr(GInt(b.toLong))
+                           Right(p)
+                         } else {
+                           Left(ReduceError("Error: index out of bound: " + nth))
+                         })
                        case _ =>
                          s.raiseError(
                            ReduceError(
@@ -1367,6 +1349,8 @@ object Reduce {
         baseExpr.exprInstance match {
           case GString(string) =>
             Applicative[M].pure[Expr](GInt(string.length.toLong))
+          case GByteArray(bytes) =>
+            Applicative[M].pure[Expr](GInt(bytes.size.toLong))
           case EListBody(EList(ps, _, _, _)) =>
             Applicative[M].pure[Expr](GInt(ps.length.toLong))
           case other =>

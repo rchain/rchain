@@ -1,5 +1,4 @@
 # Installing the prerequisites
-
 ## Step 1. Install Docker
 
 Follow the instructions on [this page](https://docs.docker.com/install/) for platform specific instalation steps
@@ -30,9 +29,7 @@ Python 3.7.0
 ### [Windows](https://docs.python-guide.org/starting/install3/win/#install3-windows)
 
 ## Step 3: [Install pipenv](https://github.com/pypa/pipenv#installation)
-
 ## Step 4: Dependencies
-
 
 Once Python is installed you can run within `integration-tests` subdirectory
 the following command:
@@ -40,7 +37,6 @@ the following command:
 ```bash
 $ pipenv sync
 ```
-
 
 ## Step 4: Create the rnode docker image
 
@@ -54,8 +50,8 @@ docker image and publish it locally. For details see [the developer
 information](https://github.com/rchain/rchain/blob/dev/DEVELOPER.md) 
  
 # Running the tests
-
 ## Configuration
+
 The file `pytest.ini` allows some configuration of the test execution. Information about all the available options 
 can be found in [pytest.ini reference](https://docs.pytest.org/en/latest/reference.html#ini-options-ref)
 
@@ -122,3 +118,40 @@ If you want to restrict your test run to only perform mypy checks and not any ot
 ```bash
 $ ./run_tests.sh --mypy -m mypy 
 ```
+
+## Troubleshooting
+
+If you're on macOS and getting exceptions similar to
+
+```
+self = <Response [403]>
+
+    def raise_for_status(self):
+        """Raises stored :class:`HTTPError`, if one occurred."""
+
+        http_error_msg = ''
+        if isinstance(self.reason, bytes):
+            # We attempt to decode utf-8 first because some servers
+            # choose to localize their reason strings. If the string
+            # isn't utf-8, we fall back to iso-8859-1 for all other
+            # encodings. (See PR #3538)
+            try:
+                reason = self.reason.decode('utf-8')
+            except UnicodeDecodeError:
+                reason = self.reason.decode('iso-8859-1')
+        else:
+            reason = self.reason
+
+        if 400 <= self.status_code < 500:
+            http_error_msg = u'%s Client Error: %s for url: %s' % (self.status_code, reason, self.url)
+
+        elif 500 <= self.status_code < 600:
+            http_error_msg = u'%s Server Error: %s for url: %s' % (self.status_code, reason, self.url)
+
+        if http_error_msg:
+>           raise HTTPError(http_error_msg, response=self)
+E           requests.exceptions.HTTPError: 403 Client Error: Forbidden for url: http+docker://localhost/v1.35/networks/4c5079902ad7d50a0c7a763ac6a022923c2fe2e4ceb608952c67d433b428e891
+```
+
+make sure you have at least 4GiB of RAM set for use by the Docker Engine
+(macOS system menu bar -> Docker icon -> Preferences... -> Advanced).

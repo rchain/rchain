@@ -18,7 +18,7 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
         _ <- g.close
       } yield g
       graph.show shouldBe (
-        """graph G {
+        """graph "G" {
           |}""".stripMargin
       )
     }
@@ -29,7 +29,7 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
         _ <- g.close
       } yield g
       graph.show shouldBe (
-        """digraph G {
+        """digraph "G" {
           |}""".stripMargin
       )
     }
@@ -41,7 +41,7 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
       } yield g
       graph.show shouldBe (
         """// this is comment
-          |graph G {
+          |graph "G" {
           |}""".stripMargin
       )
     }
@@ -55,8 +55,8 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
       } yield g
       // then
       graph.show shouldBe (
-        """graph G {
-          |  "Hello" -- "World" []
+        """graph "G" {
+          |  "Hello" -- "World"
           |}""".stripMargin
       )
     }
@@ -70,8 +70,8 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
       } yield g
       // then
       graph.show shouldBe (
-        """digraph G {
-          |  "Hello" -> "World" []
+        """digraph "G" {
+          |  "Hello" -> "World"
           |}""".stripMargin
       )
     }
@@ -87,10 +87,10 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
       } yield g
       // then
       graph.show shouldBe (
-        """digraph G {
+        """digraph "G" {
 	  |  "Hello" [shape=box]
 	  |  "World" [shape=doublecircle]
-          |  "Hello" -> "World" []
+          |  "Hello" -> "World"
           |}""".stripMargin
       )
     }
@@ -129,27 +129,27 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
         _ <- g.close
       } yield g
       graph.show shouldBe (
-        """digraph Process {
+        """digraph "Process" {
           |  "0"
           |  subgraph {
           |    "A"
           |    "B"
           |    "C"
-          |    "A" -> "B" []
-          |    "B" -> "C" []
+          |    "A" -> "B"
+          |    "B" -> "C"
           |  }
-          |  "0" -> "A" []
+          |  "0" -> "A"
           |  subgraph {
           |    "K"
           |    "L"
           |    "M"
-          |    "K" -> "L" []
-          |    "L" -> "M" []
+          |    "K" -> "L"
+          |    "L" -> "M"
           |  }
-          |  "0" -> "K" []
+          |  "0" -> "K"
           |  "1"
-          |  "M" -> "1" []
-          |  "C" -> "1" []
+          |  "M" -> "1"
+          |  "C" -> "1"
           |}""".stripMargin
       )
     }
@@ -200,31 +200,31 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
         _ <- g.close
       } yield g
       graph.show shouldBe (
-        """digraph Process {
+        """digraph "Process" {
           |  "0"
-          |  subgraph cluster_p1 {
+          |  subgraph "cluster_p1" {
           |    label = "process #1"
           |    color=blue
           |    "A"
           |    "B"
           |    "C"
-          |    "A" -> "B" []
-          |    "B" -> "C" []
+          |    "A" -> "B"
+          |    "B" -> "C"
           |  }
-          |  "0" -> "A" []
-          |  subgraph cluster_p2 {
+          |  "0" -> "A"
+          |  subgraph "cluster_p2" {
           |    label = "process #2"
           |    color=green
           |    "K"
           |    "L"
           |    "M"
-          |    "K" -> "L" []
-          |    "L" -> "M" []
+          |    "K" -> "L"
+          |    "L" -> "M"
           |  }
-          |  "0" -> "K" []
+          |  "0" -> "K"
           |  "1"
-          |  "M" -> "1" []
-          |  "C" -> "1" []
+          |  "M" -> "1"
+          |  "C" -> "1"
           |}""".stripMargin
       )
     }
@@ -269,7 +269,7 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
       } yield g
       // then
       graph.show shouldBe (
-        """digraph Blockchain {
+        """digraph "Blockchain" {
           |  rankdir=BT
           |  subgraph {
           |    rank=same
@@ -277,21 +277,21 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
           |    "ddeecc" [shape=box]
           |    "ffeeff" [shape=box]
           |  }
-          |  "000000" -> "ffeeff" []
-          |  "000000" -> "ddeecc" []
+          |  "000000" -> "ffeeff"
+          |  "000000" -> "ddeecc"
           |  subgraph {
           |    rank=same
           |    "0"
           |    "000000" [shape=box]
           |  }
-          |  subgraph timeline {
+          |  subgraph "timeline" {
           |    "3" [shape=plaintext]
           |    "2" [shape=plaintext]
           |    "1" [shape=plaintext]
           |    "0" [shape=plaintext]
-          |    "0" -> "1" []
-          |    "1" -> "2" []
-          |    "2" -> "3" []
+          |    "0" -> "1"
+          |    "1" -> "2"
+          |    "2" -> "3"
           |  }
           |}""".stripMargin
       )
@@ -316,20 +316,20 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
         _     <- graph.edge("sleep", "runmem")
         _     <- graph.close
       } yield graph).show shouldBe (
-        """graph G {
-          |  "run" -- "intr" []
-          |  "intr" -- "runbl" []
-          |  "runbl" -- "run" []
-          |  "run" -- "kernel" []
-          |  "kernel" -- "zombie" []
-          |  "kernel" -- "sleep" []
-          |  "kernel" -- "runmem" []
-          |  "sleep" -- "swap" []
-          |  "swap" -- "runswap" []
-          |  "runswap" -- "new" []
-          |  "runswap" -- "runmem" []
-          |  "new" -- "runmem" []
-          |  "sleep" -- "runmem" []
+        """graph "G" {
+          |  "run" -- "intr"
+          |  "intr" -- "runbl"
+          |  "runbl" -- "run"
+          |  "run" -- "kernel"
+          |  "kernel" -- "zombie"
+          |  "kernel" -- "sleep"
+          |  "kernel" -- "runmem"
+          |  "sleep" -- "swap"
+          |  "swap" -- "runswap"
+          |  "runswap" -- "new"
+          |  "runswap" -- "runmem"
+          |  "new" -- "runmem"
+          |  "sleep" -- "runmem"
           |}""".stripMargin
       )
     }

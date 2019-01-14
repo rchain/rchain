@@ -6,6 +6,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
+import coop.rchain.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
 
 import scala.collection.immutable.{HashMap, HashSet}
@@ -16,8 +17,12 @@ class CliqueOracleTest
     with BlockGenerator
     with BlockDagStorageFixture {
 
+  behavior of "Turan Oracle"
+
+  implicit val logEff = new LogStub[Task]
+
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
-  "Turan Oracle" should "detect finality as appropriate" in withStorage {
+  it should "detect finality as appropriate" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val v1     = generateValidator("Validator One")
       val v2     = generateValidator("Validator Two")
@@ -84,7 +89,7 @@ class CliqueOracleTest
   }
 
   // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
-  "Turan Oracle" should "detect possible disagreements appropriately" in withStorage {
+  it should "detect possible disagreements appropriately" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val v1     = generateValidator("Validator One")
       val v2     = generateValidator("Validator Two")

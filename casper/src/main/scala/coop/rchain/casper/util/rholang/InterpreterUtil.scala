@@ -18,7 +18,7 @@ import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.Interpreter
 import coop.rchain.rspace.ReplayException
 import coop.rchain.shared.{Log, LogSource}
-import monix.eval.Task
+import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler
 
 import scala.concurrent.duration._
@@ -28,14 +28,14 @@ object InterpreterUtil {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def mkTerm(rho: String): Either[Throwable, Par] =
-    Interpreter.buildNormalizedTerm(rho).runAttempt
+    Interpreter[Coeval].buildNormalizedTerm(rho).runAttempt
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
   def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: ToAbstractContext](
       b: BlockMessage,
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager
+      runtimeManager: RuntimeManager[Task]
   ): F[Either[BlockException, Option[StateHash]]] = {
     val preStateHash    = ProtoUtil.preStateHash(b)
     val tsHash          = ProtoUtil.tuplespace(b)
@@ -47,9 +47,9 @@ object InterpreterUtil {
       possiblePreStateHash <- computeParentsPostState[F](
                                parents,
                                dag,
-                               runtimeManager,
-                               timestamp
+                               runtimeManager
                              )
+      _ <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(b)}.")
       result <- processPossiblePreStateHash[F](
                  runtimeManager,
                  preStateHash,
@@ -62,7 +62,7 @@ object InterpreterUtil {
   }
 
   private def processPossiblePreStateHash[F[_]: Sync: Log: BlockStore: ToAbstractContext](
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       preStateHash: StateHash,
       tsHash: Option[StateHash],
       internalDeploys: Seq[InternalProcessedDeploy],
@@ -91,7 +91,7 @@ object InterpreterUtil {
     }
 
   private def processPreStateHash[F[_]: Sync: Log: BlockStore: ToAbstractContext](
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       preStateHash: StateHash,
       tsHash: Option[StateHash],
       internalDeploys: Seq[InternalProcessedDeploy],
@@ -148,13 +148,13 @@ object InterpreterUtil {
       parents: Seq[BlockMessage],
       deploys: Seq[Deploy],
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager,
+      runtimeManager: RuntimeManager[Task],
       time: Option[Long] = None
   )(
       implicit scheduler: Scheduler
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =
     for {
-      possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager, time)
+      possiblePreStateHash <- computeParentsPostState[F](parents, dag, runtimeManager)
     } yield
       possiblePreStateHash match {
         case Right(preStateHash) =>
@@ -168,8 +168,7 @@ object InterpreterUtil {
   private def computeParentsPostState[F[_]: Sync: BlockStore: ToAbstractContext](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager,
-      time: Option[Long]
+      runtimeManager: RuntimeManager[Task]
   ): F[Either[Throwable, StateHash]] = {
     val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
 
@@ -186,7 +185,6 @@ object InterpreterUtil {
           parents,
           dag,
           runtimeManager,
-          time,
           initStateHash
         )
     }
@@ -197,30 +195,42 @@ object InterpreterUtil {
   private def computeMultiParentsPostState[F[_]: Sync: BlockStore: ToAbstractContext](
       parents: Seq[BlockMessage],
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager,
-      time: Option[Long],
+      runtimeManager: RuntimeManager[Task],
       initStateHash: StateHash
   ): F[Either[Throwable, StateHash]] =
     for {
       blockHashesToApply <- findMultiParentsBlockHashesForReplay(parents, dag)
       blocksToApply      <- blockHashesToApply.traverse(b => ProtoUtil.unsafeGetBlock[F](b.blockHash))
-      deploys            = blocksToApply.flatMap(_.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal))
-      replayResult <- ToAbstractContext[F].fromTask(
-                       runtimeManager
-                         .replayComputeState(initStateHash, deploys, time)
-                     )
-    } yield
-      replayResult match {
-        case result @ Right(_) => result.leftCast[Throwable]
-        case Left((_, status)) =>
-          val parentHashes =
-            parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
-          Left(
-            new Exception(
-              s"Failed status while computing post state of $parentHashes: $status"
-            )
-          )
-      }
+      replayResult <- blocksToApply.toList.foldM(Right(initStateHash).leftCast[Throwable]) {
+                       (acc, block) =>
+                         acc match {
+                           case Right(stateHash) =>
+                             val deploys =
+                               block.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal)
+                             val time = Some(block.header.get.timestamp)
+                             for {
+                               replayResult <- ToAbstractContext[F].fromTask(
+                                                runtimeManager
+                                                  .replayComputeState(stateHash, deploys, time)
+                                              )
+                             } yield
+                               replayResult match {
+                                 case result @ Right(_) => result.leftCast[Throwable]
+                                 case Left((_, status)) =>
+                                   val parentHashes =
+                                     parents.map(
+                                       p => Base16.encode(p.blockHash.toByteArray).take(8)
+                                     )
+                                   Left(
+                                     new Exception(
+                                       s"Failed status while computing post state of $parentHashes: $status"
+                                     )
+                                   )
+                               }
+                           case Left(_) => acc.pure[F]
+                         }
+                     }
+    } yield replayResult
 
   private[rholang] def findMultiParentsBlockHashesForReplay[F[_]: Monad](
       parents: Seq[BlockMessage],
@@ -249,7 +259,7 @@ object InterpreterUtil {
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager
+      runtimeManager: RuntimeManager[Task]
   )(
       implicit scheduler: Scheduler
   ): F[Either[Throwable, (StateHash, StateHash, Seq[InternalProcessedDeploy])]] =

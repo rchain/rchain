@@ -17,6 +17,7 @@ import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.shared._
+import monix.eval.Task
 import monix.execution.Scheduler
 
 import scala.util.{Failure, Success, Try}
@@ -567,7 +568,7 @@ object Validate {
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       emptyStateHash: StateHash,
-      runtimeManager: RuntimeManager
+      runtimeManager: RuntimeManager[Task]
   ): F[Either[BlockStatus, ValidBlock]] =
     for {
       maybeStateHash <- InterpreterUtil
@@ -610,7 +611,7 @@ object Validate {
 
   def bondsCache[F[_]: Log: Concurrent: ToAbstractContext](
       b: BlockMessage,
-      runtimeManager: RuntimeManager
+      runtimeManager: RuntimeManager[Task]
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val bonds = ProtoUtil.bonds(b)
     ProtoUtil.tuplespace(b) match {

@@ -48,7 +48,14 @@ case class Kamon(
 case class InfluxDb(
     hostname: String,
     port: Int,
-    database: String
+    database: String,
+    protocol: String,
+    authentication: Option[InfluxDBAuthentication]
+)
+
+case class InfluxDBAuthentication(
+    user: String,
+    password: String
 )
 
 sealed trait Command
@@ -62,15 +69,15 @@ case class Deploy(
     nonce: Int,
     location: String
 ) extends Command
-case object DeployDemo                   extends Command
-case object Propose                      extends Command
-case class ShowBlock(hash: String)       extends Command
-case class ShowBlocks(depth: Int)        extends Command
-case class VisualizeBlocks(depth: Int)   extends Command
-case object Run                          extends Command
-case object Help                         extends Command
-case class DataAtName(name: Name)        extends Command
-case class ContAtName(names: List[Name]) extends Command
+case object DeployDemo                                               extends Command
+case object Propose                                                  extends Command
+case class ShowBlock(hash: String)                                   extends Command
+case class ShowBlocks(depth: Int)                                    extends Command
+case class VisualizeDag(depth: Int, showJustificationLines: Boolean) extends Command
+case object Run                                                      extends Command
+case object Help                                                     extends Command
+case class DataAtName(name: Name)                                    extends Command
+case class ContAtName(names: List[Name])                             extends Command
 case class BondingDeployGen(
     bondKey: String,
     ethAddress: String,

@@ -14,9 +14,9 @@ import coop.rchain.rholang.syntax.rholang_mercury.PrettyPrinter
 import coop.rchain.rholang.{GenTools, ProcGen}
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Context, RSpace}
-import monix.eval.Task
+import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
-import org.scalacheck.Arbitrary
+import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.Test.Parameters
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
@@ -28,13 +28,13 @@ class CostAccountingPropertyTest extends FlatSpec with PropertyChecks with Match
 
   implicit val params: Parameters = Parameters.defaultVerbose.withMinSuccessfulTests(1000)
 
-  def procGen(maxHeight: Int) =
+  def procGen(maxHeight: Int): Gen[PrettyPrinted[Proc]] =
     ProcGen.topLevelGen(maxHeight).map(PrettyPrinted[Proc](_, PrettyPrinter.print))
   implicit val procArbitrary: Arbitrary[PrettyPrinted[Proc]] = Arbitrary(procGen(5))
 
   implicit val taskExecutionDuration: FiniteDuration = 5.seconds
 
-  def cost(proc: Proc): Cost = Cost(Interpreter.buildPar(proc).apply)
+  def cost(proc: Proc): Cost = Cost(Interpreter[Coeval].buildPar(proc).apply)
 
   behavior of "Cost accounting in Reducer"
 
@@ -62,7 +62,7 @@ class CostAccountingPropertyTest extends FlatSpec with PropertyChecks with Match
   }
 
   it should "repeated executions have the same cost" in {
-    implicit val procListArb =
+    implicit val procListArb: Arbitrary[List[PrettyPrinted[Proc]]] =
       Arbitrary(GenTools.nonemptyLimitedList(5, procGen(5)))
 
     forAll { ps: List[PrettyPrinted[Proc]] =>
@@ -84,20 +84,20 @@ object CostAccountingPropertyTest {
   def execute(reducer: ChargingReducer[Task], p: Proc)(
       implicit rand: Blake2b512Random
   ): Task[Long] = {
-    val program = Interpreter.buildPar(p).apply
+    val program = Interpreter[Coeval].buildPar(p).apply
 
     val initPhlos = Cost(accounting.MAX_VALUE)
 
     for {
-      _         <- reducer.setAvailablePhlos(initPhlos)
+      _         <- reducer.setPhlo(initPhlos)
       _         <- reducer.inj(program)
-      phlosLeft <- reducer.getAvailablePhlos()
+      phlosLeft <- reducer.phlo
     } yield (initPhlos - phlosLeft.cost).value
   }
 
   def costOfExecution(procs: Proc*): Task[Long] = {
     implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
-    implicit val errLog: ErrorLog       = new ErrorLog()
+    implicit val errLog: ErrorLog[Task] = new ErrorLog[Task]()
 
     mkRhoISpace[Task]("cost-accounting-property-test-")
       .use { pureRSpace =>

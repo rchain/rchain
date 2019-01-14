@@ -1,0 +1,12 @@
+new x, y, stdout(`rho:io:stdout`) in {
+
+  stdout!({
+    "nth for byte array": "deadbeef".hexToBytes().nth(3),
+    "expected": 239 // 0xef
+  })
+  |
+  stdout!({
+    "length for byte array": "deadbeef".hexToBytes().length(),
+    "expected": 4
+  })
+}
