@@ -34,7 +34,7 @@ trait SafetyOracle[F[_]] {
     * The normalizedFaultTolerance must be greater than the fault tolerance threshold t in order
     * for a candidate to be safe.
     *
-    * @param candidate Block to detect safety on
+    * @param candidateBlockHash Block hash of candidate block to detect safety on
     * @return normalizedFaultTolerance float between -1 and 1, where -1 means potentially orphaned
     */
   def normalizedFaultTolerance(
@@ -50,6 +50,13 @@ object SafetyOracle extends SafetyOracleInstances {
 sealed abstract class SafetyOracleInstances {
   def cliqueOracle[F[_]: Monad: Log]: SafetyOracle[F] =
     new SafetyOracle[F] {
+
+      /**
+        * To have a maximum clique of half the total weight,
+        * you need at least twice the weight of the agreeingValidatorToWeight to be greater than the total weight.
+        * If that is false, we don't need to compute agreementGraphMaxCliqueWeight
+        * as we know the value is going to be below 0 and thus useless for finalization.
+        */
       def normalizedFaultTolerance(
           blockDag: BlockDagRepresentation[F],
           candidateBlockHash: BlockHash
@@ -61,10 +68,6 @@ sealed abstract class SafetyOracleInstances {
                                         candidateBlockHash
                                       )
           maxCliqueWeight <- if (2L * agreeingValidatorToWeight.values.sum < totalWeight) {
-                              // To have a maximum clique of half the total weight,
-                              // you need at least twice the weight of the agreeingValidatorToWeight to be greater than the total weight.
-                              // Hence we don't need to compute agreementGraphMaxCliqueWeight
-                              // as we know the value is going to be below 0 and thus useless for finalization.
                               0L.pure[F]
                             } else {
                               agreementGraphMaxCliqueWeight(
@@ -126,7 +129,7 @@ sealed abstract class SafetyOracleInstances {
       private def agreementGraphMaxCliqueWeight(
           blockDag: BlockDagRepresentation[F],
           candidateBlockHash: BlockHash,
-          candidates: Map[Validator, Long]
+          agreeingValidatorToWeight: Map[Validator, Long]
       ): F[Long] = {
         def findAgreeingJustificationHash(
             justificationHashes: List[BlockHash],
@@ -236,8 +239,8 @@ sealed abstract class SafetyOracleInstances {
 
         def computeAgreementGraphEdges: F[List[(Validator, Validator)]] =
           (for {
-            x <- candidates.keys
-            y <- candidates.keys
+            x <- agreeingValidatorToWeight.keys
+            y <- agreeingValidatorToWeight.keys
             if x.toString > y.toString // TODO: Order ByteString
           } yield (x, y)).toList.filterA {
             case (first: Validator, second: Validator) =>
@@ -256,19 +259,19 @@ sealed abstract class SafetyOracleInstances {
 
         def findMaximumClique(
             edges: List[(Validator, Validator)],
-            candidates: Map[Validator, Long],
+            agreeingValidatorToWeight: Map[Validator, Long],
             largestCandidate: Long
         ): Long =
           Clique
             .findCliquesRecursive(edges)
             .foldLeft(largestCandidate) {
               case (largestWeight, clique: Seq[Validator]) =>
-                val weight = clique.map(candidates.getOrElse(_, 0L)).sum
+                val weight = clique.map(agreeingValidatorToWeight.getOrElse(_, 0L)).sum
                 Math.max(weight, largestWeight)
             }
 
         computeAgreementGraphEdges.map { edges =>
-          findMaximumClique(edges, candidates, candidates.values.max)
+          findMaximumClique(edges, agreeingValidatorToWeight, agreeingValidatorToWeight.values.max)
         }
       }
 
