@@ -18,7 +18,7 @@ import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 
 import scala.collection.immutable
 
-abstract class RuntimeManager[F[_]] {
+trait RuntimeManager[F[_]] {
   def captureResults(start: StateHash, deploy: Deploy, name: String = "__SCALA__"): F[Seq[Par]]
   def captureResults(start: StateHash, deploy: Deploy, name: Par): F[Seq[Par]]
   def replayComputeState(
