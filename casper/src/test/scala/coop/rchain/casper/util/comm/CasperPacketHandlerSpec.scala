@@ -265,7 +265,6 @@ class CasperPacketHandlerSpec extends WordSpec {
         val bootstrapCasper =
           new BootstrapCasperHandler[Task](
             runtimeManager,
-            runtimeManager,
             shardId,
             Some(validatorId),
             validators

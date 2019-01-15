@@ -126,7 +126,6 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         bootstrap <- Ref.of[F, CasperPacketHandlerInternal[F]](
                       new BootstrapCasperHandler(
                         runtimeManager,
-                        runtimeManagerTask,
                         conf.shardId,
                         validatorId,
                         validators
@@ -191,7 +190,6 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                     ab,
                     Set(ByteString.copyFrom(validatorId.publicKey)),
                     runtimeManager,
-                    runtimeManagerTask,
                     Some(validatorId),
                     shardId
                   )
@@ -283,7 +281,6 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                      _ <- BlockStore[F].put(blockMessage.blockHash, blockMessage)
                      casper <- MultiParentCasper.hashSetCasper[F](
                                 runtimeManager,
-                                runtimeManagerTask,
                                 validatorId,
                                 blockMessage,
                                 shardId
@@ -304,7 +301,6 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     **/
   private[comm] class BootstrapCasperHandler[F[_]: Sync: Concurrent: Capture: ConnectionsCell: NodeDiscovery: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock: BlockDagStorage: ToAbstractContext](
       runtimeManager: RuntimeManager[F],
-      runtimeManagerTask: RuntimeManager[Task],
       shardId: String,
       validatorId: Option[ValidatorIdentity],
       validators: Set[ByteString]
@@ -335,7 +331,6 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         ab,
         validators,
         runtimeManager,
-        runtimeManagerTask,
         validatorId,
         shardId
       )
@@ -577,7 +572,6 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       b: ApprovedBlock,
       validators: Set[ByteString],
       runtimeManager: RuntimeManager[F],
-      runtimeManagerTask: RuntimeManager[Task],
       validatorId: Option[ValidatorIdentity],
       shardId: String
   )(implicit scheduler: Scheduler): F[Option[MultiParentCasper[F]]] =
@@ -592,7 +586,6 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                    casper <- MultiParentCasper
                               .hashSetCasper[F](
                                 runtimeManager,
-                                runtimeManagerTask,
                                 validatorId,
                                 blockMessage,
                                 shardId

@@ -28,12 +28,6 @@ import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.ski.kp2
-import coop.rchain.rspace.Checkpoint
-import monix.eval.Task
-import monix.execution.Scheduler
-import monix.execution.atomic.AtomicAny
-
-import scala.concurrent.SyncVar
 
 trait Casper[F[_], A] {
   def addBlock(
@@ -76,11 +70,10 @@ sealed abstract class MultiParentCasperInstances {
 
   def hashSetCasper[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ToAbstractContext](
       runtimeManager: RuntimeManager[F],
-      runtimeManagerTask: RuntimeManager[Task],
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       shardId: String
-  )(implicit scheduler: Scheduler): F[MultiParentCasper[F]] =
+  ): F[MultiParentCasper[F]] =
     for {
       // Initialize DAG storage with genesis block in case it is empty
       _   <- BlockDagStorage[F].insert(genesis)
