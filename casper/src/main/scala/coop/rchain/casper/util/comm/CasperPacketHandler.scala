@@ -83,7 +83,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                     conf.minimumBond,
                     conf.maximumBond,
                     conf.hasFaucet,
-                    runtimeManagerTask,
+                    runtimeManager,
                     conf.shardId,
                     conf.deployTimestamp
                   )

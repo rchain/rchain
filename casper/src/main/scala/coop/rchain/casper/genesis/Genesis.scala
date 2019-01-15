@@ -83,15 +83,11 @@ object Genesis {
           } yield ps.withPreStateHash(runtimeManager.emptyStateHash).withPostStateHash(stateHash)
           val version   = initial.header.get.version
           val timestamp = initial.header.get.timestamp
-
           val blockDeploys =
             processedDeploys.filterNot(_.status.isFailed).map(ProcessedDeployUtil.fromInternal)
           val sortedDeploys = blockDeploys.map(d => d.copy(log = d.log.sortBy(_.toByteArray)))
-
-          val body = Body(state = stateWithContracts, deploys = sortedDeploys)
-
-          val header = blockHeader(body, List.empty[ByteString], version, timestamp)
-
+          val body          = Body(state = stateWithContracts, deploys = sortedDeploys)
+          val header        = blockHeader(body, List.empty[ByteString], version, timestamp)
           unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
       }
 
@@ -120,7 +116,7 @@ object Genesis {
   }
 
   //TODO: Decide on version number and shard identifier
-  def fromInputFiles[F[_]: Monad: Capture: Log: Time](
+  def fromInputFiles[F[_]: Concurrent: Capture: Log: Time](
       maybeBondsPath: Option[String],
       numValidators: Int,
       genesisPath: Path,
@@ -128,10 +124,10 @@ object Genesis {
       minimumBond: Long,
       maximumBond: Long,
       faucet: Boolean,
-      runtimeManager: RuntimeManager[Task],
+      runtimeManager: RuntimeManager[F],
       shardId: String,
       deployTimestamp: Option[Long]
-  )(implicit scheduler: Scheduler): F[BlockMessage] =
+  ): F[BlockMessage] =
     for {
       bondsFile <- toFile[F](maybeBondsPath, genesisPath.resolve("bonds.txt"))
       _ <- bondsFile.fold[F[Unit]](
@@ -149,15 +145,15 @@ object Genesis {
       initial     = withoutContracts(bonds = bonds, timestamp = 1L, version = 1L, shardId = shardId)
       validators  = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
       faucetCode  = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
-      withContr = withContracts(
-        initial,
-        ProofOfStakeParams(minimumBond, maximumBond, validators),
-        wallets,
-        faucetCode,
-        runtimeManager.emptyStateHash,
-        runtimeManager,
-        timestamp
-      ).runSyncUnsafe(Duration.Inf)
+      withContr <- withContracts(
+                    initial,
+                    ProofOfStakeParams(minimumBond, maximumBond, validators),
+                    wallets,
+                    faucetCode,
+                    runtimeManager.emptyStateHash,
+                    runtimeManager,
+                    timestamp
+                  )
     } yield withContr
 
   def toFile[F[_]: Applicative: Log](
