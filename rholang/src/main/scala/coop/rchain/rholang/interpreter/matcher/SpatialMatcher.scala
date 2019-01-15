@@ -208,8 +208,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
     val maximumBipartiteMatch = MaximumBipartiteMatch(memoizeInHashMap(matchFunction))
 
     for {
-      matchesOpt             <- maximumBipartiteMatch.findMatches(allPatterns, targets)
-      matches                <- F.fromStream(matchesOpt.toStream)
+      matches                <- Alternative[F].unite(maximumBipartiteMatch.findMatches(allPatterns, targets))
       freeMaps               = matches.map(_._3)
       updatedFreeMap         <- aggregateUpdates(freeMaps)
       _                      <- _freeMap[F].set(updatedFreeMap)
@@ -290,7 +289,7 @@ trait SpatialMatcherInstances {
         case ConnOrBody(ConnectiveBody(ps)) =>
           val freeMap = _freeMap[F]
           val allMatches = for {
-            p       <- F.fromStream(ps.toStream)
+            p       <- Alternative[F].unite(ps.toList.pure[F])
             matches <- freeMap.get
             _       <- spatialMatch(target, p)
             _       <- freeMap.set(matches)
@@ -386,8 +385,8 @@ trait SpatialMatcherInstances {
         ): F[Par] = {
           val (con, bounds, remainders) = labeledConnective
           for {
-            sp <- F.fromStream(
-                   subPars(target, bounds._1, bounds._2, remainders._1, remainders._2)
+            sp <- Alternative[F].unite(
+                   subPars(target, bounds._1, bounds._2, remainders._1, remainders._2).pure[F]
                  )
             _ <- spatialMatch(sp._1, con)
           } yield sp._2
