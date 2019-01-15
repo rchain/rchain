@@ -4,7 +4,7 @@ import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.MonadState
 import cats.mtl.implicits._
-import cats.{Alternative, Monad, Eval => _}
+import cats.{Alternative, Monad, MonoidK, Eval => _}
 import coop.rchain.catscontrib._
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
@@ -92,11 +92,11 @@ object SpatialMatcher extends SpatialMatcherInstances {
     (tlist, plist) match {
       case (Nil, Nil) => Seq.empty[T].pure[F]
       case (Nil, _) =>
-        F.empty[Seq[T]]
+        MonoidK[F].empty[Seq[T]]
       case (trem, Nil) =>
         remainder match {
           case None =>
-            F.empty[Seq[T]]
+            MonoidK[F].empty[Seq[T]]
           case Some(Var(FreeVar(level))) => {
             def freeCheck(trem: Seq[T], level: Int, acc: Seq[T]): F[Seq[T]] =
               trem match {
@@ -105,12 +105,12 @@ object SpatialMatcher extends SpatialMatcherInstances {
                   if (lft.locallyFree(item, 0).isEmpty)
                     freeCheck(rem, level, acc :+ item)
                   else
-                    F.empty[Seq[T]]
+                    MonoidK[F].empty[Seq[T]]
               }
             freeCheck(trem, level, Vector.empty[T])
           }
           case Some(Var(Wildcard(_))) => Seq.empty[T].pure[F]
-          case _                      => F.empty[Seq[T]]
+          case _                      => MonoidK[F].empty[Seq[T]]
         }
       case (t +: trem, p +: prem) =>
         spatialMatch(t, p).flatMap(_ => foldMatch(trem, prem, remainder))
@@ -151,9 +151,9 @@ object SpatialMatcher extends SpatialMatcherInstances {
 
     val result: F[Unit] =
       if (exactMatch && plen != tlen)
-        F.empty[Unit].charge(COMPARISON_COST)
+        MonoidK[F].empty[Unit].charge(COMPARISON_COST)
       else if (plen > tlen)
-        F.empty[Unit].charge(COMPARISON_COST)
+        MonoidK[F].empty[Unit].charge(COMPARISON_COST)
       else if (plen == 0 && tlen == 0 && remainder.isEmpty)
         ().pure[F]
       else if (plen == 0 && remainder.isDefined) {
@@ -161,7 +161,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
           if (tlist.forall(lf.locallyFree(_, 0).isEmpty))
             handleRemainder[F, T](tlist, remainder.get, merger)
           else
-            F.empty[Unit]
+            MonoidK[F].empty[Unit]
         matchResult.charge(COMPARISON_COST * tlist.size)
       } else
         listMatch(tlist, plist, merger, remainder, wildcard)
@@ -226,7 +226,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
                 ().pure[F]
               else
                 // This should be prevented by the length checks.
-                F.empty
+                MonoidK[F].empty
             // If there's a capture variable, we prefer to add things to that rather than throw them away.
             case Some(level) => {
               handleRemainder[F, T](remainderTargetsSorted, level, merger)
@@ -302,50 +302,50 @@ trait SpatialMatcherInstances {
         case ConnNotBody(p) =>
           spatialMatch(target, p).attemptOpt.flatMap {
             case None    => ().pure[F]
-            case Some(_) => F.empty
+            case Some(_) => MonoidK[F].empty
           }
 
         case _: VarRefBody =>
           // this should never happen because variable references should be substituted
-          F.empty[Unit]
+          MonoidK[F].empty[Unit]
 
         case _: ConnBool =>
           target.singleExpr match {
             case Some(Expr(GBool(_))) =>
               ().pure[F]
-            case _ => F.empty[Unit]
+            case _ => MonoidK[F].empty[Unit]
           }
 
         case _: ConnInt =>
           target.singleExpr match {
             case Some(Expr(GInt(_))) =>
               ().pure[F]
-            case _ => F.empty[Unit]
+            case _ => MonoidK[F].empty[Unit]
           }
 
         case _: ConnString =>
           target.singleExpr match {
             case Some(Expr(GString(_))) =>
               ().pure[F]
-            case _ => F.empty[Unit]
+            case _ => MonoidK[F].empty[Unit]
           }
 
         case _: ConnUri =>
           target.singleExpr match {
             case Some(Expr(GUri(_))) =>
               ().pure[F]
-            case _ => F.empty[Unit]
+            case _ => MonoidK[F].empty[Unit]
           }
 
         case _: ConnByteArray =>
           target.singleExpr match {
             case Some(Expr(GByteArray(_))) =>
               ().pure[F]
-            case _ => F.empty[Unit]
+            case _ => MonoidK[F].empty[Unit]
           }
 
         case ConnectiveInstance.Empty =>
-          F.empty[Unit]
+          MonoidK[F].empty[Unit]
       }
     }
 
@@ -356,7 +356,7 @@ trait SpatialMatcherInstances {
         if (pattern == target)
           ().pure[NonDetFreeMapWithCost].charge(cost)
         else {
-          NonDetFreeMapWithCost.empty[Unit].charge(cost)
+          MonoidK[F].empty[Unit].charge(cost)
         }
       } else {
 
@@ -455,14 +455,14 @@ trait SpatialMatcherInstances {
       if (pattern == target)
         ().pure[F].charge(cost)
       else {
-        F.empty[Unit].charge(cost)
+        MonoidK[F].empty[Unit].charge(cost)
       }
     }
 
   implicit val sendSpatialMatcherInstance: SpatialMatcher[Send, Send] = fromFunction[Send, Send] {
     (target, pattern) =>
       if (target.persistent != pattern.persistent)
-        F.empty[Unit].charge(COMPARISON_COST)
+        MonoidK[F].empty[Unit].charge(COMPARISON_COST)
       else
         for {
           _ <- spatialMatch(target.chan, pattern.chan)
@@ -473,7 +473,7 @@ trait SpatialMatcherInstances {
   implicit val receiveSpatialMatcherInstance: SpatialMatcher[Receive, Receive] =
     fromFunction[Receive, Receive] { (target, pattern) =>
       if (target.persistent != pattern.persistent)
-        F.empty[Unit].charge(COMPARISON_COST)
+        MonoidK[F].empty[Unit].charge(COMPARISON_COST)
       else
         for {
           _ <- listMatchSingle[ReceiveBind](target.binds, pattern.binds)
@@ -486,7 +486,7 @@ trait SpatialMatcherInstances {
       if (target.bindCount == pattern.bindCount)
         spatialMatch(target.p, pattern.p).charge(COMPARISON_COST)
       else
-        F.empty[Unit].charge(COMPARISON_COST)
+        MonoidK[F].empty[Unit].charge(COMPARISON_COST)
   }
 
   implicit val exprSpatialMatcherInstance: SpatialMatcher[Expr, Expr] = fromFunction[Expr, Expr] {
@@ -522,7 +522,7 @@ trait SpatialMatcherInstances {
           if (vp == vt)
             ().pure[F].charge(cost)
           else
-            F.empty[Unit].charge(cost)
+            MonoidK[F].empty[Unit].charge(cost)
         case (ENotBody(ENot(t)), ENotBody(ENot(p))) => spatialMatch(t, p)
         case (ENegBody(ENeg(t)), ENegBody(ENeg(p))) => spatialMatch(t, p)
         case (EMultBody(EMult(t1, t2)), EMultBody(EMult(p1, p2))) =>
@@ -558,7 +558,7 @@ trait SpatialMatcherInstances {
             _ <- spatialMatch(t1, p1)
             _ <- spatialMatch(t2, p2)
           } yield Unit
-        case _ => F.empty[Unit]
+        case _ => MonoidK[F].empty[Unit]
       }
   }
 
@@ -581,7 +581,7 @@ trait SpatialMatcherInstances {
         val cost = equalityCheckCost(target, pattern)
         ().pure[F].charge(cost)
       } else
-        F.empty
+        MonoidK[F].empty
     }
 
   implicit val receiveBindSpatialMatcherInstance: SpatialMatcher[ReceiveBind, ReceiveBind] =
@@ -592,7 +592,7 @@ trait SpatialMatcherInstances {
             .zip(pattern.patterns)
             .map(x => equalityCheckCost(x._1, x._2))
             .foldLeft(Cost(0))(_ + _)
-        F.empty.charge(cost)
+        MonoidK[F].empty.charge(cost)
       } else
         spatialMatch(target.source, pattern.source)
     }
@@ -601,7 +601,7 @@ trait SpatialMatcherInstances {
     fromFunction[MatchCase, MatchCase] { (target, pattern) =>
       if (target.pattern != pattern.pattern) {
         val cost: Cost = equalityCheckCost(target.pattern, pattern.pattern)
-        F.empty.charge(cost)
+        MonoidK[F].empty.charge(cost)
       } else
         spatialMatch(target.source, pattern.source)
     }

@@ -1,8 +1,8 @@
 package coop.rchain.rholang.interpreter
 
-import cats.{Alternative, MonadError, Monoid, MonoidK}
+import cats.MonadError
 import cats.arrow.FunctionK
-import cats.data.{OptionT, StateT}
+import cats.data.StateT
 import cats.implicits._
 import cats.mtl.implicits._
 import cats.mtl.MonadState
@@ -83,9 +83,6 @@ package object matcher {
 
     implicit def toNonDetFreeMapWithCostOps[A](s: NonDetFreeMapWithCost[A]) =
       new NonDetFreeMapWithCostOps[A](s)
-
-    def empty[A]: NonDetFreeMapWithCost[A] =
-      MonoidK[NonDetFreeMapWithCost].empty[A]
 
     def fromStream[A](stream: Stream[A]): NonDetFreeMapWithCost[A] =
       StateT.liftF(StreamT.fromStream(StateT.pure(stream)))
