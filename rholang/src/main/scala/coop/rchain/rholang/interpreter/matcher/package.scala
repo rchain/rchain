@@ -85,7 +85,7 @@ package object matcher {
       new NonDetFreeMapWithCostOps[A](s)
 
     def empty[A]: NonDetFreeMapWithCost[A] =
-      MonadTrans[StateT[?[_], FreeMap, ?]].liftM(MonoidK[StreamWithCost].empty)
+      MonoidK[NonDetFreeMapWithCost].empty[A]
 
     def fromStream[A](stream: Stream[A]): NonDetFreeMapWithCost[A] =
       StateT.liftF(StreamT.fromStream(StateT.pure(stream)))
