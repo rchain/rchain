@@ -103,6 +103,7 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       val err: Throwable = handleStreamErr(streamWithoutHeader)
       // then
       err.getMessage should startWith("received not full stream message, will not process")
+      tempFolder.toFile.list() should be(empty)
     }
 
     it("should stop processing a stream if stream brought incomplete data") {
@@ -115,6 +116,7 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       val err: Throwable = handleStreamErr(incompleteStream)
       // then
       err.getMessage should startWith("received not full stream message, will not process")
+      tempFolder.toFile.list() should be(empty)
     }
 
   }
