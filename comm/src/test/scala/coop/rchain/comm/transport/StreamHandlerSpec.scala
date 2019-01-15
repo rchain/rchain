@@ -82,15 +82,15 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
 
     it("should stop receiving a stream if will not fit in memory") {
       // given
-      val alwaysBreak: CircuitBreaker = kp(true)
-      val stream                      = createStream()
+      val messageSize                     = 10 * 1024
+      val breakOnSndChunk: CircuitBreaker = read => read > messageSize
+      val stream                          = createStream(messageSize = messageSize)
       // when
-      val err: Throwable = handleStreamErr(stream, circuitBreaker = alwaysBreak)
+      val err: Throwable = handleStreamErr(stream, circuitBreaker = breakOnSndChunk)
       // then
       err.getMessage shouldBe ("Circuit was broken")
       tempFolder.toFile.list() should be(empty)
     }
-
   }
 
   private def handleStream(stream: Observable[Chunk], folder: Path = tempFolder): StreamMessage =
