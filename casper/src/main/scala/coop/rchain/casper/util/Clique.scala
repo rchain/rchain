@@ -3,13 +3,11 @@ package coop.rchain.casper.util
 object Clique {
   def findMaximumCliqueByWeight[A](edges: List[(A, A)], weights: Map[A, Long]): Long = {
     val maxWeight = weights.values.max
-    Clique
-      .findCliquesRecursive(edges)
-      .foldLeft(maxWeight) {
-        case (largestWeight, clique: Seq[A]) =>
-          val weight = clique.map(weights.getOrElse(_, 0L)).sum
-          Math.max(weight, largestWeight)
-      }
+    findCliquesRecursive(edges).foldLeft(maxWeight) {
+      case (largestWeight, clique: Seq[A]) =>
+        val weight = clique.map(weights.getOrElse(_, 0L)).sum
+        Math.max(weight, largestWeight)
+    }
   }
 
   // e is a list of undirected edges
