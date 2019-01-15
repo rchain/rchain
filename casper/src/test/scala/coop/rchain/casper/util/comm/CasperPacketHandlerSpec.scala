@@ -69,7 +69,6 @@ class CasperPacketHandlerSpec extends WordSpec {
     val bap = new BlockApproverProtocol(
       validatorId,
       deployTimestamp,
-      runtimeManager,
       bonds,
       Seq.empty,
       1L,
@@ -120,7 +119,7 @@ class CasperPacketHandlerSpec extends WordSpec {
 
         val ref =
           Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
-            new GenesisValidatorHandler(runtimeManager, validatorId, shardId, bap)
+            new GenesisValidatorHandler(runtimeManager, runtimeManager, validatorId, shardId, bap)
           )
         val packetHandler     = new CasperPacketHandlerImpl[Task](ref)
         val expectedCandidate = ApprovedBlockCandidate(Some(genesis), requiredSigs)
@@ -151,7 +150,7 @@ class CasperPacketHandlerSpec extends WordSpec {
 
         val ref =
           Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
-            new GenesisValidatorHandler(runtimeManager, validatorId, shardId, bap)
+            new GenesisValidatorHandler(runtimeManager, runtimeManager, validatorId, shardId, bap)
           )
         val packetHandler = new CasperPacketHandlerImpl[Task](ref)
 

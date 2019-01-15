@@ -8,7 +8,7 @@ import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.{Applicative, ApplicativeError, Id, Monad}
 import coop.rchain.blockstorage._
-import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.casper._
 import coop.rchain.casper.helper.BlockDagStorageTestFixture.mapSize
 import coop.rchain.casper.helper.HashSetCasperTestNode.Close
@@ -59,7 +59,7 @@ class HashSetCasperTestNode[F[_]](
     val blockStoreDir: Path,
     blockProcessingLock: Semaphore[F],
     shardId: String = "rchain",
-    createRuntime: (Path, Long) => (RuntimeManager[Task], Close[Task])
+    createRuntime: (Path, Long) => (RuntimeManager[F], RuntimeManager[Task], Close[F])
 )(
     implicit scheduler: Scheduler,
     syncF: Sync[F],
@@ -81,7 +81,8 @@ class HashSetCasperTestNode[F[_]](
   implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[F]
   implicit val rpConfAsk          = createRPConfAsk[F](local)
 
-  val (runtimeManager, closeRuntime) = createRuntime(storageDirectory, storageSize)
+  val (runtimeManager, runtimeManagerTask, closeRuntime) =
+    createRuntime(storageDirectory, storageSize)
 
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
 
@@ -93,7 +94,7 @@ class HashSetCasperTestNode[F[_]](
   val postGenesisStateHash = ProtoUtil.postStateHash(genesis)
 
   implicit val casperEff = new MultiParentCasperImpl[F](
-    runtimeManager,
+    runtimeManagerTask,
     Some(validatorId),
     genesis,
     postGenesisStateHash,
@@ -118,7 +119,7 @@ class HashSetCasperTestNode[F[_]](
           .validateBlockCheckpoint[F](
             genesis,
             dag,
-            runtimeManager
+            runtimeManagerTask
           )
           .void
       }
@@ -135,7 +136,7 @@ class HashSetCasperTestNode[F[_]](
     for {
       _ <- blockStore.close()
       _ <- blockDagStorage.close()
-      _ = closeRuntime.apply().unsafeRunSync
+      _ <- closeRuntime.apply()
     } yield ()
 }
 
@@ -153,18 +154,22 @@ object HashSetCasperTestNode {
 
   def createRuntime(storageDirectory: Path, storageSize: Long)(
       implicit scheduler: Scheduler
-  ): (RuntimeManager[Task], Close[Task]) = {
+  ): (RuntimeManager[Effect], RuntimeManager[Task], Close[Effect]) = {
     val activeRuntime =
       Runtime.create[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB).unsafeRunSync
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
-    (runtimeManager, activeRuntime.close)
+    (
+      RuntimeManager.eitherTRuntimeManager(runtimeManager),
+      runtimeManager,
+      () => activeRuntime.close().liftM[CommErrT]
+    )
   }
 
   def standaloneF[F[_]](
       genesis: BlockMessage,
       sk: Array[Byte],
       storageSize: Long = 1024L * 1024 * 10,
-      createRuntime: (Path, Long) => (RuntimeManager[Task], Close[Task])
+      createRuntime: (Path, Long) => (RuntimeManager[F], RuntimeManager[Task], Close[F])
   )(
       implicit scheduler: Scheduler,
       errorHandler: ErrorHandler[F],
@@ -242,7 +247,7 @@ object HashSetCasperTestNode {
       sks: IndexedSeq[Array[Byte]],
       genesis: BlockMessage,
       storageSize: Long = 1024L * 1024 * 10,
-      createRuntime: (Path, Long) => (RuntimeManager[Task], Close[Task])
+      createRuntime: (Path, Long) => (RuntimeManager[F], RuntimeManager[Task], Close[F])
   )(
       implicit scheduler: Scheduler,
       errorHandler: ErrorHandler[F],

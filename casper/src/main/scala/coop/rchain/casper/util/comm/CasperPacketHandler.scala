@@ -40,7 +40,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   def of[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Capture: Sync: Concurrent: Time: Log: MultiParentCasperRef: BlockDagStorage: ToAbstractContext](
       conf: CasperConf,
       delay: FiniteDuration,
-      runtimeManager: RuntimeManager[Task],
+      runtimeManager: RuntimeManager[F],
+      runtimeManagerTask: RuntimeManager[Task],
       toTask: F[_] => Task[_]
   )(implicit scheduler: Scheduler): F[CasperPacketHandler[F]] =
     if (conf.approveGenesis) {
@@ -55,7 +56,6 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         bap = new BlockApproverProtocol(
           validatorId.get,
           timestamp,
-          runtimeManager,
           bonds,
           wallets,
           conf.minimumBond,
@@ -64,7 +64,13 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
           conf.requiredSigs
         )
         gv <- Ref.of[F, CasperPacketHandlerInternal[F]](
-               new GenesisValidatorHandler(runtimeManager, validatorId.get, conf.shardId, bap)
+               new GenesisValidatorHandler(
+                 runtimeManager,
+                 runtimeManagerTask,
+                 validatorId.get,
+                 conf.shardId,
+                 bap
+               )
              )
       } yield new CasperPacketHandlerImpl[F](gv)
     } else if (conf.createGenesis) {
@@ -77,7 +83,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                     conf.minimumBond,
                     conf.maximumBond,
                     conf.hasFaucet,
-                    runtimeManager,
+                    runtimeManagerTask,
                     conf.shardId,
                     conf.deployTimestamp
                   )
@@ -104,7 +110,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                   .approveBlockInterval(
                     conf.approveGenesisInterval,
                     conf.shardId,
-                    runtimeManager,
+                    runtimeManagerTask,
                     validatorId,
                     standalone
                   )
@@ -118,7 +124,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         validatorId <- ValidatorIdentity.fromConfig[F](conf)
         bootstrap <- Ref.of[F, CasperPacketHandlerInternal[F]](
                       new BootstrapCasperHandler(
-                        runtimeManager,
+                        runtimeManagerTask,
                         conf.shardId,
                         validatorId,
                         validators
@@ -159,7 +165,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     * When in this state node can't handle any other message type so it will return `F[None]`
     **/
   private[comm] class GenesisValidatorHandler[F[_]: Capture: Sync: Concurrent: ConnectionsCell: NodeDiscovery: TransportLayer: Log: Time: SafetyOracle: ErrorHandler: RPConfAsk: BlockStore: LastApprovedBlock: BlockDagStorage: ToAbstractContext](
-      runtimeManager: RuntimeManager[Task],
+      runtimeManager: RuntimeManager[F],
+      runtimeManagerTask: RuntimeManager[Task],
       validatorId: ValidatorIdentity,
       shardId: String,
       blockApprover: BlockApproverProtocol
@@ -181,7 +188,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         casperO <- onApprovedBlockTransition(
                     ab,
                     Set(ByteString.copyFrom(validatorId.publicKey)),
-                    runtimeManager,
+                    runtimeManagerTask,
                     Some(validatorId),
                     shardId
                   )
@@ -200,7 +207,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       noop
 
     override def handleUnapprovedBlock(peer: PeerNode, ub: UnapprovedBlock): F[Unit] =
-      blockApprover.unapprovedBlockPacketHandler(peer, ub)
+      blockApprover.unapprovedBlockPacketHandler(peer, ub, runtimeManager)
+
     override def handleNoApprovedBlockAvailable(na: NoApprovedBlockAvailable): F[Unit] =
       Log[F].info(s"No approved block available on node ${na.nodeIdentifer}")
   }
