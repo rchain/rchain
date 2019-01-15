@@ -54,9 +54,6 @@ package object matcher {
 
     class NonDetFreeMapWithCostOps[A](s: NonDetFreeMapWithCost[A]) {
 
-      def attemptOpt: NonDetFreeMapWithCost[Option[A]] =
-        matcher.attemptOpt(s)
-
       def runWithCost(
           initCost: Cost
       ): Either[OutOfPhlogistonsError.type, (Cost, Stream[(FreeMap, A)])] =

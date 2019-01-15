@@ -42,7 +42,7 @@ class MatcherMonadSpec extends FlatSpec {
 
   it should "retain cost and matches when attemptOpt is called on successful match" in {
     assert(
-      modifyStates.attemptOpt
+      attemptOpt[F, Unit](modifyStates)
         .runFirstWithCost(Cost(0)) == Right((Cost(1), Some((Map(42 -> Par()), Some(())))))
     )
   }
@@ -53,7 +53,10 @@ class MatcherMonadSpec extends FlatSpec {
       _ <- _short[F].raiseError[Int](())
     } yield ()
 
-    assert(failed.attemptOpt.runFirstWithCost(Cost(0)) == Right((Cost(1), Some((Map.empty, None)))))
+    assert(
+      attemptOpt[F, Unit](failed)
+        .runFirstWithCost(Cost(0)) == Right((Cost(1), Some((Map.empty, None))))
+    )
   }
 
   it should "retain cost but discard matches when attemptOpt is called on a match failed using `guard`" in {
@@ -62,7 +65,10 @@ class MatcherMonadSpec extends FlatSpec {
       _ <- A.guard(false)
     } yield ()
 
-    assert(failed.attemptOpt.runFirstWithCost(Cost(0)) == Right((Cost(1), Some((Map.empty, None)))))
+    assert(
+      attemptOpt[F, Unit](failed)
+        .runFirstWithCost(Cost(0)) == Right((Cost(1), Some((Map.empty, None))))
+    )
   }
 
   it should "apply `guard`-s separately to each computation branch" in {

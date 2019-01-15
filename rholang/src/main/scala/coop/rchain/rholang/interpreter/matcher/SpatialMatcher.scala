@@ -203,7 +203,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
             //They match everything that's concrete though.
             charge[F](COMPARISON_COST) *> Alternative[F].guard(lf.locallyFree(t, 0).isEmpty)
         }
-        isolateState[F, FreeMap](matchEffect).attemptOpt
+        attemptOpt[F, FreeMap](isolateState[F, FreeMap](matchEffect))
       }
     val maximumBipartiteMatch = MaximumBipartiteMatch(memoizeInHashMap(matchFunction))
 
@@ -298,7 +298,7 @@ trait SpatialMatcherInstances {
           allMatches.takeFirst()
 
         case ConnNotBody(p) =>
-          spatialMatch(target, p).attemptOpt.flatMap {
+          attemptOpt[F, Unit](spatialMatch(target, p)).flatMap {
             case None    => ().pure[F]
             case Some(_) => MonoidK[F].empty
           }
