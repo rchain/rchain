@@ -92,11 +92,17 @@ object StreamHandler {
 
   }
 
-  private def toResult(stmd: Streamed): EitherT[Task, Throwable, StreamMessage] = {
-    val notFullError =
-      (new RuntimeException(s"received not full stream message, will not process. $stmd"))
-        .asLeft[StreamMessage]
-    EitherT(Task.delay {
+  private def toResult(
+      stmd: Streamed
+  )(implicit logger: Log[Task]): EitherT[Task, Throwable, StreamMessage] = {
+    val notFullError = stmd.path
+      .deleteSingleFile[Task]
+      .as(
+        new RuntimeException(s"received not full stream message, will not process. $stmd")
+          .asLeft[StreamMessage]
+      )
+
+    EitherT(
       stmd match {
         case Streamed(
             Some(sender),
@@ -109,13 +115,13 @@ object StreamHandler {
             _
             ) =>
           if (readSoFar == contentLength)
-            Right(StreamMessage(sender, packetType, path, compressed, contentLength))
+            Right(StreamMessage(sender, packetType, path, compressed, contentLength)).pure[Task]
           else notFullError
         case stmd => notFullError
-
       }
-    })
+    )
   }
+
   def restore(msg: StreamMessage)(implicit logger: Log[Task]): Task[Either[Throwable, Blob]] =
     (fetchContent(msg.path).attempt >>= {
       case Left(ex) => logger.error("Could not read streamed data from file", ex).as(Left(ex))
