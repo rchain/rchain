@@ -217,7 +217,6 @@ class CasperPacketHandlerSpec extends WordSpec {
               interval,
               shardId,
               runtimeManager,
-              runtimeManager,
               Some(validatorId),
               refCasper
             )

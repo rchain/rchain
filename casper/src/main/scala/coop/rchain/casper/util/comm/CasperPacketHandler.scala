@@ -111,7 +111,6 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                     conf.approveGenesisInterval,
                     conf.shardId,
                     runtimeManager,
-                    runtimeManagerTask,
                     validatorId,
                     standalone
                   )
@@ -258,10 +257,9 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         interval: FiniteDuration,
         shardId: String,
         runtimeManager: RuntimeManager[F],
-        runtimeManagerTask: RuntimeManager[Task],
         validatorId: Option[ValidatorIdentity],
         capserHandlerInternal: Ref[F, CasperPacketHandlerInternal[F]]
-    )(implicit scheduler: Scheduler): F[Unit] =
+    ): F[Unit] =
       for {
         _                  <- Time[F].sleep(interval)
         lastApprovedBlockO <- LastApprovedBlock[F].get
@@ -271,7 +269,6 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                      interval,
                      shardId,
                      runtimeManager,
-                     runtimeManagerTask,
                      validatorId,
                      capserHandlerInternal
                    )
