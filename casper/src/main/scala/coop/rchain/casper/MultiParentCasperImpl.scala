@@ -26,7 +26,11 @@ import monix.execution.atomic.AtomicAny
 
 import scala.collection.mutable
 
-case class CasperState(blockBuffer: Set[BlockMessage], deployHistory: Set[Deploy])
+case class CasperState(
+    blockBuffer: Set[BlockMessage] = Set.empty[BlockMessage],
+    deployHistory: Set[Deploy] = Set.empty[Deploy],
+    invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash]
+)
 
 class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ToAbstractContext](
     runtimeManager: RuntimeManager[Task],
@@ -40,7 +44,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  type BlockHash = ByteString
   type Validator = ByteString
 
   //TODO: Extract hardcoded version
@@ -56,8 +59,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
   // each EquivocationRecord.
   private val equivocationsTracker: mutable.Set[EquivocationRecord] =
     new mutable.HashSet[EquivocationRecord]()
-  private val invalidBlockTracker: mutable.HashSet[BlockHash] =
-    new mutable.HashSet[BlockHash]()
 
   // TODO: Extract hardcoded fault tolerance threshold
   private val faultToleranceThreshold         = 0f
@@ -397,12 +398,14 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       postBondsCacheStatus <- postTransactionsCheckStatus.joinRight.traverse(
                                _ => Validate.bondsCache[F](b, runtimeManager)
                              )
+
+      state <- Cell[F, CasperState].read
       postNeglectedInvalidBlockStatus <- postBondsCacheStatus.joinRight.traverse(
                                           _ =>
                                             Validate
                                               .neglectedInvalidBlock[F](
                                                 b,
-                                                invalidBlockTracker.toSet
+                                                state.invalidBlockTracker
                                               )
                                         )
       postNeglectedEquivocationCheckStatus <- postNeglectedInvalidBlockStatus.joinRight
@@ -542,7 +545,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
             s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}."
           )
       // TODO: Slash block for status except InvalidUnslashableBlock
-      _ <- Capture[F].capture(invalidBlockTracker += block.blockHash) *> addToState(block)
+      _ <- Cell[F, CasperState].modify { s =>
+            s.copy(invalidBlockTracker = s.invalidBlockTracker + block.blockHash).pure[F]
+          }
+      _ <- addToState(block)
     } yield ()
 
   private def addToState(block: BlockMessage): F[Unit] =

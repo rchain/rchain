@@ -197,9 +197,7 @@ object HashSetCasperTestNode {
                           genesis
                         )
       blockProcessingLock <- Semaphore[F](1)
-      casperState <- Cell.mvarCell[F, CasperState](
-                      CasperState(Set.empty[BlockMessage], Set.empty[Deploy])
-                    )
+      casperState         <- Cell.mvarCell[F, CasperState](CasperState())
       node = new HashSetCasperTestNode[F](
         name,
         identity,
