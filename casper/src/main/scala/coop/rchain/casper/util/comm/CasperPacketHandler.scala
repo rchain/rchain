@@ -110,6 +110,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                   .approveBlockInterval(
                     conf.approveGenesisInterval,
                     conf.shardId,
+                    runtimeManager,
                     runtimeManagerTask,
                     validatorId,
                     standalone
@@ -124,6 +125,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         validatorId <- ValidatorIdentity.fromConfig[F](conf)
         bootstrap <- Ref.of[F, CasperPacketHandlerInternal[F]](
                       new BootstrapCasperHandler(
+                        runtimeManager,
                         runtimeManagerTask,
                         conf.shardId,
                         validatorId,
@@ -188,6 +190,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         casperO <- onApprovedBlockTransition(
                     ab,
                     Set(ByteString.copyFrom(validatorId.publicKey)),
+                    runtimeManager,
                     runtimeManagerTask,
                     Some(validatorId),
                     shardId
@@ -256,7 +259,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     def approveBlockInterval[F[_]: Sync: Concurrent: Capture: ConnectionsCell: NodeDiscovery: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock: MultiParentCasperRef: BlockDagStorage: ToAbstractContext](
         interval: FiniteDuration,
         shardId: String,
-        runtimeManager: RuntimeManager[Task],
+        runtimeManager: RuntimeManager[F],
+        runtimeManagerTask: RuntimeManager[Task],
         validatorId: Option[ValidatorIdentity],
         capserHandlerInternal: Ref[F, CasperPacketHandlerInternal[F]]
     )(implicit scheduler: Scheduler): F[Unit] =
@@ -269,6 +273,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                      interval,
                      shardId,
                      runtimeManager,
+                     runtimeManagerTask,
                      validatorId,
                      capserHandlerInternal
                    )
@@ -278,6 +283,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                      _ <- BlockStore[F].put(blockMessage.blockHash, blockMessage)
                      casper <- MultiParentCasper.hashSetCasper[F](
                                 runtimeManager,
+                                runtimeManagerTask,
                                 validatorId,
                                 blockMessage,
                                 shardId
@@ -297,7 +303,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     * `F[None]` to all other message types.
     **/
   private[comm] class BootstrapCasperHandler[F[_]: Sync: Concurrent: Capture: ConnectionsCell: NodeDiscovery: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock: BlockDagStorage: ToAbstractContext](
-      runtimeManager: RuntimeManager[Task],
+      runtimeManager: RuntimeManager[F],
+      runtimeManagerTask: RuntimeManager[Task],
       shardId: String,
       validatorId: Option[ValidatorIdentity],
       validators: Set[ByteString]
@@ -324,7 +331,14 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     override def handleApprovedBlock(
         ab: ApprovedBlock
     ): F[Option[MultiParentCasper[F]]] =
-      onApprovedBlockTransition(ab, validators, runtimeManager, validatorId, shardId)
+      onApprovedBlockTransition(
+        ab,
+        validators,
+        runtimeManager,
+        runtimeManagerTask,
+        validatorId,
+        shardId
+      )
 
     override def handleNoApprovedBlockAvailable(na: NoApprovedBlockAvailable): F[Unit] =
       Log[F].info(s"No approved block available on node ${na.nodeIdentifer}")
@@ -562,7 +576,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   private def onApprovedBlockTransition[F[_]: Sync: Concurrent: Time: ErrorHandler: SafetyOracle: RPConfAsk: TransportLayer: Capture: ConnectionsCell: Log: BlockStore: LastApprovedBlock: BlockDagStorage: ToAbstractContext](
       b: ApprovedBlock,
       validators: Set[ByteString],
-      runtimeManager: RuntimeManager[Task],
+      runtimeManager: RuntimeManager[F],
+      runtimeManagerTask: RuntimeManager[Task],
       validatorId: Option[ValidatorIdentity],
       shardId: String
   )(implicit scheduler: Scheduler): F[Option[MultiParentCasper[F]]] =
@@ -575,7 +590,13 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                    _            <- BlockStore[F].put(blockMessage.blockHash, blockMessage)
                    _            <- LastApprovedBlock[F].set(b)
                    casper <- MultiParentCasper
-                              .hashSetCasper[F](runtimeManager, validatorId, blockMessage, shardId)
+                              .hashSetCasper[F](
+                                runtimeManager,
+                                runtimeManagerTask,
+                                validatorId,
+                                blockMessage,
+                                shardId
+                              )
                  } yield Option(casper)
                } else
                  Log[F]

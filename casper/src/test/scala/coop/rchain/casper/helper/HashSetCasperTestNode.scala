@@ -94,6 +94,7 @@ class HashSetCasperTestNode[F[_]](
   val postGenesisStateHash = ProtoUtil.postStateHash(genesis)
 
   implicit val casperEff = new MultiParentCasperImpl[F](
+    runtimeManager,
     runtimeManagerTask,
     Some(validatorId),
     genesis,
@@ -119,7 +120,7 @@ class HashSetCasperTestNode[F[_]](
           .validateBlockCheckpoint[F](
             genesis,
             dag,
-            runtimeManagerTask
+            runtimeManager
           )
           .void
       }

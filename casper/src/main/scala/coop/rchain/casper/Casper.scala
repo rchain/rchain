@@ -75,7 +75,8 @@ object MultiParentCasper extends MultiParentCasperInstances {
 sealed abstract class MultiParentCasperInstances {
 
   def hashSetCasper[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ToAbstractContext](
-      runtimeManager: RuntimeManager[Task],
+      runtimeManager: RuntimeManager[F],
+      runtimeManagerTask: RuntimeManager[Task],
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       shardId: String
@@ -107,6 +108,7 @@ sealed abstract class MultiParentCasperInstances {
       implicit val state = casperState
       new MultiParentCasperImpl[F](
         runtimeManager,
+        runtimeManagerTask,
         validatorId,
         genesis,
         postGenesisStateHash,

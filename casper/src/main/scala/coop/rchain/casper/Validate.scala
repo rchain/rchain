@@ -568,7 +568,7 @@ object Validate {
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       emptyStateHash: StateHash,
-      runtimeManager: RuntimeManager[Task]
+      runtimeManager: RuntimeManager[F]
   ): F[Either[BlockStatus, ValidBlock]] =
     for {
       maybeStateHash <- InterpreterUtil

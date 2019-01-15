@@ -213,7 +213,14 @@ class CasperPacketHandlerSpec extends WordSpec {
           casperPacketHandler = new CasperPacketHandlerImpl[Task](refCasper)
           c1                  = abp.run().forkAndForget.runToFuture
           c2 = StandaloneCasperHandler
-            .approveBlockInterval(interval, shardId, runtimeManager, Some(validatorId), refCasper)
+            .approveBlockInterval(
+              interval,
+              shardId,
+              runtimeManager,
+              runtimeManager,
+              Some(validatorId),
+              refCasper
+            )
             .forkAndForget
             .runToFuture
           blockApproval = ApproveBlockProtocolTest.approval(
@@ -256,7 +263,13 @@ class CasperPacketHandlerSpec extends WordSpec {
 
         // interval and duration don't really matter since we don't require and signs from validators
         val bootstrapCasper =
-          new BootstrapCasperHandler[Task](runtimeManager, shardId, Some(validatorId), validators)
+          new BootstrapCasperHandler[Task](
+            runtimeManager,
+            runtimeManager,
+            shardId,
+            Some(validatorId),
+            validators
+          )
 
         val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesis))
 
