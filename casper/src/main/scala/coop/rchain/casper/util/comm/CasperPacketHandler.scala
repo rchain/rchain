@@ -41,7 +41,6 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       conf: CasperConf,
       delay: FiniteDuration,
       runtimeManager: RuntimeManager[F],
-      runtimeManagerTask: RuntimeManager[Task],
       toTask: F[_] => Task[_]
   )(implicit scheduler: Scheduler): F[CasperPacketHandler[F]] =
     if (conf.approveGenesis) {
@@ -66,7 +65,6 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         gv <- Ref.of[F, CasperPacketHandlerInternal[F]](
                new GenesisValidatorHandler(
                  runtimeManager,
-                 runtimeManagerTask,
                  validatorId.get,
                  conf.shardId,
                  bap
@@ -166,7 +164,6 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     **/
   private[comm] class GenesisValidatorHandler[F[_]: Capture: Sync: Concurrent: ConnectionsCell: NodeDiscovery: TransportLayer: Log: Time: SafetyOracle: ErrorHandler: RPConfAsk: BlockStore: LastApprovedBlock: BlockDagStorage: ToAbstractContext](
       runtimeManager: RuntimeManager[F],
-      runtimeManagerTask: RuntimeManager[Task],
       validatorId: ValidatorIdentity,
       shardId: String,
       blockApprover: BlockApproverProtocol

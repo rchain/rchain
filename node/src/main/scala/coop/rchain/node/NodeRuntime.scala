@@ -420,7 +420,6 @@ class NodeRuntime private[node] (
                               conf.casper,
                               defaultTimeout,
                               RuntimeManager.eitherTRuntimeManager(runtimeManager),
-                              runtimeManager,
                               _.value
                             )(
                               labEff,

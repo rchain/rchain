@@ -1,14 +1,9 @@
 package coop.rchain.casper.util.comm
 
-import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.blockstorage.{
-  BlockDagRepresentation,
-  BlockMetadata,
-  InMemBlockDagStorage,
-  InMemBlockStore
-}
+import coop.rchain.blockstorage.{BlockDagRepresentation, InMemBlockDagStorage, InMemBlockStore}
 import coop.rchain.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import coop.rchain.casper._
 import coop.rchain.casper.genesis.contracts.Faucet
@@ -30,19 +25,18 @@ import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
 import coop.rchain.comm.rp.ProtocolHelper
 import ProtocolHelper._
+import cats.Parallel
+import cats.effect.{ContextShift, Sync}
 import coop.rchain.comm.{transport, _}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.{Cell, StoreType}
 import monix.eval.Task
 import monix.execution.Scheduler
-import monix.execution.Scheduler.Implicits.global
-import monix.execution.schedulers.TestScheduler
 import org.scalatest.WordSpec
 import coop.rchain.casper.util.TestTime
 
@@ -54,7 +48,12 @@ class CasperPacketHandlerSpec extends WordSpec {
     val runtimeDir = BlockDagStorageTestFixture.blockStorageDir
     val activeRuntime =
       Runtime
-        .create[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB)
+        .create[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB)(
+          ContextShift[Task],
+          Sync[Task],
+          Parallel[Task, Task.Par],
+          scheduler
+        )
         .unsafeRunSync(scheduler)
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync(scheduler)
 
@@ -113,13 +112,13 @@ class CasperPacketHandlerSpec extends WordSpec {
     "in GenesisValidator state" should {
 
       "respond on UnapprovedBlock messages with BlockApproval" in {
-        implicit val ctx = TestScheduler()
+        implicit val ctx = Scheduler.global
         val fixture      = setup()
         import fixture._
 
         val ref =
           Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
-            new GenesisValidatorHandler(runtimeManager, runtimeManager, validatorId, shardId, bap)
+            new GenesisValidatorHandler(runtimeManager, validatorId, shardId, bap)
           )
         val packetHandler     = new CasperPacketHandlerImpl[Task](ref)
         val expectedCandidate = ApprovedBlockCandidate(Some(genesis), requiredSigs)
@@ -140,17 +139,16 @@ class CasperPacketHandlerSpec extends WordSpec {
           }
         } yield ()
         test.unsafeRunSync
-        ctx.tick()
       }
 
       "should not respond to any other message" in {
-        implicit val ctx = TestScheduler()
+        implicit val ctx = Scheduler.global
         val fixture      = setup()
         import fixture._
 
         val ref =
           Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
-            new GenesisValidatorHandler(runtimeManager, runtimeManager, validatorId, shardId, bap)
+            new GenesisValidatorHandler(runtimeManager, validatorId, shardId, bap)
           )
         val packetHandler = new CasperPacketHandlerImpl[Task](ref)
 
@@ -172,7 +170,6 @@ class CasperPacketHandlerSpec extends WordSpec {
           _            = assert(transportLayer.requests.isEmpty)
         } yield ()
         test.unsafeRunSync
-        ctx.tick()
       }
     }
 

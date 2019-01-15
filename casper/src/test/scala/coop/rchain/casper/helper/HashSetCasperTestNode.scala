@@ -59,7 +59,7 @@ class HashSetCasperTestNode[F[_]](
     val blockStoreDir: Path,
     blockProcessingLock: Semaphore[F],
     shardId: String = "rchain",
-    createRuntime: (Path, Long) => (RuntimeManager[F], RuntimeManager[Task], Close[F])
+    createRuntime: (Path, Long) => (RuntimeManager[F], Close[F])
 )(
     implicit scheduler: Scheduler,
     syncF: Sync[F],
@@ -81,7 +81,7 @@ class HashSetCasperTestNode[F[_]](
   implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[F]
   implicit val rpConfAsk          = createRPConfAsk[F](local)
 
-  val (runtimeManager, runtimeManagerTask, closeRuntime) =
+  val (runtimeManager, closeRuntime) =
     createRuntime(storageDirectory, storageSize)
 
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
@@ -154,13 +154,12 @@ object HashSetCasperTestNode {
 
   def createRuntime(storageDirectory: Path, storageSize: Long)(
       implicit scheduler: Scheduler
-  ): (RuntimeManager[Effect], RuntimeManager[Task], Close[Effect]) = {
+  ): (RuntimeManager[Effect], Close[Effect]) = {
     val activeRuntime =
       Runtime.create[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB).unsafeRunSync
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
     (
       RuntimeManager.eitherTRuntimeManager(runtimeManager),
-      runtimeManager,
       () => activeRuntime.close().liftM[CommErrT]
     )
   }
@@ -169,7 +168,7 @@ object HashSetCasperTestNode {
       genesis: BlockMessage,
       sk: Array[Byte],
       storageSize: Long = 1024L * 1024 * 10,
-      createRuntime: (Path, Long) => (RuntimeManager[F], RuntimeManager[Task], Close[F])
+      createRuntime: (Path, Long) => (RuntimeManager[F], Close[F])
   )(
       implicit scheduler: Scheduler,
       errorHandler: ErrorHandler[F],
@@ -247,7 +246,7 @@ object HashSetCasperTestNode {
       sks: IndexedSeq[Array[Byte]],
       genesis: BlockMessage,
       storageSize: Long = 1024L * 1024 * 10,
-      createRuntime: (Path, Long) => (RuntimeManager[F], RuntimeManager[Task], Close[F])
+      createRuntime: (Path, Long) => (RuntimeManager[F], Close[F])
   )(
       implicit scheduler: Scheduler,
       errorHandler: ErrorHandler[F],
