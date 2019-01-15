@@ -54,9 +54,6 @@ package object matcher {
 
     class NonDetFreeMapWithCostOps[A](s: NonDetFreeMapWithCost[A]) {
 
-      def charge(amount: Cost): NonDetFreeMapWithCost[A] =
-        s.flatMap(matcher.charge[NonDetFreeMapWithCost](amount).as)
-
       def attemptOpt: NonDetFreeMapWithCost[Option[A]] =
         matcher.attemptOpt(s)
 

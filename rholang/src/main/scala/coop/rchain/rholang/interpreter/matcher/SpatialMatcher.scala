@@ -151,9 +151,9 @@ object SpatialMatcher extends SpatialMatcherInstances {
 
     val result: F[Unit] =
       if (exactMatch && plen != tlen)
-        MonoidK[F].empty[Unit].charge(COMPARISON_COST)
+        charge[F](COMPARISON_COST) *> MonoidK[F].empty[Unit]
       else if (plen > tlen)
-        MonoidK[F].empty[Unit].charge(COMPARISON_COST)
+        charge[F](COMPARISON_COST) *> MonoidK[F].empty[Unit]
       else if (plen == 0 && tlen == 0 && remainder.isEmpty)
         ().pure[F]
       else if (plen == 0 && remainder.isDefined) {
@@ -162,7 +162,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
             handleRemainder[F, T](tlist, remainder.get, merger)
           else
             MonoidK[F].empty[Unit]
-        matchResult.charge(COMPARISON_COST * tlist.size)
+        charge[F](COMPARISON_COST * tlist.size) *> matchResult
       } else
         listMatch(tlist, plist, merger, remainder, wildcard)
 
@@ -194,16 +194,14 @@ object SpatialMatcher extends SpatialMatcherInstances {
           case Term(p) =>
             if (!lf.connectiveUsed(p)) {
               //match using `==` if pattern is a concrete term
-              Alternative[F].guard(t == p).charge(COMPARISON_COST)
+              charge[F](COMPARISON_COST) *> Alternative[F].guard(t == p)
             } else {
               spatialMatch(t, p)
             }
           case Remainder(_) =>
             //Remainders can't match non-concrete terms, because they can't be captured.
             //They match everything that's concrete though.
-            Alternative[F]
-              .guard(lf.locallyFree(t, 0).isEmpty)
-              .charge(COMPARISON_COST)
+            charge[F](COMPARISON_COST) *> Alternative[F].guard(lf.locallyFree(t, 0).isEmpty)
         }
         isolateState[F, FreeMap](matchEffect).attemptOpt
       }
@@ -354,9 +352,9 @@ trait SpatialMatcherInstances {
       if (!pattern.connectiveUsed) {
         val cost = equalityCheckCost(pattern, target)
         if (pattern == target)
-          ().pure[NonDetFreeMapWithCost].charge(cost)
+          charge[F](cost) *> ().pure[F]
         else {
-          MonoidK[F].empty[Unit].charge(cost)
+          charge[F](cost) *> MonoidK[F].empty[Unit]
         }
       } else {
 
@@ -453,16 +451,16 @@ trait SpatialMatcherInstances {
     fromFunction[Bundle, Bundle] { (target, pattern) =>
       val cost = equalityCheckCost(target, pattern)
       if (pattern == target)
-        ().pure[F].charge(cost)
+        charge[F](cost) *> ().pure[F]
       else {
-        MonoidK[F].empty[Unit].charge(cost)
+        charge[F](cost) *> MonoidK[F].empty[Unit]
       }
     }
 
   implicit val sendSpatialMatcherInstance: SpatialMatcher[Send, Send] = fromFunction[Send, Send] {
     (target, pattern) =>
       if (target.persistent != pattern.persistent)
-        MonoidK[F].empty[Unit].charge(COMPARISON_COST)
+        charge[F](COMPARISON_COST) *> MonoidK[F].empty[Unit]
       else
         for {
           _ <- spatialMatch(target.chan, pattern.chan)
@@ -473,7 +471,7 @@ trait SpatialMatcherInstances {
   implicit val receiveSpatialMatcherInstance: SpatialMatcher[Receive, Receive] =
     fromFunction[Receive, Receive] { (target, pattern) =>
       if (target.persistent != pattern.persistent)
-        MonoidK[F].empty[Unit].charge(COMPARISON_COST)
+        charge[F](COMPARISON_COST) *> MonoidK[F].empty[Unit]
       else
         for {
           _ <- listMatchSingle[ReceiveBind](target.binds, pattern.binds)
@@ -484,9 +482,9 @@ trait SpatialMatcherInstances {
   implicit val newSpatialMatcherInstance: SpatialMatcher[New, New] = fromFunction[New, New] {
     (target, pattern) =>
       if (target.bindCount == pattern.bindCount)
-        spatialMatch(target.p, pattern.p).charge(COMPARISON_COST)
+        charge[F](COMPARISON_COST) *> spatialMatch(target.p, pattern.p)
       else
-        MonoidK[F].empty[Unit].charge(COMPARISON_COST)
+        charge[F](COMPARISON_COST) *> MonoidK[F].empty[Unit]
   }
 
   implicit val exprSpatialMatcherInstance: SpatialMatcher[Expr, Expr] = fromFunction[Expr, Expr] {
@@ -520,9 +518,9 @@ trait SpatialMatcherInstances {
         case (EVarBody(EVar(vp)), EVarBody(EVar(vt))) =>
           val cost = equalityCheckCost(vp, vt)
           if (vp == vt)
-            ().pure[F].charge(cost)
+            charge[F](cost) *> ().pure[F]
           else
-            MonoidK[F].empty[Unit].charge(cost)
+            charge[F](cost) *> MonoidK[F].empty[Unit]
         case (ENotBody(ENot(t)), ENotBody(ENot(p))) => spatialMatch(t, p)
         case (ENegBody(ENeg(t)), ENegBody(ENeg(p))) => spatialMatch(t, p)
         case (EMultBody(EMult(t1, t2)), EMultBody(EMult(p1, p2))) =>
@@ -579,7 +577,7 @@ trait SpatialMatcherInstances {
     fromFunction[GPrivate, GPrivate] { (target, pattern) =>
       if (target == pattern) {
         val cost = equalityCheckCost(target, pattern)
-        ().pure[F].charge(cost)
+        charge[F](cost) *> ().pure[F]
       } else
         MonoidK[F].empty
     }
@@ -592,7 +590,7 @@ trait SpatialMatcherInstances {
             .zip(pattern.patterns)
             .map(x => equalityCheckCost(x._1, x._2))
             .foldLeft(Cost(0))(_ + _)
-        MonoidK[F].empty.charge(cost)
+        charge[F](cost) *> MonoidK[F].empty
       } else
         spatialMatch(target.source, pattern.source)
     }
@@ -601,7 +599,7 @@ trait SpatialMatcherInstances {
     fromFunction[MatchCase, MatchCase] { (target, pattern) =>
       if (target.pattern != pattern.pattern) {
         val cost: Cost = equalityCheckCost(target.pattern, pattern.pattern)
-        MonoidK[F].empty.charge(cost)
+        charge[F](cost) *> MonoidK[F].empty
       } else
         spatialMatch(target.source, pattern.source)
     }
