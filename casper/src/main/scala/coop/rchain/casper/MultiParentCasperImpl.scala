@@ -35,7 +35,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
     postGenesisStateHash: StateHash,
     shardId: String,
     blockProcessingLock: Semaphore[F]
-)(implicit cell: Cell[F, CasperState], scheduler: Scheduler)
+)(implicit state: Cell[F, CasperState], scheduler: Scheduler)
     extends MultiParentCasper[F] {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
@@ -160,13 +160,14 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
     for {
       b                  <- ProtoUtil.unsafeGetBlock[F](finalizedChild)
       deploys            = b.body.get.deploys.map(_.deploy.get).toList
-      state              <- Cell[F, CasperState].read
-      initialHistorySize = state.deployHistory.size
+      stateBefore        <- Cell[F, CasperState].read
+      initialHistorySize = stateBefore.deployHistory.size
       _ <- Cell[F, CasperState].modify { s =>
             s.copy(deployHistory = s.deployHistory -- deploys).pure[F]
           }
 
-      deploysRemoved = initialHistorySize - state.deployHistory.size
+      stateAfter     <- Cell[F, CasperState].read
+      deploysRemoved = initialHistorySize - stateAfter.deployHistory.size
       _ <- Log[F].info(
             s"Removed $deploysRemoved deploys from deploy history as we finalized block ${PrettyPrinter
               .buildString(finalizedChild)}."
