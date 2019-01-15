@@ -99,7 +99,12 @@ sealed abstract class MultiParentCasperInstances {
                                case Right(Some(hash)) => hash.pure[F]
                              }
       blockProcessingLock <- Semaphore[F](1)
-    } yield
+      casperState <- Cell.mvarCell[F, CasperState](
+                      CasperState(Set.empty[BlockMessage], Set.empty[Deploy])
+                    )
+
+    } yield {
+      implicit val state = casperState
       new MultiParentCasperImpl[F](
         runtimeManager,
         validatorId,
@@ -108,4 +113,5 @@ sealed abstract class MultiParentCasperInstances {
         shardId,
         blockProcessingLock
       )
+    }
 }

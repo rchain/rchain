@@ -1608,7 +1608,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _               <- nodes(2).receive()
 
       _     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF genesisWithEqualBonds
-      state <- nodes(0).casperEff.casperState.get
+      state <- nodes(0).casperState.read
       _     = state.deployHistory.size should be(2)
 
       createBlock6Result <- nodes(2).casperEff
@@ -1619,7 +1619,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _               <- nodes(1).receive()
 
       _     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block1
-      state <- nodes(0).casperEff.casperState.get
+      state <- nodes(0).casperState.read
       _     = state.deployHistory.size should be(1)
 
       createBlock7Result <- nodes(0).casperEff
@@ -1639,7 +1639,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _               <- nodes(2).receive()
 
       _     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block3
-      state <- nodes(0).casperEff.casperState.get
+      state <- nodes(0).casperState.read
       _     = state.deployHistory.size should be(2)
 
       _ <- nodes.map(_.tearDown()).toList.sequence
