@@ -288,9 +288,9 @@ trait SpatialMatcherInstances {
         case ConnAndBody(ConnectiveBody(ps)) =>
           ps.toList.traverse_(p => spatialMatch(target, p))
         case ConnOrBody(ConnectiveBody(ps)) =>
-          val freeMap = _freeMap[NonDetFreeMapWithCost]
+          val freeMap = _freeMap[F]
           val allMatches = for {
-            p       <- NonDetFreeMapWithCost.fromStream(ps.toStream)
+            p       <- F.fromStream(ps.toStream)
             matches <- freeMap.get
             _       <- spatialMatch(target, p)
             _       <- freeMap.set(matches)
@@ -383,10 +383,10 @@ trait SpatialMatcherInstances {
         def matchConnectiveWithBounds(
             target: Par,
             labeledConnective: (Connective, (ParCount, ParCount), (ParCount, ParCount))
-        ): NonDetFreeMapWithCost[Par] = {
+        ): F[Par] = {
           val (con, bounds, remainders) = labeledConnective
           for {
-            sp <- NonDetFreeMapWithCost.fromStream(
+            sp <- F.fromStream(
                    subPars(target, bounds._1, bounds._2, remainders._1, remainders._2)
                  )
             _ <- spatialMatch(sp._1, con)
