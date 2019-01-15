@@ -67,15 +67,15 @@ class ManyValidatorsTest
                        HashMap.empty[BlockHash, BlockMessage],
                        tips.toIndexedSeq
                      )(Sync[Task], blockStore, newIndexedBlockDagStorage)
-      logEff            = new LogStub[Task]
-      casperRef         <- MultiParentCasperRef.of[Task]
-      _                 <- casperRef.set(casperEffect)
-      turanOracleEffect = SafetyOracle.turanOracle[Task]
+      logEff             = new LogStub[Task]
+      casperRef          <- MultiParentCasperRef.of[Task]
+      _                  <- casperRef.set(casperEffect)
+      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
       result <- BlockAPI.showBlocks[Task](Int.MaxValue)(
                  Monad[Task],
                  casperRef,
                  logEff,
-                 turanOracleEffect,
+                 cliqueOracleEffect,
                  blockStore
                )
     } yield result

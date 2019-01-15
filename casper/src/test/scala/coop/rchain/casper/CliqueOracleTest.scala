@@ -8,6 +8,8 @@ import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
+import org.scalatest._
+import org.scalatest.Matchers._
 
 import scala.collection.immutable.{HashMap, HashSet}
 
@@ -17,7 +19,7 @@ class CliqueOracleTest
     with BlockGenerator
     with BlockDagStorageFixture {
 
-  behavior of "Turan Oracle"
+  behavior of "Clique Oracle"
 
   implicit val logEff = new LogStub[Task]
 
@@ -30,7 +32,7 @@ class CliqueOracleTest
       val v2Bond = Bond(v2, 3)
       val bonds  = Seq(v1Bond, v2Bond)
 
-      implicit val turanOracleEffect = SafetyOracle.turanOracle[Task]
+      implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
 
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
@@ -78,13 +80,13 @@ class CliqueOracleTest
              )
         dag                   <- blockDagStorage.getRepresentation
         genesisFaultTolerance <- SafetyOracle[Task].normalizedFaultTolerance(dag, genesis.blockHash)
-        _                     = assert(genesisFaultTolerance == 1)
+        _                     = assert(genesisFaultTolerance === 1f +- 0.01f)
         b2FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b2.blockHash)
-        _                     = assert(b2FaultTolerance == 1)
+        _                     = assert(b2FaultTolerance === 1f +- 0.01f)
         b3FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b3.blockHash)
-        _                     = assert(b3FaultTolerance == -1)
+        _                     = assert(b3FaultTolerance === -1f +- 0.01f)
         b4FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b4.blockHash)
-        result                = assert(b4FaultTolerance == -0.2f) // Clique oracle would be 0.2f
+        result                = assert(b4FaultTolerance === 0.2f +- 0.01f)
       } yield result
   }
 
@@ -99,7 +101,7 @@ class CliqueOracleTest
       val v3Bond = Bond(v3, 15)
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
-      implicit val turanOracleEffect = SafetyOracle.turanOracle[Task]
+      implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
         b2 <- createBlock[Task](
@@ -148,13 +150,13 @@ class CliqueOracleTest
         dag <- blockDagStorage.getRepresentation
 
         genesisFaultTolerance <- SafetyOracle[Task].normalizedFaultTolerance(dag, genesis.blockHash)
-        _                     = assert(genesisFaultTolerance == 1)
+        _                     = assert(genesisFaultTolerance === 1f +- 0.01f)
         b2FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b2.blockHash)
-        _                     = assert(b2FaultTolerance == -0.5f)
+        _                     = assert(b2FaultTolerance === -1f / 6 +- 0.01f)
         b3FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b3.blockHash)
-        _                     = assert(b3FaultTolerance == -1f)
+        _                     = assert(b3FaultTolerance === -1f +- 0.01f)
         b4FaultTolerance      <- SafetyOracle[Task].normalizedFaultTolerance(dag, b4.blockHash)
-        result                = assert(b4FaultTolerance == -0.5f)
+        result                = assert(b4FaultTolerance === -1f / 6 +- 0.01f)
       } yield result
   }
 }

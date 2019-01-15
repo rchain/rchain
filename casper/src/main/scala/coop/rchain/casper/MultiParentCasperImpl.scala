@@ -168,6 +168,13 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
           )
     } yield ()
 
+  /*
+   * On the first pass, block B is finalized if B's main parent block is finalized
+   * and the safety oracle says B's normalized fault tolerance is above the threshold.
+   * On the second pass, block B is finalized if any of B's children blocks are finalized.
+   *
+   * TODO: Implement the second pass in BlockAPI
+   */
   private def isGreaterThanFaultToleranceThreshold(
       dag: BlockDagRepresentation[F],
       blockHash: BlockHash
