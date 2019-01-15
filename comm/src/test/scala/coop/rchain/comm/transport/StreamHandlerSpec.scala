@@ -88,6 +88,7 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       val err: Throwable = handleStreamErr(stream, circuitBreaker = alwaysBreak)
       // then
       err.getMessage shouldBe ("Circuit was broken")
+      tempFolder.toFile.list() should be(empty)
     }
 
   }

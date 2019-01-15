@@ -1,7 +1,9 @@
 package coop.rchain.comm.transport
 
 import java.util.UUID
+import coop.rchain.shared.Log
 import coop.rchain.shared.GracefulClose._
+import coop.rchain.shared.PathOps._
 import coop.rchain.catscontrib.ski._
 import java.io.FileOutputStream
 import java.nio.file.{Files, Path}
@@ -39,7 +41,7 @@ object StreamHandler {
       folder: Path,
       stream: Observable[Chunk],
       circuitBreaker: CircuitBreaker
-  ): Task[Either[Throwable, StreamMessage]] =
+  )(implicit log: Log[Task]): Task[Either[Throwable, StreamMessage]] =
     (init(folder)
       .bracket { initStmd =>
         (collect(initStmd, stream, circuitBreaker) >>= toResult).value
@@ -58,7 +60,7 @@ object StreamHandler {
       init: Streamed,
       stream: Observable[Chunk],
       circuitBreaker: CircuitBreaker
-  ): EitherT[Task, Throwable, Streamed] = {
+  )(implicit log: Log[Task]): EitherT[Task, Throwable, Streamed] = {
 
     def collectStream = stream.foldWhileLeftL(init) {
       case (stmd, Chunk(Chunk.Content.Header(ChunkHeader(sender, typeId, compressed, cl)))) =>
@@ -81,9 +83,10 @@ object StreamHandler {
           Left(stmd.copy(readSoFar = readSoFar))
     }
 
-    EitherT(collectStream.attempt.map {
-      case Right(stmd) if stmd.circuitBroken => Left(new RuntimeException("Circuit was broken"))
-      case res                               => res
+    EitherT(collectStream.attempt >>= {
+      case Right(stmd) if stmd.circuitBroken =>
+        stmd.path.deleteSingleFile[Task].as(Left(new RuntimeException("Circuit was broken")))
+      case res => res.pure[Task]
     })
 
   }
