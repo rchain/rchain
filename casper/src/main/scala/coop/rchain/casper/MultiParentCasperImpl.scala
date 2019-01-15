@@ -46,13 +46,13 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
 
   private val emptyStateHash = runtimeManager.emptyStateHash
 
-  case class CasperState(blockBuffer: Set[BlockMessage])
+  case class CasperState(blockBuffer: Set[BlockMessage], deployHistory: Set[Deploy])
 
   // TODO: move this outside so MultiParentCasperImpl can become a type class
-  private implicit val casperState = new DefaultMonadState[F, CasperState] {
+  private[casper] implicit val casperState = new DefaultMonadState[F, CasperState] {
     val monad: Monad[F] = implicitly[Monad[F]]
     // TODO: move other mutable collections inside
-    private var state = CasperState(Set.empty[BlockMessage])
+    private var state = CasperState(Set.empty[BlockMessage], Set.empty[Deploy])
 
     def get: F[CasperState]          = state.pure[F]
     def set(s: CasperState): F[Unit] = (state = s).pure[F].map(_ => ())
@@ -60,8 +60,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
 
   private val dependencyDagState =
     new AtomicMonadState[F, DoublyLinkedDag[BlockHash]](AtomicAny(BlockDependencyDag.empty))
-
-  private[casper] val deployHist: mutable.HashSet[Deploy] = new mutable.HashSet[Deploy]()
 
   // Used to keep track of when other validators detect the equivocation consisting of the base block
   // at the sequence number identified by the (validator, base equivocation sequence number) pair of
@@ -170,15 +168,15 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
 
   private def removeDeploysInFinalizedBlock(finalizedChild: BlockHash): F[Unit] =
     for {
-      b       <- ProtoUtil.unsafeGetBlock[F](finalizedChild)
-      deploys = b.body.get.deploys.map(_.deploy.get)
-      deploysRemoved <- deploys.toList.foldM(0)(
-                         (count, deploy) =>
-                           Sync[F].ifM(Sync[F].delay { deployHist.remove(deploy) })(
-                             (count + 1).pure[F],
-                             count.pure[F]
-                           )
-                       )
+      b                  <- ProtoUtil.unsafeGetBlock[F](finalizedChild)
+      deploys            = b.body.get.deploys.map(_.deploy.get).toList
+      state              <- casperState.get
+      initialHistorySize = state.deployHistory.size
+      _ <- casperState.modify { s =>
+            s.copy(deployHistory = s.deployHistory -- deploys)
+          }
+
+      deploysRemoved = initialHistorySize - state.deployHistory.size
       _ <- Log[F].info(
             s"Removed $deploysRemoved deploys from deploy history as we finalized block ${PrettyPrinter
               .buildString(finalizedChild)}."
@@ -221,10 +219,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
 
   def addDeploy(deploy: Deploy): F[Unit] =
     for {
-      _ <- Sync[F].delay {
-            deployHist += deploy
+      _ <- casperState.modify { s =>
+            s.copy(deployHistory = s.deployHistory + deploy)
           }
-      _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
+      _     <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
     } yield ()
 
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockMessage]] =
@@ -284,16 +282,20 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
   // TODO: Optimize for large number of deploys accumulated over history
   private def remDeploys(dag: BlockDagRepresentation[F], p: Seq[BlockMessage]): F[Seq[Deploy]] =
     for {
-      result <- Capture[F].capture { deployHist.clone() }
-      _ <- DagOperations
+      state <- casperState.get
+      hist  = state.deployHistory
+      d <- DagOperations
             .bfTraverseF[F, BlockMessage](p.toList)(ProtoUtil.unsafeGetParents[F])
-            .foreach(
-              b =>
-                Capture[F].capture {
-                  b.body.foreach(_.deploys.flatMap(_.deploy).foreach(result -= _))
-                }
-            )
-    } yield result.toSeq
+            .map { b =>
+              b.body
+                .map(_.deploys.flatMap(_.deploy))
+                .toSeq
+                .flatten
+            }
+            .toList
+      deploy = d.flatten
+      result = hist -- deploy
+    } yield (result.toSeq)
 
   private def createProposal(
       dag: BlockDagRepresentation[F],
