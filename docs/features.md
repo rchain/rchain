@@ -129,7 +129,7 @@
 * `ceremonyMaster` sends `ApprovedBlock` to `validatorA` and `validatorB`
 * `validatorA` and `validatorB` transition to ApprovedBlockReceivedHandler
 * `ceremonyMaster`, `validatorA` and `validatorB` tip points to block (genesis) where it has no parent and Bonds holds `validatorA` and `validatorB`
-* `readOnlyA` **never** transitions to `ApprovedBlockReceivedHandler`
+* `readOnlyA` transitions to `ApprovedBlockReceivedHandler`
 
 
 #### A NOT successful genesis ceremony (not enough sigs)
