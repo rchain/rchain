@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter.matcher
 import cats.mtl.lifting.MonadLayerControl
-import cats.{~>, Applicative, Functor, Monad, MonadError, MonoidK}
+import cats.{~>, Alternative, Applicative, Functor, Monad, MonadError, MonoidK}
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, SNil, Step}
 
@@ -62,6 +62,15 @@ object StreamT extends StreamTInstances0 {
       case SCons(head, tail) => F.map(run(tail))(t => head +: t)
     }
   }
+
+  def dropTail[F[_]: Monad, A](fa: StreamT[F, A]): StreamT[F, A] = {
+    val F = Monad[F]
+    val next: F[Step[F, A]] = F.map(fa.next) {
+      case SCons(head, _) => SCons(head, empty)
+      case nil @ SNil()   => nil
+    }
+    StreamT(next)
+  }
 }
 
 trait StreamTInstances0 extends StreamTInstances1 {
@@ -74,23 +83,24 @@ trait StreamTInstances0 extends StreamTInstances1 {
       streamTMonad[G]
   }
 
-  implicit def streamTMonoidK[F[_]: Monad]: MonoidK[StreamT[F, ?]] = new MonoidK[StreamT[F, ?]] {
+  implicit def streamTAlternative[F[_]: Monad]: Alternative[StreamT[F, ?]] =
+    new Alternative[StreamT[F, ?]] with StreamTMonad[F] {
 
-    private val F = Monad[F]
+      override val F = Monad[F]
 
-    override def empty[A]: StreamT[F, A] = StreamT.empty
+      override def empty[A]: StreamT[F, A] = StreamT.empty
 
-    override def combineK[A](x: StreamT[F, A], y: StreamT[F, A]): StreamT[F, A] = {
-      val next: F[Step[F, A]] = F.flatMap(x.next) {
-        case SNil()            => y.next
-        case SCons(head, tail) => F.pure(SCons(head, combineK(tail, y)))
+      override def combineK[A](x: StreamT[F, A], y: StreamT[F, A]): StreamT[F, A] = {
+        val next: F[Step[F, A]] = F.flatMap(x.next) {
+          case SNil()            => y.next
+          case SCons(head, tail) => F.pure(SCons(head, combineK(tail, y)))
+        }
+        StreamT(next)
       }
-      StreamT(next)
+
     }
 
-  }
-
-  implicit def streamTMonad[F[_]](implicit F0: Monad[F]): Monad[StreamT[F, ?]] =
+  private[matcher] def streamTMonad[F[_]](implicit F0: Monad[F]): Monad[StreamT[F, ?]] =
     new StreamTMonad[F]() {
       implicit val F = F0
     }
@@ -149,6 +159,11 @@ trait StreamTInstances2 {
   private[matcher] type of[F[_], G[_]] = { type l[A] = F[G[A]] }
   private[matcher] type StreamTC[M[_]] = { type l[A] = StreamT[M, A] }
 
+  implicit def catsDataMonadErrorMonadForStreamT[F[_]](
+      implicit F0: Monad[F]
+  ): MonadError[StreamT[F, ?], Unit] =
+    new StreamTMonadErrorMonad[F] { implicit val F = F0 }
+
   implicit final def streamMonadLayerControl[M[_]](
       implicit M: Monad[M]
   ): MonadLayerControl.Aux[StreamTC[M]#l, M, Stream] =
@@ -174,4 +189,18 @@ trait StreamTInstances2 {
 
       def zero[A](state: Stream[A]): Boolean = state.isEmpty
     }
+}
+
+private trait StreamTMonadErrorMonad[F[_]]
+    extends MonadError[StreamT[F, ?], Unit]
+    with StreamTMonad[F] {
+  implicit def F: Monad[F]
+
+  override def raiseError[A](e: Unit): StreamT[F, A] = StreamT.empty
+
+  override def handleErrorWith[A](fa: StreamT[F, A])(f: Unit => StreamT[F, A]): StreamT[F, A] =
+    StreamT(F.flatMap(fa.next) {
+      case s @ SCons(_, _) => F.pure(s)
+      case SNil()          => f(()).next
+    })
 }

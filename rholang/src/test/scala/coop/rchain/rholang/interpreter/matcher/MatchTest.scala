@@ -11,7 +11,7 @@ import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rholang.interpreter.PrettyPrinter
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
-import coop.rchain.rholang.interpreter.matcher.OptionalFreeMapWithCost.toOptionalFreeMapWithCostOps
+import coop.rchain.rholang.interpreter.matcher.NonDetFreeMapWithCost.toNonDetFreeMapWithCostOps
 import monix.eval.Coeval
 import org.scalactic.TripleEqualsSupport
 import org.scalatest._
@@ -38,7 +38,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
       _.values.foreach((v: Par) => assertSorted(v, "expected captured term"))
     )
     val intermediate: Either[OutOfPhlogistonsError.type, (Cost, Option[(FreeMap, Unit)])] =
-      spatialMatch(target, pattern).runWithCost(Cost(Integer.MAX_VALUE))
+      spatialMatch(target, pattern).runFirstWithCost(Cost(Integer.MAX_VALUE))
     assert(intermediate.isRight)
     val result = intermediate.right.get._2.map(_._1)
     assert(prettyCaptures(result) == prettyCaptures(expectedCaptures))
@@ -918,7 +918,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
     val target: Par = EList(Seq(GInt(1), GInt(2), GInt(3)))
     val pattern: Par =
       EList(Seq(GInt(1), EVar(FreeVar(0)), EVar(FreeVar(1))), connectiveUsed = true)
-    val res = spatialMatch(target, pattern).runWithCost(Cost(0))
+    val res = spatialMatch(target, pattern).runFirstWithCost(Cost(0))
     res should be(Left(OutOfPhlogistonsError))
   }
 }
