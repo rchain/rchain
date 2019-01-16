@@ -82,6 +82,12 @@ package object matcher {
     implicit def toNonDetFreeMapWithCostOps[A](s: NonDetFreeMapWithCost[A]) =
       new NonDetFreeMapWithCostOps[A](s)
 
+    implicit val splittable: Splittable[NonDetFreeMapWithCost] =
+      new Splittable[NonDetFreeMapWithCost] {
+        override def takeFirst[A](fa: NonDetFreeMapWithCost[A]): NonDetFreeMapWithCost[A] =
+          fa.takeFirst()
+      }
+
   }
 
   def emptyMap: FreeMap = Map.empty[Int, Par]
