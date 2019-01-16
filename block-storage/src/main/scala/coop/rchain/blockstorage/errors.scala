@@ -1,6 +1,6 @@
 package coop.rchain.blockstorage
-import java.io.IOException
-import java.nio.file.Path
+import java.io.{FileNotFoundException, IOException}
+import java.nio.file.{NotDirectoryException, Path}
 
 import cats.data.EitherT
 import coop.rchain.casper.protocol.BlockMessage
@@ -15,14 +15,17 @@ final case class BlockSenderIsMalformed(block: BlockMessage)                  ex
 
 sealed abstract class StorageIOError extends StorageError
 
-final case class FileSeekFailed(exception: IOException)         extends StorageIOError
-final case class IntReadFailed(exception: IOException)          extends StorageIOError
-final case class ByteArrayReadFailed(exception: IOException)    extends StorageIOError
-final case class IntWriteFailed(exception: IOException)         extends StorageIOError
-final case class ByteArrayWriteFailed(exception: IOException)   extends StorageIOError
-final case class ClearFileFailed(exception: IOException)        extends StorageIOError
-final case class ClosingFailed(exception: IOException)          extends StorageIOError
-final case class UnexpectedIOStorageError(throwable: Throwable) extends StorageIOError
+final case class FileSeekFailed(exception: IOException)               extends StorageIOError
+final case class IntReadFailed(exception: IOException)                extends StorageIOError
+final case class ByteArrayReadFailed(exception: IOException)          extends StorageIOError
+final case class IntWriteFailed(exception: IOException)               extends StorageIOError
+final case class ByteArrayWriteFailed(exception: IOException)         extends StorageIOError
+final case class ClearFileFailed(exception: IOException)              extends StorageIOError
+final case class ClosingFailed(exception: IOException)                extends StorageIOError
+final case class FileNotFound(exception: FileNotFoundException)       extends StorageIOError
+final case class FileSecurityViolation(exception: SecurityException)  extends StorageIOError
+final case class FileIsNotDirectory(exception: NotDirectoryException) extends StorageIOError
+final case class UnexpectedIOStorageError(throwable: Throwable)       extends StorageIOError
 
 object StorageError {
   type StorageErr[A]        = Either[StorageError, A]
@@ -56,6 +59,21 @@ object StorageError {
       case ByteArrayWriteFailed(e) =>
         val msg = Option(e.getMessage).getOrElse("")
         s"Byte array write failed: $msg"
+      case ClearFileFailed(e) =>
+        val msg = Option(e.getMessage).getOrElse("")
+        s"File clearing failed: $msg"
+      case ClosingFailed(e) =>
+        val msg = Option(e.getMessage).getOrElse("")
+        s"File closing failed: $msg"
+      case FileNotFound(e) =>
+        val msg = Option(e.getMessage).getOrElse("")
+        s"File not found: $msg"
+      case FileSecurityViolation(e) =>
+        val msg = Option(e.getMessage).getOrElse("")
+        s"Security manager denied access to file: $msg"
+      case FileIsNotDirectory(e) =>
+        val msg = Option(e.getMessage).getOrElse("")
+        s"File is not a directory: $msg"
       case UnexpectedIOStorageError(t) =>
         val msg = Option(t.getMessage).getOrElse("")
         s"Unexpected error ocurred during reading: $msg"
