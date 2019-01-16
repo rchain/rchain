@@ -4,7 +4,6 @@ import cats._
 import cats.implicits._
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, Sync}
-import cats.mtl._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import coop.rchain.catscontrib._
@@ -22,14 +21,14 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
-import monix.execution.atomic.AtomicAny
 
 import scala.collection.mutable
 
 case class CasperState(
     blockBuffer: Set[BlockMessage] = Set.empty[BlockMessage],
     deployHistory: Set[Deploy] = Set.empty[Deploy],
-    invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash]
+    invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash],
+    dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty
 )
 
 class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ToAbstractContext](
@@ -50,9 +49,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
   private val version = 1L
 
   private val emptyStateHash = runtimeManager.emptyStateHash
-
-  private val dependencyDagState =
-    new AtomicMonadState[F, DoublyLinkedDag[BlockHash]](AtomicAny(BlockDependencyDag.empty))
 
   // Used to keep track of when other validators detect the equivocation consisting of the base block
   // at the sequence number identified by the (validator, base equivocation sequence number) pair of
@@ -112,12 +108,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
             case MissingBlocks => ().pure[F]
             case _ =>
               Cell[F, CasperState].modify { s =>
-                s.copy(blockBuffer = (s.blockBuffer - b)).pure[F]
-              } *> dependencyDagState
-                .modify(
-                  blockBufferDependencyDag =>
-                    DoublyLinkedDagOperations.remove(blockBufferDependencyDag, b.blockHash)
-                )
+                s.copy(
+                    blockBuffer = (s.blockBuffer - b),
+                    dependencyDag = DoublyLinkedDagOperations.remove(s.dependencyDag, b.blockHash)
+                  )
+                  .pure[F]
+              }
           }
       _ <- attempt match {
             case MissingBlocks           => ().pure[F]
@@ -419,11 +415,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
                                                        genesis
                                                      )
                                                )
-      dependencyDag <- dependencyDagState.get
       postEquivocationCheckStatus <- postNeglectedEquivocationCheckStatus.joinRight.traverse(
                                       _ =>
                                         EquivocationDetector
-                                          .checkEquivocations[F](dependencyDag, b, dag)
+                                          .checkEquivocations[F](state.dependencyDag, b, dag)
                                     )
       status = postEquivocationCheckStatus.joinRight.merge
       _      <- addEffects(status, b)
@@ -528,13 +523,14 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
     } yield ()
 
   private def handleMissingDependency(hash: BlockHash, childBlock: BlockMessage): F[Unit] =
-    for {
-      _ <- dependencyDagState.modify(
-            dependencyDag =>
-              DoublyLinkedDagOperations
-                .add[BlockHash](dependencyDag, hash, childBlock.blockHash)
+    Cell[F, CasperState].modify(
+      s =>
+        s.copy(
+            dependencyDag = DoublyLinkedDagOperations
+              .add[BlockHash](s.dependencyDag, hash, childBlock.blockHash)
           )
-    } yield ()
+          .pure[F]
+    )
 
   private def requestMissingDependency(hash: BlockHash) =
     CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash))
@@ -559,9 +555,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
 
   private def reAttemptBuffer: F[Unit] =
     for {
-      dependencyDag  <- dependencyDagState.get
-      dependencyFree = dependencyDag.dependencyFree
       state          <- Cell[F, CasperState].read
+      dependencyFree = state.dependencyDag.dependencyFree
       dependencyFreeBlocks = state.blockBuffer
         .filter(block => dependencyFree.contains(block.blockHash))
         .toList
@@ -574,7 +569,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
             ().pure[F]
           } else {
             for {
-              _ <- removeAdded(dependencyDag, attempts)
+              _ <- removeAdded(state.dependencyDag, attempts)
               _ <- reAttemptBuffer
             } yield ()
           }
@@ -607,19 +602,20 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
       successfulAdds: List[(BlockMessage, BlockStatus)]
   ): F[Unit] =
-    dependencyDagState.set(
-      successfulAdds.foldLeft(blockBufferDependencyDag) {
-        case (acc, successfulAdd) =>
-          DoublyLinkedDagOperations.remove(acc, successfulAdd._1.blockHash)
-      }
-    )
+    Cell[F, CasperState].modify { s =>
+      s.copy(dependencyDag = successfulAdds.foldLeft(blockBufferDependencyDag) {
+          case (acc, successfulAdd) =>
+            DoublyLinkedDagOperations.remove(acc, successfulAdd._1.blockHash)
+        })
+        .pure[F]
+    }
 
   def getRuntimeManager: F[Option[RuntimeManager[Task]]] = Applicative[F].pure(Some(runtimeManager))
 
   def fetchDependencies: F[Unit] =
     for {
-      dependencyDag <- dependencyDagState.get
-      _ <- dependencyDag.dependencyFree.toList.traverse { hash =>
+      s <- Cell[F, CasperState].read
+      _ <- s.dependencyDag.dependencyFree.toList.traverse { hash =>
             CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash))
           }
     } yield ()
