@@ -1,7 +1,7 @@
 addSbtPlugin("com.thesamet" % "sbt-protoc" % "0.99.19")
 // Yes it's weird to do the following, but it's what is mandated by the scalapb documentation
 libraryDependencies += "com.thesamet.scalapb" %% "compilerplugin" % "0.7.4"
-
+addSbtPlugin("com.typesafe.sbt"       % "sbt-license-report"    % "1.2.0")
 addSbtPlugin("com.geirsson"           %  "sbt-scalafmt"         % "1.6.0-RC4")
 addSbtPlugin("com.eed3si9n"           %  "sbt-assembly"         % "0.14.9")
 addSbtPlugin("org.scoverage"          %  "sbt-scoverage"        % "1.5.1")
