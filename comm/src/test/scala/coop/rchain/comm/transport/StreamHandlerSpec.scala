@@ -93,6 +93,23 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       tempFolder.toFile.list() should be(empty)
     }
 
+    it("should stop processing a stream if stream is missing part of header") {
+      // given
+      val streamWithIncompleteHeader: Observable[Chunk] =
+        Observable.fromIterator(createStreamIterator().map(_.toList).map {
+          case header :: data =>
+            val newHeaderContent: Chunk.Content =
+              Chunk.Content.Header(header.content.header.get.copy(sender = None))
+            val incompleteHeader = header.copy(content = newHeaderContent)
+            (incompleteHeader :: data).toIterator
+        })
+      // when
+      val err: Throwable = handleStreamErr(streamWithIncompleteHeader)
+      // then
+      err.getMessage should startWith("received not full stream message, will not process")
+      tempFolder.toFile.list() should be(empty)
+    }
+
     it("should stop processing a stream if stream is missing header") {
       // given
       val streamWithoutHeader: Observable[Chunk] =
