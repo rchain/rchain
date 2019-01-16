@@ -22,13 +22,20 @@ import coop.rchain.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
 
-import scala.collection.mutable
+/**
+  Encapsulates mutable state of the MultiParentCasperImpl
 
+  @param blockBuffer
+  @param deployHistory
+  @param invalidBlockTracker
+  @param equivocationsTracker: Used to keep track of when other validators detect the equivocation consisting of the base block at the sequence number identified by the (validator, base equivocation sequence number) pair of each EquivocationRecord.
+  */
 case class CasperState(
     blockBuffer: Set[BlockMessage] = Set.empty[BlockMessage],
     deployHistory: Set[Deploy] = Set.empty[Deploy],
     invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash],
-    dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty
+    dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty,
+    equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord]
 )
 
 class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ToAbstractContext](
@@ -49,12 +56,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
   private val version = 1L
 
   private val emptyStateHash = runtimeManager.emptyStateHash
-
-  // Used to keep track of when other validators detect the equivocation consisting of the base block
-  // at the sequence number identified by the (validator, base equivocation sequence number) pair of
-  // each EquivocationRecord.
-  private val equivocationsTracker: mutable.Set[EquivocationRecord] =
-    new mutable.HashSet[EquivocationRecord]()
 
   // TODO: Extract hardcoded fault tolerance threshold
   private val faultToleranceThreshold         = 0f
@@ -362,13 +363,16 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       .map(_.getOrElse(s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!"))
 
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
-    (equivocationsTracker
-      .map(_.equivocator)
-      .toSet
-      .flatMap(weights.get)
-      .sum
-      .toFloat / weightMapTotal(weights))
-      .pure[F]
+    for {
+      state   <- Cell[F, CasperState].read
+      tracker = state.equivocationsTracker
+    } yield
+      (tracker
+        .map(_.equivocator)
+        .toSet
+        .flatMap(weights.get)
+        .sum
+        .toFloat / weightMapTotal(weights))
 
   /*
    * TODO: Pass in blockDag. We should only call _blockDag.get at one location.
@@ -395,13 +399,13 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
                                _ => Validate.bondsCache[F](b, runtimeManager)
                              )
 
-      state <- Cell[F, CasperState].read
+      s <- Cell[F, CasperState].read
       postNeglectedInvalidBlockStatus <- postBondsCacheStatus.joinRight.traverse(
                                           _ =>
                                             Validate
                                               .neglectedInvalidBlock[F](
                                                 b,
-                                                state.invalidBlockTracker
+                                                s.invalidBlockTracker
                                               )
                                         )
       postNeglectedEquivocationCheckStatus <- postNeglectedInvalidBlockStatus.joinRight
@@ -409,7 +413,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
                                                  _ =>
                                                    EquivocationDetector
                                                      .checkNeglectedEquivocationsWithUpdate[F](
-                                                       equivocationsTracker,
                                                        b,
                                                        dag,
                                                        genesis
@@ -418,7 +421,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       postEquivocationCheckStatus <- postNeglectedEquivocationCheckStatus.joinRight.traverse(
                                       _ =>
                                         EquivocationDetector
-                                          .checkEquivocations[F](state.dependencyDag, b, dag)
+                                          .checkEquivocations[F](s.dependencyDag, b, dag)
                                     )
       status = postEquivocationCheckStatus.joinRight.merge
       _      <- addEffects(status, b)
@@ -438,18 +441,20 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
         } *> fetchMissingDependencies(block)
       }
       case AdmissibleEquivocation =>
-        Capture[F].capture {
-          val baseEquivocationBlockSeqNum = block.seqNum - 1
-          if (equivocationsTracker.exists {
+        val baseEquivocationBlockSeqNum = block.seqNum - 1
+
+        Cell[F, CasperState].modify { s =>
+          if (s.equivocationsTracker.exists {
                 case EquivocationRecord(validator, seqNum, _) =>
                   block.sender == validator && baseEquivocationBlockSeqNum == seqNum
               }) {
             // More than 2 equivocating children from base equivocation block and base block has already been recorded
+            s.pure[F]
           } else {
             val newEquivocationRecord =
               EquivocationRecord(block.sender, baseEquivocationBlockSeqNum, Set.empty[BlockHash])
-            equivocationsTracker.add(newEquivocationRecord)
-          }
+            s.copy(equivocationsTracker = s.equivocationsTracker + (newEquivocationRecord))
+          }.pure[F]
         } *>
           addToState(block) *> CommUtil.sendBlock[F](block) *> Log[F].info(
           s"Added admissible equivocation child block ${PrettyPrinter.buildString(block.blockHash)}"
