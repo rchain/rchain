@@ -1,0 +1,2 @@
+pyyaml>=4.2b1
+optparse-pretty==0.1.1
