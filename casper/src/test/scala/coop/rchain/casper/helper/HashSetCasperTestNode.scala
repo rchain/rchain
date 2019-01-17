@@ -68,7 +68,8 @@ class HashSetCasperTestNode[F[_]](
     val blockStore: BlockStore[F],
     val blockDagStorage: BlockDagStorage[F],
     val metricEff: Metrics[F],
-    val abF: ToAbstractContext[F]
+    val abF: ToAbstractContext[F],
+    val casperState: Cell[F, CasperState]
 ) {
 
   private val storageDirectory = Files.createTempDirectory(s"hash-set-casper-test-$name")
@@ -196,6 +197,7 @@ object HashSetCasperTestNode {
                           genesis
                         )(Monad[F], Concurrent[F], Sync[F], Log[F], blockStore)
       blockProcessingLock <- Semaphore[F](1)
+      casperState         <- Cell.mvarCell[F, CasperState](CasperState())
       node = new HashSetCasperTestNode[F](
         name,
         identity,
@@ -210,7 +212,17 @@ object HashSetCasperTestNode {
         blockProcessingLock,
         "rchain",
         createRuntime
-      )(scheduler, syncF, captureF, concurrentF, blockStore, blockDagStorage, metricEff, absF)
+      )(
+        scheduler,
+        syncF,
+        captureF,
+        concurrentF,
+        blockStore,
+        blockDagStorage,
+        metricEff,
+        absF,
+        casperState
+      )
       result <- node.initialize.map(_ => node)
     } yield result
   }
@@ -275,6 +287,9 @@ object HashSetCasperTestNode {
                                   genesis
                                 )(Monad[F], Concurrent[F], Sync[F], Log[F], blockStore)
               semaphore <- Semaphore[F](1)
+              casperState <- Cell.mvarCell[F, CasperState](
+                              CasperState(Set.empty[BlockMessage], Set.empty[Deploy])
+                            )
               node = new HashSetCasperTestNode[F](
                 n,
                 p,
@@ -297,7 +312,8 @@ object HashSetCasperTestNode {
                 blockStore,
                 blockDagStorage,
                 metricEff,
-                absF
+                absF,
+                casperState
               )
             } yield node
         }
