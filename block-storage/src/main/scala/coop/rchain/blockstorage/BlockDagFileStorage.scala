@@ -13,7 +13,6 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagFileStorage.{Checkpoint, CheckpointedDagInfo}
 import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.blockstorage.errors._
 import coop.rchain.blockstorage.util.BlockMessageUtil.{blockNumber, bonds, parentHashes}
 import coop.rchain.blockstorage.util.{BlockMessageUtil, Crc32, TopologicalSortUtil}
 import coop.rchain.blockstorage.util.byteOps._
@@ -637,10 +636,10 @@ object BlockDagFileStorage {
                      }) {
                    sortedCheckpoints.pure[F]
                  } else {
-                   Sync[F].raiseError(CheckpointsAreNotConsecutive(sortedCheckpoints))
+                   Sync[F].raiseError(CheckpointsAreNotConsecutive(sortedCheckpoints.map(_.path)))
                  }
                } else {
-                 Sync[F].raiseError(CheckpointsDoNotStartFromZero(sortedCheckpoints))
+                 Sync[F].raiseError(CheckpointsDoNotStartFromZero(sortedCheckpoints.map(_.path)))
                }
     } yield result
 

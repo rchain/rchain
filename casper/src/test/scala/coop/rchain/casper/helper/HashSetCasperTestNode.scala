@@ -10,6 +10,7 @@ import cats.{Applicative, ApplicativeError, Id, Monad}
 import coop.rchain.blockstorage._
 import coop.rchain.catscontrib._
 import coop.rchain.casper._
+import coop.rchain.casper.helper.BlockDagStorageTestFixture.mapSize
 import coop.rchain.casper.helper.HashSetCasperTestNode.Close
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
@@ -35,6 +36,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rspace.Context
 import coop.rchain.shared.{Cell, Log, StoreType}
 import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
@@ -180,11 +182,9 @@ object HashSetCasperTestNode {
 
     val blockDagDir   = BlockDagStorageTestFixture.blockDagStorageDir
     val blockStoreDir = BlockDagStorageTestFixture.blockStorageDir
-    implicit val blockStore =
-      LMDBBlockStore.create[F](
-        LMDBBlockStore.Config(path = blockStoreDir, mapSize = storageSize)
-      )
+    val env           = Context.env(blockStoreDir, mapSize)
     for {
+      blockStore <- FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
       blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
                           BlockDagFileStorage.Config(
                             blockDagDir.resolve("latest-messages-data"),
@@ -194,7 +194,7 @@ object HashSetCasperTestNode {
                             blockDagDir.resolve("checkpoints")
                           ),
                           genesis
-                        )
+                        )(Monad[F], Concurrent[F], Sync[F], Log[F], blockStore)
       blockProcessingLock <- Semaphore[F](1)
       node = new HashSetCasperTestNode[F](
         name,
@@ -261,11 +261,9 @@ object HashSetCasperTestNode {
 
             val blockDagDir   = BlockDagStorageTestFixture.blockDagStorageDir
             val blockStoreDir = BlockDagStorageTestFixture.blockStorageDir
-            implicit val blockStore =
-              LMDBBlockStore.create[F](
-                LMDBBlockStore.Config(path = blockStoreDir, mapSize = storageSize)
-              )
+            val env           = Context.env(blockStoreDir, mapSize)
             for {
+              blockStore <- FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
               blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
                                   BlockDagFileStorage.Config(
                                     blockDagDir.resolve("latest-messages-data"),
@@ -275,7 +273,7 @@ object HashSetCasperTestNode {
                                     blockDagDir.resolve("checkpoints")
                                   ),
                                   genesis
-                                )
+                                )(Monad[F], Concurrent[F], Sync[F], Log[F], blockStore)
               semaphore <- Semaphore[F](1)
               node = new HashSetCasperTestNode[F](
                 n,
