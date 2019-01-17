@@ -15,7 +15,7 @@ import coop.rchain.casper.util.rholang.{
   ProcessedDeployUtil,
   RuntimeManager
 }
-import coop.rchain.catscontrib.{Capture, ToAbstractContext}
+import coop.rchain.catscontrib.Capture
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.protocol.routing.Packet
@@ -25,11 +25,9 @@ import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.shared._
-import monix.eval.Task
 import monix.execution.Scheduler
 
 import scala.util.Try
-import scala.concurrent.duration.Duration
 
 /**
   * Validator side of the protocol defined in
@@ -38,7 +36,6 @@ import scala.concurrent.duration.Duration
 class BlockApproverProtocol(
     validatorId: ValidatorIdentity,
     deployTimestamp: Long,
-    runtimeManager: RuntimeManager[Task],
     bonds: Map[Array[Byte], Long],
     wallets: Seq[PreWallet],
     minimumBond: Long,
@@ -51,13 +48,14 @@ class BlockApproverProtocol(
 
   def unapprovedBlockPacketHandler[F[_]: Capture: Concurrent: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
       peer: PeerNode,
-      u: UnapprovedBlock
+      u: UnapprovedBlock,
+      runtimeManager: RuntimeManager[F]
   ): F[Unit] =
     if (u.candidate.isEmpty) {
       Log[F].warn("Candidate is not defined.")
     } else {
       val candidate = u.candidate.get
-      val validCandidate = BlockApproverProtocol
+      BlockApproverProtocol
         .validateCandidate(
           runtimeManager,
           candidate,
@@ -69,21 +67,22 @@ class BlockApproverProtocol(
           maximumBond,
           faucet
         )
-        .runSyncUnsafe(Duration.Inf)
-      validCandidate match {
-        case Right(_) =>
-          for {
-            local <- RPConfAsk[F].reader(_.local)
-            serializedApproval = BlockApproverProtocol
-              .getApproval(candidate, validatorId)
-              .toByteString
-            msg = Blob(local, Packet(transport.BlockApproval.id, serializedApproval))
-            _   <- TransportLayer[F].stream(Seq(peer), msg)
-            _   <- Log[F].info(s"Received expected candidate from $peer. Approval sent in response.")
-          } yield ()
-        case Left(errMsg) =>
-          Log[F].warn(s"Received unexpected candidate from $peer because: $errMsg")
-      }
+        .flatMap {
+          case Right(_) =>
+            for {
+              local <- RPConfAsk[F].reader(_.local)
+              serializedApproval = BlockApproverProtocol
+                .getApproval(candidate, validatorId)
+                .toByteString
+              msg = Blob(local, Packet(transport.BlockApproval.id, serializedApproval))
+              _   <- TransportLayer[F].stream(Seq(peer), msg)
+              _ <- Log[F].info(
+                    s"Received expected candidate from $peer. Approval sent in response."
+                  )
+            } yield ()
+          case Left(errMsg) =>
+            Log[F].warn(s"Received unexpected candidate from $peer because: $errMsg")
+        }
     }
 }
 

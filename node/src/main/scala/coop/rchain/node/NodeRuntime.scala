@@ -416,7 +416,12 @@ class NodeRuntime private[node] (
       def fromTask[A](fa: Task[A]): Effect[A] = fa.toEffect
     }
     casperPacketHandler <- CasperPacketHandler
-                            .of[Effect](conf.casper, defaultTimeout, runtimeManager, _.value)(
+                            .of[Effect](
+                              conf.casper,
+                              defaultTimeout,
+                              RuntimeManager.eitherTRuntimeManager(runtimeManager),
+                              _.value
+                            )(
                               labEff,
                               Metrics.eitherT(Monad[Task], metrics),
                               blockStore,
@@ -433,7 +438,6 @@ class NodeRuntime private[node] (
                               Log.eitherTLog(Monad[Task], log),
                               multiParentCasperRef,
                               blockDagStorage,
-                              abs,
                               scheduler
                             )
     packetHandler = PacketHandler.pf[Effect](casperPacketHandler.handle)(

@@ -13,12 +13,9 @@ import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.bonds
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.shared._
-import monix.eval.Task
-import monix.execution.Scheduler
 
 import scala.util.{Failure, Success, Try}
 
@@ -564,11 +561,11 @@ object Validate {
         false
       }
 
-  def transactions[F[_]: Sync: Log: BlockStore: ToAbstractContext](
+  def transactions[F[_]: Sync: Log: BlockStore](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       emptyStateHash: StateHash,
-      runtimeManager: RuntimeManager[Task]
+      runtimeManager: RuntimeManager[F]
   ): F[Either[BlockStatus, ValidBlock]] =
     for {
       maybeStateHash <- InterpreterUtil
@@ -609,14 +606,14 @@ object Validate {
     }
   }
 
-  def bondsCache[F[_]: Log: Concurrent: ToAbstractContext](
+  def bondsCache[F[_]: Log: Concurrent](
       b: BlockMessage,
-      runtimeManager: RuntimeManager[Task]
+      runtimeManager: RuntimeManager[F]
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val bonds = ProtoUtil.bonds(b)
     ProtoUtil.tuplespace(b) match {
       case Some(tuplespaceHash) =>
-        ToAbstractContext[F].fromTask(runtimeManager.computeBonds(tuplespaceHash)).attempt.flatMap {
+        runtimeManager.computeBonds(tuplespaceHash).attempt.flatMap {
           case Right(computedBonds) =>
             if (bonds.toSet == computedBonds.toSet) {
               Applicative[F].pure(Right(Valid))

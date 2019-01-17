@@ -1,5 +1,7 @@
 package coop.rchain.casper.util.rholang
 
+import cats.Monad
+import cats.data.EitherT
 import cats.effect._
 import cats.effect.concurrent.MVar
 import cats.implicits._
@@ -7,6 +9,8 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.catscontrib.Catscontrib._
+import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models._
@@ -18,7 +22,7 @@ import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 
 import scala.collection.immutable
 
-abstract class RuntimeManager[F[_]: Concurrent] {
+trait RuntimeManager[F[_]] {
   def captureResults(start: StateHash, deploy: Deploy, name: String = "__SCALA__"): F[Seq[Par]]
   def captureResults(start: StateHash, deploy: Deploy, name: Par): F[Seq[Par]]
   def replayComputeState(
@@ -314,4 +318,61 @@ object RuntimeManager {
       _                = assert(hash == replayHash)
       runtime          <- MVar[F].of(active)
     } yield new RuntimeManagerImpl(hash, runtime)
+
+  def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
+      runtimeManager: RuntimeManager[F]
+  ): RuntimeManager[T[F, ?]] =
+    new RuntimeManager[T[F, ?]] {
+      override def captureResults(
+          start: RuntimeManager.StateHash,
+          deploy: Deploy,
+          name: String
+      ): T[F, scala.Seq[Par]] = runtimeManager.captureResults(start, deploy, name).liftM[T]
+
+      override def captureResults(
+          start: RuntimeManager.StateHash,
+          deploy: Deploy,
+          name: Par
+      ): T[F, scala.Seq[Par]] = runtimeManager.captureResults(start, deploy, name).liftM[T]
+
+      override def replayComputeState(
+          hash: RuntimeManager.StateHash,
+          terms: scala.Seq[InternalProcessedDeploy],
+          time: Option[Long]
+      ): T[F, scala.Either[(Option[Deploy], Failed), RuntimeManager.StateHash]] =
+        runtimeManager.replayComputeState(hash, terms, time).liftM[T]
+
+      override def computeState(
+          hash: RuntimeManager.StateHash,
+          terms: scala.Seq[Deploy],
+          time: Option[Long]
+      ): T[F, (RuntimeManager.StateHash, scala.Seq[InternalProcessedDeploy])] =
+        runtimeManager.computeState(hash, terms, time).liftM[T]
+
+      override def storageRepr(
+          hash: RuntimeManager.StateHash
+      ): T[F, Option[String]] = runtimeManager.storageRepr(hash).liftM[T]
+
+      override def computeBonds(
+          hash: RuntimeManager.StateHash
+      ): T[F, scala.Seq[Bond]] = runtimeManager.computeBonds(hash).liftM[T]
+
+      override def getData(
+          hash: ByteString,
+          channel: Par
+      ): T[F, scala.Seq[Par]] = runtimeManager.getData(hash, channel).liftM[T]
+
+      override def getContinuation(
+          hash: ByteString,
+          channels: scala.collection.immutable.Seq[Par]
+      ): T[F, scala.Seq[(scala.Seq[BindPattern], Par)]] =
+        runtimeManager.getContinuation(hash, channels).liftM[T]
+
+      override val emptyStateHash: ByteString = runtimeManager.emptyStateHash
+    }
+
+  def eitherTRuntimeManager[E, F[_]: Monad](
+      rm: RuntimeManager[F]
+  ): RuntimeManager[EitherT[F, E, ?]] =
+    RuntimeManager.forTrans[F, EitherT[?[_], E, ?]](rm)
 }

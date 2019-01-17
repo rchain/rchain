@@ -19,8 +19,6 @@ import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.shared._
-import monix.eval.Task
-import monix.execution.Scheduler
 
 /**
   Encapsulates mutable state of the MultiParentCasperImpl
@@ -38,14 +36,14 @@ case class CasperState(
     equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord]
 )
 
-class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ToAbstractContext](
-    runtimeManager: RuntimeManager[Task],
+class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage](
+    runtimeManager: RuntimeManager[F],
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
     shardId: String,
     blockProcessingLock: Semaphore[F]
-)(implicit state: Cell[F, CasperState], scheduler: Scheduler)
+)(implicit state: Cell[F, CasperState])
     extends MultiParentCasper[F] {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
@@ -335,8 +333,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
                            case (acc, b) => math.max(acc, blockNumber(b))
                          }
 
-                       ToAbstractContext[F]
-                         .fromTask(runtimeManager.computeBonds(postStateHash))
+                       runtimeManager
+                         .computeBonds(postStateHash)
                          .map {
                            newBonds =>
                              val postState = RChainState()
@@ -362,11 +360,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
     BlockDagStorage[F].getRepresentation
 
   def storageContents(hash: StateHash): F[String] =
-    ToAbstractContext[F]
-      .fromTask(
-        runtimeManager
-          .storageRepr(hash)
-      )
+    runtimeManager
+      .storageRepr(hash)
       .map(_.getOrElse(s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!"))
 
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
@@ -622,7 +617,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
         .pure[F]
     }
 
-  def getRuntimeManager: F[Option[RuntimeManager[Task]]] = Applicative[F].pure(Some(runtimeManager))
+  def getRuntimeManager: F[Option[RuntimeManager[F]]] =
+    Applicative[F].pure(Some(runtimeManager))
 
   def fetchDependencies: F[Unit] =
     for {

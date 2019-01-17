@@ -4,11 +4,7 @@ import cats.Monad
 import cats.effect.concurrent.Semaphore
 import cats.effect.Concurrent
 import cats.effect.Sync
-import cats._
-import cats.data._
 import cats.implicits._
-import cats.mtl._
-import cats.mtl.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.Estimator.BlockHash
@@ -18,22 +14,18 @@ import coop.rchain.casper.protocol._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.graphz._
-import coop.rchain.models.{BindPattern, Par}
-import coop.rchain.rspace.{Serialize, StableHashProvider}
+import coop.rchain.models.Par
+import coop.rchain.rspace.StableHashProvider
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import coop.rchain.shared.Log
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
 import coop.rchain.models.rholang.sorter.Sortable._
-import monix.execution.Scheduler
-import scodec.Codec
 
 import scala.collection.immutable
 import coop.rchain.casper.util.EventConverter
 import coop.rchain.casper._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.catscontrib.ToAbstractContext
-import monix.eval.Task
 
 object BlockAPI {
 
@@ -85,7 +77,7 @@ object BlockAPI {
       default = DeployServiceResponse(success = false, "Error: Casper instance not available")
     )
 
-  def getListeningNameDataResponse[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: ToAbstractContext](
+  def getListeningNameDataResponse[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int,
       listeningName: Par
   ): F[ListeningNameDataResponse] = {
@@ -116,7 +108,7 @@ object BlockAPI {
     )
   }
 
-  def getListeningNameContinuationResponse[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: ToAbstractContext](
+  def getListeningNameContinuationResponse[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int,
       listeningNames: Seq[Par]
   ): F[ListeningNameContinuationResponse] = {
@@ -158,8 +150,8 @@ object BlockAPI {
       mainChain <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[BlockMessage], depth)
     } yield mainChain
 
-  private def getDataWithBlockInfo[F[_]: MultiParentCasper: Log: SafetyOracle: BlockStore: ToAbstractContext: Concurrent](
-      runtimeManager: RuntimeManager[Task],
+  private def getDataWithBlockInfo[F[_]: MultiParentCasper: Log: SafetyOracle: BlockStore: Concurrent](
+      runtimeManager: RuntimeManager[F],
       sortedListeningName: Par,
       block: BlockMessage
   ): F[Option[DataWithBlockInfo]] =
@@ -167,17 +159,15 @@ object BlockAPI {
       val stateHash =
         ProtoUtil.tuplespace(block).get
       for {
-        data <- ToAbstractContext[F].fromTask(
-                 runtimeManager.getData(stateHash, sortedListeningName)
-               )
+        data      <- runtimeManager.getData(stateHash, sortedListeningName)
         blockInfo <- getBlockInfoWithoutTuplespace[F](block)
       } yield Option[DataWithBlockInfo](DataWithBlockInfo(data, Some(blockInfo)))
     } else {
       none[DataWithBlockInfo].pure[F]
     }
 
-  private def getContinuationsWithBlockInfo[F[_]: MultiParentCasper: Log: SafetyOracle: BlockStore: Concurrent: ToAbstractContext](
-      runtimeManager: RuntimeManager[Task],
+  private def getContinuationsWithBlockInfo[F[_]: MultiParentCasper: Log: SafetyOracle: BlockStore: Concurrent](
+      runtimeManager: RuntimeManager[F],
       sortedListeningNames: immutable.Seq[Par],
       block: BlockMessage
   ): F[Option[ContinuationsWithBlockInfo]] =
@@ -185,9 +175,7 @@ object BlockAPI {
       val stateHash =
         ProtoUtil.tuplespace(block).get
       for {
-        continuations <- ToAbstractContext[F].fromTask(
-                          runtimeManager.getContinuation(stateHash, sortedListeningNames)
-                        )
+        continuations <- runtimeManager.getContinuation(stateHash, sortedListeningNames)
         continuationInfos = continuations.map(
           continuation => WaitingContinuationInfo(continuation._1, Some(continuation._2))
         )

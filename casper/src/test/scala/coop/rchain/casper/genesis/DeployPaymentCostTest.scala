@@ -1,9 +1,8 @@
 package coop.rchain.casper.genesis
 
 import cats.implicits._
-import cats.{Id, Monad}
+import cats.{Applicative, Id, Monad}
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.genesis.DeployPaymentCostTest._
 import coop.rchain.casper.genesis.contracts.{Faucet, PreWallet}
 import coop.rchain.casper.helper.HashSetCasperTestNode
@@ -26,7 +25,6 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.catscontrib.ski.kp2
-import monix.eval.Task
 
 import scala.collection.immutable.BitSet
 
@@ -48,7 +46,7 @@ class DeployPaymentCostTest extends FlatSpec {
       timestamp         = System.currentTimeMillis()
       paymentBlock      <- paymentDeploy(paymentPar, user, timestamp)
       paymentDeployCost = deployCost(paymentBlock, user, timestamp)
-      _                 = assertSuccessfulTransfer(node, ProtoUtil.postStateHash(paymentBlock), statusChannel)
+      _                 <- assertSuccessfulTransfer(node, ProtoUtil.postStateHash(paymentBlock), statusChannel)
     } yield println(s"Cost of deploying payment contract is at minimum: $paymentDeployCost")
   }
 
@@ -181,7 +179,7 @@ object DeployPaymentCostTest {
   }
 
   def createWallet(
-      rm: RuntimeManager[Task]
+      rm: RuntimeManager[Effect]
   )(implicit casper: MultiParentCasperImpl[Effect]): Effect[Par] = {
     // Create new wallet
     val walletRetCh = GPrivateBuilder()
@@ -199,12 +197,12 @@ object DeployPaymentCostTest {
       )
   }
 
-  def deployAndCapture(p: Par, retChannel: Par, rm: RuntimeManager[Task])(
+  def deployAndCapture(p: Par, retChannel: Par, rm: RuntimeManager[Effect])(
       implicit casper: MultiParentCasperImpl[Effect]
   ): Effect[Par] =
     for {
       postDeployStateHash <- deploy[Effect](p).map(ProtoUtil.postStateHash)
-      data                = rm.getData(postDeployStateHash, retChannel).unsafeRunSync
+      data                <- rm.getData(postDeployStateHash, retChannel)
       _                   = assert(data.size == 1)
     } yield data.head
 
@@ -260,7 +258,7 @@ object DeployPaymentCostTest {
       walletAddress: Par,
       secKey: Array[Byte],
       pubKey: Array[Byte],
-      rm: RuntimeManager[Task]
+      rm: RuntimeManager[Effect]
   )(implicit casper: MultiParentCasperImpl[Effect]): Effect[String] = {
     val registerWalletTuple: Par = ETuple(Seq(GInt(1), walletAddress))
     val registrySig              = Ed25519.sign(registerWalletTuple.toByteArray, secKey)
@@ -284,11 +282,11 @@ object DeployPaymentCostTest {
     deployAndCapture(par, walletUriRet, rm).map(walletUri => walletUri.exprs.head.getGUri)
   }
 
-  def assertSuccessfulTransfer[F[_]](
+  def assertSuccessfulTransfer[F[_]: Applicative](
       node: HashSetCasperTestNode[F],
       tuplespaceHash: ByteString,
       statusChannel: GPrivate
-  ): Unit =
+  ): F[Unit] =
     node.runtimeManager
       .getData(
         tuplespaceHash,
@@ -298,6 +296,4 @@ object DeployPaymentCostTest {
         assert(transferStatus.size == 1)
         transferStatus.head.exprs.head should be(Expr(GString("Success")))
       }
-      .unsafeRunSync
-
 }
