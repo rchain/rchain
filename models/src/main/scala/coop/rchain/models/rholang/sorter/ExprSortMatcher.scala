@@ -178,15 +178,26 @@ private[sorter] object ExprSortMatcher extends Sortable[Expr] {
             Node(Score.EMINUSMINUS, sortedPar1.score, sortedPar2.score)
           )
       case EMapBody(parMap) =>
+        def sortKeyValuePair(key: Par, value: Par): F[ScoredTerm[(Par, Par)]] =
+          for {
+            sortedKey   <- Sortable.sortMatch(key)
+            sortedValue <- Sortable.sortMatch(value)
+          } yield ScoredTerm((sortedKey.term, sortedValue.term), sortedKey.score)
+
         for {
-          sortedPars <- parMap.ps.sortedList
-                         .flatMap(t => List(t._1, t._2))
-                         .traverse(Sortable[Par].sortMatch[F])
+          sortedPars          <- parMap.ps.sortedList.traverse(kv => sortKeyValuePair(kv._1, kv._2))
           remainderScore      <- remainderScore(parMap.remainder)
           connectiveUsedScore = if (parMap.connectiveUsed) 1 else 0
         } yield
           constructExpr(
-            EMapBody(parMap),
+            EMapBody(
+              ParMap(
+                sortedPars.map(_.term),
+                parMap.connectiveUsed,
+                parMap.locallyFree,
+                parMap.remainder
+              )
+            ),
             Node(
               Seq(Leaf(Score.EMAP), remainderScore) ++ sortedPars.map(_.score) ++ Seq(
                 Leaf(connectiveUsedScore)
@@ -200,7 +211,14 @@ private[sorter] object ExprSortMatcher extends Sortable[Expr] {
           connectiveUsedScore = if (parSet.connectiveUsed) 1 else 0
         } yield
           constructExpr(
-            ESetBody(parSet),
+            ESetBody(
+              ParSet(
+                SortedParHashSet(sortedPars.map(_.term)),
+                parSet.connectiveUsed,
+                parSet.locallyFree,
+                parSet.remainder
+              )
+            ),
             Node(
               Seq(Leaf(Score.ESET), remainderScore) ++ sortedPars
                 .map(_.score) ++ Seq(Leaf(connectiveUsedScore))
@@ -213,7 +231,9 @@ private[sorter] object ExprSortMatcher extends Sortable[Expr] {
           connectiveUsedScore = if (list.connectiveUsed) 1 else 0
         } yield
           constructExpr(
-            EListBody(list),
+            EListBody(
+              EList(pars.map(_.term), list.locallyFree, list.connectiveUsed, list.remainder)
+            ),
             Node(
               Seq(Leaf(Score.ELIST), remainderScore) ++ pars.map(_.score) ++ Seq(
                 Leaf(connectiveUsedScore)
