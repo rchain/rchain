@@ -6,10 +6,16 @@ from typing import (
     List,
     Tuple,
     Optional,
+    TYPE_CHECKING,
 )
 import dataclasses
 
 from docker.client import DockerClient
+
+if TYPE_CHECKING:
+    # pylint: disable=cyclic-import
+    from .wait import PredicateProtocol
+
 
 
 @dataclasses.dataclass(eq=True, frozen=True)
@@ -55,6 +61,12 @@ class NonZeroExitCodeError(Exception):
 
 class GetBlockError(NonZeroExitCodeError):
     pass
+
+
+class WaitTimeoutError(Exception):
+    def __init__(self, predicate: 'PredicateProtocol', timeout: int) -> None:
+        self.predicate = predicate
+        self.timeout = timeout
 
 
 def random_string(context: TestingContext, length: int) -> str:

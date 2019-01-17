@@ -9,6 +9,7 @@ import pytest
 from .common import (
     TestingContext,
     GetBlockError,
+    WaitTimeoutError,
 )
 from .network import (
     Network,
@@ -140,7 +141,7 @@ class BlocksCountAtLeast:
         return actual_blocks_count >= self.blocks_count
 
 
-def wait_on_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) -> None:
+def wait_using_wall_clock_time_or_fail(predicate: PredicateProtocol, timeout: int) -> None:
     logging.info("AWAITING {}".format(predicate))
 
     elapsed = 0
@@ -162,9 +163,16 @@ def wait_on_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) ->
 
         time.sleep(iteration_duration)
         elapsed = elapsed + iteration_duration
-
     logging.info("TIMEOUT %s", predicate)
-    pytest.fail('Failed to satisfy {} after {}s'.format(predicate, elapsed))
+    raise WaitTimeoutError(predicate, timeout)
+
+
+def wait_on_using_wall_clock_time(predicate, timeout):
+    try:
+        wait_using_wall_clock_time_or_fail(predicate, timeout)
+    except WaitTimeoutError:
+        pytest.fail('Failed to satisfy {} after {}s'.format(predicate, timeout))
+
 
 def wait_for_node_sees_block(context: TestingContext, node: 'Node', block_hash: str) -> None:
     predicate = NodeSeesBlock(node, block_hash)
@@ -229,3 +237,8 @@ def wait_for_block_approval(context: TestingContext, node: 'Node') -> None:
 def wait_for_sent_approved_block(context: TestingContext, node: 'Node') -> None:
     predicate = SentApprovedBlock(node)
     wait_on_using_wall_clock_time(predicate, context.network_converge_timeout)
+
+
+def wait_for_approved_block_received_handler_state_or_fail(context: TestingContext, node: 'Node') -> None:
+    predicate = ApprovedBlockReceivedHandlerStateEntered(node)
+    wait_using_wall_clock_time_or_fail(predicate, context.network_converge_timeout)
