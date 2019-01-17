@@ -167,7 +167,7 @@ def wait_using_wall_clock_time_or_fail(predicate: PredicateProtocol, timeout: in
     raise WaitTimeoutError(predicate, timeout)
 
 
-def wait_on_using_wall_clock_time(predicate, timeout):
+def wait_on_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) ->None:
     try:
         wait_using_wall_clock_time_or_fail(predicate, timeout)
     except WaitTimeoutError:

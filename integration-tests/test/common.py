@@ -65,6 +65,7 @@ class GetBlockError(NonZeroExitCodeError):
 
 class WaitTimeoutError(Exception):
     def __init__(self, predicate: 'PredicateProtocol', timeout: int) -> None:
+        super().__init__()
         self.predicate = predicate
         self.timeout = timeout
 
