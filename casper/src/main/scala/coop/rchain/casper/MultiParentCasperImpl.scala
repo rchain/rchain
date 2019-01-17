@@ -106,7 +106,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       _ <- attempt match {
             case MissingBlocks => ().pure[F]
             case _ =>
-              Cell[F, CasperState].modify { s =>
+              Cell[F, CasperState].flatModify { s =>
                 s.copy(
                     blockBuffer = (s.blockBuffer - b),
                     dependencyDag = DoublyLinkedDagOperations.remove(s.dependencyDag, b.blockHash)
@@ -158,7 +158,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       deploys            = b.body.get.deploys.map(_.deploy.get).toList
       stateBefore        <- Cell[F, CasperState].read
       initialHistorySize = stateBefore.deployHistory.size
-      _ <- Cell[F, CasperState].modify { s =>
+      _ <- Cell[F, CasperState].flatModify { s =>
             s.copy(deployHistory = s.deployHistory -- deploys).pure[F]
           }
 
@@ -213,7 +213,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
 
   def addDeploy(deploy: Deploy): F[Unit] =
     for {
-      _ <- Cell[F, CasperState].modify { s =>
+      _ <- Cell[F, CasperState].flatModify { s =>
             s.copy(deployHistory = s.deployHistory + deploy).pure[F]
           }
       _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
@@ -438,14 +438,14 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
           s"Added ${PrettyPrinter.buildString(block.blockHash)}"
         )
       case MissingBlocks => {
-        Cell[F, CasperState].modify { s =>
+        Cell[F, CasperState].flatModify { s =>
           s.copy(blockBuffer = s.blockBuffer + block).pure[F]
         } *> fetchMissingDependencies(block)
       }
       case AdmissibleEquivocation =>
         val baseEquivocationBlockSeqNum = block.seqNum - 1
 
-        Cell[F, CasperState].modify { s =>
+        Cell[F, CasperState].flatModify { s =>
           if (s.equivocationsTracker.exists {
                 case EquivocationRecord(validator, seqNum, _) =>
                   block.sender == validator && baseEquivocationBlockSeqNum == seqNum
@@ -530,7 +530,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
     } yield ()
 
   private def handleMissingDependency(hash: BlockHash, childBlock: BlockMessage): F[Unit] =
-    Cell[F, CasperState].modify(
+    Cell[F, CasperState].flatModify(
       s =>
         s.copy(
             dependencyDag = DoublyLinkedDagOperations
@@ -548,7 +548,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
             s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}."
           )
       // TODO: Slash block for status except InvalidUnslashableBlock
-      _ <- Cell[F, CasperState].modify { s =>
+      _ <- Cell[F, CasperState].flatModify { s =>
             s.copy(invalidBlockTracker = s.invalidBlockTracker + block.blockHash).pure[F]
           }
       _ <- addToState(block)
@@ -600,7 +600,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       successfulAdds: List[(BlockMessage, BlockStatus)]
   ): F[Unit] = {
     val addedBlocks = successfulAdds.map(_._1)
-    Cell[F, CasperState].modify { s =>
+    Cell[F, CasperState].flatModify { s =>
       s.copy(blockBuffer = s.blockBuffer -- addedBlocks).pure[F]
     }
   }
@@ -609,7 +609,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
       successfulAdds: List[(BlockMessage, BlockStatus)]
   ): F[Unit] =
-    Cell[F, CasperState].modify { s =>
+    Cell[F, CasperState].flatModify { s =>
       s.copy(dependencyDag = successfulAdds.foldLeft(blockBufferDependencyDag) {
           case (acc, successfulAdd) =>
             DoublyLinkedDagOperations.remove(acc, successfulAdd._1.blockHash)

@@ -76,14 +76,14 @@ class CellSpec extends FunSpec with Matchers with BeforeAndAfterEach {
     } yield ()).unsafeRunSync
 
   private def justIncrement(cell: Cell[Task, Int]): Task[Unit] =
-    cell.modify(increment)
+    cell.flatModify(increment)
 
   private def incrementAndStore(
       name: String,
       cell: Cell[Task, Int],
       external: TrieMap[String, Int]
   ): Task[Unit] =
-    cell.modify(
+    cell.flatModify(
       i =>
         for {
           newI <- increment(i)
@@ -94,6 +94,6 @@ class CellSpec extends FunSpec with Matchers with BeforeAndAfterEach {
   private val increment: Int => Task[Int] = (i: Int) => Task.delay(i + 1)
 
   private def failWithError(cell: Cell[Task, Int]): Task[Unit] =
-    cell.modify(_ => Task.raiseError(new RuntimeException))
+    cell.flatModify(_ => Task.raiseError(new RuntimeException))
 
 }
