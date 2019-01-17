@@ -166,13 +166,13 @@ object EquivocationDetector {
           false
       }
       _ <- if (equivocationDiscoveryStatus == EquivocationDetected) {
-            Cell[F, CasperState].flatModify { s =>
+            Cell[F, CasperState].modify { s =>
               val updatedEquivocationDetectedBlockHashes = equivocationRecord.equivocationDetectedBlockHashes + block.blockHash
               val newEquivocationsTracker = s.equivocationsTracker - equivocationRecord + (
                 equivocationRecord
                   .copy(equivocationDetectedBlockHashes = updatedEquivocationDetectedBlockHashes)
                 )
-              s.copy(equivocationsTracker = newEquivocationsTracker).pure[F]
+              s.copy(equivocationsTracker = newEquivocationsTracker)
             }
           } else ().pure[F]
     } yield neglectedEquivocationDetected

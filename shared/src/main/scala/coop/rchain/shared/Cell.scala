@@ -11,6 +11,7 @@ import cats.syntax.functor._
 import cats.syntax.either._
 
 trait Cell[F[_], S] {
+  def modify(f: S => S): F[Unit]
   def flatModify(f: S => F[S]): F[Unit]
   def read: F[S]
 }
@@ -21,6 +22,12 @@ object Cell extends CellInstances0 {
   def mvarCell[F[_]: Concurrent, S](initalState: S): F[Cell[F, S]] =
     MVar[F].of(initalState) map { mvar =>
       new Cell[F, S] {
+        def modify(f: S => S): F[Unit] =
+          for {
+            s <- mvar.take
+            _ <- mvar.put(f(s))
+          } yield ()
+
         def flatModify(f: S => F[S]): F[Unit] =
           for {
             s <- mvar.take
@@ -36,7 +43,8 @@ object Cell extends CellInstances0 {
 
   def unsafe[F[_]: Applicative, S](const: S): Cell[F, S] =
     new Cell[F, S] {
-      private var s: S = const
+      private var s: S            = const
+      def modify(f: S => S): F[Unit] = { s = f(s) }.pure[F]
       def flatModify(f: S => F[S]): F[Unit] = f(s).map { newS =>
         s = newS
         ()
@@ -45,7 +53,8 @@ object Cell extends CellInstances0 {
     }
 
   def id[S](init: S): Cell[Id, S] = new Cell[Id, S] {
-    var s: S = init
+    var s: S                 = init
+    def modify(f: S => S): Unit = flatModify(f)
     def flatModify(f: S => S): Unit =
       s = f(s)
     def read: S = s
@@ -58,6 +67,14 @@ trait CellInstances0 {
       fCell: Cell[F, S]
   ): Cell[EitherT[F, E, ?], S] =
     new Cell[EitherT[F, E, ?], S] {
+      def modify(f: S => S): EitherT[F, E, Unit] =
+        EitherT(
+          fCell
+            .modify(
+              s => f(s)
+            )
+            .map(Right(_).leftCast[E])
+        )
       def flatModify(f: S => EitherT[F, E, S]): EitherT[F, E, Unit] =
         EitherT(
           fCell
