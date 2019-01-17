@@ -19,8 +19,6 @@ import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.shared._
-import monix.eval.Task
-import monix.execution.Scheduler
 
 /**
   Encapsulates mutable state of the MultiParentCasperImpl
@@ -40,13 +38,12 @@ case class CasperState(
 
 class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ToAbstractContext](
     runtimeManager: RuntimeManager[F],
-    runtimeManagerTask: RuntimeManager[Task],
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
     shardId: String,
     blockProcessingLock: Semaphore[F]
-)(implicit state: Cell[F, CasperState], scheduler: Scheduler)
+)(implicit state: Cell[F, CasperState])
     extends MultiParentCasper[F] {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
@@ -401,7 +398,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
                                         )
                                     )
       postBondsCacheStatus <- postTransactionsCheckStatus.joinRight.traverse(
-                               _ => Validate.bondsCache[F](b, runtimeManagerTask)
+                               _ => Validate.bondsCache[F](b, runtimeManager)
                              )
 
       s <- Cell[F, CasperState].read
@@ -620,8 +617,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
         .pure[F]
     }
 
-  def getRuntimeManager: F[Option[RuntimeManager[Task]]] =
-    Applicative[F].pure(Some(runtimeManagerTask))
+  def getRuntimeManager: F[Option[RuntimeManager[F]]] =
+    Applicative[F].pure(Some(runtimeManager))
 
   def fetchDependencies: F[Unit] =
     for {

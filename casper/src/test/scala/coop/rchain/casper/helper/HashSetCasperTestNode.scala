@@ -95,7 +95,6 @@ class HashSetCasperTestNode[F[_]](
 
   implicit val casperEff = new MultiParentCasperImpl[F](
     runtimeManager,
-    runtimeManagerTask,
     Some(validatorId),
     genesis,
     postGenesisStateHash,

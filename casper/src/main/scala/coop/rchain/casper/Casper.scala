@@ -56,7 +56,7 @@ trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]] {
   def lastFinalizedBlock: F[BlockMessage]
   def storageContents(hash: ByteString): F[String]
   // TODO: Refactor hashSetCasper to take a RuntimeManager[F] just like BlockStore[F]
-  def getRuntimeManager: F[Option[RuntimeManager[Task]]]
+  def getRuntimeManager: F[Option[RuntimeManager[F]]]
 }
 
 object MultiParentCasper extends MultiParentCasperInstances {
@@ -108,7 +108,6 @@ sealed abstract class MultiParentCasperInstances {
       implicit val state = casperState
       new MultiParentCasperImpl[F](
         runtimeManager,
-        runtimeManagerTask,
         validatorId,
         genesis,
         postGenesisStateHash,
