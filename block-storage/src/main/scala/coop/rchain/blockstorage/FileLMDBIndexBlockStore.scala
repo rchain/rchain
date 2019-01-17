@@ -1,6 +1,6 @@
 package coop.rchain.blockstorage
 
-import java.io.{FileNotFoundException, IOException, RandomAccessFile}
+import java.io._
 import java.nio.ByteBuffer
 import java.nio.file.{Files, NotDirectoryException, Path}
 import java.util.stream.Collectors
@@ -43,10 +43,9 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
       }
     } {
       case (txn, ExitCase.Error(NonFatal(ex))) =>
-        Sync[F].delay {
-          ex.printStackTrace()
-          txn.close()
-        } *> Sync[F].raiseError(ex)
+        val stringWriter = new StringWriter()
+        ex.printStackTrace(new PrintWriter(stringWriter))
+        Log[F].error(stringWriter.toString) *> Sync[F].delay(txn.close()) *> Sync[F].raiseError(ex)
       case (txn, _) => Sync[F].delay(txn.close())
     }
 
