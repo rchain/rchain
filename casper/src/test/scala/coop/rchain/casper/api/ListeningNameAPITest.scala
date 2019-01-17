@@ -62,7 +62,6 @@ class ListeningNameAPITest extends FlatSpec with Matchers {
       implicit val nodeZeroSafetyOracleEffect = nodes(0).cliqueOracleEffect
       implicit val nodeZeroLogEffect          = nodes(0).logEff
       implicit val nodeZeroBlockStoreEffect   = nodes(0).blockStore
-      implicit val abstractCtx                = nodes(0).abF
 
       implicit val timeEff = new LogicalTime[Effect]
       for {

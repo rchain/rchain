@@ -3,28 +3,16 @@ package coop.rchain.casper
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import cats.{Applicative, Monad}
 import cats.implicits._
-import cats.mtl.implicits._
 import cats.effect.{Concurrent, Sync}
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util._
-import coop.rchain.casper.util.ProtoUtil._
-import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib._
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.shared._
-import coop.rchain.shared.AttemptOps._
-
-import scala.annotation.tailrec
-import scala.collection.{immutable, mutable}
-import scala.collection.immutable.{HashMap, HashSet}
-import cats.effect.concurrent.{Ref, Semaphore}
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockMetadata, BlockStore}
-import coop.rchain.casper.EquivocationRecord.SequenceNumber
+import cats.effect.concurrent.Semaphore
+import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.ski.kp2
@@ -68,7 +56,7 @@ object MultiParentCasper extends MultiParentCasperInstances {
 
 sealed abstract class MultiParentCasperInstances {
 
-  def hashSetCasper[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ToAbstractContext](
+  def hashSetCasper[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage](
       runtimeManager: RuntimeManager[F],
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,

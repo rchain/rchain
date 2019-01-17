@@ -15,7 +15,6 @@ import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Time
 import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 
 import scala.collection.immutable.HashMap
 import scala.language.higherKinds
@@ -23,7 +22,7 @@ import scala.language.higherKinds
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]()(Capture.taskCapture)
 
-  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage: ToAbstractContext](
+  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage](
       id: Int,
       genesis: BlockMessage,
       runtimeManager: RuntimeManager[F]
@@ -41,7 +40,7 @@ object BlockGenerator {
       _                                 <- injectPostStateHash[F](id, b, postStateHash, processedDeploys)
     } yield b
 
-  def computeBlockCheckpoint[F[_]: Sync: BlockStore: ToAbstractContext](
+  def computeBlockCheckpoint[F[_]: Sync: BlockStore](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],

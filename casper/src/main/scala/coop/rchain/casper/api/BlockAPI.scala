@@ -26,7 +26,6 @@ import coop.rchain.casper.util.EventConverter
 import coop.rchain.casper._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.catscontrib.ToAbstractContext
 
 object BlockAPI {
 
@@ -78,7 +77,7 @@ object BlockAPI {
       default = DeployServiceResponse(success = false, "Error: Casper instance not available")
     )
 
-  def getListeningNameDataResponse[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: ToAbstractContext](
+  def getListeningNameDataResponse[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int,
       listeningName: Par
   ): F[ListeningNameDataResponse] = {
@@ -109,7 +108,7 @@ object BlockAPI {
     )
   }
 
-  def getListeningNameContinuationResponse[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: ToAbstractContext](
+  def getListeningNameContinuationResponse[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int,
       listeningNames: Seq[Par]
   ): F[ListeningNameContinuationResponse] = {
@@ -151,7 +150,7 @@ object BlockAPI {
       mainChain <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[BlockMessage], depth)
     } yield mainChain
 
-  private def getDataWithBlockInfo[F[_]: MultiParentCasper: Log: SafetyOracle: BlockStore: ToAbstractContext: Concurrent](
+  private def getDataWithBlockInfo[F[_]: MultiParentCasper: Log: SafetyOracle: BlockStore: Concurrent](
       runtimeManager: RuntimeManager[F],
       sortedListeningName: Par,
       block: BlockMessage
@@ -167,7 +166,7 @@ object BlockAPI {
       none[DataWithBlockInfo].pure[F]
     }
 
-  private def getContinuationsWithBlockInfo[F[_]: MultiParentCasper: Log: SafetyOracle: BlockStore: Concurrent: ToAbstractContext](
+  private def getContinuationsWithBlockInfo[F[_]: MultiParentCasper: Log: SafetyOracle: BlockStore: Concurrent](
       runtimeManager: RuntimeManager[F],
       sortedListeningNames: immutable.Seq[Par],
       block: BlockMessage

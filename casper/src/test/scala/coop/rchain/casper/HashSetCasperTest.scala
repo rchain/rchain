@@ -869,12 +869,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
     import node.casperEff
 
-    implicit val runtimeManager  = node.runtimeManager
-    implicit val abstractContext = node.abF
-    val (sk, pk)                 = Ed25519.newKeyPair
-    val pkStr                    = Base16.encode(pk)
-    val amount                   = 314L
-    val forwardCode              = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
+    implicit val runtimeManager = node.runtimeManager
+    val (sk, pk)                = Ed25519.newKeyPair
+    val pkStr                   = Base16.encode(pk)
+    val amount                  = 314L
+    val forwardCode             = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
 
     for {
       bondingCode <- BondingUtil.faucetBondDeploy[Effect](amount, "ed25519", pkStr, sk)
@@ -946,12 +945,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       } yield ()
 
     def bond(node: HashSetCasperTestNode[Effect]): Effect[Unit] = {
-      implicit val runtimeManager  = node.runtimeManager
-      implicit val abstractContext = node.abF
-      val (sk, pk)                 = Ed25519.newKeyPair
-      val pkStr                    = Base16.encode(pk)
-      val amount                   = 314L
-      val forwardCode              = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
+      implicit val runtimeManager = node.runtimeManager
+      val (sk, pk)                = Ed25519.newKeyPair
+      val pkStr                   = Base16.encode(pk)
+      val amount                  = 314L
+      val forwardCode             = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
       for {
         bondingCode <- BondingUtil.faucetBondDeploy[Effect](amount, "ed25519", pkStr, sk)
         forwardDeploy = ProtoUtil.sourceDeploy(

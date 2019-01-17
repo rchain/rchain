@@ -368,7 +368,7 @@ object RuntimeManager {
       ): T[F, scala.Seq[(scala.Seq[BindPattern], Par)]] =
         runtimeManager.getContinuation(hash, channels).liftM[T]
 
-      override def emptyStateHash: ByteString = runtimeManager.emptyStateHash
+      override val emptyStateHash: ByteString = runtimeManager.emptyStateHash
     }
 
   def eitherTRuntimeManager[E, F[_]: Monad](

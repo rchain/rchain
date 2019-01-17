@@ -561,7 +561,7 @@ object Validate {
         false
       }
 
-  def transactions[F[_]: Sync: Log: BlockStore: ToAbstractContext](
+  def transactions[F[_]: Sync: Log: BlockStore](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       emptyStateHash: StateHash,
@@ -606,7 +606,7 @@ object Validate {
     }
   }
 
-  def bondsCache[F[_]: Log: Concurrent: ToAbstractContext](
+  def bondsCache[F[_]: Log: Concurrent](
       b: BlockMessage,
       runtimeManager: RuntimeManager[F]
   ): F[Either[InvalidBlock, ValidBlock]] = {

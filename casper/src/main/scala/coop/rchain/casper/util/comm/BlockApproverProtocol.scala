@@ -15,7 +15,7 @@ import coop.rchain.casper.util.rholang.{
   ProcessedDeployUtil,
   RuntimeManager
 }
-import coop.rchain.catscontrib.{Capture, ToAbstractContext}
+import coop.rchain.catscontrib.Capture
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.protocol.routing.Packet
