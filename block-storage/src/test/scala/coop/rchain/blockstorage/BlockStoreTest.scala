@@ -182,7 +182,7 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
     implicit val metrics = new MetricsNOP[Task]()
     implicit val log     = new Log.NOPLog[Task]()
     val env              = Context.env(blockStoreDataDir, 100L * 1024L * 1024L * 4096L)
-    FileLMDBIndexBlockStore.create[Task](env, blockStoreDataDir)
+    FileLMDBIndexBlockStore.create[Task](env, blockStoreDataDir).map(_.right.get)
   }
 
   def withStoreLocation[R](f: Path => Task[R]): R = {
@@ -205,7 +205,7 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
       withStoreLocation { blockStoreDataDir =>
         for {
           firstStore  <- createBlockStore(blockStoreDataDir)
-          _           <- blockStoreElements.traverse_[Task, Unit](firstStore.put(_))
+          _           <- blockStoreElements.traverse_[Task, StorageIOErr[Unit]](firstStore.put)
           _           <- firstStore.close()
           secondStore <- createBlockStore(blockStoreDataDir)
           _ <- blockStoreElements.traverse[Task, Assertion] { block =>
@@ -224,9 +224,9 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
         val (firstHalf, secondHalf) = blockStoreElements.splitAt(blockStoreElements.size / 2)
         for {
           firstStore <- createBlockStore(blockStoreDataDir)
-          _          <- firstHalf.traverse_[Task, Unit](firstStore.put(_))
+          _          <- firstHalf.traverse_[Task, StorageIOErr[Unit]](firstStore.put)
           _          <- firstStore.checkpoint()
-          _          <- secondHalf.traverse_[Task, Unit](firstStore.put(_))
+          _          <- secondHalf.traverse_[Task, StorageIOErr[Unit]](firstStore.put)
           _ <- blockStoreElements.traverse[Task, Assertion] { block =>
                 firstStore.get(block.blockHash).map(_ shouldBe Some(block))
               }
@@ -251,7 +251,8 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
           firstStore <- createBlockStore(blockStoreDataDir)
           _ <- blockStoreBatches.traverse_[Task, Unit](
                 blockStoreElements =>
-                  blockStoreElements.traverse_[Task, Unit](firstStore.put(_)) *> firstStore
+                  blockStoreElements
+                    .traverse_[Task, StorageIOErr[Unit]](firstStore.put) *> firstStore
                     .checkpoint()
               )
           _ <- blocks.traverse[Task, Assertion] { block =>

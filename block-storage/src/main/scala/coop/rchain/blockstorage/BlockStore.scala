@@ -11,7 +11,7 @@ import scala.language.higherKinds
 trait BlockStore[F[_]] {
   import BlockStore.BlockHash
 
-  def put(blockMessage: BlockMessage): F[Unit] =
+  def put(blockMessage: BlockMessage): F[StorageIOErr[Unit]] =
     put((blockMessage.blockHash, blockMessage))
 
   def put(blockHash: BlockHash, blockMessage: BlockMessage): F[StorageIOErr[Unit]] =
