@@ -194,10 +194,6 @@ The [comm](comm) subproject contains code for network related operations for RCh
 
 The [rholang](rholang) subproject contains compiler related code for the Rholang language.
 
-### Rosette
-
-The [rosette](rosette) subproject contains code for a low level virtual machine for RChain.
-
 ### Rspace
 
 The [rspace](rspace) subproject contains code related to the key-value storage of the RChain blockchain.
