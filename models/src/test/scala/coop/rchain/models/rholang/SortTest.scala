@@ -50,6 +50,44 @@ class ScoredTermSpec extends FlatSpec with PropertyChecks with Matchers {
     )
     unsortedTerms.sorted should be(sortedTerms)
   }
+  it should "sort so that whenever scores are unequal then result terms have to be unequal" in {
+    def check[A: Sortable: Arbitrary]: Unit =
+      forAll{ (x: A, y: A) =>
+        whenever(sort(x).score != sort(y).score) {
+          assert(sort(x).term != sort(y).term)
+        }
+      }
+
+    import coop.rchain.models.testImplicits._
+    check[Bundle]
+    check[Connective]
+    check[Expr]
+    check[Match]
+    check[New]
+    check[Par]
+    check[Receive]
+    check[Send]
+    check[Var]
+  }
+  it should "sort so that whenever scores or result terms are unequal then the initial terms have to be unequal" in {
+    def check[A: Sortable: Arbitrary]: Unit =
+      forAll{ (x: A, y: A) =>
+        whenever(sort(x).score != sort(y).score || sort(x).term != sort(y).term) {
+          assert(x != y)
+        }
+      }
+
+    import coop.rchain.models.testImplicits._
+    check[Bundle]
+    check[Connective]
+    check[Expr]
+    check[Match]
+    check[New]
+    check[Par]
+    check[Receive]
+    check[Send]
+    check[Var]
+  }
   it should "sort so that unequal terms have unequal scores and the other way around" in {
     def checkScoreEquality[A: Sortable: Arbitrary]: Unit =
       // ScalaCheck generates similar A-s in subsequent calls which
