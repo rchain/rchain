@@ -139,13 +139,16 @@ sealed abstract class SafetyOracleInstances {
             maybeLatestByValidatorHash <- blockDag.latestMessageHash(validator)
             result <- maybeLatestByValidatorHash match {
                        case Some(latestByValidatorHash) =>
+                         val creatorJustificationOrGenesis = block.justifications
+                           .find(_.validator == block.sender)
+                           .fold(block.blockHash)(_.latestBlockHash)
                          DagOperations
                            .bfTraverseF[F, BlockHash](List(latestByValidatorHash)) { blockHash =>
                              ProtoUtil.getCreatorJustificationAsListByInMemory(
                                blockDag,
                                blockHash,
                                validator,
-                               b => b == block.blockHash
+                               b => b == creatorJustificationOrGenesis
                              )
                            }
                            .filterF(potentialChildHash => {
