@@ -138,36 +138,35 @@ object ProtoUtil {
     }
   }
 
-  def getCreatorJustificationAsListByInMemory[F[_]: Monad](
+  /**
+    * Since the creator justification is unique
+    * we don't need to return a list. However, the bfTraverseF
+    * requires a list to be returned. When we reach the goalFunc,
+    * we return an empty list.
+    */
+  def getCreatorJustificationAsListUntilGoalInMemory[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
       blockHash: BlockHash,
       validator: Validator,
       goalFunc: BlockHash => Boolean = _ => false
   ): F[List[BlockHash]] =
-    for {
-      maybeCreatorBlock <- blockDag.lookup(blockHash)
-      maybeCreatorJustificationHash = maybeCreatorBlock.flatMap(
-        _.justifications.find(_.validator == validator)
-      )
-      result <- maybeCreatorJustificationHash match {
-                 case Some(creatorJustificationHash) =>
-                   for {
-                     maybeCreatorJustification <- blockDag.lookup(
-                                                   creatorJustificationHash.latestBlockHash
-                                                 )
-                     result = maybeCreatorJustification match {
-                       case Some(creatorJustification) =>
-                         if (goalFunc(creatorJustification.blockHash)) {
-                           List.empty[BlockHash]
-                         } else {
-                           List(creatorJustification.blockHash)
-                         }
-                       case None => List.empty[BlockHash]
-                     }
-                   } yield result
-                 case None => List.empty[BlockHash].pure[F]
-               }
-    } yield result
+    blockDag.lookup(blockHash).flatMap {
+      case Some(block) =>
+        block.justifications.find(_.validator == validator).map(_.latestBlockHash) match {
+          case Some(creatorJustificationHash) =>
+            blockDag.lookup(creatorJustificationHash).map {
+              case Some(creatorJustification) =>
+                if (goalFunc(creatorJustification.blockHash)) {
+                  List.empty[BlockHash]
+                } else {
+                  List(creatorJustification.blockHash)
+                }
+              case None => List.empty[BlockHash]
+            }
+          case None => List.empty[BlockHash].pure[F]
+        }
+      case None => List.empty[BlockHash].pure[F]
+    }
 
   def weightMap(blockMessage: BlockMessage): Map[ByteString, Long] =
     blockMessage.body match {

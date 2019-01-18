@@ -139,7 +139,7 @@ sealed abstract class SafetyOracleInstances {
                 .fold(block.blockHash)(_.latestBlockHash)
               DagOperations
                 .bfTraverseF[F, BlockHash](List(latestByValidatorHash)) { blockHash =>
-                  ProtoUtil.getCreatorJustificationAsListByInMemory(
+                  ProtoUtil.getCreatorJustificationAsListUntilGoalInMemory(
                     blockDag,
                     blockHash,
                     validator,
