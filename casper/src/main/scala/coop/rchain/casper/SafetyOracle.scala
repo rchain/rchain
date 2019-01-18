@@ -135,25 +135,23 @@ sealed abstract class SafetyOracleInstances {
           agreeingValidatorToWeight: Map[Validator, Long]
       ): F[Long] = {
         def filterChildren(block: BlockMetadata, validator: Validator): F[StreamT[F, BlockHash]] =
-          for {
-            maybeLatestByValidatorHash <- blockDag.latestMessageHash(validator)
-            result <- maybeLatestByValidatorHash match {
-                       case Some(latestByValidatorHash) =>
-                         val creatorJustificationOrGenesis = block.justifications
-                           .find(_.validator == block.sender)
-                           .fold(block.blockHash)(_.latestBlockHash)
-                         DagOperations
-                           .bfTraverseF[F, BlockHash](List(latestByValidatorHash)) { blockHash =>
-                             ProtoUtil.getCreatorJustificationAsListByInMemory(
-                               blockDag,
-                               blockHash,
-                               validator,
-                               b => b == creatorJustificationOrGenesis
-                             )
-                           }
-                       case None => StreamT.empty[F, BlockHash].pure[F]
-                     }
-          } yield result
+          blockDag.latestMessageHash(validator).flatMap {
+            case Some(latestByValidatorHash) =>
+              val creatorJustificationOrGenesis = block.justifications
+                .find(_.validator == block.sender)
+                .fold(block.blockHash)(_.latestBlockHash)
+              DagOperations
+                .bfTraverseF[F, BlockHash](List(latestByValidatorHash)) { blockHash =>
+                  ProtoUtil.getCreatorJustificationAsListByInMemory(
+                    blockDag,
+                    blockHash,
+                    validator,
+                    b => b == creatorJustificationOrGenesis
+                  )
+                }
+                .pure[F]
+            case None => StreamT.empty[F, BlockHash].pure[F]
+          }
 
         def neverEventuallySeeDisagreement(
             first: Validator,
