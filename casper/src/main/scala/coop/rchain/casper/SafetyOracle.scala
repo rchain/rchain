@@ -144,7 +144,6 @@ sealed abstract class SafetyOracleInstances {
                   ProtoUtil.getCreatorJustificationAsListUntilGoalInMemory(
                     blockDag,
                     blockHash,
-                    validator,
                     b => b == creatorJustificationOrGenesis
                   )
                 }

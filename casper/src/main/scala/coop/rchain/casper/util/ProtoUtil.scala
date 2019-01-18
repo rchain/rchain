@@ -102,45 +102,23 @@ object ProtoUtil {
       }
 
   def findCreatorJustificationAncestorWithSeqNum[F[_]: Monad: BlockStore](
+      blockDag: BlockDagRepresentation[F],
       b: BlockMessage,
       seqNum: SequenceNumber
-  ): F[Option[BlockMessage]] =
+  ): F[Option[BlockHash]] =
     if (b.seqNum == seqNum) {
-      Option[BlockMessage](b).pure[F]
+      Option(b.blockHash).pure[F]
     } else {
       DagOperations
-        .bfTraverseF(List(b)) { block =>
-          getCreatorJustificationAsList[F](block, block.sender)
+        .bfTraverseF(List(b.blockHash)) { blockHash =>
+          getCreatorJustificationAsListUntilGoalInMemory[F](blockDag, blockHash)
         }
-        .find(_.seqNum == seqNum)
+        .findF { blockHash =>
+          for {
+            blockMeta <- blockDag.lookup(blockHash)
+          } yield blockMeta.get.seqNum == seqNum
+        }
     }
-
-  // TODO: Replace with getCreatorJustificationAsListUntilGoal
-  def getCreatorJustificationAsList[F[_]: Monad: BlockStore](
-      block: BlockMessage,
-      validator: Validator,
-      goalFunc: BlockMessage => Boolean = _ => false
-  ): F[List[BlockMessage]] = {
-    val maybeCreatorJustificationHash =
-      block.justifications.find(_.validator == validator)
-    maybeCreatorJustificationHash match {
-      case Some(creatorJustificationHash) =>
-        for {
-          maybeCreatorJustification <- BlockStore[F].get(creatorJustificationHash.latestBlockHash)
-          maybeCreatorJustificationAsList = maybeCreatorJustification match {
-            case Some(creatorJustification) =>
-              if (goalFunc(creatorJustification)) {
-                List.empty[BlockMessage]
-              } else {
-                List(creatorJustification)
-              }
-            case None =>
-              List.empty[BlockMessage]
-          }
-        } yield maybeCreatorJustificationAsList
-      case None => List.empty[BlockMessage].pure[F]
-    }
-  }
 
   /**
     * Since the creator justification is unique
@@ -151,14 +129,13 @@ object ProtoUtil {
   def getCreatorJustificationAsListUntilGoalInMemory[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
       blockHash: BlockHash,
-      validator: Validator,
       goalFunc: BlockHash => Boolean = _ => false
   ): F[List[BlockHash]] =
     (for {
       block <- OptionT(blockDag.lookup(blockHash))
       creatorJustificationHash <- OptionT.fromOption[F](
                                    block.justifications
-                                     .find(_.validator == validator)
+                                     .find(_.validator == block.sender)
                                      .map(_.latestBlockHash)
                                  )
       creatorJustification <- OptionT(blockDag.lookup(creatorJustificationHash))
