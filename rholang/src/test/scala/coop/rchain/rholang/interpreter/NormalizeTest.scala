@@ -210,7 +210,10 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     )
     result.knownFree should be(inputs.knownFree.newBindings(newBindings)._1)
   }
-  "Map" should "sort the insides of their elements" in {
+  "Map" should "sort the insides of their keys" in {
+    assertEqualNormalized("@0!({{1 | 2} : 0})", "@0!({{2 | 1} : 0})")
+  }
+  "Map" should "sort the insides of their values" in {
     assertEqualNormalized("@0!({0 : {1 | 2}})", "@0!({0 : {2 | 1}})")
   }
 }
