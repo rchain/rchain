@@ -151,12 +151,6 @@ sealed abstract class SafetyOracleInstances {
                                b => b == creatorJustificationOrGenesis
                              )
                            }
-                           .filterF(potentialChildHash => {
-                             for {
-                               potentialChild <- blockDag.lookup(potentialChildHash).map(_.get)
-                               isFutureBlock  = block.seqNum <= potentialChild.seqNum
-                             } yield isFutureBlock
-                           })
                        case None => StreamT.empty[F, BlockHash].pure[F]
                      }
           } yield result
