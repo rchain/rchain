@@ -217,21 +217,40 @@
 ### As a platform stakeholder, I want REV to be the currency token for the RChain platform
 ### As a REV holder, assuming I maintain control of my keys and properly use the wallet where I store REV, I expect my REV to never be lost
 ## Wallets
-1. ### As a user, I want to be able to configure a coop-supplied wallet so that I can store REV in it
+1. ### As a user, I want to be able to configure a coop-supplied wallet so that I can store REV in it.
 1. ### As a user, I want to be able to interface with the coop-supplied wallet at the command line.
-1. ### As a user, I want to be able to add REV to my coop-supplied wallet so that I have available REV to pay for goods/services
-1. ### As a user, I want to be able to remove REV from my coop-supplied wallet so that I can pay for goods/services
-1. ### As a user, I want to be able to receive REV from another user by providing that user with the public key for my coop-supplied-wallet.
-1. ### As a user, I want to be able to send REV to the coop-supplied wallet of another user by specifying the public key to the coop-supplied wallet of that user.
-1. ### As a user of a coop-supplied wallet, I want to query a wallet contract (or the blocks) for my public address to get the history of all REV transfers to and/or from it
-1. ### As a recipient of REV (other than REV at mainnet launch 'genesis'), I can use a co-op supplied dApp to view my REV balance
-1. ### As a recipient of REV at mainnet launch 'genesis', I can use a co-op supplied wallet to view my REV balance after launch.
-1. ### As an organization holding REV, I need to have multiple approviesr for any REV transaction.
-1. ### As a validator, I can move Rev to/from the key-pair for one validator node to the key-pair for another validator node or that of the co-op supplied wallet dApp
-1. ### As a wallet dApp developer, I want to use Ethereum-style addresses for send transactions to specify the recipient, so that a) I can reuse available Ethereum utility libraries; b) so the QR code is smaller and thus faster to scan than it would be for a full public key; c) it is easier for users to verbally confirm their address versus public key; and d) so RChain is more palatable for the Ethereum community
-1. ### As a wallet dApp developer, I want to discover and connect to rNodes that support a particular version (release number and hash) and have a minimum number of active connections, so that user risks due to interoperability issues and sybil actors are minimized
-1. ### As a wallet user, I need a command line interface for interacting with wallets.
-1. ### As a dApp organization, I need to have multiple approvers for any send transaction.
+1. ### As a user, I can run the coop-supplied wallet on the following platforms: Linux, Docker, others TBD.
+1. ### As a user, I want to be able to request another user to send REV to my coop-supplied wallet so that I have available REV to pay for goods/services.
+1. ### As a user, I want to be able to send REV from my coop-supplied wallet to another user so that I can pay for goods/services.
+1. ### As a user, I want to be able to receive REV from another user by providing that user with the Ethereum-style address for my coop-supplied-wallet.
+1. ### As a user, I want to be able to send REV to the coop-supplied wallet of another user by specifying the Ethereum-style address of that user.
+1. ### As a user, I want to query the wallet based on my public address and see the history of all REV transfers to/from it, including the source/destination address, amount, and approximate datetime.
+1. ### As a user who has received REVs transacted after Genesis, I can view my REV balance.
+1. ### As a user who has received REVs with a balance cloned at Genesis from RHOC, I can view my REV balance.
+1. ### As a validator, I can move REVs to/from the key-pair for one validator node from/to the key-pair for another validator node or wallet dApp.
+1. ### As a user, I can specify Ethereum-style addresses to specify send, request, or history commands.  Rationale: a) Users don’t need to generate a public key from their private key; b) developers can leverage Ethereum utility libraries; c) so the QR code is smaller and thus faster to scan than it would be for a full public key; d) it is easier for users to verbally confirm their address versus public key; and e) so RChain is more palatable for the Ethereum community
+1. ### As a wallet user, I want to connect to an RNode hosted by someone else, so I don’t need to host my own.
+1. ### As a wallet user, I want to be able to easily connect with a trustworthy RNode that is on the mainnet and that is version-compatible with my installed wallet.
+1. ### Multi-Sig Wallet
+    1. As an officer of an organization, I need to have multiple approvers for any send transaction.
+    1. As a user, I can create a multisig wallet by specifying signer’s addresses and a quorum number.
+    1. As a basic wallet user, I can send Rev to a multi-sig wallet.
+    1. As a basic wallet user, I can see the current Rev balance in a multi-sig wallet.
+    1. As a basic wallet user, I can see the completed Rev transaction history in a multi-sig wallet.
+    1. As a multisig user, I can see all open requests (e.g., for payment, quorum number, add signing user, or remove signing user).
+    1. As a multisig user, I can initiate a payment request to a destination address.
+    1. As a payment request initiator, I can withdraw a payment request that I initiated (prior to full approval).
+    1. As a multisig user, I can see the state of a payment request (proposed, pending approval, approved, withdrawn).
+    1. Any multisig user can see the inbound and outbound transaction history, with from/to address, amount, and approximate time.
+    1. As a multisig user, I can see the history (i.e., who took what action when) of payment requests.
+    1. As a multisig user, I can vote to approve a payment request (before it is completed or withdrawn).
+    1. As a multisig user, I can vote to reject a payment request (before it is completed or withdrawn).
+    1. As a multisig user, I can indicate my vote is undecided (or pending) for a payment request (before it is completed or withdrawn).
+    1. As a multisig user, when I vote to approve a payment request and my vote causes a quorum to be met, the system sends the specified Revs.
+    1. As a multisig user, I can see the current Rev balance controlled by the multisig wallet.
+    1. As a multisig user, I can propose the quorum number be changed. (The approval workflow is then similar to payment requests.)
+    1. As a multisig user, I can propose an existing signing user be removed. (The approval workflow is then similar to payment requests.)
+    1. As a multisig user, I can propose a new signing user be added. (The approval workflow is then similar to payment requests.)
 ## Validation
 ### As a RChain validator, I want my validator identity to be different from the identity of my node and from the identity of my wallet
 #### Documentation of identities
