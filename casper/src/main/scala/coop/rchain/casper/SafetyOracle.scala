@@ -96,25 +96,22 @@ sealed abstract class SafetyOracleInstances {
           weights <- computeMainParentWeightMap(blockDag, candidateBlockHash)
           agreeingWeights <- weights.toList.traverse {
                               case (validator, stake) =>
-                                for {
-                                  maybeLatestMessageHash <- blockDag.latestMessageHash(validator)
-                                  result <- maybeLatestMessageHash match {
-                                             case Some(latestMessageHash) =>
-                                               computeCompatibility(
-                                                 blockDag,
-                                                 candidateBlockHash,
-                                                 latestMessageHash
-                                               ).map { isCompatible =>
-                                                 if (isCompatible) {
-                                                   Some((validator, stake))
-                                                 } else {
-                                                   none[(Validator, Long)]
-                                                 }
-                                               }
-                                             case None =>
-                                               none[(Validator, Long)].pure[F]
-                                           }
-                                } yield result
+                                blockDag.latestMessageHash(validator).flatMap {
+                                  case Some(latestMessageHash) =>
+                                    computeCompatibility(
+                                      blockDag,
+                                      candidateBlockHash,
+                                      latestMessageHash
+                                    ).map { isCompatible =>
+                                      if (isCompatible) {
+                                        Some((validator, stake))
+                                      } else {
+                                        none[(Validator, Long)]
+                                      }
+                                    }
+                                  case None =>
+                                    none[(Validator, Long)].pure[F]
+                                }
                             }
         } yield agreeingWeights.flatten.toMap
 
