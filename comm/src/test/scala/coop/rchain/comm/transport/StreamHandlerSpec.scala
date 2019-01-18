@@ -16,7 +16,6 @@ import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib.ski._
 import monix.execution.Scheduler.Implicits.global
 import com.google.protobuf.ByteString
-import scala.util.Random
 
 class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
 
