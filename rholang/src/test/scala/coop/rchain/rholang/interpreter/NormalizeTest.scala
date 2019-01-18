@@ -82,10 +82,10 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     )
     result.knownFree should be(inputs.knownFree)
   }
-  "List" should "sort elements" in {
+  "List" should "sort the insides of their elements" in {
     assertEqualNormalized("@0!([{1 | 2}])", "@0!([{2 | 1}])")
   }
-  "List" should "sort elements in inner send" in {
+  "List" should "sort the insides of a send encoded as a byte array" in {
     val rho1 =
       """new x in {
         |  x!(
@@ -143,7 +143,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
       ProcNormalizeMatcher.normalizeMatch[Coeval](tuple, inputs).value
     }
   }
-  "Tuple" should "sort elements" in {
+  "Tuple" should "sort the insides of their elements" in {
     assertEqualNormalized("@0!(({1 | 2}))", "@0!(({2 | 1}))")
   }
   "Set" should "delegate" in {
@@ -175,7 +175,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     )
     result.knownFree should be(inputs.knownFree.newBindings(newBindings)._1)
   }
-  "Set" should "sort elements" in {
+  "Set" should "sort the insides of their elements" in {
     assertEqualNormalized("@0!(Set({1 | 2}))", "@0!(Set({2 | 1}))")
   }
   "Map" should "delegate" in {
@@ -210,7 +210,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     )
     result.knownFree should be(inputs.knownFree.newBindings(newBindings)._1)
   }
-  "Map" should "sort elements" in {
+  "Map" should "sort the insides of their elements" in {
     assertEqualNormalized("@0!({0 : {1 | 2}})", "@0!({0 : {2 | 1}})")
   }
 }
