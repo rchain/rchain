@@ -2,13 +2,14 @@ package coop.rchain.casper
 
 import cats.Monad
 import cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._
+import coop.rchain.catscontrib._
+import Catscontrib._
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockMetadata}
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.Justification
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.{Clique, DagOperations, ProtoUtil}
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Log, StreamT}
 
 /*
  * Implementation inspired by Ethereum's CBC casper simulator's clique oracle implementation.
@@ -133,7 +134,7 @@ sealed abstract class SafetyOracleInstances {
           candidateBlockHash: BlockHash,
           agreeingValidatorToWeight: Map[Validator, Long]
       ): F[Long] = {
-        def filterChildren(block: BlockMetadata, validator: Validator): F[List[BlockHash]] =
+        def filterChildren(block: BlockMetadata, validator: Validator): F[StreamT[F, BlockHash]] =
           for {
             maybeLatestByValidatorHash <- blockDag.latestMessageHash(validator)
             result <- maybeLatestByValidatorHash match {
@@ -153,8 +154,7 @@ sealed abstract class SafetyOracleInstances {
                                isFutureBlock  = block.seqNum <= potentialChild.seqNum
                              } yield isFutureBlock
                            })
-                           .flatMap(_.toList)
-                       case None => List.empty[BlockHash].pure[F]
+                       case None => StreamT.empty[F, BlockHash].pure[F]
                      }
           } yield result
 
@@ -162,49 +162,43 @@ sealed abstract class SafetyOracleInstances {
             first: Validator,
             second: Validator
         ): F[Boolean] =
-          for {
-            maybeFirstLatest <- blockDag.latestMessage(first)
-            result <- maybeFirstLatest match {
-                       case Some(firstLatestBlock) =>
-                         val maybeSecondLatestOfFirstLatestHash =
-                           firstLatestBlock.justifications
-                             .find {
-                               case Justification(validator, _) =>
-                                 validator == second
-                             }
-                             .map(_.latestBlockHash)
-                         maybeSecondLatestOfFirstLatestHash match {
-                           case Some(secondLatestOfFirstLatestHash) =>
-                             for {
-                               maybeSecondLatestOfFirstLatest <- blockDag.lookup(
-                                                                  secondLatestOfFirstLatestHash
-                                                                )
-                               result <- maybeSecondLatestOfFirstLatest match {
-                                          case Some(secondLatestOfFirstLatest) =>
-                                            for {
-                                              potentialDisagreements <- filterChildren(
-                                                                         secondLatestOfFirstLatest,
-                                                                         second
-                                                                       )
-                                              result <- potentialDisagreements.forallM {
-                                                         potentialDisagreement =>
-                                                           computeCompatibility(
-                                                             blockDag,
-                                                             candidateBlockHash,
-                                                             potentialDisagreement
-                                                           )
-                                                       }
-                                            } yield result
-                                          case None =>
-                                            false.pure[F]
-                                        }
-                             } yield result
-                           case None =>
-                             false.pure[F]
-                         }
-                       case None => false.pure[F]
-                     }
-          } yield result
+          blockDag.latestMessage(first).flatMap {
+            case Some(firstLatestBlock) =>
+              val maybeSecondLatestOfFirstLatestHash =
+                firstLatestBlock.justifications
+                  .find {
+                    case Justification(validator, _) =>
+                      validator == second
+                  }
+                  .map(_.latestBlockHash)
+              maybeSecondLatestOfFirstLatestHash match {
+                case Some(secondLatestOfFirstLatestHash) =>
+                  blockDag.lookup(secondLatestOfFirstLatestHash).flatMap {
+                    case Some(secondLatestOfFirstLatest) =>
+                      for {
+                        potentialDisagreements <- filterChildren(
+                                                   secondLatestOfFirstLatest,
+                                                   second
+                                                 )
+                        // TODO: Implement forallM on StreamT
+                        result <- potentialDisagreements.toList.flatMap(
+                                   _.forallM { potentialDisagreement =>
+                                     computeCompatibility(
+                                       blockDag,
+                                       candidateBlockHash,
+                                       potentialDisagreement
+                                     )
+                                   }
+                                 )
+                      } yield result
+                    case None =>
+                      false.pure[F]
+                  }
+                case None =>
+                  false.pure[F]
+              }
+            case None => false.pure[F]
+          }
 
         def computeAgreementGraphEdges: F[List[(Validator, Validator)]] =
           (for {
