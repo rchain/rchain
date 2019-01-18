@@ -1,5 +1,23 @@
 # Mainnet Feature Requirements
 
+- [Nodes](#nodes)
+- [Peer-To-Peer Network](#peer-to-peer-network)
+- [Network Launch](#network-launch)
+- [Contract Deployment](#contract-deployment)
+- [Rev](#rev)
+- [Wallets](#wallets)
+- [Validation](#validation)
+- [Bonding/unbonding](#bondingunbonding)
+- [Validator Rewards](#validator-rewards)
+- [Validator Slashing and Ejection](#validator-slashing-and-ejection)
+- [Consensus](#consensus)
+- [Cost Accounting](#cost-accounting)
+- [Name Registry](#name-registry)
+- [Performance](#performance)
+- [Platform Administration](#platform-administration)
+- [Documentation](#documentation)
+- [Not Grouped](#not_grouped)
+
 ## Nodes
 ### As a Node Operator, I want to install software from binary artifacts or a Docker image
 #### Install rnode using tarball
@@ -199,21 +217,21 @@
 ### As a platform stakeholder, I want REV to be the currency token for the RChain platform
 ### As a REV holder, assuming I maintain control of my keys and properly use the wallet where I store REV, I expect my REV to never be lost
 ## Wallets
-### As a user, I want to be able to configure a coop-supplied wallet so that I can store REV in it
-### As a user, I want to be able to interface with the coop-supplied wallet at the command line.
-### As a user, I want to be able to add REV to my coop-supplied wallet so that I have available REV to pay for goods/services
-### As a user, I want to be able to remove REV from my coop-supplied wallet so that I can pay for goods/services
-### As a user, I want to be able to receive REV from another user by providing that user with the public key for my coop-supplied-wallet.
-### As a user, I want to be able to send REV to the coop-supplied wallet of another user by specifying the public key to the coop-supplied wallet of that user.
-### As a user of a coop-supplied wallet, I want to query a wallet contract (or the blocks) for my public address to get the history of all REV transfers to and/or from it
-### As a recipient of REV (other than REV at mainnet launch 'genesis'), I can use a co-op supplied dApp to view my REV balance
-### As a recipient of REV at mainnet launch 'genesis', I can use a co-op supplied wallet to view my REV balance after launch.
-### As an organization holding REV, I need to have multiple approviesr for any REV transaction.
-### As a validator, I can move Rev to/from the key-pair for one validator node to the key-pair for another validator node or that of the co-op supplied wallet dApp
-### As a wallet dApp developer, I want to use Ethereum-style addresses for send transactions to specify the recipient, so that a) I can reuse available Ethereum utility libraries; b) so the QR code is smaller and thus faster to scan than it would be for a full public key; c) it is easier for users to verbally confirm their address versus public key; and d) so RChain is more palatable for the Ethereum community
-### As a wallet dApp developer, I want to discover and connect to rNodes that support a particular version (release number and hash) and have a minimum number of active connections, so that user risks due to interoperability issues and sybil actors are minimized
-### As a wallet user, I need a command line interface for interacting with wallets.
-### As a dApp organization, I need to have multiple approvers for any send transaction.
+1. ### As a user, I want to be able to configure a coop-supplied wallet so that I can store REV in it
+1. ### As a user, I want to be able to interface with the coop-supplied wallet at the command line.
+1. ### As a user, I want to be able to add REV to my coop-supplied wallet so that I have available REV to pay for goods/services
+1. ### As a user, I want to be able to remove REV from my coop-supplied wallet so that I can pay for goods/services
+1. ### As a user, I want to be able to receive REV from another user by providing that user with the public key for my coop-supplied-wallet.
+1. ### As a user, I want to be able to send REV to the coop-supplied wallet of another user by specifying the public key to the coop-supplied wallet of that user.
+1. ### As a user of a coop-supplied wallet, I want to query a wallet contract (or the blocks) for my public address to get the history of all REV transfers to and/or from it
+1. ### As a recipient of REV (other than REV at mainnet launch 'genesis'), I can use a co-op supplied dApp to view my REV balance
+1. ### As a recipient of REV at mainnet launch 'genesis', I can use a co-op supplied wallet to view my REV balance after launch.
+1. ### As an organization holding REV, I need to have multiple approviesr for any REV transaction.
+1. ### As a validator, I can move Rev to/from the key-pair for one validator node to the key-pair for another validator node or that of the co-op supplied wallet dApp
+1. ### As a wallet dApp developer, I want to use Ethereum-style addresses for send transactions to specify the recipient, so that a) I can reuse available Ethereum utility libraries; b) so the QR code is smaller and thus faster to scan than it would be for a full public key; c) it is easier for users to verbally confirm their address versus public key; and d) so RChain is more palatable for the Ethereum community
+1. ### As a wallet dApp developer, I want to discover and connect to rNodes that support a particular version (release number and hash) and have a minimum number of active connections, so that user risks due to interoperability issues and sybil actors are minimized
+1. ### As a wallet user, I need a command line interface for interacting with wallets.
+1. ### As a dApp organization, I need to have multiple approvers for any send transaction.
 ## Validation
 ### As a RChain validator, I want my validator identity to be different from the identity of my node and from the identity of my wallet
 #### Documentation of identities
