@@ -220,6 +220,17 @@ private[sorter] object ExprSortMatcher extends Sortable[Expr] {
               )
             )
           )
+      case ETupleBody(tuple) =>
+        for {
+          sortedPars          <- tuple.ps.toList.traverse(Sortable[Par].sortMatch[F])
+          connectiveUsedScore = if (tuple.connectiveUsed) 1 else 0
+        } yield
+          ScoredTerm(
+            ETupleBody(tuple.withPs(sortedPars.map(_.term))),
+            Node(
+              Seq(Leaf(Score.ETUPLE)) ++ sortedPars.map(_.score) ++ Seq(Leaf(connectiveUsedScore))
+            )
+          )
       case EMethodBody(em) =>
         for {
           args         <- em.arguments.toList.traverse(Sortable[Par].sortMatch[F])
