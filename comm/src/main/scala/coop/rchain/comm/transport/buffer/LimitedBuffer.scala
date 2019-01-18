@@ -21,6 +21,7 @@ trait LimitedBuffer[A] {
   def complete(): Unit
 }
 
+@SuppressWarnings(Array("org.wartremover.warts.Return"))
 private final class DropNewBuffer[A](out: Subscriber[A], bufferSize: Int) extends LimitedBuffer[A] {
 
   require(bufferSize > 0, "bufferSize must be a strictly positive number")

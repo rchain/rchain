@@ -1,7 +1,7 @@
 package coop.rchain.shared
 import java.lang.Long.numberOfLeadingZeros
 import java.util.Locale
-
+import cats._, cats.data._, cats.implicits._
 object LongOps {
 
   implicit class RichLong(value: Long) {
@@ -14,7 +14,7 @@ object LongOps {
       */
     def toHumanReadableSize: String =
       if (value < 1024) {
-        value + " B"
+        value.show + " B"
       } else {
         //division and then multiplication by 10 resets trailing bits
         val z: Int = (63 - numberOfLeadingZeros(value)) / 10

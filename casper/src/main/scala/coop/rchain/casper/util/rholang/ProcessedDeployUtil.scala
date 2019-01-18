@@ -5,7 +5,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.models.PCost
 import coop.rchain.rspace.trace
 
-case class InternalProcessedDeploy(
+final case class InternalProcessedDeploy(
     deploy: Deploy,
     cost: PCost,
     log: Seq[trace.Event],

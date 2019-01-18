@@ -131,12 +131,14 @@ class TcpTransportLayer(
   def stream(peers: Seq[PeerNode], blob: Blob): Task[Unit] =
     streamObservable.stream(peers.toList, blob) *> log.info(s"stream to $peers blob")
 
+  @SuppressWarnings(Array("org.wartremover.warts.IsInstanceOf"))
   private object PeerUnavailable {
     def unapply(e: Throwable): Boolean =
       e.isInstanceOf[StatusRuntimeException] &&
         e.asInstanceOf[StatusRuntimeException].getStatus.getCode == Status.Code.UNAVAILABLE
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.IsInstanceOf"))
   private object PeerTimeout {
     def unapply(e: Throwable): Boolean = e.isInstanceOf[TimeoutException]
   }

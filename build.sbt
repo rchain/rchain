@@ -21,6 +21,16 @@ lazy val projectSettings = Seq(
     Resolver.sonatypeRepo("snapshots"),
     "jitpack" at "https://jitpack.io"
   ),
+  wartremoverExcluded += sourceManaged.value,
+  wartremoverErrors in (Compile, compile) ++= Warts.allBut(
+    Wart.ImplicitParameter, Wart.Recursion, Wart.DefaultArguments, Wart.ImplicitConversion,
+    Wart.LeakingSealed, Wart.Overloading, Wart.Nothing, Wart.NonUnitStatements,
+    Wart.Equals, Wart.PublicInference, Wart.Var, Wart.TraversableOps, Wart.ArrayEquals,
+    Wart.Throw, Wart.While, Wart.Any, Wart.Product, Wart.Serializable, Wart.OptionPartial,
+    Wart.EitherProjectionPartial, Wart.Option2Iterable, Wart.ToString, Wart.JavaConversions,
+    Wart.MutableDataStructures, Wart.FinalVal, Wart.Null, Wart.AsInstanceOf, Wart.ExplicitImplicitTypes,
+    Wart.StringPlusAny, Wart.AnyVal
+  ),
   scalafmtOnCompile := sys.env.get("CI").isEmpty, // disable in CI environments
   scapegoatVersion in ThisBuild := "1.3.4",
   testOptions in Test += Tests.Argument("-oD"), //output test durations

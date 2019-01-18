@@ -4,9 +4,9 @@ import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.CommError
 
 sealed trait CommunicationResponse
-case class HandledWithMessage(pm: Protocol) extends CommunicationResponse
-case object HandledWitoutMessage            extends CommunicationResponse
-case class NotHandled(error: CommError)     extends CommunicationResponse
+final case class HandledWithMessage(pm: Protocol) extends CommunicationResponse
+final case object HandledWitoutMessage            extends CommunicationResponse
+final case class NotHandled(error: CommError)     extends CommunicationResponse
 
 object CommunicationResponse {
   def handledWithMessage(protocol: Protocol): CommunicationResponse = HandledWithMessage(protocol)

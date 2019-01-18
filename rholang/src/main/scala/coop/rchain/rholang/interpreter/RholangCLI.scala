@@ -96,6 +96,7 @@ object RholangCLI {
     }
 
   @tailrec
+  @SuppressWarnings(Array("org.wartremover.warts.Return"))
   def repl(runtime: Runtime[Task])(implicit scheduler: Scheduler): Unit = {
     printPrompt()
     Option(scala.io.StdIn.readLine()) match {

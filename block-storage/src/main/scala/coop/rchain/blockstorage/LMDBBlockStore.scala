@@ -123,7 +123,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
 
 object LMDBBlockStore {
 
-  case class Config(
+  final case class Config(
       path: Path,
       mapSize: Long,
       maxDbs: Int = 1,

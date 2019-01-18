@@ -18,7 +18,7 @@ private[regex] trait RegexOptions extends ParseOptions {
   val endsWith: List[String]
 }
 
-case class PathRegexOptions(
+final case class PathRegexOptions(
     caseSensitive: Boolean = false,
     strict: Boolean = false,
     end: Boolean = true,
@@ -37,7 +37,7 @@ object PathRegexOptions {
   val nonEnd        = PathRegexOptions(end = false)
 }
 
-private[regex] case class PathToken(
+private[regex] final case class PathToken(
     name: Option[String],
     key: Int,
     prefix: Option[Char],
@@ -123,7 +123,7 @@ private[regex] object PathToken {
     new PathToken(None, -1, None, None, false, false, false, None, Some(substring))
 }
 
-case class PathRegex(tokens: List[PathToken], options: RegexOptions) {
+final case class PathRegex(tokens: List[PathToken], options: RegexOptions) {
   def withOptions(newOptions: RegexOptions): PathRegex = new PathRegex(tokens, newOptions)
 
   /**
@@ -252,7 +252,7 @@ object PathRegex {
   private[this] val rxPath =
     """(\\.)|(?:\:(\w+)(?:\(((?:\\.|[^\\()])+)\))?|\(((?:\\.|[^\\()])+)\))([+*?])?""".r
 
-  private[this] case class ParseState(
+  private[this] final case class ParseState(
       subStr: String,
       rawPathPart: String,
       tokens: List[PathToken],

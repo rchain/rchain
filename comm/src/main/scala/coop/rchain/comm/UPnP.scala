@@ -223,7 +223,7 @@ object UPnP {
     }
 }
 
-case class UPnPDevices(
+final case class UPnPDevices(
     all: Map[InetAddress, GatewayDevice],
     gateways: Seq[GatewayDevice],
     validGateway: Option[GatewayDevice]

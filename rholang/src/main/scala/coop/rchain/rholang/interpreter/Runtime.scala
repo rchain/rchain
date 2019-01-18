@@ -199,7 +199,7 @@ object Runtime {
     }.sequence
 
   object SystemProcess {
-    case class Context[F[_]: Sync](
+    final case class Context[F[_]: Sync](
         space: RhoISpace[F],
         dispatcher: RhoDispatch[F],
         registry: Registry[F],
@@ -209,7 +209,7 @@ object Runtime {
       val systemProcesses = SystemProcesses[F](dispatcher, space)
     }
 
-    case class Definition[F[_]](
+    final case class Definition[F[_]](
         urn: String,
         fixedChannel: Name,
         arity: Arity,

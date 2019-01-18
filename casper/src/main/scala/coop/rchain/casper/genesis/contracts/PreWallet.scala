@@ -2,7 +2,7 @@ package coop.rchain.casper.genesis.contracts
 
 import scala.util.{Failure, Success, Try}
 
-case class PreWallet(ethAddress: String, initRevBalance: BigInt)
+final case class PreWallet(ethAddress: String, initRevBalance: BigInt)
 
 object PreWallet {
 

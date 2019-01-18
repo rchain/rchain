@@ -29,6 +29,7 @@ object StringExamples {
     *
     * It captures the data it consumes.
     */
+  @SuppressWarnings(Array("org.wartremover.warts.MutableDataStructures"))
   class StringsCaptor extends ((Seq[String]) => Unit) with Serializable {
 
     @transient

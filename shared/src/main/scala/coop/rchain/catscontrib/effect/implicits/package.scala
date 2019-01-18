@@ -23,6 +23,7 @@ package object implicits {
           case NonFatal(e) => f(e)
         }
 
+      @SuppressWarnings(Array("org.wartremover.warts.Throw"))
       def raiseError[A](e: Throwable): cats.Id[A] = throw e
 
       def flatMap[A, B](fa: cats.Id[A])(f: A => cats.Id[B]): cats.Id[B] =
@@ -31,6 +32,7 @@ package object implicits {
       def tailRecM[A, B](a: A)(f: A => cats.Id[Either[A, B]]): cats.Id[B] =
         catsInstancesForId.tailRecM(a)(f)
 
+      @SuppressWarnings(Array("org.wartremover.warts.Throw"))
       def bracketCase[A, B](acquire: A)(use: A => B)(release: (A, ExitCase[Throwable]) => Unit): B =
         Try(use(acquire)) match {
           case Success(result) =>
@@ -66,7 +68,7 @@ package object implicits {
             })
       )
 
-    override def raiseError[A](e: Throwable): Try[A] = trySyntax.raiseError(e)
+    override def raiseError[A](e: Throwable): Try[A] = trySyntax.raiseError[A](e)
 
     override def handleErrorWith[A](fa: Try[A])(f: Throwable => Try[A]): Try[A] =
       trySyntax.handleErrorWith(fa)(f)

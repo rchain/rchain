@@ -6,7 +6,7 @@ import coop.rchain.rspace.{Blake2b256Hash, InMemoryOps, InMemTransaction, _}
 
 import kamon.Kamon
 
-case class State[K, V](
+final case class State[K, V](
     _dbTrie: Map[Blake2b256Hash, Trie[K, V]],
     _dbRoot: Map[Branch, Blake2b256Hash],
     _dbPastRoots: Map[Branch, Seq[Blake2b256Hash]],
