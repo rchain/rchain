@@ -393,27 +393,6 @@ lazy val rholangProtoBuild = (project in file("rholang-proto-build"))
   )
   .dependsOn(rholang)
 
-lazy val roscalaMacros = (project in file("roscala/macros"))
-  .settings(commonSettings: _*)
-  .settings(
-    libraryDependencies ++= commonDependencies ++ Seq(
-      "org.scala-lang" % "scala-reflect" % scalaVersion.value
-    )
-  )
-
-lazy val roscala = (project in file("roscala"))
-  .settings(commonSettings: _*)
-  .settings(
-    name := "Rosette",
-    mainClass in assembly := Some("coop.rchain.rosette.Main"),
-    assemblyJarName in assembly := "rosette.jar",
-    inThisBuild(
-      List(addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full))
-    ),
-    libraryDependencies ++= commonDependencies
-  )
-  .dependsOn(roscalaMacros)
-
 lazy val blockStorage = (project in file("block-storage"))
   .settings(commonSettings: _*)
   .settings(
@@ -530,7 +509,6 @@ lazy val rchain = (project in file("."))
     regex,
     rholang,
     rholangCLI,
-    roscala,
     rspace,
     rspaceBench,
     shared
