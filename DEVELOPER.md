@@ -194,10 +194,6 @@ The [comm](comm) subproject contains code for network related operations for RCh
 
 The [rholang](rholang) subproject contains compiler related code for the Rholang language.
 
-### Roscala
-
-The [roscala](roscala) subproject contains a Scala translation of the Rosette VM.
-
 ### Rosette
 
 The [rosette](rosette) subproject contains code for a low level virtual machine for RChain.
