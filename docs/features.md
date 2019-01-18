@@ -220,15 +220,22 @@
 1. ### As a user, I want to be able to configure a coop-supplied wallet so that I can store REV in it.
 1. ### As a user, I want to be able to interface with the coop-supplied wallet at the command line.
 1. ### As a user, I can run the coop-supplied wallet on the following platforms: Linux, Docker, others TBD.
+1. ### As a wallet user, I can import my private key.
+1. ### As a wallet user, I can store my private key encrypted with a password I provide.
+1. ### As a wallet user, I must provide my password for each session in order to use my stored private key.
+1. ### As a wallet user, I can create a random private key.
+1. ### As a wallet user, I can view my private key, public key, and Ethereum-style address.
 1. ### As a user, I want to be able to request another user to send REV to my coop-supplied wallet so that I have available REV to pay for goods/services.
 1. ### As a user, I want to be able to send REV from my coop-supplied wallet to another user so that I can pay for goods/services.
 1. ### As a user, I want to be able to receive REV from another user by providing that user with the Ethereum-style address for my coop-supplied-wallet.
 1. ### As a user, I want to be able to send REV to the coop-supplied wallet of another user by specifying the Ethereum-style address of that user.
 1. ### As a user, I want to query the wallet based on my public address and see the history of all REV transfers to/from it, including the source/destination address, amount, and approximate datetime.
+1. ### As a wallet user, I can see and present verifiable evidence to a third party that one of my payments to/from another user did in fact occur and complete.
 1. ### As a user who has received REVs transacted after Genesis, I can view my REV balance.
 1. ### As a user who has received REVs with a balance cloned at Genesis from RHOC, I can view my REV balance.
 1. ### As a validator, I can move REVs to/from the key-pair for one validator node from/to the key-pair for another validator node or wallet dApp.
-1. ### As a user, I can specify Ethereum-style addresses to specify send, request, or history commands.  Rationale: a) Users don’t need to generate a public key from their private key; b) developers can leverage Ethereum utility libraries; c) so the QR code is smaller and thus faster to scan than it would be for a full public key; d) it is easier for users to verbally confirm their address versus public key; and e) so RChain is more palatable for the Ethereum community
+1. ### As a user, I can specify Ethereum-style addresses to specify send, request, or history commands.  Rationale: a) Users don’t need to generate a public key from their private key; b) developers can leverage Ethereum utility libraries; c) so the QR code is smaller and thus faster to scan than it would be for a full public key; d) it is easier for users to verbally confirm their address versus public key; and e) so RChain is more palatable for the Ethereum community.
+1. ### As a wallet user, I can connect to a self-hosted RNode.
 1. ### As a wallet user, I want to connect to an RNode hosted by someone else, so I don’t need to host my own.
 1. ### As a wallet user, I want to be able to easily connect with a trustworthy RNode that is on the mainnet and that is version-compatible with my installed wallet.
 1. ### Multi-Sig Wallet
