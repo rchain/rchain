@@ -19,7 +19,8 @@ import coop.rchain.casper.util.comm.CasperPacketHandler.{
   CasperPacketHandlerImpl,
   CasperPacketHandlerInternal
 }
-import coop.rchain.casper.util.comm.TransportLayerTestImpl
+import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
+import coop.rchain.casper.util.comm.{TestNetwork, TransportLayerTestImpl}
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib._
@@ -167,12 +168,13 @@ object HashSetCasperTestNode {
       implicit errorHandler: ErrorHandler[F],
       syncF: Sync[F],
       captureF: Capture[F],
-      concurrentF: Concurrent[F]
+      concurrentF: Concurrent[F],
+      testNetworkF: TestNetwork[F]
   ): F[HashSetCasperTestNode[F]] = {
     val name     = "standalone"
     val identity = peerNode(name, 40400)
     val tle =
-      new TransportLayerTestImpl[F](identity, Map.empty[PeerNode, Ref[F, mutable.Queue[Protocol]]])
+      new TransportLayerTestImpl[F](identity)
     val logicalTime: LogicalTime[F] = new LogicalTime[F]
     implicit val log                = new Log.NOPLog[F]()
     implicit val metricEff          = new Metrics.MetricsNOP[F]
@@ -181,6 +183,7 @@ object HashSetCasperTestNode {
     val blockStoreDir = BlockDagStorageTestFixture.blockStorageDir
     val env           = Context.env(blockStoreDir, mapSize)
     for {
+      _          <- TestNetwork.addPeer(identity)
       blockStore <- FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
       blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
                           BlockDagFileStorage.Config(
@@ -220,14 +223,20 @@ object HashSetCasperTestNode {
       result <- node.initialize.map(_ => node)
     } yield result
   }
-  def standaloneEff(genesis: BlockMessage, sk: Array[Byte], storageSize: Long = 1024L * 1024 * 10)(
+  def standaloneEff(
+      genesis: BlockMessage,
+      sk: Array[Byte],
+      storageSize: Long = 1024L * 1024 * 10,
+      testNetwork: TestNetwork[Effect] = TestNetwork.empty
+  )(
       implicit scheduler: Scheduler
   ): HashSetCasperTestNode[Effect] =
     standaloneF[Effect](genesis, sk, storageSize, createRuntime)(
       ApplicativeError_[Effect, CommError],
       syncEffectInstance,
       Capture[Effect],
-      Concurrent[Effect]
+      Concurrent[Effect],
+      testNetwork
     ).value.unsafeRunSync.right.get
 
   def networkF[F[_]](
@@ -239,7 +248,8 @@ object HashSetCasperTestNode {
       implicit errorHandler: ErrorHandler[F],
       syncF: Sync[F],
       captureF: Capture[F],
-      concurrentF: Concurrent[F]
+      concurrentF: Concurrent[F],
+      testNetworkF: TestNetwork[F]
   ): F[IndexedSeq[HashSetCasperTestNode[F]]] = {
     val n     = sks.length
     val names = (1 to n).map(i => s"node-$i")
@@ -257,7 +267,7 @@ object HashSetCasperTestNode {
         .toList
         .traverse {
           case ((n, p), sk) =>
-            val tle                = new TransportLayerTestImpl[F](p, msgQueues)
+            val tle                = new TransportLayerTestImpl[F](p)
             implicit val log       = new Log.NOPLog[F]()
             implicit val metricEff = new Metrics.MetricsNOP[F]
 
@@ -265,6 +275,7 @@ object HashSetCasperTestNode {
             val blockStoreDir = BlockDagStorageTestFixture.blockStorageDir
             val env           = Context.env(blockStoreDir, mapSize)
             for {
+              _          <- TestNetwork.addPeer(p)
               blockStore <- FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
               blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
                                   BlockDagFileStorage.Config(
@@ -331,13 +342,15 @@ object HashSetCasperTestNode {
   def networkEff(
       sks: IndexedSeq[Array[Byte]],
       genesis: BlockMessage,
-      storageSize: Long = 1024L * 1024 * 10
+      storageSize: Long = 1024L * 1024 * 10,
+      testNetwork: TestNetwork[Effect] = TestNetwork.empty
   )(implicit scheduler: Scheduler): Effect[IndexedSeq[HashSetCasperTestNode[Effect]]] =
     networkF[Effect](sks, genesis, storageSize, createRuntime)(
       ApplicativeError_[Effect, CommError],
       syncEffectInstance,
       Capture[Effect],
-      Concurrent[Effect]
+      Concurrent[Effect],
+      testNetwork
     )
 
   val appErrId = new ApplicativeError[Id, CommError] {
