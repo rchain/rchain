@@ -70,9 +70,7 @@ trait CellInstances0 {
       def modify(f: S => S): EitherT[F, E, Unit] =
         EitherT(
           fCell
-            .modify(
-              s => f(s)
-            )
+            .modify(f)
             .map(Right(_).leftCast[E])
         )
       def flatModify(f: S => EitherT[F, E, S]): EitherT[F, E, Unit] =
