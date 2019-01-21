@@ -569,4 +569,13 @@ object ProtoUtil {
     val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(dd.timestamp))))
     (computeCodeHash(dd), phloPrice, userId, timestamp)
   }
+
+  def dependenciesHashesOf(b: BlockMessage): List[BlockHash] = {
+    val missingParents = parentHashes(b).toSet
+    val missingJustifications = b.justifications
+      .map(_.latestBlockHash)
+      .toSet
+    (missingParents union missingJustifications).toList
+  }
+
 }

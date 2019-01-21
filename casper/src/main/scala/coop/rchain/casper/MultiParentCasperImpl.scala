@@ -510,18 +510,14 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       b: BlockMessage
   ): F[Unit] =
     for {
-      dag            <- blockDag
-      missingParents = parentHashes(b).toSet
-      missingJustifications = b.justifications
-        .map(_.latestBlockHash)
-        .toSet
-      allDependencies = (missingParents union missingJustifications).toList
-      missingDependencies <- allDependencies.filterA(
-                              blockHash =>
-                                dag
-                                  .lookup(blockHash)
-                                  .map(_.isEmpty)
-                            )
+      dag <- blockDag
+      missingDependencies <- dependenciesHashesOf(b)
+                              .filterA(
+                                blockHash =>
+                                  dag
+                                    .lookup(blockHash)
+                                    .map(_.isEmpty)
+                              )
       state <- Cell[F, CasperState].read
       missingUnseenDependencies = missingDependencies.filter(
         blockHash => !state.seenBlockHashes.contains(blockHash)
