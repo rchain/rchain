@@ -82,7 +82,7 @@ sealed abstract class MultiParentCasperInstances {
                              }
       blockProcessingLock <- Semaphore[F](1)
       casperState <- Cell.mvarCell[F, CasperState](
-                      CasperState(Set.empty[BlockMessage], Set.empty[Deploy])
+                      CasperState()
                     )
 
     } yield {
