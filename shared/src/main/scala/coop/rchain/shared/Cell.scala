@@ -71,7 +71,7 @@ trait CellInstances0 {
         EitherT(
           fCell
             .modify(f)
-            .map(Right(_).leftCast[E])
+            .map(_.asRight[E])
         )
       def flatModify(f: S => EitherT[F, E, S]): EitherT[F, E, Unit] =
         EitherT(
