@@ -242,10 +242,22 @@ private[sorter] object ExprSortMatcher extends Sortable[Expr] {
               Seq(Leaf(Score.EMETHOD), Leaf(em.methodName), sortedTarget.score) ++ args.map(_.score)
             )
           )
-      case eg =>
-        for {
-          sortedGround <- Sortable.sortMatch(eg)
-        } yield constructExpr(sortedGround.term, sortedGround.score)
+      case gb: GBool =>
+        Sortable.sortMatch(gb).map { sorted =>
+          ScoredTerm(e, sorted.score)
+        }
+      case gi: GInt    => ScoredTerm(e, Leaves(Score.INT, gi.value)).pure[F]
+      case gs: GString => ScoredTerm(e, Node(Score.STRING, Leaf(gs.value))).pure[F]
+      case gu: GUri    => ScoredTerm(e, Node(Score.URI, Leaf(gu.value))).pure[F]
+      case GByteArray(ba) =>
+        ScoredTerm(e, Node(Score.EBYTEARR, Leaf(ba.toStringUtf8))).pure[F]
+      //TODO get rid of Empty nodes in Protobuf unless they represent sth indeed optional
+      case Empty =>
+        ScoredTerm(e, Node(Score.ABSENT)).pure[F]
+      case expr => //TODO(mateusz.gorski): rethink it
+        Sync[F].raiseError(
+          new IllegalArgumentException(s"GroundSortMatcher passed unknown Expr instance:\n$expr")
+        )
     }
   }
 }

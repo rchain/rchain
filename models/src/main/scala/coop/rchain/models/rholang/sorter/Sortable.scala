@@ -17,7 +17,6 @@ object Sortable {
   implicit val bundleSortable: Sortable[Bundle]         = BundleSortMatcher
   implicit val connectiveSortable: Sortable[Connective] = ConnectiveSortMatcher
   implicit val exprSortable: Sortable[Expr]             = ExprSortMatcher
-  implicit val groundSortable: Sortable[ExprInstance]   = GroundSortMatcher
   implicit val matchSortable: Sortable[Match]           = MatchSortMatcher
   implicit val newSortable: Sortable[New]               = NewSortMatcher
   implicit val parSortable: Sortable[Par]               = ParSortMatcher
