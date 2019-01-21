@@ -172,7 +172,7 @@ object EquivocationDetector {
                 equivocationRecord
                   .copy(equivocationDetectedBlockHashes = updatedEquivocationDetectedBlockHashes)
                 )
-              s.copy(equivocationsTracker = newEquivocationsTracker).pure[F]
+              s.copy(equivocationsTracker = newEquivocationsTracker)
             }
           } else ().pure[F]
     } yield neglectedEquivocationDetected

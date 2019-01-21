@@ -321,7 +321,9 @@ object HashSetCasperTestNode {
             case (f, (n, m)) =>
               f.flatMap(
                 _ =>
-                  n.connectionsCell.modify(_.addConn[F](m.local)(Monad[F], n.logEff, n.metricEff))
+                  n.connectionsCell.flatModify(
+                    _.addConn[F](m.local)(Monad[F], n.logEff, n.metricEff)
+                  )
               )
           }
     } yield nodes
