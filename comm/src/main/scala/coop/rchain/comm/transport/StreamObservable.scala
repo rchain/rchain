@@ -13,7 +13,7 @@ import java.nio.file._
 import scala.concurrent.duration._
 import coop.rchain.catscontrib.Catscontrib._
 
-case class StreamToPeers(peers: Seq[PeerNode], path: Path, sender: PeerNode)
+final case class StreamToPeers(peers: Seq[PeerNode], path: Path, sender: PeerNode)
 
 class StreamObservable(bufferSize: Int, folder: Path)(implicit log: Log[Task], scheduler: Scheduler)
     extends Observable[StreamToPeers] {

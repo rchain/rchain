@@ -1,14 +1,12 @@
 package coop.rchain.catscontrib
 
-import cats.{Monad, Monoid}
-import cats.implicits._
-
+import cats._, cats.data._, cats.implicits._
 import scala.math.Ordering
 
 object ListContrib {
   def sortBy[A, K: Monoid](list: List[A], map: collection.Map[A, K])(
       implicit ord: Ordering[K]
-  ) =
+  ): List[A] =
     list.sortBy(map.getOrElse(_, Monoid[K].empty))(ord)
 
   // From https://hygt.github.io/2018/08/05/Cats-findM-collectFirstM.html
@@ -16,9 +14,9 @@ object ListContrib {
     list.tailRecM[G, Option[A]] {
       case head :: tail =>
         p(head).map {
-          case true  => Right(Some(head))
-          case false => Left(tail)
+          case true  => Some(head).asRight[List[A]]
+          case false => tail.asLeft[Option[A]]
         }
-      case Nil => G.pure(Right(None))
+      case Nil => G.pure(None.asRight[List[A]])
     }
 }

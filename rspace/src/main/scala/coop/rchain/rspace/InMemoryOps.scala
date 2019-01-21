@@ -1,5 +1,6 @@
 package coop.rchain.rspace
 import scala.concurrent.SyncVar
+import cats._, cats.data._, cats.implicits._
 
 trait InMemTransaction[S] {
   def commit(): Unit
@@ -43,7 +44,7 @@ trait InMemoryOps[S] extends CloseOps {
 
     new InMemTransaction[S] {
 
-      val name: String = "read-" + Thread.currentThread().getId
+      val name: String = "read-" + Thread.currentThread().getId.show
 
       private[this] val state = stateRef.get
 
@@ -64,7 +65,7 @@ trait InMemoryOps[S] extends CloseOps {
     failIfClosed()
 
     new InMemTransaction[S] {
-      val name: String = "write-" + Thread.currentThread().getId
+      val name: String = "write-" + Thread.currentThread().getId.show
 
       private[this] val initial = stateRef.take
       private[this] var current = initial

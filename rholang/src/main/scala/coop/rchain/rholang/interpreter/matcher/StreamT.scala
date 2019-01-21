@@ -27,8 +27,8 @@ final case class StreamT[F[_], A](next: F[Step[F, A]])
 object StreamT extends StreamTInstances0 {
 
   sealed trait Step[F[_], A]
-  case class SNil[F[_], A]()                              extends Step[F, A]
-  case class SCons[F[_], A](head: A, tail: StreamT[F, A]) extends Step[F, A]
+  final case class SNil[F[_], A]()                              extends Step[F, A]
+  final case class SCons[F[_], A](head: A, tail: StreamT[F, A]) extends Step[F, A]
 
   def empty[F[_]: Applicative, A]: StreamT[F, A] =
     StreamT[F, A](Applicative[F].pure(SNil()))

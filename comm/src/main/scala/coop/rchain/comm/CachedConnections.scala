@@ -55,7 +55,7 @@ object Transport {
   type TransportCell[F[_]] = Cell[F, TransportState]
 }
 
-case class TransportState(
+final case class TransportState(
     connections: Transport.Connections = Map.empty,
     server: Option[Cancelable] = None,
     clientQueue: Option[Cancelable] = None,

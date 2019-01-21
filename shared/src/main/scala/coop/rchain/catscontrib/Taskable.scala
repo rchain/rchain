@@ -29,7 +29,7 @@ sealed trait TaskableInstances0 {
           .toTask(fa.value)
           .flatMap {
             case Right(a) => Task.now(a)
-            case Left(e)  => Task.raiseError(ToTaskException(e))
+            case Left(e)  => Task.raiseError[A](ToTaskException(e))
           }
 
     }

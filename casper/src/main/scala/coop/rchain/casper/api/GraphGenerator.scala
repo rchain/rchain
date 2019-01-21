@@ -14,7 +14,7 @@ import cats.mtl.implicits._
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.ski._
 
-case class ValidatorBlock(
+final case class ValidatorBlock(
     blockHash: String,
     parentsHashes: List[String],
     justifications: List[String]
@@ -32,13 +32,13 @@ object ValidatorBlock {
   }
 }
 
-case class GraphConfig(showJustificationLines: Boolean = false)
+final case class GraphConfig(showJustificationLines: Boolean = false)
 
 object GraphzGenerator {
 
   type ValidatorsBlocks = Map[Long, ValidatorBlock]
 
-  case class DagInfo[G[_]](
+  final case class DagInfo[G[_]](
       validators: Map[String, ValidatorsBlocks] = Map.empty,
       timeseries: List[Long] = List.empty
   )

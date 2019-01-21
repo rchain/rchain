@@ -22,6 +22,7 @@ object Secp256k1 {
     * @return (private key, public key) pair
     *
     */
+  @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   def newKeyPair: (PrivateKey, PublicKey) = {
     val kpg = KeyPairGenerator.getInstance("ECDSA", provider)
     kpg.initialize(new ECGenParameterSpec(curveName), SecureRandomUtil.secureRandomNonBlocking)

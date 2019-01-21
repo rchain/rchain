@@ -37,6 +37,7 @@ object GrpcMonix {
       grpcObserverToMonixSubscriber(inputObserver, outputSubsriber.scheduler)
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def monixSubscriberToGrpcObserver[T](subscriber: Subscriber[T]): StreamObserver[T] =
     new StreamObserver[T] {
       override def onError(t: Throwable): Unit = subscriber.onError(t)
@@ -44,6 +45,7 @@ object GrpcMonix {
       override def onNext(value: T): Unit      = subscriber.onNext(value)
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def reactiveSubscriberToGrpcObserver[T](subscriber: SubscriberR[_ >: T]): StreamObserver[T] =
     new StreamObserver[T] {
       override def onError(t: Throwable): Unit = subscriber.onError(t)
@@ -51,6 +53,7 @@ object GrpcMonix {
       override def onNext(value: T): Unit      = subscriber.onNext(value)
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def grpcObserverToMonixSubscriber[T](observer: StreamObserver[T], s: Scheduler): Subscriber[T] =
     new Subscriber[T] {
       override implicit def scheduler: Scheduler = s
@@ -87,6 +90,7 @@ object GrpcMonix {
       grpcOperatorToMonixOperator(operator)
     )
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def unliftByTransformer[I, O](
       transformer: Transformer[I, O],
       subscriber: Subscriber[O]

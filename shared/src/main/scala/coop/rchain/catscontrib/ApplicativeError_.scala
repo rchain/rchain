@@ -14,8 +14,8 @@ trait ApplicativeError_[F[_], E] {
 
   def attempt[A](fa: F[A])(implicit ev: Applicative[F]): F[Either[E, A]] =
     handleErrorWith(
-      Applicative[F].map(fa)(Right(_): Either[E, A])
-    )(e => Applicative[F].pure(Left(e)))
+      Applicative[F].map(fa)(_.asRight[E])
+    )(e => Applicative[F].pure(e.asLeft[A]))
 
 }
 

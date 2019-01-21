@@ -41,6 +41,7 @@ object Cell extends CellInstances0 {
       }
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Var"))
   def unsafe[F[_]: Applicative, S](const: S): Cell[F, S] =
     new Cell[F, S] {
       private var s: S               = const
@@ -52,6 +53,7 @@ object Cell extends CellInstances0 {
       def read: F[S] = s.pure[F]
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Var"))
   def id[S](init: S): Cell[Id, S] = new Cell[Id, S] {
     var s: S                    = init
     def modify(f: S => S): Unit = flatModify(f)

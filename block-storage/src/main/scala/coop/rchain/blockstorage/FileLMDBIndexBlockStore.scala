@@ -205,7 +205,7 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
 object FileLMDBIndexBlockStore {
   private val checkpointPattern: Regex = "([0-9]+)-([0-9]+)".r
 
-  case class Config(
+  final case class Config(
       storagePath: Path,
       indexPath: Path,
       checkpointsDirPath: Path,
@@ -215,12 +215,12 @@ object FileLMDBIndexBlockStore {
       noTls: Boolean = true
   )
 
-  private[blockstorage] case class CheckpointIndex(
+  private[blockstorage] final case class CheckpointIndex(
       env: Env[ByteBuffer],
       index: Dbi[ByteBuffer]
   )
 
-  private[blockstorage] case class Checkpoint(
+  private[blockstorage] final case class Checkpoint(
       start: Long,
       end: Long,
       dirPath: Path,

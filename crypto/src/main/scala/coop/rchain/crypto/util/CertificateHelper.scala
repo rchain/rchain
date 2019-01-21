@@ -48,12 +48,14 @@ object CertificateHelper {
   def from(certFilePath: String): X509Certificate =
     fromFile(new File(certFilePath))
 
+  @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   def fromFile(certFile: File): X509Certificate = {
     val cf = CertificateFactory.getInstance("X.509")
     val is = new FileInputStream(certFile)
     cf.generateCertificate(is).asInstanceOf[X509Certificate]
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   def readKeyPair(keyFile: File): KeyPair = {
     import coop.rchain.shared.Resources._
     val str = withResource(Source.fromFile(keyFile)) {
@@ -79,6 +81,7 @@ object CertificateHelper {
     kpg.generateKeyPair
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   def generate(keyPair: KeyPair): X509Certificate = {
     import sun.security.x509._
 
@@ -117,7 +120,7 @@ object CertificateHelper {
 
 }
 
-case class ParameterSpec(
+final case class ParameterSpec(
     curve: EllipticCurve,
     generator: ECPoint,
     order: BigInt,

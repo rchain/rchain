@@ -28,7 +28,7 @@ import coop.rchain.shared._
   @param invalidBlockTracker
   @param equivocationsTracker: Used to keep track of when other validators detect the equivocation consisting of the base block at the sequence number identified by the (validator, base equivocation sequence number) pair of each EquivocationRecord.
   */
-case class CasperState(
+final case class CasperState(
     blockBuffer: Set[BlockMessage] = Set.empty[BlockMessage],
     deployHistory: Set[Deploy] = Set.empty[Deploy],
     invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash],

@@ -5,7 +5,8 @@ import cats._, cats.data._, cats.implicits._
 object writerT extends WriterTInstances
 
 trait WriterTInstances {
-  implicit def writerTMonadTrans[A: Monoid] = new WriterTMonadTrans[A]() {}
+  implicit def writerTMonadTrans[L: Monoid]: MonadTrans[WriterT[?[_], L, ?]] =
+    new WriterTMonadTrans[L]() {}
 }
 
 abstract class WriterTMonadTrans[L: Monoid]() extends MonadTrans[WriterT[?[_], L, ?]] {

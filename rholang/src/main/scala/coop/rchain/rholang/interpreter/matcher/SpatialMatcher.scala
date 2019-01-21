@@ -298,8 +298,8 @@ object SpatialMatcher extends SpatialMatcherInstances {
   )(implicit lf: HasLocallyFree[T], sm: SpatialMatcher[T, T]): F[Unit] = {
 
     sealed trait Pattern
-    case class Term(term: T)         extends Pattern
-    case class Remainder(level: Int) extends Pattern
+    final case class Term(term: T)         extends Pattern
+    final case class Remainder(level: Int) extends Pattern
 
     val remainderPatterns: Seq[Pattern] = remainder.fold(
       Seq.empty[Pattern]
@@ -397,7 +397,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
       _                   <- freeMap.modify(_ + (level -> remainderParUpdated))
     } yield Unit
 
-  case class ParCount(
+  final case class ParCount(
       sends: Int = 0,
       receives: Int = 0,
       news: Int = 0,

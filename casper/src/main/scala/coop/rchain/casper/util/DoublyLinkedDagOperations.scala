@@ -9,7 +9,7 @@ trait DoublyLinkedDag[A] {
   val childToParentAdjacencyList: Map[A, Set[A]]
   val dependencyFree: Set[A]
 }
-case class BlockDependencyDag(
+final case class BlockDependencyDag(
     parentToChildAdjacencyList: Map[BlockHash, Set[BlockHash]],
     childToParentAdjacencyList: Map[BlockHash, Set[BlockHash]],
     dependencyFree: Set[BlockHash]

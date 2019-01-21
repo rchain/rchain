@@ -1,5 +1,7 @@
 package coop.rchain.catscontrib
 
+import cats._, cats.data._, cats.implicits._
+
 final class BooleanOps(self: Boolean) {
 
   final def either[A, B](a: => A): ConditionalEither[A] = new ConditionalEither(a)
@@ -8,7 +10,7 @@ final class BooleanOps(self: Boolean) {
 
   final class ConditionalEither[A](a: => A) {
     def or[B](b: => B): Either[B, A] =
-      if (self) Right(a) else Left(b)
+      if (self) a.asRight[B] else b.asLeft[A]
   }
 }
 

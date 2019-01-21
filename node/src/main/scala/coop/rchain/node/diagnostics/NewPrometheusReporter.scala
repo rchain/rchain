@@ -47,7 +47,7 @@ class NewPrometheusReporter extends MetricReporter {
   */
 object NewPrometheusReporter {
 
-  case class Configuration(
+  final case class Configuration(
       startEmbeddedServer: Boolean,
       embeddedServerHostname: String,
       embeddedServerPort: Int,

@@ -14,7 +14,7 @@ import scala.concurrent.duration.FiniteDuration
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
 
-case class CasperConf(
+final case class CasperConf(
     publicKeyBase16: Option[String],
     privateKey: Option[Either[String, Path]],
     sigAlgorithm: String,
