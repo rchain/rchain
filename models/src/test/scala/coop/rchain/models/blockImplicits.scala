@@ -1,14 +1,12 @@
-package coop.rchain.blockstorage
+package coop.rchain.models
 
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockDagRepresentation.Validator
-import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.{BlockMessage, Header}
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.Gen.listOfN
 
-object BlockGen {
+object blockImplicits {
   // TODO: move to `shared` along with code in coop.rchain.rspace.test.ArbitraryInstances
   /**
   Credit: https://gist.github.com/etorreborre/d0616e704ed85d7276eb12b025df8ab0
@@ -18,16 +16,16 @@ object BlockGen {
   def distinctListOf[T: Arbitrary] =
     distinctListOfGen(arbitrary[T])(_ == _)
 
-  val blockHashGen: Gen[BlockHash] = for {
+  val blockHashGen: Gen[ByteString] = for {
     byteArray <- listOfN(32, arbitrary[Byte])
   } yield ByteString.copyFrom(byteArray.toArray)
 
-  implicit val arbitraryHash: Arbitrary[BlockHash] = Arbitrary(blockHashGen)
+  implicit val arbitraryHash: Arbitrary[ByteString] = Arbitrary(blockHashGen)
 
   val blockElementGen: Gen[BlockMessage] =
     for {
-      hash      <- arbitrary[BlockHash]
-      validator <- arbitrary[Validator]
+      hash      <- arbitrary[ByteString]
+      validator <- arbitrary[ByteString]
       version   <- arbitrary[Long]
       timestamp <- arbitrary[Long]
     } yield

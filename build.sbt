@@ -57,7 +57,7 @@ lazy val projectSettings = Seq(
     case path => MergeStrategy.defaultMergeStrategy(path)
   }
 ) ++
-// skip api doc generation if SKIP_DOC env variable is defined 
+// skip api doc generation if SKIP_DOC env variable is defined
 Seq(sys.env.get("SKIP_DOC")).flatMap { _ =>
   Seq(
     publishArtifact in (Compile, packageDoc) := false,
@@ -413,7 +413,7 @@ lazy val blockStorage = (project in file("block-storage"))
       catsMtl
     )
   )
-  .dependsOn(shared, models)
+  .dependsOn(shared, models % "compile->compile;test->test")
 
 lazy val rspace = (project in file("rspace"))
   .configs(IntegrationTest extend Test)
