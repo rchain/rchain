@@ -249,11 +249,10 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
         val blocks = blockStoreBatches.flatten
         for {
           firstStore <- createBlockStore(blockStoreDataDir)
-          _ <- blockStoreBatches.traverse_[Task, Unit](
+          _ <- blockStoreBatches.traverse_[Task, StorageIOErr[Unit]](
                 blockStoreElements =>
                   blockStoreElements
-                    .traverse_[Task, StorageIOErr[Unit]](firstStore.put) *> firstStore
-                    .checkpoint()
+                    .traverse_[Task, StorageIOErr[Unit]](firstStore.put) *> firstStore.checkpoint()
               )
           _ <- blocks.traverse[Task, Assertion] { block =>
                 firstStore.get(block.blockHash).map(_ shouldBe Some(block))

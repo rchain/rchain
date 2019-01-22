@@ -107,8 +107,8 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
             }
     } yield ret
 
-  def checkpoint(): F[Unit] =
-    ().pure[F]
+  def checkpoint(): F[StorageIOErr[Unit]] =
+    ().asRight[StorageIOError].pure[F]
 
   def clear(): F[StorageIOErr[Unit]] =
     for {

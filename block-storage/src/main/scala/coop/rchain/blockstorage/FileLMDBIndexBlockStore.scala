@@ -2,7 +2,7 @@ package coop.rchain.blockstorage
 
 import java.io._
 import java.nio.ByteBuffer
-import java.nio.file.{Files, NotDirectoryException, Path}
+import java.nio.file._
 import java.util.stream.Collectors
 
 import cats.Monad
@@ -202,23 +202,34 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
       } yield ()).value
     )
 
-  override def checkpoint(): F[Unit] =
+  override def checkpoint(): F[StorageIOErr[Unit]] =
     lock.withPermit(
-      for {
-        checkpointIndex              <- currentIndexRef.get
-        checkpointPath               = checkpointsDir.resolve(checkpointIndex.toString)
-        blockMessageRandomAccessFile <- blockMessageRandomAccessFileRef.get
-        _                            <- Sync[F].delay { blockMessageRandomAccessFile.close() }
-        _                            <- Sync[F].delay { Files.move(storagePath, checkpointPath) }
-        newBlockMessageRandomAccessFile <- Sync[F].delay {
-                                            new RandomAccessFile(storagePath.toFile, "rw")
-                                          }
-        _ <- blockMessageRandomAccessFileRef.update(_ => newBlockMessageRandomAccessFile)
-        _ <- checkpointsRef.update(
-              _.updated(checkpointIndex, Checkpoint(checkpointIndex, checkpointPath))
+      (for {
+        checkpointIndex <- EitherT.liftF[F, StorageIOError, Int](currentIndexRef.get)
+        checkpointPath  = checkpointsDir.resolve(checkpointIndex.toString)
+        blockMessageRandomAccessFile <- EitherT.liftF[F, StorageIOError, RandomAccessFile](
+                                         blockMessageRandomAccessFileRef.get
+                                       )
+        _ <- EitherT(Sync[F].delay { blockMessageRandomAccessFile.close() }.attempt)
+              .leftMap[StorageIOError] {
+                case e: IOException =>
+                  ClosingFailed(e)
+                case t =>
+                  UnexpectedIOStorageError(t)
+              }
+        _ <- FileLMDBIndexBlockStore
+              .moveFile(storagePath, checkpointPath, StandardCopyOption.ATOMIC_MOVE)
+        newBlockMessageRandomAccessFile <- FileLMDBIndexBlockStore.openRandomAccessFile(storagePath)
+        _ <- EitherT.liftF[F, StorageIOError, Unit](
+              blockMessageRandomAccessFileRef.update(_ => newBlockMessageRandomAccessFile)
             )
-        _ <- currentIndexRef.update(_ + 1)
-      } yield ()
+        _ <- EitherT.liftF[F, StorageIOError, Unit](
+              checkpointsRef.update(
+                _.updated(checkpointIndex, Checkpoint(checkpointIndex, checkpointPath))
+              )
+            )
+        _ <- EitherT.liftF[F, StorageIOError, Unit](currentIndexRef.update(_ + 1))
+      } yield ()).value
     )
 
   override def clear(): F[StorageIOErr[Unit]] =
@@ -286,11 +297,31 @@ object FileLMDBIndexBlockStore {
       storagePath: Path
   )
 
-  private def openRandomAccessFile[F[_]: Sync](path: Path): StorageErrT[F, RandomAccessFile] =
+  private def openRandomAccessFile[F[_]: Sync](path: Path): StorageIOErrT[F, RandomAccessFile] =
     EitherT(Sync[F].delay { new RandomAccessFile(path.toFile, "rw") }.attempt).leftMap {
       case e: FileNotFoundException => FileNotFound(e)
       case e: SecurityException     => FileSecurityViolation(e)
       case t                        => UnexpectedIOStorageError(t)
+    }
+
+  private def moveFile[F[_]: Sync](
+      from: Path,
+      to: Path,
+      options: CopyOption*
+  ): StorageIOErrT[F, Path] =
+    EitherT(Sync[F].delay { Files.move(from, to, options: _*) }.attempt).leftMap[StorageIOError] {
+      case e: UnsupportedOperationException =>
+        UnsupportedFileOperation(e)
+      case e: FileAlreadyExistsException =>
+        FileAlreadyExists(e)
+      case e: DirectoryNotEmptyException =>
+        DirectoryNotEmpty(e)
+      case e: AtomicMoveNotSupportedException =>
+        AtomicMoveNotSupported(e)
+      case e: SecurityException =>
+        FileSecurityViolation(e)
+      case t =>
+        UnexpectedIOStorageError(t)
     }
 
   private def isDirectory[F[_]: Sync](path: Path): StorageErrT[F, Boolean] =

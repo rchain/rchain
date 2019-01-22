@@ -42,8 +42,8 @@ class InMemBlockStore[F[_]] private ()(
           }
     } yield Right(())
 
-  def checkpoint(): F[Unit] =
-    ().pure[F]
+  def checkpoint(): F[StorageIOErr[Unit]] =
+    ().asRight[StorageIOError].pure[F]
 
   def clear(): F[StorageIOErr[Unit]] =
     for {
