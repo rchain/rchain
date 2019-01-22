@@ -204,7 +204,7 @@ lazy val models = (project in file("models"))
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(rspace)
+  .dependsOn(shared % "compile->compile;test->test", rspace)
 
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
