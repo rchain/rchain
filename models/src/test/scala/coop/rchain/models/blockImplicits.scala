@@ -1,7 +1,7 @@
 package coop.rchain.models
 
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.{BlockMessage, Header}
+import coop.rchain.casper.protocol._
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.Gen.listOfN
@@ -22,15 +22,28 @@ object blockImplicits {
 
   implicit val arbitraryHash: Arbitrary[ByteString] = Arbitrary(blockHashGen)
 
+  val justificationGen: Gen[Justification] = for {
+    latestBlockHash <- arbitrary[ByteString]
+  } yield (Justification().withLatestBlockHash(latestBlockHash))
+
+  implicit val arbitraryJustification: Arbitrary[Justification] = Arbitrary(justificationGen)
+
   val blockElementGen: Gen[BlockMessage] =
     for {
-      hash      <- arbitrary[ByteString]
-      validator <- arbitrary[ByteString]
-      version   <- arbitrary[Long]
-      timestamp <- arbitrary[Long]
+      hash            <- arbitrary[ByteString]
+      validator       <- arbitrary[ByteString]
+      version         <- arbitrary[Long]
+      timestamp       <- arbitrary[Long]
+      parentsHashList <- arbitrary[Seq[ByteString]]
+      justifications  <- arbitrary[Seq[Justification]]
     } yield
       BlockMessage(blockHash = hash)
-        .withHeader(Header().withVersion(version).withTimestamp(timestamp))
+        .withHeader(
+          Header()
+            .withParentsHashList(parentsHashList)
+            .withVersion(version)
+            .withTimestamp(timestamp)
+        )
         .withSender(validator)
 
   val blockHashElementGen: Gen[(String, BlockMessage)] =
