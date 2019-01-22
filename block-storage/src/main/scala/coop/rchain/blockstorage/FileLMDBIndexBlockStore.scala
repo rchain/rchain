@@ -354,10 +354,10 @@ object FileLMDBIndexBlockStore {
     } yield filesList
 
   private def listFiles[F[_]: Sync](dirPath: Path): StorageErrT[F, List[Path]] = {
-    type TEMP[A] = StorageErrT[F, A]
+    type StorageErrTF[A] = StorageErrT[F, A]
     for {
       inDirectoryList <- listInDirectory(dirPath)
-      directoryList   <- inDirectoryList.filterA[TEMP](isRegularFile)
+      directoryList   <- inDirectoryList.filterA[StorageErrTF](isRegularFile)
     } yield directoryList
   }
 

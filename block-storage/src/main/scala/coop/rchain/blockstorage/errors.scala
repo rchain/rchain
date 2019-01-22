@@ -48,8 +48,7 @@ object StorageError {
       case TopoSortLengthIsTooBig(length) =>
         s"Topological sorting of length $length was requested while maximal length is ${Int.MaxValue}"
       case BlockSenderIsMalformed(block) =>
-        s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is malformed: ${Base16.encode(
-          block.sender.toByteArray)}"
+        s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is malformed: ${Base16.encode(block.sender.toByteArray)}"
       case FileSeekFailed(e) =>
         val msg = Option(e.getMessage).getOrElse("")
         s"File seek failed: $msg"
