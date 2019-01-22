@@ -256,7 +256,7 @@ private[sorter] object ExprSortMatcher extends Sortable[Expr] {
         ScoredTerm(e, Node(Score.ABSENT)).pure[F]
       case expr => //TODO(mateusz.gorski): rethink it
         Sync[F].raiseError(
-          new IllegalArgumentException(s"GroundSortMatcher passed unknown Expr instance:\n$expr")
+          new IllegalArgumentException(s"ExprSortMatcher passed unknown Expr instance:\n$expr")
         )
     }
   }
