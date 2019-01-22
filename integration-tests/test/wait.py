@@ -7,9 +7,11 @@ import typing_extensions
 import pytest
 
 from .common import (
-    Network,
     TestingContext,
     GetBlockError,
+)
+from .network import (
+    Network,
 )
 
 if TYPE_CHECKING:
@@ -58,6 +60,16 @@ class ApprovedBlockReceived(LogsContainMessage):
 class SentUnapprovedBlock(LogsContainMessage):
     def __init__(self, node: 'Node') -> None:
         super().__init__(node, 'c.r.c.u.c.ApproveBlockProtocol$ApproveBlockProtocolImpl - APPROVAL: Sent UnapprovedBlock')
+
+
+class BlockApproval(LogsContainMessage):
+    def __init__(self, node: 'Node') -> None:
+        super().__init__(node, 'c.r.c.u.c.ApproveBlockProtocol$ApproveBlockProtocolImpl - APPROVAL: received block approval from')
+
+
+class SentApprovedBlock(LogsContainMessage):
+    def __init__(self, node: 'Node') -> None:
+        super().__init__(node, 'c.r.c.u.c.ApproveBlockProtocol$ApproveBlockProtocolImpl - APPROVAL: Sent ApprovedBlock')
 
 
 class HasAtLeastPeers:
@@ -206,4 +218,14 @@ def wait_for_peers_count_at_least(context: TestingContext, node: 'Node', npeers:
 
 def wait_for_sent_unapproved_block(context: TestingContext, node: 'Node') -> None:
     predicate = SentUnapprovedBlock(node)
+    wait_on_using_wall_clock_time(predicate, context.network_converge_timeout)
+
+
+def wait_for_block_approval(context: TestingContext, node: 'Node') -> None:
+    predicate = BlockApproval(node)
+    wait_on_using_wall_clock_time(predicate, context.network_converge_timeout)
+
+
+def wait_for_sent_approved_block(context: TestingContext, node: 'Node') -> None:
+    predicate = SentApprovedBlock(node)
     wait_on_using_wall_clock_time(predicate, context.network_converge_timeout)

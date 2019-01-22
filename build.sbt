@@ -14,12 +14,22 @@ Global / dependencyOverrides := Dependencies.overrides
 
 lazy val projectSettings = Seq(
   organization := "coop.rchain",
-  scalaVersion := "2.12.7",
+  scalaVersion := "2.12.8",
   version := "0.1.0-SNAPSHOT",
   resolvers ++= Seq(
     Resolver.sonatypeRepo("releases"),
     Resolver.sonatypeRepo("snapshots"),
     "jitpack" at "https://jitpack.io"
+  ),
+  wartremoverExcluded += sourceManaged.value,
+  wartremoverErrors in (Compile, compile) ++= Warts.allBut(
+    Wart.ImplicitParameter, Wart.Recursion, Wart.DefaultArguments, Wart.ImplicitConversion,
+    Wart.LeakingSealed, Wart.Overloading, Wart.Nothing, Wart.NonUnitStatements,
+    Wart.Equals, Wart.PublicInference, Wart.Var, Wart.TraversableOps, Wart.ArrayEquals,
+    Wart.Throw, Wart.While, Wart.Any, Wart.Product, Wart.Serializable, Wart.OptionPartial,
+    Wart.EitherProjectionPartial, Wart.Option2Iterable, Wart.ToString, Wart.JavaConversions,
+    Wart.MutableDataStructures, Wart.FinalVal, Wart.Null, Wart.AsInstanceOf, Wart.ExplicitImplicitTypes,
+    Wart.StringPlusAny, Wart.AnyVal
   ),
   scalafmtOnCompile := sys.env.get("CI").isEmpty, // disable in CI environments
   scapegoatVersion in ThisBuild := "1.3.4",
@@ -37,6 +47,15 @@ lazy val projectSettings = Seq(
   IntegrationTest / fork := true,
   IntegrationTest / parallelExecution := false,
   IntegrationTest / testForkedParallel := false,
+  assemblyMergeStrategy in assembly := {
+    // For some reason, all artifacts from 'io.netty' group contain this file with different contents.
+    // Discarding it as it's not needed.
+    case path if path.endsWith("io.netty.versions.properties") => MergeStrategy.discard
+    // The scala compiler includes native bindings for jansi under the same path jansi does.
+    // This should pick the ones provided by jansi.
+    case path if path.startsWith("META-INF/native/") && path.contains("jansi") => MergeStrategy.last
+    case path => MergeStrategy.defaultMergeStrategy(path)
+  }
 ) ++
 // skip api doc generation if SKIP_DOC env variable is defined 
 Seq(sys.env.get("SKIP_DOC")).flatMap { _ =>
@@ -191,7 +210,7 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.8.2",
+    version := "0.8.3",
     name := "rnode",
     maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary := "RChain Node",
@@ -384,27 +403,6 @@ lazy val rholangProtoBuild = (project in file("rholang-proto-build"))
   )
   .dependsOn(rholang)
 
-lazy val roscalaMacros = (project in file("roscala/macros"))
-  .settings(commonSettings: _*)
-  .settings(
-    libraryDependencies ++= commonDependencies ++ Seq(
-      "org.scala-lang" % "scala-reflect" % scalaVersion.value
-    )
-  )
-
-lazy val roscala = (project in file("roscala"))
-  .settings(commonSettings: _*)
-  .settings(
-    name := "Rosette",
-    mainClass in assembly := Some("coop.rchain.rosette.Main"),
-    assemblyJarName in assembly := "rosette.jar",
-    inThisBuild(
-      List(addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full))
-    ),
-    libraryDependencies ++= commonDependencies
-  )
-  .dependsOn(roscalaMacros)
-
 lazy val blockStorage = (project in file("block-storage"))
   .settings(commonSettings: _*)
   .settings(
@@ -521,7 +519,6 @@ lazy val rchain = (project in file("."))
     regex,
     rholang,
     rholangCLI,
-    roscala,
     rspace,
     rspaceBench,
     shared

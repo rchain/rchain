@@ -19,11 +19,12 @@ import scala.collection.mutable.ListBuffer
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
+@SuppressWarnings(Array("org.wartremover.warts.EitherProjectionPartial"))
 object AddressBookExample {
 
   /* Here we define a type for channels */
 
-  case class Channel(name: String)
+  final case class Channel(name: String)
 
   /* Ordering for Channel */
 
@@ -32,9 +33,9 @@ object AddressBookExample {
 
   /* Here we define a type for data */
 
-  case class Name(first: String, last: String)
-  case class Address(street: String, city: String, state: String, zip: String)
-  case class Entry(name: Name, address: Address, email: String, phone: String)
+  final case class Name(first: String, last: String)
+  final case class Address(street: String, city: String, state: String, zip: String)
+  final case class Entry(name: Name, address: Address, email: String, phone: String)
 
   /* Here we define a type for patterns */
 
@@ -62,6 +63,7 @@ object AddressBookExample {
       }
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.MutableDataStructures"))
   class EntriesCaptor extends ((Seq[Entry]) => Unit) with Serializable {
 
     @transient
@@ -114,6 +116,7 @@ object AddressBookExample {
         }
       }
 
+      @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
       def decode(bytes: ByteVector): Either[Throwable, Channel] =
         try {
           val bais = new ByteArrayInputStream(bytes.toArray)

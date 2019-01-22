@@ -43,14 +43,14 @@ object TestSetUtil {
 
   def runtime(
       extraServices: Seq[SystemProcess.Definition[Task]] = Seq.empty
-  )(implicit scheduler: Scheduler): Runtime[Task] = {
-    val runtime = Runtime.create(Paths.get("/not/a/path"), -1, InMem, extraServices)
-    Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace).unsafeRunSync
-    runtime
-  }
+  )(implicit scheduler: Scheduler): Runtime[Task] =
+    (for {
+      runtime <- Runtime.create[Task, Task.Par](Paths.get("/not/a/path"), -1, InMem, extraServices)
+      _       <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
+    } yield (runtime)).unsafeRunSync
 
   def evalDeploy(deploy: Deploy, runtime: Runtime[Task])(implicit scheduler: Scheduler): Unit = {
-    runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
+    runtime.reducer.setPhlo(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
     implicit val rand: Blake2b512Random = Blake2b512Random(
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy.getRaw))
     )
@@ -61,7 +61,7 @@ object TestSetUtil {
       term: Par,
       runtime: Runtime[Task]
   )(implicit scheduler: Scheduler, rand: Blake2b512Random): Unit = {
-    runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
+    runtime.reducer.setPhlo(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
     runtime.reducer.inj(term).unsafeRunSync
   }
 

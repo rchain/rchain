@@ -24,7 +24,7 @@ object PrettyPrinter {
     def cap() = Printer.OUTPUT_CAPPED.map(n => s"${str.take(n)}...").getOrElse(str)
   }
 }
-case class PrettyPrinter(
+final case class PrettyPrinter(
     freeShift: Int,
     boundShift: Int,
     newsShiftIndices: Vector[Int],

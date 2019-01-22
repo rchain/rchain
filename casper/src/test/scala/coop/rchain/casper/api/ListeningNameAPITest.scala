@@ -59,10 +59,9 @@ class ListeningNameAPITest extends FlatSpec with Matchers {
   it should "work across a chain" in effectTest {
     HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis).flatMap { nodes =>
       implicit val nodeZeroCasperRef          = nodes(0).multiparentCasperRef
-      implicit val nodeZeroSafetyOracleEffect = nodes(0).turanOracleEffect
+      implicit val nodeZeroSafetyOracleEffect = nodes(0).cliqueOracleEffect
       implicit val nodeZeroLogEffect          = nodes(0).logEff
       implicit val nodeZeroBlockStoreEffect   = nodes(0).blockStore
-      implicit val abstractCtx                = nodes(0).abF
 
       implicit val timeEff = new LogicalTime[Effect]
       for {

@@ -562,7 +562,7 @@ class RegistryImpl[F[_]](
       val Some(Expr(ETupleBody(ETuple(Seq(newNonce, _), _, _)))) = replacement.singleExpr
       val Some(Expr(GInt(oldNonceInt)))                          = oldNonce.singleExpr
       val Some(Expr(GInt(newNonceInt)))                          = newNonce.singleExpr
-      return newNonceInt > oldNonceInt
+      newNonceInt > oldNonceInt
     }
     genericInsertCallback(args, nonceCheck, fetchDataNonceInsert, sequenceNumber)
   }

@@ -3,8 +3,8 @@ package coop.rchain.rholang.interpreter.matcher
 import cats.arrow.FunctionK
 import cats.data.{EitherT, WriterT}
 import cats.implicits._
-import cats.laws.discipline.{MonadErrorTests, MonadTests, MonoidKTests}
-import cats.mtl.laws.discipline.{FunctorListenTests, MonadLayerControlTests}
+import cats.laws.discipline.{AlternativeTests, MonadErrorTests, MonadTests}
+import cats.mtl.laws.discipline.MonadLayerControlTests
 import cats.tests.CatsSuite
 import cats.{~>, Eq, Monad}
 import coop.rchain.catscontrib.laws.discipline.MonadTransTests
@@ -19,6 +19,15 @@ class StreamTSpec extends FlatSpec with Matchers {
   val maxDepth = StackSafetySpec.findMaxRecursionDepth()
 
   behavior of "StreamT"
+
+  it must "allow for lazy computation of the stream's head and shape" in {
+    val stack  = StreamT.liftF[Coeval, Int](Coeval.delay(???))
+    val result = StreamT.run(stack)
+
+    assertThrows[NotImplementedError] {
+      result.value()
+    }
+  }
 
   it must "not trigger spurious evaluation of underlying stream for a lazy monad" in {
     val stream: Stream[Int] = Stream.cons(1, ???)
@@ -80,6 +89,19 @@ class StreamTSpec extends FlatSpec with Matchers {
 
     assert(StreamT.run(combined).value() == (reference ++ reference))
   }
+
+  it must "be stacksafe and lazy for a stacksafe F when calling dropTail" in {
+    type StreamTCoeval[A] = StreamT[Coeval, A]
+
+    val reference                    = Stream(1)
+    val head: StreamTCoeval[Int]     = StreamT.fromStream(Coeval.now(reference))
+    val throwing: StreamTCoeval[Int] = StreamT.liftF[Coeval, Int](Coeval.delay(???))
+    val combined                     = head.combineK(throwing)
+
+    val noTail = StreamT.dropTail(combined)
+
+    assert(StreamT.run(noTail).value() == reference)
+  }
 }
 
 class StreamTLawsSpec extends CatsSuite with LowPriorityDerivations {
@@ -127,8 +149,8 @@ class StreamTLawsSpec extends CatsSuite with LowPriorityDerivations {
     MonadTests[StreamTEffect].monad[Int, Int, String]
   )
   checkAll(
-    "StreamT.MonoidKLaws",
-    MonoidKTests[StreamTEffect].monoidK[Int]
+    "StreamT.AlternativeLaws",
+    AlternativeTests[StreamTEffect].alternative[Int, Int, String]
   )
   checkAll(
     "StreamT.MonadTransLaws",
@@ -141,6 +163,10 @@ class StreamTLawsSpec extends CatsSuite with LowPriorityDerivations {
   checkAll(
     "StreamT.MonadErrorLaws",
     MonadErrorTests[StreamTEffect, String].monadError[Int, Int, String]
+  )
+  checkAll(
+    "StreamT.MonadErrorUnitLaws",
+    MonadErrorTests[StreamTEffect, Unit].monadError[Int, Int, String]
   )
 
 }

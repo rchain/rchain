@@ -2,7 +2,7 @@ package coop.rchain.casper.genesis.contracts
 
 import scala.util.{Failure, Success, Try}
 
-case class Wallet(algorithm: String, pk: String, initRevBalance: Int)
+final case class Wallet(algorithm: String, pk: String, initRevBalance: Int)
 
 object Wallet {
   def rhoPublicName(w: Wallet): String = s"@`rho:pubkey:${w.algorithm}:${w.pk}`"

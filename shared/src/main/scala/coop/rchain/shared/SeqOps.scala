@@ -6,6 +6,7 @@ object SeqOps {
 
   /** Drops the 'i'th element of a list.
     */
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def dropIndex[T](xs: Seq[T], n: Int): Seq[T] = {
     if ((n < 0) || (n >= xs.size)) {
       throw new IndexOutOfBoundsException(s"Index $n is outside the sequence bounds 0..${xs.size}")

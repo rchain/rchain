@@ -1,5 +1,7 @@
 package coop.rchain.casper.util.rholang
 
+import cats.Monad
+import cats.data.EitherT
 import cats.effect._
 import cats.effect.concurrent.MVar
 import cats.implicits._
@@ -7,7 +9,8 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.Catscontrib._
+import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models._
@@ -16,15 +19,36 @@ import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{accounting, ChargingReducer, ErrorLog, Runtime}
 import coop.rchain.rspace.internal.Datum
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
-import monix.eval.Task
-import monix.execution.Scheduler
 
 import scala.collection.immutable
 
-class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
+trait RuntimeManager[F[_]] {
+  def captureResults(start: StateHash, deploy: Deploy, name: String = "__SCALA__"): F[Seq[Par]]
+  def captureResults(start: StateHash, deploy: Deploy, name: Par): F[Seq[Par]]
+  def replayComputeState(
+      hash: StateHash,
+      terms: Seq[InternalProcessedDeploy],
+      time: Option[Long] = None
+  ): F[Either[(Option[Deploy], Failed), StateHash]]
+  def computeState(
+      hash: StateHash,
+      terms: Seq[Deploy],
+      time: Option[Long] = None
+  ): F[(StateHash, Seq[InternalProcessedDeploy])]
+  def storageRepr(hash: StateHash): F[Option[String]]
+  def computeBonds(hash: StateHash): F[Seq[Bond]]
+  def getData(hash: ByteString, channel: Par): F[Seq[Par]]
+  def getContinuation(
+      hash: ByteString,
+      channels: immutable.Seq[Par]
+  ): F[Seq[(Seq[BindPattern], Par)]]
+  def emptyStateHash: ByteString
+}
+
+class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     val emptyStateHash: ByteString,
-    runtimeContainer: MVar[F, Runtime[Task]]
-) {
+    runtimeContainer: MVar[F, Runtime[F]]
+) extends RuntimeManager[F] {
 
   def captureResults(start: StateHash, deploy: Deploy, name: String = "__SCALA__"): F[Seq[Par]] =
     captureResults(start, deploy, Par().withExprs(Seq(Expr(GString(name)))))
@@ -39,7 +63,7 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
           result <- if (processedDeploy.status.isFailed) Seq.empty[Datum[ListParWithRandom]].pure[F]
                    else {
                      val r: F[Seq[Datum[ListParWithRandom]]] =
-                       ToAbstractContext[F].fromTask(runtime.space.getData(name))
+                       runtime.space.getData(name).map(_.toSeq)
                      r
                    }
         } yield result.flatMap(_.a.pars)
@@ -71,12 +95,12 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
 
   private def setTimestamp(
       time: Option[Long],
-      runtime: Runtime[Task]
+      runtime: Runtime[F]
   ): F[Unit] =
     time match {
       case Some(t) =>
         val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(t))))
-        ToAbstractContext[F].fromTask(runtime.blockTime.setParams(timestamp))
+        runtime.blockTime.setParams(timestamp)
       case None => ().pure[F]
     }
 
@@ -84,9 +108,7 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
     Sync[F]
       .bracket(runtimeContainer.take) { runtime =>
         val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
-        ToAbstractContext[F].fromTask(
-          runtime.space.reset(blakeHash).map(_ => StoragePrinter.prettyPrint(runtime.space.store))
-        )
+        runtime.space.reset(blakeHash).map(_ => StoragePrinter.prettyPrint(runtime.space.store))
       }(runtime => runtimeContainer.put(runtime))
       .attempt
       .map {
@@ -118,10 +140,10 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
       }
   }
 
-  private def withResetRuntime[R](hash: StateHash, block: Runtime[Task] => F[R]) =
+  private def withResetRuntime[R](hash: StateHash, block: Runtime[F] => F[R]) =
     Sync[F].bracket(runtimeContainer.take) { runtime =>
       val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
-      ToAbstractContext[F].fromTask(runtime.space.reset(blakeHash)).flatMap(_ => block(runtime))
+      runtime.space.reset(blakeHash).flatMap(_ => block(runtime))
     }(runtime => runtimeContainer.put(runtime))
 
   private def toBondSeq(bondsMap: Par): Seq[Bond] =
@@ -136,7 +158,7 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
 
   def getData(hash: ByteString, channel: Par): F[Seq[Par]] =
     withResetRuntime(hash, runtime => {
-      ToAbstractContext[F].fromTask(runtime.space.getData(channel).map(_.flatMap(_.a.pars)))
+      runtime.space.getData(channel).map(_.flatMap(_.a.pars))
     })
 
   def getContinuation(
@@ -146,8 +168,8 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
     withResetRuntime(
       hash,
       runtime => {
-        ToAbstractContext[F]
-          .fromTask(runtime.space.getWaitingContinuations(channels))
+        runtime.space
+          .getWaitingContinuations(channels)
           .map(
             results =>
               for {
@@ -159,7 +181,7 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
 
   private def newEval(
       terms: Seq[Deploy],
-      runtime: Runtime[Task],
+      runtime: Runtime[F],
       initHash: StateHash
   ): F[(StateHash, Seq[InternalProcessedDeploy])] = {
 
@@ -172,19 +194,18 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
         terms match {
           case deploy +: rem =>
             for {
-              _              <- ToAbstractContext[F].fromTask(runtime.space.reset(hash))
+              _              <- runtime.space.reset(hash)
               availablePhlos = Cost(deploy.raw.map(_.phloLimit).get)
-              _              <- ToAbstractContext[F].fromTask(runtime.reducer.setAvailablePhlos(availablePhlos))
+              _              <- runtime.reducer.setPhlo(availablePhlos)
               (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(
                 deploy.raw.get
               )
-              _ <- ToAbstractContext[F].fromTask(
-                    runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
-                  )
+              _ <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
+
               injResult           <- injAttempt(deploy, runtime.reducer, runtime.errorLog)
               (phlosLeft, errors) = injResult
               cost                = phlosLeft.copy(cost = availablePhlos.value - phlosLeft.cost)
-              newCheckpoint       <- ToAbstractContext[F].fromTask(runtime.space.createCheckpoint())
+              newCheckpoint       <- runtime.space.createCheckpoint()
               deployResult = InternalProcessedDeploy(
                 deploy,
                 cost,
@@ -205,7 +226,7 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
 
   private def replayEval(
       terms: Seq[InternalProcessedDeploy],
-      runtime: Runtime[Task],
+      runtime: Runtime[F],
       initHash: StateHash
   ): F[Either[(Option[Deploy], Failed), StateHash]] = {
 
@@ -218,16 +239,12 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
           case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
             val availablePhlos = Cost(deploy.raw.map(_.phloLimit).get)
             for {
-              _ <- ToAbstractContext[F].fromTask(
-                    runtime.replayReducer.setAvailablePhlos(availablePhlos)
-                  )
+              _ <- runtime.replayReducer.setPhlo(availablePhlos)
               (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(
                 deploy.raw.get
               )
-              _ <- ToAbstractContext[F].fromTask(
-                    runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
-                  )
-              _         <- ToAbstractContext[F].fromTask(runtime.replaySpace.rig(hash, log.toList))
+              _         <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
+              _         <- runtime.replaySpace.rig(hash, log.toList)
               injResult <- injAttempt(deploy, runtime.replayReducer, runtime.errorLog)
               //TODO: compare replay deploy cost to given deploy cost
               (phlosLeft, errors) = injResult
@@ -239,8 +256,8 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
                            Left(Some(deploy) -> ReplayStatusMismatch(replayStatus, status)).pure[F]
                          else if (errors.nonEmpty) doReplayEval(rem, hash)
                          else {
-                           ToAbstractContext[F]
-                             .fromTask(runtime.replaySpace.createCheckpoint())
+                           runtime.replaySpace
+                             .createCheckpoint()
                              .attempt
                              .flatMap {
                                case Right(newCheckpoint) =>
@@ -268,30 +285,29 @@ class RuntimeManager[F[_]: Concurrent: ToAbstractContext] private (
 
   private def injAttempt(
       deploy: Deploy,
-      reducer: ChargingReducer[Task],
-      errorLog: ErrorLog[Task]
+      reducer: ChargingReducer[F],
+      errorLog: ErrorLog[F]
   ): F[(PCost, Vector[Throwable])] = {
     implicit val rand: Blake2b512Random = Blake2b512Random(
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy.raw.get))
     )
-    ToAbstractContext[F].fromTask(
-      for {
-        result    <- reducer.inj(deploy.term.get).attempt
-        phlos     <- reducer.getAvailablePhlos()
-        oldErrors <- errorLog.readAndClearErrorVector()
-        newErrors = result.swap.toSeq.toVector
-        allErrors = oldErrors |+| newErrors
-      } yield (CostAccount.toProto(phlos) -> allErrors)
-    )
+    for {
+      result    <- reducer.inj(deploy.term.get).attempt
+      phlos     <- reducer.phlo
+      oldErrors <- errorLog.readAndClearErrorVector()
+      newErrors = result.swap.toSeq.toVector
+      allErrors = oldErrors |+| newErrors
+    } yield (CostAccount.toProto(phlos) -> allErrors)
   }
 }
 
 object RuntimeManager {
   type StateHash = ByteString
-  import coop.rchain.catscontrib.TaskContrib._
 
-  def fromRuntime(active: Runtime[Task])(implicit scheduler: Scheduler): RuntimeManager[Task] =
-    (for {
+  def fromRuntime[F[_]: Concurrent: Sync](
+      active: Runtime[F]
+  ): F[RuntimeManager[F]] =
+    for {
       _                <- active.space.clear()
       _                <- active.replaySpace.clear()
       _                <- Runtime.injectEmptyRegistryRoot(active.space, active.replaySpace)
@@ -300,6 +316,63 @@ object RuntimeManager {
       hash             = ByteString.copyFrom(checkpoint.root.bytes.toArray)
       replayHash       = ByteString.copyFrom(replayCheckpoint.root.bytes.toArray)
       _                = assert(hash == replayHash)
-      runtime          <- MVar[Task].of(active)
-    } yield new RuntimeManager(hash, runtime)).unsafeRunSync
+      runtime          <- MVar[F].of(active)
+    } yield new RuntimeManagerImpl(hash, runtime)
+
+  def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
+      runtimeManager: RuntimeManager[F]
+  ): RuntimeManager[T[F, ?]] =
+    new RuntimeManager[T[F, ?]] {
+      override def captureResults(
+          start: RuntimeManager.StateHash,
+          deploy: Deploy,
+          name: String
+      ): T[F, scala.Seq[Par]] = runtimeManager.captureResults(start, deploy, name).liftM[T]
+
+      override def captureResults(
+          start: RuntimeManager.StateHash,
+          deploy: Deploy,
+          name: Par
+      ): T[F, scala.Seq[Par]] = runtimeManager.captureResults(start, deploy, name).liftM[T]
+
+      override def replayComputeState(
+          hash: RuntimeManager.StateHash,
+          terms: scala.Seq[InternalProcessedDeploy],
+          time: Option[Long]
+      ): T[F, scala.Either[(Option[Deploy], Failed), RuntimeManager.StateHash]] =
+        runtimeManager.replayComputeState(hash, terms, time).liftM[T]
+
+      override def computeState(
+          hash: RuntimeManager.StateHash,
+          terms: scala.Seq[Deploy],
+          time: Option[Long]
+      ): T[F, (RuntimeManager.StateHash, scala.Seq[InternalProcessedDeploy])] =
+        runtimeManager.computeState(hash, terms, time).liftM[T]
+
+      override def storageRepr(
+          hash: RuntimeManager.StateHash
+      ): T[F, Option[String]] = runtimeManager.storageRepr(hash).liftM[T]
+
+      override def computeBonds(
+          hash: RuntimeManager.StateHash
+      ): T[F, scala.Seq[Bond]] = runtimeManager.computeBonds(hash).liftM[T]
+
+      override def getData(
+          hash: ByteString,
+          channel: Par
+      ): T[F, scala.Seq[Par]] = runtimeManager.getData(hash, channel).liftM[T]
+
+      override def getContinuation(
+          hash: ByteString,
+          channels: scala.collection.immutable.Seq[Par]
+      ): T[F, scala.Seq[(scala.Seq[BindPattern], Par)]] =
+        runtimeManager.getContinuation(hash, channels).liftM[T]
+
+      override val emptyStateHash: ByteString = runtimeManager.emptyStateHash
+    }
+
+  def eitherTRuntimeManager[E, F[_]: Monad](
+      rm: RuntimeManager[F]
+  ): RuntimeManager[EitherT[F, E, ?]] =
+    RuntimeManager.forTrans[F, EitherT[?[_], E, ?]](rm)
 }

@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import scala.collection.immutable.Map
 
-case class Env[A] private (envMap: Map[Int, A], level: Int, shift: Int) {
+final case class Env[A] private (envMap: Map[Int, A], level: Int, shift: Int) {
   def put(a: A): Env[A] =
     Env(envMap + (level -> a), level + 1, shift)
 

@@ -1,5 +1,6 @@
 package coop.rchain.casper.util.rholang
 import cats.effect.Resource
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.shared.StoreType
 import monix.eval.Task
@@ -13,6 +14,8 @@ object Resources {
   )(implicit scheduler: Scheduler): Resource[Task, RuntimeManager[Task]] =
     mkRuntime(prefix)
       .flatMap { runtime =>
-        Resource.pure(RuntimeManager.fromRuntime(runtime))
+        Resource.make(RuntimeManager.fromRuntime[Task](runtime))(
+          _ => Task.unit /* FIXME close the manager */
+        )
       }
 }

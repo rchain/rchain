@@ -11,12 +11,12 @@ object Iso {
       implicit
       lGenA: LabelledGeneric.Aux[A, Repr],
       lGenB: LabelledGeneric.Aux[B, Repr]
-  ) = new Iso[A, B] {
+  ): Iso[A, B] = new Iso[A, B] {
     override def to(a: A): B =
       lGenB.from(lGenA.to(a))
     override def from(b: B): A =
       lGenA.from(lGenB.to(b))
   }
 
-  def apply[A, B](implicit iso: Iso[A, B]) = iso
+  def apply[A, B](implicit iso: Iso[A, B]): Iso[A, B] = iso
 }

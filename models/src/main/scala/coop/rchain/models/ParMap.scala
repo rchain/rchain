@@ -7,7 +7,7 @@ import monix.eval.Coeval
 import scala.collection.immutable.BitSet
 import coop.rchain.models.rholang.implicits._
 
-case class ParMap(
+final case class ParMap(
     ps: SortedParMap,
     connectiveUsed: Boolean,
     locallyFree: Coeval[BitSet],

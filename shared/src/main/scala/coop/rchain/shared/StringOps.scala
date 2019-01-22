@@ -3,7 +3,7 @@ package coop.rchain.shared
 import scala.util.Try
 
 object StringOps {
-  case class ColoredString(str: String, color: String) {
+  final case class ColoredString(str: String, color: String) {
     def colorize: String = color + str + "\u001B[0m"
   }
 

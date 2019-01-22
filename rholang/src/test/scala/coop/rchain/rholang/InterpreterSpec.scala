@@ -117,6 +117,6 @@ class InterpreterSpec extends FlatSpec with Matchers {
       runtime: Runtime[Task],
       source: String
   ): Task[Either[Throwable, Runtime[Task]]] =
-    Interpreter.execute(runtime, new StringReader(source)).attempt
+    Interpreter[Task].execute(runtime, new StringReader(source)).attempt
 
 }

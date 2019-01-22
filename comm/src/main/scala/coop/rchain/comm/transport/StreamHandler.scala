@@ -1,7 +1,9 @@
 package coop.rchain.comm.transport
 
 import java.util.UUID
+import coop.rchain.shared.Log
 import coop.rchain.shared.GracefulClose._
+import coop.rchain.shared.PathOps._
 import coop.rchain.catscontrib.ski._
 import java.io.FileOutputStream
 import java.nio.file.{Files, Path}
@@ -18,63 +20,91 @@ import com.google.protobuf.ByteString
 import cats._, cats.data._, cats.implicits._
 import cats.effect._
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.comm.transport.PacketOps._
 
 object StreamHandler {
 
-  private case class Streamed(
+  type CircuitBreaker = Long => Boolean
+
+  private final case class Streamed(
       sender: Option[PeerNode] = None,
       typeId: Option[String] = None,
       contentLength: Option[Int] = None,
       compressed: Boolean = false,
+      readSoFar: Long = 0,
+      circuitBroken: Boolean = false,
       path: Path,
       fos: FileOutputStream
   )
 
   def handleStream(
       folder: Path,
-      stream: Observable[Chunk]
-  )(implicit logger: Log[Task]): Task[Either[Throwable, StreamMessage]] =
+      stream: Observable[Chunk],
+      circuitBreaker: CircuitBreaker
+  )(implicit log: Log[Task]): Task[Either[Throwable, StreamMessage]] =
     (init(folder)
       .bracket { initStmd =>
-        (collect(initStmd, stream) >>= toResult).value
+        (collect(initStmd, stream, circuitBreaker) >>= toResult).value
       }(stmd => gracefullyClose[Task](stmd.fos).as(())))
       .attempt
       .map(_.flatten)
 
   private def init(folder: Path): Task[Streamed] =
     for {
-      _        <- Task.delay(folder.toFile.mkdirs())
-      fileName <- Task.delay(UUID.randomUUID.toString + "_packet_streamed.bts")
-      file     <- Task.delay(folder.resolve(fileName))
-      fos      <- Task.delay(new FileOutputStream(file.toFile))
+      packetFile <- createPacketFile[Task](folder, "_packet_streamed.bts")
+      file       = packetFile.file
+      fos        = packetFile.fos
     } yield Streamed(fos = fos, path = file)
 
   private def collect(
       init: Streamed,
-      stream: Observable[Chunk]
-  ): EitherT[Task, Throwable, Streamed] =
-    EitherT(
-      (stream
-        .foldLeftL(init) {
-          case (stmd, Chunk(Chunk.Content.Header(ChunkHeader(sender, typeId, compressed, cl)))) =>
-            stmd.copy(
-              sender = sender.map(ProtocolHelper.toPeerNode(_)),
-              typeId = Some(typeId),
-              compressed = compressed,
-              contentLength = Some(cl)
-            )
-          case (stmd, Chunk(Chunk.Content.Data(ChunkData(newData)))) =>
-            stmd.fos.write(newData.toByteArray)
-            stmd.fos.flush()
-            stmd
-        })
-        .attempt
-    )
+      stream: Observable[Chunk],
+      circuitBreaker: CircuitBreaker
+  )(implicit log: Log[Task]): EitherT[Task, Throwable, Streamed] = {
+
+    def collectStream = stream.foldWhileLeftL(init) {
+      case (stmd, Chunk(Chunk.Content.Header(ChunkHeader(sender, typeId, compressed, cl)))) =>
+        Left(
+          stmd.copy(
+            sender = sender.map(ProtocolHelper.toPeerNode(_)),
+            typeId = Some(typeId),
+            compressed = compressed,
+            contentLength = Some(cl)
+          )
+        )
+      case (stmd, Chunk(Chunk.Content.Data(ChunkData(newData)))) =>
+        val array = newData.toByteArray
+        stmd.fos.write(array)
+        stmd.fos.flush()
+        val readSoFar = stmd.readSoFar + array.length
+        if (circuitBreaker(readSoFar))
+          Right(stmd.copy(circuitBroken = true))
+        else
+          Left(stmd.copy(readSoFar = readSoFar))
+    }
+
+    EitherT(collectStream.attempt >>= {
+      case Right(stmd) if stmd.circuitBroken =>
+        stmd.path.deleteSingleFile[Task].as(Left(new RuntimeException("Circuit was broken")))
+      case res @ Left(_) => init.path.deleteSingleFile[Task].as(res)
+      case res           => res.pure[Task]
+    })
+
+  }
 
   private def toResult(stmd: Streamed): EitherT[Task, Throwable, StreamMessage] =
     EitherT(Task.delay {
       stmd match {
-        case Streamed(Some(sender), Some(packetType), Some(contentLength), compressed, path, _) =>
+        case Streamed(
+            Some(sender),
+            Some(packetType),
+            Some(contentLength),
+            compressed,
+            _,
+            _,
+            path,
+            _
+            ) =>
           Right(StreamMessage(sender, packetType, path, compressed, contentLength))
         case stmd =>
           Left(new RuntimeException(s"received not full stream message, will not process. $stmd"))

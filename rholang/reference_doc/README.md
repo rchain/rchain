@@ -23,12 +23,3 @@ Table of contents are preliminary and subject to change.
 * Rholang's [Formal Symantics](https://github.com/rchain/rchain/tree/dev/rholang/src/main/k/rholang) in K-Framework.
 * A gentler [rholang tutorial](https://github.com/JoshOrndorff/LearnRholangByExample)
 
-## Timeline
-
-Nov 5, 2018: Deadline for brain dump.
-
-Dec 3, 2018: Deadline for polished draft.
-
-Dec 3 - 10, 2018: Public feedback
-
-Dec 17, 2018: Final draft ready for publishing.

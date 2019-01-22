@@ -6,7 +6,6 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.blockstorage.errors.BlockSenderIsMalformed
 import coop.rchain.blockstorage.util.BlockMessageUtil.{bonds, parentHashes}
 import coop.rchain.blockstorage.util.TopologicalSortUtil
 import coop.rchain.casper.protocol.BlockMessage

@@ -3,7 +3,7 @@ package coop.rchain.rholang.interpreter.accounting
 import cats.Monoid
 import coop.rchain.models.PCost
 
-case class CostAccount(idx: Int, cost: Cost) {
+final case class CostAccount(idx: Int, cost: Cost) {
   def +(other: Cost): CostAccount =
     copy(idx + 1, cost + other)
   def +(other: CostAccount): CostAccount =

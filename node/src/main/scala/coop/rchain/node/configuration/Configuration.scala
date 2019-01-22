@@ -4,8 +4,7 @@ import java.io.File
 import java.nio.file.{Path, Paths}
 
 import cats.implicits._
-
-import coop.rchain.blockstorage.{BlockDagFileStorage, LMDBBlockStore}
+import coop.rchain.blockstorage.{BlockDagFileStorage, FileLMDBIndexBlockStore}
 import coop.rchain.casper.CasperConf
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
@@ -79,6 +78,7 @@ object Configuration {
   private val DefaultInfluxDbHostname = "127.0.0.1"
   private val DefaultInfluxDbPort     = 8086
   private val DefaultInfluxDbDatabase = "rnode"
+  private val DefaultInfluxDbProtocol = "http"
 
   private def loadConfigurationFile(
       configFile: File
@@ -186,7 +186,12 @@ object Configuration {
             maximumBond = DefaultMaximumBond,
             hasFaucet = DefaultHasFaucet
           ),
-          LMDBBlockStore.Config(dataDir.resolve("casper-block-store"), DefaultCasperBlockStoreSize),
+          FileLMDBIndexBlockStore.Config(
+            dataDir.resolve("casper-block-store").resolve("storage"),
+            dataDir.resolve("casper-block-store").resolve("index"),
+            dataDir.resolve("casper-block-store").resolve("checkpoints"),
+            DefaultCasperBlockStoreSize
+          ),
           BlockDagFileStorage.Config(
             dataDir.resolve("casper-block-dag-file-storage-latest-messages-log"),
             dataDir.resolve("casper-block-dag-file-storage-latest-messages-crc"),
@@ -345,7 +350,21 @@ object Configuration {
         val influxDbPort = get(kp(None), _.influxDb.flatMap(_.port), DefaultInfluxDbPort)
         val influxDbDatabase =
           get(kp(None), _.influxDb.flatMap(_.database), DefaultInfluxDbDatabase)
-        Some(InfluxDb(influxDbHostname, influxDbPort, influxDbDatabase))
+        val influxDbProtocol =
+          get(kp(None), _.influxDb.flatMap(_.protocol), DefaultInfluxDbProtocol)
+
+        val influxDBAuth = get(kp(None), _.influxDb.map(_.authentication), None)
+        val influxDBAuthentication =
+          influxDBAuth.map(a => InfluxDBAuthentication(a.user, a.password))
+        Some(
+          InfluxDb(
+            influxDbHostname,
+            influxDbPort,
+            influxDbDatabase,
+            influxDbProtocol,
+            influxDBAuthentication
+          )
+        )
       } else None
 
     val server = Server(
@@ -399,10 +418,11 @@ object Configuration {
         genesisAppriveDuration,
         deployTimestamp
       )
-
     val blockstorage =
-      LMDBBlockStore.Config(
-        dataDir.resolve("casper-block-store"),
+      FileLMDBIndexBlockStore.Config(
+        dataDir.resolve("casper-block-store").resolve("storage"),
+        dataDir.resolve("casper-block-store").resolve("index"),
+        dataDir.resolve("casper-block-store").resolve("checkpoints"),
         casperBlockStoreSize
       )
     val blockDagStorage = BlockDagFileStorage.Config(
@@ -477,7 +497,7 @@ final class Configuration(
     val grpcServer: GrpcServer,
     val tls: Tls,
     val casper: CasperConf,
-    val blockstorage: LMDBBlockStore.Config,
+    val blockstorage: FileLMDBIndexBlockStore.Config,
     val blockDagStorage: BlockDagFileStorage.Config,
     val kamon: Kamon,
     private val options: commandline.Options
@@ -485,4 +505,4 @@ final class Configuration(
   def printHelp(): Task[Unit] = Task.delay(options.printHelp())
 }
 
-case class Profile(name: String, dataDir: (() => Path, String))
+final case class Profile(name: String, dataDir: (() => Path, String))

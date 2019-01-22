@@ -2,7 +2,7 @@ package coop.rchain.shared
 import scala.util.Try
 
 object Printer {
-  final val OUTPUT_CAPPED = Try(System.getenv("PRETTY_PRINTER_OUTPUT_TRIM_AFTER"))
+  val OUTPUT_CAPPED: Option[Int] = Try(System.getenv("PRETTY_PRINTER_OUTPUT_TRIM_AFTER"))
     .map(Integer.parseInt(_))
     .toOption
     .flatMap {

@@ -6,7 +6,7 @@ import coop.rchain.comm.PeerNode
 
 import scala.concurrent.duration.FiniteDuration
 
-case class Configuration(
+final case class Configuration(
     server: Option[Server],
     grpcServer: Option[GrpcServer],
     tls: Option[Tls],
@@ -15,7 +15,7 @@ case class Configuration(
     influxDb: Option[InfluxDb]
 )
 
-case class Server(
+final case class Server(
     host: Option[String],
     port: Option[Int],
     httpPort: Option[Int],
@@ -35,18 +35,18 @@ case class Server(
     threadPoolSize: Option[Int]
 )
 
-case class GrpcServer(
+final case class GrpcServer(
     host: Option[String],
     port: Option[Int],
     portInternal: Option[Int]
 )
 
-case class Tls(
+final case class Tls(
     certificate: Option[Path],
     key: Option[Path]
 )
 
-case class Validators(
+final case class Validators(
     count: Option[Int],
     bondsFile: Option[String],
     known: Option[String],
@@ -65,15 +65,22 @@ case class Validators(
     deployTimestamp: Option[Long]
 )
 
-case class Kamon(
+final case class Kamon(
     prometheus: Option[Boolean],
     influxDb: Option[Boolean],
     zipkin: Option[Boolean],
     sigar: Option[Boolean]
 )
 
-case class InfluxDb(
+final case class InfluxDb(
     hostname: Option[String],
     port: Option[Int],
-    database: Option[String]
+    database: Option[String],
+    protocol: Option[String],
+    authentication: Option[InfluxDbAuthentication]
+)
+
+final case class InfluxDbAuthentication(
+    user: String,
+    password: String
 )

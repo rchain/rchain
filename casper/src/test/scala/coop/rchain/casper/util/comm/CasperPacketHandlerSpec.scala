@@ -1,14 +1,9 @@
 package coop.rchain.casper.util.comm
 
-import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.blockstorage.{
-  BlockDagRepresentation,
-  BlockMetadata,
-  InMemBlockDagStorage,
-  InMemBlockStore
-}
+import coop.rchain.blockstorage.{BlockDagRepresentation, InMemBlockDagStorage, InMemBlockStore}
 import coop.rchain.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import coop.rchain.casper._
 import coop.rchain.casper.genesis.contracts.Faucet
@@ -30,19 +25,18 @@ import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
 import coop.rchain.comm.rp.ProtocolHelper
 import ProtocolHelper._
+import cats.Parallel
+import cats.effect.{ContextShift, Sync}
 import coop.rchain.comm.{transport, _}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.shared.Cell
+import coop.rchain.shared.{Cell, StoreType}
 import monix.eval.Task
 import monix.execution.Scheduler
-import monix.execution.Scheduler.Implicits.global
-import monix.execution.schedulers.TestScheduler
 import org.scalatest.WordSpec
 import coop.rchain.casper.util.TestTime
 
@@ -50,10 +44,18 @@ import scala.concurrent.duration._
 
 class CasperPacketHandlerSpec extends WordSpec {
   private def setup() = new {
-    val scheduler      = Scheduler.io("test")
-    val runtimeDir     = BlockDagStorageTestFixture.blockStorageDir
-    val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024)
-    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)(scheduler)
+    val scheduler  = Scheduler.io("test")
+    val runtimeDir = BlockDagStorageTestFixture.blockStorageDir
+    val activeRuntime =
+      Runtime
+        .create[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB)(
+          ContextShift[Task],
+          Sync[Task],
+          Parallel[Task, Task.Par],
+          scheduler
+        )
+        .unsafeRunSync(scheduler)
+    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync(scheduler)
 
     implicit val captureTask       = Capture.taskCapture
     val (genesisSk, genesisPk)     = Ed25519.newKeyPair
@@ -66,7 +68,6 @@ class CasperPacketHandlerSpec extends WordSpec {
     val bap = new BlockApproverProtocol(
       validatorId,
       deployTimestamp,
-      runtimeManager,
       bonds,
       Seq.empty,
       1L,
@@ -111,7 +112,7 @@ class CasperPacketHandlerSpec extends WordSpec {
     "in GenesisValidator state" should {
 
       "respond on UnapprovedBlock messages with BlockApproval" in {
-        implicit val ctx = TestScheduler()
+        implicit val ctx = Scheduler.global
         val fixture      = setup()
         import fixture._
 
@@ -138,11 +139,10 @@ class CasperPacketHandlerSpec extends WordSpec {
           }
         } yield ()
         test.unsafeRunSync
-        ctx.tick()
       }
 
       "should not respond to any other message" in {
-        implicit val ctx = TestScheduler()
+        implicit val ctx = Scheduler.global
         val fixture      = setup()
         import fixture._
 
@@ -170,7 +170,6 @@ class CasperPacketHandlerSpec extends WordSpec {
           _            = assert(transportLayer.requests.isEmpty)
         } yield ()
         test.unsafeRunSync
-        ctx.tick()
       }
     }
 
@@ -211,7 +210,13 @@ class CasperPacketHandlerSpec extends WordSpec {
           casperPacketHandler = new CasperPacketHandlerImpl[Task](refCasper)
           c1                  = abp.run().forkAndForget.runToFuture
           c2 = StandaloneCasperHandler
-            .approveBlockInterval(interval, shardId, runtimeManager, Some(validatorId), refCasper)
+            .approveBlockInterval(
+              interval,
+              shardId,
+              runtimeManager,
+              Some(validatorId),
+              refCasper
+            )
             .forkAndForget
             .runToFuture
           blockApproval = ApproveBlockProtocolTest.approval(
@@ -254,7 +259,12 @@ class CasperPacketHandlerSpec extends WordSpec {
 
         // interval and duration don't really matter since we don't require and signs from validators
         val bootstrapCasper =
-          new BootstrapCasperHandler[Task](runtimeManager, shardId, Some(validatorId), validators)
+          new BootstrapCasperHandler[Task](
+            runtimeManager,
+            shardId,
+            Some(validatorId),
+            validators
+          )
 
         val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesis))
 
@@ -326,7 +336,7 @@ class CasperPacketHandlerSpec extends WordSpec {
         )
       )
 
-      val casper = NoOpsCasperEffect[Task]().unsafeRunSync
+      implicit val casper = NoOpsCasperEffect[Task]().unsafeRunSync
 
       val refCasper = Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
         new ApprovedBlockReceivedHandler[Task](casper, approvedBlock)
@@ -375,6 +385,25 @@ class CasperPacketHandlerSpec extends WordSpec {
           _ = assert(
             ApprovedBlock
               .parseFrom(head.msg.message.packet.get.content.toByteArray) == approvedBlock
+          )
+        } yield ()
+
+        test.unsafeRunSync
+        transportLayer.reset()
+      }
+
+      "respond to ForkChoiceTipRequest messages" in {
+        val request = ForkChoiceTipRequest()
+        val requestPacket =
+          Packet(transport.ForkChoiceTipRequest.id, request.toByteString)
+
+        val test: Task[Unit] = for {
+          tip  <- MultiParentCasper.forkChoiceTip[Task]
+          _    <- casperPacketHandler.handle(local)(requestPacket)
+          head = transportLayer.requests.head
+          _    = assert(head.peer == local)
+          _ = assert(
+            head.msg.message.packet.get == Packet(transport.BlockMessage.id, tip.toByteString)
           )
         } yield ()
 

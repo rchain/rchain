@@ -7,7 +7,7 @@ import monix.eval.Coeval
 import scala.collection.immutable.BitSet
 
 //locallyFree is of type Coeval to make use of memoization
-case class ParSet(
+final case class ParSet(
     ps: SortedParHashSet,
     connectiveUsed: Boolean,
     locallyFree: Coeval[BitSet],

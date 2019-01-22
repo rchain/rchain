@@ -1,4 +1,9 @@
-def test_repl(started_standalone_bootstrap_node):
+from .rnode import (
+    Node,
+)
+
+
+def test_repl(started_standalone_bootstrap_node: Node) -> None:
     repl_commands = [
         '5',
         'new s(`rho:io:stdout`) in { s!("foo") }',
@@ -8,7 +13,7 @@ def test_repl(started_standalone_bootstrap_node):
         started_standalone_bootstrap_node.repl(repl_cmd)
 
 
-def test_repl_detects_invalid_rholang(started_standalone_bootstrap_node):
+def test_repl_detects_invalid_rholang(started_standalone_bootstrap_node: Node) -> None:
     input = 'foo'
     output = started_standalone_bootstrap_node.repl(input, stderr=False)
     formatted_input = '{}\n'.format(input)

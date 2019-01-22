@@ -12,6 +12,9 @@ object Resources {
     * @param a A given resource implementing [[AutoCloseable]]
     * @param f A function that takes this resource as its argument
     */
+  @SuppressWarnings(
+    Array("org.wartremover.warts.Var", "org.wartremover.warts.Throw", "org.wartremover.warts.Null")
+  )
   def withResource[A <: AutoCloseable, B](a: => A)(f: A => B): B = {
     val resource: A = a
     require(resource != null, "resource is null")

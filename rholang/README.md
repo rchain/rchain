@@ -26,6 +26,8 @@ $ java -jar rholang-cli/target/scala-2.12/rholangCLI-assembly-0.1.0-SNAPSHOT.jar
 <interpreter output follows.>
 ```
 
+Consider running with `-Dlogback.configurationFile=logback-rholang_cli.xml` for sane log output.
+
 The interpereter can also be run as a REPL. Currently it won't accept multiline input, so each line must be a fully formed term.
 
 ## What's working, what's broken:

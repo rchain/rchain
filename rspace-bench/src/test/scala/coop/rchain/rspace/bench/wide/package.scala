@@ -21,8 +21,9 @@ package object wide {
     errors
   }
 
-  def createTest(t: Option[Par], reducer: ChargingReducer[Task])(
+  def createTest(t: Option[Par])(
       implicit errorProcessor: () => Vector[Throwable],
+      reducer: ChargingReducer[Task],
       rand: Blake2b512Random
   ): Task[Vector[Throwable]] = {
     val par = t.getOrElse(throw new Error("Failed to prepare executable rholang term"))

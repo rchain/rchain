@@ -1,17 +1,17 @@
 package coop.rchain.rholang.interpreter
 
+import coop.rchain.shared.StoreType
 import java.io.{BufferedOutputStream, FileOutputStream, FileReader, StringReader}
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
 
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.Interpreter.EvaluateResult
 import coop.rchain.rholang.interpreter.Runtime.RhoIStore
 import coop.rchain.rholang.interpreter.accounting.CostAccount
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import monix.eval.Task
+import monix.eval.{Coeval, Task}
 import monix.execution.{CancelableFuture, Scheduler}
 import org.rogach.scallop.{stringListConverter, ScallopConf}
 
@@ -52,11 +52,10 @@ object RholangCLI {
 
     val conf = new Conf(args)
 
-    val runtime = Runtime.create(conf.dataDir(), conf.mapSize())
-    Await.result(
-      Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace).runToFuture,
-      5.seconds
-    )
+    val runtime = (for {
+      runtime <- Runtime.create[Task, Task.Par](conf.dataDir(), conf.mapSize(), StoreType.LMDB)
+      _       <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
+    } yield (runtime)).unsafeRunSync
 
     try {
       if (conf.files.supplied) {
@@ -97,11 +96,12 @@ object RholangCLI {
     }
 
   @tailrec
+  @SuppressWarnings(Array("org.wartremover.warts.Return"))
   def repl(runtime: Runtime[Task])(implicit scheduler: Scheduler): Unit = {
     printPrompt()
     Option(scala.io.StdIn.readLine()) match {
       case Some(line) =>
-        Interpreter.buildNormalizedTerm(line).runAttempt match {
+        Interpreter[Coeval].buildNormalizedTerm(line).runAttempt match {
           case Right(par)                 => evaluatePar(runtime)(par)
           case Left(ie: InterpreterError) =>
             // we don't want to print stack trace for user errors
@@ -126,7 +126,7 @@ object RholangCLI {
 
     val source = reader(fileName)
 
-    Interpreter
+    Interpreter[Coeval]
       .buildNormalizedTerm(source)
       .runAttempt
       .fold(_.printStackTrace(Console.err), processTerm)
@@ -171,7 +171,7 @@ object RholangCLI {
     val evaluatorTask =
       for {
         _      <- Task.now(printNormalizedTerm(par))
-        result <- Interpreter.evaluate(runtime, par)
+        result <- Interpreter[Task].evaluate(runtime, par)
       } yield result
 
     waitForSuccess(evaluatorTask.runToFuture)

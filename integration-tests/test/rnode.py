@@ -15,6 +15,7 @@ from typing import (
     Tuple,
     Optional,
     Generator,
+    AbstractSet,
 )
 
 from docker.client import DockerClient
@@ -42,12 +43,13 @@ rnode_binary = '/opt/docker/bin/rnode'
 rnode_directory = "/var/lib/rnode"
 rnode_deploy_dir = "{}/deploy".format(rnode_directory)
 rnode_bonds_file = '{}/genesis/bonds.txt'.format(rnode_directory)
+rnode_wallets_file = '{}/genesis/wallets.txt'.format(rnode_directory)
 rnode_certificate = '{}/node.certificate.pem'.format(rnode_directory)
 rnode_key = '{}/node.key.pem'.format(rnode_directory)
 
 
 class RNodeAddressNotFoundError(Exception):
-    def __init__(self, regex):
+    def __init__(self, regex: str) -> None:
         super().__init__()
         self.regex = regex
 
@@ -86,7 +88,43 @@ def extract_block_count_from_show_blocks(show_blocks_output: str) -> int:
     return result
 
 
-def extract_block_hash_from_propose_output(propose_output: str):
+def parse_show_blocks_key_value_line(line: str) -> Tuple[str, str]:
+    match = re.match(r'(?P<key>[^:]*): (?P<value>.*)', line.strip())
+    if match is None:
+        raise UnexpectedShowBlocksOutputFormatError(line)
+    return (match.group('key'), match.group('value'))
+
+
+def parse_show_blocks_output(show_blocks_output: str) -> List[Dict[str, str]]:
+    result = []
+
+    lines = show_blocks_output.splitlines()
+
+    i = 0
+    while True:
+        if i >= len(lines):
+            break
+        if lines[i].startswith('------------- block '):
+            block = {}
+            j = i + 1
+            while True:
+                if j >= len(lines):
+                    break
+                if lines[j].strip() == "":
+                    break
+                key, value = parse_show_blocks_key_value_line(lines[j])
+                block[key] = value
+                j += 1
+            result.append(block)
+            i = j
+        else:
+            i += 1
+
+    return result
+
+
+
+def extract_block_hash_from_propose_output(propose_output: str) -> str:
     """We're getting back something along the lines of:
 
     Response: Success! Block a91208047c... created and added.\n
@@ -129,10 +167,10 @@ class Node:
         address = match.group(1)
         return address
 
-    def get_metrics(self):
+    def get_metrics(self) -> str:
         return self.shell_out('curl', '-s', 'http://localhost:40403/metrics')
 
-    def get_connected_peers_metric_value(self):
+    def get_connected_peers_metric_value(self) -> str:
         try:
             return self.shell_out('sh', '-c', 'curl -s http://localhost:40403/metrics | grep ^rchain_comm_rp_connect_peers\\ ')
         except NonZeroExitCodeError as e:
@@ -148,9 +186,16 @@ class Node:
     def show_blocks_with_depth(self, depth: int) -> str:
         return self.rnode_command('show-blocks', '--depth', str(depth))
 
+    def show_block(self, hash: str) -> str:
+        return self.rnode_command('show-block', hash)
+
     def get_blocks_count(self, depth: int) -> int:
         show_blocks_output = self.show_blocks_with_depth(depth)
         return extract_block_count_from_show_blocks(show_blocks_output)
+
+    def show_blocks_parsed(self, depth: int) -> List[Dict[str, str]]:
+        show_blocks_output = self.show_blocks_with_depth(depth)
+        return parse_show_blocks_output(show_blocks_output)
 
     def get_block(self, block_hash: str) -> str:
         try:
@@ -159,10 +204,10 @@ class Node:
             raise GetBlockError(command=e.command, exit_code=e.exit_code, output=e.output)
 
     # Too low level -- do not use directly.  Prefer shell_out() instead.
-    def _exec_run_with_timeout(self, cmd: Tuple[str, ...], stderr=True) -> Tuple[int, str]:
+    def _exec_run_with_timeout(self, cmd: Tuple[str, ...], stderr: bool = True) -> Tuple[int, str]:
         control_queue: queue.Queue = Queue(1)
 
-        def command_process():
+        def command_process() -> None:
             exec_result: ExecResult = self.container.exec_run(cmd, stderr=stderr)
             control_queue.put((exec_result.exit_code, exec_result.output.decode('utf-8')))
 
@@ -187,7 +232,7 @@ class Node:
             logging.debug("EXITED {} {} {}".format(self.name, cmd, exit_code))
         return exit_code, output
 
-    def shell_out(self, *cmd: str, stderr=True) -> str:
+    def shell_out(self, *cmd: str, stderr: bool = True) -> str:
         exit_code, output = self._exec_run_with_timeout(cmd, stderr=stderr)
         if exit_code != 0:
             raise NonZeroExitCodeError(command=cmd, exit_code=exit_code, output=output)
@@ -265,9 +310,10 @@ class LoggingThread(threading.Thread):
             pass
 
 
-def make_container_command(container_command: str, container_command_options: Dict) -> str:
+def make_container_command(container_command: str, container_command_flags: AbstractSet, container_command_options: Dict) -> str:
     opts = ['{} {}'.format(option, argument) for option, argument in container_command_options.items()]
-    result = '{} {}'.format(container_command, ' '.join(opts))
+    flags = ' '.join(container_command_flags)
+    result = '{} {} {}'.format(container_command, flags, ' '.join(opts))
     return result
 
 
@@ -278,12 +324,14 @@ def make_node(
     network: str,
     bonds_file: str,
     container_command: str,
+    container_command_flags: AbstractSet,
     container_command_options: Dict,
     command_timeout: int,
     extra_volumes: List[str],
     allowed_peers: Optional[List[str]],
     image: str = DEFAULT_IMAGE,
     mem_limit: Optional[str] = None,
+    wallets_file: Optional[str] = None,
 ) -> Node:
     assert isinstance(name, str)
     assert '_' not in name, 'Underscore is not allowed in host name'
@@ -295,7 +343,7 @@ def make_node(
     hosts_allow_file = make_tempfile("hosts-allow-{}".format(name), hosts_allow_file_content)
     hosts_deny_file = make_tempfile("hosts-deny-{}".format(name), "ALL: ALL")
 
-    command = make_container_command(container_command, container_command_options)
+    command = make_container_command(container_command, container_command_flags, container_command_options)
 
     env = {}
     java_options = os.environ.get('_JAVA_OPTIONS')
@@ -310,6 +358,10 @@ def make_node(
         "{}:{}".format(deploy_dir, rnode_deploy_dir),
     ]
 
+    if wallets_file is not None:
+        volumes.append('{}:{}'.format(wallets_file, rnode_wallets_file))
+
+    logging.info('STARTING %s %s', name, command)
     container = docker_client.containers.run(
         image,
         name=name,
@@ -361,23 +413,30 @@ def make_bootstrap_node(
     command_timeout: int,
     allowed_peers: Optional[List[str]] = None,
     mem_limit: Optional[str] = None,
+    cli_flags: Optional[AbstractSet] = None,
     cli_options: Optional[Dict] = None,
     mount_dir: Optional[str] = None,
+    wallets_file: Optional[str] = None,
 ) -> Node:
     key_file = get_absolute_path_for_mounting("bootstrap_certificate/node.key.pem", mount_dir=mount_dir)
     cert_file = get_absolute_path_for_mounting("bootstrap_certificate/node.certificate.pem", mount_dir=mount_dir)
 
     container_name = make_bootstrap_name(network)
 
+    container_command_flags = set([
+        "--standalone",
+        "--prometheus",
+    ])
+
     container_command_options = {
         "--port":                   40400,
-        "--standalone":             "",
         "--validator-private-key":  keypair.private_key,
         "--validator-public-key":   keypair.public_key,
-        "--has-faucet":             "",
         "--host":                   container_name,
-        "--prometheus":             ""
     }
+
+    if cli_flags is not None:
+        container_command_flags.update(cli_flags)
 
     if cli_options is not None:
         container_command_options.update(cli_options)
@@ -393,11 +452,13 @@ def make_bootstrap_node(
         network=network,
         bonds_file=bonds_file,
         container_command='run',
+        container_command_flags=container_command_flags,
         container_command_options=container_command_options,
         command_timeout=command_timeout,
         extra_volumes=volumes,
         allowed_peers=allowed_peers,
         mem_limit=mem_limit if mem_limit is not None else '4G',
+        wallets_file=wallets_file,
     )
     return container
 
@@ -429,6 +490,9 @@ def make_peer(
     keypair: KeyPair,
     allowed_peers: Optional[List[str]] = None,
     mem_limit: Optional[str] = None,
+    wallets_file: Optional[str] = None,
+    cli_flags: Optional[AbstractSet] = None,
+    cli_options: Optional[Dict] = None,
 ) -> Node:
     assert isinstance(name, str)
     assert '_' not in name, 'Underscore is not allowed in host name'
@@ -436,13 +500,22 @@ def make_peer(
 
     bootstrap_address = bootstrap.get_rnode_address()
 
+    container_command_flags = set([
+        "--prometheus",
+    ])
+
+    if cli_flags is not None:
+        container_command_flags.update(cli_flags)
+
     container_command_options = {
         "--bootstrap":              bootstrap_address,
         "--validator-private-key":  keypair.private_key,
         "--validator-public-key":   keypair.public_key,
         "--host":                   name,
-        "--prometheus":             ""
     }
+
+    if cli_options is not None:
+        container_command_options.update(cli_options)
 
     container = make_node(
         docker_client=docker_client,
@@ -450,11 +523,13 @@ def make_peer(
         network=network,
         bonds_file=bonds_file,
         container_command='run',
+        container_command_flags=container_command_flags,
         container_command_options=container_command_options,
         command_timeout=command_timeout,
         extra_volumes=[],
         allowed_peers=allowed_peers,
         mem_limit=mem_limit if not None else '4G',
+        wallets_file=wallets_file,
     )
     return container
 
@@ -467,6 +542,9 @@ def started_peer(
     name: str,
     bootstrap: Node,
     keypair: KeyPair,
+    wallets_file: Optional[str] = None,
+    cli_flags: Optional[AbstractSet] = None,
+    cli_options: Optional[Dict] = None,
 ) -> Generator[Node, None, None]:
     peer = make_peer(
         docker_client=context.docker,
@@ -476,6 +554,9 @@ def started_peer(
         bootstrap=bootstrap,
         keypair=keypair,
         command_timeout=context.command_timeout,
+        wallets_file=wallets_file,
+        cli_flags=cli_flags,
+        cli_options=cli_options,
     )
     try:
         wait_for_node_started(context, peer)
@@ -558,7 +639,15 @@ def docker_network(context: TestingContext, docker_client: DockerClient) -> Gene
 
 
 @contextlib.contextmanager
-def started_bootstrap(*, context: TestingContext, network: str, mount_dir: str = None, cli_options: Optional[Dict] = None) -> Generator[Node, None, None]:
+def started_bootstrap(
+    *,
+    context: TestingContext,
+    network: str,
+    mount_dir: str = None,
+    cli_flags: Optional[AbstractSet] = None,
+    cli_options: Optional[Dict] = None,
+    wallets_file: Optional[str] = None,
+) -> Generator[Node, None, None]:
     bootstrap_node = make_bootstrap_node(
         docker_client=context.docker,
         network=network,
@@ -566,25 +655,32 @@ def started_bootstrap(*, context: TestingContext, network: str, mount_dir: str =
         keypair=context.bootstrap_keypair,
         command_timeout=context.command_timeout,
         mount_dir=mount_dir,
+        cli_flags=cli_flags,
         cli_options=cli_options,
+        wallets_file=wallets_file,
     )
     try:
         wait_for_node_started(context, bootstrap_node)
-        wait_for_approved_block_received_handler_state(context, bootstrap_node)
         yield bootstrap_node
     finally:
         bootstrap_node.cleanup()
 
 
 @contextlib.contextmanager
-def docker_network_with_started_bootstrap(context: TestingContext) -> Generator[Node, None, None]:
+def docker_network_with_started_bootstrap(context: TestingContext, cli_flags: Optional[AbstractSet] = None) -> Generator[Node, None, None]:
     with docker_network(context, context.docker) as network:
-        with started_bootstrap(context=context, network=network, mount_dir=context.mount_dir) as node:
-            yield node
+        with started_bootstrap(context=context, network=network, mount_dir=context.mount_dir, cli_flags=cli_flags) as bootstrap:
+            wait_for_approved_block_received_handler_state(context, bootstrap)
+            yield bootstrap
 
 
 @contextlib.contextmanager
-def ready_bootstrap(context: TestingContext, cli_options: Optional[Dict] = None) -> Generator[Node, None, None]:
+def ready_bootstrap(
+    context: TestingContext,
+    cli_flags: Optional[AbstractSet] = None,
+    cli_options: Optional[Dict] = None,
+    wallets_file: Optional[str] = None,
+) -> Generator[Node, None, None]:
     with docker_network(context, context.docker) as network:
-        with started_bootstrap(context=context, network=network, mount_dir=context.mount_dir, cli_options=cli_options) as node:
+        with started_bootstrap(context=context, network=network, mount_dir=context.mount_dir, cli_flags=cli_flags, cli_options=cli_options, wallets_file=wallets_file) as node:
             yield node

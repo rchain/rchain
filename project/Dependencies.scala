@@ -16,7 +16,7 @@ object Dependencies {
   val catsCore            = "org.typelevel"              %% "cats-core"                 % catsVersion
   val catsLawsTest        = "org.typelevel"              %% "cats-laws"                 % catsVersion % "test"
   val catsLawsTestkitTest = "org.typelevel"              %% "cats-testkit"              % catsVersion % "test"
-  val catsEffect          = "org.typelevel"              %% "cats-effect"               % "1.0.0"
+  val catsEffect          = "org.typelevel"              %% "cats-effect"               % "1.1.0"
   val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % catsMtlVersion
   val catsMtlLawsTest     = "org.typelevel"              %% "cats-mtl-laws"             % catsMtlVersion % "test"
   val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion

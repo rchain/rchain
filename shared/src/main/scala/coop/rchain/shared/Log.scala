@@ -20,6 +20,7 @@ object LogSource {
     val clazz: Class[_] = c
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Null")) // false-positive
   implicit def matLogSource: LogSource = macro LogSourceMacros.mkLogSource
 }
 

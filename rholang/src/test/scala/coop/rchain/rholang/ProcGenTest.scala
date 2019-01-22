@@ -4,6 +4,7 @@ import coop.rchain.models.PrettyPrinted
 import coop.rchain.rholang.interpreter.Interpreter
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn._
 import coop.rchain.rholang.syntax.rholang_mercury.PrettyPrinter
+import monix.eval.Coeval
 import org.scalacheck.Arbitrary
 import org.scalacheck.Test.Parameters
 import org.scalatest.{FlatSpec, Matchers}
@@ -19,7 +20,7 @@ class ProcGenTest extends FlatSpec with PropertyChecks with Matchers {
   it should "generate correct procs that are normalized successfully" in {
 
     forAll { p: PrettyPrinted[Proc] =>
-      Interpreter.buildPar(p.value).apply
+      Interpreter[Coeval].buildPar(p.value).apply
     }
   }
 
@@ -30,7 +31,7 @@ class ProcGenTest extends FlatSpec with PropertyChecks with Matchers {
       ProcGen.procShrinker
         .shrink(original.value)
         .headOption
-        .map(shrinked => Interpreter.buildPar(shrinked).apply)
+        .map(shrinked => Interpreter[Coeval].buildPar(shrinked).apply)
         .getOrElse(true)
 
     }

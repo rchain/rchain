@@ -18,7 +18,7 @@ import coop.rchain.shared.{Log, LogSource}
 
 import scala.language.higherKinds
 
-case class ValidatorIdentity(
+final case class ValidatorIdentity(
     publicKey: Array[Byte],
     privateKey: Array[Byte],
     sigAlgorithm: String

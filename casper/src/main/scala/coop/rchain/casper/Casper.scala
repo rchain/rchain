@@ -3,37 +3,19 @@ package coop.rchain.casper
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import cats.{Applicative, Monad}
 import cats.implicits._
-import cats.mtl.implicits._
 import cats.effect.{Concurrent, Sync}
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util._
-import coop.rchain.casper.util.ProtoUtil._
-import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib._
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.shared._
-import coop.rchain.shared.AttemptOps._
-
-import scala.annotation.tailrec
-import scala.collection.{immutable, mutable}
-import scala.collection.immutable.{HashMap, HashSet}
-import cats.effect.concurrent.{Ref, Semaphore}
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockMetadata, BlockStore}
-import coop.rchain.casper.EquivocationRecord.SequenceNumber
+import cats.effect.concurrent.Semaphore
+import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.ski.kp2
-import coop.rchain.rspace.Checkpoint
-import monix.eval.Task
-import monix.execution.Scheduler
-import monix.execution.atomic.AtomicAny
-
-import scala.concurrent.SyncVar
 
 trait Casper[F[_], A] {
   def addBlock(
@@ -56,7 +38,7 @@ trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]] {
   def lastFinalizedBlock: F[BlockMessage]
   def storageContents(hash: ByteString): F[String]
   // TODO: Refactor hashSetCasper to take a RuntimeManager[F] just like BlockStore[F]
-  def getRuntimeManager: F[Option[RuntimeManager[Task]]]
+  def getRuntimeManager: F[Option[RuntimeManager[F]]]
 }
 
 object MultiParentCasper extends MultiParentCasperInstances {
@@ -74,12 +56,12 @@ object MultiParentCasper extends MultiParentCasperInstances {
 
 sealed abstract class MultiParentCasperInstances {
 
-  def hashSetCasper[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage: ToAbstractContext](
-      runtimeManager: RuntimeManager[Task],
+  def hashSetCasper[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage](
+      runtimeManager: RuntimeManager[F],
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       shardId: String
-  )(implicit scheduler: Scheduler): F[MultiParentCasper[F]] =
+  ): F[MultiParentCasper[F]] =
     for {
       // Initialize DAG storage with genesis block in case it is empty
       _   <- BlockDagStorage[F].insert(genesis)
@@ -99,7 +81,12 @@ sealed abstract class MultiParentCasperInstances {
                                case Right(Some(hash)) => hash.pure[F]
                              }
       blockProcessingLock <- Semaphore[F](1)
-    } yield
+      casperState <- Cell.mvarCell[F, CasperState](
+                      CasperState(Set.empty[BlockMessage], Set.empty[Deploy])
+                    )
+
+    } yield {
+      implicit val state = casperState
       new MultiParentCasperImpl[F](
         runtimeManager,
         validatorId,
@@ -108,4 +95,5 @@ sealed abstract class MultiParentCasperInstances {
         shardId,
         blockProcessingLock
       )
+    }
 }

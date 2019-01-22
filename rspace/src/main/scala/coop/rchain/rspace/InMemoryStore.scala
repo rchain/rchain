@@ -12,7 +12,7 @@ import coop.rchain.shared.SeqOps.{dropIndex, removeFirst}
 import kamon._
 import scodec.Codec
 
-case class State[C, P, A, K](
+final case class State[C, P, A, K](
     dbGNATs: Map[Blake2b256Hash, GNAT[C, P, A, K]],
     dbJoins: Map[C, Seq[Seq[C]]]
 ) {

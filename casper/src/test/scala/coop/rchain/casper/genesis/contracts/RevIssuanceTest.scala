@@ -1,5 +1,7 @@
 package coop.rchain.casper.genesis.contracts
 
+import cats.effect.Concurrent
+import cats.implicits._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.HashSetCasperTest.createBonds
 import coop.rchain.casper.genesis.Genesis
@@ -36,7 +38,7 @@ class RevIssuanceTest extends FlatSpec with Matchers {
 
   "Rev" should "be issued and accessible based on inputs from Ethereum" in {
     val activeRuntime  = TestSetUtil.runtime()
-    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
+    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
     val emptyHash      = runtimeManager.emptyStateHash
 
     val ethAddress      = "0x041e1eec23d118f0c4ffc814d4f415ac3ef3dcff"
@@ -59,21 +61,28 @@ class RevIssuanceTest extends FlatSpec with Matchers {
 
     val statusOut = "out"
     val unlockDeployData =
-      RevIssuanceTest.preWalletUnlockDeploy(ethAddress, pubKey, secKey, statusOut)(runtimeManager)
+      RevIssuanceTest
+        .preWalletUnlockDeploy[Task](ethAddress, pubKey, secKey, statusOut)(
+          Concurrent[Task],
+          runtimeManager
+        )
+        .unsafeRunSync
     val unlockDeploy = ProtoUtil.deployDataToDeploy(unlockDeployData)
 
     val nonce             = 0
     val amount            = 15L
     val destination       = "deposit"
     val transferStatusOut = "tOut"
-    val transferDeployData = RevIssuanceTest.walletTransferDeploy(
-      nonce,
-      amount,
-      destination,
-      transferStatusOut,
-      pubKey,
-      secKey
-    )(runtimeManager)
+    val transferDeployData = RevIssuanceTest
+      .walletTransferDeploy(
+        nonce,
+        amount,
+        destination,
+        transferStatusOut,
+        pubKey,
+        secKey
+      )(Concurrent[Task], runtimeManager)
+      .unsafeRunSync
     val transferDeploy = ProtoUtil.deployDataToDeploy(transferDeployData)
     val (postGenHash, _) =
       runtimeManager.computeState(emptyHash, genesisDeploys).runSyncUnsafe(10.seconds)
@@ -94,31 +103,30 @@ class RevIssuanceTest extends FlatSpec with Matchers {
 }
 
 object RevIssuanceTest {
-  def preWalletUnlockDeploy(
+  def preWalletUnlockDeploy[F[_]: Concurrent](
       ethAddress: String,
       pubKey: String,
       secKey: Array[Byte],
       statusOut: String
-  )(implicit runtimeManager: RuntimeManager[Task]): DeployData = {
-    val code =
-      BondingUtil.preWalletUnlockDeploy[Task](ethAddress, pubKey, secKey, statusOut).unsafeRunSync
-    ProtoUtil.sourceDeploy(
-      code,
-      System.currentTimeMillis(),
-      accounting.MAX_VALUE
-    )
-  }
+  )(implicit runtimeManager: RuntimeManager[F]): F[DeployData] =
+    BondingUtil.preWalletUnlockDeploy[F](ethAddress, pubKey, secKey, statusOut).map { code =>
+      ProtoUtil.sourceDeploy(
+        code,
+        System.currentTimeMillis(),
+        accounting.MAX_VALUE
+      )
+    }
 
-  def walletTransferDeploy(
+  def walletTransferDeploy[F[_]: Concurrent](
       nonce: Int,
       amount: Long,
       destination: String,
       transferStatusOut: String,
       pubKey: String,
       secKey: Array[Byte]
-  )(implicit runtimeManager: RuntimeManager[Task]): DeployData = {
-    val code = BondingUtil
-      .issuanceWalletTransferDeploy[Task](
+  )(implicit runtimeManager: RuntimeManager[F]): F[DeployData] =
+    BondingUtil
+      .issuanceWalletTransferDeploy[F](
         nonce,
         amount,
         destination,
@@ -126,12 +134,11 @@ object RevIssuanceTest {
         pubKey,
         secKey
       )
-      .unsafeRunSync
-
-    ProtoUtil.sourceDeploy(
-      code,
-      System.currentTimeMillis(),
-      accounting.MAX_VALUE
-    )
-  }
+      .map { code =>
+        ProtoUtil.sourceDeploy(
+          code,
+          System.currentTimeMillis(),
+          accounting.MAX_VALUE
+        )
+      }
 }

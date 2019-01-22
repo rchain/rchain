@@ -5,7 +5,7 @@ import cats._, cats.data._, cats.implicits._
 object stateT extends StateTInstances
 
 trait StateTInstances {
-  implicit def stateTMonadTrans[A] = new StateTMonadTrans[A] {}
+  implicit def stateTMonadTrans[A]: MonadTrans[StateT[?[_], A, ?]] = new StateTMonadTrans[A] {}
 }
 
 trait StateTMonadTrans[A] extends MonadTrans[StateT[?[_], A, ?]] {

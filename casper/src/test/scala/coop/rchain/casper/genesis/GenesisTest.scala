@@ -17,6 +17,7 @@ import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.shared.PathOps.RichPath
+import coop.rchain.shared.StoreType
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 import java.nio.file.Path
@@ -209,8 +210,8 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
       val walletsFile = genesisPath.resolve("wallets.txt").toString
       printWallets(walletsFile)
 
-      val runtimeManager = RuntimeManager.fromRuntime(runtime)
       for {
+        runtimeManager  <- RuntimeManager.fromRuntime(runtime)
         _               <- fromInputFiles()(runtimeManager, genesisPath, log, time)
         storageContents = StoragePrinter.prettyPrint(runtime.space.store)
       } yield walletAddresses.forall(storageContents contains _._1) should be(true)
@@ -258,16 +259,16 @@ object GenesisTest {
       body: (Runtime[Task], Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
   ): Task[Unit] = {
     val storePath = storageLocation
-    val runtime   = Runtime.create(storePath, storageSize)
     val gp        = genesisPath
     val log       = new LogStub[Task]
     val time      = new LogicalTime[Task]
 
     for {
-      result <- body(runtime, genesisPath, log, time)
-      _      <- runtime.close()
-      _      <- Sync[Task].delay { storePath.recursivelyDelete() }
-      _      <- Sync[Task].delay { gp.recursivelyDelete() }
+      runtime <- Runtime.create[Task, Task.Par](storePath, storageSize, StoreType.LMDB)
+      result  <- body(runtime, genesisPath, log, time)
+      _       <- runtime.close()
+      _       <- Sync[Task].delay { storePath.recursivelyDelete() }
+      _       <- Sync[Task].delay { gp.recursivelyDelete() }
     } yield result
   }
 
@@ -276,7 +277,6 @@ object GenesisTest {
   ): Task[Unit] =
     withRawGenResources {
       (runtime: Runtime[Task], genesisPath: Path, log: LogStub[Task], time: LogicalTime[Task]) =>
-        val runtimeManager = RuntimeManager.fromRuntime(runtime)
-        body(runtimeManager, genesisPath, log, time)
+        RuntimeManager.fromRuntime(runtime).flatMap(body(_, genesisPath, log, time))
     }
 }

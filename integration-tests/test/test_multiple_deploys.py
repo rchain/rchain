@@ -8,6 +8,7 @@ from .common import (
     CommandLineOptions,
 )
 from .rnode import (
+    Node,
     bootstrap_connected_peer,
     docker_network_with_started_bootstrap,
 )
@@ -18,14 +19,14 @@ from .wait import (
 
 
 class DeployThread(threading.Thread):
-    def __init__(self, name, node, contract, count):
+    def __init__(self, name: str, node: Node, contract: str, count: int) -> None:
         threading.Thread.__init__(self)
         self.name = name
         self.node = node
         self.contract = contract
         self.count = count
 
-    def run(self):
+    def run(self) -> None:
         for _ in range(self.count):
             self.node.deploy(self.contract)
             self.node.propose()

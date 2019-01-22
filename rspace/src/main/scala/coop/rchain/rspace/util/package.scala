@@ -62,6 +62,7 @@ package object util {
     * Based on:
     * [[https://github.com/OpenTSDB/asynchbase/blob/f6a8ccb7e55ed9bc0aad265345da4c679e750055/src/Bytes.java#L549-L572]]
     */
+  @SuppressWarnings(Array("org.wartremover.warts.Return"))
   def memcmp(a: Array[Byte], b: Array[Byte]): Int = {
     val c = a.length - b.length
     if (c != 0) {
@@ -84,6 +85,7 @@ package object util {
       data = gnat.data.sortBy(_.source.hash.bytes)(ordByteVector)
     )
 
+  @SuppressWarnings(Array("org.wartremover.warts.Return"))
   def veccmp(a: ByteVector, b: ByteVector): Int = {
     val c = a.length - b.length
     if (c != 0) {

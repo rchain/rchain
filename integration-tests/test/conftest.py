@@ -5,6 +5,7 @@ import tempfile
 import logging
 import contextlib
 from typing import (
+    Any,
     List,
     Generator,
 )
@@ -44,7 +45,7 @@ def pytest_addoption(parser: Parser) -> None:
 
 
 @pytest.yield_fixture(scope='session')
-def command_line_options(request) -> Generator[CommandLineOptions, None, None]:
+def command_line_options(request: Any) -> Generator[CommandLineOptions, None, None]:
     startup_timeout = int(request.config.getoption("--startup-timeout"))
     converge_timeout = int(request.config.getoption("--converge-timeout"))
     receive_timeout = int(request.config.getoption("--receive-timeout"))
@@ -73,6 +74,27 @@ def temporary_bonds_file(random_generator: Random, validator_keys: List[KeyPair]
             for pair in validator_keys:
                 bond = random_generator.randint(1, 100)
                 f.write("{} {}\n".format(pair.public_key, bond))
+        yield file
+    finally:
+        os.unlink(file)
+
+
+def make_wallets_file_lines(random_generator: Random, validator_keys: List[KeyPair]) -> List[str]:
+    result = []
+    for keypair in validator_keys:
+        token_amount = random_generator.randint(1, 100)
+        line = '0x{},{},0'.format(keypair.public_key, token_amount)
+        result.append(line)
+    return result
+
+
+@contextlib.contextmanager
+def temporary_wallets_file(random_generator: Random, validator_keys: List[KeyPair]) -> Generator[str, None, None]:
+    lines = make_wallets_file_lines(random_generator, validator_keys)
+    (fd, file) = tempfile.mkstemp(prefix="rchain-wallets-file-", suffix=".txt", dir="/tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.writelines('{}\n'.format(l) for l in lines)
         yield file
     finally:
         os.unlink(file)

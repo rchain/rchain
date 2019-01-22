@@ -4,9 +4,9 @@ import coop.rchain.casper.util.Sorting
 import coop.rchain.crypto.codec.Base16
 
 //TODO: include other fields relevent to PoS (e.g. rewards channel)
-case class ProofOfStakeValidator(id: Array[Byte], stake: Long)
+final case class ProofOfStakeValidator(id: Array[Byte], stake: Long)
 
-case class ProofOfStakeParams(
+final case class ProofOfStakeParams(
     minimumBond: Long,
     maximumBond: Long,
     validators: Seq[ProofOfStakeValidator]
