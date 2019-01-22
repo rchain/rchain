@@ -1082,16 +1082,19 @@ object ProcNormalizeMatcher {
   * @param env
   * @param knownFree
   */
-case class ProcVisitInputs(
+final case class ProcVisitInputs(
     par: Par,
     env: IndexMapChain[VarSort],
     knownFree: DebruijnLevelMap[VarSort]
 )
 // Returns the update Par and an updated map of free variables.
-case class ProcVisitOutputs(par: Par, knownFree: DebruijnLevelMap[VarSort])
+final case class ProcVisitOutputs(par: Par, knownFree: DebruijnLevelMap[VarSort])
 
-case class NameVisitInputs(env: IndexMapChain[VarSort], knownFree: DebruijnLevelMap[VarSort])
-case class NameVisitOutputs(chan: Par, knownFree: DebruijnLevelMap[VarSort])
+final case class NameVisitInputs(env: IndexMapChain[VarSort], knownFree: DebruijnLevelMap[VarSort])
+final case class NameVisitOutputs(chan: Par, knownFree: DebruijnLevelMap[VarSort])
 
-case class CollectVisitInputs(env: IndexMapChain[VarSort], knownFree: DebruijnLevelMap[VarSort])
-case class CollectVisitOutputs(expr: Expr, knownFree: DebruijnLevelMap[VarSort])
+final case class CollectVisitInputs(
+    env: IndexMapChain[VarSort],
+    knownFree: DebruijnLevelMap[VarSort]
+)
+final case class CollectVisitOutputs(expr: Expr, knownFree: DebruijnLevelMap[VarSort])

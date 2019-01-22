@@ -187,6 +187,7 @@ sealed abstract class RegexPattern {
 }
 
 //we need 3 states to handle case [a-b-z], that means Set(a,b,-,z)
+@SuppressWarnings(Array("org.wartremover.warts.Enumeration"))
 private[regex] object RangeState extends Enumeration {
   val firstSymbol, notStarted, inside, justFinished = Value
 }
@@ -298,7 +299,7 @@ object CharClassPattern extends ParsedPattern {
         None
       }
 
-    case class ParseState(
+    final case class ParseState(
         collectedChars: List[Char],
         collectedUnionClasses: List[CharClassPattern],
         rangeState: RangeState.Value

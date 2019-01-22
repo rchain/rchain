@@ -43,12 +43,12 @@ import coop.rchain.shared.{Cell, Log, LogSource}
   * to detect the equivocation corresponding to the "equivocation record".
   */
 sealed trait EquivocationDiscoveryStatus
-case object EquivocationNeglected extends EquivocationDiscoveryStatus
-case object EquivocationDetected  extends EquivocationDiscoveryStatus
-case object EquivocationOblivious extends EquivocationDiscoveryStatus
+final case object EquivocationNeglected extends EquivocationDiscoveryStatus
+final case object EquivocationDetected  extends EquivocationDiscoveryStatus
+final case object EquivocationOblivious extends EquivocationDiscoveryStatus
 
 // This is the sequence number of the equivocator's base block
-case class EquivocationRecord(
+final case class EquivocationRecord(
     equivocator: Validator,
     equivocationBaseBlockSeqNum: SequenceNumber,
     equivocationDetectedBlockHashes: Set[BlockHash]
@@ -172,7 +172,7 @@ object EquivocationDetector {
                 equivocationRecord
                   .copy(equivocationDetectedBlockHashes = updatedEquivocationDetectedBlockHashes)
                 )
-              s.copy(equivocationsTracker = newEquivocationsTracker).pure[F]
+              s.copy(equivocationsTracker = newEquivocationsTracker)
             }
           } else ().pure[F]
     } yield neglectedEquivocationDetected

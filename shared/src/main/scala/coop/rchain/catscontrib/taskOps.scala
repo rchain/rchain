@@ -16,7 +16,7 @@ object TaskContrib {
     def nonCancelingTimeout(after: FiniteDuration): Task[A] =
       nonCancelingTimeoutTo(
         after,
-        Task.raiseError(new TimeoutException(s"Task timed-out after $after of inactivity"))
+        Task.raiseError[A](new TimeoutException(s"Task timed-out after $after of inactivity"))
       )
 
     def nonCancelingTimeoutTo[B >: A](after: FiniteDuration, backup: Task[B]): Task[B] =

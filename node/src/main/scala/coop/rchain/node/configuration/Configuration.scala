@@ -505,4 +505,4 @@ final class Configuration(
   def printHelp(): Task[Unit] = Task.delay(options.printHelp())
 }
 
-case class Profile(name: String, dataDir: (() => Path, String))
+final case class Profile(name: String, dataDir: (() => Path, String))

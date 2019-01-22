@@ -10,15 +10,15 @@ sealed trait CreateBlockStatus {
     Applicative[F].pure[CreateBlockStatus](this)
 }
 sealed trait NoBlock extends CreateBlockStatus
-case class Created(block: BlockMessage) extends CreateBlockStatus {
+final case class Created(block: BlockMessage) extends CreateBlockStatus {
   override def map(f: BlockMessage => BlockMessage): CreateBlockStatus = Created(f(block))
   override def mapF[F[_]: Applicative](f: BlockMessage => F[BlockMessage]): F[CreateBlockStatus] =
     f(block).map(Created.apply)
 }
-case class InternalDeployError(ex: Throwable) extends NoBlock
-case object ReadOnlyMode                      extends NoBlock
-case object LockUnavailable                   extends NoBlock
-case object NoNewDeploys                      extends NoBlock
+final case class InternalDeployError(ex: Throwable) extends NoBlock
+final case object ReadOnlyMode                      extends NoBlock
+final case object LockUnavailable                   extends NoBlock
+final case object NoNewDeploys                      extends NoBlock
 
 object CreateBlockStatus {
   def created(block: BlockMessage): CreateBlockStatus       = Created(block)

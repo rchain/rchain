@@ -21,6 +21,7 @@ abstract class ConcurrentQueue[A] {
   def drain(buffer: mutable.Buffer[A], limit: Int): Unit
 }
 
+@SuppressWarnings(Array("org.wartremover.warts.Return"))
 object ConcurrentQueue {
   final val recommendedSize: Int = 1024
 

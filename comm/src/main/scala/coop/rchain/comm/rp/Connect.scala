@@ -92,7 +92,7 @@ object Connect {
         results                <- toPing.traverse(sendHeartbeat)
         successfulPeers        = results.collect { case (peer, Right(_)) => peer }
         failedPeers            = results.collect { case (peer, Left(_)) => peer }
-        _ <- ConnectionsCell[F].modify { connections =>
+        _ <- ConnectionsCell[F].flatModify { connections =>
               connections.removeConn[F](toPing) >>= (_.addConn[F](successfulPeers))
             }
       } yield failedPeers.size
@@ -106,7 +106,7 @@ object Connect {
 
   def resetConnections[F[_]: Monad: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]
     : F[Unit] =
-    ConnectionsCell[F].modify { connections =>
+    ConnectionsCell[F].flatModify { connections =>
       for {
         local  <- RPConfAsk[F].reader(_.local)
         _      <- TransportLayer[F].broadcast(connections, disconnect(local))
@@ -148,7 +148,7 @@ object Connect {
         _ <- Log[F].debug(
               s"Received protocol handshake response from ${ProtocolHelper.sender(response)}."
             )
-        _ <- ConnectionsCell[F].modify(_.addConn[F](peer))
+        _ <- ConnectionsCell[F].flatModify(_.addConn[F](peer))
       } yield ()
     ).timer("connect-time")
 

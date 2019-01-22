@@ -26,7 +26,7 @@ object StreamHandler {
 
   type CircuitBreaker = Long => Boolean
 
-  private case class Streamed(
+  private final case class Streamed(
       sender: Option[PeerNode] = None,
       typeId: Option[String] = None,
       contentLength: Option[Int] = None,
@@ -86,8 +86,8 @@ object StreamHandler {
     EitherT(collectStream.attempt >>= {
       case Right(stmd) if stmd.circuitBroken =>
         stmd.path.deleteSingleFile[Task].as(Left(new RuntimeException("Circuit was broken")))
-      case res @ Left(ex) => init.path.deleteSingleFile[Task].as(res)
-      case res            => res.pure[Task]
+      case res @ Left(_) => init.path.deleteSingleFile[Task].as(res)
+      case res           => res.pure[Task]
     })
 
   }

@@ -83,7 +83,7 @@ class TcpServerObservable(
 
         (StreamHandler.handleStream(tempFolder, observable, neverBreak) >>= {
           case Left(ex)   => logger.error(s"Could not receive stream! Details: ${ex.getMessage}", ex)
-          case Right(msg) => Task.delay(bufferBlobMessage.pushNext(msg))
+          case Right(msg) => Task.delay(bufferBlobMessage.pushNext(msg)).as(())
         }).as(ChunkResponse())
 
       }

@@ -8,7 +8,7 @@ import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.shared._
 import coop.rchain.comm.protocol.routing._
 
-case class Blob(sender: PeerNode, packet: Packet)
+final case class Blob(sender: PeerNode, packet: Packet)
 
 trait TransportLayer[F[_]] {
   def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): F[CommErr[Protocol]]

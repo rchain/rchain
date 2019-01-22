@@ -45,6 +45,7 @@ object Metrics extends MetricsInstances {
   import shapeless.tag.@@
   sealed trait SourceTag
   type Source = String @@ SourceTag
+  @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   private def Source(name: String): Source         = name.asInstanceOf[Source]
   def Source(prefix: Source, name: String): Source = Source(s"$prefix.$name")
   val BaseSource: Source                           = Source("rchain")

@@ -7,6 +7,7 @@ import coop.rchain.catscontrib.Capture
 
 import monix.execution.atomic.Atomic
 
+@SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.While")) // false positive
 class AtomicMonadState[F[_]: Capture, S](state: Atomic[S])(implicit val monad: Monad[F])
     extends MonadState[F, S] {
   def get: F[S]                   = Capture[F].capture(state.get)
