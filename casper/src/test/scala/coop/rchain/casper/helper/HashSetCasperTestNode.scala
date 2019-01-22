@@ -278,7 +278,7 @@ object HashSetCasperTestNode {
                                 )(Monad[F], Concurrent[F], Sync[F], Log[F], blockStore)
               semaphore <- Semaphore[F](1)
               casperState <- Cell.mvarCell[F, CasperState](
-                              CasperState(Set.empty[BlockMessage], Set.empty[Deploy])
+                              CasperState()
                             )
               node = new HashSetCasperTestNode[F](
                 n,
