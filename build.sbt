@@ -119,6 +119,12 @@ lazy val graphz = (project in file("graphz"))
   .settings(commonSettings: _*)
   .settings(
     version := "0.1",
+    scalacOptions ++= Seq(
+      "-Xfatal-warnings",
+      "-unchecked",
+      "-deprecation",
+      "-feature"
+    ),
     libraryDependencies ++= commonDependencies ++ Seq(
       catsCore,
       catsEffect,
