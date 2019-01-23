@@ -6,11 +6,12 @@ import cats.effect.Sync
 
 import coop.rchain.metrics.Metrics
 
+final case class Record(value: Long, count: Long)
+
 class MetricsTestImpl[F[_]: Sync] extends Metrics[F] {
-  val counters: MutableMap[String, Long] = MutableMap.empty
-  val samplers: MutableMap[String, Long] = MutableMap.empty
-  val gauges: MutableMap[String, Long]   = MutableMap.empty
-  final case class Record(value: Long, count: Long)
+  val counters: MutableMap[String, Long]        = MutableMap.empty
+  val samplers: MutableMap[String, Long]        = MutableMap.empty
+  val gauges: MutableMap[String, Long]          = MutableMap.empty
   val records: MutableMap[String, List[Record]] = MutableMap.empty
 
   private def incrementBy(name: String, delta: Long)(
