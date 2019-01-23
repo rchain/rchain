@@ -236,6 +236,12 @@ lazy val node = (project in file("node"))
   .settings(
     version := "0.8.3" + git.gitHeadCommit.value.map(".git" + _.take(8)).getOrElse(""),
     name := "rnode",
+    scalacOptions ++= Seq(
+      "-Xfatal-warnings",
+      "-unchecked",
+      "-deprecation",
+      "-feature"
+    ),
     maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary := "RChain Node",
     packageDescription := "RChain Node - the RChain blockchain node server software.",

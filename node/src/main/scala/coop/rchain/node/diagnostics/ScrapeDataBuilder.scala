@@ -74,7 +74,7 @@ class ScrapeDataBuilder(
           resolveBucketConfiguration(metric)
         )
 
-        val count = format(metric.distribution.count)
+        val count = format(metric.distribution.count.toDouble)
         val sum   = format(scale(metric.distribution.sum, metric.unit))
         appendTimeSerieValue(normalizedMetricName, metric.tags, count, "_count")
         appendTimeSerieValue(normalizedMetricName, metric.tags, sum, "_sum")
@@ -86,7 +86,7 @@ class ScrapeDataBuilder(
       name: String,
       tags: Map[String, String],
       value: String,
-      suffix: String = ""
+      suffix: String
   ): Unit = {
     append(name)
     append(suffix)
@@ -136,14 +136,19 @@ class ScrapeDataBuilder(
         }
       }
 
-      appendTimeSerieValue(name, bucketTags, format(inBucketCount), "_bucket")
+      appendTimeSerieValue(name, bucketTags, format(inBucketCount.toDouble), "_bucket")
     }
 
     while (distributionBuckets.hasNext) {
       leftOver += distributionBuckets.next().frequency
     }
 
-    appendTimeSerieValue(name, tags + ("le" -> "+Inf"), format(leftOver + inBucketCount), "_bucket")
+    appendTimeSerieValue(
+      name,
+      tags + ("le" -> "+Inf"),
+      format(leftOver + inBucketCount.toDouble),
+      "_bucket"
+    )
   }
 
   private def appendTags(tags: Map[String, String]): Unit = {
@@ -187,7 +192,7 @@ class ScrapeDataBuilder(
       MeasurementUnit.scale(value, unit, time.seconds)
     case Information if unit.magnitude != information.bytes.magnitude =>
       MeasurementUnit.scale(value, unit, information.bytes)
-    case _ => value
+    case _ => value.toDouble
   }
 
 }
