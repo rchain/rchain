@@ -210,7 +210,7 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.8.3",
+    version := "0.8.3" + git.gitHeadCommit.value.map(".git" + _.take(8)).getOrElse(""),
     name := "rnode",
     maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary := "RChain Node",
@@ -269,8 +269,6 @@ lazy val node = (project in file("node"))
     """,
     /* Dockerization */
     dockerUsername := Some(organization.value),
-    version in Docker := version.value +
-      git.gitHeadCommit.value.map("-git" + _.take(8)).getOrElse(""),
     dockerAliases ++=
       sys.env.get("DRONE_BUILD_NUMBER")
         .toSeq.map(num => dockerAlias.value.withTag(Some(s"DRONE-${num}"))),
