@@ -47,7 +47,7 @@ object StreamHandler {
         (collect(initStmd, stream, circuitBreaker) >>= toResult).value
       }({
         // failed while collecting stream
-        case (stmd, Right(Left(ex))) =>
+        case (stmd, Right(Left(_))) =>
           gracefullyClose[Task](stmd.fos).as(()) *>
             stmd.path.deleteSingleFile[Task]
         // should not happend (errors handled witin bracket) but covered for safety
@@ -72,7 +72,7 @@ object StreamHandler {
       init: Streamed,
       stream: Observable[Chunk],
       circuitBreaker: CircuitBreaker
-  )(implicit log: Log[Task]): EitherT[Task, Throwable, Streamed] = {
+  ): EitherT[Task, Throwable, Streamed] = {
 
     def collectStream = stream.foldWhileLeftL(init) {
       case (stmd, Chunk(Chunk.Content.Header(ChunkHeader(sender, typeId, compressed, cl)))) =>
@@ -105,7 +105,7 @@ object StreamHandler {
 
   private def toResult(
       stmd: Streamed
-  )(implicit logger: Log[Task]): EitherT[Task, Throwable, StreamMessage] = {
+  ): EitherT[Task, Throwable, StreamMessage] = {
     val notFullError = new RuntimeException(
       s"received not full stream message, will not process. $stmd"
     ).asLeft[StreamMessage]
@@ -128,7 +128,7 @@ object StreamHandler {
             notFullError
           else result
 
-        case stmd => notFullError
+        case _ => notFullError
       }
     })
   }

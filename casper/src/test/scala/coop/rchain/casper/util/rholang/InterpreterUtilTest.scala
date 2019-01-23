@@ -36,13 +36,13 @@ class InterpreterUtilTest
     with Matchers
     with BlockGenerator
     with BlockDagStorageFixture {
+  implicit val logEff  = new LogStub[Task]
   val storageSize      = 1024L * 1024
   val storageDirectory = Files.createTempDirectory("casper-interp-util-test")
   val activeRuntime =
     Runtime.create[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB).unsafeRunSync
-  val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
 
-  implicit val logEff = new LogStub[Task]
+  val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in withStorage {
     implicit blockStore => implicit blockDagStorage =>

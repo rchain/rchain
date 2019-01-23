@@ -110,6 +110,8 @@ trait IStore[C, P, A, K] {
   private[rspace] def getAndClearTrieUpdates(): Seq[TrieUpdate[C, P, A, K]] =
     _trieUpdates.getAndTransform(kp((0L, Nil)))._2
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // TODO stop throwing exceptions
   def createCheckpoint(): Blake2b256Hash = {
     val trieUpdates = getAndClearTrieUpdates()
     collapse(trieUpdates).foreach(processTrieUpdate)

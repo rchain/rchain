@@ -17,6 +17,8 @@ import org.lmdbjava.DbiFlags.MDB_CREATE
 import scodec.Codec
 import scodec.bits.{BitVector, ByteVector}
 
+@SuppressWarnings(Array("org.wartremover.warts.Throw"))
+// TODO stop throwing exceptions
 class LMDBTrieStore[K, V] private (
     val env: Env[ByteBuffer],
     protected[this] val databasePath: Path,

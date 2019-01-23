@@ -29,7 +29,7 @@ lazy val projectSettings = Seq(
     Wart.Recursion,
     Wart.LeakingSealed, Wart.Overloading, Wart.Nothing, Wart.NonUnitStatements,
     Wart.Equals, Wart.PublicInference, Wart.TraversableOps, Wart.ArrayEquals,
-    Wart.Throw, Wart.While, Wart.Any, Wart.Product, Wart.Serializable, Wart.OptionPartial,
+    Wart.While, Wart.Any, Wart.Product, Wart.Serializable, Wart.OptionPartial,
     Wart.EitherProjectionPartial, Wart.Option2Iterable, Wart.ToString, Wart.JavaConversions,
     Wart.MutableDataStructures, Wart.FinalVal, Wart.Null, Wart.AsInstanceOf, Wart.ExplicitImplicitTypes,
     Wart.StringPlusAny, Wart.AnyVal

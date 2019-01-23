@@ -37,6 +37,7 @@ object PathRegexOptions {
   val nonEnd        = PathRegexOptions(end = false)
 }
 
+@SuppressWarnings(Array("org.wartremover.warts.Throw"))
 private[regex] final case class PathToken(
     name: Option[String],
     key: Int,

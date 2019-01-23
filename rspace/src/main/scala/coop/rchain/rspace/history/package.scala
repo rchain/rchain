@@ -56,6 +56,8 @@ package object history {
       }
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // TODO stop throwing exceptions
   private[this] def lookup[T, K, V](
       txn: T,
       store: ITrieStore[T, K, V],
@@ -112,6 +114,8 @@ package object history {
       store.getRoot(txn, branch).flatMap(lookup(txn, store, _, key))
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // TODO stop throwing exceptions
   def lookup[T, K, V](store: ITrieStore[T, K, V], branch: Branch, keys: immutable.Seq[K])(
       implicit codecK: Codec[K]
   ): Option[immutable.Seq[V]] =
@@ -125,6 +129,8 @@ package object history {
       }
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // TODO stop throwing exceptions
   private[this] def getParents[T, K, V](
       store: ITrieStore[T, K, V],
       txn: T,
@@ -187,6 +193,8 @@ package object history {
         (Trie.hash[K, V](node), node)
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // TODO stop throwing exceptions
   def insert[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K, value: V)(
       implicit
       codecK: Codec[K],
@@ -253,6 +261,8 @@ package object history {
       }
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // TODO stop throwing exceptions
   private[this] def insertLeafOntoSkipNode[V, K, T](
       encodedKeyByteVector: ByteVector,
       newLeafHash: Blake2b256Hash,
@@ -323,6 +333,8 @@ package object history {
     newParents ++ rehashedNodes
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // TODO stop throwing exceptions
   private[this] def updateLeaf[V, K, T](
       newLeafHash: Blake2b256Hash,
       parents: Parents[K, V]
@@ -339,6 +351,8 @@ package object history {
     rehashedNodes
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // TODO stop throwing exceptions
   private[this] def collapseAndUpdatePointerBlock[T, K, V](
       ptr: NonEmptyPointer,
       incomingAffix: ByteVector,
@@ -402,6 +416,8 @@ package object history {
     }
 
   @tailrec
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // TODO stop throwing exceptions
   private[this] def deleteLeaf[T, K, V](store: ITrieStore[T, K, V], txn: T, parents: Parents[K, V])(
       implicit
       codecK: Codec[K],
@@ -455,6 +471,8 @@ package object history {
         }
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // TODO stop throwing exceptions
   def delete[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K, value: V)(
       implicit
       codecK: Codec[K],

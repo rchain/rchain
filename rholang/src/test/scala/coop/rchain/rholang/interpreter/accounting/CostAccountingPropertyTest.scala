@@ -14,6 +14,7 @@ import coop.rchain.rholang.syntax.rholang_mercury.PrettyPrinter
 import coop.rchain.rholang.{GenTools, ProcGen}
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Context, RSpace}
+import coop.rchain.shared.Log
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.{Arbitrary, Gen}
@@ -98,6 +99,7 @@ object CostAccountingPropertyTest {
   def costOfExecution(procs: Proc*): Task[Long] = {
     implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
     implicit val errLog: ErrorLog[Task] = new ErrorLog[Task]()
+    implicit val logF: Log[Task]        = new Log.NOPLog[Task]
 
     mkRhoISpace[Task]("cost-accounting-property-test-")
       .use { pureRSpace =>

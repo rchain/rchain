@@ -24,6 +24,7 @@ import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.pure.PureRSpace
 import coop.rchain.shared.StoreType
 import coop.rchain.shared.StoreType._
+import coop.rchain.shared.Log
 
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
@@ -285,7 +286,7 @@ object Runtime {
     )
   )
 
-  def create[F[_]: ContextShift: Sync, M[_]](
+  def create[F[_]: ContextShift: Sync: Log, M[_]](
       dataDir: Path,
       mapSize: Long,
       storeType: StoreType,
@@ -427,7 +428,7 @@ object Runtime {
     } yield ()
   }
 
-  def setupRSpace[F[_]: Sync: ContextShift](
+  def setupRSpace[F[_]: Sync: ContextShift: Log](
       dataDir: Path,
       mapSize: Long,
       storeType: StoreType

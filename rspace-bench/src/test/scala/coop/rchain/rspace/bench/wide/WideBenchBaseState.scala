@@ -11,7 +11,7 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
-import coop.rchain.shared.StoreType
+import coop.rchain.shared.{Log, StoreType}
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler
 import org.openjdk.jmh.annotations._
@@ -34,7 +34,8 @@ abstract class WideBenchBaseState {
 
   var runTask: Task[Vector[Throwable]] = null
 
-  implicit def readErrors = () => runtime.readAndClearErrorVector().unsafeRunSync
+  implicit def readErrors      = () => runtime.readAndClearErrorVector().unsafeRunSync
+  implicit val logF: Log[Task] = Log.log[Task]
 
   def createRuntime(): Runtime[Task] =
     Runtime.create[Task, Task.Par](dbDir, mapSize, StoreType.LMDB).unsafeRunSync

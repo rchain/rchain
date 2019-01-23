@@ -6,6 +6,7 @@ import java.util.concurrent.TimeUnit
 import cats.effect.{ContextShift, Sync}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.shared.Log
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.catscontrib.TaskContrib.TaskOps
@@ -105,6 +106,7 @@ object BasicBench {
     import coop.rchain.rholang.interpreter.storage.implicits._
 
     implicit val syncF: Sync[Task]                 = Task.catsEffect
+    implicit val logF: Log[Task]                   = new Log.NOPLog[Task]
     implicit val contextShiftF: ContextShift[Task] = Task.contextShift
 
     private val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")

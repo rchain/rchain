@@ -24,6 +24,7 @@ import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 import coop.rchain.shared.PathOps._
+import coop.rchain.shared.Log
 
 import scala.collection.immutable.BitSet
 import scala.collection.mutable.HashMap
@@ -34,8 +35,10 @@ final case class TestFixture(space: RhoISpace[Task], reducer: ChargingReducer[Ta
 
 trait PersistentStoreTester {
   def withTestSpace[R](errorLog: ErrorLog[Task])(f: TestFixture => R): R = {
-    val dbDir               = Files.createTempDirectory("rholang-interpreter-test-")
-    val context: RhoContext = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
+    val dbDir                    = Files.createTempDirectory("rholang-interpreter-test-")
+    val context: RhoContext      = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
+    implicit val logF: Log[Task] = new Log.NOPLog[Task]
+
     val space = (RSpace
       .create[
         Task,

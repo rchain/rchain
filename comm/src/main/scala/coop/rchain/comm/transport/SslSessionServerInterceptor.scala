@@ -7,6 +7,10 @@ import coop.rchain.shared.{Log, LogSource}
 import io.grpc._
 import javax.net.ssl.SSLSession
 
+/**
+  * This wart exists because that's how grpc works. They looooovveee throwing exceptions
+  */
+@SuppressWarnings(Array("org.wartremover.warts.Throw"))
 class SslSessionServerInterceptor() extends ServerInterceptor {
 
   def interceptCall[ReqT, RespT](

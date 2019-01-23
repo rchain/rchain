@@ -12,6 +12,7 @@ import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.rholang.interpreter.{accounting, Runtime}
 import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.shared.StoreType
+import coop.rchain.shared.Log
 import java.io.PrintWriter
 import java.nio.file.{Files, Path}
 
@@ -180,7 +181,7 @@ object BondingUtil {
       runtimeDir => Sync[F].delay { runtimeDir.recursivelyDelete() }
     )
 
-  def makeRuntimeResource[F[_]: Sync: ContextShift, M[_]](
+  def makeRuntimeResource[F[_]: Sync: ContextShift: Log, M[_]](
       runtimeDirResource: Resource[F, Path]
   )(implicit P: Parallel[F, M], scheduler: ExecutionContext): Resource[F, Runtime[F]] =
     runtimeDirResource.flatMap(
@@ -201,7 +202,7 @@ object BondingUtil {
         Resource.make(RuntimeManager.fromRuntime[F](activeRuntime))(_ => Sync[F].unit)
     )
 
-  def writeIssuanceBasedRhoFiles[F[_]: Concurrent: ContextShift, M[_]](
+  def writeIssuanceBasedRhoFiles[F[_]: Concurrent: ContextShift: Log, M[_]](
       bondKey: String,
       ethAddress: String,
       amount: Long,
@@ -224,7 +225,7 @@ object BondingUtil {
     )
   }
 
-  def writeFaucetBasedRhoFiles[F[_]: Concurrent: ContextShift, M[_]](
+  def writeFaucetBasedRhoFiles[F[_]: Concurrent: ContextShift: Log, M[_]](
       amount: Long,
       sigAlgorithm: String,
       secKey: String,

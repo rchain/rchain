@@ -12,6 +12,8 @@ object SecureRandomUtil {
     "SHA1PRNG"
   )
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // this is sad :(
   lazy val secureRandomNonBlocking: SecureRandom =
     instancesNonBlocking.iterator //use iterator to try instances lazily
       .map(name => Try(SecureRandom.getInstance(name)))
