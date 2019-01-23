@@ -24,9 +24,9 @@ lazy val projectSettings = Seq(
   wartremoverExcluded += sourceManaged.value,
   wartremoverErrors in (Compile, compile) ++= Warts.allBut(
     // those we want
-    Wart.DefaultArguments,
+    Wart.DefaultArguments, Wart.ImplicitParameter, Wart.ImplicitConversion,
     // those don't want
-    Wart.ImplicitParameter, Wart.Recursion, Wart.ImplicitConversion,
+    Wart.Recursion,
     Wart.LeakingSealed, Wart.Overloading, Wart.Nothing, Wart.NonUnitStatements,
     Wart.Equals, Wart.PublicInference, Wart.TraversableOps, Wart.ArrayEquals,
     Wart.Throw, Wart.While, Wart.Any, Wart.Product, Wart.Serializable, Wart.OptionPartial,
