@@ -291,19 +291,33 @@
 
 # Cost accounting
 ### As a node operator, I want to get the list of deploys and their costs when I run `show-blocks`.
-### As a node operator, I want to be compensated for storing, running, and processing transactions against smart contracts based on the computational intensity required.
+### As a node operator, I want to be compensated for storing, running, and processing transactions against smart contracts based on the computational complexity required.
+- This is a Casper thing, from Greg.Computation intensity is covered in Cost Accounting. Not really covering the real storage location.  Storage needs to be refined
 ### As a node operator, I want to be compensated 
+- This is Casper related. Also very broad. THis is integration between Cost Accounting.
 ### As a validator, I want to receive interest in phlo on my bond amount as defined by the schedule in the mint.
+- We have to give interest to validators & Issue Mint. The interest in phlo is wrong. Phlo = gas. wallet -> phlo -> exec contract -> remaining phlo if any -> wallet
+- validator has a bond.  interest is computed for a bond. validator have a diff wallet from bond. The interest will go to this separate wallet
 ### As a validator, having an absolute minimum phlo cost to deploy a contract helps support my resources and mitigate against DOS attacks.
+- take a linear function of deploy to develop the formula. In ET store op has a certain cost. There should be a cost with `we got your deploy`. Need a `lower bound` for deploy.  
+- There should be a min REV cost.
 ### As a validator, to support management of my resources I want to receive as a fee either a minimum charge for a deployment or a charge determined as a percentage of the size of the contract. The fee will be whichever is greater: the absolute minimum charge or the calculated minimum.
+-  work with Kent to find the docs for this. This is on Casper
 ### As a dApp developer, I use phlo to pay the cost to deploy smart contracts on the RChain platform.
+- False. I use REV
 ### As a dApp developer, I need to know the minimum cost it will take to deploy my contract. The cost will be whichever is greater: the absolute minimum charge or the calculated minimum.
+- Comes fro 298. 
+- That is the estimate discussed in AM session
 ### As a dApp developer, I need to know how much it will cost to execute my contract.
+- dup
 ### As a dApp developer, I want the phlo cost to execute a contract a contract once it's on chain to be consistent given the asm REV to phlo price and accounting for non-determinism.
+- not possible. There are external and internal race conditions. 
 ### As a client of a contract already deployed on the blockchain, I need to know how much it will cost to execute the contract.
+- this is repeat. 
 ### As a validator, I will yield 0.01% of all transaction fees received to accounts controlled by the Coop.
+- Correct. This is a Capser Requirements.
 ### As the RChain coop, I want to receive 0.01% of all transaction fees to accounts controlled by the Coop.
-
+- Yes. This is also a Casper Requirements. 
 ## Name registry
 ### As a dApp developer, I want to predict registry names using readily available crypto libraries.
 
