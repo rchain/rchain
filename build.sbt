@@ -191,6 +191,12 @@ lazy val crypto = (project in file("crypto"))
   .settings(commonSettings: _*)
   .settings(
     name := "crypto",
+    scalacOptions ++= Seq(
+      "-Xfatal-warnings",
+      "-unchecked",
+      "-deprecation",
+      "-feature"
+    ),
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       guava,
       bouncyCastle,
