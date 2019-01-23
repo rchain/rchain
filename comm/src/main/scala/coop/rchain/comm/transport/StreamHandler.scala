@@ -43,9 +43,21 @@ object StreamHandler {
       circuitBreaker: CircuitBreaker
   )(implicit log: Log[Task]): Task[Either[Throwable, StreamMessage]] =
     (init(folder)
-      .bracket { initStmd =>
+      .bracketE { initStmd =>
         (collect(initStmd, stream, circuitBreaker) >>= toResult).value
-      }(stmd => gracefullyClose[Task](stmd.fos).as(())))
+      }({
+        // failed while collecting stream
+        case (stmd, Right(Left(ex))) =>
+          gracefullyClose[Task](stmd.fos).as(()) *>
+            stmd.path.deleteSingleFile[Task]
+        // should not happend (errors handled witin bracket) but covered for safety
+        case (stmd, Left(_)) =>
+          gracefullyClose[Task](stmd.fos).as(()) *>
+            stmd.path.deleteSingleFile[Task]
+        // succesfully collected
+        case (stmd, _) =>
+          gracefullyClose[Task](stmd.fos).as(())
+      }))
       .attempt
       .map(_.flatten)
 
@@ -83,11 +95,10 @@ object StreamHandler {
           Left(stmd.copy(readSoFar = readSoFar))
     }
 
-    EitherT(collectStream.attempt >>= {
+    EitherT(collectStream.attempt.map {
       case Right(stmd) if stmd.circuitBroken =>
-        stmd.path.deleteSingleFile[Task].as(Left(new RuntimeException("Circuit was broken")))
-      case res @ Left(_) => init.path.deleteSingleFile[Task].as(res)
-      case res           => res.pure[Task]
+        new RuntimeException("Circuit was broken").asLeft
+      case res => res
     })
 
   }
@@ -95,14 +106,11 @@ object StreamHandler {
   private def toResult(
       stmd: Streamed
   )(implicit logger: Log[Task]): EitherT[Task, Throwable, StreamMessage] = {
-    val notFullError = stmd.path
-      .deleteSingleFile[Task]
-      .as(
-        new RuntimeException(s"received not full stream message, will not process. $stmd")
-          .asLeft[StreamMessage]
-      )
+    val notFullError = new RuntimeException(
+      s"received not full stream message, will not process. $stmd"
+    ).asLeft[StreamMessage]
 
-    EitherT(
+    EitherT(Task.delay {
       stmd match {
         case Streamed(
             Some(sender),
@@ -114,12 +122,15 @@ object StreamHandler {
             path,
             _
             ) =>
-          if (readSoFar == contentLength)
-            Right(StreamMessage(sender, packetType, path, compressed, contentLength)).pure[Task]
-          else notFullError
+          val result =
+            StreamMessage(sender, packetType, path, compressed, contentLength).asRight[Throwable]
+          if (!compressed && readSoFar != contentLength)
+            notFullError
+          else result
+
         case stmd => notFullError
       }
-    )
+    })
   }
 
   def restore(msg: StreamMessage)(implicit logger: Log[Task]): Task[Either[Throwable, Blob]] =
