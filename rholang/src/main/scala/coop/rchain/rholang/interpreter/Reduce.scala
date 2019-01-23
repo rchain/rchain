@@ -721,6 +721,8 @@ object Reduce {
                   ReduceError("Error: interpolation Map should only contain String keys")
                 )
             }
+          @SuppressWarnings(Array("org.wartremover.warts.Var"))
+          // TODO consider replacing while loop with tailrec recursion
           def interpolate(string: String, keyValuePairs: List[(String, String)]): String = {
             val result  = StringBuilder.newBuilder
             var current = string

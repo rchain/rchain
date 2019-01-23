@@ -107,6 +107,7 @@ object CertificateHelper {
     info.set(X509CertInfo.ALGORITHM_ID, new CertificateAlgorithmId(algorithmId))
 
     // Sign the cert to identify the algorithm that's used.
+    @SuppressWarnings(Array("org.wartremover.warts.Var"))
     var cert = new X509CertImpl(info)
     cert.sign(privateKey, algorythm)
 

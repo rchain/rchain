@@ -155,6 +155,7 @@ object HashM extends HashMDerivation {
   implicit val PrivateNamePreviewQueryHash = gen[PrivateNamePreviewQuery]
 }
 
+@SuppressWarnings(Array("org.wartremover.warts.Var"))
 trait HashMDerivation {
   import magnolia._
 

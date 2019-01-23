@@ -320,7 +320,7 @@ final case class Fsm(
     * If `Fsm.AnythingElse` is in your alphabet, then any symbol not in your
     * alphabet will be converted to `Fsm.AnythingElse`
     */
-  @SuppressWarnings(Array("org.wartremover.warts.Return"))
+  @SuppressWarnings(Array("org.wartremover.warts.Return", "org.wartremover.warts.Var"))
   def accepts(input: String): Boolean = {
     var currentState = initialState
     for (currentSymbol <- input) {
@@ -348,7 +348,7 @@ final case class Fsm(
     * If you fall into oblivion, then the derivative is an FSM accepting no
     * strings.
     */
-  @SuppressWarnings(Array("org.wartremover.warts.Return"))
+  @SuppressWarnings(Array("org.wartremover.warts.Return", "org.wartremover.warts.Var"))
   def derive(input: String): Try[Fsm] = {
     var currentState = initialState
     for (currentSymbol <- input) {
@@ -433,6 +433,7 @@ final case class Fsm(
     * may be more efficient ways to do this, that I haven't investigated yet.
     * You can use this in list comprehensions.
     */
+  @SuppressWarnings(Array("org.wartremover.warts.Var"))
   def strings: Stream[String] = {
     // Many FSMs have "dead states". Once you reach a dead state, you can no
     // longer reach a final state. Since many strings may end up here, it's

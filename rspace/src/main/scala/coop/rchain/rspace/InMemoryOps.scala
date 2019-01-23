@@ -61,6 +61,7 @@ trait InMemoryOps[S] extends CloseOps {
     }
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Var"))
   private[rspace] def createTxnWrite(): InMemTransaction[S] = {
     failIfClosed()
 
