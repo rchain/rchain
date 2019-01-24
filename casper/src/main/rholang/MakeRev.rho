@@ -15,36 +15,36 @@ in {
         new ch, ch2, ch3, ch4, ch6 in {
           rev!("getBalance", bundle0{*contract1}, *ch) | for(@bc1 <- ch) {
             trace!({"contract1 balance before": bc1}) |
-            rev!("sendNameToName", bundle0{*contract1}, bundle0{*contract2}, 75, *ch) |
+            rev!("sendFromName", bundle0{*contract1}, {"name": bundle0{*contract2}}, 75, *ch) |
             for(@sendResult <- ch) {
               trace!({"sendResult": sendResult}) |
 
               // Overdraft
-              rev!("sendNameToName", bundle0{*contract1}, bundle0{*contract2}, 100, *ch) |
+              rev!("sendFromName", bundle0{*contract1}, {"name": bundle0{*contract2}}, 100, *ch) |
               for(@sendResult <- ch) {
-                trace!({"2nd sendResult": sendResult})
+                trace!({"should overdraft": sendResult})
               }
             } |
 
             // Overflow
-            rev!("sendNameToName", bundle0{*contract1}, bundle0{*c3}, 10, *ch2) |
+            rev!("sendFromName", bundle0{*contract1}, {"name": bundle0{*c3}}, 10, *ch2) |
             for(@sendResult <- ch2) {
-              trace!({"big sendResult": sendResult})
+              trace!({"should overflow": sendResult})
             } |
 
             // Junk destination
-            rev!("sendNameToKey", bundle0{*contract1}, Nil, 10, *ch3) |
+            rev!("sendFromName", bundle0{*contract1}, {"address": Nil}, 10, *ch3) |
             for(@sendResult <- ch3) {
               trace!({"junk dest sendResult": sendResult})
             } |
-            rev!("sendNameToKey", bundle0{*contract1}, "0xdeadbeef", 10, *ch4) |
+            rev!("sendFromName", bundle0{*contract1}, {"address": "0xdeadbeef"}, 10, *ch4) |
             for(@sendResult <- ch4) {
               trace!({"short dest sendResult": sendResult})
             } |
 
             // send to key
-            rev!("sendNameToKey", bundle0{*contract1},
-              "0x02c50804457ff616801953fa72672564f40a58d9", 2, *ch6) |
+            rev!("sendFromName", bundle0{*contract1},
+              {"address": "0x02c50804457ff616801953fa72672564f40a58d9"}, 2, *ch6) |
             for(@sendResult <- ch6) {
               trace!({"send to key result": sendResult})
             }
@@ -142,34 +142,29 @@ in {
         }
       } |
 
-      contract self(@"sendNameToName",
+      contract self(@"sendFromName",
         @from,            // bundle0{*unforgableName}
-        @to,              // bundle0{*unforgableName}
+        @{to},            // {{ "address": String } \/ { "name": _ }}},
         @{value /\ Int},
         // @{data}        // ISSUE: do we want to let people annotate payments?
         return            // either balances: { "from": b_f, "to": b_t }
                           // or { "error": "message" }
       ) = {
-        // trace!("sendNameToName") |
-        transferIfEnough!(bundle0{from}, bundle0{to}, value, *return)
-      } |
-
-      contract self(@"sendNameToKey",
-        @from,                // bundle0{*unforgableName}
-        @{toAddr /\ String},  // 0x...
-        @{value /\ Int},
-        return                // either balances: { "from": b_f, "to": b_t }
-                              // or { "error": "message" }
-      ) = {
-        match (toAddr.slice(0, 2), toAddr.slice(2, toAddr.length()).hexToBytes()) {
-          ("0x", {toHash /\ ByteString}) => {
-            if (toHash.length() != 20) { // ISSUE: cryptoSuite / addr format
-              return!({"error": "bad address length"})
-            } else {
-              transferIfEnough!(bundle0{from}, toHash, value, *return)
+        match to {
+          {"name": toName} => { transferIfEnough!(bundle0{from}, bundle0{toName}, value, *return) }
+          {"address": { toAddr /\ String}} => {
+            match (toAddr.slice(0, 2), toAddr.slice(2, toAddr.length()).hexToBytes()) {
+              ("0x", {toHash /\ ByteString}) => {
+                if (toHash.length() != 20) { // ISSUE: cryptoSuite / addr format
+                  return!({"error": "bad address length"})
+                } else {
+                  transferIfEnough!(bundle0{from}, toHash, value, *return)
+                }
+              }
+              _ => { return!({"error": "address not in 0x... format"}) }
             }
           }
-          _ => { return!({"error": "address not in 0x... format"}) }
+          _ => { return!({"error": "bad destination"}) }
         }
       }
     }
