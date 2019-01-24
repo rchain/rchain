@@ -121,9 +121,7 @@ in {
   contract roguePurse1(rhoSpec, @(*mint1, _), ackCh) = {
     new fakePurse in {
       contract fakePurse(@stolenDecr, @amount, success) = {
-        success!(true) |
-        stdlog!("error", {"all your token are belong to us": amount, "stolenDecr": stolenDecr}) |
-        rhoSpec!("assert", false, "fakePurse stole decr", *ackCh)
+        success!(true, "fakeDecr")
       } |
 
       new let2, let3, depositCh in {  // let @m1 = ...
