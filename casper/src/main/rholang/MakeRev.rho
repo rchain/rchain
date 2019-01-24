@@ -1,19 +1,37 @@
 new
   MakeRev, exampleUsage,
-  transferIfEnough, checkedAddSubtract,
-  trace(`rho:io:stderr`)
+  // trace(`rho:io:stderr`),
+  transferIfEnough, checkedAddSubtract
 in {
   contract exampleUsage(_) = {
-    new revCh, contract1, contract2, trace(`rho:io:stderr`) in {
-      MakeRev!({bundle0{*contract1}: 100}, *revCh) |
+    new revCh, contract1, contract2, c3, c4, c5, trace(`rho:io:stderr`) in {
+      MakeRev!({
+        bundle0{*contract1}: 100,
+        bundle0{*c3}: 9223372036854775807
+      }, *revCh) |
       for (rev <- revCh) {
-        new ch in {
+
+        // Simple send from one contract "account" to another.
+        new ch, ch2 in {
           rev!("getBalance", bundle0{*contract1}, *ch) | for(@bc1 <- ch) {
             trace!({"contract1 balance before": bc1}) |
-            rev!("sendNameToName", bundle0{*contract1}, bundle0{*contract2}, 50, *ch) |
+            rev!("sendNameToName", bundle0{*contract1}, bundle0{*contract2}, 75, *ch) |
             for(@sendResult <- ch) {
-              trace!({"sendResult": sendResult})
+              trace!({"sendResult": sendResult}) |
+
+              // Overdraft
+              rev!("sendNameToName", bundle0{*contract1}, bundle0{*contract2}, 100, *ch) |
+              for(@sendResult <- ch) {
+                trace!({"2nd sendResult": sendResult})
+              }
+            } |
+
+            // Overflow
+            rev!("sendNameToName", bundle0{*contract1}, bundle0{*c3}, 10, *ch) |
+            for(@sendResult <- ch) {
+              trace!({"big sendResult": sendResult})
             }
+
           }
         }
       }
@@ -74,7 +92,7 @@ in {
       } |
 
       contract transferIfEnough(@from, @to, @{value /\ Int}, return) = {
-        trace!("transferIfEnough") |
+        // trace!("transferIfEnough") |
         for (@balances <- balancesCh) {
           new ch in {
             checkedAddSubtract!(balances.getOrElse(from, 0), balances.getOrElse(to, 0), value, *ch) |
@@ -92,14 +110,18 @@ in {
       } |
 
       contract checkedAddSubtract(@{fromBefore /\ Int}, @{toBefore /\ Int}, @{value /\ Int}, return) = {
-        trace!("checkedAddSubtract") |
+        // trace!("checkedAddSubtract") |
         if (value < 0) {
           return!({"error": "negative value"})
         } else {
-          if (toBefore + value < toBefore or fromBefore - value > fromBefore) {
-            return!({"error": "overflow" })
+          if (value > fromBefore) {
+            return!({"error": "overdraft"})
           } else {
-            return!({"from": fromBefore - value, "to": toBefore + value})
+            if (toBefore + value < toBefore) {
+              return!({"error": "overflow" })
+            } else {
+              return!({"from": fromBefore - value, "to": toBefore + value})
+            }
           }
         }
       } |
@@ -112,7 +134,19 @@ in {
         return            // either balances: { "from": b_f, "to": b_t }
                           // or { "error": "message" }
       ) = {
-        trace!("sendNameToName") |
+        // trace!("sendNameToName") |
+        transferIfEnough!(bundle0{from}, bundle0{to}, value, *return)
+      } |
+
+      contract self(@"sendNameToName",
+        @from,            // bundle0{*unforgableName}
+        @to,              // bundle0{*unforgableName}
+        @{value /\ Int},
+        // @{data}        // ISSUE: do we want to let people annotate payments?
+        return            // either balances: { "from": b_f, "to": b_t }
+                          // or { "error": "message" }
+      ) = {
+        // trace!("sendNameToName") |
         transferIfEnough!(bundle0{from}, bundle0{to}, value, *return)
       }
     }
