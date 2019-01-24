@@ -1,0 +1,120 @@
+new
+  MakeRev, exampleUsage,
+  transferIfEnough, checkedAddSubtract,
+  trace(`rho:io:stderr`)
+in {
+  contract exampleUsage(_) = {
+    new revCh, contract1, contract2, trace(`rho:io:stderr`) in {
+      MakeRev!({bundle0{*contract1}: 100}, *revCh) |
+      for (rev <- revCh) {
+        new ch in {
+          rev!("getBalance", bundle0{*contract1}, *ch) | for(@bc1 <- ch) {
+            trace!({"contract1 balance before": bc1}) |
+            rev!("sendNameToName", bundle0{*contract1}, bundle0{*contract2}, 50, *ch) |
+            for(@sendResult <- ch) {
+              trace!({"sendResult": sendResult})
+            }
+          }
+        }
+      }
+    }
+  } |
+  exampleUsage!(Nil) |
+
+  // This morning (Jan 24) I said this contract is still a mint
+  // in that whoever holds it can print money.
+  // I have reconsidered; it can be published in the
+  // registry and anyone can call its methods, which
+  // conserve money. So I'm calling it MakeRev.
+  contract MakeRev(@initialBalances, return) = {
+    new self, balancesCh, transfer in {
+      return!(bundle+{*self}) |
+
+      // ISSUE: should be a concurrent map
+      balancesCh!(initialBalances) |
+
+      contract self(@"getBalance", @holder, return) = {
+        for (@balances <- balancesCh) {
+          balancesCh!(balances) | // (should be peek)
+          return!(balances.get(holder))
+        }
+      } |
+
+      contract self(@"sendKeyToKey",
+        @{from /\ String}, // sender's public key
+                           // ISSUE: public key or hash of key ala ethAddr?
+                           // ISSUE cryptoSuite: secp256k1 or ed25591? secp256r1? parameterized?
+        @nonce,            // Distinctness is the responsibility of the signer;
+                           // Using an unforgable name is recommended.
+        // @{gasPrice}, only relevant to deployment payments? ISSUE: how to do deployments
+        // @{gasLimit},
+        @{to /\ String},   // 0x... eth addr (ISSUE cryptoSuite applies here too)
+        @{value /\ Int},
+        // @{data}         // ISSUE: eth compat expectation: do we want to let people annotate payments?
+        @{sig /\ String},
+        return             // either balances: { "from": b_f, "to": b_t }
+                           // or { "error": "message" }
+      ) = {
+        new hashCh, sigOkCh in {
+          // ISSUE cryptoSuite: choice of hash... keccak256hash?
+          @"blake2b256Hash"!(
+            // keeping track of argument order is a pain; let's use names
+            // OTOH... then whether we call it "value" or "amount" is runtime-visible
+            { "from": from.hexToBytes(), "to": to.slice(2).hexToBytes(),
+              "nonce": nonce, "value": value,  }.toByteArray(), *hashCh) |
+          for (@txHash <- hashCh) {
+            // ISSUE cryptoSuite
+            @"ed25519Verify"!(txHash, sig.hexToBytes(), from.hexToBytes(), *sigOkCh) |
+            for (@sigOk <- sigOkCh) {
+              if (sigOk) { transfer!(from.hexToBytes(), to.hexToBytes(), value, *return)
+              } else { return!({"error": "signature verification failed"}) }
+            }
+          }
+        }
+      } |
+
+      contract transferIfEnough(@from, @to, @{value /\ Int}, return) = {
+        trace!("transferIfEnough") |
+        for (@balances <- balancesCh) {
+          new ch in {
+            checkedAddSubtract!(balances.getOrElse(from, 0), balances.getOrElse(to, 0), value, *ch) |
+            for (@result <- ch) {
+              match result {
+                {"error": _ } => { balancesCh!(balances) | return!(result) }
+                {"from": fromBalance, "to": toBalance} => {
+                  balancesCh!(balances.set(from, fromBalance).set(to, toBalance)) |
+                  return!(result)
+                }
+              }
+            }
+          }
+        }
+      } |
+
+      contract checkedAddSubtract(@{fromBefore /\ Int}, @{toBefore /\ Int}, @{value /\ Int}, return) = {
+        trace!("checkedAddSubtract") |
+        if (value < 0) {
+          return!({"error": "negative value"})
+        } else {
+          if (toBefore + value < toBefore or fromBefore - value > fromBefore) {
+            return!({"error": "overflow" })
+          } else {
+            return!({"from": fromBefore - value, "to": toBefore + value})
+          }
+        }
+      } |
+
+      contract self(@"sendNameToName",
+        @from,            // bundle0{*unforgableName}
+        @to,              // bundle0{*unforgableName}
+        @{value /\ Int},
+        // @{data}        // ISSUE: do we want to let people annotate payments?
+        return            // either balances: { "from": b_f, "to": b_t }
+                          // or { "error": "message" }
+      ) = {
+        trace!("sendNameToName") |
+        transferIfEnough!(bundle0{from}, bundle0{to}, value, *return)
+      }
+    }
+  }
+}
