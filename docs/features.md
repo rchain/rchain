@@ -290,43 +290,72 @@
 * each validator should output exactly same DAG
 
 # Cost accounting
+## TODOs
+#### need outside counsel
+#### Need to talk to the doc's authors to clarify
+- node operator concerns
+- validator incentives
+- if the 1st three points are duplicates
+- what is `as a client of a contract` ? Does it mean the `user of a contract`? If so use the estimate tool, same as previous item
+
 ### As a node operator, I want to get the list of deploys and their costs when I run `show-blocks`.
 ### As a node operator, I want to be compensated for storing, running, and processing transactions against smart contracts based on the computational complexity required.
-- This is a Casper concern.  Cmputation intensity is covered in Cost Accounting. Not really covering the real storage location.  
+- This is a Casper concern.  
+- Computation intensity is covered in Cost Accounting. 
+- Not really covering the real storage location.  
 - Storage needs to be refined
+
 ### As a node operator, I want to be compensated 
-- Casper related. Also very broad. Need to discuss is integration between Cost Accounting.
-### As a validator, I want to receive interest in phlo on my bond amount as defined by the schedule in the mint.
+- Casper related. Also very broad. 
+- Need to discuss integration Cost Accounting & Casper 
+- what are the list of things do as part to of the validator porposal?  
+- See Kent's proposal
+
+### As a validator, I want to receive transaction fees in phlo on my bond amount as defined by the schedule in the mint.
 - We have to give interest to validators & Issue Mint. The interest in phlo is wrong. Phlo = gas. 
 - wallet -> phlo -> exec contract -> remaining phlo if any -> wallet
-- Validator has bond.  
+- Validator has bond.
 - Interest is computed for a bond. 
 - Validator have a diff wallet for bond. 
 - Interest will go to a separate wallet from bond wallet
+
 ### As a validator, having an absolute minimum phlo cost to deploy a contract helps support my resources and mitigate against DOS attacks.
-- Take a linear function of deploy to develop the formula. 
 - There should be a cost associated with `we got your deploy`. 
-- Need a `lower bound` for deploy cost
+- DOS attacks assumes resource attacks. 
+
 ### As a validator, to support management of my resources I want to receive as a fee either a minimum charge for a deployment or a charge determined as a percentage of the size of the contract. The fee will be whichever is greater: the absolute minimum charge or the calculated minimum.
 - Need to work with Kent to find the docs for this. 
 - This is a Casper issue.
+- Take a linear function of deploy to develop the formula. 
+- Need a `lower bound` for deploy cost.
+- Min cost should depend on the size of submission
+- can we combine this and prev point?
 ### As a dApp developer, I use phlo to pay the cost to deploy smart contracts on the RChain platform.
 - False, Use REV
+-  Phlo is REV.
+- Why is this here? Can we remove this?
+
 ### As a dApp developer, I need to know the minimum cost it will take to deploy my contract. The cost will be whichever is greater: the absolute minimum charge or the calculated minimum.
 - Addressed in previous items.
 - Also discussed in the estimate discussed in AM session 23/Jan/2019
+
 ### As a dApp developer, I need to know how much it will cost to execute my contract.
 - Dup
+
 ### As a dApp developer, I want the phlo cost to execute a contract a contract once it's on chain to be consistent given the asm REV to phlo price and accounting for non-determinism.
-- There are external and internal race conditions. 
+
 ### As a client of a contract already deployed on the blockchain, I need to know how much it will cost to execute the contract.
 - Repeat. 
+
 ### As a validator, I will yield 0.01% of all transaction fees received to accounts controlled by the Coop.
-- Correct. Capser Requirements
+- Correct. Caspser Contract
+
 ### As the RChain coop, I want to receive 0.01% of all transaction fees to accounts controlled by the Coop.
-- Yes. Casper Requirements. 
+- Correct. Capser Contract
+
 ## Name registry
 ### As a dApp developer, I want to predict registry names using readily available crypto libraries.
+- this item is not true. Must removed.
 
 ## Performance
 ### As a user of the platform, I want to know the current performance of the network in terms of COMM events per second.
