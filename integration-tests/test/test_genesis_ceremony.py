@@ -78,7 +78,7 @@ def test_successful_genesis_ceremony(command_line_options: CommandLineOptions, r
                         assert validator_a_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
                         assert validator_a_genesis_block['mainParentHash'] == '""'
 
-                        validator_b_blocks = validator_a.show_blocks_parsed(2)
+                        validator_b_blocks = validator_b.show_blocks_parsed(2)
                         assert len(validator_b_blocks) == 1
                         validator_b_genesis_block = validator_b_blocks[0]
                         assert validator_b_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
@@ -130,7 +130,7 @@ def test_successful_genesis_ceremony_with_read_only(command_line_options: Comman
                             assert validator_a_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
                             assert validator_a_genesis_block['mainParentHash'] == '""'
 
-                            validator_b_blocks = validator_a.show_blocks_parsed(2)
+                            validator_b_blocks = validator_b.show_blocks_parsed(2)
                             assert len(validator_b_blocks) == 1
                             validator_b_genesis_block = validator_b_blocks[0]
                             assert validator_b_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
