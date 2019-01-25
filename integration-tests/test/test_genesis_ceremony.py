@@ -22,6 +22,7 @@ from .wait import (
     wait_for_sent_approved_block,
     wait_for_sent_unapproved_block,
     wait_for_approved_block_received_handler,
+    wait_for_block_contains,
 )
 
 
@@ -163,7 +164,6 @@ def test_not_successful_genesis_ceremony(command_line_options: CommandLineOption
                         with pytest.raises(WaitTimeoutError):
                             wait_for_approved_block_received_handler(context, ceremony_master)
 
-@pytest.mark.xfail
 def test_validator_catching_up(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     bootstrap_cli_options = {
         '--deploy-timestamp':   '1',
@@ -221,3 +221,6 @@ def test_validator_catching_up(command_line_options: CommandLineOptions, random_
                             validator_c_genesis_block = validator_c_blocks[0]
                             assert validator_c_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
                             assert validator_c_genesis_block['mainParentHash'] == '""'
+
+                            wait_for_block_contains(context, validator_c, validator_c_genesis_block['blockHash'], VALIDATOR_A_KEYPAIR.public_key)
+                            wait_for_block_contains(context, validator_c, validator_c_genesis_block['blockHash'], VALIDATOR_B_KEYPAIR.public_key)
