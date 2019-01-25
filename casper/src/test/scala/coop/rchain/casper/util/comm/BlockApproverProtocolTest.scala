@@ -38,7 +38,10 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
           _ = node.logEff.infos.exists(_.contains("Approval sent in response")) should be(true)
           _ = node.logEff.warns.isEmpty should be(true)
 
-          queue  <- node.transportLayerEff.msgQueues(node.local).get
+          queue <- {
+            implicit val network = node.transportLayerEff.testNetworkF
+            TestNetwork.peerQueue(node.local)
+          }
           result = queue.size should be(1)
         } yield result
     }
@@ -66,8 +69,11 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
                 runtimeManager
               )
 
-          _      = node.logEff.warns.count(_.contains("Received unexpected candidate")) should be(2)
-          queue  <- node.transportLayerEff.msgQueues(node.local).get
+          _ = node.logEff.warns.count(_.contains("Received unexpected candidate")) should be(2)
+          queue <- {
+            implicit val network = node.transportLayerEff.testNetworkF
+            TestNetwork.peerQueue(node.local)
+          }
           result = queue.isEmpty should be(true)
         } yield result
     }
