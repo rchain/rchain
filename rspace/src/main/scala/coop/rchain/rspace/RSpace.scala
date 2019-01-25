@@ -44,6 +44,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
   private[this] val produceSpan   = Kamon.buildSpan(MetricsSource + ".produce")
   protected[this] val installSpan = Kamon.buildSpan(MetricsSource + ".install")
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove when Kamon replaced with Metrics API
   override def consume(
       channels: Seq[C],
       patterns: Seq[P],
@@ -169,6 +170,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
       }.max
     ) + 1
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove when Kamon replaced with Metrics API
   override def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
       implicit m: Match[P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =

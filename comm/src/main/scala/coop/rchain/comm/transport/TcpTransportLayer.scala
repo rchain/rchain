@@ -70,7 +70,7 @@ class TcpTransportLayer(
     }
 
   // TODO FIX-ME No throwing exceptions!
-  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  @SuppressWarnings(Array("org.wartremover.warts.Throw", "org.wartremover.warts.NonUnitStatements"))
   private lazy val clientSslContext: SslContext =
     try {
       val builder = GrpcSslContexts.forClient
@@ -278,7 +278,7 @@ class TcpTransportLayer(
     }
 
     cell.modify { s =>
-      /** 
+      /**
         * //TODO Bring back lvl of parallelism to Math.max(Runtime.getRuntime.availableProcessors(), 2) once
         * MultiparentCasperImpl is not synchronous (uses semaphore)
         */

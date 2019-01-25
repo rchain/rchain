@@ -175,6 +175,7 @@ object BondingUtil {
     file.use(pw => Sync[F].delay { pw.println(content) })
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def makeRuntimeDir[F[_]: Sync]: Resource[F, Path] =
     Resource.make[F, Path](Sync[F].delay { Files.createTempDirectory("casper-bonding-helper-") })(
       runtimeDir => Sync[F].delay { runtimeDir.recursivelyDelete() }

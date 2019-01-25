@@ -35,6 +35,7 @@ private final case class FileLMDBIndexBlockStoreState(
     currentIndex: Int
 )
 
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
     lock: Semaphore[F],
     env: Env[ByteBuffer],
@@ -454,8 +455,9 @@ object FileLMDBIndexBlockStore {
       config: Config
   ): F[StorageErr[BlockStore[F]]] =
     for {
+      notExists <- Sync[F].delay(Files.notExists(config.indexPath))
+      _         <- if (notExists) Sync[F].delay(Files.createDirectories(config.indexPath)) else ().pure[F]
       env <- Sync[F].delay {
-              if (Files.notExists(config.indexPath)) Files.createDirectories(config.indexPath)
               val flags = if (config.noTls) List(EnvFlags.MDB_NOTLS) else List.empty
               Env
                 .create()

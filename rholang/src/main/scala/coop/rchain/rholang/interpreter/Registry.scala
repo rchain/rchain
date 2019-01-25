@@ -226,7 +226,7 @@ class RegistryImpl[F[_]](
             publicRegisterSignedPatterns,
             TaggedContinuation(ScalaBodyRef(BodyRefs.REG_PUBLIC_REGISTER_SIGNED))
           )
-    } yield Unit
+    } yield ()
 
   private val prefixRetReplacePattern = BindPattern(
     Seq(

@@ -22,7 +22,7 @@ import scodec.bits._
   *
   * To create an instance, use [[LMDBStore.create]].
   */
-@SuppressWarnings(Array("org.wartremover.warts.Throw"))
+@SuppressWarnings(Array("org.wartremover.warts.Throw", "org.wartremover.warts.NonUnitStatements"))
 // TODO stop throwing exceptions
 class LMDBStore[C, P, A, K] private[rspace] (
     val env: Env[ByteBuffer],

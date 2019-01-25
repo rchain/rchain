@@ -30,8 +30,7 @@ object State {
   def empty[K, V]: State[K, V] = State[K, V](Map.empty, Map.empty, Map.empty, None)
 }
 
-@SuppressWarnings(Array("org.wartremover.warts.Throw"))
-// TODO stop throwing exceptions
+@SuppressWarnings(Array("org.wartremover.warts.Throw", "org.wartremover.warts.NonUnitStatements")) // TODO stop throwing exceptions
 class InMemoryTrieStore[K, V]
     extends InMemoryOps[State[K, V]]
     with ITrieStore[InMemTransaction[State[K, V]], K, V] {
