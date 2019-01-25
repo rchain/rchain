@@ -1,52 +1,43 @@
 new
   MakeRev, exampleUsage,
-  // trace(`rho:io:stderr`),
-  transferIfEnough, checkedAddSubtract
+  trace(`rho:io:stderr`),
+  LockBox,
+  WalletCheck,
+  MakeMint, NonNegativeNumber, RhocWallet, //@@@@
+  lookup(`rho:registry:lookup`),
+  checkedMultiply
 in {
+  // TODO: move to test
   contract exampleUsage(_) = {
-    new revCh, contract1, contract2, c3, c4, c5, trace(`rho:io:stderr`) in {
-      MakeRev!({
-        bundle0{*contract1}: 100,
-        bundle0{*c3}: 9223372036854775807
-      }, *revCh) |
-      for (rev <- revCh) {
+    new wcCh, revCh, mintCh, purseCh in {
+      MakeMint!(*mintCh) | for (revMint <- mintCh) {
+        trace!({"revMint": *revMint}) |
+        WalletCheck!({
+          "0x02c50804457ff616801953fa72672564f40a58d9": 12300000000, // ktel
+          "0xcd4a30304134db5d69cac607e4a659244eeb01fc": 45600000000, // funkey
+        }, *revMint, *wcCh) | for (walletCheck <- wcCh) {
+          trace!({"walletCheck": *walletCheck}) |
+          revMint!("makePurse", 0, *purseCh) | for (casperPoSPurse <- purseCh) {
+            trace!({"casper purse": *casperPoSPurse}) |
+            MakeRev!(*walletCheck, *revMint, *casperPoSPurse, *revCh) | for (rev <- revCh) {
+              trace!({"Rev": *rev}) |
 
-        // Simple send from one contract "account" to another.
-        new ch, ch2, ch3, ch4, ch6 in {
-          rev!("getBalance", bundle0{*contract1}, *ch) | for(@bc1 <- ch) {
-            trace!({"contract1 balance before": bc1}) |
-            rev!("sendFromName", bundle0{*contract1}, {"name": bundle0{*contract2}}, 75, *ch) |
-            for(@sendResult <- ch) {
-              trace!({"sendResult": sendResult}) |
-
-              // Overdraft
-              rev!("sendFromName", bundle0{*contract1}, {"name": bundle0{*contract2}}, 100, *ch) |
-              for(@sendResult <- ch) {
-                trace!({"should overdraft": sendResult})
+              new prCh in {
+                rev!("payForDeployment", {
+                  // funkey's public key
+                  "user": "e3163d3821844d186f25ffa766693a55c37dfbc5ea6f47d6681acda7f3a7bcfe".hexToBytes(),
+                  "term": "Nil",
+                  "timestamp": 1548378913194, // 2019-01-25T01:15:13.194Z
+                  "sig": "63d527b73645922b26dfca72abb036c2d0d8a6b2fddd844fdf55c40e9a8a47345a05c768cd0219833f95d6307b83909e3a486f16f77f732711b3de7027a68500".hexToBytes(),
+                  "sigAlgorithm": "ed25519",
+                  "from": { "rhocAddr": "0xcd4a30304134db5d69cac607e4a659244eeb01fc" },
+                  "phloPrice": 4,
+                  "phloLimit": 100000,
+                  "nonce": "fake-unforgeable for testing",
+                }, *prCh) | for (@paymentResult <- prCh) {
+                  trace!({"paymentResult": paymentResult})
+                }
               }
-            } |
-
-            // Overflow
-            rev!("sendFromName", bundle0{*contract1}, {"name": bundle0{*c3}}, 10, *ch2) |
-            for(@sendResult <- ch2) {
-              trace!({"should overflow": sendResult})
-            } |
-
-            // Junk destination
-            rev!("sendFromName", bundle0{*contract1}, {"address": Nil}, 10, *ch3) |
-            for(@sendResult <- ch3) {
-              trace!({"junk dest sendResult": sendResult})
-            } |
-            rev!("sendFromName", bundle0{*contract1}, {"address": "0xdeadbeef"}, 10, *ch4) |
-            for(@sendResult <- ch4) {
-              trace!({"short dest sendResult": sendResult})
-            } |
-
-            // send to key
-            rev!("sendFromName", bundle0{*contract1},
-              {"address": "0x02c50804457ff616801953fa72672564f40a58d9"}, 2, *ch6) |
-            for(@sendResult <- ch6) {
-              trace!({"send to key result": sendResult})
             }
           }
         }
@@ -55,69 +46,75 @@ in {
   } |
   exampleUsage!(Nil) |
 
-  // This morning (Jan 24) I said this contract is still a mint
-  // in that whoever holds it can print money.
-  // I have reconsidered; it can be published in the
-  // registry and anyone can call its methods, which
-  // conserve money. So I'm calling it MakeRev.
-  contract MakeRev(@initialBalances, return) = {
-    new self, balancesCh, transfer in {
+  // ISSUE: rename MakeRev to MakeDeployThingy?
+  contract MakeRev(walletCheck, revMint, casperPosPurse, return) = {
+    new self, payFromWallet, banker, bankerCh in {
       return!(bundle+{*self}) |
 
-      // ISSUE: should be a concurrent map
-      balancesCh!(initialBalances) |
+      LockBox!(*banker, "blake2b256Hash", *bankerCh) | for (bankerBox <- bankerCh) {
 
-      contract self(@"getBalance", @holder, return) = {
-        for (@balances <- balancesCh) {
-          balancesCh!(balances) | // (should be peek)
-          return!(balances.get(holder))
-        }
-      } |
-
-      contract self(@"sendKeyToKey",
-        @{from /\ String}, // sender's public key
-                           // ISSUE: public key or hash of key ala ethAddr?
-                           // ISSUE cryptoSuite: secp256k1 or ed25591? secp256r1? parameterized?
-        @nonce,            // Distinctness is the responsibility of the signer;
-                           // Using an unforgable name is recommended.
-        // @{gasPrice}, only relevant to deployment payments? ISSUE: how to do deployments
-        // @{gasLimit},
-        @{to /\ String},   // 0x... eth addr (ISSUE cryptoSuite applies here too)
-        @{value /\ Int},
-        // @{data}         // ISSUE: eth compat expectation: do we want to let people annotate payments?
-        @{sig /\ String},
-        return             // either balances: { "from": b_f, "to": b_t }
-                           // or { "error": "message" }
-      ) = {
-        new hashCh, sigOkCh in {
-          // ISSUE cryptoSuite: choice of hash... keccak256hash?
-          @"blake2b256Hash"!(
+        contract self(@"payForDeployment",
+          // ref DeployData in CasperMessages.proto
+          @{deployData /\ {
+            "user":         {user /\ ByteArray},
+            "term":         String,
+            "timestamp":    Int,
+            "sig":          {sig /\ ByteArray},
+            "sigAlgorithm": {sigAlgorithm /\ String},
+            "from":         from, // {"rhocAddr": String} \/ {"wallet": Uri}
+            "phloPrice":    { phloPrice /\ Int},
+            "phloLimit":    { phloLimit /\ Int},
+            "nonce":        nonceCh,  // lock box proxy channel
+          }},
+          return             // either balance after payment: { "balance": Int }
+                             //
+                             // or { "error": String }
+        ) = {
+          trace!({"deployData": deployData}) |
+          bankerBox!("try", deployData.delete("sig").delete("sigAlgorithm"),
+            sigAlgorithm, sig, user, nonceCh, nonceCh) |
+          for (@result <- @nonceCh) {
+            trace!({"bankerBox try result": result}) |
             // keeping track of argument order is a pain; let's use names
             // OTOH... then whether we call it "value" or "amount" is runtime-visible
-            { "from": from.hexToBytes(), "to": to.slice(2, to.length()).hexToBytes(),
-              "nonce": nonce, "value": value,  }.toByteArray(), *hashCh) |
-          for (@txHash <- hashCh) {
-            // ISSUE cryptoSuite
-            @"ed25519Verify"!(txHash, sig.hexToBytes(), from.hexToBytes(), *sigOkCh) |
-            for (@sigOk <- sigOkCh) {
-              if (sigOk) { transfer!(from.hexToBytes(), to.hexToBytes(), value, *return)
-              } else { return!({"error": "signature verification failed"}) }
-            }
-          }
-        }
-      } |
-
-      contract transferIfEnough(@from, @to, @{value /\ Int}, return) = {
-        // trace!("transferIfEnough") |
-        for (@balances <- balancesCh) {
-          new ch in {
-            checkedAddSubtract!(balances.getOrElse(from, 0), balances.getOrElse(to, 0), value, *ch) |
-            for (@result <- ch) {
               match result {
-                {"error": _ } => { balancesCh!(balances) | return!(result) }
-                {"from": fromBalance, "to": toBalance} => {
-                  balancesCh!(balances.set(from, fromBalance).set(to, toBalance)) |
-                  return!(result)
+              {"error": _ } => { return!(result) }
+              {"proxy": bankerOneShot } => {
+                @bankerOneShot!("tryPay", Nil, *return)
+              }
+            }
+          }
+        } |
+
+        contract banker(@"tryPay", _args,
+          @{"from": from, "phloLimit": {phloLimit /\ Int}, "phloPrice": {phloPrice /\ Int}, ..._}, return) = {
+          trace!({"banker tryPay from": from}) |
+          new let1, let2, let3, let4, let5, wCh in {
+            checkedMultiply!(phloLimit, phloPrice, *let1) | for (@amount <- let1) {
+              trace!({"multiply amount": amount}) |
+              if (amount == Nil) { return!({"error": "overflow converting phlo to rev"}) }
+              else {
+                match from {
+                  // Pay with initial RHOC -> REV balance
+                  // TODO: provide claim method as well.
+                  {"rhocAddr": {addr /\ String}} => {
+                    trace!({"rhocAddr": addr}) |
+                    // TODO: check that addr is 0x followed by 20 bytes in hex
+                    walletCheck!("findOrCreateWallet", addr, *wCh) | for (wallet <- wCh) {
+                      trace!({"walletCheck wallet": *wallet}) |
+                      payFromWallet!(*wallet, amount, *return)
+                    }
+                  }
+
+                  // Pay from wallet identified by registry URI. We
+                  // follow the insertSigned registry protocol, though
+                  // that can be imitated by inserting a tuple with with
+                  // insertArbitrary.
+                  {"wallet": walletURI} => {
+                    lookup!(walletURI, *let1) | for (@(_, *allegedWallet) <- let1) {
+                      payFromWallet!(*allegedWallet, amount, *return)
+                    }
+                  }
                 }
               }
             }
@@ -125,48 +122,383 @@ in {
         }
       } |
 
-      contract checkedAddSubtract(@{fromBefore /\ Int}, @{toBefore /\ Int}, @{value /\ Int}, return) = {
-        // trace!("checkedAddSubtract") |
-        if (value < 0) {
-          return!({"error": "negative value"})
-        } else {
-          if (value > fromBefore) {
-            return!({"error": "overdraft"})
-          } else {
-            if (toBefore + value < toBefore) {
-              return!({"error": "overflow" })
-            } else {
-              return!({"from": fromBefore - value, "to": toBefore + value})
-            }
-          }
-        }
-      } |
-
-      contract self(@"sendFromName",
-        @from,            // bundle0{*unforgableName}
-        @{to},            // {{ "address": String } \/ { "name": _ }}},
-        @{value /\ Int},
-        // @{data}        // ISSUE: do we want to let people annotate payments?
-        return            // either balances: { "from": b_f, "to": b_t }
-                          // or { "error": "message" }
-      ) = {
-        match to {
-          {"name": toName} => { transferIfEnough!(bundle0{from}, bundle0{toName}, value, *return) }
-          {"address": { toAddr /\ String}} => {
-            match (toAddr.slice(0, 2), toAddr.slice(2, toAddr.length()).hexToBytes()) {
-              ("0x", {toHash /\ ByteString}) => {
-                if (toHash.length() != 20) { // ISSUE: cryptoSuite / addr format
-                  return!({"error": "bad address length"})
-                } else {
-                  transferIfEnough!(bundle0{from}, toHash, value, *return)
+      contract payFromWallet(allegedWallet, @{amount /\ Int}, return) = {
+        trace!({"payFromWallet amount": amount}) |
+        new pbCh, pmtOkCh in {
+          // bundle0{*walletCheck} = "because I said so!"
+          trace!({
+            "using debit key": bundle0{bundle0{*allegedWallet} | bundle0{*walletCheck}},
+            "on wallet": *allegedWallet
+          }) |
+          allegedWallet!("debit",
+            bundle0{bundle0{*allegedWallet} | bundle0{*walletCheck}},
+            amount, *pbCh) |
+          for(@splitResult <- pbCh) {
+            match splitResult {
+              [] => { return!({"error": "cannot debit wallet"}) }
+                [allegedPmt] => {
+                trace!({"allegedWallet debit result": allegedPmt}) |
+                casperPosPurse!("deposit", amount, allegedPmt, *pmtOkCh) | for (@pmtOk <- pmtOkCh) {
+                  trace!({"pmtOk": pmtOk})|
+                  if (pmtOk) {
+                    // ISSUE: is an extra round trip here worthwhile? make the caller do it?
+                    allegedWallet!("getBalance", *pmtOkCh) | for (@balance <- pmtOkCh) {
+                      return!({"balance": balance})
+                    }
+                  }
+                  else {
+                    // refund
+                    trace!("refund") |
+                    allegedWallet!("deposit", amount, allegedPmt, Nil) |
+                    return!({"error": "payment to validators failed"})
+                  }
                 }
               }
-              _ => { return!({"error": "address not in 0x... format"}) }
             }
           }
-          _ => { return!({"error": "bad destination"}) }
         }
       }
     }
-  }
+  } |
+
+  contract RhocWallet(@{rhocAddr /\ String}, @sigAlgorithm, @debitKey, purse, return) = {
+    new self, verified, boxCh in {
+      return!(bundle+{*self}) |
+
+      contract verified(@"transfer", _args, @[{amount /\ Int}, destination], return) = {
+        trace!({"verified transfer": [amount, destination]}) |
+        return!({"error": "transfer not implemented: split etc."})
+      } |
+
+      LockBox!(*verified, "blake2b256Hash", *boxCh) | for (vBox <- boxCh) {
+        contract self(@"getBalance", return) = { purse!("getBalance", *return) } |
+        contract self(@"transfer",
+          @{amount /\ Int},
+          @{sig /\ ByteArray},
+          @{pubKey /\ ByteArray}, // ISSUE: wouldn't need this if we had ecrecover
+          @destination,
+          return
+        ) = {
+          // TODO: check pubKey against rhocAddr
+          new proxyCh in {
+            vBox!("try", [amount, destination], sigAlgorithm, sig, pubKey, destination, *proxyCh) |
+            for (proxy <- proxyCh) {
+              proxy!("transfer", Nil, *return)
+            }
+          }
+        } |
+        new let1 in {
+          let1!(bundle0{bundle0{*self} | debitKey}) | for (@key <- let1) {
+            trace!({"my debit key": key}) |
+            contract self(@"debit", @=key, @amount, return) = {
+              trace!({"debit": amount}) |
+              purse!("split", amount, *return)
+            }
+          }
+        }
+      }
+    }
+  } |
+
+  // ISSUE/TODO: move claim stuff back to WalletCheck.rho
+  contract WalletCheck(@rhocBalances, revMint, return) = {
+    new self, balanceByAddressCh, walletByAddressCh in {
+      return!(bundle+{*self}) |
+
+      // ISSUE: should be a concurrent map?
+      balanceByAddressCh!(rhocBalances) |
+      walletByAddressCh!({}) |
+
+      contract self(@"findOrCreateWallet", @{rhocAddr /\ String}, return) = {
+        trace!({"forc": rhocAddr}) |
+        for(@walletByAddress <- walletByAddressCh) {
+          match walletByAddress.get(rhocAddr) {
+            // not found. create
+            Nil => {
+              new wCh, pCh in {
+                for (@balanceByAddress <- balanceByAddressCh) {
+                  trace!({"balancebyaddress": balanceByAddress}) |
+                  revMint!("makePurse", balanceByAddress.getOrElse(rhocAddr, 0), *pCh) |
+                  for (purse <- pCh) {
+                    trace!({"forc purse": *purse}) |
+                    // ISSUE: crypto suite
+                    RhocWallet!(rhocAddr, "secp256k1",
+                      bundle0{*self}, // for debit key
+                      *purse, *wCh) | for (wallet <- wCh) {
+                      walletByAddressCh!(walletByAddress.set(rhocAddr, *wallet)) |
+                      balanceByAddressCh!(balanceByAddress.set(rhocAddr, 0)) |
+                      return!(*wallet)
+                    }
+                  }
+                }
+              }
+            }
+            // found
+            wallet => {
+              walletByAddressCh!(walletByAddress) |
+              return!(wallet)
+            }
+          }
+        }
+      }
+    }
+  } |
+
+  new suiteCh in {
+    new secp256k1VerifyDERFix in {
+      contract secp256k1VerifyDERFix(@data, @sigDER, @{pubKeyRaw /\ ByteArray}, return) = {
+        @"secp256k1Verify"!(data, sigDER,
+          "04".hexToBytes() ++ pubKeyRaw, *return)
+      } |
+      suiteCh!({ "ed25519": "ed25519Verify", "secp256k1": *secp256k1VerifyDERFix })
+    } |
+    for (@sigAlgorithms <- suiteCh) {
+      contract LockBox(contents, hashFunction, return) = {
+        new self in {
+          return!(bundle+{*self}) |
+
+          contract self(@"try",
+            @data, // {"data": data, "nonce": signedReturn}.toByteArray() gets Hash'd
+            @{sigAlgorithm /\ String},
+            @{sig /\ ByteArray},
+            @{pubKey /\ ByteArray},
+            proxyOut,  // signed channel on which to yield a proxy to the contents
+            return     // { "proxy": _ } \/ { "error": String }
+          ) = {
+            trace!({"try data": data}) |
+              match sigAlgorithms.get(sigAlgorithm) {
+              Nil => { return!({"error": "unknown signature algorithm"}) }
+              verify => {
+                trace!({
+                  "verify": verify,
+                  "signing over": {"data": data, "nonce": *proxyOut},
+                  "bytes to hash": {"data": data, "nonce": *proxyOut}.toByteArray()
+                }) |
+                new let1, let2 in {
+                  hashFunction!({"data": data, "nonce": *proxyOut}.toByteArray(), *let1) |
+                  for (@hash <- let1) {
+                    trace!({"hash": hash}) |
+                    @verify!(hash, sig, pubKey, *let2) | for (@sigOk <- let2) {
+                      trace!({"sigOk": sigOk}) |
+                      if (sigOk or true) { // @@postpone sig details
+                        new proxy in {
+                          return!({"proxy": bundle+{*proxy}}) |
+                          trace!({"proxy": *proxy}) |
+                          // one shot proxy
+                          for (@method, @args, return <- proxy) {
+                            trace!({"proxy method": method, "args": args}) |
+                            // Splitting method, args, and return channel
+                            // is done to facilitate off-chain interop,
+                            // where putting a return channel into a data structure
+                            // can be awkward.
+                            contents!(method, args, data, *return)
+                          }
+                        }
+                      }
+                      else { return!({"error": "signature verification failed"}) }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  } |
+
+  // TODO: move to NonNegative
+  contract checkedMultiply(@{x /\ Int}, @{y /\ Int}, return) = {
+    if (x * y > x and x * y > y) { return!(x * y) }
+  } |
+
+
+
+  ///////////////////////////
+  // please excuse copy-and-paste for testing purposes
+  // the registry doesn't work with rnode eval
+  ///////////////////////////
+
+//scalapackage coop.rchain.rholang.math
+
+//This is a contract to explicitly implement the int >= 0 behavioural type
+
+//Registry info:
+//  sk: 32cc47a15b4fe26f94042bb12914440a2d83f5f097f652a73ca4c6302a700ab0
+//  pk: d89a1e6d2b8f53595b3d0d47effd48f0e537d19d847ad5811cf5216157a3a63c
+//  user == pk
+//  timestamp: 1539963224985
+//Resulting unforgable name: Unforgeable(0x289e512cb46e7491c54d8e42c5f997c2a85be7e1222dcf9810ac24bf960748e0)
+//  ==> signature data == 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a20289e512cb46e7491c54d8e42c5f997c2a85be7e1222dcf9810ac24bf960748e01001
+//  ==> signature == 992a8bbeaed194951667e38ec9b4bc0e1d50c4fdaf564a67ae4d90bfbe2439b5e85b53afb81b33075446ef5c5729bbfbb5b95b73aaeb17b05e2ead12ce226c07
+//URI derived from pk == `rho:id:nd74ztexkao5awjhj95e3octkza7tydwiy7euthnyrt5ihgi9rj495`
+new rs(`rho:registry:insertSigned:ed25519`), uriOut in {
+  contract NonNegativeNumber(@init, return) = {
+    new this, valueStore in {
+      contract this(@"add", @x, success) = {
+        if (x >= 0) {
+          for(@v <- valueStore){
+            if (v + x > v) {
+              valueStore!(v + x) | success!(true)
+            } else {
+              //overflow
+              valueStore!(v) | success!(false)
+            }
+          }
+        } else {
+          success!(false)
+        }
+      } |
+      contract this(@"sub", @x, success) = {
+        if (x >= 0) {
+          for(@v <- valueStore) {
+            if (x <= v) {
+              valueStore!(v - x) | success!(true)
+            } else {
+              valueStore!(v) | success!(false)
+            }
+          }
+        } else {
+          success!(false)
+        }
+      } |
+      contract this(@"value", return) = {
+        for(@v <- valueStore) {
+          valueStore!(v) | return!(v)
+        }
+      } |
+      return!(bundle+{*this}) |
+      match init { //Initial balance is zero if given is negative on non-integer
+        Int => {
+          if (init >= 0) { valueStore!(init)  }
+          else           { valueStore!(0) }
+        }
+         _ => { valueStore!(0) }
+      }
+    }
+  } |
+
+  rs!(
+    "d89a1e6d2b8f53595b3d0d47effd48f0e537d19d847ad5811cf5216157a3a63c".hexToBytes(),
+    (9223372036854775807, bundle+{*NonNegativeNumber}),
+    "992a8bbeaed194951667e38ec9b4bc0e1d50c4fdaf564a67ae4d90bfbe2439b5e85b53afb81b33075446ef5c5729bbfbb5b95b73aaeb17b05e2ead12ce226c07".hexToBytes(),
+    *uriOut
+  )
+}
+  |
+
+//////////
+//scalapackage coop.rchain.rholang.mint
+
+//based on http://erights.org/elib/capability/ode/ode-capabilities.html#simple-money
+//requires NonNegativeNumber
+
+//Registry info:
+//  sk: a300690f29ac6385917cb94bf534f9b4163792ef8636c5db44608a77fa0356c2
+//  pk: d9ba2075d355755060205605f4cdbd5ecd3cce5ed1f39690f34772f7c9aa30ab
+//  user == pk
+//  timestamp: 1539969637029
+//Resulting unforgable name: Unforgeable(0xdf2886c69e880d611d9c609d5ea51a59e43a684f3a587b233be034dace00d092)
+//  ==> signature data == 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a20df2886c69e880d611d9c609d5ea51a59e43a684f3a587b233be034dace00d0921001
+//  ==> signature == 36229e3f4530c15f3b7c1d9165369201b70b4673289a003652af14b436b20a275d5909d6dfbbd06e685292d39eadf3af11db6f882dcc78ef0b794e6da0ad6109
+//URI derived from pk == `rho:id:exunyijimapk7z43g3bbr69awqdz54kyroj9q43jgu3dh567fxsftx`
+new
+  rs(`rho:registry:insertSigned:ed25519`), uriOut,
+  rl(`rho:registry:lookup`), NonNegativeNumberCh
+in {
+//  rl!(`rho:id:nd74ztexkao5awjhj95e3octkza7tydwiy7euthnyrt5ihgi9rj495`, *NonNegativeNumberCh) |
+//  for(@(_, NonNegativeNumber) <- NonNegativeNumberCh) {
+    new roguePurse1, trace(`rho:io:stderr`) in {
+      contract roguePurse1(_) = {
+        trace!("roguePurse1") |
+        new fakePurse in {
+          contract fakePurse(@stolenDecr, @amount, success) = {
+            success!(true, "fakeDecr") |
+            trace!({"all your token are belong to us": amount, "stolenDecr": stolenDecr})
+          } |
+
+          new let1, let2, let3, depositCh in {  // let @m1 = ...
+            MakeMint!(*let1) | for (mint1 <- let1) {
+              mint1!("makePurse", 10, *let2) | for (purse1 <- let2) {
+                purse1!("deposit", 5, *fakePurse, *depositCh) | for (@depositOk <- depositCh) {
+                  trace!({"deposit from fakePurse returned": depositOk}) |
+                  purse1!("getBalance", *let3) | for (@bal <- let3) {
+                    trace!({"real purse thinks new balance is": bal})
+                  }
+                }
+              }
+            }
+          }
+        }
+      } |
+      roguePurse1!(Nil)
+    } |
+
+    contract MakeMint(return) = {
+      new thisMint, internalMakePurse, decr in {
+        contract thisMint(@"makePurse", @init, return) = {
+          new balanceCh in {
+            NonNegativeNumber!(init, *balanceCh) | for(@balance <- balanceCh) {
+              internalMakePurse!(balance, *return)
+            }
+          }
+        } |
+        contract internalMakePurse(balance, return) = {
+          //balance must be a name that NonNegativeNumber contract is listening on
+          new thisPurse in {
+            new letCh in { // let thisDecr = ...
+              letCh!(bundle0{bundle0{*thisPurse}|*decr}) | for (thisDecr <- letCh) {
+                contract thisPurse(@=*thisDecr, @amount, return) = {
+                  new success in {
+                    balance!("sub", amount, *success) | for (@subOk <- success) {
+                      return!(subOk, *decr)
+                    }
+                  }
+                }
+              }
+            } |
+            contract thisPurse(@"getBalance", return) = { balance!("value", *return) } |
+            contract thisPurse(@"sprout", return) = { thisMint!("makePurse", 0, *return) } |
+            contract thisPurse(@"split", @amount, return) = {
+              new destPurseCh, successCh in {
+                thisPurse!("sprout", *destPurseCh) | for(@destPurse <- destPurseCh) {
+                  @destPurse!("deposit", amount, *thisPurse, *successCh) |
+                  for(@success <- successCh) {
+                    if (success) {
+                      return!([destPurse])
+                    } else {
+                      return!([])
+                    }
+                  }
+                }
+              }
+            } |
+            contract thisPurse(@"deposit", @amount, @src, success) = {
+              trace!({"purse pmt": amount}) |
+              new result in {
+                @src!(bundle0{bundle0{src}|*decr}, amount, *result) | //call src decr function.
+                for(@decrSuccess, @auth <- result) {
+                  if (decrSuccess and auth == *decr) {
+                    balance!("add", amount, *success) // add transferred amount to this purse
+                  } else {
+                    success!(false)
+                  }
+                }
+              }
+            } |
+            return!(bundle+{*thisPurse})
+          }
+        } |
+        return!(bundle+{*thisMint})
+      }
+  } |
+  rs!(
+    "d9ba2075d355755060205605f4cdbd5ecd3cce5ed1f39690f34772f7c9aa30ab".hexToBytes(),
+    (9223372036854775807, bundle+{*MakeMint}),
+    "36229e3f4530c15f3b7c1d9165369201b70b4673289a003652af14b436b20a275d5909d6dfbbd06e685292d39eadf3af11db6f882dcc78ef0b794e6da0ad6109".hexToBytes(),
+    *uriOut
+  )
+//}
+}
+
 }
