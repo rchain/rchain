@@ -6,6 +6,7 @@ import coop.rchain.rspace._
 import coop.rchain.rspace.examples.StringExamples.{Pattern, StringMatch, StringsCaptor, Wildcard}
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal.{Datum, GNAT, WaitingContinuation}
+import coop.rchain.shared.GeneratorUtils._
 import org.scalacheck._
 import org.scalacheck.Arbitrary._
 import scodec.bits.ByteVector
@@ -171,34 +172,5 @@ object ArbitraryInstances {
         )
         .map(_.toMap)
     })
-
-  /**
-   Credit: https://gist.github.com/etorreborre/d0616e704ed85d7276eb12b025df8ab0
-
-   Distinct list of elements from a given arbitrary
-    */
-  def distinctListOf[T: Arbitrary] =
-    distinctListOfGen(arbitrary[T])
-
-  /**
-   Distinct list of elements from a given generator
-   with a maximum number of elements to discard
-    */
-  def distinctListOfGen[T](gen: Gen[T], maxDiscarded: Int = 1000): Gen[List[T]] = {
-    val seen: ListBuffer[T] = new ListBuffer[T]
-    var discarded           = 0
-
-    Gen.sized { size =>
-      if (size == seen.size) seen.toList
-      else {
-        while (seen.size <= size && discarded < maxDiscarded) gen.sample match {
-          case Some(t) if !seen.contains(t) =>
-            seen.+=:(t)
-          case _ => discarded += 1
-        }
-        seen.toList
-      }
-    }
-  }
 
 }

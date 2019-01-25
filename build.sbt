@@ -484,7 +484,7 @@ lazy val rspace = (project in file("rspace"))
       )
     )
   )
-  .dependsOn(shared, crypto)
+  .dependsOn(shared % "compile->compile;test->test", crypto)
 
 lazy val rspaceBench = (project in file("rspace-bench"))
   .settings(
