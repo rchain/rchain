@@ -298,18 +298,14 @@
 - if the 1st three points are duplicates
 - what is `as a client of a contract` ? Does it mean the `user of a contract`? If so use the estimate tool, same as previous item
 
-### As a node operator, I want to get the list of deploys and their costs when I run `show-blocks`.
+### ~~As a node operator, I want to get the list of deploys and their costs when I run `show-blocks`.~~ Modify next item to reflect this.
 ### As a node operator, I want to be compensated for storing, running, and processing transactions against smart contracts based on the computational complexity required.
 - This is a Casper concern.  
 - Computation intensity is covered in Cost Accounting. 
 - Not really covering the real storage location.  
 - Storage needs to be refined
 
-### As a node operator, I want to be compensated 
-- Casper related. Also very broad. 
-- Need to discuss integration Cost Accounting & Casper 
-- what are the list of things do as part to of the validator porposal?  
-- See Kent's proposal
+### ~~As a node operator, I want to be compensated~~  duplicate?
 
 ### As a validator, I want to receive transaction fees in phlo on my bond amount as defined by the schedule in the mint.
 - We have to give interest to validators & Issue Mint. The interest in phlo is wrong. Phlo = gas. 
