@@ -5,7 +5,7 @@ import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance.EVarBody
 import coop.rchain.models.{Connective, ConnectiveBody, EVar, Par}
 import coop.rchain.models.Var.VarInstance.{FreeVar, Wildcard}
-import coop.rchain.rholang.interpreter.matcher.SpatialMatcher.noFrees
+import coop.rchain.rholang.interpreter.matcher.ParSpatialMatcherUtils.noFrees
 
 private[matcher] final case class ParCount(
     sends: Int = 0,
