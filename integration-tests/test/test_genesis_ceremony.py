@@ -10,6 +10,7 @@ from .conftest import (
 from .common import (
     KeyPair,
     CommandLineOptions,
+    WaitTimeoutError,
 )
 from .rnode import (
     started_peer,
@@ -19,6 +20,8 @@ from .wait import (
     wait_for_block_approval,
     wait_for_approved_block_received_handler_state,
     wait_for_sent_approved_block,
+    wait_for_sent_unapproved_block,
+    wait_for_approved_block_received_handler,
 )
 
 
@@ -134,10 +137,30 @@ def test_successful_genesis_ceremony_with_read_only(command_line_options: Comman
 
                             wait_for_approved_block_received_handler_state(context, readonly_a)
 
-@pytest.mark.xfail
-def test_not_successful_genesis_ceremony(docker_client_session: DockerClient) -> None:
-    assert False
-
+def test_not_successful_genesis_ceremony(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
+    bootstrap_cli_options = {
+        '--deploy-timestamp':   '1',
+        '--required-sigs':      '3',
+        '--duration':           '5min',
+        '--interval':           '10sec',
+    }
+    peers_cli_flags = set(['--genesis-validator'])
+    peers_cli_options = {
+        '--deploy-timestamp':   '1',
+        '--required-sigs':      '3',
+    }
+    peers_keypairs = [
+        VALIDATOR_A_KEYPAIR,
+        VALIDATOR_B_KEYPAIR,
+    ]
+    with testing_context(command_line_options, random_generator, docker_client, bootstrap_keypair=CEREMONY_MASTER_KEYPAIR, peers_keypairs=peers_keypairs) as context:
+        with temporary_wallets_file(context.random_generator, [context.bootstrap_keypair] + context.peers_keypairs) as wallets:
+            with ready_bootstrap(context=context, cli_options=bootstrap_cli_options, wallets_file=wallets) as ceremony_master:
+                with started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-a', keypair=VALIDATOR_A_KEYPAIR, wallets_file=wallets, cli_flags=peers_cli_flags, cli_options=peers_cli_options):
+                    with started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-b', keypair=VALIDATOR_B_KEYPAIR, wallets_file=wallets, cli_flags=peers_cli_flags, cli_options=peers_cli_options):
+                        wait_for_sent_unapproved_block(context, ceremony_master)
+                        with pytest.raises(WaitTimeoutError):
+                            wait_for_approved_block_received_handler(context, ceremony_master)
 
 @pytest.mark.xfail
 def test_validator_catching_up(docker_client_session: DockerClient) -> None:
