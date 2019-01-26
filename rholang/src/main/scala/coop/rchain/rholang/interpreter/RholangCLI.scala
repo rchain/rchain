@@ -132,7 +132,19 @@ object RholangCLI {
     Interpreter[Coeval]
       .buildNormalizedTerm(source)
       .runAttempt
-      .fold(_.printStackTrace(Console.err), processTerm)
+      .fold(
+        {
+          // ParserError seems to be about parser construction,
+          // i.e. a design-time error that merits a stack trace.
+          // LexerError is uses that way too, but it's also
+          // used for unexpected EOF and end of string.
+          case er: LexerError      => Console.err.println(er.getMessage)
+          case er: SyntaxError     => Console.err.println(er.getMessage)
+          case er: NormalizerError => Console.err.println(er.getMessage)
+          case th                  => th.printStackTrace(Console.err)
+        },
+        processTerm
+      )
   }
 
   @tailrec
