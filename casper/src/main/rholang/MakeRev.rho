@@ -1,5 +1,5 @@
 new
-  MakeRev, exampleUsage,
+  MakeRev,
   trace(`rho:io:stderr`),
   LockBox,
   WalletCheck,
@@ -7,45 +7,6 @@ new
   lookup(`rho:registry:lookup`),
   checkedMultiply
 in {
-  // TODO: move to test
-  contract exampleUsage(_) = {
-    new wcCh, revCh, mintCh, purseCh in {
-      MakeMint!(*mintCh) | for (revMint <- mintCh) {
-        trace!({"revMint": *revMint}) |
-        WalletCheck!({
-          "0x02c50804457ff616801953fa72672564f40a58d9": 12300000000, // ktel
-          "0xcd4a30304134db5d69cac607e4a659244eeb01fc": 45600000000, // funkey
-        }, *revMint, *wcCh) | for (walletCheck <- wcCh) {
-          trace!({"walletCheck": *walletCheck}) |
-          revMint!("makePurse", 0, *purseCh) | for (casperPoSPurse <- purseCh) {
-            trace!({"casper purse": *casperPoSPurse}) |
-            MakeRev!(*walletCheck, *revMint, *casperPoSPurse, *revCh) | for (rev <- revCh) {
-              trace!({"Rev": *rev}) |
-
-              new prCh in {
-                rev!("payForDeployment", {
-                  // funkey's public key
-                  "user": "e3163d3821844d186f25ffa766693a55c37dfbc5ea6f47d6681acda7f3a7bcfe".hexToBytes(),
-                  "term": "Nil",
-                  "timestamp": 1548378913194, // 2019-01-25T01:15:13.194Z
-                  "sig": "63d527b73645922b26dfca72abb036c2d0d8a6b2fddd844fdf55c40e9a8a47345a05c768cd0219833f95d6307b83909e3a486f16f77f732711b3de7027a68500".hexToBytes(),
-                  "sigAlgorithm": "ed25519",
-                  "from": { "rhocAddr": "0xcd4a30304134db5d69cac607e4a659244eeb01fc" },
-                  "phloPrice": 4,
-                  "phloLimit": 100000,
-                  "nonce": "fake-unforgeable for testing",
-                }, *prCh) | for (@paymentResult <- prCh) {
-                  trace!({"paymentResult": paymentResult})
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  } |
-  exampleUsage!(Nil) |
-
   // ISSUE: rename MakeRev to MakeDeployThingy?
   contract MakeRev(walletCheck, revMint, casperPosPurse, return) = {
     new self, payFromWallet, banker, bankerCh in {

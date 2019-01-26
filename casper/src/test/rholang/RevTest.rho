@@ -1,0 +1,71 @@
+//scalapackage coop.rchain.rholang.wallet
+
+// requires MakeMint, RevPkg = { MakeRev, WalletCheck, RhocWallet, LockBox }
+new
+  setup,
+  exampleUsage,
+  trace(`rho:io:stderr`),
+  rl(`rho:registry:lookup`)
+in {
+  // ISSUE style: return vs retCh
+  // ISSUE style: n!(p...) vs n ! (p...)
+  contract setup(return) = {
+    new MakeMintCh, RevPkgCh, mintCh, wCh, purseCh, wcCh, revCh in {
+      rl!(`rho:id:exunyijimapk7z43g3bbr69awqdz54kyroj9q43jgu3dh567fxsftx`, *MakeMintCh) |
+      rl!(`rho:id:o1xmrxm55bt5prt4ikie1qrxq77hy7q1dxb4a8hmdnm6uu1pdk4m9s`, *RevPkgCh) |
+      for(@(_, *MakeMint) <- MakeMintCh;
+        @(_, {
+          "MakeRev": *MakeRev,
+          "WalletCheck": *WalletCheck,
+          "RhocWallet": *RhocWallet,
+          "LockBox": *LockBox,
+          ..._
+        }) <- RevPkgCh) {
+        MakeMint!(*mintCh) | for (revMint <- mintCh) {
+
+          WalletCheck!({
+            "0x02c50804457ff616801953fa72672564f40a58d9": 12300000000, // ktel
+            "0xcd4a30304134db5d69cac607e4a659244eeb01fc": 45600000000, // funkey
+          }, *revMint, *wcCh) | for (walletCheck <- wcCh) {
+            trace!({"walletCheck": *walletCheck}) |
+            revMint!("makePurse", 0, *purseCh) | for (casperPoSPurse <- purseCh) {
+              trace!({"casper purse": *casperPoSPurse}) |
+              MakeRev!(*walletCheck, *revMint, *casperPoSPurse, *revCh) | for (rev <- revCh) {
+                return!({"rev": *rev})
+              }
+            }
+          }
+        }
+      }
+    }
+  } |
+
+  contract exampleUsage(rhoSpec, @{"rev": *rev, ..._}, ackCh) = {
+    new prCh in {
+      rev!("payForDeployment", {
+        // funkey's public key
+        "user": "e3163d3821844d186f25ffa766693a55c37dfbc5ea6f47d6681acda7f3a7bcfe".hexToBytes(),
+        "term": "Nil",
+        "timestamp": 1548378913194, // 2019-01-25T01:15:13.194Z
+        "sig": "63d527b73645922b26dfca72abb036c2d0d8a6b2fddd844fdf55c40e9a8a47345a05c768cd0219833f95d6307b83909e3a486f16f77f732711b3de7027a68500".hexToBytes(),
+        "sigAlgorithm": "ed25519",
+        "from": { "rhocAddr": "0xcd4a30304134db5d69cac607e4a659244eeb01fc" },
+        "phloPrice": 4,
+        "phloLimit": 100000,
+        "nonce": "fake-unforgeable for testing",
+      }, *prCh) | for (@paymentResult <- prCh) {
+        trace!({"paymentResult": paymentResult}) |
+        rhoSpec!("assert", (paymentResult.get("balance"), "==", 100), "balance after deployment", *ackCh)
+      }
+    }
+  } |
+
+  new RhoSpecCh in {
+    rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *RhoSpecCh) |
+    for(@(_, RhoSpec) <- RhoSpecCh) {
+      @RhoSpec!("testSuite", *setup, [
+        ("payForDeployment should follow the happy-path", *exampleUsage)
+      ])
+    }
+  }
+  }
