@@ -13,7 +13,8 @@ class RevSpec
         StandardDeploys.nonNegativeNumber,
         StandardDeploys.makeMint,
         StandardDeploys.basicWallet,
-        StandardDeploys.walletCheck
+        StandardDeploys.walletCheck,
+        StandardDeploys.makeRev
       ),
       10.seconds
     )

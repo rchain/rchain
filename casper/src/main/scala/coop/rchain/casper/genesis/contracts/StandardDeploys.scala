@@ -9,7 +9,7 @@ import coop.rchain.rholang.math.NonNegativeNumber
 import coop.rchain.rholang.mint.{BasicWalletFaucet, MakeMint}
 import coop.rchain.rholang.proofofstake.MakePoS
 import coop.rchain.rholang.registry.SystemInstancesRegistry
-import coop.rchain.rholang.wallet.{BasicWallet, WalletCheck}
+import coop.rchain.rholang.wallet.{BasicWallet, MakeRev, WalletCheck}
 
 object StandardDeploys {
   private def toDeploy(
@@ -74,7 +74,13 @@ object StandardDeploys {
       "852a03854f285b36a44c7e84b1c07d30352196de60b593522653ba5e71c8e016",
       1540218618622L
     )
-  def systemInstances: DeployData =
+  def makeRev: Deploy =
+    toDeploy(
+      MakeRev,
+      "059575803c76fe551659324d87542ffbbee2647fca0d7833cd155591065651bd",
+      1548484356426L
+    )
+  def systemInstances: Deploy =
     toDeploy(
       SystemInstancesRegistry,
       "08a0f8fccace949453dcb6a885e9f50dd96a58ed51c49fc2e346aa4d42ffb7c1",
