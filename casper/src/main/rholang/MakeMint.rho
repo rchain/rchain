@@ -18,30 +18,6 @@ new
 in {
   rl!(`rho:id:nd74ztexkao5awjhj95e3octkza7tydwiy7euthnyrt5ihgi9rj495`, *NonNegativeNumberCh) |
   for(@(_, NonNegativeNumber) <- NonNegativeNumberCh) {
-    new roguePurse1, trace(`rho:io:stderr`) in {
-      contract roguePurse1(_) = {
-        new fakePurse in {
-          contract fakePurse(@stolenDecr, @amount, success) = {
-            success!(true) | trace!({"all your token are belong to us": amount, "stolenDecr": stolenDecr})
-          } |
-
-          new let1, let2, let3, depositCh in {  // let @m1 = ...
-            MakeMint!(*let1) | for (mint1 <- let1) {
-              mint1!("makePurse", 10, *let2) | for (purse1 <- let2) {
-                purse1!("deposit", 5, *fakePurse, *depositCh) | for (@depositOk <- depositCh) {
-                  trace!({"deposit from fakePurse returned": depositOk}) |
-                  purse1!("getBalance", *let3) | for (@bal <- let3) {
-                    trace!({"real purse thinks new balance is": bal})
-                  }
-                }
-              }
-            }
-          }
-        }
-      } |
-      roguePurse1!(Nil)
-    } |
-
     contract MakeMint(return) = {
       new thisMint, internalMakePurse, decr in {
         contract thisMint(@"makePurse", @init, return) = {
