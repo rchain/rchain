@@ -12,6 +12,7 @@ import coop.rchain.rspace.Context
 import coop.rchain.shared.PathOps._
 import coop.rchain.models.blockImplicits.{blockBatchesGen, blockElementGen, blockElementsGen}
 import cats.effect.Sync
+import coop.rchain.catscontrib.Capture.taskCapture
 import coop.rchain.blockstorage.InMemBlockStore.emptyMapRef
 import coop.rchain.blockstorage.StorageError.StorageIOErr
 import coop.rchain.metrics.Metrics
