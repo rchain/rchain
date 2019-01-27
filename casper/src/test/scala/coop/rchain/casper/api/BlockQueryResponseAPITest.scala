@@ -28,6 +28,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
 
   val genesisHashString = "0000000000000000000000000000000000000000000000000000000000000000"
   val version           = 1L
+  val bondsValidatorHash = ByteString.copyFromUtf8("random")
 
   def genesisBlock(genesisHashString: String, version: Long): BlockMessage = {
     val genesisHash = ProtoUtil.stringToByteString(genesisHashString)
@@ -35,7 +36,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
     val timestamp   = 1527191663L
     val ps = RChainState()
       .withBlockNumber(blockNumber)
-      .withBonds(Seq(Bond(ByteString.copyFromUtf8("random"), 1)))
+      .withBonds(Seq(Bond(bondsValidatorHash, 1)))
     val body   = Body().withState(ps)
     val header = ProtoUtil.blockHeader(body, Seq.empty[ByteString], version, timestamp)
     BlockMessage().withBlockHash(genesisHash).withHeader(header).withBody(body)
@@ -96,7 +97,8 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
         _         = blockInfo.mainParentHash should be(genesisHashString)
         _         = blockInfo.parentsHashList should be(parentsString)
         _         = blockInfo.sender should be(secondBlockSenderString)
-        result    = blockInfo.shardId should be(shardId)
+        _         = blockInfo.shardId should be(shardId)
+        result    = blockInfo.bondsValidatorList should be(bondsValidatorHash)
       } yield result
   }
 
@@ -144,7 +146,8 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
         _         = blockInfo.mainParentHash should be(genesisHashString)
         _         = blockInfo.parentsHashList should be(parentsString)
         _         = blockInfo.sender should be(secondBlockSenderString)
-        result    = blockInfo.shardId should be(shardId)
+        _         = blockInfo.shardId should be(shardId)
+        result    = blockInfo.bondsValidatorList should be(bondsValidatorHash)
       } yield result
   }
 

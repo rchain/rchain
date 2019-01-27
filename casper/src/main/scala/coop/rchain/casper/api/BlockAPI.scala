@@ -7,7 +7,7 @@ import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
-import coop.rchain.casper.Estimator.BlockHash
+import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.protocol._
@@ -375,7 +375,8 @@ object BlockAPI {
           BlockHash,
           Seq[BlockHash],
           Float,
-          Float
+          Float,
+          Seq[Validator]
       ) => F[A]
   ): F[A] =
     for {
@@ -392,6 +393,7 @@ object BlockAPI {
       parentsHashList          = header.parentsHashList
       normalizedFaultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, block.blockHash)
       initialFault             <- MultiParentCasper[F].normalizedInitialFault(ProtoUtil.weightMap(block))
+      bondsValidatorList       = ProtoUtil.bonds(block).map(bond => bond.validator)
       blockInfo <- constructor(
                     block,
                     version,
@@ -401,7 +403,8 @@ object BlockAPI {
                     mainParent,
                     parentsHashList,
                     normalizedFaultTolerance,
-                    initialFault
+                    initialFault,
+                    bondsValidatorList
                   )
     } yield blockInfo
 
@@ -422,7 +425,8 @@ object BlockAPI {
       mainParent: BlockHash,
       parentsHashList: Seq[BlockHash],
       normalizedFaultTolerance: Float,
-      initialFault: Float
+      initialFault: Float,
+      bondsValidatorList: Seq[Validator]
   ): F[BlockInfo] =
     for {
       tsDesc <- MultiParentCasper[F].storageContents(tsHash)
@@ -440,7 +444,8 @@ object BlockAPI {
         mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
         parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit),
         sender = PrettyPrinter.buildStringNoLimit(block.sender),
-        shardId = block.shardId
+        shardId = block.shardId,
+        bondsValidatorList = bondsValidatorList.map(PrettyPrinter.buildStringNoLimit)
       )
 
   private def constructBlockInfoWithoutTuplespace[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
@@ -452,7 +457,8 @@ object BlockAPI {
       mainParent: BlockHash,
       parentsHashList: Seq[BlockHash],
       normalizedFaultTolerance: Float,
-      initialFault: Float
+      initialFault: Float,
+      bondsValidatorList: Seq[Validator]
   ): F[BlockInfoWithoutTuplespace] =
     BlockInfoWithoutTuplespace(
       blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
