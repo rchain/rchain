@@ -105,6 +105,22 @@ class InterpreterSpec extends FlatSpec with Matchers {
     )
   }
 
+  it should "signal syntax errors to the caller" in {
+    import coop.rchain.catscontrib.effect.implicits.bracketTry
+    val result = mkRuntime(tmpPrefix, mapSize)
+      .use { runtime =>
+        failure(
+          runtime,
+          """
+            |new f, x in { f(x) }
+          """.stripMargin
+        )
+      }
+      .runSyncUnsafe(maxDuration)
+
+    result shouldBe a[coop.rchain.rholang.interpreter.errors.SyntaxError]
+  }
+
   private def storageContents(runtime: Runtime[Task]): String =
     StoragePrinter.prettyPrint(runtime.space.store)
 
