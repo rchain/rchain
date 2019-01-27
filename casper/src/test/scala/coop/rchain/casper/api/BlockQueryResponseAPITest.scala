@@ -28,7 +28,8 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
 
   val genesisHashString = "0000000000000000000000000000000000000000000000000000000000000000"
   val version           = 1L
-  val bondsValidatorHash = ByteString.copyFromUtf8("random")
+
+  val bondsValidatorString = "random"
 
   def genesisBlock(genesisHashString: String, version: Long): BlockMessage = {
     val genesisHash = ProtoUtil.stringToByteString(genesisHashString)
@@ -36,7 +37,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
     val timestamp   = 1527191663L
     val ps = RChainState()
       .withBlockNumber(blockNumber)
-      .withBonds(Seq(Bond(bondsValidatorHash, 1)))
+      .withBonds(Seq(Bond(ByteString.copyFromUtf8(bondsValidatorString), 1)))
     val body   = Body().withState(ps)
     val header = ProtoUtil.blockHeader(body, Seq.empty[ByteString], version, timestamp)
     BlockMessage().withBlockHash(genesisHash).withHeader(header).withBody(body)
@@ -47,8 +48,10 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
   val blockHash: BlockHash = ProtoUtil.stringToByteString(secondHashString)
   val blockNumber          = 1L
   val timestamp            = 1527191665L
-  val ps: RChainState      = RChainState().withBlockNumber(blockNumber)
-  val deployCount          = 10
+  val ps: RChainState = RChainState()
+    .withBlockNumber(blockNumber)
+    .withBonds(Seq(Bond(ByteString.copyFromUtf8(bondsValidatorString), 1)))
+  val deployCount = 10
   val randomDeploys =
     (0 until deployCount).toList
       .traverse(ProtoUtil.basicProcessedDeploy[Task])
@@ -69,7 +72,10 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
       .withSender(secondBlockSender)
       .withShardId(shardId)
 
-  val faultTolerance = -1f
+  val faultTolerance = 1f
+
+  val bondValidatorHashList: List[String] = List(ByteString.copyFromUtf8(bondsValidatorString))
+    .map(PrettyPrinter.buildStringNoLimit)
 
   // TODO: Test tsCheckpoint:
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
@@ -98,7 +104,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
         _         = blockInfo.parentsHashList should be(parentsString)
         _         = blockInfo.sender should be(secondBlockSenderString)
         _         = blockInfo.shardId should be(shardId)
-        result    = blockInfo.bondsValidatorList should be(bondsValidatorHash)
+        result    = blockInfo.bondsValidatorList should be(bondValidatorHashList)
       } yield result
   }
 
@@ -147,7 +153,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
         _         = blockInfo.parentsHashList should be(parentsString)
         _         = blockInfo.sender should be(secondBlockSenderString)
         _         = blockInfo.shardId should be(shardId)
-        result    = blockInfo.bondsValidatorList should be(bondsValidatorHash)
+        result    = blockInfo.bondsValidatorList should be(bondValidatorHashList)
       } yield result
   }
 
