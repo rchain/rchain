@@ -100,10 +100,8 @@ trait BlockStoreTest
     withStore { store =>
       val exception = new RuntimeException("msg")
 
-      def elem: (BlockHash, BlockMessage) = {
-        blockElementGen.sample.get
+      def elem: (BlockHash, BlockMessage) =
         throw exception
-      }
 
       for {
         _          <- store.find(_ => true).map(_.size shouldEqual 0)
