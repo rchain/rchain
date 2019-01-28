@@ -1,5 +1,7 @@
 package coop.rchain.rholang.interpreter.storage
 
+import cats.implicits._
+import cats.mtl.implicits._
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
@@ -43,7 +45,11 @@ object implicits {
           data: ListParWithRandom
       ): Either[OutOfPhlogistonsError.type, Option[ListParWithRandomAndPhlos]] =
         SpatialMatcher
-          .foldMatch(data.pars, pattern.patterns, pattern.remainder)
+          .foldMatch[NonDetFreeMapWithCost, Par, Par](
+            data.pars,
+            pattern.patterns,
+            pattern.remainder
+          )
           .runFirstWithCost(init)
           .map {
             case (left, resultMatch) =>
