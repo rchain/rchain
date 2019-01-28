@@ -75,13 +75,10 @@ class ScoredTermSpec extends FlatSpec with PropertyChecks with Matchers {
       forAllSimilarA[A] { (x, y) =>
         val xSorted = sort(x)
         val ySorted = sort(y)
-        if (xSorted.score != ySorted.score || xSorted.term != ySorted.term) {
+        if (xSorted.score != ySorted.score || xSorted.term != ySorted.term)
           assert(x != y)
-        } else if (xSorted.score == ySorted.score && xSorted.term == ySorted.term) {
+        else
           assert(x == y)
-        } else {
-          assert(true)
-        }
       }
 
     import coop.rchain.models.testImplicits._
