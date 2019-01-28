@@ -4,7 +4,7 @@ import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.MonadState
 import cats.mtl.implicits._
-import cats.{Alternative, Monad, Eval => _}
+import cats.{Alternative, Monad, MonoidK, Eval => _}
 import coop.rchain.catscontrib._
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
@@ -15,6 +15,7 @@ import coop.rchain.models.rholang.implicits.{VectorPar, _}
 import coop.rchain.rholang.interpreter.accounting.{Cost, _}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.matcher.NonDetFreeMapWithCost._
+import coop.rchain.rholang.interpreter.matcher.ParSpatialMatcherUtils.{noFrees, subPars}
 import coop.rchain.rholang.interpreter.matcher.SpatialMatcher._
 import coop.rchain.rholang.interpreter.matcher.StreamT._
 
@@ -80,127 +81,6 @@ object SpatialMatcher extends SpatialMatcherInstances {
         fn(target, pattern)
     }
 
-  def noFrees(par: Par): Par =
-    par.withExprs(noFrees(par.exprs))
-
-  def noFrees(exprs: Seq[Expr]): Seq[Expr] =
-    exprs.filter({ (expr) =>
-      expr.exprInstance match {
-        case EVarBody(EVar(v)) =>
-          v.varInstance match {
-            case FreeVar(_)  => false
-            case Wildcard(_) => false
-            case _           => true
-          }
-        case _ => true
-      }
-    })
-
-  def subPars(
-      par: Par,
-      min: ParCount,
-      max: ParCount,
-      minPrune: ParCount,
-      maxPrune: ParCount
-  ): Stream[(Par, Par)] = {
-
-    val sendMax    = math.min(max.sends, par.sends.size - minPrune.sends)
-    val receiveMax = math.min(max.receives, par.receives.size - minPrune.receives)
-    val newMax     = math.min(max.news, par.news.size - minPrune.news)
-    val exprMax    = math.min(max.exprs, par.exprs.size - minPrune.exprs)
-    val matchMax   = math.min(max.matches, par.matches.size - minPrune.matches)
-    val idMax      = math.min(max.ids, par.ids.size - minPrune.ids)
-    val bundleMax  = math.min(max.bundles, par.bundles.size - minPrune.bundles)
-
-    val sendMin    = math.max(min.sends, par.sends.size - maxPrune.sends)
-    val receiveMin = math.max(min.receives, par.receives.size - maxPrune.receives)
-    val newMin     = math.max(min.news, par.news.size - maxPrune.news)
-    val exprMin    = math.max(min.exprs, par.exprs.size - maxPrune.exprs)
-    val matchMin   = math.max(min.matches, par.matches.size - maxPrune.matches)
-    val idMin      = math.max(min.ids, par.ids.size - maxPrune.ids)
-    val bundleMin  = math.max(min.bundles, par.bundles.size - maxPrune.bundles)
-
-    for {
-      subSends    <- minMaxSubsets(par.sends, sendMin, sendMax)
-      subReceives <- minMaxSubsets(par.receives, receiveMin, receiveMax)
-      subNews     <- minMaxSubsets(par.news, newMin, newMax)
-      subExprs    <- minMaxSubsets(par.exprs, exprMin, exprMax)
-      subMatches  <- minMaxSubsets(par.matches, matchMin, matchMax)
-      subIds      <- minMaxSubsets(par.ids, idMin, idMax)
-      subBundles  <- minMaxSubsets(par.bundles, bundleMin, bundleMax)
-    } yield
-      (
-        Par(
-          subSends._1,
-          subReceives._1,
-          subNews._1,
-          subExprs._1,
-          subMatches._1,
-          subIds._1,
-          subBundles._1
-        ),
-        Par(
-          subSends._2,
-          subReceives._2,
-          subNews._2,
-          subExprs._2,
-          subMatches._2,
-          subIds._2,
-          subBundles._2
-        )
-      )
-  }
-
-  def minMaxSubsets[A](as: Seq[A], minSize: Int, maxSize: Int): Stream[(Seq[A], Seq[A])] = {
-    def countedMaxSubsets(as: Seq[A], maxSize: Int): Stream[(Seq[A], Seq[A], Int)] =
-      as match {
-        case Nil => Stream((as, as, 0))
-        case head +: rem =>
-          (as.slice(0, 0), as, 0) #::
-            (for {
-              countedTail               <- countedMaxSubsets(rem, maxSize)
-              (tail, complement, count) = countedTail
-              result <- {
-                if (count == maxSize)
-                  Stream((tail, head +: complement, count))
-                else if (tail.isEmpty)
-                  Stream((head +: tail, complement, 1))
-                else
-                  Stream((tail, head +: complement, count), (head +: tail, complement, count + 1))
-              }
-            } yield result)
-      }
-    def worker(as: Seq[A], minSize: Int, maxSize: Int): Stream[(Seq[A], Seq[A], Int)] =
-      if (maxSize < 0)
-        Stream.empty
-      else if (minSize > maxSize)
-        Stream.empty
-      else if (minSize <= 0)
-        if (maxSize == 0)
-          Stream((as.slice(0, 0), as, 0))
-        else
-          countedMaxSubsets(as, maxSize)
-      else
-        as match {
-          case Nil => Stream.empty
-          case hd +: rem =>
-            val decr = minSize - 1
-            for {
-              countedTail               <- worker(rem, decr, maxSize)
-              (tail, complement, count) = countedTail
-              result <- {
-                if (count == maxSize)
-                  Stream((tail, hd +: complement, count))
-                else if (count == decr)
-                  Stream((hd +: tail, complement, minSize))
-                else
-                  Stream((tail, hd +: complement, count), (hd +: tail, complement, count + 1))
-              }
-            } yield result
-        }
-    worker(as, minSize, maxSize).map(x => (x._1, x._2))
-  }
-
   private[matcher] type F[A] = NonDetFreeMapWithCost[A]
   private[matcher] val F = NonDetFreeMapWithCost
 
@@ -212,11 +92,11 @@ object SpatialMatcher extends SpatialMatcherInstances {
     (tlist, plist) match {
       case (Nil, Nil) => Seq.empty[T].pure[F]
       case (Nil, _) =>
-        F.empty[Seq[T]]
+        MonoidK[F].empty[Seq[T]]
       case (trem, Nil) =>
         remainder match {
           case None =>
-            F.empty[Seq[T]]
+            MonoidK[F].empty[Seq[T]]
           case Some(Var(FreeVar(level))) => {
             def freeCheck(trem: Seq[T], level: Int, acc: Seq[T]): F[Seq[T]] =
               trem match {
@@ -225,12 +105,12 @@ object SpatialMatcher extends SpatialMatcherInstances {
                   if (lft.locallyFree(item, 0).isEmpty)
                     freeCheck(rem, level, acc :+ item)
                   else
-                    F.empty[Seq[T]]
+                    MonoidK[F].empty[Seq[T]]
               }
             freeCheck(trem, level, Vector.empty[T])
           }
           case Some(Var(Wildcard(_))) => Seq.empty[T].pure[F]
-          case _                      => F.empty[Seq[T]]
+          case _                      => MonoidK[F].empty[Seq[T]]
         }
       case (t +: trem, p +: prem) =>
         spatialMatch(t, p).flatMap(_ => foldMatch(trem, prem, remainder))
@@ -271,9 +151,9 @@ object SpatialMatcher extends SpatialMatcherInstances {
 
     val result: F[Unit] =
       if (exactMatch && plen != tlen)
-        F.empty[Unit].charge(COMPARISON_COST)
+        charge[F](COMPARISON_COST) *> MonoidK[F].empty[Unit]
       else if (plen > tlen)
-        F.empty[Unit].charge(COMPARISON_COST)
+        charge[F](COMPARISON_COST) *> MonoidK[F].empty[Unit]
       else if (plen == 0 && tlen == 0 && remainder.isEmpty)
         ().pure[F]
       else if (plen == 0 && remainder.isDefined) {
@@ -281,8 +161,8 @@ object SpatialMatcher extends SpatialMatcherInstances {
           if (tlist.forall(lf.locallyFree(_, 0).isEmpty))
             handleRemainder[F, T](tlist, remainder.get, merger)
           else
-            F.empty[Unit]
-        matchResult.charge(COMPARISON_COST * tlist.size)
+            MonoidK[F].empty[Unit]
+        charge[F](COMPARISON_COST * tlist.size) *> matchResult
       } else
         listMatch(tlist, plist, merger, remainder, wildcard)
 
@@ -314,24 +194,21 @@ object SpatialMatcher extends SpatialMatcherInstances {
           case Term(p) =>
             if (!lf.connectiveUsed(p)) {
               //match using `==` if pattern is a concrete term
-              Alternative[F].guard(t == p).charge(COMPARISON_COST)
+              charge[F](COMPARISON_COST) *> Alternative[F].guard(t == p)
             } else {
               spatialMatch(t, p)
             }
           case Remainder(_) =>
             //Remainders can't match non-concrete terms, because they can't be captured.
             //They match everything that's concrete though.
-            Alternative[F]
-              .guard(lf.locallyFree(t, 0).isEmpty)
-              .charge(COMPARISON_COST)
+            charge[F](COMPARISON_COST) *> Alternative[F].guard(lf.locallyFree(t, 0).isEmpty)
         }
-        isolateState[F, FreeMap](matchEffect).attemptOpt
+        attemptOpt[F, FreeMap](isolateState[F, FreeMap](matchEffect))
       }
     val maximumBipartiteMatch = MaximumBipartiteMatch(memoizeInHashMap(matchFunction))
 
     for {
-      matchesOpt             <- maximumBipartiteMatch.findMatches(allPatterns, targets)
-      matches                <- F.fromStream(matchesOpt.toStream)
+      matches                <- Alternative[F].unite(maximumBipartiteMatch.findMatches(allPatterns, targets))
       freeMaps               = matches.map(_._3)
       updatedFreeMap         <- aggregateUpdates(freeMaps)
       _                      <- _freeMap[F].set(updatedFreeMap)
@@ -346,7 +223,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
                 ().pure[F]
               else
                 // This should be prevented by the length checks.
-                F.empty
+                MonoidK[F].empty
             // If there's a capture variable, we prefer to add things to that rather than throw them away.
             case Some(level) => {
               handleRemainder[F, T](remainderTargetsSorted, level, merger)
@@ -397,107 +274,6 @@ object SpatialMatcher extends SpatialMatcherInstances {
       _                   <- freeMap.modify(_ + (level -> remainderParUpdated))
     } yield Unit
 
-  final case class ParCount(
-      sends: Int = 0,
-      receives: Int = 0,
-      news: Int = 0,
-      exprs: Int = 0,
-      matches: Int = 0,
-      ids: Int = 0,
-      bundles: Int = 0
-  ) {
-    def min(other: ParCount): ParCount = binOp(math.min, other)
-
-    def max(other: ParCount): ParCount = binOp(math.max, other)
-
-    def +(other: ParCount): ParCount = binOp(saturatingAdd, other)
-
-    def binOp(op: (Int, Int) => Int, other: ParCount): ParCount =
-      ParCount(
-        sends = op(sends, other.sends),
-        receives = op(receives, other.receives),
-        news = op(news, other.news),
-        exprs = op(exprs, other.exprs),
-        matches = op(matches, other.matches),
-        ids = op(ids, other.ids),
-        bundles = op(bundles, other.bundles)
-      )
-
-    // Only saturates going from positive to negative
-    def saturatingAdd(l: Int, r: Int): Int = {
-      val res = l + r
-      (res | -(if (res < l) 1 else 0)) & ~Int.MinValue
-    }
-  }
-
-  object ParCount {
-    def apply(par: Par): ParCount =
-      ParCount(
-        sends = par.sends.size,
-        receives = par.receives.size,
-        news = par.news.size,
-        matches = par.matches.size,
-        exprs = par.exprs.size,
-        ids = par.ids.size,
-        bundles = par.bundles.size
-      )
-    def max: ParCount =
-      ParCount(
-        sends = Int.MaxValue,
-        receives = Int.MaxValue,
-        news = Int.MaxValue,
-        matches = Int.MaxValue,
-        exprs = Int.MaxValue,
-        ids = Int.MaxValue,
-        bundles = Int.MaxValue
-      )
-
-    def minMax(par: Par): (ParCount, ParCount) = {
-      val pc = ParCount(noFrees(par))
-      val wildcard: Boolean = par.exprs.exists { expr =>
-        expr.exprInstance match {
-          case EVarBody(EVar(v)) =>
-            v.varInstance match {
-              case Wildcard(_) => true
-              case FreeVar(_)  => true
-              case _           => false
-            }
-          case _ => false
-        }
-      }
-      val minInit = pc
-      val maxInit = if (wildcard) ParCount.max else pc
-
-      par.connectives.foldLeft((minInit, maxInit)) {
-        case ((min, max), con) =>
-          val (cmin, cmax) = minMax(con)
-          (min + cmin, max + cmax)
-      }
-    }
-
-    def minMax(con: Connective): (ParCount, ParCount) =
-      con.connectiveInstance match {
-        case ConnAndBody(ConnectiveBody(ps)) =>
-          val pMinMax = ps.map(minMax)
-          (pMinMax.foldLeft(ParCount())(_ max _._1), pMinMax.foldLeft(ParCount.max)(_ min _._2))
-        case ConnOrBody(ConnectiveBody(ps)) =>
-          val pMinMax = ps.map(minMax)
-          (pMinMax.foldLeft(ParCount.max)(_ min _._1), pMinMax.foldLeft(ParCount())(_ max _._2))
-        case ConnNotBody(_) =>
-          (ParCount(), ParCount.max)
-        case ConnectiveInstance.Empty =>
-          (ParCount(), ParCount())
-        case _: VarRefBody =>
-          // Variable references should be substituted before going into the matcher.
-          // This should never happen.
-          (ParCount(), ParCount())
-        case _: ConnBool      => (ParCount(exprs = 1), ParCount(exprs = 1))
-        case _: ConnInt       => (ParCount(exprs = 1), ParCount(exprs = 1))
-        case _: ConnString    => (ParCount(exprs = 1), ParCount(exprs = 1))
-        case _: ConnUri       => (ParCount(exprs = 1), ParCount(exprs = 1))
-        case _: ConnByteArray => (ParCount(exprs = 1), ParCount(exprs = 1))
-      }
-  }
 }
 
 trait SpatialMatcherInstances {
@@ -511,9 +287,9 @@ trait SpatialMatcherInstances {
         case ConnAndBody(ConnectiveBody(ps)) =>
           ps.toList.traverse_(p => spatialMatch(target, p))
         case ConnOrBody(ConnectiveBody(ps)) =>
-          val freeMap = _freeMap[NonDetFreeMapWithCost]
+          val freeMap = _freeMap[F]
           val allMatches = for {
-            p       <- NonDetFreeMapWithCost.fromStream(ps.toStream)
+            p       <- Alternative[F].unite(ps.toList.pure[F])
             matches <- freeMap.get
             _       <- spatialMatch(target, p)
             _       <- freeMap.set(matches)
@@ -521,52 +297,52 @@ trait SpatialMatcherInstances {
           allMatches.takeFirst()
 
         case ConnNotBody(p) =>
-          spatialMatch(target, p).attemptOpt.flatMap {
+          attemptOpt[F, Unit](spatialMatch(target, p)).flatMap {
             case None    => ().pure[F]
-            case Some(_) => F.empty
+            case Some(_) => MonoidK[F].empty
           }
 
         case _: VarRefBody =>
           // this should never happen because variable references should be substituted
-          F.empty[Unit]
+          MonoidK[F].empty[Unit]
 
         case _: ConnBool =>
           target.singleExpr match {
             case Some(Expr(GBool(_))) =>
               ().pure[F]
-            case _ => F.empty[Unit]
+            case _ => MonoidK[F].empty[Unit]
           }
 
         case _: ConnInt =>
           target.singleExpr match {
             case Some(Expr(GInt(_))) =>
               ().pure[F]
-            case _ => F.empty[Unit]
+            case _ => MonoidK[F].empty[Unit]
           }
 
         case _: ConnString =>
           target.singleExpr match {
             case Some(Expr(GString(_))) =>
               ().pure[F]
-            case _ => F.empty[Unit]
+            case _ => MonoidK[F].empty[Unit]
           }
 
         case _: ConnUri =>
           target.singleExpr match {
             case Some(Expr(GUri(_))) =>
               ().pure[F]
-            case _ => F.empty[Unit]
+            case _ => MonoidK[F].empty[Unit]
           }
 
         case _: ConnByteArray =>
           target.singleExpr match {
             case Some(Expr(GByteArray(_))) =>
               ().pure[F]
-            case _ => F.empty[Unit]
+            case _ => MonoidK[F].empty[Unit]
           }
 
         case ConnectiveInstance.Empty =>
-          F.empty[Unit]
+          MonoidK[F].empty[Unit]
       }
     }
 
@@ -575,9 +351,9 @@ trait SpatialMatcherInstances {
       if (!pattern.connectiveUsed) {
         val cost = equalityCheckCost(pattern, target)
         if (pattern == target)
-          ().pure[NonDetFreeMapWithCost].charge(cost)
+          charge[F](cost) *> ().pure[F]
         else {
-          NonDetFreeMapWithCost.empty[Unit].charge(cost)
+          charge[F](cost) *> MonoidK[F].empty[Unit]
         }
       } else {
 
@@ -606,11 +382,11 @@ trait SpatialMatcherInstances {
         def matchConnectiveWithBounds(
             target: Par,
             labeledConnective: (Connective, (ParCount, ParCount), (ParCount, ParCount))
-        ): NonDetFreeMapWithCost[Par] = {
+        ): F[Par] = {
           val (con, bounds, remainders) = labeledConnective
           for {
-            sp <- NonDetFreeMapWithCost.fromStream(
-                   subPars(target, bounds._1, bounds._2, remainders._1, remainders._2)
+            sp <- Alternative[F].unite(
+                   subPars(target, bounds._1, bounds._2, remainders._1, remainders._2).pure[F]
                  )
             _ <- spatialMatch(sp._1, con)
           } yield sp._2
@@ -674,16 +450,16 @@ trait SpatialMatcherInstances {
     fromFunction[Bundle, Bundle] { (target, pattern) =>
       val cost = equalityCheckCost(target, pattern)
       if (pattern == target)
-        ().pure[F].charge(cost)
+        charge[F](cost) *> ().pure[F]
       else {
-        F.empty[Unit].charge(cost)
+        charge[F](cost) *> MonoidK[F].empty[Unit]
       }
     }
 
   implicit val sendSpatialMatcherInstance: SpatialMatcher[Send, Send] = fromFunction[Send, Send] {
     (target, pattern) =>
       if (target.persistent != pattern.persistent)
-        F.empty[Unit].charge(COMPARISON_COST)
+        charge[F](COMPARISON_COST) *> MonoidK[F].empty[Unit]
       else
         for {
           _ <- spatialMatch(target.chan, pattern.chan)
@@ -694,7 +470,7 @@ trait SpatialMatcherInstances {
   implicit val receiveSpatialMatcherInstance: SpatialMatcher[Receive, Receive] =
     fromFunction[Receive, Receive] { (target, pattern) =>
       if (target.persistent != pattern.persistent)
-        F.empty[Unit].charge(COMPARISON_COST)
+        charge[F](COMPARISON_COST) *> MonoidK[F].empty[Unit]
       else
         for {
           _ <- listMatchSingle[ReceiveBind](target.binds, pattern.binds)
@@ -705,9 +481,9 @@ trait SpatialMatcherInstances {
   implicit val newSpatialMatcherInstance: SpatialMatcher[New, New] = fromFunction[New, New] {
     (target, pattern) =>
       if (target.bindCount == pattern.bindCount)
-        spatialMatch(target.p, pattern.p).charge(COMPARISON_COST)
+        charge[F](COMPARISON_COST) *> spatialMatch(target.p, pattern.p)
       else
-        F.empty[Unit].charge(COMPARISON_COST)
+        charge[F](COMPARISON_COST) *> MonoidK[F].empty[Unit]
   }
 
   implicit val exprSpatialMatcherInstance: SpatialMatcher[Expr, Expr] = fromFunction[Expr, Expr] {
@@ -741,9 +517,9 @@ trait SpatialMatcherInstances {
         case (EVarBody(EVar(vp)), EVarBody(EVar(vt))) =>
           val cost = equalityCheckCost(vp, vt)
           if (vp == vt)
-            ().pure[F].charge(cost)
+            charge[F](cost) *> ().pure[F]
           else
-            F.empty[Unit].charge(cost)
+            charge[F](cost) *> MonoidK[F].empty[Unit]
         case (ENotBody(ENot(t)), ENotBody(ENot(p))) => spatialMatch(t, p)
         case (ENegBody(ENeg(t)), ENegBody(ENeg(p))) => spatialMatch(t, p)
         case (EMultBody(EMult(t1, t2)), EMultBody(EMult(p1, p2))) =>
@@ -779,7 +555,7 @@ trait SpatialMatcherInstances {
             _ <- spatialMatch(t1, p1)
             _ <- spatialMatch(t2, p2)
           } yield Unit
-        case _ => F.empty[Unit]
+        case _ => MonoidK[F].empty[Unit]
       }
   }
 
@@ -800,9 +576,9 @@ trait SpatialMatcherInstances {
     fromFunction[GPrivate, GPrivate] { (target, pattern) =>
       if (target == pattern) {
         val cost = equalityCheckCost(target, pattern)
-        ().pure[F].charge(cost)
+        charge[F](cost) *> ().pure[F]
       } else
-        F.empty
+        MonoidK[F].empty
     }
 
   implicit val receiveBindSpatialMatcherInstance: SpatialMatcher[ReceiveBind, ReceiveBind] =
@@ -813,7 +589,7 @@ trait SpatialMatcherInstances {
             .zip(pattern.patterns)
             .map(x => equalityCheckCost(x._1, x._2))
             .foldLeft(Cost(0))(_ + _)
-        F.empty.charge(cost)
+        charge[F](cost) *> MonoidK[F].empty
       } else
         spatialMatch(target.source, pattern.source)
     }
@@ -822,7 +598,7 @@ trait SpatialMatcherInstances {
     fromFunction[MatchCase, MatchCase] { (target, pattern) =>
       if (target.pattern != pattern.pattern) {
         val cost: Cost = equalityCheckCost(target.pattern, pattern.pattern)
-        F.empty.charge(cost)
+        charge[F](cost) *> MonoidK[F].empty
       } else
         spatialMatch(target.source, pattern.source)
     }

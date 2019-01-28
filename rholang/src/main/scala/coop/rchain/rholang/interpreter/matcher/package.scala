@@ -1,8 +1,8 @@
 package coop.rchain.rholang.interpreter
 
-import cats.{Alternative, MonadError, Monoid, MonoidK}
+import cats.MonadError
 import cats.arrow.FunctionK
-import cats.data.{OptionT, StateT}
+import cats.data.StateT
 import cats.implicits._
 import cats.mtl.implicits._
 import cats.mtl.MonadState
@@ -54,12 +54,6 @@ package object matcher {
 
     class NonDetFreeMapWithCostOps[A](s: NonDetFreeMapWithCost[A]) {
 
-      def charge(amount: Cost): NonDetFreeMapWithCost[A] =
-        s.flatMap(matcher.charge[NonDetFreeMapWithCost](amount).as)
-
-      def attemptOpt: NonDetFreeMapWithCost[Option[A]] =
-        matcher.attemptOpt(s)
-
       def runWithCost(
           initCost: Cost
       ): Either[OutOfPhlogistonsError.type, (Cost, Stream[(FreeMap, A)])] =
@@ -84,11 +78,6 @@ package object matcher {
     implicit def toNonDetFreeMapWithCostOps[A](s: NonDetFreeMapWithCost[A]) =
       new NonDetFreeMapWithCostOps[A](s)
 
-    def empty[A]: NonDetFreeMapWithCost[A] =
-      MonadTrans[StateT[?[_], FreeMap, ?]].liftM(MonoidK[StreamWithCost].empty)
-
-    def fromStream[A](stream: Stream[A]): NonDetFreeMapWithCost[A] =
-      StateT.liftF(StreamT.fromStream(StateT.pure(stream)))
   }
 
   def emptyMap: FreeMap = Map.empty[Int, Par]

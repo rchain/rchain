@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter.matcher
 
 import cats.implicits._
 import cats.mtl.implicits._
-import cats.{Alternative, Foldable, Monad, MonoidK, SemigroupK}
+import cats.{Alternative, Foldable, MonoidK, SemigroupK}
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
@@ -23,13 +23,13 @@ class MatcherMonadSpec extends FlatSpec {
   it should "charge for each non-deterministic branch" in {
 
     val possibleResults = Stream((0, 1), (0, 2))
-    val computation     = NonDetFreeMapWithCost.fromStream(possibleResults)
-    val sum             = computation.map { case (x, y) => x + y }.charge(Cost(1))
+    val computation     = Alternative[F].unite(possibleResults.pure[F])
+    val sum             = computation.map { case (x, y) => x + y } <* charge[F](Cost(1))
     val (cost, _)       = sum.runWithCost(Cost(possibleResults.size)).right.get
     assert(cost.value == 0)
 
-    val moreVariants    = sum.flatMap(x => NonDetFreeMapWithCost.fromStream(Stream(x, 0, -x)))
-    val moreComputation = moreVariants.map(x => "Do sth with " + x).charge(Cost(1))
+    val moreVariants    = sum.flatMap(x => Alternative[F].unite(Stream(x, 0, -x).pure[F]))
+    val moreComputation = moreVariants.map(x => "Do sth with " + x) <* charge[F](Cost(1))
     val (cost2, _) =
       moreComputation.runWithCost(Cost(possibleResults.size * 3 + possibleResults.size)).right.get
     assert(cost2.value == 0)
@@ -42,7 +42,7 @@ class MatcherMonadSpec extends FlatSpec {
 
   it should "retain cost and matches when attemptOpt is called on successful match" in {
     assert(
-      modifyStates.attemptOpt
+      attemptOpt[F, Unit](modifyStates)
         .runFirstWithCost(Cost(0)) == Right((Cost(1), Some((Map(42 -> Par()), Some(())))))
     )
   }
@@ -53,7 +53,10 @@ class MatcherMonadSpec extends FlatSpec {
       _ <- _short[F].raiseError[Int](())
     } yield ()
 
-    assert(failed.attemptOpt.runFirstWithCost(Cost(0)) == Right((Cost(1), Some((Map.empty, None)))))
+    assert(
+      attemptOpt[F, Unit](failed)
+        .runFirstWithCost(Cost(0)) == Right((Cost(1), Some((Map.empty, None))))
+    )
   }
 
   it should "retain cost but discard matches when attemptOpt is called on a match failed using `guard`" in {
@@ -62,7 +65,10 @@ class MatcherMonadSpec extends FlatSpec {
       _ <- A.guard(false)
     } yield ()
 
-    assert(failed.attemptOpt.runFirstWithCost(Cost(0)) == Right((Cost(1), Some((Map.empty, None)))))
+    assert(
+      attemptOpt[F, Unit](failed)
+        .runFirstWithCost(Cost(0)) == Right((Cost(1), Some((Map.empty, None))))
+    )
   }
 
   it should "apply `guard`-s separately to each computation branch" in {
@@ -93,17 +99,15 @@ class MatcherMonadSpec extends FlatSpec {
   }
 
   it should "charge for each branch as long as `charge` is before a short-circuit" in {
-    val a: F[Unit] = ().pure[F].charge(Cost(1))
+    val a: F[Unit] = charge[F](Cost(1))
 
-    val b: F[Unit] = ().pure[F].charge(Cost(2)) >> A.guard(false)
-    val c: F[Unit] = A.guard(false) >> ().pure[F].charge(Cost(4))
-    val d: F[Unit] = A.guard(false).charge(Cost(8))
+    val b: F[Unit] = charge[F](Cost(2)) >> A.guard(false)
+    val c: F[Unit] = A.guard(false) >> charge[F](Cost(4))
 
-    val e: F[Unit] = ().pure[F].charge(Cost(16)) >> _short[F].raiseError[Unit](())
-    val f: F[Unit] = _short[F].raiseError[Int](()) >> ().pure[F].charge(Cost(32))
-    val g: F[Unit] = _short[F].raiseError[Int](()) >> ().pure[F].charge(Cost(64))
+    val d: F[Unit] = charge[F](Cost(8)) >> _short[F].raiseError[Unit](())
+    val e: F[Unit] = _short[F].raiseError[Int](()) >> charge[F](Cost(16))
 
-    val result = combineK(List(a, b, c, d, e, f, g)).runWithCost(Cost(1 + 2 + 16))
+    val result = combineK(List(a, b, c, d, e)).runWithCost(Cost(1 + 2 + 8))
     assert(result == Right((Cost(0), Stream((Map.empty, ())))))
   }
 
