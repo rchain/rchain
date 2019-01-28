@@ -1,9 +1,10 @@
 //scalapackage coop.rchain.rholang.wallet
 
-// requires MakeMint, RevPkg = { MakeRev, WalletCheck }
+// requires MakeMint, MakeRev
 new
   setup,
   exampleUsage,
+  testLockBox,
   trace(`rho:io:stderr`),
   log(`rho:io:stdlog`),
   rl(`rho:registry:lookup`)
@@ -17,8 +18,11 @@ in {
       rl!(`rho:id:5t3x6qbecat9ihry1nqki4o1zzs7une5hn75a1q9jk77dwxafbax4m`, *MakeRevCh) |
       for(@(_, *MakeMint) <- MakeMintCh; @(_, *MakeRev) <- MakeRevCh) {
         log!("info", "setup: lookup done") |
-        trace!({"MakeRev contract rxd": *MakeRev}) |
-        MakeRev!("exports", *pkgCh) | for(@{ "WalletCheck": *WalletCheck, ..._ } <- pkgCh) {
+        MakeRev!("exports", *pkgCh) | for(@{
+          "WalletCheck": *WalletCheck,
+          "LockBox": *LockBox,
+          ..._
+        } <- pkgCh) {
           log!("info", "got MakeRev") |
           MakeMint!(*mintCh) | for (revMint <- mintCh) {
 
@@ -26,11 +30,56 @@ in {
               "0x02c50804457ff616801953fa72672564f40a58d9": 12300000000, // ktel
               "0xcd4a30304134db5d69cac607e4a659244eeb01fc": 45600000000, // funkey
             }, *revMint, *wcCh) | for (walletCheck <- wcCh) {
-              trace!({"walletCheck": *walletCheck}) |
               revMint!("makePurse", 0, *purseCh) | for (casperPoSPurse <- purseCh) {
                 trace!({"casper purse": *casperPoSPurse}) |
                 MakeRev!(*walletCheck, *revMint, *casperPoSPurse, *revCh) | for (rev <- revCh) {
-                  return!({"rev": *rev})
+                  return!({
+                    "rev": *rev,
+                    "LockBox": *LockBox,
+                  })
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  } |
+
+  contract testLockBox(rhoSpec, @{"LockBox": *LockBox, ..._}, ackCh) = {
+    new bet, boxCh in {
+      // TODO: motivate _args
+      contract bet(@"place", _args, @{signedData /\ {"color": color, ..._}}, return) = {
+        trace!({"signer -> bet: place on": color}) |
+        return!("lose")
+      } |
+      LockBox!(*bet, "blake2b256Hash", *boxCh) |
+      for (lockedBet <- boxCh) {
+        trace!({"house -> LockBox: bet": *bet, "LockBox -> house:": *lockedBet}) |
+
+        // ISSUE: This lockbox allows anyone to bet;
+        // so LockBox is a bit of a misnomer;
+        // It's more like an ID verification check.
+        // TODO: make a single-key LockBox layered on SignedAccess.
+        lockedBet!("try", {"color": "red"},
+          "ed25519",
+          "5e1f92626a02406422006364f66d806cdde7d6346f54e43b1a778b575b5daf623f268f8c2b025176d81d5135c47252eaf01ae738e2f05ca135e884e9dcca6c06".hexToBytes(),  // sig
+          "e3163d3821844d186f25ffa766693a55c37dfbc5ea6f47d6681acda7f3a7bcfe".hexToBytes(),      // pk
+          "nonceCh - normally unforgeable",
+          "nonceCh - normally unforgeable", // TODO: fix API
+        ) |
+        for (@result <- @"nonceCh - normally unforgeable") {
+          match result {
+            {"error": msg} => {
+              rhoSpec!("assert", ("", "==", msg), "unlock failed", *ackCh)
+            }
+            { "proxy": p } => {
+              trace!({"lockedBet -> signer: proxy": p }) |
+              new wOut in {
+                trace!("proxy -> bet: place") |
+                @p!("place", Nil, *wOut) | for (@outcome <- wOut) {
+                  trace!({"bet -> signer: outcome": outcome}) |
+                  rhoSpec!("assert", (outcome, "==", "lose"), "outcome (lose)", *ackCh)
                 }
               }
             }
@@ -41,21 +90,19 @@ in {
   } |
 
   contract exampleUsage(rhoSpec, @{"rev": *rev, ..._}, ackCh) = {
-    log!("info", "hi from exampleUsage@@@@") |
     new prCh in {
       rev!("payForDeployment", {
         // funkey's public key
         "user": "e3163d3821844d186f25ffa766693a55c37dfbc5ea6f47d6681acda7f3a7bcfe".hexToBytes(),
         "term": "Nil",
         "timestamp": 1548378913194, // 2019-01-25T01:15:13.194Z
-        "sig": "63d527b73645922b26dfca72abb036c2d0d8a6b2fddd844fdf55c40e9a8a47345a05c768cd0219833f95d6307b83909e3a486f16f77f732711b3de7027a68500".hexToBytes(),
+        "sig": "d2e099d40f6c3c0740305319052a73c89c8376eae9b9991b45ce18cf34df047439e3fae9150473a8a9d3130446b1902a122ba6b4ae79e815c296429cf83ca70c".hexToBytes(),
         "sigAlgorithm": "ed25519",
         "from": { "rhocAddr": "0xcd4a30304134db5d69cac607e4a659244eeb01fc" },
         "phloPrice": 4,
         "phloLimit": 100000,
         "nonce": "fake-unforgeable for testing",
       }, *prCh) | for (@paymentResult <- prCh) {
-        log!("info", "got paymentResult@@@@") |
         trace!({"paymentResult": paymentResult}) |
         rhoSpec!("assert", (paymentResult.get("balance"), "==", 45599600000), "balance after deployment", *ackCh)
       }
@@ -66,7 +113,8 @@ in {
     rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *RhoSpecCh) |
     for(@(_, *RhoSpec) <- RhoSpecCh) {
       RhoSpec!("testSuite", *setup, [
-        ("payForDeployment should follow the happy-path", *exampleUsage)
+        ("follow the happy-path through payForDeployment", *exampleUsage),
+        ("follow the happy-path through LockBox", *testLockBox),
       ])
     }
   }
