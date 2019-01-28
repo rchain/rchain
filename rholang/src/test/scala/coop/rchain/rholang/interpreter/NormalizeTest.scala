@@ -59,6 +59,9 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     IndexMapChain[VarSort]().newBindings(List(("P", ProcSort, 0, 0), ("x", NameSort, 0, 0))),
     DebruijnLevelMap[VarSort]()
   )
+  def getNormalizedPar(rho: String): Par = Interpreter[Coeval].buildNormalizedTerm(rho).value()
+  def assertEqualNormalized(rho1: String, rho2: String): Assertion =
+    assert(getNormalizedPar(rho1) == getNormalizedPar(rho2))
 
   "List" should "delegate" in {
     val listData = new ListProc()
@@ -79,7 +82,32 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     )
     result.knownFree should be(inputs.knownFree)
   }
-
+  "List" should "sort the insides of their elements" in {
+    assertEqualNormalized("@0!([{1 | 2}])", "@0!([{2 | 1}])")
+  }
+  "List" should "sort the insides of a send encoded as a byte array" in {
+    val rho1 =
+      """new x in {
+        |  x!(
+        |    [
+        |      @"a"!(
+        |        @"x"!("abc") |
+        |        @"y"!(1)
+        |      )
+        |    ].toByteArray()
+        |  )}""".stripMargin
+    val rho2 =
+      """new x in {
+        |  x!(
+        |    [
+        |      @"a"!(
+        |        @"y"!(1) |
+        |        @"x"!("abc")
+        |      )
+        |    ].toByteArray()
+        |  )}""".stripMargin
+    assertEqualNormalized(rho1, rho2)
+  }
   "Tuple" should "delegate" in {
     val tupleData = new ListProc()
     tupleData.add(new PEval(new NameVar("y")))
@@ -115,7 +143,9 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
       ProcNormalizeMatcher.normalizeMatch[Coeval](tuple, inputs).value
     }
   }
-
+  "Tuple" should "sort the insides of their elements" in {
+    assertEqualNormalized("@0!(({1 | 2}))", "@0!(({2 | 1}))")
+  }
   "Set" should "delegate" in {
     val setData = new ListProc()
     setData.add(new PAdd(new PVar(new ProcVarVar("P")), new PVar(new ProcVarVar("R"))))
@@ -145,7 +175,9 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     )
     result.knownFree should be(inputs.knownFree.newBindings(newBindings)._1)
   }
-
+  "Set" should "sort the insides of their elements" in {
+    assertEqualNormalized("@0!(Set({1 | 2}))", "@0!(Set({2 | 1}))")
+  }
   "Map" should "delegate" in {
     val mapData = new ListKeyValuePair()
     mapData.add(
@@ -177,6 +209,12 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
       ("Q", NameSort, 0, 0)
     )
     result.knownFree should be(inputs.knownFree.newBindings(newBindings)._1)
+  }
+  "Map" should "sort the insides of their keys" in {
+    assertEqualNormalized("@0!({{1 | 2} : 0})", "@0!({{2 | 1} : 0})")
+  }
+  "Map" should "sort the insides of their values" in {
+    assertEqualNormalized("@0!({0 : {1 | 2}})", "@0!({0 : {2 | 1}})")
   }
 }
 

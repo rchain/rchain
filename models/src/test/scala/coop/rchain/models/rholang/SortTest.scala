@@ -7,9 +7,9 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.SortTest.sort
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.rholang.sorter._
+import coop.rchain.models.testUtils.TestUtils.forAllSimilarA
 import monix.eval.Coeval
-import org.scalacheck.Arbitrary.arbitrary
-import org.scalacheck.{Arbitrary, Gen}
+import org.scalacheck.Arbitrary
 import org.scalatest._
 import org.scalatest.prop.PropertyChecks
 
@@ -50,18 +50,57 @@ class ScoredTermSpec extends FlatSpec with PropertyChecks with Matchers {
     )
     unsortedTerms.sorted should be(sortedTerms)
   }
+  it should "sort so that whenever scores differ then result terms have to differ and the other way around" in {
+    def check[A: Sortable: Arbitrary]: Unit =
+      forAllSimilarA[A] { (x, y) =>
+        val xSorted = sort(x)
+        val ySorted = sort(y)
+        assert((xSorted.term == ySorted.term) == (xSorted.score == ySorted.score))
+      }
+
+    import coop.rchain.models.testImplicits._
+    check[Bundle]
+    check[Connective]
+    check[Expr]
+    check[Match]
+    check[New]
+    check[Par]
+    check[Receive]
+    check[Send]
+    check[Var]
+  }
+
+  it should "sort so that whenever scores or result terms differ then the initial terms differ and the other way around" in {
+    def check[A: Sortable: Arbitrary]: Unit =
+      forAllSimilarA[A] { (x, y) =>
+        val xSorted = sort(x)
+        val ySorted = sort(y)
+        if (xSorted.score != ySorted.score || xSorted.term != ySorted.term)
+          assert(x != y)
+        else
+          assert(x == y)
+      }
+
+    import coop.rchain.models.testImplicits._
+    check[Bundle]
+    check[Connective]
+    check[Expr]
+    check[Match]
+    check[New]
+    check[Par]
+    check[Receive]
+    check[Send]
+    check[Var]
+  }
   it should "sort so that unequal terms have unequal scores and the other way around" in {
     def checkScoreEquality[A: Sortable: Arbitrary]: Unit =
-      // ScalaCheck generates similar A-s in subsequent calls which
-      // we need to hit the case where `x == y` more often
-      forAll(Gen.listOfN(5, arbitrary[A])) { as: List[A] =>
-        for (x :: y :: Nil <- as.combinations(2)) {
+      forAllSimilarA[A](
+        (x, y) =>
           if (x != y)
             assert(sort(x).score != sort(y).score)
           else
             assert(sort(x).score == sort(y).score)
-        }
-      }
+      )
 
     import coop.rchain.models.testImplicits._
 

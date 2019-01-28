@@ -3,8 +3,9 @@ package coop.rchain.models
 import com.google.protobuf.ByteString
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.testImplicits._
+import coop.rchain.models.testUtils.TestUtils.forAllSimilarA
 import monix.eval.Coeval
-import org.scalacheck.{Arbitrary, Gen, Shrink}
+import org.scalacheck.{Arbitrary, Shrink}
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
@@ -70,12 +71,7 @@ class EqualMSpec extends FlatSpec with PropertyChecks with Matchers {
       implicit tag: ClassTag[A]
   ): Unit =
     it must s"provide same results as equals for ${tag.runtimeClass.getSimpleName}" in {
-      val gen = implicitly[Arbitrary[A]].arbitrary
-      forAll(Gen.listOfN(5, gen)) { as: List[A] =>
-        for (x :: y :: Nil <- as.combinations(2)) {
-          sameResultAsReference(x, y)
-        }
-      }
+      forAllSimilarA[A]((x, y) => sameResultAsReference(x, y))
     }
 
   private def sameResultAsReference[A <: Any: EqualM: Pretty](x: A, y: A): Assertion = {
