@@ -4,7 +4,7 @@ import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.MonadState
 import cats.mtl.implicits._
-import cats.{Alternative, Monad, MonoidK, Eval => _}
+import cats.{Monad, MonoidK, Eval => _}
 import coop.rchain.catscontrib._
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
@@ -194,21 +194,21 @@ object SpatialMatcher extends SpatialMatcherInstances {
           case Term(p) =>
             if (!lf.connectiveUsed(p)) {
               //match using `==` if pattern is a concrete term
-              charge[F](COMPARISON_COST) *> Alternative[F].guard(t == p)
+              charge[F](COMPARISON_COST) *> Alternative_[F].guard(t == p)
             } else {
               spatialMatch(t, p)
             }
           case Remainder(_) =>
             //Remainders can't match non-concrete terms, because they can't be captured.
             //They match everything that's concrete though.
-            charge[F](COMPARISON_COST) *> Alternative[F].guard(lf.locallyFree(t, 0).isEmpty)
+            charge[F](COMPARISON_COST) *> Alternative_[F].guard(lf.locallyFree(t, 0).isEmpty)
         }
         attemptOpt[F, FreeMap](isolateState[F, FreeMap](matchEffect))
       }
     val maximumBipartiteMatch = MaximumBipartiteMatch(memoizeInHashMap(matchFunction))
 
     for {
-      matches                <- Alternative[F].unite(maximumBipartiteMatch.findMatches(allPatterns, targets))
+      matches                <- Alternative_[F].unite(maximumBipartiteMatch.findMatches(allPatterns, targets))
       freeMaps               = matches.map(_._3)
       updatedFreeMap         <- aggregateUpdates(freeMaps)
       _                      <- _freeMap[F].set(updatedFreeMap)
@@ -248,7 +248,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
   private def aggregateUpdates(freeMaps: Seq[FreeMap]): F[FreeMap] =
     for {
       currentFreeMap <- _freeMap[F].get
-      _ <- Alternative[F].guard {
+      _ <- Alternative_[F].guard {
             //The correctness of isolating MBM from changing FreeMap relies
             //on our ability to aggregate the var assignments from subsequent matches.
             //This means all the variables populated by MBM must not duplicate each other.
@@ -289,7 +289,7 @@ trait SpatialMatcherInstances {
         case ConnOrBody(ConnectiveBody(ps)) =>
           val freeMap = _freeMap[F]
           val allMatches = for {
-            p       <- Alternative[F].unite(ps.toList.pure[F])
+            p       <- Alternative_[F].unite(ps.toList.pure[F])
             matches <- freeMap.get
             _       <- spatialMatch(target, p)
             _       <- freeMap.set(matches)
@@ -385,7 +385,7 @@ trait SpatialMatcherInstances {
         ): F[Par] = {
           val (con, bounds, remainders) = labeledConnective
           for {
-            sp <- Alternative[F].unite(
+            sp <- Alternative_[F].unite(
                    subPars(target, bounds._1, bounds._2, remainders._1, remainders._2).pure[F]
                  )
             _ <- spatialMatch(sp._1, con)
