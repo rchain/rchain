@@ -3,8 +3,10 @@
 //requires MakeMint, RhoSpec
 new
   rl(`rho:registry:lookup`),
+  stdlog(`rho:io:stdlog`),
   setup,
   test_create_purse, test_cross_currency_deposit, test_deposit, test_split,
+  test_deposit_fails_on_overflow,
   test_deposit_is_atomical,
   split, getBalance, deposit
 in {
@@ -17,7 +19,8 @@ in {
           // ("Cross-currency deposits should fail.", *test_cross_currency_deposit)
           ("Deposit should work as expected", *test_deposit),
           ("Split should work as expected", *test_split),
-          ("Purse deposit is atomical", *test_deposit_is_atomical, 100)
+          ("Purse deposit is atomical", *test_deposit_is_atomical, 1000),
+          ("Deposit should fail on overflow", *test_deposit_fails_on_overflow)
         ])
     }
   } |
@@ -133,6 +136,27 @@ in {
           rhoSpec!("assert",
             (50, "==", aliceFinalBalance + bobFinalBalance),
             "The observable sum should be equal to the original sum",
+            *ackCh)
+          }
+        }
+      }
+    } |
+
+  contract test_deposit_fails_on_overflow(rhoSpec, @(mintA,_), ackCh)= {
+    new retCh1, retCh2, purse1, purse2 in {
+      @mintA!("makePurse", 1000, *retCh1) |
+      @mintA!("makePurse", 9223372036854775807, *retCh2) |
+      for(purse1 <- retCh1; purse2 <- retCh2) {
+        purse1!("deposit", 9223372036854775807, *purse2, *retCh1) |
+        for(@expectedFailure <- retCh1) {
+          purse1!("getBalance", *retCh1) |
+          purse2!("getBalance", *retCh2) |
+          rhoSpec!("assertMany",
+            [
+              ((false, "==", expectedFailure), "expect failure on overflow"),
+              ((1000, "== <-", *retCh1), "purse1 balance should not  change"),
+              ((9223372036854775807, "== <-", *retCh2), "purse2 balance should not change")
+            ],
             *ackCh)
         }
       }
