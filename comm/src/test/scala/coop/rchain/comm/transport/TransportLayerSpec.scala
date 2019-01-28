@@ -254,14 +254,14 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
           ): F[Unit] =
             transportLayer.stream(
               List(remote),
-              Blob(local, Packet("N/A", bigContent))
+              Blob(local, Packet(BlockMessage.id, bigContent))
             )
 
           run()
 
           streamDispatcher.received should have length 1
           val (_, blob) = streamDispatcher.received.head
-          blob.packet.typeId shouldBe ("N/A")
+          blob.packet.typeId shouldBe (BlockMessage.id)
           blob.packet.content shouldBe (bigContent)
         }
       }

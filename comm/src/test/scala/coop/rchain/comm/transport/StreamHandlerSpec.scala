@@ -91,15 +91,59 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       err.getMessage shouldBe ("Circuit was broken")
       tempFolder.toFile.list() should be(empty)
     }
+
+    it("should stop processing a stream if stream is missing part of header") {
+      // given
+      val streamWithIncompleteHeader: Observable[Chunk] =
+        Observable.fromIterator(createStreamIterator().map(_.toList).map {
+          case header :: data =>
+            val newHeaderContent: Chunk.Content =
+              Chunk.Content.Header(header.content.header.get.copy(sender = None))
+            val incompleteHeader = header.copy(content = newHeaderContent)
+            (incompleteHeader :: data).toIterator
+        })
+      // when
+      val err: Throwable = handleStreamErr(streamWithIncompleteHeader)
+      // then
+      err.getMessage should startWith("received not full stream message, will not process")
+      tempFolder.toFile.list() should be(empty)
+    }
+
+    it("should stop processing a stream if stream is missing header") {
+      // given
+      val streamWithoutHeader: Observable[Chunk] =
+        Observable.fromIterator(createStreamIterator().map(_.toList).map {
+          case header :: data => data.toIterator
+        })
+      // when
+      val err: Throwable = handleStreamErr(streamWithoutHeader)
+      // then
+      err.getMessage should startWith("received not full stream message, will not process")
+      tempFolder.toFile.list() should be(empty)
+    }
+
+    it("should stop processing a stream if stream brought incomplete data") {
+      // given
+      val incompleteStream: Observable[Chunk] =
+        Observable.fromIterator(createStreamIterator().map(_.toList).map {
+          case header :: data1 :: data2 => (header :: data2).toIterator
+        })
+      // when
+      val err: Throwable = handleStreamErr(incompleteStream)
+      // then
+      err.getMessage should startWith("received not full stream message, will not process")
+      tempFolder.toFile.list() should be(empty)
+    }
+
   }
 
   private def handleStream(stream: Observable[Chunk], folder: Path = tempFolder): StreamMessage =
-    StreamHandler.handleStream(folder, stream, circuitBreaker = kp(false)).unsafeRunSync.right.get
+    StreamHandler.handleStream(folder, stream, circuitBreaker = neverBreak).unsafeRunSync.right.get
 
   private def handleStreamErr(
       stream: Observable[Chunk],
       folder: Path = tempFolder,
-      circuitBreaker: StreamHandler.CircuitBreaker
+      circuitBreaker: StreamHandler.CircuitBreaker = neverBreak
   ): Throwable =
     StreamHandler
       .handleStream(folder, stream, circuitBreaker = circuitBreaker)
@@ -112,16 +156,27 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       contentLength: Int = 30 * 1024,
       sender: String = "sender",
       typeId: String = BlockMessage.id
-  ): Observable[Chunk] = {
+  ): Observable[Chunk] =
+    Observable.fromIterator(createStreamIterator(messageSize, contentLength, sender, typeId))
+
+  private def createStreamIterator(
+      messageSize: Int = 10 * 1024,
+      contentLength: Int = 30 * 1024,
+      sender: String = "sender",
+      typeId: String = BlockMessage.id
+  ): Task[Iterator[Chunk]] = {
 
     val content = Array.fill(contentLength)((Random.nextInt(256) - 128).toByte)
     val packet  = Packet(BlockMessage.id, ByteString.copyFrom(content))
     val sender  = peerNode("sender")
     val blob    = Blob(sender, packet)
-    Observable.fromIterator(Chunker.chunkIt(blob, messageSize))
+    Chunker.chunkIt(blob, messageSize)
   }
 
   private def peerNode(name: String): PeerNode =
     PeerNode(NodeIdentifier(name.getBytes), Endpoint("", 80, 80))
+
+  private val alwaysBreak: CircuitBreaker = kp(true)
+  private val neverBreak: CircuitBreaker  = kp(false)
 
 }
