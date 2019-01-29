@@ -1,11 +1,11 @@
 package coop.rchain.rholang.interpreter
 
-import cats.{Applicative, Monad}
+import cats.Monad
 import cats.arrow.FunctionK
 import cats.data.StateT
 import cats.implicits._
 import cats.mtl.implicits._
-import cats.mtl.MonadState
+import cats.mtl.{FunctorRaise, MonadState}
 import coop.rchain.catscontrib.MonadError_
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting.Cost
@@ -28,7 +28,7 @@ package object matcher {
   // Adopted from: http://atnos-org.github.io/eff/org.atnos.site.Tutorial.html#write-an-interpreter-for-your-program
   type _freeMap[F[_]] = MonadState[F, FreeMap]
   type _cost[F[_]]    = MonadState[F, Cost]
-  type _error[F[_]]   = MonadError_[F, OutOfPhlogistonsError.type]
+  type _error[F[_]]   = FunctorRaise[F, OutOfPhlogistonsError.type]
   type _short[F[_]]   = MonadError_[F, Unit] //arises from and corresponds to the OptionT/StreamT in the stack
 
   // Implicit summoner methods, just like `Monad.apply` on `Monad`'s companion object.
