@@ -29,7 +29,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
   val genesisHashString = "0000000000000000000000000000000000000000000000000000000000000000"
   val version           = 1L
 
-  val bondsValidatorString = "random"
+  val bondsValidator = Bond(ByteString.copyFromUtf8("random"), 1)
 
   def genesisBlock(genesisHashString: String, version: Long): BlockMessage = {
     val genesisHash = ProtoUtil.stringToByteString(genesisHashString)
@@ -37,7 +37,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
     val timestamp   = 1527191663L
     val ps = RChainState()
       .withBlockNumber(blockNumber)
-      .withBonds(Seq(Bond(ByteString.copyFromUtf8(bondsValidatorString), 1)))
+      .withBonds(Seq(bondsValidator))
     val body   = Body().withState(ps)
     val header = ProtoUtil.blockHeader(body, Seq.empty[ByteString], version, timestamp)
     BlockMessage().withBlockHash(genesisHash).withHeader(header).withBody(body)
@@ -50,7 +50,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
   val timestamp            = 1527191665L
   val ps: RChainState = RChainState()
     .withBlockNumber(blockNumber)
-    .withBonds(Seq(Bond(ByteString.copyFromUtf8(bondsValidatorString), 1)))
+    .withBonds(Seq(bondsValidator))
   val deployCount = 10
   val randomDeploys =
     (0 until deployCount).toList
@@ -74,8 +74,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
 
   val faultTolerance = 1f
 
-  val bondValidatorHashList: List[String] = List(ByteString.copyFromUtf8(bondsValidatorString))
-    .map(PrettyPrinter.buildStringNoLimit)
+  val bondValidatorHashList: List[String] = List(bondsValidator).map(PrettyPrinter.buildString)
 
   // TODO: Test tsCheckpoint:
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
