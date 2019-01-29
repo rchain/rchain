@@ -2,6 +2,8 @@ package coop.rchain.node.configuration
 
 import java.nio.file.Path
 
+import scala.concurrent.duration.FiniteDuration
+
 import coop.rchain.casper.util.comm.ListenAtName.Name
 import coop.rchain.comm.PeerNode
 import coop.rchain.shared.StoreType
@@ -13,12 +15,13 @@ final case class Server(
     kademliaPort: Int,
     dynamicHostAddress: Boolean,
     noUpnp: Boolean,
-    defaultTimeout: Int,
+    defaultTimeout: FiniteDuration,
     bootstrap: PeerNode,
     standalone: Boolean,
     dataDir: Path,
     mapSize: Long,
     storeType: StoreType,
+    storeSize: Long,
     maxNumOfConnections: Int,
     maxMessageSize: Int
 )
@@ -39,22 +42,9 @@ final case class Tls(
 
 final case class Kamon(
     prometheus: Boolean,
-    influxDb: Option[InfluxDb],
+    influxDb: Boolean,
     zipkin: Boolean,
     sigar: Boolean
-)
-
-final case class InfluxDb(
-    hostname: String,
-    port: Int,
-    database: String,
-    protocol: String,
-    authentication: Option[InfluxDBAuthentication]
-)
-
-final case class InfluxDBAuthentication(
-    user: String,
-    password: String
 )
 
 sealed trait Command
