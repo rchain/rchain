@@ -12,11 +12,14 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{Bundle, ETuple, Expr, GPrivate, Par}
 import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
 
-case class InsertSigned(pk: Hex, nonce: Long, contract: String, sig: Hex) {
+case class InsertSigned(pk: Hex, value: (Long, Contract), sig: Hex) {
+  def nonce    = value._1
+  def contract = value._2
+
   override def toString() = s"""
     | rs!(
     |   \"${pk}\".hexToBytes(),
-    |   (${nonce}, bundle+{${contract}}),
+    |   (${nonce}, bundle+{*${contract.varName}}),
     |   \"${sig}\".hexToBytes(),
     |   Nil)
   """.stripMargin
@@ -25,14 +28,12 @@ case class InsertSigned(pk: Hex, nonce: Long, contract: String, sig: Hex) {
 case class Hex(bs: Array[Byte]) {
   override def toString() = Base16.encode(bs)
 }
-case class Rholang(p: Par) {
-  override def toString() = PrettyPrinter().buildString(p)
-}
+case class Contract(varName: String, p: Par)
 
 case class Derivation(
     sk: Hex,
     timestamp: Long,
-    uname: Rholang,
+    uname: Par,
     toSign: Hex,
     result: InsertSigned
 ) {
@@ -40,7 +41,7 @@ case class Derivation(
     | sk = ${sk}
     | pk = ${result.pk}
     | timestamp = ${timestamp}
-    | uname = ${uname}
+    | uname = ${PrettyPrinter().buildString(uname)}
     | nonce = ${result.nonce}
     | toSign = ${toSign}
     | sig = ${result.sig}
@@ -59,7 +60,7 @@ object RegistrySigGen {
     System.out.println(info)
   }
 
-  def deriveFrom(key: (Array[Byte], Array[Byte]), timestamp: Long, contract: String) = {
+  def deriveFrom(key: (Array[Byte], Array[Byte]), timestamp: Long, varName: String) = {
     val (secKey, pubKey) = key
 
     val user = byteArrayToByteString(pubKey)
@@ -73,6 +74,7 @@ object RegistrySigGen {
 
     // Nobody else can receive from our contract.
     val access: Par = Bundle(uname, true, false)
+    val contract    = Contract(varName, access)
 
     // prevent anyone from replacing this registry entry by using the maximum nonce value.
     val lastNonce = maxLong
@@ -84,12 +86,11 @@ object RegistrySigGen {
     Derivation(
       sk = Hex(secKey),
       timestamp = timestamp,
-      uname = Rholang(uname),
+      uname = uname,
       toSign = Hex(toSign.toByteArray),
       result = InsertSigned(
         Hex(pubKey),
-        lastNonce,
-        contract,
+        (lastNonce, contract),
         Hex(sig)
       )
     )
