@@ -100,8 +100,7 @@ class NodeRuntime private[node] (
       nodeCoreMetrics: NodeMetrics[Task],
       jvmMetrics: JvmMetrics[Task],
       connectionsCell: ConnectionsCell[Task],
-      concurrent: Concurrent[Effect],
-      abstractContext: ToAbstractContext[Effect]
+      concurrent: Concurrent[Effect]
   ): Effect[Servers] = {
     implicit val s: Scheduler = scheduler
     for {
@@ -241,8 +240,7 @@ class NodeRuntime private[node] (
       packetHandler: PacketHandler[Effect],
       casperConstructor: MultiParentCasperRef[Effect],
       nodeCoreMetrics: NodeMetrics[Task],
-      jvmMetrics: JvmMetrics[Task],
-      abstractContext: ToAbstractContext[Effect]
+      jvmMetrics: JvmMetrics[Task]
   ): Effect[Unit] = {
 
     val info: Effect[Unit] =
@@ -412,9 +410,6 @@ class NodeRuntime private[node] (
       implicit val s = scheduler
       RuntimeManager.fromRuntime[Task](casperRuntime).toEffect
     }
-    abs = new ToAbstractContext[Effect] {
-      def fromTask[A](fa: Task[A]): Effect[A] = fa.toEffect
-    }
     casperPacketHandler <- CasperPacketHandler
                             .of[Effect](
                               conf.casper,
@@ -464,8 +459,7 @@ class NodeRuntime private[node] (
       packetHandler,
       multiParentCasperRef,
       nodeCoreMetrics,
-      jvmMetrics,
-      abs
+      jvmMetrics
     )
     _ <- handleUnrecoverableErrors(program)
   } yield ()
