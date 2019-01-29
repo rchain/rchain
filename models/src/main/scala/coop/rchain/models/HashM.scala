@@ -155,7 +155,6 @@ object HashM extends HashMDerivation {
   implicit val PrivateNamePreviewQueryHash = gen[PrivateNamePreviewQuery]
 }
 
-@SuppressWarnings(Array("org.wartremover.warts.Var"))
 trait HashMDerivation {
   import magnolia._
 
@@ -176,6 +175,7 @@ trait HashMDerivation {
 
   //copied and adapted from scala.util.hashing.MurmurHash3,
   //which is used in Scala's case class hash code implementation
+  @SuppressWarnings(Array("org.wartremover.warts.Var"))
   private def productHash(prefix: String, elements: Seq[Int]): Int = {
     val arr = elements.size
     // Case objects have the hashCode inlined directly into the
