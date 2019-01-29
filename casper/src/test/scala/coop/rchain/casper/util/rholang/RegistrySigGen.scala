@@ -21,7 +21,7 @@ case class InsertSigned(pk: Hex, value: (Long, Contract), sig: Hex) {
     |   \"${pk}\".hexToBytes(),
     |   (${nonce}, bundle+{*${contract.varName}}),
     |   \"${sig}\".hexToBytes(),
-    |   Nil)
+    |   *uriOut)
   """.stripMargin
 }
 
