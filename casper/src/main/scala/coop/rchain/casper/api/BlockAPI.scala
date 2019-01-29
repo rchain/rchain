@@ -39,7 +39,7 @@ object BlockAPI {
              }
       } yield re
 
-    val errorMessage = "Could not deploy, casper instance was not available."
+    val errorMessage = "Could not deploy, casper instance was not available yet."
 
     MultiParentCasperRef
       .withCasper[F, DeployServiceResponse](
@@ -53,7 +53,7 @@ object BlockAPI {
   def createBlock[F[_]: Sync: Concurrent: MultiParentCasperRef: Log](
       blockApiLock: Semaphore[F]
   ): F[DeployServiceResponse] = {
-    val errorMessage = "Could not create block, casper instance was not available."
+    val errorMessage = "Could not create block, casper instance was not available yet."
     MultiParentCasperRef.withCasper[F, DeployServiceResponse](
       casper => {
         Sync[F].bracket(blockApiLock.tryAcquire) {
@@ -90,7 +90,7 @@ object BlockAPI {
       listeningName: Par
   ): F[ListeningNameDataResponse] = {
 
-    val errorMessage = "Could not get listening name data, casper instance was not available."
+    val errorMessage = "Could not get listening name data, casper instance was not available yet."
 
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
@@ -126,7 +126,7 @@ object BlockAPI {
       listeningNames: Seq[Par]
   ): F[ListeningNameContinuationResponse] = {
     val errorMessage =
-      "Could not get listening names confinuation, casper instance was not available."
+      "Could not get listening names continuation, casper instance was not available yet."
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
         mainChain           <- getMainChainFromTip[F](depth)
@@ -243,7 +243,7 @@ object BlockAPI {
   ): F[String] = {
 
     val errorMessage =
-      "Could not visualize graph, casper instance was not available."
+      "Could not visualize graph, casper instance was not available yet."
 
     def casperResponse(implicit casper: MultiParentCasper[F]): F[String] =
       for {
@@ -267,7 +267,7 @@ object BlockAPI {
   ): F[List[BlockInfoWithoutTuplespace]] = {
 
     val errorMessage =
-      "Could not show blocks, casper instance was not available."
+      "Could not show blocks, casper instance was not available yet."
 
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
@@ -306,7 +306,7 @@ object BlockAPI {
   ): F[List[BlockInfoWithoutTuplespace]] = {
 
     val errorMessage =
-      "Could not show main chain, casper instance was not available."
+      "Could not show main chain, casper instance was not available yet."
 
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
@@ -330,7 +330,7 @@ object BlockAPI {
   ): F[BlockQueryResponse] = {
 
     val errorMessage =
-      "Could not find bloc with deploy, casper instance was not available."
+      "Could not find block with deploy, casper instance was not available yet."
 
     def casperResponse(implicit casper: MultiParentCasper[F]): F[BlockQueryResponse] =
       for {
@@ -374,7 +374,7 @@ object BlockAPI {
   ): F[BlockQueryResponse] = {
 
     val errorMessage =
-      "Could not show block, casper instance was not available."
+      "Could not show block, casper instance was not available yet."
 
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
