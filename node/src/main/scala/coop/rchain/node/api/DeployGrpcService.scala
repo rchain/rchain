@@ -16,14 +16,14 @@ import cats.mtl._
 import cats.mtl.implicits._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.catscontrib.{Taskable, ToAbstractContext}
+import coop.rchain.catscontrib.Taskable
 import coop.rchain.catscontrib.TaskContrib._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.reactive.Observable
 
 private[api] object DeployGrpcService {
-  def instance[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable: ToAbstractContext](
+  def instance[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
       blockApiLock: Semaphore[F]
   )(
       implicit worker: Scheduler
