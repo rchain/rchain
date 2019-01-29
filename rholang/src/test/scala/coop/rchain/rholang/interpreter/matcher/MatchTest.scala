@@ -1,7 +1,10 @@
 package coop.rchain.rholang.interpreter.matcher
 
+import cats.implicits._
+import cats.mtl.implicits._
 import cats.{Eval => _}
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.MonadError_._
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
@@ -9,9 +12,9 @@ import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
 import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rholang.interpreter.PrettyPrinter
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
+import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
-import coop.rchain.rholang.interpreter.matcher.NonDetFreeMapWithCost.toNonDetFreeMapWithCostOps
+import coop.rchain.rholang.interpreter.matcher.NonDetFreeMapWithCost._
 import monix.eval.Coeval
 import org.scalactic.TripleEqualsSupport
 import org.scalatest._
@@ -30,7 +33,11 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
       target: T,
       pattern: P,
       expectedCaptures: Option[FreeMap]
-  )(implicit sm: SpatialMatcher[T, P], ts: Sortable[T], ps: Sortable[P]): Assertion = {
+  )(
+      implicit sm: SpatialMatcher[NonDetFreeMapWithCost, T, P],
+      ts: Sortable[T],
+      ps: Sortable[P]
+  ): Assertion = {
     println(explainMatch(target, pattern, expectedCaptures))
     assertSorted(target, "target")
     assertSorted(pattern, "pattern")

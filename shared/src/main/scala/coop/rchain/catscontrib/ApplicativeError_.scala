@@ -1,21 +1,17 @@
 package coop.rchain.catscontrib
 
-import cats._, cats.data._, cats.implicits._
+import cats._
 
 /** Like ApplicativeError but not Applicative thus no ambigous conflicts */
 /** We should REALLY use Scalaz */
 trait ApplicativeError_[F[_], E] {
 
-  def raiseError[A](e: E): F[A]
-  def handleErrorWith[A](fa: F[A])(f: E => F[A]): F[A]
+  implicit val instance: ApplicativeError[F, E]
 
-  def fromEither[A](x: E Either A)(implicit ev: Applicative[F]): F[A] =
-    x.fold(raiseError, Applicative[F].pure)
-
-  def attempt[A](fa: F[A])(implicit ev: Applicative[F]): F[Either[E, A]] =
-    handleErrorWith(
-      Applicative[F].map(fa)(_.asRight[E])
-    )(e => Applicative[F].pure(e.asLeft[A]))
+  def raiseError[A](e: E): F[A]                        = instance.raiseError(e)
+  def handleErrorWith[A](fa: F[A])(f: E => F[A]): F[A] = instance.handleErrorWith(fa)(f)
+  def fromEither[A](x: E Either A): F[A]               = instance.fromEither(x)
+  def attempt[A](fa: F[A]): F[Either[E, A]]            = instance.attempt(fa)
 
 }
 
@@ -28,9 +24,7 @@ trait ApplicativeError_Instances {
   implicit def applicativeError[F[_], E](
       implicit F: ApplicativeError[F, E]
   ): ApplicativeError_[F, E] = new ApplicativeError_[F, E] {
-    def raiseError[A](e: E): F[A] = ApplicativeError[F, E].raiseError(e)
-    def handleErrorWith[A](fa: F[A])(f: E => F[A]): F[A] =
-      ApplicativeError[F, E].handleErrorWith(fa)(f)
+    val instance = F
   }
 
 }
