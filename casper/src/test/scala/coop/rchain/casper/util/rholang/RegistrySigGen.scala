@@ -50,8 +50,6 @@ case class Derivation(
 }
 
 object RegistrySigGen {
-  import scala.math.pow
-
   val maxLong                                          = (1L << 62) + ((1L << 62) - 1)
   val byteArrayToByteString: Array[Byte] => ByteString = ba => ByteString.copyFrom(ba)
 
