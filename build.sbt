@@ -57,7 +57,7 @@ lazy val projectSettings = Seq(
     case path => MergeStrategy.defaultMergeStrategy(path)
   }
 ) ++
-// skip api doc generation if SKIP_DOC env variable is defined 
+// skip api doc generation if SKIP_DOC env variable is defined
 Seq(sys.env.get("SKIP_DOC")).flatMap { _ =>
   Seq(
     publishArtifact in (Compile, packageDoc) := false,
@@ -204,7 +204,7 @@ lazy val models = (project in file("models"))
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(rspace)
+  .dependsOn(shared % "compile->compile;test->test", rspace)
 
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
@@ -413,7 +413,7 @@ lazy val blockStorage = (project in file("block-storage"))
       catsMtl
     )
   )
-  .dependsOn(shared, models)
+  .dependsOn(shared, models % "compile->compile;test->test")
 
 lazy val rspace = (project in file("rspace"))
   .configs(IntegrationTest extend Test)
@@ -484,7 +484,7 @@ lazy val rspace = (project in file("rspace"))
       )
     )
   )
-  .dependsOn(shared, crypto)
+  .dependsOn(shared % "compile->compile;test->test", crypto)
 
 lazy val rspaceBench = (project in file("rspace-bench"))
   .settings(

@@ -27,14 +27,20 @@ __pr_build_condiditions: &pr_build_conditions
 __buildenv: &buildenv
   image: rchain/buildenv:latest
 
-__sbtenv: &sbtenv
+__sbtcompileenv: &sbtcompileenv
   <<: *buildenv
   environment:
-    - _JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G
+    - _JAVA_OPTIONS=-Xms2G -Xmx4G -Xss2m -XX:MaxMetaspaceSize=1G
                     -Dsbt.task.timings=true -Dsbt.task.timings.on.shutdown=true -Dsbt.task.timings.threshold=2000
   volumes:
     - /var/cache/rchain-build/.sbt:/root/.sbt
     - /var/cache/rchain-build/.ivy2:/root/.ivy2
+
+__sbttestenv: &sbttestenv
+  <<: *sbtcompileenv
+  environment:
+    - _JAVA_OPTIONS=-Xms2G -Xmx4G -XX:MaxMetaspaceSize=1G
+                    -Dsbt.task.timings=true -Dsbt.task.timings.on.shutdown=true -Dsbt.task.timings.threshold=2000
 
 # Build definition
 
@@ -56,14 +62,14 @@ pipeline:
 
   pr-compile:
     <<: *pr_build_conditions
-    <<: *sbtenv
+    <<: *sbtcompileenv
     commands:
-      - sbt update rholang/bnfc:generate compile
+      - sbt update rholang/bnfc:generate test:compile
 
   pr-run-unit-tests:
     <<: *pr_build_conditions
     group: parallel
-    <<: *sbtenv
+    <<: *sbttestenv
     commands:
       - sbt test it:test
 
@@ -71,13 +77,13 @@ pipeline:
 
   compile:
     <<: *branch_build_conditions
-    <<: *sbtenv
+    <<: *sbtcompileenv
     commands:
-      - sbt update rholang/bnfc:generate compile
+      - sbt update rholang/bnfc:generate test:compile
 
   docker-build:
     <<: *branch_build_conditions
-    <<: *sbtenv
+    <<: *sbtcompileenv
     commands:
       # Skip the `doc` task - it's being invoked explicitly later
       - SKIP_DOC=true sbt node/docker:publishLocal
@@ -89,7 +95,7 @@ pipeline:
   run-unit-tests:
     <<: *branch_build_conditions
     group: parallel
-    <<: *sbtenv
+    <<: *sbttestenv
     commands:
       - cp -r . ../step.run-unit-tests && cd ../step.run-unit-tests
       - sbt test it:test
@@ -110,7 +116,7 @@ pipeline:
   package:
     <<: *branch_build_conditions
     group: parallel
-    <<: *sbtenv
+    <<: *sbtcompileenv
     commands:
       - cp -r . ../step.package && cd ../step.package
       - mkdir -p artifacts

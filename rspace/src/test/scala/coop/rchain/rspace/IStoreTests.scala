@@ -7,6 +7,7 @@ import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test.ArbitraryInstances._
+import coop.rchain.shared.GeneratorUtils._
 import org.scalacheck.Gen
 import org.scalactic.anyvals.PosInt
 import org.scalatest.AppendedClues

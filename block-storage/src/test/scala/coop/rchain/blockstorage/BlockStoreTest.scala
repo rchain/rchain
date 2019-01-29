@@ -10,7 +10,7 @@ import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.{BlockMessage, Header}
 import coop.rchain.rspace.Context
 import coop.rchain.shared.PathOps._
-import BlockGen.blockHashElementsGen
+import coop.rchain.models.blockImplicits.blockHashElementsGen
 import coop.rchain.blockstorage.InMemBlockStore.emptyMapRef
 import coop.rchain.blockstorage.StorageError.StorageIOErr
 import coop.rchain.metrics.Metrics
