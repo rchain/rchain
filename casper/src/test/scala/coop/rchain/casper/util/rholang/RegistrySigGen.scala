@@ -1,23 +1,38 @@
 package coop.rchain.casper.util.rholang
 
-// package of Registry.scala:
-// package coop.rchain.rholang.interpreter
-
-import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import com.google.protobuf.ByteString
-import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GString}
-import coop.rchain.models.{ETuple, Expr, GPrivate, Par}
-import coop.rchain.models.Expr.ExprInstance.GInt
-import coop.rchain.crypto.hash.Blake2b512Random
+
 import coop.rchain.casper.protocol.DeployData
-import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
+import coop.rchain.models.Expr.ExprInstance.GInt
+import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GString}
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.models.{Bundle, ETuple, Expr, GPrivate, Par}
+import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
+
+case class InsertSigned(pk: Hex, nonce: Long, contract: String, sig: Hex) {
+  override def toString() = s"""
+    | rs!(
+    |   \"${pk}\".hexToBytes(),
+    |   (${nonce}, bundle+{${contract}}),
+    |   \"${sig}\".hexToBytes(),
+    |   Nil)
+  """.stripMargin
+}
+
+case class Hex(bs: Array[Byte]) {
+  override def toString() = Base16.encode(bs)
+}
+case class Rholang(p: Par) {
+  override def toString() = PrettyPrinter().buildString(p)
+}
 
 case class Derivation(
     sk: Hex,
     timestamp: Long,
-    uname: Pretty,
+    uname: Rholang,
     toSign: Hex,
     result: InsertSigned
 ) {
@@ -34,59 +49,60 @@ case class Derivation(
   """.stripMargin
 }
 
-case class InsertSigned(pk: Hex, nonce: Long, contract: String, sig: Hex) {
-  override def toString() = s"""
-    | rs!(
-    |   \"${pk}\".hexToBytes(),
-    |   (${nonce}, bundle+{${contract}}),
-    |   \"${sig}\".hexToBytes(),
-    |   Nil)
-  """.stripMargin
-}
-
-case class Hex(bs: Array[Byte]) {
-  override def toString() = Base16.encode(bs)
-}
-case class Pretty(p: Par) {
-  override def toString() = PrettyPrinter().buildString(p)
-}
-
 object RegistrySigGen {
   import scala.math.pow
-  val maxint: Long                                     = (1L << 62) + ((1L << 62) - 1)
+
+  val maxLong                                          = (1L << 62) + ((1L << 62) - 1)
   val byteArrayToByteString: Array[Byte] => ByteString = ba => ByteString.copyFrom(ba)
-  val byteStringToExpr: ByteString => Expr             = bs => Expr(GByteArray(bs))
-  val byteArrayToExpr: Array[Byte] => Expr             = byteArrayToByteString andThen byteStringToExpr
 
   def main(argv: Array[String]) = {
     // these could be command-line args...
-    val term = insertSignedTerm(Ed25519.newKeyPair, System.currentTimeMillis, "CONTRACT")
-    System.out.println(term)
+    val info = deriveFrom(Ed25519.newKeyPair, System.currentTimeMillis, "CONTRACT")
+    System.out.println(info)
   }
 
-  def insertSignedTerm(key: (Array[Byte], Array[Byte]), timestamp: Long, contract: String) = {
+  def deriveFrom(key: (Array[Byte], Array[Byte]), timestamp: Long, contract: String) = {
     val (secKey, pubKey) = key
-    val user             = byteArrayToByteString(pubKey)
 
-    val seed        = DeployData().withUser(user).withTimestamp(timestamp)
-    val rand        = Blake2b512Random(DeployData.toByteArray(seed))
-    val id          = ByteString.copyFrom(rand.next())
-    val uname: Par  = GPrivate(id)
-    val nonce       = maxint
-    val toSign: Par = ETuple(Seq(GInt(nonce), uname))
+    val user = byteArrayToByteString(pubKey)
+    val id   = genIds(user, timestamp).next()
+
+    // Now we can determine the unforgeable name
+    // that will be allocated by
+    //   new CONTRACT in { ... }
+    // provided that's the first thing deployed.
+    val uname: Par = GPrivate(ByteString.copyFrom(id))
+
+    // Nobody else can receive from our contract.
+    val access: Par = Bundle(uname, true, false)
+
+    // prevent anyone from replacing this registry entry by using the maximum nonce value.
+    val lastNonce = maxLong
+
+    // Now we have the value that goes in the registry and we can sign it.
+    val toSign: Par = ETuple(Seq(GInt(lastNonce), access))
     val sig         = Ed25519.sign(toSign.toByteArray, secKey)
 
     Derivation(
       sk = Hex(secKey),
       timestamp = timestamp,
-      uname = Pretty(uname),
+      uname = Rholang(uname),
       toSign = Hex(toSign.toByteArray),
       result = InsertSigned(
         Hex(pubKey),
-        nonce,
+        lastNonce,
         contract,
         Hex(sig)
       )
     )
   }
+
+  /** Seed source of deterministic unforgeable names with
+    * deploy parameters: user (public key) and timestamp.
+    */
+  def genIds(user: ByteString, timestamp: Long) = {
+    val seed = DeployData().withUser(user).withTimestamp(timestamp)
+    Blake2b512Random(DeployData.toByteArray(seed))
+  }
+
 }
