@@ -9,14 +9,16 @@ import monix.execution.Scheduler.Implicits.global
 import coop.rchain.rholang.Resources.mkRuntime
 import monix.eval.Task
 import org.scalatest.{FunSuite, Matchers}
+import coop.rchain.shared.Log
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 
 class CompilerTests extends FunSuite with Matchers {
-  private val mapSize     = 1024L * 1024L * 10
-  private val tmpPrefix   = "rspace-store-"
-  private val maxDuration = 5.seconds
+  private val mapSize          = 1024L * 1024L * 10
+  private val tmpPrefix        = "rspace-store-"
+  private val maxDuration      = 5.seconds
+  implicit val logF: Log[Task] = new Log.NOPLog[Task]
 
   private val testFiles: Iterator[Path] =
     Files.walk(Paths.get(getClass.getResource("/tests").getPath)).iterator().asScala

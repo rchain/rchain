@@ -37,6 +37,7 @@ object Ed25519 {
     * boolean value of verification
     *
     */
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def verify(
       data: Array[Byte],
       signature: Array[Byte],
@@ -49,7 +50,7 @@ object Ed25519 {
         if (ex.getMessage contains "signature was forged or corrupted") {
           false
         } else {
-          throw ex
+          throw ex // should we return false?
         }
     }
 

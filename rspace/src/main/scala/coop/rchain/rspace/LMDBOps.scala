@@ -40,6 +40,8 @@ trait LMDBOps extends CloseOps {
     entriesGauge.set(env.stat().entries)
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // TODO stop throwing exceptions
   private[rspace] def withTxn[R](txn: Txn[ByteBuffer])(f: Txn[ByteBuffer] => R): R =
     try {
       val ret: R = f(txn)
@@ -71,6 +73,8 @@ trait LMDBOps extends CloseOps {
     *
     * a benchmark showing the difference can be found in the rspaceBench project (KeyBench)
     */
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // TODO stop throwing exceptions
   implicit class RichDbi(val dbi: Dbi[ByteBuffer]) {
 
     def get[V](txn: Txn[ByteBuffer], key: Blake2b256Hash)(implicit codecV: Codec[V]): Option[V] =

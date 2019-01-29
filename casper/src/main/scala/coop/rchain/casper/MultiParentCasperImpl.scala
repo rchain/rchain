@@ -430,6 +430,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       _      <- addEffects(status, b)
     } yield status
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
   // TODO: Handle slashing
   private def addEffects(status: BlockStatus, block: BlockMessage): F[Unit] =
     status match {

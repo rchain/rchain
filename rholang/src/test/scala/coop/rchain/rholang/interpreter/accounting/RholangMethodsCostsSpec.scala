@@ -22,6 +22,7 @@ import coop.rchain.rholang.interpreter.accounting.Chargeable._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Context, ISpace, RSpace}
+import coop.rchain.shared.Log
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.prop.TableFor1
 
@@ -798,6 +799,8 @@ class RholangMethodsCostsSpec
   private var dbDir: Path            = null
   private var context: RhoContext    = null
   private var space: RhoISpace[Task] = null
+
+  implicit val logF: Log[Task] = new Log.NOPLog[Task]
 
   override protected def beforeAll(): Unit = {
     import coop.rchain.catscontrib.TaskContrib._

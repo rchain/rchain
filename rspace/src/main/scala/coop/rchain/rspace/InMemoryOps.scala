@@ -26,6 +26,8 @@ trait InMemoryOps[S] extends CloseOps {
     sv
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // TODO stop throwing exceptions
   private[rspace] def withTxn[R](txn: Transaction)(f: Transaction => R): R =
     try {
       val ret: R = f(txn)
@@ -39,6 +41,8 @@ trait InMemoryOps[S] extends CloseOps {
       txn.close()
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // TODO stop throwing exceptions
   private[rspace] def createTxnRead(): InMemTransaction[S] = {
     failIfClosed()
 
@@ -61,6 +65,7 @@ trait InMemoryOps[S] extends CloseOps {
     }
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Var"))
   private[rspace] def createTxnWrite(): InMemTransaction[S] = {
     failIfClosed()
 

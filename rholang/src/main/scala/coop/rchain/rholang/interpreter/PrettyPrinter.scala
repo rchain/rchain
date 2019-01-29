@@ -47,6 +47,7 @@ final case class PrettyPrinter(
   def buildString(v: Var): String              = buildStringM(v).value.cap()
   def buildString(m: GeneratedMessage): String = buildStringM(m).value.cap()
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   private def buildStringM(e: Expr): Coeval[String] = Coeval.defer {
     e.exprInstance match {
 
@@ -155,6 +156,7 @@ final case class PrettyPrinter(
 
   private def buildStringM(t: GeneratedMessage): Coeval[String] = buildStringM(t, 0)
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   private def buildStringM(t: GeneratedMessage, indent: Int): Coeval[String] = Coeval.defer {
     val content = t match {
       case v: Var => buildStringM(v)

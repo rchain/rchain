@@ -150,6 +150,7 @@ object HashSetCasperTestNode {
   def createRuntime(storageDirectory: Path, storageSize: Long)(
       implicit scheduler: Scheduler
   ): (RuntimeManager[Effect], Close[Effect]) = {
+    implicit val log = new Log.NOPLog[Task]()
     val activeRuntime =
       Runtime.create[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB).unsafeRunSync
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync

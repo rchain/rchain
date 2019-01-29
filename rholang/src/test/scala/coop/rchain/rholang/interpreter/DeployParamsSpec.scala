@@ -10,6 +10,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoIStore
 import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.StoreType
 import monix.eval.Task
@@ -20,6 +21,8 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 
 class DeployParamsSpec extends fixture.FlatSpec with Matchers {
+  implicit val logF: Log[Task] = new Log.NOPLog[Task]
+
   override protected def withFixture(test: OneArgTest): Outcome = {
     val randomInt = scala.util.Random.nextInt
     val dbDir     = Files.createTempDirectory(s"rchain-storage-test-$randomInt")

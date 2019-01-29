@@ -8,6 +8,7 @@ import monix.execution.Scheduler.Implicits.global
 import coop.rchain.rholang.Resources.mkRuntime
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
+import coop.rchain.shared.Log
 
 import scala.concurrent.duration._
 import scala.util.Try
@@ -16,6 +17,8 @@ class InterpreterSpec extends FlatSpec with Matchers {
   private val mapSize     = 10L * 1024L * 1024L
   private val tmpPrefix   = "rspace-store-"
   private val maxDuration = 5.seconds
+
+  implicit val logF: Log[Task] = new Log.NOPLog[Task]
 
   behavior of "Interpreter"
 

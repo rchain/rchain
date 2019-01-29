@@ -82,6 +82,7 @@ private[regex] object Multiplier {
   * also permit a max of 0 (iff min is 0 too). This allows the multiplier
   * "zero" to exist, which actually are quite useful in their own special way.
   */
+@SuppressWarnings(Array("org.wartremover.warts.Throw"))
 final case class Multiplier(min: Option[Int], max: Option[Int]) {
 
   /**

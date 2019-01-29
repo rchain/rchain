@@ -23,6 +23,10 @@ object HostnameTrustManagerFactory {
   val Instance: HostnameTrustManagerFactory = new HostnameTrustManagerFactory()
 }
 
+/**
+  * This wart exists because that's how grpc works. They looooovveee throwing exceptions
+  */
+@SuppressWarnings(Array("org.wartremover.warts.Throw"))
 private class HostnameTrustManager extends X509ExtendedTrustManager {
 
   def checkClientTrusted(

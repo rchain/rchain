@@ -3,6 +3,7 @@ import com.typesafe.scalalogging.Logger
 import monix.eval.Coeval
 import monix.eval.Coeval.Eager
 
+@SuppressWarnings(Array("org.wartremover.warts.Var"))
 class Memo[A](f: => Coeval[A]) {
 
   private[this] val logger = Logger("Memo")

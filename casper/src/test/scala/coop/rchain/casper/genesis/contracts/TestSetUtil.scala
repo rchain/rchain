@@ -16,6 +16,7 @@ import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.unittest.TestSet
 import coop.rchain.shared.StoreType.InMem
+import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -43,11 +44,13 @@ object TestSetUtil {
 
   def runtime(
       extraServices: Seq[SystemProcess.Definition[Task]] = Seq.empty
-  )(implicit scheduler: Scheduler): Runtime[Task] =
-    (for {
+  )(implicit scheduler: Scheduler): Runtime[Task] = {
+    implicit val log: Log[Task] = new Log.NOPLog[Task]
+    for {
       runtime <- Runtime.create[Task, Task.Par](Paths.get("/not/a/path"), -1, InMem, extraServices)
       _       <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
-    } yield (runtime)).unsafeRunSync
+    } yield (runtime)
+  }.unsafeRunSync
 
   def evalDeploy(deploy: Deploy, runtime: Runtime[Task])(implicit scheduler: Scheduler): Unit = {
     runtime.reducer.setPhlo(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)

@@ -12,6 +12,7 @@ import java.nio.file.{Files, Path, Paths}
 import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
 import coop.rchain.rspace.Checkpoint
 import coop.rchain.shared.StoreType.InMem
+import coop.rchain.shared.Log
 import coop.rchain.models._
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import coop.rchain.catscontrib.TaskContrib._
@@ -93,7 +94,7 @@ class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler
 object Interactive {
   def apply(): Interactive = {
     implicit val scheduler = Scheduler.io("rhoang-interpreter")
-
+    implicit val log       = new Log.NOPLog[Task]
     new Interactive(TestSetUtil.runtime())
   }
 }

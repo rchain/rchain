@@ -8,10 +8,11 @@ import scala.concurrent.ExecutionContext
 import cats.effect.{ContextShift, Sync}
 import cats.implicits._
 
-import coop.rchain.catscontrib._
+import coop.rchain.catscontrib._, Catscontrib._
+import coop.rchain.shared.Log
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.trace.{Produce, _}
+import coop.rchain.rspace.trace.{Produce, Log => RSpaceLog, _}
 
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
@@ -25,6 +26,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
     serializeA: Serialize[A],
     serializeK: Serialize[K],
     val syncF: Sync[F],
+    logF: Log[F],
     contextShift: ContextShift[F],
     scheduler: ExecutionContext
 ) extends RSpaceOps[F, C, P, E, A, R, K](store, branch)
@@ -51,21 +53,20 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
       implicit m: Match[P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     contextShift.evalOn(scheduler) {
-      syncF.delay {
-        Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
-          if (channels.length =!= patterns.length) {
-            val msg = "channels.length must equal patterns.length"
-            logger.error(msg)
-            throw new IllegalArgumentException(msg)
-          }
-          val span = Kamon.currentSpan()
-          span.mark("before-consume-lock")
-          consumeLock(channels) {
-            span.mark("consume-lock-acquired")
-            lockedConsume(channels, patterns, continuation, persist, sequenceNumber)
+      if (channels.length =!= patterns.length) {
+        val msg = "channels.length must equal patterns.length"
+        logF.error(msg) *> syncF.raiseError(new IllegalArgumentException(msg))
+      } else
+        syncF.delay {
+          Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
+            val span = Kamon.currentSpan()
+            span.mark("before-consume-lock")
+            consumeLock(channels) {
+              span.mark("consume-lock-acquired")
+              lockedConsume(channels, patterns, continuation, persist, sequenceNumber)
+            }
           }
         }
-      }
     }
 
   private[this] def lockedConsume(
@@ -153,6 +154,8 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
     }
 
     @tailrec
+    @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+    // TODO stop throwing exceptions
     def getCommOrDataCandidates(comms: Seq[COMM]): Either[COMM, Seq[DataCandidate[C, R]]] =
       comms match {
         case Nil =>
@@ -330,6 +333,8 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
       val produceRef = Produce.create(channel, data, persist, sequenceNumber)
 
       @tailrec
+      @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+      // TODO stop throwing exceptions
       def getCommOrProduceCandidate(
           comms: Seq[COMM]
       ): Either[COMM, ProduceCandidate[C, P, R, K]] =
@@ -378,17 +383,17 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
         updatedReplays.removeBinding(produceRef, commRef)
     }
 
-  def createCheckpoint(): F[Checkpoint] = syncF.delay {
-    if (replayData.isEmpty) {
-      val root = store.createCheckpoint()
-      Checkpoint(root, Seq.empty)
-    } else {
-      // TODO: Make error message more informative
-      val msg = s"unused comm event: replayData multimap has ${replayData.size} elements left"
-      logger.error(msg)
-      throw new ReplayException(msg)
-    }
-  }
+  def createCheckpoint(): F[Checkpoint] =
+    for {
+      isEmpty <- syncF.delay(replayData.isEmpty)
+      checkpoint <- isEmpty.fold(
+                     Checkpoint(store.createCheckpoint(), Seq.empty).pure[F], {
+                       val msg =
+                         s"unused comm event: replayData multimap has ${replayData.size} elements left"
+                       logF.error(msg) *> syncF.raiseError[Checkpoint](new ReplayException(msg))
+                     }
+                   )
+    } yield checkpoint
 
   override def clear(): F[Unit] =
     for {
@@ -408,6 +413,7 @@ object ReplayRSpace {
       sa: Serialize[A],
       sk: Serialize[K],
       sync: Sync[F],
+      log: Log[F],
       contextShift: ContextShift[F],
       scheduler: ExecutionContext
   ): F[ReplayRSpace[F, C, P, E, A, R, K]] = {

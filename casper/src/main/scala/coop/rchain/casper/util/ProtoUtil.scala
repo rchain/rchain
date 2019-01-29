@@ -81,6 +81,7 @@ object ProtoUtil {
     } yield mainChain
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
   def unsafeGetBlock[F[_]: Monad: BlockStore](hash: BlockHash): F[BlockMessage] =
     for {
       maybeBlock <- BlockStore[F].get(hash)
