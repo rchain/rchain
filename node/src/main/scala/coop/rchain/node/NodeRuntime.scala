@@ -406,10 +406,7 @@ class NodeRuntime private[node] (
       implicit val s = rspaceScheduler
       Runtime.create[Task, Task.Par](casperStoragePath, storageSize, storeType, Seq.empty).toEffect
     }
-    runtimeManager <- {
-      implicit val s = scheduler
-      RuntimeManager.fromRuntime[Task](casperRuntime).toEffect
-    }
+    runtimeManager <- RuntimeManager.fromRuntime[Task](casperRuntime).toEffect
     casperPacketHandler <- CasperPacketHandler
                             .of[Effect](
                               conf.casper,
