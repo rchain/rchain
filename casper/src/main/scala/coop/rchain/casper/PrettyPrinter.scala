@@ -56,4 +56,7 @@ object PrettyPrinter {
 
   private def buildString(r: RChainState): String =
     buildString(r.postStateHash)
+
+  def buildString(b: Bond): String =
+    s"${buildStringNoLimit(b.validator)}: ${b.stake.toString}"
 }
