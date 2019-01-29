@@ -34,20 +34,23 @@ case class Derivation(
     sk: Hex,
     timestamp: Long,
     uname: Par,
-    toSign: Hex,
+    toSign: Par,
     result: InsertSigned
 ) {
   override def toString() = s"""
-    | sk = ${sk}
-    | pk = ${result.pk}
-    | timestamp = ${timestamp}
-    | uname = ${PrettyPrinter().buildString(uname)}
-    | nonce = ${result.nonce}
-    | toSign = ${toSign}
-    | sig = ${result.sig}
+    |       given     1. sk = ${sk}
+    |       given     2. timestamp = ${timestamp}
+    |       lastNonce 3. nonce = ${result.nonce}
+    | 1,    ed25519   4. pk = ${result.pk}
+    | 4, 2, genIds    5. uname = ${pprint(uname)}
+    | 3, 5, registry  6. value = ${pprint(toSign)}
+    | 6,    protobuf  7. toSign = ${Hex(toSign.toByteArray)}
+    | 7, 1, ed25519   8. sig = ${result.sig}
     |
     | ${result}
   """.stripMargin
+
+  def pprint(p: Par) = PrettyPrinter().buildString(p)
 }
 
 object RegistrySigGen {
@@ -87,7 +90,7 @@ object RegistrySigGen {
       sk = Hex(secKey),
       timestamp = timestamp,
       uname = uname,
-      toSign = Hex(toSign.toByteArray),
+      toSign = toSign,
       result = InsertSigned(
         Hex(pubKey),
         (lastNonce, contract),
