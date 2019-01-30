@@ -63,6 +63,12 @@ object RegistrySigGen {
     System.out.println(info)
   }
 
+  def exampleMakeMint() = {
+    val sk = Base16.decode("a300690f29ac6385917cb94bf534f9b4163792ef8636c5db44608a77fa0356c2");
+    val pk = Ed25519.toPublic(sk)
+    deriveFrom((sk, pk), 1539969637029L, "MakeMint")
+  }
+
   def deriveFrom(key: (Array[Byte], Array[Byte]), timestamp: Long, varName: String) = {
     val (secKey, pubKey) = key
 
