@@ -279,7 +279,7 @@
 * wait graceful period of 10 seconds
 * each validator should have a DAG with same set of finalized blocks
 
-### As a Node Validator I want consensus protocol to converge
+### As a validator I want consensus protocol to converge
 #### 5 validators deploying 200 blocks end up with the same DAG
 ##### test: test/test_dag_correctness.py::test_5val_200blocks
 ##### steps:
@@ -291,16 +291,13 @@
 
 # Cost accounting
 ### As a node operator, I want to get the list of deploys and their costs when I run `show-blocks`.
-### As a node operator, I want to be compensated for storing, running, and processing transactions against smart contracts based on the computational intensity required.
-### As a node operator, I want to be compensated 
-### As a validator, I want to receive interest in phlo on my bond amount as defined by the schedule in the mint.
-### As a validator, having an absolute minimum phlo cost to deploy a contract helps support my resources and mitigate against DOS attacks.
-### As a validator, to support management of my resources I want to receive as a fee either a minimum charge for a deployment or a charge determined as a percentage of the size of the contract. The fee will be whichever is greater: the absolute minimum charge or the calculated minimum.
-### As a dApp developer, I use phlo to pay the cost to deploy smart contracts on the RChain platform.
-### As a dApp developer, I need to know the minimum cost it will take to deploy my contract. The cost will be whichever is greater: the absolute minimum charge or the calculated minimum.
-### As a dApp developer, I need to know how much it will cost to execute my contract.
-### As a dApp developer, I want the phlo cost to execute a contract a contract once it's on chain to be consistent given the asm REV to phlo price and accounting for non-determinism.
-### As a client of a contract already deployed on the blockchain, I need to know how much it will cost to execute the contract.
+### As a validator, I want to be compensated in REV for setting up, storing, running, and processing transactions. I need to be able to see a record of this compenstation and retrieve my earnings.
+### As a validator, I want to receive interest in REV on my bond amount as defined by the schedule in the mint.
+##### steps:
+* initiate a validator
+* Calculate interest for the validator's bond based on the scheudle in the mint
+* transfer the earned interest to the validator's wallet
+### As a dApp developer, I use REV to pay the cost to deploy smart contracts on the RChain platform.
 ### As a validator, I will yield 0.01% of all transaction fees received to accounts controlled by the Coop.
 ### As the RChain coop, I want to receive 0.01% of all transaction fees to accounts controlled by the Coop.
 
