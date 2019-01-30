@@ -346,7 +346,6 @@ object ProtoUtil {
 
   def chooseNonConflicting[F[_]: Monad: Log: BlockStore](
       blocks: Seq[BlockMessage],
-      genesis: BlockMessage,
       dag: BlockDagRepresentation[F]
   ): F[Seq[BlockMessage]] = {
     def nonConflicting(b: BlockMessage): BlockMessage => F[Boolean] =
