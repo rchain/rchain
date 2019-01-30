@@ -129,41 +129,56 @@ compiled rholang/examples/hello_world_again.rho to rholang/examples/hello_world_
 ```
 
 ### Configuration file
-Most of the [command line options](node/README.md##2-modes) can be specified in a configuration file `rnode.toml`. The default location of the configuration file is the data dir. An alternative lococation can be specified with the command line option `--config-file  <path>`. The format of the configuration file is [TOML](https://github.com/toml-lang/toml). Example configuration file:
-```toml
-[server]
-host = "localhost"
-port = 40400
-http-port = 40402
-metrics-port = 40403
-no-upnp = false
-default-timeout = 2000
-bootstrap = "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400"
-standalone = false
-data-dir = "/var/lib/rnode"
-map-size = 1073741824
-casper-block-store-size = 1073741824
-in-memory-store = false
-max-num-of-connections = 500
+Most of the [command line options](node/README.md##2-modes) can be specified in a configuration file `rnode.conf`.
+The default location of the configuration file is the data dir. An alternative lococation can be specified with the command line option `--config-file  <path>`.
+The format of the configuration file is [HOCON](https://github.com/lightbend/config/blob/master/HOCON.md).
+The [reference.conf](node/src/main/resources/reference.conf) configuration file shows all options and default values.
+Example configuration file:
+```hocon
+rnode {
+  server {
+    host = localhost
+    upnp = false
+    port = 40400
+    port-http = 40403
+    port-kademlia = 40404
+    send-timeout = 2 seconds
+    standalone = false
+    bootstrap = "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"
+    data-dir = "/var/lib/rnode"
+    store-size = 1G
+    map-size = 1G
+    max-connections = 500
+    max-message-size = 256K
 
-[grpc-server]
-host = "localhost"
-port = 40401
-port-internal = 40404
+    tls {
+      certificate = /etc/ssl/node.certificate.pem"
+      key = /etc/ssl/node.key.pem
+    }
 
-[tls]
-certificate = "/var/lib/rnode/certificate.pem"
-key = "/var/lib/rnode/key.pem"
+    metrics {
+      prometheus = false
+      influxdb = true
+      zipkin = false
+      sigar = false
+    }
+  }
 
-[validators]
-count = 5
-shard-id = "rchain"
-sig-algorithm = "ed25519"
-# bonds-file = ""
-# wallets-file = ""
-# known = ""
-# public-key = ""
-# private-key = ""
+  grpc {
+    host = localhost
+    port-external = 40401
+    port-internal = 40402
+  }
+
+  casper {
+    # validator-public-key =
+    # validator-private-key-path =
+    sig-algorithm = ed25519
+    # bonds-file =
+    # known-validators-file =
+    validators = 5
+   }
+}
 ```
 
 ### Configuration flags
@@ -212,18 +227,9 @@ TBD
     * Total machine's memory size
     * Amount of free disk space left
     * Total machine's disk space
- * `rnode.toml` allows for configuring the address of the InfluxDB instance
-
-```
-[kamon]
-influx-db = true
-
-[influx-db]
-hostname = "localhost"
-port = 8086
-database = "rnode"
-```
-
+ * The InfluxDB reporter must be enabled in the `rnode.conf`. The configuration key `rnode.server.metrics.influxdb` must be set to `true`.
+ * For all system metrics the Sigar library must be enabled in the `rnode.conf`. The configuration key `rnode.server.metrics.sigar` must be set to `true`.
+ * `rnode.conf` allows for configuring the address of the InfluxDB instance. Please see the Kamon-InfluxDB [reference.conf](https://github.com/kamon-io/kamon-influxdb/blob/master/src/main/resources/reference.conf) for all options.
  * If the address or the InfluxDB instance isn't configured, metrics are NOT available to the node operator
  * Metrics published to InfluxDB are available for charting in Chronograf
  * Chronograf instance address is determined by the configuration of the InfluxDB instance, not the node

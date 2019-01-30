@@ -83,7 +83,7 @@ class NodeRuntime private[node] (
   private val casperStoragePath = storagePath.resolve("casper")
   private val storageSize       = conf.server.mapSize
   private val storeType         = conf.server.storeType
-  private val defaultTimeout    = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS) // TODO remove
+  private val defaultTimeout    = conf.server.defaultTimeout // TODO remove
 
   case class Servers(
       grpcServerExternal: GrpcServer,
@@ -132,56 +132,12 @@ class NodeRuntime private[node] (
                           .toEffect
 
       _ <- Task.delay {
-            val influxdb = conf.kamon.influxDb
-              .map { i =>
-                val authentication = i.authentication
-                  .map { a =>
-                    s"""
-                    |    authentication {
-                    |      user = "${a.user}"
-                    |      password = "${a.password}"
-                    |    }
-                    |""".stripMargin
-                  }
-                  .getOrElse("")
-
-                s"""
-                |  influxdb {
-                |    hostname = "${i.hostname}"
-                |    port = ${i.port}
-                |    database = "${i.database}"
-                |    protocol = "${i.protocol}"
-                |    $authentication
-                |  }
-                |""".stripMargin
-              }
-              .getOrElse("")
-            val kamonConf =
-              s"""
-               |kamon {
-               |  environment {
-               |    service = "rnode"
-               |    instance = "${id.toString}"
-               |  }
-               |  metric {
-               |    tick-interval = 10 seconds
-               |  }
-               |  system-metrics {
-               |    host {
-               |      enabled = ${conf.kamon.sigar}
-               |      sigar-native-folder = ${conf.server.dataDir.resolve("native")}
-               |    }
-               |  }
-               |  $influxdb
-               |}
-               |""".stripMargin
-            Kamon.reconfigure(ConfigFactory.parseString(kamonConf).withFallback(Kamon.config()))
-            if (conf.kamon.influxDb.isDefined)
-              Kamon.addReporter(new kamon.influxdb.InfluxDBReporter())
+            Kamon.reconfigure(conf.underlying.withFallback(Kamon.config()))
+            if (conf.kamon.influxDb) Kamon.addReporter(new kamon.influxdb.InfluxDBReporter())
             if (conf.kamon.prometheus) Kamon.addReporter(prometheusReporter)
             if (conf.kamon.zipkin) Kamon.addReporter(new ZipkinReporter())
             Kamon.addReporter(new JmxReporter())
-            SystemMetrics.startCollecting()
+            if (conf.kamon.sigar) SystemMetrics.startCollecting()
           }.toEffect
     } yield Servers(grpcServerExternal, grpcServerInternal, httpServerFiber)
   }
@@ -345,7 +301,7 @@ class NodeRuntime private[node] (
               .toEffect
 
     // 2. set up configurations
-    defaultTimeout = conf.server.defaultTimeout.millis
+    defaultTimeout = conf.server.defaultTimeout
 
     // 3. create instances of typeclasses
     initPeer             = if (conf.server.standalone) None else Some(conf.server.bootstrap)

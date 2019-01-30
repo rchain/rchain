@@ -32,7 +32,7 @@ object Main {
 
     val exec: Task[Unit] =
       for {
-        conf <- Configuration(args)
+        conf <- Configuration.build(args)
         _    <- Task.defer(mainProgram(conf))
       } yield ()
 
