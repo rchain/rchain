@@ -137,9 +137,13 @@ def parse_show_block_output(show_block_output: str) -> Dict[str, Union[str, Dict
         if key == "bondsValidatorList":
             if result.get(key) is None:
                 result[key] = {}
-            validator_hash, stake = value.split(':')
-            stake = float(stake.strip('" '))
+            validator_hash, stake = value.split(': ')
+            stake = float(stake.strip('"'))
+            validator_hash = validator_hash.strip('"')
             result[key][validator_hash] = stake
+        else:
+            result[key] = value
+
     return result
 
 
