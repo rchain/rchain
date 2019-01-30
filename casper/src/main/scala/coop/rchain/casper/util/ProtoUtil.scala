@@ -19,6 +19,8 @@ import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.{Log, LogSource, Time}
 import java.nio.charset.StandardCharsets
 
+import cats.data.OptionT
+import coop.rchain.catscontrib.ski.id
 import coop.rchain.casper.protocol.Event.EventInstance.{Comm, Consume, Produce}
 
 import scala.collection.{immutable, BitSet}
@@ -113,6 +115,7 @@ object ProtoUtil {
         .find(_.seqNum == seqNum)
     }
 
+  // TODO: Replace with getCreatorJustificationAsListUntilGoal
   def getCreatorJustificationAsList[F[_]: Monad: BlockStore](
       block: BlockMessage,
       validator: Validator,
@@ -151,23 +154,20 @@ object ProtoUtil {
       validator: Validator,
       goalFunc: BlockHash => Boolean = _ => false
   ): F[List[BlockHash]] =
-    blockDag.lookup(blockHash).flatMap {
-      case Some(block) =>
-        block.justifications.find(_.validator == validator).map(_.latestBlockHash) match {
-          case Some(creatorJustificationHash) =>
-            blockDag.lookup(creatorJustificationHash).map {
-              case Some(creatorJustification) =>
-                if (goalFunc(creatorJustification.blockHash)) {
-                  List.empty[BlockHash]
-                } else {
-                  List(creatorJustification.blockHash)
-                }
-              case None => List.empty[BlockHash]
-            }
-          case None => List.empty[BlockHash].pure[F]
-        }
-      case None => List.empty[BlockHash].pure[F]
-    }
+    (for {
+      block <- OptionT(blockDag.lookup(blockHash))
+      creatorJustificationHash <- OptionT.fromOption[F](
+                                   block.justifications
+                                     .find(_.validator == validator)
+                                     .map(_.latestBlockHash)
+                                 )
+      creatorJustification <- OptionT(blockDag.lookup(creatorJustificationHash))
+      creatorJustificationAsList = if (goalFunc(creatorJustification.blockHash)) {
+        List.empty[BlockHash]
+      } else {
+        List(creatorJustification.blockHash)
+      }
+    } yield creatorJustificationAsList).fold(List.empty[BlockHash])(id)
 
   def weightMap(blockMessage: BlockMessage): Map[ByteString, Long] =
     blockMessage.body match {

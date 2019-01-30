@@ -4,11 +4,13 @@ import cats.Monad
 import cats.implicits._
 import coop.rchain.catscontrib._
 import Catscontrib._
+import cats.data.OptionT
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockMetadata}
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.Justification
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.{Clique, DagOperations, ProtoUtil}
+import coop.rchain.catscontrib.ski.id
 import coop.rchain.shared.{Log, StreamT}
 
 /*
@@ -154,43 +156,26 @@ sealed abstract class SafetyOracleInstances {
             first: Validator,
             second: Validator
         ): F[Boolean] =
-          blockDag.latestMessage(first).flatMap {
-            case Some(firstLatestBlock) =>
-              val maybeSecondLatestOfFirstLatestHash =
-                firstLatestBlock.justifications
-                  .find {
-                    case Justification(validator, _) =>
-                      validator == second
-                  }
-                  .map(_.latestBlockHash)
-              maybeSecondLatestOfFirstLatestHash match {
-                case Some(secondLatestOfFirstLatestHash) =>
-                  blockDag.lookup(secondLatestOfFirstLatestHash).flatMap {
-                    case Some(secondLatestOfFirstLatest) =>
-                      for {
-                        potentialDisagreements <- filterChildren(
-                                                   secondLatestOfFirstLatest,
-                                                   second
-                                                 )
-                        // TODO: Implement forallM on StreamT
-                        result <- potentialDisagreements.toList.flatMap(
-                                   _.forallM { potentialDisagreement =>
-                                     computeCompatibility(
-                                       blockDag,
-                                       candidateBlockHash,
-                                       potentialDisagreement
+          (for {
+            firstLatestBlock <- OptionT(blockDag.latestMessage(first))
+            secondLatestOfFirstLatestHash <- OptionT.fromOption[F](
+                                              firstLatestBlock.justifications
+                                                .find {
+                                                  case Justification(validator, _) =>
+                                                    validator == second
+                                                }
+                                                .map(_.latestBlockHash)
+                                            )
+            secondLatestOfFirstLatest <- OptionT(blockDag.lookup(secondLatestOfFirstLatestHash))
+            potentialDisagreements <- OptionT.liftF(
+                                       filterChildren(secondLatestOfFirstLatest, second)
                                      )
-                                   }
-                                 )
-                      } yield result
-                    case None =>
-                      false.pure[F]
-                  }
-                case None =>
-                  false.pure[F]
-              }
-            case None => false.pure[F]
-          }
+            // TODO: Implement forallM on StreamT
+            result <- OptionT.liftF(potentialDisagreements.toList.flatMap(_.forallM {
+                       potentialDisagreement =>
+                         computeCompatibility(blockDag, candidateBlockHash, potentialDisagreement)
+                     }))
+          } yield result).fold(false)(id)
 
         def computeAgreementGraphEdges: F[List[(Validator, Validator)]] =
           (for {
