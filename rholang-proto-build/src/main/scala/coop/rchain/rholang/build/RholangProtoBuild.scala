@@ -21,6 +21,7 @@ object RholangProtoBuild {
 
   def escape(s: String): String = "\"" + s.replace("\"", "\\") + "\""
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def createProtoArtifact(input: Path, output: Path): Unit =
     CompiledRholangSource.fromSourceFile(input.toFile) match {
       case Left(ex) =>
@@ -92,6 +93,7 @@ object RholangProtoBuild {
     |  <resourceManaged>     - directory to write protobuf outputs to
     |""".stripMargin
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def main(args: Array[String]): Unit =
     if (args.length != 3) {
       println(cliUsage)

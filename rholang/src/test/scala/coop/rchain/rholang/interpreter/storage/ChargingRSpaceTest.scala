@@ -19,6 +19,7 @@ import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.ChargingRSpaceTest.{ChargingRSpace, _}
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Match, _}
+import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
@@ -466,4 +467,5 @@ object ChargingRSpaceTest {
     override def clear(): Task[Unit]                                                      = ???
   }
 
+  implicit val logF: Log[Task] = new Log.NOPLog[Task]
 }

@@ -9,6 +9,7 @@ import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
 import coop.rchain.rspace.history.Branch
+import coop.rchain.shared.Log
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra.Blackhole
 
@@ -54,11 +55,11 @@ object ReplayRSpaceBench {
     var space: IdISpace[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor] = null
     var replaySpace: IReplaySpace[cats.Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor] =
       null
-
-    val consumeChannel = Channel("consume")
-    val produceChannel = Channel("produce")
-    val matches        = List(CityMatch(city = "Crystal Lake"))
-    val captor         = new EntriesCaptor()
+    implicit val logF: Log[Id] = new Log.NOPLog[Id]
+    val consumeChannel         = Channel("consume")
+    val produceChannel         = Channel("produce")
+    val matches                = List(CityMatch(city = "Crystal Lake"))
+    val captor                 = new EntriesCaptor()
 
     def initSpace() = {
       val rigPoint = space.createCheckpoint()

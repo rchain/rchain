@@ -1,9 +1,11 @@
 #!/bin/bash
 set -eo pipefail
 
+prefix=branches/
 if [[ -n $DRONE_TAG ]]; then
 	REF=$DRONE_TAG
 	TAG=1
+	prefix=release/
 elif [[ -n $DRONE_BRANCH ]]; then
 	REF=$DRONE_BRANCH
 	if [[ $DRONE_BRANCH = "staging" ]]; then
@@ -31,7 +33,7 @@ echo "$SSH_PRIVATE_KEY" | base64 -d | tr -d '\r' >~/.ssh/id_rsa
 # We don't check host keys because artifacts are public.
 rsync -avrz --delete -e "ssh -p 22 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
     artifacts/*.deb artifacts/*.rpm artifacts/*.tgz \
-    inbound@build.rchain-dev.tk:/srv/inbound/$REF/
+    inbound@build.rchain-dev.tk:/srv/inbound/$prefix$REF/
 
 # Upload Docker image
 

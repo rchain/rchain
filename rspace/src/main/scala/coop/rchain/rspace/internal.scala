@@ -152,6 +152,7 @@ object internal {
 
   import scodec.{Attempt, Err}
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   implicit class RichAttempt[T](a: Attempt[T]) {
     def get: T =
       a match {

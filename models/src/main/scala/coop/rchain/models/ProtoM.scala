@@ -106,6 +106,7 @@ object ProtoM extends DescriptorPimps {
   private def writeUInt32NoTag(out: CodedOutputStream, valueSize: Int): Coeval[Unit] =
     Sync[Coeval].delay { out.writeUInt32NoTag(valueSize) }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   private def writeScalarValue(
       value: Any,
       field: FieldDescriptor,
@@ -209,6 +210,7 @@ object ProtoM extends DescriptorPimps {
       scalarValueSize(value, field)
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   private def scalarValueSize(value: Any, field: FieldDescriptor): Coeval[Int] =
     Sync[Coeval].catchNonFatal {
 

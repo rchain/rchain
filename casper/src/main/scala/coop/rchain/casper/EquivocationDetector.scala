@@ -301,6 +301,7 @@ object EquivocationDetector {
     } yield equivocationDetected
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
   private def maybeAddEquivocationChild[F[_]: Monad: BlockStore](
       justificationBlock: BlockMessage,
       equivocatingValidator: Validator,
@@ -347,6 +348,7 @@ object EquivocationDetector {
       }
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
   private def addEquivocationChild[F[_]: Monad: BlockStore](
       justificationBlock: BlockMessage,
       equivocationBaseBlockSeqNum: SequenceNumber,

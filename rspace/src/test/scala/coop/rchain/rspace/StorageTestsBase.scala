@@ -15,6 +15,7 @@ import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
 import coop.rchain.shared.PathOps._
+import coop.rchain.shared.Log
 import org.scalatest._
 
 import scala.collection.immutable.{Seq, Set}
@@ -27,6 +28,7 @@ trait StorageTestsBase[F[_], C, P, E, A, K] extends FlatSpec with Matchers with 
   type T = ISpace[F, C, P, E, A, A, K]
 
   implicit def syncF: Sync[F]
+  implicit def logF: Log[F]
   implicit def monadF: Monad[F]
   implicit def contextShiftF: ContextShift[F]
 

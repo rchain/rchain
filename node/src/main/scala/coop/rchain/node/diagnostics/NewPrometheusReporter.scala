@@ -11,6 +11,7 @@ import kamon.metric._
 /**
   * Based on kamon-prometheus but without the embedded server
   */
+@SuppressWarnings(Array("org.wartremover.warts.Var"))
 class NewPrometheusReporter extends MetricReporter {
   import NewPrometheusReporter.Configuration.{environmentTags, readConfiguration}
 

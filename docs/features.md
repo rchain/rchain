@@ -110,7 +110,7 @@
 * `ceremonyMaster` sends `UnapprovedBlock` to `validatorA` and `validatorB`
 * `validatorA` and `validatorB` receives `UnapprovedBlock`
 * `validatorA` and `validatorB` send back `BlockApproval`
-* `ceremonyMaster` transitions to `ApprovedBlockReceivedHandler`
+* `ceremonyMaster` transitions to `ApprovedBlockReceivedHandler` once requirements are met for duration and required sigs
 * `ceremonyMaster` sends `ApprovedBlock` to `validatorA` and `validatorB`
 * `validatorA` and `validatorB` transition to ApprovedBlockReceivedHandler
 * `ceremonyMaster`, `validatorA` and `validatorB` tip points to block (genesis) where it has no parent and Bonds holds `validatorA` and `validatorB`
@@ -125,7 +125,7 @@
 * `ceremonyMaster` sends `UnapprovedBlock` to `validatorA` and `validatorB`
 * `validatorA` and `validatorB` receives `UnapprovedBlock`
 * `validatorA` and `validatorB` send back `BlockApproval`
-* `ceremonyMaster` transitions to `ApprovedBlockReceivedHandler`
+* `ceremonyMaster` transitions to `ApprovedBlockReceivedHandler` once requirements are met for duration and required sigs
 * `ceremonyMaster` sends `ApprovedBlock` to `validatorA` and `validatorB`
 * `validatorA` and `validatorB` transition to ApprovedBlockReceivedHandler
 * `ceremonyMaster`, `validatorA` and `validatorB` tip points to block (genesis) where it has no parent and Bonds holds `validatorA` and `validatorB`

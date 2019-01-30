@@ -55,6 +55,8 @@ class TcpTransportLayer(
 
   private val streamObservable = new StreamObservable(clientQueueSize, tempFolder)
 
+  // TODO FIX-ME No throwing exceptions!
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   private lazy val serverSslContext: SslContext =
     try {
       GrpcSslContexts
@@ -68,6 +70,8 @@ class TcpTransportLayer(
         throw e
     }
 
+  // TODO FIX-ME No throwing exceptions!
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   private lazy val clientSslContext: SslContext =
     try {
       val builder = GrpcSslContexts.forClient

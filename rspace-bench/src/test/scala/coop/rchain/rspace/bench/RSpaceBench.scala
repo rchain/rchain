@@ -11,6 +11,7 @@ import coop.rchain.rspace.examples.AddressBookExample.implicits._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.util._
 import coop.rchain.shared.PathOps._
+import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.openjdk.jmh.annotations._
@@ -92,8 +93,8 @@ class LMDBBench extends RSpaceBench {
   val mapSize: Long  = 1024L * 1024L * 1024L
   val noTls: Boolean = false
 
-  var dbDir: Path = null
-
+  var dbDir: Path            = null
+  implicit val logF: Log[Id] = new Log.NOPLog[Id]
   @Setup
   def setup() = {
     dbDir = Files.createTempDirectory("rchain-rspace-lmdb-bench-")
@@ -120,6 +121,8 @@ class LMDBBench extends RSpaceBench {
 @Measurement(iterations = 10)
 class InMemBench extends RSpaceBench {
 
+  implicit val logF: Log[Id] = new Log.NOPLog[Id]
+
   @Setup
   def setup() = {
     val context = Context.createInMemory[Channel, Pattern, Entry, EntriesCaptor]()
@@ -145,10 +148,10 @@ class InMemBench extends RSpaceBench {
 @Measurement(iterations = 10)
 class MixedBench extends RSpaceBench {
 
-  val mapSize: Long  = 1024L * 1024L * 1024L
-  val noTls: Boolean = false
-
-  var dbDir: Path = null
+  val mapSize: Long          = 1024L * 1024L * 1024L
+  val noTls: Boolean         = false
+  implicit val logF: Log[Id] = Log.log[Id]
+  var dbDir: Path            = null
 
   @Setup
   def setup() = {

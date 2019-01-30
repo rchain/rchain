@@ -28,6 +28,7 @@ object ReputationOrder extends Ordering[Reputable] {
   def compare(a: Reputable, b: Reputable) = a.reputation compare b.reputation
 }
 
+@SuppressWarnings(Array("org.wartremover.warts.Var"))
 final case class PeerTableEntry[A](entry: A, gkey: A => Seq[Byte]) extends Keyed {
   var pinging           = false
   val key               = gkey(entry)

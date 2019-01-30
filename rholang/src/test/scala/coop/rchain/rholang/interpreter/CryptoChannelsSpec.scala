@@ -21,6 +21,7 @@ import coop.rchain.rholang.interpreter.Runtime.RhoIStore
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rspace.Serialize
 import coop.rchain.shared.PathOps._
+import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
@@ -210,9 +211,10 @@ class CryptoChannelsSpec
   }
 
   override protected def withFixture(test: OneArgTest): Outcome = {
-    val randomInt = scala.util.Random.nextInt
-    val dbDir     = Files.createTempDirectory(s"rchain-storage-test-$randomInt")
-    val size      = 1024L * 1024 * 10
+    val randomInt                = scala.util.Random.nextInt
+    val dbDir                    = Files.createTempDirectory(s"rchain-storage-test-$randomInt")
+    val size                     = 1024L * 1024 * 10
+    implicit val logF: Log[Task] = new Log.NOPLog[Task]
 
     val runtime = (for {
       runtime <- Runtime.create[Task, Task.Par](dbDir, size, StoreType.LMDB)

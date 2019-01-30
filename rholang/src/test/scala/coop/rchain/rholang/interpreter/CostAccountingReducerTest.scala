@@ -18,6 +18,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.rholang.Resources.mkRhoISpace
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rspace.internal
+import coop.rchain.shared.Log
 
 import scala.collection.immutable
 import scala.concurrent.duration._
@@ -90,8 +91,9 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     val program =
       Par(sends = Seq(Send(channel, Seq(a)), Send(channel, Seq(b))))
 
-    implicit val rand   = Blake2b512Random(Array.empty[Byte])
-    implicit val errLog = new ErrorLog[Task]()
+    implicit val rand            = Blake2b512Random(Array.empty[Byte])
+    implicit val errLog          = new ErrorLog[Task]()
+    implicit val logF: Log[Task] = Log.log[Task]
 
     def testImplementation(pureRSpace: RhoISpace[Task]): Task[
       (

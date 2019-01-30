@@ -1,12 +1,12 @@
 package coop.rchain.rholang.interpreter
 
-import cats.{Alternative, MonadError, Monoid, MonoidK}
+import cats.{Applicative, Monad}
 import cats.arrow.FunctionK
-import cats.data.{OptionT, StateT}
+import cats.data.StateT
 import cats.implicits._
 import cats.mtl.implicits._
 import cats.mtl.MonadState
-import coop.rchain.catscontrib.MonadTrans
+import coop.rchain.catscontrib.MonadError_
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
@@ -28,8 +28,8 @@ package object matcher {
   // Adopted from: http://atnos-org.github.io/eff/org.atnos.site.Tutorial.html#write-an-interpreter-for-your-program
   type _freeMap[F[_]] = MonadState[F, FreeMap]
   type _cost[F[_]]    = MonadState[F, Cost]
-  type _error[F[_]]   = MonadError[F, OutOfPhlogistonsError.type]
-  type _short[F[_]]   = MonadError[F, Unit] //arises from and corresponds to the OptionT/StreamT in the stack
+  type _error[F[_]]   = MonadError_[F, OutOfPhlogistonsError.type]
+  type _short[F[_]]   = MonadError_[F, Unit] //arises from and corresponds to the OptionT/StreamT in the stack
 
   // Implicit summoner methods, just like `Monad.apply` on `Monad`'s companion object.
   def _freeMap[F[_]](implicit ev: _freeMap[F]): _freeMap[F] = ev
@@ -37,7 +37,7 @@ package object matcher {
   def _error[F[_]](implicit ev: _error[F]): _error[F]       = ev
   def _short[F[_]](implicit ev: _short[F]): _short[F]       = ev
 
-  private[matcher] def charge[F[_]](
+  private[matcher] def charge[F[_]: Monad](
       amount: Cost
   )(implicit cost: _cost[F], error: _error[F]): F[Unit] =
     for {
@@ -47,18 +47,16 @@ package object matcher {
       _           <- error.ensure(cost.get)(OutOfPhlogistonsError)(_.value >= 0)
     } yield ()
 
-  private[matcher] def attemptOpt[F[_], A](f: F[A])(implicit short: _short[F]): F[Option[A]] =
-    short.attempt(f).map(_.fold(_ => None, Some(_)))
+  private[matcher] def attemptOpt[F[_], A](
+      f: F[A]
+  )(implicit short: _short[F]): F[Option[A]] = {
+    import short.instance
+    f.attempt.map(_.fold(_ => None, Some(_)))
+  }
 
   object NonDetFreeMapWithCost {
 
     class NonDetFreeMapWithCostOps[A](s: NonDetFreeMapWithCost[A]) {
-
-      def charge(amount: Cost): NonDetFreeMapWithCost[A] =
-        s.flatMap(matcher.charge[NonDetFreeMapWithCost](amount).as)
-
-      def attemptOpt: NonDetFreeMapWithCost[Option[A]] =
-        matcher.attemptOpt(s)
 
       def runWithCost(
           initCost: Cost
@@ -84,11 +82,12 @@ package object matcher {
     implicit def toNonDetFreeMapWithCostOps[A](s: NonDetFreeMapWithCost[A]) =
       new NonDetFreeMapWithCostOps[A](s)
 
-    def empty[A]: NonDetFreeMapWithCost[A] =
-      MonadTrans[StateT[?[_], FreeMap, ?]].liftM(MonoidK[StreamWithCost].empty)
+    implicit val splittable: Splittable[NonDetFreeMapWithCost] =
+      new Splittable[NonDetFreeMapWithCost] {
+        override def takeFirst[A](fa: NonDetFreeMapWithCost[A]): NonDetFreeMapWithCost[A] =
+          fa.takeFirst()
+      }
 
-    def fromStream[A](stream: Stream[A]): NonDetFreeMapWithCost[A] =
-      StateT.liftF(StreamT.fromStream(StateT.pure(stream)))
   }
 
   def emptyMap: FreeMap = Map.empty[Int, Par]

@@ -9,6 +9,7 @@ import pytest
 from .common import (
     TestingContext,
     GetBlockError,
+    WaitTimeoutError,
 )
 from .network import (
     Network,
@@ -140,7 +141,7 @@ class BlocksCountAtLeast:
         return actual_blocks_count >= self.blocks_count
 
 
-def wait_on_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) -> None:
+def wait_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) -> None:
     logging.info("AWAITING {}".format(predicate))
 
     elapsed = 0
@@ -162,39 +163,46 @@ def wait_on_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) ->
 
         time.sleep(iteration_duration)
         elapsed = elapsed + iteration_duration
-
     logging.info("TIMEOUT %s", predicate)
-    pytest.fail('Failed to satisfy {} after {}s'.format(predicate, elapsed))
+    raise WaitTimeoutError(predicate, timeout)
+
+
+def wait_using_wall_clock_time_or_fail(predicate: PredicateProtocol, timeout: int) ->None:
+    try:
+        wait_using_wall_clock_time(predicate, timeout)
+    except WaitTimeoutError:
+        pytest.fail('Failed to satisfy {} after {}s'.format(predicate, timeout))
+
 
 def wait_for_node_sees_block(context: TestingContext, node: 'Node', block_hash: str) -> None:
     predicate = NodeSeesBlock(node, block_hash)
-    wait_on_using_wall_clock_time(predicate, context.node_startup_timeout)
+    wait_using_wall_clock_time_or_fail(predicate, context.node_startup_timeout)
 
 
 def wait_for_block_contains(context: TestingContext, node: 'Node', block_hash: str, expected_string: str) -> None:
     predicate = BlockContainsString(node, block_hash, expected_string)
-    wait_on_using_wall_clock_time(predicate, context.receive_timeout)
+    wait_using_wall_clock_time_or_fail(predicate, context.receive_timeout)
 
 
 def wait_for_blocks_count_at_least(context: TestingContext, node: 'Node', expected_blocks_count: int) -> None:
     predicate = BlocksCountAtLeast(node, expected_blocks_count)
-    wait_on_using_wall_clock_time(predicate, context.receive_timeout * expected_blocks_count)
+    wait_using_wall_clock_time_or_fail(predicate, context.receive_timeout * expected_blocks_count)
 
 
 def wait_for_node_started(context: TestingContext, node: 'Node') -> None:
     predicate = NodeStarted(node)
-    wait_on_using_wall_clock_time(predicate, context.node_startup_timeout)
+    wait_using_wall_clock_time_or_fail(predicate, context.node_startup_timeout)
 
 
 def wait_for_approved_block_received_handler_state(context: TestingContext, node: 'Node') -> None:
     predicate = ApprovedBlockReceivedHandlerStateEntered(node)
-    wait_on_using_wall_clock_time(predicate, context.node_startup_timeout)
+    wait_using_wall_clock_time_or_fail(predicate, context.node_startup_timeout)
 
 
 def wait_for_approved_block_received(context: TestingContext, network: Network) -> None:
     for peer in network.peers:
         predicate = ApprovedBlockReceived(peer)
-        wait_on_using_wall_clock_time(predicate, context.node_startup_timeout + context.receive_timeout)
+        wait_using_wall_clock_time_or_fail(predicate, context.node_startup_timeout + context.receive_timeout)
 
 
 def wait_for_started_network(context: TestingContext, network: Network) -> None:
@@ -204,28 +212,33 @@ def wait_for_started_network(context: TestingContext, network: Network) -> None:
 
 def wait_for_converged_network(context: TestingContext, network: Network, peer_connections: int) -> None:
     bootstrap_predicate = HasAtLeastPeers(network.bootstrap, len(network.peers))
-    wait_on_using_wall_clock_time(bootstrap_predicate, context.network_converge_timeout)
+    wait_using_wall_clock_time_or_fail(bootstrap_predicate, context.network_converge_timeout)
 
     for peer in network.peers:
         peer_predicate = HasAtLeastPeers(peer, peer_connections)
-        wait_on_using_wall_clock_time(peer_predicate, context.network_converge_timeout)
+        wait_using_wall_clock_time_or_fail(peer_predicate, context.network_converge_timeout)
 
 
 def wait_for_peers_count_at_least(context: TestingContext, node: 'Node', npeers: int) -> None:
     predicate = HasAtLeastPeers(node, npeers)
-    wait_on_using_wall_clock_time(predicate, context.network_converge_timeout)
+    wait_using_wall_clock_time_or_fail(predicate, context.network_converge_timeout)
 
 
 def wait_for_sent_unapproved_block(context: TestingContext, node: 'Node') -> None:
     predicate = SentUnapprovedBlock(node)
-    wait_on_using_wall_clock_time(predicate, context.network_converge_timeout)
+    wait_using_wall_clock_time_or_fail(predicate, context.network_converge_timeout)
 
 
 def wait_for_block_approval(context: TestingContext, node: 'Node') -> None:
     predicate = BlockApproval(node)
-    wait_on_using_wall_clock_time(predicate, context.network_converge_timeout)
+    wait_using_wall_clock_time_or_fail(predicate, context.network_converge_timeout)
 
 
 def wait_for_sent_approved_block(context: TestingContext, node: 'Node') -> None:
     predicate = SentApprovedBlock(node)
-    wait_on_using_wall_clock_time(predicate, context.network_converge_timeout)
+    wait_using_wall_clock_time_or_fail(predicate, context.network_converge_timeout)
+
+
+def wait_for_approved_block_received_handler(context: TestingContext, node: 'Node') -> None:
+    predicate = ApprovedBlockReceivedHandlerStateEntered(node)
+    wait_using_wall_clock_time(predicate, context.network_converge_timeout)

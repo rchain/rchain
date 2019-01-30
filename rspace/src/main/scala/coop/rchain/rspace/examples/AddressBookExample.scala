@@ -9,6 +9,7 @@ import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Language.ignore
+import coop.rchain.shared.Log
 import coop.rchain.rspace.util._
 import scala.concurrent.ExecutionContext
 import scodec.bits.ByteVector
@@ -199,6 +200,8 @@ object AddressBookExample {
 
   def exampleOne(): Unit = {
 
+    implicit val log: Log[Id] = Log.log
+
     // Here we define a temporary place to put the store's files
     val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
 
@@ -237,6 +240,8 @@ object AddressBookExample {
   }
 
   def exampleTwo(): Unit = {
+
+    implicit val log: Log[Id] = Log.log
 
     // Here we define a temporary place to put the store's files
     val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
@@ -331,6 +336,8 @@ object AddressBookExample {
   private[this] def withSpace(
       f: IdISpace[Channel, Pattern, Nothing, Entry, Entry, Printer] => Unit
   ) = {
+
+    implicit val log: Log[Id] = Log.log
     // Here we define a temporary place to put the store's files
     val storePath = Files.createTempDirectory("rspace-address-book-example-")
     // Let's define our store

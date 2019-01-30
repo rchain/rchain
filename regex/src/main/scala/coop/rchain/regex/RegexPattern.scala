@@ -29,6 +29,7 @@ trait ParsedPattern {
 /**
   * A companion object for the RegexPattern class
   */
+@SuppressWarnings(Array("org.wartremover.warts.Throw"))
 object RegexPattern extends ParsedPattern {
 
   /**
@@ -57,6 +58,7 @@ object RegexPattern extends ParsedPattern {
   * All patterns have some things in common. This parent class mainly
   * hosts documentation though.
   */
+@SuppressWarnings(Array("org.wartremover.warts.Throw"))
 sealed abstract class RegexPattern {
 
   /**
@@ -690,6 +692,7 @@ object ConcPattern extends ParsedPattern {
   * e.g. abcde[{@literal ^}fg]*h{4}[a-z]+(subpattern)(subpattern2)
   * To express the empty string, use an empty ConcatenationPattern().
   */
+@SuppressWarnings(Array("org.wartremover.warts.Throw"))
 final case class ConcPattern(mults: List[MultPattern]) extends RegexPattern {
 
   override lazy val alphabet: Set[Char] = mults.flatMap(_.alphabet).toSet + Fsm.anythingElse
@@ -801,6 +804,7 @@ object AltPattern extends ParsedPattern {
   * 1, a lower bound 1, and a multiplicand which is a new subpattern, "ghi|jkl".
   * This new subpattern again consists of two ConcPatterns: "ghi" and "jkl".
   */
+@SuppressWarnings(Array("org.wartremover.warts.Throw"))
 final case class AltPattern(concs: Set[ConcPattern]) extends RegexPattern {
 
   override lazy val alphabet: Set[Char] = concs.flatMap(_.alphabet) + Fsm.anythingElse
@@ -900,6 +904,7 @@ object MultPattern extends ParsedPattern {
   * multipliers like "*" (min = 0, max = inf) and so on.
   * e.g. a, b{2}, c?, d*, [efg]{2,5}, f{2,}, (anysubpattern)+, .*, and so on
   */
+@SuppressWarnings(Array("org.wartremover.warts.Throw"))
 final case class MultPattern(multiplicand: RegexPattern, multiplier: Multiplier)
     extends RegexPattern {
 

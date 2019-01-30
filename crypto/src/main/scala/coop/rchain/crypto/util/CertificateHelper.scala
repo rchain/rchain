@@ -107,15 +107,15 @@ object CertificateHelper {
     info.set(X509CertInfo.ALGORITHM_ID, new CertificateAlgorithmId(algorithmId))
 
     // Sign the cert to identify the algorithm that's used.
-    var cert = new X509CertImpl(info)
+    val cert = new X509CertImpl(info)
     cert.sign(privateKey, algorythm)
 
     // Update the algorith, and resign.
     val algorithmId2 = cert.get(X509CertImpl.SIG_ALG).asInstanceOf[AlgorithmId]
     info.set(CertificateAlgorithmId.NAME + "." + CertificateAlgorithmId.ALGORITHM, algorithmId2)
-    cert = new X509CertImpl(info)
-    cert.sign(privateKey, algorythm)
-    cert
+    val cert2 = new X509CertImpl(info)
+    cert2.sign(privateKey, algorythm)
+    cert2
   }
 
 }

@@ -11,12 +11,14 @@ import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccounting}
 import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
 import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.shared.StoreType
+import coop.rchain.shared.Log
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 
 trait EvalBenchStateBase {
   private lazy val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
   private val mapSize: Long    = 1024L * 1024L * 1024L
+  implicit val logF: Log[Task] = new Log.NOPLog[Task]
 
   val rhoScriptSource: String
   lazy val runtime: Runtime[Task] =

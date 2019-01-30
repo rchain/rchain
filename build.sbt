@@ -23,10 +23,13 @@ lazy val projectSettings = Seq(
   ),
   wartremoverExcluded += sourceManaged.value,
   wartremoverErrors in (Compile, compile) ++= Warts.allBut(
-    Wart.ImplicitParameter, Wart.Recursion, Wart.DefaultArguments, Wart.ImplicitConversion,
+    // those we want
+    Wart.DefaultArguments, Wart.ImplicitParameter, Wart.ImplicitConversion,
+    // those don't want
+    Wart.Recursion,
     Wart.LeakingSealed, Wart.Overloading, Wart.Nothing, Wart.NonUnitStatements,
-    Wart.Equals, Wart.PublicInference, Wart.Var, Wart.TraversableOps, Wart.ArrayEquals,
-    Wart.Throw, Wart.While, Wart.Any, Wart.Product, Wart.Serializable, Wart.OptionPartial,
+    Wart.Equals, Wart.PublicInference, Wart.TraversableOps, Wart.ArrayEquals,
+    Wart.While, Wart.Any, Wart.Product, Wart.Serializable, Wart.OptionPartial,
     Wart.EitherProjectionPartial, Wart.Option2Iterable, Wart.ToString, Wart.JavaConversions,
     Wart.MutableDataStructures, Wart.FinalVal, Wart.Null, Wart.AsInstanceOf, Wart.ExplicitImplicitTypes,
     Wart.StringPlusAny, Wart.AnyVal
@@ -57,7 +60,7 @@ lazy val projectSettings = Seq(
     case path => MergeStrategy.defaultMergeStrategy(path)
   }
 ) ++
-// skip api doc generation if SKIP_DOC env variable is defined 
+// skip api doc generation if SKIP_DOC env variable is defined
 Seq(sys.env.get("SKIP_DOC")).flatMap { _ =>
   Seq(
     publishArtifact in (Compile, packageDoc) := false,
@@ -95,6 +98,12 @@ lazy val shared = (project in file("shared"))
   .settings(commonSettings: _*)
   .settings(
     version := "0.1",
+    scalacOptions ++= Seq(
+      "-Xfatal-warnings",
+      "-unchecked",
+      "-deprecation",
+      "-feature"
+    ),
     libraryDependencies ++= commonDependencies ++ Seq(
       catsCore,
       catsEffect,
@@ -113,6 +122,12 @@ lazy val graphz = (project in file("graphz"))
   .settings(commonSettings: _*)
   .settings(
     version := "0.1",
+    scalacOptions ++= Seq(
+      "-Xfatal-warnings",
+      "-unchecked",
+      "-deprecation",
+      "-feature"
+    ),
     libraryDependencies ++= commonDependencies ++ Seq(
       catsCore,
       catsEffect,
@@ -148,6 +163,12 @@ lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
   .settings(
     version := "0.1",
+    scalacOptions ++= Seq(
+      "-Xfatal-warnings",
+      "-unchecked",
+      "-deprecation",
+      "-feature"
+    ),
     dependencyOverrides += "org.slf4j" % "slf4j-api" % "1.7.25",
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
       grpcNetty,
@@ -173,6 +194,12 @@ lazy val crypto = (project in file("crypto"))
   .settings(commonSettings: _*)
   .settings(
     name := "crypto",
+    scalacOptions ++= Seq(
+      "-Xfatal-warnings",
+      "-unchecked",
+      "-deprecation",
+      "-feature"
+    ),
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       guava,
       bouncyCastle,
@@ -204,14 +231,20 @@ lazy val models = (project in file("models"))
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(rspace)
+  .dependsOn(shared % "compile->compile;test->test", rspace)
 
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.8.3",
+    version := "0.8.3" + git.gitHeadCommit.value.map(".git" + _.take(8)).getOrElse(""),
     name := "rnode",
+    scalacOptions ++= Seq(
+      "-Xfatal-warnings",
+      "-unchecked",
+      "-deprecation",
+      "-feature"
+    ),
     maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary := "RChain Node",
     packageDescription := "RChain Node - the RChain blockchain node server software.",
@@ -269,8 +302,6 @@ lazy val node = (project in file("node"))
     """,
     /* Dockerization */
     dockerUsername := Some(organization.value),
-    version in Docker := version.value +
-      git.gitHeadCommit.value.map("-git" + _.take(8)).getOrElse(""),
     dockerAliases ++=
       sys.env.get("DRONE_BUILD_NUMBER")
         .toSeq.map(num => dockerAlias.value.withTag(Some(s"DRONE-${num}"))),
@@ -415,7 +446,7 @@ lazy val blockStorage = (project in file("block-storage"))
       catsMtl
     )
   )
-  .dependsOn(shared, models)
+  .dependsOn(shared, models % "compile->compile;test->test")
 
 lazy val rspace = (project in file("rspace"))
   .configs(IntegrationTest extend Test)
@@ -486,7 +517,7 @@ lazy val rspace = (project in file("rspace"))
       )
     )
   )
-  .dependsOn(shared, crypto)
+  .dependsOn(shared % "compile->compile;test->test", crypto)
 
 lazy val rspaceBench = (project in file("rspace-bench"))
   .settings(

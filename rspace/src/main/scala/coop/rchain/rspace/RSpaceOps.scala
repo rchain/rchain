@@ -67,6 +67,8 @@ abstract class RSpaceOps[F[_], C, P, E, A, R, K](
         install(txn, channels, patterns, continuation)(_match)
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // TODO stop throwing exceptions
   private[this] def install(
       txn: store.Transaction,
       channels: Seq[C],

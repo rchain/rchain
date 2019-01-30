@@ -2,7 +2,7 @@ package coop.rchain.casper
 
 import java.nio.file.Files
 
-import cats.Applicative
+import cats.{Applicative, Monad}
 import cats.data.EitherT
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
@@ -38,7 +38,9 @@ import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 import coop.rchain.casper.scalatestcontrib._
+import coop.rchain.casper.util.comm.TestNetwork
 import coop.rchain.catscontrib.ski.kp2
+import coop.rchain.comm.rp.Connect.Connections
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared.Log
 import org.scalatest
@@ -904,17 +906,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  it should "allow bonding in an existing network" in effectTest {
-    val deployDatasFs = Vector(
-      "@2!(2)",
-      "@1!(1)",
-      "@3!(3)"
-    ).zipWithIndex
-      .map(
-        d =>
-          () =>
-            ProtoUtil.sourceDeploy(d._1, System.currentTimeMillis() + d._2, accounting.MAX_VALUE)
-      )
+  it should "allow bonding in an existing network" ignore effectTest {
+    def deployment(i: Int): DeployData =
+      ProtoUtil.sourceDeploy(s"@$i!({$i})", System.currentTimeMillis() + i, accounting.MAX_VALUE)
+
     def deploy(
         node: HashSetCasperTestNode[Effect],
         dd: DeployData
@@ -926,27 +921,23 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         status <- node.casperEff.addBlock(signedBlock1, ignoreDoppelgangerCheck[Effect])
       } yield (signedBlock1, status)
 
-    def stepSplit(nodes: Seq[HashSetCasperTestNode[Effect]]): Effect[Unit] =
+    def stepSplit(nodes: List[HashSetCasperTestNode[Effect]]): Effect[Unit] =
       for {
-        _ <- deploy(nodes(0), deployDatasFs(0).apply())
-        _ <- deploy(nodes(1), deployDatasFs(1).apply())
-        _ <- deploy(nodes(2), deployDatasFs(2).apply())
-
-        _ <- nodes(0).receive()
-        _ <- nodes(1).receive()
-        _ <- nodes(2).receive()
+        _ <- nodes.zipWithIndex.traverse { case (n, i) => deploy(n, deployment(i)) }
+        _ <- nodes.traverse(_.receive())
       } yield ()
 
-    def propagate(nodes: Seq[HashSetCasperTestNode[Effect]]): Effect[Unit] =
+    def propagate(nodes: List[HashSetCasperTestNode[Effect]]): Effect[Unit] =
       for {
-        _ <- nodes(0).receive()
-        _ <- nodes(1).receive()
-        _ <- nodes(2).receive()
+        _ <- nodes.traverse(_.receive())
       } yield ()
 
-    def bond(node: HashSetCasperTestNode[Effect]): Effect[Unit] = {
+    def bond(
+        node: HashSetCasperTestNode[Effect],
+        keys: (Array[Byte], Array[Byte])
+    ): Effect[Unit] = {
       implicit val runtimeManager = node.runtimeManager
-      val (sk, pk)                = Ed25519.newKeyPair
+      val (sk, pk)                = keys
       val pkStr                   = Base16.encode(pk)
       val amount                  = 314L
       val forwardCode             = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
@@ -972,18 +963,23 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       } yield ()
     }
 
-    for {
-      nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
-      _     <- stepSplit(nodes)
-      _     <- stepSplit(nodes)
-      _     <- bond(nodes(0))
-      _     <- propagate(nodes)
-      _     <- propagate(nodes)
+    val network = TestNetwork.empty[Effect]
 
-      _ <- deploy(nodes(0), deployDatasFs(0).apply())
-      _ <- deploy(nodes(2), deployDatasFs(2).apply())
-      _ <- nodes(2).receive()
-      _ <- nodes.map(_.tearDown()).toList.sequence
+    for {
+      nodes <- HashSetCasperTestNode
+                .networkEff(validatorKeys.take(3), genesis, testNetwork = network)
+                .map(_.toList)
+      _        <- stepSplit(nodes)
+      _        <- stepSplit(nodes)
+      (sk, pk) = Ed25519.newKeyPair
+      newNode  = HashSetCasperTestNode.standaloneEff(genesis, sk, testNetwork = network)
+      _        <- bond(nodes(0), (sk, pk))
+      all      <- HashSetCasperTestNode.rigConnectionsF[Effect](newNode, nodes)
+
+      _ <- stepSplit(all)
+      _ <- stepSplit(all)
+
+      _ <- all.map(_.tearDown()).sequence
     } yield ()
   }
 
@@ -1747,6 +1743,7 @@ object HashSetCasperTest {
     val initial           = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "rchain")
     val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
     val storageSize: Long = 1024L * 1024
+    implicit val log      = new Log.NOPLog[Task]
 
     val activeRuntime =
       Runtime.create[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB).unsafeRunSync
