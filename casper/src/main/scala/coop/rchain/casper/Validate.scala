@@ -172,7 +172,6 @@ object Validate {
 
   /*
    * TODO: Double check ordering of validity checks
-   * TODO: Check that justifications follow from bonds of creator justification
    */
   def blockSummary[F[_]: Monad: Log: Time: BlockStore](
       block: BlockMessage,
