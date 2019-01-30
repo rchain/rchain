@@ -6,13 +6,12 @@ import coop.rchain.casper.protocol.DeployData
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
-import coop.rchain.models.Expr.ExprInstance.GInt
-import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GString}
+import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GInt, GString}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{Bundle, ETuple, Expr, GPrivate, Par}
-import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
+import coop.rchain.rholang.interpreter.PrettyPrinter
 
-case class InsertSigned(pk: Hex, value: (Long, Contract), sig: Hex) {
+final case class InsertSigned(pk: Hex, value: (Long, Contract), sig: Hex) {
   def nonce    = value._1
   def contract = value._2
 
@@ -25,12 +24,12 @@ case class InsertSigned(pk: Hex, value: (Long, Contract), sig: Hex) {
   """.stripMargin
 }
 
-case class Hex(bs: Array[Byte]) {
+final case class Hex(bs: Array[Byte]) {
   override def toString() = Base16.encode(bs)
 }
-case class Contract(varName: String, p: Par)
+final case class Contract(varName: String, p: Par)
 
-case class Derivation(
+final case class Derivation(
     sk: Hex,
     timestamp: Long,
     uname: Par,
