@@ -16,7 +16,6 @@ from typing import (
     Optional,
     Generator,
     AbstractSet,
-    Union,
 )
 
 from docker.client import DockerClient
@@ -124,27 +123,34 @@ def parse_show_blocks_output(show_blocks_output: str) -> List[Dict[str, str]]:
     return result
 
 
-def parse_show_block_output(show_block_output: str) -> Dict[str, Union[str, Dict[str, float]]]:
-    result = {}
+def parse_show_block_output(show_block_output: str) -> Dict[str, str]:
+    result: Dict[str, str] = {}
 
     lines = show_block_output.splitlines()
+    bonds_validator = []
     for line in lines:
-        if line.startswith('status:') or line.startswith('blockInfo') or line.startswith('}'):
+        if line.startswith('status:') or line.startswith('blockInfo {') or line.startswith('}'):
             continue
         if line.strip() == '':
             continue
         key, value = parse_show_blocks_key_value_line(line)
         if key == "bondsValidatorList":
-            if result.get(key) is None:
-                result[key] = {}
-            validator_hash, stake = value.split(': ')
-            stake = float(stake.strip('"'))
-            validator_hash = validator_hash.strip('"')
-            result[key][validator_hash] = stake
+            validator_hash = value.strip('"')
+            bonds_validator.append(validator_hash)
         else:
             result[key] = value
-
+    result['bondsValidatorList'] = ','.join(bonds_validator)
     return result
+
+
+def extract_validator_stake_from_bonds_validator_str(out_put: str) -> Dict[str, float]:
+    validator_stake_dict = {}
+    validator_stake_list = out_put.split(',')
+    for validator_stake in validator_stake_list:
+        validator, stake = validator_stake.split(': ')
+        stake_f = float(stake)
+        validator_stake_dict[validator] = stake_f
+    return validator_stake_dict
 
 
 def extract_block_hash_from_propose_output(propose_output: str) -> str:
@@ -220,7 +226,7 @@ class Node:
         show_blocks_output = self.show_blocks_with_depth(depth)
         return parse_show_blocks_output(show_blocks_output)
 
-    def show_block_parsed(self, hash: str) -> Dict[str, Union[str, Dict[str, float]]]:
+    def show_block_parsed(self, hash: str) -> Dict[str, str]:
         show_block_output = self.show_block(hash)
         return parse_show_block_output(show_block_output)
 

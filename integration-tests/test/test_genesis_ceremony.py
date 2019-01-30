@@ -15,6 +15,7 @@ from .common import (
 from .rnode import (
     started_peer,
     ready_bootstrap,
+    extract_validator_stake_from_bonds_validator_str,
 )
 from .wait import (
     wait_for_block_approval,
@@ -22,7 +23,6 @@ from .wait import (
     wait_for_sent_approved_block,
     wait_for_sent_unapproved_block,
     wait_for_approved_block_received_handler,
-    wait_for_block_contains,
 )
 
 
@@ -223,5 +223,6 @@ def test_validator_catching_up(command_line_options: CommandLineOptions, random_
                             assert validator_c_genesis_block['mainParentHash'] == '""'
 
                             validator_c_genesis_block_info = validator_c.show_block_parsed(validator_c_genesis_block['blockHash'].strip('"'))
-                            assert VALIDATOR_A_KEYPAIR.public_key in validator_c_genesis_block_info['bondsValidatorList']
-                            assert VALIDATOR_B_KEYPAIR.public_key in validator_c_genesis_block_info['bondsValidatorList']
+                            validator_c_bonds_validator_stake = extract_validator_stake_from_bonds_validator_str(validator_c_genesis_block_info['bondsValidatorList'])
+                            assert VALIDATOR_A_KEYPAIR.public_key in validator_c_bonds_validator_stake
+                            assert VALIDATOR_B_KEYPAIR.public_key in validator_c_bonds_validator_stake
