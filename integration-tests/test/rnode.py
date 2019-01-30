@@ -16,6 +16,7 @@ from typing import (
     Optional,
     Generator,
     AbstractSet,
+    Union,
 )
 
 from docker.client import DockerClient
@@ -123,6 +124,24 @@ def parse_show_blocks_output(show_blocks_output: str) -> List[Dict[str, str]]:
     return result
 
 
+def parse_show_block_output(show_block_output: str) -> Dict[str, Union[str, Dict[str, float]]]:
+    result = {}
+
+    lines = show_block_output.splitlines()
+    for line in lines:
+        if line.startswith('status:') or line.startswith('blockInfo') or line.startswith('}'):
+            continue
+        if line.strip() == '':
+            continue
+        key, value = parse_show_blocks_key_value_line(line)
+        if key == "bondsValidatorList":
+            if result.get(key) is None:
+                result[key] = {}
+            validator_hash, stake = value.split(':')
+            stake = float(stake.strip('" '))
+            result[key][validator_hash] = stake
+    return result
+
 
 def extract_block_hash_from_propose_output(propose_output: str) -> str:
     """We're getting back something along the lines of:
@@ -196,6 +215,10 @@ class Node:
     def show_blocks_parsed(self, depth: int) -> List[Dict[str, str]]:
         show_blocks_output = self.show_blocks_with_depth(depth)
         return parse_show_blocks_output(show_blocks_output)
+
+    def show_block_parsed(self, hash: str) -> Dict[str, Union[str, Dict[str, float]]]:
+        show_block_output = self.show_block(hash)
+        return parse_show_block_output(show_block_output)
 
     def get_block(self, block_hash: str) -> str:
         try:

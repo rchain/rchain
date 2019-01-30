@@ -222,5 +222,6 @@ def test_validator_catching_up(command_line_options: CommandLineOptions, random_
                             assert validator_c_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
                             assert validator_c_genesis_block['mainParentHash'] == '""'
 
-                            wait_for_block_contains(context, validator_c, validator_c_genesis_block['blockHash'], VALIDATOR_A_KEYPAIR.public_key)
-                            wait_for_block_contains(context, validator_c, validator_c_genesis_block['blockHash'], VALIDATOR_B_KEYPAIR.public_key)
+                            validator_c_genesis_block_info = validator_c.show_block_parsed(validator_c_genesis_block['blockHash'].strip('"'))
+                            assert VALIDATOR_A_KEYPAIR.public_key in validator_c_genesis_block_info['bondsValidatorList']
+                            assert VALIDATOR_B_KEYPAIR.public_key in validator_c_genesis_block_info['bondsValidatorList']
