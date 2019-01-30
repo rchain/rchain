@@ -17,7 +17,7 @@ object blockImplicits {
 
   val justificationGen: Gen[Justification] = for {
     latestBlockHash <- arbitrary[ByteString]
-  } yield (Justification().withLatestBlockHash(latestBlockHash))
+  } yield Justification().withLatestBlockHash(latestBlockHash)
 
   implicit val arbitraryJustification: Arbitrary[Justification] = Arbitrary(justificationGen)
 
@@ -39,13 +39,13 @@ object blockImplicits {
         )
         .withSender(validator)
 
-  val blockHashElementGen: Gen[(String, BlockMessage)] =
-    blockElementGen.map(block => (block.blockHash.toStringUtf8, block))
+  val blockElementsGen: Gen[List[BlockMessage]] =
+    Gen.listOf(blockElementGen)
 
-  val blockHashElementsGen: Gen[List[(String, BlockMessage)]] =
-    distinctListOfGen(blockHashElementGen)(_._1 == _._1)
+  val blockBatchesGen: Gen[List[List[BlockMessage]]] =
+    Gen.listOf(blockElementsGen)
 
-  def blockElementsGen: Gen[List[BlockMessage]] =
+  def blockElementsWithParentsGen: Gen[List[BlockMessage]] =
     Gen.sized { size =>
       (0 until size).foldLeft(Gen.listOfN(0, blockElementGen)) {
         case (gen, _) =>

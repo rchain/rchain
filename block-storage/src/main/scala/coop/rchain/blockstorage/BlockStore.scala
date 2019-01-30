@@ -11,6 +11,9 @@ import scala.language.higherKinds
 trait BlockStore[F[_]] {
   import BlockStore.BlockHash
 
+  def put(blockMessage: BlockMessage): F[StorageIOErr[Unit]] =
+    put((blockMessage.blockHash, blockMessage))
+
   def put(blockHash: BlockHash, blockMessage: BlockMessage): F[StorageIOErr[Unit]] =
     put((blockHash, blockMessage))
 
@@ -26,7 +29,7 @@ trait BlockStore[F[_]] {
   def contains(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[Boolean] =
     get(blockHash).map(_.isDefined)
 
-  def checkpoint(): F[Unit]
+  def checkpoint(): F[StorageIOErr[Unit]]
 
   def clear(): F[StorageIOErr[Unit]]
 
