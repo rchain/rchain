@@ -1,10 +1,10 @@
 package coop.rchain.rholang.interpreter
 
-import coop.rchain.shared.StoreType
-import java.io.{BufferedOutputStream, FileOutputStream, FileReader, StringReader}
+import java.io.{BufferedOutputStream, FileOutputStream, FileReader, IOException, StringReader}
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
 
+import coop.rchain.shared.StoreType
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.RhoIStore
@@ -19,7 +19,7 @@ import coop.rchain.shared.Log
 import scala.annotation.tailrec
 import scala.concurrent.Await
 import scala.concurrent.duration._
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 object RholangCLI {
 
@@ -60,16 +60,45 @@ object RholangCLI {
       _       <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
     } yield (runtime)).unsafeRunSync
 
-    try {
+    val problems = try {
       if (conf.files.supplied) {
-        val fileNames = conf.files()
-        fileNames.foreach(f => processFile(conf, runtime, f))
+        val problems = for {
+          f                <- conf.files()
+          result           = processFile(conf, runtime, f) if result.isFailure
+          Failure(problem) = result
+        } yield (f, problem)
+        problems.foreach {
+          case (f, oops) => {
+            Console.err.println("error in: " + f)
+            errorOrBug(oops) match {
+              case Right(err) => Console.err.println(err.getMessage)
+              case Left(bug)  => bug.printStackTrace(Console.err)
+            }
+          }
+        }
+        problems
       } else {
         repl(runtime)
+        List()
       }
     } finally {
       runtime.close().unsafeRunSync
     }
+    if (!problems.isEmpty) {
+      System.exit(1)
+    }
+  }
+
+  def errorOrBug(th: Throwable): Either[Throwable, Throwable] = th match {
+    // ParserError seems to be about parser construction,
+    // i.e. a design-time error that merits a stack trace.
+    // LexerError is uses that way too, but it's also
+    // used for unexpected EOF and end of string.
+    case er: LexerError      => Right(er)
+    case er: SyntaxError     => Right(er)
+    case er: NormalizerError => Right(er)
+    case er: IOException     => Right(er)
+    case th: Throwable       => Left(th)
   }
 
   def reader(fileName: String): FileReader = new FileReader(fileName)
@@ -121,30 +150,18 @@ object RholangCLI {
 
   def processFile(conf: Conf, runtime: Runtime[Task], fileName: String)(
       implicit scheduler: Scheduler
-  ): Unit = {
-    val processTerm: Par => Unit =
+  ): Try[Unit] = {
+    val processTerm: Par => Try[Unit] =
       if (conf.binary()) writeBinary(fileName)
       else if (conf.text()) writeHumanReadable(fileName)
       else evaluatePar(runtime)
 
-    val source = reader(fileName)
-
-    Interpreter[Coeval]
-      .buildNormalizedTerm(source)
-      .runAttempt
-      .fold(
-        {
-          // ParserError seems to be about parser construction,
-          // i.e. a design-time error that merits a stack trace.
-          // LexerError is uses that way too, but it's also
-          // used for unexpected EOF and end of string.
-          case er: LexerError      => Console.err.println(er.getMessage)
-          case er: SyntaxError     => Console.err.println(er.getMessage)
-          case er: NormalizerError => Console.err.println(er.getMessage)
-          case th                  => th.printStackTrace(Console.err)
-        },
-        processTerm
-      )
+    Try(reader(fileName)).flatMap(source => {
+      Interpreter[Coeval]
+        .buildNormalizedTerm(source)
+        .runAttempt
+        .fold(Failure(_), processTerm(_))
+    })
   }
 
   @tailrec
@@ -166,31 +183,38 @@ object RholangCLI {
         throw e
     }
 
-  private def writeHumanReadable(fileName: String)(sortedTerm: Par): Unit = {
+  private def writeHumanReadable(fileName: String)(sortedTerm: Par): Try[Unit] = {
     val compiledFileName = fileName.replaceAll(".rho$", "") + ".rhoc"
-    new java.io.PrintWriter(compiledFileName) {
-      write(sortedTerm.toProtoString)
-      close()
-    }
-    println(s"Compiled $fileName to $compiledFileName")
+    Try({
+      new java.io.PrintWriter(compiledFileName) {
+        write(sortedTerm.toProtoString)
+        close()
+      }
+      println(s"Compiled $fileName to $compiledFileName")
+    })
   }
 
-  private def writeBinary(fileName: String)(sortedTerm: Par): Unit = {
+  private def writeBinary(fileName: String)(sortedTerm: Par): Try[Unit] = {
     val binaryFileName = fileName.replaceAll(".rho$", "") + ".bin"
-    val output         = new BufferedOutputStream(new FileOutputStream(binaryFileName))
-    output.write(sortedTerm.toByteString.toByteArray)
-    output.close()
-    println(s"Compiled $fileName to $binaryFileName")
+    Try({
+      val output = new BufferedOutputStream(new FileOutputStream(binaryFileName))
+      output.write(sortedTerm.toByteString.toByteArray)
+      output.close()
+      println(s"Compiled $fileName to $binaryFileName")
+    })
   }
 
-  def evaluatePar(runtime: Runtime[Task])(par: Par)(implicit scheduler: Scheduler): Unit = {
+  def evaluatePar(runtime: Runtime[Task])(
+      par: Par
+  )(implicit scheduler: Scheduler): Try[Unit] = {
     val evaluatorTask =
       for {
-        _      <- Task.now(printNormalizedTerm(par))
+        _      <- Task.delay(printNormalizedTerm(par))
         result <- Interpreter[Task].evaluate(runtime, par)
       } yield result
 
-    waitForSuccess(evaluatorTask.runToFuture)
-    printStorageContents(runtime.space.store)
+    Try(waitForSuccess(evaluatorTask.runToFuture)).map{ _ok =>
+      printStorageContents(runtime.space.store)
+    }
   }
 }
