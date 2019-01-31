@@ -11,6 +11,7 @@ import coop.rchain.models.Par
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.collection.ListOps
 import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.TestRuntime
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
 import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.rholang.interpreter.accounting.Cost
@@ -47,7 +48,7 @@ object TestSetUtil {
   )(implicit scheduler: Scheduler): Runtime[Task] = {
     implicit val log: Log[Task] = new Log.NOPLog[Task]
     for {
-      runtime <- Runtime.create[Task, Task.Par](Paths.get("/not/a/path"), -1, InMem, extraServices)
+      runtime <- TestRuntime.create[Task, Task.Par](extraServices)
       _       <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
     } yield (runtime)
   }.unsafeRunSync
