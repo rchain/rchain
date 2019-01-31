@@ -99,12 +99,8 @@ object CostAccountingPropertyTest {
     implicit val logF: Log[Task] = new Log.NOPLog[Task]
 
     for {
-      runtime <- Runtime.create[Task, Task.Par](
-                  java.nio.file.Paths.get("/not/a/path"),
-                  -1,
-                  coop.rchain.shared.StoreType.InMem
-                )
-      _ <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
+      runtime <- TestRuntime.create[Task, Task.Par]()
+      _       <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
       res <- procs.toStream
               .traverse(execute(runtime, _))
               .map(_.sum)
