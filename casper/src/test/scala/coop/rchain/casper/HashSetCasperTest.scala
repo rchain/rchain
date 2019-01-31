@@ -906,7 +906,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  it should "allow bonding in an existing network" ignore effectTest {
+  it should "allow bonding in an existing network" in effectTest {
     def deployment(i: Int): DeployData =
       ProtoUtil.sourceDeploy(s"@$i!({$i})", System.currentTimeMillis() + i, accounting.MAX_VALUE)
 
