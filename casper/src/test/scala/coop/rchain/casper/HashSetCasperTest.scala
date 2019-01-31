@@ -906,7 +906,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  it should "allow bonding in an existing network" ignore effectTest {
+  it should "allow bonding in an existing network" in effectTest {
     def deployment(i: Int): DeployData =
       ProtoUtil.sourceDeploy(s"@$i!({$i})", System.currentTimeMillis() + i, accounting.MAX_VALUE)
 
@@ -1597,9 +1597,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _               <- nodes(0).receive()
       _               <- nodes(2).receive()
 
-      _     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF genesisWithEqualBonds
+      _     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block1
       state <- nodes(0).casperState.read
-      _     = state.deployHistory.size should be(2)
+      _     = state.deployHistory.size should be(1)
 
       createBlock6Result <- nodes(2).casperEff
                              .deploy(deployDatas(5)) *> nodes(2).casperEff.createBlock
@@ -1608,7 +1608,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _               <- nodes(0).receive()
       _               <- nodes(1).receive()
 
-      _     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block1
+      _     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block2
       state <- nodes(0).casperState.read
       _     = state.deployHistory.size should be(1)
 
@@ -1619,7 +1619,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _               <- nodes(1).receive()
       _               <- nodes(2).receive()
 
-      _ <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block2
+      _ <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block3
+      _ = state.deployHistory.size should be(1)
 
       createBlock8Result <- nodes(1).casperEff
                              .deploy(deployDatas(7)) *> nodes(1).casperEff.createBlock
@@ -1628,9 +1629,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _               <- nodes(0).receive()
       _               <- nodes(2).receive()
 
-      _     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block3
+      _     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block4
       state <- nodes(0).casperState.read
-      _     = state.deployHistory.size should be(2)
+      _     = state.deployHistory.size should be(1)
 
       _ <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
