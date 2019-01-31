@@ -291,8 +291,8 @@
 
 # Cost accounting
 ### As a node operator, I want to get the list of deploys and their costs when I run `show-blocks`.
-### As a validator, I want to be compensated in REV for setting up, storing, running, and processing transactions. I need to be able to see a record of this compenstation and retrieve my earnings.
-### As a validator, I want to receive interest in REV on my bond amount as defined by the schedule in the mint.
+### As a validating node operator, I want to be compensated in REV for setting up, storing, running, and processing transactions. I need to be able to see a record of this compenstation and retrieve my earnings.
+### As a validating node operator, I want to receive interest in REV on my bond amount as defined by the schedule in the mint.
 ##### steps:
 * initiate a validator
 * Calculate interest for the validator's bond based on the scheudle in the mint
