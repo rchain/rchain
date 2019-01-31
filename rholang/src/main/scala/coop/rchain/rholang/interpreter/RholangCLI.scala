@@ -29,6 +29,7 @@ object RholangCLI {
 
     val binary = opt[Boolean](descr = "outputs binary protobuf serialization")
     val text   = opt[Boolean](descr = "outputs textual protobuf serialization")
+    val quiet  = opt[Boolean](descr = "don't print tuplespace after evaluation")
 
     val dataDir = opt[Path](
       required = false,
@@ -64,7 +65,7 @@ object RholangCLI {
       if (conf.files.supplied) {
         val problems = for {
           f                <- conf.files()
-          result           = processFile(conf, runtime, f) if result.isFailure
+          result           = processFile(conf, runtime, f, conf.quiet.getOrElse(false)) if result.isFailure
           Failure(problem) = result
         } yield (f, problem)
         problems.foreach {
@@ -148,13 +149,13 @@ object RholangCLI {
     repl(runtime)
   }
 
-  def processFile(conf: Conf, runtime: Runtime[Task], fileName: String)(
+  def processFile(conf: Conf, runtime: Runtime[Task], fileName: String, quiet: Boolean)(
       implicit scheduler: Scheduler
   ): Try[Unit] = {
     val processTerm: Par => Try[Unit] =
       if (conf.binary()) writeBinary(fileName)
       else if (conf.text()) writeHumanReadable(fileName)
-      else evaluatePar(runtime)
+      else evaluatePar(runtime, quiet)
 
     Try(reader(fileName)).flatMap(source => {
       Interpreter[Coeval]
@@ -204,17 +205,21 @@ object RholangCLI {
     })
   }
 
-  def evaluatePar(runtime: Runtime[Task])(
+  def evaluatePar(runtime: Runtime[Task], quiet: Boolean = false)(
       par: Par
   )(implicit scheduler: Scheduler): Try[Unit] = {
     val evaluatorTask =
       for {
-        _      <- Task.delay(printNormalizedTerm(par))
+        _ <- Task.delay(if (!quiet) {
+              printNormalizedTerm(par)
+            })
         result <- Interpreter[Task].evaluate(runtime, par)
       } yield result
 
-    Try(waitForSuccess(evaluatorTask.runToFuture)).map{ _ok =>
-      printStorageContents(runtime.space.store)
+    Try(waitForSuccess(evaluatorTask.runToFuture)).map { _ok =>
+      if (!quiet) {
+        printStorageContents(runtime.space.store)
+      }
     }
   }
 }
