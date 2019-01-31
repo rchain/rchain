@@ -6,7 +6,7 @@ object Dependencies {
 
   val circeVersion   = "0.10.0"
   val http4sVersion  = "0.19.0"
-  val kamonVersion   = "1.1.3"
+  val kamonVersion   = "1.1.5"
   val catsVersion    = "1.5.0"
   val catsMtlVersion = "0.4.0"
 
@@ -36,7 +36,7 @@ object Dependencies {
   // see https://jitpack.io/#rchain/kalium
   val kalium              = "com.github.rchain"           % "kalium"                    % "0.8.1"
   val kamonCore           = "io.kamon"                   %% "kamon-core"                % kamonVersion
-  val kamonSystemMetrics  = "io.kamon"                   %% "kamon-system-metrics"      % "1.0.0"
+  val kamonSystemMetrics  = "io.kamon"                   %% "kamon-system-metrics"      % "1.0.1"
   val kamonPrometheus     = "io.kamon"                   %% "kamon-prometheus"          % "1.1.1"
   val kamonInfluxDb       = "io.kamon"                   %% "kamon-influxdb"            % "1.0.2"
   val kamonZipkin         = "io.kamon"                   %% "kamon-zipkin"              % "1.0.0"
