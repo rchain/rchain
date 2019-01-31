@@ -595,10 +595,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
                             dag
                           )
                         ) {
-                          case (acc, b) =>
+                          case ((attempts, updatedDag), b) =>
                             for {
-                              status <- attemptAdd(b, acc._2, lastFinalizedBlockHash)
-                            } yield ((b, status) :: acc._1, status._2)
+                              status <- attemptAdd(b, updatedDag, lastFinalizedBlockHash)
+                            } yield ((b, status) :: attempts, status._2)
                         }
       (attempts, updatedDag) = attemptsWithDag
       _ <- if (attempts.isEmpty) {
