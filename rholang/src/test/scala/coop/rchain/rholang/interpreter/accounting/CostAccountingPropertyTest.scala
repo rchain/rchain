@@ -2,6 +2,8 @@ package coop.rchain.rholang.interpreter.accounting
 
 import java.nio.file.Files
 
+import cats._
+import cats.effect._
 import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models._
@@ -83,13 +85,13 @@ object CostAccountingPropertyTest {
       .map { _.sliding(2).forall { case List(r1, r2) => r1 == r2 } }
       .runSyncUnsafe(duration)
 
-  def execute(runtime: Runtime[Task], p: Proc): Task[Long] = {
-    val interpreter = Interpreter[Task]
+  def execute[F[_]: Sync](runtime: Runtime[F], p: Proc): F[Long] = {
+    val interpreter = Interpreter[F]
 
     for {
-      program   <- interpreter.buildPar(p)
-      res       <- interpreter.evaluate(runtime, program)
-      cost      = res.cost.cost
+      program <- interpreter.buildPar(p)
+      res     <- interpreter.evaluate(runtime, program)
+      cost    = res.cost.cost
     } yield cost.value
   }
 
