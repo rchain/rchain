@@ -76,40 +76,38 @@ class CostAccountingPropertyTest extends FlatSpec with PropertyChecks with Match
 }
 
 object CostAccountingPropertyTest {
+
   def haveEqualResults[A](tasks: Task[A]*)(implicit duration: Duration): Boolean =
     tasks.toList
       .sequence[Task, A]
       .map { _.sliding(2).forall { case List(r1, r2) => r1 == r2 } }
       .runSyncUnsafe(duration)
 
-  def execute(reducer: ChargingReducer[Task], p: Proc)(
-      implicit rand: Blake2b512Random
-  ): Task[Long] = {
-    val program = Interpreter[Coeval].buildPar(p).apply
-
-    val initPhlos = Cost(accounting.MAX_VALUE)
+  def execute(runtime: Runtime[Task], p: Proc): Task[Long] = {
+    val interpreter = Interpreter[Task]
 
     for {
-      _         <- reducer.setPhlo(initPhlos)
-      _         <- reducer.inj(program)
-      phlosLeft <- reducer.phlo
-    } yield (initPhlos - phlosLeft.cost).value
+      program   <- interpreter.buildPar(p)
+      res       <- interpreter.evaluate(runtime, program)
+      cost      = res.cost.cost
+    } yield cost.value
   }
 
   def costOfExecution(procs: Proc*): Task[Long] = {
-    implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
-    implicit val errLog: ErrorLog[Task] = new ErrorLog[Task]()
-    implicit val logF: Log[Task]        = new Log.NOPLog[Task]
+    implicit val logF: Log[Task] = new Log.NOPLog[Task]
 
-    mkRhoISpace[Task]("cost-accounting-property-test-")
-      .use { pureRSpace =>
-        lazy val (_, reducer, _) =
-          RholangAndScalaDispatcher.create[Task, Task.Par](pureRSpace, Map.empty, Map.empty)
+    for {
+      runtime <- Runtime.create[Task, Task.Par](
+                  java.nio.file.Paths.get("/not/a/path"),
+                  -1,
+                  coop.rchain.shared.StoreType.InMem
+                )
+      _ <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
+      res <- procs.toStream
+              .traverse(execute(runtime, _))
+              .map(_.sum)
+    } yield res
 
-        procs.toStream
-          .traverse(execute(reducer, _))
-          .map(_.sum)
-      }
   }
 
 }
