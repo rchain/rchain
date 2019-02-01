@@ -1,15 +1,6 @@
 package coop.rchain.rholang.interpreter
 
-import cats.{Monad, MonadError}
-import monix.eval.{Coeval, Task}
-import monix.eval.Task.catsAsync
-import cats.implicits._
-import coop.rchain.models.Expr.ExprInstance
-import coop.rchain.models.rholang.implicits._
-
 object errors {
-  type InterpreterErrorsM[M[_]] = MonadError[M, InterpreterError]
-  def interpreterErrorM[M[_]: Monad: InterpreterErrorsM] = MonadError[M, InterpreterError]
 
   sealed abstract class InterpreterError(message: String) extends Throwable(message) {
 
@@ -114,44 +105,5 @@ object errors {
 
   final case class OperatorExpectedError(op: String, expected: String, otherType: String)
       extends InterpreterError(s"Error: Operator `$op` is not defined on $otherType.")
-
-  implicit val monadErrorTask: MonadError[Task, InterpreterError] =
-    new MonadError[Task, InterpreterError] {
-      override def raiseError[A](e: InterpreterError): Task[A] = Task.raiseError(e)
-
-      override def handleErrorWith[A](fa: Task[A])(f: InterpreterError => Task[A]): Task[A] =
-        fa.onErrorHandleWith {
-          case e: InterpreterError => f(e)
-          case other               => Task.raiseError(other)
-        }
-
-      override def flatMap[A, B](fa: Task[A])(f: A => Task[B]): Task[B] =
-        fa.flatMap(f)
-
-      override def tailRecM[A, B](a: A)(f: A => Task[Either[A, B]]): Task[B] =
-        Task.tailRecM(a)(f)
-
-      override def pure[A](x: A): Task[A] = Task.pure(x)
-    }
-
-  implicit val monadErrorCoeval: MonadError[Coeval, InterpreterError] =
-    new MonadError[Coeval, InterpreterError] {
-      override def flatMap[A, B](fa: Coeval[A])(f: A => Coeval[B]): Coeval[B] =
-        fa.flatMap(f)
-
-      override def tailRecM[A, B](a: A)(f: A => Coeval[Either[A, B]]): Coeval[B] =
-        Coeval.tailRecM(a)(f)
-
-      override def raiseError[A](e: InterpreterError): Coeval[A] =
-        Coeval.raiseError(e)
-
-      override def handleErrorWith[A](fa: Coeval[A])(f: InterpreterError => Coeval[A]): Coeval[A] =
-        fa.onErrorHandleWith {
-          case ie: InterpreterError => f(ie)
-          case other                => Coeval.raiseError(other)
-        }
-
-      override def pure[A](x: A): Coeval[A] = Coeval.delay(x)
-    }
 
 }
