@@ -369,16 +369,17 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
           }
     } yield ()
 
+  private def representation: F[BlockDagRepresentation[F]] =
+    for {
+      latestMessages <- getLatestMessages
+      childMap       <- getChildMap
+      dataLookup     <- getDataLookup
+      topoSort       <- getTopoSort
+      sortOffset     <- getSortOffset
+    } yield FileDagRepresentation(latestMessages, childMap, dataLookup, topoSort, sortOffset)
+
   def getRepresentation: F[BlockDagRepresentation[F]] =
-    lock.withPermit(
-      for {
-        latestMessages <- getLatestMessages
-        childMap       <- getChildMap
-        dataLookup     <- getDataLookup
-        topoSort       <- getTopoSort
-        sortOffset     <- getSortOffset
-      } yield FileDagRepresentation(latestMessages, childMap, dataLookup, topoSort, sortOffset)
-    )
+    lock.withPermit(representation)
 
   def insert(block: BlockMessage): F[BlockDagRepresentation[F]] =
     lock.withPermit(
@@ -435,7 +436,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
                 _ <- updateDataLookupFile(blockMetadata)
               } yield ()
             }
-        dag <- getRepresentation
+        dag <- representation
       } yield dag
     )
 
