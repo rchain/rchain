@@ -36,7 +36,7 @@ import coop.rchain.catscontrib.eitherT._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{Assertion, FlatSpec, Matchers}
+import org.scalatest.{Assertion, FlatSpec, Inspectors, Matchers}
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.comm.TestNetwork
 import coop.rchain.catscontrib.ski.kp2
@@ -49,7 +49,7 @@ import scala.collection.immutable
 import scala.util.Random
 import scala.concurrent.duration._
 
-class HashSetCasperTest extends FlatSpec with Matchers {
+class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
 
   import HashSetCasperTest._
 
@@ -913,19 +913,23 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     def deploy(
         node: HashSetCasperTestNode[Effect],
         dd: DeployData
-    ): Effect[(BlockMessage, BlockStatus)] =
+    ): Effect[(BlockMessage, Either[Throwable, BlockStatus])] =
       for {
         createBlockResult1    <- node.casperEff.deploy(dd) *> node.casperEff.createBlock
         Created(signedBlock1) = createBlockResult1
 
-        status <- node.casperEff.addBlock(signedBlock1, ignoreDoppelgangerCheck[Effect])
+        status <- Sync[Effect].attempt(
+                   node.casperEff.addBlock(signedBlock1, ignoreDoppelgangerCheck[Effect])
+                 )
       } yield (signedBlock1, status)
 
-    def stepSplit(nodes: List[HashSetCasperTestNode[Effect]]): Effect[Unit] =
+    def stepSplit(
+        nodes: List[HashSetCasperTestNode[Effect]]
+    ): Effect[List[Either[Throwable, Unit]]] =
       for {
-        _ <- nodes.zipWithIndex.traverse { case (n, i) => deploy(n, deployment(i)) }
-        _ <- nodes.traverse(_.receive())
-      } yield ()
+        _  <- nodes.zipWithIndex.traverse { case (n, i) => deploy(n, deployment(i)) }
+        vs <- nodes.traverse(v => Sync[Effect].attempt(v.receive()))
+      } yield vs
 
     def propagate(nodes: List[HashSetCasperTestNode[Effect]]): Effect[Unit] =
       for {
@@ -957,8 +961,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         br       <- deploy(node, bondingDeploy)
         oldBonds = fr._1.getBody.getState.bonds
         newBonds = br._1.getBody.getState.bonds
-        _        = fr._2 shouldBe Valid
-        _        = br._2 shouldBe Valid
+        _        = fr._2 shouldBe Right(Valid)
+        _        = br._2 shouldBe Right(Valid)
         _        = (oldBonds.size + 1) shouldBe newBonds.size
       } yield ()
     }
@@ -976,8 +980,14 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _        <- bond(nodes(0), (sk, pk))
       all      <- HashSetCasperTestNode.rigConnectionsF[Effect](newNode, nodes)
 
-      _ <- stepSplit(all)
-      _ <- stepSplit(all)
+      s1 <- stepSplit(all)
+      _ = forAll(s1) { v =>
+        v.isRight should be(true)
+      }
+      s2 <- stepSplit(all)
+      _ = forAll(s2) { v =>
+        v.isRight should be(true)
+      }
 
       _ <- all.map(_.tearDown()).sequence
     } yield ()
