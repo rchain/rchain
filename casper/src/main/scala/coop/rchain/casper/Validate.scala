@@ -199,7 +199,7 @@ object Validate {
                         _ => Validate.justificationFollows[F](block, genesis, dag)
                       )
       parentsStatus <- followsStatus.joinRight.traverse(
-                        _ => Validate.parents[F](block, lastFinalizedBlockHash, dag)
+                        _ => Validate.parents[F](block, genesis, lastFinalizedBlockHash, dag)
                       )
       sequenceNumberStatus <- parentsStatus.joinRight.traverse(
                                _ => Validate.sequenceNumber[F](block, dag)
@@ -423,12 +423,13 @@ object Validate {
     */
   def parents[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
+      genesis: BlockMessage,
       lastFinalizedBlockHash: BlockHash,
       dag: BlockDagRepresentation[F]
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val maybeParentHashes = ProtoUtil.parentHashes(b)
     val parentHashes = maybeParentHashes match {
-      case hashes if hashes.isEmpty => Seq(lastFinalizedBlockHash)
+      case hashes if hashes.isEmpty => Seq(genesis.blockHash)
       case hashes                   => hashes
     }
 
@@ -442,7 +443,12 @@ object Validate {
                else
                  for {
                    _ <- Log[F].warn(
-                         ignore(b, "block parents did not match estimate based on justification.")
+                         ignore(
+                           b,
+                           s"block parents ${parentHashes.map(parentHash => PrettyPrinter.buildString(parentHash)).mkString(",")} did not match estimate ${computedParentHashes
+                             .map(parentHash => PrettyPrinter.buildString(parentHash))
+                             .mkString(",")} based on justification ${latestMessagesHashes.map { case (validator, blockHash) => PrettyPrinter.buildString(validator) + ": " + PrettyPrinter.buildString(blockHash) }.mkString(",")}."
+                         )
                        )
                  } yield Left(InvalidParents)
     } yield status

@@ -392,22 +392,24 @@ class ValidateTest
                        dag <- blockDagStorage.getRepresentation
 
                        // Valid
-                       _ <- Validate.parents[Task](b0, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b1, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b2, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b3, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b4, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b5, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b6, b0.blockHash, dag)
+                       _ <- Validate.parents[Task](b0, b0, b0.blockHash, dag)
+                       _ <- Validate.parents[Task](b1, b0, b0.blockHash, dag)
+                       _ <- Validate.parents[Task](b2, b0, b0.blockHash, dag)
+                       _ <- Validate.parents[Task](b3, b0, b0.blockHash, dag)
+                       _ <- Validate.parents[Task](b4, b0, b0.blockHash, dag)
+                       _ <- Validate.parents[Task](b5, b0, b0.blockHash, dag)
+                       _ <- Validate.parents[Task](b6, b0, b0.blockHash, dag)
 
                        // Not valid
-                       _ <- Validate.parents[Task](b7, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b8, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b9, b0.blockHash, dag)
+                       _ <- Validate.parents[Task](b7, b0, b0.blockHash, dag)
+                       _ <- Validate.parents[Task](b8, b0, b0.blockHash, dag)
+                       _ <- Validate.parents[Task](b9, b0, b0.blockHash, dag)
 
                        _ = log.warns.size should be(3)
                        result = log.warns.forall(
-                         _.contains("block parents did not match estimate based on justification")
+                         _.matches(
+                           "Ignoring block .* because block parents .* did not match estimate .* based on justification .*"
+                         )
                        ) should be(
                          true
                        )
