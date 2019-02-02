@@ -39,7 +39,7 @@
 * program exists with 1 and prints out coop.rchain.rholang.interpreter.errorsTopLevelFreeVariablesNotAllowedError
 
 ### As a Node Operator, I want to have a default configuration and the ability to customize the configuration on the command line
-#### Configure rnode using rnode.toml
+#### Configure rnode using a default configuration.
 ##### documentation: https://github.com/rchain/rchain/#configuration-file
 #### Configure rnode using command line flags
 ##### documentation: https://github.com/rchain/rchain/#configuration-flags
