@@ -163,10 +163,13 @@ object Interpreter {
 /**
   * Signal errors to the caller rather than printing them to System.err.
   *
+  * Please excuse the use of throw; we didn't design the CUP API.
+  *
   * Ref Section 4. Customizing the Parser in
   * CUP User's Manual Last updated 06/2014 (v0.11b)
   * http://www2.cs.tum.edu/projects/cup/docs.php#parser
   */
+@SuppressWarnings(Array("org.wartremover.warts.Throw"))
 class ErrorHandlingParser(s: Yylex, sf: java_cup.runtime.SymbolFactory) extends parser(s, sf) {
   import java_cup.runtime.ComplexSymbolFactory.ComplexSymbol
   import java_cup.runtime.Symbol
