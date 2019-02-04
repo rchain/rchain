@@ -21,11 +21,10 @@ object MultiParentCasperRef {
 
   def withCasper[F[_]: Monad: Log: MultiParentCasperRef, A](
       f: MultiParentCasper[F] => F[A],
-      default: A
+      default: F[A]
   ): F[A] =
     MultiParentCasperRef[F].get flatMap {
       case Some(casper) => f(casper)
-      case None =>
-        Log[F].warn(s"Casper instance was not available.").map(_ => default)
+      case None         => default
     }
 }
