@@ -9,7 +9,7 @@ import IOError.IOErr
 
 import scala.language.higherKinds
 
-final case class RandomAccessIO[F[_]: Sync](file: RandomAccessFile) {
+final case class RandomAccessIO[F[_]: Sync] private (private val file: RandomAccessFile) {
   private def handleIo[A](io: => A, handleIoException: IOException => IOError): F[IOErr[A]] =
     Sync[F].delay { io }.attempt.map[IOErr[A]] {
       case Left(e: IOException) => Left(handleIoException(e))
