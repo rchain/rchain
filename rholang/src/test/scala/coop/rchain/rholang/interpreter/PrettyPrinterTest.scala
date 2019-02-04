@@ -436,6 +436,17 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     result shouldBe "x0"
   }
 
+  "PVarRef" should "Print with referenced identifier" in {
+    checkRoundTrip(
+      """for( @{x0}, @{x1} <- @{0} ) {
+        |  match x0 {
+        |    =x0 => Nil
+        |    =x1 => Nil
+        |  }
+        |}""".stripMargin
+    )
+  }
+
   "PEval" should "Print eval with fresh identifier" in {
     val pEval       = new PEval(new NameVar("x"))
     val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", NameSort, 0, 0)))
