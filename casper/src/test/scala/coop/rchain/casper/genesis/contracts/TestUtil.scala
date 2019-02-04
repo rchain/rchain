@@ -9,35 +9,33 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.rholang.build.CompiledRholangSource
-import coop.rchain.rholang.collection.ListOps
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.TestRuntime
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
 import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.rholang.unittest.TestSet
+import coop.rchain.rholang.unittest.RhoSpecContract
 import coop.rchain.shared.StoreType.InMem
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler
 
 import scala.concurrent.duration._
-import scala.io.Source
 
-object TestSetUtil {
+object TestUtil {
 
-  val testSetDeploy: Deploy = {
+  val rhoSpecDeploy: Deploy = {
     val deployData = DeployData(
       user = ProtoUtil.stringToByteString(
         "4ae94eb0b2d7df529f7ae68863221d5adda402fc54303a3d90a8a7a279326828"
       ),
       timestamp = 1539808849271L,
-      term = TestSet.code,
+      term = RhoSpecContract.code,
       phloLimit = accounting.MAX_VALUE
     )
 
     Deploy(
-      term = Some(TestSet.term),
+      term = Some(RhoSpecContract.term),
       raw = Some(deployData)
     )
 
@@ -87,39 +85,8 @@ object TestSetUtil {
   ): Unit = {
     val rand = Blake2b512Random(128)
     evalDeploy(StandardDeploys.listOps, runtime)(implicitly)
-    evalDeploy(testSetDeploy, runtime)(implicitly)
+    evalDeploy(rhoSpecDeploy, runtime)(implicitly)
     otherLibs.foreach(evalDeploy(_, runtime))
     eval(tests.code, runtime)(implicitly, rand.splitShort(1))
   }
-
-  def runTests(
-      tests: CompiledRholangSource,
-      otherLibs: Seq[CompiledRholangSource],
-      runtime: Runtime[Task]
-  )(implicit scheduler: Scheduler): Unit = {
-    //load "libraries" required for all tests
-    val rand = Blake2b512Random(128)
-    evalDeploy(StandardDeploys.listOps, runtime)(implicitly)
-    evalDeploy(testSetDeploy, runtime)(implicitly)
-
-    //load "libraries" required for this particular set of tests
-    otherLibs.zipWithIndex.foreach {
-      case (lib, idx) =>
-        eval(lib.code, runtime)(implicitly, rand.splitShort((idx + 2).toShort))
-    }
-
-    eval(tests.code, runtime)(implicitly, rand.splitShort((otherLibs.length + 2).toShort))
-  }
-
-  /**
-    * Extracts the descriptions of all the tests defined in the source file
-    */
-  def getTests(src: String): Iterator[String] =
-    Source.fromFile(src).getLines().sliding(2).collect {
-      case Seq(line1, line2) if line1.contains("@TestSet!(\"define\",") =>
-        line2.split('"')(1)
-    }
-
-  def testPassed(test: String, tuplespace: String): Boolean =
-    tuplespace.contains(s"$test == true")
 }

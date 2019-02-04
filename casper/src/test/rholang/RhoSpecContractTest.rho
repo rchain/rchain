@@ -1,0 +1,90 @@
+//scalapackage coop.rchain.rholang
+
+new rl(`rho:registry:lookup`),
+    RhoSpecCh,
+    setup,
+    stdlog(`rho:io:stdlog`),
+    testSetup, testAssertEquals, testAssertTrue, testAssertMany,
+    testAssertEqualsFromChannel, testAssertManyEqualsFromChannel,
+    testAssertEqualsForVariables
+in {
+  stdlog!("info", "starting SuccessfulResultCollector...") |
+  rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *RhoSpecCh) |
+  for(@(_, RhoSpec) <- RhoSpecCh) {
+  @RhoSpec!("testSuite", *setup,
+    [
+      ("setup runs correctly", *testSetup),
+      ("assert equality", *testAssertEquals),
+      ("assert boolean conditions", *testAssertTrue),
+      ("assert many conditions", *testAssertMany),
+      ("assert '== <-'", *testAssertEqualsFromChannel),
+      ("assertMany '== <-'", *testAssertManyEqualsFromChannel)
+    ])
+  } |
+
+  contract setup(returnCh) = {
+    returnCh!("self value")
+  } |
+
+  contract testSetup(rhoSpec, self, ackCh) = {
+    rhoSpec ! ("assert", ("self value", "==", *self), "self should equal the value returned by testsuiteSetup", *ackCh)
+  } |
+
+  contract testAssertEquals(rhoSpec, self, ackCh) = {
+    new privateAck in {
+      rhoSpec ! ("assert", ("abc", "==", "abc"), "strings should be equal", *privateAck) |
+
+      for( _ <- privateAck) {
+        rhoSpec ! ("assert", (1, "==", 1), "ints should be equal", *ackCh)
+      }
+    }
+  } |
+
+  contract testAssertTrue(rhoSpec, self, ackCh) = {
+    rhoSpec ! ("assert", true, "boolean assertions should work", *ackCh)
+  } |
+
+  contract testAssertMany(rhoSpec, self, ackCh) = {
+    rhoSpec ! ("assertMany",
+      [
+        (true, "assert boolean"),
+        ((1, "==", 1), "assert equals")
+      ],
+      *ackCh)
+  } |
+
+  contract testAssertEqualsFromChannel(rhoSpec, self, ackCh) = {
+    new ch in {
+      ch ! (1) |
+      rhoSpec ! ("assert", (1, "== <-", *ch), "assert equals from channel", *ackCh)
+    }
+  } |
+
+  contract testAssertEqualsForVariables(rhoSpec, self, ackCh) = {
+    new ch in {
+      ch !! (1) |
+      for (x <- ch; y <- ch) {
+        rhoSpec ! ("assertMany",
+          [
+            ((*x, "==", *y), "assert var equals var"),
+            ((*x, "==", 1), "assert var equals const"),
+            ((1, "==", *x), "assert const equals var"),
+          ],
+          *ackCh)
+      }
+    }
+  } |
+
+  contract testAssertManyEqualsFromChannel(rhoSpec, self, ackCh) = {
+    new ch1, ch2 in {
+      ch1 ! (1) |
+      ch2 ! (2) |
+      rhoSpec ! ("assertMany",
+        [
+          ((1, "== <-", *ch1), "first assert"),
+          ((2, "== <-", *ch2) , "second assert")
+        ],
+        *ackCh)
+    }
+  }
+}
