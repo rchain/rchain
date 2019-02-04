@@ -12,13 +12,14 @@ import cats.effect.concurrent.Semaphore
 import cats.mtl.MonadState
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.blockstorage.FileLMDBIndexBlockStore.Checkpoint
+import coop.rchain.blockstorage.FileLMDBIndexBlockStore.{toStorageIOErrT, Checkpoint}
 import coop.rchain.blockstorage.StorageError.{StorageErr, StorageErrT, StorageIOErr, StorageIOErrT}
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.shared.Resources.withResource
 import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.blockstorage.util.io._
 import coop.rchain.blockstorage.StorageError._
+import coop.rchain.blockstorage.util.io.IOError.IOErr
 import coop.rchain.catscontrib.Capture
 import coop.rchain.shared.{AtomicMonadState, Log}
 import coop.rchain.shared.ByteStringOps._
@@ -91,10 +92,10 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
   private def readBlockMessage(indexEntry: IndexEntry): StorageIOErrT[F, BlockMessage] = {
     def readBlockMessageFromFile(storageFile: RandomAccessIO[F]): StorageIOErrT[F, BlockMessage] =
       for {
-        _                      <- EitherT(storageFile.seek(indexEntry.offset)).toStorageIOErrT
-        blockMessageSize       <- EitherT(storageFile.readInt).toStorageIOErrT
+        _                      <- toStorageIOErrT(storageFile.seek(indexEntry.offset))
+        blockMessageSize       <- toStorageIOErrT(storageFile.readInt)
         blockMessagesByteArray = Array.ofDim[Byte](blockMessageSize)
-        _                      <- EitherT(storageFile.readFully(blockMessagesByteArray)).toStorageIOErrT
+        _                      <- toStorageIOErrT(storageFile.readFully(blockMessagesByteArray))
         blockMessage           = BlockMessage.parseFrom(blockMessagesByteArray)
       } yield blockMessage
 
@@ -112,11 +113,13 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
                                     case Some(checkpoint) =>
                                       type StorageIOErrTF[A] = StorageIOErrT[F, A]
                                       Sync[StorageIOErrTF].bracket {
-                                        RandomAccessIO.open[F](checkpoint.storagePath)
+                                        toStorageIOErrT(
+                                          RandomAccessIO.open[F](checkpoint.storagePath)
+                                        )
                                       } { storageFile =>
                                         readBlockMessageFromFile(storageFile)
                                       } { storageFile =>
-                                        EitherT(storageFile.close()).toStorageIOErrT
+                                        toStorageIOErrT(storageFile.close())
                                       }
                                     case None =>
                                       EitherT
@@ -180,12 +183,12 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
                              getBlockMessageRandomAccessFile
                            )
         currentIndex              <- EitherT.liftF(getCurrentIndex)
-        endOfFileOffset           <- EitherT(randomAccessFile.length).toStorageIOErrT
-        _                         <- EitherT(randomAccessFile.seek(endOfFileOffset)).toStorageIOErrT
+        endOfFileOffset           <- toStorageIOErrT(randomAccessFile.length)
+        _                         <- toStorageIOErrT(randomAccessFile.seek(endOfFileOffset))
         (blockHash, blockMessage) = f
         blockMessageByteArray     = blockMessage.toByteArray
-        _                         <- EitherT(randomAccessFile.writeInt(blockMessageByteArray.length)).toStorageIOErrT
-        _                         <- EitherT(randomAccessFile.write(blockMessageByteArray)).toStorageIOErrT
+        _                         <- toStorageIOErrT(randomAccessFile.writeInt(blockMessageByteArray.length))
+        _                         <- toStorageIOErrT(randomAccessFile.write(blockMessageByteArray))
         _ <- EitherT.liftF[F, StorageIOError, Unit](withWriteTxn { txn =>
               index.put(
                 txn,
@@ -204,9 +207,9 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
         blockMessageRandomAccessFile <- EitherT.liftF[F, StorageIOError, RandomAccessIO[F]](
                                          getBlockMessageRandomAccessFile
                                        )
-        _                               <- EitherT(blockMessageRandomAccessFile.close()).toStorageIOErrT
-        _                               <- moveFile(storagePath, checkpointPath, StandardCopyOption.ATOMIC_MOVE).toStorageIOErrT
-        newBlockMessageRandomAccessFile <- RandomAccessIO.open[F](storagePath).toStorageIOErrT
+        _                               <- toStorageIOErrT(blockMessageRandomAccessFile.close())
+        _                               <- toStorageIOErrT(moveFile(storagePath, checkpointPath, StandardCopyOption.ATOMIC_MOVE))
+        newBlockMessageRandomAccessFile <- toStorageIOErrT(RandomAccessIO.open[F](storagePath))
         _ <- EitherT.liftF[F, StorageIOError, Unit](
               setBlockMessageRandomAccessFile(newBlockMessageRandomAccessFile)
             )
@@ -226,7 +229,7 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
         _ <- withWriteTxn { txn =>
               index.drop(txn)
             }
-        result <- EitherT(blockMessageRandomAccessFile.setLength(0)).toStorageIOErrT.value
+        result <- toStorageIOErrT(blockMessageRandomAccessFile.setLength(0)).value
       } yield result
     )
 
@@ -236,7 +239,7 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
         blockMessageRandomAccessFile <- EitherT.liftF[F, StorageIOError, RandomAccessIO[F]](
                                          getBlockMessageRandomAccessFile
                                        )
-        _ <- EitherT(blockMessageRandomAccessFile.close()).toStorageIOErrT
+        _ <- toStorageIOErrT(blockMessageRandomAccessFile.close())
         _ <- EitherT(Sync[F].delay { env.close() }.attempt).leftMap[StorageIOError] {
               case e: IOException =>
                 WrappedIOError(ClosingFailed(e))
@@ -270,11 +273,16 @@ object FileLMDBIndexBlockStore {
       storagePath: Path
   )
 
+  private[blockstorage] def toStorageIOErrT[F[_]: Sync, A](
+      ioError: F[IOErr[A]]
+  ): StorageIOErrT[F, A] =
+    EitherT(ioError).toStorageIOErrT
+
   private def loadCheckpoints[F[_]: Sync: Log](
       checkpointsDirPath: Path
   ): StorageErrT[F, List[Checkpoint]] =
     for {
-      checkpointFilesList <- listFiles(checkpointsDirPath).toStorageIOErrT
+      checkpointFilesList <- toStorageIOErrT(listFiles(checkpointsDirPath))
       checkpoints <- EitherT.liftF[F, StorageError, List[Checkpoint]](
                       checkpointFilesList.flatTraverse { filePath =>
                         filePath.getFileName.toString match {
@@ -320,7 +328,7 @@ object FileLMDBIndexBlockStore {
       index <- EitherT.liftF[F, StorageError, Dbi[ByteBuffer]](Sync[F].delay {
                 env.openDbi(s"block_store_index", MDB_CREATE)
               })
-      blockMessageRandomAccessFile <- RandomAccessIO.open(storagePath).toStorageIOErrT
+      blockMessageRandomAccessFile <- toStorageIOErrT(RandomAccessIO.open(storagePath))
       sortedCheckpoints            <- loadCheckpoints(checkpointsDirPath)
       checkpointsMap               = sortedCheckpoints.map(c => c.index -> c).toMap
       currentIndex                 = sortedCheckpoints.lastOption.map(_.index + 1).getOrElse(0)
