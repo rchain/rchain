@@ -2,14 +2,12 @@ package coop.rchain.comm.transport
 
 import java.io.ByteArrayInputStream
 import java.nio.file._
-import java.util.concurrent.TimeoutException
 
 import scala.concurrent.duration._
 import scala.util._
 
 import cats.implicits._
 
-import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
@@ -17,10 +15,10 @@ import coop.rchain.comm.CachedConnections.ConnectionsCache
 import coop.rchain.comm.CommError._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
+import coop.rchain.grpc.implicits._
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.implicits._
 import coop.rchain.shared._
-import coop.rchain.shared.PathOps._
 
 import io.grpc._
 import io.grpc.netty._
@@ -43,8 +41,9 @@ class TcpTransportLayer(
     connectionsCache: ConnectionsCache[Task, TcpConnTag]
 ) extends TransportLayer[Task] {
 
-  private val DefaultSendTimeout = 5.seconds
-  private val cell               = connectionsCache(clientChannel)
+  private val DefaultSendTimeout   = 5.seconds
+  private val DefaultStreamTimeout = 10.minutes
+  private val cell                 = connectionsCache(clientChannel)
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private implicit val metricsSource: Metrics.Source =
@@ -114,12 +113,12 @@ class TcpTransportLayer(
       } yield s.copy(connections = s.connections - peer)
     }
 
-  private def withClient[A](peer: PeerNode, enforce: Boolean)(
+  private def withClient[A](peer: PeerNode, timeout: FiniteDuration, enforce: Boolean)(
       f: TransportLayerStub => Task[A]
   ): Task[A] =
     for {
       channel <- cell.connection(peer, enforce)
-      stub    <- Task.delay(RoutingGrpcMonix.stub(channel))
+      stub    <- Task.delay(RoutingGrpcMonix.stub(channel).withDeadlineAfter(timeout))
       result <- f(stub).doOnFinish {
                  case Some(_) => disconnect(peer)
                  case _       => Task.unit
@@ -127,24 +126,30 @@ class TcpTransportLayer(
       _ <- Task.unit.asyncBoundary // return control to caller thread
     } yield result
 
-  private def transport(peer: PeerNode, enforce: Boolean)(
+  private def transport(peer: PeerNode, timeout: FiniteDuration, enforce: Boolean)(
       f: TransportLayerStub => Task[TLResponse]
   ): Task[CommErr[Option[Protocol]]] =
-    withClient(peer, enforce)(f).attempt.map(processResponse(peer, _))
+    withClient(peer, timeout, enforce)(f).attempt.map(processResponse(peer, _))
 
   def stream(peers: Seq[PeerNode], blob: Blob): Task[Unit] =
     streamObservable.stream(peers.toList, blob) *> log.info(s"stream to $peers blob")
 
-  @SuppressWarnings(Array("org.wartremover.warts.IsInstanceOf"))
   private object PeerUnavailable {
     def unapply(e: Throwable): Boolean =
-      e.isInstanceOf[StatusRuntimeException] &&
-        e.asInstanceOf[StatusRuntimeException].getStatus.getCode == Status.Code.UNAVAILABLE
+      e match {
+        case sre: StatusRuntimeException =>
+          sre.getStatus.getCode == Status.Code.UNAVAILABLE
+        case _ => false
+      }
   }
 
-  @SuppressWarnings(Array("org.wartremover.warts.IsInstanceOf"))
   private object PeerTimeout {
-    def unapply(e: Throwable): Boolean = e.isInstanceOf[TimeoutException]
+    def unapply(e: Throwable): Boolean =
+      e match {
+        case sre: StatusRuntimeException =>
+          sre.getStatus.getCode == Status.Code.DEADLINE_EXCEEDED
+        case _ => false
+      }
   }
 
   private def processResponse(
@@ -170,10 +175,9 @@ class TcpTransportLayer(
   def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): Task[CommErr[Protocol]] =
     for {
       _ <- metrics.incrementCounter("round-trip")
-      result <- transport(peer, enforce = false)(
+      result <- transport(peer, timeout, enforce = false)(
                  _.ask(TLRequest(msg.some))
                    .timer("round-trip-time")
-                   .nonCancelingTimeout(timeout)
                ).map(_.flatMap {
                  case Some(p) => Right(p)
                  case _ =>
@@ -189,10 +193,9 @@ class TcpTransportLayer(
   ): Task[CommErr[Unit]] =
     for {
       _ <- metrics.incrementCounter("send")
-      result <- transport(peer, enforce)(
+      result <- transport(peer, timeout, enforce)(
                  _.ask(TLRequest(msg.some))
                    .timer("send-time")
-                   .nonCancelingTimeout(timeout)
                ).map(_.flatMap {
                  case Some(p) =>
                    Left(internalCommunicationError(s"Was expecting no message. Response: $p"))
@@ -223,7 +226,7 @@ class TcpTransportLayer(
       if (retryCount > 0)
         PacketOps.restore[Task](path) >>= {
           case Right(packet) =>
-            withClient(peer, enforce = false) { stub =>
+            withClient(peer, DefaultStreamTimeout, enforce = false) { stub =>
               val blob = Blob(sender, packet)
               stub.stream(Observable.fromIterator(Chunker.chunkIt(blob, maxMessageSize)))
             }.attempt
