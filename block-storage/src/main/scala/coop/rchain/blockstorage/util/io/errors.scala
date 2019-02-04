@@ -19,6 +19,7 @@ final case class IntWriteFailed(exception: IOException)                     exte
 final case class ByteArrayWriteFailed(exception: IOException)               extends IOError
 final case class SetLengthFailed(exception: IOException)                    extends IOError
 final case class ClosingFailed(exception: IOException)                      extends IOError
+final case class StreamFlushFailed(e: IOException)                          extends IOError
 final case class FileNotFound(exception: FileNotFoundException)             extends IOError
 final case class FileSecurityViolation(exception: SecurityException)        extends IOError
 final case class FileIsNotDirectory(exception: NotDirectoryException)       extends IOError
