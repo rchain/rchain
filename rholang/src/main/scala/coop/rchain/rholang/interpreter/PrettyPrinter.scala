@@ -221,7 +221,7 @@ final case class PrettyPrinter(
           (pure("") /: m.cases.zipWithIndex) {
             case (string, (matchCase, i)) =>
               string |+| pure(indentStr * (indent + 1)) |+| buildMatchCase(matchCase, indent + 1) |+| pure {
-                if (i != m.cases.length - 1) " ;\n"
+                if (i != m.cases.length - 1) "\n"
                 else ""
               }
           } |+| pure("\n" + (indentStr * indent) + "}")
