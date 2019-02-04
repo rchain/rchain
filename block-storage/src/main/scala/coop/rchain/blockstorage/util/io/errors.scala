@@ -17,7 +17,7 @@ final case class IntReadFailed(exception: IOException)                      exte
 final case class ByteArrayReadFailed(exception: IOException)                extends IOError
 final case class IntWriteFailed(exception: IOException)                     extends IOError
 final case class ByteArrayWriteFailed(exception: IOException)               extends IOError
-final case class ClearFileFailed(exception: IOException)                    extends IOError
+final case class SetLengthFailed(exception: IOException)                    extends IOError
 final case class ClosingFailed(exception: IOException)                      extends IOError
 final case class FileNotFound(exception: FileNotFoundException)             extends IOError
 final case class FileSecurityViolation(exception: SecurityException)        extends IOError
@@ -49,9 +49,9 @@ object IOError {
       case ByteArrayWriteFailed(e) =>
         val msg = Option(e.getMessage).getOrElse("")
         s"Byte array write failed: $msg"
-      case ClearFileFailed(e) =>
+      case SetLengthFailed(e) =>
         val msg = Option(e.getMessage).getOrElse("")
-        s"File clearing failed: $msg"
+        s"Set file length failed: $msg"
       case ClosingFailed(e) =>
         val msg = Option(e.getMessage).getOrElse("")
         s"File closing failed: $msg"

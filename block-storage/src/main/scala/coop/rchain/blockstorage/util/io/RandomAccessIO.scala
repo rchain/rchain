@@ -39,7 +39,7 @@ final case class RandomAccessIO[F[_]: Sync](file: RandomAccessFile) {
     handleIo(file.seek(offset), FileSeekFailed.apply)
 
   def setLength(length: Long): F[IOErr[Unit]] =
-    handleIo(file.setLength(length), ClearFileFailed.apply)
+    handleIo(file.setLength(length), SetLengthFailed.apply)
 }
 
 object RandomAccessIO {
