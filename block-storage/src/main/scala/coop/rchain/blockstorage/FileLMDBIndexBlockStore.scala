@@ -90,10 +90,10 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
   private def readBlockMessage(indexEntry: IndexEntry): StorageIOErrT[F, BlockMessage] = {
     def readBlockMessageFromFile(storageFile: RandomAccessIO[F]): StorageIOErrT[F, BlockMessage] =
       for {
-        _                      <- storageFile.seek(indexEntry.offset).toStorageIOErrT
-        blockMessageSize       <- storageFile.readInt.toStorageIOErrT
+        _                      <- EitherT(storageFile.seek(indexEntry.offset)).toStorageIOErrT
+        blockMessageSize       <- EitherT(storageFile.readInt).toStorageIOErrT
         blockMessagesByteArray = Array.ofDim[Byte](blockMessageSize)
-        _                      <- storageFile.readFully(blockMessagesByteArray).toStorageIOErrT
+        _                      <- EitherT(storageFile.readFully(blockMessagesByteArray)).toStorageIOErrT
         blockMessage           = BlockMessage.parseFrom(blockMessagesByteArray)
       } yield blockMessage
 
@@ -115,7 +115,7 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
                                       } { storageFile =>
                                         readBlockMessageFromFile(storageFile)
                                       } { storageFile =>
-                                        storageFile.close()
+                                        EitherT(storageFile.close()).toStorageIOErrT
                                       }
                                     case None =>
                                       EitherT
@@ -179,12 +179,12 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
                              getBlockMessageRandomAccessFile
                            )
         currentIndex              <- EitherT.liftF(getCurrentIndex)
-        endOfFileOffset           <- randomAccessFile.length.toStorageIOErrT
-        _                         <- randomAccessFile.seek(endOfFileOffset).toStorageIOErrT
+        endOfFileOffset           <- EitherT(randomAccessFile.length).toStorageIOErrT
+        _                         <- EitherT(randomAccessFile.seek(endOfFileOffset)).toStorageIOErrT
         (blockHash, blockMessage) = f
         blockMessageByteArray     = blockMessage.toByteArray
-        _                         <- randomAccessFile.writeInt(blockMessageByteArray.length).toStorageIOErrT
-        _                         <- randomAccessFile.write(blockMessageByteArray).toStorageIOErrT
+        _                         <- EitherT(randomAccessFile.writeInt(blockMessageByteArray.length)).toStorageIOErrT
+        _                         <- EitherT(randomAccessFile.write(blockMessageByteArray)).toStorageIOErrT
         _ <- EitherT.liftF[F, StorageIOError, Unit](withWriteTxn { txn =>
               index.put(
                 txn,
@@ -203,7 +203,7 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
         blockMessageRandomAccessFile <- EitherT.liftF[F, StorageIOError, RandomAccessIO[F]](
                                          getBlockMessageRandomAccessFile
                                        )
-        _                               <- blockMessageRandomAccessFile.close().toStorageIOErrT
+        _                               <- EitherT(blockMessageRandomAccessFile.close()).toStorageIOErrT
         _                               <- moveFile(storagePath, checkpointPath, StandardCopyOption.ATOMIC_MOVE).toStorageIOErrT
         newBlockMessageRandomAccessFile <- RandomAccessIO.open[F](storagePath).toStorageIOErrT
         _ <- EitherT.liftF[F, StorageIOError, Unit](
@@ -225,7 +225,7 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
         _ <- withWriteTxn { txn =>
               index.drop(txn)
             }
-        result <- blockMessageRandomAccessFile.setLength(0).toStorageIOErrT.value
+        result <- EitherT(blockMessageRandomAccessFile.setLength(0)).toStorageIOErrT.value
       } yield result
     )
 
@@ -235,7 +235,7 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
         blockMessageRandomAccessFile <- EitherT.liftF[F, StorageIOError, RandomAccessIO[F]](
                                          getBlockMessageRandomAccessFile
                                        )
-        _ <- blockMessageRandomAccessFile.close().toStorageIOErrT
+        _ <- EitherT(blockMessageRandomAccessFile.close()).toStorageIOErrT
         _ <- EitherT(Sync[F].delay { env.close() }.attempt).leftMap[StorageIOError] {
               case e: IOException =>
                 WrappedIOError(ClosingFailed(e))
