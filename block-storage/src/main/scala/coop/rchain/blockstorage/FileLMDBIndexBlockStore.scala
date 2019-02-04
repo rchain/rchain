@@ -111,7 +111,7 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
                                     case Some(checkpoint) =>
                                       type StorageIOErrTF[A] = StorageIOErrT[F, A]
                                       Sync[StorageIOErrTF].bracket {
-                                        RandomAccessIO.open[F](checkpoint.storagePath)
+                                        EitherT(RandomAccessIO.open[F](checkpoint.storagePath)).toStorageIOErrT
                                       } { storageFile =>
                                         readBlockMessageFromFile(storageFile)
                                       } { storageFile =>
@@ -205,7 +205,7 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
                                        )
         _                               <- EitherT(blockMessageRandomAccessFile.close()).toStorageIOErrT
         _                               <- moveFile(storagePath, checkpointPath, StandardCopyOption.ATOMIC_MOVE).toStorageIOErrT
-        newBlockMessageRandomAccessFile <- RandomAccessIO.open[F](storagePath).toStorageIOErrT
+        newBlockMessageRandomAccessFile <- EitherT(RandomAccessIO.open[F](storagePath)).toStorageIOErrT
         _ <- EitherT.liftF[F, StorageIOError, Unit](
               setBlockMessageRandomAccessFile(newBlockMessageRandomAccessFile)
             )
@@ -319,7 +319,7 @@ object FileLMDBIndexBlockStore {
       index <- EitherT.liftF[F, StorageError, Dbi[ByteBuffer]](Sync[F].delay {
                 env.openDbi(s"block_store_index", MDB_CREATE)
               })
-      blockMessageRandomAccessFile <- RandomAccessIO.open(storagePath).toStorageIOErrT
+      blockMessageRandomAccessFile <- EitherT(RandomAccessIO.open(storagePath)).toStorageIOErrT
       sortedCheckpoints            <- loadCheckpoints(checkpointsDirPath)
       checkpointsMap               = sortedCheckpoints.map(c => c.index -> c).toMap
       currentIndex                 = sortedCheckpoints.lastOption.map(_.index + 1).getOrElse(0)
