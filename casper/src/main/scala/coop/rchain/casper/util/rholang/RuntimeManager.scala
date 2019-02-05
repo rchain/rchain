@@ -23,16 +23,16 @@ import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 import scala.collection.immutable
 
 trait RuntimeManager[F[_]] {
-  def captureResults(start: StateHash, deploy: Deploy, name: String = "__SCALA__"): F[Seq[Par]]
-  def captureResults(start: StateHash, deploy: Deploy, name: Par): F[Seq[Par]]
+  def captureResults(start: StateHash, deploy: DeployData, name: String = "__SCALA__"): F[Seq[Par]]
+  def captureResults(start: StateHash, deploy: DeployData, name: Par): F[Seq[Par]]
   def replayComputeState(
       hash: StateHash,
       terms: Seq[InternalProcessedDeploy],
       time: Option[Long] = None
-  ): F[Either[(Option[Deploy], Failed), StateHash]]
+  ): F[Either[(Option[DeployData], Failed), StateHash]]
   def computeState(
       hash: StateHash,
-      terms: Seq[Deploy],
+      terms: Seq[DeployData],
       time: Option[Long] = None
   ): F[(StateHash, Seq[InternalProcessedDeploy])]
   def storageRepr(hash: StateHash): F[Option[String]]
@@ -50,10 +50,14 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     runtimeContainer: MVar[F, Runtime[F]]
 ) extends RuntimeManager[F] {
 
-  def captureResults(start: StateHash, deploy: Deploy, name: String = "__SCALA__"): F[Seq[Par]] =
+  def captureResults(
+      start: StateHash,
+      deploy: DeployData,
+      name: String = "__SCALA__"
+  ): F[Seq[Par]] =
     captureResults(start, deploy, Par().withExprs(Seq(Expr(GString(name)))))
 
-  def captureResults(start: StateHash, deploy: Deploy, name: Par): F[Seq[Par]] =
+  def captureResults(start: StateHash, deploy: DeployData, name: Par): F[Seq[Par]] =
     Sync[F]
       .bracket(runtimeContainer.take) { runtime =>
         //TODO: Is better error handling needed here?
@@ -73,7 +77,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       hash: StateHash,
       terms: Seq[InternalProcessedDeploy],
       time: Option[Long] = None
-  ): F[Either[(Option[Deploy], Failed), StateHash]] =
+  ): F[Either[(Option[DeployData], Failed), StateHash]] =
     Sync[F].bracket(runtimeContainer.take) { runtime =>
       for {
         _      <- setTimestamp(time, runtime)
@@ -83,7 +87,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
 
   def computeState(
       hash: StateHash,
-      terms: Seq[Deploy],
+      terms: Seq[DeployData],
       time: Option[Long] = None
   ): F[(StateHash, Seq[InternalProcessedDeploy])] =
     Sync[F].bracket(runtimeContainer.take) { runtime =>
@@ -127,7 +131,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         |}""".stripMargin
 
     val bondsQueryTerm =
-      ProtoUtil.deployDataToDeploy(ProtoUtil.sourceDeploy(bondsQuery, 0L, accounting.MAX_VALUE))
+      ProtoUtil.sourceDeploy(bondsQuery, 0L, accounting.MAX_VALUE)
     captureResults(hash, bondsQueryTerm)
       .ensureOr(
         bondsPar =>
@@ -180,13 +184,13 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     )
 
   private def newEval(
-      terms: Seq[Deploy],
+      terms: Seq[DeployData],
       runtime: Runtime[F],
       initHash: StateHash
   ): F[(StateHash, Seq[InternalProcessedDeploy])] = {
 
     def doEval(
-        terms: Seq[Deploy],
+        terms: Seq[DeployData],
         hash: Blake2b256Hash,
         acc: Seq[InternalProcessedDeploy]
     ): F[(StateHash, Seq[InternalProcessedDeploy])] =
@@ -195,10 +199,10 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
           case deploy +: rem =>
             for {
               _              <- runtime.space.reset(hash)
-              availablePhlos = Cost(deploy.raw.map(_.phloLimit).get)
+              availablePhlos = Cost(deploy.phloLimit)
               _              <- runtime.reducer.setPhlo(availablePhlos)
               (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(
-                deploy.raw.get
+                deploy
               )
               _ <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
 
@@ -228,20 +232,20 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       terms: Seq[InternalProcessedDeploy],
       runtime: Runtime[F],
       initHash: StateHash
-  ): F[Either[(Option[Deploy], Failed), StateHash]] = {
+  ): F[Either[(Option[DeployData], Failed), StateHash]] = {
 
     def doReplayEval(
         terms: Seq[InternalProcessedDeploy],
         hash: Blake2b256Hash
-    ): F[Either[(Option[Deploy], Failed), StateHash]] =
+    ): F[Either[(Option[DeployData], Failed), StateHash]] =
       Concurrent[F].defer {
         terms match {
           case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
-            val availablePhlos = Cost(deploy.raw.map(_.phloLimit).get)
+            val availablePhlos = Cost(deploy.phloLimit)
             for {
               _ <- runtime.replayReducer.setPhlo(availablePhlos)
               (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(
-                deploy.raw.get
+                deploy
               )
               _         <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
               _         <- runtime.replaySpace.rig(hash, log.toList)
@@ -264,8 +268,8 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
                                  doReplayEval(rem, newCheckpoint.root)
                                case Left(ex: ReplayException) =>
                                  Either
-                                   .left[(Option[Deploy], Failed), StateHash](
-                                     none[Deploy] -> UnusedCommEvent(ex)
+                                   .left[(Option[DeployData], Failed), StateHash](
+                                     none[DeployData] -> UnusedCommEvent(ex)
                                    )
                                    .pure[F]
                              }
@@ -275,7 +279,9 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
 
           case _ =>
             Either
-              .right[(Option[Deploy], Failed), StateHash](ByteString.copyFrom(hash.bytes.toArray))
+              .right[(Option[DeployData], Failed), StateHash](
+                ByteString.copyFrom(hash.bytes.toArray)
+              )
               .pure[F]
         }
       }
@@ -284,15 +290,17 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
   }
 
   private def injAttempt(
-      deploy: Deploy,
+      deploy: DeployData,
       reducer: ChargingReducer[F],
       errorLog: ErrorLog[F]
   ): F[(PCost, Vector[Throwable])] = {
     implicit val rand: Blake2b512Random = Blake2b512Random(
-      DeployData.toByteArray(ProtoUtil.stripDeployData(deploy.raw.get))
+      DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
     )
+    // TODO: add error handling
+    val parsed = InterpreterUtil.mkTerm(deploy.term).right.get
     for {
-      result    <- reducer.inj(deploy.term.get).attempt
+      result    <- reducer.inj(parsed).attempt
       phlos     <- reducer.phlo
       oldErrors <- errorLog.readAndClearErrorVector()
       newErrors = result.swap.toSeq.toVector
@@ -325,13 +333,13 @@ object RuntimeManager {
     new RuntimeManager[T[F, ?]] {
       override def captureResults(
           start: RuntimeManager.StateHash,
-          deploy: Deploy,
+          deploy: DeployData,
           name: String
       ): T[F, scala.Seq[Par]] = runtimeManager.captureResults(start, deploy, name).liftM[T]
 
       override def captureResults(
           start: RuntimeManager.StateHash,
-          deploy: Deploy,
+          deploy: DeployData,
           name: Par
       ): T[F, scala.Seq[Par]] = runtimeManager.captureResults(start, deploy, name).liftM[T]
 
@@ -339,12 +347,12 @@ object RuntimeManager {
           hash: RuntimeManager.StateHash,
           terms: scala.Seq[InternalProcessedDeploy],
           time: Option[Long]
-      ): T[F, scala.Either[(Option[Deploy], Failed), RuntimeManager.StateHash]] =
+      ): T[F, scala.Either[(Option[DeployData], Failed), RuntimeManager.StateHash]] =
         runtimeManager.replayComputeState(hash, terms, time).liftM[T]
 
       override def computeState(
           hash: RuntimeManager.StateHash,
-          terms: scala.Seq[Deploy],
+          terms: scala.Seq[DeployData],
           time: Option[Long]
       ): T[F, (RuntimeManager.StateHash, scala.Seq[InternalProcessedDeploy])] =
         runtimeManager.computeState(hash, terms, time).liftM[T]

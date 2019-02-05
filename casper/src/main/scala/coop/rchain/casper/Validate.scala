@@ -247,8 +247,7 @@ object Validate {
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val deployKeySet = (for {
       bd <- block.body.toList
-      d  <- bd.deploys.flatMap(_.deploy)
-      r  <- d.raw.toList
+      r  <- bd.deploys.flatMap(_.deploy)
     } yield (r.user, r.timestamp)).toSet
 
     for {
@@ -260,7 +259,7 @@ object Validate {
                               _.deploys
                                 .flatMap(_.deploy)
                                 .exists(
-                                  _.raw.exists(p => deployKeySet.contains((p.user, p.timestamp)))
+                                  p => deployKeySet.contains((p.user, p.timestamp))
                                 )
                             )
                           )

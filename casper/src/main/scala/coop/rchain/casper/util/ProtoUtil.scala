@@ -252,11 +252,7 @@ object ProtoUtil {
       .flatMap(getDeployData)
       .exists(deployData => deployData.user == user && deployData.timestamp == timestamp)
 
-  private def getDeployData(d: ProcessedDeploy): Option[DeployData] =
-    for {
-      deploy     <- d.deploy
-      deployData <- deploy.raw
-    } yield deployData
+  private def getDeployData(d: ProcessedDeploy): Option[DeployData] = d.deploy
 
   def deploys(b: BlockMessage): Seq[ProcessedDeploy] =
     b.body.fold(Seq.empty[ProcessedDeploy])(_.deploys)
@@ -500,14 +496,8 @@ object ProtoUtil {
           .withPhloLimit(accounting.MAX_VALUE)
     )
 
-  def basicDeploy[F[_]: Monad: Time](id: Int): F[Deploy] =
-    for {
-      d    <- basicDeployData[F](id)
-      term = InterpreterUtil.mkTerm(d.term).right.get
-    } yield Deploy(term = Some(term), raw = Some(d))
-
   def basicProcessedDeploy[F[_]: Monad: Time](id: Int): F[ProcessedDeploy] =
-    basicDeploy[F](id).map(deploy => ProcessedDeploy(deploy = Some(deploy)))
+    basicDeployData[F](id).map(deploy => ProcessedDeploy(deploy = Some(deploy)))
 
   def sourceDeploy(source: String, timestamp: Long, phlos: Long): DeployData =
     DeployData(
@@ -517,36 +507,19 @@ object ProtoUtil {
       phloLimit = phlos
     )
 
+  def sourceDeployNow(source: String): DeployData =
+    sourceDeploy(
+      source,
+      System.currentTimeMillis(),
+      accounting.MAX_VALUE
+    )
+
   def compiledSourceDeploy(
       source: CompiledRholangSource,
       timestamp: Long,
       phloLimit: Long
-  ): Deploy =
-    Deploy(
-      term = Some(source.term),
-      raw = Some(sourceDeploy(source.code, timestamp, phloLimit))
-    )
-
-  def termDeploy(term: Par, timestamp: Long, phloLimit: Long): Deploy =
-    Deploy(
-      term = Some(term),
-      raw = Some(
-        DeployData(
-          user = ByteString.EMPTY,
-          timestamp = timestamp,
-          term = term.toProtoString,
-          phloLimit = phloLimit
-        )
-      )
-    )
-
-  def termDeployNow(term: Par): Deploy =
-    termDeploy(term, System.currentTimeMillis(), accounting.MAX_VALUE)
-
-  def deployDataToDeploy(dd: DeployData): Deploy = Deploy(
-    term = InterpreterUtil.mkTerm(dd.term).toOption,
-    raw = Some(dd)
-  )
+  ): DeployData =
+    sourceDeploy(source.code, timestamp, phloLimit)
 
   /**
     * Strip a deploy down to the fields we are using to seed the Deterministic name generator.

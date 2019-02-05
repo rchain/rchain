@@ -6,7 +6,7 @@ import coop.rchain.models.PCost
 import coop.rchain.rspace.trace
 
 final case class InternalProcessedDeploy(
-    deploy: Deploy,
+    deploy: DeployData,
     cost: PCost,
     log: Seq[trace.Event],
     status: DeployStatus

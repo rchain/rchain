@@ -16,7 +16,7 @@ object PrettyPrinter {
   def buildString(t: GeneratedMessage): String =
     t match {
       case b: BlockMessage => buildString(b)
-      case d: Deploy       => buildString(d)
+      case d: DeployData   => buildString(d)
       case _               => "Unknown consensus protocol message"
     }
 
@@ -51,8 +51,8 @@ object PrettyPrinter {
   private def buildString(par: Option[Par]): String =
     par.map(p => limit(rpp.buildString(p), 25)).getOrElse("")
 
-  private def buildString(d: Deploy): String =
-    s"Deploy #${d.raw.fold(0L)(_.timestamp)} -- ${buildString(d.term)}"
+  private def buildString(d: DeployData): String =
+    s"DeployData #${d.timestamp}}"
 
   private def buildString(r: RChainState): String =
     buildString(r.postStateHash)

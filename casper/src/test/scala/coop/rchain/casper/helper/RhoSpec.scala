@@ -1,7 +1,7 @@
 package coop.rchain.casper.helper
 
 import coop.rchain.casper.genesis.contracts.TestUtil
-import coop.rchain.casper.protocol.Deploy
+import coop.rchain.casper.protocol.DeployData
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
@@ -39,7 +39,7 @@ object RhoSpec {
     TestUtil.runtime(testResultCollectorService)
   }
 
-  def getResults(testObject: CompiledRholangSource, otherLibs: Seq[Deploy]): Task[TestResult] =
+  def getResults(testObject: CompiledRholangSource, otherLibs: Seq[DeployData]): Task[TestResult] =
     for {
       testResultCollector <- TestResultCollector[Task]
 
@@ -53,7 +53,7 @@ object RhoSpec {
 
 class RhoSpec(
     testObject: CompiledRholangSource,
-    standardDeploys: Seq[Deploy],
+    standardDeploys: Seq[DeployData],
     executionTimeout: Duration
 ) extends FlatSpec
     with AppendedClues
