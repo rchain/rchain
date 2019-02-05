@@ -334,6 +334,48 @@ class ValidateTest
       } yield result
   }
 
+  "Last sequence number validation" should "only accept all 0s for a block with no parents" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      for {
+        _       <- createChain[Task](1)
+        genesis <- blockDagStorage.lookupByIdUnsafe(0)
+        _ <- Validate.lastSequenceNumber[Task](
+              genesis.withLastSequenceNumber(Seq(LastSequenceNumber(genesis.sender, 0))),
+              genesis
+            ) shouldBeF Left(InvalidLastSequenceNumber)
+        _ <- Validate.lastSequenceNumber[Task](genesis, genesis) shouldBeF Right(Valid)
+        _ = log.warns.size should be(1)
+        result = log.warns.head.contains(
+          "main parent is missing even though block is not genesis"
+        ) should be(true)
+      } yield result
+  }
+
+  it should "only accept valid updates" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      for {
+        _       <- createChain[Task](2)
+        genesis <- blockDagStorage.lookupByIdUnsafe(0)
+        block   <- blockDagStorage.lookupByIdUnsafe(1)
+        _ <- Validate.lastSequenceNumber[Task](
+              block.withLastSequenceNumber(Seq.empty[LastSequenceNumber]),
+              genesis
+            ) shouldBeF Left(
+              InvalidLastSequenceNumber
+            )
+        _ <- Validate.lastSequenceNumber[Task](
+              block.withLastSequenceNumber(Seq(LastSequenceNumber(block.sender, 0))),
+              genesis
+            ) shouldBeF Right(Valid)
+        _ = log.warns.size should be(1)
+        result = log.warns.head.contains(
+          "computed last sequence number is not equal to given last sequence number"
+        ) should be(
+          true
+        )
+      } yield result
+  }
+
   "Parent validation" should "return true for proper justifications and false otherwise" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val validators = Vector(
