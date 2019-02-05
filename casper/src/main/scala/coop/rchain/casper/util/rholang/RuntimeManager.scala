@@ -14,6 +14,7 @@ import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models._
+import coop.rchain.rholang.interpreter.Interpreter
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{accounting, ChargingReducer, ErrorLog, Runtime}
@@ -298,8 +299,8 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
     )
     // TODO: add error handling
-    val parsed = InterpreterUtil.mkTerm(deploy.term).right.get
     for {
+      parsed    <- Interpreter[F].buildNormalizedTerm(deploy.term)
       result    <- reducer.inj(parsed).attempt
       phlos     <- reducer.phlo
       oldErrors <- errorLog.readAndClearErrorVector()
