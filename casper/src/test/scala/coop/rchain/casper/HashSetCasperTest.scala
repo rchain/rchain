@@ -1692,12 +1692,15 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     val serializedBlockHash = ByteString.copyFrom(blockHash)
     val blockThatPointsToInvalidBlock =
       BlockMessage(serializedBlockHash, Some(header), Some(body), serializedJustifications)
-    nodes(1).casperEff.blockDag.flatMap { dag =>
-      ProtoUtil.signBlock[Effect](
+    val sender = ByteString.copyFrom(validators(1))
+    nodes(1).casperEff.blockDag.map { dag =>
+      ProtoUtil.signBlock(
         blockThatPointsToInvalidBlock,
         dag,
-        validators(1),
+        sender,
         validatorKeys(1),
+        blockThatPointsToInvalidBlock.seqNum,
+        blockThatPointsToInvalidBlock.lastSequenceNumber,
         "ed25519",
         "rchain"
       )

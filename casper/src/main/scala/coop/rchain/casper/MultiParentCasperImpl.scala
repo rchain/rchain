@@ -262,9 +262,25 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
                    } else {
                      CreateBlockStatus.noNewDeploys.pure[F]
                    }
-        signedBlock <- proposal.mapF(
-                        signBlock(_, dag, publicKey, privateKey, sigAlgorithm, shardId)
-                      )
+        sender                    = ByteString.copyFrom(publicKey)
+        maybeCreatorJustification <- dag.latestMessage(sender)
+        seqNum                    = maybeCreatorJustification.fold(0)(_.seqNum) + 1
+        updatedLastSequenceNumberMap = ProtoUtil
+          .toLastSequenceNumberMap(p.head.lastSequenceNumber)
+          .updated(sender, seqNum)
+        signedBlock = proposal.map(
+          b =>
+            signBlock(
+              b,
+              dag,
+              sender,
+              privateKey,
+              seqNum,
+              ProtoUtil.toLastSequenceNumber(updatedLastSequenceNumberMap),
+              sigAlgorithm,
+              shardId
+            )
+        )
       } yield signedBlock
     case None => CreateBlockStatus.readOnlyMode.pure[F]
   }

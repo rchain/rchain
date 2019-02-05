@@ -436,6 +436,7 @@ object ProtoUtil {
       sender: ByteString,
       sigAlgorithm: String,
       seqNum: Int,
+      lastSequenceNumber: Seq[LastSequenceNumber],
       shardId: String,
       extraBytes: ByteString
   ): BlockHash =
@@ -444,18 +445,22 @@ object ProtoUtil {
       sender.toByteArray,
       StringValue.of(sigAlgorithm).toByteArray,
       Int32Value.of(seqNum).toByteArray,
+      hashByteArrays(lastSequenceNumber.map(_.toByteArray): _*).toByteArray, // TODO: Is this what we want?
       StringValue.of(shardId).toByteArray,
       extraBytes.toByteArray
     )
 
-  def signBlock[F[_]: Applicative](
+  // TODO: Double check that ByteString.copyFrom(byteArray).toByteArray == byteArray
+  def signBlock[F[_]](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
-      pk: Array[Byte],
+      sender: ByteString,
       sk: Array[Byte],
+      seqNum: Int,
+      lastSequenceNumbers: Seq[LastSequenceNumber],
       sigAlgorithm: String,
       shardId: String
-  ): F[BlockMessage] = {
+  ): BlockMessage = {
 
     val header = {
       //TODO refactor casper code to avoid the usage of Option fields in the block data structures
@@ -464,20 +469,25 @@ object ProtoUtil {
       block.header.get
     }
 
-    val sender = ByteString.copyFrom(pk)
-    for {
-      latestMessageOpt  <- dag.latestMessage(sender)
-      seqNum            = latestMessageOpt.fold(0)(_.seqNum) + 1
-      blockHash         = hashSignedBlock(header, sender, sigAlgorithm, seqNum, shardId, block.extraBytes)
-      sigAlgorithmBlock = block.withSigAlgorithm(sigAlgorithm)
-      sig               = ByteString.copyFrom(sigAlgorithmBlock.signFunction(blockHash.toByteArray, sk))
-      signedBlock = sigAlgorithmBlock
-        .withSender(sender)
-        .withSig(sig)
-        .withSeqNum(seqNum)
-        .withBlockHash(blockHash)
-        .withShardId(shardId)
-    } yield signedBlock
+    val blockHash = hashSignedBlock(
+      header,
+      sender,
+      sigAlgorithm,
+      seqNum,
+      lastSequenceNumbers,
+      shardId,
+      block.extraBytes
+    )
+    val sigAlgorithmBlock = block.withSigAlgorithm(sigAlgorithm)
+    val sig               = ByteString.copyFrom(sigAlgorithmBlock.signFunction(blockHash.toByteArray, sk))
+    val signedBlock = sigAlgorithmBlock
+      .withSender(sender)
+      .withSig(sig)
+      .withSeqNum(seqNum)
+      .withLastSequenceNumber(lastSequenceNumbers)
+      .withBlockHash(blockHash)
+      .withShardId(shardId)
+    signedBlock
   }
 
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)

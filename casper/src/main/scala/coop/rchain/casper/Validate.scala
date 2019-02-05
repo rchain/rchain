@@ -198,7 +198,10 @@ object Validate {
       followsStatus <- blockNumberStatus.joinRight.traverse(
                         _ => Validate.justificationFollows[F](block, genesis, dag)
                       )
-      parentsStatus <- followsStatus.joinRight.traverse(
+      lastSequenceNumberStatus <- followsStatus.joinRight.traverse(
+                                   _ => Validate.lastSequenceNumber[F](block, genesis)
+                                 )
+      parentsStatus <- lastSequenceNumberStatus.joinRight.traverse(
                         _ => Validate.parents[F](block, lastFinalizedBlockHash, dag)
                       )
       sequenceNumberStatus <- parentsStatus.joinRight.traverse(
@@ -393,6 +396,7 @@ object Validate {
       b.sender,
       b.sigAlgorithm,
       b.seqNum,
+      b.lastSequenceNumber,
       b.shardId,
       b.extraBytes
     )
@@ -418,6 +422,7 @@ object Validate {
       } yield Left(InvalidDeployCount)
     }
 
+  // TODO: Double check logic with validator rotation
   def lastSequenceNumber[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
       genesis: BlockMessage
