@@ -369,6 +369,24 @@ object ProtoUtil {
         } yield acc.updated(validator, BlockMetadata.fromBlock(block))
     }
 
+  def toLastSequenceNumber(
+      lastSequenceNumberMap: immutable.Map[Validator, Int]
+  ): Seq[LastSequenceNumber] =
+    lastSequenceNumberMap.toSeq.map {
+      case (validator, sequenceNumber) =>
+        LastSequenceNumber()
+          .withValidator(validator)
+          .withSeqNum(sequenceNumber)
+    }
+
+  def toLastSequenceNumberMap(
+      lastSequenceNumbers: Seq[LastSequenceNumber]
+  ): immutable.Map[Validator, Int] =
+    lastSequenceNumbers.foldLeft(Map.empty[Validator, Int]) {
+      case (acc, LastSequenceNumber(validator, sequenceNumber)) =>
+        acc.updated(validator, sequenceNumber)
+    }
+
   def protoHash[A <: { def toByteArray: Array[Byte] }](protoSeq: A*): ByteString =
     protoSeqHash(protoSeq)
 

@@ -418,6 +418,42 @@ object Validate {
       } yield Left(InvalidDeployCount)
     }
 
+  def lastSequenceNumber[F[_]: Monad: Log: BlockStore](
+      b: BlockMessage,
+      genesis: BlockMessage
+  ): F[Either[InvalidBlock, ValidBlock]] =
+    for {
+      maybeMainParent <- ProtoUtil.mainParent[F](b)
+      result <- maybeMainParent match {
+                 case Some(mainParent) =>
+                   val mainParentLastSequenceNumberMap =
+                     ProtoUtil.toLastSequenceNumberMap(mainParent.lastSequenceNumber)
+                   val computedLastSequenceNumber =
+                     mainParentLastSequenceNumberMap.updated(b.sender, b.seqNum)
+                   if (b.lastSequenceNumber == ProtoUtil.toLastSequenceNumber(
+                         computedLastSequenceNumber
+                       )) {
+                     Applicative[F].pure(Right(Valid))
+                   } else {
+                     val logMessage =
+                       s"computed last sequence number is not equal to given last sequence number."
+                     for {
+                       _ <- Log[F].warn(ignore(b, logMessage))
+                     } yield Left(InvalidLastSequenceNumber)
+                   }
+                 case None =>
+                   if (b == genesis) {
+                     Applicative[F].pure(Right(Valid))
+                   } else {
+                     val logMessage =
+                       s"main parent is missing even though block is not genesis."
+                     for {
+                       _ <- Log[F].warn(ignore(b, logMessage))
+                     } yield Left(InvalidLastSequenceNumber)
+                   }
+               }
+    } yield result
+
   /**
     * Works only with fully explicit justifications.
     */
