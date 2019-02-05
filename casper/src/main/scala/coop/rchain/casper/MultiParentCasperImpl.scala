@@ -513,6 +513,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
         handleInvalidBlockEffect(status, block)
       case InvalidBlockNumber =>
         handleInvalidBlockEffect(status, block)
+      case InvalidLastSequenceNumber =>
+        handleInvalidBlockEffect(status, block)
       case InvalidParents =>
         handleInvalidBlockEffect(status, block)
       case JustificationRegression =>
