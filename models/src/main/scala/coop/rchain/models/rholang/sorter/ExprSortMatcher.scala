@@ -253,13 +253,15 @@ private[sorter] object ExprSortMatcher extends Sortable[Expr] {
           )
       case EMethodBody(em) =>
         for {
-          args         <- em.arguments.toList.traverse(Sortable[Par].sortMatch[F])
-          sortedTarget <- Sortable.sortMatch(em.target)
+          args                <- em.arguments.toList.traverse(Sortable[Par].sortMatch[F])
+          sortedTarget        <- Sortable.sortMatch(em.target)
+          connectiveUsedScore = if (em.connectiveUsed) 1 else 0
         } yield
           constructExpr(
             EMethodBody(em.withArguments(args.map(_.term.get)).withTarget(sortedTarget.term.get)),
             Node(
-              Seq(Leaf(Score.EMETHOD), Leaf(em.methodName), sortedTarget.score) ++ args.map(_.score)
+              Seq(Leaf(Score.EMETHOD), Leaf(em.methodName), sortedTarget.score) ++ args
+                .map(_.score) ++ Seq(Leaf(connectiveUsedScore))
             )
           )
       case gb: GBool =>
