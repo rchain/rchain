@@ -4,6 +4,7 @@ import cats.Monad
 import cats.implicits._
 import cats.mtl.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.util.BlockMessageUtil
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.DagOperations

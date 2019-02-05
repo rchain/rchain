@@ -3,7 +3,7 @@ package coop.rchain.casper.util
 import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockMetadata, BlockStore}
+import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.{BlockHash, Validator}

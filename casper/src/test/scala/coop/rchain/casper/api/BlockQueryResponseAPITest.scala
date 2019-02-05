@@ -6,7 +6,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
-import coop.rchain.blockstorage.{BlockDagFileStorage, BlockDagStorage, BlockMetadata, BlockStore}
+import coop.rchain.blockstorage.{BlockDagFileStorage, BlockDagStorage, BlockStore}
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper._
 import coop.rchain.casper.helper.{BlockDagStorageFixture, NoOpsCasperEffect}

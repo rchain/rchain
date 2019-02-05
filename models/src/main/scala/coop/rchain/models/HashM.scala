@@ -137,6 +137,7 @@ object HashM extends HashMDerivation {
   implicit val ApprovedBlockCandidateHash    = gen[ApprovedBlockCandidate]
   implicit val BlockApprovalHash             = gen[BlockApproval]
   implicit val BlockMessageHash              = gen[BlockMessage]
+  implicit val BlockMetadataInternalHash     = gen[BlockMetadataInternal]
   implicit val BodyHash                      = gen[Body]
   implicit val BondHash                      = gen[Bond]
   implicit val DeployHash                    = gen[Deploy]

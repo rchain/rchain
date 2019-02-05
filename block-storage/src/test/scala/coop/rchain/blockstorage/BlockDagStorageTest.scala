@@ -12,6 +12,7 @@ import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.metrics.Metrics.MetricsNOP
+import coop.rchain.models.BlockMetadata
 import coop.rchain.models.blockImplicits._
 import coop.rchain.rspace.Context
 import coop.rchain.shared

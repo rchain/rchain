@@ -2,11 +2,12 @@ package coop.rchain.casper.util
 
 import cats.{Eval, Monad}
 import cats.implicits._
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockMetadata, BlockStore}
+import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.casper.util.MapHelper.updatedWith
 import coop.rchain.catscontrib.ListContrib
+import coop.rchain.models.BlockMetadata
 import coop.rchain.shared.StreamT
 
 import scala.annotation.tailrec
