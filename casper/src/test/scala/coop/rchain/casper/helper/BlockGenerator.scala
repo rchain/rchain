@@ -73,6 +73,7 @@ trait BlockGenerator {
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
+      lastSequenceNumber: collection.Map[Validator, Int] = HashMap.empty[Validator, Int],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       tsHash: ByteString = ByteString.EMPTY,
       shardId: String = "rchain",
@@ -96,12 +97,17 @@ trait BlockGenerator {
         case (creator: Validator, latestBlockHash: BlockHash) =>
           Justification(creator, latestBlockHash)
       }
+      serializedLastSequenceNumber = lastSequenceNumber.toList.map {
+        case (creator: Validator, sequenceNumber: Int) =>
+          LastSequenceNumber(creator, sequenceNumber)
+      }
       serializedBlockHash = ByteString.copyFrom(blockHash)
       block = BlockMessage(
         serializedBlockHash,
         Some(header),
         Some(body),
         serializedJustifications,
+        serializedLastSequenceNumber,
         creator,
         shardId = shardId
       )
