@@ -24,9 +24,9 @@ in {
   for(@(_, ListOps) <- ListOpsCh) {
     contract RhoSpec(@"testSuite", setup, @tests) = {
       stdlog!("info", "Defining the testSuite") |
-      new runTest, retCh in {
-        contract runTest(@(testName, testBody), testAckCh) = {
-          stdlog!("info", "Running test: " ++ testName) |
+      new runTest, runTestOnce, retCh in {
+        contract runTestOnce(@(testName, testBody), @attempt, testAckCh) = {
+          stdlog!("info", "Running test: " ++ testName ++ " attempt " + attempt) |
           new rhoSpecImpl, privateAssert in {
             contract privateAssert(@assertion, @clue, ackCh) = {
               stdlog!("info", "asserting: " ++ clue) |
@@ -34,11 +34,11 @@ in {
                 (expected, "== <-", actualCh) => {
                   for (@actual <- @actualCh) {
                     stdlog!("info", {"actual": actual, "expected": expected}) |
-                    assert!(testName, (expected, "==", actual), clue, *ackCh)
+                    assert!(testName, attempt, (expected, "==", actual), clue, *ackCh)
                   }
                 }
                 assertion => {
-                  assert!(testName, assertion, clue, *ackCh)
+                  assert!(testName, attempt, assertion, clue, *ackCh)
                 }
               }
             } |
@@ -74,6 +74,26 @@ in {
               for (setupResult <- setupCh) {
                 @testBody ! (*rhoSpecImpl, *setupResult, *testAckCh)
               }
+            }
+          }
+        } |
+
+
+        contract runTest(@(testName, testBody), ackCh) = {
+          runTest!((testName, testBody, 1), *ackCh)
+        } |
+
+        contract runTest(@(testName, testBody, attempts), ackCh) = {
+          stdlog!("info", "Calling runTest") |
+
+          new retCh, runTestImpl in {
+            contract runTestImpl(@attempt, retCh) = {
+              runTestOnce!((testName, testBody), attempt, *retCh)
+            } |
+
+            @ListOps!("range", 1, attempts + 1, *retCh) |
+            for(@range <- retCh) {
+              @ListOps!("foreach", range, *runTestImpl, *ackCh)
             }
           }
         } |

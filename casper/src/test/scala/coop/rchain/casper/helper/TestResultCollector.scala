@@ -3,7 +3,7 @@ import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.Expr.ExprInstance.{ETupleBody, GBool, GString}
+import coop.rchain.models.Expr.ExprInstance.{ETupleBody, GBool, GInt, GString}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{ETuple, Expr, ListParWithRandomAndPhlos, Par, _}
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
@@ -26,19 +26,26 @@ object IsBoolean {
     }
 }
 
+object IsNumber {
+  def unapply(p: Par): Option[Long] =
+    p.singleExpr().collect {
+      case Expr(GInt(v)) => v
+    }
+}
+
 object IsAssert {
   def unapply(
       p: Seq[ListParWithRandomAndPhlos]
-  ): Option[(String, Par, String, AckedActionCtx)] =
+  ): Option[(String, Long, Par, String, AckedActionCtx)] =
     p match {
       case Seq(
           ListParWithRandomAndPhlos(
-            Seq(IsString(testName), assertion, IsString(clue), ackChannel),
+            Seq(IsString(testName), IsNumber(attempt), assertion, IsString(clue), ackChannel),
             rand,
             sequenceNumber
           )
           ) =>
-        Some((testName, assertion, clue, AckedActionCtx(ackChannel, rand, sequenceNumber)))
+        Some((testName, attempt, assertion, clue, AckedActionCtx(ackChannel, rand, sequenceNumber)))
       case _ => None
     }
 }
@@ -70,17 +77,26 @@ object IsSetFinished {
 sealed trait RhoTestAssertion {
   val testName: String
   val clue: String
+  val isSuccess: Boolean
 }
 
-case class RhoAssertTrue(testName: String, value: Boolean, clue: String) extends RhoTestAssertion
-case class RhoAssertEquals(testName: String, expected: Any, actual: Any, clue: String)
+case class RhoAssertTrue(testName: String, override val isSuccess: Boolean, clue: String)
     extends RhoTestAssertion
+case class RhoAssertEquals(testName: String, expected: Any, actual: Any, clue: String)
+    extends RhoTestAssertion {
+  override val isSuccess: Boolean = actual == expected
+}
 
-case class TestResult(assertions: Map[String, List[RhoTestAssertion]], hasFinished: Boolean) {
-  def addAssertion(assertion: RhoTestAssertion): TestResult = {
+case class TestResult(
+    assertions: Map[String, Map[Long, List[RhoTestAssertion]]],
+    hasFinished: Boolean
+) {
+  def addAssertion(attempt: Long, assertion: RhoTestAssertion): TestResult = {
+    val currentAtteptAssertions = assertions.getOrElse(assertion.testName, Map.empty)
     val newAssertion =
-      (assertion.testName, assertion :: assertions.getOrElse(assertion.testName, List.empty))
-    TestResult(assertions + newAssertion, hasFinished)
+      (attempt, assertion :: currentAtteptAssertions.getOrElse(attempt, List.empty))
+    val newCurrentAttemptAssertions = currentAtteptAssertions + newAssertion
+    TestResult(assertions.updated(assertion.testName, newCurrentAttemptAssertions), hasFinished)
   }
   def setFinished(hasFinished: Boolean): TestResult =
     TestResult(assertions, hasFinished = hasFinished)
@@ -133,20 +149,22 @@ class TestResultCollector[F[_]: Sync](result: Ref[F, TestResult]) {
       ctx: SystemProcess.Context[F]
   )(message: Seq[ListParWithRandomAndPhlos], x: Int): F[Unit] =
     message match {
-      case IsAssert(testName, assertion, clue, ackedActionCtx) =>
+      case IsAssert(testName, attempt, assertion, clue, ackedActionCtx) =>
         assertion match {
-          case IsComparison(expected, "==", actual) =>
+          case IsComparison(expected, "==", actual) => {
+            val assertion = RhoAssertEquals(testName, expected, actual, clue)
             runWithAck(
               ctx,
               ackedActionCtx,
-              result.update(_.addAssertion(RhoAssertEquals(testName, expected, actual, clue))),
-              Expr(GBool(expected == actual))
+              result.update(_.addAssertion(attempt, assertion)),
+              Expr(GBool(assertion.isSuccess))
             )
+          }
           case IsBoolean(condition) =>
             runWithAck(
               ctx,
               ackedActionCtx,
-              result.update(_.addAssertion(RhoAssertTrue(testName, condition, clue))),
+              result.update(_.addAssertion(attempt, RhoAssertTrue(testName, condition, clue))),
               Expr(GBool(condition))
             )
 
@@ -156,9 +174,10 @@ class TestResultCollector[F[_]: Sync](result: Ref[F, TestResult]) {
               ackedActionCtx,
               result.update(
                 _.addAssertion(
+                  attempt,
                   RhoAssertTrue(
                     testName,
-                    value = false,
+                    isSuccess = false,
                     s"Failed to evaluate assertion $assertion"
                   )
                 )
