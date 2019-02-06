@@ -50,25 +50,24 @@ class InterpreterUtilTest
         "@1!(1)",
         "@2!(2)",
         "for(@a <- @1){ @123!(5 * a) }"
-      ).flatMap(mkTerm(_).toOption)
-        .map(ProtoUtil.termDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
+      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
       val genesisDeploysCost =
         genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1)))
 
       val b1Deploys = Vector(
         "@1!(1)",
         "for(@a <- @2){ @456!(5 * a) }"
-      ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
+      ).map(ProtoUtil.sourceDeployNow)
       val b1DeploysCost = b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
 
       val b2Deploys = Vector(
         "for(@a <- @123; @b <- @456){ @1!(a + b) }"
-      ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
+      ).map(ProtoUtil.sourceDeployNow)
       val b2DeploysCost = b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
 
       val b3Deploys = Vector(
         "@7!(7)"
-      ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
+      ).map(ProtoUtil.sourceDeployNow)
       val b3DeploysCost = b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
 
       /*
@@ -141,26 +140,26 @@ class InterpreterUtilTest
         "@1!(1)",
         "@2!(2)",
         "for(@a <- @1){ @123!(5 * a) }"
-      ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
+      ).map(ProtoUtil.sourceDeployNow)
       val genesisDeploysWithCost =
         genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1)))
 
       val b1Deploys = Vector(
         "@5!(5)",
         "for(@a <- @2){ @456!(5 * a) }"
-      ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
+      ).map(ProtoUtil.sourceDeployNow)
       val b1DeploysWithCost =
         b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(2, 2L)))
 
       val b2Deploys = Vector(
         "@6!(6)"
-      ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
+      ).map(ProtoUtil.sourceDeployNow)
       val b2DeploysWithCost =
         b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
 
       val b3Deploys = Vector(
         "for(@a <- @123; @b <- @456){ @1!(a + b) }"
-      ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
+      ).map(ProtoUtil.sourceDeployNow)
       val b3DeploysWithCost =
         b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(5, 5L)))
 
@@ -249,7 +248,7 @@ class InterpreterUtilTest
   """.stripMargin
 
   def prepareDeploys(v: Vector[String], c: PCost) = {
-    val genesisDeploys = v.flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
+    val genesisDeploys = v.map(ProtoUtil.sourceDeployNow)
     genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(c))
   }
 
@@ -391,7 +390,7 @@ class InterpreterUtilTest
   def computeSingleProcessedDeploy(
       runtimeManager: RuntimeManager[Task],
       dag: BlockDagRepresentation[Task],
-      deploy: Deploy*
+      deploy: DeployData*
   )(implicit blockStore: BlockStore[Task]): Task[Seq[InternalProcessedDeploy]] =
     for {
       computeResult         <- computeDeploysCheckpoint[Task](Seq.empty, deploy, dag, runtimeManager)
@@ -403,20 +402,20 @@ class InterpreterUtilTest
       implicit blockDagStorage =>
         //reference costs
         //deploy each Rholang program separately and record its cost
-        val deploy1 = ProtoUtil.termDeploy(
-          mkTerm("@1!(Nil)").toOption.get,
+        val deploy1 = ProtoUtil.sourceDeploy(
+          "@1!(Nil)",
           System.currentTimeMillis(),
           accounting.MAX_VALUE
         )
         val deploy2 =
-          ProtoUtil.termDeploy(
-            mkTerm("@3!([1,2,3,4])").toOption.get,
+          ProtoUtil.sourceDeploy(
+            "@3!([1,2,3,4])",
             System.currentTimeMillis(),
             accounting.MAX_VALUE
           )
         val deploy3 =
-          ProtoUtil.termDeploy(
-            mkTerm("for(@x <- @0) { @4!(x.toByteArray()) }").toOption.get,
+          ProtoUtil.sourceDeploy(
+            "for(@x <- @0) { @4!(x.toByteArray()) }",
             System.currentTimeMillis(),
             accounting.MAX_VALUE
           )
@@ -438,14 +437,14 @@ class InterpreterUtilTest
       withStorage { implicit blockStore => implicit blockDagStorage =>
         //deploy each Rholang program separately and record its cost
         val deploy1 =
-          ProtoUtil.termDeploy(
-            mkTerm("@1!(Nil)").toOption.get,
+          ProtoUtil.sourceDeploy(
+            "@1!(Nil)",
             System.currentTimeMillis(),
             accounting.MAX_VALUE
           )
         val deploy2 =
-          ProtoUtil.termDeploy(
-            mkTerm("@2!([1,2,3,4])").toOption.get,
+          ProtoUtil.sourceDeploy(
+            "@2!([1,2,3,4])",
             System.currentTimeMillis(),
             accounting.MAX_VALUE
           )
@@ -458,8 +457,8 @@ class InterpreterUtilTest
 
             accCostsSep = cost1 ++ cost2
 
-            deployErr = ProtoUtil.termDeploy(
-              mkTerm("@3!(\"a\" + 3)").toOption.get,
+            deployErr = ProtoUtil.sourceDeploy(
+              "@3!(\"a\" + 3)",
               System.currentTimeMillis(),
               accounting.MAX_VALUE
             )
@@ -472,7 +471,7 @@ class InterpreterUtilTest
 
   "validateBlockCheckpoint" should "not return a checkpoint for an invalid block" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val deploys = Vector("@1!(1)").flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
+      val deploys = Vector("@1!(1)").map(ProtoUtil.sourceDeployNow)
       val processedDeploys =
         deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
       val invalidHash = ByteString.EMPTY
@@ -498,8 +497,7 @@ class InterpreterUtilTest
           "@2!(5)",
           "for (@x <- @1) { @2!(x) }",
           "for (@x <- @2) { @3!(x) }"
-        ).flatMap(mkTerm(_).toOption)
-          .map(ProtoUtil.termDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
+        ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {
           dag1 <- blockDagStorage.getRepresentation
@@ -552,8 +550,8 @@ class InterpreterUtilTest
       """.stripMargin
       ).map(
         s =>
-          ProtoUtil.termDeploy(
-            InterpreterUtil.mkTerm(s).right.get,
+          ProtoUtil.sourceDeploy(
+            s,
             System.currentTimeMillis(),
             accounting.MAX_VALUE
           )
@@ -614,8 +612,8 @@ class InterpreterUtilTest
           """)
           .map(
             s =>
-              ProtoUtil.termDeploy(
-                InterpreterUtil.mkTerm(s).right.get,
+              ProtoUtil.sourceDeploy(
+                s,
                 System.currentTimeMillis(),
                 accounting.MAX_VALUE
               )
@@ -672,8 +670,8 @@ class InterpreterUtilTest
           |}""".stripMargin
         ).map(
           s =>
-            ProtoUtil.termDeploy(
-              InterpreterUtil.mkTerm(s).right.get,
+            ProtoUtil.sourceDeploy(
+              s,
               System.currentTimeMillis(),
               accounting.MAX_VALUE
             )
@@ -722,8 +720,8 @@ class InterpreterUtilTest
             |""".stripMargin
           ).map(
             s =>
-              ProtoUtil.termDeploy(
-                InterpreterUtil.mkTerm(s).right.get,
+              ProtoUtil.sourceDeploy(
+                s,
                 System.currentTimeMillis(),
                 accounting.MAX_VALUE
               )
@@ -758,8 +756,7 @@ class InterpreterUtilTest
     implicit blockStore => implicit blockDagStorage =>
       val deploys = (0 until 1).map(i => {
         val code = s"for(_ <- @$i){ Nil } | @$i!($i)"
-        val term = InterpreterUtil.mkTerm(code).right.get
-        ProtoUtil.termDeployNow(term)
+        ProtoUtil.sourceDeployNow(code)
       })
 
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
@@ -811,7 +808,7 @@ class InterpreterUtilTest
             """
             |@"store"!("2")
           """.stripMargin
-          ).map(s => ProtoUtil.termDeployNow(InterpreterUtil.mkTerm(s).right.get))
+          ).map(s => ProtoUtil.sourceDeployNow(s))
 
         mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
           for {

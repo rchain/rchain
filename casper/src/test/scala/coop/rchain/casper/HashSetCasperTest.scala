@@ -131,7 +131,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       _      = parents.size should be(1)
       _      = parents.head should be(genesis.blockHash)
       _      = deploys.size should be(1)
-      _      = deploys.head.raw should be(Some(deploy))
+      _      = deploys.head should be(deploy)
       result = storage.contains("@{0}!(0)") should be(true)
       _      <- node.tearDown()
     } yield result
@@ -769,7 +769,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       validatorBondsAndRanksT <- runtimeManager
                                   .captureResults(
                                     ProtoUtil.postStateHash(block1),
-                                    ProtoUtil.deployDataToDeploy(rankedValidatorQuery)
+                                    rankedValidatorQuery
                                   )
 
       validatorBondsAndRanks: Seq[(ByteString, Long, Int)] = validatorBondsAndRanksT.head.exprs.head.getEListBody.ps
@@ -858,7 +858,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       newWalletBalance <- node.runtimeManager
                            .captureResults(
                              ProtoUtil.postStateHash(block),
-                             ProtoUtil.deployDataToDeploy(balanceQuery)
+                             balanceQuery
                            )
       _      = blockStatus shouldBe Valid
       result = newWalletBalance.head.exprs.head.getGInt shouldBe amount
@@ -1092,7 +1092,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       capturedResults <- node.runtimeManager
                           .captureResults(
                             ProtoUtil.postStateHash(genesis),
-                            ProtoUtil.deployDataToDeploy(sigDeployData)
+                            sigDeployData
                           )
       sigData     = capturedResults.head.exprs.head.getGByteArray
       sig         = Base16.encode(Ed25519.sign(sigData.toByteArray, sk))
@@ -1134,7 +1134,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       deployQueryResult <- deployAndQuery(
                             node,
                             paymentDeployData,
-                            ProtoUtil.deployDataToDeploy(paymentQuery)
+                            paymentQuery
                           )
       (blockStatus, queryResult) = deployQueryResult
       (codeHashPar, _, userIdPar, timestampPar) = ProtoUtil.getRholangDeployParams(
@@ -1482,11 +1482,11 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
   it should "prepare to slash an block that includes a invalid block pointer" in effectTest {
     for {
       nodes           <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
-      deploys         <- (0 to 5).toList.traverse(i => ProtoUtil.basicDeploy[Effect](i))
+      deploys         <- (0 to 5).toList.traverse(i => ProtoUtil.basicDeployData[Effect](i))
       deploysWithCost = deploys.map(d => ProcessedDeploy(deploy = Some(d))).toIndexedSeq
 
       createBlockResult <- nodes(0).casperEff
-                            .deploy(deploys(0).raw.get) *> nodes(0).casperEff.createBlock
+                            .deploy(deploys(0)) *> nodes(0).casperEff.createBlock
       Created(signedBlock) = createBlockResult
       signedInvalidBlock = BlockUtil.resignBlock(
         signedBlock.withSeqNum(-2),
@@ -1726,7 +1726,7 @@ object HashSetCasperTest {
   def deployAndQuery(
       node: HashSetCasperTestNode[Effect],
       dd: DeployData,
-      query: Deploy
+      query: DeployData
   ): Effect[(BlockStatus, Seq[Par])] =
     for {
       createBlockResult <- node.casperEff.deploy(dd) *> node.casperEff.createBlock

@@ -5,7 +5,7 @@ import cats.effect._
 import cats.implicits._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.util.ProtoUtil.{deployDataToDeploy, sourceDeploy}
+import coop.rchain.casper.util.ProtoUtil.sourceDeploy
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
@@ -69,13 +69,13 @@ object BondingUtil {
       statusOut: String
   )(implicit runtimeManager: RuntimeManager[F]): F[String] = {
     require(Base16.encode(Keccak256.hash(Base16.decode(pubKey)).drop(12)) == ethAddress.drop(2))
-    val unlockSigDataTerm = deployDataToDeploy(
+    val unlockSigDataTerm =
       sourceDeploy(
         s""" @"__SCALA__"!(["$pubKey", "$statusOut"].toByteArray())""",
         0L,
         accounting.MAX_VALUE
       )
-    )
+
     for {
       capturedResults <- runtimeManager
                           .captureResults(runtimeManager.emptyStateHash, unlockSigDataTerm)
@@ -98,13 +98,12 @@ object BondingUtil {
       amount: Long,
       destination: String
   )(implicit runtimeManager: RuntimeManager[F]): F[Array[Byte]] = {
-    val transferSigDataTerm = deployDataToDeploy(
+    val transferSigDataTerm =
       sourceDeploy(
         s""" @"__SCALA__"!([$nonce, $amount, "$destination"].toByteArray())""",
         0L,
         accounting.MAX_VALUE
       )
-    )
 
     for {
       capturedResults <- runtimeManager

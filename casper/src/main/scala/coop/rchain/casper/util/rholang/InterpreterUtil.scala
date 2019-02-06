@@ -140,7 +140,7 @@ object InterpreterUtil {
 
   def computeDeploysCheckpoint[F[_]: Sync: BlockStore](
       parents: Seq[BlockMessage],
-      deploys: Seq[Deploy],
+      deploys: Seq[DeployData],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
       time: Option[Long] = None

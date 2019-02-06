@@ -274,7 +274,7 @@ message Header {
 }
 
 message ProcessedDeploy {
-    Deploy deploy = 1;
+    DeployData deploy = 1;
     PCost cost = 2 ;
     repeated Event log = 3; //the new terms and comm. rule reductions from this deploy
     bool errored = 4; //true if deploy encountered a user error
@@ -299,11 +299,6 @@ message RChainState {
   //(which will be part of the tuplespace in the real implementation).
   repeated Bond bonds        = 3;
   int64         blockNumber  = 4;
-}
-
-message Deploy {
-  Par          term  = 1; //rholang term to deploy
-  DeployData   raw   = 2;
 }
 
 message Event {
