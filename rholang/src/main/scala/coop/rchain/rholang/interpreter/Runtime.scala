@@ -62,16 +62,6 @@ object Runtime {
   type CPAK[F[_, _, _, _]] =
     F[Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
-  type CPARK[F[_, _, _, _, _, _]] =
-    F[
-      Par,
-      BindPattern,
-      InterpreterError,
-      ListParWithRandom,
-      ListParWithRandomAndPhlos,
-      TaggedContinuation
-    ]
-
   type TCPARK[M[_], F[_[_], _, _, _, _, _, _]] =
     F[
       M,
