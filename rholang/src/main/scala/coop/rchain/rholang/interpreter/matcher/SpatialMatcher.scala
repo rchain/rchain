@@ -298,7 +298,7 @@ trait SpatialMatcherInstances {
   // more ways than one, we don't care, as we care about what went into the
   // match, and not about how it matched inside. The tricky part goes into
   // the par/par matcher.
-  import Splittable._
+  import Splittable.SplittableOps
 
   implicit def connectiveMatcher[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short]
     : SpatialMatcher[F, Par, Connective] =

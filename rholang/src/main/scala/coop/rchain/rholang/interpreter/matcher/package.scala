@@ -80,22 +80,10 @@ package object matcher {
       private def runFreeMapAndStream: ErroredOrCost[Stream[(FreeMap, A)]] =
         StreamT.run(s.run(Map.empty))
 
-      def takeFirst(): NonDetFreeMapWithCost[A] =
-        s.mapK[StreamWithCost](new FunctionK[StreamWithCost, StreamWithCost] {
-          override def apply[T](fa: StreamWithCost[T]): StreamWithCost[T] =
-            StreamT.dropTail(fa)
-        })
-
     }
 
     implicit def toNonDetFreeMapWithCostOps[A](s: NonDetFreeMapWithCost[A]) =
       new NonDetFreeMapWithCostOps[A](s)
-
-    implicit val splittable: Splittable[NonDetFreeMapWithCost] =
-      new Splittable[NonDetFreeMapWithCost] {
-        override def takeFirst[A](fa: NonDetFreeMapWithCost[A]): NonDetFreeMapWithCost[A] =
-          fa.takeFirst()
-      }
 
   }
 
