@@ -514,13 +514,6 @@ object ProtoUtil {
       accounting.MAX_VALUE
     )
 
-  def compiledSourceDeploy(
-      source: CompiledRholangSource,
-      timestamp: Long,
-      phloLimit: Long
-  ): DeployData =
-    sourceDeploy(source.code, timestamp, phloLimit)
-
   /**
     * Strip a deploy down to the fields we are using to seed the Deterministic name generator.
     * Because we enforce that a deployment must be unique on the user, timestamp pair, we leave
