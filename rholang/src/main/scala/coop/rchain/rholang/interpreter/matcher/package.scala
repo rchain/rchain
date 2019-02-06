@@ -9,7 +9,7 @@ import cats.mtl.{FunctorRaise, MonadState}
 import coop.rchain.catscontrib.MonadError_
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.errors.{InterpreterError, OutOfPhlogistonsError}
 
 import scala.collection.immutable.Stream
 
@@ -17,18 +17,18 @@ package object matcher {
 
   type FreeMap = Map[Int, Par]
 
-  //FreeMap => Cost => Either[OutOfPhlogistonsError.type, (Cost, Stream[(FreeMap, A)])]
+  //FreeMap => Cost => Either[InterpreterError, (Cost, Stream[(FreeMap, A)])]
   type NonDetFreeMapWithCost[A] = StateT[StreamWithCost, FreeMap, A]
   type StreamWithCost[A]        = StreamT[ErroredOrCost, A]
-  type ErroredOrCost[A]         = StateT[OOPE, Cost, A]
-  type OOPE[A]                  = Either[OutOfPhlogistonsError.type, A]
+  type ErroredOrCost[A]         = StateT[Err, Cost, A]
+  type Err[A]                   = Either[InterpreterError, A]
 
   // The naming convention means: this is an effect-type alias.
   // Will be used similarly to capabilities, but for more generic and probably low-level/implementation stuff.
   // Adopted from: http://atnos-org.github.io/eff/org.atnos.site.Tutorial.html#write-an-interpreter-for-your-program
   type _freeMap[F[_]] = MonadState[F, FreeMap]
   type _cost[F[_]]    = MonadState[F, Cost]
-  type _error[F[_]]   = FunctorRaise[F, OutOfPhlogistonsError.type]
+  type _error[F[_]]   = FunctorRaise[F, InterpreterError]
   type _short[F[_]]   = MonadError_[F, Unit] //arises from and corresponds to the OptionT/StreamT in the stack
 
   // Implicit summoner methods, just like `Monad.apply` on `Monad`'s companion object.
@@ -60,12 +60,12 @@ package object matcher {
 
       def runWithCost(
           initCost: Cost
-      ): Either[OutOfPhlogistonsError.type, (Cost, Stream[(FreeMap, A)])] =
+      ): Either[InterpreterError, (Cost, Stream[(FreeMap, A)])] =
         runFreeMapAndStream.run(initCost)
 
       def runFirstWithCost(
           initCost: Cost
-      ): Either[OutOfPhlogistonsError.type, (Cost, Option[(FreeMap, A)])] =
+      ): Either[InterpreterError, (Cost, Option[(FreeMap, A)])] =
         runFreeMapAndStream.map(_.headOption).run(initCost)
 
       private def runFreeMapAndStream: ErroredOrCost[Stream[(FreeMap, A)]] =

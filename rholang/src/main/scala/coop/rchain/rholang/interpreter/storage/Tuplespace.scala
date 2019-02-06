@@ -2,16 +2,13 @@ package coop.rchain.rholang.interpreter.storage
 
 import cats.Parallel
 import cats.effect.Sync
-import coop.rchain.models._
+import cats.implicits._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
+import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Dispatch
-import coop.rchain.rholang.interpreter.errors.{OutOfPhlogistonsError, ReduceError}
+import coop.rchain.rholang.interpreter.errors.{InterpreterError, ReduceError}
 import coop.rchain.rspace.pure.PureRSpace
 import coop.rchain.rspace.util._
-import cats.implicits._
-import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
-import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 
 trait Tuplespace[F[_]] {
   def produce(chan: Par, data: ListParWithRandom, persistent: Boolean, sequenceNumber: Int): F[Unit]
@@ -29,7 +26,7 @@ object Tuplespace {
         F,
         Par,
         BindPattern,
-        OutOfPhlogistonsError.type,
+        InterpreterError,
         ListParWithRandom,
         ListParWithRandomAndPhlos,
         TaggedContinuation
@@ -44,7 +41,7 @@ object Tuplespace {
     ): F[Unit] = {
       // TODO: Handle the environment in the store
       def go(
-          res: Either[OutOfPhlogistonsError.type, Option[
+          res: Either[InterpreterError, Option[
             (TaggedContinuation, Seq[ListParWithRandomAndPhlos], Int)
           ]]
       ): F[Unit] =
@@ -82,7 +79,7 @@ object Tuplespace {
         case _ =>
           val (patterns: Seq[BindPattern], sources: Seq[Par]) = binds.unzip
           def go(
-              res: Either[OutOfPhlogistonsError.type, Option[
+              res: Either[InterpreterError, Option[
                 (TaggedContinuation, Seq[ListParWithRandomAndPhlos], Int)
               ]]
           ): F[Unit] =

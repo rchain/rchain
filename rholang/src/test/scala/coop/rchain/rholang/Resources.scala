@@ -6,14 +6,13 @@ import cats.Applicative
 import cats.effect.ExitCase.Error
 import cats.effect.{ContextShift, Resource, Sync}
 import com.typesafe.scalalogging.Logger
-import coop.rchain.shared.Log
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Context, RSpace}
-import coop.rchain.shared.StoreType
+import coop.rchain.shared.{Log, StoreType}
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -42,6 +41,7 @@ object Resources {
       mapSize: Long = 1024L * 1024L * 4
   ): Resource[F, RhoISpace[F]] = {
     import coop.rchain.rholang.interpreter.storage.implicits._
+
     import scala.concurrent.ExecutionContext.Implicits.global
 
     def mkRspace(dbDir: Path): F[RhoISpace[F]] = {
@@ -51,7 +51,7 @@ object Resources {
         F,
         Par,
         BindPattern,
-        OutOfPhlogistonsError.type,
+        InterpreterError,
         ListParWithRandom,
         ListParWithRandomAndPhlos,
         TaggedContinuation
