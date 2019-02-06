@@ -14,7 +14,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits.{VectorPar, _}
 import coop.rchain.rholang.interpreter.Splittable
 import coop.rchain.rholang.interpreter.accounting.{Cost, _}
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.errors.{BugFoundError, OutOfPhlogistonsError}
 import coop.rchain.rholang.interpreter.matcher.ParSpatialMatcherUtils.{noFrees, subPars}
 import coop.rchain.rholang.interpreter.matcher.SpatialMatcher._
 import coop.rchain.rholang.interpreter.matcher.StreamT._
@@ -263,14 +263,16 @@ object SpatialMatcher extends SpatialMatcherInstances {
   ): F[FreeMap] =
     for {
       currentFreeMap <- _freeMap[F].get
-      _ <- Alternative_[F].guard {
+      currentVars    = currentFreeMap.keys.toSet
+      addedVars      = freeMaps.flatMap(_.keys.filterNot(currentVars.contains))
+      _ <- _error[F].ensure(addedVars.pure[F])(
+            BugFoundError(s"Aggregated updates conflicted with each other: $freeMaps")
+          ) {
             //The correctness of isolating MBM from changing FreeMap relies
             //on our ability to aggregate the var assignments from subsequent matches.
             //This means all the variables populated by MBM must not duplicate each other.
-            //TODO start using MonadError in the interpreter and raise errors for violated assertions
-            val currentVars = currentFreeMap.keys.toSet
-            val addedVars   = freeMaps.flatMap(_.keys.filterNot(currentVars.contains))
-            addedVars.size == addedVars.distinct.size
+            addedVars =>
+              addedVars.size == addedVars.distinct.size
           }
       updatedFreeMap = freeMaps.fold(currentFreeMap)(_ ++ _)
     } yield updatedFreeMap
