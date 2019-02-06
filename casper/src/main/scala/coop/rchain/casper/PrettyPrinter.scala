@@ -52,7 +52,7 @@ object PrettyPrinter {
     par.map(p => limit(rpp.buildString(p), 25)).getOrElse("")
 
   private def buildString(d: DeployData): String =
-    s"DeployData #${d.timestamp}}"
+    s"DeployData #${d.timestamp} -- ${d.term}}"
 
   private def buildString(r: RChainState): String =
     buildString(r.postStateHash)
