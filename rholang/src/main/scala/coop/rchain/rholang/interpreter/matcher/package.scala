@@ -23,6 +23,10 @@ package object matcher {
   type ErroredOrCost[A]         = StateT[Err, Cost, A]
   type Err[A]                   = Either[InterpreterError, A]
 
+  // MatcherMonadT[Err, A] is equivalent to NonDetFreeMapWithCost[A]. Scalac is too dumb to notice though.
+  type MatcherMonadT[F[_], A]   = StateT[StreamWithCostT[F, ?], FreeMap, A]
+  type StreamWithCostT[F[_], A] = StreamT[StateT[F, Cost, ?], A]
+
   // The naming convention means: this is an effect-type alias.
   // Will be used similarly to capabilities, but for more generic and probably low-level/implementation stuff.
   // Adopted from: http://atnos-org.github.io/eff/org.atnos.site.Tutorial.html#write-an-interpreter-for-your-program
@@ -45,6 +49,12 @@ package object matcher {
     override val functor: Functor[F]  = monadError
     override def raise[A](e: E): F[A] = monadError.raiseError(e)
   }
+
+  private[matcher] def runFirstWithCost[F[_]: Monad, A](
+      f: MatcherMonadT[F, A],
+      initCost: Cost
+  ): F[(Cost, Option[(FreeMap, A)])] =
+    StreamT.run(StreamT.dropTail(f.run(emptyMap))).map(_.headOption).run(initCost)
 
   private[matcher] def charge[F[_]: Monad](
       amount: Cost

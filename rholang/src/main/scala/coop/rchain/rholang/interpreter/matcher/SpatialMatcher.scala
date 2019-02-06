@@ -43,28 +43,23 @@ object SpatialMatcher extends SpatialMatcherInstances {
   def spatialMatchAndCharge[M[_]: Sync](target: Par, pattern: Par)(
       implicit costAlg: CostAccounting[M]
   ): M[Option[(FreeMap, Unit)]] = {
-    import NonDetFreeMapWithCost._
+    type R[A] = MatcherMonadT[M, A]
 
-    for {
-      // phlos available before going to the matcher
+    val doMatch: R[Unit] = SpatialMatcher.spatialMatch[R, Par, Par](target, pattern)
+
+    val matchAndCharge: M[Option[(FreeMap, Unit)]] = for {
       phlosAvailable <- costAlg.get()
-      result <- Sync[M]
-                 .fromEither(
-                   SpatialMatcher
-                     .spatialMatch[NonDetFreeMapWithCost, Par, Par](target, pattern)
-                     .runFirstWithCost(phlosAvailable.cost)
-                 )
-                 .flatMap {
-                   case (phlosLeft, result) =>
-                     val matchCost = phlosAvailable.cost - phlosLeft
-                     costAlg.charge(matchCost).map(_ => result)
-                 }
-                 .onError {
-                   case OutOfPhlogistonsError =>
-                     // if we run out of phlos during the match we have to zero phlos available
-                     costAlg.get().flatMap(ca => costAlg.charge(ca.cost))
-                 }
-    } yield result
+      result <- runFirstWithCost[M, Unit](doMatch, phlosAvailable.cost).onError {
+                 case OutOfPhlogistonsError =>
+                   // if we run out of phlos during the match we have to zero phlos available
+                   costAlg.get().flatMap(ca => costAlg.charge(ca.cost))
+               }
+      (phlosLeft, matchResult) = result
+      matchCost                = phlosAvailable.cost - phlosLeft
+      _                        <- costAlg.charge(matchCost)
+    } yield matchResult
+
+    matchAndCharge
   }
 
   def spatialMatch[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short, T, P](
