@@ -2,31 +2,25 @@ package coop.rchain.rholang.interpreter.accounting
 
 import java.nio.file.{Files, Path}
 
-import cats.Id
-import cats.effect.Sync
 import com.google.protobuf.ByteString
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter._
-import org.scalatest.{Assertion, BeforeAndAfterAll, Matchers, WordSpec}
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
+import coop.rchain.rholang.interpreter._
+import coop.rchain.rholang.interpreter.accounting.Chargeable._
+import coop.rchain.rholang.interpreter.errors.InterpreterError
+import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.{Context, RSpace}
+import coop.rchain.shared.Log
 import monix.eval.Task
-import org.scalatest.prop.PropertyChecks._
-
-import scala.concurrent.duration._
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
-import coop.rchain.models.testImplicits._
-import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
-import coop.rchain.rholang.interpreter.accounting.Chargeable._
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
-import coop.rchain.rspace.history.Branch
-import coop.rchain.rspace.{Context, ISpace, RSpace}
-import coop.rchain.shared.Log
-import org.scalacheck.{Arbitrary, Gen}
-import org.scalatest.prop.TableFor1
+import org.scalatest.prop.PropertyChecks._
+import org.scalatest.{Assertion, BeforeAndAfterAll, Matchers, WordSpec}
 
 import scala.collection.immutable.BitSet
+import scala.concurrent.duration._
 
 class RholangMethodsCostsSpec
     extends WordSpec
@@ -812,7 +806,7 @@ class RholangMethodsCostsSpec
         Task,
         Par,
         BindPattern,
-        OutOfPhlogistonsError.type,
+        InterpreterError,
         ListParWithRandom,
         ListParWithRandomAndPhlos,
         TaggedContinuation

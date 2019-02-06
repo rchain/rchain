@@ -25,7 +25,7 @@ object RholangOnlyDispatcher {
 
     implicit val matchCost: Match[
       BindPattern,
-      errors.OutOfPhlogistonsError.type,
+      errors.InterpreterError,
       ListParWithRandom,
       ListParWithRandomAndPhlos
     ] = matchListPar(Cost(Integer.MAX_VALUE))

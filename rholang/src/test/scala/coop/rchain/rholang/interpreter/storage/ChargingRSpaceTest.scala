@@ -1,10 +1,7 @@
 package coop.rchain.rholang.interpreter.storage
 
-import java.nio.file.Files
-
 import cats.effect.{Resource, Sync}
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
@@ -12,19 +9,18 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.Resources.mkRhoISpace
-import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace, RhoPureSpace}
+import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoPureSpace}
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccounting, _}
 import coop.rchain.rholang.interpreter.errors
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.storage.ChargingRSpace._
 import coop.rchain.rholang.interpreter.storage.ChargingRSpaceTest.{ChargingRSpace, _}
-import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Match, _}
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatest.{fixture, Matchers, Outcome}
-import coop.rchain.rholang.interpreter.storage.ChargingRSpace._
 
 import scala.collection.immutable
 import scala.concurrent.duration._
@@ -391,11 +387,11 @@ object ChargingRSpaceTest {
     )(
         implicit m: Match[
           BindPattern,
-          errors.OutOfPhlogistonsError.type,
+          errors.InterpreterError,
           ListParWithRandom,
           ListParWithRandomAndPhlos
         ]
-    ): Task[Either[errors.OutOfPhlogistonsError.type, Option[
+    ): Task[Either[errors.InterpreterError, Option[
       (
           ContResult[Par, BindPattern, TaggedContinuation],
           immutable.Seq[Result[ListParWithRandomAndPhlos]]
@@ -418,11 +414,11 @@ object ChargingRSpaceTest {
     )(
         implicit m: Match[
           BindPattern,
-          errors.OutOfPhlogistonsError.type,
+          errors.InterpreterError,
           ListParWithRandom,
           ListParWithRandomAndPhlos
         ]
-    ): Task[Either[errors.OutOfPhlogistonsError.type, Option[
+    ): Task[Either[errors.InterpreterError, Option[
       (
           ContResult[Par, BindPattern, TaggedContinuation],
           immutable.Seq[Result[ListParWithRandomAndPhlos]]
@@ -447,7 +443,7 @@ object ChargingRSpaceTest {
     )(
         implicit m: Match[
           BindPattern,
-          errors.OutOfPhlogistonsError.type,
+          errors.InterpreterError,
           ListParWithRandom,
           ListParWithRandomAndPhlos
         ]
