@@ -2,7 +2,7 @@ package coop.rchain.casper.genesis.contracts
 
 import java.nio.file.Paths
 
-import coop.rchain.casper.protocol.{Deploy, DeployData}
+import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
 import coop.rchain.catscontrib.TaskContrib._
@@ -24,8 +24,8 @@ import scala.concurrent.duration._
 
 object TestUtil {
 
-  val rhoSpecDeploy: Deploy = {
-    val deployData = DeployData(
+  val rhoSpecDeploy: DeployData =
+    DeployData(
       user = ProtoUtil.stringToByteString(
         "4ae94eb0b2d7df529f7ae68863221d5adda402fc54303a3d90a8a7a279326828"
       ),
@@ -33,13 +33,6 @@ object TestUtil {
       term = RhoSpecContract.code,
       phloLimit = accounting.MAX_VALUE
     )
-
-    Deploy(
-      term = Some(RhoSpecContract.term),
-      raw = Some(deployData)
-    )
-
-  }
 
   def runtime(
       extraServices: Seq[SystemProcess.Definition[Task]] = Seq.empty
@@ -51,12 +44,15 @@ object TestUtil {
     } yield (runtime)
   }.unsafeRunSync
 
-  def evalDeploy(deploy: Deploy, runtime: Runtime[Task])(implicit scheduler: Scheduler): Unit = {
+  def evalDeploy(deploy: DeployData, runtime: Runtime[Task])(
+      implicit scheduler: Scheduler
+  ): Unit = {
     runtime.reducer.setPhlo(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
     implicit val rand: Blake2b512Random = Blake2b512Random(
-      DeployData.toByteArray(ProtoUtil.stripDeployData(deploy.getRaw))
+      DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
     )
-    runtime.reducer.inj(deploy.getTerm).unsafeRunSync
+    val term = mkTerm(deploy.term).right.get
+    runtime.reducer.inj(term).unsafeRunSync
   }
 
   def evalTerm(
@@ -78,7 +74,7 @@ object TestUtil {
 
   def runTestsWithDeploys(
       tests: CompiledRholangSource,
-      otherLibs: Seq[Deploy],
+      otherLibs: Seq[DeployData],
       runtime: Runtime[Task]
   )(
       implicit scheduler: Scheduler

@@ -18,6 +18,7 @@ import coop.rchain.blockstorage.util.{BlockMessageUtil, Crc32, TopologicalSortUt
 import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.BlockMetadata
 import coop.rchain.shared.{Log, LogSource}
 
 import scala.ref.WeakReference
@@ -607,8 +608,9 @@ object BlockDagFileStorage {
   private def extractTopoSort(
       dataLookup: List[(BlockHash, BlockMetadata)]
   ): Vector[Vector[BlockHash]] = {
+    val blockMetadatas = dataLookup.map(_._2).toVector
     val indexedTopoSort =
-      dataLookup.map(_._2).toVector.groupBy(_.blockNum).mapValues(_.map(_.blockHash)).toVector
+      blockMetadatas.groupBy(_.blockNum).mapValues(_.map(_.blockHash)).toVector.sortBy(_._1)
     assert(indexedTopoSort.zipWithIndex.forall { case ((readI, _), i) => readI == i })
     indexedTopoSort.map(_._2)
   }

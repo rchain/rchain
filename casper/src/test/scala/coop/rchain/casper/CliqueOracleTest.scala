@@ -23,7 +23,7 @@ class CliqueOracleTest
 
   implicit val logEff = new LogStub[Task]
 
-  // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
+  // See [[/docs/casper/images/cbc-casper_ping_pong_diagram.png]]
   it should "detect finality as appropriate" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val v1     = generateValidator("Validator One")

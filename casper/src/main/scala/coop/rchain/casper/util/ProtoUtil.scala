@@ -3,7 +3,7 @@ package coop.rchain.casper.util
 import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockMetadata, BlockStore}
+import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
@@ -102,45 +102,23 @@ object ProtoUtil {
       }
 
   def findCreatorJustificationAncestorWithSeqNum[F[_]: Monad: BlockStore](
+      blockDag: BlockDagRepresentation[F],
       b: BlockMessage,
       seqNum: SequenceNumber
-  ): F[Option[BlockMessage]] =
+  ): F[Option[BlockHash]] =
     if (b.seqNum == seqNum) {
-      Option[BlockMessage](b).pure[F]
+      Option(b.blockHash).pure[F]
     } else {
       DagOperations
-        .bfTraverseF(List(b)) { block =>
-          getCreatorJustificationAsList[F](block, block.sender)
+        .bfTraverseF(List(b.blockHash)) { blockHash =>
+          getCreatorJustificationAsListUntilGoalInMemory[F](blockDag, blockHash)
         }
-        .find(_.seqNum == seqNum)
+        .findF { blockHash =>
+          for {
+            blockMeta <- blockDag.lookup(blockHash)
+          } yield blockMeta.get.seqNum == seqNum
+        }
     }
-
-  // TODO: Replace with getCreatorJustificationAsListUntilGoal
-  def getCreatorJustificationAsList[F[_]: Monad: BlockStore](
-      block: BlockMessage,
-      validator: Validator,
-      goalFunc: BlockMessage => Boolean = _ => false
-  ): F[List[BlockMessage]] = {
-    val maybeCreatorJustificationHash =
-      block.justifications.find(_.validator == validator)
-    maybeCreatorJustificationHash match {
-      case Some(creatorJustificationHash) =>
-        for {
-          maybeCreatorJustification <- BlockStore[F].get(creatorJustificationHash.latestBlockHash)
-          maybeCreatorJustificationAsList = maybeCreatorJustification match {
-            case Some(creatorJustification) =>
-              if (goalFunc(creatorJustification)) {
-                List.empty[BlockMessage]
-              } else {
-                List(creatorJustification)
-              }
-            case None =>
-              List.empty[BlockMessage]
-          }
-        } yield maybeCreatorJustificationAsList
-      case None => List.empty[BlockMessage].pure[F]
-    }
-  }
 
   /**
     * Since the creator justification is unique
@@ -151,14 +129,13 @@ object ProtoUtil {
   def getCreatorJustificationAsListUntilGoalInMemory[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
       blockHash: BlockHash,
-      validator: Validator,
       goalFunc: BlockHash => Boolean = _ => false
   ): F[List[BlockHash]] =
     (for {
       block <- OptionT(blockDag.lookup(blockHash))
       creatorJustificationHash <- OptionT.fromOption[F](
                                    block.justifications
-                                     .find(_.validator == validator)
+                                     .find(_.validator == block.sender)
                                      .map(_.latestBlockHash)
                                  )
       creatorJustification <- OptionT(blockDag.lookup(creatorJustificationHash))
@@ -252,11 +229,7 @@ object ProtoUtil {
       .flatMap(getDeployData)
       .exists(deployData => deployData.user == user && deployData.timestamp == timestamp)
 
-  private def getDeployData(d: ProcessedDeploy): Option[DeployData] =
-    for {
-      deploy     <- d.deploy
-      deployData <- deploy.raw
-    } yield deployData
+  private def getDeployData(d: ProcessedDeploy): Option[DeployData] = d.deploy
 
   def deploys(b: BlockMessage): Seq[ProcessedDeploy] =
     b.body.fold(Seq.empty[ProcessedDeploy])(_.deploys)
@@ -500,14 +473,8 @@ object ProtoUtil {
           .withPhloLimit(accounting.MAX_VALUE)
     )
 
-  def basicDeploy[F[_]: Monad: Time](id: Int): F[Deploy] =
-    for {
-      d    <- basicDeployData[F](id)
-      term = InterpreterUtil.mkTerm(d.term).right.get
-    } yield Deploy(term = Some(term), raw = Some(d))
-
   def basicProcessedDeploy[F[_]: Monad: Time](id: Int): F[ProcessedDeploy] =
-    basicDeploy[F](id).map(deploy => ProcessedDeploy(deploy = Some(deploy)))
+    basicDeployData[F](id).map(deploy => ProcessedDeploy(deploy = Some(deploy)))
 
   def sourceDeploy(source: String, timestamp: Long, phlos: Long): DeployData =
     DeployData(
@@ -517,36 +484,12 @@ object ProtoUtil {
       phloLimit = phlos
     )
 
-  def compiledSourceDeploy(
-      source: CompiledRholangSource,
-      timestamp: Long,
-      phloLimit: Long
-  ): Deploy =
-    Deploy(
-      term = Some(source.term),
-      raw = Some(sourceDeploy(source.code, timestamp, phloLimit))
+  def sourceDeployNow(source: String): DeployData =
+    sourceDeploy(
+      source,
+      System.currentTimeMillis(),
+      accounting.MAX_VALUE
     )
-
-  def termDeploy(term: Par, timestamp: Long, phloLimit: Long): Deploy =
-    Deploy(
-      term = Some(term),
-      raw = Some(
-        DeployData(
-          user = ByteString.EMPTY,
-          timestamp = timestamp,
-          term = term.toProtoString,
-          phloLimit = phloLimit
-        )
-      )
-    )
-
-  def termDeployNow(term: Par): Deploy =
-    termDeploy(term, System.currentTimeMillis(), accounting.MAX_VALUE)
-
-  def deployDataToDeploy(dd: DeployData): Deploy = Deploy(
-    term = InterpreterUtil.mkTerm(dd.term).toOption,
-    raw = Some(dd)
-  )
 
   /**
     * Strip a deploy down to the fields we are using to seed the Deterministic name generator.

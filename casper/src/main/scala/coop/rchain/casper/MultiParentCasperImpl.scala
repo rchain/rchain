@@ -32,7 +32,7 @@ import coop.rchain.shared._
 final case class CasperState(
     seenBlockHashes: Set[BlockHash] = Set.empty[BlockHash],
     blockBuffer: Set[BlockMessage] = Set.empty[BlockMessage],
-    deployHistory: Set[Deploy] = Set.empty[Deploy],
+    deployHistory: Set[DeployData] = Set.empty[DeployData],
     invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash],
     dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty,
     equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord]
@@ -201,19 +201,14 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
 
   def deploy(d: DeployData): F[Either[Throwable, Unit]] =
     InterpreterUtil.mkTerm(d.term) match {
-      case Right(term) =>
-        addDeploy(
-          Deploy(
-            term = Some(term),
-            raw = Some(d)
-          )
-        ).as(Right(()))
+      case Right(_) =>
+        addDeploy(d).as(Right(()))
 
       case Left(err) =>
         Applicative[F].pure(Left(new Exception(s"Error in parsing term: \n$err")))
     }
 
-  def addDeploy(deploy: Deploy): F[Unit] =
+  def addDeploy(deploy: DeployData): F[Unit] =
     for {
       _ <- Cell[F, CasperState].modify { s =>
             s.copy(deployHistory = s.deployHistory + deploy)
@@ -276,7 +271,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
     } yield blockMessage
 
   // TODO: Optimize for large number of deploys accumulated over history
-  private def remDeploys(dag: BlockDagRepresentation[F], p: Seq[BlockMessage]): F[Seq[Deploy]] =
+  private def remDeploys(dag: BlockDagRepresentation[F], p: Seq[BlockMessage]): F[Seq[DeployData]] =
     for {
       state <- Cell[F, CasperState].read
       hist  = state.deployHistory
@@ -296,7 +291,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
   private def createProposal(
       dag: BlockDagRepresentation[F],
       p: Seq[BlockMessage],
-      r: Seq[Deploy],
+      r: Seq[DeployData],
       justifications: Seq[Justification]
   ): F[CreateBlockStatus] =
     for {

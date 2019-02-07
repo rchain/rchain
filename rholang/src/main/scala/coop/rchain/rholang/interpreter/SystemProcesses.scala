@@ -11,7 +11,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.ShortLeashParams.ShortLeashParameters
 import coop.rchain.rholang.interpreter.Runtime.{BlockTime, RhoISpace, ShortLeashParams}
 import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.errors.{InterpreterError, OutOfPhlogistonsError}
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.{ContResult, Result}
@@ -54,7 +54,7 @@ object SystemProcesses {
       private val UNLIMITED_MATCH_PHLO = matchListPar(Cost(Integer.MAX_VALUE))
 
       private def foldResult(
-          produceResult: Either[OutOfPhlogistonsError.type, Option[(ContWithMetaData, Channels)]]
+          produceResult: Either[InterpreterError, Option[(ContWithMetaData, Channels)]]
       ): F[Unit] =
         produceResult.fold(
           _ => F.raiseError(OutOfPhlogistonsError),
