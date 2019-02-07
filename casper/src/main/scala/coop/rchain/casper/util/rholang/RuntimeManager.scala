@@ -1,6 +1,6 @@
 package coop.rchain.casper.util.rholang
 
-import cats.Monad
+import cats._
 import cats.data.EitherT
 import cats.effect._
 import cats.effect.concurrent.MVar
@@ -298,15 +298,22 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     implicit val rand: Blake2b512Random = Blake2b512Random(
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
     )
-    // TODO: add error handling
-    for {
-      parsed    <- Interpreter[F].buildNormalizedTerm(deploy.term)
-      result    <- reducer.inj(parsed).attempt
-      phlos     <- reducer.phlo
-      oldErrors <- errorLog.readAndClearErrorVector()
-      newErrors = result.swap.toSeq.toVector
-      allErrors = oldErrors |+| newErrors
-    } yield (CostAccount.toProto(phlos) -> allErrors)
+
+    val parsingCost = accounting.parsingCost(deploy.term)
+
+    Interpreter[F].buildNormalizedTerm(deploy.term).attempt.flatMap {
+      case Right(parsed) =>
+        for {
+          result    <- reducer.inj(parsed).attempt
+          phlos     <- reducer.phlo
+          oldErrors <- errorLog.readAndClearErrorVector()
+          newErrors = result.swap.toSeq.toVector
+          allErrors = oldErrors |+| newErrors
+        } yield (CostAccount.toProto(phlos + parsingCost) -> allErrors)
+      case Left(error) =>
+        (CostAccount.toProto(CostAccount(parsingCost.value)) -> Vector(error)).pure[F]
+    }
+
   }
 }
 

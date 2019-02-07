@@ -10,6 +10,7 @@ import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.catscontrib.TestOutlaws._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.accounting
+import coop.rchain.rholang.interpreter.accounting.Cost
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
@@ -29,6 +30,18 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         .runSyncUnsafe(10.seconds)
 
     result.status.isFailed should be(true)
+  }
+
+  it should "capture rholang parsing errors and charge for parsing" in {
+    val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!("hi") """
+    val deploy     = ProtoUtil.sourceDeployNow(badRholang)
+    val (_, Seq(result)) =
+      runtimeManager
+        .use(mgr => mgr.computeState(mgr.emptyStateHash, deploy :: Nil))
+        .runSyncUnsafe(10.seconds)
+
+    result.status.isFailed should be(true)
+    result.cost.cost shouldEqual (accounting.MAX_VALUE - accounting.parsingCost(badRholang).value)
   }
 
   "captureResult" should "return the value at the specified channel after a rholang computation" in {
