@@ -114,6 +114,11 @@ class ScoredTermSpec extends FlatSpec with PropertyChecks with Matchers {
     checkScoreEquality[Send]
     checkScoreEquality[Var]
   }
+  it should "sort so that unequal EMethod have unequal scores" in {
+    val method1 = Expr(EMethodBody(EMethod(connectiveUsed = true)))
+    val method2 = Expr(EMethodBody(EMethod(connectiveUsed = false)))
+    assert(sort(method1).score != sort(method2).score)
+  }
   it should "sort so that unequal ParMap have unequal scores" in {
     val map1 = Expr(EMapBody(ParMap(Seq.empty, connectiveUsed = true, BitSet(), None)))
     val map2 = Expr(EMapBody(ParMap(Seq.empty, connectiveUsed = false, BitSet(), None)))
