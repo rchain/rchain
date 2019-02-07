@@ -56,6 +56,7 @@ package object io {
 
   def listInDirectory[F[_]: Sync](dirPath: Path): F[IOErr[List[Path]]] =
     (for {
+      _ <- EitherT(makeDirectory(dirPath))
       files <- EitherT(handleIo(Files.list(dirPath), {
                 case e: NotDirectoryException => FileIsNotDirectory(e)
                 case e                        => UnexpectedIOError(e)
@@ -69,8 +70,8 @@ package object io {
   def listRegularFiles[F[_]: Sync](dirPath: Path): F[IOErr[List[Path]]] = {
     type IOErrTF[A] = IOErrT[F, A]
     (for {
-      files        <- EitherT(listInDirectory(dirPath))
-      regularFiles <- files.filterA[IOErrTF](f => EitherT(isRegularFile(f)))
-    } yield regularFiles).value
+      inDirectoryList <- EitherT(listInDirectory(dirPath))
+      directoryList   <- inDirectoryList.filterA[IOErrTF](f => EitherT(isRegularFile(f)))
+    } yield directoryList).value
   }
 }
