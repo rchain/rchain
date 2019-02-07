@@ -243,7 +243,7 @@
 
 ## MultiSig Wallets
 ### As an officer of an organization, I need to have multiple approvers for any send transaction.
-### As a user, I can create a multisig wallet by specifying signer’s addresses and a quorum number.
+### As a user, I can create a multisig wallet by specifying signers' addresses and a quorum number.
 ### As a basic wallet user, I can send Rev to a multi-sig wallet.
 ### As a multisig wallet user, I can send Rev to a basic wallet.
 ### As a basic wallet user, I can see the current Rev balance in a multi-sig wallet.
