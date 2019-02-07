@@ -113,7 +113,10 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
                                       type StorageIOErrTF[A] = StorageIOErrT[F, A]
                                       Sync[StorageIOErrTF].bracket {
                                         toStorageIOErrT(
-                                          RandomAccessIO.open[F](checkpoint.storagePath)
+                                          RandomAccessIO.open[F](
+                                            checkpoint.storagePath,
+                                            RandomAccessIO.ReadWrite
+                                          )
                                         )
                                       } { storageFile =>
                                         readBlockMessageFromFile(storageFile)
@@ -206,9 +209,12 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
         blockMessageRandomAccessFile <- EitherT.liftF[F, StorageIOError, RandomAccessIO[F]](
                                          getBlockMessageRandomAccessFile
                                        )
-        _                               <- toStorageIOErrT(blockMessageRandomAccessFile.close())
-        _                               <- toStorageIOErrT(moveFile(storagePath, checkpointPath, StandardCopyOption.ATOMIC_MOVE))
-        newBlockMessageRandomAccessFile <- toStorageIOErrT(RandomAccessIO.open[F](storagePath))
+        _ <- toStorageIOErrT(blockMessageRandomAccessFile.close())
+        _ <- toStorageIOErrT(moveFile(storagePath, checkpointPath, StandardCopyOption.ATOMIC_MOVE))
+        newBlockMessageRandomAccessFile <- toStorageIOErrT(
+                                            RandomAccessIO
+                                              .open[F](storagePath, RandomAccessIO.ReadWrite)
+                                          )
         _ <- EitherT.liftF[F, StorageIOError, Unit](
               setBlockMessageRandomAccessFile(newBlockMessageRandomAccessFile)
             )
@@ -277,6 +283,11 @@ object FileLMDBIndexBlockStore {
   ): StorageIOErrT[F, A] =
     EitherT(ioError).toStorageIOErrT
 
+  private[blockstorage] def toStorageErrT[F[_]: Sync, A](
+      ioError: F[IOErr[A]]
+  ): StorageErrT[F, A] =
+    EitherT(ioError).toStorageErrT
+
   private def loadCheckpoints[F[_]: Sync: Log](
       checkpointsDirPath: Path
   ): StorageErrT[F, List[Checkpoint]] =
@@ -327,10 +338,12 @@ object FileLMDBIndexBlockStore {
       index <- EitherT.liftF[F, StorageError, Dbi[ByteBuffer]](Sync[F].delay {
                 env.openDbi(s"block_store_index", MDB_CREATE)
               })
-      blockMessageRandomAccessFile <- toStorageIOErrT(RandomAccessIO.open(storagePath))
-      sortedCheckpoints            <- loadCheckpoints(checkpointsDirPath)
-      checkpointsMap               = sortedCheckpoints.map(c => c.index -> c).toMap
-      currentIndex                 = sortedCheckpoints.lastOption.map(_.index + 1).getOrElse(0)
+      blockMessageRandomAccessFile <- toStorageIOErrT(
+                                       RandomAccessIO.open(storagePath, RandomAccessIO.ReadWrite)
+                                     )
+      sortedCheckpoints <- loadCheckpoints(checkpointsDirPath)
+      checkpointsMap    = sortedCheckpoints.map(c => c.index -> c).toMap
+      currentIndex      = sortedCheckpoints.lastOption.map(_.index + 1).getOrElse(0)
       initialState = FileLMDBIndexBlockStoreState[F](
         blockMessageRandomAccessFile,
         checkpointsMap,
