@@ -36,6 +36,8 @@ trait ITrieStore[T, K, V] {
 
   private[rspace] def toMap: Map[Blake2b256Hash, Trie[K, V]]
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // TODO stop throwing exceptions
   private[rspace] def getLeaves(txn: T, hash: Blake2b256Hash): Seq[Leaf[K, V]] = {
     @tailrec
     def loop(txn: T, ts: Seq[Trie[K, V]], ls: Seq[Leaf[K, V]]): Seq[Leaf[K, V]] =

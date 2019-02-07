@@ -17,6 +17,10 @@ class SslSessionClientInterceptor() extends ClientInterceptor {
     new SslSessionClientCallInterceptor(next.newCall(method, callOptions))
 }
 
+/**
+  * This wart exists because that's how grpc works. They looooovveee throwing exceptions
+  */
+@SuppressWarnings(Array("org.wartremover.warts.Throw"))
 class SslSessionClientCallInterceptor[ReqT, RespT](next: ClientCall[ReqT, RespT])
     extends ClientCall[ReqT, RespT] {
   self =>

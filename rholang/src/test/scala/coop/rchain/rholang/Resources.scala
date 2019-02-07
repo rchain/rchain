@@ -9,10 +9,10 @@ import com.typesafe.scalalogging.Logger
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Context, RSpace}
-import coop.rchain.shared.StoreType
+import coop.rchain.shared.{Log, StoreType}
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -35,12 +35,13 @@ object Resources {
         })
     )
 
-  def mkRhoISpace[F[_]: Sync: ContextShift](
+  def mkRhoISpace[F[_]: Sync: ContextShift: Log](
       prefix: String = "",
       branch: String = "test",
       mapSize: Long = 1024L * 1024L * 4
   ): Resource[F, RhoISpace[F]] = {
     import coop.rchain.rholang.interpreter.storage.implicits._
+
     import scala.concurrent.ExecutionContext.Implicits.global
 
     def mkRspace(dbDir: Path): F[RhoISpace[F]] = {
@@ -50,7 +51,7 @@ object Resources {
         F,
         Par,
         BindPattern,
-        OutOfPhlogistonsError.type,
+        InterpreterError,
         ListParWithRandom,
         ListParWithRandomAndPhlos,
         TaggedContinuation
@@ -65,7 +66,7 @@ object Resources {
       prefix: String,
       storageSize: Long = 1024 * 1024,
       storeType: StoreType = StoreType.LMDB
-  )(implicit scheduler: Scheduler): Resource[Task, Runtime[Task]] =
+  )(implicit log: Log[Task], scheduler: Scheduler): Resource[Task, Runtime[Task]] =
     mkTempDir[Task](prefix)
       .flatMap { tmpDir =>
         Resource.make[Task, Runtime[Task]](Task.suspend {

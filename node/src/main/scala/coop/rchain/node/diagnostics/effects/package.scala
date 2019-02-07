@@ -221,10 +221,9 @@ package object effects {
         m.getOrElseUpdate(source(name), Kamon.timer(source(name))) match {
           case c: metric.Timer =>
             for {
-              t  <- Sync[F].delay(c.start())
-              r0 <- Sync[F].attempt(block)
-              _  = t.stop()
-              r  <- r0.fold(Sync[F].raiseError, Sync[F].pure)
+              t <- Sync[F].delay(c.start())
+              r <- block
+              _ = t.stop()
             } yield r
         }
     }

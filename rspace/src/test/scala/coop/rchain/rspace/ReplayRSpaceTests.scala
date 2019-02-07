@@ -14,6 +14,7 @@ import coop.rchain.rspace.history.{Branch, InMemoryTrieStore}
 import coop.rchain.rspace.internal.GNAT
 import coop.rchain.rspace.trace.{COMM, Consume, IOEvent, Produce}
 import coop.rchain.shared.PathOps._
+import coop.rchain.shared.Log
 import org.scalatest._
 
 import scala.collection.parallel.ParSeq
@@ -25,6 +26,8 @@ import scala.concurrent.ExecutionContext.Implicits.global
 trait ReplayRSpaceTests
     extends ReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
     with TestImplicitHelpers {
+
+  implicit val log: Log[Id] = new Log.NOPLog[Id]
 
   def consumeMany[C, P, A, R, K](
       space: IdISpace[C, P, Nothing, A, R, K],
@@ -893,6 +896,7 @@ trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, 
     implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
     implicit val contextShiftF: ContextShift[Id] =
       coop.rchain.rspace.test.contextShiftId
+    implicit val log: Log[Id] = Log.log[Id]
 
     val dbDir       = Files.createTempDirectory("rchain-storage-test-")
     val context     = Context.create[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
@@ -925,6 +929,7 @@ trait MixedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C,
     implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
     implicit val contextShiftF: ContextShift[Id] =
       coop.rchain.rspace.test.contextShiftId
+    implicit val log: Log[Id] = Log.log[Id]
 
     val dbDir       = Files.createTempDirectory("rchain-storage-test-")
     val context     = Context.createMixed[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
@@ -954,6 +959,8 @@ trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase
       oC: Ordering[C]
   ): S = {
 
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+    implicit val log: Log[Id]    = Log.log[Id]
     val ctx: Context[C, P, A, K] = Context.createInMemory()
     val space                    = RSpace.create[Id, C, P, E, A, A, K](ctx, Branch.REPLAY)
     val replaySpace              = ReplayRSpace.create[Id, C, P, E, A, A, K](ctx, Branch.REPLAY)
@@ -981,6 +988,7 @@ trait FaultyStoreReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsB
     implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
     implicit val contextShiftF: ContextShift[Id] =
       coop.rchain.rspace.test.contextShiftId
+    implicit val log: Log[Id] = Log.log[Id]
 
     val trieStore = InMemoryTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]]()
     val mainStore = InMemoryStore

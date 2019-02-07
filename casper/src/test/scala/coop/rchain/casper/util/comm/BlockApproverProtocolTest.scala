@@ -13,7 +13,7 @@ import coop.rchain.comm.transport
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.shared.StoreType
+import coop.rchain.shared.{Log, StoreType}
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
@@ -95,7 +95,8 @@ object BlockApproverProtocolTest {
   ): Effect[(BlockApproverProtocol, HashSetCasperTestNode[Effect])] = {
     import monix.execution.Scheduler.Implicits.global
 
-    val runtimeDir = BlockDagStorageTestFixture.blockStorageDir
+    val runtimeDir   = BlockDagStorageTestFixture.blockStorageDir
+    implicit val log = new Log.NOPLog[Task]()
     val activeRuntime =
       Runtime.create[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB).unsafeRunSync
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync

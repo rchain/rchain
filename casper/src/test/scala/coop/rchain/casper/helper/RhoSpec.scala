@@ -1,127 +1,82 @@
 package coop.rchain.casper.helper
 
-import cats.effect.Sync
-import cats.effect.concurrent.Ref
-import cats.implicits._
-import coop.rchain.casper.genesis.contracts.TestSetUtil
-import coop.rchain.models.Expr.ExprInstance.{GBool, GString}
-import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.{Expr, ListParWithRandomAndPhlos, Par}
+import coop.rchain.casper.genesis.contracts.TestUtil
+import coop.rchain.casper.protocol.DeployData
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
+import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.{AppendedClues, FlatSpec, Matchers}
 
-import scala.concurrent.duration._
-
-object IsString {
-  def unapply(p: Par): Option[String] =
-    p.singleExpr().collect {
-      case Expr(GString(bs)) => bs
-    }
-}
-
-object IsBoolean {
-  def unapply(p: Par): Option[Boolean] =
-    p.singleExpr().collect {
-      case Expr(GBool(b)) => b
-    }
-}
-
-object IsCondition {
-  def unapply(p: Seq[ListParWithRandomAndPhlos]): Option[(String, Boolean)] =
-    p match {
-      case Seq(ListParWithRandomAndPhlos(Seq(IsString(testName), IsBoolean(condition)), _, _)) =>
-        Some((testName, condition))
-      case _ => None
-    }
-}
-object IsComparison {
-  def unapply(p: Seq[ListParWithRandomAndPhlos]): Option[(String, Par, String, Par)] =
-    p match {
-      case Seq(
-          ListParWithRandomAndPhlos(
-            Seq(IsString(testName), expected, IsString(operator), actual),
-            _,
-            _
-          )
-          ) =>
-        Some((testName, expected, operator, actual))
-      case _ => None
-    }
-}
-
-sealed trait RhoTestAssertion {
-  val testName: String
-}
-case class RhoAssertTrue(testName: String, value: Boolean)               extends RhoTestAssertion
-case class RhoAssertEquals(testName: String, expected: Any, actual: Any) extends RhoTestAssertion
-
-private class TestResultCollector[F[_]: Sync](assertions: Ref[F, List[RhoTestAssertion]]) {
-  def getAssertions: F[List[RhoTestAssertion]] = assertions.get
-
-  def handleMessage(
-      ctx: SystemProcess.Context[F]
-  )(message: Seq[ListParWithRandomAndPhlos], x: Int): F[Unit] = {
-    val assertion = message match {
-      case IsComparison(testName, expected, "==", actual) =>
-        RhoAssertEquals(testName, expected, actual)
-      case IsCondition(testName, condition) => RhoAssertTrue(testName, condition)
-    }
-    assertions.update(assertion :: _)
-  }
-}
-
-private object TestResultCollector {
-  def apply[F[_]: Sync]: F[TestResultCollector[F]] =
-    Ref
-      .of(List.empty[RhoTestAssertion])
-      .map(new TestResultCollector(_))
-}
+import scala.concurrent.duration.Duration
 
 object RhoSpec {
+  implicit val logger: Log[Task] = Log.log[Task]
+
   private def mkRuntime(testResultCollector: TestResultCollector[Task]) = {
     val testResultCollectorService =
-      Seq((2, "assert"), (4, "assertEquals"))
-        .zip(Stream.from(24))
+      Seq((4, "assertAck", 24), (1, "testSuiteCompleted", 25))
         .map {
-          case ((arity, name), n) =>
+          case (arity, name, n) =>
             SystemProcess.Definition[Task](
               s"rho:test:$name",
               Runtime.byteName(n.toByte),
               arity,
-              n,
+              n.toLong,
               testResultCollector.handleMessage
             )
-        }
-    TestSetUtil.runtime(testResultCollectorService)
+        } ++ Seq(
+        SystemProcess.Definition[Task](
+          "rho:io:stdlog",
+          Runtime.byteName(26),
+          2,
+          26L,
+          RhoLogger.handleMessage[Task]
+        )
+      )
+    TestUtil.runtime(testResultCollectorService)
   }
 
-  def mkAssertions(testObject: CompiledRholangSource) =
+  def getResults(testObject: CompiledRholangSource, otherLibs: Seq[DeployData]): Task[TestResult] =
     for {
       testResultCollector <- TestResultCollector[Task]
 
       _ <- Task.delay {
-            TestSetUtil.runTests(testObject, List.empty, mkRuntime(testResultCollector))
+            TestUtil.runTestsWithDeploys(testObject, otherLibs, mkRuntime(testResultCollector))
           }
 
-      assertions <- testResultCollector.getAssertions
-    } yield assertions
+      result <- testResultCollector.getResult
+    } yield result
 }
 
-class RhoSpec(testObject: CompiledRholangSource) extends FlatSpec with Matchers {
-  def mkTest(assertion: RhoTestAssertion): Unit =
-    it should assertion.testName in {
-      assertion match {
-        case RhoAssertEquals(testName, expected, actual) => actual should be(expected)
-        case RhoAssertTrue(testName, value)              => value should be(true)
-      }
+class RhoSpec(
+    testObject: CompiledRholangSource,
+    standardDeploys: Seq[DeployData],
+    executionTimeout: Duration
+) extends FlatSpec
+    with AppendedClues
+    with Matchers {
+  def mkTest(test: (String, List[RhoTestAssertion])): Unit =
+    test match {
+      case (testName, assertions) =>
+        it should testName in {
+          assertions.foreach {
+            case RhoAssertEquals(_, expected, actual, clue) =>
+              actual should be(expected) withClue clue
+            case RhoAssertTrue(_, v, clue) => v should be(true) withClue clue
+          }
+        }
     }
 
-  RhoSpec
-    .mkAssertions(testObject)
-    .runSyncUnsafe(3.seconds)
-    .foreach(mkTest)
+  private val result = RhoSpec
+    .getResults(testObject, standardDeploys)
+    .runSyncUnsafe(executionTimeout)
+
+  it should "finish execution within timeout" in {
+    result.hasFinished should be(true) withClue s"timeout of $executionTimeout expired"
+  }
+
+  result.assertions.foreach(mkTest)
 }

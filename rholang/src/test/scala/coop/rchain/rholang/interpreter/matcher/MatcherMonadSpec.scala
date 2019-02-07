@@ -89,9 +89,9 @@ class MatcherMonadSpec extends FlatSpec {
     assert(result.right.get._2 == Stream((Map.empty, 2)))
   }
 
-  it should "fail all branches when using `_error[F].raiseError`" in {
+  it should "fail all branches when using `_error[F].raise`" in {
     val a: F[Int] = 1.pure[F]
-    val b: F[Int] = 2.pure[F] >> _error[F].raiseError[Int](OutOfPhlogistonsError)
+    val b: F[Int] = 2.pure[F] >> _error[F].raise[Int](OutOfPhlogistonsError)
     val c: F[Int] = 3.pure[F]
 
     val result = combineK(List(a, b, c)).runWithCost(Cost(0))

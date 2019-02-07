@@ -4,6 +4,7 @@ import cats.Monad
 import cats.implicits._
 import cats.mtl.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.util.BlockMessageUtil
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.DagOperations
@@ -29,6 +30,11 @@ object Estimator {
 
   /**
     * When the BlockDag has an empty latestMessages, tips will return IndexedSeq(genesis)
+    *
+    * TODO: If the base block between the main parent and a secondary parent are more than
+    * X blocks deep from the main parent, ignore. Additionally, the last finalized block must
+    * be deeper than X blocks from the tip. This allows different validators to have
+    * different last finalized blocks and still come up with the same estimator tips for a block.
     */
   def tips[F[_]: Monad: BlockStore](
       blockDag: BlockDagRepresentation[F],

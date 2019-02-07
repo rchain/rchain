@@ -258,10 +258,10 @@ object GenesisTest {
   def withRawGenResources(
       body: (Runtime[Task], Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
   ): Task[Unit] = {
-    val storePath = storageLocation
-    val gp        = genesisPath
-    val log       = new LogStub[Task]
-    val time      = new LogicalTime[Task]
+    val storePath    = storageLocation
+    val gp           = genesisPath
+    implicit val log = new LogStub[Task]
+    val time         = new LogicalTime[Task]
 
     for {
       runtime <- Runtime.create[Task, Task.Par](storePath, storageSize, StoreType.LMDB)

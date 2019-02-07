@@ -1,0 +1,95 @@
+//scalapackage coop.rchain.rholang.unittest
+
+//Registry info:
+//  sk: adf1e344dd34979255aeaaf5703a586fba52246d9940ef58572572db339316d3
+//  pk: 4ae94eb0b2d7df529f7ae68863221d5adda402fc54303a3d90a8a7a279326828
+//  user == pk
+//  timestamp: 1539808849271
+//Resulting unforgable name: RhoSpec == Unforgeable(0xbc4bad752f043b9e488ddfc1c69370a89700f4852f318a79d0b50d88f44e1210)
+//  ==> signature data == 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a20bc4bad752f043b9e488ddfc1c69370a89700f4852f318a79d0b50d88f44e12101001
+//  ==> signature == 07aa40b3bcb61b91816d7f7763ed3b7abccfeb99688ecec75cd76099f1552010bc523980fb476c990b982a46a9f36649097b8c02b590ae72a2bac4a7a790490b
+//URI derived from pk == `rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`
+new
+  RhoSpec,
+  rs(`rho:registry:insertSigned:ed25519`),
+  rl(`rho:registry:lookup`),
+  stdlog(`rho:io:stdlog`),
+  ListOpsCh,
+  assert(`rho:test:assertAck`),
+  testSuiteCompleted(`rho:test:testSuiteCompleted`),
+  uriOut
+in {
+  stdlog!("info", "Loading RhoSpec") |
+  rl!(`rho:id:dputnspi15oxxnyymjrpu7rkaok3bjkiwq84z7cqcrx4ktqfpyapn4`, *ListOpsCh) |
+  for(@(_, ListOps) <- ListOpsCh) {
+    contract RhoSpec(@"testSuite", setup, @tests) = {
+      stdlog!("info", "Defining the testSuite") |
+      new runTest, retCh in {
+        contract runTest(@(testName, testBody), testAckCh) = {
+          stdlog!("info", "Running test: " ++ testName) |
+          new rhoSpecImpl, privateAssert in {
+            contract privateAssert(@assertion, @clue, ackCh) = {
+              stdlog!("info", "asserting: " ++ clue) |
+              match assertion {
+                (expected, "== <-", actualCh) => {
+                  for (@actual <- @actualCh) {
+                    stdlog!("info", {"actual": actual, "expected": expected}) |
+                    assert!(testName, (expected, "==", actual), clue, *ackCh)
+                  }
+                }
+                assertion => {
+                  assert!(testName, assertion, clue, *ackCh)
+                }
+              }
+            } |
+
+            contract rhoSpecImpl(@"assert", @assertion, @clue, ackCh) = {
+              privateAssert!(assertion, clue, *ackCh)
+            } |
+
+            contract rhoSpecImpl(@"assertMany", @assertions, ackCh) = {
+              match assertions {
+                [] => { ackCh!(true) }
+
+                [(assertion, clue) ...tail] => {
+
+                  new privateAck in {
+                    privateAssert!(assertion, clue, *privateAck) |
+
+                    for (@v <- privateAck) {
+                      if (v) {
+                        rhoSpecImpl!("assertMany", tail, *ackCh)
+                      }
+                      else {
+                        ackCh!(false)
+                      }
+                    }
+                  }
+                }
+              }
+            } |
+
+            new setupCh in {
+              setup!(bundle+{*setupCh}) |
+              for (setupResult <- setupCh) {
+                @testBody ! (*rhoSpecImpl, *setupResult, *testAckCh)
+              }
+            }
+          }
+        } |
+
+        @ListOps!("foreach", tests, *runTest, *retCh) |
+        for (@v <- retCh) {
+          testSuiteCompleted!(true)
+        }
+      }
+    }
+  } |
+
+  rs!(
+    "4ae94eb0b2d7df529f7ae68863221d5adda402fc54303a3d90a8a7a279326828".hexToBytes(),
+    (9223372036854775807, bundle+{*RhoSpec}),
+    "07aa40b3bcb61b91816d7f7763ed3b7abccfeb99688ecec75cd76099f1552010bc523980fb476c990b982a46a9f36649097b8c02b590ae72a2bac4a7a790490b".hexToBytes(),
+    *uriOut
+  )
+}

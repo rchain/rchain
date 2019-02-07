@@ -4,23 +4,24 @@ import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
 
 import cats.effect.{ContextShift, Sync}
-import coop.rchain.models._
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
-import coop.rchain.rspace._
-import coop.rchain.rspace.history.Branch
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
+import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting.Cost
-import org.openjdk.jmh.annotations.{State => _, _}
+import coop.rchain.rholang.interpreter.errors.InterpreterError
+import coop.rchain.rspace._
+import coop.rchain.rspace.history.Branch
+import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
+import org.openjdk.jmh.annotations.{State => _, _}
 import org.openjdk.jmh.infra.Blackhole
-import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.Gen.Parameters
 import org.scalacheck.rng.Seed
+import org.scalacheck.{Arbitrary, Gen}
 
 import scala.collection.immutable.{BitSet, Seq}
 
@@ -105,6 +106,7 @@ object BasicBench {
     import coop.rchain.rholang.interpreter.storage.implicits._
 
     implicit val syncF: Sync[Task]                 = Task.catsEffect
+    implicit val logF: Log[Task]                   = new Log.NOPLog[Task]
     implicit val contextShiftF: ContextShift[Task] = Task.contextShift
 
     private val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
@@ -122,7 +124,7 @@ object BasicBench {
       Task,
       Par,
       BindPattern,
-      OutOfPhlogistonsError.type,
+      InterpreterError,
       ListParWithRandom,
       ListParWithRandomAndPhlos,
       TaggedContinuation
@@ -132,7 +134,7 @@ object BasicBench {
           Task,
           Par,
           BindPattern,
-          OutOfPhlogistonsError.type,
+          InterpreterError,
           ListParWithRandom,
           ListParWithRandomAndPhlos,
           TaggedContinuation

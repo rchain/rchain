@@ -7,9 +7,10 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.util.BlockMessageUtil.{bonds, parentHashes}
-import coop.rchain.blockstorage.util.TopologicalSortUtil
+import coop.rchain.blockstorage.util.{BlockMessageUtil, TopologicalSortUtil}
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.BlockMetadata
 import coop.rchain.shared.Log
 
 import scala.collection.immutable.HashSet
@@ -65,7 +66,8 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
       topoSort       <- topoSortRef.get
       _              <- lock.release
     } yield InMemBlockDagRepresentation(latestMessages, childMap, dataLookup, topoSort)
-  override def insert(block: BlockMessage): F[Unit] =
+
+  override def insert(block: BlockMessage): F[BlockDagRepresentation[F]] =
     for {
       _ <- lock.acquire
       _ <- dataLookupRef.update(_.updated(block.blockHash, BlockMetadata.fromBlock(block)))
@@ -99,8 +101,9 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
               case (acc, v) => acc.updated(v, block.blockHash)
             }
           }
-      _ <- lock.release
-    } yield ()
+      _   <- lock.release
+      dag <- getRepresentation
+    } yield dag
   override def checkpoint(): F[Unit] = ().pure[F]
   override def clear(): F[Unit] =
     for {

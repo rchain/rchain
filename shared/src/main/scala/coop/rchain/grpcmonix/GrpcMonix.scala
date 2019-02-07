@@ -7,6 +7,7 @@ import coop.rchain.shared.{Log, LogSource}
 
 import com.google.common.util.concurrent.ListenableFuture
 import io.grpc.stub.StreamObserver
+import io.grpc.{Status, StatusRuntimeException}
 import monix.eval.Task
 import monix.execution._
 import monix.execution.Ack.{Continue, Stop}
@@ -78,6 +79,8 @@ object GrpcMonix {
           observer.onNext(value)
           observer.onCompleted()
         } catch {
+          case sre: StatusRuntimeException if sre.getStatus.getCode == Status.Code.CANCELLED =>
+            logger.warn(s"Failed to send a response: peer request timeout")
           case NonFatal(e) => logger.warn(s"Failed to send a response: ${e.getMessage}")
         }
     }

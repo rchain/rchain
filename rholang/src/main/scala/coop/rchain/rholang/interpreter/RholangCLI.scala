@@ -14,6 +14,7 @@ import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import monix.eval.{Coeval, Task}
 import monix.execution.{CancelableFuture, Scheduler}
 import org.rogach.scallop.{stringListConverter, ScallopConf}
+import coop.rchain.shared.Log
 
 import scala.annotation.tailrec
 import scala.concurrent.Await
@@ -51,6 +52,8 @@ object RholangCLI {
     import monix.execution.Scheduler.Implicits.global
 
     val conf = new Conf(args)
+
+    implicit val log: Log[Task] = Log.log[Task]
 
     val runtime = (for {
       runtime <- Runtime.create[Task, Task.Par](conf.dataDir(), conf.mapSize(), StoreType.LMDB)
@@ -133,6 +136,7 @@ object RholangCLI {
   }
 
   @tailrec
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def waitForSuccess(evaluatorFuture: CancelableFuture[EvaluateResult]): Unit =
     try {
       Await.ready(evaluatorFuture, 5.seconds).value match {

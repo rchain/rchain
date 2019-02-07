@@ -7,7 +7,7 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoPureSpace}
 import coop.rchain.rholang.interpreter.accounting.{CostAccounting, _}
 import coop.rchain.rholang.interpreter.errors
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.{Blake2b256Hash, Checkpoint, ContResult, Result}
@@ -38,7 +38,7 @@ object ChargingRSpace {
           continuation: TaggedContinuation,
           persist: Boolean,
           sequenceNumber: Int
-      ): F[Either[errors.OutOfPhlogistonsError.type, Option[
+      ): F[Either[errors.InterpreterError, Option[
         (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandomAndPhlos]])
       ]]] = {
         val storageCost = storageCostConsume(channels, patterns, continuation)
@@ -67,7 +67,7 @@ object ChargingRSpace {
           data: ListParWithRandom,
           persist: Boolean,
           sequenceNumber: Int
-      ): F[Either[errors.OutOfPhlogistonsError.type, Option[
+      ): F[Either[errors.InterpreterError, Option[
         (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandomAndPhlos]])
       ]]] = {
         val storageCost = storageCostProduce(channel, data)
@@ -80,7 +80,7 @@ object ChargingRSpace {
       }
 
       private def handleResult(
-          result: Either[OutOfPhlogistonsError.type, Option[
+          result: Either[InterpreterError, Option[
             (
                 ContResult[Par, BindPattern, TaggedContinuation],
                 Seq[Result[ListParWithRandomAndPhlos]]

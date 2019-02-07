@@ -16,13 +16,13 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.ShortLeashParams.ShortLeashParameters
 import coop.rchain.rholang.interpreter.Runtime._
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
-import coop.rchain.rholang.interpreter.errors.{OutOfPhlogistonsError, SetupError}
+import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.errors.{InterpreterError, SetupError}
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.pure.PureRSpace
-import coop.rchain.shared.StoreType
+import coop.rchain.shared.{Log, StoreType}
 import coop.rchain.shared.StoreType._
 
 import scala.collection.immutable
@@ -62,22 +62,12 @@ object Runtime {
   type CPAK[F[_, _, _, _]] =
     F[Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
-  type CPARK[F[_, _, _, _, _, _]] =
-    F[
-      Par,
-      BindPattern,
-      OutOfPhlogistonsError.type,
-      ListParWithRandom,
-      ListParWithRandomAndPhlos,
-      TaggedContinuation
-    ]
-
   type TCPARK[M[_], F[_[_], _, _, _, _, _, _]] =
     F[
       M,
       Par,
       BindPattern,
-      OutOfPhlogistonsError.type,
+      InterpreterError,
       ListParWithRandom,
       ListParWithRandomAndPhlos,
       TaggedContinuation
@@ -285,7 +275,7 @@ object Runtime {
     )
   )
 
-  def create[F[_]: ContextShift: Sync, M[_]](
+  def create[F[_]: ContextShift: Sync: Log, M[_]](
       dataDir: Path,
       mapSize: Long,
       storeType: StoreType,
@@ -427,7 +417,7 @@ object Runtime {
     } yield ()
   }
 
-  def setupRSpace[F[_]: Sync: ContextShift](
+  def setupRSpace[F[_]: Sync: ContextShift: Log](
       dataDir: Path,
       mapSize: Long,
       storeType: StoreType
@@ -440,7 +430,7 @@ object Runtime {
                   F,
                   Par,
                   BindPattern,
-                  OutOfPhlogistonsError.type,
+                  InterpreterError,
                   ListParWithRandom,
                   ListParWithRandomAndPhlos,
                   TaggedContinuation
@@ -449,7 +439,7 @@ object Runtime {
                         F,
                         Par,
                         BindPattern,
-                        OutOfPhlogistonsError.type,
+                        InterpreterError,
                         ListParWithRandom,
                         ListParWithRandomAndPhlos,
                         TaggedContinuation

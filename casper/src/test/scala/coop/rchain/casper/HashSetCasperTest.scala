@@ -36,7 +36,7 @@ import coop.rchain.catscontrib.eitherT._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{Assertion, FlatSpec, Matchers}
+import org.scalatest.{Assertion, FlatSpec, Inspectors, Matchers}
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.comm.TestNetwork
 import coop.rchain.catscontrib.ski.kp2
@@ -49,7 +49,7 @@ import scala.collection.immutable
 import scala.util.Random
 import scala.concurrent.duration._
 
-class HashSetCasperTest extends FlatSpec with Matchers {
+class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
 
   import HashSetCasperTest._
 
@@ -131,7 +131,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _      = parents.size should be(1)
       _      = parents.head should be(genesis.blockHash)
       _      = deploys.size should be(1)
-      _      = deploys.head.raw should be(Some(deploy))
+      _      = deploys.head should be(deploy)
       result = storage.contains("@{0}!(0)") should be(true)
       _      <- node.tearDown()
     } yield result
@@ -769,7 +769,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       validatorBondsAndRanksT <- runtimeManager
                                   .captureResults(
                                     ProtoUtil.postStateHash(block1),
-                                    ProtoUtil.deployDataToDeploy(rankedValidatorQuery)
+                                    rankedValidatorQuery
                                   )
 
       validatorBondsAndRanks: Seq[(ByteString, Long, Int)] = validatorBondsAndRanksT.head.exprs.head.getEListBody.ps
@@ -858,7 +858,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       newWalletBalance <- node.runtimeManager
                            .captureResults(
                              ProtoUtil.postStateHash(block),
-                             ProtoUtil.deployDataToDeploy(balanceQuery)
+                             balanceQuery
                            )
       _      = blockStatus shouldBe Valid
       result = newWalletBalance.head.exprs.head.getGInt shouldBe amount
@@ -906,26 +906,30 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     } yield result
   }
 
-  it should "allow bonding in an existing network" ignore effectTest {
+  it should "allow bonding in an existing network" in effectTest {
     def deployment(i: Int): DeployData =
       ProtoUtil.sourceDeploy(s"@$i!({$i})", System.currentTimeMillis() + i, accounting.MAX_VALUE)
 
     def deploy(
         node: HashSetCasperTestNode[Effect],
         dd: DeployData
-    ): Effect[(BlockMessage, BlockStatus)] =
+    ): Effect[(BlockMessage, Either[Throwable, BlockStatus])] =
       for {
         createBlockResult1    <- node.casperEff.deploy(dd) *> node.casperEff.createBlock
         Created(signedBlock1) = createBlockResult1
 
-        status <- node.casperEff.addBlock(signedBlock1, ignoreDoppelgangerCheck[Effect])
+        status <- Sync[Effect].attempt(
+                   node.casperEff.addBlock(signedBlock1, ignoreDoppelgangerCheck[Effect])
+                 )
       } yield (signedBlock1, status)
 
-    def stepSplit(nodes: List[HashSetCasperTestNode[Effect]]): Effect[Unit] =
+    def stepSplit(
+        nodes: List[HashSetCasperTestNode[Effect]]
+    ): Effect[List[Either[Throwable, Unit]]] =
       for {
-        _ <- nodes.zipWithIndex.traverse { case (n, i) => deploy(n, deployment(i)) }
-        _ <- nodes.traverse(_.receive())
-      } yield ()
+        _  <- nodes.zipWithIndex.traverse { case (n, i) => deploy(n, deployment(i)) }
+        vs <- nodes.traverse(v => Sync[Effect].attempt(v.receive()))
+      } yield vs
 
     def propagate(nodes: List[HashSetCasperTestNode[Effect]]): Effect[Unit] =
       for {
@@ -957,8 +961,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         br       <- deploy(node, bondingDeploy)
         oldBonds = fr._1.getBody.getState.bonds
         newBonds = br._1.getBody.getState.bonds
-        _        = fr._2 shouldBe Valid
-        _        = br._2 shouldBe Valid
+        _        = fr._2 shouldBe Right(Valid)
+        _        = br._2 shouldBe Right(Valid)
         _        = (oldBonds.size + 1) shouldBe newBonds.size
       } yield ()
     }
@@ -976,8 +980,14 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _        <- bond(nodes(0), (sk, pk))
       all      <- HashSetCasperTestNode.rigConnectionsF[Effect](newNode, nodes)
 
-      _ <- stepSplit(all)
-      _ <- stepSplit(all)
+      s1 <- stepSplit(all)
+      _ = forAll(s1) { v =>
+        v.isRight should be(true)
+      }
+      s2 <- stepSplit(all)
+      _ = forAll(s2) { v =>
+        v.isRight should be(true)
+      }
 
       _ <- all.map(_.tearDown()).sequence
     } yield ()
@@ -1082,7 +1092,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       capturedResults <- node.runtimeManager
                           .captureResults(
                             ProtoUtil.postStateHash(genesis),
-                            ProtoUtil.deployDataToDeploy(sigDeployData)
+                            sigDeployData
                           )
       sigData     = capturedResults.head.exprs.head.getGByteArray
       sig         = Base16.encode(Ed25519.sign(sigData.toByteArray, sk))
@@ -1124,7 +1134,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       deployQueryResult <- deployAndQuery(
                             node,
                             paymentDeployData,
-                            ProtoUtil.deployDataToDeploy(paymentQuery)
+                            paymentQuery
                           )
       (blockStatus, queryResult) = deployQueryResult
       (codeHashPar, _, userIdPar, timestampPar) = ProtoUtil.getRholangDeployParams(
@@ -1472,11 +1482,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   it should "prepare to slash an block that includes a invalid block pointer" in effectTest {
     for {
       nodes           <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
-      deploys         <- (0 to 5).toList.traverse(i => ProtoUtil.basicDeploy[Effect](i))
+      deploys         <- (0 to 5).toList.traverse(i => ProtoUtil.basicDeployData[Effect](i))
       deploysWithCost = deploys.map(d => ProcessedDeploy(deploy = Some(d))).toIndexedSeq
 
       createBlockResult <- nodes(0).casperEff
-                            .deploy(deploys(0).raw.get) *> nodes(0).casperEff.createBlock
+                            .deploy(deploys(0)) *> nodes(0).casperEff.createBlock
       Created(signedBlock) = createBlockResult
       signedInvalidBlock = BlockUtil.resignBlock(
         signedBlock.withSeqNum(-2),
@@ -1597,9 +1607,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _               <- nodes(0).receive()
       _               <- nodes(2).receive()
 
-      _     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF genesisWithEqualBonds
+      _     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block1
       state <- nodes(0).casperState.read
-      _     = state.deployHistory.size should be(2)
+      _     = state.deployHistory.size should be(1)
 
       createBlock6Result <- nodes(2).casperEff
                              .deploy(deployDatas(5)) *> nodes(2).casperEff.createBlock
@@ -1608,7 +1618,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _               <- nodes(0).receive()
       _               <- nodes(1).receive()
 
-      _     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block1
+      _     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block2
       state <- nodes(0).casperState.read
       _     = state.deployHistory.size should be(1)
 
@@ -1619,7 +1629,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _               <- nodes(1).receive()
       _               <- nodes(2).receive()
 
-      _ <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block2
+      _ <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block3
+      _ = state.deployHistory.size should be(1)
 
       createBlock8Result <- nodes(1).casperEff
                              .deploy(deployDatas(7)) *> nodes(1).casperEff.createBlock
@@ -1628,9 +1639,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       _               <- nodes(0).receive()
       _               <- nodes(2).receive()
 
-      _     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block3
+      _     <- nodes(0).casperEff.lastFinalizedBlock shouldBeF block4
       state <- nodes(0).casperState.read
-      _     = state.deployHistory.size should be(2)
+      _     = state.deployHistory.size should be(1)
 
       _ <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
@@ -1715,7 +1726,7 @@ object HashSetCasperTest {
   def deployAndQuery(
       node: HashSetCasperTestNode[Effect],
       dd: DeployData,
-      query: Deploy
+      query: DeployData
   ): Effect[(BlockStatus, Seq[Par])] =
     for {
       createBlockResult <- node.casperEff.deploy(dd) *> node.casperEff.createBlock
@@ -1742,6 +1753,7 @@ object HashSetCasperTest {
     val initial           = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "rchain")
     val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
     val storageSize: Long = 1024L * 1024
+    implicit val log      = new Log.NOPLog[Task]
 
     val activeRuntime =
       Runtime.create[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB).unsafeRunSync

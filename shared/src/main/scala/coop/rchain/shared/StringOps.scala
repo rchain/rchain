@@ -17,7 +17,7 @@ object StringOps {
   implicit class BracesOps(expr: String) {
     // Wrap if it's sth more than just a number
     def wrapWithBraces: String =
-      Try(new Integer(expr)).fold(
+      Try(Integer.valueOf(expr)).fold(
         _ =>
           if (expr.startsWith("(") && expr.endsWith(")")) {
             expr

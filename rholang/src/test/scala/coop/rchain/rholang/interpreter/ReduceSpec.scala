@@ -2,7 +2,6 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.Files
 
-import cats.effect.Sync
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
@@ -20,10 +19,11 @@ import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
+import coop.rchain.shared.Log
+import coop.rchain.shared.PathOps._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertion, FlatSpec, Matchers}
-import coop.rchain.shared.PathOps._
 
 import scala.collection.immutable.BitSet
 import scala.collection.mutable.HashMap
@@ -34,14 +34,16 @@ final case class TestFixture(space: RhoISpace[Task], reducer: ChargingReducer[Ta
 
 trait PersistentStoreTester {
   def withTestSpace[R](errorLog: ErrorLog[Task])(f: TestFixture => R): R = {
-    val dbDir               = Files.createTempDirectory("rholang-interpreter-test-")
-    val context: RhoContext = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
+    val dbDir                    = Files.createTempDirectory("rholang-interpreter-test-")
+    val context: RhoContext      = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
+    implicit val logF: Log[Task] = new Log.NOPLog[Task]
+
     val space = (RSpace
       .create[
         Task,
         Par,
         BindPattern,
-        OutOfPhlogistonsError.type,
+        InterpreterError,
         ListParWithRandom,
         ListParWithRandomAndPhlos,
         TaggedContinuation
@@ -921,7 +923,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand = rand.splitByte(0)
-    import coop.rchain.models.serialization.implicits._
     val proc = Receive(
       Seq(ReceiveBind(Seq(EVar(FreeVar(0))), GString("channel"))),
       Par(),
@@ -998,7 +999,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "eval of hexToBytes" should "transform encoded string to byte array (not the rholang term)" in {
-    import coop.rchain.models.serialization.implicits._
     implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand                 = rand.splitByte(0)
@@ -1026,7 +1026,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "eval of `toUtf8Bytes`" should "transform string to UTF-8 byte array (not the rholang term)" in {
-    import coop.rchain.models.serialization.implicits._
     implicit val errorLog         = new ErrorLog[Task]()
     val splitRand                 = rand.splitByte(0)
     val testString                = "testing testing"

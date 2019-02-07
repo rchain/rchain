@@ -2,11 +2,10 @@ package coop.rchain.casper.util
 
 import org.scalatest.{FlatSpec, Matchers}
 import cats.{Id, Monad}
-import coop.rchain.blockstorage.BlockMetadata
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.helper.BlockGenerator._
-import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.scalatestcontrib._
+import coop.rchain.models.BlockMetadata
 import monix.eval.Task
 
 import scala.collection.immutable.BitSet

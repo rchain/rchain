@@ -38,6 +38,7 @@ final case class CasperConf(
 object CasperConf {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
   def parseValidatorsFile[F[_]: Monad: Capture: Log](
       knownValidatorsFile: Option[String]
   ): F[Set[ByteString]] =
@@ -66,6 +67,7 @@ object CasperConf {
           }
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def publicKey(
       givenPublicKey: Option[Array[Byte]],
       sigAlgorithm: String,

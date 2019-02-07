@@ -18,6 +18,7 @@ import coop.rchain.blockstorage.util.{BlockMessageUtil, Crc32, TopologicalSortUt
 import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.BlockMetadata
 import coop.rchain.shared.{Log, LogSource}
 
 import scala.ref.WeakReference
@@ -296,7 +297,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
       _              <- lock.release
     } yield FileDagRepresentation(latestMessages, childMap, dataLookup, topoSort, sortOffset)
 
-  def insert(block: BlockMessage): F[Unit] =
+  def insert(block: BlockMessage): F[BlockDagRepresentation[F]] =
     for {
       _             <- lock.acquire
       alreadyStored <- dataLookupRef.get.map(_.contains(block.blockHash))
@@ -348,8 +349,9 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
               _ <- updateDataLookupFile(blockMetadata)
             } yield ()
           }
-      _ <- lock.release
-    } yield ()
+      _   <- lock.release
+      dag <- getRepresentation
+    } yield dag
 
   def checkpoint(): F[Unit] =
     ().pure[F]
@@ -606,8 +608,9 @@ object BlockDagFileStorage {
   private def extractTopoSort(
       dataLookup: List[(BlockHash, BlockMetadata)]
   ): Vector[Vector[BlockHash]] = {
+    val blockMetadatas = dataLookup.map(_._2).toVector
     val indexedTopoSort =
-      dataLookup.map(_._2).toVector.groupBy(_.blockNum).mapValues(_.map(_.blockHash)).toVector
+      blockMetadatas.groupBy(_.blockNum).mapValues(_.map(_.blockHash)).toVector.sortBy(_._1)
     assert(indexedTopoSort.zipWithIndex.forall { case ((readI, _), i) => readI == i })
     indexedTopoSort.map(_._2)
   }

@@ -260,6 +260,8 @@ class InMemoryStore[T, C, P, A, K](
 
 object InMemoryStore {
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // TODO stop throwing exceptions
   def roundTrip[K: Serialize](k: K): K =
     Serialize[K].decode(Serialize[K].encode(k)) match {
       case Left(ex)     => throw ex

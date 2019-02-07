@@ -101,6 +101,7 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
               Chunk.Content.Header(header.content.header.get.copy(sender = None))
             val incompleteHeader = header.copy(content = newHeaderContent)
             (incompleteHeader :: data).toIterator
+          case Nil => throw new RuntimeException("")
         })
       // when
       val err: Throwable = handleStreamErr(streamWithIncompleteHeader)
@@ -113,7 +114,8 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       // given
       val streamWithoutHeader: Observable[Chunk] =
         Observable.fromIterator(createStreamIterator().map(_.toList).map {
-          case header :: data => data.toIterator
+          case _ :: data => data.toIterator
+          case _         => throw new RuntimeException("")
         })
       // when
       val err: Throwable = handleStreamErr(streamWithoutHeader)
@@ -126,7 +128,8 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       // given
       val incompleteStream: Observable[Chunk] =
         Observable.fromIterator(createStreamIterator().map(_.toList).map {
-          case header :: data1 :: data2 => (header :: data2).toIterator
+          case header :: _ :: data2 => (header :: data2).toIterator
+          case _                    => throw new RuntimeException("")
         })
       // when
       val err: Throwable = handleStreamErr(incompleteStream)
@@ -176,7 +179,6 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
   private def peerNode(name: String): PeerNode =
     PeerNode(NodeIdentifier(name.getBytes), Endpoint("", 80, 80))
 
-  private val alwaysBreak: CircuitBreaker = kp(true)
-  private val neverBreak: CircuitBreaker  = kp(false)
+  private val neverBreak: CircuitBreaker = kp(false)
 
 }

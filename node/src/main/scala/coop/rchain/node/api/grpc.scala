@@ -78,7 +78,7 @@ object GrpcServer {
       )
     }
 
-  def acquireExternalServer[F[_]: Concurrent: Capture: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable: ToAbstractContext](
+  def acquireExternalServer[F[_]: Concurrent: Capture: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
       port: Int,
       grpcExecutor: Scheduler,
       blockApiLock: Semaphore[F]

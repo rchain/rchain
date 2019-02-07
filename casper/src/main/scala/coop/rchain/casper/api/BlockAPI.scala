@@ -39,16 +39,21 @@ object BlockAPI {
              }
       } yield re
 
+    val errorMessage = "Could not deploy, casper instance was not available yet."
+
     MultiParentCasperRef
       .withCasper[F, DeployServiceResponse](
         casperDeploy(_),
-        DeployServiceResponse(success = false, s"Error: Casper instance not available")
+        Log[F]
+          .warn(errorMessage)
+          .as(DeployServiceResponse(success = false, s"Error: $errorMessage"))
       )
   }
 
   def createBlock[F[_]: Sync: Concurrent: MultiParentCasperRef: Log](
       blockApiLock: Semaphore[F]
-  ): F[DeployServiceResponse] =
+  ): F[DeployServiceResponse] = {
+    val errorMessage = "Could not create block, casper instance was not available yet."
     MultiParentCasperRef.withCasper[F, DeployServiceResponse](
       casper => {
         Sync[F].bracket(blockApiLock.tryAcquire) {
@@ -74,13 +79,19 @@ object BlockAPI {
           blockApiLock.release
         }
       },
-      default = DeployServiceResponse(success = false, "Error: Casper instance not available")
+      default = Log[F]
+        .warn(errorMessage)
+        .as(DeployServiceResponse(success = false, s"Error: $errorMessage"))
     )
+  }
 
   def getListeningNameDataResponse[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int,
       listeningName: Par
   ): F[ListeningNameDataResponse] = {
+
+    val errorMessage = "Could not get listening name data, casper instance was not available yet."
+
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
         mainChain           <- getMainChainFromTip[F](depth)
@@ -104,7 +115,9 @@ object BlockAPI {
 
     MultiParentCasperRef.withCasper[F, ListeningNameDataResponse](
       casperResponse(_),
-      ListeningNameDataResponse(status = "Error: Casper instance not available")
+      Log[F]
+        .warn(errorMessage)
+        .as(ListeningNameDataResponse(status = s"Error: $errorMessage"))
     )
   }
 
@@ -112,6 +125,8 @@ object BlockAPI {
       depth: Int,
       listeningNames: Seq[Par]
   ): F[ListeningNameContinuationResponse] = {
+    val errorMessage =
+      "Could not get listening names continuation, casper instance was not available yet."
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
         mainChain           <- getMainChainFromTip[F](depth)
@@ -136,7 +151,9 @@ object BlockAPI {
 
     MultiParentCasperRef.withCasper[F, ListeningNameContinuationResponse](
       casperResponse(_),
-      ListeningNameContinuationResponse(status = "Error: Casper instance not available")
+      Log[F]
+        .warn(errorMessage)
+        .as(ListeningNameContinuationResponse(status = s"Error: $errorMessage"))
     )
   }
 
@@ -225,6 +242,9 @@ object BlockAPI {
       stringify: G[Graphz[G]] => String
   ): F[String] = {
 
+    val errorMessage =
+      "Could not visualize graph, casper instance was not available yet."
+
     def casperResponse(implicit casper: MultiParentCasper[F]): F[String] =
       for {
         dag                <- MultiParentCasper[F].blockDag
@@ -238,13 +258,17 @@ object BlockAPI {
 
     MultiParentCasperRef.withCasper[F, String](
       casperResponse(_),
-      "no casper"
+      Log[F].warn(errorMessage).as(errorMessage)
     )
   }
 
   def showBlocks[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int
   ): F[List[BlockInfoWithoutTuplespace]] = {
+
+    val errorMessage =
+      "Could not show blocks, casper instance was not available yet."
+
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
         dag         <- MultiParentCasper[F].blockDag
@@ -258,7 +282,7 @@ object BlockAPI {
 
     MultiParentCasperRef.withCasper[F, List[BlockInfoWithoutTuplespace]](
       casperResponse(_),
-      List.empty[BlockInfoWithoutTuplespace]
+      Log[F].warn(errorMessage).as(List.empty[BlockInfoWithoutTuplespace])
     )
   }
 
@@ -280,6 +304,10 @@ object BlockAPI {
   def showMainChain[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int
   ): F[List[BlockInfoWithoutTuplespace]] = {
+
+    val errorMessage =
+      "Could not show main chain, casper instance was not available yet."
+
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
         dag        <- MultiParentCasper[F].blockDag
@@ -291,7 +319,7 @@ object BlockAPI {
 
     MultiParentCasperRef.withCasper[F, List[BlockInfoWithoutTuplespace]](
       casperResponse(_),
-      List.empty[BlockInfoWithoutTuplespace]
+      Log[F].warn(errorMessage).as(List.empty[BlockInfoWithoutTuplespace])
     )
   }
 
@@ -300,6 +328,10 @@ object BlockAPI {
       user: ByteString,
       timestamp: Long
   ): F[BlockQueryResponse] = {
+
+    val errorMessage =
+      "Could not find block with deploy, casper instance was not available yet."
+
     def casperResponse(implicit casper: MultiParentCasper[F]): F[BlockQueryResponse] =
       for {
         dag                <- MultiParentCasper[F].blockDag
@@ -322,7 +354,9 @@ object BlockAPI {
 
     MultiParentCasperRef.withCasper[F, BlockQueryResponse](
       casperResponse(_),
-      BlockQueryResponse(status = "Error: Casper instance not available")
+      Log[F]
+        .warn(errorMessage)
+        .as(BlockQueryResponse(status = s"Error: errorMessage"))
     )
   }
 
@@ -338,6 +372,10 @@ object BlockAPI {
   def showBlock[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       q: BlockQuery
   ): F[BlockQueryResponse] = {
+
+    val errorMessage =
+      "Could not show block, casper instance was not available yet."
+
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
         dag        <- MultiParentCasper[F].blockDag
@@ -360,7 +398,7 @@ object BlockAPI {
 
     MultiParentCasperRef.withCasper[F, BlockQueryResponse](
       casperResponse(_),
-      BlockQueryResponse(status = "Error: Casper instance not available")
+      Log[F].warn(errorMessage).as(BlockQueryResponse(status = s"Error: $errorMessage"))
     )
   }
 
@@ -375,7 +413,8 @@ object BlockAPI {
           BlockHash,
           Seq[BlockHash],
           Float,
-          Float
+          Float,
+          Seq[Bond]
       ) => F[A]
   ): F[A] =
     for {
@@ -392,6 +431,7 @@ object BlockAPI {
       parentsHashList          = header.parentsHashList
       normalizedFaultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, block.blockHash)
       initialFault             <- MultiParentCasper[F].normalizedInitialFault(ProtoUtil.weightMap(block))
+      bondsValidatorList       = ProtoUtil.bonds(block)
       blockInfo <- constructor(
                     block,
                     version,
@@ -401,7 +441,8 @@ object BlockAPI {
                     mainParent,
                     parentsHashList,
                     normalizedFaultTolerance,
-                    initialFault
+                    initialFault,
+                    bondsValidatorList
                   )
     } yield blockInfo
 
@@ -422,7 +463,8 @@ object BlockAPI {
       mainParent: BlockHash,
       parentsHashList: Seq[BlockHash],
       normalizedFaultTolerance: Float,
-      initialFault: Float
+      initialFault: Float,
+      bondsValidatorList: Seq[Bond]
   ): F[BlockInfo] =
     for {
       tsDesc <- MultiParentCasper[F].storageContents(tsHash)
@@ -440,7 +482,8 @@ object BlockAPI {
         mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
         parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit),
         sender = PrettyPrinter.buildStringNoLimit(block.sender),
-        shardId = block.shardId
+        shardId = block.shardId,
+        bondsValidatorList = bondsValidatorList.map(PrettyPrinter.buildString)
       )
 
   private def constructBlockInfoWithoutTuplespace[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
@@ -452,7 +495,8 @@ object BlockAPI {
       mainParent: BlockHash,
       parentsHashList: Seq[BlockHash],
       normalizedFaultTolerance: Float,
-      initialFault: Float
+      initialFault: Float,
+      bondsValidatorList: Seq[Bond]
   ): F[BlockInfoWithoutTuplespace] =
     BlockInfoWithoutTuplespace(
       blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),

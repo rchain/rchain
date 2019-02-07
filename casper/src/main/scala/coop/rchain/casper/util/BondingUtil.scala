@@ -5,13 +5,14 @@ import cats.effect._
 import cats.implicits._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.util.ProtoUtil.{deployDataToDeploy, sourceDeploy}
+import coop.rchain.casper.util.ProtoUtil.sourceDeploy
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.rholang.interpreter.{accounting, Runtime}
 import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.shared.StoreType
+import coop.rchain.shared.Log
 import java.io.PrintWriter
 import java.nio.file.{Files, Path}
 
@@ -68,13 +69,13 @@ object BondingUtil {
       statusOut: String
   )(implicit runtimeManager: RuntimeManager[F]): F[String] = {
     require(Base16.encode(Keccak256.hash(Base16.decode(pubKey)).drop(12)) == ethAddress.drop(2))
-    val unlockSigDataTerm = deployDataToDeploy(
+    val unlockSigDataTerm =
       sourceDeploy(
         s""" @"__SCALA__"!(["$pubKey", "$statusOut"].toByteArray())""",
         0L,
         accounting.MAX_VALUE
       )
-    )
+
     for {
       capturedResults <- runtimeManager
                           .captureResults(runtimeManager.emptyStateHash, unlockSigDataTerm)
@@ -97,13 +98,12 @@ object BondingUtil {
       amount: Long,
       destination: String
   )(implicit runtimeManager: RuntimeManager[F]): F[Array[Byte]] = {
-    val transferSigDataTerm = deployDataToDeploy(
+    val transferSigDataTerm =
       sourceDeploy(
         s""" @"__SCALA__"!([$nonce, $amount, "$destination"].toByteArray())""",
         0L,
         accounting.MAX_VALUE
       )
-    )
 
     for {
       capturedResults <- runtimeManager
@@ -180,7 +180,7 @@ object BondingUtil {
       runtimeDir => Sync[F].delay { runtimeDir.recursivelyDelete() }
     )
 
-  def makeRuntimeResource[F[_]: Sync: ContextShift, M[_]](
+  def makeRuntimeResource[F[_]: Sync: ContextShift: Log, M[_]](
       runtimeDirResource: Resource[F, Path]
   )(implicit P: Parallel[F, M], scheduler: ExecutionContext): Resource[F, Runtime[F]] =
     runtimeDirResource.flatMap(
@@ -201,7 +201,7 @@ object BondingUtil {
         Resource.make(RuntimeManager.fromRuntime[F](activeRuntime))(_ => Sync[F].unit)
     )
 
-  def writeIssuanceBasedRhoFiles[F[_]: Concurrent: ContextShift, M[_]](
+  def writeIssuanceBasedRhoFiles[F[_]: Concurrent: ContextShift: Log, M[_]](
       bondKey: String,
       ethAddress: String,
       amount: Long,
@@ -224,7 +224,7 @@ object BondingUtil {
     )
   }
 
-  def writeFaucetBasedRhoFiles[F[_]: Concurrent: ContextShift, M[_]](
+  def writeFaucetBasedRhoFiles[F[_]: Concurrent: ContextShift: Log, M[_]](
       amount: Long,
       sigAlgorithm: String,
       secKey: String,

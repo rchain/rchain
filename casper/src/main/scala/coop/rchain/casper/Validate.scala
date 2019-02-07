@@ -172,14 +172,13 @@ object Validate {
 
   /*
    * TODO: Double check ordering of validity checks
-   * TODO: Add check for missing fields
-   * TODO: Check that justifications follow from bonds of creator justification
    */
   def blockSummary[F[_]: Monad: Log: Time: BlockStore](
       block: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
-      shardId: String
+      shardId: String,
+      lastFinalizedBlockHash: BlockHash
   ): F[Either[BlockStatus, ValidBlock]] =
     for {
       blockHashStatus   <- Validate.blockHash[F](block)
@@ -200,7 +199,7 @@ object Validate {
                         _ => Validate.justificationFollows[F](block, genesis, dag)
                       )
       parentsStatus <- followsStatus.joinRight.traverse(
-                        _ => Validate.parents[F](block, genesis, dag)
+                        _ => Validate.parents[F](block, lastFinalizedBlockHash, dag)
                       )
       sequenceNumberStatus <- parentsStatus.joinRight.traverse(
                                _ => Validate.sequenceNumber[F](block, dag)
@@ -248,8 +247,7 @@ object Validate {
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val deployKeySet = (for {
       bd <- block.body.toList
-      d  <- bd.deploys.flatMap(_.deploy)
-      r  <- d.raw.toList
+      r  <- bd.deploys.flatMap(_.deploy)
     } yield (r.user, r.timestamp)).toSet
 
     for {
@@ -261,7 +259,7 @@ object Validate {
                               _.deploys
                                 .flatMap(_.deploy)
                                 .exists(
-                                  _.raw.exists(p => deployKeySet.contains((p.user, p.timestamp)))
+                                  p => deployKeySet.contains((p.user, p.timestamp))
                                 )
                             )
                           )
@@ -424,19 +422,19 @@ object Validate {
     */
   def parents[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
-      genesis: BlockMessage,
+      lastFinalizedBlockHash: BlockHash,
       dag: BlockDagRepresentation[F]
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val maybeParentHashes = ProtoUtil.parentHashes(b)
     val parentHashes = maybeParentHashes match {
-      case hashes if hashes.isEmpty => Seq(genesis.blockHash)
+      case hashes if hashes.isEmpty => Seq(lastFinalizedBlockHash)
       case hashes                   => hashes
     }
 
     for {
       latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure[F]
-      estimate             <- Estimator.tips[F](dag, genesis.blockHash, latestMessagesHashes)
-      computedParents      <- ProtoUtil.chooseNonConflicting[F](estimate, genesis, dag)
+      estimate             <- Estimator.tips[F](dag, lastFinalizedBlockHash, latestMessagesHashes)
+      computedParents      <- ProtoUtil.chooseNonConflicting[F](estimate, dag)
       computedParentHashes = computedParents.map(_.blockHash)
       status <- if (parentHashes == computedParentHashes)
                  Applicative[F].pure(Right(Valid))

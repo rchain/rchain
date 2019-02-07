@@ -43,8 +43,7 @@ object Substitute {
   def substituteNoSortAndCharge[A: Chargeable, M[_]: CostAccounting: Substitute[?[_], A]: Sync](
       term: A,
       depth: Int,
-      env: Env[Par],
-      costAccountingAlg: CostAccounting[M]
+      env: Env[Par]
   ): M[A] =
     charge(Substitute[M, A].substituteNoSort(term)(depth, env), Cost(term))
 

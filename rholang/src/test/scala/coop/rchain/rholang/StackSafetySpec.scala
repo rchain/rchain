@@ -8,6 +8,7 @@ import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.StackSafetySpec.findMaxRecursionDepth
 import coop.rchain.rholang.interpreter.{Interpreter, PrettyPrinter}
 import coop.rchain.rspace.Serialize
+import coop.rchain.shared.Log
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.prop.TableDrivenPropertyChecks
@@ -18,9 +19,10 @@ import scala.concurrent.duration._
 
 object StackSafetySpec extends Assertions {
 
-  val mapSize     = 10L * 1024L * 1024L
-  val tmpPrefix   = "rspace-store-"
-  val maxDuration = 20.seconds
+  val mapSize                  = 10L * 1024L * 1024L
+  val tmpPrefix                = "rspace-store-"
+  val maxDuration              = 20.seconds
+  implicit val logF: Log[Task] = new Log.NOPLog[Task]
 
   def findMaxRecursionDepth(): Int = {
     def count(i: Int): Int =
@@ -157,6 +159,8 @@ class StackSafetySpec extends FlatSpec with TableDrivenPropertyChecks with Match
     Seq.fill(depth)(left).mkString + middle + Seq.fill(depth)(right).mkString
 
   private def checkAll(term: String): Unit = {
+    implicit val logF: Log[Task] = Log.log[Task]
+
     val rho =
       s"""
          |  //send without reducing the term, testing serialization
