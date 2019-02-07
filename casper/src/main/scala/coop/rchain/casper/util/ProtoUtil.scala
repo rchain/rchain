@@ -296,7 +296,7 @@ object ProtoUtil {
       b2: BlockMessage,
       dag: BlockDagRepresentation[F]
   ): F[Boolean] =
-    dag.deriveOrdering(0L).flatMap { // TODO: Replace with something meaningful
+    dag.deriveOrdering(0L).map(_.right.get).flatMap { // TODO: Handle the possible error properly
       implicit ordering =>
         for {
           b1MetaDataOpt        <- dag.lookup(b1.blockHash)

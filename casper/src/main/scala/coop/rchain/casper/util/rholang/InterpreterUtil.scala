@@ -232,7 +232,8 @@ object InterpreterUtil {
   ): F[Vector[BlockMetadata]] =
     for {
       parentsMetadata <- parents.toList.traverse(b => dag.lookup(b.blockHash).map(_.get))
-      ordering        <- dag.deriveOrdering(0L) // TODO: Replace with an actual starting number
+      orderingEither  <- dag.deriveOrdering(0L) // TODO: Replace with an actual starting number
+      ordering        = orderingEither.right.get // TODO: Handle the possible error properly
       blockHashesToApply <- {
         implicit val o: Ordering[BlockMetadata] = ordering
         for {

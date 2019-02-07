@@ -205,16 +205,18 @@ object HashSetCasperTestNode {
     for {
       _          <- TestNetwork.addPeer(identity)
       blockStore <- FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
-      blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
-                          BlockDagFileStorage.Config(
-                            blockDagDir.resolve("latest-messages-data"),
-                            blockDagDir.resolve("latest-messages-crc"),
-                            blockDagDir.resolve("block-metadata-data"),
-                            blockDagDir.resolve("block-metadata-crc"),
-                            blockDagDir.resolve("checkpoints")
-                          ),
-                          genesis
-                        )(Monad[F], Concurrent[F], Sync[F], Log[F], blockStore)
+      blockDagStorage <- BlockDagFileStorage
+                          .createEmptyFromGenesis[F](
+                            BlockDagFileStorage.Config(
+                              blockDagDir.resolve("latest-messages-data"),
+                              blockDagDir.resolve("latest-messages-crc"),
+                              blockDagDir.resolve("block-metadata-data"),
+                              blockDagDir.resolve("block-metadata-crc"),
+                              blockDagDir.resolve("checkpoints")
+                            ),
+                            genesis
+                          )(Concurrent[F], Sync[F], Capture[F], Log[F], blockStore)
+                          .map(_.right.get)
       blockProcessingLock <- Semaphore[F](1)
       casperState         <- Cell.mvarCell[F, CasperState](CasperState())
       node = new HashSetCasperTestNode[F](
@@ -297,16 +299,18 @@ object HashSetCasperTestNode {
             for {
               _          <- TestNetwork.addPeer(p)
               blockStore <- FileLMDBIndexBlockStore.create[F](env, blockStoreDir).map(_.right.get)
-              blockDagStorage <- BlockDagFileStorage.createEmptyFromGenesis[F](
-                                  BlockDagFileStorage.Config(
-                                    blockDagDir.resolve("latest-messages-data"),
-                                    blockDagDir.resolve("latest-messages-crc"),
-                                    blockDagDir.resolve("block-metadata-data"),
-                                    blockDagDir.resolve("block-metadata-crc"),
-                                    blockDagDir.resolve("checkpoints")
-                                  ),
-                                  genesis
-                                )(Monad[F], Concurrent[F], Sync[F], Log[F], blockStore)
+              blockDagStorage <- BlockDagFileStorage
+                                  .createEmptyFromGenesis[F](
+                                    BlockDagFileStorage.Config(
+                                      blockDagDir.resolve("latest-messages-data"),
+                                      blockDagDir.resolve("latest-messages-crc"),
+                                      blockDagDir.resolve("block-metadata-data"),
+                                      blockDagDir.resolve("block-metadata-crc"),
+                                      blockDagDir.resolve("checkpoints")
+                                    ),
+                                    genesis
+                                  )(Concurrent[F], Sync[F], Capture[F], Log[F], blockStore)
+                                  .map(_.right.get)
               semaphore <- Semaphore[F](1)
               casperState <- Cell.mvarCell[F, CasperState](
                               CasperState()

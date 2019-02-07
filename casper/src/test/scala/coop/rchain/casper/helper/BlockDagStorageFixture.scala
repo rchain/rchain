@@ -109,13 +109,15 @@ object BlockDagStorageTestFixture {
       log: Log[Task],
       blockStore: BlockStore[Task]
   ): Task[BlockDagStorage[Task]] =
-    BlockDagFileStorage.create[Task](
-      BlockDagFileStorage.Config(
-        blockDagStorageDir.resolve("latest-messages-data"),
-        blockDagStorageDir.resolve("latest-messages-crc"),
-        blockDagStorageDir.resolve("block-metadata-data"),
-        blockDagStorageDir.resolve("block-metadata-crc"),
-        blockDagStorageDir.resolve("checkpoints")
+    BlockDagFileStorage
+      .create[Task](
+        BlockDagFileStorage.Config(
+          blockDagStorageDir.resolve("latest-messages-data"),
+          blockDagStorageDir.resolve("latest-messages-crc"),
+          blockDagStorageDir.resolve("block-metadata-data"),
+          blockDagStorageDir.resolve("block-metadata-crc"),
+          blockDagStorageDir.resolve("checkpoints")
+        )
       )
-    )
+      .map(_.right.get)
 }

@@ -227,11 +227,16 @@ object BlockAPI {
 
     def casperResponse(implicit casper: MultiParentCasper[F]): F[String] =
       for {
-        dag                <- MultiParentCasper[F].blockDag
-        maxHeight          <- dag.topoSort(0L).map(_.length - 1)
-        depth              = d.getOrElse(maxHeight)
-        startHeight        = math.max(0, maxHeight - depth)
-        topoSort           <- dag.topoSortTail(depth)
+        dag <- MultiParentCasper[F].blockDag
+        maxHeight <- dag
+                      .topoSort(0L)
+                      .map(_.right.get)
+                      .map(_.length - 1)
+        depth       = d.getOrElse(maxHeight)
+        startHeight = math.max(0, maxHeight - depth)
+        topoSort <- dag
+                     .topoSortTail(depth)
+                     .map(_.right.get) // TODO: Handle the possible error properly
         lastFinalizedBlock <- MultiParentCasper[F].lastFinalizedBlock
         graph              <- visualizer(topoSort, PrettyPrinter.buildString(lastFinalizedBlock.blockHash))
       } yield stringify(graph)
@@ -247,8 +252,11 @@ object BlockAPI {
   ): F[List[BlockInfoWithoutTuplespace]] = {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
-        dag         <- MultiParentCasper[F].blockDag
-        maxHeight   <- dag.topoSort(0L).map(_.length - 1) // TODO: Optimize calculating max height
+        dag <- MultiParentCasper[F].blockDag
+        maxHeight <- dag
+                      .topoSort(0L)
+                      .map(_.right.get)
+                      .map(_.length - 1) // TODO: Optimize calculating max height
         startHeight = math.max(0, maxHeight - depth)
         flattenedBlockInfosUntilDepth <- getFlattenedBlockInfosUntilDepth[F](
                                           depth,
@@ -267,7 +275,9 @@ object BlockAPI {
       dag: BlockDagRepresentation[F]
   ): F[List[BlockInfoWithoutTuplespace]] =
     for {
-      topoSort <- dag.topoSortTail(depth)
+      topoSort <- dag
+                   .topoSortTail(depth)
+                   .map(_.right.get) // TODO: Handle the possible error properly
       result <- topoSort.foldM(List.empty[BlockInfoWithoutTuplespace]) {
                  case (blockInfosAtHeightAcc, blockHashesAtHeight) =>
                    for {
@@ -302,8 +312,10 @@ object BlockAPI {
   ): F[BlockQueryResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F]): F[BlockQueryResponse] =
       for {
-        dag                <- MultiParentCasper[F].blockDag
-        allBlocksTopoSort  <- dag.topoSort(0L)
+        dag <- MultiParentCasper[F].blockDag
+        allBlocksTopoSort <- dag
+                              .topoSort(0L)
+                              .map(_.right.get) // TODO: Handle the possible error properly
         maybeBlock         <- findBlockWithDeploy[F](allBlocksTopoSort.flatten.reverse, user, timestamp)
         blockQueryResponse <- maybeBlock.traverse(getFullBlockInfo[F])
       } yield

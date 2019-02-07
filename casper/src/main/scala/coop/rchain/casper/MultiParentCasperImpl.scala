@@ -575,8 +575,13 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
 
   private def addToState(block: BlockMessage): F[BlockDagRepresentation[F]] =
     for {
-      _          <- BlockStore[F].put(block.blockHash, block)
-      updatedDag <- BlockDagStorage[F].insert(block)
+      _ <- BlockStore[F].put(block.blockHash, block)
+      updatedDag <- BlockDagStorage[F].insert(block).flatMap {
+                     case Right(dag) =>
+                       dag.pure[F]
+                     case Left(error) =>
+                       Log[F].error(s"Error during inserting block: ${error.message}") *> blockDag
+                   }
     } yield updatedDag
 
   private def reAttemptBuffer(

@@ -87,7 +87,7 @@ class DagOperationsTest
 
           dag <- blockDagStorage.getRepresentation
 
-          ordering <- dag.deriveOrdering(0L)
+          ordering <- dag.deriveOrdering(0L).map(_.right.get)
           _ <- DagOperations.uncommonAncestors(Vector(b6, b7), dag)(Monad[Task], ordering) shouldBeF Map(
                 toMetadata(b6) -> BitSet(0),
                 toMetadata(b4) -> BitSet(0),
