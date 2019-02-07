@@ -7,7 +7,8 @@ import cats.effect.Sync
 import cats.syntax.functor._
 import coop.rchain.blockstorage.util.io.IOError.IOErr
 
-final case class FileOutputStreamIO[F[_]: Sync] private (private val stream: FileOutputStream) extends AutoCloseable {
+final case class FileOutputStreamIO[F[_]: Sync] private (private val stream: FileOutputStream)
+    extends AutoCloseable {
   def write(bytes: Array[Byte]): F[IOErr[Unit]] =
     handleIo(stream.write(bytes), ByteArrayWriteFailed.apply)
 

@@ -1,6 +1,6 @@
 package coop.rchain.blockstorage.util
 
-import java.io.IOException
+import java.io.{EOFException, IOException}
 import java.nio.file._
 import java.util.stream.Collectors
 
@@ -20,9 +20,11 @@ package object io {
       try {
         Right(io)
       } catch {
+        case e: EOFException                  => Left(EndOfFile(e))
         case e: IOException                   => Left(handleIoException(e))
         case e: SecurityException             => Left(FileSecurityViolation(e))
         case e: UnsupportedOperationException => Left(UnsupportedFileOperation(e))
+        case e: IllegalArgumentException      => Left(IllegalFileOperation(e))
         case e                                => Left(UnexpectedIOError(e))
       }
     }
@@ -74,4 +76,16 @@ package object io {
       directoryList   <- inDirectoryList.filterA[IOErrTF](f => EitherT(isRegularFile(f)))
     } yield directoryList).value
   }
+
+  def createTemporaryFile[F[_]: Sync](prefix: String, suffix: String): F[IOErr[Path]] =
+    handleIo(Files.createTempFile(prefix, suffix), UnexpectedIOError.apply)
+
+  def createNewFile[F[_]: Sync](filePath: Path): F[IOErr[Boolean]] =
+    handleIo(filePath.toFile.createNewFile(), UnexpectedIOError.apply)
+
+  def writeToFile[F[_]: Sync](filePath: Path, bytes: Array[Byte]): F[IOErr[Unit]] =
+    handleIo(Files.write(filePath, bytes), ByteArrayWriteFailed.apply)
+
+  def readAllBytesFromFile[F[_]: Sync](filePath: Path): F[IOErr[Array[Byte]]] =
+    handleIo(Files.readAllBytes(filePath), ByteArrayReadFailed.apply)
 }
