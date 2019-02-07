@@ -6,6 +6,7 @@
 - [Contract Deployment](#contract-deployment)
 - [Rev](#rev)
 - [Wallets](#wallets)
+- [MultiSig Wallets](#multisig-wallets)
 - [Validation](#validation)
 - [Bonding/unbonding](#bondingunbonding)
 - [Validator Rewards](#validator-rewards)
@@ -57,7 +58,7 @@
 * program exists with 1 and prints out coop.rchain.rholang.interpreter.errorsTopLevelFreeVariablesNotAllowedError
 
 ### As a Node Operator, I want to have a default configuration and the ability to customize the configuration on the command line
-#### Configure rnode using rnode.toml
+#### Configure rnode using a default configuration.
 ##### documentation: https://github.com/rchain/rchain/#configuration-file
 #### Configure rnode using command line flags
 ##### documentation: https://github.com/rchain/rchain/#configuration-flags
@@ -128,7 +129,7 @@
 * `ceremonyMaster` sends `UnapprovedBlock` to `validatorA` and `validatorB`
 * `validatorA` and `validatorB` receives `UnapprovedBlock`
 * `validatorA` and `validatorB` send back `BlockApproval`
-* `ceremonyMaster` transitions to `ApprovedBlockReceivedHandler`
+* `ceremonyMaster` transitions to `ApprovedBlockReceivedHandler` once requirements are met for duration and required sigs
 * `ceremonyMaster` sends `ApprovedBlock` to `validatorA` and `validatorB`
 * `validatorA` and `validatorB` transition to ApprovedBlockReceivedHandler
 * `ceremonyMaster`, `validatorA` and `validatorB` tip points to block (genesis) where it has no parent and Bonds holds `validatorA` and `validatorB`
@@ -143,7 +144,7 @@
 * `ceremonyMaster` sends `UnapprovedBlock` to `validatorA` and `validatorB`
 * `validatorA` and `validatorB` receives `UnapprovedBlock`
 * `validatorA` and `validatorB` send back `BlockApproval`
-* `ceremonyMaster` transitions to `ApprovedBlockReceivedHandler`
+* `ceremonyMaster` transitions to `ApprovedBlockReceivedHandler` once requirements are met for duration and required sigs
 * `ceremonyMaster` sends `ApprovedBlock` to `validatorA` and `validatorB`
 * `validatorA` and `validatorB` transition to ApprovedBlockReceivedHandler
 * `ceremonyMaster`, `validatorA` and `validatorB` tip points to block (genesis) where it has no parent and Bonds holds `validatorA` and `validatorB`
@@ -216,48 +217,52 @@
 ## REV
 ### As a platform stakeholder, I want REV to be the currency token for the RChain platform
 ### As a REV holder, assuming I maintain control of my keys and properly use the wallet where I store REV, I expect my REV to never be lost
+
 ## Wallets
-1. ### As a user, I want to be able to configure a coop-supplied wallet so that I can store REV in it.
-1. ### As a user, I want to be able to interface with the coop-supplied wallet at the command line.
-1. ### As a user, I can run the coop-supplied wallet on the following platforms: Linux, Docker, others TBD.
-1. ### As a wallet user, I can import my private key.
-1. ### As a wallet user, I can store my private key encrypted with a password I provide.
-1. ### As a wallet user, I must provide my password for each session in order to use my stored private key.
-1. ### As a wallet user, I can create a random private key.
-1. ### As a wallet user, I can view my private key, public key, and Ethereum-style address.
-1. ### As a user, I want to be able to request another user to send REV to my coop-supplied wallet so that I have available REV to pay for goods/services.
-1. ### As a user, I want to be able to send REV from my coop-supplied wallet to another user so that I can pay for goods/services.
-1. ### As a user, I want to be able to receive REV from another user by providing that user with the Ethereum-style address for my coop-supplied-wallet.
-1. ### As a user, I want to be able to send REV to the coop-supplied wallet of another user by specifying the Ethereum-style address of that user.
-1. ### As a user, I want to query the wallet based on my public address and see the history of all REV transfers to/from it, including the source/destination address, amount, and approximate datetime.
-1. ### As a wallet user, I can see and present verifiable evidence to a third party that one of my payments to/from another user did in fact occur and complete.
-1. ### As a user who has received REVs transacted after Genesis, I can view my REV balance.
-1. ### As a user who has received REVs with a balance cloned at Genesis from RHOC, I can view my REV balance.
-1. ### As a validator, I can move REVs to/from the key-pair for one validator node from/to the key-pair for another validator node or wallet dApp.
-1. ### As a user, I can specify Ethereum-style addresses to specify send, request, or history commands.  Rationale: a) Users don’t need to generate a public key from their private key; b) developers can leverage Ethereum utility libraries; c) so the QR code is smaller and thus faster to scan than it would be for a full public key; d) it is easier for users to verbally confirm their address versus public key; and e) so RChain is more palatable for the Ethereum community.
-1. ### As a wallet user, I can connect to a self-hosted RNode.
-1. ### As a wallet user, I want to connect to an RNode hosted by someone else, so I don’t need to host my own.
-1. ### As a wallet user, I want to be able to easily connect with a trustworthy RNode that is on the mainnet and that is version-compatible with my installed wallet.
-1. ### Multi-Sig Wallet
-    1. As an officer of an organization, I need to have multiple approvers for any send transaction.
-    1. As a user, I can create a multisig wallet by specifying signer’s addresses and a quorum number.
-    1. As a basic wallet user, I can send Rev to a multi-sig wallet.
-    1. As a basic wallet user, I can see the current Rev balance in a multi-sig wallet.
-    1. As a basic wallet user, I can see the completed Rev transaction history in a multi-sig wallet.
-    1. As a multisig user, I can see all open requests (e.g., for payment, quorum number, add signing user, or remove signing user).
-    1. As a multisig user, I can initiate a payment request to a destination address.
-    1. As a payment request initiator, I can withdraw a payment request that I initiated (prior to full approval).
-    1. As a multisig user, I can see the state of a payment request (proposed, pending approval, approved, withdrawn).
-    1. Any multisig user can see the inbound and outbound transaction history, with from/to address, amount, and approximate time.
-    1. As a multisig user, I can see the history (i.e., who took what action when) of payment requests.
-    1. As a multisig user, I can vote to approve a payment request (before it is completed or withdrawn).
-    1. As a multisig user, I can vote to reject a payment request (before it is completed or withdrawn).
-    1. As a multisig user, I can indicate my vote is undecided (or pending) for a payment request (before it is completed or withdrawn).
-    1. As a multisig user, when I vote to approve a payment request and my vote causes a quorum to be met, the system sends the specified Revs.
-    1. As a multisig user, I can see the current Rev balance controlled by the multisig wallet.
-    1. As a multisig user, I can propose the quorum number be changed. (The approval workflow is then similar to payment requests.)
-    1. As a multisig user, I can propose an existing signing user be removed. (The approval workflow is then similar to payment requests.)
-    1. As a multisig user, I can propose a new signing user be added. (The approval workflow is then similar to payment requests.)
+### As a user, I want to be able to configure a coop-supplied wallet so that I can store REV in it.
+### As a user, I want to be able to interface with the coop-supplied wallet at the command line.
+### As a user, I can run the coop-supplied wallet on the following platforms: Linux, Docker, others TBD.
+### As a wallet user, I can import my private key.
+### As a wallet user, I can store my private key encrypted with a password I provide.
+### As a wallet user, I must provide my password for each session in order to use my stored private key.
+### As a wallet user, I can create a random private key.
+### As a wallet user, I can view my private key, public key, and Ethereum-style address.
+### As a user, I want to be able to request another user to send REV to my coop-supplied wallet so that I have available REV to pay for goods/services.
+### As a user, I want to be able to send REV from my coop-supplied wallet to another user so that I can pay for goods/services.
+### As a user, I want to be able to receive REV from another user by providing that user with the Ethereum-style address for my coop-supplied-wallet.
+### As a user, I want to be able to send REV to the coop-supplied wallet of another user by specifying the Ethereum-style address of that user.
+### As a user, I want to query the wallet based on my public address and see the history of all REV transfers to/from it, including the source/destination address, amount, and approximate datetime.
+### As a wallet user, I can see and present verifiable evidence to a third party that one of my payments to/from another user did in fact occur and complete.
+### As a user who has received REVs transacted after Genesis, I can view my REV balance.
+### As a user who has received REVs with a balance cloned at Genesis from RHOC, I can view my REV balance.
+### As a validator, I can move REVs to/from the key-pair for one validator node from/to the key-pair for another validator node or wallet dApp.
+### As a user, I can specify Ethereum-style addresses to specify send, request, or history commands.  Rationale: a) Users don’t need to generate a public key from their private key; b) developers can leverage Ethereum utility libraries; c) so the QR code is smaller and thus faster to scan than it would be for a full public key; d) it is easier for users to verbally confirm their address versus public key; and e) so RChain is more palatable for the Ethereum community.
+### As a wallet user, I can connect to a self-hosted RNode.
+### As a wallet user, I want to connect to an RNode hosted by someone else, so I don’t need to host my own.
+### As a wallet user, I want to be able to easily connect with a trustworthy RNode that is on the mainnet and that is version-compatible with my installed wallet.
+
+## MultiSig Wallets
+### As an officer of an organization, I need to have multiple approvers for any send transaction.
+### As a user, I can create a multisig wallet by specifying signer’s addresses and a quorum number.
+### As a basic wallet user, I can send Rev to a multi-sig wallet.
+### As a multisig wallet user, I can send Rev to a basic wallet.
+### As a basic wallet user, I can see the current Rev balance in a multi-sig wallet.
+### As a basic wallet user, I can see the completed Rev transaction history in a multi-sig wallet.
+### As a multisig wallet user, I can see all open requests (e.g., for payment, quorum number, add signing user, or remove signing user).
+### As a multisig wallet user, I can initiate a payment request to a destination address.
+### As a payment request initiator, I can withdraw a payment request that I initiated (prior to full approval).
+### As a multisig wallet user, I can see the state of a payment request (proposed, pending approval, approved, withdrawn).
+### As a multisig wallet user, I can see any multisig user's inbound and outbound transaction history, with from/to address, amount, and approximate time.
+### As a multisig wallet user, I can see the history (i.e., who took what action when) of payment requests.
+### As a multisig wallet user, I can vote to approve a payment request (before it is completed or withdrawn).
+### As a multisig wallet user, I can vote to reject a payment request (before it is completed or withdrawn).
+### As a multisig wallet user, I can indicate my vote is undecided (or pending) for a payment request (before it is completed or withdrawn).
+### As a multisig wallet user, when I vote to approve a payment request and my vote causes a quorum to be met, the system sends the specified Revs.
+### As a multisig wallet user, I can see the current Rev balance controlled by the multisig wallet.
+### As a multisig wallet user, I can propose the quorum number be changed. (The approval workflow is then similar to payment requests.)
+### As a multisig wallet user, I can propose an existing signing user be removed. (The approval workflow is then similar to payment requests.)
+### As a multisig wallet user, I can propose a new signing user be added. (The approval workflow is then similar to payment requests.)
+
 ## Validation
 ### As a RChain validator, I want my validator identity to be different from the identity of my node and from the identity of my wallet
 #### Documentation of identities
@@ -323,7 +328,7 @@
 * wait graceful period of 10 seconds
 * each validator should have a DAG with same set of finalized blocks
 
-### As a Node Validator I want consensus protocol to converge
+### As a validator I want consensus protocol to converge
 #### 5 validators deploying 200 blocks end up with the same DAG
 ##### test: test/test_dag_correctness.py::test_5val_200blocks
 ##### steps:
@@ -335,16 +340,13 @@
 
 # Cost accounting
 ### As a node operator, I want to get the list of deploys and their costs when I run `show-blocks`.
-### As a node operator, I want to be compensated for storing, running, and processing transactions against smart contracts based on the computational intensity required.
-### As a node operator, I want to be compensated 
-### As a validator, I want to receive interest in phlo on my bond amount as defined by the schedule in the mint.
-### As a validator, having an absolute minimum phlo cost to deploy a contract helps support my resources and mitigate against DOS attacks.
-### As a validator, to support management of my resources I want to receive as a fee either a minimum charge for a deployment or a charge determined as a percentage of the size of the contract. The fee will be whichever is greater: the absolute minimum charge or the calculated minimum.
-### As a dApp developer, I use phlo to pay the cost to deploy smart contracts on the RChain platform.
-### As a dApp developer, I need to know the minimum cost it will take to deploy my contract. The cost will be whichever is greater: the absolute minimum charge or the calculated minimum.
-### As a dApp developer, I need to know how much it will cost to execute my contract.
-### As a dApp developer, I want the phlo cost to execute a contract a contract once it's on chain to be consistent given the asm REV to phlo price and accounting for non-determinism.
-### As a client of a contract already deployed on the blockchain, I need to know how much it will cost to execute the contract.
+### As a validating node operator, I want to be compensated in REV for setting up, storing, running, and processing transactions. I need to be able to see a record of this compenstation and retrieve my earnings.
+### As a validating node operator, I want to receive interest in REV on my bond amount as defined by the schedule in the mint.
+##### steps:
+* initiate a validator
+* Calculate interest for the validator's bond based on the scheudle in the mint
+* transfer the earned interest to the validator's wallet
+### As a dApp developer, I use REV to pay the cost to deploy smart contracts on the RChain platform.
 ### As a validator, I will yield 0.01% of all transaction fees received to accounts controlled by the Coop.
 ### As the RChain coop, I want to receive 0.01% of all transaction fees to accounts controlled by the Coop.
 
