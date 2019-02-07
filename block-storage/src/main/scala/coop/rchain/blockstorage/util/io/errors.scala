@@ -1,6 +1,6 @@
 package coop.rchain.blockstorage.util.io
 
-import java.io.{FileNotFoundException, IOException}
+import java.io.{EOFException, FileNotFoundException, IOException}
 import java.nio.file.{
   AtomicMoveNotSupportedException,
   DirectoryNotEmptyException,
@@ -24,9 +24,11 @@ final case class FileNotFound(exception: FileNotFoundException)             exte
 final case class FileSecurityViolation(exception: SecurityException)        extends IOError
 final case class FileIsNotDirectory(exception: NotDirectoryException)       extends IOError
 final case class UnsupportedFileOperation(e: UnsupportedOperationException) extends IOError
+final case class IllegalFileOperation(e: IllegalArgumentException)          extends IOError
 final case class FileAlreadyExists(e: FileAlreadyExistsException)           extends IOError
 final case class DirectoryNotEmpty(e: DirectoryNotEmptyException)           extends IOError
 final case class AtomicMoveNotSupported(e: AtomicMoveNotSupportedException) extends IOError
+final case class EndOfFile(e: EOFException)                                 extends IOError
 final case class UnexpectedIOError(throwable: Throwable)                    extends IOError
 
 object IOError {

@@ -276,6 +276,11 @@ object FileLMDBIndexBlockStore {
   ): StorageIOErrT[F, A] =
     EitherT(ioError).toStorageIOErrT
 
+  private[blockstorage] def toStorageErrT[F[_]: Sync, A](
+      ioError: F[IOErr[A]]
+  ): StorageErrT[F, A] =
+    EitherT(ioError).toStorageErrT
+
   private def loadCheckpoints[F[_]: Sync: Log](
       checkpointsDirPath: Path
   ): StorageErrT[F, List[Checkpoint]] =

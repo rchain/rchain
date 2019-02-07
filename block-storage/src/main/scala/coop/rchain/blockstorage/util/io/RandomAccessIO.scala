@@ -9,7 +9,8 @@ import IOError.IOErr
 
 import scala.language.higherKinds
 
-final case class RandomAccessIO[F[_]: Sync] private (private val file: RandomAccessFile) {
+final case class RandomAccessIO[F[_]: Sync] private (private val file: RandomAccessFile)
+    extends AutoCloseable {
   def close(): F[IOErr[Unit]] =
     handleIo(file.close(), ClosingFailed.apply)
 
@@ -36,8 +37,13 @@ final case class RandomAccessIO[F[_]: Sync] private (private val file: RandomAcc
 }
 
 object RandomAccessIO {
-  def open[F[_]: Sync](path: Path): F[IOErr[RandomAccessIO[F]]] =
-    handleIo(new RandomAccessFile(path.toFile, "rw"), {
+  sealed abstract class Mode(val representation: String)
+  case object Read      extends Mode("r")
+  case object Write     extends Mode("w")
+  case object ReadWrite extends Mode("rw")
+
+  def open[F[_]: Sync](path: Path, mode: Mode): F[IOErr[RandomAccessIO[F]]] =
+    handleIo(new RandomAccessFile(path.toFile, mode.representation), {
       case e: FileNotFoundException => FileNotFound(e)
       case e                        => UnexpectedIOError(e)
     }).map(_.right.map(RandomAccessIO.apply[F]))
