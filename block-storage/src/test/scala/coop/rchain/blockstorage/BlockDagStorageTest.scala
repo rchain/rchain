@@ -128,16 +128,18 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   )(implicit blockStore: BlockStore[Task]): Task[BlockDagFileStorage[Task]] = {
     implicit val log     = new shared.Log.NOPLog[Task]()
     implicit val metrics = new MetricsNOP[Task]()
-    BlockDagFileStorage.create[Task](
-      BlockDagFileStorage.Config(
-        defaultLatestMessagesLog(dagDataDir),
-        defaultLatestMessagesCrc(dagDataDir),
-        defaultBlockMetadataLog(dagDataDir),
-        defaultBlockMetadataCrc(dagDataDir),
-        defaultCheckpointsDir(dagDataDir),
-        maxSizeFactor
+    BlockDagFileStorage
+      .create[Task](
+        BlockDagFileStorage.Config(
+          defaultLatestMessagesLog(dagDataDir),
+          defaultLatestMessagesCrc(dagDataDir),
+          defaultBlockMetadataLog(dagDataDir),
+          defaultBlockMetadataCrc(dagDataDir),
+          defaultCheckpointsDir(dagDataDir),
+          maxSizeFactor
+        )
       )
-    )
+      .map(_.right.get)
   }
 
   type LookupResult =
@@ -176,8 +178,8 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
              }
       latestMessageHashes <- dag.latestMessageHashes
       latestMessages      <- dag.latestMessages
-      topoSort            <- dag.topoSort(topoSortStartBlockNumber)
-      topoSortTail        <- dag.topoSortTail(topoSortTailLength)
+      topoSort            <- dag.topoSort(topoSortStartBlockNumber).map(_.right.get)
+      topoSortTail        <- dag.topoSortTail(topoSortTailLength).map(_.right.get)
     } yield (list, latestMessageHashes, latestMessages, topoSort, topoSortTail)
 
   private def testLookupElementsResult(

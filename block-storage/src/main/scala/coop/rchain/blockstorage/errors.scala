@@ -9,12 +9,13 @@ import coop.rchain.blockstorage.util.io.IOError.IOErrT
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.codec.Base16
 
-sealed abstract class StorageError extends Exception
+sealed trait StorageError
 
 final case class CheckpointsDoNotStartFromZero(sortedCheckpoints: List[Path]) extends StorageError
 final case class CheckpointsAreNotConsecutive(sortedCheckpoints: List[Path])  extends StorageError
 final case class TopoSortLengthIsTooBig(length: Long)                         extends StorageError
 final case class BlockSenderIsMalformed(block: BlockMessage)                  extends StorageError
+final case class CheckpointDoesNotExist(offset: Long)                         extends StorageError
 
 sealed abstract class StorageIOError extends StorageError
 
@@ -39,6 +40,8 @@ object StorageError {
         s"Topological sorting of length $length was requested while maximal length is ${Int.MaxValue}"
       case BlockSenderIsMalformed(block) =>
         s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is malformed: ${Base16.encode(block.sender.toByteArray)}"
+      case CheckpointDoesNotExist(offset) =>
+        s"Requested a block with block number $offset, but there is no checkpoint for it"
       case WrappedIOError(ioError) =>
         ioError.message
       case UnavailableReferencedCheckpoint(checkpointIndex) =>
@@ -51,6 +54,7 @@ object StorageError {
 
   implicit class IOErrorTToStorageIOErrorT[F[_]: Functor, A](ioErrT: IOErrT[F, A]) {
     def toStorageIOErrT: StorageIOErrT[F, A] = ioErrT.leftMap(WrappedIOError.apply)
+    def toStorageErrT: StorageErrT[F, A]     = ioErrT.leftMap(WrappedIOError.apply)
   }
 
   implicit def ioErrorTToStorageIoError[F[_]: Functor, A](

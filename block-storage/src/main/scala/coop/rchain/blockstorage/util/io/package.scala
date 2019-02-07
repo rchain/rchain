@@ -80,6 +80,9 @@ package object io {
   def createNewFile[F[_]: Sync](filePath: Path): F[IOErr[Boolean]] =
     handleIo(filePath.toFile.createNewFile(), UnexpectedIOError.apply)
 
+  def createFile[F[_]: Sync](filePath: Path): F[IOErr[Unit]] =
+    handleIo(Files.createFile(filePath), UnexpectedIOError.apply)
+
   def writeToFile[F[_]: Sync](filePath: Path, bytes: Array[Byte]): F[IOErr[Unit]] =
     handleIo(Files.write(filePath, bytes), ByteArrayWriteFailed.apply)
 

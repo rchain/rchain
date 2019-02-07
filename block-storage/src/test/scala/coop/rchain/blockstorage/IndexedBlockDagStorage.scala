@@ -5,6 +5,7 @@ import cats.{Id, Monad}
 import cats.implicits._
 import cats.effect.concurrent.{Ref, Semaphore}
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.StorageError.StorageErr
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.hash.Blake2b256
 
@@ -20,13 +21,13 @@ final class IndexedBlockDagStorage[F[_]: Monad](
       result <- underlying.getRepresentation
       _      <- lock.release
     } yield result
-  def insert(block: BlockMessage): F[BlockDagRepresentation[F]] =
+  def insert(block: BlockMessage): F[StorageErr[BlockDagRepresentation[F]]] =
     for {
       _          <- lock.acquire
       _          <- underlying.insert(block)
       _          <- lock.release
       updatedDag <- getRepresentation
-    } yield updatedDag
+    } yield updatedDag.asRight[StorageError]
   def insertIndexed(block: BlockMessage): F[BlockMessage] =
     for {
       _                 <- lock.acquire
@@ -54,16 +55,16 @@ final class IndexedBlockDagStorage[F[_]: Monad](
       _ <- underlying.insert(block)
       _ <- lock.release
     } yield ()
-  def checkpoint(): F[Unit] = underlying.checkpoint()
-  def clear(): F[Unit] =
+  def checkpoint(): F[StorageErr[Unit]] = underlying.checkpoint()
+  def clear(): F[StorageErr[Unit]] =
     for {
       _ <- lock.acquire
       _ <- underlying.clear()
       _ <- idToBlocksRef.set(Map.empty)
       _ <- currentIdRef.set(-1)
       _ <- lock.release
-    } yield ()
-  def close(): F[Unit] = underlying.close()
+    } yield ().asRight[StorageError]
+  def close(): F[StorageErr[Unit]] = underlying.close()
   def lookupById(id: Int): F[Option[BlockMessage]] =
     for {
       idToBlocks <- idToBlocksRef.get

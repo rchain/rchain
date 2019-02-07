@@ -9,9 +9,8 @@ import IOError.IOErr
 
 import scala.language.higherKinds
 
-final case class RandomAccessIO[F[_]: Sync] private (private val file: RandomAccessFile)
-    extends AutoCloseable {
-  def close(): F[IOErr[Unit]] =
+final case class RandomAccessIO[F[_]: Sync] private (private val file: RandomAccessFile) {
+  def close: F[IOErr[Unit]] =
     handleIo(file.close(), ClosingFailed.apply)
 
   def write(bytes: Array[Byte]): F[IOErr[Unit]] =

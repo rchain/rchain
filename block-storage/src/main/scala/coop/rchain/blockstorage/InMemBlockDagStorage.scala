@@ -6,6 +6,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.blockstorage.BlockStore.BlockHash
+import coop.rchain.blockstorage.StorageError.StorageErr
 import coop.rchain.blockstorage.util.BlockMessageUtil.{bonds, parentHashes}
 import coop.rchain.blockstorage.util.TopologicalSortUtil
 import coop.rchain.casper.protocol.BlockMessage
@@ -33,15 +34,15 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
       dataLookup.get(blockHash).pure[F]
     def contains(blockHash: BlockHash): F[Boolean] =
       dataLookup.contains(blockHash).pure[F]
-    def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
-      topoSortVector.drop(startBlockNumber.toInt).pure[F]
-    def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]] =
-      topoSortVector.takeRight(tailLength).pure[F]
-    def deriveOrdering(startBlockNumber: Long): F[Ordering[BlockMetadata]] =
-      topoSort(startBlockNumber).map { topologicalSorting =>
+    def topoSort(startBlockNumber: Long): F[StorageErr[Vector[Vector[BlockHash]]]] =
+      topoSortVector.drop(startBlockNumber.toInt).asRight[StorageError].pure[F]
+    def topoSortTail(tailLength: Int): F[StorageErr[Vector[Vector[BlockHash]]]] =
+      topoSortVector.takeRight(tailLength).asRight[StorageError].pure[F]
+    def deriveOrdering(startBlockNumber: Long): F[StorageErr[Ordering[BlockMetadata]]] =
+      topoSort(startBlockNumber).map(_.map { topologicalSorting =>
         val order = topologicalSorting.flatten.zipWithIndex.toMap
         Ordering.by(b => order(b.blockHash))
-      }
+      })
     def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
       latestMessagesMap.get(validator).pure[F]
     def latestMessage(validator: Validator): F[Option[BlockMetadata]] =
@@ -66,7 +67,7 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
       _              <- lock.release
     } yield InMemBlockDagRepresentation(latestMessages, childMap, dataLookup, topoSort)
 
-  override def insert(block: BlockMessage): F[BlockDagRepresentation[F]] =
+  override def insert(block: BlockMessage): F[StorageErr[BlockDagRepresentation[F]]] =
     for {
       _ <- lock.acquire
       _ <- dataLookupRef.update(_.updated(block.blockHash, BlockMetadata.fromBlock(block)))
@@ -83,28 +84,34 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
         .map(_.validator)
         .toSet
         .diff(block.justifications.map(_.validator).toSet)
-      newValidatorsWithSender <- if (block.sender.isEmpty) {
-                                  // Ignore empty sender for special cases such as genesis block
-                                  Log[F].warn(
-                                    s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
-                                  ) *> newValidators.pure[F]
-                                } else if (block.sender.size() == 32) {
-                                  (newValidators + block.sender).pure[F]
-                                } else {
-                                  Sync[F].raiseError[Set[ByteString]](
-                                    BlockSenderIsMalformed(block)
-                                  )
-                                }
-      _ <- latestMessagesRef.update { latestMessages =>
-            newValidatorsWithSender.foldLeft(latestMessages) {
-              case (acc, v) => acc.updated(v, block.blockHash)
+      newValidatorsWithSenderEither <- if (block.sender.isEmpty) {
+                                        // Ignore empty sender for special cases such as genesis block
+                                        Log[F].warn(
+                                          s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
+                                        ) *> newValidators
+                                          .asRight[StorageError]
+                                          .pure[F]
+                                      } else if (block.sender.size() == 32) {
+                                        (newValidators + block.sender)
+                                          .asRight[StorageError]
+                                          .pure[F]
+                                      } else {
+                                        (BlockSenderIsMalformed(block): StorageError)
+                                          .asLeft[Set[ByteString]]
+                                          .pure[F]
+                                      }
+      _ <- newValidatorsWithSenderEither.traverse { newValidatorsWithSender =>
+            latestMessagesRef.update { latestMessages =>
+              newValidatorsWithSender.foldLeft(latestMessages) {
+                case (acc, v) => acc.updated(v, block.blockHash)
+              }
             }
           }
       _   <- lock.release
       dag <- getRepresentation
-    } yield dag
-  override def checkpoint(): F[Unit] = ().pure[F]
-  override def clear(): F[Unit] =
+    } yield newValidatorsWithSenderEither.map(_ => dag)
+  override def checkpoint(): F[StorageErr[Unit]] = ().asRight[StorageError].pure[F]
+  override def clear(): F[StorageErr[Unit]] =
     for {
       _ <- lock.acquire
       _ <- dataLookupRef.set(Map.empty)
@@ -112,8 +119,8 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
       _ <- topoSortRef.set(Vector.empty)
       _ <- latestMessagesRef.set(Map.empty)
       _ <- lock.release
-    } yield ()
-  override def close(): F[Unit] = ().pure[F]
+    } yield ().asRight[StorageError]
+  override def close(): F[StorageErr[Unit]] = ().asRight[StorageError].pure[F]
 }
 
 object InMemBlockDagStorage {
