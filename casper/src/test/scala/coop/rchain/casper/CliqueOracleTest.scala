@@ -1,7 +1,9 @@
 package coop.rchain.casper
 
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.Bond
+import coop.rchain.blockstorage.BlockDagRepresentation.Validator
+import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
+import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.helper.BlockGenerator._
@@ -11,7 +13,7 @@ import monix.eval.Task
 import org.scalatest._
 import org.scalatest.Matchers._
 
-import scala.collection.immutable.{HashMap, HashSet}
+import scala.collection.immutable.HashMap
 
 class CliqueOracleTest
     extends FlatSpec
@@ -23,61 +25,40 @@ class CliqueOracleTest
 
   implicit val logEff = new LogStub[Task]
 
+  def createBlock(bonds: Seq[Bond])(creator: ByteString)(
+      parent: BlockMessage,
+      justifications: Map[Validator, BlockMessage]
+  )(implicit store: BlockStore[Task], dagStore: IndexedBlockDagStorage[Task]): Task[BlockMessage] =
+    createBlock[Task](
+      Seq(parent.blockHash),
+      creator,
+      bonds,
+      justifications.map { case (v, bm) => (v, bm.blockHash) }
+    )
+
   // See [[/docs/casper/images/cbc-casper_ping_pong_diagram.png]]
   it should "detect finality as appropriate" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val v1     = generateValidator("Validator One")
-      val v2     = generateValidator("Validator Two")
-      val v1Bond = Bond(v1, 2)
-      val v2Bond = Bond(v2, 3)
-      val bonds  = Seq(v1Bond, v2Bond)
+      val v1             = generateValidator("Validator One")
+      val v2             = generateValidator("Validator Two")
+      val v1Bond         = Bond(v1, 2)
+      val v2Bond         = Bond(v2, 3)
+      val bonds          = Seq(v1Bond, v2Bond)
+      val blockCreatorV1 = createBlock(bonds)(v1) _
+      val blockCreatorV2 = createBlock(bonds)(v2) _
 
       implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
-
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-        b2 <- createBlock[Task](
-               Seq(genesis.blockHash),
-               v2,
-               bonds,
-               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
-             )
-        b3 <- createBlock[Task](
-               Seq(genesis.blockHash),
-               v1,
-               bonds,
-               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
-             )
-        b4 <- createBlock[Task](
-               Seq(b2.blockHash),
-               v2,
-               bonds,
-               HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash)
-             )
-        b5 <- createBlock[Task](
-               Seq(b2.blockHash),
-               v1,
-               bonds,
-               HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash)
-             )
-        b6 <- createBlock[Task](
-               Seq(b4.blockHash),
-               v2,
-               bonds,
-               HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
-             )
-        b7 <- createBlock[Task](
-               Seq(b4.blockHash),
-               v1,
-               bonds,
-               HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
-             )
-        b8 <- createBlock[Task](
-               Seq(b7.blockHash),
-               v1,
-               bonds,
-               HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash)
-             )
+        genesisJustification = HashMap(v1 -> genesis, v2 -> genesis)
+        b2 <- blockCreatorV2(genesis, genesisJustification)
+        b3 <- blockCreatorV1(genesis, genesisJustification)
+        b4 <- blockCreatorV2(b2, HashMap(v1 -> genesis, v2 -> b2))
+        b5 <- blockCreatorV1(b2, HashMap(v1 -> b3, v2 -> b2))
+        b6 <- blockCreatorV2(b4, HashMap(v1 -> b5, v2 -> b4))
+        b7 <- blockCreatorV1(b4, HashMap(v1 -> b5, v2 -> b4))
+        b8 <- blockCreatorV1(b7, HashMap(v1 -> b7, v2 -> b4))
+
         dag                   <- blockDagStorage.getRepresentation
         genesisFaultTolerance <- SafetyOracle[Task].normalizedFaultTolerance(dag, genesis.blockHash)
         _                     = assert(genesisFaultTolerance === 1f +- 0.01f)
@@ -100,52 +81,21 @@ class CliqueOracleTest
       val v2Bond = Bond(v2, 20)
       val v3Bond = Bond(v3, 15)
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
+      val blockCreatorV1 = createBlock(bonds)(v1) _
+      val blockCreatorV2 = createBlock(bonds)(v2) _
+      val blockCreatorV3 = createBlock(bonds)(v3) _
 
       implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
       for {
         genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-        b2 <- createBlock[Task](
-               Seq(genesis.blockHash),
-               v2,
-               bonds,
-               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
-             )
-        b3 <- createBlock[Task](
-               Seq(genesis.blockHash),
-               v1,
-               bonds,
-               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
-             )
-        b4 <- createBlock[Task](
-               Seq(b2.blockHash),
-               v3,
-               bonds,
-               HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
-             )
-        b5 <- createBlock[Task](
-               Seq(b3.blockHash),
-               v2,
-               bonds,
-               HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
-             )
-        b6 <- createBlock[Task](
-               Seq(b4.blockHash),
-               v1,
-               bonds,
-               HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
-             )
-        b7 <- createBlock[Task](
-               Seq(b5.blockHash),
-               v3,
-               bonds,
-               HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
-             )
-        b8 <- createBlock[Task](
-               Seq(b6.blockHash),
-               v2,
-               bonds,
-               HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
-             )
+        genesisJustification = HashMap(v1 -> genesis, v2 -> genesis, v3 -> genesis)
+        b2 <- blockCreatorV2(genesis, genesisJustification)
+        b3 <- blockCreatorV1(genesis, genesisJustification)
+        b4 <- blockCreatorV3(b2, HashMap(v1 -> genesis, v2 -> b2, v3 -> b2))
+        b5 <- blockCreatorV2(b3, HashMap(v1 -> b3, v2 -> b2, v3 -> genesis))
+        b6 <- blockCreatorV1(b4, HashMap(v1 -> b3, v2 -> b2, v3 -> b4))
+        b7 <- blockCreatorV3(b5, HashMap(v1 -> b3, v2 -> b5, v3 -> b4))
+        b8 <- blockCreatorV2(b6, HashMap(v1 -> b6, v2 -> b5, v3 -> b4))
 
         dag <- blockDagStorage.getRepresentation
 
