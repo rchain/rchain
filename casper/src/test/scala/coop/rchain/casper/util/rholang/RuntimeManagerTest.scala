@@ -8,8 +8,10 @@ import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.catscontrib.TestOutlaws._
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.rholang.interpreter.accounting
+import coop.rchain.rholang.Resources.mkRuntime
+import coop.rchain.rholang.interpreter.{accounting, Interpreter}
 import coop.rchain.rholang.interpreter.accounting.Cost
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -41,7 +43,40 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         .runSyncUnsafe(10.seconds)
 
     result.status.isFailed should be(true)
-    result.cost.cost shouldEqual (accounting.MAX_VALUE - accounting.parsingCost(badRholang).value)
+    result.cost.cost shouldEqual (accounting.parsingCost(badRholang).value)
+  }
+
+  it should "charge for parsing and execution" in {
+    val correctRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!(2) }"""
+    val deploy         = ProtoUtil.sourceDeployNow(correctRholang)
+
+    val (_, Seq(result)) =
+      runtimeManager
+        .use(mgr => mgr.computeState(mgr.emptyStateHash, deploy :: Nil))
+        .runSyncUnsafe(10.seconds)
+
+    import coop.rchain.shared.Log
+    implicit val log: Log[Task] = new Log.NOPLog[Task]
+    val runtime                 = mkRuntime("casper-tests-auxiliary-runtime")
+
+    val parsingCost = accounting.parsingCost(correctRholang)
+    val reductionCost = runtime
+      .use { runtime =>
+        implicit val rand: Blake2b512Random = Blake2b512Random(
+          DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
+        )
+        val initialPhlo = Cost(accounting.MAX_VALUE)
+        for {
+          _         <- runtime.reducer.setPhlo(initialPhlo)
+          term      <- Interpreter[Task].buildNormalizedTerm(deploy.term)
+          _         <- runtime.reducer.inj(term)
+          phlosLeft <- runtime.reducer.phlo
+        } yield (initialPhlo - phlosLeft.cost)
+      }
+      .runSyncUnsafe(10.seconds)
+
+    result.status.isFailed should be(false)
+    result.cost.cost shouldEqual ((parsingCost + reductionCost).value)
   }
 
   "captureResult" should "return the value at the specified channel after a rholang computation" in {

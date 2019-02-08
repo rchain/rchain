@@ -305,13 +305,15 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       case Right(parsed) =>
         for {
           result    <- reducer.inj(parsed).attempt
-          phlos     <- reducer.phlo
+          phlosLeft <- reducer.phlo
           oldErrors <- errorLog.readAndClearErrorVector()
           newErrors = result.swap.toSeq.toVector
           allErrors = oldErrors |+| newErrors
-        } yield (CostAccount.toProto(phlos + parsingCost) -> allErrors)
+        } yield (CostAccount.toProto(phlosLeft - parsingCost) -> allErrors)
       case Left(error) =>
-        (CostAccount.toProto(CostAccount(parsingCost.value)) -> Vector(error)).pure[F]
+        for {
+          phlosLeft <- reducer.phlo
+        } yield (CostAccount.toProto(phlosLeft - parsingCost) -> Vector(error))
     }
 
   }
