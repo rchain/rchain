@@ -67,11 +67,11 @@ package object io {
         .toList
     } yield filesList).value
 
-  def listFiles[F[_]: Sync](dirPath: Path): F[IOErr[List[Path]]] = {
+  def listRegularFiles[F[_]: Sync](dirPath: Path): F[IOErr[List[Path]]] = {
     type IOErrTF[A] = IOErrT[F, A]
     (for {
-      inDirectoryList <- EitherT(listInDirectory(dirPath))
-      directoryList   <- inDirectoryList.filterA[IOErrTF](f => EitherT(isRegularFile(f)))
-    } yield directoryList).value
+      files        <- EitherT(listInDirectory(dirPath))
+      regularFiles <- files.filterA[IOErrTF](f => EitherT(isRegularFile(f)))
+    } yield regularFiles).value
   }
 }
