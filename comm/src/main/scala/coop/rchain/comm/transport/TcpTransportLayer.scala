@@ -278,7 +278,11 @@ class TcpTransportLayer(
     }
 
     cell.modify { s =>
-      val parallelism = Math.max(Runtime.getRuntime.availableProcessors(), 2)
+      /** 
+        * //TODO Bring back lvl of parallelism to Math.max(Runtime.getRuntime.availableProcessors(), 2) once
+        * MultiparentCasperImpl is not synchronous (uses semaphore)
+        */
+      val parallelism = 1
       val queueScheduler =
         Scheduler.fixedPool("tl-dispatcher", parallelism, reporter = UncaughtExceptionLogger)
       for {
