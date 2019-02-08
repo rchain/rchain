@@ -6,7 +6,7 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
+import coop.rchain.casper.util.rholang.Resources._
 import coop.rchain.catscontrib.TestOutlaws._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -50,30 +50,27 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val correctRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!(2) }"""
     val deploy         = ProtoUtil.sourceDeployNow(correctRholang)
 
-    val (_, Seq(result)) =
-      runtimeManager
-        .use(mgr => mgr.computeState(mgr.emptyStateHash, deploy :: Nil))
+    val (reductionCost, result) =
+      mkRuntimeAndManager("casper-runtime-manager-test")
+        .use {
+          case (runtime, runtimeManager) =>
+            implicit val rand: Blake2b512Random = Blake2b512Random(
+              DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
+            )
+            val initialPhlo = Cost(accounting.MAX_VALUE)
+            for {
+              _             <- runtime.reducer.setPhlo(initialPhlo)
+              term          <- Interpreter[Task].buildNormalizedTerm(deploy.term)
+              _             <- runtime.reducer.inj(term)
+              phlosLeft     <- runtime.reducer.phlo
+              reductionCost = initialPhlo - phlosLeft.cost
+              state         <- runtimeManager.computeState(runtimeManager.emptyStateHash, deploy :: Nil)
+              result        = state._2.head
+            } yield ((reductionCost, result))
+        }
         .runSyncUnsafe(10.seconds)
 
-    import coop.rchain.shared.Log
-    implicit val log: Log[Task] = new Log.NOPLog[Task]
-    val runtime                 = mkRuntime("casper-tests-auxiliary-runtime")
-
     val parsingCost = accounting.parsingCost(correctRholang)
-    val reductionCost = runtime
-      .use { runtime =>
-        implicit val rand: Blake2b512Random = Blake2b512Random(
-          DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
-        )
-        val initialPhlo = Cost(accounting.MAX_VALUE)
-        for {
-          _         <- runtime.reducer.setPhlo(initialPhlo)
-          term      <- Interpreter[Task].buildNormalizedTerm(deploy.term)
-          _         <- runtime.reducer.inj(term)
-          phlosLeft <- runtime.reducer.phlo
-        } yield (initialPhlo - phlosLeft.cost)
-      }
-      .runSyncUnsafe(10.seconds)
 
     result.status.isFailed should be(false)
     result.cost.cost shouldEqual ((parsingCost + reductionCost).value)
