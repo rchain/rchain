@@ -4,7 +4,8 @@
 new
   rl(`rho:registry:lookup`),
   setup,
-test_create_purse, test_cross_currency_deposit, test_deposit, test_split,
+  test_create_purse, test_cross_currency_deposit, test_deposit, test_split,
+  test_deposit_is_atomical,
   split, getBalance, deposit
 in {
   new RhoSpecCh in {
@@ -15,11 +16,12 @@ in {
           ("Purses should be created with the given balance", *test_create_purse),
           // ("Cross-currency deposits should fail.", *test_cross_currency_deposit)
           ("Deposit should work as expected", *test_deposit),
-          ("Split should work as expected", *test_split)
+          ("Split should work as expected", *test_split),
+          ("Purse deposit is atomical", *test_deposit_is_atomical, 100)
         ])
     }
   } |
-  
+
   contract setup(retCh) = {
     new MakeMintCh, mintACh, mintBCh in {
       rl!(`rho:id:exunyijimapk7z43g3bbr69awqdz54kyroj9q43jgu3dh567fxsftx`, *MakeMintCh) |
@@ -110,6 +112,28 @@ in {
             ],
             *ackCh
           )
+        }
+      }
+    }
+  } |
+
+  contract test_deposit_is_atomical(rhoSpec, @(mintA, _), ackCh) = {
+    new aliceAPurse, aliceAPurseBalance,
+        bobAPurse, bobAPurseBalance,
+        depositSuccess in {
+      @mintA!("makePurse", 0, *aliceAPurse) |
+      @mintA!("makePurse", 50, *bobAPurse) |
+      for(aliceAPurse <- aliceAPurse;
+          bobAPurse <- bobAPurse) {
+        aliceAPurse!("getBalance", *aliceAPurseBalance) |
+        aliceAPurse!("deposit", 10, *bobAPurse, *depositSuccess) |
+        bobAPurse!("getBalance", *bobAPurseBalance) |
+
+        for (@aliceFinalBalance <- aliceAPurseBalance; @bobFinalBalance <- bobAPurseBalance) {
+          rhoSpec!("assert",
+            (50, "==", aliceFinalBalance + bobFinalBalance),
+            "The observable sum should be equal to the original sum",
+            *ackCh)
         }
       }
     }
