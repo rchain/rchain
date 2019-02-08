@@ -52,9 +52,4 @@ object StorageError {
   implicit class IOErrorTToStorageIOErrorT[F[_]: Functor, A](ioErrT: IOErrT[F, A]) {
     def toStorageIOErrT: StorageIOErrT[F, A] = ioErrT.leftMap(WrappedIOError.apply)
   }
-
-  implicit def ioErrorTToStorageIoError[F[_]: Functor, A](
-      ioError: IOErrT[F, A]
-  ): StorageIOErrT[F, A] =
-    ioError.leftMap(WrappedIOError.apply)
 }
