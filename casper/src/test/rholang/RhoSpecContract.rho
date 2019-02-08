@@ -19,17 +19,17 @@ new
   testSuiteCompleted(`rho:test:testSuiteCompleted`),
   uriOut
 in {
-  stdlog!("info", "Loading RhoSpec") |
+  stdlog!("debug", "Loading RhoSpec") |
   rl!(`rho:id:dputnspi15oxxnyymjrpu7rkaok3bjkiwq84z7cqcrx4ktqfpyapn4`, *ListOpsCh) |
   for(@(_, ListOps) <- ListOpsCh) {
     contract RhoSpec(@"testSuite", setup, @tests) = {
-      stdlog!("info", "Defining the testSuite") |
+      stdlog!("debug", "Defining the testSuite") |
       new runTest, runTestOnce, retCh in {
         contract runTestOnce(@(testName, testBody), @attempt, testAckCh) = {
-          stdlog!("info", "Running test: " ++ testName ++ " attempt " + attempt) |
+          stdlog!("debug", "Running test: " ++ testName ++ " attempt " + attempt) |
           new rhoSpecImpl, privateAssert in {
             contract privateAssert(@assertion, @clue, ackCh) = {
-              stdlog!("info", "asserting: " ++ clue) |
+              stdlog!("debug", "asserting: " ++ clue) |
               match assertion {
                 (expected, "== <-", actualCh) => {
                   for (@actual <- @actualCh) {
