@@ -33,9 +33,7 @@ object Resources {
 
     mkRuntime(prefix)
       .flatMap { runtime =>
-        Resource.make(RuntimeManager.fromRuntime[Task](runtime))(
-          _ => Task.unit /* FIXME close the manager */
-        )
+        Resource.liftF(RuntimeManager.fromRuntime[Task](runtime))
       }
   }
 }
