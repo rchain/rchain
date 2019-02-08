@@ -16,12 +16,15 @@ package object io {
       io: => A,
       handleIoException: IOException => IOError
   ): F[IOErr[A]] =
-    Sync[F].delay { io }.attempt.map[IOErr[A]] {
-      case Left(e: IOException)                   => Left(handleIoException(e))
-      case Left(e: SecurityException)             => Left(FileSecurityViolation(e))
-      case Left(e: UnsupportedOperationException) => Left(UnsupportedFileOperation(e))
-      case Left(e)                                => Left(UnexpectedIOError(e))
-      case Right(v)                               => Right(v)
+    Sync[F].delay {
+      try {
+        Right(io)
+      } catch {
+        case e: IOException                   => Left(handleIoException(e))
+        case e: SecurityException             => Left(FileSecurityViolation(e))
+        case e: UnsupportedOperationException => Left(UnsupportedFileOperation(e))
+        case e                                => Left(UnexpectedIOError(e))
+      }
     }
 
   def moveFile[F[_]: Sync](
