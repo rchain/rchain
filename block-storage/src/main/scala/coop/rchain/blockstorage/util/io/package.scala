@@ -56,7 +56,6 @@ package object io {
 
   def listInDirectory[F[_]: Sync](dirPath: Path): F[IOErr[List[Path]]] =
     (for {
-      _ <- EitherT(makeDirectory(dirPath))
       files <- EitherT(handleIo(Files.list(dirPath), {
                 case e: NotDirectoryException => FileIsNotDirectory(e)
                 case e                        => UnexpectedIOError(e)

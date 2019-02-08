@@ -282,6 +282,7 @@ object FileLMDBIndexBlockStore {
       checkpointsDirPath: Path
   ): StorageErrT[F, List[Checkpoint]] =
     for {
+      _                   <- toStorageIOErrT(makeDirectory(checkpointsDirPath))
       checkpointFilesList <- toStorageIOErrT(listRegularFiles(checkpointsDirPath))
       checkpoints <- EitherT.liftF[F, StorageError, List[Checkpoint]](
                       checkpointFilesList.flatTraverse { filePath =>
