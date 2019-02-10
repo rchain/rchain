@@ -374,7 +374,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     } yield result
   }
 
-  it should "handle multi-parent blocks correctly" in effectTest {
+  it should "handle multi-parent blocks correctly" ignore effectTest {
     for {
       nodes       <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
       deployData0 <- ProtoUtil.basicDeployData[Effect](0)
