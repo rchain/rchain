@@ -434,7 +434,7 @@ object Validate {
     for {
       latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure[F]
       estimate             <- Estimator.tips[F](dag, lastFinalizedBlockHash, latestMessagesHashes)
-      computedParents      <- ProtoUtil.chooseNonConflicting[F](estimate, dag)
+      computedParents      <- ProtoUtil.chooseNonConflicting[F](estimate.take(1), dag)
       computedParentHashes = computedParents.map(_.blockHash)
       status <- if (parentHashes == computedParentHashes)
                  Applicative[F].pure(Right(Valid))
