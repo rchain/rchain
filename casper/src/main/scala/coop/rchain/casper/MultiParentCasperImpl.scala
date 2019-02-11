@@ -220,7 +220,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
     for {
       lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
       rankedEstimates        <- Estimator.tips[F](dag, lastFinalizedBlockHash)
-    } yield rankedEstimates
+    } yield rankedEstimates.take(1)
 
   /*
    * Logic:
