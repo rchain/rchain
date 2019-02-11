@@ -6,10 +6,14 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
+import coop.rchain.casper.util.rholang.Resources._
 import coop.rchain.catscontrib.TestOutlaws._
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.rholang.interpreter.accounting
+import coop.rchain.rholang.Resources.mkRuntime
+import coop.rchain.rholang.interpreter.{accounting, Interpreter}
+import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
@@ -29,6 +33,56 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         .runSyncUnsafe(10.seconds)
 
     result.status.isFailed should be(true)
+  }
+
+  it should "capture rholang parsing errors and charge for parsing" in {
+    val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!("hi") """
+    val deploy     = ProtoUtil.sourceDeployNow(badRholang)
+    val (_, Seq(result)) =
+      runtimeManager
+        .use(mgr => mgr.computeState(mgr.emptyStateHash, deploy :: Nil))
+        .runSyncUnsafe(10.seconds)
+
+    result.status.isFailed should be(true)
+    result.cost.cost shouldEqual (accounting.parsingCost(badRholang).value)
+  }
+
+  it should "charge for parsing and execution" in {
+    val correctRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!(2) }"""
+    val deploy         = ProtoUtil.sourceDeployNow(correctRholang)
+
+    implicit val log: Log[Task] = new Log.NOPLog[Task]
+
+    (for {
+      reductionCost <- mkRuntime("casper-runtime")
+                        .use { runtime =>
+                          implicit val rand: Blake2b512Random = Blake2b512Random(
+                            DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
+                          )
+                          val initialPhlo = Cost(accounting.MAX_VALUE)
+                          for {
+                            _             <- runtime.reducer.setPhlo(initialPhlo)
+                            term          <- Interpreter[Task].buildNormalizedTerm(deploy.term)
+                            _             <- runtime.reducer.inj(term)
+                            phlosLeft     <- runtime.reducer.phlo
+                            reductionCost = initialPhlo - phlosLeft.cost
+                          } yield (reductionCost)
+                        }
+      result <- mkRuntimeManager("casper-runtime-manager")
+                 .use {
+                   case runtimeManager =>
+                     for {
+                       state <- runtimeManager.computeState(
+                                 runtimeManager.emptyStateHash,
+                                 deploy :: Nil
+                               )
+                       result = state._2.head
+                     } yield (result)
+                 }
+      _ = result.status.isFailed should be(false)
+      parsingCost = accounting.parsingCost(correctRholang)
+    } yield (result.cost.cost shouldEqual ((parsingCost + reductionCost).value)))
+      .runSyncUnsafe(10.seconds)
   }
 
   "captureResult" should "return the value at the specified channel after a rholang computation" in {
