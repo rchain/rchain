@@ -10,7 +10,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.Resources.mkRhoISpace
 import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoPureSpace}
-import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccounting, _}
+import coop.rchain.rholang.interpreter.accounting.{CostAccounting, _}
 import coop.rchain.rholang.interpreter.errors
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.ChargingRSpace._

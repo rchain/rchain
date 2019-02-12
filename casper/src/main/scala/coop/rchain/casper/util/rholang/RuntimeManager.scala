@@ -15,7 +15,7 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Interpreter
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
+import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{accounting, ChargingReducer, ErrorLog, Runtime}
 import coop.rchain.rspace.internal.Datum

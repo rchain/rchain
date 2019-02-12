@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.{Expr, Par}
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccounting}
+import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
 
 // TODO: After refactoring Reduce to not include implicits in methods,
 //       make ChargingReducer extend Reduce.

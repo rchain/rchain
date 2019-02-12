@@ -9,7 +9,7 @@ import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.rholang.sorter.Sortable
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
+import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.{
   LexerError,
   ParserError,

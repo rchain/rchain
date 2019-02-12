@@ -7,7 +7,7 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoDispatchMap
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccounting}
+import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.ISpace
