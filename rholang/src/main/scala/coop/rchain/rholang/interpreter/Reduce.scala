@@ -231,7 +231,7 @@ object Reduce {
           }
         }
         .parSequence
-        .as(Unit)
+        .as(())
     }
 
     override def inj(
@@ -705,7 +705,9 @@ object Reduce {
                   ReduceError("Error: interpolation Map should only contain String keys")
                 )
             }
-          @SuppressWarnings(Array("org.wartremover.warts.Var"))
+          @SuppressWarnings(
+            Array("org.wartremover.warts.Var", "org.wartremover.warts.NonUnitStatements")
+          )
           // TODO consider replacing while loop with tailrec recursion
           def interpolate(string: String, keyValuePairs: List[(String, String)]): String = {
             val result  = StringBuilder.newBuilder

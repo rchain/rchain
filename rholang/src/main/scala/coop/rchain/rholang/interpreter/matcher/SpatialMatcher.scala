@@ -235,7 +235,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
               handleRemainder[F, T](remainderTargetsSorted, level, merger)
             }
           }
-    } yield Unit
+    } yield ()
   }
 
   private def isolateState[H[_]: MonadState[?[_], S], S](f: H[_]): H[S] = {
@@ -284,7 +284,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
       //TODO: enforce sorted-ness of returned terms using types / by verifying the sorted-ness here
       remainderParUpdated = merger(remainderPar, remainderTargets)
       _                   <- freeMap.modify(_ + (level -> remainderParUpdated))
-    } yield Unit
+    } yield ()
 
 }
 
@@ -457,7 +457,7 @@ trait SpatialMatcherInstances {
               varLevel,
               wildcard
             )
-      } yield Unit
+      } yield ()
     }
   }
 
@@ -480,7 +480,7 @@ trait SpatialMatcherInstances {
       for {
         _ <- spatialMatch(target.chan, pattern.chan)
         _ <- foldMatch(target.data, pattern.data)
-      } yield Unit
+      } yield ()
   }
 
   implicit def receiveSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short]
@@ -492,7 +492,7 @@ trait SpatialMatcherInstances {
         for {
           _ <- listMatchSingle(target.binds, pattern.binds)
           _ <- spatialMatch(target.body, pattern.body)
-        } yield Unit
+        } yield ()
     }
 
   implicit def newSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short]
@@ -514,10 +514,10 @@ trait SpatialMatcherInstances {
                   _freeMap[F].modify(m => m + (level -> EList(matchedRem)))
                 case _ => ().pure[F]
               }
-        } yield Unit
+        } yield ()
       }
       case (ETupleBody(ETuple(tlist, _, _)), ETupleBody(ETuple(plist, _, _))) => {
-        foldMatch(tlist, plist).map(_ => Unit)
+        foldMatch(tlist, plist).map(_ => ())
       }
       case (ESetBody(ParSet(tlist, _, _, _)), ESetBody(ParSet(plist, _, _, rem))) =>
         val isWildcard      = rem.collect { case Var(Wildcard(_)) => true }.isDefined
@@ -543,12 +543,12 @@ trait SpatialMatcherInstances {
         for {
           _ <- spatialMatch(t1, p1)
           _ <- spatialMatch(t2, p2)
-        } yield Unit
+        } yield ()
       case (EDivBody(EDiv(t1, t2)), EDivBody(EDiv(p1, p2))) =>
         for {
           _ <- spatialMatch(t1, p1)
           _ <- spatialMatch(t2, p2)
-        } yield Unit
+        } yield ()
       case (
           EPercentPercentBody(EPercentPercent(t1, t2)),
           EPercentPercentBody(EPercentPercent(p1, p2))
@@ -556,22 +556,22 @@ trait SpatialMatcherInstances {
         for {
           _ <- spatialMatch(t1, p1)
           _ <- spatialMatch(t2, p2)
-        } yield Unit
+        } yield ()
       case (EPlusBody(EPlus(t1, t2)), EPlusBody(EPlus(p1, p2))) =>
         for {
           _ <- spatialMatch(t1, p1)
           _ <- spatialMatch(t2, p2)
-        } yield Unit
+        } yield ()
       case (EPlusPlusBody(EPlusPlus(t1, t2)), EPlusPlusBody(EPlusPlus(p1, p2))) =>
         for {
           _ <- spatialMatch(t1, p1)
           _ <- spatialMatch(t2, p2)
-        } yield Unit
+        } yield ()
       case (EMinusMinusBody(EMinusMinus(t1, t2)), EMinusMinusBody(EMinusMinus(p1, p2))) =>
         for {
           _ <- spatialMatch(t1, p1)
           _ <- spatialMatch(t2, p2)
-        } yield Unit
+        } yield ()
       case _ => MonoidK[F].empty[Unit]
     }
   }
@@ -582,7 +582,7 @@ trait SpatialMatcherInstances {
       for {
         _ <- spatialMatch(target.target, pattern.target)
         _ <- foldMatch(target.cases, pattern.cases)
-      } yield Unit
+      } yield ()
     }
 
   /**

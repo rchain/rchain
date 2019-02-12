@@ -43,6 +43,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
   private[this] val produceSpan   = Kamon.buildSpan(MetricsSource + ".produce")
   protected[this] val installSpan = Kamon.buildSpan(MetricsSource + ".install")
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove when Kamon replaced with Metrics API
   def consume(
       channels: Seq[C],
       patterns: Seq[P],
@@ -69,6 +70,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
         }
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove when Kamon replaced with Metrics API
   private[this] def lockedConsume(
       channels: Seq[C],
       patterns: Seq[P],
@@ -97,6 +99,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
         .sequence
     }
 
+    @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove when Kamon replaced with Metrics API
     def storeWaitingContinuation(
         consumeRef: Consume,
         maybeCommRef: Option[COMM]
@@ -199,6 +202,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
     }
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove when Kamon replaced with Metrics API
   def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
       implicit m: Match[P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
@@ -215,6 +219,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
       }
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove when Kamon replaced with Metrics API
   private[this] def lockedProduce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
       implicit m: Match[P, E, A, R]
   ): Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]] = {
@@ -374,6 +379,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
     }
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   @inline
   private def removeBindingsFor(
       commRef: COMM

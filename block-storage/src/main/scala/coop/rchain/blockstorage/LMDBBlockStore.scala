@@ -18,6 +18,7 @@ import org.lmdbjava._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.Txn.NotReadyException
 
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks: Dbi[ByteBuffer])(
     implicit
     syncF: Sync[F],
@@ -121,6 +122,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
     syncF.delay { Right(env.close()) }
 }
 
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 object LMDBBlockStore {
 
   final case class Config(

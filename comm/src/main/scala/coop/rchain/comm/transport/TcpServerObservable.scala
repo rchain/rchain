@@ -52,6 +52,7 @@ class TcpServerObservable(
             }
           }
 
+      @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
       def ask(request: TLRequest): Task[TLResponse] =
         request.protocol
           .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>

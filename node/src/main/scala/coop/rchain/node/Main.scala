@@ -108,13 +108,14 @@ object Main {
       case Left(CouldNotConnectToBootstrap) =>
         log.error("Node could not connect to bootstrap node.")
       case Left(InitializationError(msg)) =>
-        log.error(msg)
-        Task.delay(System.exit(-1))
+        log.error(msg) >>
+          Task.delay(System.exit(-1))
       case Left(error) =>
         log.error(s"Failed! Reason: '$error")
     }
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   implicit private def consoleIO: ConsoleIO[Task] = {
     val console = new ConsoleReader()
     console.setHistoryEnabled(true)

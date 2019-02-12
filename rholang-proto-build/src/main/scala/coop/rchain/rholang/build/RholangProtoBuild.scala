@@ -93,7 +93,7 @@ object RholangProtoBuild {
     |  <resourceManaged>     - directory to write protobuf outputs to
     |""".stripMargin
 
-  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  @SuppressWarnings(Array("org.wartremover.warts.Throw", "org.wartremover.warts.NonUnitStatements"))
   def main(args: Array[String]): Unit =
     if (args.length != 3) {
       println(cliUsage)

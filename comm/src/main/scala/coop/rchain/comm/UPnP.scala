@@ -19,6 +19,7 @@ import scala.util.Try
 import scala.util.control.NonFatal
 import scala.util.matching.Regex
 
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 object UPnP {
 
   lazy val IPv4: Regex =

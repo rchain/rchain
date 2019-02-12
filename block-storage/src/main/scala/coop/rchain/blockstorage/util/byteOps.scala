@@ -5,6 +5,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.blockstorage.BlockStore.BlockHash
 
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 object byteOps {
   implicit class ByteBufferRich(val byteBuffer: ByteBuffer) extends AnyVal {
     def getBlockHash(): BlockHash = {

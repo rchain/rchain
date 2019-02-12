@@ -120,6 +120,7 @@ object ConfigMapper {
     final class AddToMap(map: mutable.Map[String, Any]) {
       def apply(prefix: String): AddWithPrefix = new AddWithPrefix(prefix)
 
+      @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
       final class AddWithPrefix(prefix: String) {
         def apply[A: OptionConverter](key: String, opt: ScallopOption[A]): Unit =
           opt.foreach(a => map += s"$prefix.$key" -> OptionConverter[A].toConfigValue(a))

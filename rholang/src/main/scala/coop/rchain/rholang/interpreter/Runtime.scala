@@ -445,19 +445,20 @@ object Runtime {
                         TaggedContinuation
                       ](context, Branch.REPLAY)
       } yield ((context, space, replaySpace))
+
+    def checkCreateDataDir: F[Unit] =
+      for {
+        notexists <- Sync[F].delay(Files.notExists(dataDir))
+        _         <- if (notexists) Sync[F].delay(Files.createDirectories(dataDir)) else ().pure[F]
+      } yield ()
+
     storeType match {
       case InMem =>
         createSpace(Context.createInMemory())
       case LMDB =>
-        if (Files.notExists(dataDir)) {
-          Files.createDirectories(dataDir)
-        }
-        createSpace(Context.create(dataDir, mapSize, true))
+        checkCreateDataDir >> createSpace(Context.create(dataDir, mapSize, true))
       case Mixed =>
-        if (Files.notExists(dataDir)) {
-          Files.createDirectories(dataDir)
-        }
-        createSpace(Context.createMixed(dataDir, mapSize))
+        checkCreateDataDir >> createSpace(Context.createMixed(dataDir, mapSize))
     }
   }
 }
