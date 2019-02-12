@@ -43,16 +43,6 @@ package object matcher {
   ): F[(Cost, Option[(FreeMap, A)])] =
     StreamT.run(StreamT.dropTail(f.run(emptyMap))).map(_.headOption).run(initCost)
 
-  private[matcher] def charge[F[_]: Monad](
-      amount: Cost
-  )(implicit cost: _cost[F], error: _error[F]): F[Unit] =
-    for {
-      currentCost <- cost.get
-      newCost     = currentCost - amount
-      _           <- cost.set(newCost)
-      _           <- error.ensure(cost.get)(OutOfPhlogistonsError)(_.value >= 0)
-    } yield ()
-
   private[matcher] def attemptOpt[F[_], A](
       f: F[A]
   )(implicit short: _short[F]): F[Option[A]] = {
