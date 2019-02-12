@@ -13,6 +13,7 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance.{FreeVar, Wildcard}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits.{VectorPar, _}
+import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.Splittable
 import coop.rchain.rholang.interpreter.accounting.{Cost, _}
 import coop.rchain.rholang.interpreter.errors.{BugFoundError, OutOfPhlogistonsError}
