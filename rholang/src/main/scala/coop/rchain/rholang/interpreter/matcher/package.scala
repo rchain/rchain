@@ -41,15 +41,6 @@ package object matcher {
   def _error[F[_]](implicit ev: _error[F]): _error[F]       = ev
   def _short[F[_]](implicit ev: _short[F]): _short[F]       = ev
 
-  // Derive _error[Task] = FunctorRaise[Task, InterpreterError] and similar
-  // based on their MonadError[_, Throwable] instance
-  implicit def monadErrorFunctorRaise[F[_], E <: Throwable](
-      implicit monadError: MonadError[F, Throwable]
-  ): FunctorRaise[F, E] = new FunctorRaise[F, E] {
-    override val functor: Functor[F]  = monadError
-    override def raise[A](e: E): F[A] = monadError.raiseError(e)
-  }
-
   private[matcher] def runFirstWithCost[F[_]: Monad, A](
       f: MatcherMonadT[F, A],
       initCost: Cost

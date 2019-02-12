@@ -6,6 +6,7 @@ import cats.mtl.MonadState
 import cats.mtl.implicits._
 import cats.{FlatMap, Monad, MonoidK, Eval => _}
 import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
