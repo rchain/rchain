@@ -31,25 +31,25 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     val term: Expr => Par = expr => Par(bundles = Seq(Bundle(Par(exprs = Seq(expr)))))
     val substTerm         = term(Expr(GString("1")))
     val termCost          = Chargeable[Par].cost(substTerm)
-    val initCost          = CostAccount(1000)
+    val initCost          = Cost(1000)
     implicit val costAlg  = CostAccounting.unsafe[Coeval](initCost)
     val res               = Substitute.charge(Coeval.pure(substTerm), Cost(10000)).attempt.value
     assert(res === Right(substTerm))
-    assert(costAlg.get().value.cost === (initCost.cost - Cost(termCost)))
+    assert(costAlg.get().value === (initCost - Cost(termCost)))
   }
 
   it should "charge for failed substitution" in {
     val term: Expr => Par = expr => Par(bundles = Seq(Bundle(Par(exprs = Seq(expr)))))
     val varTerm           = term(Expr(EVarBody(EVar(Var(FreeVar(0))))))
     val originalTermCost  = Chargeable[Par].cost(varTerm)
-    val initCost          = CostAccount(1000)
+    val initCost          = Cost(1000)
     implicit val costAlg  = CostAccounting.unsafe[Coeval](initCost)
     val res = Substitute
       .charge(Coeval.raiseError[Par](new RuntimeException("")), Cost(originalTermCost))
       .attempt
       .value
     assert(res.isLeft)
-    assert(costAlg.get().value.cost === (initCost.cost - Cost(originalTermCost)))
+    assert(costAlg.get().value === (initCost - Cost(originalTermCost)))
   }
 
   it should "stop if OutOfPhloError is returned from RSpace" in {
@@ -71,7 +71,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
 
     implicit val errorLog = new ErrorLog[Task]()
     implicit val rand     = Blake2b512Random(128)
-    implicit val costAlg  = CostAccounting.unsafe[Task](CostAccount(1000))
+    implicit val costAlg  = CostAccounting.unsafe[Task](Cost(1000))
     val reducer           = new DebruijnInterpreter[Task, Task.Par](tuplespaceAlg, Map.empty)
     val send              = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
     val test              = reducer.inj(send).attempt.runSyncUnsafe(1.second)

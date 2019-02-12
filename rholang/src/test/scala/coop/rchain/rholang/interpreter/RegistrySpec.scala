@@ -22,7 +22,7 @@ import scala.concurrent.duration._
 trait RegistryTester extends PersistentStoreTester {
   implicit val errorLog = new ErrorLog[Task]()
   implicit val costAccounting =
-    CostAccounting.unsafe[Task](CostAccount(Integer.MAX_VALUE))
+    CostAccounting.unsafe[Task](Cost(Integer.MAX_VALUE))
 
   private[this] def dispatchTableCreator(registry: Registry[Task]): RhoDispatchMap[Task] = {
     import coop.rchain.rholang.interpreter.Runtime.BodyRefs._

@@ -22,7 +22,7 @@ import coop.rchain.rholang.interpreter.errors.{
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 
-final case class EvaluateResult(cost: CostAccount, errors: Vector[Throwable])
+final case class EvaluateResult(cost: Cost, errors: Vector[Throwable])
 
 trait Interpreter[F[_]] {
 
@@ -76,7 +76,7 @@ object Interpreter {
         _             <- runtime.reducer.inj(par)(rand)
         errors        <- runtime.readAndClearErrorVector()
         remainingPhlo <- runtime.reducer.phlo
-        cost          = remainingPhlo.copy(cost = initialPhlo - remainingPhlo.cost)
+        cost          = initialPhlo - remainingPhlo
         _             <- if (errors.nonEmpty) runtime.space.reset(checkpoint.root) else F.unit
       } yield EvaluateResult(cost, errors)
     }

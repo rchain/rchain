@@ -65,7 +65,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                             term          <- Interpreter[Task].buildNormalizedTerm(deploy.term)
                             _             <- runtime.reducer.inj(term)
                             phlosLeft     <- runtime.reducer.phlo
-                            reductionCost = initialPhlo - phlosLeft.cost
+                            reductionCost = initialPhlo - phlosLeft
                           } yield (reductionCost)
                         }
       result <- mkRuntimeManager("casper-runtime-manager")
@@ -79,7 +79,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                        result = state._2.head
                      } yield (result)
                  }
-      _ = result.status.isFailed should be(false)
+      _           = result.status.isFailed should be(false)
       parsingCost = accounting.parsingCost(correctRholang)
     } yield (result.cost.cost shouldEqual ((parsingCost + reductionCost).value)))
       .runSyncUnsafe(10.seconds)

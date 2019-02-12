@@ -741,7 +741,7 @@ class RholangMethodsCostsSpec
 
   def methodCallCost(reducer: ChargingReducer[Task]): Task[Cost] =
     reducer.phlo
-      .map(ca => Cost(Integer.MAX_VALUE) - ca.cost - METHOD_CALL_COST)
+      .map(cost => Cost(Integer.MAX_VALUE) - cost - METHOD_CALL_COST)
 
   def map(pairs: Seq[(Par, Par)]): Map[Par, Par] = Map(pairs: _*)
   def emptyMap: Map[Par, Par]                    = map(Seq.empty[(Par, Par)])

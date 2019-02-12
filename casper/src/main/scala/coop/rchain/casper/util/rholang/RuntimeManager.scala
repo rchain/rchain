@@ -309,11 +309,11 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
           oldErrors <- errorLog.readAndClearErrorVector()
           newErrors = result.swap.toSeq.toVector
           allErrors = oldErrors |+| newErrors
-        } yield (CostAccount.toProto(phlosLeft - parsingCost) -> allErrors)
+        } yield (Cost.toProto(phlosLeft - parsingCost) -> allErrors)
       case Left(error) =>
         for {
           phlosLeft <- reducer.phlo
-        } yield (CostAccount.toProto(phlosLeft - parsingCost) -> Vector(error))
+        } yield (Cost.toProto(phlosLeft - parsingCost) -> Vector(error))
     }
 
   }
