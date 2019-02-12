@@ -4,7 +4,8 @@ import cats.implicits._
 import cats.mtl.implicits._
 import cats.{Alternative, Foldable, MonoidK, SemigroupK}
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter._
+import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.matcher.NonDetFreeMapWithCost._
 import org.scalatest.FlatSpec

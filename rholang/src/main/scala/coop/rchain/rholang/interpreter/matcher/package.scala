@@ -8,7 +8,7 @@ import cats.mtl.implicits._
 import cats.mtl.{FunctorRaise, MonadState}
 import coop.rchain.catscontrib.MonadError_
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.{InterpreterError, OutOfPhlogistonsError}
 
 import scala.collection.immutable.Stream
@@ -31,12 +31,10 @@ package object matcher {
   // Will be used similarly to capabilities, but for more generic and probably low-level/implementation stuff.
   // Adopted from: http://atnos-org.github.io/eff/org.atnos.site.Tutorial.html#write-an-interpreter-for-your-program
   type _freeMap[F[_]] = MonadState[F, FreeMap]
-  type _cost[F[_]]    = MonadState[F, Cost]
   type _short[F[_]]   = MonadError_[F, Unit] //arises from and corresponds to the OptionT/StreamT in the stack
 
   // Implicit summoner methods, just like `Monad.apply` on `Monad`'s companion object.
   def _freeMap[F[_]](implicit ev: _freeMap[F]): _freeMap[F] = ev
-  def _cost[F[_]](implicit ev: _cost[F]): _cost[F]          = ev
   def _short[F[_]](implicit ev: _short[F]): _short[F]       = ev
 
   private[matcher] def runFirstWithCost[F[_]: Monad, A](
