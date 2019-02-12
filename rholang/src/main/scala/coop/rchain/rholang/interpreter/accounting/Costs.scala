@@ -21,7 +21,7 @@ object Cost {
     override def combine(x: Cost, y: Cost): Cost = x + y
   }
 
-  def toProto(c: Cost): PCost = PCost(0, c.value)
+  def toProto(c: Cost): PCost = PCost(c.value)
 }
 
 trait Costs {
