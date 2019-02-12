@@ -7,6 +7,7 @@ import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.{Applicative, ApplicativeError, Id, Monad}
+
 import coop.rchain.blockstorage._
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.casper._
@@ -20,7 +21,7 @@ import coop.rchain.casper.util.comm.CasperPacketHandler.{
   CasperPacketHandlerInternal
 }
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
-import coop.rchain.casper.util.comm.{TestNetwork, TransportLayerTestImpl}
+import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib._
@@ -38,11 +39,11 @@ import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rspace.Context
-import coop.rchain.shared.{Cell, Log, StoreType}
+import coop.rchain.shared._
 import coop.rchain.shared.PathOps.RichPath
+
 import monix.eval.Task
 import monix.execution.Scheduler
-
 import scala.collection.mutable
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.Random
@@ -51,6 +52,7 @@ class HashSetCasperTestNode[F[_]](
     name: String,
     val local: PeerNode,
     tle: TransportLayerTestImpl[F],
+    tls: TransportLayerServerTestImpl[F],
     val genesis: BlockMessage,
     sk: Array[Byte],
     logicalTime: LogicalTime[F],
@@ -123,7 +125,7 @@ class HashSetCasperTestNode[F[_]](
           .void
       }
 
-  def receive(): F[Unit] = tle.receive(p => handle[F](p, defaultTimeout), kp(().pure[F]))
+  def receive(): F[Unit] = tls.receive(p => handle[F](p, defaultTimeout), kp(().pure[F])).void
 
   def tearDown(): F[Unit] =
     tearDownNode().map { _ =>
@@ -191,10 +193,10 @@ object HashSetCasperTestNode {
       concurrentF: Concurrent[F],
       testNetworkF: TestNetwork[F]
   ): F[HashSetCasperTestNode[F]] = {
-    val name     = "standalone"
-    val identity = peerNode(name, 40400)
-    val tle =
-      new TransportLayerTestImpl[F](identity)
+    val name                        = "standalone"
+    val identity                    = peerNode(name, 40400)
+    val tle                         = new TransportLayerTestImpl[F]()
+    val tls                         = new TransportLayerServerTestImpl[F](identity)
     val logicalTime: LogicalTime[F] = new LogicalTime[F]
     implicit val log                = new Log.NOPLog[F]()
     implicit val metricEff          = new Metrics.MetricsNOP[F]
@@ -221,6 +223,7 @@ object HashSetCasperTestNode {
         name,
         identity,
         tle,
+        tls,
         genesis,
         sk,
         logicalTime,
@@ -287,7 +290,8 @@ object HashSetCasperTestNode {
         .toList
         .traverse {
           case ((n, p), sk) =>
-            val tle                = new TransportLayerTestImpl[F](p)
+            val tle                = new TransportLayerTestImpl[F]()
+            val tls                = new TransportLayerServerTestImpl[F](p)
             implicit val log       = new Log.NOPLog[F]()
             implicit val metricEff = new Metrics.MetricsNOP[F]
 
@@ -315,6 +319,7 @@ object HashSetCasperTestNode {
                 n,
                 p,
                 tle,
+                tls,
                 genesis,
                 sk,
                 logicalTime,
