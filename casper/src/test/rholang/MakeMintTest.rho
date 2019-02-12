@@ -3,8 +3,10 @@
 //requires MakeMint, RhoSpec
 new
   rl(`rho:registry:lookup`),
+  stdlog(`rho:io:stdlog`),
   setup,
 test_create_purse, test_cross_currency_deposit, test_deposit, test_split,
+  roguePurse1,
   split, getBalance, deposit
 in {
   new RhoSpecCh in {
@@ -14,6 +16,7 @@ in {
         [
           ("Purses should be created with the given balance", *test_create_purse),
           // ("Cross-currency deposits should fail.", *test_cross_currency_deposit)
+          ("Fake purses should not be able to forge payment.", *roguePurse1),
           ("Deposit should work as expected", *test_deposit),
           ("Split should work as expected", *test_split)
         ])
@@ -110,6 +113,24 @@ in {
             ],
             *ackCh
           )
+        }
+      }
+    }
+  } |
+
+  contract roguePurse1(rhoSpec, @(*mint1, _), ackCh) = {
+    new fakePurse in {
+      contract fakePurse(@stolenDecr, @amount, success) = {
+        success!(true, "fakeDecr")
+      } |
+
+      new let2, let3, depositCh in {  // let @m1 = ...
+        mint1!("makePurse", 10, *let2) | for (purse1 <- let2) {
+          purse1!("deposit", 5, *fakePurse, *depositCh) | for (@depositOk <- depositCh) {
+            purse1!("getBalance", *let3) | for (@bal <- let3) {
+              rhoSpec!("assert", (bal, "==", 10), "real purse balance should not increase", *ackCh)
+            }
+          }
         }
       }
     }
