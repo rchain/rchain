@@ -49,13 +49,13 @@ object SpatialMatcher extends SpatialMatcherInstances {
 
     val matchAndCharge: M[Option[(FreeMap, Unit)]] = for {
       phlosAvailable <- costAlg.get()
-      result <- runFirstWithCost[M, Unit](doMatch, phlosAvailable.cost).onError {
+      result <- runFirstWithCost[M, Unit](doMatch, phlosAvailable).onError {
                  case OutOfPhlogistonsError =>
                    // if we run out of phlos during the match we have to zero phlos available
-                   costAlg.get().flatMap(ca => costAlg.charge(ca.cost))
+                   costAlg.get().flatMap(ca => costAlg.charge(ca))
                }
       (phlosLeft, matchResult) = result
-      matchCost                = phlosAvailable.cost - phlosLeft
+      matchCost                = phlosAvailable - phlosLeft
       _                        <- costAlg.charge(matchCost)
     } yield matchResult
 

@@ -8,7 +8,7 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccounting}
+import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
 import coop.rchain.rholang.interpreter.storage.Tuplespace
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.Match
@@ -32,7 +32,7 @@ object RholangOnlyDispatcher {
 
     val pureSpace = PureRSpace[M].of(tuplespace)
 
-    implicit val costAlg: CostAccounting[M] = CostAccounting.unsafe[M](CostAccount(0))
+    implicit val costAlg: CostAccounting[M] = CostAccounting.unsafe[M](Cost(0))
 
     lazy val dispatcher: Dispatch[M, ListParWithRandomAndPhlos, TaggedContinuation] =
       new RholangOnlyDispatcher

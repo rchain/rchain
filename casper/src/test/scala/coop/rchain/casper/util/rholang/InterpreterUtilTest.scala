@@ -58,17 +58,17 @@ class InterpreterUtilTest
         "@1!(1)",
         "for(@a <- @2){ @456!(5 * a) }"
       ).map(ProtoUtil.sourceDeployNow)
-      val b1DeploysCost = b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
+      val b1DeploysCost = b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L)))
 
       val b2Deploys = Vector(
         "for(@a <- @123; @b <- @456){ @1!(a + b) }"
       ).map(ProtoUtil.sourceDeployNow)
-      val b2DeploysCost = b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
+      val b2DeploysCost = b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L)))
 
       val b3Deploys = Vector(
         "@7!(7)"
       ).map(ProtoUtil.sourceDeployNow)
-      val b3DeploysCost = b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
+      val b3DeploysCost = b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L)))
 
       /*
        * DAG Looks like this:
@@ -149,19 +149,19 @@ class InterpreterUtilTest
         "for(@a <- @2){ @456!(5 * a) }"
       ).map(ProtoUtil.sourceDeployNow)
       val b1DeploysWithCost =
-        b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(2, 2L)))
+        b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(2L)))
 
       val b2Deploys = Vector(
         "@6!(6)"
       ).map(ProtoUtil.sourceDeployNow)
       val b2DeploysWithCost =
-        b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
+        b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L)))
 
       val b3Deploys = Vector(
         "for(@a <- @123; @b <- @456){ @1!(a + b) }"
       ).map(ProtoUtil.sourceDeployNow)
       val b3DeploysWithCost =
-        b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(5, 5L)))
+        b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(5L)))
 
       /*
        * DAG Looks like this:
@@ -257,9 +257,9 @@ class InterpreterUtilTest
       val contract = registry
 
       val genesisDeploysWithCost = prepareDeploys(Vector.empty, PCost(1))
-      val b1DeploysWithCost      = prepareDeploys(Vector(contract), PCost(2, 2L))
-      val b2DeploysWithCost      = prepareDeploys(Vector(contract), PCost(1, 1L))
-      val b3DeploysWithCost      = prepareDeploys(Vector.empty, PCost(5, 5L))
+      val b1DeploysWithCost      = prepareDeploys(Vector(contract), PCost(2L))
+      val b2DeploysWithCost      = prepareDeploys(Vector(contract), PCost(1L))
+      val b3DeploysWithCost      = prepareDeploys(Vector.empty, PCost(5L))
 
       /*
        * DAG Looks like this:
@@ -312,15 +312,15 @@ class InterpreterUtilTest
 
       val genesisDeploysWithCost = prepareDeploys(Vector(contract), PCost(1))
 
-      val b1DeploysWithCost = prepareDeploys(Vector(contract), PCost(2, 2L))
+      val b1DeploysWithCost = prepareDeploys(Vector(contract), PCost(2L))
 
-      val b2DeploysWithCost = prepareDeploys(Vector(contract), PCost(1, 1L))
+      val b2DeploysWithCost = prepareDeploys(Vector(contract), PCost(1L))
 
-      val b3DeploysWithCost = prepareDeploys(Vector(contract), PCost(5, 5L))
+      val b3DeploysWithCost = prepareDeploys(Vector(contract), PCost(5L))
 
-      val b4DeploysWithCost = prepareDeploys(Vector(contract), PCost(5, 5L))
+      val b4DeploysWithCost = prepareDeploys(Vector(contract), PCost(5L))
 
-      val b5DeploysWithCost = prepareDeploys(Vector(contract), PCost(5, 5L))
+      val b5DeploysWithCost = prepareDeploys(Vector(contract), PCost(5L))
 
       /*
        * DAG Looks like this:
@@ -473,7 +473,7 @@ class InterpreterUtilTest
     implicit blockStore => implicit blockDagStorage =>
       val deploys = Vector("@1!(1)").map(ProtoUtil.sourceDeployNow)
       val processedDeploys =
-        deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
+        deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L)))
       val invalidHash = ByteString.EMPTY
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {

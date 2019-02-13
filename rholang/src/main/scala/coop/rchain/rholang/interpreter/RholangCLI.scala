@@ -8,7 +8,7 @@ import java.util.concurrent.TimeoutException
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.RhoIStore
-import coop.rchain.rholang.interpreter.accounting.CostAccount
+import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import monix.eval.{Coeval, Task}
@@ -87,7 +87,7 @@ object RholangCLI {
     Console.println(StoragePrinter.prettyPrint(store))
   }
 
-  private def printCost(cost: CostAccount): Unit =
+  private def printCost(cost: Cost): Unit =
     Console.println(s"Estimated deploy cost: $cost")
 
   private def printErrors(errors: Vector[Throwable]) =

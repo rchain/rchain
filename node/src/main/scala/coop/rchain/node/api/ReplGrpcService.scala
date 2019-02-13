@@ -35,7 +35,6 @@ import coop.rchain.shared._
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter._
 import Interpreter._
-import coop.rchain.rholang.interpreter.accounting.CostAccount
 import storage.StoragePrinter
 
 private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)

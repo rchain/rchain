@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter.accounting
 
 import cats.Monoid
 import com.google.protobuf.ByteString
-import coop.rchain.models.{Par, ProtoM, StacksafeMessage}
+import coop.rchain.models.{PCost, Par, ProtoM, StacksafeMessage}
 
 //TODO(mateusz.gorski): Adjust the costs of operations
 final case class Cost(value: Long) extends AnyVal {
@@ -20,6 +20,8 @@ object Cost {
     override def empty: Cost                     = Cost(0)
     override def combine(x: Cost, y: Cost): Cost = x + y
   }
+
+  def toProto(c: Cost): PCost = PCost(c.value)
 }
 
 trait Costs {
