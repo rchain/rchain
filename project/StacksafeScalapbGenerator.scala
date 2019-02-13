@@ -132,8 +132,6 @@ class StacksafeProtobufGenerator(params: GeneratorParams) extends ProtobufGenera
     super
       .generateSerializedSize(message)(withEqualsAndHashCode)
       .newline
-      .add("import monix.eval.Coeval")
-      .newline
       .add("@transient var _serializedSizeM: coop.rchain.models.Memo[Int] = null")
       .newline
       .add("def serializedSizeM: coop.rchain.models.Memo[Int] = if(_serializedSizeM == null) {")
