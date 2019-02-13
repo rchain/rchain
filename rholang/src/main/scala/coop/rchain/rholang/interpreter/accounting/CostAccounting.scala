@@ -3,6 +3,7 @@ package coop.rchain.rholang.interpreter.accounting
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
+import cats.mtl._
 import cats.{FlatMap, Monad}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 
@@ -42,5 +43,13 @@ object CostAccounting {
     override def refund(refund: Cost): F[Unit] = state.update(_ + refund)
     private val failOnOutOfPhlo: F[Unit] =
       FlatMap[F].ifM(state.get.map(_.value < 0))(F.raiseError(OutOfPhlogistonsError), F.unit)
+  }
+
+  implicit def costAccountingMonadState[F[_]: Monad](
+      costAccounting: CostAccounting[F]
+  ): _cost[F] = new DefaultMonadState[F, Cost] {
+    val monad: cats.Monad[F]  = implicitly[Monad[F]]
+    def get: F[Cost]          = costAccounting.get
+    def set(s: Cost): F[Unit] = costAccounting.set(s)
   }
 }
