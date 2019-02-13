@@ -112,6 +112,60 @@ def test_catch_up_next_round(command_line_options: CommandLineOptions, random_ge
                             assert validator3_vdag == validator4_vdag
 
 
-@pytest.mark.xfail
-def test_catch_up(command_line_options: CommandLineOptions, docker_client: DockerClient) -> None:
-    assert False
+def test_catch_up(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
+    peers_keypairs = [BONDED_VALIDATOR_KEY_1, BONDED_VALIDATOR_KEY_2, BONDED_VALIDATOR_KEY_3, BONDED_VALIDATOR_KEY_4]
+    contract_path = '/opt/docker/examples/tut-hello.rho'
+    with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_NODE_KEYS, peers_keys=peers_keypairs) as context, \
+        docker_network_with_started_bootstrap(context=context) as bootstrap_node, \
+        bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', private_key=BONDED_VALIDATOR_KEY_1) as validator1, \
+        bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2', private_key=BONDED_VALIDATOR_KEY_2) as validator2, \
+        bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-3', private_key=BONDED_VALIDATOR_KEY_3) as validator3:
+            wait_for_peers_count_at_least(context, validator1, 3)
+            wait_for_peers_count_at_least(context, validator2, 3)
+            wait_for_peers_count_at_least(context, validator3, 3)
+
+            deploy1 = DeployThread("validator1", validator1, contract_path, 10, BONDED_VALIDATOR_KEY_1)
+            deploy1.start()
+
+            deploy2 = DeployThread("validator2", validator2, contract_path, 10, BONDED_VALIDATOR_KEY_2)
+            deploy2.start()
+
+            deploy3 = DeployThread("validator3", validator3, contract_path, 10, BONDED_VALIDATOR_KEY_3)
+            deploy3.start()
+
+
+            deploy1.join()
+            deploy2.join()
+            deploy3.join()
+
+            expected_blocks_count = 31
+            wait_for_blocks_count_at_least(
+                context,
+                validator1,
+                expected_blocks_count,
+            )
+            wait_for_blocks_count_at_least(
+                context,
+                validator2,
+                expected_blocks_count,
+            )
+            wait_for_blocks_count_at_least(
+                context,
+                validator3,
+                expected_blocks_count,
+            )
+
+            with bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-4', private_key=BONDED_VALIDATOR_KEY_4) as validator4:
+                wait_for_blocks_count_at_least(
+                    context,
+                    validator4,
+                    expected_blocks_count,
+                )
+                validator1_vdag = validator1.get_parsed_mvdag()
+                validator2_vdag = validator2.get_parsed_mvdag()
+                validator3_vdag = validator3.get_parsed_mvdag()
+                validator4_vdag = validator4.get_parsed_mvdag()
+
+                assert validator1_vdag == validator4_vdag
+                assert validator2_vdag == validator4_vdag
+                assert validator3_vdag == validator4_vdag

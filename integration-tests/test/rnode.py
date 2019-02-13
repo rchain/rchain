@@ -785,7 +785,7 @@ def ready_bootstrap(
 def parse_mvdag_str(mvdag_output: str) -> Dict[str, Set[str]]:
     dag_dict: Dict[str, Set[str]] = defaultdict(set)
 
-    lines = mvdag_output.splitlines()
+    lines = mvdag_output.strip().splitlines()
     for line in lines:
         parent_hash, child_hash = line.split(' ')
         dag_dict[parent_hash].add(child_hash)
