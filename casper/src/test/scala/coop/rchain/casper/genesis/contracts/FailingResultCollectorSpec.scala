@@ -6,15 +6,19 @@ import scala.concurrent.duration._
 import monix.execution.Scheduler.Implicits.global
 
 class FailingResultCollectorSpec extends FlatSpec with AppendedClues with Matchers {
-  def mkTest(test: (String, List[RhoTestAssertion])): Unit =
+  def clue(clueMsg: String, attempt: Long) = s"$clueMsg (attempt $attempt)"
+  def mkTest(test: (String, Map[Long, List[RhoTestAssertion]])): Unit =
     test match {
-      case (testName, assertions) =>
+      case (testName, attempts) =>
         it should testName in {
-          assertions.foreach {
-            case RhoAssertEquals(_, expected, actual, clue) => {
-              actual should not be (expected)
-            } withClue (clue)
-            case RhoAssertTrue(_, value, clue) => { value should not be (true) } withClue (clue)
+          attempts.foreach {
+            case (attempt, assertions) =>
+              assertions.foreach {
+                case RhoAssertEquals(_, expected, actual, clueMsg) =>
+                  actual should not be (expected) withClue (clue(clueMsg, attempt))
+                case RhoAssertTrue(_, value, clueMsg) =>
+                  value should not be (true) withClue (clue(clueMsg, attempt))
+              }
           }
         }
     }

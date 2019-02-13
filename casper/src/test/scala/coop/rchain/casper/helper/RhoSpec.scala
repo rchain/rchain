@@ -17,7 +17,7 @@ object RhoSpec {
 
   private def mkRuntime(testResultCollector: TestResultCollector[Task]) = {
     val testResultCollectorService =
-      Seq((4, "assertAck", 24), (1, "testSuiteCompleted", 25))
+      Seq((5, "assertAck", 24), (1, "testSuiteCompleted", 25))
         .map {
           case (arity, name, n) =>
             SystemProcess.Definition[Task](
@@ -58,17 +58,28 @@ class RhoSpec(
 ) extends FlatSpec
     with AppendedClues
     with Matchers {
-  def mkTest(test: (String, List[RhoTestAssertion])): Unit =
+  def mkTest(test: (String, Map[Long, List[RhoTestAssertion]])): Unit =
     test match {
-      case (testName, assertions) =>
+      case (testName, testAttempts) =>
+        assert(testAttempts.size > 0, "It doesn't make sense to have less than one attempt")
+
+        val (attempt, assertions) =
+          testAttempts
+            .find { case (attempt, assertions) => hasFailures(assertions) }
+            .getOrElse(testAttempts.head)
+
+        def clueMsg(clue: String) = s"$clue (test attempt: $attempt)"
+
         it should testName in {
           assertions.foreach {
             case RhoAssertEquals(_, expected, actual, clue) =>
-              actual should be(expected) withClue clue
-            case RhoAssertTrue(_, v, clue) => v should be(true) withClue clue
+              actual should be(expected) withClue clueMsg(clue)
+            case RhoAssertTrue(_, v, clue) => v should be(true) withClue clueMsg(clue)
           }
         }
     }
+
+  def hasFailures(assertions: List[RhoTestAssertion]) = assertions.find(_.isSuccess).isDefined
 
   private val result = RhoSpec
     .getResults(testObject, standardDeploys)
@@ -78,5 +89,6 @@ class RhoSpec(
     result.hasFinished should be(true) withClue s"timeout of $executionTimeout expired"
   }
 
-  result.assertions.foreach(mkTest)
+  result.assertions
+    .foreach(mkTest)
 }
