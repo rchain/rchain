@@ -60,7 +60,7 @@ message ParWithRandom {
  * Cost of the performed operations.
  */
 message PCost {
-    uint64 cost = 2;
+    uint64 cost = 1;
 }
 
 message ListParWithRandom {
