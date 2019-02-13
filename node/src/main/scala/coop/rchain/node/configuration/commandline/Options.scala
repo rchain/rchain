@@ -97,6 +97,14 @@ object Converter {
 }
 
 object Options {
+  object ports {
+    val DefaultPort: Int             = 40400
+    val DefaultGrpcPort: Int         = 40401
+    val DefaultGrpcPortInternal: Int = 40402
+    val DefaultHttpPort: Int         = 40403
+    val DefaultKademliaPort: Int     = 40404
+  }
+
   import shapeless.tag.@@
 
   sealed trait FlagTag
@@ -114,6 +122,7 @@ object Options {
 final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) {
   import Converter._
   import Options.Flag
+  import Options.ports._
 
   version(s"RChain Node ${BuildInfo.version}")
   printedName = "rchain"
@@ -126,10 +135,10 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val configFile = opt[Path](descr = "Path to the configuration file.")
 
   val grpcPort =
-    opt[Int](descr = "Port used for external gRPC API.")
+    opt[Int](descr = s"Port used for external gRPC API. Defaults to $DefaultGrpcPort")
 
   val grpcPortInternal =
-    opt[Int](descr = "Port used for internal gRPC API.")
+    opt[Int](descr = s"Port used for internal gRPC API. Defaults to $DefaultGrpcPortInternal")
 
   val grpcHost =
     opt[String](descr = "Hostname or IP of node on which gRPC service is running.")
@@ -164,13 +173,16 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       opt[Flag](descr = "Use a non blocking secure random instance")
 
     val port =
-      opt[Int](short = 'p', descr = "Network port to use.")
+      opt[Int](short = 'p', descr = s"Network port to use. Defaults to $DefaultPort")
 
     val httpPort =
-      opt[Int](descr = "HTTP port (deprecated - all API features will be ported to gRPC API).")
+      opt[Int](descr = s"HTTP port (prometheus, version, status). Defaults to $DefaultHttpPort")
 
     val kademliaPort =
-      opt[Int](descr = "Kademlia port used for node discovery based on Kademlia algorithm")
+      opt[Int](
+        descr =
+          s"Kademlia port used for node discovery based on Kademlia algorithm. Defaults to $DefaultKademliaPort"
+      )
 
     val numValidators = opt[Int](descr = "Number of validators at genesis.")
     val bondsFile = opt[String](
