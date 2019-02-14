@@ -71,6 +71,9 @@ object IOError {
       case ClosingFailed(e) =>
         val msg = Option(e.getMessage).getOrElse("")
         s"File closing failed: $msg"
+      case StreamFlushFailed(e) =>
+        val msg = Option(e.getMessage).getOrElse("")
+        s"Stream flush failed: $msg"
       case FileNotFound(e) =>
         val msg = Option(e.getMessage).getOrElse("")
         s"File not found: $msg"
@@ -80,6 +83,24 @@ object IOError {
       case FileIsNotDirectory(e) =>
         val msg = Option(e.getMessage).getOrElse("")
         s"File is not a directory: $msg"
+      case UnsupportedFileOperation(e) =>
+        val msg = Option(e.getMessage).getOrElse("")
+        s"Unsupported file operation: $msg"
+      case IllegalFileOperation(e) =>
+        val msg = Option(e.getMessage).getOrElse("")
+        s"Illegal file operation: $msg"
+      case FileAlreadyExists(e) =>
+        val msg = Option(e.getMessage).getOrElse("")
+        s"File already exists: $msg"
+      case DirectoryNotEmpty(e) =>
+        val msg = Option(e.getMessage).getOrElse("")
+        s"Directory is not empty: $msg"
+      case AtomicMoveNotSupported(e) =>
+        val msg = Option(e.getMessage).getOrElse("")
+        s"Atomic move is not supported: $msg"
+      case EndOfFile(e) =>
+        val msg = Option(e.getMessage).getOrElse("")
+        s"End of file: $msg"
       case UnexpectedIOError(t) =>
         val msg = Option(t.getMessage).getOrElse("")
         s"Unexpected IO error occurred: $msg"
