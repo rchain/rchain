@@ -15,10 +15,9 @@ package object accounting extends Costs {
       amount: Cost
   )(implicit cost: _cost[F], error: _error[F]): F[Unit] =
     for {
-      currentCost <- cost.get
-      newCost     = currentCost - amount
-      _           <- cost.set(newCost)
-      _           <- error.ensure(cost.get)(OutOfPhlogistonsError)(_.value >= 0)
+      _ <- error.ensure(cost.get)(OutOfPhlogistonsError)(_.value >= 0)
+      _ <- cost.modify(_ - amount)
+      _ <- error.ensure(cost.get)(OutOfPhlogistonsError)(_.value >= 0)
     } yield ()
 
 }
