@@ -3,7 +3,7 @@ package coop.rchain.rspace.examples
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
 import java.nio.file.{Files, Path}
 
-import cats.Id
+import cats.{Applicative, Id}
 import cats.effect.{ContextShift, Sync}
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace._
@@ -11,13 +11,13 @@ import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Language.ignore
 import coop.rchain.shared.Log
 import coop.rchain.rspace.util._
+
 import scala.concurrent.ExecutionContext
 import scodec.bits.ByteVector
 
 import scala.collection.immutable.Seq
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
-
 import scala.concurrent.ExecutionContext.Implicits.global
 
 @SuppressWarnings(Array("org.wartremover.warts.EitherProjectionPartial"))
@@ -162,15 +162,16 @@ object AddressBookExample {
     /**
       * An instance of [[Match]] for [[Pattern]] and [[Entry]]
       */
-    implicit object matchPatternEntry extends Match[Pattern, Nothing, Entry, Entry] {
-      def get(p: Pattern, a: Entry): Either[Nothing, Option[Entry]] =
+    implicit def matchPatternEntry[F[_]](
+        implicit apF: Applicative[F]
+    ): Match[F, Pattern, Nothing, Entry, Entry] = new Match[F, Pattern, Nothing, Entry, Entry] {
+      def get(p: Pattern, a: Entry): F[Either[Nothing, Option[Entry]]] =
         p match {
-          case NameMatch(last) if a.name.last == last        => Right(Some(a))
-          case CityMatch(city) if a.address.city == city     => Right(Some(a))
-          case StateMatch(state) if a.address.state == state => Right(Some(a))
-          case _                                             => Right(None)
+          case NameMatch(last) if a.name.last == last        => apF.pure(Right(Some(a)))
+          case CityMatch(city) if a.address.city == city     => apF.pure(Right(Some(a)))
+          case StateMatch(state) if a.address.state == state => apF.pure(Right(Some(a)))
+          case _                                             => apF.pure(Right(None))
         }
-
     }
   }
 

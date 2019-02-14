@@ -38,7 +38,7 @@ trait ReplayRSpaceTests
       continuationCreator: Int => K,
       persist: Boolean
   )(
-      implicit matcher: Match[P, Nothing, A, R]
+      implicit matcher: Match[Id, P, Nothing, A, R]
   ): ParSeq[Option[(ContResult[C, P, K], Seq[Result[R]])]] =
     (if (shuffle) Random.shuffle(range.toList) else range.toList).par.map { i: Int =>
       logger.debug("Started consume {}", i)
@@ -56,7 +56,7 @@ trait ReplayRSpaceTests
       datumCreator: Int => A,
       persist: Boolean
   )(
-      implicit matcher: Match[P, Nothing, A, R]
+      implicit matcher: Match[Id, P, Nothing, A, R]
   ): ParSeq[Option[(ContResult[C, P, K], immutable.Seq[Result[R]])]] =
     (if (shuffle) Random.shuffle(range.toList) else range.toList).par.map { i: Int =>
       logger.debug("Started produce {}", i)

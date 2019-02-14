@@ -1,9 +1,11 @@
 package coop.rchain.rspace
 
+import cats.Traverse
 import cats.effect.Sync
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
-import coop.rchain.catscontrib._, ski._
+import coop.rchain.catscontrib._
+import ski._
 import coop.rchain.rspace.concurrent.{DefaultTwoStepLock, TwoStepLock}
 import coop.rchain.rspace.history.{Branch, Leaf}
 import coop.rchain.rspace.internal._
@@ -11,6 +13,7 @@ import coop.rchain.rspace.trace.Consume
 import coop.rchain.shared.SyncVarOps._
 import kamon._
 import kamon.trace.Tracer.SpanBuilder
+
 import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 import scala.util.Random
@@ -34,8 +37,8 @@ abstract class RSpaceOps[F[_], C, P, E, A, R, K](
   protected[this] def consumeLock(
       channels: Seq[C]
   )(
-      thunk: => Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]
-  ): Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]] = {
+      thunk: => F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
+  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] = {
     val hashes = channels.map(ch => StableHashProvider.hash(ch))
     lock.acquire(hashes)(() => hashes)(thunk)
   }
@@ -43,8 +46,8 @@ abstract class RSpaceOps[F[_], C, P, E, A, R, K](
   protected[this] def produceLock(
       channel: C
   )(
-      thunk: => Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]
-  ): Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]] =
+      thunk: => F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
+  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     lock.acquire(Seq(StableHashProvider.hash(channel)))(
       () =>
         store.withTxn(store.createTxnRead()) { txn =>
@@ -56,8 +59,8 @@ abstract class RSpaceOps[F[_], C, P, E, A, R, K](
   protected[this] val logger: Logger
   protected[this] val installSpan: SpanBuilder
 
-  private[this] val installs: SyncVar[Installs[C, P, E, A, R, K]] = {
-    val installs = new SyncVar[Installs[C, P, E, A, R, K]]()
+  private[this] val installs: SyncVar[Installs[F, C, P, E, A, R, K]] = {
+    val installs = new SyncVar[Installs[F, C, P, E, A, R, K]]()
     installs.put(Map.empty)
     installs
   }
@@ -75,7 +78,7 @@ abstract class RSpaceOps[F[_], C, P, E, A, R, K](
       channels: Seq[C],
       patterns: Seq[P],
       continuation: K
-  )(implicit m: Match[P, E, A, R]): Option[(K, Seq[R])] = {
+  )(implicit m: Match[F, P, E, A, R]): F[Option[(K, Seq[R])]] = {
     if (channels.length =!= patterns.length) {
       val msg = "channels.length must equal patterns.length"
       logger.error(msg)
@@ -99,34 +102,35 @@ abstract class RSpaceOps[F[_], C, P, E, A, R, K](
       c -> Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
     }.toMap
 
-    val options: Either[E, Option[Seq[DataCandidate[C, R]]]] =
-      extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).sequence
-        .map(_.sequence)
+    val options: F[Either[E, Option[Seq[DataCandidate[C, R]]]]] =
+      extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil)
+        .map(Traverse[Seq].sequence(_).map(Traverse[Seq].sequence(_)))
 
-    options match {
+    options.flatMap {
       case Left(e) =>
-        throw new RuntimeException(s"Install never result in an invalid match: $e")
+        syncF.raiseError(new RuntimeException(s"Install never result in an invalid match: $e"))
       case Right(None) =>
-        installs.update(_.updated(channels, Install(patterns, continuation, m)))
-        store.installWaitingContinuation(
-          txn,
-          channels,
-          WaitingContinuation(patterns, continuation, persist = true, consumeRef)
-        )
-        for (channel <- channels) store.addJoin(txn, channel, channels)
-        logger.debug(s"""|storing <(patterns, continuation): ($patterns, $continuation)>
-                         |at <channels: $channels>""".stripMargin.replace('\n', ' '))
-        None
+        syncF.delay {
+          installs.update(_.updated(channels, Install(patterns, continuation, m)))
+          store.installWaitingContinuation(
+            txn,
+            channels,
+            WaitingContinuation(patterns, continuation, persist = true, consumeRef)
+          )
+          for (channel <- channels) store.addJoin(txn, channel, channels)
+          logger.debug(s"""|storing <(patterns, continuation): ($patterns, $continuation)>
+                           |at <channels: $channels>""".stripMargin.replace('\n', ' '))
+          None
+        }
       case Right(Some(_)) =>
-        throw new RuntimeException("Installing can be done only on startup")
+        syncF.raiseError(new RuntimeException("Installing can be done only on startup"))
     }
-
   }
 
   override def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
-      implicit m: Match[P, E, A, R]
+      implicit m: Match[F, P, E, A, R]
   ): F[Option[(K, Seq[R])]] =
-    syncF.delay {
+    syncF.defer {
       Kamon.withSpan(installSpan.start(), finishSpan = true) {
         store.withTxn(store.createTxnWrite()) { txn =>
           install(txn, channels, patterns, continuation)

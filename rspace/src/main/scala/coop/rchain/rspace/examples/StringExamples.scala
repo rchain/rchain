@@ -2,6 +2,8 @@ package coop.rchain.rspace.examples
 
 import java.nio.charset.StandardCharsets
 
+import cats.effect.Sync
+import cats.{Applicative, Id}
 import coop.rchain.shared.Language.ignore
 import coop.rchain.rspace.{Match, Serialize}
 import scodec.bits.ByteVector
@@ -50,11 +52,11 @@ object StringExamples {
 
   object implicits {
 
-    implicit object stringMatch extends Match[Pattern, Nothing, String, String] {
-      def get(p: Pattern, a: String): Either[Nothing, Option[String]] =
-        Right(Some(a).filter(p.isMatch))
-    }
-
+    implicit def stringMatch[F[_]: Sync]: Match[F, Pattern, Nothing, String, String] =
+      new Match[F, Pattern, Nothing, String, String] {
+        def get(p: Pattern, a: String): F[Either[Nothing, Option[String]]] =
+          Sync[F].pure(Right(Some(a).filter(p.isMatch)))
+      }
     implicit object stringSerialize extends Serialize[String] {
 
       def encode(a: String): ByteVector =

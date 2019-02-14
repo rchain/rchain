@@ -51,14 +51,14 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
       persist: Boolean,
       sequenceNumber: Int
   )(
-      implicit m: Match[P, E, A, R]
+      implicit m: Match[F, P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     contextShift.evalOn(scheduler) {
       if (channels.length =!= patterns.length) {
         val msg = "channels.length must equal patterns.length"
         logF.error(msg) *> syncF.raiseError(new IllegalArgumentException(msg))
       } else
-        syncF.delay {
+        syncF.defer {
           Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
             val span = Kamon.currentSpan()
             span.mark("before-consume-lock")
@@ -78,10 +78,10 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
       persist: Boolean,
       sequenceNumber: Int
   )(
-      implicit m: Match[P, E, A, R]
-  ): Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]] = {
+      implicit m: Match[F, P, E, A, R]
+  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] = {
     val span = Kamon.currentSpan()
-    def runMatcher(comm: COMM): Option[Seq[DataCandidate[C, R]]] = {
+    def runMatcher(comm: COMM): F[Option[Seq[DataCandidate[C, R]]]] = {
 
       span.mark("before-channel-to-indexed-data")
       val channelToIndexedData = channels.map { (c: C) =>
@@ -94,9 +94,9 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
         }
       }.toMap
       span.mark("before-extract-data-candidates")
-      extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil)
-        .flatMap(_.toOption)
-        .sequence
+      extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).map {
+        _.flatMap(_.toOption).sequence
+      }
     }
 
     @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove when Kamon replaced with Metrics API
@@ -156,23 +156,22 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
       )
     }
 
-    @tailrec
     @SuppressWarnings(Array("org.wartremover.warts.Throw"))
     // TODO stop throwing exceptions
-    def getCommOrDataCandidates(comms: Seq[COMM]): Either[COMM, Seq[DataCandidate[C, R]]] =
+    def getCommOrDataCandidates(comms: Seq[COMM]): F[Either[COMM, Seq[DataCandidate[C, R]]]] =
       comms match {
         case Nil =>
           val msg = "List comms must not be empty"
           logger.error(msg)
           throw new IllegalArgumentException(msg)
         case commRef :: Nil =>
-          runMatcher(commRef) match {
+          runMatcher(commRef).map {
             case Some(x) => Right(x)
             case None    => Left(commRef)
           }
         case commRef :: rem =>
-          runMatcher(commRef) match {
-            case Some(x) => Right(x)
+          runMatcher(commRef).flatMap {
+            case Some(x) => syncF.pure(Right(x))
             case None    => getCommOrDataCandidates(rem)
           }
       }
@@ -185,13 +184,13 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
     replayData.get(consumeRef) match {
       case None =>
         span.mark("no-consume-ref-found")
-        Right(storeWaitingContinuation(consumeRef, None))
+        syncF.pure(Right(storeWaitingContinuation(consumeRef, None)))
       case Some(comms) =>
         span.mark("ref-found")
-        val commOrDataCandidates: Either[COMM, Seq[DataCandidate[C, R]]] =
+        val commOrDataCandidates: F[Either[COMM, Seq[DataCandidate[C, R]]]] =
           getCommOrDataCandidates(comms.iterator().asScala.toList)
 
-        commOrDataCandidates match {
+        commOrDataCandidates.map {
           case Left(commRef) =>
             span.mark("no-data-candidates-found")
             Right(storeWaitingContinuation(consumeRef, Some(commRef)))
@@ -204,10 +203,10 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove when Kamon replaced with Metrics API
   def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
-      implicit m: Match[P, E, A, R]
+      implicit m: Match[F, P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     contextShift.evalOn(scheduler) {
-      syncF.delay {
+      syncF.defer {
         Kamon.withSpan(produceSpan.start(), finishSpan = true) {
           val span = Kamon.currentSpan()
           span.mark("before-produce-lock")
@@ -221,17 +220,16 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove when Kamon replaced with Metrics API
   private[this] def lockedProduce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
-      implicit m: Match[P, E, A, R]
-  ): Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]] = {
+      implicit m: Match[F, P, E, A, R]
+  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] = {
     val span = Kamon.currentSpan()
-    @tailrec
     def runMatcher(
         comm: COMM,
         produceRef: Produce,
         groupedChannels: Seq[Seq[C]]
-    ): Option[ProduceCandidate[C, P, R, K]] =
+    ): F[Option[ProduceCandidate[C, P, R, K]]] =
       groupedChannels match {
-        case Nil => None
+        case Nil => syncF.pure(None)
         case channels :: remaining =>
           val matchCandidates: Seq[(WaitingContinuation[P, K], Int)] =
             store.withTxn(store.createTxnRead()) { txn =>
@@ -256,9 +254,9 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
                 }
               }.toMap
             }
-          extractFirstMatch(channels, matchCandidates, channelToIndexedData) match {
+          extractFirstMatch(channels, matchCandidates, channelToIndexedData).flatMap {
             case Right(None)             => runMatcher(comm, produceRef, remaining)
-            case Right(produceCandidate) => produceCandidate
+            case Right(produceCandidate) => syncF.pure(produceCandidate)
             case Left(_)                 => ???
           }
       }
@@ -337,25 +335,24 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
 
       val produceRef = Produce.create(channel, data, persist, sequenceNumber)
 
-      @tailrec
       @SuppressWarnings(Array("org.wartremover.warts.Throw"))
       // TODO stop throwing exceptions
       def getCommOrProduceCandidate(
           comms: Seq[COMM]
-      ): Either[COMM, ProduceCandidate[C, P, R, K]] =
+      ): F[Either[COMM, ProduceCandidate[C, P, R, K]]] =
         comms match {
           case Nil =>
             val msg = "comms must not be empty"
             logger.error(msg)
             throw new IllegalArgumentException(msg)
           case commRef :: Nil =>
-            runMatcher(commRef, produceRef, groupedChannels) match {
+            runMatcher(commRef, produceRef, groupedChannels).map {
               case Some(x) => Right(x)
               case None    => Left(commRef)
             }
           case commRef :: rem =>
-            runMatcher(commRef, produceRef, groupedChannels) match {
-              case Some(x) => Right(x)
+            runMatcher(commRef, produceRef, groupedChannels).flatMap {
+              case Some(x) => syncF.pure(Right(x))
               case None    => getCommOrProduceCandidate(rem)
             }
         }
@@ -363,11 +360,11 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
       replayData.get(produceRef) match {
         case None =>
           span.mark("no-produce-ref-found")
-          Right(storeDatum(produceRef, None))
+          syncF.pure(Right(storeDatum(produceRef, None)))
         case Some(comms) =>
-          val commOrProduceCandidate: Either[COMM, ProduceCandidate[C, P, R, K]] =
+          val commOrProduceCandidate: F[Either[COMM, ProduceCandidate[C, P, R, K]]] =
             getCommOrProduceCandidate(comms.iterator().asScala.toList)
-          commOrProduceCandidate match {
+          commOrProduceCandidate.map {
             case Left(comm) =>
               span.mark("no-produce-candidate-found")
               Right(storeDatum(produceRef, Some(comm)))
