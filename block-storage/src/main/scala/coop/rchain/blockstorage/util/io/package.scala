@@ -1,6 +1,6 @@
 package coop.rchain.blockstorage.util
 
-import java.io.{EOFException, IOException}
+import java.io.IOException
 import java.nio.file._
 import java.util.stream.Collectors
 
@@ -9,6 +9,7 @@ import cats.effect.Sync
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 
 import scala.collection.JavaConverters._
+import scala.util.control.NonFatal
 
 package object io {
   private[io] def handleIo[F[_]: Sync: RaiseIOError, A](
@@ -27,7 +28,7 @@ package object io {
           RaiseIOError[F].raise[A](UnsupportedFileOperation(e))
         case e: IllegalArgumentException =>
           RaiseIOError[F].raise[A](IllegalFileOperation(e))
-        case e =>
+        case NonFatal(e) =>
           RaiseIOError[F].raise[A](UnexpectedIOError(e))
       }
     }.flatten
@@ -48,7 +49,7 @@ package object io {
           RaiseIOError[F].raise[A](UnsupportedFileOperation(e))
         case e: IllegalArgumentException =>
           RaiseIOError[F].raise[A](IllegalFileOperation(e))
-        case e =>
+        case NonFatal(e) =>
           RaiseIOError[F].raise[A](UnexpectedIOError(e))
       }
     }.flatten
@@ -66,7 +67,7 @@ package object io {
           DirectoryNotEmpty(e)
         case e: AtomicMoveNotSupportedException =>
           AtomicMoveNotSupported(e)
-        case e =>
+        case NonFatal(e) =>
           UnexpectedIOError(e)
       }
     )
