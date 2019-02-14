@@ -11,8 +11,8 @@ import coop.rchain.crypto.hash.Blake2b256
 final class IndexedBlockDagStorage[F[_]: Monad](
     lock: Semaphore[F],
     underlying: BlockDagStorage[F],
-    idToBlocksRef: Ref[F, Map[Int, BlockMessage]],
-    currentIdRef: Ref[F, Int]
+    idToBlocksRef: Ref[F, Map[Long, BlockMessage]],
+    currentIdRef: Ref[F, Long]
 ) extends BlockDagStorage[F] {
   def getRepresentation: F[BlockDagRepresentation[F]] =
     for {
@@ -33,7 +33,7 @@ final class IndexedBlockDagStorage[F[_]: Monad](
       body              = block.body.get
       header            = block.header.get
       currentId         <- currentIdRef.get
-      nextId            = currentId + 1
+      nextId            = currentId + 1L
       dag               <- underlying.getRepresentation
       nextCreatorSeqNum <- dag.latestMessage(block.sender).map(_.fold(-1)(_.seqNum) + 1)
       newPostState      = body.getState.withBlockNumber(nextId)
@@ -80,8 +80,8 @@ object IndexedBlockDagStorage {
   def create[F[_]: Concurrent](underlying: BlockDagStorage[F]): F[IndexedBlockDagStorage[F]] =
     for {
       semaphore  <- Semaphore[F](1)
-      idToBlocks <- Ref.of[F, Map[Int, BlockMessage]](Map.empty)
-      currentId  <- Ref.of[F, Int](-1)
+      idToBlocks <- Ref.of[F, Map[Long, BlockMessage]](Map.empty)
+      currentId  <- Ref.of[F, Long](-1L)
     } yield
       new IndexedBlockDagStorage[F](
         semaphore,

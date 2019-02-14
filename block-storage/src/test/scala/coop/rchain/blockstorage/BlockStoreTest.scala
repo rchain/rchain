@@ -47,7 +47,7 @@ trait BlockStoreTest
       withStore { store =>
         val items = blockStoreElements
         for {
-          _ <- items.traverse_(store.put(_))
+          _ <- items.traverse_(store.put)
           _ <- items.traverse[Task, Assertion] { block =>
                 store.get(block.blockHash).map(_ shouldBe Some(block))
               }
@@ -62,7 +62,7 @@ trait BlockStoreTest
       withStore { store =>
         val items = blockStoreElements
         for {
-          _ <- items.traverse_(store.put(_))
+          _ <- items.traverse_(store.put)
           _ <- items.traverse[Task, Assertion] { block =>
                 store.find(_ == ByteString.copyFrom(block.blockHash.toByteArray)).map { w =>
                   w should have size 1
