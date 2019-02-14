@@ -773,17 +773,17 @@ object BlockDagFileStorage {
                                        true
                                      )
       state = BlockDagFileStorageState(
-        latestMessagesMap,
-        childMap,
-        dataLookupList.toMap,
-        topoSort,
-        sortedCheckpoints.lastOption.map(_.end).getOrElse(0L),
-        sortedCheckpoints,
-        latestMessagesLogOutputStream,
-        logSize,
-        calculatedLatestMessagesCrc,
-        blockMetadataLogOutputStream,
-        calculatedDataLookupCrc
+        latestMessages = latestMessagesMap,
+        childMap = childMap,
+        dataLookup = dataLookupList.toMap,
+        topoSort = topoSort,
+        sortOffset = sortedCheckpoints.lastOption.map(_.end).getOrElse(0L),
+        checkpoints = sortedCheckpoints,
+        latestMessagesLogOutputStream = latestMessagesLogOutputStream,
+        latestMessagesLogSize = logSize,
+        latestMessagesCrc = calculatedLatestMessagesCrc,
+        blockMetadataLogOutputStream = blockMetadataLogOutputStream,
+        blockMetadataCrc = calculatedDataLookupCrc
       )
     } yield
       new BlockDagFileStorage[F](
@@ -838,17 +838,17 @@ object BlockDagFileStorage {
                                        true
                                      )
       state = BlockDagFileStorageState(
-        initialLatestMessages,
-        Map(genesis.blockHash -> Set.empty[BlockHash]),
-        Map(genesis.blockHash -> BlockMetadata.fromBlock(genesis)),
-        Vector(Vector(genesis.blockHash)),
-        0L,
-        List.empty,
-        latestMessagesLogOutputStream,
-        initialLatestMessages.size,
-        latestMessagesCrc,
-        blockMetadataLogOutputStream,
-        blockMetadataCrc
+        latestMessages = initialLatestMessages,
+        childMap = Map(genesis.blockHash   -> Set.empty[BlockHash]),
+        dataLookup = Map(genesis.blockHash -> BlockMetadata.fromBlock(genesis)),
+        topoSort = Vector(Vector(genesis.blockHash)),
+        sortOffset = 0L,
+        checkpoints = List.empty,
+        latestMessagesLogOutputStream = latestMessagesLogOutputStream,
+        latestMessagesLogSize = initialLatestMessages.size,
+        latestMessagesCrc = latestMessagesCrc,
+        blockMetadataLogOutputStream = blockMetadataLogOutputStream,
+        blockMetadataCrc = blockMetadataCrc
       )
     } yield
       new BlockDagFileStorage[F](
