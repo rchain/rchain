@@ -5,7 +5,6 @@ import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.blockstorage.StorageError.StorageIOErr
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.metrics.Metrics
 
@@ -33,24 +32,24 @@ class InMemBlockStore[F[_]] private ()(
       state <- refF.get
     } yield state.filterKeys(p(_)).toSeq
 
-  def put(f: => (BlockHash, BlockMessage)): F[StorageIOErr[Unit]] =
+  def put(f: => (BlockHash, BlockMessage)): F[Unit] =
     for {
       _ <- metricsF.incrementCounter("put")
       _ <- refF.update { state =>
             val (hash, message) = f
             state.updated(hash, message)
           }
-    } yield Right(())
+    } yield ()
 
-  def checkpoint(): F[StorageIOErr[Unit]] =
-    ().asRight[StorageIOError].pure[F]
+  def checkpoint(): F[Unit] =
+    ().pure[F]
 
-  def clear(): F[StorageIOErr[Unit]] =
+  def clear(): F[Unit] =
     for {
       _ <- refF.update { _.empty }
-    } yield Right(())
+    } yield ()
 
-  override def close(): F[StorageIOErr[Unit]] = monadF.pure(Right(()))
+  override def close(): F[Unit] = monadF.pure(())
 }
 
 object InMemBlockStore {
