@@ -13,6 +13,7 @@ final case class CheckpointsAreNotConsecutive(sortedCheckpoints: List[Path])  ex
 final case class TopoSortLengthIsTooBig(length: Long)                         extends StorageError
 final case class BlockSenderIsMalformed(block: BlockMessage)                  extends StorageError
 final case class CheckpointDoesNotExist(offset: Long)                         extends StorageError
+final case object LatestMessagesLogIsMalformed                                extends StorageError
 
 object StorageError {
   type StorageErr[A]        = Either[StorageError, A]
@@ -30,6 +31,8 @@ object StorageError {
         s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is malformed: ${Base16.encode(block.sender.toByteArray)}"
       case CheckpointDoesNotExist(offset) =>
         s"Requested a block with block number $offset, but there is no checkpoint for it"
+      case LatestMessagesLogIsMalformed =>
+        "Latest messages log is malformed"
     }
 
   implicit class StorageErrorToMessage(storageError: StorageError) {
