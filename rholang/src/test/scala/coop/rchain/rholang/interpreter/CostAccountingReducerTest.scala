@@ -29,28 +29,28 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
   behavior of "Cost accounting in Reducer"
 
   it should "charge for the successful substitution" in {
-    val term: Expr => Par = expr => Par(bundles = Seq(Bundle(Par(exprs = Seq(expr)))))
-    val substTerm         = term(Expr(GString("1")))
-    val termCost          = Chargeable[Par].cost(substTerm)
-    val initCost          = Cost(1000)
-    implicit val costAlg  = CostAccounting.unsafe[Coeval](initCost)
-    val res               = Substitute.charge(Coeval.pure(substTerm), Cost(10000)).attempt.value
+    val term: Expr => Par               = expr => Par(bundles = Seq(Bundle(Par(exprs = Seq(expr)))))
+    val substTerm                       = term(Expr(GString("1")))
+    val termCost                        = Chargeable[Par].cost(substTerm)
+    val initCost                        = Cost(1000)
+    implicit val costAlg: _cost[Coeval] = CostAccounting.unsafe[Coeval](initCost)
+    val res                             = Substitute.charge(Coeval.pure(substTerm), Cost(10000)).attempt.value
     assert(res === Right(substTerm))
-    assert(costAlg.get().value === (initCost - Cost(termCost)))
+    assert(costAlg.get() === (initCost - Cost(termCost)))
   }
 
   it should "charge for failed substitution" in {
-    val term: Expr => Par = expr => Par(bundles = Seq(Bundle(Par(exprs = Seq(expr)))))
-    val varTerm           = term(Expr(EVarBody(EVar(Var(FreeVar(0))))))
-    val originalTermCost  = Chargeable[Par].cost(varTerm)
-    val initCost          = Cost(1000)
-    implicit val costAlg  = CostAccounting.unsafe[Coeval](initCost)
+    val term: Expr => Par               = expr => Par(bundles = Seq(Bundle(Par(exprs = Seq(expr)))))
+    val varTerm                         = term(Expr(EVarBody(EVar(Var(FreeVar(0))))))
+    val originalTermCost                = Chargeable[Par].cost(varTerm)
+    val initCost                        = Cost(1000)
+    implicit val costAlg: _cost[Coeval] = CostAccounting.unsafe[Coeval](initCost)
     val res = Substitute
       .charge(Coeval.raiseError[Par](new RuntimeException("")), Cost(originalTermCost))
       .attempt
       .value
     assert(res.isLeft)
-    assert(costAlg.get().value === (initCost - Cost(originalTermCost)))
+    assert(costAlg.get() === (initCost - Cost(originalTermCost)))
   }
 
   it should "stop if OutOfPhloError is returned from RSpace" in {

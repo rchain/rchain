@@ -15,7 +15,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits.{VectorPar, _}
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.Splittable
-import coop.rchain.rholang.interpreter.accounting.{Cost, _}
+import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.{BugFoundError, OutOfPhlogistonsError}
 import coop.rchain.rholang.interpreter.matcher.ParSpatialMatcherUtils.{noFrees, subPars}
 import coop.rchain.rholang.interpreter.matcher.SpatialMatcher._
@@ -43,22 +43,23 @@ object SpatialMatcher extends SpatialMatcherInstances {
   type Alternative[F[_]] = Alternative_[F]
 
   def spatialMatchAndCharge[M[_]: Sync](target: Par, pattern: Par)(
-      implicit costAlg: CostAccounting[M]
+      implicit
+      cost: _cost[M]
   ): M[Option[(FreeMap, Unit)]] = {
     type R[A] = MatcherMonadT[M, A]
 
     val doMatch: R[Unit] = SpatialMatcher.spatialMatch[R, Par, Par](target, pattern)
 
     val matchAndCharge: M[Option[(FreeMap, Unit)]] = for {
-      phlosAvailable <- costAlg.get()
+      phlosAvailable <- cost.get
       result <- runFirstWithCost[M, Unit](doMatch, phlosAvailable).onError {
                  case OutOfPhlogistonsError =>
                    // if we run out of phlos during the match we have to zero phlos available
-                   costAlg.get().flatMap(ca => costAlg.charge(ca))
+                   cost.get.flatMap(ca => charge[M](ca))
                }
       (phlosLeft, matchResult) = result
       matchCost                = phlosAvailable - phlosLeft
-      _                        <- costAlg.charge(matchCost)
+      _                        <- charge[M](matchCost)
     } yield matchResult
 
     matchAndCharge

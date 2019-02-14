@@ -63,7 +63,6 @@ object Reduce {
       private val urnMap: Map[String, Par]
   )(
       implicit
-      costAccountingAlg: CostAccounting[M],
       parallel: cats.Parallel[M, F],
       s: Sync[M],
       fTell: FunctorTell[M, Throwable],
