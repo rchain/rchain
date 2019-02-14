@@ -92,8 +92,8 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
     def readBlockMessageFromFile(storageFile: RandomAccessIO[F]): F[BlockMessage] =
       for {
         _                      <- storageFile.seek(indexEntry.offset)
-        blockMessageSize       <- storageFile.readInt
-        blockMessagesByteArray = Array.ofDim[Byte](blockMessageSize)
+        blockMessageSizeOpt    <- storageFile.readInt
+        blockMessagesByteArray = Array.ofDim[Byte](blockMessageSizeOpt.get)
         _                      <- storageFile.readFully(blockMessagesByteArray)
         blockMessage           = BlockMessage.parseFrom(blockMessagesByteArray)
       } yield blockMessage

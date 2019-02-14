@@ -1,6 +1,6 @@
 package coop.rchain.blockstorage.util.io
 
-import java.io.{FileNotFoundException, RandomAccessFile}
+import java.io.{EOFException, FileNotFoundException, RandomAccessFile}
 import java.nio.file.Path
 
 import cats.effect.Sync
@@ -21,11 +21,17 @@ final case class RandomAccessIO[F[_]: Sync: RaiseIOError] private (
   def writeInt(v: Int): F[Unit] =
     handleIo(file.writeInt(v), IntWriteFailed.apply)
 
-  def readInt: F[Int] =
-    handleIo(file.readInt(), IntReadFailed.apply)
+  def readInt: F[Option[Int]] =
+    handleIoF(file.readInt().some, {
+      case _: EOFException => none[Int].pure[F]
+      case e               => RaiseIOError[F].raise[Option[Int]](IntReadFailed(e))
+    })
 
-  def readFully(buffer: Array[Byte]): F[Unit] =
-    handleIo(file.readFully(buffer), ByteArrayReadFailed.apply)
+  def readFully(buffer: Array[Byte]): F[Option[Unit]] =
+    handleIoF(file.readFully(buffer).some, {
+      case _: EOFException => none[Unit].pure[F]
+      case e               => RaiseIOError[F].raise[Option[Unit]](ByteArrayReadFailed(e))
+    })
 
   def length: F[Long] =
     handleIo(file.length(), UnexpectedIOError.apply)
