@@ -11,7 +11,7 @@ final case class FileOutputStreamIO[F[_]: Sync: RaiseIOError] private (
     private val stream: FileOutputStream
 ) {
   def write(bytes: Array[Byte]): F[Unit] =
-    handleIo(stream.write(bytes), ByteArrayWriteFailed.apply)
+    handleIo(stream.write(bytes), StreamWriteFailed.apply)
 
   def flush: F[Unit] =
     handleIo(stream.flush(), StreamFlushFailed.apply)

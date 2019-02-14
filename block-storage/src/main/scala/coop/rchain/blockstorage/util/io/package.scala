@@ -109,8 +109,8 @@ package object io {
     handleIo(Files.createFile(filePath), UnexpectedIOError.apply)
 
   def writeToFile[F[_]: Sync: RaiseIOError](filePath: Path, bytes: Array[Byte]): F[Path] =
-    handleIo(Files.write(filePath, bytes), ByteArrayWriteFailed.apply)
+    handleIo(Files.write(filePath, bytes), FileWriteFailed.apply)
 
   def readAllBytesFromFile[F[_]: Sync: RaiseIOError](filePath: Path): F[Array[Byte]] =
-    handleIo(Files.readAllBytes(filePath), ByteArrayReadFailed.apply)
+    handleIo(Files.readAllBytes(filePath), FileReadFailed.apply)
 }
