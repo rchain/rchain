@@ -296,13 +296,7 @@ object FileLMDBIndexBlockStore {
       storagePath: Path,
       checkpointsDirPath: Path
   ): F[StorageErr[BlockStore[F]]] = {
-    implicit val raiseIOErrorThroughSync = new FunctorRaise[F, IOError] {
-      override val functor: Functor[F] =
-        Functor[F]
-
-      override def raise[A](e: IOError): F[A] =
-        Sync[F].raiseError(IOError.ExceptionWrapper(e))
-    }
+    implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
     for {
       lock <- Semaphore[F](1)
       index <- Sync[F].delay {

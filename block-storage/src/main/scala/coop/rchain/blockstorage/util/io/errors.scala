@@ -3,6 +3,8 @@ package coop.rchain.blockstorage.util.io
 import java.io.{EOFException, FileNotFoundException, IOException}
 import java.nio.file._
 
+import cats.Functor
+import cats.effect.Sync
 import cats.mtl.FunctorRaise
 
 sealed trait IOError
@@ -34,6 +36,15 @@ object IOError {
   object RaiseIOError {
     def apply[F[_]](implicit ev: RaiseIOError[F]): RaiseIOError[F] = ev
   }
+
+  def raiseIOErrorThroughSync[F[_]: Sync]: FunctorRaise[F, IOError] =
+    new FunctorRaise[F, IOError] {
+      override val functor: Functor[F] =
+        Functor[F]
+
+      override def raise[A](e: IOError): F[A] =
+        Sync[F].raiseError(IOError.ExceptionWrapper(e))
+    }
 
   final case class ExceptionWrapper(e: IOError) extends Exception
 
