@@ -26,6 +26,9 @@ final case class FileAlreadyExists(e: FileAlreadyExistsException)           exte
 final case class DirectoryNotEmpty(e: DirectoryNotEmptyException)           extends IOError
 final case class AtomicMoveNotSupported(e: AtomicMoveNotSupportedException) extends IOError
 final case class EndOfFile(e: EOFException)                                 extends IOError
+final case class StreamWriteFailed(e: IOException)                          extends IOError
+final case class FileReadFailed(e: IOException)                             extends IOError
+final case class FileWriteFailed(e: IOException)                            extends IOError
 final case class UnexpectedIOError(throwable: Throwable)                    extends IOError
 
 final case class UnavailableReferencedCheckpoint(checkpointIndex: Int) extends IOError
@@ -104,6 +107,15 @@ object IOError {
       case UnexpectedIOError(t) =>
         val msg = Option(t.getMessage).getOrElse("")
         s"Unexpected IO error occurred: $msg"
+      case StreamWriteFailed(t) =>
+        val msg = Option(t.getMessage).getOrElse("")
+        s"Stream write failed: $msg"
+      case FileReadFailed(t) =>
+        val msg = Option(t.getMessage).getOrElse("")
+        s"File read failed: $msg"
+      case FileWriteFailed(t) =>
+        val msg = Option(t.getMessage).getOrElse("")
+        s"File write failed: $msg"
       case UnavailableReferencedCheckpoint(checkpointIndex) =>
         s"Unavailable checkpoint: $checkpointIndex"
     }
