@@ -134,14 +134,12 @@ class StacksafeProtobufGenerator(params: GeneratorParams) extends ProtobufGenera
       .newline
       .add("@transient var _serializedSizeM: coop.rchain.models.Memo[Int] = null")
       .newline
-      .add("def serializedSizeM: coop.rchain.models.Memo[Int] = if(_serializedSizeM == null) {")
-      .newline
-      .add("  _serializedSizeM = new coop.rchain.models.Memo(coop.rchain.models.ProtoM.serializedSize(this))")
-      .newline
-      .add("  _serializedSizeM")
-      .newline
-      .add("} else _serializedSizeM")
-
+      .add("def serializedSizeM: coop.rchain.models.Memo[Int] = synchronized {")
+      .add("  if(_serializedSizeM == null) {")
+      .add("    _serializedSizeM = new coop.rchain.models.Memo(coop.rchain.models.ProtoM.serializedSize(this))")
+      .add("    _serializedSizeM")
+      .add("  } else _serializedSizeM")
+      .add("}")
   }
 
   private def generateEqualsOverride(message: Descriptor)(fp: FunctionalPrinter) = {
