@@ -4,36 +4,41 @@ import java.io.{EOFException, IOException}
 import java.nio.file._
 import java.util.stream.Collectors
 
-import cats.data.EitherT
 import cats.implicits._
 import cats.effect.Sync
-import coop.rchain.blockstorage.util.io.IOError.{IOErr, IOErrT}
+import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 
 import scala.collection.JavaConverters._
 
 package object io {
-  private[io] def handleIo[F[_]: Sync, A](
+  private[io] def handleIo[F[_]: Sync: RaiseIOError, A](
       io: => A,
       handleIoException: IOException => IOError
-  ): F[IOErr[A]] =
+  ): F[A] =
     Sync[F].delay {
       try {
-        Right(io)
+        io.pure[F]
       } catch {
-        case e: EOFException                  => Left(EndOfFile(e))
-        case e: IOException                   => Left(handleIoException(e))
-        case e: SecurityException             => Left(FileSecurityViolation(e))
-        case e: UnsupportedOperationException => Left(UnsupportedFileOperation(e))
-        case e: IllegalArgumentException      => Left(IllegalFileOperation(e))
-        case e                                => Left(UnexpectedIOError(e))
+        case e: EOFException =>
+          RaiseIOError[F].raise[A](EndOfFile(e))
+        case e: IOException =>
+          RaiseIOError[F].raise[A](handleIoException(e))
+        case e: SecurityException =>
+          RaiseIOError[F].raise[A](FileSecurityViolation(e))
+        case e: UnsupportedOperationException =>
+          RaiseIOError[F].raise[A](UnsupportedFileOperation(e))
+        case e: IllegalArgumentException =>
+          RaiseIOError[F].raise[A](IllegalFileOperation(e))
+        case e =>
+          RaiseIOError[F].raise[A](UnexpectedIOError(e))
       }
-    }
+    }.flatten
 
-  def moveFile[F[_]: Sync](
+  def moveFile[F[_]: Sync: RaiseIOError](
       from: Path,
       to: Path,
       options: CopyOption*
-  ): F[IOErr[Path]] =
+  ): F[Path] =
     handleIo(
       Files.move(from, to, options: _*), {
         case e: FileAlreadyExistsException =>
@@ -47,45 +52,45 @@ package object io {
       }
     )
 
-  def isDirectory[F[_]: Sync](path: Path): F[IOErr[Boolean]] =
+  def isDirectory[F[_]: Sync: RaiseIOError](path: Path): F[Boolean] =
     handleIo(Files.isDirectory(path), UnexpectedIOError.apply)
 
-  def isRegularFile[F[_]: Sync](path: Path): F[IOErr[Boolean]] =
+  def isRegularFile[F[_]: Sync: RaiseIOError](path: Path): F[Boolean] =
     handleIo(Files.isRegularFile(path), UnexpectedIOError.apply)
 
-  def makeDirectory[F[_]: Sync](dirPath: Path): F[IOErr[Boolean]] =
+  def makeDirectory[F[_]: Sync: RaiseIOError](dirPath: Path): F[Boolean] =
     handleIo(dirPath.toFile.mkdir(), UnexpectedIOError.apply)
 
-  def listInDirectory[F[_]: Sync](dirPath: Path): F[IOErr[List[Path]]] =
-    (for {
-      _ <- EitherT(makeDirectory(dirPath))
-      files <- EitherT(handleIo(Files.list(dirPath), {
+  def listInDirectory[F[_]: Sync: RaiseIOError](dirPath: Path): F[List[Path]] =
+    for {
+      files <- handleIo(Files.list(dirPath), {
                 case e: NotDirectoryException => FileIsNotDirectory(e)
                 case e                        => UnexpectedIOError(e)
-              }))
+              })
       filesList = files
         .collect(Collectors.toList[Path])
         .asScala
         .toList
-    } yield filesList).value
+    } yield filesList
 
-  def listRegularFiles[F[_]: Sync](dirPath: Path): F[IOErr[List[Path]]] = {
-    type IOErrTF[A] = IOErrT[F, A]
-    (for {
-      inDirectoryList <- EitherT(listInDirectory(dirPath))
-      directoryList   <- inDirectoryList.filterA[IOErrTF](f => EitherT(isRegularFile(f)))
-    } yield directoryList).value
-  }
+  def listRegularFiles[F[_]: Sync: RaiseIOError](dirPath: Path): F[List[Path]] =
+    for {
+      files        <- listInDirectory(dirPath)
+      regularFiles <- files.filterA[F](isRegularFile[F])
+    } yield regularFiles
 
-  def createTemporaryFile[F[_]: Sync](prefix: String, suffix: String): F[IOErr[Path]] =
+  def createTemporaryFile[F[_]: Sync: RaiseIOError](prefix: String, suffix: String): F[Path] =
     handleIo(Files.createTempFile(prefix, suffix), UnexpectedIOError.apply)
 
-  def createNewFile[F[_]: Sync](filePath: Path): F[IOErr[Boolean]] =
+  def createNewFile[F[_]: Sync: RaiseIOError](filePath: Path): F[Boolean] =
     handleIo(filePath.toFile.createNewFile(), UnexpectedIOError.apply)
 
-  def writeToFile[F[_]: Sync](filePath: Path, bytes: Array[Byte]): F[IOErr[Unit]] =
+  def createFile[F[_]: Sync: RaiseIOError](filePath: Path): F[Path] =
+    handleIo(Files.createFile(filePath), UnexpectedIOError.apply)
+
+  def writeToFile[F[_]: Sync: RaiseIOError](filePath: Path, bytes: Array[Byte]): F[Path] =
     handleIo(Files.write(filePath, bytes), ByteArrayWriteFailed.apply)
 
-  def readAllBytesFromFile[F[_]: Sync](filePath: Path): F[IOErr[Array[Byte]]] =
+  def readAllBytesFromFile[F[_]: Sync: RaiseIOError](filePath: Path): F[Array[Byte]] =
     handleIo(Files.readAllBytes(filePath), ByteArrayReadFailed.apply)
 }

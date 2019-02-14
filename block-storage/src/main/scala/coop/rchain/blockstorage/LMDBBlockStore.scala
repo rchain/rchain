@@ -13,7 +13,6 @@ import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared.Resources.withResource
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.StorageError.StorageIOErr
 import org.lmdbjava._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.Txn.NotReadyException
@@ -68,7 +67,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
   private[this] def withReadTxn[R](f: Txn[ByteBuffer] => R): F[R] =
     withTxn(env.txnRead())(f)
 
-  def put(f: => (BlockHash, BlockMessage)): F[StorageIOErr[Unit]] =
+  def put(f: => (BlockHash, BlockMessage)): F[Unit] =
     for {
       _ <- metricsF.incrementCounter("put")
       ret <- withWriteTxn { txn =>
@@ -108,17 +107,17 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
             }
     } yield ret
 
-  def checkpoint(): F[StorageIOErr[Unit]] =
-    ().asRight[StorageIOError].pure[F]
+  def checkpoint(): F[Unit] =
+    ().pure[F]
 
-  def clear(): F[StorageIOErr[Unit]] =
+  def clear(): F[Unit] =
     for {
       ret <- withWriteTxn { txn =>
               blocks.drop(txn)
             }
-    } yield Right(())
+    } yield ()
 
-  override def close(): F[StorageIOErr[Unit]] =
+  override def close(): F[Unit] =
     syncF.delay { Right(env.close()) }
 }
 

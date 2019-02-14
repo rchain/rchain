@@ -1,14 +1,9 @@
 package coop.rchain.blockstorage.util.io
 
 import java.io.{EOFException, FileNotFoundException, IOException}
-import java.nio.file.{
-  AtomicMoveNotSupportedException,
-  DirectoryNotEmptyException,
-  FileAlreadyExistsException,
-  NotDirectoryException
-}
+import java.nio.file._
 
-import cats.data.EitherT
+import cats.mtl.FunctorRaise
 
 sealed trait IOError
 
@@ -31,9 +26,16 @@ final case class AtomicMoveNotSupported(e: AtomicMoveNotSupportedException) exte
 final case class EndOfFile(e: EOFException)                                 extends IOError
 final case class UnexpectedIOError(throwable: Throwable)                    extends IOError
 
+final case class UnavailableReferencedCheckpoint(checkpointIndex: Int) extends IOError
+
 object IOError {
-  type IOErr[A]        = Either[IOError, A]
-  type IOErrT[F[_], A] = EitherT[F, IOError, A]
+  type RaiseIOError[F[_]] = FunctorRaise[F, IOError]
+
+  object RaiseIOError {
+    def apply[F[_]](implicit ev: RaiseIOError[F]): RaiseIOError[F] = ev
+  }
+
+  final case class ExceptionWrapper(e: IOError) extends Exception
 
   def errorMessage(error: IOError): String =
     error match {
@@ -70,6 +72,8 @@ object IOError {
       case UnexpectedIOError(t) =>
         val msg = Option(t.getMessage).getOrElse("")
         s"Unexpected IO error occurred: $msg"
+      case UnavailableReferencedCheckpoint(checkpointIndex) =>
+        s"Unavailable checkpoint: $checkpointIndex"
     }
 
   implicit class IOErrorToMessage(ioError: IOError) {
