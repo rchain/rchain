@@ -19,7 +19,7 @@ trait Substitute[M[_], A] {
 }
 
 object Substitute {
-  def charge[A: Chargeable, M[_]: Sync: CostAccounting](
+  private[interpreter] def charge[A: Chargeable, M[_]: Sync: CostAccounting](
       substitutionResult: M[A],
       failureCost: Cost
   ): M[A] =
