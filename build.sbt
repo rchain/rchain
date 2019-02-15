@@ -69,6 +69,9 @@ Seq(sys.env.get("SKIP_DOC")).flatMap { _ =>
   )
 }
 
+// a namespace for generative tests (or other tests that take a long time)
+lazy val SlowcookerTest = config("slowcooker") extend(Test)
+
 lazy val coverageSettings = Seq(
   coverageMinimum := 90,
   coverageFailOnMinimum := false,
@@ -136,14 +139,18 @@ lazy val graphz = (project in file("graphz"))
   ).dependsOn(shared)
 
 lazy val casper = (project in file("casper"))
+  .configs(SlowcookerTest)
   .settings(commonSettings: _*)
   .settings(rholangSettings: _*)
+  .settings(inConfig(SlowcookerTest)(Defaults.testSettings) : _*)
+  .settings(inConfig(SlowcookerTest)(org.scalafmt.sbt.ScalafmtPlugin.scalafmtConfigSettings))
   .settings(
     name := "casper",
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       catsCore,
       catsMtl,
-      monix
+      monix,
+      scalacheck % "slowcooker"
     ),
     rholangProtoBuildAssembly := (rholangProtoBuild / Compile / incrementalAssembly).value
   )
@@ -203,7 +210,7 @@ lazy val crypto = (project in file("crypto"))
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       guava,
       bouncyCastle,
-      scalacheckNoTest,
+      scalacheck,
       kalium,
       jaxb,
       secp256k1Java,
@@ -220,7 +227,7 @@ lazy val models = (project in file("models"))
       catsCore,
       magnolia,
       scalapbCompiler,
-      scalacheck,
+      scalacheck % "test",
       scalacheckShapeless,
       scalapbRuntimegGrpc
     ),
