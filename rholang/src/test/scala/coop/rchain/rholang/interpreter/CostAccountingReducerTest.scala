@@ -1,12 +1,13 @@
 package coop.rchain.rholang.interpreter
 
+import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Reduce.DebruijnInterpreter
-import coop.rchain.rholang.interpreter.accounting.{Chargeable, Cost, CostAccounting, _}
+import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rholang.interpreter.storage.{ChargingRSpace, ChargingRSpaceTest, Tuplespace}
@@ -69,12 +70,13 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
       ): Task[Unit] = Task.raiseError(OutOfPhlogistonsError)
     }
 
-    implicit val errorLog = new ErrorLog[Task]()
-    implicit val rand     = Blake2b512Random(128)
-    implicit val costAlg  = CostAccounting.unsafe[Task](Cost(1000))
-    val reducer           = new DebruijnInterpreter[Task, Task.Par](tuplespaceAlg, Map.empty)
-    val send              = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
-    val test              = reducer.inj(send).attempt.runSyncUnsafe(1.second)
+    implicit val errorLog          = new ErrorLog[Task]()
+    implicit val rand              = Blake2b512Random(128)
+    implicit val costAlg           = CostAccounting.unsafe[Task](Cost(1000))
+    implicit val cost: _cost[Task] = costAlg
+    val reducer                    = new DebruijnInterpreter[Task, Task.Par](tuplespaceAlg, Map.empty)
+    val send                       = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
+    val test                       = reducer.inj(send).attempt.runSyncUnsafe(1.second)
     assert(test === Left(OutOfPhlogistonsError))
   }
 
