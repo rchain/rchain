@@ -40,43 +40,7 @@ object Estimator {
       blockDag: BlockDagRepresentation[F],
       lastFinalizedBlockHash: BlockHash,
       latestMessagesHashes: Map[Validator, BlockHash]
-  ): F[IndexedSeq[BlockMessage]] = {
-    def sortChildren(
-        blocks: List[BlockHash],
-        blockDag: BlockDagRepresentation[F],
-        scores: Map[BlockHash, Long]
-    ): F[List[BlockHash]] =
-      // TODO: This ListContrib.sortBy will be improved on Thursday with Pawels help
-      for {
-        unsortedNewBlocks <- blocks.flatTraverse(replaceBlockHashWithChildren(_, blockDag, scores))
-        newBlocks = ListContrib.sortBy[BlockHash, Long](
-          unsortedNewBlocks.distinct,
-          scores
-        )
-        result <- if (stillSame(blocks, newBlocks)) {
-                   blocks.pure[F]
-                 } else {
-                   sortChildren(newBlocks, blockDag, scores)
-                 }
-      } yield result
-
-    /**
-      * Only include children that have been scored,
-      * this ensures that the search does not go beyond
-      * the messages defined by blockDag.latestMessages
-      */
-    def replaceBlockHashWithChildren(
-        b: BlockHash,
-        blockDag: BlockDagRepresentation[F],
-        scores: Map[BlockHash, Long]
-    ): F[List[BlockHash]] =
-      for {
-        c <- blockDag.children(b).map(_.getOrElse(Set.empty[BlockHash]).filter(scores.contains))
-      } yield if (c.nonEmpty) c.toList else List(b)
-
-    def stillSame(blocks: List[BlockHash], newBlocks: List[BlockHash]) =
-      newBlocks == blocks
-
+  ): F[IndexedSeq[BlockMessage]] =
     for {
       scoresMap <- buildScoresMap(blockDag, latestMessagesHashes, lastFinalizedBlockHash)
       sortedChildrenHash <- sortChildren(
@@ -87,9 +51,8 @@ object Estimator {
       maybeSortedChildren <- sortedChildrenHash.traverse(BlockStore[F].get)
       sortedChildren      = maybeSortedChildren.flatten.toVector
     } yield sortedChildren
-  }
 
-  def buildScoresMap[F[_]: Monad](
+  private def buildScoresMap[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
       latestMessagesHashes: Map[Validator, BlockHash],
       lastFinalizedBlockHash: BlockHash
@@ -173,4 +136,40 @@ object Estimator {
         } yield postImplicitlySupportedScoreMap
     }
   }
+
+  private def sortChildren[F[_]: Monad](
+      blocks: List[BlockHash],
+      blockDag: BlockDagRepresentation[F],
+      scores: Map[BlockHash, Long]
+  ): F[List[BlockHash]] =
+    // TODO: This ListContrib.sortBy will be improved on Thursday with Pawels help
+    for {
+      unsortedNewBlocks <- blocks.flatTraverse(replaceBlockHashWithChildren[F](_, blockDag, scores))
+      newBlocks = ListContrib.sortBy[BlockHash, Long](
+        unsortedNewBlocks.distinct,
+        scores
+      )
+      result <- if (stillSame(blocks, newBlocks)) {
+                 blocks.pure[F]
+               } else {
+                 sortChildren(newBlocks, blockDag, scores)
+               }
+    } yield result
+
+  /**
+    * Only include children that have been scored,
+    * this ensures that the search does not go beyond
+    * the messages defined by blockDag.latestMessages
+    */
+  private def replaceBlockHashWithChildren[F[_]: Monad](
+      b: BlockHash,
+      blockDag: BlockDagRepresentation[F],
+      scores: Map[BlockHash, Long]
+  ): F[List[BlockHash]] =
+    for {
+      c <- blockDag.children(b).map(_.getOrElse(Set.empty[BlockHash]).filter(scores.contains))
+    } yield if (c.nonEmpty) c.toList else List(b)
+
+  private def stillSame(blocks: List[BlockHash], newBlocks: List[BlockHash]): Boolean =
+    newBlocks == blocks
 }
