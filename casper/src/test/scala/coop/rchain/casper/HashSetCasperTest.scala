@@ -993,7 +993,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     } yield ()
   }
 
-  it should "estimate parent properly" ignore effectTest {
+  it should "estimate parent properly" in effectTest {
     val (otherSk, otherPk)          = Ed25519.newKeyPair
     val (validatorKeys, validators) = (1 to 5).map(_ => Ed25519.newKeyPair).unzip
     val (ethPivKeys, ethPubKeys)    = (1 to 5).map(_ => Secp256k1.newKeyPair).unzip
