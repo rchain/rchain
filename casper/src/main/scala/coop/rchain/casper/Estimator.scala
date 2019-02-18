@@ -166,9 +166,10 @@ object Estimator {
       blockDag: BlockDagRepresentation[F],
       scores: Map[BlockHash, Long]
   ): F[List[BlockHash]] =
-    for {
-      c <- blockDag.children(b).map(_.getOrElse(Set.empty[BlockHash]).filter(scores.contains))
-    } yield if (c.nonEmpty) c.toList else List(b)
+    blockDag.children(b).map(_.getOrElse(Set.empty[BlockHash]).filter(scores.contains)).map {
+      case c if c.nonEmpty => c.toList
+      case _            => List(b)
+    }
 
   private def stillSame(blocks: List[BlockHash], newBlocks: List[BlockHash]): Boolean =
     newBlocks == blocks
