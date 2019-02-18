@@ -72,7 +72,7 @@ class ForkchoiceTest
         dag <- blockDagStorage.getRepresentation
         forkchoice <- Estimator.tips[Task](
                        dag,
-                       genesis.blockHash,
+                       genesis,
                        Map.empty[Validator, BlockHash]
                      )
       } yield forkchoice.head should be(genesis)
@@ -137,7 +137,7 @@ class ForkchoiceTest
         )
         forkchoice <- Estimator.tips[Task](
                        dag,
-                       genesis.blockHash,
+                       genesis,
                        latestBlocks
                      )
         _      = forkchoice.head should be(b6)
@@ -207,7 +207,7 @@ class ForkchoiceTest
         )
         forkchoice <- Estimator.tips[Task](
                        dag,
-                       genesis.blockHash,
+                       genesis,
                        latestBlocks
                      )
         _      = forkchoice.head should be(b8)
