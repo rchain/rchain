@@ -65,7 +65,7 @@ class MatcherMonadSpec extends FlatSpec {
     (for {
       _        <- cost.set(Cost(0))
       a        = attemptOpt(modifyStates)
-      res      <- runFirstWithCost(a)
+      res      <- runFirst(a)
       phloLeft <- cost.get
       _        = assert(phloLeft.value == 1)
     } yield (assert(res == Some((Map(42 -> Par()), Some(())))))).unsafeRunSync
@@ -80,7 +80,7 @@ class MatcherMonadSpec extends FlatSpec {
     (for {
       _        <- cost.set(Cost(0))
       a        = attemptOpt[F, Unit](failed)
-      res      <- runFirstWithCost(a)
+      res      <- runFirst(a)
       phloLeft <- cost.get
       _        = assert(phloLeft.value == 1)
     } yield (assert(res == Some((Map.empty, None))))).unsafeRunSync
@@ -96,7 +96,7 @@ class MatcherMonadSpec extends FlatSpec {
     (for {
       _        <- cost.set(Cost(0))
       a        = attemptOpt[F, Unit](failed)
-      res      <- runFirstWithCost(a)
+      res      <- runFirst(a)
       phloLeft <- cost.get
       _        = assert(phloLeft.value == 1)
     } yield (assert(res == Some((Map.empty, None))))).unsafeRunSync

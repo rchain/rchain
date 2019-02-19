@@ -42,7 +42,7 @@ package object matcher {
   ): F[Stream[(FreeMap, A)]] =
     StreamT.run(f.run(emptyMap))
 
-  private[matcher] def runFirstWithCost[F[_]: Monad: _cost, A](
+  private[matcher] def runFirst[F[_]: Monad: _cost, A](
       f: MatcherMonadT[F, A]
   ): F[Option[(FreeMap, A)]] =
     for {
