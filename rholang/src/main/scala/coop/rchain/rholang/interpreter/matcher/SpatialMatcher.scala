@@ -54,7 +54,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
       runFirst[M, Unit](doMatch).onError {
         case OutOfPhlogistonsError =>
           // if we run out of phlos during the match we have to zero phlos available
-          cost.get.flatMap(ca => charge[M](ca))
+          cost.modify(_ => Cost(0))
       }
 
     matchAndCharge
