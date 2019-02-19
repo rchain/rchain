@@ -102,31 +102,35 @@ object DagOperations {
     * TODO: Implement a GCA that doesn't require the genesis block (see https://rchain.atlassian.net/browse/RCHAIN-3002)
     * TODO: Remove usage of BlockStore by just using BlockDagRepresentation (see https://rchain.atlassian.net/browse/RCHAIN-3003)
     */
-  def greatestCommonAncestorF[F[_]: Monad: BlockStore](
-      b1: BlockMessage,
-      b2: BlockMessage,
-      genesis: BlockMessage,
+  def greatestCommonAncestorF[F[_]: Monad](
+      b1: BlockMetadata,
+      b2: BlockMetadata,
+      genesis: BlockMetadata,
       dag: BlockDagRepresentation[F]
-  ): F[BlockMessage] =
+  ): F[BlockMetadata] =
     if (b1 == b2) {
       b1.pure[F]
     } else {
       def commonAncestorChild(
-          b: BlockMessage,
-          commonAncestors: Set[BlockMessage]
-      ): F[List[BlockMessage]] =
+          b: BlockMetadata,
+          commonAncestors: Set[BlockMetadata]
+      ): F[List[BlockMetadata]] =
         for {
           childrenHashesOpt      <- dag.children(b.blockHash)
-          childrenHashes         = childrenHashesOpt.getOrElse(Set.empty[BlockHash])
-          children               <- childrenHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F])
-          commonAncestorChildren = children.filter(commonAncestors)
-        } yield commonAncestorChildren
+          childrenHashes         = childrenHashesOpt.getOrElse(Set.empty[BlockHash]).toList
+          children               <- childrenHashes.traverse(dag.lookup).map(r => r.flatten.toSet)
+          commonAncestorChildren = children.intersect(commonAncestors)
+        } yield commonAncestorChildren.toList
 
       for {
-        b1Ancestors     <- bfTraverseF[F, BlockMessage](List(b1))(ProtoUtil.unsafeGetParents[F]).toSet
-        b2Ancestors     <- bfTraverseF[F, BlockMessage](List(b2))(ProtoUtil.unsafeGetParents[F]).toSet
+        b1Ancestors <- bfTraverseF[F, BlockMetadata](List(b1))(
+                        bm => bm.parents.traverse(dag.lookup).map(r => r.flatten)
+                      ).toSet
+        b2Ancestors <- bfTraverseF[F, BlockMetadata](List(b2))(
+                        bm => bm.parents.traverse(dag.lookup).map(r => r.flatten)
+                      ).toSet
         commonAncestors = b1Ancestors.intersect(b2Ancestors)
-        gca <- bfTraverseF[F, BlockMessage](List(genesis))(commonAncestorChild(_, commonAncestors))
+        gca <- bfTraverseF[F, BlockMetadata](List(genesis))(commonAncestorChild(_, commonAncestors))
                 .findF(
                   b =>
                     for {
@@ -135,8 +139,14 @@ object DagOperations {
                       result <- children.existsM(
                                  hash =>
                                    for {
-                                     c <- ProtoUtil.unsafeGetBlock[F](hash)
-                                   } yield b1Ancestors(c) ^ b2Ancestors(c)
+                                     co <- dag.lookup(hash)
+                                   } yield {
+                                     if (co.isEmpty) false
+                                     else {
+                                       val c = co.get
+                                       b1Ancestors(c) ^ b2Ancestors(c)
+                                     }
+                                   }
                                )
                     } yield result
                 )
