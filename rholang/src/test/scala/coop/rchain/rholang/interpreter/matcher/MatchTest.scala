@@ -945,4 +945,18 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
       Left(OutOfPhlogistonsError)
     )
   }
+
+  it should "charge for matching operations" in {
+    implicit val cost: _cost[Task] = CostAccounting.unsafe[Task](Cost(100))
+
+    val target: Par = EList(Seq(GInt(1), GInt(2), GInt(3)))
+    val pattern: Par =
+      EList(Seq(GInt(1), EVar(FreeVar(0)), EVar(FreeVar(1))), connectiveUsed = true)
+
+    (for {
+      res      <- spatialMatchAndCharge[Task](target, pattern)
+      phloLeft <- cost.get
+    } yield (phloLeft.value shouldBe 90)).unsafeRunSync
+
+  }
 }
