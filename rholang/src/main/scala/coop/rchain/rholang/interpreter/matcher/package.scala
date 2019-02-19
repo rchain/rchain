@@ -37,19 +37,17 @@ package object matcher {
   def _freeMap[F[_]](implicit ev: _freeMap[F]): _freeMap[F] = ev
   def _short[F[_]](implicit ev: _short[F]): _short[F]       = ev
 
-  private[matcher] def run[F[_]: Monad: _cost, A](
+  private[matcher] def run[F[_]: Monad, A](
       f: MatcherMonadT[F, A]
   ): F[Stream[(FreeMap, A)]] =
     StreamT.run(f.run(emptyMap))
 
-  private[matcher] def runFirst[F[_]: Monad: _cost, A](
+  private[matcher] def runFirst[F[_]: Monad, A](
       f: MatcherMonadT[F, A]
   ): F[Option[(FreeMap, A)]] =
-    for {
-      cost <- _cost[F].get
-      s <- StreamT
-            .run(StreamT.dropTail(f.run(emptyMap)))
-    } yield (s.headOption)
+    StreamT
+      .run(StreamT.dropTail(f.run(emptyMap)))
+      .map(_.headOption)
 
   private[matcher] def attemptOpt[F[_], A](
       f: F[A]
