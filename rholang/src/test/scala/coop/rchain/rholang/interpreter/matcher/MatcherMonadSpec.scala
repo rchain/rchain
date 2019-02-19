@@ -15,12 +15,12 @@ import coop.rchain.rholang.interpreter.accounting.CostAccounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.matcher.{run => runMatcher, _}
 import coop.rchain.rholang.interpreter.matcher.NonDetFreeMapWithCost._
-import org.scalatest.FlatSpec
+import org.scalatest._
 
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 
-class MatcherMonadSpec extends FlatSpec {
+class MatcherMonadSpec extends FlatSpec with Matchers {
 
   type F[A] = MatcherMonadT[Task, A]
 
@@ -137,11 +137,7 @@ class MatcherMonadSpec extends FlatSpec {
     val c: F[Int] = 3.pure[F]
 
     val combined = combineK(List(a, b, c))
-    (for {
-      res <- runMatcher(combined)
-    } yield (fail("Should have ran out of phlo"))).onErrorHandleWith {
-      case OutOfPhlogistonsError => Task.now(succeed)
-    }.unsafeRunSync
+    runMatcher(combined).attempt.unsafeRunSync shouldBe (Left(OutOfPhlogistonsError))
   }
 
   it should "charge for each branch as long as `charge` is before a short-circuit" in {
