@@ -9,6 +9,7 @@ import scala.collection.immutable.Seq
 /**
   * Blake2b256 hashing algorithm
   */
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 object Blake2b256 {
 
   def hash(input: Array[Byte]): Array[Byte] = {

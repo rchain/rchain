@@ -30,6 +30,7 @@ class NoopTxn[S] extends InMemTransaction[S] {
   *
   * It should be used with RSpace that solves high level locking (e.g. FineGrainedRSpace).
   */
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 class LockFreeInMemoryStore[T, C, P, A, K](
     val trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]],
     val trieBranch: Branch

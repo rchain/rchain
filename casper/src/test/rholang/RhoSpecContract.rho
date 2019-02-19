@@ -27,9 +27,10 @@ in {
       new runTest, runTestOnce, retCh in {
         contract runTestOnce(@(testName, testBody), @attempt, testAckCh) = {
           stdlog!("info", "Running test: " ++ testName ++ " attempt " + attempt) |
+
           new rhoSpecImpl, privateAssert in {
             contract privateAssert(@assertion, @clue, ackCh) = {
-              stdlog!("info", "asserting: " ++ clue) |
+              stdlog!("debug", "asserting: " ++ clue) |
               match assertion {
                 (expected, "== <-", actualCh) => {
                   for (@actual <- @actualCh) {

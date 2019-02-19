@@ -25,6 +25,7 @@ import scala.ref.WeakReference
 import scala.util.matching.Regex
 import collection.JavaConverters._
 
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove!!
 final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private (
     lock: Semaphore[F],
     latestMessagesRef: Ref[F, Map[Validator, BlockHash]],
@@ -406,6 +407,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore] private
     } yield ()
 }
 
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove
 object BlockDagFileStorage {
   private implicit val logSource       = LogSource(BlockDagFileStorage.getClass)
   private val checkpointPattern: Regex = "([0-9]+)-([0-9]+)".r

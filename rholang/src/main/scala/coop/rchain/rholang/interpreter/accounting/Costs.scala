@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter.accounting
 
 import cats.Monoid
 import com.google.protobuf.ByteString
-import coop.rchain.models.{Par, ProtoM, StacksafeMessage}
+import coop.rchain.models.{PCost, Par, ProtoM, StacksafeMessage}
 
 //TODO(mateusz.gorski): Adjust the costs of operations
 final case class Cost(value: Long) extends AnyVal {
@@ -20,6 +20,8 @@ object Cost {
     override def empty: Cost                     = Cost(0)
     override def combine(x: Cost, y: Cost): Cost = x + y
   }
+
+  def toProto(c: Cost): PCost = PCost(c.value)
 }
 
 trait Costs {
@@ -77,6 +79,8 @@ trait Costs {
   // we charge proportionally to `to` and fail if the method call is incorrect, for example
   // if underlying string is shorter then the `to` value.
   def sliceCost(to: Int): Cost = Cost(to)
+
+  def parsingCost(term: String): Cost = Cost(term.getBytes.size)
 
   final val NTH_METHOD_CALL_COST: Cost = Cost(10)
 

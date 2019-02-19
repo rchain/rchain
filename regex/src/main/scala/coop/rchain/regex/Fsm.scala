@@ -7,6 +7,7 @@ import scala.util.{Failure, Success, Try}
 /**
   * A companion object for the Fsm class.
   */
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 object Fsm {
 
   /**
@@ -244,6 +245,7 @@ object Fsm {
   * closure), intersected, and simplified.
   * The majority of these methods are available using operator overloads.
   */
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 final case class Fsm(
     alphabet: Set[Char],
     states: Set[Int],

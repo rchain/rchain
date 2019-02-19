@@ -78,7 +78,7 @@ class BlocksResponseAPITest
                HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
              )
         dag  <- blockDagStorage.getRepresentation
-        tips <- Estimator.tips[Task](dag, genesis.blockHash)
+        tips <- Estimator.tips[Task](dag, genesis)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMessage],
                          tips
@@ -144,7 +144,7 @@ class BlocksResponseAPITest
                HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
              )
         dag  <- blockDagStorage.getRepresentation
-        tips <- Estimator.tips[Task](dag, genesis.blockHash)
+        tips <- Estimator.tips[Task](dag, genesis)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMessage],
                          tips
@@ -210,7 +210,7 @@ class BlocksResponseAPITest
              HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
            )
       dag  <- blockDagStorage.getRepresentation
-      tips <- Estimator.tips[Task](dag, genesis.blockHash)
+      tips <- Estimator.tips[Task](dag, genesis)
       casperEffect <- NoOpsCasperEffect[Task](
                        HashMap.empty[BlockHash, BlockMessage],
                        tips

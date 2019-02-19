@@ -1,5 +1,8 @@
 //scalapackage coop.rchain.rholang
 
+// All the assertions in this file are expected to fail as the FailingResultCollectorSpec 
+// will make sure that in case of failing assertions a failure is properly reported
+
 new assert(`rho:test:assertAck`),
     testCompleted(`rho:test:testSuiteCompleted`),
     ch1, ch2,

@@ -157,6 +157,7 @@ class Blake2b512Block {
   }
 }
 
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 object Blake2b512Block {
   /*
   def apply(): Blake2b512Block = {

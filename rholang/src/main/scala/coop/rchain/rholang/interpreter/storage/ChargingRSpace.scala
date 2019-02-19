@@ -44,7 +44,7 @@ object ChargingRSpace {
         val storageCost = storageCostConsume(channels, patterns, continuation)
         for {
           _      <- costAlg.charge(storageCost)
-          matchF <- costAlg.get().map(ca => matchListPar(ca.cost))
+          matchF <- costAlg.get().map(cost => matchListPar(cost))
           consRes <- space.consume(channels, patterns, continuation, persist, sequenceNumber)(
                       matchF
                     )
@@ -73,7 +73,7 @@ object ChargingRSpace {
         val storageCost = storageCostProduce(channel, data)
         for {
           _       <- costAlg.charge(storageCost)
-          matchF  <- costAlg.get().map(ca => matchListPar(ca.cost))
+          matchF  <- costAlg.get().map(cost => matchListPar(cost))
           prodRes <- space.produce(channel, data, persist, sequenceNumber)(matchF)
           _       <- handleResult(prodRes)
         } yield prodRes
@@ -90,7 +90,7 @@ object ChargingRSpace {
         result match {
           case Left(oope) =>
             // if we run out of phlos during the match we have to zero phlos available
-            costAlg.get().flatMap(ca => costAlg.charge(ca.cost)) >> Sync[F].raiseError(oope)
+            costAlg.get().flatMap(cost => costAlg.charge(cost)) >> Sync[F].raiseError(oope)
 
           case Right(None) => Sync[F].unit
 

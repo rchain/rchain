@@ -10,6 +10,7 @@ import kamon.MetricReporter
 import kamon.metric._
 import java.time.Instant
 
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 class JmxReporter extends MetricReporter {
 
   private val snapshotAccumulator =

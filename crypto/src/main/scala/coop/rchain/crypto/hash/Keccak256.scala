@@ -5,6 +5,7 @@ import org.bouncycastle.crypto.digests.KeccakDigest
 /**
   * Keccak256 hashing algorithm
   */
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 object Keccak256 {
 
   def hash(input: Array[Byte]): Array[Byte] = {

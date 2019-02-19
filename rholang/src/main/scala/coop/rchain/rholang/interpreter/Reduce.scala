@@ -1,10 +1,12 @@
 package coop.rchain.rholang.interpreter
 
+import cats._
 import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.FunctorTell
 import cats.{Applicative, FlatMap, Foldable, Parallel, Eval => _}
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.mtl._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance._
@@ -13,7 +15,8 @@ import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.{Match, MatchCase, _}
-import coop.rchain.rholang.interpreter.Substitute._
+import coop.rchain.rholang.interpreter._
+import coop.rchain.rholang.interpreter.Substitute.{charge => _, _}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.matcher._
@@ -60,10 +63,11 @@ object Reduce {
       private val urnMap: Map[String, Par]
   )(
       implicit
-      costAccountingAlg: CostAccounting[M],
       parallel: cats.Parallel[M, F],
       s: Sync[M],
-      fTell: FunctorTell[M, Throwable]
+      fTell: FunctorTell[M, Throwable],
+      cost: _cost[M],
+      err: _error[M]
   ) extends Reduce[M] {
 
     /**
@@ -231,7 +235,7 @@ object Reduce {
           }
         }
         .parSequence
-        .as(Unit)
+        .as(())
     }
 
     override def inj(
@@ -285,7 +289,7 @@ object Reduce {
                       p => substituteAndCharge[Par, M](p, 0, env)
                     )
         _ <- produce(unbundled, substData, send.persistent, rand, sequenceNumber)
-        _ <- costAccountingAlg.charge(SEND_EVAL_COST)
+        _ <- charge[M](SEND_EVAL_COST)
       } yield ()
 
     private def evalExplicit(
@@ -325,7 +329,7 @@ object Reduce {
                       env.shift(receive.bindCount)
                     )
         _ <- consume(binds, substBody, receive.persistent, rand, sequenceNumber)
-        _ <- costAccountingAlg.charge(RECEIVE_EVAL_COST)
+        _ <- charge[M](RECEIVE_EVAL_COST)
       } yield ()
 
     /**
@@ -342,7 +346,7 @@ object Reduce {
     private def eval(
         valproc: Var
     )(implicit env: Env[Par]): M[Par] =
-      costAccountingAlg.charge(VAR_EVAL_COST) *> {
+      charge[M](VAR_EVAL_COST) *> {
         valproc.varInstance match {
           case BoundVar(level) =>
             env.get(level) match {
@@ -421,7 +425,7 @@ object Reduce {
         // TODO(kyle): Make the matcher accept an environment, instead of substituting it.
         substTarget <- substituteAndCharge[Par, M](evaledTarget, 0, env)
         _           <- firstMatch(substTarget, mat.cases)
-        _           <- costAccountingAlg.charge(MATCH_EVAL_COST)
+        _           <- charge[M](MATCH_EVAL_COST)
       } yield ()
     }
 
@@ -468,7 +472,7 @@ object Reduce {
         }
       }
 
-      costAccountingAlg.charge(newBindingsCost(neu.bindCount)) *>
+      charge[M](newBindingsCost(neu.bindCount)) *>
         alloc(neu.bindCount, neu.uri).flatMap { newEnv =>
           eval(neu.p)(newEnv, rand, sequenceNumber)
         }
@@ -520,7 +524,7 @@ object Reduce {
         case EMethodBody(EMethod(method, target, arguments, _, _)) => {
           val methodLookup = methodTable.get(method)
           for {
-            _            <- costAccountingAlg.charge(METHOD_CALL_COST)
+            _            <- charge[M](METHOD_CALL_COST)
             evaledTarget <- evalExpr(target)
             evaledArgs   <- arguments.toList.traverse(expr => evalExpr(expr))
             resultPar <- methodLookup match {
@@ -581,13 +585,13 @@ object Reduce {
           for {
             v1 <- evalToLong(p1)
             v2 <- evalToLong(p2)
-            _  <- costAccountingAlg.charge(MULTIPLICATION_COST)
+            _  <- charge[M](MULTIPLICATION_COST)
           } yield GInt(v1 * v2)
         case EDivBody(EDiv(p1, p2)) =>
           for {
             v1 <- evalToLong(p1)
             v2 <- evalToLong(p2)
-            _  <- costAccountingAlg.charge(DIVISION_COST)
+            _  <- charge[M](DIVISION_COST)
           } yield GInt(v1 / v2)
         case EPlusBody(EPlus(p1, p2)) =>
           for {
@@ -596,11 +600,11 @@ object Reduce {
             result <- (v1.exprInstance, v2.exprInstance) match {
                        case (GInt(lhs), GInt(rhs)) =>
                          for {
-                           _ <- costAccountingAlg.charge(SUM_COST)
+                           _ <- charge[M](SUM_COST)
                          } yield Expr(GInt(lhs + rhs))
                        case (lhs: ESetBody, rhs) =>
                          for {
-                           _         <- costAccountingAlg.charge(OP_CALL_COST)
+                           _         <- charge[M](OP_CALL_COST)
                            resultPar <- add(lhs, List[Par](rhs))
                            resultExp <- evalSingleExpr(resultPar)
                          } yield resultExp
@@ -617,17 +621,17 @@ object Reduce {
             result <- (v1.exprInstance, v2.exprInstance) match {
                        case (GInt(lhs), GInt(rhs)) =>
                          for {
-                           _ <- costAccountingAlg.charge(SUBTRACTION_COST)
+                           _ <- charge[M](SUBTRACTION_COST)
                          } yield Expr(GInt(lhs - rhs))
                        case (lhs: EMapBody, rhs) =>
                          for {
-                           _         <- costAccountingAlg.charge(OP_CALL_COST)
+                           _         <- charge[M](OP_CALL_COST)
                            resultPar <- delete(lhs, List[Par](rhs))
                            resultExp <- evalSingleExpr(resultPar)
                          } yield resultExp
                        case (lhs: ESetBody, rhs) =>
                          for {
-                           _         <- costAccountingAlg.charge(OP_CALL_COST)
+                           _         <- charge[M](OP_CALL_COST)
                            resultPar <- delete(lhs, List[Par](rhs))
                            resultExp <- evalSingleExpr(resultPar)
                          } yield resultExp
@@ -638,13 +642,13 @@ object Reduce {
                      }
           } yield result
         case ELtBody(ELt(p1, p2)) =>
-          relop(p1, p2, (_ < _), (_ < _), (_ < _)) <* costAccountingAlg.charge(COMPARISON_COST)
+          relop(p1, p2, (_ < _), (_ < _), (_ < _)) <* charge[M](COMPARISON_COST)
         case ELteBody(ELte(p1, p2)) =>
-          relop(p1, p2, (_ <= _), (_ <= _), (_ <= _)) <* costAccountingAlg.charge(COMPARISON_COST)
+          relop(p1, p2, (_ <= _), (_ <= _), (_ <= _)) <* charge[M](COMPARISON_COST)
         case EGtBody(EGt(p1, p2)) =>
-          relop(p1, p2, (_ > _), (_ > _), (_ > _)) <* costAccountingAlg.charge(COMPARISON_COST)
+          relop(p1, p2, (_ > _), (_ > _), (_ > _)) <* charge[M](COMPARISON_COST)
         case EGteBody(EGte(p1, p2)) =>
-          relop(p1, p2, (_ >= _), (_ >= _), (_ >= _)) <* costAccountingAlg.charge(COMPARISON_COST)
+          relop(p1, p2, (_ >= _), (_ >= _), (_ >= _)) <* charge[M](COMPARISON_COST)
         case EEqBody(EEq(p1, p2)) =>
           for {
             v1 <- evalExpr(p1)
@@ -652,7 +656,7 @@ object Reduce {
             // TODO: build an equality operator that takes in an environment.
             sv1 <- substituteAndCharge[Par, M](v1, 0, env)
             sv2 <- substituteAndCharge[Par, M](v2, 0, env)
-            _   <- costAccountingAlg.charge(equalityCheckCost(sv1, sv2))
+            _   <- charge[M](equalityCheckCost(sv1, sv2))
           } yield GBool(sv1 == sv2)
         case ENeqBody(ENeq(p1, p2)) =>
           for {
@@ -660,19 +664,19 @@ object Reduce {
             v2  <- evalExpr(p2)
             sv1 <- substituteAndCharge[Par, M](v1, 0, env)
             sv2 <- substituteAndCharge[Par, M](v2, 0, env)
-            _   <- costAccountingAlg.charge(equalityCheckCost(sv1, sv2))
+            _   <- charge[M](equalityCheckCost(sv1, sv2))
           } yield GBool(sv1 != sv2)
         case EAndBody(EAnd(p1, p2)) =>
           for {
             b1 <- evalToBool(p1)
             b2 <- evalToBool(p2)
-            _  <- costAccountingAlg.charge(BOOLEAN_AND_COST)
+            _  <- charge[M](BOOLEAN_AND_COST)
           } yield GBool(b1 && b2)
         case EOrBody(EOr(p1, p2)) =>
           for {
             b1 <- evalToBool(p1)
             b2 <- evalToBool(p2)
-            _  <- costAccountingAlg.charge(BOOLEAN_OR_COST)
+            _  <- charge[M](BOOLEAN_OR_COST)
           } yield GBool(b1 || b2)
 
         case EMatchesBody(EMatches(target, pattern)) =>
@@ -705,7 +709,9 @@ object Reduce {
                   ReduceError("Error: interpolation Map should only contain String keys")
                 )
             }
-          @SuppressWarnings(Array("org.wartremover.warts.Var"))
+          @SuppressWarnings(
+            Array("org.wartremover.warts.Var", "org.wartremover.warts.NonUnitStatements")
+          )
           // TODO consider replacing while loop with tailrec recursion
           def interpolate(string: String, keyValuePairs: List[(String, String)]): String = {
             val result  = StringBuilder.newBuilder
@@ -725,7 +731,7 @@ object Reduce {
             result.toString
           }
           for {
-            _  <- costAccountingAlg.charge(OP_CALL_COST)
+            _  <- charge[M](OP_CALL_COST)
             v1 <- evalSingleExpr(p1)
             v2 <- evalSingleExpr(p2)
             result <- (v1.exprInstance, v2.exprInstance) match {
@@ -746,7 +752,7 @@ object Reduce {
                                         .map(
                                           keyValuePairs => GString(interpolate(lhs, keyValuePairs))
                                         )
-                             _ <- costAccountingAlg.charge(interpolateCost(lhs.length, rhs.size))
+                             _ <- charge[M](interpolateCost(lhs.length, rhs.size))
                            } yield result
                          } else {
                            s.pure(GString(lhs))
@@ -759,25 +765,25 @@ object Reduce {
           } yield result
         case EPlusPlusBody(EPlusPlus(p1, p2)) =>
           for {
-            _  <- costAccountingAlg.charge(OP_CALL_COST)
+            _  <- charge[M](OP_CALL_COST)
             v1 <- evalSingleExpr(p1)
             v2 <- evalSingleExpr(p2)
             result <- (v1.exprInstance, v2.exprInstance) match {
                        case (GString(lhs), GString(rhs)) =>
                          for {
-                           _ <- costAccountingAlg.charge(
+                           _ <- charge[M](
                                  stringAppendCost(lhs.length, rhs.length)
                                )
                          } yield Expr(GString(lhs + rhs))
                        case (GByteArray(lhs), GByteArray(rhs)) =>
                          for {
-                           _ <- costAccountingAlg.charge(
+                           _ <- charge[M](
                                  byteArrayAppendCost(lhs)
                                )
                          } yield Expr(GByteArray(lhs.concat(rhs)))
                        case (EListBody(lhs), EListBody(rhs)) =>
                          for {
-                           _ <- costAccountingAlg.charge(
+                           _ <- charge[M](
                                  listAppendCost(rhs.ps.toVector)
                                )
                          } yield
@@ -814,7 +820,7 @@ object Reduce {
           } yield result
         case EMinusMinusBody(EMinusMinus(p1, p2)) =>
           for {
-            _  <- costAccountingAlg.charge(OP_CALL_COST)
+            _  <- charge[M](OP_CALL_COST)
             v1 <- evalSingleExpr(p1)
             v2 <- evalSingleExpr(p2)
             result <- (v1.exprInstance, v2.exprInstance) match {
@@ -866,7 +872,7 @@ object Reduce {
         case EMethodBody(EMethod(method, target, arguments, _, _)) => {
           val methodLookup = methodTable.get(method)
           for {
-            _            <- costAccountingAlg.charge(METHOD_CALL_COST)
+            _            <- charge[M](METHOD_CALL_COST)
             evaledTarget <- evalExpr(target)
             evaledArgs   <- arguments.toList.traverse(expr => evalExpr(expr))
             resultPar <- methodLookup match {
@@ -926,7 +932,7 @@ object Reduce {
                            )
                          )
                      }
-            _ <- costAccountingAlg.charge(NTH_METHOD_CALL_COST)
+            _ <- charge[M](NTH_METHOD_CALL_COST)
           } yield result
         }
     }
@@ -949,7 +955,7 @@ object Reduce {
           for {
             exprEvaled <- evalExpr(p)
             exprSubst  <- substituteAndCharge[Par, M](exprEvaled, 0, env)
-            _          <- costAccountingAlg.charge(toByteArrayCost(exprSubst))
+            _          <- charge[M](toByteArrayCost(exprSubst))
             ba         <- s.fromEither(serialize(exprSubst))
           } yield Expr(GByteArray(ByteString.copyFrom(ba)))
         }
@@ -971,7 +977,7 @@ object Reduce {
                   s"Error: exception was thrown when decoding input string to hexadecimal: ${th.getMessage}"
                 )
               for {
-                _           <- costAccountingAlg.charge(hexToBytesCost(encoded))
+                _           <- charge[M](hexToBytesCost(encoded))
                 encodingRes = Try(ByteString.copyFrom(Base16.decode(encoded)))
                 res <- encodingRes.fold(
                         th => s.raiseError(decodingError(th)),
@@ -998,7 +1004,7 @@ object Reduce {
           p.singleExpr() match {
             case Some(Expr(GString(utf8string))) =>
               for {
-                _ <- costAccountingAlg.charge(hexToBytesCost(utf8string))
+                _ <- charge[M](hexToBytesCost(utf8string))
               } yield Expr(GByteArray(ByteString.copyFrom(utf8string.getBytes("UTF-8"))))
             case Some(Expr(other)) =>
               s.raiseError(MethodNotDefined("toUtf8Bytes", other.typ))
@@ -1018,7 +1024,7 @@ object Reduce {
               ESetBody(base @ ParSet(basePs, _, _, _)),
               ESetBody(other @ ParSet(otherPs, _, _, _))
               ) =>
-            costAccountingAlg.charge(unionCost(otherPs.size)) *> Applicative[M].pure[Expr](
+            charge[M](unionCost(otherPs.size)) *> Applicative[M].pure[Expr](
               ESetBody(
                 ParSet(
                   basePs.union(otherPs.sortedPars.toSet),
@@ -1032,7 +1038,7 @@ object Reduce {
               EMapBody(base @ ParMap(baseMap, _, _, _)),
               EMapBody(other @ ParMap(otherMap, _, _, _))
               ) =>
-            costAccountingAlg.charge(unionCost(otherMap.size)) *>
+            charge[M](unionCost(otherMap.size)) *>
               Applicative[M].pure[Expr](
                 EMapBody(
                   ParMap(
@@ -1070,7 +1076,7 @@ object Reduce {
               ) =>
             // diff is implemented in terms of foldLeft that at each step
             // removes one element from the collection.
-            costAccountingAlg.charge(diffCost(otherPs.size)) *>
+            charge[M](diffCost(otherPs.size)) *>
               Applicative[M].pure[Expr](
                 ESetBody(
                   ParSet(basePs.sortedPars.toSet.diff(otherPs.sortedPars.toSet).toSeq)
@@ -1078,7 +1084,7 @@ object Reduce {
               )
           case (EMapBody(ParMap(basePs, _, _, _)), EMapBody(ParMap(otherPs, _, _, _))) =>
             val newMap = basePs -- otherPs.keys
-            costAccountingAlg.charge(diffCost(otherPs.size)) *>
+            charge[M](diffCost(otherPs.size)) *>
               Applicative[M].pure[Expr](
                 EMapBody(ParMap(newMap))
               )
@@ -1131,7 +1137,7 @@ object Reduce {
           baseExpr <- evalSingleExpr(p)
           element  <- evalExpr(args(0))
           result   <- add(baseExpr, element)
-          _        <- costAccountingAlg.charge(ADD_COST)
+          _        <- charge[M](ADD_COST)
         } yield result
     }
 
@@ -1175,7 +1181,7 @@ object Reduce {
           baseExpr <- evalSingleExpr(p)
           element  <- evalExpr(args(0))
           result   <- delete(baseExpr, element)
-          _        <- costAccountingAlg.charge(REMOVE_COST) //TODO(mateusz.gorski): think whether deletion of an element from the collection should dependent on the collection type/size
+          _        <- charge[M](REMOVE_COST) //TODO(mateusz.gorski): think whether deletion of an element from the collection should dependent on the collection type/size
         } yield result
     }
 
@@ -1198,7 +1204,7 @@ object Reduce {
           baseExpr <- evalSingleExpr(p)
           element  <- evalExpr(args(0))
           result   <- contains(baseExpr, element)
-          _        <- costAccountingAlg.charge(LOOKUP_COST)
+          _        <- charge[M](LOOKUP_COST)
         } yield result
     }
 
@@ -1222,7 +1228,7 @@ object Reduce {
           baseExpr <- evalSingleExpr(p)
           key      <- evalExpr(args(0))
           result   <- get(baseExpr, key)
-          _        <- costAccountingAlg.charge(LOOKUP_COST)
+          _        <- charge[M](LOOKUP_COST)
         } yield result
     }
 
@@ -1247,7 +1253,7 @@ object Reduce {
           key      <- evalExpr(args(0))
           default  <- evalExpr(args(1))
           result   <- getOrElse(baseExpr, key, default)
-          _        <- costAccountingAlg.charge(LOOKUP_COST)
+          _        <- charge[M](LOOKUP_COST)
         } yield result
     }
 
@@ -1272,7 +1278,7 @@ object Reduce {
           key      <- evalExpr(args(0))
           value    <- evalExpr(args(1))
           result   <- set(baseExpr, key, value)
-          _        <- costAccountingAlg.charge(ADD_COST)
+          _        <- charge[M](ADD_COST)
         } yield result
     }
 
@@ -1295,7 +1301,7 @@ object Reduce {
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           result   <- keys(baseExpr)
-          _        <- costAccountingAlg.charge(KEYS_METHOD_COST)
+          _        <- charge[M](KEYS_METHOD_COST)
         } yield result
     }
 
@@ -1322,7 +1328,7 @@ object Reduce {
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           result   <- size(baseExpr)
-          _        <- costAccountingAlg.charge(sizeMethodCost(result._1))
+          _        <- charge[M](sizeMethodCost(result._1))
         } yield result._2
     }
 
@@ -1348,7 +1354,7 @@ object Reduce {
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           result   <- length(baseExpr)
-          _        <- costAccountingAlg.charge(LENGTH_METHOD_COST)
+          _        <- charge[M](LENGTH_METHOD_COST)
         } yield result
     }
 
@@ -1388,7 +1394,7 @@ object Reduce {
           toArgRaw   <- evalToLong(args(1))
           toArg      <- restrictToInt(toArgRaw)
           result     <- slice(baseExpr, fromArg, toArg)
-          _          <- costAccountingAlg.charge(sliceCost(toArg))
+          _          <- charge[M](sliceCost(toArg))
         } yield result
     }
 

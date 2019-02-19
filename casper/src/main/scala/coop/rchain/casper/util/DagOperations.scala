@@ -95,9 +95,13 @@ object DagOperations {
     })
   }
 
-  //Conceptually, the GCA is the first point at which the histories of b1 and b2 diverge.
-  //Based on that, we compute by finding the first block from genesis for which there
-  //exists a child of that block which is an ancestor of b1 or b2 but not both.
+  /**
+    * Conceptually, the GCA is the first point at which the histories of b1 and b2 diverge.
+    * We compute by finding the first block from genesis for which there exists a child of that block which is an ancestor of b1 or b2 but not both.
+    *
+    * TODO: Implement a GCA that doesn't require the genesis block (see https://rchain.atlassian.net/browse/RCHAIN-3002)
+    * TODO: Remove usage of BlockStore by just using BlockDagRepresentation (see https://rchain.atlassian.net/browse/RCHAIN-3003)
+    */
   def greatestCommonAncestorF[F[_]: Monad: BlockStore](
       b1: BlockMessage,
       b2: BlockMessage,

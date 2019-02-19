@@ -92,10 +92,11 @@ case class TestResult(
     hasFinished: Boolean
 ) {
   def addAssertion(attempt: Long, assertion: RhoTestAssertion): TestResult = {
-    val currentAtteptAssertions = assertions.getOrElse(assertion.testName, Map.empty)
+    val currentAttemptAssertions = assertions.getOrElse(assertion.testName, Map.empty)
     val newAssertion =
-      (attempt, assertion :: currentAtteptAssertions.getOrElse(attempt, List.empty))
-    val newCurrentAttemptAssertions = currentAtteptAssertions + newAssertion
+      (attempt, assertion :: currentAttemptAssertions.getOrElse(attempt, List.empty))
+    val newCurrentAttemptAssertions = currentAttemptAssertions + newAssertion
+
     TestResult(assertions.updated(assertion.testName, newCurrentAttemptAssertions), hasFinished)
   }
   def setFinished(hasFinished: Boolean): TestResult =

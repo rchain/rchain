@@ -48,8 +48,7 @@ object Dependencies {
   val monix               = "io.monix"                   %% "monix"                     % "3.0.0-RC2"
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.9.0"
   val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "1.1.5"
-  val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.13.5" % "test"
-  val scalacheckNoTest    = "org.scalacheck"             %% "scalacheck"                % "1.13.5"
+  val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.13.5"
   val scalacheckShapeless = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.8" % "test"
   val scalactic           = "org.scalactic"              %% "scalactic"                 % "3.0.5" % "test"
   val scalapbCompiler     = "com.thesamet.scalapb"       %% "compilerplugin"            % scalapb.compiler.Version.scalapbVersion
@@ -81,7 +80,7 @@ object Dependencies {
     shapeless,
     guava,
     scodecBits,
-    scalacheckNoTest,
+    scalacheck,
     //overrides for transitive dependencies (we don't use them directly, hence no val-s)
     "org.typelevel"            %% "machinist"              % "0.6.5",
     "org.typelevel"            %% "catalysts-platform"     % "0.6",

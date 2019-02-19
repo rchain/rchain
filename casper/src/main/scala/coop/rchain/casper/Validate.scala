@@ -177,8 +177,7 @@ object Validate {
       block: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
-      shardId: String,
-      lastFinalizedBlockHash: BlockHash
+      shardId: String
   ): F[Either[BlockStatus, ValidBlock]] =
     for {
       blockHashStatus   <- Validate.blockHash[F](block)
@@ -199,7 +198,7 @@ object Validate {
                         _ => Validate.justificationFollows[F](block, genesis, dag)
                       )
       parentsStatus <- followsStatus.joinRight.traverse(
-                        _ => Validate.parents[F](block, lastFinalizedBlockHash, dag)
+                        _ => Validate.parents[F](block, genesis, dag)
                       )
       sequenceNumberStatus <- parentsStatus.joinRight.traverse(
                                _ => Validate.sequenceNumber[F](block, dag)
@@ -422,19 +421,19 @@ object Validate {
     */
   def parents[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
-      lastFinalizedBlockHash: BlockHash,
+      genesis: BlockMessage,
       dag: BlockDagRepresentation[F]
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val maybeParentHashes = ProtoUtil.parentHashes(b)
     val parentHashes = maybeParentHashes match {
-      case hashes if hashes.isEmpty => Seq(lastFinalizedBlockHash)
+      case hashes if hashes.isEmpty => Seq(genesis.blockHash)
       case hashes                   => hashes
     }
 
     for {
       latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure[F]
-      estimate             <- Estimator.tips[F](dag, lastFinalizedBlockHash, latestMessagesHashes)
-      computedParents      <- ProtoUtil.chooseNonConflicting[F](estimate, dag)
+      estimate             <- Estimator.tips[F](dag, genesis, latestMessagesHashes)
+      computedParents      <- ProtoUtil.chooseNonConflicting[F](estimate.take(1), dag)
       computedParentHashes = computedParents.map(_.blockHash)
       status <- if (parentHashes == computedParentHashes)
                  Applicative[F].pure(Right(Valid))

@@ -91,7 +91,7 @@ object CostAccountingPropertyTest {
     for {
       program <- interpreter.buildPar(p)
       res     <- interpreter.evaluate(runtime, program)
-      cost    = res.cost.cost
+      cost    = res.cost
     } yield cost.value
   }
 

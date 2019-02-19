@@ -27,6 +27,7 @@ import coop.rchain.catscontrib._
 import ski._
 
 class GrpcServer(server: Server) {
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def start: Task[Unit] = Task.delay(server.start())
 
   private def attemptShutdown: Task[Boolean] =

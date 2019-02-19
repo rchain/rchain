@@ -1,6 +1,6 @@
 package coop.rchain.casper.util.rholang
 
-import cats.Monad
+import cats._
 import cats.data.EitherT
 import cats.effect._
 import cats.effect.concurrent.MVar
@@ -15,7 +15,7 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Interpreter
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
+import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{accounting, ChargingReducer, ErrorLog, Runtime}
 import coop.rchain.rspace.internal.Datum
@@ -298,15 +298,24 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     implicit val rand: Blake2b512Random = Blake2b512Random(
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
     )
-    // TODO: add error handling
-    for {
-      parsed    <- Interpreter[F].buildNormalizedTerm(deploy.term)
-      result    <- reducer.inj(parsed).attempt
-      phlos     <- reducer.phlo
-      oldErrors <- errorLog.readAndClearErrorVector()
-      newErrors = result.swap.toSeq.toVector
-      allErrors = oldErrors |+| newErrors
-    } yield (CostAccount.toProto(phlos) -> allErrors)
+
+    val parsingCost = accounting.parsingCost(deploy.term)
+
+    Interpreter[F].buildNormalizedTerm(deploy.term).attempt.flatMap {
+      case Right(parsed) =>
+        for {
+          result    <- reducer.inj(parsed).attempt
+          phlosLeft <- reducer.phlo
+          oldErrors <- errorLog.readAndClearErrorVector()
+          newErrors = result.swap.toSeq.toVector
+          allErrors = oldErrors |+| newErrors
+        } yield (Cost.toProto(phlosLeft - parsingCost) -> allErrors)
+      case Left(error) =>
+        for {
+          phlosLeft <- reducer.phlo
+        } yield (Cost.toProto(phlosLeft - parsingCost) -> Vector(error))
+    }
+
   }
 }
 

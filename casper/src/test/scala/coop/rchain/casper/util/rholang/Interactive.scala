@@ -6,7 +6,7 @@ import monix.execution.Scheduler
 import monix.eval.Task
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccounting}
+import coop.rchain.rholang.interpreter.accounting.{CostAccounting}
 import coop.rchain.shared.PathOps.RichPath
 import java.nio.file.{Files, Path, Paths}
 import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}

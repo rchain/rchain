@@ -284,18 +284,19 @@ object Genesis {
     val bonds        = pubKeys.zipWithIndex.toMap.mapValues(_.toLong + 1L)
     val genBondsFile = genesisPath.resolve(s"bonds.txt").toFile
 
-    val skFiles = Capture[F].capture {
-      genesisPath.toFile.mkdir()
-      keys.foreach { //create files showing the secret key for each public key
-        case (sec, pub) =>
-          val sk      = Base16.encode(sec)
-          val pk      = Base16.encode(pub)
-          val skFile  = genesisPath.resolve(s"$pk.sk").toFile
-          val printer = new PrintWriter(skFile)
-          printer.println(sk)
-          printer.close()
-      }
-    }
+    val skFiles =
+      Capture[F].capture(genesisPath.toFile.mkdir()) >>
+        Capture[F].capture {
+          keys.foreach { //create files showing the secret key for each public key
+            case (sec, pub) =>
+              val sk      = Base16.encode(sec)
+              val pk      = Base16.encode(pub)
+              val skFile  = genesisPath.resolve(s"$pk.sk").toFile
+              val printer = new PrintWriter(skFile)
+              printer.println(sk)
+              printer.close()
+          }
+        }
 
     //create bonds file for editing/future use
     for {

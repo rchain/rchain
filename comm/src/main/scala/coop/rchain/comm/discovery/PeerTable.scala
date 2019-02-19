@@ -28,7 +28,7 @@ object ReputationOrder extends Ordering[Reputable] {
   def compare(a: Reputable, b: Reputable) = a.reputation compare b.reputation
 }
 
-@SuppressWarnings(Array("org.wartremover.warts.Var"))
+@SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.NonUnitStatements"))
 final case class PeerTableEntry[A](entry: A, gkey: A => Seq[Byte]) extends Keyed {
   var pinging           = false
   val key               = gkey(entry)
@@ -77,6 +77,7 @@ object PeerTable {
   * network discovery and routing protocol.
   *
   */
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 final class PeerTable[A <: PeerNode](
     localKey: Seq[Byte],
     private[discovery] val k: Int,

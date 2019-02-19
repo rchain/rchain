@@ -25,9 +25,9 @@ lazy val projectSettings = Seq(
   wartremoverErrors in (Compile, compile) ++= Warts.allBut(
     // those we want
     Wart.DefaultArguments, Wart.ImplicitParameter, Wart.ImplicitConversion,
+    Wart.LeakingSealed, Wart.Recursion,
     // those don't want
-    Wart.Recursion,
-    Wart.LeakingSealed, Wart.Overloading, Wart.Nothing, Wart.NonUnitStatements,
+    Wart.Overloading, Wart.Nothing,
     Wart.Equals, Wart.PublicInference, Wart.TraversableOps, Wart.ArrayEquals,
     Wart.While, Wart.Any, Wart.Product, Wart.Serializable, Wart.OptionPartial,
     Wart.EitherProjectionPartial, Wart.Option2Iterable, Wart.ToString, Wart.JavaConversions,
@@ -68,6 +68,9 @@ Seq(sys.env.get("SKIP_DOC")).flatMap { _ =>
     sources in (Compile, doc) := Seq.empty
   )
 }
+
+// a namespace for generative tests (or other tests that take a long time)
+lazy val SlowcookerTest = config("slowcooker") extend(Test)
 
 lazy val coverageSettings = Seq(
   coverageMinimum := 90,
@@ -136,14 +139,18 @@ lazy val graphz = (project in file("graphz"))
   ).dependsOn(shared)
 
 lazy val casper = (project in file("casper"))
+  .configs(SlowcookerTest)
   .settings(commonSettings: _*)
   .settings(rholangSettings: _*)
+  .settings(inConfig(SlowcookerTest)(Defaults.testSettings) : _*)
+  .settings(inConfig(SlowcookerTest)(org.scalafmt.sbt.ScalafmtPlugin.scalafmtConfigSettings))
   .settings(
     name := "casper",
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       catsCore,
       catsMtl,
-      monix
+      monix,
+      scalacheck % "slowcooker"
     ),
     rholangProtoBuildAssembly := (rholangProtoBuild / Compile / incrementalAssembly).value
   )
@@ -203,7 +210,7 @@ lazy val crypto = (project in file("crypto"))
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       guava,
       bouncyCastle,
-      scalacheckNoTest,
+      scalacheck,
       kalium,
       jaxb,
       secp256k1Java,
@@ -220,7 +227,7 @@ lazy val models = (project in file("models"))
       catsCore,
       magnolia,
       scalapbCompiler,
-      scalacheck,
+      scalacheck % "test",
       scalacheckShapeless,
       scalapbRuntimegGrpc
     ),

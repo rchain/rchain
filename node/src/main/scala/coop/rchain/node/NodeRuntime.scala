@@ -49,6 +49,7 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.blaze._
 
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 class NodeRuntime private[node] (
     conf: Configuration,
     id: NodeIdentifier,

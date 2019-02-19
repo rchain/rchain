@@ -357,7 +357,7 @@ class ValidateTest
           current <- Time[F].currentMillis
           deploy  <- ProtoUtil.basicProcessedDeploy[F](current.toInt)
           block <- createBlock[F](
-                    parents.map(_.blockHash),
+                    parents.map(_.blockHash).take(1),
                     creator = validators(validator),
                     bonds = bonds,
                     deploys = Seq(deploy),
@@ -392,18 +392,18 @@ class ValidateTest
                        dag <- blockDagStorage.getRepresentation
 
                        // Valid
-                       _ <- Validate.parents[Task](b0, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b1, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b2, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b3, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b4, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b5, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b6, b0.blockHash, dag)
+                       _ <- Validate.parents[Task](b0, b0, dag)
+                       _ <- Validate.parents[Task](b1, b0, dag)
+                       _ <- Validate.parents[Task](b2, b0, dag)
+                       _ <- Validate.parents[Task](b3, b0, dag)
+                       _ <- Validate.parents[Task](b4, b0, dag)
+                       _ <- Validate.parents[Task](b5, b0, dag)
+                       _ <- Validate.parents[Task](b6, b0, dag)
 
                        // Not valid
-                       _ <- Validate.parents[Task](b7, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b8, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b9, b0.blockHash, dag)
+                       _ <- Validate.parents[Task](b7, b0, dag)
+                       _ <- Validate.parents[Task](b8, b0, dag)
+                       _ <- Validate.parents[Task](b9, b0, dag)
 
                        _ = log.warns.size should be(3)
                        result = log.warns.forall(
@@ -436,8 +436,7 @@ class ValidateTest
               signedBlock,
               BlockMessage.defaultInstance,
               dag,
-              "rchain",
-              BlockMessage.defaultInstance.blockHash
+              "rchain"
             ) shouldBeF Left(InvalidBlockNumber)
         result = log.warns.size should be(1)
       } yield result

@@ -3,11 +3,12 @@ package coop.rchain.rholang.interpreter
 import cats.Parallel
 import cats.effect.Sync
 import cats.mtl.FunctorTell
+import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoPureSpace}
-import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccounting}
+import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.storage.{ChargingRSpace, Tuplespace}
 
 trait Dispatch[M[_], A, K] {
@@ -63,7 +64,8 @@ object RholangAndScalaDispatcher {
       ft: FunctorTell[M, Throwable]
   ): (Dispatch[M, ListParWithRandomAndPhlos, TaggedContinuation], ChargingReducer[M], Registry[M]) = {
 
-    implicit val costAlg: CostAccounting[M] = CostAccounting.unsafe[M](CostAccount(0))
+    implicit val costAlg: CostAccounting[M] = CostAccounting.unsafe[M](Cost(0))
+    implicit val cost: _cost[M]             = costAlg
 
     implicit lazy val dispatcher: Dispatch[M, ListParWithRandomAndPhlos, TaggedContinuation] =
       new RholangAndScalaDispatcher(dispatchTable)

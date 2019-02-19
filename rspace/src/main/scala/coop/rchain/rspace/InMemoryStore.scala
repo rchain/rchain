@@ -32,6 +32,7 @@ object State {
   def empty[C, P, A, K]: State[C, P, A, K] = State[C, P, A, K](Map.empty, Map.empty)
 }
 
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 class InMemoryStore[T, C, P, A, K](
     val trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]],
     val trieBranch: Branch
