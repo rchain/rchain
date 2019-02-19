@@ -56,7 +56,7 @@ object Estimator {
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[BlockHash] =
     for {
-      latestMessages <- latestMessagesHashes.values.toList
+      latestMessages <- latestMessagesHashes.values.toStream
                          .traverse(hash => ProtoUtil.unsafeGetBlock[F](hash))
       result <- if (latestMessages.isEmpty) {
                  genesis.pure[F]
@@ -182,10 +182,17 @@ object Estimator {
       blockDag: BlockDagRepresentation[F],
       scores: Map[BlockHash, Long]
   ): F[List[BlockHash]] =
-    blockDag.children(b).map(_.getOrElse(Set.empty[BlockHash]).filter(scores.contains)).map {
-      case c if c.nonEmpty => c.toList
-      case _               => List(b)
-    }
+    for {
+      children <- blockDag
+                   .children(b)
+                   .map(maybeChildren => maybeChildren.getOrElse(Set.empty[BlockHash]))
+      scoredChildren = children.filter(scores.contains)
+      result = if (scoredChildren.nonEmpty) {
+        scoredChildren.toList
+      } else {
+        List(b)
+      }
+    } yield result
 
   private def stillSame(blocks: List[BlockHash], newBlocks: List[BlockHash]): Boolean =
     newBlocks == blocks
