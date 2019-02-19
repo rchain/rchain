@@ -7,7 +7,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.util.BlockMessageUtil
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.util.DagOperations
+import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.weightFromValidatorByDag
 
 import scala.collection.immutable.{Map, Set}
@@ -21,36 +21,52 @@ object Estimator {
 
   def tips[F[_]: Monad: BlockStore](
       blockDag: BlockDagRepresentation[F],
-      lastFinalizedBlockHash: BlockHash
+      genesis: BlockMessage
   ): F[IndexedSeq[BlockMessage]] =
     for {
       latestMessageHashes <- blockDag.latestMessageHashes
-      result              <- Estimator.tips[F](blockDag, lastFinalizedBlockHash, latestMessageHashes)
+      result              <- Estimator.tips[F](blockDag, genesis, latestMessageHashes)
     } yield result
 
   /**
     * When the BlockDag has an empty latestMessages, tips will return IndexedSeq(genesis)
     *
-    * TODO: If the base block between the main parent and a secondary parent are more than
-    * X blocks deep from the main parent, ignore. Additionally, the last finalized block must
-    * be deeper than X blocks from the tip. This allows different validators to have
-    * different last finalized blocks and still come up with the same estimator tips for a block.
+    * TODO: Remove lastFinalizedBlockHash in follow up PR
     */
   def tips[F[_]: Monad: BlockStore](
       blockDag: BlockDagRepresentation[F],
-      lastFinalizedBlockHash: BlockHash,
+      genesis: BlockMessage,
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[IndexedSeq[BlockMessage]] =
     for {
-      scoresMap <- buildScoresMap(blockDag, latestMessagesHashes, lastFinalizedBlockHash)
+      gca       <- calculateGca(blockDag, genesis, latestMessagesHashes)
+      scoresMap <- buildScoresMap(blockDag, latestMessagesHashes, gca)
       sortedChildrenHash <- sortChildren(
-                             List(lastFinalizedBlockHash),
+                             List(gca),
                              blockDag,
                              scoresMap
                            )
       maybeSortedChildren <- sortedChildrenHash.traverse(BlockStore[F].get)
       sortedChildren      = maybeSortedChildren.flatten.toVector
     } yield sortedChildren
+
+  private def calculateGca[F[_]: Monad: BlockStore](
+      blockDag: BlockDagRepresentation[F],
+      genesis: BlockMessage,
+      latestMessagesHashes: Map[Validator, BlockHash]
+  ): F[BlockHash] =
+    for {
+      latestMessages <- latestMessagesHashes.values.toStream
+                         .traverse(hash => ProtoUtil.unsafeGetBlock[F](hash))
+      result <- if (latestMessages.isEmpty) {
+                 genesis.pure[F]
+               } else {
+                 latestMessages.foldM(latestMessages.head) {
+                   case (acc, latestMessage) =>
+                     DagOperations.greatestCommonAncestorF[F](acc, latestMessage, genesis, blockDag)
+                 }
+               }
+    } yield result.blockHash
 
   private def buildScoresMap[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
@@ -167,8 +183,16 @@ object Estimator {
       scores: Map[BlockHash, Long]
   ): F[List[BlockHash]] =
     for {
-      c <- blockDag.children(b).map(_.getOrElse(Set.empty[BlockHash]).filter(scores.contains))
-    } yield if (c.nonEmpty) c.toList else List(b)
+      children <- blockDag
+                   .children(b)
+                   .map(maybeChildren => maybeChildren.getOrElse(Set.empty[BlockHash]))
+      scoredChildren = children.filter(scores.contains)
+      result = if (scoredChildren.nonEmpty) {
+        scoredChildren.toList
+      } else {
+        List(b)
+      }
+    } yield result
 
   private def stillSame(blocks: List[BlockHash], newBlocks: List[BlockHash]): Boolean =
     newBlocks == blocks

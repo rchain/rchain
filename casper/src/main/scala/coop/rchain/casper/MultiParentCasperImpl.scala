@@ -96,16 +96,15 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       dag: BlockDagRepresentation[F]
   ): F[BlockStatus] =
     for {
-      validFormat            <- Validate.formatOfFields[F](b)
-      validSig               <- Validate.blockSignature[F](b)
-      validSender            <- Validate.blockSender[F](b, genesis, dag)
-      validVersion           <- Validate.version[F](b, version)
-      lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
+      validFormat  <- Validate.formatOfFields[F](b)
+      validSig     <- Validate.blockSignature[F](b)
+      validSender  <- Validate.blockSender[F](b, genesis, dag)
+      validVersion <- Validate.version[F](b, version)
       attemptResult <- if (!validFormat) (InvalidUnslashableBlock, dag).pure[F]
                       else if (!validSig) (InvalidUnslashableBlock, dag).pure[F]
                       else if (!validSender) (InvalidUnslashableBlock, dag).pure[F]
                       else if (!validVersion) (InvalidUnslashableBlock, dag).pure[F]
-                      else attemptAdd(b, dag, lastFinalizedBlockHash)
+                      else attemptAdd(b, dag)
       (attempt, updatedDag) = attemptResult
       _ <- attempt match {
             case MissingBlocks => ().pure[F]
@@ -122,11 +121,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
             case IgnorableEquivocation   => ().pure[F]
             case InvalidUnslashableBlock => ().pure[F]
             case _ =>
-              reAttemptBuffer(updatedDag, lastFinalizedBlockHash) // reAttempt for any status that resulted in the adding of the block into the view
+              reAttemptBuffer(updatedDag) // reAttempt for any status that resulted in the adding of the block into the view
           }
       estimates                     <- estimator(updatedDag)
       tip                           = estimates.head
       _                             <- Log[F].info(s"New fork-choice tip is block ${PrettyPrinter.buildString(tip.blockHash)}.")
+      lastFinalizedBlockHash        <- lastFinalizedBlockHashContainer.get
       updatedLastFinalizedBlockHash <- updateLastFinalizedBlock(updatedDag, lastFinalizedBlockHash)
       _                             <- lastFinalizedBlockHashContainer.set(updatedLastFinalizedBlockHash)
     } yield attempt
@@ -218,8 +218,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
 
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockMessage]] =
     for {
-      lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
-      rankedEstimates        <- Estimator.tips[F](dag, lastFinalizedBlockHash)
+      rankedEstimates <- Estimator.tips[F](dag, genesis)
     } yield rankedEstimates.take(1)
 
   /*
@@ -382,13 +381,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
    */
   private def attemptAdd(
       b: BlockMessage,
-      dag: BlockDagRepresentation[F],
-      lastFinalizedBlockHash: BlockHash
+      dag: BlockDagRepresentation[F]
   ): F[(BlockStatus, BlockDagRepresentation[F])] =
     for {
       _ <- Log[F].info(s"Attempting to add Block ${PrettyPrinter.buildString(b.blockHash)} to DAG.")
       postValidationStatus <- Validate
-                               .blockSummary[F](b, genesis, dag, shardId, lastFinalizedBlockHash)
+                               .blockSummary[F](b, genesis, dag, shardId)
       postTransactionsCheckStatus <- postValidationStatus.traverse(
                                       _ =>
                                         Validate.transactions[F](
@@ -575,8 +573,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
     } yield updatedDag
 
   private def reAttemptBuffer(
-      dag: BlockDagRepresentation[F],
-      lastFinalizedBlockHash: BlockHash
+      dag: BlockDagRepresentation[F]
   ): F[Unit] =
     for {
       state          <- Cell[F, CasperState].read
@@ -592,7 +589,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
                         ) {
                           case ((attempts, updatedDag), b) =>
                             for {
-                              status <- attemptAdd(b, updatedDag, lastFinalizedBlockHash)
+                              status <- attemptAdd(b, updatedDag)
                             } yield ((b, status) :: attempts, status._2)
                         }
       (attempts, updatedDag) = attemptsWithDag
@@ -601,7 +598,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
           } else {
             for {
               _ <- removeAdded(state.dependencyDag, attempts)
-              _ <- reAttemptBuffer(updatedDag, lastFinalizedBlockHash)
+              _ <- reAttemptBuffer(updatedDag)
             } yield ()
           }
     } yield ()
