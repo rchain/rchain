@@ -1,22 +1,24 @@
 package coop.rchain.casper.api
 
 import cats.implicits._
-import com.google.protobuf.ByteString
+
+import coop.rchain.casper.{Created, HashSetCasperTest}
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.{Created, HashSetCasperTest}
 import coop.rchain.casper.scalatestcontrib._
+import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.catscontrib.Capture._
 import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models._
+import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.accounting
+
+import com.google.protobuf.ByteString
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
-import coop.rchain.catscontrib.Capture._
 
 class ListeningNameAPITest extends FlatSpec with Matchers {
 
@@ -48,11 +50,12 @@ class ListeningNameAPITest extends FlatSpec with Matchers {
       resultData    = Par().copy(exprs = Seq(Expr(GInt(0))))
       listeningNameResponse1 <- BlockAPI
                                  .getListeningNameDataResponse[Effect](Int.MaxValue, listeningName)
-      data1   = listeningNameResponse1.blockResults.map(_.postBlockData)
-      blocks1 = listeningNameResponse1.blockResults.map(_.block)
+      _       = listeningNameResponse1.isRight shouldBe true
+      data1   = listeningNameResponse1.right.get.blockResults.map(_.postBlockData)
+      blocks1 = listeningNameResponse1.right.get.blockResults.map(_.block)
       _       = data1 should be(List(List(resultData)))
       _       = blocks1.length should be(1)
-      result  = listeningNameResponse1.length should be(1)
+      result  = listeningNameResponse1.right.get.length should be(1)
     } yield result
   }
 
@@ -81,11 +84,12 @@ class ListeningNameAPITest extends FlatSpec with Matchers {
                                    Int.MaxValue,
                                    listeningName
                                  )
-        data1   = listeningNameResponse1.blockResults.map(_.postBlockData)
-        blocks1 = listeningNameResponse1.blockResults.map(_.block)
+        _       = listeningNameResponse1.isRight shouldBe true
+        data1   = listeningNameResponse1.right.get.blockResults.map(_.postBlockData)
+        blocks1 = listeningNameResponse1.right.get.blockResults.map(_.block)
         _       = data1 should be(List(List(resultData)))
         _       = blocks1.length should be(1)
-        _       = listeningNameResponse1.length should be(1)
+        _       = listeningNameResponse1.right.get.length should be(1)
 
         createBlock2Result <- nodes(1).casperEff
                                .deploy(deployDatas(1)) *> nodes(1).casperEff.createBlock
@@ -112,8 +116,9 @@ class ListeningNameAPITest extends FlatSpec with Matchers {
                                    Int.MaxValue,
                                    listeningName
                                  )
-        data2   = listeningNameResponse2.blockResults.map(_.postBlockData)
-        blocks2 = listeningNameResponse2.blockResults.map(_.block)
+        _       = listeningNameResponse2.isRight shouldBe true
+        data2   = listeningNameResponse2.right.get.blockResults.map(_.postBlockData)
+        blocks2 = listeningNameResponse2.right.get.blockResults.map(_.block)
         _ = data2 should be(
           List(
             List(resultData, resultData, resultData, resultData),
@@ -123,7 +128,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers {
           )
         )
         _ = blocks2.length should be(4)
-        _ = listeningNameResponse2.length should be(4)
+        _ = listeningNameResponse2.right.get.length should be(4)
 
         createBlock5Result <- nodes(1).casperEff
                                .deploy(deployDatas(4)) *> nodes(1).casperEff.createBlock
@@ -150,8 +155,9 @@ class ListeningNameAPITest extends FlatSpec with Matchers {
                                    Int.MaxValue,
                                    listeningName
                                  )
-        data3   = listeningNameResponse3.blockResults.map(_.postBlockData)
-        blocks3 = listeningNameResponse3.blockResults.map(_.block)
+        _       = listeningNameResponse3.isRight shouldBe true
+        data3   = listeningNameResponse3.right.get.blockResults.map(_.postBlockData)
+        blocks3 = listeningNameResponse3.right.get.blockResults.map(_.block)
         _ = data3 should be(
           List(
             List(
@@ -172,17 +178,19 @@ class ListeningNameAPITest extends FlatSpec with Matchers {
           )
         )
         _ = blocks3.length should be(7)
-        _ = listeningNameResponse3.length should be(7)
+        _ = listeningNameResponse3.right.get.length should be(7)
 
         listeningNameResponse3UntilDepth <- BlockAPI
                                              .getListeningNameDataResponse[Effect](1, listeningName)
-        _ = listeningNameResponse3UntilDepth.length should be(1)
+        _ = listeningNameResponse3UntilDepth.isRight shouldBe true
+        _ = listeningNameResponse3UntilDepth.right.get.length should be(1)
 
         listeningNameResponse3UntilDepth2 <- BlockAPI.getListeningNameDataResponse[Effect](
                                               2,
                                               listeningName
                                             )
-        result = listeningNameResponse3UntilDepth2.length should be(2)
+        _      = listeningNameResponse3UntilDepth2.isRight shouldBe true
+        result = listeningNameResponse3UntilDepth2.right.get.length should be(2)
 
         _ = nodes.foreach(_.tearDown())
       } yield result
@@ -222,11 +230,12 @@ class ListeningNameAPITest extends FlatSpec with Matchers {
                                  Int.MaxValue,
                                  listeningNamesShuffled1
                                )
-      continuations1 = listeningNameResponse1.blockResults.map(_.postBlockContinuations)
-      blocks1        = listeningNameResponse1.blockResults.map(_.block)
+      _              = listeningNameResponse1.isRight shouldBe true
+      continuations1 = listeningNameResponse1.right.get.blockResults.map(_.postBlockContinuations)
+      blocks1        = listeningNameResponse1.right.get.blockResults.map(_.block)
       _              = continuations1 should be(List(List(desiredResult)))
       _              = blocks1.length should be(1)
-      _              = listeningNameResponse1.length should be(1)
+      _              = listeningNameResponse1.right.get.length should be(1)
 
       listeningNamesShuffled2 = List(
         Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3)))),
@@ -236,11 +245,12 @@ class ListeningNameAPITest extends FlatSpec with Matchers {
                                  Int.MaxValue,
                                  listeningNamesShuffled2
                                )
-      continuations2 = listeningNameResponse2.blockResults.map(_.postBlockContinuations)
-      blocks2        = listeningNameResponse2.blockResults.map(_.block)
+      _              = listeningNameResponse2.isRight shouldBe true
+      continuations2 = listeningNameResponse2.right.get.blockResults.map(_.postBlockContinuations)
+      blocks2        = listeningNameResponse2.right.get.blockResults.map(_.block)
       _              = continuations2 should be(List(List(desiredResult)))
       _              = blocks2.length should be(1)
-      result         = listeningNameResponse2.length should be(1)
+      result         = listeningNameResponse2.right.get.length should be(1)
     } yield result
   }
 }

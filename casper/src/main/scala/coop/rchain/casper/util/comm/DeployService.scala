@@ -6,21 +6,22 @@ import java.util.concurrent.TimeUnit
 import scala.util.Either
 
 import coop.rchain.casper.protocol._
+import coop.rchain.models.either.implicits._
 
 import com.google.protobuf.empty.Empty
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
 
 trait DeployService[F[_]] {
-  def deploy(d: DeployData): F[Either[Throwable, String]]
-  def createBlock(): F[Either[Throwable, String]] //create block and add to Casper internal state
-  def showBlock(q: BlockQuery): F[Either[Throwable, String]]
-  def showBlocks(q: BlocksQuery): F[Either[Throwable, String]]
-  def visualizeDag(q: VisualizeDagQuery): F[Either[Throwable, String]]
-  def listenForDataAtName(request: DataAtNameQuery): F[ListeningNameDataResponse]
+  def deploy(d: DeployData): F[Either[Seq[String], String]]
+  def createBlock(): F[Either[Seq[String], String]] //create block and add to Casper internal state
+  def showBlock(q: BlockQuery): F[Either[Seq[String], String]]
+  def showBlocks(q: BlocksQuery): F[Either[Seq[String], String]]
+  def visualizeDag(q: VisualizeDagQuery): F[Either[Seq[String], String]]
+  def listenForDataAtName(request: DataAtNameQuery): F[Either[Seq[String], Seq[DataWithBlockInfo]]]
   def listenForContinuationAtName(
       request: ContinuationAtNameQuery
-  ): F[ListeningNameContinuationResponse]
+  ): F[Either[Seq[String], Seq[ContinuationsWithBlockInfo]]]
 }
 
 object DeployService {
@@ -40,57 +41,54 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
 
   private val stub = CasperMessageGrpcMonix.stub(channel)
 
-  def deploy(d: DeployData): Task[Either[Throwable, String]] =
-    stub.doDeploy(d).map { response =>
-      if (response.success) Right(response.message)
-      else Left(new RuntimeException(response.message))
-    }
+  def deploy(d: DeployData): Task[Either[Seq[String], String]] =
+    stub.doDeploy(d).map(_.toEither[DeployServiceResponse].map(_.message))
 
-  def createBlock(): Task[Either[Throwable, String]] =
-    stub.createBlock(Empty()).map { response =>
-      if (response.success) Right(response.message)
-      else Left(new RuntimeException(response.message))
-    }
+  def createBlock(): Task[Either[Seq[String], String]] =
+    stub.createBlock(Empty()).map(_.toEither[DeployServiceResponse].map(_.message))
 
-  def showBlock(q: BlockQuery): Task[Either[Throwable, String]] =
-    stub.showBlock(q).map { response =>
-      if (response.status == "Success") Right(response.toProtoString)
-      else Left(new RuntimeException(response.status))
-    }
+  def showBlock(q: BlockQuery): Task[Either[Seq[String], String]] =
+    stub.showBlock(q).map(_.toEither[BlockQueryResponse].map(_.toProtoString))
 
-  def visualizeDag(q: VisualizeDagQuery): Task[Either[Throwable, String]] =
-    stub.visualizeDag(q).map { response =>
-      if (response.status == "Success") Right(response.toProtoString)
-      else Left(new RuntimeException(response.status))
-    }
+  def visualizeDag(q: VisualizeDagQuery): Task[Either[Seq[String], String]] =
+    stub.visualizeDag(q).map(_.toEither[VisualizeBlocksResponse].map(_.toProtoString))
 
-  def showBlocks(q: BlocksQuery): Task[Either[Throwable, String]] =
+  def showBlocks(q: BlocksQuery): Task[Either[Seq[String], String]] =
     stub
       .showBlocks(q)
-      .map { bi =>
+      .map(_.toEither[BlockInfoWithoutTuplespace].map { bi =>
         s"""
          |------------- block ${bi.blockNumber} ---------------
          |${bi.toProtoString}
          |-----------------------------------------------------
          |""".stripMargin
-      }
+      })
       .toListL
       .map { bs =>
-        val showLength =
-          s"""
-           |count: ${bs.length}
-           |""".stripMargin
+        val (l, r) = bs.partition(_.isLeft)
+        if (l.isEmpty) {
+          val showLength =
+            s"""
+             |count: ${r.length}
+             |""".stripMargin
 
-        Right(bs.mkString("\n") + "\n" + showLength)
+          Right(r.map(_.right.get).mkString("\n") + "\n" + showLength)
+        } else Left(l.flatMap(_.left.get))
       }
 
-  def listenForDataAtName(request: DataAtNameQuery): Task[ListeningNameDataResponse] =
-    stub.listenForDataAtName(request)
+  def listenForDataAtName(
+      request: DataAtNameQuery
+  ): Task[Either[Seq[String], Seq[DataWithBlockInfo]]] =
+    stub
+      .listenForDataAtName(request)
+      .map(_.toEither[ListeningNameDataResponse].map(_.blockResults))
 
   def listenForContinuationAtName(
       request: ContinuationAtNameQuery
-  ): Task[ListeningNameContinuationResponse] =
-    stub.listenForContinuationAtName(request)
+  ): Task[Either[Seq[String], Seq[ContinuationsWithBlockInfo]]] =
+    stub
+      .listenForContinuationAtName(request)
+      .map(_.toEither[ListeningNameContinuationResponse].map(_.blockResults))
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   override def close(): Unit = {

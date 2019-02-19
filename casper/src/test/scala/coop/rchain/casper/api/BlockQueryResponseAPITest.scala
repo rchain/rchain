@@ -1,25 +1,24 @@
 package coop.rchain.casper.api
 
-import cats._
+import scala.collection.immutable.HashMap
+
 import cats.effect.Sync
 import cats.implicits._
-import com.google.protobuf.ByteString
+
+import coop.rchain.blockstorage.{BlockDagStorage, BlockStore}
+import coop.rchain.casper._
 import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
-import coop.rchain.blockstorage.{BlockDagFileStorage, BlockDagStorage, BlockStore}
-import coop.rchain.casper.Estimator.{BlockHash, Validator}
-import coop.rchain.casper._
 import coop.rchain.casper.helper.{BlockDagStorageFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
-import org.scalatest.{FlatSpec, Matchers}
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.Capture._
-import coop.rchain.shared.Log
-import monix.eval.Task
+import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 
-import scala.collection.immutable.HashMap
+import com.google.protobuf.ByteString
+import monix.eval.Task
+import org.scalatest.{FlatSpec, Matchers}
 
 class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStorageFixture {
   implicit val timeEff = new LogicalTime[Task]
@@ -84,26 +83,27 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
         effects                                 <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
         (logEff, casperRef, cliqueOracleEffect) = effects
         q                                       = BlockQuery(hash = secondBlockQuery)
-        blockQueryResponse <- BlockAPI.showBlock[Task](q)(
-                               Sync[Task],
-                               casperRef,
-                               logEff,
-                               cliqueOracleEffect,
-                               blockStore
-                             )
-        blockInfo = blockQueryResponse.blockInfo.get
-        _         = blockQueryResponse.status should be("Success")
-        _         = blockInfo.blockHash should be(secondHashString)
-        _         = blockInfo.blockSize should be(secondBlock.serializedSize.toString)
-        _         = blockInfo.blockNumber should be(blockNumber)
-        _         = blockInfo.version should be(version)
-        _         = blockInfo.deployCount should be(deployCount)
-        _         = blockInfo.faultTolerance should be(faultTolerance)
-        _         = blockInfo.mainParentHash should be(genesisHashString)
-        _         = blockInfo.parentsHashList should be(parentsString)
-        _         = blockInfo.sender should be(secondBlockSenderString)
-        _         = blockInfo.shardId should be(shardId)
-        result    = blockInfo.bondsValidatorList should be(bondValidatorHashList)
+        blockQueryResponseE <- BlockAPI.showBlock[Task](q)(
+                                Sync[Task],
+                                casperRef,
+                                logEff,
+                                cliqueOracleEffect,
+                                blockStore
+                              )
+        _                  = blockQueryResponseE.isRight shouldBe true
+        blockQueryResponse = blockQueryResponseE.right.get
+        blockInfo          = blockQueryResponse.blockInfo.get
+        _                  = blockInfo.blockHash should be(secondHashString)
+        _                  = blockInfo.blockSize should be(secondBlock.serializedSize.toString)
+        _                  = blockInfo.blockNumber should be(blockNumber)
+        _                  = blockInfo.version should be(version)
+        _                  = blockInfo.deployCount should be(deployCount)
+        _                  = blockInfo.faultTolerance should be(faultTolerance)
+        _                  = blockInfo.mainParentHash should be(genesisHashString)
+        _                  = blockInfo.parentsHashList should be(parentsString)
+        _                  = blockInfo.sender should be(secondBlockSenderString)
+        _                  = blockInfo.shardId should be(shardId)
+        result             = blockInfo.bondsValidatorList should be(bondValidatorHashList)
       } yield result
   }
 
@@ -120,10 +120,12 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
                                cliqueOracleEffect,
                                blockStore
                              )
-      } yield
-        blockQueryResponse.status should be(
+      } yield {
+        blockQueryResponse.isLeft shouldBe true
+        blockQueryResponse.left.get should be(
           s"Error: Failure to find block with hash ${badTestHashQuery}"
         )
+      }
   }
 
   "findBlockWithDeploy" should "return successful block info response" in withStorage {
@@ -133,26 +135,27 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
         (logEff, casperRef, cliqueOracleEffect) = effects
         user                                    = ByteString.EMPTY
         timestamp                               = 1L
-        blockQueryResponse <- BlockAPI.findBlockWithDeploy[Task](user, timestamp)(
-                               Sync[Task],
-                               casperRef,
-                               logEff,
-                               cliqueOracleEffect,
-                               blockStore
-                             )
-        blockInfo = blockQueryResponse.blockInfo.get
-        _         = blockQueryResponse.status should be("Success")
-        _         = blockInfo.blockHash should be(secondHashString)
-        _         = blockInfo.blockSize should be(secondBlock.serializedSize.toString)
-        _         = blockInfo.blockNumber should be(blockNumber)
-        _         = blockInfo.version should be(version)
-        _         = blockInfo.deployCount should be(deployCount)
-        _         = blockInfo.faultTolerance should be(faultTolerance)
-        _         = blockInfo.mainParentHash should be(genesisHashString)
-        _         = blockInfo.parentsHashList should be(parentsString)
-        _         = blockInfo.sender should be(secondBlockSenderString)
-        _         = blockInfo.shardId should be(shardId)
-        result    = blockInfo.bondsValidatorList should be(bondValidatorHashList)
+        blockQueryResponseE <- BlockAPI.findBlockWithDeploy[Task](user, timestamp)(
+                                Sync[Task],
+                                casperRef,
+                                logEff,
+                                cliqueOracleEffect,
+                                blockStore
+                              )
+        _                  = blockQueryResponseE.isRight shouldBe true
+        blockQueryResponse = blockQueryResponseE.right.get
+        blockInfo          = blockQueryResponse.blockInfo.get
+        _                  = blockInfo.blockHash should be(secondHashString)
+        _                  = blockInfo.blockSize should be(secondBlock.serializedSize.toString)
+        _                  = blockInfo.blockNumber should be(blockNumber)
+        _                  = blockInfo.version should be(version)
+        _                  = blockInfo.deployCount should be(deployCount)
+        _                  = blockInfo.faultTolerance should be(faultTolerance)
+        _                  = blockInfo.mainParentHash should be(genesisHashString)
+        _                  = blockInfo.parentsHashList should be(parentsString)
+        _                  = blockInfo.sender should be(secondBlockSenderString)
+        _                  = blockInfo.shardId should be(shardId)
+        result             = blockInfo.bondsValidatorList should be(bondValidatorHashList)
       } yield result
   }
 
@@ -170,10 +173,12 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockDagStor
                                cliqueOracleEffect,
                                blockStore
                              )
-      } yield
-        blockQueryResponse.status should be(
+      } yield {
+        blockQueryResponse.isLeft shouldBe true
+        blockQueryResponse.left.get should be(
           s"Error: Failure to find block containing deploy signed by  with timestamp ${timestamp.toString}"
         )
+      }
   }
 
   private def effectsForSimpleCasperSetup(
