@@ -44,12 +44,12 @@ package object matcher {
 
   private[matcher] def runFirstWithCost[F[_]: Monad: _cost, A](
       f: MatcherMonadT[F, A]
-  ): F[(Cost, Option[(FreeMap, A)])] =
+  ): F[Option[(FreeMap, A)]] =
     for {
       cost <- _cost[F].get
       s <- StreamT
             .run(StreamT.dropTail(f.run(emptyMap)))
-    } yield ((cost, s.headOption))
+    } yield (s.headOption)
 
   private[matcher] def attemptOpt[F[_], A](
       f: F[A]

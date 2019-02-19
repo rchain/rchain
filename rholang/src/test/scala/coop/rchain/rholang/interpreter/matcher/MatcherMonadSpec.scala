@@ -66,10 +66,9 @@ class MatcherMonadSpec extends FlatSpec {
       _        <- cost.set(Cost(0))
       a        = attemptOpt(modifyStates)
       res      <- runFirstWithCost(a)
-      (_, r)   = res
       phloLeft <- cost.get
       _        = assert(phloLeft.value == 1)
-    } yield (assert(r == Some((Map(42 -> Par()), Some(())))))).unsafeRunSync
+    } yield (assert(res == Some((Map(42 -> Par()), Some(())))))).unsafeRunSync
   }
 
   it should "retain cost but discard matches when attemptOpt is called on a match failed using _short" in {
@@ -82,10 +81,9 @@ class MatcherMonadSpec extends FlatSpec {
       _        <- cost.set(Cost(0))
       a        = attemptOpt[F, Unit](failed)
       res      <- runFirstWithCost(a)
-      (_, r)   = res
       phloLeft <- cost.get
       _        = assert(phloLeft.value == 1)
-    } yield (assert(r == Some((Map.empty, None))))).unsafeRunSync
+    } yield (assert(res == Some((Map.empty, None))))).unsafeRunSync
 
   }
 
@@ -99,10 +97,9 @@ class MatcherMonadSpec extends FlatSpec {
       _        <- cost.set(Cost(0))
       a        = attemptOpt[F, Unit](failed)
       res      <- runFirstWithCost(a)
-      (_, r)   = res
       phloLeft <- cost.get
       _        = assert(phloLeft.value == 1)
-    } yield (assert(r == Some((Map.empty, None))))).unsafeRunSync
+    } yield (assert(res == Some((Map.empty, None))))).unsafeRunSync
 
   }
 
