@@ -960,7 +960,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
 
   }
 
-  it should "not finish with a negative cost" in {
+  it should "be allowed to finish with a negative cost" in {
     implicit val cost: _cost[Task] = CostAccounting.unsafe[Task](Cost(8))
 
     val target: Par = EList(Seq(GInt(1), GInt(2), GInt(3)))
@@ -973,7 +973,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
 
     (for {
       phloLeft <- cost.get
-    } yield (phloLeft.value shouldBe 0)).unsafeRunSync
+    } yield (phloLeft.value shouldBe -2)).unsafeRunSync
 
   }
 }

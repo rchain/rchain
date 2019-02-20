@@ -51,11 +51,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
     val doMatch: R[Unit] = SpatialMatcher.spatialMatch[R, Par, Par](target, pattern)
 
     val matchAndCharge: M[Option[(FreeMap, Unit)]] =
-      runFirst[M, Unit](doMatch).onError {
-        case OutOfPhlogistonsError =>
-          // if we run out of phlos during the match we have to zero phlos available
-          cost.modify(_ => Cost(0))
-      }
+      runFirst[M, Unit](doMatch)
 
     matchAndCharge
   }
