@@ -23,7 +23,6 @@ package object matcher {
   type ErroredOrCost[A]         = StateT[Err, Cost, A]
   type Err[A]                   = Either[InterpreterError, A]
 
-  // MatcherMonadT[Err, A] is equivalent to NonDetFreeMapWithCost[A]. Scalac is too dumb to notice though.
   type MatcherMonadT[F[_], A] = StateT[StreamT[F, ?], FreeMap, A]
 
   // The naming convention means: this is an effect-type alias.
