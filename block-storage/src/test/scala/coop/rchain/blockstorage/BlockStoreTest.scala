@@ -14,7 +14,6 @@ import coop.rchain.models.blockImplicits.{blockBatchesGen, blockElementGen, bloc
 import cats.effect.Sync
 import coop.rchain.catscontrib.Capture.taskCapture
 import coop.rchain.blockstorage.InMemBlockStore.emptyMapRef
-import coop.rchain.blockstorage.StorageError.StorageIOErr
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.catscontrib.TaskContrib._
@@ -48,7 +47,7 @@ trait BlockStoreTest
       withStore { store =>
         val items = blockStoreElements
         for {
-          _ <- items.traverse_(store.put(_))
+          _ <- items.traverse_(store.put)
           _ <- items.traverse[Task, Assertion] { block =>
                 store.get(block.blockHash).map(_ shouldBe Some(block))
               }
@@ -63,7 +62,7 @@ trait BlockStoreTest
       withStore { store =>
         val items = blockStoreElements
         for {
-          _ <- items.traverse_(store.put(_))
+          _ <- items.traverse_(store.put)
           _ <- items.traverse[Task, Assertion] { block =>
                 store.find(_ == ByteString.copyFrom(block.blockHash.toByteArray)).map { w =>
                   w should have size 1
@@ -83,11 +82,11 @@ trait BlockStoreTest
           (block.blockHash, block, toBlockMessage(block.blockHash, 200L, 20000L))
         }
         for {
-          _ <- items.traverse_[Task, StorageIOErr[Unit]] { case (k, v1, _) => store.put(k, v1) }
+          _ <- items.traverse_[Task, Unit] { case (k, v1, _) => store.put(k, v1) }
           _ <- items.traverse_[Task, Assertion] {
                 case (k, v1, _) => store.get(k).map(_ shouldBe Some(v1))
               }
-          _ <- items.traverse_[Task, StorageIOErr[Unit]] { case (k, _, v2) => store.put(k, v2) }
+          _ <- items.traverse_[Task, Unit] { case (k, _, v2) => store.put(k, v2) }
           _ <- items.traverse_[Task, Assertion] {
                 case (k, _, v2) => store.get(k).map(_ shouldBe Some(v2))
               }
@@ -204,7 +203,7 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
       withStoreLocation { blockStoreDataDir =>
         for {
           firstStore  <- createBlockStore(blockStoreDataDir)
-          _           <- blockStoreElements.traverse_[Task, StorageIOErr[Unit]](firstStore.put)
+          _           <- blockStoreElements.traverse_[Task, Unit](firstStore.put)
           _           <- firstStore.close()
           secondStore <- createBlockStore(blockStoreDataDir)
           _ <- blockStoreElements.traverse[Task, Assertion] { block =>
@@ -223,9 +222,9 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
         val (firstHalf, secondHalf) = blockStoreElements.splitAt(blockStoreElements.size / 2)
         for {
           firstStore <- createBlockStore(blockStoreDataDir)
-          _          <- firstHalf.traverse_[Task, StorageIOErr[Unit]](firstStore.put)
+          _          <- firstHalf.traverse_[Task, Unit](firstStore.put)
           _          <- firstStore.checkpoint()
-          _          <- secondHalf.traverse_[Task, StorageIOErr[Unit]](firstStore.put)
+          _          <- secondHalf.traverse_[Task, Unit](firstStore.put)
           _ <- blockStoreElements.traverse[Task, Assertion] { block =>
                 firstStore.get(block.blockHash).map(_ shouldBe Some(block))
               }
@@ -248,10 +247,10 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
         val blocks = blockStoreBatches.flatten
         for {
           firstStore <- createBlockStore(blockStoreDataDir)
-          _ <- blockStoreBatches.traverse_[Task, StorageIOErr[Unit]](
+          _ <- blockStoreBatches.traverse_[Task, Unit](
                 blockStoreElements =>
                   blockStoreElements
-                    .traverse_[Task, StorageIOErr[Unit]](firstStore.put) *> firstStore.checkpoint()
+                    .traverse_[Task, Unit](firstStore.put) *> firstStore.checkpoint()
               )
           _ <- blocks.traverse[Task, Assertion] { block =>
                 firstStore.get(block.blockHash).map(_ shouldBe Some(block))

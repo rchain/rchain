@@ -2,10 +2,7 @@ package coop.rchain.blockstorage
 
 import java.nio.file.Path
 
-import cats.Functor
 import cats.data.EitherT
-import coop.rchain.blockstorage.util.io.IOError
-import coop.rchain.blockstorage.util.io.IOError.IOErrT
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.codec.Base16
 
@@ -15,19 +12,12 @@ final case class CheckpointsDoNotStartFromZero(sortedCheckpoints: List[Path]) ex
 final case class CheckpointsAreNotConsecutive(sortedCheckpoints: List[Path])  extends StorageError
 final case class TopoSortLengthIsTooBig(length: Long)                         extends StorageError
 final case class BlockSenderIsMalformed(block: BlockMessage)                  extends StorageError
-
-sealed abstract class StorageIOError extends StorageError
-
-final case class WrappedIOError(ioError: IOError) extends StorageIOError
-
-final case class UnavailableReferencedCheckpoint(checkpointIndex: Int) extends StorageIOError
+final case class CheckpointDoesNotExist(offset: Long)                         extends StorageError
+final case object LatestMessagesLogIsMalformed                                extends StorageError
 
 object StorageError {
   type StorageErr[A]        = Either[StorageError, A]
   type StorageErrT[F[_], A] = EitherT[F, StorageError, A]
-
-  type StorageIOErr[A]        = Either[StorageIOError, A]
-  type StorageIOErrT[F[_], A] = EitherT[F, StorageIOError, A]
 
   def errorMessage(ce: StorageError): String =
     ce match {
@@ -39,17 +29,13 @@ object StorageError {
         s"Topological sorting of length $length was requested while maximal length is ${Int.MaxValue}"
       case BlockSenderIsMalformed(block) =>
         s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is malformed: ${Base16.encode(block.sender.toByteArray)}"
-      case WrappedIOError(ioError) =>
-        ioError.message
-      case UnavailableReferencedCheckpoint(checkpointIndex) =>
-        s"Unavailable checkpoint: $checkpointIndex"
+      case CheckpointDoesNotExist(offset) =>
+        s"Requested a block with block number $offset, but there is no checkpoint for it"
+      case LatestMessagesLogIsMalformed =>
+        "Latest messages log is malformed"
     }
 
   implicit class StorageErrorToMessage(storageError: StorageError) {
     val message: String = StorageError.errorMessage(storageError)
-  }
-
-  implicit class IOErrorTToStorageIOErrorT[F[_]: Functor, A](ioErrT: IOErrT[F, A]) {
-    def toStorageIOErrT: StorageIOErrT[F, A] = ioErrT.leftMap(WrappedIOError.apply)
   }
 }
