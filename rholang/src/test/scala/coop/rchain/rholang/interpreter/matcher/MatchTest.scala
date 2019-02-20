@@ -934,46 +934,31 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
     res should be(Left(OutOfPhlogistonsError))
   }
 
-  "spatialMatchAndCharge" should "short-circuit when runs out of phlo in the middle of matching" in {
-    implicit val cost: _cost[Task] = CostAccounting.unsafe[Task](Cost(0))
-
-    val target: Par = EList(Seq(GInt(1), GInt(2), GInt(3)))
+  private def doMatchAndCharge(initialPhlo: Int) = {
+    implicit val cost: _cost[Task] = CostAccounting.unsafe[Task](Cost(initialPhlo))
+    val target: Par                = EList(Seq(GInt(1), GInt(2), GInt(3)))
     val pattern: Par =
       EList(Seq(GInt(1), EVar(FreeVar(0)), EVar(FreeVar(1))), connectiveUsed = true)
 
-    spatialMatchAndCharge[Task](target, pattern).attempt.unsafeRunSync should be(
-      Left(OutOfPhlogistonsError)
-    )
+    (for {
+      res      <- spatialMatchAndCharge[Task](target, pattern).attempt
+      phloLeft <- cost.get
+    } yield (phloLeft, res)).unsafeRunSync
+  }
+
+  "spatialMatchAndCharge" should "short-circuit when runs out of phlo in the middle of matching" in {
+    val (_, res) = doMatchAndCharge(initialPhlo = 0)
+    res should be(Left(OutOfPhlogistonsError))
   }
 
   it should "charge for matching operations" in {
-    implicit val cost: _cost[Task] = CostAccounting.unsafe[Task](Cost(100))
-
-    val target: Par = EList(Seq(GInt(1), GInt(2), GInt(3)))
-    val pattern: Par =
-      EList(Seq(GInt(1), EVar(FreeVar(0)), EVar(FreeVar(1))), connectiveUsed = true)
-
-    (for {
-      res      <- spatialMatchAndCharge[Task](target, pattern)
-      phloLeft <- cost.get
-    } yield (phloLeft.value shouldBe 90)).unsafeRunSync
-
+    val (phloLeft, _) = doMatchAndCharge(initialPhlo = 100)
+    phloLeft.value shouldBe 90
   }
 
   it should "be allowed to finish with a negative cost" in {
-    implicit val cost: _cost[Task] = CostAccounting.unsafe[Task](Cost(8))
-
-    val target: Par = EList(Seq(GInt(1), GInt(2), GInt(3)))
-    val pattern: Par =
-      EList(Seq(GInt(1), EVar(FreeVar(0)), EVar(FreeVar(1))), connectiveUsed = true)
-
-    spatialMatchAndCharge[Task](target, pattern).attempt.unsafeRunSync should be(
-      Left(OutOfPhlogistonsError)
-    )
-
-    (for {
-      phloLeft <- cost.get
-    } yield (phloLeft.value shouldBe -2)).unsafeRunSync
-
+    val (phloLeft, res) = doMatchAndCharge(initialPhlo = 8)
+    res should be(Left(OutOfPhlogistonsError))
+    phloLeft.value shouldBe -2
   }
 }
