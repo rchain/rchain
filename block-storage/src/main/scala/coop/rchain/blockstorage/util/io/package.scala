@@ -22,7 +22,7 @@ package object io {
       io: => A,
       handleIoException: IOException => F[A]
   ): F[A] =
-    Sync[F].delay {
+    Sync[F].defer {
       try {
         io.pure[F]
       } catch {
@@ -37,7 +37,7 @@ package object io {
         case NonFatal(e) =>
           RaiseIOError[F].raise[A](UnexpectedIOError(e))
       }
-    }.flatten
+    }
 
   def moveFile[F[_]: Sync: RaiseIOError](
       from: Path,
