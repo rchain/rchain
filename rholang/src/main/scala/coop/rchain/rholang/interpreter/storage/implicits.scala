@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter.storage
 
+import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.implicits._
 import coop.rchain.models.Var.VarInstance.FreeVar
@@ -25,49 +26,46 @@ object implicits {
       }
     }
 
-  def matchListPar(init: Cost): StorageMatch[
-    BindPattern,
-    InterpreterError,
-    ListParWithRandom,
-    ListParWithRandomAndPhlos
-  ] =
-    new StorageMatch[
-      BindPattern,
-      InterpreterError,
-      ListParWithRandom,
-      ListParWithRandomAndPhlos
-    ] {
+  def matchListPar[F[_]: Sync](
+      init: Cost
+  ): StorageMatch[F, BindPattern, InterpreterError, ListParWithRandom, ListParWithRandomAndPhlos] =
+    new StorageMatch[F, BindPattern, InterpreterError, ListParWithRandom, ListParWithRandomAndPhlos] {
 
       private def calcUsed(init: Cost, left: Cost): Cost = init - left
 
       def get(
           pattern: BindPattern,
           data: ListParWithRandom
-      ): Either[InterpreterError, Option[ListParWithRandomAndPhlos]] =
-        SpatialMatcher
-          .foldMatch[NonDetFreeMapWithCost, Par, Par](
-            data.pars,
-            pattern.patterns,
-            pattern.remainder
-          )
-          .runFirstWithCost(init)
+      ): F[Either[InterpreterError, Option[ListParWithRandomAndPhlos]]] =
+        Sync[F]
+          .delay {
+            SpatialMatcher
+              .foldMatch[NonDetFreeMapWithCost, Par, Par](
+                data.pars,
+                pattern.patterns,
+                pattern.remainder
+              )
+              .runFirstWithCost(init)
+          }
           .map {
-            case (left, resultMatch) =>
-              val cost = calcUsed(init, left)
-              resultMatch
-                .map {
-                  case (freeMap: FreeMap, caughtRem: Seq[Par]) =>
-                    val remainderMap = pattern.remainder match {
-                      case Some(Var(FreeVar(level))) =>
-                        freeMap + (level -> VectorPar().addExprs(EList(caughtRem.toVector)))
-                      case _ => freeMap
-                    }
-                    ListParWithRandomAndPhlos(
-                      toSeq(remainderMap, pattern.freeCount),
-                      data.randomState,
-                      cost.value
-                    )
-                }
+            _.map {
+              case (left, resultMatch) =>
+                val cost = calcUsed(init, left)
+                resultMatch
+                  .map {
+                    case (freeMap: FreeMap, caughtRem: Seq[Par]) =>
+                      val remainderMap = pattern.remainder match {
+                        case Some(Var(FreeVar(level))) =>
+                          freeMap + (level -> VectorPar().addExprs(EList(caughtRem.toVector)))
+                        case _ => freeMap
+                      }
+                      ListParWithRandomAndPhlos(
+                        toSeq(remainderMap, pattern.freeCount),
+                        data.randomState,
+                        cost.value
+                      )
+                  }
+            }
           }
     }
 

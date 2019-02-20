@@ -96,8 +96,9 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
 
               span.mark("before-extract-data-candidates")
               val options: F[Either[E, Option[Seq[DataCandidate[C, R]]]]] =
-                extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil)
-                  .map(Traverse[Seq].sequence(_).map(Traverse[Seq].sequence(_)))
+                extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).map {
+                  _.sequence.map(_.sequence)
+                }
 
               options.map {
                 case Left(e) =>

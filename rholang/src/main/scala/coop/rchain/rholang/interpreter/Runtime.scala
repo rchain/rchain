@@ -163,10 +163,7 @@ object Runtime {
     val GET_TIMESTAMP: Par     = byteName(13)
   }
 
-  // because only we do installs
-  private val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
-
-  private def introduceSystemProcesses[F[_]: Applicative](
+  private def introduceSystemProcesses[F[_]: Sync](
       space: RhoISpace[F],
       replaySpace: RhoISpace[F],
       processes: List[(Name, Arity, Remainder, BodyRef)]
@@ -181,10 +178,11 @@ object Runtime {
             freeCount = arity
           )
         )
-        val continuation = TaggedContinuation(ScalaBodyRef(ref))
+        val continuation                   = TaggedContinuation(ScalaBodyRef(ref))
+        implicit val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
         List(
-          space.install(channels, patterns, continuation)(MATCH_UNLIMITED_PHLOS),
-          replaySpace.install(channels, patterns, continuation)(MATCH_UNLIMITED_PHLOS)
+          space.install(channels, patterns, continuation),
+          replaySpace.install(channels, patterns, continuation)
         )
     }.sequence
 

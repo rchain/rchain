@@ -103,8 +103,9 @@ abstract class RSpaceOps[F[_], C, P, E, A, R, K](
     }.toMap
 
     val options: F[Either[E, Option[Seq[DataCandidate[C, R]]]]] =
-      extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil)
-        .map(Traverse[Seq].sequence(_).map(Traverse[Seq].sequence(_)))
+      extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).map {
+        _.sequence.map(_.sequence)
+      }
 
     options.flatMap {
       case Left(e) =>

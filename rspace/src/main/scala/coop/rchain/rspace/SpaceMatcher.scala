@@ -142,8 +142,9 @@ private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, 
     matchCandidates match {
       case (p @ WaitingContinuation(patterns, _, _, _), index) +: remaining =>
         val maybeDataCandidates: F[Either[E, Option[Seq[DataCandidate[C, R]]]]] =
-          extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil)
-            .map(Traverse[Seq].sequence(_).map(Traverse[Seq].sequence(_)))
+          extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).map {
+            _.sequence.map(_.sequence)
+          }
         maybeDataCandidates.flatMap {
           case Left(e) => syncF.pure(Left(e))
           case Right(None) =>
