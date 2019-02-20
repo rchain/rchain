@@ -16,22 +16,7 @@ package object io {
       io: => A,
       handleIoException: IOException => IOError
   ): F[A] =
-    Sync[F].delay {
-      try {
-        io.pure[F]
-      } catch {
-        case e: IOException =>
-          RaiseIOError[F].raise[A](handleIoException(e))
-        case e: SecurityException =>
-          RaiseIOError[F].raise[A](FileSecurityViolation(e))
-        case e: UnsupportedOperationException =>
-          RaiseIOError[F].raise[A](UnsupportedFileOperation(e))
-        case e: IllegalArgumentException =>
-          RaiseIOError[F].raise[A](IllegalFileOperation(e))
-        case NonFatal(e) =>
-          RaiseIOError[F].raise[A](UnexpectedIOError(e))
-      }
-    }.flatten
+    handleIoF(io, e => RaiseIOError[F].raise[A](handleIoException(e)))
 
   private[io] def handleIoF[F[_]: Sync: RaiseIOError, A](
       io: => A,
