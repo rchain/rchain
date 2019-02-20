@@ -2,6 +2,8 @@ package coop.rchain.casper
 
 import cats._
 import cats.implicits._
+import coop.rchain.catscontrib.ski._
+import coop.rchain.catscontrib.{BooleanF, Catscontrib}, BooleanF._, Catscontrib._
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, Sync}
 import com.google.protobuf.ByteString
@@ -30,7 +32,6 @@ import coop.rchain.shared._
   @param equivocationsTracker: Used to keep track of when other validators detect the equivocation consisting of the base block at the sequence number identified by the (validator, base equivocation sequence number) pair of each EquivocationRecord.
   */
 final case class CasperState(
-    seenBlockHashes: Set[BlockHash] = Set.empty[BlockHash],
     blockBuffer: Set[BlockMessage] = Set.empty[BlockMessage],
     deployHistory: Set[DeployData] = Set.empty[DeployData],
     invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash],
@@ -64,32 +65,36 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
   def addBlock(
       b: BlockMessage,
       handleDoppelganger: (BlockMessage, Validator) => F[Unit]
-  ): F[BlockStatus] =
+  ): F[BlockStatus] = {
+
+    def logAlreadyProcessed =
+      Log[F]
+        .info(
+          s"Block ${PrettyPrinter.buildString(b.blockHash)} has already been processed by another thread."
+        )
+        .as(BlockStatus.processing)
+
+    def doopelgangerAndAdd =
+      for {
+        dag <- blockDag
+        _ <- validatorId match {
+              case Some(ValidatorIdentity(publicKey, _, _)) =>
+                val sender = ByteString.copyFrom(publicKey)
+                handleDoppelganger(b, sender)
+              case None => ().pure[F]
+            }
+        _      <- BlockStore[F].put(b)
+        status <- internalAddBlock(b, dag)
+      } yield status
+
     Sync[F].bracket(blockProcessingLock.acquire)(
-      _ =>
-        for {
-          dag            <- blockDag
-          blockHash      = b.blockHash
-          containsResult <- dag.contains(blockHash)
-          s              <- Cell[F, CasperState].read
-          result <- if (containsResult || s.seenBlockHashes.contains(blockHash)) {
-                     Log[F]
-                       .info(
-                         s"Block ${PrettyPrinter.buildString(b.blockHash)} has already been processed by another thread."
-                       )
-                       .map(_ => BlockStatus.processing)
-                   } else {
-                     (validatorId match {
-                       case Some(ValidatorIdentity(publicKey, _, _)) =>
-                         val sender = ByteString.copyFrom(publicKey)
-                         handleDoppelganger(b, sender)
-                       case None => ().pure[F]
-                     }) *> Cell[F, CasperState].modify { s =>
-                       s.copy(seenBlockHashes = s.seenBlockHashes + b.blockHash)
-                     } *> internalAddBlock(b, dag)
-                   }
-        } yield result
-    )(_ => blockProcessingLock.release)
+      kp(
+        blockDag >>= (_.contains(b.blockHash)
+          .||^(BlockStore[F].contains(b.blockHash))
+          .ifM(logAlreadyProcessed, doopelgangerAndAdd))
+      )
+    )(kp(blockProcessingLock.release))
+  }
 
   private def internalAddBlock(
       b: BlockMessage,
@@ -194,10 +199,11 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       b: BlockMessage
   ): F[Boolean] =
     for {
-      blockStoreContains <- BlockStore[F].contains(b.blockHash)
-      state              <- Cell[F, CasperState].read
-      bufferContains     = state.blockBuffer.exists(_.blockHash == b.blockHash)
-    } yield (blockStoreContains || bufferContains)
+      dag            <- blockDag
+      dagContains    <- dag.contains(b.blockHash)
+      state          <- Cell[F, CasperState].read
+      bufferContains = state.blockBuffer.exists(_.blockHash == b.blockHash)
+    } yield (dagContains || bufferContains)
 
   def deploy(d: DeployData): F[Either[Throwable, Unit]] =
     InterpreterUtil.mkTerm(d.term) match {
@@ -531,10 +537,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
                                     .lookup(blockHash)
                                     .map(_.isEmpty)
                               )
-      state <- Cell[F, CasperState].read
-      missingUnseenDependencies = missingDependencies.filter(
-        blockHash => !state.seenBlockHashes.contains(blockHash)
-      )
+      missingUnseenDependencies <- missingDependencies.filterA(
+                                    blockHash => ~^(BlockStore[F].contains(blockHash))
+                                  )
       _ <- missingDependencies.traverse(hash => handleMissingDependency(hash, b))
       _ <- missingUnseenDependencies.traverse(hash => requestMissingDependency(hash))
     } yield ()
@@ -566,6 +571,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       updatedDag <- addToState(block)
     } yield updatedDag
 
+  // TODO: should only call insert on BLockDagStorage
   private def addToState(block: BlockMessage): F[BlockDagRepresentation[F]] =
     for {
       _          <- BlockStore[F].put(block.blockHash, block)

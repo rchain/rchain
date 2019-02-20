@@ -215,14 +215,14 @@ object Validate {
   /**
     * Works with either efficient justifications or full explicit justifications
     */
-  def missingBlocks[F[_]: Monad: Log: BlockStore](
+  def missingBlocks[F[_]: Monad: Log](
       block: BlockMessage,
       dag: BlockDagRepresentation[F]
   ): F[Either[InvalidBlock, ValidBlock]] =
     for {
-      parentsPresent <- ProtoUtil.parentHashes(block).toList.forallM(p => BlockStore[F].contains(p))
+      parentsPresent <- ProtoUtil.parentHashes(block).toList.forallM(p => dag.contains(p))
       justificationsPresent <- block.justifications.toList
-                                .forallM(j => BlockStore[F].contains(j.latestBlockHash))
+                                .forallM(j => dag.contains(j.latestBlockHash))
       result <- if (parentsPresent && justificationsPresent) {
                  Applicative[F].pure(Right(Valid))
                } else {
