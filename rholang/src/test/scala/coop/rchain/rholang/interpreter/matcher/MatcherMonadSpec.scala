@@ -31,6 +31,13 @@ class MatcherMonadSpec extends FlatSpec with Matchers {
   private def combineK[FF[_]: MonoidK, G[_]: Foldable, A](gfa: G[FF[A]]): FF[A] =
     gfa.foldLeft(MonoidK[FF].empty[A])(SemigroupK[FF].combineK[A])
 
+  private def runWithCost[A](f: Task[A], phlo: Int) =
+    (for {
+      _        <- cost.set(Cost(phlo))
+      result   <- f
+      phloLeft <- cost.get
+    } yield (phloLeft, result)).unsafeRunSync
+
   behavior of "MatcherMonad"
 
   it should "charge for each non-deterministic branch" in {
@@ -38,22 +45,15 @@ class MatcherMonadSpec extends FlatSpec with Matchers {
     val possibleResults = Stream((0, 1), (0, 2))
     val computation     = Alternative[F].unite(possibleResults.pure[F])
     val sum             = computation.map { case (x, y) => x + y } <* charge[F](Cost(1))
-    val t1 = (for {
-      _        <- cost.set(Cost(possibleResults.size))
-      _        <- runMatcher(sum)
-      phloLeft <- cost.get
-    } yield (assert(phloLeft.value == 0)))
+    val (phloLeft, _)   = runWithCost(runMatcher(sum), possibleResults.size)
+    assert(phloLeft.value == 0)
 
     val moreVariants    = sum.flatMap(x => Alternative[F].unite(Stream(x, 0, -x).pure[F]))
     val moreComputation = moreVariants.map(x => "Do sth with " + x) <* charge[F](Cost(1))
+    val (phloLeft2, _) =
+      runWithCost(runMatcher(moreComputation), possibleResults.size * 3 + possibleResults.size)
+    assert(phloLeft2.value == 0)
 
-    val t2 = (for {
-      _        <- cost.set(Cost(possibleResults.size * 3 + possibleResults.size))
-      _        <- runMatcher(moreComputation)
-      phloLeft <- cost.get
-    } yield (assert(phloLeft.value == 0)))
-
-    t1 >> t2 unsafeRunSync
   }
 
   val modifyStates = for {
@@ -62,13 +62,9 @@ class MatcherMonadSpec extends FlatSpec with Matchers {
   } yield ()
 
   it should "retain cost and matches when attemptOpt is called on successful match" in {
-    (for {
-      _        <- cost.set(Cost(0))
-      a        = attemptOpt(modifyStates)
-      res      <- runFirst(a)
-      phloLeft <- cost.get
-      _        = assert(phloLeft.value == 1)
-    } yield (assert(res == Some((Map(42 -> Par()), Some(())))))).unsafeRunSync
+    val (phloLeft, res) = runWithCost(runFirst(attemptOpt[F, Unit](modifyStates)), 0)
+    assert(phloLeft.value == 1)
+    assert(res == Some((Map(42 -> Par()), Some(()))))
   }
 
   it should "retain cost but discard matches when attemptOpt is called on a match failed using _short" in {
@@ -77,13 +73,9 @@ class MatcherMonadSpec extends FlatSpec with Matchers {
       _ <- _short[F].raiseError[Int](())
     } yield ()
 
-    (for {
-      _        <- cost.set(Cost(0))
-      a        = attemptOpt[F, Unit](failed)
-      res      <- runFirst(a)
-      phloLeft <- cost.get
-      _        = assert(phloLeft.value == 1)
-    } yield (assert(res == Some((Map.empty, None))))).unsafeRunSync
+    val (phloLeft, res) = runWithCost(runFirst(attemptOpt[F, Unit](failed)), 0)
+    assert(phloLeft.value == 1)
+    assert(res == Some((Map.empty, None)))
 
   }
 
@@ -93,42 +85,31 @@ class MatcherMonadSpec extends FlatSpec with Matchers {
       _ <- A.guard(false)
     } yield ()
 
-    (for {
-      _        <- cost.set(Cost(0))
-      a        = attemptOpt[F, Unit](failed)
-      res      <- runFirst(a)
-      phloLeft <- cost.get
-      _        = assert(phloLeft.value == 1)
-    } yield (assert(res == Some((Map.empty, None))))).unsafeRunSync
-
+    val (phloLeft, res) = runWithCost(runFirst(attemptOpt[F, Unit](failed)), 0)
+    assert(phloLeft.value == 1)
+    assert(res == Some((Map.empty, None)))
   }
 
   it should "apply `guard`-s separately to each computation branch" in {
     val a: F[Int] = A.guard(true) >> 1.pure[F]
     val b: F[Int] = A.guard(false) >> 2.pure[F]
     val c: F[Int] = A.guard(true) >> 3.pure[F]
+    val combined  = combineK(List(a, b, c))
 
-    (for {
-      _        <- cost.set(Cost(0))
-      combined = combineK(List(a, b, c))
-      res      <- runMatcher(combined)
-      phloLeft <- cost.get
-      _        = assert(phloLeft.value == 0)
-    } yield (assert(res == Stream((Map.empty, 1), (Map.empty, 3))))).unsafeRunSync
+    val (phloLeft, res) = runWithCost(runMatcher(combined), 0)
+    assert(phloLeft.value == 0)
+    assert(res == Stream((Map.empty, 1), (Map.empty, 3)))
   }
 
   it should "apply `_short[F].raiseError` separately to each computation branch" in {
     val a: F[Int] = _short[F].raiseError[Int](()) >> 1.pure[F]
     val b: F[Int] = 2.pure[F]
     val c: F[Int] = 3.pure[F] >> _short[F].raiseError[Int](())
+    val combined  = combineK(List(a, b, c))
 
-    (for {
-      _        <- cost.set(Cost(0))
-      combined = combineK(List(a, b, c))
-      res      <- runMatcher(combined)
-      phloLeft <- cost.get
-      _        = assert(phloLeft.value == 0)
-    } yield (assert(res == Stream((Map.empty, 2))))).unsafeRunSync
+    val (phloLeft, res) = runWithCost(runMatcher(combined), 0)
+    assert(phloLeft.value == 0)
+    assert(res == Stream((Map.empty, 2)))
   }
 
   it should "fail all branches when using `_error[F].raise`" in {
@@ -137,7 +118,8 @@ class MatcherMonadSpec extends FlatSpec with Matchers {
     val c: F[Int] = 3.pure[F]
 
     val combined = combineK(List(a, b, c))
-    runMatcher(combined).attempt.unsafeRunSync shouldBe (Left(OutOfPhlogistonsError))
+    val (_, res) = runWithCost(runMatcher(combined).attempt, 0)
+    res shouldBe (Left(OutOfPhlogistonsError))
   }
 
   it should "charge for each branch as long as `charge` is before a short-circuit" in {
@@ -149,13 +131,11 @@ class MatcherMonadSpec extends FlatSpec with Matchers {
     val d: F[Unit] = charge[F](Cost(8)) >> _short[F].raiseError[Unit](())
     val e: F[Unit] = _short[F].raiseError[Int](()) >> charge[F](Cost(16))
 
-    (for {
-      _        <- cost.set(Cost(1 + 2 + 8))
-      combined = combineK(List(a, b, c, d, e))
-      res      <- runMatcher(combined)
-      phloLeft <- cost.get
-      _        = assert(phloLeft.value == 0)
-    } yield (assert(res == Stream((Map.empty, ()))))).unsafeRunSync
+    val combined        = combineK(List(a, b, c, d, e))
+    val (phloLeft, res) = runWithCost(runMatcher(combined), 1 + 2 + 8)
+
+    assert(phloLeft.value == 0)
+    assert(res == Stream((Map.empty, ())))
 
   }
 
