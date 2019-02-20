@@ -280,12 +280,12 @@
 * each validator should have a DAG with same set of finalized blocks
 
 ### As a validator I want consensus protocol to converge
-#### 5 validators deploying 200 blocks end up with the same DAG
+#### 5 validators deploying 100 blocks end up with the same DAG
 ##### test: test/test_dag_correctness.py::test_5val_200blocks
 ##### steps:
 
 * initiate p2p with 5 validators `validatorA`, `validatorB`, `validatorC`, `validatorD` and `validatorE`
-* each validator runs 200 rounds of deploy and propose
+* each validator runs 100 rounds of deploy and propose
 * wait graceful period of 30 seconds
 * each validator should output exactly same DAG
 
