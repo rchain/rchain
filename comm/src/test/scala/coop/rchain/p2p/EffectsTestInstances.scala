@@ -92,17 +92,14 @@ object EffectsTestInstances {
     def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] =
       broadcast(peers, ProtocolHelper.protocol(blob.sender).withPacket(blob.packet)).void
 
-    def receive(
-        dispatch: Protocol => F[CommunicationResponse],
-        handleStreamed: Blob => F[Unit]
-    ): F[Unit] = ???
-
     def disconnect(peer: PeerNode): F[Unit] =
       Capture[F].capture {
         disconnects = disconnects :+ peer
       }
 
     def shutdown(msg: Protocol): F[Unit] = ???
+
+    def start(): F[Unit] = ???
   }
 
   class LogStub[F[_]: Applicative] extends Log[F] {

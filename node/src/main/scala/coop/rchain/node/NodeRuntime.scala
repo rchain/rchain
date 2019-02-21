@@ -87,6 +87,7 @@ class NodeRuntime private[node] (
   private val defaultTimeout    = conf.server.defaultTimeout // TODO remove
 
   case class Servers(
+      transportServer: TransportServer,
       grpcServerExternal: GrpcServer,
       grpcServerInternal: GrpcServer,
       httpServer: Fiber[Task, Unit]
@@ -105,6 +106,17 @@ class NodeRuntime private[node] (
   ): Effect[Servers] = {
     implicit val s: Scheduler = scheduler
     for {
+      transportServer <- Task
+                          .delay(
+                            GrpcTransportServer.acquireServer(
+                              port,
+                              conf.tls.certificate,
+                              conf.tls.key,
+                              conf.server.maxMessageSize,
+                              conf.server.dataDir.resolve("tmp").resolve("comm")
+                            )(grpcScheduler, log)
+                          )
+                          .toEffect
       grpcServerExternal <- GrpcServer
                              .acquireExternalServer[Effect](
                                conf.grpcServer.portExternal,
@@ -140,12 +152,12 @@ class NodeRuntime private[node] (
             Kamon.addReporter(new JmxReporter())
             if (conf.kamon.sigar) SystemMetrics.startCollecting()
           }.toEffect
-    } yield Servers(grpcServerExternal, grpcServerInternal, httpServerFiber)
+    } yield Servers(transportServer, grpcServerExternal, grpcServerInternal, httpServerFiber)
   }
 
   def clearResources(servers: Servers, runtime: Runtime[Task], casperRuntime: Runtime[Task])(
       implicit
-      transport: TransportLayer[Task],
+      transportShutdown: TransportLayerShutdown[Task],
       kademliaRPC: KademliaRPC[Task],
       blockStore: BlockStore[Effect],
       peerNodeAsk: PeerNodeAsk[Task]
@@ -155,9 +167,10 @@ class NodeRuntime private[node] (
       _   <- servers.grpcServerExternal.stop
       _   <- servers.grpcServerInternal.stop
       _   <- log.info("Shutting down transport layer, broadcasting DISCONNECT")
+      _   <- servers.transportServer.stop()
       loc <- peerNodeAsk.ask
       msg = ProtocolHelper.disconnect(loc)
-      _   <- transport.shutdown(msg)
+      _   <- transportShutdown(msg)
       _   <- kademliaRPC.shutdown()
       _   <- log.info("Shutting down HTTP server....")
       _   <- Task.delay(Kamon.stopAllReporters())
@@ -172,7 +185,7 @@ class NodeRuntime private[node] (
     } yield ()).unsafeRunSync(scheduler)
 
   def addShutdownHook(servers: Servers, runtime: Runtime[Task], casperRuntime: Runtime[Task])(
-      implicit transport: TransportLayer[Task],
+      implicit transportShutdown: TransportLayerShutdown[Task],
       kademliaRPC: KademliaRPC[Task],
       blockStore: BlockStore[Effect],
       peerNodeAsk: PeerNodeAsk[Task]
@@ -189,6 +202,7 @@ class NodeRuntime private[node] (
       peerNodeAsk: PeerNodeAsk[Task],
       metrics: Metrics[Task],
       transport: TransportLayer[Task],
+      transportShutdown: TransportLayerShutdown[Task],
       kademliaRPC: KademliaRPC[Task],
       nodeDiscovery: NodeDiscovery[Task],
       rpConnectons: ConnectionsCell[Task],
@@ -246,7 +260,7 @@ class NodeRuntime private[node] (
       _ <- Log[Effect].info(
             s"gRPC internal server started at $host:${servers.grpcServerInternal.port}"
           )
-      _ <- TransportLayer[Effect].receive(
+      _ <- servers.transportServer.startWithEffects(
             pm => HandleMessages.handle[Effect](pm, defaultTimeout),
             blob => packetHandler.handlePacket(blob.sender, blob.packet).as(())
           )
@@ -320,13 +334,15 @@ class NodeRuntime private[node] (
     labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
     commTmpFolder        = conf.server.dataDir.resolve("tmp").resolve("comm")
     _                    <- commTmpFolder.deleteDirectory[Task]().toEffect
-    transport = effects.tcpTransportLayer(
-      port,
-      conf.tls.certificate,
-      conf.tls.key,
-      conf.server.maxMessageSize,
-      commTmpFolder
-    )(grpcScheduler, log, metrics, tcpConnections)
+    tl <- effects
+           .transportClient(
+             conf.tls.certificate,
+             conf.tls.key,
+             conf.server.maxMessageSize,
+             commTmpFolder
+           )(grpcScheduler, log, metrics, tcpConnections)
+           .toEffect
+    (transport, transportShutdown) = tl
     kademliaRPC = effects.kademliaRPC(kademliaPort, defaultTimeout)(
       grpcScheduler,
       peerNodeAsk,
@@ -405,6 +421,7 @@ class NodeRuntime private[node] (
       peerNodeAsk,
       metrics,
       transport,
+      transportShutdown,
       kademliaRPC,
       nodeDiscovery,
       rpConnections,
