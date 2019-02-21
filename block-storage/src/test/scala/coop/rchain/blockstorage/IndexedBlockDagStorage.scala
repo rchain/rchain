@@ -54,6 +54,11 @@ final class IndexedBlockDagStorage[F[_]: Monad](
       _ <- underlying.insert(block)
       _ <- lock.release
     } yield ()
+
+  def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A] =
+    lock.withPermit(
+      underlying.accessEquivocationsTracker(f)
+    )
   def checkpoint(): F[Unit] = underlying.checkpoint()
   def clear(): F[Unit] =
     for {

@@ -23,7 +23,7 @@ import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.models.BlockMetadata
+import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 import coop.rchain.shared.{AtomicMonadState, Log, LogSource}
 import monix.execution.atomic.AtomicAny
 
@@ -36,6 +36,7 @@ private final case class BlockDagFileStorageState[F[_]: Sync](
     childMap: Map[BlockHash, Set[BlockHash]],
     dataLookup: Map[BlockHash, BlockMetadata],
     topoSort: Vector[Vector[BlockHash]],
+    equivocationsTracker: Set[EquivocationRecord],
     sortOffset: Long,
     checkpoints: List[Checkpoint],
     latestMessagesLogOutputStream: FileOutputStreamIO[F],
@@ -67,6 +68,8 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
     state.get.map(_.topoSort)
   private[this] def getSortOffset: F[Long] =
     state.get.map(_.sortOffset)
+  private[this] def getEquviocationsTracker: F[Set[EquivocationRecord]] =
+    state.get.map(_.equivocationsTracker)
   private[this] def getCheckpoints: F[List[Checkpoint]] =
     state.get.map(_.checkpoints)
   private[this] def getLatestMessagesLogOutputStream: F[FileOutputStreamIO[F]] =
@@ -88,6 +91,8 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
     state.modify(s => s.copy(dataLookup = v))
   private[this] def setTopoSort(v: Vector[Vector[BlockHash]]): F[Unit] =
     state.modify(s => s.copy(topoSort = v))
+  private[this] def setEquviocationsTracker(v: Set[EquivocationRecord]): F[Unit] =
+    state.modify(s => s.copy(equivocationsTracker = v))
   private[this] def setSortOffset(v: Long): F[Unit] =
     state.modify(s => s.copy(sortOffset = v))
   private[this] def setCheckpoints(v: List[Checkpoint]): F[Unit] =
@@ -119,6 +124,10 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
       f: Vector[Vector[BlockHash]] => Vector[Vector[BlockHash]]
   ): F[Unit] =
     state.modify(s => s.copy(topoSort = f(s.topoSort)))
+  private[this] def modifyEquivocationsTracker(
+      f: Set[EquivocationRecord] => Set[EquivocationRecord]
+  ): F[Unit] =
+    state.modify(s => s.copy(equivocationsTracker = f(s.equivocationsTracker)))
   private[this] def modifySortOffset(f: Long => Long): F[Unit] =
     state.modify(s => s.copy(sortOffset = f(s.sortOffset)))
   private[this] def modifyCheckpoints(f: List[Checkpoint] => List[Checkpoint]): F[Unit] =
@@ -223,6 +232,24 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
           case (validator, hash) => lookup(hash).map(validator -> _.get)
         }
         .map(_.toMap)
+  }
+
+  private object FileEquivocationsTracker extends EquivocationsTracker[F] {
+    override def equivocationRecords: F[Set[EquivocationRecord]] =
+      getEquviocationsTracker
+    override def insertEquivocationRecord(record: EquivocationRecord): F[Unit] =
+      modifyEquivocationsTracker(_ + record)
+    override def updateEquivocationRecord(
+        record: EquivocationRecord,
+        blockHash: BlockHash
+    ): F[Unit] = {
+      val updatedEquivocationDetectedBlockHashes =
+        record.equivocationDetectedBlockHashes + blockHash
+      modifyEquivocationsTracker(
+        _ - record +
+          record.copy(equivocationDetectedBlockHashes = updatedEquivocationDetectedBlockHashes)
+      )
+    }
   }
 
   private def loadDagInfo(checkpoint: Checkpoint): F[CheckpointedDagInfo] = {
@@ -430,6 +457,11 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
             }
         dag <- representation
       } yield dag
+    )
+
+  override def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A] =
+    lock.withPermit(
+      f(FileEquivocationsTracker)
     )
 
   def checkpoint(): F[Unit] =
@@ -773,6 +805,7 @@ object BlockDagFileStorage {
         childMap = childMap,
         dataLookup = dataLookupList.toMap,
         topoSort = topoSort,
+        equivocationsTracker = Set.empty,
         sortOffset = sortedCheckpoints.lastOption.map(_.end).getOrElse(0L),
         checkpoints = sortedCheckpoints,
         latestMessagesLogOutputStream = latestMessagesLogOutputStream,
@@ -838,6 +871,7 @@ object BlockDagFileStorage {
         childMap = Map(genesis.blockHash   -> Set.empty[BlockHash]),
         dataLookup = Map(genesis.blockHash -> BlockMetadata.fromBlock(genesis)),
         topoSort = Vector(Vector(genesis.blockHash)),
+        equivocationsTracker = Set.empty,
         sortOffset = 0L,
         checkpoints = List.empty,
         latestMessagesLogOutputStream = latestMessagesLogOutputStream,

@@ -20,22 +20,19 @@ import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.EquivocationRecord
 import coop.rchain.shared._
 
 /**
   Encapsulates mutable state of the MultiParentCasperImpl
 
-  @param seenBlockHashes - tracks hashes of all blocks seen so far
   @param blockBuffer
   @param deployHistory
-  @param invalidBlockTracker
-  @param equivocationsTracker: Used to keep track of when other validators detect the equivocation consisting of the base block at the sequence number identified by the (validator, base equivocation sequence number) pair of each EquivocationRecord.
   */
 final case class CasperState(
     blockBuffer: Set[BlockMessage] = Set.empty[BlockMessage],
     deployHistory: Set[DeployData] = Set.empty[DeployData],
-    dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty,
-    equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord]
+    dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty
 )
 
 class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage](
@@ -366,16 +363,15 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       .map(_.getOrElse(s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!"))
 
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
-    for {
-      state   <- Cell[F, CasperState].read
-      tracker = state.equivocationsTracker
-    } yield
-      (tracker
-        .map(_.equivocator)
-        .toSet
-        .flatMap(weights.get)
-        .sum
-        .toFloat / weightMapTotal(weights))
+    BlockDagStorage[F].accessEquivocationsTracker { tracker =>
+      tracker.equivocationRecords.map { equivocations =>
+        equivocations
+          .map(_.equivocator)
+          .flatMap(weights.get)
+          .sum
+          .toFloat / weightMapTotal(weights)
+      }
+    }
 
   /*
    * TODO: Pass in blockDag. We should only call _blockDag.get at one location.
@@ -457,22 +453,25 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       case AdmissibleEquivocation =>
         val baseEquivocationBlockSeqNum = block.seqNum - 1
         for {
-          _ <- Cell[F, CasperState].modify { s =>
-                if (s.equivocationsTracker.exists {
-                      case EquivocationRecord(validator, seqNum, _) =>
-                        block.sender == validator && baseEquivocationBlockSeqNum == seqNum
-                    }) {
-                  // More than 2 equivocating children from base equivocation block and base block has already been recorded
-                  s
-                } else {
-                  val newEquivocationRecord =
-                    EquivocationRecord(
-                      block.sender,
-                      baseEquivocationBlockSeqNum,
-                      Set.empty[BlockHash]
-                    )
-                  s.copy(equivocationsTracker = s.equivocationsTracker + newEquivocationRecord)
-                }
+          _ <- BlockDagStorage[F].accessEquivocationsTracker { tracker =>
+                for {
+                  equivocations <- tracker.equivocationRecords
+                  _ <- if (equivocations.exists {
+                             case EquivocationRecord(validator, seqNum, _) =>
+                               block.sender == validator && baseEquivocationBlockSeqNum == seqNum
+                           }) {
+                        // More than 2 equivocating children from base equivocation block and base block has already been recorded
+                        ().pure[F]
+                      } else {
+                        val newEquivocationRecord =
+                          EquivocationRecord(
+                            block.sender,
+                            baseEquivocationBlockSeqNum,
+                            Set.empty[BlockHash]
+                          )
+                        tracker.insertEquivocationRecord(newEquivocationRecord)
+                      }
+                } yield ()
               }
           updatedDag <- addToState(block)
           _          <- CommUtil.sendBlock[F](block)
