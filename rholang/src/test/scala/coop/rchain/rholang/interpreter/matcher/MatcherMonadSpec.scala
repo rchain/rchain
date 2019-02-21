@@ -1,23 +1,42 @@
 package coop.rchain.rholang.interpreter.matcher
 
+import cats._
+import cats.effect._
+import cats.effect.implicits._
 import cats.implicits._
 import cats.mtl.implicits._
 import cats.{Alternative, Foldable, MonoidK, SemigroupK}
+import coop.rchain.catscontrib.mtl.implicits._
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.accounting.CostAccounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.matcher.{run => runMatcher, _}
 import coop.rchain.rholang.interpreter.matcher.NonDetFreeMapWithCost._
-import org.scalatest.FlatSpec
+import org.scalatest._
 
-class MatcherMonadSpec extends FlatSpec {
+import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
 
-  type F[A] = NonDetFreeMapWithCost[A]
+class MatcherMonadSpec extends FlatSpec with Matchers {
+
+  type F[A] = MatcherMonadT[Task, A]
 
   val A: Alternative[F] = Alternative[F]
 
+  implicit val cost: _cost[Task] = CostAccounting.unsafe[Task](Cost(0))
+
   private def combineK[FF[_]: MonoidK, G[_]: Foldable, A](gfa: G[FF[A]]): FF[A] =
     gfa.foldLeft(MonoidK[FF].empty[A])(SemigroupK[FF].combineK[A])
+
+  private def runWithCost[A](f: Task[A], phlo: Int) =
+    (for {
+      _        <- cost.set(Cost(phlo))
+      result   <- f
+      phloLeft <- cost.get
+    } yield (phloLeft, result)).unsafeRunSync
 
   behavior of "MatcherMonad"
 
@@ -26,14 +45,15 @@ class MatcherMonadSpec extends FlatSpec {
     val possibleResults = Stream((0, 1), (0, 2))
     val computation     = Alternative[F].unite(possibleResults.pure[F])
     val sum             = computation.map { case (x, y) => x + y } <* charge[F](Cost(1))
-    val (cost, _)       = sum.runWithCost(Cost(possibleResults.size)).right.get
-    assert(cost.value == 0)
+    val (phloLeft, _)   = runWithCost(runMatcher(sum), possibleResults.size)
+    assert(phloLeft.value == 0)
 
     val moreVariants    = sum.flatMap(x => Alternative[F].unite(Stream(x, 0, -x).pure[F]))
     val moreComputation = moreVariants.map(x => "Do sth with " + x) <* charge[F](Cost(1))
-    val (cost2, _) =
-      moreComputation.runWithCost(Cost(possibleResults.size * 3 + possibleResults.size)).right.get
-    assert(cost2.value == 0)
+    val (phloLeft2, _) =
+      runWithCost(runMatcher(moreComputation), possibleResults.size * 3 + possibleResults.size)
+    assert(phloLeft2.value == 0)
+
   }
 
   val modifyStates = for {
@@ -42,10 +62,9 @@ class MatcherMonadSpec extends FlatSpec {
   } yield ()
 
   it should "retain cost and matches when attemptOpt is called on successful match" in {
-    assert(
-      attemptOpt[F, Unit](modifyStates)
-        .runFirstWithCost(Cost(0)) == Right((Cost(1), Some((Map(42 -> Par()), Some(())))))
-    )
+    val (phloLeft, res) = runWithCost(runFirst(attemptOpt[F, Unit](modifyStates)), 0)
+    assert(phloLeft.value == 1)
+    assert(res == Some((Map(42 -> Par()), Some(()))))
   }
 
   it should "retain cost but discard matches when attemptOpt is called on a match failed using _short" in {
@@ -54,10 +73,10 @@ class MatcherMonadSpec extends FlatSpec {
       _ <- _short[F].raiseError[Int](())
     } yield ()
 
-    assert(
-      attemptOpt[F, Unit](failed)
-        .runFirstWithCost(Cost(0)) == Right((Cost(1), Some((Map.empty, None))))
-    )
+    val (phloLeft, res) = runWithCost(runFirst(attemptOpt[F, Unit](failed)), 0)
+    assert(phloLeft.value == 1)
+    assert(res == Some((Map.empty, None)))
+
   }
 
   it should "retain cost but discard matches when attemptOpt is called on a match failed using `guard`" in {
@@ -66,28 +85,31 @@ class MatcherMonadSpec extends FlatSpec {
       _ <- A.guard(false)
     } yield ()
 
-    assert(
-      attemptOpt[F, Unit](failed)
-        .runFirstWithCost(Cost(0)) == Right((Cost(1), Some((Map.empty, None))))
-    )
+    val (phloLeft, res) = runWithCost(runFirst(attemptOpt[F, Unit](failed)), 0)
+    assert(phloLeft.value == 1)
+    assert(res == Some((Map.empty, None)))
   }
 
   it should "apply `guard`-s separately to each computation branch" in {
     val a: F[Int] = A.guard(true) >> 1.pure[F]
     val b: F[Int] = A.guard(false) >> 2.pure[F]
     val c: F[Int] = A.guard(true) >> 3.pure[F]
+    val combined  = combineK(List(a, b, c))
 
-    val result = combineK(List(a, b, c)).runWithCost(Cost(0))
-    assert(result.right.get._2 == Stream((Map.empty, 1), (Map.empty, 3)))
+    val (phloLeft, res) = runWithCost(runMatcher(combined), 0)
+    assert(phloLeft.value == 0)
+    assert(res == Stream((Map.empty, 1), (Map.empty, 3)))
   }
 
   it should "apply `_short[F].raiseError` separately to each computation branch" in {
     val a: F[Int] = _short[F].raiseError[Int](()) >> 1.pure[F]
     val b: F[Int] = 2.pure[F]
     val c: F[Int] = 3.pure[F] >> _short[F].raiseError[Int](())
+    val combined  = combineK(List(a, b, c))
 
-    val result = combineK(List(a, b, c)).runWithCost(Cost(0))
-    assert(result.right.get._2 == Stream((Map.empty, 2)))
+    val (phloLeft, res) = runWithCost(runMatcher(combined), 0)
+    assert(phloLeft.value == 0)
+    assert(res == Stream((Map.empty, 2)))
   }
 
   it should "fail all branches when using `_error[F].raise`" in {
@@ -95,8 +117,9 @@ class MatcherMonadSpec extends FlatSpec {
     val b: F[Int] = 2.pure[F] >> _error[F].raise[Int](OutOfPhlogistonsError)
     val c: F[Int] = 3.pure[F]
 
-    val result = combineK(List(a, b, c)).runWithCost(Cost(0))
-    assert(result == Left(OutOfPhlogistonsError))
+    val combined = combineK(List(a, b, c))
+    val (_, res) = runWithCost(runMatcher(combined).attempt, 0)
+    res shouldBe (Left(OutOfPhlogistonsError))
   }
 
   it should "charge for each branch as long as `charge` is before a short-circuit" in {
@@ -108,8 +131,12 @@ class MatcherMonadSpec extends FlatSpec {
     val d: F[Unit] = charge[F](Cost(8)) >> _short[F].raiseError[Unit](())
     val e: F[Unit] = _short[F].raiseError[Int](()) >> charge[F](Cost(16))
 
-    val result = combineK(List(a, b, c, d, e)).runWithCost(Cost(1 + 2 + 8))
-    assert(result == Right((Cost(0), Stream((Map.empty, ())))))
+    val combined        = combineK(List(a, b, c, d, e))
+    val (phloLeft, res) = runWithCost(runMatcher(combined), 1 + 2 + 8)
+
+    assert(phloLeft.value == 0)
+    assert(res == Stream((Map.empty, ())))
+
   }
 
 }

@@ -21,7 +21,7 @@ object CostAccounting {
 
   def apply[F[_]](implicit ev: CostAccounting[F]): CostAccounting[F] = ev
 
-  def unsafe[F[_]: Monad](init: Cost)(implicit F: Sync[F]): CostAccounting[F] = {
+  def unsafe[F[_]](init: Cost)(implicit F: Sync[F]): CostAccounting[F] = {
     val ref = Ref.unsafe[F, Cost](init)
     new CostAccountingImpl[F](ref)
   }

@@ -5,6 +5,8 @@ import cats.mtl.implicits._
 import cats.{Eval => _}
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.MonadError_._
+import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
@@ -12,10 +14,11 @@ import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
 import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rholang.interpreter.PrettyPrinter
-import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.{InterpreterError, OutOfPhlogistonsError}
 import coop.rchain.rholang.interpreter.matcher.NonDetFreeMapWithCost._
-import monix.eval.Coeval
+import monix.eval.{Coeval, Task}
+import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatest._
 import org.scalatest.concurrent.TimeLimits
@@ -922,12 +925,40 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
     assertSpatialMatch(failTarget, pattern, None)
   }
 
-  "Spatial matcher" should "short-circuit when runs out of phlo in the middle of matching" in {
+  "spatialMatch" should "short-circuit when runs out of phlo in the middle of matching" in {
     val target: Par = EList(Seq(GInt(1), GInt(2), GInt(3)))
     val pattern: Par =
       EList(Seq(GInt(1), EVar(FreeVar(0)), EVar(FreeVar(1))), connectiveUsed = true)
     val res =
       spatialMatch[NonDetFreeMapWithCost, Par, Par](target, pattern).runFirstWithCost(Cost(0))
     res should be(Left(OutOfPhlogistonsError))
+  }
+
+  private def doMatchAndCharge(initialPhlo: Int) = {
+    implicit val cost: _cost[Task] = CostAccounting.unsafe[Task](Cost(initialPhlo))
+    val target: Par                = EList(Seq(GInt(1), GInt(2), GInt(3)))
+    val pattern: Par =
+      EList(Seq(GInt(1), EVar(FreeVar(0)), EVar(FreeVar(1))), connectiveUsed = true)
+
+    (for {
+      res      <- spatialMatchAndCharge[Task](target, pattern).attempt
+      phloLeft <- cost.get
+    } yield (phloLeft, res)).unsafeRunSync
+  }
+
+  "spatialMatchAndCharge" should "short-circuit when runs out of phlo in the middle of matching" in {
+    val (_, res) = doMatchAndCharge(initialPhlo = 0)
+    res should be(Left(OutOfPhlogistonsError))
+  }
+
+  it should "charge for matching operations" in {
+    val (phloLeft, _) = doMatchAndCharge(initialPhlo = 100)
+    phloLeft.value shouldBe 90
+  }
+
+  it should "be allowed to finish with a negative cost" in {
+    val (phloLeft, res) = doMatchAndCharge(initialPhlo = 8)
+    res should be(Left(OutOfPhlogistonsError))
+    phloLeft.value shouldBe -2
   }
 }

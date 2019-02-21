@@ -23,9 +23,7 @@ package object matcher {
   type ErroredOrCost[A]         = StateT[Err, Cost, A]
   type Err[A]                   = Either[InterpreterError, A]
 
-  // MatcherMonadT[Err, A] is equivalent to NonDetFreeMapWithCost[A]. Scalac is too dumb to notice though.
-  type MatcherMonadT[F[_], A]   = StateT[StreamWithCostT[F, ?], FreeMap, A]
-  type StreamWithCostT[F[_], A] = StreamT[StateT[F, Cost, ?], A]
+  type MatcherMonadT[F[_], A] = StateT[StreamT[F, ?], FreeMap, A]
 
   // The naming convention means: this is an effect-type alias.
   // Will be used similarly to capabilities, but for more generic and probably low-level/implementation stuff.
@@ -37,11 +35,17 @@ package object matcher {
   def _freeMap[F[_]](implicit ev: _freeMap[F]): _freeMap[F] = ev
   def _short[F[_]](implicit ev: _short[F]): _short[F]       = ev
 
-  private[matcher] def runFirstWithCost[F[_]: Monad, A](
-      f: MatcherMonadT[F, A],
-      initCost: Cost
-  ): F[(Cost, Option[(FreeMap, A)])] =
-    StreamT.run(StreamT.dropTail(f.run(emptyMap))).map(_.headOption).run(initCost)
+  private[matcher] def run[F[_]: Monad, A](
+      f: MatcherMonadT[F, A]
+  ): F[Stream[(FreeMap, A)]] =
+    StreamT.run(f.run(emptyMap))
+
+  private[matcher] def runFirst[F[_]: Monad, A](
+      f: MatcherMonadT[F, A]
+  ): F[Option[(FreeMap, A)]] =
+    StreamT
+      .run(StreamT.dropTail(f.run(emptyMap)))
+      .map(_.headOption)
 
   private[matcher] def attemptOpt[F[_], A](
       f: F[A]
