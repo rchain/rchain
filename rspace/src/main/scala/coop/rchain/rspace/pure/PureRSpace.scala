@@ -64,7 +64,7 @@ object PureRSpace {
 
         def reset(hash: Blake2b256Hash): F[Unit] = space.reset(hash)
 
-        def close(): F[Unit] = space.close()
+        def close(): F[Unit] = space.close
       }
   }
 }

@@ -11,7 +11,7 @@ trait InMemTransaction[S] {
   def name: String
 }
 
-trait InMemoryOps[S] extends CloseOps {
+trait InMemoryOps[F[_], S] extends CloseOps[F] {
   protected[rspace] type Transaction = InMemTransaction[S]
 
   protected[rspace] type StateType = S

@@ -37,7 +37,7 @@ package object test {
 
   def offset(d: Int) = ("   " * d)
 
-  def printTree[T, K, V](store: ITrieStore[T, K, V], branch: Branch = Branch.MASTER): Unit =
+  def printTree[T, K, V](store: ITrieStore[Id, T, K, V], branch: Branch = Branch.MASTER): Unit =
     store.withTxn(store.createTxnRead()) { txn =>
       def printBranch(d: Int, t: Trie[K, V]): Unit =
         t match {

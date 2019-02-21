@@ -24,17 +24,17 @@ import scala.concurrent.SyncVar
   */
 private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, E, A, R, K] {
 
+  implicit val syncF: Sync[F]
+
   /**
     * A store which satisfies the [[IStore]] interface.
     */
-  val store: IStore[C, P, A, K]
+  private[rspace] val store: IStore[F, C, P, A, K]
 
-  val branch: Branch
+  private[rspace] val branch: Branch
 
   protected[this] val eventLog: SyncVar[Log] =
     SyncVarOps.create[Log](Seq.empty)
-
-  implicit val syncF: Sync[F]
 
   /* Consume */
 
@@ -155,5 +155,5 @@ private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, 
       case _ => syncF.pure(Right(None))
     }
 
-  override def close(): F[Unit] = syncF.delay { store.close() }
+  override def close: F[Unit] = store.close
 }

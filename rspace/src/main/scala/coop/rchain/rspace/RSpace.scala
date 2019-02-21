@@ -1,8 +1,7 @@
 package coop.rchain.rspace
 
-import cats.Traverse
+import java.nio.ByteBuffer
 
-import scala.annotation.tailrec
 import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext
 import scala.util.Random
@@ -16,11 +15,12 @@ import coop.rchain.rspace.trace._
 import coop.rchain.shared.SyncVarOps._
 import com.typesafe.scalalogging.Logger
 import kamon._
+import org.lmdbjava.Txn
 import scodec.Codec
 
 class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
-    store: IStore[C, P, A, K],
-    branch: Branch
+    override val store: IStore[F, C, P, A, K],
+    override val branch: Branch
 )(
     implicit
     serializeC: Serialize[C],
@@ -33,6 +33,8 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
     scheduler: ExecutionContext
 ) extends RSpaceOps[F, C, P, E, A, R, K](store, branch)
     with ISpace[F, C, P, E, A, R, K] {
+
+  def toMap: F[Map[Seq[C], Row[P, A, K]]] = store.toMap
 
   override protected[this] val logger: Logger = Logger[this.type]
 
@@ -315,8 +317,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
     }
 
   override def createCheckpoint(): F[Checkpoint] =
-    syncF.delay {
-      val root   = store.createCheckpoint()
+    store.createCheckpoint().map { root =>
       val events = eventLog.take()
       eventLog.put(Seq.empty)
       Checkpoint(root, events)
@@ -325,7 +326,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
 
 object RSpace {
 
-  def create[F[_], C, P, E, A, R, K](context: Context[C, P, A, K], branch: Branch)(
+  def create[F[_], C, P, E, A, R, K](context: Context[F, C, P, A, K], branch: Branch)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -337,17 +338,30 @@ object RSpace {
       scheduler: ExecutionContext
   ): F[ISpace[F, C, P, E, A, R, K]] =
     context match {
-      case ctx: LMDBContext[C, P, A, K] =>
-        create(LMDBStore.create[C, P, A, K](ctx, branch), branch)
+      case ctx: LMDBContext[F, C, P, A, K] =>
+        create(LMDBStore.create[F, C, P, A, K](ctx, branch), branch)
 
-      case ctx: InMemoryContext[C, P, A, K] =>
-        create(InMemoryStore.create(ctx.trieStore, branch), branch)
+      case ctx: InMemoryContext[F, C, P, A, K] =>
+        create(
+          InMemoryStore.create[
+            F,
+            InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]],
+            C,
+            P,
+            A,
+            K
+          ](ctx.trieStore, branch),
+          branch
+        )
 
-      case ctx: MixedContext[C, P, A, K] =>
-        create(LockFreeInMemoryStore.create(ctx.trieStore, branch), branch)
+      case ctx: MixedContext[F, C, P, A, K] =>
+        create(
+          LockFreeInMemoryStore.create[F, Txn[ByteBuffer], C, P, A, K](ctx.trieStore, branch),
+          branch
+        )
     }
 
-  def create[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
+  def create[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch: Branch)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -373,6 +387,7 @@ object RSpace {
      * In this case, we create a checkpoint for the empty store so that we can reset
      * to the empty store state with the clear method.
      */
+
     if (history.initialize(store.trieStore, branch)) {
       space.createCheckpoint().map(_ => space)
     } else {

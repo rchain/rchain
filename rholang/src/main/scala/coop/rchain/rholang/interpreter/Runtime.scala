@@ -34,16 +34,17 @@ class Runtime[F[_]: Sync] private (
     val space: RhoISpace[F],
     val replaySpace: RhoReplayISpace[F],
     val errorLog: ErrorLog[F],
-    val context: RhoContext,
+    val context: RhoContext[F],
     val shortLeashParams: Runtime.ShortLeashParams[F],
     val blockTime: Runtime.BlockTime[F]
 ) {
   def readAndClearErrorVector(): F[Vector[Throwable]] = errorLog.readAndClearErrorVector()
   def close(): F[Unit] =
     for {
-      _ <- space.close()
-      _ <- replaySpace.close()
-    } yield (context.close())
+      _ <- space.close
+      _ <- replaySpace.close
+      _ <- context.close()
+    } yield ()
 }
 
 object Runtime {
@@ -52,15 +53,18 @@ object Runtime {
   type RhoPureSpace[F[_]]    = TCPARK[F, PureRSpace]
   type RhoReplayISpace[F[_]] = TCPARK[F, IReplaySpace]
 
-  type RhoIStore  = CPAK[IStore]
-  type RhoContext = CPAK[Context]
+  type RhoIStore[F[_]]  = CPAK[F, IStore]
+  type RhoContext[F[_]] = TCPAK[F, Context]
 
   type RhoDispatch[F[_]]    = Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
   type RhoSysFunction[F[_]] = (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
   type RhoDispatchMap[F[_]] = Map[Long, RhoSysFunction[F]]
 
-  type CPAK[F[_, _, _, _]] =
-    F[Par, BindPattern, ListParWithRandom, TaggedContinuation]
+  type TCPAK[M[_], F[_[_], _, _, _, _]] =
+    F[M, Par, BindPattern, ListParWithRandom, TaggedContinuation]
+
+  type CPAK[M[_], F[_[_], _, _, _, _]] =
+    F[M, Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
   type TCPARK[M[_], F[_[_], _, _, _, _, _, _]] =
     F[
@@ -419,10 +423,10 @@ object Runtime {
       dataDir: Path,
       mapSize: Long,
       storeType: StoreType
-  )(implicit scheduler: ExecutionContext): F[(RhoContext, RhoISpace[F], RhoReplayISpace[F])] = {
+  )(implicit scheduler: ExecutionContext): F[(RhoContext[F], RhoISpace[F], RhoReplayISpace[F])] = {
     def createSpace(
-        context: RhoContext
-    ): F[(RhoContext, RhoISpace[F], RhoReplayISpace[F])] =
+        context: RhoContext[F]
+    ): F[(RhoContext[F], RhoISpace[F], RhoReplayISpace[F])] =
       for {
         space <- RSpace.create[
                   F,
@@ -452,7 +456,7 @@ object Runtime {
 
     storeType match {
       case InMem =>
-        createSpace(Context.createInMemory())
+        createSpace(Context.createInMemory)
       case LMDB =>
         checkCreateDataDir >> createSpace(Context.create(dataDir, mapSize, true))
       case Mixed =>

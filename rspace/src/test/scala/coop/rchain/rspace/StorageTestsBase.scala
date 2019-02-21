@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import cats._
 import cats.implicits._
 import cats.effect._
+import coop.rchain.catscontrib.traverseSeq
 import com.typesafe.scalalogging.Logger
 import com.google.common.collect.HashMultiset
 import coop.rchain.rspace.ISpace.IdISpace
@@ -55,77 +56,86 @@ trait StorageTestsBase[F[_], C, P, E, A, K] extends FlatSpec with Matchers with 
       indexedStates: Seq[(State, Int)],
       reportName: String,
       differenceReport: Boolean = false
-  ): Boolean = {
+  ): F[Boolean] = {
     final case class SetRow(data: Set[Datum[A]], wks: Set[WaitingContinuation[P, K]])
 
     def convertMap(m: Map[Seq[C], Row[P, A, K]]): Map[Seq[C], SetRow] =
       m.map { case (channels, row) => channels -> SetRow(row.data.toSet, row.wks.toSet) }
 
-    val tests: Seq[Any] = indexedStates
-      .map {
-        case (State(checkpoint, rawExpectedContents, expectedJoins), chunkNo) =>
-          space.reset(checkpoint)
-          val num = "%02d".format(chunkNo)
+    val tests: F[Seq[Boolean]] = Traverse[Seq].sequence {
+      indexedStates
+        .map {
+          case (State(checkpoint, rawExpectedContents, expectedJoins), chunkNo) =>
+            for {
+              _        <- space.reset(checkpoint)
+              spaceMap <- space.store.toMap
+            } yield {
 
-          val expectedContents = convertMap(rawExpectedContents)
-          val actualContents   = convertMap(space.store.toMap)
+              val num = "%02d".format(chunkNo)
 
-          val contentsTest = expectedContents == actualContents
+              val expectedContents = convertMap(rawExpectedContents)
+              val actualContents   = convertMap(spaceMap)
 
-          val actualJoins = space.store.joinMap
+              val contentsTest = expectedContents == actualContents
 
-          val joinsTest =
-            expectedJoins.forall {
-              case (hash: Blake2b256Hash, expecteds: Seq[Seq[C]]) =>
-                val expected = HashMultiset.create[Seq[C]](expecteds.asJava)
-                val actual   = HashMultiset.create[Seq[C]](actualJoins(hash).asJava)
-                expected.equals(actual)
-            }
+              val actualJoins = space.store.joinMap
 
-          val result = contentsTest && joinsTest
-          if (!result) {
-            if (!contentsTest) {
-              logger.error(s"$num: store had unexpected contents ($reportName)")
-            }
+              val joinsTest =
+                expectedJoins.forall {
+                  case (hash: Blake2b256Hash, expecteds: Seq[Seq[C]]) =>
+                    val expected = HashMultiset.create[Seq[C]](expecteds.asJava)
+                    val actual   = HashMultiset.create[Seq[C]](actualJoins(hash).asJava)
+                    expected.equals(actual)
+                }
 
-            if (!joinsTest) {
-              logger.error(s"$num: store had unexpected joins ($reportName)")
-            }
+              val result = contentsTest && joinsTest
+              if (!result) {
+                if (!contentsTest) {
+                  logger.error(s"$num: store had unexpected contents ($reportName)")
+                }
 
-            if (differenceReport) {
-              logger.error(s"difference report ($reportName)")
-              for ((expectedChannels, expectedRow) <- expectedContents) {
-                val actualRow = actualContents.get(expectedChannels)
+                if (!joinsTest) {
+                  logger.error(s"$num: store had unexpected joins ($reportName)")
+                }
 
-                actualRow match {
-                  case Some(row) =>
-                    if (row != expectedRow) {
-                      logger.error(
-                        s"key [$expectedChannels] invalid actual value: $row !== $expectedRow"
-                      )
+                if (differenceReport) {
+                  logger.error(s"difference report ($reportName)")
+                  for ((expectedChannels, expectedRow) <- expectedContents) {
+                    val actualRow = actualContents.get(expectedChannels)
+
+                    actualRow match {
+                      case Some(row) =>
+                        if (row != expectedRow) {
+                          logger.error(
+                            s"key [$expectedChannels] invalid actual value: $row !== $expectedRow"
+                          )
+                        }
+                      case None =>
+                        logger.error(s"key [$expectedChannels] not found in actual records")
                     }
-                  case None => logger.error(s"key [$expectedChannels] not found in actual records")
+                  }
+
+                  for ((actualChannels, actualRow) <- actualContents) {
+                    val expectedRow = expectedContents.get(actualChannels)
+
+                    expectedRow match {
+                      case Some(row) =>
+                        if (row != actualRow) {
+                          logger.error(
+                            s"key[$actualChannels] invalid actual value: $actualRow !== $row"
+                          )
+                        }
+                      case None =>
+                        logger.error(s"key [$actualChannels] not found in expected records")
+                    }
+                  }
                 }
               }
-
-              for ((actualChannels, actualRow) <- actualContents) {
-                val expectedRow = expectedContents.get(actualChannels)
-
-                expectedRow match {
-                  case Some(row) =>
-                    if (row != actualRow) {
-                      logger.error(
-                        s"key[$actualChannels] invalid actual value: $actualRow !== $row"
-                      )
-                    }
-                  case None => logger.error(s"key [$actualChannels] not found in expected records")
-                }
-              }
+              result
             }
-          }
-          result
-      }
-    !tests.contains(false)
+        }
+    }
+    tests.map(!_.contains(false))
   }
 }
 
@@ -139,7 +149,7 @@ abstract class InMemoryStoreTestsBase[F[_]]
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
     val branch                                = Branch("inmem")
 
-    val ctx: Context[String, Pattern, String, StringsCaptor] = Context.createInMemory()
+    val ctx: Context[F, String, Pattern, String, StringsCaptor] = Context.createInMemory
 
     run(for {
       testSpace <- RSpace.create[F, String, Pattern, Nothing, String, String, StringsCaptor](
@@ -148,25 +158,18 @@ abstract class InMemoryStoreTestsBase[F[_]]
                   )
       testStore = testSpace.store
       trieStore = testStore.trieStore
-      _ <- testStore
-            .withTxn(testStore.createTxnWrite()) { txn =>
-              testStore.withTrieTxn(txn) { trieTxn =>
-                testStore.clear(txn)
-                testStore.trieStore.clear(trieTxn)
-              }
+      _ <- testStore.withTxn(testStore.createTxnWrite()) { txn =>
+            testStore.withTrieTxn(txn) { trieTxn =>
+              testStore.clear(txn)
+              testStore.trieStore.clear(trieTxn)
             }
-            .pure[F]
-      _   <- history.initialize(trieStore, branch).pure[F]
+          }
+      _   <- syncF.delay(history.initialize(trieStore, branch))
       _   <- testSpace.createCheckpoint()
       res <- f(testSpace)
-    } yield {
-      try {
-        res
-      } finally {
-        trieStore.close()
-        testStore.close()
-      }
-    })
+      _   <- trieStore.close
+      _   <- testStore.close
+    } yield res)
   }
 
   override def afterAll(): Unit =
@@ -186,7 +189,7 @@ abstract class LMDBStoreTestsBase[F[_]]
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
 
     val testBranch = Branch("test")
-    val env        = Context.create[String, Pattern, String, StringsCaptor](dbDir, mapSize)
+    val env        = Context.create[F, String, Pattern, String, StringsCaptor](dbDir, mapSize)
 
     run(for {
       testSpace <- RSpace.create[F, String, Pattern, Nothing, String, String, StringsCaptor](
@@ -201,19 +204,13 @@ abstract class LMDBStoreTestsBase[F[_]]
                 testStore.trieStore.clear(trieTxn)
               }
             }
-            .pure[F]
-      _   <- history.initialize(testStore.trieStore, testBranch).pure[F]
+      _   <- syncF.delay(history.initialize(testStore.trieStore, testBranch))
       _   <- testSpace.createCheckpoint()
       res <- f(testSpace)
-    } yield {
-      try {
-        res
-      } finally {
-        testStore.trieStore.close()
-        testStore.close()
-        env.close()
-      }
-    })
+      _   <- testStore.trieStore.close
+      _   <- testStore.close
+      _   <- env.close()
+    } yield res)
   }
 
   override def afterAll(): Unit =
@@ -233,7 +230,7 @@ abstract class MixedStoreTestsBase[F[_]]
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
 
     val testBranch = Branch("test")
-    val env        = Context.createMixed[String, Pattern, String, StringsCaptor](dbDir, mapSize)
+    val env        = Context.createMixed[F, String, Pattern, String, StringsCaptor](dbDir, mapSize)
 
     run(for {
       testSpace <- RSpace.create[F, String, Pattern, Nothing, String, String, StringsCaptor](
@@ -248,19 +245,13 @@ abstract class MixedStoreTestsBase[F[_]]
                 testStore.trieStore.clear(trieTxn)
               }
             }
-            .pure[F]
-      _   <- history.initialize(testStore.trieStore, testBranch).pure[F]
+      _   <- syncF.delay(history.initialize(testStore.trieStore, testBranch))
       _   <- testSpace.createCheckpoint()
       res <- f(testSpace)
-    } yield {
-      try {
-        res
-      } finally {
-        testStore.trieStore.close()
-        testStore.close()
-        env.close()
-      }
-    })
+      _   <- testStore.trieStore.close
+      _   <- testStore.close
+      _   <- env.close()
+    } yield res)
   }
 
   override def afterAll(): Unit =

@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter.storage
 
+import cats.Id
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
@@ -8,14 +9,16 @@ import coop.rchain.rholang.interpreter.Runtime.RhoIStore
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace.trace.{Consume, Produce}
 
+import scala.collection.immutable
+
 object StoragePrinter {
-  def prettyPrint(store: RhoIStore): String = {
-    val pars: Seq[Par] = store.toMap.map {
+  def prettyPrint(
+      storeMap: Map[immutable.Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]]
+  ): String = {
+    val pars: Seq[Par] = storeMap.map {
       case (
-          (
           channels: Seq[Par],
           row: Row[BindPattern, ListParWithRandom, TaggedContinuation]
-          )
           ) => {
         def toSends(data: Seq[Datum[ListParWithRandom]]): Par = {
           val sends: Seq[Send] = data.flatMap {

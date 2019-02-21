@@ -1,6 +1,7 @@
 package coop.rchain.rspace
 
 import cats.Id
+import cats.effect.Sync
 import coop.rchain.rspace.internal._
 
 import scala.collection.immutable.Seq
@@ -24,6 +25,10 @@ final case class ContResult[C, P, R](
   * @tparam K a type representing a continuation
   */
 trait ISpace[F[_], C, P, E, A, R, K] {
+
+  private[rspace] val store: IStore[F, C, P, A, K]
+
+  def toMap: F[Map[Seq[C], Row[P, A, K]]]
 
   /** Searches the store for data matching all the given patterns at the given channels.
     *
@@ -116,9 +121,8 @@ trait ISpace[F[_], C, P, E, A, R, K] {
 
   /** Closes
     */
-  def close(): F[Unit]
+  def close: F[Unit]
 
-  val store: IStore[C, P, A, K]
 }
 
 object ISpace {

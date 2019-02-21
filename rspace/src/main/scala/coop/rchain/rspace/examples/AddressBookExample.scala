@@ -207,7 +207,7 @@ object AddressBookExample {
     val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
 
     // Let's define our store
-    val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
+    val context = Context.create[Id, Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
     val space =
       RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
@@ -248,7 +248,7 @@ object AddressBookExample {
     val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
 
     // Let's define our store
-    val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
+    val context = Context.create[Id, Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
     val space =
       RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
@@ -331,7 +331,7 @@ object AddressBookExample {
     println("Rollback example: And again second produce result should be empty")
     assert(produceAlice.isEmpty)
 
-    space.close()
+    space.close
   }
 
   private[this] def withSpace(
@@ -342,13 +342,13 @@ object AddressBookExample {
     // Here we define a temporary place to put the store's files
     val storePath = Files.createTempDirectory("rspace-address-book-example-")
     // Let's define our store
-    val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
+    val context = Context.create[Id, Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
     val space =
       RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
     try {
       f(space)
     } finally {
-      space.close()
+      space.close
       context.close()
     }
 

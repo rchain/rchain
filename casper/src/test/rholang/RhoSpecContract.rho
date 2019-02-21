@@ -19,26 +19,26 @@ new
   testSuiteCompleted(`rho:test:testSuiteCompleted`),
   uriOut
 in {
-  stdlog!("debug", "Loading RhoSpec") |
+  stdlog!("info", "Loading RhoSpec") |
   rl!(`rho:id:dputnspi15oxxnyymjrpu7rkaok3bjkiwq84z7cqcrx4ktqfpyapn4`, *ListOpsCh) |
   for(@(_, ListOps) <- ListOpsCh) {
     contract RhoSpec(@"testSuite", setup, @tests) = {
-      stdlog!("debug", "Defining the testSuite") |
-      new runTest, runTestOnce, retCh in {
-        contract runTestOnce(@(testName, testBody), @attempt, testAckCh) = {
-          stdlog!("debug", "Running test: " ++ testName ++ " attempt " + attempt) |
+      stdlog!("info", "Defining the testSuite") |
+      new runTest, retCh in {
+        contract runTest(@(testName, testBody), testAckCh) = {
+          stdlog!("info", "Running test: " ++ testName) |
           new rhoSpecImpl, privateAssert in {
             contract privateAssert(@assertion, @clue, ackCh) = {
-              stdlog!("debug", "asserting: " ++ clue) |
+              stdlog!("info", "asserting: " ++ clue) |
               match assertion {
                 (expected, "== <-", actualCh) => {
                   for (@actual <- @actualCh) {
                     stdlog!("info", {"actual": actual, "expected": expected}) |
-                    assert!(testName, attempt, (expected, "==", actual), clue, *ackCh)
+                    assert!(testName, (expected, "==", actual), clue, *ackCh)
                   }
                 }
                 assertion => {
-                  assert!(testName, attempt, assertion, clue, *ackCh)
+                  assert!(testName, assertion, clue, *ackCh)
                 }
               }
             } |
@@ -74,26 +74,6 @@ in {
               for (setupResult <- setupCh) {
                 @testBody ! (*rhoSpecImpl, *setupResult, *testAckCh)
               }
-            }
-          }
-        } |
-
-
-        contract runTest(@(testName, testBody), ackCh) = {
-          runTest!((testName, testBody, 1), *ackCh)
-        } |
-
-        contract runTest(@(testName, testBody, attempts), ackCh) = {
-          stdlog!("info", "Calling runTest") |
-
-          new retCh, runTestImpl in {
-            contract runTestImpl(@attempt, retCh) = {
-              runTestOnce!((testName, testBody), attempt, *retCh)
-            } |
-
-            @ListOps!("range", 1, attempts + 1, *retCh) |
-            for(@range <- retCh) {
-              @ListOps!("foreach", range, *runTestImpl, *ackCh)
             }
           }
         } |

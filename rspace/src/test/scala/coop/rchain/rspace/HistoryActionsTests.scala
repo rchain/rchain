@@ -41,9 +41,9 @@ trait HistoryActionsTests[F[_]]
     * Helper for testing purposes only.
     */
   private[this] def getRootHash(
-      store: IStore[String, Pattern, String, StringsCaptor],
+      store: IStore[F, String, Pattern, String, StringsCaptor],
       branch: Branch
-  ): Blake2b256Hash =
+  ): F[Blake2b256Hash] =
     store.withTxn(store.createTxnRead()) { txn =>
       store.withTrieTxn(txn) { trieTxn =>
         store.trieStore.getRoot(trieTxn, branch).get
@@ -91,7 +91,8 @@ trait HistoryActionsTests[F[_]]
               gnat.wks.head.persist
             )
         _          = history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None
-        retrieved  <- space.retrieve(getRootHash(space.store, space.store.trieBranch), channelsHash)
+        rootHash   <- getRootHash(space.store, space.store.trieBranch)
+        retrieved  <- space.retrieve(rootHash, channelsHash)
         _          = retrieved shouldBe None
         checkpoint <- space.createCheckpoint()
         _          = checkpoint.root shouldBe nodeHash
@@ -151,8 +152,9 @@ trait HistoryActionsTests[F[_]]
         _ = history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash1) shouldBe Some(
           gnat1
         )
+        rootHash0 <- getRootHash(space.store, space.store.trieBranch)
         retrieved1 <- space.retrieve(
-                       getRootHash(space.store, space.store.trieBranch),
+                       rootHash0,
                        channelsHash1
                      )
         _ = retrieved1 shouldBe Some(
@@ -161,8 +163,9 @@ trait HistoryActionsTests[F[_]]
         _ = history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash2) shouldBe Some(
           gnat2
         )
+        rootHash1 <- getRootHash(space.store, space.store.trieBranch)
         retrieved2 <- space.retrieve(
-                       getRootHash(space.store, space.store.trieBranch),
+                       rootHash1,
                        channelsHash2
                      )
         _ = retrieved2 shouldBe Some(
@@ -242,7 +245,6 @@ trait HistoryActionsTests[F[_]]
     withTestSpace { space =>
       val channels     = List("ch1")
       val channelsHash = space.store.hashChannels(channels)
-
       for {
         r1         <- space.consume(channels, List(Wildcard), new StringsCaptor, persist = false)
         _          = r1 shouldBe Right(None)
@@ -254,7 +256,7 @@ trait HistoryActionsTests[F[_]]
           "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3"
         )
         _ = history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None
-      } yield (())
+      } yield ()
     }
 
   "createCheckpoint, consume, reset" should "result in an empty store" in
@@ -279,10 +281,11 @@ trait HistoryActionsTests[F[_]]
               gnat1.wks.head.continuation,
               gnat1.wks.head.persist
             )
-        _ = space.store.isEmpty shouldBe false
-        _ <- space.reset(root0)
-
-      } yield (space.store.isEmpty shouldBe true)
+        empty0 <- space.store.isEmpty
+        _      = empty0 shouldBe false
+        _      <- space.reset(root0)
+        empty1 <- space.store.isEmpty
+      } yield (empty1 shouldBe true)
     }
 
   "createCheckpoint, consume, createCheckpoint, reset to first checkpoint, reset to second checkpoint" should
@@ -308,32 +311,34 @@ trait HistoryActionsTests[F[_]]
               gnat1.wks.head.continuation,
               gnat1.wks.head.persist
             )
-        checkpoint1                                                      <- space.createCheckpoint()
-        root1                                                            = checkpoint1.root
-        contents1: Map[Seq[String], Row[Pattern, String, StringsCaptor]] = space.store.toMap
-        _                                                                = space.store.isEmpty shouldBe false
+        checkpoint1 <- space.createCheckpoint()
+        root1       = checkpoint1.root
+        contents1   <- space.store.toMap
+        _           = space.store.isEmpty shouldBe false
         _ = space.store.withTxn(space.store.createTxnRead()) { txn =>
           space.store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
           space.store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
         }
 
         // Rollback to first checkpoint
-        _ <- space.reset(root0)
-        _ = space.store.isEmpty shouldBe true
+        _     <- space.reset(root0)
+        empty <- space.store.isEmpty
+        _     = empty shouldBe true
         _ = space.store.withTxn(space.store.createTxnRead()) { txn =>
           space.store.getJoin(txn, "ch1") shouldBe Nil
           space.store.getJoin(txn, "ch2") shouldBe Nil
         }
 
         // Rollback to second checkpoint
-        _ <- space.reset(root1)
-        _ = space.store.isEmpty shouldBe false
+        _     <- space.reset(root1)
+        empty <- space.store.isEmpty
+        _     = empty shouldBe false
         _ = space.store.withTxn(space.store.createTxnRead()) { txn =>
           space.store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
           space.store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
         }
-
-      } yield (space.store.toMap shouldBe contents1)
+        spaceMap <- space.store.toMap
+      } yield (spaceMap shouldBe contents1)
   }
 
   "when resetting to a bunch of checkpoints made with produces, the store" should
@@ -353,17 +358,18 @@ trait HistoryActionsTests[F[_]]
                                  .toList
                                  .sequence
               checkpoint <- space.createCheckpoint()
+              spaceMap   <- space.store.toMap
             } yield {
               val num  = "%02d".format(chunkNo)
               val size = "%02d".format(produces.size)
               logger.debug(s"$num: checkpointing $size produces")
-              (State(checkpoint.root, space.store.toMap, space.store.joinMap), chunkNo)
+              (State(checkpoint.root, spaceMap, space.store.joinMap), chunkNo)
             }
         }
         for {
-          stateEffect <- states.toList.sequence
-        } yield (validateIndexedStates(space, stateEffect, "produces_reset"))
-
+          stateEffect        <- states.toList.sequence
+          indexedStatesValid <- validateIndexedStates(space, stateEffect, "produces_reset")
+        } yield indexedStatesValid
       }
     }
     check(prop)
@@ -391,16 +397,18 @@ trait HistoryActionsTests[F[_]]
                                  .toList
                                  .sequence
               checkpoint <- space.createCheckpoint()
+              spaceMap   <- space.store.toMap
             } yield {
               val num  = "%02d".format(chunkNo)
               val size = "%02d".format(consumes.size)
               logger.debug(s"$num: checkpointing $size consumes")
-              (State(checkpoint.root, space.store.toMap, space.store.joinMap), chunkNo)
+              (State(checkpoint.root, spaceMap, space.store.joinMap), chunkNo)
             }
         }
         for {
-          stateEffect <- states.toList.sequence
-        } yield (validateIndexedStates(space, stateEffect, "consumes_reset"))
+          stateEffect        <- states.toList.sequence
+          indexedStatesValid <- validateIndexedStates(space, stateEffect, "consumes_reset")
+        } yield indexedStatesValid
       }
     }
     check(prop)
@@ -436,20 +444,22 @@ trait HistoryActionsTests[F[_]]
                                  .sequence
 
               checkpoint <- space.createCheckpoint()
+              spaceMap   <- space.store.toMap
             } yield {
               val num          = "%02d".format(chunkNo)
               val consumesSize = "%02d".format(consumes.size)
               val producesSize = "%02d".format(produces.size)
               logger.debug(s"$num: checkpointing $consumesSize consumes and $producesSize produces")
               (
-                State(checkpoint.root, space.store.toMap, space.store.joinMap),
+                State(checkpoint.root, spaceMap, space.store.joinMap),
                 chunkNo
               )
             }
         }
         for {
-          stateEffect <- states.toList.sequence
-        } yield (validateIndexedStates(space, stateEffect, "produces_consumes_reset"))
+          stateEffect        <- states.toList.sequence
+          indexedStatesValid <- validateIndexedStates(space, stateEffect, "produces_consumes_reset")
+        } yield indexedStatesValid
       }
     }
     check(prop)
@@ -469,7 +479,8 @@ trait HistoryActionsTests[F[_]]
       expectedProduce1   = Produce.create(channels(0), data(0), false)
       expectedProduce2   = Produce.create(channels(1), data(1), false)
       commEvent          = COMM(expectedConsume, Seq(expectedProduce1, expectedProduce2))
-      Checkpoint(_, log) = space.createCheckpoint()
+      checkpoint         <- space.createCheckpoint()
+      Checkpoint(_, log) = checkpoint
     } yield
       (log should contain theSameElementsInOrderAs Seq(
         commEvent,

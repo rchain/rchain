@@ -1,9 +1,14 @@
 package coop.rchain.rspace
 
+import cats.Traverse
+import cats.effect.Sync
+import cats.implicits._
 import coop.rchain.catscontrib.ski._
+import coop.rchain.catscontrib.traverseSeq
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import monix.execution.atomic.AtomicAny
+
 import scala.collection.immutable.Seq
 
 /** The interface for the underlying store
@@ -13,7 +18,9 @@ import scala.collection.immutable.Seq
   * @tparam A a type representing an arbitrary piece of data
   * @tparam K a type representing a continuation
   */
-trait IStore[C, P, A, K] {
+trait IStore[F[_], C, P, A, K] {
+
+  implicit val syncF: Sync[F]
 
   /**
     * The type of transactions
@@ -71,31 +78,35 @@ trait IStore[C, P, A, K] {
 
   private[rspace] def joinMap: Map[Blake2b256Hash, Seq[Seq[C]]]
 
-  def toMap: Map[Seq[C], Row[P, A, K]]
+  def toMap: F[Map[Seq[C], Row[P, A, K]]]
 
-  private[rspace] def close(): Unit
+  private[rspace] def close: F[Unit]
 
-  val trieStore: ITrieStore[TrieTransaction, Blake2b256Hash, GNAT[C, P, A, K]]
+  private[rspace] val trieStore: ITrieStore[F, TrieTransaction, Blake2b256Hash, GNAT[C, P, A, K]]
 
-  val trieBranch: Branch
+  private[rspace] val trieBranch: Branch
 
-  def withTrieTxn[R](txn: Transaction)(f: TrieTransaction => R): R
+  def withTrieTxn[R](txn: Transaction)(f: TrieTransaction => R): F[R]
 
   private val _trieUpdates: AtomicAny[(Long, List[TrieUpdate[C, P, A, K]])] =
     AtomicAny[(Long, List[TrieUpdate[C, P, A, K]])]((0L, Nil))
 
   @SuppressWarnings(Array("org.wartremover.warts.Var"))
-  def trieDelete(key: Blake2b256Hash, gnat: GNAT[C, P, A, K]): Unit =
-    _trieUpdates.getAndTransform {
-      case (count, list) =>
-        (count + 1, TrieUpdate(count, Delete, key, gnat) :: list)
+  def trieDelete(key: Blake2b256Hash, gnat: GNAT[C, P, A, K]): F[Unit] =
+    syncF.delay {
+      _trieUpdates.getAndTransform {
+        case (count, list) =>
+          (count + 1, TrieUpdate(count, Delete, key, gnat) :: list)
+      }
     }
 
   @SuppressWarnings(Array("org.wartremover.warts.Var"))
-  def trieInsert(key: Blake2b256Hash, gnat: GNAT[C, P, A, K]): Unit =
-    _trieUpdates.getAndTransform {
-      case (count, list) =>
-        (count + 1, TrieUpdate(count, Insert, key, gnat) :: list)
+  def trieInsert(key: Blake2b256Hash, gnat: GNAT[C, P, A, K]): F[Unit] =
+    syncF.delay {
+      _trieUpdates.getAndTransform {
+        case (count, list) =>
+          (count + 1, TrieUpdate(count, Insert, key, gnat) :: list)
+      }
     }
 
   private[rspace] def getTrieUpdates: Seq[TrieUpdate[C, P, A, K]] =
@@ -104,7 +115,7 @@ trait IStore[C, P, A, K] {
   private[rspace] def getTrieUpdateCount: Long =
     _trieUpdates.get._1
 
-  protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): Unit
+  protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): F[Unit]
 
   @SuppressWarnings(Array("org.wartremover.warts.Var"))
   private[rspace] def getAndClearTrieUpdates(): Seq[TrieUpdate[C, P, A, K]] =
@@ -112,15 +123,20 @@ trait IStore[C, P, A, K] {
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   // TODO stop throwing exceptions
-  def createCheckpoint(): Blake2b256Hash = {
-    val trieUpdates = getAndClearTrieUpdates()
-    collapse(trieUpdates).foreach(processTrieUpdate)
-    trieStore.withTxn(trieStore.createTxnWrite()) { txn =>
-      trieStore
-        .persistAndGetRoot(txn, trieBranch)
-        .getOrElse(throw new Exception("Could not get root hash"))
-    }
-  }
+  def createCheckpoint(): F[Blake2b256Hash] =
+    for {
+      trieUpdates <- syncF.delay(getAndClearTrieUpdates())
+      _ <- Traverse[Seq].sequence_ {
+            collapse(trieUpdates).map(processTrieUpdate)
+          }
+      checkPoint <- syncF.delay {
+                     trieStore.withTxn(trieStore.createTxnWrite()) { txn =>
+                       trieStore
+                         .persistAndGetRoot(txn, trieBranch)
+                         .getOrElse(throw new Exception("Could not get root hash"))
+                     }
+                   }
+    } yield checkPoint
 
   private[rspace] def collapse(in: Seq[TrieUpdate[C, P, A, K]]): Seq[TrieUpdate[C, P, A, K]] =
     in.groupBy(_.channelsHash)
@@ -143,5 +159,5 @@ trait IStore[C, P, A, K] {
 
   private[rspace] def clear(txn: Transaction): Unit
 
-  def isEmpty: Boolean
+  def isEmpty: F[Boolean]
 }

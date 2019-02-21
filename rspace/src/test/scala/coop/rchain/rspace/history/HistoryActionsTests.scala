@@ -3,6 +3,8 @@ package coop.rchain.rspace.history
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 
+import cats.Id
+import cats.effect.Sync
 import coop.rchain.rspace.{Context, InMemTransaction}
 import coop.rchain.rspace.test._
 import coop.rchain.shared.PathOps._
@@ -21,14 +23,14 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, Byte
   import TestData._
 
   "Insert, lookup" should "work" in withTestTrieStore {
-    (store: ITrieStore[T, TestKey4, ByteVector], branch: Branch) =>
+    (store: ITrieStore[Id, T, TestKey4, ByteVector], branch: Branch) =>
       insert(store, branch, key1, val1)
       val actual = lookup(store, branch, key1)
       actual.value shouldBe val1
   }
 
   "Two inserts, two lookups" should "work" in withTestTrieStore {
-    (store: ITrieStore[T, TestKey4, ByteVector], branch: Branch) =>
+    (store: ITrieStore[Id, T, TestKey4, ByteVector], branch: Branch) =>
       insert(store, branch, key1, val1)
       insert(store, branch, key2, val2)
       val actual1 = lookup(store, branch, key1)
@@ -38,7 +40,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, Byte
   }
 
   "Duplicate inserts, lookup" should "work" in withTestTrieStore {
-    (store: ITrieStore[T, TestKey4, ByteVector], branch: Branch) =>
+    (store: ITrieStore[Id, T, TestKey4, ByteVector], branch: Branch) =>
       insert(store, branch, key1, val1)
       val root1 = getRoot(store, branch)
       insert(store, branch, key1, val1)
@@ -48,7 +50,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, Byte
   }
 
   "Two inserts at same key with different values, lookup" should "work" in withTestTrieStore {
-    (store: ITrieStore[T, TestKey4, ByteVector], branch: Branch) =>
+    (store: ITrieStore[Id, T, TestKey4, ByteVector], branch: Branch) =>
       insert(store, branch, key1, val1)
       val root1 = getRoot(store, branch)
       insert(store, branch, key1, val2)
@@ -58,7 +60,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, Byte
   }
 
   "Three inserts, three lookups" should "work" in
-    withTestTrieStore { (store: ITrieStore[T, TestKey4, ByteVector], branch: Branch) =>
+    withTestTrieStore { (store: ITrieStore[Id, T, TestKey4, ByteVector], branch: Branch) =>
       insert(store, branch, key1, val1)
       insert(store, branch, key2, val2)
       insert(store, branch, key3, val3)
@@ -71,7 +73,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, Byte
     }
 
   "Three inserts, three lookups (alt)" should "work" in
-    withTestTrieStore { (store: ITrieStore[T, TestKey4, ByteVector], branch: Branch) =>
+    withTestTrieStore { (store: ITrieStore[Id, T, TestKey4, ByteVector], branch: Branch) =>
       insert(store, branch, key1, val1)
       insert(store, branch, key2, val2)
       insert(store, branch, key6, val6)
@@ -84,7 +86,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, Byte
     }
 
   "Four inserts, four lookups" should "work" in
-    withTestTrieStore { (store: ITrieStore[T, TestKey4, ByteVector], branch: Branch) =>
+    withTestTrieStore { (store: ITrieStore[Id, T, TestKey4, ByteVector], branch: Branch) =>
       insert(store, branch, key1, val1)
       insert(store, branch, key2, val2)
       insert(store, branch, key3, val3)
@@ -100,7 +102,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, Byte
     }
 
   "Five inserts, five lookups" should "work" in
-    withTestTrieStore { (store: ITrieStore[T, TestKey4, ByteVector], branch: Branch) =>
+    withTestTrieStore { (store: ITrieStore[Id, T, TestKey4, ByteVector], branch: Branch) =>
       insert(store, branch, key1, val1)
       insert(store, branch, key2, val2)
       insert(store, branch, key3, val3)
@@ -119,7 +121,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, Byte
     }
 
   "Insert, lookup, delete, lookup" should "work" in
-    withTestTrieStore { (store: ITrieStore[T, TestKey4, ByteVector], branch: Branch) =>
+    withTestTrieStore { (store: ITrieStore[Id, T, TestKey4, ByteVector], branch: Branch) =>
       insert(store, branch, key1, val1)
       lookup(store, branch, key1).value shouldBe val1
 
@@ -128,13 +130,13 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, Byte
     }
 
   "Delete, lookup" should "work" in
-    withTestTrieStore { (store: ITrieStore[T, TestKey4, ByteVector], branch: Branch) =>
+    withTestTrieStore { (store: ITrieStore[Id, T, TestKey4, ByteVector], branch: Branch) =>
       delete(store, branch, key1, val1) shouldBe false
       lookup(store, branch, key1) shouldBe None
     }
 
   "Delete" should "return false for a missing (key, value)" in {
-    withTestTrieStore { (store: ITrieStore[T, TestKey4, ByteVector], branch: Branch) =>
+    withTestTrieStore { (store: ITrieStore[Id, T, TestKey4, ByteVector], branch: Branch) =>
       insert(store, branch, key2, val2)
       delete(store, branch, key2, val2) shouldBe true
       delete(store, branch, key2, val2) shouldBe false
@@ -142,7 +144,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, Byte
   }
 
   "Insert, insert, delete, delete" should "work" in
-    withTestTrieStore { (store: ITrieStore[T, TestKey4, ByteVector], branch: Branch) =>
+    withTestTrieStore { (store: ITrieStore[Id, T, TestKey4, ByteVector], branch: Branch) =>
       val root0 = getRoot(store, branch)
 
       insert(store, branch, key1, val1)
@@ -172,7 +174,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, Byte
     }
 
   "Insert, delete, delete again" should "work" in
-    withTestTrieStore { (store: ITrieStore[T, TestKey4, ByteVector], branch: Branch) =>
+    withTestTrieStore { (store: ITrieStore[Id, T, TestKey4, ByteVector], branch: Branch) =>
       val root0 = getRoot(store, branch)
 
       insert(store, branch, key1, val1)
@@ -189,7 +191,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, Byte
     }
 
   "Insert, Insert, Delete, Delete, Rollback, Delete, Delete" should "work" in
-    withTestTrieStore { (store: ITrieStore[T, TestKey4, ByteVector], branch: Branch) =>
+    withTestTrieStore { (store: ITrieStore[Id, T, TestKey4, ByteVector], branch: Branch) =>
       val root0 = getRoot(store, branch)
 
       insert(store, branch, key1, val1)
@@ -235,7 +237,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, Byte
     }
 
   "Rollback twice" should "work" in
-    withTestTrieStore { (store: ITrieStore[T, TestKey4, ByteVector], branch: Branch) =>
+    withTestTrieStore { (store: ITrieStore[Id, T, TestKey4, ByteVector], branch: Branch) =>
       val root0 = getRoot(store, branch)
 
       insert(store, branch, key1, val1)
@@ -412,21 +414,21 @@ trait GenerativeHistoryActionsTests[T, K]
 
 object HistoryActionsTests {
 
-  def insertAll[T, K, V](store: ITrieStore[T, K, V], branch: Branch, pairs: Seq[(K, V)])(
+  def insertAll[T, K, V](store: ITrieStore[Id, T, K, V], branch: Branch, pairs: Seq[(K, V)])(
       implicit
       codecK: Codec[K],
       codecV: Codec[V]
   ): Unit =
     pairs.foreach { case (k, v) => insert(store, branch, k, v) }
 
-  def deleteAll[T, K, V](store: ITrieStore[T, K, V], branch: Branch, pairs: Seq[(K, V)])(
+  def deleteAll[T, K, V](store: ITrieStore[Id, T, K, V], branch: Branch, pairs: Seq[(K, V)])(
       implicit
       codecK: Codec[K],
       codecV: Codec[V]
   ): Unit =
     pairs.foreach { case (k, v) => delete(store, branch, k, v) }
 
-  def lookupAll[T, K, V](store: ITrieStore[T, K, V], branch: Branch, pairs: Seq[(K, V)])(
+  def lookupAll[T, K, V](store: ITrieStore[Id, T, K, V], branch: Branch, pairs: Seq[(K, V)])(
       implicit codecK: Codec[K]
   ): Seq[(K, V)] =
     pairs.flatMap { case (k, _) => lookup(store, branch, k).map((v: V) => (k, v)).toList }
@@ -437,19 +439,18 @@ trait LMDBWithTestTrieStore[K]
     with WithTestStore[Txn[ByteBuffer], K, ByteVector] { this: Suite =>
   val dbDir: Path   = Files.createTempDirectory("rchain-storage-history-test-")
   val mapSize: Long = 1024L * 1024L * 1024L
-
   override def withTestTrieStore[R](
-      f: (ITrieStore[Txn[ByteBuffer], K, ByteVector], Branch) => R
+      f: (ITrieStore[Id, Txn[ByteBuffer], K, ByteVector], Branch) => R
   ): R = {
     val env        = Context.env(dbDir, mapSize, Nil)
-    val testTrie   = LMDBTrieStore.create[K, ByteVector](env, dbDir)
+    val testTrie   = LMDBTrieStore.create[Id, K, ByteVector](env, dbDir)
     val testBranch = Branch("test")
     testTrie.withTxn(testTrie.createTxnWrite())(txn => testTrie.clear(txn))
     try {
       initialize(testTrie, testBranch)
       f(testTrie, testBranch)
     } finally {
-      testTrie.close()
+      testTrie.close
       env.close()
     }
   }
@@ -464,18 +465,18 @@ trait InMemoryWithTestTrieStore[K]
 
   override def withTestTrieStore[R](
       f: (
-          ITrieStore[InMemTransaction[State[K, scodec.bits.ByteVector]], K, ByteVector],
+          ITrieStore[Id, InMemTransaction[State[K, scodec.bits.ByteVector]], K, ByteVector],
           Branch
       ) => R
   ): R = {
-    val testTrie   = InMemoryTrieStore.create[K, ByteVector]()
+    val testTrie   = InMemoryTrieStore.create[Id, K, ByteVector]()
     val testBranch = Branch("test")
     //no need to clear new instance
     try {
       initialize(testTrie, testBranch)
       f(testTrie, testBranch)
     } finally {
-      testTrie.close()
+      testTrie.close
     }
   }
 }

@@ -1,9 +1,9 @@
 package coop.rchain.rspace.history
 
+import cats.effect.Sync
+
 import scala.collection.immutable.Seq
-
-import coop.rchain.rspace.{Blake2b256Hash, InMemoryOps, InMemTransaction, _}
-
+import coop.rchain.rspace.{Blake2b256Hash, InMemTransaction, InMemoryOps, _}
 import kamon.Kamon
 
 final case class State[K, V](
@@ -31,9 +31,11 @@ object State {
 }
 
 @SuppressWarnings(Array("org.wartremover.warts.Throw", "org.wartremover.warts.NonUnitStatements")) // TODO stop throwing exceptions
-class InMemoryTrieStore[K, V]
-    extends InMemoryOps[State[K, V]]
-    with ITrieStore[InMemTransaction[State[K, V]], K, V] {
+class InMemoryTrieStore[F[_], K, V](implicit F: Sync[F])
+    extends InMemoryOps[F, State[K, V]]
+    with ITrieStore[F, InMemTransaction[State[K, V]], K, V] {
+
+  val syncF: Sync[F] = F
 
   override def emptyState: State[K, V] = State.empty
 
@@ -147,6 +149,8 @@ class InMemoryTrieStore[K, V]
 }
 
 object InMemoryTrieStore {
-  def create[K, V](): ITrieStore[InMemTransaction[State[K, V]], K, V] =
-    new InMemoryTrieStore[K, V]()
+  def create[F[_], K, V]()(
+      implicit syncF: Sync[F]
+  ): ITrieStore[F, InMemTransaction[State[K, V]], K, V] =
+    new InMemoryTrieStore[F, K, V]()
 }

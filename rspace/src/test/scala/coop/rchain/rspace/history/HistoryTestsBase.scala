@@ -1,5 +1,7 @@
 package coop.rchain.rspace.history
 
+import cats.Id
+import cats.effect.Sync
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.test.TestKey4
@@ -17,10 +19,10 @@ trait HistoryTestsBase[T, K, V]
     with Configuration
     with WithTestStore[T, K, V] {
 
-  def getRoot(store: ITrieStore[T, K, V], branch: Branch): Option[Blake2b256Hash] =
+  def getRoot(store: ITrieStore[Id, T, K, V], branch: Branch): Option[Blake2b256Hash] =
     store.withTxn(store.createTxnRead())(txn => store.getRoot(txn, branch))
 
-  def setRoot(store: ITrieStore[T, K, V], branch: Branch, hash: Blake2b256Hash): Unit =
+  def setRoot(store: ITrieStore[Id, T, K, V], branch: Branch, hash: Blake2b256Hash): Unit =
     store.withTxn(store.createTxnWrite()) { txn =>
       store.get(txn, hash) match {
         case Some(Node(_)) => store.putRoot(txn, branch, hash)
@@ -28,7 +30,7 @@ trait HistoryTestsBase[T, K, V]
       }
     }
 
-  def getLeaves(store: ITrieStore[T, K, V], hash: Blake2b256Hash): Seq[Leaf[K, V]] =
+  def getLeaves(store: ITrieStore[Id, T, K, V], hash: Blake2b256Hash): Seq[Leaf[K, V]] =
     store.withTxn(store.createTxnRead())(txn => store.getLeaves(txn, hash))
 
   object TestData {
@@ -61,8 +63,9 @@ trait WithTestStore[T, K, V] {
 
   implicit def codecK: Codec[K]
   implicit def codecV: Codec[V]
+  implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
 
   /** A fixture for creating and running a test with a fresh instance of the test store.
     */
-  def withTestTrieStore[R](f: (ITrieStore[T, K, V], Branch) => R): R
+  def withTestTrieStore[R](f: (ITrieStore[Id, T, K, V], Branch) => R): R
 }

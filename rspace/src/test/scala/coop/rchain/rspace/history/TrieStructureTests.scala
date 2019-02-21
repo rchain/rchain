@@ -2,6 +2,7 @@ package coop.rchain.rspace.history
 
 import java.nio.ByteBuffer
 
+import cats.Id
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.test.{printTree, TestKey4}
 import org.lmdbjava.Txn
@@ -27,7 +28,7 @@ class TrieStructureTests
 
   def withTrieTxnAndStore[R](
       f: (
-          ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector],
+          ITrieStore[Id, Txn[ByteBuffer], TestKey4, ByteVector],
           Branch,
           Txn[ByteBuffer],
           Trie[TestKey4, ByteVector]
@@ -239,7 +240,7 @@ class TrieStructureTests
   }
 
   private[this] def assertSingleElementTrie(
-      implicit store: ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector]
+      implicit store: ITrieStore[Id, Txn[ByteBuffer], TestKey4, ByteVector]
   ) = {
     import SingleElementData._
     store.withTxn(store.createTxnRead()) { implicit txn =>
@@ -256,7 +257,7 @@ class TrieStructureTests
   }
 
   private[this] def assertCommonPrefixTrie(
-      implicit store: ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector]
+      implicit store: ITrieStore[Id, Txn[ByteBuffer], TestKey4, ByteVector]
   ) = {
     import CommonPrefixData._
     store.withTxn(store.createTxnRead()) { implicit txn =>
@@ -280,7 +281,7 @@ class TrieStructureTests
   private[this] def expectNode(
       currentHex: String,
       childHexes: Seq[(Int, Pointer)]
-  )(implicit txn: Txn[ByteBuffer], store: ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector]) =
+  )(implicit txn: Txn[ByteBuffer], store: ITrieStore[Id, Txn[ByteBuffer], TestKey4, ByteVector]) =
     store.get(
       txn,
       Blake2b256Hash
@@ -301,7 +302,7 @@ class TrieStructureTests
 
   def expectSkip(currentHex: String, expectedAffix: ByteVector, expectedPointer: NonEmptyPointer)(
       implicit txn: Txn[ByteBuffer],
-      store: ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector]
+      store: ITrieStore[Id, Txn[ByteBuffer], TestKey4, ByteVector]
   ) =
     store.get(
       txn,

@@ -1,6 +1,7 @@
 package coop.rchain.rspace
 
 import scala.annotation.tailrec
+import scala.collection.immutable
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext
@@ -19,7 +20,7 @@ import com.typesafe.scalalogging.Logger
 import kamon._
 import scodec.Codec
 
-class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
+class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch: Branch)(
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
@@ -31,6 +32,8 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
     scheduler: ExecutionContext
 ) extends RSpaceOps[F, C, P, E, A, R, K](store, branch)
     with IReplaySpace[F, C, P, E, A, R, K] {
+
+  def toMap: F[Map[Seq[C], Row[P, A, K]]] = store.toMap
 
   override protected[this] val logger: Logger = Logger[this.type]
 
@@ -388,15 +391,18 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
 
   def createCheckpoint(): F[Checkpoint] =
     for {
-      isEmpty <- syncF.delay(replayData.isEmpty)
-      checkpoint <- isEmpty.fold(
-                     Checkpoint(store.createCheckpoint(), Seq.empty).pure[F], {
-                       val msg =
-                         s"unused comm event: replayData multimap has ${replayData.size} elements left"
-                       logF.error(msg) *> syncF.raiseError[Checkpoint](new ReplayException(msg))
-                     }
-                   )
-    } yield checkpoint
+      isEmpty    <- syncF.delay(replayData.isEmpty)
+      checkpoint <- store.createCheckpoint()
+      updatedCheckpoint <- isEmpty.fold(
+                            Checkpoint(checkpoint, Seq.empty).pure[F], {
+                              val msg =
+                                s"unused comm event: replayData multimap has ${replayData.size} elements left"
+                              logF.error(msg) *> syncF.raiseError[Checkpoint](
+                                new ReplayException(msg)
+                              )
+                            }
+                          )
+    } yield updatedCheckpoint
 
   override def clear(): F[Unit] =
     for {
@@ -409,7 +415,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
 
 object ReplayRSpace {
 
-  def create[F[_], C, P, E, A, R, K](context: Context[C, P, A, K], branch: Branch)(
+  def create[F[_], C, P, E, A, R, K](context: Context[F, C, P, A, K], branch: Branch)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -426,18 +432,19 @@ object ReplayRSpace {
     implicit val codecA: Codec[A] = sa.toCodec
     implicit val codecK: Codec[K] = sk.toCodec
 
-    val mainStore = context match {
-      case lmdbContext: LMDBContext[C, P, A, K] =>
-        LMDBStore.create[C, P, A, K](lmdbContext, branch)
+    val mainStore: IStore[F, C, P, A, K] = context match {
+      case lmdbContext: LMDBContext[F, C, P, A, K] =>
+        LMDBStore.create[F, C, P, A, K](lmdbContext, branch)
 
-      case memContext: InMemoryContext[C, P, A, K] =>
+      case memContext: InMemoryContext[F, C, P, A, K] =>
         InMemoryStore.create(memContext.trieStore, branch)
 
-      case mixedContext: MixedContext[C, P, A, K] =>
+      case mixedContext: MixedContext[F, C, P, A, K] =>
         LockFreeInMemoryStore.create(mixedContext.trieStore, branch)
     }
 
-    val replaySpace = new ReplayRSpace[F, C, P, E, A, R, K](mainStore, branch)
+    val replaySpace: ReplayRSpace[F, C, P, E, A, R, K] =
+      new ReplayRSpace[F, C, P, E, A, R, K](mainStore, branch)
 
     /*
      * history.initialize returns true if the history trie contains no root (i.e. is empty).
@@ -445,11 +452,11 @@ object ReplayRSpace {
      * In this case, we create a checkpoint for the empty store so that we can reset
      * to the empty store state with the clear method.
      */
+
     if (history.initialize(mainStore.trieStore, branch)) {
       replaySpace.createCheckpoint().map(_ => replaySpace)
     } else {
       replaySpace.pure[F]
     }
   }
-
 }

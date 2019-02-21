@@ -6,7 +6,7 @@ new rl(`rho:registry:lookup`),
     stdlog(`rho:io:stdlog`),
     testSetup, testAssertEquals, testAssertTrue, testAssertMany,
     testAssertEqualsFromChannel, testAssertManyEqualsFromChannel,
-    testAssertEqualsForVariables,  testMultipleAttempts
+    testAssertEqualsForVariables
 in {
   stdlog!("info", "starting SuccessfulResultCollector...") |
   rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *RhoSpecCh) |
@@ -18,8 +18,7 @@ in {
       ("assert boolean conditions", *testAssertTrue),
       ("assert many conditions", *testAssertMany),
       ("assert '== <-'", *testAssertEqualsFromChannel),
-      ("assertMany '== <-'", *testAssertManyEqualsFromChannel),
-      ("run the test function multiple times", *testMultipleAttempts, 10)
+      ("assertMany '== <-'", *testAssertManyEqualsFromChannel)
     ])
   } |
 
@@ -87,10 +86,5 @@ in {
         ],
         *ackCh)
     }
-  } |
-
-  contract testMultipleAttempts(rhoSpec, self, ackCh) = {
-    stdlog ! ("info", "Running testMultipleAttempts") |
-    rhoSpec!("assert", true, "should always be successful", *ackCh)
   }
 }

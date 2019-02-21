@@ -3,15 +3,16 @@ package coop.rchain.rspace
 import java.nio.ByteBuffer
 import java.nio.file.Path
 
+import cats.effect.Sync
+import cats.implicits._
+
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
-
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.canonicalize
 import coop.rchain.shared.Resources.withResource
 import coop.rchain.shared.SeqOps._
-
 import org.lmdbjava._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import scodec.Codec
@@ -24,21 +25,24 @@ import scodec.bits._
   */
 @SuppressWarnings(Array("org.wartremover.warts.Throw", "org.wartremover.warts.NonUnitStatements"))
 // TODO stop throwing exceptions
-class LMDBStore[C, P, A, K] private[rspace] (
+class LMDBStore[F[_], C, P, A, K] private[rspace] (
     val env: Env[ByteBuffer],
     protected[this] val databasePath: Path,
     private[this] val _dbGNATs: Dbi[ByteBuffer],
     private[this] val _dbJoins: Dbi[ByteBuffer],
-    val trieStore: ITrieStore[Txn[ByteBuffer], Blake2b256Hash, GNAT[C, P, A, K]],
-    val trieBranch: Branch
+    private[rspace] val trieStore: ITrieStore[F, Txn[ByteBuffer], Blake2b256Hash, GNAT[C, P, A, K]],
+    private[rspace] val trieBranch: Branch
 )(
     implicit
     codecC: Codec[C],
     codecP: Codec[P],
     codecA: Codec[A],
-    codecK: Codec[K]
-) extends IStore[C, P, A, K]
-    with LMDBOps {
+    codecK: Codec[K],
+    F: Sync[F]
+) extends IStore[F, C, P, A, K]
+    with LMDBOps[F] {
+
+  val syncF: Sync[F] = F
 
   protected val MetricsSource: String = RSpaceMetricsSource + ".lmdb"
 
@@ -47,7 +51,10 @@ class LMDBStore[C, P, A, K] private[rspace] (
 
   private[rspace] type TrieTransaction = Transaction
 
-  def withTrieTxn[R](txn: Transaction)(f: TrieTransaction => R): R = f(txn)
+  def withTrieTxn[R](txn: Transaction)(f: TrieTransaction => R): F[R] =
+    syncF.delay {
+      f(txn)
+    }
 
   /* Basic operations */
   private[this] def fetchGNAT(
@@ -241,38 +248,43 @@ class LMDBStore[C, P, A, K] private[rspace] (
     _dbJoins.drop(txn)
   }
 
-  override def close(): Unit = {
-    super.close()
-    _dbGNATs.close()
-    _dbJoins.close()
-  }
+  override def close: F[Unit] =
+    super.close
+      .map(_ => _dbGNATs.close())
+      .map(_ => _dbJoins.close())
 
-  def isEmpty: Boolean =
-    withTxn(createTxnRead()) { txn =>
-      !_dbGNATs.iterate(txn).hasNext &&
-      !_dbJoins.iterate(txn).hasNext
+  def isEmpty: F[Boolean] =
+    syncF.delay {
+      withTxn(createTxnRead()) { txn =>
+        !_dbGNATs.iterate(txn).hasNext &&
+        !_dbJoins.iterate(txn).hasNext
+      }
     }
 
   def getPatterns(txn: Transaction, channels: Seq[C]): Seq[Seq[P]] =
     getWaitingContinuation(txn, channels).map(_.patterns)
 
-  def toMap: Map[Seq[C], Row[P, A, K]] =
-    withTxn(createTxnRead()) { txn =>
-      withResource(_dbGNATs.iterate(txn)) { (it: CursorIterator[ByteBuffer]) =>
-        it.asScala.map { (x: CursorIterator.KeyVal[ByteBuffer]) =>
-          val row  = x.`val`()
-          val gnat = Codec[GNAT[C, P, A, K]].decode(BitVector(row)).map(_.value).get
-          (gnat.channels, Row(gnat.data, gnat.wks))
-        }.toMap
+  def toMap: F[Map[Seq[C], Row[P, A, K]]] =
+    syncF.delay {
+      withTxn(createTxnRead()) { txn =>
+        withResource(_dbGNATs.iterate(txn)) { (it: CursorIterator[ByteBuffer]) =>
+          it.asScala.map { (x: CursorIterator.KeyVal[ByteBuffer]) =>
+            val row  = x.`val`()
+            val gnat = Codec[GNAT[C, P, A, K]].decode(BitVector(row)).map(_.value).get
+            (gnat.channels, Row(gnat.data, gnat.wks))
+          }.toMap
+        }
       }
     }
 
-  protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): Unit =
-    update match {
-      case TrieUpdate(_, Insert, channelsHash, gnat) =>
-        history.insert(trieStore, trieBranch, channelsHash, canonicalize(gnat))
-      case TrieUpdate(_, Delete, channelsHash, gnat) =>
-        history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat))
+  protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): F[Unit] =
+    syncF.delay {
+      update match {
+        case TrieUpdate(_, Insert, channelsHash, gnat) =>
+          history.insert(trieStore, trieBranch, channelsHash, canonicalize(gnat))
+        case TrieUpdate(_, Delete, channelsHash, gnat) =>
+          history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat))
+      }
     }
 
   // TODO: Does using a cursor improve performance for bulk operations?
@@ -294,13 +306,17 @@ class LMDBStore[C, P, A, K] private[rspace] (
 
 object LMDBStore {
 
-  def create[C, P, A, K](context: LMDBContext[C, P, A, K], branch: Branch = Branch.MASTER)(
+  def create[F[_], C, P, A, K](
+      context: LMDBContext[F, C, P, A, K],
+      branch: Branch = Branch.MASTER
+  )(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]
-  ): LMDBStore[C, P, A, K] = {
+      sk: Serialize[K],
+      syncF: Sync[F]
+  ): LMDBStore[F, C, P, A, K] = {
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec
     implicit val codecA: Codec[A] = sa.toCodec
@@ -309,7 +325,7 @@ object LMDBStore {
     val dbGnats: Dbi[ByteBuffer] = context.env.openDbi(s"${branch.name}-gnats", MDB_CREATE)
     val dbJoins: Dbi[ByteBuffer] = context.env.openDbi(s"${branch.name}-joins", MDB_CREATE)
 
-    new LMDBStore[C, P, A, K](
+    new LMDBStore[F, C, P, A, K](
       context.env,
       context.path,
       dbGnats,

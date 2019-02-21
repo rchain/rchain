@@ -1,13 +1,13 @@
 package coop.rchain.rspace
 
+import cats.effect.Sync
+
 import scala.collection.concurrent.TrieMap
 import scala.collection.immutable.Seq
-
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.canonicalize
 import coop.rchain.shared.SeqOps.{dropIndex, removeFirst}
-
 import kamon._
 import scodec.Codec
 
@@ -31,12 +31,14 @@ class NoopTxn[S] extends InMemTransaction[S] {
   * It should be used with RSpace that solves high level locking (e.g. FineGrainedRSpace).
   */
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-class LockFreeInMemoryStore[T, C, P, A, K](
-    val trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]],
-    val trieBranch: Branch
-)(implicit sc: Serialize[C], sp: Serialize[P], sa: Serialize[A], sk: Serialize[K])
-    extends IStore[C, P, A, K]
-    with CloseOps {
+class LockFreeInMemoryStore[F[_], T, C, P, A, K](
+    private[rspace] val trieStore: ITrieStore[F, T, Blake2b256Hash, GNAT[C, P, A, K]],
+    private[rspace] val trieBranch: Branch
+)(implicit sc: Serialize[C], sp: Serialize[P], sa: Serialize[A], sk: Serialize[K], F: Sync[F])
+    extends IStore[F, C, P, A, K]
+    with CloseOps[F] {
+
+  val syncF: Sync[F] = F
 
   protected[rspace] type Transaction = InMemTransaction[State[C, P, A, K]]
 
@@ -49,7 +51,7 @@ class LockFreeInMemoryStore[T, C, P, A, K](
     new NoopTxn[State[C, P, A, K]]
   }
   override private[rspace] def withTxn[R](txn: Transaction)(f: Transaction => R) = f(txn)
-  override def close(): Unit                                                     = super.close()
+  override def close: F[Unit]                                                    = super.close
 
   type TrieTransaction = T
 
@@ -72,9 +74,11 @@ class LockFreeInMemoryStore[T, C, P, A, K](
   private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash =
     StableHashProvider.hash(channels)
 
-  override def withTrieTxn[R](txn: Transaction)(f: TrieTransaction => R): R =
-    trieStore.withTxn(trieStore.createTxnWrite()) { ttxn =>
-      f(ttxn)
+  override def withTrieTxn[R](txn: Transaction)(f: TrieTransaction => R): F[R] =
+    syncF.delay {
+      trieStore.withTxn(trieStore.createTxnWrite()) { ttxn =>
+        f(ttxn)
+      }
     }
 
   private[rspace] def getChannels(txn: Transaction, key: Blake2b256Hash): Seq[C] =
@@ -207,22 +211,29 @@ class LockFreeInMemoryStore[T, C, P, A, K](
     stateGNAT.clear()
   }
 
-  def isEmpty: Boolean = stateGNAT.isEmpty && stateJoin.isEmpty
+  def isEmpty: F[Boolean] =
+    syncF.delay {
+      stateGNAT.isEmpty && stateJoin.isEmpty
+    }
 
-  def toMap: Map[Seq[C], Row[P, A, K]] =
-    stateGNAT.readOnlySnapshot.map {
-      case (_, GNAT(cs, data, wks)) => (cs, Row(data, wks))
-    }.toMap
+  def toMap: F[Map[Seq[C], Row[P, A, K]]] =
+    syncF.delay {
+      stateGNAT.readOnlySnapshot.map {
+        case (_, GNAT(cs, data, wks)) => (cs, Row(data, wks))
+      }.toMap
+    }
 
   private[this] def isOrphaned(gnat: GNAT[C, P, A, K]): Boolean =
     gnat.data.isEmpty && gnat.wks.isEmpty
 
-  protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): Unit =
-    update match {
-      case TrieUpdate(_, Insert, channelsHash, gnat) =>
-        history.insert(trieStore, trieBranch, channelsHash, canonicalize(gnat))
-      case TrieUpdate(_, Delete, channelsHash, gnat) =>
-        history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat))
+  protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): F[Unit] =
+    syncF.delay {
+      update match {
+        case TrieUpdate(_, Insert, channelsHash, gnat) =>
+          history.insert(trieStore, trieBranch, channelsHash, canonicalize(gnat))
+        case TrieUpdate(_, Delete, channelsHash, gnat) =>
+          history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat))
+      }
     }
 
   private[rspace] def bulkInsert(
@@ -253,14 +264,15 @@ class LockFreeInMemoryStore[T, C, P, A, K](
 
 object LockFreeInMemoryStore {
 
-  def create[T, C, P, A, K](
-      trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]],
+  def create[F[_], T, C, P, A, K](
+      trieStore: ITrieStore[F, T, Blake2b256Hash, GNAT[C, P, A, K]],
       branch: Branch
   )(
       implicit sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]
-  ): LockFreeInMemoryStore[T, C, P, A, K] =
-    new LockFreeInMemoryStore[T, C, P, A, K](trieStore, branch)(sc, sp, sa, sk)
+      sk: Serialize[K],
+      syncF: Sync[F]
+  ): LockFreeInMemoryStore[F, T, C, P, A, K] =
+    new LockFreeInMemoryStore[F, T, C, P, A, K](trieStore, branch)(sc, sp, sa, sk, syncF)
 }

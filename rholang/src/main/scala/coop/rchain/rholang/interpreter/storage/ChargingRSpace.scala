@@ -136,6 +136,6 @@ object ChargingRSpace {
 
       override def createCheckpoint(): F[Checkpoint]    = space.createCheckpoint()
       override def reset(hash: Blake2b256Hash): F[Unit] = space.reset(hash)
-      override def close(): F[Unit]                     = space.close()
+      override def close(): F[Unit]                     = space.close
     }
 }

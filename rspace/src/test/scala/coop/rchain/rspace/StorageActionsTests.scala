@@ -58,9 +58,10 @@ trait StorageActionsTests[F[_]]
         store.getWaitingContinuation(txn, key) shouldBe Nil
       }
 
-      _ = r shouldBe Right(None)
+      _     = r shouldBe Right(None)
+      empty <- store.isEmpty
       //store is not empty - we have 'A' stored
-    } yield (store.isEmpty shouldBe false)
+    } yield (empty shouldBe false)
   }
 
   "producing twice on the same channel" should
@@ -88,9 +89,10 @@ trait StorageActionsTests[F[_]]
         )
         store.getWaitingContinuation(txn, key) shouldBe Nil
       }
-      _ = r2 shouldBe Right(None)
+      _     = r2 shouldBe Right(None)
+      empty <- store.isEmpty
       //store is not empty - we have 2 As stored
-    } yield (store.isEmpty shouldBe false)
+    } yield (empty shouldBe false)
   }
 
   "consuming on one channel" should
@@ -108,9 +110,10 @@ trait StorageActionsTests[F[_]]
         store.getData(txn, key) shouldBe Nil
         store.getWaitingContinuation(txn, key) should not be empty
       }
-      _ = r shouldBe Right(None)
+      _     = r shouldBe Right(None)
+      empty <- store.isEmpty
       //there is a continuation stored in the storage
-    } yield (store.isEmpty shouldBe false)
+    } yield (empty shouldBe false)
   }
 
   "consuming on three channels" should
@@ -128,9 +131,10 @@ trait StorageActionsTests[F[_]]
         store.getData(txn, key) shouldBe Nil
         store.getWaitingContinuation(txn, key) should not be empty
       }
-      _ = r shouldBe Right(None)
+      _     = r shouldBe Right(None)
+      empty <- store.isEmpty
       //continuation is left in the storage
-    } yield (store.isEmpty shouldBe false)
+    } yield (empty shouldBe false)
   }
 
   "producing and then consuming on the same channel" should
@@ -149,39 +153,42 @@ trait StorageActionsTests[F[_]]
       }
       _ = r1 shouldBe Right(None)
 
-      r2 <- space.consume(key, List(Wildcard), new StringsCaptor, persist = false)
-      _  = store.isEmpty shouldBe true
+      r2     <- space.consume(key, List(Wildcard), new StringsCaptor, persist = false)
+      empty0 <- store.isEmpty
+      _      = empty0 shouldBe true
       _ = store.withTxn(store.createTxnRead()) { txn =>
         store.getChannels(txn, keyHash) shouldBe Nil
         store.getPatterns(txn, key) shouldBe Nil
         store.getData(txn, key) shouldBe Nil
         store.getWaitingContinuation(txn, key) shouldBe Nil
       }
-      _ = r2 shouldBe defined
-      _ = runK(r2)
-      _ = getK(r2).results should contain theSameElementsAs List(List("datum"))
-    } yield (store.isEmpty shouldBe true)
+      _      = r2 shouldBe defined
+      _      = runK(r2)
+      _      = getK(r2).results should contain theSameElementsAs List(List("datum"))
+      empty1 <- store.isEmpty
+    } yield (empty1 shouldBe true)
   }
 
   "producing three times then doing consuming three times" should "work" in withTestSpace { space =>
     val store = space.store
     for {
-      r1 <- space.produce("ch1", "datum1", persist = false)
-      r2 <- space.produce("ch1", "datum2", persist = false)
-      r3 <- space.produce("ch1", "datum3", persist = false)
-      _  = r1 shouldBe Right(None)
-      _  = r2 shouldBe Right(None)
-      _  = r3 shouldBe Right(None)
-      r4 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
-      _  = runK(r4)
-      _  = getK(r4).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
-      r5 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
-      _  = runK(r5)
-      _  = getK(r5).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
-      r6 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
-      _  = runK(r6)
-      _  = getK(r6).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
-    } yield (store.isEmpty shouldBe true)
+      r1    <- space.produce("ch1", "datum1", persist = false)
+      r2    <- space.produce("ch1", "datum2", persist = false)
+      r3    <- space.produce("ch1", "datum3", persist = false)
+      _     = r1 shouldBe Right(None)
+      _     = r2 shouldBe Right(None)
+      _     = r3 shouldBe Right(None)
+      r4    <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+      _     = runK(r4)
+      _     = getK(r4).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
+      r5    <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+      _     = runK(r5)
+      _     = getK(r5).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
+      r6    <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+      _     = runK(r6)
+      _     = getK(r6).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
+      empty <- store.isEmpty
+    } yield (empty shouldBe true)
   }
 
   "producing on channel, consuming on that channel and another, and then producing on the other channel" should
@@ -238,10 +245,11 @@ trait StorageActionsTests[F[_]]
         store.getData(txn, produceKey2) shouldBe Nil
         store.getWaitingContinuation(txn, produceKey2) shouldBe Nil
       }
-      _ = r3 shouldBe defined
-      _ = runK(r3)
-      _ = getK(r3).results should contain theSameElementsAs List(List("datum1", "datum2"))
-    } yield (store.isEmpty shouldBe true)
+      _     = r3 shouldBe defined
+      _     = runK(r3)
+      _     = getK(r3).results should contain theSameElementsAs List(List("datum1", "datum2"))
+      empty <- store.isEmpty
+    } yield (empty shouldBe true)
   }
 
   "producing on three different channels and then consuming once on all three" should
@@ -295,10 +303,11 @@ trait StorageActionsTests[F[_]]
         store.getData(txn, consumeKey) shouldBe Nil
         store.getWaitingContinuation(txn, consumeKey) shouldBe Nil
       }
-      _ = r4 shouldBe defined
-      _ = runK(r4)
-      _ = getK(r4).results should contain theSameElementsAs List(List("datum1", "datum2", "datum3"))
-    } yield (store.isEmpty shouldBe true)
+      _     = r4 shouldBe defined
+      _     = runK(r4)
+      _     = getK(r4).results should contain theSameElementsAs List(List("datum1", "datum2", "datum3"))
+      empty <- store.isEmpty
+    } yield (empty shouldBe true)
   }
 
   "producing three times on the same channel then consuming three times on the same channel" should
@@ -334,7 +343,8 @@ trait StorageActionsTests[F[_]]
         List("datum2"),
         List("datum1")
       )
-    } yield (store.isEmpty shouldBe true)
+      empty <- store.isEmpty
+    } yield (empty shouldBe true)
   }
 
   "consuming three times on the same channel, then producing three times on that channel" should
@@ -357,13 +367,14 @@ trait StorageActionsTests[F[_]]
           .map(unpackEither[Id, String, Pattern, Nothing, StringsCaptor, String])
           .foreach(runK)
 
-        _ = getK(r1).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
-        _ = getK(r2).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
-        _ = getK(r3).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
-        _ = getK(r1).results shouldNot contain theSameElementsAs getK(r2).results
-        _ = getK(r1).results shouldNot contain theSameElementsAs getK(r3).results
-        _ = getK(r2).results shouldNot contain theSameElementsAs getK(r3).results
-      } yield (store.isEmpty shouldBe true)
+        _     = getK(r1).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
+        _     = getK(r2).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
+        _     = getK(r3).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
+        _     = getK(r1).results shouldNot contain theSameElementsAs getK(r2).results
+        _     = getK(r1).results shouldNot contain theSameElementsAs getK(r3).results
+        _     = getK(r2).results shouldNot contain theSameElementsAs getK(r3).results
+        empty <- store.isEmpty
+      } yield (empty shouldBe true)
   }
 
   "consuming three times on the same channel with non-trivial matches, then producing three times on that channel" should
@@ -402,11 +413,11 @@ trait StorageActionsTests[F[_]]
         .map(unpackEither[Id, String, Pattern, Nothing, StringsCaptor, String])
         .foreach(runK)
 
-      _ = getK(r1).results shouldBe List(List("datum1"))
-      _ = getK(r2).results shouldBe List(List("datum2"))
-      _ = getK(r3).results shouldBe List(List("datum3"))
-
-    } yield (store.isEmpty shouldBe true)
+      _     = getK(r1).results shouldBe List(List("datum1"))
+      _     = getK(r2).results shouldBe List(List("datum2"))
+      _     = getK(r3).results shouldBe List(List("datum3"))
+      empty <- store.isEmpty
+    } yield (empty shouldBe true)
 
   }
 
@@ -430,9 +441,9 @@ trait StorageActionsTests[F[_]]
 
       _ = runK(r3)
 
-      _ = getK(r3).results should contain theSameElementsAs List(List("datum1", "datum2"))
-
-    } yield (store.isEmpty shouldBe true)
+      _     = getK(r3).results should contain theSameElementsAs List(List("datum1", "datum2"))
+      empty <- store.isEmpty
+    } yield (empty shouldBe true)
 
   }
 
@@ -457,10 +468,10 @@ trait StorageActionsTests[F[_]]
       _ = r2 shouldBe Right(None)
       _ = r3 shouldBe defined
 
-      _ = runK(r3)
-      _ = getK(r3).results shouldBe List(List("datum1", "datum1"))
-
-    } yield (store.isEmpty shouldBe true)
+      _     = runK(r3)
+      _     = getK(r3).results shouldBe List(List("datum1", "datum1"))
+      empty <- store.isEmpty
+    } yield (empty shouldBe true)
 
   }
 
@@ -500,10 +511,10 @@ trait StorageActionsTests[F[_]]
         .map(unpackEither[Id, String, Pattern, Nothing, StringsCaptor, String])
         .foreach(runK)
 
-      _ = getK(r4).results should contain theSameElementsAs List(List("datum3", "datum4"))
-      _ = getK(r6).results should contain theSameElementsAs List(List("datum1", "datum2"))
-
-    } yield (store.isEmpty shouldBe true)
+      _     = getK(r4).results should contain theSameElementsAs List(List("datum3", "datum4"))
+      _     = getK(r6).results should contain theSameElementsAs List(List("datum1", "datum2"))
+      empty <- store.isEmpty
+    } yield (empty shouldBe true)
 
   }
 
@@ -533,8 +544,8 @@ trait StorageActionsTests[F[_]]
         store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
         store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
       }
-
-    } yield (store.isEmpty shouldBe false)
+      empty <- store.isEmpty
+    } yield (empty shouldBe false)
   }
 
   "consuming twice and producing twice with non-trivial matches" should
@@ -566,10 +577,10 @@ trait StorageActionsTests[F[_]]
         store.getData(txn, List("ch2")) shouldBe Nil
       }
 
-      _ = getK(r3).results should contain theSameElementsAs List(List("datum1"))
-      _ = getK(r4).results should contain theSameElementsAs List(List("datum2"))
-
-    } yield (store.isEmpty shouldBe true)
+      _     = getK(r3).results should contain theSameElementsAs List(List("datum1"))
+      _     = getK(r4).results should contain theSameElementsAs List(List("datum2"))
+      empty <- store.isEmpty
+    } yield (empty shouldBe true)
 
   }
 
@@ -609,8 +620,8 @@ trait StorageActionsTests[F[_]]
           store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
           store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
         }
-
-      } yield (store.isEmpty shouldBe false)
+        empty <- store.isEmpty
+      } yield (empty shouldBe false)
     }
 
   /* Persist tests */
@@ -636,7 +647,9 @@ trait StorageActionsTests[F[_]]
       // Data exists so the write will not "stick"
       r2 <- space.consume(key, List(Wildcard), new StringsCaptor, persist = true)
 
-      _ = store.isEmpty shouldBe true
+      empty <- store.isEmpty
+
+      _ = empty shouldBe true
 
       _ = r2 shouldBe defined
 
@@ -677,7 +690,9 @@ trait StorageActionsTests[F[_]]
         // Matching data exists so the write will not "stick"
         r2 <- space.consume(key, List(Wildcard), new StringsCaptor, persist = true)
 
-        _ = store.isEmpty shouldBe true
+        empty <- store.isEmpty
+
+        _ = empty shouldBe true
 
         _ = r2 shouldBe defined
 
@@ -765,7 +780,9 @@ trait StorageActionsTests[F[_]]
       // A matching continuation exists so the write will not "stick"
       r2 <- space.produce("ch1", "datum1", persist = true)
 
-      _ = store.isEmpty shouldBe true
+      empty <- store.isEmpty
+
+      _ = empty shouldBe true
 
       _ = r2 shouldBe defined
 
@@ -796,7 +813,9 @@ trait StorageActionsTests[F[_]]
         // A matching continuation exists so the write will not "stick"
         r2 <- space.produce("ch1", "datum1", persist = true)
 
-        _ = store.isEmpty shouldBe true
+        empty <- store.isEmpty
+
+        _ = empty shouldBe true
 
         _ = r2 shouldBe defined
 
@@ -919,7 +938,9 @@ trait StorageActionsTests[F[_]]
       // Matching data exists so the write will not "stick"
       r6 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
 
-      _ = store.isEmpty shouldBe true
+      empty <- store.isEmpty
+
+      _ = empty shouldBe true
 
       _ = r6 shouldBe defined
 
@@ -959,7 +980,7 @@ trait StorageActionsTests[F[_]]
 
         _ = runK(r2)
 
-      } yield (getK(r2).results should contain(List("datum", "datum")))
+      } yield getK(r2).results should contain(List("datum", "datum"))
   }
 
   "reset" should "change the state of the store, and reset the trie updates log" in withTestSpace {
@@ -972,18 +993,19 @@ trait StorageActionsTests[F[_]]
         checkpoint0 <- space.createCheckpoint()
         r           <- space.consume(key, patterns, new StringsCaptor, persist = false)
         _           = r shouldBe Right(None)
-        _           = store.isEmpty shouldBe false
+        empty0      <- store.isEmpty
+        _           = empty0 shouldBe false
         _           = store.getTrieUpdates.length shouldBe 1
         _           = store.getTrieUpdateCount shouldBe 1
 
-        _ <- space.reset(checkpoint0.root)
-
-        _ = store.isEmpty shouldBe true
-        _ = store.getTrieUpdates.length shouldBe 0
-        _ = store.getTrieUpdateCount shouldBe 0
+        _      <- space.reset(checkpoint0.root)
+        empty1 <- store.isEmpty
+        _      = empty1 shouldBe true
+        _      = store.getTrieUpdates.length shouldBe 0
+        _      = store.getTrieUpdateCount shouldBe 0
 
         checkpoint1 <- space.createCheckpoint()
-      } yield (checkpoint1.log shouldBe empty)
+      } yield checkpoint1.log shouldBe empty
   }
 
   "clear" should "empty the store, reset the event log, and reset the trie updates log" in withTestSpace {
@@ -1003,21 +1025,23 @@ trait StorageActionsTests[F[_]]
           store.getWaitingContinuation(txn, key) should not be empty
         }
 
-        _ = r shouldBe Right(None)
-        _ = store.isEmpty shouldBe false
-        _ = store.getTrieUpdates.length shouldBe 1
-        _ = store.getTrieUpdateCount shouldBe 1
+        _      = r shouldBe Right(None)
+        empty0 <- store.isEmpty
+        _      = empty0 shouldBe false
+        _      = store.getTrieUpdates.length shouldBe 1
+        _      = store.getTrieUpdateCount shouldBe 1
 
         checkpoint0 <- space.createCheckpoint()
         _           = checkpoint0.log should not be empty
 
-        _ <- space.clear()
-        _ = store.isEmpty shouldBe true
-        _ = store.getTrieUpdates.length shouldBe 0
-        _ = store.getTrieUpdateCount shouldBe 0
+        _      <- space.clear()
+        empty1 <- store.isEmpty
+        _      = empty1 shouldBe true
+        _      = store.getTrieUpdates.length shouldBe 0
+        _      = store.getTrieUpdateCount shouldBe 0
 
         checkpoint1 <- space.createCheckpoint()
-      } yield (checkpoint1.log shouldBe empty)
+      } yield checkpoint1.log shouldBe empty
   }
 
   "clear" should "reset to the same hash on multiple runs" in withTestSpace { space =>
@@ -1034,21 +1058,21 @@ trait StorageActionsTests[F[_]]
       _           <- space.createCheckpoint()
       _           <- space.clear()
       //force clearing of trie store state
-      _ = store.createCheckpoint()
+      _ <- store.createCheckpoint()
       _ <- space.clear()
       //the checkpointing mechanism should not interfere with the empty root
       checkpoint2 <- space.createCheckpoint()
       _           = checkpoint2.log shouldBe empty
-    } yield (checkpoint2.root shouldBe emptyCheckpoint.root)
+    } yield checkpoint2.root shouldBe emptyCheckpoint.root
   }
 
   "createCheckpoint on an empty store" should "return the expected hash" in withTestSpace { space =>
     for {
       checkpoint <- space.createCheckpoint()
     } yield
-      (checkpoint.root shouldBe Blake2b256Hash.fromHex(
+      checkpoint.root shouldBe Blake2b256Hash.fromHex(
         "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3"
-      ))
+      )
   }
 
   "consume then createCheckpoint" should "return the expected hash and the TrieStore should contain the expected value" in
@@ -1090,8 +1114,9 @@ trait StorageActionsTests[F[_]]
         _          = checkpoint.root shouldBe nodeHash
 
       } yield
-        (history
-          .lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe Some(gnat))
+        history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe Some(
+          gnat
+        )
     }
 
   "consume twice then createCheckpoint" should "persist the expected values in the TrieStore" in
@@ -1307,10 +1332,11 @@ trait MonadicStorageActionsTests[F[_]]
       res <- Sync[F].attempt(
               space.consume(List("ch1", "ch2"), List(Wildcard), new StringsCaptor, persist = false)
             )
-      err = res.left.get
-      _   = err shouldBe an[IllegalArgumentException]
-      _   = err.getMessage shouldBe "channels.length must equal patterns.length"
-    } yield (space.store.isEmpty shouldBe true)
+      err   = res.left.get
+      _     = err shouldBe an[IllegalArgumentException]
+      _     = err.getMessage shouldBe "channels.length must equal patterns.length"
+      empty <- space.store.isEmpty
+    } yield (empty shouldBe true)
   }
 
   "an install" should "not allow installing after a produce operation" in withTestSpace { space =>
@@ -1332,7 +1358,7 @@ trait MonadicStorageActionsTests[F[_]]
     val patterns = List(Wildcard)
 
     for {
-      _ <- space.close()
+      _ <- space.close
       //using some nulls here to ensure that exception is thrown even before args check
       e1 <- Sync[F]
              .attempt(space.install(key, patterns, null))
@@ -1368,8 +1394,9 @@ trait LegacyStorageActionsTests
     val patterns = List(Wildcard)
 
     val ex = the[RuntimeException] thrownBy {
-      space.produce(channel, datum, persist = false)
-      space.install(key, patterns, new StringsCaptor)
+      space.produce(channel, datum, persist = false).map { _ =>
+        space.install(key, patterns, new StringsCaptor)
+      }
     }
     ex.getMessage shouldBe "Installing can be done only on startup"
   }
@@ -1380,7 +1407,7 @@ trait LegacyStorageActionsTests
     val patterns = List(Wildcard)
 
     space =>
-      space.close()
+      space.close
       //using some nulls here to ensure that exception is thrown even before args check
       an[RSpaceClosedException] shouldBe thrownBy(
         space.install(key, patterns, null)

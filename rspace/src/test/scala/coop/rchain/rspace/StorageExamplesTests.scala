@@ -33,14 +33,15 @@ trait StorageExamplesTests[F[_]]
                new EntriesCaptor,
                persist = false
              )
-      _  = r1 shouldBe Right(None)
-      r2 <- space.produce(Channel("friends"), bob, persist = false)
-      _  = r2 shouldBe Right(None)
-      r3 <- space.produce(Channel("friends"), bob, persist = false)
-      _  = r3 shouldBe defined
-      _  = runK(r3)
-      _  = getK(r3).results shouldBe List(List(bob, bob))
-    } yield (store.isEmpty shouldBe true)
+      _     = r1 shouldBe Right(None)
+      r2    <- space.produce(Channel("friends"), bob, persist = false)
+      _     = r2 shouldBe Right(None)
+      r3    <- space.produce(Channel("friends"), bob, persist = false)
+      _     = r3 shouldBe defined
+      _     = runK(r3)
+      _     = getK(r3).results shouldBe List(List(bob, bob))
+      empty <- store.isEmpty
+    } yield (empty shouldBe true)
   }
 
   "CORE-365: Two produces on the same channel followed by a joined consume on duplicates of that channel" should
@@ -59,10 +60,11 @@ trait StorageExamplesTests[F[_]]
                new EntriesCaptor,
                persist = false
              )
-      _ = r3 shouldBe defined
-      _ = runK(r3)
-      _ = getK(r3).results shouldBe List(List(bob, bob))
-    } yield (store.isEmpty shouldBe true)
+      _     = r3 shouldBe defined
+      _     = runK(r3)
+      _     = getK(r3).results shouldBe List(List(bob, bob))
+      empty <- store.isEmpty
+    } yield (empty shouldBe true)
   }
 
   "CORE-365: A joined consume on duplicate channels given twice followed by three produces" should
@@ -81,16 +83,17 @@ trait StorageExamplesTests[F[_]]
                new EntriesCaptor,
                persist = false
              )
-      _  = r1 shouldBe Right(None)
-      r2 <- space.produce(Channel("friends"), bob, persist = false)
-      _  = r2 shouldBe Right(None)
-      r3 <- space.produce(Channel("friends"), bob, persist = false)
-      _  = r3 shouldBe Right(None)
-      r4 <- space.produce(Channel("colleagues"), alice, persist = false)
-      _  = r4 shouldBe defined
-      _  = runK(r4)
-      _  = getK(r4).results shouldBe List(List(alice, bob, bob))
-    } yield (store.isEmpty shouldBe true)
+      _     = r1 shouldBe Right(None)
+      r2    <- space.produce(Channel("friends"), bob, persist = false)
+      _     = r2 shouldBe Right(None)
+      r3    <- space.produce(Channel("friends"), bob, persist = false)
+      _     = r3 shouldBe Right(None)
+      r4    <- space.produce(Channel("colleagues"), alice, persist = false)
+      _     = r4 shouldBe defined
+      _     = runK(r4)
+      _     = getK(r4).results shouldBe List(List(alice, bob, bob))
+      empty <- store.isEmpty
+    } yield (empty shouldBe true)
 
   }
 
@@ -151,8 +154,8 @@ trait StorageExamplesTests[F[_]]
       _ = getK(r10).results shouldBe List(
         List(carol, carol, carol, carol, alice, alice, alice, bob, bob)
       )
-
-    } yield (store.isEmpty shouldBe true)
+      empty <- store.isEmpty
+    } yield (empty shouldBe true)
   }
 
   "CORE-365: Multiple produces on multiple duplicate channels followed by the requisite consume" should
@@ -213,7 +216,8 @@ trait StorageExamplesTests[F[_]]
       _ = getK(r10).results shouldBe List(
         List(carol, carol, carol, carol, alice, alice, alice, bob, bob)
       )
-    } yield (store.isEmpty shouldBe true)
+      empty <- store.isEmpty
+    } yield (empty shouldBe true)
   }
 
   "CORE-365: A joined consume on multiple mixed up duplicate channels followed by the requisite produces" should
@@ -274,7 +278,8 @@ trait StorageExamplesTests[F[_]]
       _ = getK(r10).results shouldBe List(
         List(carol, alice, carol, bob, bob, carol, alice, alice, carol)
       )
-    } yield (store.isEmpty shouldBe true)
+      empty <- store.isEmpty
+    } yield (empty shouldBe true)
   }
 }
 
@@ -296,7 +301,8 @@ abstract class MixedInMemoryStoreStorageExamplesTestsBase[F[_]]
 
     val branch = Branch("inmem")
 
-    val ctx: Context[Channel, Pattern, Entry, EntriesCaptor] = Context.createMixed(dbDir, mapSize)
+    val ctx: Context[F, Channel, Pattern, Entry, EntriesCaptor] =
+      Context.createMixed(dbDir, mapSize)
 
     run(for {
       testSpace <- RSpace.create[F, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
@@ -313,9 +319,9 @@ abstract class MixedInMemoryStoreStorageExamplesTestsBase[F[_]]
       try {
         res
       } finally {
-        trieStore.close()
-        testStore.close()
-        ctx.close()
+        trieStore.close
+          .flatMap(_ => testStore.close)
+          .map(_ => ctx.close())
       }
     })
   }
@@ -340,7 +346,7 @@ abstract class InMemoryStoreStorageExamplesTestsBase[F[_]]
 
     val branch = Branch("inmem")
 
-    val ctx: Context[Channel, Pattern, Entry, EntriesCaptor] = Context.createInMemory()
+    val ctx: Context[F, Channel, Pattern, Entry, EntriesCaptor] = Context.createInMemory
 
     run(for {
       testSpace <- RSpace.create[F, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
@@ -357,8 +363,8 @@ abstract class InMemoryStoreStorageExamplesTestsBase[F[_]]
       try {
         res
       } finally {
-        trieStore.close()
-        testStore.close()
+        trieStore.close
+          .map(_ => testStore.close)
       }
     })
   }
@@ -373,8 +379,8 @@ abstract class LMDBStoreStorageExamplesTestBase[F[_]]
   val noTls: Boolean = false
 
   override def withTestSpace[R](f: T => F[R]): R = {
-    val context   = Context.create[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
-    val testStore = LMDBStore.create[Channel, Pattern, Entry, EntriesCaptor](context)
+    val context   = Context.create[F, Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
+    val testStore = LMDBStore.create[F, Channel, Pattern, Entry, EntriesCaptor](context)
     run(for {
       testSpace <- RSpace.create[F, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
                     testStore,
@@ -386,9 +392,9 @@ abstract class LMDBStoreStorageExamplesTestBase[F[_]]
       try {
         res
       } finally {
-        testStore.close()
-        testSpace.close()
-        context.close()
+        testStore.close
+          .flatMap(_ => testSpace.close)
+          .map(_ => context.close())
       }
     })
   }

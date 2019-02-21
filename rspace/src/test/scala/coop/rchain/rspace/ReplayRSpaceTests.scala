@@ -796,7 +796,7 @@ trait ReplayRSpaceTests
       val continuation = "continuation"
       val data         = "datum1"
 
-      replaySpace.close()
+      replaySpace.close
 
       an[RSpaceClosedException] shouldBe thrownBy(
         replaySpace.install(key, patterns, continuation)
@@ -899,15 +899,15 @@ trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, 
     implicit val log: Log[Id] = Log.log[Id]
 
     val dbDir       = Files.createTempDirectory("rchain-storage-test-")
-    val context     = Context.create[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
+    val context     = Context.create[Id, C, P, A, K](dbDir, 1024L * 1024L * 4096L)
     val space       = RSpace.create[Id, C, P, E, A, A, K](context, Branch.MASTER)
     val replaySpace = ReplayRSpace.create[Id, C, P, E, A, A, K](context, Branch.REPLAY)
 
     try {
       f(space, replaySpace)
     } finally {
-      space.close()
-      replaySpace.close()
+      space.close
+      replaySpace.close
       context.close()
       dbDir.recursivelyDelete()
     }
@@ -932,15 +932,15 @@ trait MixedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C,
     implicit val log: Log[Id] = Log.log[Id]
 
     val dbDir       = Files.createTempDirectory("rchain-storage-test-")
-    val context     = Context.createMixed[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
+    val context     = Context.createMixed[Id, C, P, A, K](dbDir, 1024L * 1024L * 4096L)
     val space       = RSpace.create[Id, C, P, E, A, A, K](context, Branch.MASTER)
     val replaySpace = ReplayRSpace.create[Id, C, P, E, A, A, K](context, Branch.REPLAY)
 
     try {
       f(space, replaySpace)
     } finally {
-      space.close()
-      replaySpace.close()
+      space.close
+      replaySpace.close
       context.close()
       dbDir.recursivelyDelete()
     }
@@ -959,17 +959,17 @@ trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase
       oC: Ordering[C]
   ): S = {
 
-    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
-    implicit val log: Log[Id]    = Log.log[Id]
-    val ctx: Context[C, P, A, K] = Context.createInMemory()
-    val space                    = RSpace.create[Id, C, P, E, A, A, K](ctx, Branch.REPLAY)
-    val replaySpace              = ReplayRSpace.create[Id, C, P, E, A, A, K](ctx, Branch.REPLAY)
+    implicit val syncF: Sync[Id]     = coop.rchain.catscontrib.effect.implicits.syncId
+    implicit val log: Log[Id]        = Log.log[Id]
+    val ctx: Context[Id, C, P, A, K] = Context.createInMemory
+    val space                        = RSpace.create[Id, C, P, E, A, A, K](ctx, Branch.REPLAY)
+    val replaySpace                  = ReplayRSpace.create[Id, C, P, E, A, A, K](ctx, Branch.REPLAY)
 
     try {
       f(space, replaySpace)
     } finally {
-      space.close()
-      replaySpace.close()
+      space.close
+      replaySpace.close
     }
   }
 }
@@ -990,20 +990,20 @@ trait FaultyStoreReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsB
       coop.rchain.rspace.test.contextShiftId
     implicit val log: Log[Id] = Log.log[Id]
 
-    val trieStore = InMemoryTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]]()
+    val trieStore = InMemoryTrieStore.create[Id, Blake2b256Hash, GNAT[C, P, A, K]]()
     val mainStore = InMemoryStore
-      .create[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
+      .create[Id, InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
         trieStore,
         Branch.REPLAY
       )
     val space = RSpace.create[Id, C, P, E, A, A, K](mainStore, Branch.REPLAY)
-    val store =
-      new InMemoryStore[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
+    val store
+      : InMemoryStore[Id, InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K] =
+      new InMemoryStore[Id, InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
         trieStore,
         Branch.REPLAY
       ) {
-        override private[rspace] def createTxnWrite()
-          : InMemTransaction[coop.rchain.rspace.State[C, P, A, K]] =
+        override private[rspace] def createTxnWrite(): Transaction =
           throw new RuntimeException("Couldn't write to underlying store")
       }
 
@@ -1012,8 +1012,8 @@ trait FaultyStoreReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsB
     try {
       f(space, replaySpace)
     } finally {
-      space.close()
-      replaySpace.close()
+      space.close
+      replaySpace.close
     }
   }
 

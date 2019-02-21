@@ -1,5 +1,7 @@
 package coop.rchain.rspace.history
 
+import cats.effect.Sync
+import cats.effect.implicits._
 import cats.instances.option._
 import cats.instances.vector._
 import cats.syntax.traverse._
@@ -8,7 +10,9 @@ import coop.rchain.rspace.Blake2b256Hash
 import scala.annotation.tailrec
 import scala.collection.immutable.Seq
 
-trait ITrieStore[T, K, V] {
+trait ITrieStore[F[_], T, K, V] {
+
+  implicit val syncF: Sync[F]
 
   private[rspace] def createTxnRead(): T
 
@@ -72,5 +76,5 @@ trait ITrieStore[T, K, V] {
 
   private[rspace] def clear(txn: T): Unit
 
-  def close(): Unit
+  def close: F[Unit]
 }

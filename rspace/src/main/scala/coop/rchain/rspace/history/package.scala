@@ -36,7 +36,7 @@ package object history {
 
   private val logger: Logger = Logger[this.type]
 
-  def initialize[T, K, V](store: ITrieStore[T, K, V], branch: Branch)(
+  def initialize[F[_], T, K, V](store: ITrieStore[F, T, K, V], branch: Branch)(
       implicit
       codecK: Codec[K],
       codecV: Codec[V]
@@ -58,9 +58,9 @@ package object history {
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   // TODO stop throwing exceptions
-  private[this] def lookup[T, K, V](
+  private[this] def lookup[F[_], T, K, V](
       txn: T,
-      store: ITrieStore[T, K, V],
+      store: ITrieStore[F, T, K, V],
       branchRootHash: Blake2b256Hash,
       key: K
   )(implicit codecK: Codec[K]): Option[V] = {
@@ -100,14 +100,14 @@ package object history {
     } yield res
   }
 
-  def lookup[T, K, V](store: ITrieStore[T, K, V], rootHash: Blake2b256Hash, key: K)(
+  def lookup[F[_], T, K, V](store: ITrieStore[F, T, K, V], rootHash: Blake2b256Hash, key: K)(
       implicit codecK: Codec[K]
   ): Option[V] =
     store.withTxn(store.createTxnRead()) { (txn: T) =>
       lookup(txn, store, rootHash, key)
     }
 
-  def lookup[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K)(
+  def lookup[F[_], T, K, V](store: ITrieStore[F, T, K, V], branch: Branch, key: K)(
       implicit codecK: Codec[K]
   ): Option[V] =
     store.withTxn(store.createTxnRead()) { (txn: T) =>
@@ -116,7 +116,7 @@ package object history {
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   // TODO stop throwing exceptions
-  def lookup[T, K, V](store: ITrieStore[T, K, V], branch: Branch, keys: immutable.Seq[K])(
+  def lookup[F[_], T, K, V](store: ITrieStore[F, T, K, V], branch: Branch, keys: immutable.Seq[K])(
       implicit codecK: Codec[K]
   ): Option[immutable.Seq[V]] =
     if (keys.isEmpty) {
@@ -131,8 +131,8 @@ package object history {
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   // TODO stop throwing exceptions
-  private[this] def getParents[T, K, V](
-      store: ITrieStore[T, K, V],
+  private[this] def getParents[F[_], T, K, V](
+      store: ITrieStore[F, T, K, V],
       txn: T,
       path: Seq[Byte],
       curr: Trie[K, V]
@@ -195,7 +195,7 @@ package object history {
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   // TODO stop throwing exceptions
-  def insert[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K, value: V)(
+  def insert[F[_], T, K, V](store: ITrieStore[F, T, K, V], branch: Branch, key: K, value: V)(
       implicit
       codecK: Codec[K],
       codecV: Codec[V]
@@ -404,8 +404,8 @@ package object history {
       (ptr, Seq.empty)
     }
 
-  private[this] def insertTries[T, K, V](
-      store: ITrieStore[T, K, V],
+  private[this] def insertTries[F[_], T, K, V](
+      store: ITrieStore[F, T, K, V],
       txn: T,
       rehashedNodes: Seq[(Blake2b256Hash, Trie[K, V])]
   ): Option[Blake2b256Hash] =
@@ -418,7 +418,11 @@ package object history {
   @tailrec
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   // TODO stop throwing exceptions
-  private[this] def deleteLeaf[T, K, V](store: ITrieStore[T, K, V], txn: T, parents: Parents[K, V])(
+  private[this] def deleteLeaf[F[_], T, K, V](
+      store: ITrieStore[F, T, K, V],
+      txn: T,
+      parents: Parents[K, V]
+  )(
       implicit
       codecK: Codec[K],
       codecV: Codec[V]
@@ -473,7 +477,7 @@ package object history {
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   // TODO stop throwing exceptions
-  def delete[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K, value: V)(
+  def delete[F[_], T, K, V](store: ITrieStore[F, T, K, V], branch: Branch, key: K, value: V)(
       implicit
       codecK: Codec[K],
       codecV: Codec[V]
@@ -503,7 +507,7 @@ package object history {
               val (hd, nodesToRehash, newNodes) = deleteLeaf(store, txn, parents)
               val rehashedNodes                 = rehash[K, V](hd, nodesToRehash)
               val nodesToInsert                 = newNodes ++ rehashedNodes
-              val newRootHash                   = insertTries[T, K, V](store, txn, nodesToInsert).get
+              val newRootHash                   = insertTries[F, T, K, V](store, txn, nodesToInsert).get
               store.putRoot(txn, branch, newRootHash)
               logger.debug(s"workingRootHash: $newRootHash")
               true

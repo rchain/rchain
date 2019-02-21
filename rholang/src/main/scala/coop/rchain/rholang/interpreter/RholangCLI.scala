@@ -5,18 +5,21 @@ import java.io.{BufferedOutputStream, FileOutputStream, FileReader, StringReader
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
 
+import cats.Id
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.RhoIStore
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
+import coop.rchain.rspace.internal.Row
 import monix.eval.{Coeval, Task}
 import monix.execution.{CancelableFuture, Scheduler}
 import org.rogach.scallop.{stringListConverter, ScallopConf}
 import coop.rchain.shared.Log
 
 import scala.annotation.tailrec
+import scala.collection.immutable.Seq
 import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
@@ -51,7 +54,7 @@ object RholangCLI {
   def main(args: Array[String]): Unit = {
     import monix.execution.Scheduler.Implicits.global
 
-    val conf = new Conf(args)
+    val conf = new Conf(args.toIndexedSeq)
 
     implicit val log: Log[Task] = Log.log[Task]
 
@@ -82,9 +85,11 @@ object RholangCLI {
     Console.println(PrettyPrinter().buildString(normalizedTerm))
   }
 
-  private def printStorageContents(store: RhoIStore): Unit = {
+  private def printStorageContents(
+      storeMap: Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]]
+  ): Unit = {
     Console.println("\nStorage Contents:")
-    Console.println(StoragePrinter.prettyPrint(store))
+    Console.println(StoragePrinter.prettyPrint(storeMap))
   }
 
   private def printCost(cost: Cost): Unit =
@@ -137,12 +142,17 @@ object RholangCLI {
 
   @tailrec
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-  def waitForSuccess(evaluatorFuture: CancelableFuture[EvaluateResult]): Unit =
+  def waitForSuccess(
+      evaluatorFuture: CancelableFuture[
+        (EvaluateResult, Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]])
+      ]
+  ): Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]] =
     try {
       Await.ready(evaluatorFuture, 5.seconds).value match {
-        case Some(Success(EvaluateResult(cost, errors))) =>
+        case Some(Success((EvaluateResult(cost, errors), storeMap))) =>
           printCost(cost)
           printErrors(errors)
+          storeMap
         case Some(Failure(e)) => throw e
         case None             => throw new Exception("Future claimed to be ready, but value was None")
       }
@@ -172,13 +182,16 @@ object RholangCLI {
   }
 
   def evaluatePar(runtime: Runtime[Task])(par: Par)(implicit scheduler: Scheduler): Unit = {
-    val evaluatorTask =
+    val evaluatorTask: Task[
+      (EvaluateResult, Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]])
+    ] =
       for {
-        _      <- Task.now(printNormalizedTerm(par))
-        result <- Interpreter[Task].evaluate(runtime, par)
-      } yield result
+        _        <- Task.now(printNormalizedTerm(par))
+        result   <- Interpreter[Task].evaluate(runtime, par)
+        storeMap <- runtime.space.toMap
+      } yield (result, storeMap)
 
-    waitForSuccess(evaluatorTask.runToFuture)
-    printStorageContents(runtime.space.store)
+    val storeMap = waitForSuccess(evaluatorTask.runToFuture)
+    printStorageContents(storeMap)
   }
 }
