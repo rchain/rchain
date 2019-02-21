@@ -34,7 +34,6 @@ import coop.rchain.shared._
 final case class CasperState(
     blockBuffer: Set[BlockMessage] = Set.empty[BlockMessage],
     deployHistory: Set[DeployData] = Set.empty[DeployData],
-    invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash],
     dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty,
     equivocationsTracker: Set[EquivocationRecord] = Set.empty[EquivocationRecord]
 )
@@ -412,7 +411,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
                                             Validate
                                               .neglectedInvalidBlock[F](
                                                 b,
-                                                s.invalidBlockTracker
+                                                dag
                                               )
                                         )
       postNeglectedEquivocationCheckStatus <- postNeglectedInvalidBlockStatus.joinRight
@@ -565,10 +564,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
             s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}."
           )
       // TODO: Slash block for status except InvalidUnslashableBlock
-      _ <- Cell[F, CasperState].modify { s =>
-            s.copy(invalidBlockTracker = s.invalidBlockTracker + block.blockHash)
-          }
-      updatedDag <- addToState(block)
+      invalidBlock = block.copy(invalid = true)
+      updatedDag   <- addToState(invalidBlock)
     } yield updatedDag
 
   // TODO: should only call insert on BLockDagStorage

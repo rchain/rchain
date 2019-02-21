@@ -1503,7 +1503,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       _ <- nodes(1).casperEff.contains(signedBlock1Prime) shouldBeF true
 
       _ <- nodes(1).casperEff
-            .contains(signedBlock4) shouldBeF true // However, in invalidBlockTracker
+            .contains(signedBlock4) shouldBeF true // However, marked as invalid
 
       _ = nodes(1).logEff.infos.count(_ startsWith "Added admissible equivocation") should be(1)
       _ = nodes(2).logEff.warns.size should be(0)
@@ -1524,8 +1524,10 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
           }(nodes(0).metricEff, nodes(0).logEff)
       _ <- validateBlockStore(nodes(1)) { blockStore =>
             for {
-              _      <- blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
-              result <- blockStore.get(signedBlock4.blockHash) shouldBeF Some(signedBlock4)
+              _ <- blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
+              result <- blockStore.get(signedBlock4.blockHash) shouldBeF Some(
+                         signedBlock4.copy(invalid = true)
+                       )
             } yield result
           }(nodes(1).metricEff, nodes(1).logEff)
       result <- validateBlockStore(nodes(2)) { blockStore =>

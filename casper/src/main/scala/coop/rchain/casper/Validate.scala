@@ -584,24 +584,27 @@ object Validate {
     */
   def neglectedInvalidBlock[F[_]: Applicative](
       block: BlockMessage,
-      invalidBlockTracker: Set[BlockHash]
-  ): F[Either[InvalidBlock, ValidBlock]] = {
-    val invalidJustifications = block.justifications.filter(
-      justification => invalidBlockTracker.contains(justification.latestBlockHash)
-    )
-    val neglectedInvalidJustification = invalidJustifications.exists { justification =>
-      val slashedValidatorBond = bonds(block).find(_.validator == justification.validator)
-      slashedValidatorBond match {
-        case Some(bond) => bond.stake > 0
-        case None       => false
+      dag: BlockDagRepresentation[F]
+  ): F[Either[InvalidBlock, ValidBlock]] =
+    for {
+      invalidJustifications <- block.justifications.toList.filterA { justification =>
+                                for {
+                                  latestBlockOpt <- dag.lookup(justification.latestBlockHash)
+                                } yield latestBlockOpt.exists(_.invalid)
+                              }
+      neglectedInvalidJustification = invalidJustifications.exists { justification =>
+        val slashedValidatorBond = bonds(block).find(_.validator == justification.validator)
+        slashedValidatorBond match {
+          case Some(bond) => bond.stake > 0
+          case None       => false
+        }
       }
-    }
-    if (neglectedInvalidJustification) {
-      Applicative[F].pure(Left(NeglectedInvalidBlock))
-    } else {
-      Applicative[F].pure(Right(Valid))
-    }
-  }
+      result = if (neglectedInvalidJustification) {
+        Left(NeglectedInvalidBlock)
+      } else {
+        Right(Valid)
+      }
+    } yield result
 
   def bondsCache[F[_]: Log: Concurrent](
       b: BlockMessage,
