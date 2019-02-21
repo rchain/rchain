@@ -2,6 +2,7 @@ package coop.rchain.casper.util
 
 import org.scalatest.{FlatSpec, Matchers}
 import cats.{Id, Monad}
+import coop.rchain.casper.BlockHash
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.scalatestcontrib._
@@ -21,49 +22,52 @@ class DagOperationsTest
     stream.take(10).toList shouldBe List(1, 2, 3, 4, 6, 9, 8, 12, 18, 27)
   }
 
-  "Greatest common ancestor" should "be computed properly" in withStorage {
-    implicit blockStore =>
-      implicit blockDagStorage =>
-        /*
-         * DAG Looks like this:
-         *
-         *        b6   b7
-         *       |  \ /  \
-         *       |   b4  b5
-         *       |    \ /
-         *       b2    b3
-         *         \  /
-         *          b1
-         *           |
-         *         genesis
-         */
-        for {
-          genesis <- createBlock[Task](Seq.empty)
-          b1      <- createBlock[Task](Seq(genesis.blockHash))
-          b1m     = BlockMetadata.fromBlock(b1)
-          b2      <- createBlock[Task](Seq(b1.blockHash))
-          b2m     = BlockMetadata.fromBlock(b2)
-          b3      <- createBlock[Task](Seq(b1.blockHash))
-          b3m     = BlockMetadata.fromBlock(b3)
-          b4      <- createBlock[Task](Seq(b3.blockHash))
-          b4m     = BlockMetadata.fromBlock(b4)
-          b5      <- createBlock[Task](Seq(b3.blockHash))
-          b5m     = BlockMetadata.fromBlock(b5)
-          b6      <- createBlock[Task](Seq(b2.blockHash, b4.blockHash))
-          b6m     = BlockMetadata.fromBlock(b6)
-          b7      <- createBlock[Task](Seq(b4.blockHash, b5.blockHash))
-          b7m     = BlockMetadata.fromBlock(b7)
+  "lowest common ancestor" should "be computed properly" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      def createBlockWithMeta(bh: BlockHash*): Task[BlockMetadata] =
+        createBlock[Task](bh.toSeq).map(BlockMetadata.fromBlock)
 
-          dag      <- blockDagStorage.getRepresentation
-          genesism = BlockMetadata.fromBlock(genesis)
+      implicit def blockMetadataToBlockHash(bm: BlockMetadata): BlockHash = bm.blockHash
 
-          _ <- DagOperations.greatestCommonAncestorF[Task](b1m, b5m, genesism, dag) shouldBeF b1m
-          _ <- DagOperations.greatestCommonAncestorF[Task](b3m, b2m, genesism, dag) shouldBeF b1m
-          _ <- DagOperations.greatestCommonAncestorF[Task](b6m, b7m, genesism, dag) shouldBeF b1m
-          _ <- DagOperations.greatestCommonAncestorF[Task](b2m, b2m, genesism, dag) shouldBeF b2m
-          result <- DagOperations
-                     .greatestCommonAncestorF[Task](b3m, b7m, genesism, dag) shouldBeF b3m
-        } yield result
+      /*
+       * DAG Looks like this:
+       *
+       *        b9   b10
+       *          \ /
+       *          b8
+       *          / \
+       *        b6   b7
+       *       |  \ /  \
+       *       |   b4  b5
+       *       |    \ /
+       *       b2    b3
+       *         \  /
+       *          b1
+       *           |
+       *         genesis
+       */
+      for {
+        genesis <- createBlock[Task](Seq.empty)
+        b1      <- createBlockWithMeta(genesis.blockHash)
+        b2      <- createBlockWithMeta(b1)
+        b3      <- createBlockWithMeta(b1)
+        b4      <- createBlockWithMeta(b3)
+        b5      <- createBlockWithMeta(b3)
+        b6      <- createBlockWithMeta(b2, b4)
+        b7      <- createBlockWithMeta(b4, b5)
+        b8      <- createBlockWithMeta(b6, b7)
+        b9      <- createBlockWithMeta(b8)
+        b10     <- createBlockWithMeta(b8)
+
+        dag <- blockDagStorage.getRepresentation
+
+        _ <- DagOperations.lowestCommonAncestorF[Task](b1, b5, dag) shouldBeF b1
+        _ <- DagOperations.lowestCommonAncestorF[Task](b3, b2, dag) shouldBeF b1
+        _ <- DagOperations.lowestCommonAncestorF[Task](b6, b7, dag) shouldBeF b1
+        _ <- DagOperations.lowestCommonAncestorF[Task](b2, b2, dag) shouldBeF b2
+        _ <- DagOperations.lowestCommonAncestorF[Task](b10, b9, dag) shouldBeF b8
+        result <- DagOperations.lowestCommonAncestorF[Task](b3, b7, dag) shouldBeF b3
+      } yield result
   }
 
   "uncommon ancestors" should "be computed properly" in withStorage {

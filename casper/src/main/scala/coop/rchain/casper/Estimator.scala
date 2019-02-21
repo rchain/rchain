@@ -40,7 +40,7 @@ object Estimator {
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[IndexedSeq[BlockMessage]] =
     for {
-      gca       <- calculateGca(blockDag, BlockMetadata.fromBlock(genesis), latestMessagesHashes)
+      gca       <- calculateLCA(blockDag, BlockMetadata.fromBlock(genesis), latestMessagesHashes)
       scoresMap <- buildScoresMap(blockDag, latestMessagesHashes, gca)
       sortedChildrenHash <- sortChildren(
                              List(gca),
@@ -51,7 +51,7 @@ object Estimator {
       sortedChildren      = maybeSortedChildren.flatten.toVector
     } yield sortedChildren
 
-  private def calculateGca[F[_]: Monad](
+  private def calculateLCA[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
       genesis: BlockMetadata,
       latestMessagesHashes: Map[Validator, BlockHash]
@@ -66,10 +66,9 @@ object Estimator {
                  latestMessages
                    .foldM(latestMessages.head) {
                      case (acc, latestMessage) =>
-                       DagOperations.greatestCommonAncestorF[F](
+                       DagOperations.lowestCommonAncestorF[F](
                          acc,
                          latestMessage,
-                         genesis,
                          blockDag
                        )
                    }
