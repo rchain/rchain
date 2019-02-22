@@ -154,6 +154,8 @@ object Configuration {
       dataDir.resolve("casper-block-dag-file-storage-latest-messages-crc"),
       dataDir.resolve("casper-block-dag-file-storage-block-metadata-log"),
       dataDir.resolve("casper-block-dag-file-storage-block-metadata-crc"),
+      dataDir.resolve("casper-block-dag-file-storage-equivocation-tracker-log"),
+      dataDir.resolve("casper-block-dag-file-storage-equivocation-tracker-crc"),
       dataDir.resolve("casper-block-dag-file-storage-checkpoints")
     )
     val blockStorage =

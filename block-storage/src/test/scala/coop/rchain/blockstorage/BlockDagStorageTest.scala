@@ -7,12 +7,15 @@ import coop.rchain.shared.PathOps._
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.catscontrib.Capture.taskCapture
 import cats.effect.Sync
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.util.byteOps._
+import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
+import coop.rchain.blockstorage.util.io._
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.metrics.Metrics.MetricsNOP
-import coop.rchain.models.BlockMetadata
+import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 import coop.rchain.models.blockImplicits._
 import coop.rchain.rspace.Context
 import coop.rchain.shared
@@ -70,6 +73,8 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
 
   private[this] def mkTmpDir(): Path = Files.createTempDirectory("rchain-dag-storage-test-")
 
+  implicit val raiseIOError: RaiseIOError[Task] = IOError.raiseIOErrorThroughSync[Task]
+
   def withDagStorageLocation[R](f: (Path, BlockStore[Task]) => Task[R]): R = {
     val testProgram = Sync[Task].bracket {
       Sync[Task].delay {
@@ -113,6 +118,12 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   private def defaultBlockMetadataCrc(dagDataDir: Path): Path =
     dagDataDir.resolve("block-metadata-checksum")
 
+  private def defaultEquivocationsTrackerLog(dagDataDir: Path): Path =
+    dagDataDir.resolve("equivocations-tracker-data")
+
+  private def defaultEquivocationsTrackerCrc(dagDataDir: Path): Path =
+    dagDataDir.resolve("equivocations-tracker-checksum")
+
   private def defaultCheckpointsDir(dagDataDir: Path): Path =
     dagDataDir.resolve("checkpoints")
 
@@ -135,6 +146,8 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
         defaultLatestMessagesCrc(dagDataDir),
         defaultBlockMetadataLog(dagDataDir),
         defaultBlockMetadataCrc(dagDataDir),
+        defaultEquivocationsTrackerLog(dagDataDir),
+        defaultEquivocationsTrackerCrc(dagDataDir),
         defaultCheckpointsDir(dagDataDir),
         maxSizeFactor
       )
@@ -340,6 +353,79 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
                 blockElements ++ secondBlockElements ++ thirdBlockElements
               )
           }
+      }
+    }
+  }
+
+  it should "be able to restore equivocations tracker on startup" in {
+    forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
+      forAll(blockHashGen) { equivocator =>
+        forAll(blockHashGen) { blockHash =>
+          withDagStorageLocation { (dagDataDir, blockStore) =>
+            for {
+              firstStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
+              _            <- blockElements.traverse_(firstStorage.insert)
+              record = EquivocationRecord(
+                equivocator,
+                0,
+                Set(blockHash)
+              )
+              _ <- firstStorage.accessEquivocationsTracker { tracker =>
+                    tracker.insertEquivocationRecord(record)
+                  }
+              _             <- firstStorage.close()
+              secondStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
+              records       <- secondStorage.accessEquivocationsTracker(_.equivocationRecords)
+              _             = records shouldBe Set(record)
+              result        <- lookupElements(blockElements, secondStorage)
+              _             <- secondStorage.close()
+            } yield testLookupElementsResult(result, blockElements)
+          }
+        }
+      }
+    }
+  }
+
+  it should "be able to restore equivocations tracker on startup with appended garbage equivocation record" in {
+    forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
+      forAll(blockHashGen) { equivocator =>
+        forAll(blockHashGen) { blockHash =>
+          withDagStorageLocation { (dagDataDir, blockStore) =>
+            for {
+              firstStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
+              _            <- blockElements.traverse_(firstStorage.insert)
+              record = EquivocationRecord(
+                equivocator,
+                0,
+                Set(blockHash)
+              )
+              _ <- firstStorage.accessEquivocationsTracker { tracker =>
+                    tracker.insertEquivocationRecord(record)
+                  }
+              _                  <- firstStorage.close()
+              garbageEquivocator = Array.fill[Byte](32)(0)
+              _                  <- Sync[Task].delay { Random.nextBytes(garbageEquivocator) }
+              garbageBlockHash   = Array.fill[Byte](32)(0)
+              _                  <- Sync[Task].delay { Random.nextBytes(garbageBlockHash) }
+              garbageRecord = EquivocationRecord(
+                ByteString.copyFrom(garbageEquivocator),
+                0,
+                Set(ByteString.copyFrom(garbageBlockHash))
+              )
+              garbageBytes = garbageRecord.toByteString.toByteArray
+              _ <- writeToFile[Task](
+                    defaultEquivocationsTrackerLog(dagDataDir),
+                    garbageBytes,
+                    StandardOpenOption.APPEND
+                  )
+              secondStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
+              records       <- secondStorage.accessEquivocationsTracker(_.equivocationRecords)
+              _             = records shouldBe Set(record)
+              result        <- lookupElements(blockElements, secondStorage)
+              _             <- secondStorage.close()
+            } yield testLookupElementsResult(result, blockElements)
+          }
+        }
       }
     }
   }
