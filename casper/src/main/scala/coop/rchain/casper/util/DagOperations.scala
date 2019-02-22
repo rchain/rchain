@@ -2,16 +2,11 @@ package coop.rchain.casper.util
 
 import cats.{Eval, Monad}
 import cats.implicits._
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
-import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.Estimator.BlockHash
-import coop.rchain.casper.util.MapHelper.updatedWith
-import coop.rchain.catscontrib.ListContrib
+import coop.rchain.blockstorage.{BlockDagRepresentation}
 import coop.rchain.models.BlockMetadata
 import coop.rchain.shared.StreamT
 
-import scala.annotation.tailrec
-import scala.collection.immutable.{BitSet, HashSet, Queue}
+import scala.collection.immutable.{BitSet, HashSet, Queue, SortedSet}
 import scala.collection.mutable
 
 object DagOperations {
@@ -96,50 +91,53 @@ object DagOperations {
   }
 
   /**
-    * Conceptually, the GCA is the first point at which the histories of b1 and b2 diverge.
-    * We compute by finding the first block from genesis for which there exists a child of that block which is an ancestor of b1 or b2 but not both.
-    *
-    * TODO: Implement a GCA that doesn't require the genesis block (see https://rchain.atlassian.net/browse/RCHAIN-3002)
-    * TODO: Remove usage of BlockStore by just using BlockDagRepresentation (see https://rchain.atlassian.net/browse/RCHAIN-3003)
+    * Conceptually, the LCA is the lowest point at which the histories of b1 and b2 diverge.
+    * We compute by finding the first block that is the "lowest" (has highest blocknum) common block.
     */
-  def greatestCommonAncestorF[F[_]: Monad: BlockStore](
-      b1: BlockMessage,
-      b2: BlockMessage,
-      genesis: BlockMessage,
+  def lowestCommonAncestorF[F[_]: Monad](
+      b1: BlockMetadata,
+      b2: BlockMetadata,
       dag: BlockDagRepresentation[F]
-  ): F[BlockMessage] =
+  ): F[BlockMetadata] = {
+
+    type BlockWithDepth = (Long, BlockMetadata)
+
+    object BlockWithDepth {
+      def apply(bm: BlockMetadata): BlockWithDepth = (bm.blockNum, bm)
+    }
+
+    implicit class RichBlockWithDepth(b: BlockWithDepth) {
+      def block: BlockMetadata = b._2
+      def num: Long            = b._1
+    }
+
+    implicit val blockNumDecreasing: Ordering[BlockWithDepth] =
+      (l: BlockWithDepth, r: BlockWithDepth) => r.num.compare(l.num)
+
+    def getParents(p: BlockMetadata): F[Set[BlockMetadata]] =
+      p.parents.traverse(dag.lookup).map(_.toSet.flatten)
+
+    def addExtractedParents(source: SortedSet[BlockWithDepth]) = { newBlocks: Set[BlockMetadata] =>
+      {
+        val mapped = newBlocks.map(BlockWithDepth(_))
+        source ++ mapped
+      }
+    }
+
+    def extractParentsFromHighestNumBlock(
+        blocks: SortedSet[BlockWithDepth]
+    ): F[SortedSet[BlockWithDepth]] = {
+      val (head, tail) = (blocks.head, blocks.tail)
+      getParents(head.block).map(addExtractedParents(tail))
+    }
+
     if (b1 == b2) {
       b1.pure[F]
     } else {
-      def commonAncestorChild(
-          b: BlockMessage,
-          commonAncestors: Set[BlockMessage]
-      ): F[List[BlockMessage]] =
-        for {
-          childrenHashesOpt      <- dag.children(b.blockHash)
-          childrenHashes         = childrenHashesOpt.getOrElse(Set.empty[BlockHash])
-          children               <- childrenHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F])
-          commonAncestorChildren = children.filter(commonAncestors)
-        } yield commonAncestorChildren
-
-      for {
-        b1Ancestors     <- bfTraverseF[F, BlockMessage](List(b1))(ProtoUtil.unsafeGetParents[F]).toSet
-        b2Ancestors     <- bfTraverseF[F, BlockMessage](List(b2))(ProtoUtil.unsafeGetParents[F]).toSet
-        commonAncestors = b1Ancestors.intersect(b2Ancestors)
-        gca <- bfTraverseF[F, BlockMessage](List(genesis))(commonAncestorChild(_, commonAncestors))
-                .findF(
-                  b =>
-                    for {
-                      childrenOpt <- dag.children(b.blockHash)
-                      children    = childrenOpt.getOrElse(Set.empty[BlockHash]).toList
-                      result <- children.existsM(
-                                 hash =>
-                                   for {
-                                     c <- ProtoUtil.unsafeGetBlock[F](hash)
-                                   } yield b1Ancestors(c) ^ b2Ancestors(c)
-                               )
-                    } yield result
-                )
-      } yield gca.get
+      val start = SortedSet.empty[BlockWithDepth] + BlockWithDepth(b1) + BlockWithDepth(b2)
+      Monad[F]
+        .iterateWhileM(start)(extractParentsFromHighestNumBlock)(_.size != 1)
+        .map(v => v.head.block)
     }
+  }
 }

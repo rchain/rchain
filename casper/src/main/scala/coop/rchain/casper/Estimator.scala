@@ -12,6 +12,7 @@ import coop.rchain.casper.util.ProtoUtil.weightFromValidatorByDag
 
 import scala.collection.immutable.{Map, Set}
 import coop.rchain.catscontrib.ListContrib
+import coop.rchain.models.BlockMetadata
 
 object Estimator {
   type BlockHash = ByteString
@@ -39,7 +40,7 @@ object Estimator {
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[IndexedSeq[BlockMessage]] =
     for {
-      gca       <- calculateGca(blockDag, genesis, latestMessagesHashes)
+      gca       <- calculateLCA(blockDag, BlockMetadata.fromBlock(genesis), latestMessagesHashes)
       scoresMap <- buildScoresMap(blockDag, latestMessagesHashes, gca)
       sortedChildrenHash <- sortChildren(
                              List(gca),
@@ -50,23 +51,30 @@ object Estimator {
       sortedChildren      = maybeSortedChildren.flatten.toVector
     } yield sortedChildren
 
-  private def calculateGca[F[_]: Monad: BlockStore](
+  private def calculateLCA[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
-      genesis: BlockMessage,
+      genesis: BlockMetadata,
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[BlockHash] =
     for {
       latestMessages <- latestMessagesHashes.values.toStream
-                         .traverse(hash => ProtoUtil.unsafeGetBlock[F](hash))
+                         .traverse(hash => blockDag.lookup(hash))
+                         .map(_.flatten)
       result <- if (latestMessages.isEmpty) {
-                 genesis.pure[F]
+                 genesis.blockHash.pure[F]
                } else {
-                 latestMessages.foldM(latestMessages.head) {
-                   case (acc, latestMessage) =>
-                     DagOperations.greatestCommonAncestorF[F](acc, latestMessage, genesis, blockDag)
-                 }
+                 latestMessages
+                   .foldM(latestMessages.head) {
+                     case (acc, latestMessage) =>
+                       DagOperations.lowestCommonAncestorF[F](
+                         acc,
+                         latestMessage,
+                         blockDag
+                       )
+                   }
+                   .map(_.blockHash)
                }
-    } yield result.blockHash
+    } yield result
 
   private def buildScoresMap[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
