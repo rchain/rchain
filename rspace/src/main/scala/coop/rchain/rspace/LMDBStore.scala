@@ -3,15 +3,15 @@ package coop.rchain.rspace
 import java.nio.ByteBuffer
 import java.nio.file.Path
 
+import cats.effect.Sync
+
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
-
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.canonicalize
 import coop.rchain.shared.Resources.withResource
 import coop.rchain.shared.SeqOps._
-
 import org.lmdbjava._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import scodec.Codec
@@ -36,7 +36,8 @@ class LMDBStore[F[_], C, P, A, K] private[rspace] (
     codecC: Codec[C],
     codecP: Codec[P],
     codecA: Codec[A],
-    codecK: Codec[K]
+    codecK: Codec[K],
+    val syncF: Sync[F]
 ) extends IStore[F, C, P, A, K]
     with LMDBOps[F] {
 
@@ -299,7 +300,8 @@ object LMDBStore {
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]
+      sk: Serialize[K],
+      syncF: Sync[F]
   ): IStore[F, C, P, A, K] = {
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec

@@ -1,13 +1,14 @@
 package coop.rchain.rspace
 
+import cats.effect.Sync
+import cats.implicits._
+
 import scala.collection.concurrent.TrieMap
 import scala.collection.immutable.Seq
-
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.canonicalize
 import coop.rchain.shared.SeqOps.{dropIndex, removeFirst}
-
 import kamon._
 import scodec.Codec
 
@@ -34,7 +35,7 @@ class NoopTxn[S] extends InMemTransaction[S] {
 class LockFreeInMemoryStore[F[_], T, C, P, A, K](
     val trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]],
     val trieBranch: Branch
-)(implicit sc: Serialize[C], sp: Serialize[P], sa: Serialize[A], sk: Serialize[K])
+)(implicit sc: Serialize[C], sp: Serialize[P], sa: Serialize[A], sk: Serialize[K], syncF: Sync[F])
     extends IStore[F, C, P, A, K]
     with CloseOps {
 
@@ -49,7 +50,27 @@ class LockFreeInMemoryStore[F[_], T, C, P, A, K](
     new NoopTxn[State[C, P, A, K]]
   }
   override private[rspace] def withTxn[R](txn: Transaction)(f: Transaction => R) = f(txn)
-  override def close(): Unit                                                     = super.close()
+
+  private[rspace] def createTxnReadF(): F[Transaction] = syncF.delay(createTxnRead())
+
+  private[rspace] def createTxnWriteF(): F[Transaction] = syncF.delay(createTxnWrite())
+
+  private[rspace] def withTxnF[R](txnF: F[Transaction])(f: Transaction => R): F[R] =
+    for {
+      txn <- txnF
+      retErr <- syncF.delay {
+                 val r = f(txn)
+                 txn.commit()
+                 r
+               }.attempt
+      _ <- syncF.delay {
+            updateGauges()
+            txn.close()
+          }
+      ret <- retErr.fold(syncF.raiseError, _.pure[F])
+    } yield ret
+
+  override def close(): Unit = super.close()
 
   type TrieTransaction = T
 
@@ -260,7 +281,8 @@ object LockFreeInMemoryStore {
       implicit sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]
+      sk: Serialize[K],
+      syncF: Sync[F]
   ): IStore[F, C, P, A, K] =
-    new LockFreeInMemoryStore[F, T, C, P, A, K](trieStore, branch)(sc, sp, sa, sk)
+    new LockFreeInMemoryStore[F, T, C, P, A, K](trieStore, branch)(sc, sp, sa, sk, syncF)
 }

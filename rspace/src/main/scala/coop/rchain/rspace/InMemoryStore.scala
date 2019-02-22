@@ -1,14 +1,13 @@
 package coop.rchain.rspace
 
+import cats.effect.Sync
+
 import scala.collection.immutable.Seq
-
 import cats.implicits._
-
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.canonicalize
 import coop.rchain.shared.SeqOps.{dropIndex, removeFirst}
-
 import kamon._
 import scodec.Codec
 
@@ -36,7 +35,7 @@ object State {
 class InMemoryStore[F[_], T, C, P, A, K](
     val trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]],
     val trieBranch: Branch
-)(implicit sc: Serialize[C], sp: Serialize[P], sa: Serialize[A], sk: Serialize[K])
+)(implicit sc: Serialize[C], sp: Serialize[P], sa: Serialize[A], sk: Serialize[K], syncF: Sync[F])
     extends InMemoryOps[State[C, P, A, K]]
     with IStore[F, C, P, A, K] {
 
@@ -52,6 +51,25 @@ class InMemoryStore[F[_], T, C, P, A, K](
   private[this] val MetricsSource = RSpaceMetricsSource + ".in-mem"
   private[this] val refine        = Map("path" -> "inmem")
   private[this] val entriesGauge  = Kamon.gauge(MetricsSource + ".entries").refine(refine)
+
+  private[rspace] def createTxnReadF(): F[Transaction] = syncF.delay(createTxnRead())
+
+  private[rspace] def createTxnWriteF(): F[Transaction] = syncF.delay(createTxnWrite())
+
+  private[rspace] def withTxnF[R](txnF: F[Transaction])(f: Transaction => R): F[R] =
+    for {
+      txn <- txnF
+      retErr <- syncF.delay {
+                 val r = f(txn)
+                 txn.commit()
+                 r
+               }.attempt
+      _ <- syncF.delay {
+            updateGauges()
+            txn.close()
+          }
+      ret <- retErr.fold(syncF.raiseError, _.pure[F])
+    } yield ret
 
   private[rspace] def updateGauges() =
     withTxn(createTxnRead())(_.readState { state =>
@@ -276,7 +294,8 @@ object InMemoryStore {
       implicit sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]
+      sk: Serialize[K],
+      syncF: Sync[F]
   ): IStore[F, C, P, A, K] =
-    new InMemoryStore[F, T, C, P, A, K](trieStore, branch)(sc, sp, sa, sk)
+    new InMemoryStore[F, T, C, P, A, K](trieStore, branch)(sc, sp, sa, sk, syncF)
 }

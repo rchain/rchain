@@ -3,6 +3,7 @@ package coop.rchain.rspace
 import java.nio.ByteBuffer
 import java.nio.file.Path
 
+import cats.effect.Sync
 import coop.rchain.rspace.history.{Branch, ITrieStore, InMemoryTrieStore, LMDBTrieStore}
 import coop.rchain.rspace.internal.GNAT
 import org.lmdbjava.{Env, EnvFlags, Txn}
@@ -15,7 +16,8 @@ trait Context[F[_], C, P, A, K] {
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]
+      sk: Serialize[K],
+      syncF: Sync[F]
   ): IStore[F, C, P, A, K]
 }
 
@@ -28,7 +30,8 @@ private[rspace] class LMDBContext[F[_], C, P, A, K] private[rspace] (
       implicit sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]
+      sk: Serialize[K],
+      syncF: Sync[F]
   ): IStore[F, C, P, A, K] =
     LMDBStore.create[F, C, P, A, K](this, branch)
 
@@ -50,7 +53,8 @@ private[rspace] class InMemoryContext[F[_], C, P, A, K] private[rspace] (
       implicit sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]
+      sk: Serialize[K],
+      syncF: Sync[F]
   ): IStore[F, C, P, A, K] =
     InMemoryStore.create(trieStore, branch)
 
@@ -66,7 +70,8 @@ private[rspace] class MixedContext[F[_], C, P, A, K] private[rspace] (
       implicit sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]
+      sk: Serialize[K],
+      syncF: Sync[F]
   ): IStore[F, C, P, A, K] =
     LockFreeInMemoryStore.create(trieStore, branch)
 
@@ -95,7 +100,8 @@ object Context {
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]
+      sk: Serialize[K],
+      syncF: Sync[F]
   ): LMDBContext[F, C, P, A, K] = {
     val flags = if (noTls) List(EnvFlags.MDB_NOTLS) else List.empty
     create(path, mapSize, flags)
@@ -110,7 +116,8 @@ object Context {
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]
+      sk: Serialize[K],
+      syncF: Sync[F]
   ): LMDBContext[F, C, P, A, K] = {
 
     implicit val codecC: Codec[C] = sc.toCodec
@@ -139,7 +146,8 @@ object Context {
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]
+      sk: Serialize[K],
+      syncF: Sync[F]
   ): MixedContext[F, C, P, A, K] = {
 
     implicit val codecC: Codec[C] = sc.toCodec

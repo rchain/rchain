@@ -4,6 +4,7 @@ import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 
 import cats.Id
+import cats.effect.Sync
 import coop.rchain.rspace.{Context, InMemTransaction}
 import coop.rchain.rspace.test._
 import coop.rchain.shared.PathOps._
@@ -439,6 +440,8 @@ trait LMDBWithTestTrieStore[F[_], K]
   val dbDir: Path   = Files.createTempDirectory("rchain-storage-history-test-")
   val mapSize: Long = 1024L * 1024L * 1024L
 
+  implicit val syncF: Sync[F]
+
   override def withTestTrieStore[R](
       f: (ITrieStore[Txn[ByteBuffer], K, ByteVector], Branch) => R
   ): R = {
@@ -494,7 +497,8 @@ class LMDBHistoryActionsTests
     extends HistoryActionsTests[Id, Txn[ByteBuffer]]
     with GenerativeHistoryActionsTests[Id, Txn[ByteBuffer], TestKey4]
     with LMDBWithTestTrieStore[Id, TestKey4] {
-  implicit val arbitraryMap = ArbitraryInstances.arbitraryNonEmptyMapTestKeyByteVector
+  implicit val arbitraryMap    = ArbitraryInstances.arbitraryNonEmptyMapTestKeyByteVector
+  implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
 }
 
 class LMDBHistoryActionsTestsKey32
@@ -503,6 +507,7 @@ class LMDBHistoryActionsTestsKey32
   implicit val codecV: Codec[ByteVector] = variableSizeBytesLong(int64, bytes)
   implicit val codecK: Codec[TestKey32]  = TestKey32.codecTestKey
   implicit val arbitraryMap              = ArbitraryInstances.arbitraryNonEmptyMapTestKey32ByteVector
+  implicit val syncF: Sync[Id]           = coop.rchain.catscontrib.effect.implicits.syncId
 }
 
 class InMemoryHistoryActionsTestsKey32

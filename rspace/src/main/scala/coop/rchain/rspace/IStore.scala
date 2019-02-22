@@ -26,7 +26,13 @@ trait IStore[F[_], C, P, A, K] {
 
   private[rspace] def createTxnWrite(): Transaction
 
+  private[rspace] def createTxnReadF(): F[Transaction]
+
+  private[rspace] def createTxnWriteF(): F[Transaction]
+
   private[rspace] def withTxn[R](txn: Transaction)(f: Transaction => R): R
+
+  private[rspace] def withTxnF[R](txn: F[Transaction])(f: Transaction => R): F[R]
 
   private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash
 

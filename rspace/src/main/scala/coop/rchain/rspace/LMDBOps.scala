@@ -1,19 +1,23 @@
 package coop.rchain.rspace
 
 import internal._
-
 import java.nio.ByteBuffer
 import java.nio.file.Path
 
+import cats.effect.Sync
+import cats.implicits._
 import org.lmdbjava.{Dbi, Env, Txn, TxnOps}
 import scodec.Codec
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.PathOps._
 import scodec.bits.BitVector
 import kamon._
+
 import scala.util.control.NonFatal
 
 trait LMDBOps[F[_]] extends CloseOps {
+
+  implicit val syncF: Sync[F]
 
   protected[rspace] type Transaction = Txn[ByteBuffer]
 
@@ -26,6 +30,10 @@ trait LMDBOps[F[_]] extends CloseOps {
     failIfClosed()
     env.txnWrite
   }
+
+  private[rspace] def createTxnReadF() = syncF.delay(createTxnRead())
+
+  private[rspace] def createTxnWriteF() = syncF.delay(createTxnWrite())
 
   protected[this] def databasePath: Path
   protected[this] def env: Env[ByteBuffer]
@@ -55,6 +63,21 @@ trait LMDBOps[F[_]] extends CloseOps {
       updateGauges()
       txn.close()
     }
+
+  private[rspace] def withTxnF[R](txnF: F[Txn[ByteBuffer]])(f: Txn[ByteBuffer] => R): F[R] =
+    for {
+      txn <- txnF
+      retErr <- syncF.delay {
+                 val r = f(txn)
+                 txn.commit()
+                 r
+               }.attempt
+      _ <- syncF.delay {
+            updateGauges()
+            txn.close()
+          }
+      ret <- retErr.fold(syncF.raiseError, _.pure[F])
+    } yield ret
 
   /** The methods:
     * `def get[V](txn: Txn[ByteBuffer], key: Blake2b256Hash)`

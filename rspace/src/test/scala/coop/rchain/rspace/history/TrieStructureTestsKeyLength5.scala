@@ -2,16 +2,19 @@ package coop.rchain.rspace.history
 
 import java.nio.ByteBuffer
 
+import cats.Id
+import cats.effect.Sync
 import coop.rchain.rspace.test.TestKey5
 import org.lmdbjava.Txn
 import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs.{bytes, int64, variableSizeBytesLong}
 
-class TrieStructureTestsKeyLength5[F[_]]
+class TrieStructureTestsKeyLength5[F[_]: Sync]
     extends HistoryTestsBase[F, Txn[ByteBuffer], TestKey5, ByteVector]
     with LMDBWithTestTrieStore[F, TestKey5] {
 
+  val syncF: Sync[F]                     = Sync[F]
   implicit val codecV: Codec[ByteVector] = variableSizeBytesLong(int64, bytes)
   implicit val codecK: Codec[TestKey5]   = TestKey5.codecTestKey
 

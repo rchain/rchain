@@ -4,14 +4,14 @@ import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 
+import cats.effect.Sync
+
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
-
 import coop.rchain.rspace.{Blake2b256Hash, LMDBOps, Serialize, _}
 import coop.rchain.rspace.internal._
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.Resources.withResource
-
 import org.lmdbjava._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import scodec.Codec
@@ -28,7 +28,8 @@ class LMDBTrieStore[F[_], K, V] private (
 )(
     implicit
     codecK: Codec[K],
-    codecV: Codec[V]
+    codecV: Codec[V],
+    val syncF: Sync[F]
 ) extends ITrieStore[Txn[ByteBuffer], K, V]
     with LMDBOps[F] {
 
@@ -146,7 +147,8 @@ object LMDBTrieStore {
   def create[F[_], K, V](env: Env[ByteBuffer], path: Path)(
       implicit
       codecK: Codec[K],
-      codecV: Codec[V]
+      codecV: Codec[V],
+      syncF: Sync[F]
   ): LMDBTrieStore[F, K, V] = {
     val dbTrie: Dbi[ByteBuffer]      = env.openDbi("Trie", MDB_CREATE)
     val dbRoots: Dbi[ByteBuffer]     = env.openDbi("Roots", MDB_CREATE)
