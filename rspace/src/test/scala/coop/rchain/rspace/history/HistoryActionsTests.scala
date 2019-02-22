@@ -3,6 +3,7 @@ package coop.rchain.rspace.history
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 
+import cats.Id
 import coop.rchain.rspace.{Context, InMemTransaction}
 import coop.rchain.rspace.test._
 import coop.rchain.shared.PathOps._
@@ -13,7 +14,7 @@ import scodec.Codec
 import scodec.codecs._
 import scodec.bits.ByteVector
 
-abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, ByteVector] {
+abstract class HistoryActionsTests[F[_], T] extends HistoryTestsBase[F, T, TestKey4, ByteVector] {
 
   implicit val codecV: Codec[ByteVector] = variableSizeBytesLong(int64, bytes)
   implicit val codecK: Codec[TestKey4]   = TestKey4.codecTestKey
@@ -328,9 +329,9 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, Byte
     }
 }
 
-trait GenerativeHistoryActionsTests[T, K]
-    extends HistoryTestsBase[T, K, ByteVector]
-    with WithTestStore[T, K, ByteVector] {
+trait GenerativeHistoryActionsTests[F[_], T, K]
+    extends HistoryTestsBase[F, T, K, ByteVector]
+    with WithTestStore[F, T, K, ByteVector] {
 
   implicit def arbitraryMap: Arbitrary[Map[K, ByteVector]]
 
@@ -432,9 +433,9 @@ object HistoryActionsTests {
     pairs.flatMap { case (k, _) => lookup(store, branch, k).map((v: V) => (k, v)).toList }
 }
 
-trait LMDBWithTestTrieStore[K]
+trait LMDBWithTestTrieStore[F[_], K]
     extends BeforeAndAfterAll
-    with WithTestStore[Txn[ByteBuffer], K, ByteVector] { this: Suite =>
+    with WithTestStore[F, Txn[ByteBuffer], K, ByteVector] { this: Suite =>
   val dbDir: Path   = Files.createTempDirectory("rchain-storage-history-test-")
   val mapSize: Long = 1024L * 1024L * 1024L
 
@@ -442,7 +443,7 @@ trait LMDBWithTestTrieStore[K]
       f: (ITrieStore[Txn[ByteBuffer], K, ByteVector], Branch) => R
   ): R = {
     val env        = Context.env(dbDir, mapSize, Nil)
-    val testTrie   = LMDBTrieStore.create[K, ByteVector](env, dbDir)
+    val testTrie   = LMDBTrieStore.create[F, K, ByteVector](env, dbDir)
     val testBranch = Branch("test")
     testTrie.withTxn(testTrie.createTxnWrite())(txn => testTrie.clear(txn))
     try {
@@ -458,8 +459,8 @@ trait LMDBWithTestTrieStore[K]
     dbDir.recursivelyDelete
 }
 
-trait InMemoryWithTestTrieStore[K]
-    extends WithTestStore[InMemTransaction[State[K, scodec.bits.ByteVector]], K, ByteVector] {
+trait InMemoryWithTestTrieStore[F[_], K]
+    extends WithTestStore[F, InMemTransaction[State[K, scodec.bits.ByteVector]], K, ByteVector] {
   this: Suite =>
 
   override def withTestTrieStore[R](
@@ -481,32 +482,34 @@ trait InMemoryWithTestTrieStore[K]
 }
 
 class InMemoryHistoryActionsTests
-    extends HistoryActionsTests[InMemTransaction[State[TestKey4, scodec.bits.ByteVector]]]
-    with GenerativeHistoryActionsTests[InMemTransaction[State[TestKey4, scodec.bits.ByteVector]], TestKey4]
-    with InMemoryWithTestTrieStore[TestKey4] {
+    extends HistoryActionsTests[Id, InMemTransaction[State[TestKey4, scodec.bits.ByteVector]]]
+    with GenerativeHistoryActionsTests[Id, InMemTransaction[
+      State[TestKey4, scodec.bits.ByteVector]
+    ], TestKey4]
+    with InMemoryWithTestTrieStore[Id, TestKey4] {
   implicit val arbitraryMap = ArbitraryInstances.arbitraryNonEmptyMapTestKeyByteVector
 }
 
 class LMDBHistoryActionsTests
-    extends HistoryActionsTests[Txn[ByteBuffer]]
-    with GenerativeHistoryActionsTests[Txn[ByteBuffer], TestKey4]
-    with LMDBWithTestTrieStore[TestKey4] {
+    extends HistoryActionsTests[Id, Txn[ByteBuffer]]
+    with GenerativeHistoryActionsTests[Id, Txn[ByteBuffer], TestKey4]
+    with LMDBWithTestTrieStore[Id, TestKey4] {
   implicit val arbitraryMap = ArbitraryInstances.arbitraryNonEmptyMapTestKeyByteVector
 }
 
 class LMDBHistoryActionsTestsKey32
-    extends GenerativeHistoryActionsTests[Txn[ByteBuffer], TestKey32]
-    with LMDBWithTestTrieStore[TestKey32] {
+    extends GenerativeHistoryActionsTests[Id, Txn[ByteBuffer], TestKey32]
+    with LMDBWithTestTrieStore[Id, TestKey32] {
   implicit val codecV: Codec[ByteVector] = variableSizeBytesLong(int64, bytes)
   implicit val codecK: Codec[TestKey32]  = TestKey32.codecTestKey
   implicit val arbitraryMap              = ArbitraryInstances.arbitraryNonEmptyMapTestKey32ByteVector
 }
 
 class InMemoryHistoryActionsTestsKey32
-    extends GenerativeHistoryActionsTests[InMemTransaction[
+    extends GenerativeHistoryActionsTests[Id, InMemTransaction[
       State[TestKey32, scodec.bits.ByteVector]
     ], TestKey32]
-    with InMemoryWithTestTrieStore[TestKey32] {
+    with InMemoryWithTestTrieStore[Id, TestKey32] {
   implicit val codecV: Codec[ByteVector] = variableSizeBytesLong(int64, bytes)
   implicit val codecK: Codec[TestKey32]  = TestKey32.codecTestKey
   implicit val arbitraryMap              = ArbitraryInstances.arbitraryNonEmptyMapTestKey32ByteVector

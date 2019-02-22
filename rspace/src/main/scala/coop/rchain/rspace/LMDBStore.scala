@@ -38,7 +38,7 @@ class LMDBStore[F[_], C, P, A, K] private[rspace] (
     codecA: Codec[A],
     codecK: Codec[K]
 ) extends IStore[F, C, P, A, K]
-    with LMDBOps {
+    with LMDBOps[F] {
 
   protected val MetricsSource: String = RSpaceMetricsSource + ".lmdb"
 

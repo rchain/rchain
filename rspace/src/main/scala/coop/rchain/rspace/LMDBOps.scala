@@ -13,7 +13,7 @@ import scodec.bits.BitVector
 import kamon._
 import scala.util.control.NonFatal
 
-trait LMDBOps extends CloseOps {
+trait LMDBOps[F[_]] extends CloseOps {
 
   protected[rspace] type Transaction = Txn[ByteBuffer]
 

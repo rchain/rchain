@@ -9,9 +9,9 @@ import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs._
 
-class TrieStructureTests
-    extends HistoryTestsBase[Txn[ByteBuffer], TestKey4, ByteVector]
-    with LMDBWithTestTrieStore[TestKey4] {
+class TrieStructureTests[F[_]]
+    extends HistoryTestsBase[F, Txn[ByteBuffer], TestKey4, ByteVector]
+    with LMDBWithTestTrieStore[F, TestKey4] {
 
   implicit val codecV: Codec[ByteVector] = variableSizeBytesLong(int64, bytes)
   implicit val codecK: Codec[TestKey4]   = TestKey4.codecTestKey

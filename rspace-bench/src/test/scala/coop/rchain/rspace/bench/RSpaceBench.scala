@@ -98,8 +98,8 @@ class LMDBBench extends RSpaceBench {
   @Setup
   def setup() = {
     dbDir = Files.createTempDirectory("rchain-rspace-lmdb-bench-")
-    val context   = Context.create[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
-    val testStore = LMDBStore.create[Channel, Pattern, Entry, EntriesCaptor](context)
+    val context   = Context.create[Id, Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
+    val testStore = LMDBStore.create[Id, Channel, Pattern, Entry, EntriesCaptor](context)
     assert(testStore.toMap.isEmpty)
     space = RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
       testStore,
@@ -125,9 +125,10 @@ class InMemBench extends RSpaceBench {
 
   @Setup
   def setup() = {
-    val context = Context.createInMemory[Channel, Pattern, Entry, EntriesCaptor]()
+    val context = Context.createInMemory[Id, Channel, Pattern, Entry, EntriesCaptor]()
     assert(context.trieStore.toMap.isEmpty)
-    val testStore = InMemoryStore.create(context.trieStore, Branch.MASTER)
+    val testStore: IStore[Id, Channel, Pattern, Entry, EntriesCaptor] =
+      InMemoryStore.create(context.trieStore, Branch.MASTER)
     assert(testStore.toMap.isEmpty)
     space = RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
       testStore,
@@ -156,9 +157,10 @@ class MixedBench extends RSpaceBench {
   @Setup
   def setup() = {
     dbDir = Files.createTempDirectory("rchain-rspace-mixed-bench-")
-    val context = Context.createMixed[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize)
+    val context = Context.createMixed[Id, Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize)
     assert(context.trieStore.toMap.isEmpty)
-    val testStore = InMemoryStore.create(context.trieStore, Branch.MASTER)
+    val testStore: IStore[Id, Channel, Pattern, Entry, EntriesCaptor] =
+      InMemoryStore.create(context.trieStore, Branch.MASTER)
     assert(testStore.toMap.isEmpty)
     space = RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
       testStore,

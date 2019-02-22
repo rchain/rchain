@@ -111,11 +111,11 @@ object BasicBench {
 
     private val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
 
-    val context: LMDBContext[Par, BindPattern, ListParWithRandom, TaggedContinuation] =
+    val context: LMDBContext[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation] =
       Context.create(dbDir, 1024L * 1024L * 1024L)
 
-    val testStore: LMDBStore[Par, BindPattern, ListParWithRandom, TaggedContinuation] =
-      LMDBStore.create[Par, BindPattern, ListParWithRandom, TaggedContinuation](
+    val testStore: IStore[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation] =
+      LMDBStore.create[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](
         context,
         Branch("bench")
       )

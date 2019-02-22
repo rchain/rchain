@@ -18,7 +18,7 @@ import scodec.Codec
 import scodec.bits.{BitVector, ByteVector}
 
 @SuppressWarnings(Array("org.wartremover.warts.Throw", "org.wartremover.warts.NonUnitStatements")) // TODO stop throwing exceptions
-class LMDBTrieStore[K, V] private (
+class LMDBTrieStore[F[_], K, V] private (
     val env: Env[ByteBuffer],
     protected[this] val databasePath: Path,
     _dbTrie: Dbi[ByteBuffer],
@@ -30,7 +30,7 @@ class LMDBTrieStore[K, V] private (
     codecK: Codec[K],
     codecV: Codec[V]
 ) extends ITrieStore[Txn[ByteBuffer], K, V]
-    with LMDBOps {
+    with LMDBOps[F] {
 
   protected val MetricsSource: String = RSpaceMetricsSource + ".history.lmdb"
 
@@ -143,16 +143,16 @@ class LMDBTrieStore[K, V] private (
 
 object LMDBTrieStore {
 
-  def create[K, V](env: Env[ByteBuffer], path: Path)(
+  def create[F[_], K, V](env: Env[ByteBuffer], path: Path)(
       implicit
       codecK: Codec[K],
       codecV: Codec[V]
-  ): LMDBTrieStore[K, V] = {
+  ): LMDBTrieStore[F, K, V] = {
     val dbTrie: Dbi[ByteBuffer]      = env.openDbi("Trie", MDB_CREATE)
     val dbRoots: Dbi[ByteBuffer]     = env.openDbi("Roots", MDB_CREATE)
     val dbEmptyRoot: Dbi[ByteBuffer] = env.openDbi("EmptyRoot", MDB_CREATE)
     val dbPastRoots: Dbi[ByteBuffer] = env.openDbi("PastRoots", MDB_CREATE)
-    new LMDBTrieStore[K, V](env, path, dbTrie, dbRoots, dbPastRoots, dbEmptyRoot)
+    new LMDBTrieStore[F, K, V](env, path, dbTrie, dbRoots, dbPastRoots, dbEmptyRoot)
   }
 
   private val stringSerialize: Serialize[String] = new Serialize[String] {

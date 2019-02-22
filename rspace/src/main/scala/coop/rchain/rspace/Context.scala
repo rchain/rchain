@@ -120,7 +120,7 @@ object Context {
 
     val env = Context.env(path, mapSize, flags)
 
-    val trieStore = LMDBTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]](env, path)
+    val trieStore = LMDBTrieStore.create[F, Blake2b256Hash, GNAT[C, P, A, K]](env, path)
 
     new LMDBContext[F, C, P, A, K](env, path, trieStore)
   }
@@ -149,7 +149,7 @@ object Context {
 
     val env = Context.env(path, mapSize, flags)
 
-    val trieStore = LMDBTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]](env, path)
+    val trieStore = LMDBTrieStore.create[F, Blake2b256Hash, GNAT[C, P, A, K]](env, path)
 
     new MixedContext[F, C, P, A, K](env, trieStore)
   }
