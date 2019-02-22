@@ -1,11 +1,12 @@
 package coop.rchain.rholang.interpreter.matcher
 
 import cats._
+import cats.data._
 import cats.effect._
 import cats.effect.implicits._
 import cats.implicits._
 import cats.mtl.implicits._
-import cats.{Alternative, Foldable, MonoidK, SemigroupK}
+import cats.{Alternative, Foldable, Functor, MonoidK, SemigroupK}
 import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.models.Par
@@ -26,7 +27,9 @@ class MatcherMonadSpec extends FlatSpec with Matchers {
 
   val A: Alternative[F] = Alternative[F]
 
-  implicit val cost: _cost[Task] = CostAccounting.unsafe[Task](Cost(0))
+  implicit val cost: _cost[Task]       = CostAccounting.unsafe[Task](Cost(0))
+  implicit val costLog: _costLog[Task] = noOpCostLog[Task]
+  implicit val _: _costLog[F]          = matcherMonadCostLog[Task]
 
   private def combineK[FF[_]: MonoidK, G[_]: Foldable, A](gfa: G[FF[A]]): FF[A] =
     gfa.foldLeft(MonoidK[FF].empty[A])(SemigroupK[FF].combineK[A])
@@ -41,7 +44,6 @@ class MatcherMonadSpec extends FlatSpec with Matchers {
   behavior of "MatcherMonad"
 
   it should "charge for each non-deterministic branch" in {
-
     val possibleResults = Stream((0, 1), (0, 2))
     val computation     = Alternative[F].unite(possibleResults.pure[F])
     val sum             = computation.map { case (x, y) => x + y } <* charge[F](Cost(1))

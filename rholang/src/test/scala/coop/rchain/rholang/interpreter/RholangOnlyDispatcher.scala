@@ -35,6 +35,7 @@ object RholangOnlyDispatcher {
 
     implicit val costAlg: CostAccounting[M] = CostAccounting.unsafe[M](Cost(0))
     implicit val cost: _cost[M]             = costAlg
+    implicit val _                          = noOpCostLog[M]
 
     lazy val dispatcher: Dispatch[M, ListParWithRandomAndPhlos, TaggedContinuation] =
       new RholangOnlyDispatcher

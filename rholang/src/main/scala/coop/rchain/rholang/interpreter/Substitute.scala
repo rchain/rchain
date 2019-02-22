@@ -19,7 +19,7 @@ trait Substitute[M[_], A] {
 }
 
 object Substitute {
-  private[interpreter] def charge[A: Chargeable, M[_]: Sync: _cost: _error](
+  private[interpreter] def charge[A: Chargeable, M[_]: Sync: _cost: _costLog: _error](
       substitutionResult: M[A],
       failureCost: Cost
   ): M[A] =
@@ -33,14 +33,14 @@ object Substitute {
       .flatMap({ case (result, cost) => accounting.charge[M](cost) *> Sync[M].pure(result) })
       .rethrow
 
-  def substituteAndCharge[A: Chargeable, M[_]: _cost: _error: Substitute[?[_], A]: Sync](
+  def substituteAndCharge[A: Chargeable, M[_]: _cost: _costLog: _error: Substitute[?[_], A]: Sync](
       term: A,
       depth: Int,
       env: Env[Par]
   ): M[A] =
     charge(Substitute[M, A].substitute(term)(depth, env), Cost(term))
 
-  def substituteNoSortAndCharge[A: Chargeable, M[_]: _cost: _error: Substitute[?[_], A]: Sync](
+  def substituteNoSortAndCharge[A: Chargeable, M[_]: _cost: _costLog: _error: Substitute[?[_], A]: Sync](
       term: A,
       depth: Int,
       env: Env[Par]

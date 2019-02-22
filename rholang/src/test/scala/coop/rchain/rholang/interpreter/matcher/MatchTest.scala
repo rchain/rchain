@@ -1,6 +1,8 @@
 package coop.rchain.rholang.interpreter.matcher
 
+import cats.data._
 import cats.implicits._
+import cats.mtl._
 import cats.mtl.implicits._
 import cats.{Eval => _}
 import com.google.protobuf.ByteString
@@ -935,29 +937,49 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
   }
 
   private def doMatchAndCharge(initialPhlo: Int) = {
-    implicit val cost: _cost[Task] = CostAccounting.unsafe[Task](Cost(initialPhlo))
-    val target: Par                = EList(Seq(GInt(1), GInt(2), GInt(3)))
+    implicit val cost: _cost[Task]                       = CostAccounting.unsafe[Task](Cost(initialPhlo))
+    implicit val costL: FunctorListen[Task, Chain[Cost]] = costLog[Task]
+    val target: Par                                      = EList(Seq(GInt(1), GInt(2), GInt(3)))
     val pattern: Par =
       EList(Seq(GInt(1), EVar(FreeVar(0)), EVar(FreeVar(1))), connectiveUsed = true)
 
-    (for {
+    val program = (for {
       res      <- spatialMatchAndCharge[Task](target, pattern).attempt
       phloLeft <- cost.get
-    } yield (phloLeft, res)).unsafeRunSync
+    } yield (phloLeft, res))
+
+    costL.listen(program).unsafeRunSync
   }
 
   "spatialMatchAndCharge" should "short-circuit when runs out of phlo in the middle of matching" in {
-    val (_, res) = doMatchAndCharge(initialPhlo = 0)
+    val ((_, res), _) = doMatchAndCharge(initialPhlo = 0)
     res should be(Left(OutOfPhlogistonsError))
   }
 
   it should "charge for matching operations" in {
-    val (phloLeft, _) = doMatchAndCharge(initialPhlo = 100)
+    val ((phloLeft, _), log) = doMatchAndCharge(initialPhlo = 100)
     phloLeft.value shouldBe 90
+    log.toList should contain theSameElementsAs List(
+      Cost(4, "equality check"),
+      Cost(0, "(comparison * 0)"),
+      Cost(0, "(comparison * 0)"),
+      Cost(0, "(comparison * 0)"),
+      Cost(3, "(comparison * 1)"),
+      Cost(0, "(comparison * 0)"),
+      Cost(0, "(comparison * 0)"),
+      Cost(0, "(comparison * 0)"),
+      Cost(0, "(comparison * 0)"),
+      Cost(0, "(comparison * 0)"),
+      Cost(0, "(comparison * 0)"),
+      Cost(3, "(comparison * 1)"),
+      Cost(0, "(comparison * 0)"),
+      Cost(0, "(comparison * 0)"),
+      Cost(0, "(comparison * 0)")
+    )
   }
 
   it should "be allowed to finish with a negative cost" in {
-    val (phloLeft, res) = doMatchAndCharge(initialPhlo = 8)
+    val ((phloLeft, res), _) = doMatchAndCharge(initialPhlo = 8)
     res should be(Left(OutOfPhlogistonsError))
     phloLeft.value shouldBe -2
   }

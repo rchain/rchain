@@ -1,11 +1,11 @@
 package coop.rchain.rholang.interpreter
 
-import cats.{Functor, Monad, MonadError}
+import cats._
 import cats.arrow.FunctionK
-import cats.data.StateT
+import cats.data._
 import cats.implicits._
+import cats.mtl._
 import cats.mtl.implicits._
-import cats.mtl.{FunctorRaise, MonadState}
 import coop.rchain.catscontrib.MonadError_
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting._
@@ -24,6 +24,11 @@ package object matcher {
   type Err[A]                   = Either[InterpreterError, A]
 
   type MatcherMonadT[F[_], A] = StateT[StreamT[F, ?], FreeMap, A]
+
+  import coop.rchain.rholang.interpreter.matcher.StreamT
+
+  implicit def matcherMonadCostLog[F[_]: Monad: _costLog](): _costLog[MatcherMonadT[F, ?]] =
+    ntCostLog(λ[F ~> MatcherMonadT[F, ?]](fa => StateT.liftF(StreamT.liftF(fa))))
 
   // The naming convention means: this is an effect-type alias.
   // Will be used similarly to capabilities, but for more generic and probably low-level/implementation stuff.
@@ -72,6 +77,9 @@ package object matcher {
         StreamT.run(s.run(Map.empty))
 
     }
+
+    implicit val CostLog: _costLog[NonDetFreeMapWithCost] =
+      noOpCostLog[NonDetFreeMapWithCost]
 
     implicit def toNonDetFreeMapWithCostOps[A](s: NonDetFreeMapWithCost[A]) =
       new NonDetFreeMapWithCostOps[A](s)

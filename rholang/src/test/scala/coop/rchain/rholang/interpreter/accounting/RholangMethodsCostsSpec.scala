@@ -57,7 +57,7 @@ class RholangMethodsCostsSpec
               err  <- reducer.evalExprToPar(method).attempt
               _    = assert(err.isLeft)
               cost <- methodCallCost(reducer)
-            } yield assert(cost === Cost(0))
+            } yield assert(cost.value === 0)
           }
         }
       }
@@ -91,7 +91,7 @@ class RholangMethodsCostsSpec
               err  <- reducer.evalExprToPar(method).attempt
               _    = assert(err.isLeft)
               cost <- methodCallCost(reducer)
-            } yield assert(cost === Cost(0))
+            } yield assert(cost.value === 0)
           }
         }
       }
@@ -778,7 +778,7 @@ class RholangMethodsCostsSpec
       for {
         _    <- reducer.evalExprToPar(method)
         cost <- methodCallCost(reducer)
-      } yield assert(cost === expectedCost)
+      } yield assert(cost.value === expectedCost.value)
     }
   }
   def withReducer[R](f: ChargingReducer[Task] => Task[R])(implicit errLog: ErrorLog[Task]): R = {

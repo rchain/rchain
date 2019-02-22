@@ -63,9 +63,9 @@ object RholangAndScalaDispatcher {
       s: Sync[M],
       ft: FunctorTell[M, Throwable]
   ): (Dispatch[M, ListParWithRandomAndPhlos, TaggedContinuation], ChargingReducer[M], Registry[M]) = {
-
     implicit val costAlg: CostAccounting[M] = CostAccounting.unsafe[M](Cost(0))
     implicit val cost: _cost[M]             = costAlg
+    implicit val _: _costLog[M]             = noOpCostLog[M]
 
     implicit lazy val dispatcher: Dispatch[M, ListParWithRandomAndPhlos, TaggedContinuation] =
       new RholangAndScalaDispatcher(dispatchTable)

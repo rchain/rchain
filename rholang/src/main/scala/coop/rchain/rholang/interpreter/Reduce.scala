@@ -67,6 +67,7 @@ object Reduce {
       s: Sync[M],
       fTell: FunctorTell[M, Throwable],
       cost: _cost[M],
+      costLog: _costLog[M],
       err: _error[M]
   ) extends Reduce[M] {
 
