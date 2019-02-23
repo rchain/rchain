@@ -83,6 +83,7 @@ class MultiLockTest extends FlatSpec with Matchers {
 
   "FunctionalMultiLock" should "not allow concurrent modifications of same keys" in {
     import cats.effect.{Concurrent, ContextShift, IO}
+    import cats.implicits._
 
     implicit val ioContextShift: ContextShift[IO] =
       IO.contextShift(scala.concurrent.ExecutionContext.Implicits.global)
@@ -93,11 +94,13 @@ class MultiLockTest extends FlatSpec with Matchers {
 
     def acquire(seq: List[String]) =
       tested.acquire(seq) {
-        for {
-          k <- seq
-          v = m.getOrElse(k, 0) + 1
-          _ = m.put(k, v)
-        } yield ()
+        seq.pure[IO].map { keys =>
+          for {
+            k <- keys
+            v = m.getOrElse(k, 0) + 1
+            _ = m.put(k, v)
+          } yield ()
+        }
       }
 
     (for {
@@ -109,7 +112,7 @@ class MultiLockTest extends FlatSpec with Matchers {
       _ <- acquire(List("a", "d"))
     } yield ()).unsafeRunSync
 
-    m.toList should contain theSameElementsAs (Map("d" -> 2, "b" -> 1, "c" -> 4, "a" -> 5).toList)
+    m.toList should contain theSameElementsAs Map("d" -> 2, "b" -> 1, "c" -> 4, "a" -> 5).toList
 
   }
 }

@@ -1,6 +1,9 @@
 package coop.rchain.rspace.concurrent
 
-import java.util.concurrent.Semaphore
+import cats.implicits._
+import cats.effect.Concurrent
+import cats.effect.concurrent.Semaphore
+import scala.collection.immutable.Seq
 
 import scala.collection.concurrent.TrieMap
 
@@ -36,36 +39,24 @@ class DefaultMultiLock[K] extends MultiLock[K] {
 
 }
 
-import cats._
-import cats.implicits._
-import cats.effect.Concurrent
-import cats.effect.implicits._
-
-import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
-
 class FunctionalMultiLock[F[_]: Concurrent, K] {
 
-  import cats.effect.concurrent.Semaphore
   private[this] val locks = TrieMap.empty[K, Semaphore[F]]
 
-  def acquire[R](keys: List[K])(thunk: => R)(implicit o: Ordering[K]): F[R] =
-    (for {
-      k <- keys.sorted.pure[F]
-      semaphores <- (k.map { ks =>
-                     Semaphore[F](1).map { l =>
-                       locks.getOrElseUpdate(ks, l)
-                     }
-                   }).sequence
-      openLocks <- (semaphores
-                    .map(ss => {
-                      ss.acquire.map { _ =>
-                        ss
-                      }
-                    }))
-                    .sequence
-      res = thunk
-      _   <- openLocks.map(_.release).sequence
-    } yield (res))
+  def acquire[R](keys: Seq[K])(thunk: => F[R])(implicit o: Ordering[K]): F[R] = {
+    def acquireLocks =
+      for {
+        semaphores <- keys.toSet.toList.sorted.traverse(
+                       k =>
+                         Semaphore[F](1)
+                           .map { s => // if the lock exists this is waste. how to avoid?
+                             locks.getOrElseUpdate(k, s)
+                           }
+                     )
+        acquired <- semaphores.traverse(s => s.acquire.map(_ => s))
+      } yield acquired
+    def releaseLocks(acquired: List[Semaphore[F]]) = acquired.traverse(_.release).as(())
 
+    Concurrent[F].bracket(acquireLocks)(_ => thunk)(releaseLocks)
+  }
 }

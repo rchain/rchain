@@ -1,4 +1,5 @@
 package coop.rchain.rspace.concurrent
+import cats.Id
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.catscontrib.TaskContrib._
@@ -21,7 +22,7 @@ class TwoStepLockTest extends FlatSpec with Matchers {
   }
 
   def acquireLock(
-      lock: TwoStepLock[String],
+      lock: TwoStepLock[Id, String],
       a: List[String],
       b: List[String],
       update: => Unit

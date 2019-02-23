@@ -1,9 +1,11 @@
 package coop.rchain.rspace
 
+import cats.Id
 import cats.effect.Sync
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
-import coop.rchain.catscontrib._, ski._
+import coop.rchain.catscontrib._
+import ski._
 import coop.rchain.rspace.concurrent.{DefaultTwoStepLock, TwoStepLock}
 import coop.rchain.rspace.history.{Branch, Leaf}
 import coop.rchain.rspace.internal._
@@ -11,6 +13,7 @@ import coop.rchain.rspace.trace.Consume
 import coop.rchain.shared.SyncVarOps._
 import kamon._
 import kamon.trace.Tracer.SpanBuilder
+
 import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 import scala.util.Random
@@ -29,7 +32,7 @@ abstract class RSpaceOps[F[_], C, P, E, A, R, K](
 
   implicit val codecC = serializeC.toCodec
 
-  private val lock: TwoStepLock[Blake2b256Hash] = new DefaultTwoStepLock()
+  private val lock: TwoStepLock[Id, Blake2b256Hash] = new DefaultTwoStepLock()
 
   protected[this] def consumeLock(
       channels: Seq[C]
