@@ -82,7 +82,6 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, E, A, R, K](
     )(thunk)
 
   protected[this] val logger: Logger
-  protected[this] val installSpan: SpanBuilder
 
   private[this] val installs: SyncVar[Installs[C, P, E, A, R, K]] = {
     val installs = new SyncVar[Installs[C, P, E, A, R, K]]()
@@ -155,10 +154,8 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, E, A, R, K](
       implicit m: Match[P, E, A, R]
   ): F[Option[(K, Seq[R])]] =
     syncF.delay {
-      Kamon.withSpan(installSpan.start(), finishSpan = true) {
-        store.withTxn(store.createTxnWrite()) { txn =>
-          install(txn, channels, patterns, continuation)
-        }
+      store.withTxn(store.createTxnWrite()) { txn =>
+        install(txn, channels, patterns, continuation)
       }
     }
 

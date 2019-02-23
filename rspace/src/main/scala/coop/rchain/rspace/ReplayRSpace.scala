@@ -37,10 +37,6 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
   private[this] val consumeCommCounter = Kamon.counter(MetricsSource + ".comm.consume")
   private[this] val produceCommCounter = Kamon.counter(MetricsSource + ".comm.produce")
 
-  private[this] val consumeSpan   = Kamon.buildSpan(MetricsSource + ".consume")
-  private[this] val produceSpan   = Kamon.buildSpan(MetricsSource + ".produce")
-  protected[this] val installSpan = Kamon.buildSpan(MetricsSource + ".install")
-
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove when Kamon replaced with Metrics API
   def consume(
       channels: Seq[C],
@@ -57,13 +53,8 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
         logF.error(msg) *> syncF.raiseError(new IllegalArgumentException(msg))
       } else
         syncF.delay {
-          Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
-            val span = Kamon.currentSpan()
-            span.mark("before-consume-lock")
-            consumeLock(channels) {
-              span.mark("consume-lock-acquired")
-              lockedConsume(channels, patterns, continuation, persist, sequenceNumber)
-            }
+          consumeLock(channels) {
+            lockedConsume(channels, patterns, continuation, persist, sequenceNumber)
           }
         }
     }
@@ -78,10 +69,8 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
   )(
       implicit m: Match[P, E, A, R]
   ): Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]] = {
-    val span = Kamon.currentSpan()
     def runMatcher(comm: COMM): Option[Seq[DataCandidate[C, R]]] = {
 
-      span.mark("before-channel-to-indexed-data")
       val channelToIndexedData = channels.map { (c: C) =>
         c -> {
           store.withTxn(store.createTxnRead()) { txn =>
@@ -91,7 +80,6 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
           }
         }
       }.toMap
-      span.mark("before-extract-data-candidates")
       extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil)
         .flatMap(_.toOption)
         .sequence
@@ -102,17 +90,13 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
         consumeRef: Consume,
         maybeCommRef: Option[COMM]
     ): None.type = {
-      span.mark("acquire-write-lock")
       store.withTxn(store.createTxnWrite()) { txn =>
-        span.mark("before-put-continuation")
         store.putWaitingContinuation(
           txn,
           channels,
           WaitingContinuation(patterns, continuation, persist, consumeRef)
         )
-        span.mark("after-put-continuation")
         for (channel <- channels) store.addJoin(txn, channel, channels)
-        span.mark("after-add-joins")
       }
       logger.debug(s"""|consume: no data found,
                        |storing <(patterns, continuation): ($patterns, $continuation)>
@@ -125,7 +109,6 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
         consumeRef: Consume,
         comms: Multiset[COMM]
     ): Option[(ContResult[C, P, K], Seq[Result[R]])] = {
-      span.mark("handle-matches-begin")
       consumeCommCounter.increment()
       val commRef = COMM(consumeRef, mats.map(_.datum.source))
       assert(comms.contains(commRef), "COMM Event was not contained in the trace")
@@ -134,17 +117,13 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
         .foreach {
           case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex) =>
             if (!persistData) {
-              span.mark("acquire-write-lock")
               store.withTxn(store.createTxnWrite()) { txn =>
-                span.mark("before-remove-datum")
                 store.removeDatum(txn, Seq(candidateChannel), dataIndex)
-                span.mark("after-remove-datum")
               }
             }
         }
       logger.debug(s"consume: data found for <patterns: $patterns> at <channels: $channels>")
       removeBindingsFor(commRef)
-      span.mark("handle-matches-end")
       val contSequenceNumber = commRef.nextSequenceNumber
       Some(
         (
@@ -182,19 +161,15 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
 
     replayData.get(consumeRef) match {
       case None =>
-        span.mark("no-consume-ref-found")
         Right(storeWaitingContinuation(consumeRef, None))
       case Some(comms) =>
-        span.mark("ref-found")
         val commOrDataCandidates: Either[COMM, Seq[DataCandidate[C, R]]] =
           getCommOrDataCandidates(comms.iterator().asScala.toList)
 
         commOrDataCandidates match {
           case Left(commRef) =>
-            span.mark("no-data-candidates-found")
             Right(storeWaitingContinuation(consumeRef, Some(commRef)))
           case Right(dataCandidates) =>
-            span.mark("data-candidates-found")
             Right(handleMatches(dataCandidates, consumeRef, comms))
         }
     }
@@ -206,13 +181,8 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     contextShift.evalOn(scheduler) {
       syncF.delay {
-        Kamon.withSpan(produceSpan.start(), finishSpan = true) {
-          val span = Kamon.currentSpan()
-          span.mark("before-produce-lock")
-          produceLock(channel) {
-            span.mark("produce-lock-acquired")
-            lockedProduce(channel, data, persist, sequenceNumber)
-          }
+        produceLock(channel) {
+          lockedProduce(channel, data, persist, sequenceNumber)
         }
       }
     }
@@ -221,7 +191,6 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
   private[this] def lockedProduce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
       implicit m: Match[P, E, A, R]
   ): Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]] = {
-    val span = Kamon.currentSpan()
     @tailrec
     def runMatcher(
         comm: COMM,
@@ -233,22 +202,18 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
         case channels :: remaining =>
           val matchCandidates: Seq[(WaitingContinuation[P, K], Int)] =
             store.withTxn(store.createTxnRead()) { txn =>
-              span.mark("before-get-continuation")
               store.getWaitingContinuation(txn, channels).zipWithIndex.filter {
                 case (WaitingContinuation(_, _, _, source), _) =>
                   comm.consume == source
               }
             }
-          span.mark("after-get-continuation")
 
           val channelToIndexedData: Map[C, Seq[(Datum[A], Int)]] = store
             .withTxn(store.createTxnRead()) { txn =>
               channels.map { (c: C) =>
-                span.mark("before-get-data")
                 val as = store.getData(txn, Seq(c)).zipWithIndex.filter {
                   case (Datum(_, _, source), _) => comm.produces.contains(source)
                 }
-                span.mark("after-get-data")
                 c -> {
                   if (c == channel) Seq((Datum(data, persist, produceRef), -1)) else as
                 }
@@ -265,11 +230,8 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
         produceRef: Produce,
         maybeCommRef: Option[COMM]
     ): None.type = {
-      span.mark("acquire-write-lock")
       store.withTxn(store.createTxnWrite()) { txn =>
-        span.mark("before-put-datum")
         store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
-        span.mark("after-put-datum")
       }
       logger.debug(s"""|produce: no matching continuation found
                        |storing <data: $data> at <channel: $channel>""".stripMargin)
@@ -288,36 +250,27 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
             continuationIndex,
             dataCandidates
             ) =>
-          span.mark("handle-match-begin")
           produceCommCounter.increment()
           val commRef = COMM(consumeRef, dataCandidates.map(_.datum.source))
           assert(comms.contains(commRef), "COMM Event was not contained in the trace")
           if (!persistK) {
-            span.mark("acquire-write-lock")
             store.withTxn(store.createTxnWrite()) { txn =>
-              span.mark("before-put-continuation")
               store.removeWaitingContinuation(txn, channels, continuationIndex)
-              span.mark("after-put-continuation")
             }
           }
           dataCandidates
             .sortBy(_.datumIndex)(Ordering[Int].reverse)
             .foreach {
               case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex) =>
-                span.mark("acquire-write-lock")
                 store.withTxn(store.createTxnWrite()) { txn =>
                   if (!persistData && dataIndex >= 0) {
-                    span.mark("before-remove-datum")
                     store.removeDatum(txn, Seq(candidateChannel), dataIndex)
-                    span.mark("after-remove-datum")
                   }
                   store.removeJoin(txn, candidateChannel, channels)
-                  span.mark("after-remove-join")
                 }
             }
           logger.debug(s"produce: matching continuation found at <channels: $channels>")
           removeBindingsFor(commRef)
-          span.mark("handle-match-end")
           val contSequenceNumber = commRef.nextSequenceNumber
           Some(
             (
@@ -360,17 +313,14 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
 
       replayData.get(produceRef) match {
         case None =>
-          span.mark("no-produce-ref-found")
           Right(storeDatum(produceRef, None))
         case Some(comms) =>
           val commOrProduceCandidate: Either[COMM, ProduceCandidate[C, P, R, K]] =
             getCommOrProduceCandidate(comms.iterator().asScala.toList)
           commOrProduceCandidate match {
             case Left(comm) =>
-              span.mark("no-produce-candidate-found")
               Right(storeDatum(produceRef, Some(comm)))
             case Right(produceCandidate) =>
-              span.mark("produce-candidate-found")
               Right(handleMatch(produceCandidate, produceRef, comms))
           }
       }
