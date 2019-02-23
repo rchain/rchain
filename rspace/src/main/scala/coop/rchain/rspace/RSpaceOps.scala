@@ -1,12 +1,12 @@
 package coop.rchain.rspace
 
 import cats.Id
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
 import ski._
-import coop.rchain.rspace.concurrent.{DefaultTwoStepLock, TwoStepLock}
+import coop.rchain.rspace.concurrent.{ConcurrentTwoStepLockF, DefaultTwoStepLock, TwoStepLock}
 import coop.rchain.rspace.history.{Branch, Leaf}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.Consume
@@ -19,7 +19,7 @@ import scala.concurrent.SyncVar
 import scala.util.Random
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove when Kamon replaced with Metrics API
-abstract class RSpaceOps[F[_], C, P, E, A, R, K](
+abstract class RSpaceOps[F[_]: Concurrent, C, P, E, A, R, K](
     val store: IStore[F, C, P, A, K],
     val branch: Branch
 )(
@@ -33,6 +33,30 @@ abstract class RSpaceOps[F[_], C, P, E, A, R, K](
   implicit val codecC = serializeC.toCodec
 
   private val lock: TwoStepLock[Id, Blake2b256Hash] = new DefaultTwoStepLock()
+
+  private val lockF: TwoStepLock[F, Blake2b256Hash] = new ConcurrentTwoStepLockF()
+
+  protected[this] def consumeLockF(
+                                   channels: Seq[C]
+                                 )(
+                                   thunk: => F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
+                                 ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] = {
+    val hashes = channels.map(ch => StableHashProvider.hash(ch))
+    lockF.acquire(hashes)(() => hashes.pure[F])(thunk)
+  }
+
+  protected[this] def produceLockF(
+                                   channel: C
+                                 )(
+                                   thunk: => F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
+                                 ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
+    lockF.acquire(Seq(StableHashProvider.hash(channel)))(
+      () =>
+        store.withTxnF(store.createTxnReadF()) { txn =>
+          val groupedChannels: Seq[Seq[C]] = store.getJoin(txn, channel)
+          groupedChannels.flatten.map(StableHashProvider.hash(_))
+        }
+    )(thunk)
 
   protected[this] def consumeLock(
       channels: Seq[C]
