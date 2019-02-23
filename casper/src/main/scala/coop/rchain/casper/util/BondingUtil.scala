@@ -181,7 +181,7 @@ object BondingUtil {
       runtimeDir => Sync[F].delay { runtimeDir.recursivelyDelete() }
     )
 
-  def makeRuntimeResource[F[_]: Sync: ContextShift: Log, M[_]](
+  def makeRuntimeResource[F[_]: Concurrent: ContextShift: Log, M[_]](
       runtimeDirResource: Resource[F, Path]
   )(implicit P: Parallel[F, M], scheduler: ExecutionContext): Resource[F, Runtime[F]] =
     runtimeDirResource.flatMap(

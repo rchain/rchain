@@ -4,6 +4,7 @@ import org.scalatest._
 
 import monix.eval.Task
 import scala.collection._
+import scala.collection.immutable.Seq
 
 class MultiLockTest extends FlatSpec with Matchers {
 

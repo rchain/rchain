@@ -1397,9 +1397,10 @@ trait LegacyStorageActionsTests
 }
 
 trait IdTests[C, P, A, R, K] extends StorageTestsBase[Id, C, P, A, R, K] {
-  override implicit val syncF: Sync[Id]   = coop.rchain.catscontrib.effect.implicits.syncId
+  override implicit val concurrentF: Concurrent[Id] =
+    coop.rchain.catscontrib.effect.implicits.concurrentId
   override implicit val logF: Log[Id]     = Log.log[Id]
-  override implicit val monadF: Monad[Id] = syncF
+  override implicit val monadF: Monad[Id] = concurrentF
   override implicit val contextShiftF: ContextShift[Id] =
     coop.rchain.rspace.test.contextShiftId
 
@@ -1411,13 +1412,14 @@ trait TaskTests[C, P, A, R, K] extends StorageTestsBase[Task, C, P, A, R, K] {
   import coop.rchain.catscontrib.TaskContrib._
   import scala.concurrent.ExecutionContext
 
-  override implicit val syncF: Sync[Task] = new monix.eval.instances.CatsEffectForTask()(
-    monix.execution.Scheduler.Implicits.global,
-    Task.defaultOptions
-  )
+  override implicit val concurrentF: Concurrent[Task] =
+    new monix.eval.instances.CatsConcurrentEffectForTask()(
+      monix.execution.Scheduler.Implicits.global,
+      Task.defaultOptions
+    )
   implicit val logF: Log[Task] = Log.log[Task]
 
-  override implicit val monadF: Monad[Task] = syncF
+  override implicit val monadF: Monad[Task] = concurrentF
   override implicit val contextShiftF: ContextShift[Task] = new ContextShift[Task] {
     override def shift: Task[Unit] =
       Task.shift

@@ -4,20 +4,20 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, 
 import java.nio.file.{Files, Path}
 
 import cats.Id
-import cats.effect.{ContextShift, Sync}
+import cats.effect.{Concurrent, ContextShift, Sync}
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Language.ignore
 import coop.rchain.shared.Log
 import coop.rchain.rspace.util._
+
 import scala.concurrent.ExecutionContext
 import scodec.bits.ByteVector
 
 import scala.collection.immutable.Seq
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
-
 import scala.concurrent.ExecutionContext.Implicits.global
 
 @SuppressWarnings(Array("org.wartremover.warts.EitherProjectionPartial"))
@@ -85,7 +85,7 @@ object AddressBookExample {
 
   object implicits {
 
-    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+    implicit val concurrentF: Concurrent[Id] = coop.rchain.catscontrib.effect.implicits.concurrentId
 
     implicit val contextShiftId: ContextShift[Id] =
       new ContextShift[Id] {

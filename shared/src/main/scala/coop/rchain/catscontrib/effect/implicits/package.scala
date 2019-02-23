@@ -12,6 +12,28 @@ import scala.util.control.NonFatal
 
 package object implicits {
 
+  // this is for testing purposes, do not use in production code!
+  implicit val concurrentId: Concurrent[Id] =
+    new Concurrent[Id] {
+      override def start[A](fa: Id[A]): Id[Fiber[Id, A]] = ???
+      override def racePair[A, B](
+          fa: Id[A],
+          fb: Id[B]
+      ): Id[Either[(A, Fiber[Id, B]), (Fiber[Id, A], B)]]                          = ???
+      override def async[A](k: (Either[Throwable, A] => Unit) => Unit): Id[A]      = ???
+      override def asyncF[A](k: (Either[Throwable, A] => Unit) => Id[Unit]): Id[A] = ???
+      override def suspend[A](thunk: => Id[A]): Id[A]                              = syncId.suspend(thunk)
+      override def bracketCase[A, B](acquire: Id[A])(use: A => Id[B])(
+          release: (A, ExitCase[Throwable]) => Id[Unit]
+      ): Id[B]                                                           = syncId.bracketCase(acquire)(use)(release)
+      override def flatMap[A, B](fa: Id[A])(f: A => Id[B]): Id[B]        = syncId.flatMap(fa)(f)
+      override def tailRecM[A, B](a: A)(f: A => Id[Either[A, B]]): Id[B] = syncId.tailRecM(a)(f)
+      override def raiseError[A](e: Throwable): Id[A]                    = syncId.raiseError(e)
+      override def handleErrorWith[A](fa: Id[A])(f: Throwable => Id[A]): Id[A] =
+        syncId.handleErrorWith(fa)(f)
+      override def pure[A](x: A): Id[A] = syncId.pure(x)
+    }
+
   implicit val syncId: Sync[Id] =
     new Sync[Id] {
       def pure[A](x: A): cats.Id[A] = x

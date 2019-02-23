@@ -6,7 +6,7 @@ import scala.annotation.tailrec
 import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext
 import scala.util.Random
-import cats.effect.{ContextShift, Sync}
+import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
 import coop.rchain.shared.Log
 import coop.rchain.catscontrib._
@@ -28,7 +28,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
     serializeP: Serialize[P],
     serializeA: Serialize[A],
     serializeK: Serialize[K],
-    val syncF: Sync[F],
+    val concurrent: Concurrent[F],
     logF: Log[F],
     contextShift: ContextShift[F],
     scheduler: ExecutionContext
@@ -333,7 +333,7 @@ object RSpace {
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
-      syncF: Sync[F],
+      concurrent: Concurrent[F],
       log: Log[F],
       contextShift: ContextShift[F],
       scheduler: ExecutionContext
@@ -362,7 +362,7 @@ object RSpace {
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
-      syncF: Sync[F],
+      concurrent: Concurrent[F],
       logF: Log[F],
       contextShift: ContextShift[F],
       scheduler: ExecutionContext

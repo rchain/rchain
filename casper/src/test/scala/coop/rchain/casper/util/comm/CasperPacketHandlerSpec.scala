@@ -26,7 +26,7 @@ import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
 import coop.rchain.comm.rp.ProtocolHelper
 import ProtocolHelper._
 import cats.{Applicative, ApplicativeError, Parallel}
-import cats.effect.{ContextShift, Sync}
+import cats.effect.{Concurrent, ContextShift, Sync}
 import coop.rchain.comm.{transport, _}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
@@ -50,7 +50,7 @@ class CasperPacketHandlerSpec extends WordSpec {
       Runtime
         .create[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB)(
           ContextShift[Task],
-          Sync[Task],
+          Concurrent[Task],
           log,
           Parallel[Task, Task.Par],
           scheduler

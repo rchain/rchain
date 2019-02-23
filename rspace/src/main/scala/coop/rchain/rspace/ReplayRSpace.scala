@@ -4,11 +4,10 @@ import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext
-import cats.effect.{ContextShift, Sync}
+import cats.effect.{Concurrent, ContextShift}
 import cats.implicits._
 import coop.rchain.catscontrib._
 import Catscontrib._
-import cats.Id
 import coop.rchain.shared.Log
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
@@ -24,7 +23,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
     serializeP: Serialize[P],
     serializeA: Serialize[A],
     serializeK: Serialize[K],
-    val syncF: Sync[F],
+    val concurrent: Concurrent[F],
     logF: Log[F],
     contextShift: ContextShift[F],
     scheduler: ExecutionContext
@@ -417,7 +416,7 @@ object ReplayRSpace {
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
-      sync: Sync[F],
+      concurrent: Concurrent[F],
       log: Log[F],
       contextShift: ContextShift[F],
       scheduler: ExecutionContext

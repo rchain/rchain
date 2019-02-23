@@ -4,7 +4,7 @@ import java.nio.file.{Files, Path}
 
 import cats._
 import cats.effect.concurrent.Ref
-import cats.effect.{ContextShift, Sync}
+import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
 import cats.mtl.FunctorTell
 import com.google.protobuf.ByteString
@@ -275,7 +275,7 @@ object Runtime {
     )
   )
 
-  def create[F[_]: ContextShift: Sync: Log, M[_]](
+  def create[F[_]: ContextShift: Concurrent: Log, M[_]](
       dataDir: Path,
       mapSize: Long,
       storeType: StoreType,
@@ -417,7 +417,7 @@ object Runtime {
     } yield ()
   }
 
-  def setupRSpace[F[_]: Sync: ContextShift: Log](
+  def setupRSpace[F[_]: Concurrent: ContextShift: Log](
       dataDir: Path,
       mapSize: Long,
       storeType: StoreType

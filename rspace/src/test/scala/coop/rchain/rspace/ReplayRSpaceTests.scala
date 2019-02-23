@@ -862,7 +862,7 @@ trait ReplayRSpaceTests
 trait ReplayRSpaceTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with OptionValues {
   val logger = Logger(this.getClass.getName.stripSuffix("$"))
 
-  implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+  implicit val concurrentF: Concurrent[Id] = coop.rchain.catscontrib.effect.implicits.concurrentId
   implicit val contextShiftF: ContextShift[Id] =
     coop.rchain.rspace.test.contextShiftId
 
@@ -893,7 +893,7 @@ trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, 
       oC: Ordering[C]
   ): S = {
 
-    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+    implicit val concurrentF: Concurrent[Id] = coop.rchain.catscontrib.effect.implicits.concurrentId
     implicit val contextShiftF: ContextShift[Id] =
       coop.rchain.rspace.test.contextShiftId
     implicit val log: Log[Id] = Log.log[Id]
@@ -926,7 +926,7 @@ trait MixedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C,
       oC: Ordering[C]
   ): S = {
 
-    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+    implicit val concurrentF: Concurrent[Id] = coop.rchain.catscontrib.effect.implicits.concurrentId
     implicit val contextShiftF: ContextShift[Id] =
       coop.rchain.rspace.test.contextShiftId
     implicit val log: Log[Id] = Log.log[Id]
@@ -959,11 +959,11 @@ trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase
       oC: Ordering[C]
   ): S = {
 
-    implicit val syncF: Sync[Id]     = coop.rchain.catscontrib.effect.implicits.syncId
-    implicit val log: Log[Id]        = Log.log[Id]
-    val ctx: Context[Id, C, P, A, K] = Context.createInMemory()
-    val space                        = RSpace.create[Id, C, P, E, A, A, K](ctx, Branch.REPLAY)
-    val replaySpace                  = ReplayRSpace.create[Id, C, P, E, A, A, K](ctx, Branch.REPLAY)
+    implicit val concurrentF: Concurrent[Id] = coop.rchain.catscontrib.effect.implicits.concurrentId
+    implicit val log: Log[Id]                = Log.log[Id]
+    val ctx: Context[Id, C, P, A, K]         = Context.createInMemory()
+    val space                                = RSpace.create[Id, C, P, E, A, A, K](ctx, Branch.REPLAY)
+    val replaySpace                          = ReplayRSpace.create[Id, C, P, E, A, A, K](ctx, Branch.REPLAY)
 
     try {
       f(space, replaySpace)
@@ -985,7 +985,7 @@ trait FaultyStoreReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsB
       sk: Serialize[K],
       oC: Ordering[C]
   ): S = {
-    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+    implicit val concurrentF: Concurrent[Id] = coop.rchain.catscontrib.effect.implicits.concurrentId
     implicit val contextShiftF: ContextShift[Id] =
       coop.rchain.rspace.test.contextShiftId
     implicit val log: Log[Id] = Log.log[Id]

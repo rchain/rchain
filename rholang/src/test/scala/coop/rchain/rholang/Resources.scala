@@ -4,7 +4,7 @@ import java.nio.file.{Files, Path}
 
 import cats.Applicative
 import cats.effect.ExitCase.Error
-import cats.effect.{ContextShift, Resource, Sync}
+import cats.effect.{Concurrent, ContextShift, Resource}
 import com.typesafe.scalalogging.Logger
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime
@@ -35,7 +35,7 @@ object Resources {
         })
     )
 
-  def mkRhoISpace[F[_]: Sync: ContextShift: Log](
+  def mkRhoISpace[F[_]: Concurrent: ContextShift: Log](
       prefix: String = "",
       branch: String = "test",
       mapSize: Long = 1024L * 1024L * 4

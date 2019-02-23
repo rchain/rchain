@@ -26,30 +26,31 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, E, A, R, K](
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
-    serializeK: Serialize[K],
-    syncF: Sync[F]
+    serializeK: Serialize[K]
 ) extends SpaceMatcher[F, C, P, E, A, R, K] {
 
   implicit val codecC = serializeC.toCodec
+
+  val syncF: Sync[F] = Concurrent[F]
 
   private val lock: TwoStepLock[Id, Blake2b256Hash] = new DefaultTwoStepLock()
 
   private val lockF: TwoStepLock[F, Blake2b256Hash] = new ConcurrentTwoStepLockF()
 
   protected[this] def consumeLockF(
-                                   channels: Seq[C]
-                                 )(
-                                   thunk: => F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
-                                 ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] = {
+      channels: Seq[C]
+  )(
+      thunk: => F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
+  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] = {
     val hashes = channels.map(ch => StableHashProvider.hash(ch))
     lockF.acquire(hashes)(() => hashes.pure[F])(thunk)
   }
 
   protected[this] def produceLockF(
-                                   channel: C
-                                 )(
-                                   thunk: => F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
-                                 ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
+      channel: C
+  )(
+      thunk: => F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
+  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     lockF.acquire(Seq(StableHashProvider.hash(channel)))(
       () =>
         store.withTxnF(store.createTxnReadF()) { txn =>
