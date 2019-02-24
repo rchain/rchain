@@ -3,10 +3,7 @@ package coop.rchain.catscontrib.effect
 import cats._
 import cats.effect.ExitCase.{Completed, Error}
 import cats.effect._
-import scala.concurrent.ExecutionContext
 
-import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Promise}
 import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
 
@@ -22,7 +19,7 @@ package object implicits {
       ): Id[Either[(A, Fiber[Id, B]), (Fiber[Id, A], B)]]                          = ???
       override def async[A](k: (Either[Throwable, A] => Unit) => Unit): Id[A]      = ???
       override def asyncF[A](k: (Either[Throwable, A] => Unit) => Id[Unit]): Id[A] = ???
-      override def suspend[A](thunk: => Id[A]): Id[A]                              = syncId.suspend(thunk)
+      override def suspend[A](thunk: => Id[A]): Id[A] = syncId.suspend(thunk)
       override def bracketCase[A, B](acquire: Id[A])(use: A => Id[B])(
           release: (A, ExitCase[Throwable]) => Id[Unit]
       ): Id[B]                                                           = syncId.bracketCase(acquire)(use)(release)
