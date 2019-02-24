@@ -41,19 +41,15 @@ class LockFreeInMemoryStore[F[_], T, C, P, A, K](
 
   protected[rspace] type Transaction = InMemTransaction[State[C, P, A, K]]
 
-  override private[rspace] def createTxnRead(): Transaction = {
+  private[rspace] def createTxnReadF(): F[Transaction] = syncF.delay {
     failIfClosed()
     new NoopTxn[State[C, P, A, K]]
   }
-  override private[rspace] def createTxnWrite(): Transaction = {
+
+  private[rspace] def createTxnWriteF(): F[Transaction] = syncF.delay {
     failIfClosed()
     new NoopTxn[State[C, P, A, K]]
   }
-  override private[rspace] def withTxn[R](txn: Transaction)(f: Transaction => R) = f(txn)
-
-  private[rspace] def createTxnReadF(): F[Transaction] = syncF.delay(createTxnRead())
-
-  private[rspace] def createTxnWriteF(): F[Transaction] = syncF.delay(createTxnWrite())
 
   private[rspace] def withTxnF[R](txnF: F[Transaction])(f: Transaction => R): F[R] =
     for {

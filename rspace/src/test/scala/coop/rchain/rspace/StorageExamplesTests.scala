@@ -306,7 +306,7 @@ abstract class MixedInMemoryStoreStorageExamplesTestsBase[F[_]]
                   )
       testStore = testSpace.store
       trieStore = testStore.trieStore
-      _         = testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
+      _         <- testStore.withTxnF(testStore.createTxnWriteF())(testStore.clear)
       _         = trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear)
       _         = initialize(trieStore, branch)
       res       <- f(testSpace)
@@ -350,7 +350,7 @@ abstract class InMemoryStoreStorageExamplesTestsBase[F[_]]
                   )
       testStore = testSpace.store
       trieStore = testStore.trieStore
-      _         <- testStore.withTxn(testStore.createTxnWrite())(testStore.clear).pure[F]
+      _         <- testStore.withTxnF(testStore.createTxnWriteF())(testStore.clear)
       _         <- trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear).pure[F]
       _         = initialize(trieStore, branch)
       res       <- f(testSpace)
@@ -381,7 +381,7 @@ abstract class LMDBStoreStorageExamplesTestBase[F[_]]
                     testStore,
                     Branch.MASTER
                   )
-      _   = testStore.withTxn(testStore.createTxnWrite())(txn => testStore.clear(txn))
+      _   <- testStore.withTxnF(testStore.createTxnWriteF())(testStore.clear)
       res <- f(testSpace)
     } yield {
       try {

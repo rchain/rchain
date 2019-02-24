@@ -29,7 +29,7 @@ trait IStoreTests
         val datum                                                     = Datum.create(channel, datumValue, false)
 
         store
-          .withTxn(store.createTxnWrite()) { txn =>
+          .withTxnF(store.createTxnWriteF()) { txn =>
             store.putDatum(txn, key, datum)
             store.getData(txn, key) should contain theSameElementsAs (Seq(datum))
             store.clear(txn)
@@ -45,7 +45,7 @@ trait IStoreTests
         val datum1 = Datum.create(channel, datumValue, false)
         val datum2 = Datum.create(channel, datumValue + "2", false)
 
-        store.withTxn(store.createTxnWrite()) { txn =>
+        store.withTxnF(store.createTxnWriteF()) { txn =>
           store.putDatum(txn, key, datum1)
           store.putDatum(txn, key, datum2)
           store.getData(txn, key) should contain theSameElementsAs (Seq(datum1, datum2))
@@ -75,7 +75,7 @@ trait IStoreTests
             Datum.create(channel, datumValue + i, false)
           }
 
-          store.withTxn(store.createTxnWrite()) { txn =>
+          store.withTxnF(store.createTxnWriteF()) { txn =>
             data.foreach { d =>
               store.putDatum(txn, key, d)
             }
@@ -94,7 +94,7 @@ trait IStoreTests
         val store = space.store
         val key   = List(channel)
         val hash  = store.hashChannels(key)
-        store.withTxn(store.createTxnWrite()) { txn =>
+        store.withTxnF(store.createTxnWriteF()) { txn =>
           store.putDatum(txn, key, Datum.create(channel, datum, persist = false))
           // collectGarbage is called in removeDatum:
           store.removeDatum(txn, key, 0)
@@ -114,7 +114,7 @@ trait IStoreTests
         val wc: WaitingContinuation[Pattern, StringsCaptor] =
           WaitingContinuation.create(key, patterns, continuation, false)
 
-        store.withTxn(store.createTxnWrite()) { txn =>
+        store.withTxnF(store.createTxnWriteF()) { txn =>
           store.putWaitingContinuation(txn, key, wc)
           store.getWaitingContinuation(txn, key) shouldBe List(wc)
           store.clear(txn)
@@ -135,7 +135,7 @@ trait IStoreTests
         val wc2: WaitingContinuation[Pattern, StringsCaptor] =
           WaitingContinuation.create(key, List(StringMatch(pattern + 2)), continuation, false)
 
-        store.withTxn(store.createTxnWrite()) { txn =>
+        store.withTxnF(store.createTxnWriteF()) { txn =>
           store.putWaitingContinuation(txn, key, wc1)
           store.putWaitingContinuation(txn, key, wc2)
           store.getWaitingContinuation(txn, key) should contain theSameElementsAs List(wc1, wc2)
@@ -156,7 +156,7 @@ trait IStoreTests
         val wc2: WaitingContinuation[Pattern, StringsCaptor] =
           WaitingContinuation.create(key, List(StringMatch(pattern + 2)), continuation, false)
 
-        store.withTxn(store.createTxnWrite()) { txn =>
+        store.withTxnF(store.createTxnWriteF()) { txn =>
           store.putWaitingContinuation(txn, key, wc1)
           store.putWaitingContinuation(txn, key, wc2)
           store.removeWaitingContinuation(txn, key, 0)
@@ -170,7 +170,7 @@ trait IStoreTests
     forAll("channel", "channels") { (channel: String, channels: List[String]) =>
       withTestSpace { space =>
         val store = space.store
-        store.withTxn(store.createTxnWrite()) { txn =>
+        store.withTxnF(store.createTxnWriteF()) { txn =>
           store.addJoin(txn, channel, channels)
           store.getJoin(txn, channel) shouldBe List(channels)
           store.clear(txn)
@@ -182,7 +182,7 @@ trait IStoreTests
     forAll("channel", "channels") { (channel: String, channels: List[String]) =>
       withTestSpace { space =>
         val store = space.store
-        store.withTxn(store.createTxnWrite()) { txn =>
+        store.withTxnF(store.createTxnWriteF()) { txn =>
           store.addJoin(txn, channel, channels)
           store.removeJoin(txn, channel, channels)
           store.getJoin(txn, channel) shouldBe empty
@@ -195,7 +195,7 @@ trait IStoreTests
     forAll("channel", "channels") { (channel: String, channels: List[String]) =>
       withTestSpace { space =>
         val store = space.store
-        store.withTxn(store.createTxnWrite()) { txn =>
+        store.withTxnF(store.createTxnWriteF()) { txn =>
           store.addJoin(txn, channel, channels)
           store.addJoin(txn, channel, List("otherChannel"))
           store.removeJoin(txn, channel, channels)

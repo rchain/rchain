@@ -127,10 +127,8 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, E, A, R, K](
   override def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
       implicit m: Match[P, E, A, R]
   ): F[Option[(K, Seq[R])]] =
-    syncF.delay {
-      store.withTxn(store.createTxnWrite()) { txn =>
-        install(txn, channels, patterns, continuation)
-      }
+    store.withTxnF(store.createTxnWriteF()) { txn =>
+      install(txn, channels, patterns, continuation)
     }
 
   override def retrieve(
@@ -142,27 +140,25 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, E, A, R, K](
     }
 
   override def reset(root: Blake2b256Hash): F[Unit] =
-    syncF.delay {
-      store.withTxn(store.createTxnWrite()) { txn =>
-        store.withTrieTxn(txn) { trieTxn =>
-          store.trieStore.validateAndPutRoot(trieTxn, store.trieBranch, root)
-          val leaves = store.trieStore.getLeaves(trieTxn, root)
-          eventLog.update(kp(Seq.empty))
-          store.getAndClearTrieUpdates()
-          store.clear(txn)
-          restoreInstalls(txn)
-          store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
-        }
+    store.withTxnF(store.createTxnWriteF()) { txn =>
+      store.withTrieTxn(txn) { trieTxn =>
+        store.trieStore.validateAndPutRoot(trieTxn, store.trieBranch, root)
+        val leaves = store.trieStore.getLeaves(trieTxn, root)
+        eventLog.update(kp(Seq.empty))
+        store.getAndClearTrieUpdates()
+        store.clear(txn)
+        restoreInstalls(txn)
+        store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
       }
     }
 
   override def clear(): F[Unit] =
-    syncF.suspend {
-      val root = store.withTxn(store.createTxnRead()) { txn =>
+    store
+      .withTxnF(store.createTxnReadF()) { txn =>
         store.withTrieTxn(txn) { trieTxn =>
           store.trieStore.getEmptyRoot(trieTxn)
         }
       }
-      reset(root)
-    }
+      .flatMap(root => reset(root))
+
 }

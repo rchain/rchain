@@ -61,20 +61,17 @@ class InMemoryStore[F[_], T, C, P, A, K](
       txn <- txnF
       retErr <- syncF.delay {
                  val r = f(txn)
+                 txn.readState({ state =>
+                   entriesGauge.set(state.size)
+                 })
                  txn.commit()
                  r
                }.attempt
-      _ <- syncF.delay {
-            updateGauges()
-            txn.close()
-          }
+      _   <- syncF.delay { txn.close() }
       ret <- retErr.fold(syncF.raiseError, _.pure[F])
     } yield ret
 
-  private[rspace] def updateGauges() =
-    withTxn(createTxnRead())(_.readState { state =>
-      entriesGauge.set(state.size)
-    })
+  private[rspace] def updateGauges(): Unit = ???
 
   private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash =
     StableHashProvider.hash(channels)

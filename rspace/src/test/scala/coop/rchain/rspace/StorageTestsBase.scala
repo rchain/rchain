@@ -149,13 +149,12 @@ abstract class InMemoryStoreTestsBase[F[_]]
       testStore = testSpace.store
       trieStore = testStore.trieStore
       _ <- testStore
-            .withTxn(testStore.createTxnWrite()) { txn =>
+            .withTxnF(testStore.createTxnWriteF()) { txn =>
               testStore.withTrieTxn(txn) { trieTxn =>
                 testStore.clear(txn)
                 testStore.trieStore.clear(trieTxn)
               }
             }
-            .pure[F]
       _   <- history.initialize(trieStore, branch).pure[F]
       _   <- testSpace.createCheckpoint()
       res <- f(testSpace)
@@ -195,13 +194,12 @@ abstract class LMDBStoreTestsBase[F[_]]
                   )
       testStore = testSpace.store
       _ <- testStore
-            .withTxn(testStore.createTxnWrite()) { txn =>
+            .withTxnF(testStore.createTxnWriteF()) { txn =>
               testStore.withTrieTxn(txn) { trieTxn =>
                 testStore.clear(txn)
                 testStore.trieStore.clear(trieTxn)
               }
             }
-            .pure[F]
       _   <- history.initialize(testStore.trieStore, testBranch).pure[F]
       _   <- testSpace.createCheckpoint()
       res <- f(testSpace)
@@ -242,13 +240,12 @@ abstract class MixedStoreTestsBase[F[_]]
                   )
       testStore = testSpace.store
       _ <- testStore
-            .withTxn(testStore.createTxnWrite()) { txn =>
+            .withTxnF(testStore.createTxnWriteF()) { txn =>
               testStore.withTrieTxn(txn) { trieTxn =>
                 testStore.clear(txn)
                 testStore.trieStore.clear(trieTxn)
               }
             }
-            .pure[F]
       _   <- history.initialize(testStore.trieStore, testBranch).pure[F]
       _   <- testSpace.createCheckpoint()
       res <- f(testSpace)
