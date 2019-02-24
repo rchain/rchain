@@ -60,84 +60,120 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
         val msg = "channels.length must equal patterns.length"
         logF.error(msg) *> syncF.raiseError(new IllegalArgumentException(msg))
       } else
-        syncF.delay {
-          val consumeRef =
-            Consume.create(channels, patterns, continuation, persist, sequenceNumber)
+        for {
+          consumeRef <- Consume
+                         .create(channels, patterns, continuation, persist, sequenceNumber)
+                         .pure[F]
+          result <- consumeLockF(channels) {
+                     for {
+                       _ <- ().pure[F]
+                       _ = logger.debug(
+                         s"""|consume: searching for data matching <patterns: $patterns>
+                             |at <channels: $channels>""".stripMargin.replace('\n', ' ')
+                       )
+                       _ = eventLog.update(consumeRef +: _)
 
-          consumeLock(channels) {
-            logger.debug(s"""|consume: searching for data matching <patterns: $patterns>
-                             |at <channels: $channels>""".stripMargin.replace('\n', ' '))
+                       /*
+                        * Here, we create a cache of the data at each channel as `channelToIndexedData`
+                        * which is used for finding matches.  When a speculative match is found, we can
+                        * remove the matching datum from the remaining data candidates in the cache.
+                        *
+                        * Put another way, this allows us to speculatively remove matching data without
+                        * affecting the actual store contents.
+                        */
 
-            eventLog.update(consumeRef +: _)
-            /*
-             * Here, we create a cache of the data at each channel as `channelToIndexedData`
-             * which is used for finding matches.  When a speculative match is found, we can
-             * remove the matching datum from the remaining data candidates in the cache.
-             *
-             * Put another way, this allows us to speculatively remove matching data without
-             * affecting the actual store contents.
-             */
+                       channelToIndexedData <- store.withTxnF(store.createTxnReadF()) { txn =>
+                                                channels.map { c: C =>
+                                                  c -> Random.shuffle(
+                                                    store.getData(txn, Seq(c)).zipWithIndex
+                                                  )
+                                                }.toMap
+                                              }
 
-            val channelToIndexedData = store.withTxn(store.createTxnRead()) { txn =>
-              channels.map { c: C =>
-                c -> Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
-              }.toMap
-            }
-
-            val options: Either[E, Option[Seq[DataCandidate[C, R]]]] =
-              extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).sequence
-                .map(_.sequence)
-
-            options match {
-              case Left(e) =>
-                Left(e)
-              case Right(None) =>
-                store
-                  .withTxn(store.createTxnWrite()) { txn =>
-                    store.putWaitingContinuation(
-                      txn,
-                      channels,
-                      WaitingContinuation(patterns, continuation, persist, consumeRef)
-                    )
-                    for (channel <- channels)
-                      store.addJoin(txn, channel, channels)
-                  }
-                logger.debug(s"""|consume: no data found,
+                       options = extractDataCandidates(
+                         channels.zip(patterns),
+                         channelToIndexedData,
+                         Nil
+                       ).sequence
+                         .map(_.sequence)
+                       result <- options match {
+                                  case Left(e) =>
+                                    Left(e).pure[F]
+                                  case Right(None) =>
+                                    store
+                                      .withTxnF(store.createTxnWriteF()) { txn =>
+                                        store.putWaitingContinuation(
+                                          txn,
+                                          channels,
+                                          WaitingContinuation(
+                                            patterns,
+                                            continuation,
+                                            persist,
+                                            consumeRef
+                                          )
+                                        )
+                                        for (channel <- channels)
+                                          store.addJoin(txn, channel, channels)
+                                      }
+                                      .map { _ =>
+                                        logger.debug(s"""|consume: no data found,
                                  |storing <(patterns, continuation): ($patterns, $continuation)>
                                  |at <channels: $channels>""".stripMargin.replace('\n', ' '))
-                Right(None)
-              case Right(Some(dataCandidates)) =>
-                consumeCommCounter.increment()
+                                        Right(None)
+                                      }
+                                  case Right(Some(dataCandidates)) =>
+                                    syncF.delay {
+                                      consumeCommCounter.increment()
 
-                eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
+                                      eventLog.update(
+                                        COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _
+                                      )
+                                    } >>
+                                      dataCandidates.toList
+                                        .sortBy(_.datumIndex)(Ordering[Int].reverse)
+                                        .traverse {
+                                          case DataCandidate(
+                                              candidateChannel,
+                                              Datum(_, persistData, _),
+                                              dataIndex
+                                              ) if !persistData =>
+                                            store.withTxnF(store.createTxnWriteF()) { txn =>
+                                              store.removeDatum(
+                                                txn,
+                                                Seq(candidateChannel),
+                                                dataIndex
+                                              )
+                                            }
+                                          case _ =>
+                                            ().pure[F]
+                                        }
+                                        .map { _ =>
+                                          logger.debug(
+                                            s"consume: data found for <patterns: $patterns> at <channels: $channels>"
+                                          )
+                                          val contSequenceNumber: Int =
+                                            nextSequenceNumber(consumeRef, dataCandidates)
+                                          Right(
+                                            Some(
+                                              (
+                                                ContResult(
+                                                  continuation,
+                                                  persist,
+                                                  channels,
+                                                  patterns,
+                                                  contSequenceNumber
+                                                ),
+                                                dataCandidates
+                                                  .map(dc => Result(dc.datum.a, dc.datum.persist))
+                                              )
+                                            )
+                                          )
+                                        }
+                                }
+                     } yield result
 
-                dataCandidates
-                  .sortBy(_.datumIndex)(Ordering[Int].reverse)
-                  .foreach {
-                    case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex)
-                        if !persistData =>
-                      store.withTxn(store.createTxnWrite()) { txn =>
-                        store.removeDatum(txn, Seq(candidateChannel), dataIndex)
-                      }
-                    case _ =>
-                      ()
-                  }
-                logger.debug(
-                  s"consume: data found for <patterns: $patterns> at <channels: $channels>"
-                )
-                val contSequenceNumber: Int = nextSequenceNumber(consumeRef, dataCandidates)
-                Right(
-                  Some(
-                    (
-                      ContResult(continuation, persist, channels, patterns, contSequenceNumber),
-                      dataCandidates.map(dc => Result(dc.datum.a, dc.datum.persist))
-                    )
-                  )
-                )
-
-            }
-          }
-        }
+                   }
+        } yield result
     }
 
   private def nextSequenceNumber(consumeRef: Consume, dataCandidates: Seq[DataCandidate[C, R]]) =
@@ -153,121 +189,179 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
       implicit m: Match[P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     contextShift.evalOn(scheduler) {
-      syncF.delay {
-        val produceRef = Produce.create(channel, data, persist, sequenceNumber)
-        produceLock(channel) {
-          //TODO fix double join fetch
-          val groupedChannels: Seq[Seq[C]] = store.withTxn(store.createTxnRead()) { txn =>
-            store.getJoin(txn, channel)
-          }
-          logger.debug(
-            s"""|produce: searching for matching continuations
-                  |at <groupedChannels: $groupedChannels>""".stripMargin
-              .replace('\n', ' ')
-          )
-          eventLog.update(produceRef +: _)
+      for {
+        produceRef <- Produce.create(channel, data, persist, sequenceNumber).pure[F]
+        result <- produceLockF(channel) {
+                   /*
+                    * Find produce candidate
+                    *
+                    * Could also be implemented with a lazy `foldRight`.
+                    */
+                   type MaybeCandidate = Option[ProduceCandidate[C, P, R, K]]
+                   //@tailrec <- fix tailrec
+                   def extractProduceCandidate(
+                       groupedChannels: Seq[Seq[C]],
+                       batChannel: C,
+                       data: Datum[A]
+                   ): F[Either[E, MaybeCandidate]] =
+                     groupedChannels match {
+                       case Nil => Right(None).asInstanceOf[Either[E, MaybeCandidate]].pure[F]
+                       case channels :: remaining =>
+                         for {
+                           matchCandidates <- store.withTxnF(store.createTxnReadF()) { txn =>
+                                               Random.shuffle(
+                                                 store
+                                                   .getWaitingContinuation(txn, channels)
+                                                   .zipWithIndex
+                                               )
+                                             }
+                           /*
+                            * Here, we create a cache of the data at each channel as `channelToIndexedData`
+                            * which is used for finding matches.  When a speculative match is found, we can
+                            * remove the matching datum from the remaining data candidates in the cache.
+                            *
+                            * Put another way, this allows us to speculatively remove matching data without
+                            * affecting the actual store contents.
+                            *
+                            * In this version, we also add the produced data directly to this cache.
+                            */
+                           channelToIndexedDataList <- channels.traverse { c: C =>
+                                                        store
+                                                          .withTxnF(store.createTxnReadF()) { txn =>
+                                                            Random.shuffle(
+                                                              store
+                                                                .getData(txn, Seq(c))
+                                                                .zipWithIndex
+                                                            )
+                                                          }
+                                                          .map(
+                                                            as =>
+                                                              c -> {
+                                                                if (c == batChannel)
+                                                                  (data, -1) +: as
+                                                                else as
+                                                              }
+                                                          )
+                                                      }
+                           result <- extractFirstMatch(
+                                      channels,
+                                      matchCandidates,
+                                      channelToIndexedDataList.toMap
+                                    ) match {
+                                      case Left(e) => e.asLeft[MaybeCandidate].pure[F]
+                                      case Right(None) =>
+                                        extractProduceCandidate(remaining, batChannel, data)
+                                      case Right(produceCandidate) =>
+                                        produceCandidate.asRight[E].pure[F]
+                                    }
+                         } yield result
+                     }
+                   for {
+                     //TODO fix double join fetch
+                     groupedChannels <- store.withTxnF(store.createTxnReadF()) { txn =>
+                                         store.getJoin(txn, channel)
+                                       }
+                     _ = logger.debug(
+                       s"""|produce: searching for matching continuations
+                           |at <groupedChannels: $groupedChannels>""".stripMargin.replace('\n', ' ')
+                     )
+                     _ = eventLog.update(produceRef +: _)
+                     extracted <- extractProduceCandidate(
+                                   groupedChannels,
+                                   channel,
+                                   Datum(data, persist, produceRef)
+                                 )
+                     r <- extracted match {
+                           case Left(e) => Left(e).pure[F]
+                           case Right(
+                               Some(
+                                 ProduceCandidate(
+                                   channels,
+                                   WaitingContinuation(
+                                     patterns,
+                                     continuation,
+                                     persistK,
+                                     consumeRef
+                                   ),
+                                   continuationIndex,
+                                   dataCandidates
+                                 )
+                               )
+                               ) =>
+                             syncF
+                               .delay {
+                                 produceCommCounter.increment()
 
-          /*
-           * Find produce candidate
-           *
-           * Could also be implemented with a lazy `foldRight`.
-           */
-          @tailrec
-          def extractProduceCandidate(
-              groupedChannels: Seq[Seq[C]],
-              batChannel: C,
-              data: Datum[A]
-          ): Either[E, Option[ProduceCandidate[C, P, R, K]]] =
-            groupedChannels match {
-              case Nil => Right(None)
-              case channels :: remaining =>
-                val matchCandidates: Seq[(WaitingContinuation[P, K], Int)] =
-                  store.withTxn(store.createTxnRead()) { txn =>
-                    Random.shuffle(store.getWaitingContinuation(txn, channels).zipWithIndex)
-                  }
-                /*
-                 * Here, we create a cache of the data at each channel as `channelToIndexedData`
-                 * which is used for finding matches.  When a speculative match is found, we can
-                 * remove the matching datum from the remaining data candidates in the cache.
-                 *
-                 * Put another way, this allows us to speculatively remove matching data without
-                 * affecting the actual store contents.
-                 *
-                 * In this version, we also add the produced data directly to this cache.
-                 */
-                val channelToIndexedData: Map[C, Seq[(Datum[A], Int)]] = channels.map { (c: C) =>
-                  val as = store.withTxn(store.createTxnRead()) { txn =>
-                    Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
-                  }
-                  c -> {
-                    if (c == batChannel) (data, -1) +: as else as
-                  }
-                }.toMap
-                extractFirstMatch(channels, matchCandidates, channelToIndexedData) match {
-                  case Left(e)                 => Left(e)
-                  case Right(None)             => extractProduceCandidate(remaining, batChannel, data)
-                  case Right(produceCandidate) => Right(produceCandidate)
-                }
-            }
+                                 eventLog.update(
+                                   COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _
+                                 )
+                                 persistK
+                               }
+                               .flatMap(
+                                 pk =>
+                                   if (!pk) {
+                                     store.withTxnF(store.createTxnWriteF()) { txn =>
+                                       store.removeWaitingContinuation(
+                                         txn,
+                                         channels,
+                                         continuationIndex
+                                       )
+                                     }
+                                   } else ().pure[F]
+                               )
+                               .flatMap { _ =>
+                                 dataCandidates
+                                   .sortBy(_.datumIndex)(Ordering[Int].reverse)
+                                   .traverse {
+                                     case DataCandidate(
+                                         candidateChannel,
+                                         Datum(_, persistData, _),
+                                         dataIndex
+                                         ) =>
+                                       store.withTxnF(store.createTxnWriteF()) { txn =>
+                                         if (!persistData && dataIndex >= 0) {
+                                           store.removeDatum(txn, Seq(candidateChannel), dataIndex)
+                                         }
+                                         store.removeJoin(txn, candidateChannel, channels)
+                                       }
+                                   }
+                               }
+                               .map { _ =>
+                                 logger.debug(
+                                   s"produce: matching continuation found at <channels: $channels>"
+                                 )
+                                 val contSequenceNumber: Int =
+                                   nextSequenceNumber(consumeRef, dataCandidates)
+                                 Some(
+                                   (
+                                     ContResult[C, P, K](
+                                       continuation,
+                                       persistK,
+                                       channels,
+                                       patterns,
+                                       contSequenceNumber
+                                     ),
+                                     dataCandidates.map(dc => Result(dc.datum.a, dc.datum.persist))
+                                   )
+                                 ).asRight[E]
+                               }
+                           case Right(None) =>
+                             logger.debug(s"produce: no matching continuation found")
+                             store
+                               .withTxnF(store.createTxnWriteF()) { txn =>
+                                 store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
+                               }
+                               .map { _ =>
+                                 logger.debug(
+                                   s"produce: persisted <data: $data> at <channel: $channel>"
+                                 )
+                                 Right(None)
+                               }
 
-          extractProduceCandidate(groupedChannels, channel, Datum(data, persist, produceRef)) match {
-            case Left(e) => Left(e)
-            case Right(
-                Some(
-                  ProduceCandidate(
-                    channels,
-                    WaitingContinuation(patterns, continuation, persistK, consumeRef),
-                    continuationIndex,
-                    dataCandidates
-                  )
-                )
-                ) =>
-              produceCommCounter.increment()
-
-              eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
-
-              if (!persistK) {
-                store.withTxn(store.createTxnWrite()) { txn =>
-                  store.removeWaitingContinuation(txn, channels, continuationIndex)
-                }
-              }
-              dataCandidates
-                .sortBy(_.datumIndex)(Ordering[Int].reverse)
-                .foreach {
-                  case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex) =>
-                    store.withTxn(store.createTxnWrite()) { txn =>
-                      if (!persistData && dataIndex >= 0) {
-                        store.removeDatum(txn, Seq(candidateChannel), dataIndex)
-                      }
-                      store.removeJoin(txn, candidateChannel, channels)
-                    }
-                }
-              logger.debug(s"produce: matching continuation found at <channels: $channels>")
-              val contSequenceNumber: Int = nextSequenceNumber(consumeRef, dataCandidates)
-              Right(
-                Some(
-                  (
-                    ContResult[C, P, K](
-                      continuation,
-                      persistK,
-                      channels,
-                      patterns,
-                      contSequenceNumber
-                    ),
-                    dataCandidates.map(dc => Result(dc.datum.a, dc.datum.persist))
-                  )
-                )
-              )
-            case Right(None) =>
-              logger.debug(s"produce: no matching continuation found")
-              store.withTxn(store.createTxnWrite()) { txn =>
-                store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
-              }
-              logger.debug(s"produce: persisted <data: $data> at <channel: $channel>")
-              Right(None)
-          }
-        }
-      }
+                         }
+                   } yield r
+                 }
+      } yield result
     }
 
   override def createCheckpoint(): F[Checkpoint] =

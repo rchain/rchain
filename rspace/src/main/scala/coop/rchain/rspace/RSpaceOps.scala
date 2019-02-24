@@ -11,8 +11,6 @@ import coop.rchain.rspace.history.{Branch, Leaf}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.Consume
 import coop.rchain.shared.SyncVarOps._
-import kamon._
-import kamon.trace.Tracer.SpanBuilder
 
 import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
@@ -33,8 +31,6 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, E, A, R, K](
 
   val syncF: Sync[F] = Concurrent[F]
 
-  private val lock: TwoStepLock[Id, Blake2b256Hash] = new DefaultTwoStepLock()
-
   private val lockF: TwoStepLock[F, Blake2b256Hash] = new ConcurrentTwoStepLockF()
 
   protected[this] def consumeLockF(
@@ -54,28 +50,6 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, E, A, R, K](
     lockF.acquire(Seq(StableHashProvider.hash(channel)))(
       () =>
         store.withTxnF(store.createTxnReadF()) { txn =>
-          val groupedChannels: Seq[Seq[C]] = store.getJoin(txn, channel)
-          groupedChannels.flatten.map(StableHashProvider.hash(_))
-        }
-    )(thunk)
-
-  protected[this] def consumeLock(
-      channels: Seq[C]
-  )(
-      thunk: => Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]
-  ): Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]] = {
-    val hashes = channels.map(ch => StableHashProvider.hash(ch))
-    lock.acquire(hashes)(() => hashes)(thunk)
-  }
-
-  protected[this] def produceLock(
-      channel: C
-  )(
-      thunk: => Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]
-  ): Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]] =
-    lock.acquire(Seq(StableHashProvider.hash(channel)))(
-      () =>
-        store.withTxn(store.createTxnRead()) { txn =>
           val groupedChannels: Seq[Seq[C]] = store.getJoin(txn, channel)
           groupedChannels.flatten.map(StableHashProvider.hash(_))
         }
