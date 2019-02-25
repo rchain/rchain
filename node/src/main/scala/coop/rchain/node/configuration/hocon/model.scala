@@ -119,10 +119,11 @@ object Kamon {
   val Key = s"${Server.Key}.metrics"
 
   object keys {
-    val Prometheus = "prometheus"
-    val Influxdb   = "influxdb"
-    val Zipkin     = "zipkin"
-    val Sigar      = "sigar"
+    val Prometheus  = "prometheus"
+    val Influxdb    = "influxdb"
+    val InfluxdbUdp = "influxdb-udp"
+    val Zipkin      = "zipkin"
+    val Sigar       = "sigar"
   }
 
   def fromConfig(config: Config): configuration.Kamon = {
@@ -131,6 +132,7 @@ object Kamon {
     configuration.Kamon(
       prometheus = kamon.getBoolean(keys.Prometheus),
       influxDb = kamon.getBoolean(keys.Influxdb),
+      influxDbUdp = kamon.getBoolean(keys.InfluxdbUdp),
       zipkin = kamon.getBoolean(keys.Zipkin),
       sigar = kamon.getBoolean(keys.Sigar)
     )

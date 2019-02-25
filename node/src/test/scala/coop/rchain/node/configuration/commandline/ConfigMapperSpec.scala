@@ -98,6 +98,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "run",
         "--prometheus",
         "--influxdb",
+        "--influxdb-udp",
         "--zipkin",
         "--sigar"
       ).mkString(" ")
@@ -109,6 +110,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
       configuration.Kamon(
         prometheus = true,
         influxDb = true,
+        influxDbUdp = true,
         zipkin = true,
         sigar = true
       )
