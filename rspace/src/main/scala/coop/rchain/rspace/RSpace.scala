@@ -18,6 +18,10 @@ import coop.rchain.metrics.Metrics
 import org.lmdbjava.Txn
 import scodec.Codec
 
+object A {
+  def main(args: Array[String]): Unit = {}
+}
+
 class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
     store: IStore[F, C, P, A, K],
     branch: Branch
@@ -38,8 +42,10 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
   override protected[this] val logger: Logger = Logger[this.type]
 
   private[this] implicit val MetricsSource = RSpaceMetricsSource
-  private[this] val consumeCommLabel       = MetricsSource + ".comm.consume"
-  private[this] val produceCommLabel       = MetricsSource + ".comm.produce"
+  private[this] val consumeCommLabel       = "comm.consume"
+  private[this] val produceCommLabel       = "comm.produce"
+  private[this] val consumeSpanLabel       = Metrics.Source(MetricsSource, "consume")
+  private[this] val produceSpanLabel       = Metrics.Source(MetricsSource, "produce")
 
   /*
    * Here, we create a cache of the data at each channel as `channelToIndexedData`
@@ -82,8 +88,8 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
                 store.addJoin(txn, channel, channels)
             }
       _ <- logF.debug(s"""|consume: no data found,
-                           |storing <(patterns, continuation): ($patterns, $continuation)>
-                           |at <channels: $channels>""".stripMargin.replace('\n', ' '))
+                          |storing <(patterns, continuation): ($patterns, $continuation)>
+                          |at <channels: $channels>""".stripMargin.replace('\n', ' '))
     } yield None.asRight[E]
 
   private[this] def storePersistentData(dataCandidates: Seq[DataCandidate[C, R]]) =
@@ -166,26 +172,33 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
         logF.error(msg) *> syncF.raiseError(new IllegalArgumentException(msg))
       } else
         for {
+          span <- metricsF.span(consumeSpanLabel)
+          _    <- span.mark("before-consume-ref-compute")
           consumeRef <- syncF.delay {
                          Consume.create(channels, patterns, continuation, persist, sequenceNumber)
                        }
           result <- consumeLockF(channels) {
                      for {
+                       _ <- span.mark("consume-lock-acquired")
                        _ <- logF
                              .debug(
                                s"""|consume: searching for data matching <patterns: $patterns>
-                             |at <channels: $channels>""".stripMargin.replace('\n', ' ')
+                                   |at <channels: $channels>""".stripMargin.replace('\n', ' ')
                              )
-                       _ = eventLog.update(consumeRef +: _)
+                       _ <- syncF.delay { eventLog.update(consumeRef +: _) }
+                       _ <- span.mark("event-log-updated")
 
                        channelToIndexedData <- fetchChannelToIndexData(channels)
+                       _                    <- span.mark("channel-to-indexed-data-fetched")
 
-                       options = extractDataCandidates(
-                         channels.zip(patterns),
-                         channelToIndexedData,
-                         Nil
-                       ).sequence.map(_.sequence)
-
+                       options <- syncF.delay {
+                                   extractDataCandidates(
+                                     channels.zip(patterns),
+                                     channelToIndexedData,
+                                     Nil
+                                   ).sequence.map(_.sequence)
+                                 }
+                       _ <- span.mark("extract-consume-candidate")
                        result <- options match {
                                   case Left(e) =>
                                     e.asLeft[MaybeDataCandidate].pure[F]
@@ -193,9 +206,11 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
                                   case Right(Some(dataCandidates)) =>
                                     for {
                                       _ <- metricsF.incrementCounter(consumeCommLabel)
-                                      _ = eventLog.update(
-                                        COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _
-                                      )
+                                      _ <- syncF.delay {
+                                            eventLog.update(
+                                              COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _
+                                            )
+                                          }
                                       _ <- storePersistentData(dataCandidates)
                                       _ <- logF.debug(
                                             s"consume: data found for <patterns: $patterns> at <channels: $channels>"
@@ -203,9 +218,12 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
                                     } yield wrapResult(consumeRef, dataCandidates)
 
                                 }
+                       _ <- span.mark("extract-consume-candidate")
                      } yield result
 
                    }
+          _ <- span.mark("post-consume-lock")
+          _ <- span.close()
         } yield result
     }
   }
@@ -233,11 +251,12 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
       data: Datum[A]
   )(implicit m: Match[P, E, A, R]): F[Either[E, Option[ProduceCandidate[C, P, R, K]]]] = {
     type MaybeProduceCandidate = Option[ProduceCandidate[C, P, R, K]]
+    type CandidateChannels = Seq[C]
     def go(
-        acc: Seq[Seq[C]]
-    ): F[Either[Seq[Seq[C]], Either[E, Option[ProduceCandidate[C, P, R, K]]]]] =
+        acc: Seq[CandidateChannels]
+    ): F[Either[Seq[CandidateChannels], Either[E, Option[ProduceCandidate[C, P, R, K]]]]] =
       acc match {
-        case Nil => none[ProduceCandidate[C, P, R, K]].asRight[E].asRight[Seq[Seq[C]]].pure[F]
+        case Nil => none[ProduceCandidate[C, P, R, K]].asRight[E].asRight[Seq[CandidateChannels]].pure[F]
         case channels :: remaining =>
           for {
             matchCandidates <- store.withTxnF(store.createTxnReadF()) { txn =>
@@ -281,9 +300,9 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
               matchCandidates,
               channelToIndexedDataList.toMap
             ) match {
-              case Left(e)                 => e.asLeft[MaybeProduceCandidate].asRight[Seq[Seq[C]]]
+              case Left(e)                 => e.asLeft[MaybeProduceCandidate].asRight[Seq[CandidateChannels]]
               case Right(None)             => remaining.asLeft[Either[E, MaybeProduceCandidate]]
-              case Right(produceCandidate) => produceCandidate.asRight[E].asRight[Seq[Seq[C]]]
+              case Right(produceCandidate) => produceCandidate.asRight[E].asRight[Seq[CandidateChannels]]
             }
       }
     groupedChannels.tailRecM(go)
@@ -387,31 +406,42 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     contextShift.evalOn(scheduler) {
       for {
-        produceRef <- Produce.create(channel, data, persist, sequenceNumber).pure[F]
+        span       <- metricsF.span(produceSpanLabel)
+        _          <- span.mark("before-produce-ref-computed")
+        produceRef <- syncF.delay { Produce.create(channel, data, persist, sequenceNumber) }
+        _          <- span.mark("before-produce-lock")
         result <- produceLockF(channel) {
                    for {
+                     _ <- span.mark("produce-lock-acquired")
                      //TODO fix double join fetch
                      groupedChannels <- store.withTxnF(store.createTxnReadF()) {
                                          store.getJoin(_, channel)
                                        }
+                     _ <- span.mark("grouped-channels")
                      _ <- logF.debug(
                            s"""|produce: searching for matching continuations
-                           |at <groupedChannels: $groupedChannels>""".stripMargin.replace('\n', ' ')
+                               |at <groupedChannels: $groupedChannels>""".stripMargin
+                             .replace('\n', ' ')
                          )
-                     _ = eventLog.update(produceRef +: _)
+                     _ <- syncF.delay { eventLog.update(produceRef +: _) }
+                     _ <- span.mark("event-log-updated")
                      extracted <- extractProduceCandidate(
                                    groupedChannels,
                                    channel,
                                    Datum(data, persist, produceRef)
                                  )
+                     _ <- span.mark("extract-produce-candidate")
                      r <- extracted match {
                            case Left(e)         => Left(e).pure[F]
                            case Right(Some(pc)) => processMatchFound(pc)
                            case Right(None) =>
                              storeData(channel, data, persist, produceRef)
                          }
+                     _ <- span.mark("process-matching")
                    } yield r
                  }
+        _ <- span.mark("post-produce-lock")
+        _ <- span.close()
       } yield result
     }
 
