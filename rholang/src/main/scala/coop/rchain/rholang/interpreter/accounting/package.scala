@@ -2,11 +2,8 @@ package coop.rchain.rholang.interpreter
 
 import cats._
 import cats.data._
-import cats.effect.Sync
-import cats.effect.concurrent.Ref
 import cats.implicits._
 import cats.mtl._
-
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 
 package object accounting extends Costs {
@@ -41,18 +38,6 @@ package object accounting extends Costs {
       _ <- cost.modify(_ - amount)
       _ <- error.ensure(cost.get)(OutOfPhlogistonsError)(_.value >= 0)
     } yield ()
-
-  def costLog[M[_]: Sync](): FunctorListen[M, Chain[Cost]] =
-    new DefaultFunctorListen[M, Chain[Cost]] {
-      override val functor: Functor[M]  = implicitly[Functor[M]]
-      private val ref                   = Ref.unsafe(Chain.empty[Cost])
-      def tell(l: Chain[Cost]): M[Unit] = ref.modify(c => (c.concat(l), ()))
-      def listen[A](fa: M[A]): M[(A, Chain[Cost])] =
-        for {
-          a <- fa
-          r <- ref.get
-        } yield ((a, r))
-    }
 
   def noOpCostLog[M[_]: Applicative]: FunctorTell[M, Chain[Cost]] =
     new DefaultFunctorTell[M, Chain[Cost]] {
