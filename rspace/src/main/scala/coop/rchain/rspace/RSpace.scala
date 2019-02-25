@@ -148,7 +148,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
       persist: Boolean,
       sequenceNumber: Int
   )(
-      implicit m: Match[P, E, A, R]
+      implicit m: Match[F, P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] = {
     def storeWC(consumeRef: Consume) =
       storeWaitingContinuation(channels, patterns, continuation, persist, consumeRef)
@@ -190,13 +190,11 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
                        channelToIndexedData <- fetchChannelToIndexData(channels)
                        _                    <- span.mark("channel-to-indexed-data-fetched")
 
-                       options <- syncF.delay {
-                                   extractDataCandidates(
-                                     channels.zip(patterns),
-                                     channelToIndexedData,
-                                     Nil
-                                   ).sequence.map(_.sequence)
-                                 }
+                       options <- extractDataCandidates(
+                                   channels.zip(patterns),
+                                   channelToIndexedData,
+                                   Nil
+                                 ).map(_.sequence.map(_.sequence))
                        _ <- span.mark("extract-consume-candidate")
                        result <- options match {
                                   case Left(e) =>
@@ -246,7 +244,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
       groupedChannels: Seq[Seq[C]],
       batChannel: C,
       data: Datum[A]
-  )(implicit m: Match[P, E, A, R]): F[Either[E, Option[ProduceCandidate[C, P, R, K]]]] = {
+  )(implicit m: Match[F, P, E, A, R]): F[Either[E, Option[ProduceCandidate[C, P, R, K]]]] = {
     type MaybeProduceCandidate = Option[ProduceCandidate[C, P, R, K]]
     type CandidateChannels     = Seq[C]
     def go(
@@ -292,12 +290,13 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
                                                }
                                            )
                                        }
+            firstMatch <- extractFirstMatch(
+                           channels,
+                           matchCandidates,
+                           channelToIndexedDataList.toMap
+                         )
           } yield
-            extractFirstMatch(
-              channels,
-              matchCandidates,
-              channelToIndexedDataList.toMap
-            ) match {
+            firstMatch match {
               case Left(e)     => e.asLeft[MaybeProduceCandidate].asRight[Seq[CandidateChannels]]
               case Right(None) => remaining.asLeft[Either[E, MaybeProduceCandidate]]
               case Right(produceCandidate) =>
@@ -400,7 +399,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
     } yield Right(None)
 
   override def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
-      implicit m: Match[P, E, A, R]
+      implicit m: Match[F, P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     contextShift.evalOn(scheduler) {
       for {

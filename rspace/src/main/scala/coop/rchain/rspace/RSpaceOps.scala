@@ -55,8 +55,8 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, E, A, R, K](
 
   protected[this] val logger: Logger
 
-  private[this] val installs: SyncVar[Installs[C, P, E, A, R, K]] = {
-    val installs = new SyncVar[Installs[C, P, E, A, R, K]]()
+  private[this] val installs: SyncVar[Installs[F, C, P, E, A, R, K]] = {
+    val installs = new SyncVar[Installs[F, C, P, E, A, R, K]]()
     installs.put(Map.empty)
     installs
   }
@@ -76,7 +76,7 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, E, A, R, K](
       channels: Seq[C],
       patterns: Seq[P],
       continuation: K
-  )(implicit m: Match[P, E, A, R]): F[Option[(K, Seq[R])]] = syncF.delay {
+  )(implicit m: Match[F, P, E, A, R]): F[Option[(K, Seq[R])]] = syncF.defer {
     if (channels.length =!= patterns.length) {
       val msg = "channels.length must equal patterns.length"
       logger.error(msg)
@@ -100,11 +100,11 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, E, A, R, K](
       c -> Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
     }.toMap
 
-    val options: Either[E, Option[Seq[DataCandidate[C, R]]]] =
-      extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).sequence
-        .map(_.sequence)
+    val options: F[Either[E, Option[Seq[DataCandidate[C, R]]]]] =
+      extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil)
+        .map(_.sequence.map(_.sequence))
 
-    options match {
+    options.map {
       case Left(e) =>
         throw new RuntimeException(s"Install never result in an invalid match: $e")
       case Right(None) =>
@@ -125,7 +125,7 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, E, A, R, K](
   }
 
   override def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
-      implicit m: Match[P, E, A, R]
+      implicit m: Match[F, P, E, A, R]
   ): F[Option[(K, Seq[R])]] =
     store.withTxnFlatF(store.createTxnWriteF()) { txn =>
       install(txn, channels, patterns, continuation)

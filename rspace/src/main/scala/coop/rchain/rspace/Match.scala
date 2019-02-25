@@ -8,7 +8,7 @@ package coop.rchain.rspace
   * @tparam A A type representing data
   * @tparam R A type representing a match result
   */
-trait Match[P, E, A, R] {
+trait Match[F[_], P, E, A, R] {
 
-  def get(p: P, a: A): Either[E, Option[R]]
+  def get(p: P, a: A): F[Either[E, Option[R]]]
 }

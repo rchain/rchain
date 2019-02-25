@@ -143,13 +143,13 @@ object internal {
       }
   }
 
-  final case class Install[P, E, A, R, K](
+  final case class Install[F[_], P, E, A, R, K](
       patterns: Seq[P],
       continuation: K,
-      _match: Match[P, E, A, R]
+      _match: Match[F, P, E, A, R]
   )
 
-  type Installs[C, P, E, A, R, K] = Map[Seq[C], Install[P, E, A, R, K]]
+  type Installs[F[_], C, P, E, A, R, K] = Map[Seq[C], Install[F, P, E, A, R, K]]
 
   import scodec.{Attempt, Err}
 
