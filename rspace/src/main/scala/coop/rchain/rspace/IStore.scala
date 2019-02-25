@@ -28,6 +28,8 @@ trait IStore[F[_], C, P, A, K] {
 
   private[rspace] def withTxnF[R](txn: F[Transaction])(f: Transaction => R): F[R]
 
+  private[rspace] def withTxnFlatF[R](txn: F[Transaction])(f: Transaction => F[R]): F[R]
+
   private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash
 
   private[rspace] def getChannels(txn: Transaction, channelsHash: Blake2b256Hash): Seq[C]

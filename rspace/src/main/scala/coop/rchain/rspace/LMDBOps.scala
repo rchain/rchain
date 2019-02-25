@@ -64,20 +64,18 @@ trait LMDBOps[F[_]] extends CloseOps {
       txn.close()
     }
 
-  private[rspace] def withTxnF[R](txnF: F[Txn[ByteBuffer]])(f: Txn[ByteBuffer] => R): F[R] =
+  private[rspace] def withTxnFlatF[R](txnF: F[Txn[ByteBuffer]])(f: Txn[ByteBuffer] => F[R]): F[R] =
     for {
-      txn <- txnF
-      retErr <- syncF.delay {
-                 val r = f(txn)
-                 txn.commit()
-                 r
-               }.attempt
-      _ <- syncF.delay {
-            updateGauges()
-            txn.close()
-          }
-      ret <- retErr.fold(syncF.raiseError, _.pure[F])
+      txn    <- txnF
+      retErr <- f(txn).attempt
+      _      <- syncF.delay(retErr.map(_ => txn.commit()))
+      _      <- syncF.delay(updateGauges())
+      _      <- syncF.delay(txn.close())
+      ret    <- syncF.fromEither(retErr)
     } yield ret
+
+  private[rspace] def withTxnF[R](txnF: F[Txn[ByteBuffer]])(f: Txn[ByteBuffer] => R): F[R] =
+    withTxnFlatF[R](txnF)(txn => syncF.delay { f(txn) })
 
   /** The methods:
     * `def get[V](txn: Txn[ByteBuffer], key: Blake2b256Hash)`

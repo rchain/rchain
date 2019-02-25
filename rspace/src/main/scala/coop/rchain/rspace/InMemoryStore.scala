@@ -56,20 +56,22 @@ class InMemoryStore[F[_], T, C, P, A, K](
 
   private[rspace] def createTxnWriteF(): F[Transaction] = syncF.delay(createTxnWrite())
 
-  private[rspace] def withTxnF[R](txnF: F[Transaction])(f: Transaction => R): F[R] =
+  private[rspace] def withTxnFlatF[R](txnF: F[Transaction])(f: Transaction => F[R]): F[R] =
     for {
-      txn <- txnF
-      retErr <- syncF.delay {
-                 val r = f(txn)
-                 txn.readState({ state =>
-                   entriesGauge.set(state.size)
-                 })
-                 txn.commit()
-                 r
-               }.attempt
-      _   <- syncF.delay { txn.close() }
-      ret <- retErr.fold(syncF.raiseError, _.pure[F])
+      txn    <- txnF
+      retErr <- f(txn).attempt
+      _ <- syncF.delay(retErr.map { _ =>
+            txn.readState({ state =>
+              entriesGauge.set(state.size)
+            })
+            txn.commit()
+          })
+      _   <- syncF.delay(txn.close())
+      ret <- syncF.fromEither(retErr)
     } yield ret
+
+  private[rspace] def withTxnF[R](txnF: F[Transaction])(f: Transaction => R): F[R] =
+    withTxnFlatF[R](txnF)(txn => syncF.delay { f(txn) })
 
   private[rspace] def updateGauges(): Unit = ???
 
