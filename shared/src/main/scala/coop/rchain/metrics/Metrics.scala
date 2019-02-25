@@ -4,6 +4,16 @@ import cats._
 import cats.data._
 import cats.implicits._
 
+trait Span[F[_]] {
+  def mark(name: String): F[Unit]
+  def close(): F[Unit]
+}
+
+final case class NoopSpan[F[_]: Applicative]() extends Span[F] {
+  def mark(name: String): F[Unit] = ().pure[F]
+  def close(): F[Unit]            = ().pure[F]
+}
+
 trait Metrics[F[_]] {
   // Counter
   def incrementCounter(name: String, delta: Long = 1)(implicit ev: Metrics.Source): F[Unit]
@@ -23,6 +33,8 @@ trait Metrics[F[_]] {
   def record(name: String, value: Long, count: Long = 1)(implicit ev: Metrics.Source): F[Unit]
 
   def timer[A](name: String, block: F[A])(implicit ev: Metrics.Source): F[A]
+
+  def span(source: Metrics.Source): F[Span[F]]
 }
 
 object Metrics extends MetricsInstances {
@@ -40,6 +52,7 @@ object Metrics extends MetricsInstances {
     def record(name: String, value: Long, count: Long = 1)(implicit ev: Metrics.Source): F[Unit] =
       ().pure[F]
     def timer[A](name: String, block: F[A])(implicit ev: Metrics.Source): F[A] = block
+    def span(source: Metrics.Source): F[Span[F]]                               = Applicative[F].pure(NoopSpan[F]())
   }
 
   import shapeless.tag.@@
@@ -90,5 +103,17 @@ sealed abstract class MetricsInstances {
           implicit ev: Metrics.Source
       ): EitherT[F, E, A] =
         EitherT(evF.timer(name, block.value))
+
+      //todo make this sleeker
+      def span(source: Metrics.Source): EitherT[F, E, Span[EitherT[F, E, ?]]] = {
+        val fSpan: F[Span[F]] = evF.span(source)
+        val temp: Span[EitherT[F, E, ?]] = new Span[EitherT[F, E, ?]] {
+          def mark(name: String): EitherT[F, E, Unit] =
+            EitherT.liftF(fSpan.flatMap(_.mark(name)))
+          def close(): EitherT[F, E, Unit] = EitherT.liftF(fSpan.flatMap(s => s.close()))
+        }
+
+        EitherT.liftF(temp.pure[F])
+      }
     }
 }
