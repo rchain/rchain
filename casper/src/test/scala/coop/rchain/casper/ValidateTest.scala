@@ -357,7 +357,7 @@ class ValidateTest
           current <- Time[F].currentMillis
           deploy  <- ProtoUtil.basicProcessedDeploy[F](current.toInt)
           block <- createBlock[F](
-                    parents.map(_.blockHash).take(1),
+                    parents.map(_.blockHash),
                     creator = validators(validator),
                     bonds = bonds,
                     deploys = Seq(deploy),
