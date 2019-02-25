@@ -13,7 +13,7 @@ import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{Produce, Log => RSpaceLog, _}
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, Span}
 import scodec.Codec
 
 class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch: Branch)(
@@ -33,10 +33,12 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
   override protected[this] val logger: Logger = Logger[this.type]
 
   private[this] implicit val MetricsSource: Metrics.Source =
-    Metrics.Source(RSpaceMetricsSource, ".replay")
+    Metrics.Source(RSpaceMetricsSource, "replay")
 
-  private[this] val consumeCommLabel = MetricsSource + ".comm.consume"
-  private[this] val produceCommLabel = MetricsSource + ".comm.produce"
+  private[this] val consumeCommLabel = "comm.consume"
+  private[this] val produceCommLabel = "comm.produce"
+  private[this] val consumeSpanLabel = Metrics.Source(MetricsSource, "consume")
+  private[this] val produceSpanLabel = Metrics.Source(MetricsSource, "produce")
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove when Kamon replaced with Metrics API
   def consume(
@@ -53,9 +55,14 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
         val msg = "channels.length must equal patterns.length"
         logF.error(msg) *> syncF.raiseError(new IllegalArgumentException(msg))
       } else
-        consumeLockF(channels) {
-          lockedConsume(channels, patterns, continuation, persist, sequenceNumber)
-        }
+        for {
+          span <- metricsF.span(consumeSpanLabel)
+          _    <- span.mark("before-consume-lock")
+          result <- consumeLockF(channels) {
+                     lockedConsume(channels, patterns, continuation, persist, sequenceNumber, span)
+                   }
+          _ <- span.mark("post-consume-lock")
+        } yield result
     }
 
   type MaybeConsumeResult = Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]
@@ -66,7 +73,8 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
-      sequenceNumber: Int
+      sequenceNumber: Int,
+      span: Span[F]
   )(
       implicit m: Match[P, E, A, R]
   ): F[MaybeConsumeResult] = {
@@ -82,9 +90,13 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
                                        }
                                        .map(v => c -> v) // TODO inculde map in traverse?
                                    }
-        result = extractDataCandidates(channels.zip(patterns), channelToIndexedDataList.toMap, Nil)
-          .flatMap(_.toOption)
-          .sequence
+        result <- syncF.delay {
+                   extractDataCandidates(
+                     channels.zip(patterns),
+                     channelToIndexedDataList.toMap,
+                     Nil
+                   ).flatMap(_.toOption).sequence
+                 }
       } yield result
 
     @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove when Kamon replaced with Metrics API
@@ -103,8 +115,8 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
                 for (channel <- channels) store.addJoin(txn, channel, channels)
               }
         _ <- logF.debug(s"""|consume: no data found,
-                         |storing <(patterns, continuation): ($patterns, $continuation)>
-                         |at <channels: $channels>""".stripMargin.replace('\n', ' '))
+                            |storing <(patterns, continuation): ($patterns, $continuation)>
+                            |at <channels: $channels>""".stripMargin.replace('\n', ' '))
       } yield None
 
     def handleMatches(
@@ -114,7 +126,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
     ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]] =
       for {
         _       <- metricsF.incrementCounter(consumeCommLabel)
-        commRef = COMM(consumeRef, mats.map(_.datum.source))
+        commRef <- syncF.delay { COMM(consumeRef, mats.map(_.datum.source)) }
         //fixme replace with raiseError
         _ = assert(comms.contains(commRef), "COMM Event was not contained in the trace")
         r <- mats.toList
@@ -170,9 +182,12 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
     }
 
     for {
-      _          <- logF.debug(s"""|consume: searching for data matching <patterns: $patterns>
-                     |at <channels: $channels>""".stripMargin.replace('\n', ' '))
-      consumeRef = Consume.create(channels, patterns, continuation, persist, sequenceNumber)
+      _ <- logF.debug(s"""|consume: searching for data matching <patterns: $patterns>
+                          |at <channels: $channels>""".stripMargin.replace('\n', ' '))
+      consumeRef <- syncF.delay {
+                     Consume.create(channels, patterns, continuation, persist, sequenceNumber)
+                   }
+      _ <- span.mark("after-compute-consumeref")
       r <- replayData.get(consumeRef) match {
             case None =>
               storeWaitingContinuation(consumeRef, None).map(_.asRight[E])
@@ -196,13 +211,25 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
       implicit m: Match[P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     contextShift.evalOn(scheduler) {
-      produceLockF(channel) {
-        lockedProduce(channel, data, persist, sequenceNumber)
-      }
+      for {
+        span <- metricsF.span(produceSpanLabel)
+        _    <- span.mark("before-produce-lock")
+        result <- produceLockF(channel) {
+                   lockedProduce(channel, data, persist, sequenceNumber, span)
+                 }
+        _ <- span.mark("post-produce-lock")
+        _ <- span.close()
+      } yield result
     }
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove when Kamon replaced with Metrics API
-  private[this] def lockedProduce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
+  private[this] def lockedProduce(
+      channel: C,
+      data: A,
+      persist: Boolean,
+      sequenceNumber: Int,
+      span: Span[F]
+  )(
       implicit m: Match[P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] = {
     def runMatcher(
@@ -287,7 +314,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
                 store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
               }
         _ <- logF.debug(s"""|produce: no matching continuation found
-                       |storing <data: $data> at <channel: $channel>""".stripMargin)
+                            |storing <data: $data> at <channel: $channel>""".stripMargin)
       } yield None
 
     def handleMatch(
@@ -304,7 +331,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
             ) =>
           for {
             _       <- metricsF.incrementCounter(produceCommLabel)
-            commRef = COMM(consumeRef, dataCandidates.map(_.datum.source))
+            commRef <- syncF.delay { COMM(consumeRef, dataCandidates.map(_.datum.source)) }
             //fixme replace with raiseError
             _ = assert(comms.contains(commRef), "COMM Event was not contained in the trace")
             _ <- if (!persistK) {
@@ -326,16 +353,16 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
                       }
                   }
             _ <- logF.debug(s"produce: matching continuation found at <channels: $channels>")
-            r = {
-              removeBindingsFor(commRef)
-              val contSequenceNumber = commRef.nextSequenceNumber
-              Some(
-                (
-                  ContResult(continuation, persistK, channels, patterns, contSequenceNumber),
-                  dataCandidates.map(dc => Result(dc.datum.a, dc.datum.persist))
-                )
-              )
-            }
+            r <- syncF.delay {
+                  removeBindingsFor(commRef)
+                  val contSequenceNumber = commRef.nextSequenceNumber
+                  Some(
+                    (
+                      ContResult(continuation, persistK, channels, patterns, contSequenceNumber),
+                      dataCandidates.map(dc => Result(dc.datum.a, dc.datum.persist))
+                    )
+                  )
+                }
           } yield r
       }
 
@@ -343,12 +370,14 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
       groupedChannels <- store.withTxnF(store.createTxnReadF()) { txn =>
                           store.getJoin(txn, channel)
                         }
-
-      _ <- logF.debug(s"""|produce: searching for matching continuations
-                       |at <groupedChannels: $groupedChannels>""".stripMargin.replace('\n', ' '))
-
-      produceRef = Produce.create(channel, data, persist, sequenceNumber)
-
+      _ <- span.mark("after-fetch-joins")
+      _ <- logF.debug(
+            s"""|produce: searching for matching continuations
+                |at <groupedChannels: $groupedChannels>""".stripMargin
+              .replace('\n', ' ')
+          )
+      produceRef <- syncF.delay { Produce.create(channel, data, persist, sequenceNumber) }
+      _          <- span.mark("after-compute-produceref")
       result <- replayData.get(produceRef) match {
                  case None =>
                    storeDatum(produceRef, None).map(r => Right(r))
