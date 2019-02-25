@@ -13,7 +13,7 @@ import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{Produce, Log => RSpaceLog, _}
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
-import kamon._
+import coop.rchain.metrics.Metrics
 import scodec.Codec
 
 class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch: Branch)(
@@ -25,16 +25,18 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
     val concurrent: Concurrent[F],
     logF: Log[F],
     contextShift: ContextShift[F],
-    scheduler: ExecutionContext
+    scheduler: ExecutionContext,
+    metricsF: Metrics[F]
 ) extends RSpaceOps[F, C, P, E, A, R, K](store, branch)
     with IReplaySpace[F, C, P, E, A, R, K] {
 
   override protected[this] val logger: Logger = Logger[this.type]
 
-  private[this] val MetricsSource = RSpaceMetricsSource + ".replay"
+  private[this] implicit val MetricsSource: Metrics.Source =
+    Metrics.Source(RSpaceMetricsSource, ".replay")
 
-  private[this] val consumeCommCounter = Kamon.counter(MetricsSource + ".comm.consume")
-  private[this] val produceCommCounter = Kamon.counter(MetricsSource + ".comm.produce")
+  private[this] val consumeCommLabel = MetricsSource + ".comm.consume"
+  private[this] val produceCommLabel = MetricsSource + ".comm.produce"
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove when Kamon replaced with Metrics API
   def consume(
@@ -111,7 +113,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
         comms: Multiset[COMM]
     ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]] =
       for {
-        _       <- consumeCommCounter.increment().pure[F]
+        _       <- metricsF.incrementCounter(consumeCommLabel)
         commRef = COMM(consumeRef, mats.map(_.datum.source))
         //fixme replace with raiseError
         _ = assert(comms.contains(commRef), "COMM Event was not contained in the trace")
@@ -301,7 +303,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
             dataCandidates
             ) =>
           for {
-            _       <- syncF.delay { produceCommCounter.increment() }
+            _       <- metricsF.incrementCounter(produceCommLabel)
             commRef = COMM(consumeRef, dataCandidates.map(_.datum.source))
             //fixme replace with raiseError
             _ = assert(comms.contains(commRef), "COMM Event was not contained in the trace")
@@ -410,7 +412,8 @@ object ReplayRSpace {
       concurrent: Concurrent[F],
       log: Log[F],
       contextShift: ContextShift[F],
-      scheduler: ExecutionContext
+      scheduler: ExecutionContext,
+      metricsF: Metrics[F]
   ): F[ReplayRSpace[F, C, P, E, A, R, K]] = {
 
     implicit val codecC: Codec[C] = sc.toCodec

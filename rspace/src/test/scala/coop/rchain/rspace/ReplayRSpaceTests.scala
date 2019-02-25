@@ -976,7 +976,8 @@ trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, 
           Concurrent[Task],
           log,
           ContextShift[Task],
-          dedicated
+          dedicated,
+          metricsF
         )
         .unsafeRunSync
 
