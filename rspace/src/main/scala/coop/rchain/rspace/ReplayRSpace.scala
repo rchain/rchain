@@ -1,6 +1,5 @@
 package coop.rchain.rspace
 
-import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext
@@ -91,21 +90,20 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
         consumeRef: Consume,
         maybeCommRef: Option[COMM]
     ): F[None.type] =
-      store
-        .withTxnF(store.createTxnWriteF()) { txn =>
-          store.putWaitingContinuation(
-            txn,
-            channels,
-            WaitingContinuation(patterns, continuation, persist, consumeRef)
-          )
-          for (channel <- channels) store.addJoin(txn, channel, channels)
-        }
-        .map { _ =>
-          logger.debug(s"""|consume: no data found,
+      for {
+        _ <- store
+              .withTxnF(store.createTxnWriteF()) { txn =>
+                store.putWaitingContinuation(
+                  txn,
+                  channels,
+                  WaitingContinuation(patterns, continuation, persist, consumeRef)
+                )
+                for (channel <- channels) store.addJoin(txn, channel, channels)
+              }
+        _ <- logF.debug(s"""|consume: no data found,
                          |storing <(patterns, continuation): ($patterns, $continuation)>
                          |at <channels: $channels>""".stripMargin.replace('\n', ' '))
-          None
-        }
+      } yield None
 
     def handleMatches(
         mats: Seq[DataCandidate[C, R]],
@@ -115,7 +113,8 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
       for {
         _       <- consumeCommCounter.increment().pure[F]
         commRef = COMM(consumeRef, mats.map(_.datum.source))
-        _       = assert(comms.contains(commRef), "COMM Event was not contained in the trace")
+        //fixme replace with raiseError
+        _ = assert(comms.contains(commRef), "COMM Event was not contained in the trace")
         r <- mats.toList
               .sortBy(_.datumIndex)(Ordering[Int].reverse)
               .traverse {
@@ -126,10 +125,12 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
                     }
                   } else ().pure[F]
               }
-              .map { _ =>
-                logger.debug(
+              .flatMap { _ =>
+                logF.debug(
                   s"consume: data found for <patterns: $patterns> at <channels: $channels>"
                 )
+              }
+              .map { _ =>
                 removeBindingsFor(commRef)
                 val contSequenceNumber = commRef.nextSequenceNumber
                 Some(
@@ -141,30 +142,34 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
               }
       } yield r
 
-//    @tailrec <- todo fix tailrec
     @SuppressWarnings(Array("org.wartremover.warts.Throw"))
     // TODO stop throwing exceptions
-    def getCommOrDataCandidates(comms: Seq[COMM]): F[Either[COMM, Seq[DataCandidate[C, R]]]] =
-      comms match {
-        case Nil =>
-          val msg = "List comms must not be empty"
-          logger.error(msg)
-          throw new IllegalArgumentException(msg)
-        case commRef :: Nil =>
-          runMatcher(commRef).map {
-            case Some(x) => Right(x)
-            case None    => Left(commRef)
-          }
-        case commRef :: rem =>
-          runMatcher(commRef).flatMap {
-            case Some(x) => Right(x).asInstanceOf[Either[COMM, Seq[DataCandidate[C, R]]]].pure[F]
-            case None    => getCommOrDataCandidates(rem)
-          }
-      }
+    def getCommOrDataCandidates(comms: Seq[COMM]): F[Either[COMM, Seq[DataCandidate[C, R]]]] = {
+      type COMMOrData = Either[COMM, Seq[DataCandidate[C, R]]]
+      def go(comms: Seq[COMM]) =
+        comms match {
+          case Nil =>
+            val msg = "List comms must not be empty"
+            //fixme replace with raiseError
+            logger.error(msg)
+            throw new IllegalArgumentException(msg)
+          case commRef :: Nil =>
+            runMatcher(commRef).map {
+              case Some(x) => x.asRight[COMM].asRight[Seq[COMM]]
+              case None    => commRef.asLeft[Seq[DataCandidate[C, R]]].asRight[Seq[COMM]]
+            }
+          case commRef :: rem =>
+            runMatcher(commRef).map {
+              case Some(x) => x.asRight[COMM].asRight[Seq[COMM]]
+              case None    => rem.asLeft[COMMOrData]
+            }
+        }
+      comms.tailRecM(go)
+    }
 
     for {
-      _          <- logger.debug(s"""|consume: searching for data matching <patterns: $patterns>
-                     |at <channels: $channels>""".stripMargin.replace('\n', ' ')).pure[F]
+      _          <- logF.debug(s"""|consume: searching for data matching <patterns: $patterns>
+                     |at <channels: $channels>""".stripMargin.replace('\n', ' '))
       consumeRef = Consume.create(channels, patterns, continuation, persist, sequenceNumber)
       r <- replayData.get(consumeRef) match {
             case None =>
@@ -198,57 +203,90 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
   private[this] def lockedProduce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
       implicit m: Match[P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] = {
-    //@tailrec <- todo fix tailrec
     def runMatcher(
         comm: COMM,
         produceRef: Produce,
         groupedChannels: Seq[Seq[C]]
-    ): F[Option[ProduceCandidate[C, P, R, K]]] =
-      groupedChannels match {
-        case Nil => None.asInstanceOf[Option[ProduceCandidate[C, P, R, K]]].pure[F]
-        case channels :: remaining =>
-          for {
-            matchCandidates <- store.withTxnF(store.createTxnReadF()) { txn =>
-                                store.getWaitingContinuation(txn, channels).zipWithIndex.filter {
-                                  case (WaitingContinuation(_, _, _, source), _) =>
-                                    comm.consume == source
+    ): F[Option[ProduceCandidate[C, P, R, K]]] = {
+
+      type MaybeProduceCandidate = Option[ProduceCandidate[C, P, R, K]]
+
+      def go(groupedChannels: Seq[Seq[C]]): F[Either[Seq[Seq[C]], MaybeProduceCandidate]] =
+        groupedChannels match {
+          case Nil => none[ProduceCandidate[C, P, R, K]].asRight[Seq[Seq[C]]].pure[F]
+          case channels :: remaining =>
+            for {
+              matchCandidates <- store.withTxnF(store.createTxnReadF()) { txn =>
+                                  store.getWaitingContinuation(txn, channels).zipWithIndex.filter {
+                                    case (WaitingContinuation(_, _, _, source), _) =>
+                                      comm.consume == source
+                                  }
                                 }
-                              }
-            channelToIndexedDataList <- store.withTxnF(store.createTxnReadF()) { txn =>
-                                         channels.map { c: C =>
-                                           val as = store.getData(txn, Seq(c)).zipWithIndex.filter {
-                                             case (Datum(_, _, source), _) =>
-                                               comm.produces.contains(source)
-                                           }
-                                           c -> {
-                                             if (c == channel)
-                                               Seq((Datum(data, persist, produceRef), -1))
-                                             else as
+              channelToIndexedDataList <- store.withTxnF(store.createTxnReadF()) { txn =>
+                                           channels.map { c: C =>
+                                             val as =
+                                               store.getData(txn, Seq(c)).zipWithIndex.filter {
+                                                 case (Datum(_, _, source), _) =>
+                                                   comm.produces.contains(source)
+                                               }
+                                             c -> {
+                                               if (c == channel)
+                                                 Seq((Datum(data, persist, produceRef), -1))
+                                               else as
+                                             }
                                            }
                                          }
-                                       }
-            result <- extractFirstMatch(channels, matchCandidates, channelToIndexedDataList.toMap) match {
-                       case Right(None)             => runMatcher(comm, produceRef, remaining)
-                       case Right(produceCandidate) => produceCandidate.pure[F]
-                       case Left(_)                 => ???
-                     }
-          } yield result
+              result = extractFirstMatch(channels, matchCandidates, channelToIndexedDataList.toMap) match {
+                case Right(None)             => remaining.asLeft[MaybeProduceCandidate]
+                case Right(produceCandidate) => produceCandidate.asRight[Seq[Seq[C]]]
+                case Left(_)                 => ???
+              }
+            } yield result
+        }
+      groupedChannels.tailRecM(go)
+    }
 
-      }
+    @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+    // TODO stop throwing exceptions
+    def getCommOrProduceCandidate(
+        comms: Seq[COMM],
+        produceRef: Produce,
+        groupedChannels: Seq[Seq[C]]
+    ): F[Either[COMM, ProduceCandidate[C, P, R, K]]] = {
+      type COMMOrProduce = Either[COMM, ProduceCandidate[C, P, R, K]]
+      def go(comms: Seq[COMM]): F[Either[Seq[COMM], COMMOrProduce]] =
+        comms match {
+          case Nil =>
+            val msg = "comms must not be empty"
+            //fixme replace with raiseError
+            logger.error(msg)
+            throw new IllegalArgumentException(msg)
+          case commRef :: Nil =>
+            runMatcher(commRef, produceRef, groupedChannels) map {
+              case Some(x) => x.asRight[COMM].asRight[Seq[COMM]]
+              case None    => commRef.asLeft[ProduceCandidate[C, P, R, K]].asRight[Seq[COMM]]
+            }
+          case commRef :: rem =>
+            runMatcher(commRef, produceRef, groupedChannels) map {
+              case Some(x) => x.asRight[COMM].asRight[Seq[COMM]]
+              case None    => rem.asLeft[COMMOrProduce]
+            }
+        }
+      comms.tailRecM(go)
+    }
 
     def storeDatum(
         produceRef: Produce,
         maybeCommRef: Option[COMM]
     ): F[None.type] =
-      store
-        .withTxnF(store.createTxnWriteF()) { txn =>
-          store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
-        }
-        .map { _ =>
-          logger.debug(s"""|produce: no matching continuation found
-                         |storing <data: $data> at <channel: $channel>""".stripMargin)
-          None
-        }
+      for {
+        _ <- store
+              .withTxnF(store.createTxnWriteF()) { txn =>
+                store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
+              }
+        _ <- logF.debug(s"""|produce: no matching continuation found
+                       |storing <data: $data> at <channel: $channel>""".stripMargin)
+      } yield None
 
     def handleMatch(
         mat: ProduceCandidate[C, P, R, K],
@@ -265,7 +303,8 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
           for {
             _       <- syncF.delay { produceCommCounter.increment() }
             commRef = COMM(consumeRef, dataCandidates.map(_.datum.source))
-            _       = assert(comms.contains(commRef), "COMM Event was not contained in the trace")
+            //fixme replace with raiseError
+            _ = assert(comms.contains(commRef), "COMM Event was not contained in the trace")
             _ <- if (!persistK) {
                   store.withTxnF(store.createTxnWriteF()) { txn =>
                     store.removeWaitingContinuation(txn, channels, continuationIndex)
@@ -284,8 +323,8 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
                         store.removeJoin(txn, candidateChannel, channels)
                       }
                   }
+            _ <- logF.debug(s"produce: matching continuation found at <channels: $channels>")
             r = {
-              logger.debug(s"produce: matching continuation found at <channels: $channels>")
               removeBindingsFor(commRef)
               val contSequenceNumber = commRef.nextSequenceNumber
               Some(
@@ -303,7 +342,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
                           store.getJoin(txn, channel)
                         }
 
-      _ = logger.debug(s"""|produce: searching for matching continuations
+      _ <- logF.debug(s"""|produce: searching for matching continuations
                        |at <groupedChannels: $groupedChannels>""".stripMargin.replace('\n', ' '))
 
       produceRef = Produce.create(channel, data, persist, sequenceNumber)
@@ -312,30 +351,12 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
                  case None =>
                    storeDatum(produceRef, None).map(r => Right(r))
                  case Some(comms) =>
-                   //@tailrec <-- todo fix tailrec
-                   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-                   // TODO stop throwing exceptions
-                   def getCommOrProduceCandidate(
-                       comms: Seq[COMM]
-                   ): F[Either[COMM, ProduceCandidate[C, P, R, K]]] =
-                     comms match {
-                       case Nil =>
-                         val msg = "comms must not be empty"
-                         logger.error(msg)
-                         throw new IllegalArgumentException(msg)
-                       case commRef :: Nil =>
-                         runMatcher(commRef, produceRef, groupedChannels) map {
-                           case Some(x) => Right(x)
-                           case None    => Left(commRef)
-                         }
-                       case commRef :: rem =>
-                         runMatcher(commRef, produceRef, groupedChannels) flatMap {
-                           case Some(x) => x.asRight[COMM].pure[F]
-                           case None    => getCommOrProduceCandidate(rem)
-                         }
-                     }
                    val commOrProduceCandidate: F[Either[COMM, ProduceCandidate[C, P, R, K]]] =
-                     getCommOrProduceCandidate(comms.iterator().asScala.toList)
+                     getCommOrProduceCandidate(
+                       comms.iterator().asScala.toList,
+                       produceRef,
+                       groupedChannels
+                     )
                    val r: F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] = commOrProduceCandidate flatMap {
                      case Left(comm) =>
                        storeDatum(produceRef, Some(comm)).map(r => Right(r))
@@ -361,7 +382,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
     for {
       isEmpty <- syncF.delay(replayData.isEmpty)
       checkpoint <- isEmpty.fold(
-                     Checkpoint(store.createCheckpoint(), Seq.empty).pure[F], {
+                     syncF.delay { Checkpoint(store.createCheckpoint(), Seq.empty) }, {
                        val msg =
                          s"unused comm event: replayData multimap has ${replayData.size} elements left"
                        logF.error(msg) *> syncF.raiseError[Checkpoint](new ReplayException(msg))
