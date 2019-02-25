@@ -9,6 +9,8 @@ import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.util.BondingUtil
 import coop.rchain.comm._
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.node.configuration._
 import coop.rchain.node.diagnostics.client.GrpcDiagnosticsService
 import coop.rchain.node.effects._
@@ -77,9 +79,11 @@ object Main {
       case ContAtName(names) => DeployRuntime.listenForContinuationAtName[Task](names)
       case Run               => nodeProgram(conf)
       case BondingDeployGen(bondKey, ethAddress, amount, secKey, pubKey) =>
+        implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
         BondingUtil
           .writeIssuanceBasedRhoFiles[Task, Task.Par](bondKey, ethAddress, amount, secKey, pubKey)
       case FaucetBondingDeployGen(amount, sigAlgorithm, secKey, pubKey) =>
+        implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
         BondingUtil.writeFaucetBasedRhoFiles[Task, Task.Par](amount, sigAlgorithm, secKey, pubKey)
       case _ => conf.printHelp()
     }

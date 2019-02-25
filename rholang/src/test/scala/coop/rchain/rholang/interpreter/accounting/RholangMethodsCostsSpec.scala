@@ -3,6 +3,8 @@ package coop.rchain.rholang.interpreter.accounting
 import java.nio.file.{Files, Path}
 
 import com.google.protobuf.ByteString
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
@@ -794,7 +796,8 @@ class RholangMethodsCostsSpec
   private var context: RhoContext[Task] = null
   private var space: RhoISpace[Task]    = null
 
-  implicit val logF: Log[Task] = new Log.NOPLog[Task]
+  implicit val logF: Log[Task]            = new Log.NOPLog[Task]
+  implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
   override protected def beforeAll(): Unit = {
     import coop.rchain.catscontrib.TaskContrib._

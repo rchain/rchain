@@ -14,7 +14,7 @@ import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace._
 import coop.rchain.shared.SyncVarOps._
 import com.typesafe.scalalogging.Logger
-import kamon._
+import coop.rchain.metrics.Metrics
 import org.lmdbjava.Txn
 import scodec.Codec
 
@@ -30,15 +30,16 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
     val concurrent: Concurrent[F],
     logF: Log[F],
     contextShift: ContextShift[F],
-    scheduler: ExecutionContext
+    scheduler: ExecutionContext,
+    metricsF: Metrics[F]
 ) extends RSpaceOps[F, C, P, E, A, R, K](store, branch)
     with ISpace[F, C, P, E, A, R, K] {
 
   override protected[this] val logger: Logger = Logger[this.type]
 
-  private[this] val MetricsSource      = RSpaceMetricsSource
-  private[this] val consumeCommCounter = Kamon.counter(MetricsSource + ".comm.consume")
-  private[this] val produceCommCounter = Kamon.counter(MetricsSource + ".comm.produce")
+  private[this] implicit val MetricsSource = RSpaceMetricsSource
+  private[this] val consumeCommLabel       = MetricsSource + ".comm.consume"
+  private[this] val produceCommLabel       = MetricsSource + ".comm.produce"
 
   /*
    * Here, we create a cache of the data at each channel as `channelToIndexedData`
@@ -191,7 +192,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
                                   case Right(None) => storeWC(consumeRef)
                                   case Right(Some(dataCandidates)) =>
                                     for {
-                                      _ <- syncF.delay { consumeCommCounter.increment() }
+                                      _ <- metricsF.incrementCounter(consumeCommLabel)
                                       _ = eventLog.update(
                                         COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _
                                       )
@@ -360,7 +361,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
         }
 
         for {
-          _ <- syncF.delay { produceCommCounter.increment() }
+          _ <- metricsF.incrementCounter(produceCommLabel)
           _ <- registerCOMM
           _ <- maybePersistWaitingContinuation
           _ <- removeMatchedDatumAndJoin
@@ -386,7 +387,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     contextShift.evalOn(scheduler) {
       for {
-        produceRef <- syncF.delay { Produce.create(channel, data, persist, sequenceNumber) }
+        produceRef <- Produce.create(channel, data, persist, sequenceNumber).pure[F]
         result <- produceLockF(channel) {
                    for {
                      //TODO fix double join fetch
@@ -434,7 +435,8 @@ object RSpace {
       concurrent: Concurrent[F],
       log: Log[F],
       contextShift: ContextShift[F],
-      scheduler: ExecutionContext
+      scheduler: ExecutionContext,
+      metricsF: Metrics[F]
   ): F[ISpace[F, C, P, E, A, R, K]] = {
     type InMemTXN    = InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]]
     type ByteBuffTXN = Txn[ByteBuffer]
@@ -463,7 +465,8 @@ object RSpace {
       concurrent: Concurrent[F],
       logF: Log[F],
       contextShift: ContextShift[F],
-      scheduler: ExecutionContext
+      scheduler: ExecutionContext,
+      metricsF: Metrics[F]
   ): F[ISpace[F, C, P, E, A, R, K]] = {
 
     implicit val codecC: Codec[C] = sc.toCodec

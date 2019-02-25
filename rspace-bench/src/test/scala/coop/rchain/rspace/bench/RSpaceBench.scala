@@ -5,6 +5,8 @@ import java.util.concurrent.TimeUnit
 
 import cats.Id
 import cats.effect._
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.rspace._
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
@@ -19,7 +21,6 @@ import org.openjdk.jmh.infra.Blackhole
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
-
 import scala.concurrent.ExecutionContext.Implicits.global
 
 @org.openjdk.jmh.annotations.State(Scope.Thread)
@@ -93,8 +94,10 @@ class LMDBBench extends RSpaceBench {
   val mapSize: Long  = 1024L * 1024L * 1024L
   val noTls: Boolean = false
 
-  var dbDir: Path            = null
-  implicit val logF: Log[Id] = new Log.NOPLog[Id]
+  var dbDir: Path                       = null
+  implicit val logF: Log[Id]            = new Log.NOPLog[Id]
+  implicit val noopMetrics: Metrics[Id] = new metrics.Metrics.MetricsNOP[Id]
+
   @Setup
   def setup() = {
     dbDir = Files.createTempDirectory("rchain-rspace-lmdb-bench-")
@@ -121,7 +124,8 @@ class LMDBBench extends RSpaceBench {
 @Measurement(iterations = 10)
 class InMemBench extends RSpaceBench {
 
-  implicit val logF: Log[Id] = new Log.NOPLog[Id]
+  implicit val logF: Log[Id]            = new Log.NOPLog[Id]
+  implicit val noopMetrics: Metrics[Id] = new metrics.Metrics.MetricsNOP[Id]
 
   @Setup
   def setup() = {
@@ -149,10 +153,11 @@ class InMemBench extends RSpaceBench {
 @Measurement(iterations = 10)
 class MixedBench extends RSpaceBench {
 
-  val mapSize: Long          = 1024L * 1024L * 1024L
-  val noTls: Boolean         = false
-  implicit val logF: Log[Id] = Log.log[Id]
-  var dbDir: Path            = null
+  val mapSize: Long                     = 1024L * 1024L * 1024L
+  val noTls: Boolean                    = false
+  implicit val logF: Log[Id]            = Log.log[Id]
+  implicit val noopMetrics: Metrics[Id] = new metrics.Metrics.MetricsNOP[Id]
+  var dbDir: Path                       = null
 
   @Setup
   def setup() = {

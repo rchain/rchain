@@ -3,6 +3,8 @@ package coop.rchain.rholang.interpreter.storage
 import cats.effect.{Resource, Sync}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance.FreeVar
@@ -463,5 +465,6 @@ object ChargingRSpaceTest {
     override def clear(): Task[Unit]                                                      = ???
   }
 
-  implicit val logF: Log[Task] = new Log.NOPLog[Task]
+  implicit val logF: Log[Task]            = new Log.NOPLog[Task]
+  implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 }

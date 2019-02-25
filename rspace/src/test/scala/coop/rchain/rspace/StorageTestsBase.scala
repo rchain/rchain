@@ -7,7 +7,7 @@ import cats.implicits._
 import cats.effect._
 import com.typesafe.scalalogging.Logger
 import com.google.common.collect.HashMultiset
-import coop.rchain.rspace.ISpace.IdISpace
+import coop.rchain.metrics.Metrics
 
 import scala.collection.JavaConverters._
 import coop.rchain.rspace.examples.StringExamples._
@@ -29,6 +29,7 @@ trait StorageTestsBase[F[_], C, P, E, A, K] extends FlatSpec with Matchers with 
 
   implicit def concurrentF: Concurrent[F]
   implicit def logF: Log[F]
+  implicit def metricsF: Metrics[F]
   implicit def monadF: Monad[F]
   implicit def contextShiftF: ContextShift[F]
 

@@ -4,7 +4,8 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, 
 import java.nio.file.{Files, Path}
 
 import cats.Id
-import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.effect.{Concurrent, ContextShift}
+import coop.rchain.metrics.Metrics
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
@@ -200,7 +201,8 @@ object AddressBookExample {
 
   def exampleOne(): Unit = {
 
-    implicit val log: Log[Id] = Log.log
+    implicit val log: Log[Id]          = Log.log
+    implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
 
     // Here we define a temporary place to put the store's files
     val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
@@ -241,7 +243,8 @@ object AddressBookExample {
 
   def exampleTwo(): Unit = {
 
-    implicit val log: Log[Id] = Log.log
+    implicit val log: Log[Id]          = Log.log
+    implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
 
     // Here we define a temporary place to put the store's files
     val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
@@ -337,7 +340,9 @@ object AddressBookExample {
       f: IdISpace[Channel, Pattern, Nothing, Entry, Entry, Printer] => Unit
   ) = {
 
-    implicit val log: Log[Id] = Log.log
+    implicit val log: Log[Id]          = Log.log
+    implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
+
     // Here we define a temporary place to put the store's files
     val storePath = Files.createTempDirectory("rspace-address-book-example-")
     // Let's define our store

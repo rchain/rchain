@@ -1,5 +1,7 @@
 package coop.rchain.rholang
 
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.Connective.ConnectiveInstance.ConnNotBody
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models._
@@ -19,10 +21,11 @@ import scala.concurrent.duration._
 
 object StackSafetySpec extends Assertions {
 
-  val mapSize                  = 10L * 1024L * 1024L
-  val tmpPrefix                = "rspace-store-"
-  val maxDuration              = 20.seconds
-  implicit val logF: Log[Task] = new Log.NOPLog[Task]
+  val mapSize                             = 10L * 1024L * 1024L
+  val tmpPrefix                           = "rspace-store-"
+  val maxDuration                         = 20.seconds
+  implicit val logF: Log[Task]            = new Log.NOPLog[Task]
+  implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
   def findMaxRecursionDepth(): Int = {
     def count(i: Int): Int =

@@ -6,6 +6,7 @@ import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
 
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.metrics.Metrics
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.RhoIStore
 import coop.rchain.rholang.interpreter.accounting.Cost
@@ -53,7 +54,8 @@ object RholangCLI {
 
     val conf = new Conf(args)
 
-    implicit val log: Log[Task] = Log.log[Task]
+    implicit val log: Log[Task]          = Log.log[Task]
+    implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
 
     val runtime = (for {
       runtime <- Runtime.create[Task, Task.Par](conf.dataDir(), conf.mapSize(), StoreType.LMDB)

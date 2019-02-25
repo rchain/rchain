@@ -4,6 +4,8 @@ import java.util.concurrent.TimeUnit
 
 import cats.Id
 import cats.effect._
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.rspace.{State => _, _}
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace.examples.AddressBookExample._
@@ -55,11 +57,12 @@ object ReplayRSpaceBench {
     var space: IdISpace[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor] = null
     var replaySpace: IReplaySpace[cats.Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor] =
       null
-    implicit val logF: Log[Id] = new Log.NOPLog[Id]
-    val consumeChannel         = Channel("consume")
-    val produceChannel         = Channel("produce")
-    val matches                = List(CityMatch(city = "Crystal Lake"))
-    val captor                 = new EntriesCaptor()
+    implicit val logF: Log[Id]            = new Log.NOPLog[Id]
+    implicit val noopMetrics: Metrics[Id] = new metrics.Metrics.MetricsNOP[Id]
+    val consumeChannel                    = Channel("consume")
+    val produceChannel                    = Channel("produce")
+    val matches                           = List(CityMatch(city = "Crystal Lake"))
+    val captor                            = new EntriesCaptor()
 
     def initSpace() = {
       val rigPoint = space.createCheckpoint()

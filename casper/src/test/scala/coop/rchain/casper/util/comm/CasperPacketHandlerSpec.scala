@@ -45,14 +45,16 @@ import scala.concurrent.duration._
 class CasperPacketHandlerSpec extends WordSpec {
   private def setup() = new {
     implicit val log            = new LogStub[Task]
-    val scheduler  = Scheduler.io("test")
-    val runtimeDir = BlockDagStorageTestFixture.blockStorageDir
+    implicit val metrics = new MetricsNOP[Task]
+    val scheduler        = Scheduler.io("test")
+    val runtimeDir       = BlockDagStorageTestFixture.blockStorageDir
     val activeRuntime =
       Runtime
         .create[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB)(
           ContextShift[Task],
           Concurrent[Task],
           log,
+          metrics,
           Parallel[Task, Task.Par],
           scheduler
         )
@@ -95,7 +97,6 @@ class CasperPacketHandlerSpec extends WordSpec {
         override def pure[A](x: A): Task[A]                           = Task.pure(x)
         override def ap[A, B](ff: Task[A => B])(fa: Task[A]): Task[B] = Applicative[Task].ap(ff)(fa)
       })
-    implicit val metrics = new MetricsNOP[Task]
     implicit val lab =
       LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val blockMap   = Ref.unsafe[Task, Map[BlockHash, BlockMessage]](Map.empty)

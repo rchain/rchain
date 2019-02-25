@@ -41,6 +41,7 @@ import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.comm.TestNetwork
 import coop.rchain.catscontrib.ski.kp2
 import coop.rchain.comm.rp.Connect.Connections
+import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared.Log
 import org.scalatest
@@ -1806,10 +1807,11 @@ object HashSetCasperTest {
       faucetCode: String => String,
       deployTimestamp: Long
   ): BlockMessage = {
-    val initial           = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "rchain")
-    val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
-    val storageSize: Long = 1024L * 1024
-    implicit val log      = new Log.NOPLog[Task]
+    val initial                            = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "rchain")
+    val storageDirectory                   = Files.createTempDirectory(s"hash-set-casper-test-genesis")
+    val storageSize: Long                  = 1024L * 1024
+    implicit val log                       = new Log.NOPLog[Task]
+    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
     val activeRuntime =
       Runtime.create[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB).unsafeRunSync

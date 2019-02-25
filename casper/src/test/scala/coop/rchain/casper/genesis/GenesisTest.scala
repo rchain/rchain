@@ -23,6 +23,8 @@ import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 import java.nio.file.Path
 
 import cats.effect.Sync
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import monix.eval.Task
 
 class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
@@ -258,10 +260,11 @@ object GenesisTest {
   def withRawGenResources(
       body: (Runtime[Task], Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
   ): Task[Unit] = {
-    val storePath    = storageLocation
-    val gp           = genesisPath
-    implicit val log = new LogStub[Task]
-    val time         = new LogicalTime[Task]
+    val storePath                           = storageLocation
+    val gp                                  = genesisPath
+    implicit val log                        = new LogStub[Task]
+    implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+    val time                                = new LogicalTime[Task]
 
     for {
       runtime <- Runtime.create[Task, Task.Par](storePath, storageSize, StoreType.LMDB)

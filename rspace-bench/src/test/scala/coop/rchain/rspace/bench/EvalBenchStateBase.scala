@@ -6,6 +6,8 @@ import java.nio.file.{Files, Path}
 import org.openjdk.jmh.annotations.{Setup, TearDown}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
 import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
@@ -16,9 +18,10 @@ import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 
 trait EvalBenchStateBase {
-  private lazy val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
-  private val mapSize: Long    = 1024L * 1024L * 1024L
-  implicit val logF: Log[Task] = new Log.NOPLog[Task]
+  private lazy val dbDir: Path            = Files.createTempDirectory("rchain-storage-test-")
+  private val mapSize: Long               = 1024L * 1024L * 1024L
+  implicit val logF: Log[Task]            = new Log.NOPLog[Task]
+  implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
   val rhoScriptSource: String
   lazy val runtime: Runtime[Task] =

@@ -5,6 +5,7 @@ import java.lang.{Byte => JByte}
 import cats._
 import cats.effect._
 import cats.implicits._
+import coop.rchain.metrics.Metrics
 import coop.rchain.shared.Log
 import coop.rchain.rspace.StableHashProvider._
 import coop.rchain.rspace.examples.StringExamples._
@@ -17,6 +18,7 @@ import org.scalacheck.Prop
 import org.scalatest._
 import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
+
 import scala.collection.immutable.Seq
 import coop.rchain.rspace.test.ArbitraryInstances._
 import org.scalatest.enablers.Definition
@@ -1398,8 +1400,9 @@ trait LegacyStorageActionsTests
 trait IdTests[C, P, A, R, K] extends StorageTestsBase[Id, C, P, A, R, K] {
   override implicit val concurrentF: Concurrent[Id] =
     coop.rchain.catscontrib.effect.implicits.concurrentId
-  override implicit val logF: Log[Id]     = Log.log[Id]
-  override implicit val monadF: Monad[Id] = concurrentF
+  override implicit val logF: Log[Id]         = Log.log[Id]
+  override implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()(concurrentF)
+  override implicit val monadF: Monad[Id]     = concurrentF
   override implicit val contextShiftF: ContextShift[Id] =
     coop.rchain.rspace.test.contextShiftId
 
@@ -1416,7 +1419,8 @@ trait TaskTests[C, P, A, R, K] extends StorageTestsBase[Task, C, P, A, R, K] {
       monix.execution.Scheduler.Implicits.global,
       Task.defaultOptions
     )
-  implicit val logF: Log[Task] = Log.log[Task]
+  implicit val logF: Log[Task]         = Log.log[Task]
+  implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
 
   override implicit val monadF: Monad[Task] = concurrentF
   override implicit val contextShiftF: ContextShift[Task] = new ContextShift[Task] {

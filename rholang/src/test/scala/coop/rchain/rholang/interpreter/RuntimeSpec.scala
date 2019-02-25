@@ -1,6 +1,8 @@
 package coop.rchain.rholang.interpreter
 import java.io.StringReader
 
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.rholang.Resources.mkRuntime
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -10,12 +12,13 @@ import coop.rchain.shared.Log
 import scala.concurrent.duration._
 
 class RuntimeSpec extends FlatSpec with Matchers {
-  private val mapSize          = 10L * 1024L * 1024L
-  private val tmpPrefix        = "rspace-store-"
-  private val maxDuration      = 5.seconds
-  implicit val logF: Log[Task] = Log.log[Task]
+  private val mapSize                     = 10L * 1024L * 1024L
+  private val tmpPrefix                   = "rspace-store-"
+  private val maxDuration                 = 5.seconds
+  implicit val logF: Log[Task]            = Log.log[Task]
+  implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
-//  val runtime = Runtime.create(Files.createTempDirectory(tmpPrefix), mapSize)
+  //  val runtime = Runtime.create(Files.createTempDirectory(tmpPrefix), mapSize)
 
   private val channelReadOnlyError = "ReduceError: Trying to read from non-readable channel."
 

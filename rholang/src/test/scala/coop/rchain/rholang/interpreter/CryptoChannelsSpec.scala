@@ -8,6 +8,8 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GString}
 import coop.rchain.models.Var.VarInstance.Wildcard
 import coop.rchain.models.Var.WildcardMsg
@@ -211,10 +213,11 @@ class CryptoChannelsSpec
   }
 
   override protected def withFixture(test: OneArgTest): Outcome = {
-    val randomInt                = scala.util.Random.nextInt
-    val dbDir                    = Files.createTempDirectory(s"rchain-storage-test-$randomInt")
-    val size                     = 1024L * 1024 * 10
-    implicit val logF: Log[Task] = new Log.NOPLog[Task]
+    val randomInt                           = scala.util.Random.nextInt
+    val dbDir                               = Files.createTempDirectory(s"rchain-storage-test-$randomInt")
+    val size                                = 1024L * 1024 * 10
+    implicit val logF: Log[Task]            = new Log.NOPLog[Task]
+    implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
     val runtime = (for {
       runtime <- Runtime.create[Task, Task.Par](dbDir, size, StoreType.LMDB)

@@ -9,6 +9,7 @@ import cats.implicits._
 import cats.mtl.FunctorTell
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
@@ -275,7 +276,7 @@ object Runtime {
     )
   )
 
-  def create[F[_]: ContextShift: Concurrent: Log, M[_]](
+  def create[F[_]: ContextShift: Concurrent: Log: Metrics, M[_]](
       dataDir: Path,
       mapSize: Long,
       storeType: StoreType,
@@ -417,7 +418,7 @@ object Runtime {
     } yield ()
   }
 
-  def setupRSpace[F[_]: Concurrent: ContextShift: Log](
+  def setupRSpace[F[_]: Concurrent: ContextShift: Log: Metrics](
       dataDir: Path,
       mapSize: Long,
       storeType: StoreType
