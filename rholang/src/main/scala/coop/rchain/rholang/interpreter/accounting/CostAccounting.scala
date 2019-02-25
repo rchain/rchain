@@ -49,7 +49,7 @@ object CostAccounting {
 
   implicit def costAccountingMonadState[F[_]: Monad](
       costAccounting: CostAccounting[F]
-  ): _cost[F] = new DefaultMonadState[F, Cost] {
+  ): MonadState[F, Cost] = new DefaultMonadState[F, Cost] {
     val monad: cats.Monad[F]                      = implicitly[Monad[F]]
     def get: F[Cost]                              = costAccounting.get
     def set(s: Cost): F[Unit]                     = costAccounting.set(s)

@@ -27,9 +27,9 @@ class MatcherMonadSpec extends FlatSpec with Matchers {
 
   val A: Alternative[F] = Alternative[F]
 
-  implicit val cost: _cost[Task]       = CostAccounting.unsafe[Task](Cost(0))
-  implicit val costLog: _costLog[Task] = noOpCostLog[Task]
-  implicit val _: _costLog[F]          = matcherMonadCostLog[Task]
+  implicit val cost: _cost[Task] =
+    loggingCost(CostAccounting.unsafe[Task](Cost(0)), noOpCostLog[Task])
+  implicit val costF: _cost[F] = matcherMonadCostLog[Task]
 
   private def combineK[FF[_]: MonoidK, G[_]: Foldable, A](gfa: G[FF[A]]): FF[A] =
     gfa.foldLeft(MonoidK[FF].empty[A])(SemigroupK[FF].combineK[A])
@@ -60,7 +60,7 @@ class MatcherMonadSpec extends FlatSpec with Matchers {
 
   val modifyStates = for {
     _ <- _freeMap[F].set(Map(42 -> Par()))
-    _ <- _cost[F].modify(_ + Cost(1))
+    _ <- costF.modify(_ + Cost(1))
   } yield ()
 
   it should "retain cost and matches when attemptOpt is called on successful match" in {

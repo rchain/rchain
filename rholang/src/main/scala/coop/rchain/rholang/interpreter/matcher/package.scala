@@ -27,7 +27,7 @@ package object matcher {
 
   import coop.rchain.rholang.interpreter.matcher.StreamT
 
-  implicit def matcherMonadCostLog[F[_]: Monad: _costLog](): _costLog[MatcherMonadT[F, ?]] =
+  implicit def matcherMonadCostLog[F[_]: Monad: _cost](): _cost[MatcherMonadT[F, ?]] =
     ntCostLog(λ[F ~> MatcherMonadT[F, ?]](fa => StateT.liftF(StreamT.liftF(fa))))
 
   // The naming convention means: this is an effect-type alias.
@@ -78,8 +78,13 @@ package object matcher {
 
     }
 
-    implicit val CostLog: _costLog[NonDetFreeMapWithCost] =
-      noOpCostLog[NonDetFreeMapWithCost]
+    implicit def cost(
+        implicit ms: MonadState[NonDetFreeMapWithCost, Cost]
+    ): _cost[NonDetFreeMapWithCost] =
+      loggingCost(
+        ms,
+        noOpCostLog[NonDetFreeMapWithCost]
+      )
 
     implicit def toNonDetFreeMapWithCostOps[A](s: NonDetFreeMapWithCost[A]) =
       new NonDetFreeMapWithCostOps[A](s)
