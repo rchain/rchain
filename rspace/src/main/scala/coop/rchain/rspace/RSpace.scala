@@ -6,7 +6,6 @@ import scala.annotation.tailrec
 import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext
 import scala.util.Random
-
 import cats.effect.{ContextShift, Sync}
 import cats.implicits._
 import coop.rchain.shared.Log
@@ -15,14 +14,13 @@ import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace._
 import coop.rchain.shared.SyncVarOps._
-
 import com.typesafe.scalalogging.Logger
 import kamon._
 import org.lmdbjava.Txn
 import scodec.Codec
 
 class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
-    store: IStore[C, P, A, K],
+    store: IStore[F, C, P, A, K],
     branch: Branch
 )(
     implicit
@@ -329,7 +327,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
 
 object RSpace {
 
-  def create[F[_], C, P, E, A, R, K](context: Context[C, P, A, K], branch: Branch)(
+  def create[F[_], C, P, E, A, R, K](context: Context[F, C, P, A, K], branch: Branch)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -342,19 +340,23 @@ object RSpace {
   ): F[ISpace[F, C, P, E, A, R, K]] = {
     type InMemTXN    = InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]]
     type ByteBuffTXN = Txn[ByteBuffer]
+
     context match {
-      case ctx: LMDBContext[C, P, A, K] =>
-        create(LMDBStore.create[C, P, A, K](ctx, branch), branch)
+      case ctx: LMDBContext[F, C, P, A, K] =>
+        create(LMDBStore.create[F, C, P, A, K](ctx, branch), branch)
 
-      case ctx: InMemoryContext[C, P, A, K] =>
-        create(InMemoryStore.create(ctx.trieStore, branch), branch)
+      case ctx: InMemoryContext[F, C, P, A, K] =>
+        create(InMemoryStore.create[F, InMemTXN, C, P, A, K](ctx.trieStore, branch), branch)
 
-      case ctx: MixedContext[C, P, A, K] =>
-        create(LockFreeInMemoryStore.create(ctx.trieStore, branch), branch)
+      case ctx: MixedContext[F, C, P, A, K] =>
+        create(
+          LockFreeInMemoryStore.create[F, ByteBuffTXN, C, P, A, K](ctx.trieStore, branch),
+          branch
+        )
     }
   }
 
-  def create[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
+  def create[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch: Branch)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],

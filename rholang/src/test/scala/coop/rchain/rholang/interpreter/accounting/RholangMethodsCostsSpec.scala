@@ -790,9 +790,9 @@ class RholangMethodsCostsSpec
     test.runSyncUnsafe(5.seconds)
   }
 
-  private var dbDir: Path            = null
-  private var context: RhoContext    = null
-  private var space: RhoISpace[Task] = null
+  private var dbDir: Path               = null
+  private var context: RhoContext[Task] = null
+  private var space: RhoISpace[Task]    = null
 
   implicit val logF: Log[Task] = new Log.NOPLog[Task]
 

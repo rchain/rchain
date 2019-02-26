@@ -118,7 +118,7 @@ trait ISpace[F[_], C, P, E, A, R, K] {
     */
   def close(): F[Unit]
 
-  val store: IStore[C, P, A, K]
+  val store: IStore[F, C, P, A, K]
 }
 
 object ISpace {

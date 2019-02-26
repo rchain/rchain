@@ -33,12 +33,12 @@ object State {
 }
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-class InMemoryStore[T, C, P, A, K](
+class InMemoryStore[F[_], T, C, P, A, K](
     val trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]],
     val trieBranch: Branch
 )(implicit sc: Serialize[C], sp: Serialize[P], sa: Serialize[A], sk: Serialize[K])
     extends InMemoryOps[State[C, P, A, K]]
-    with IStore[C, P, A, K] {
+    with IStore[F, C, P, A, K] {
 
   type TrieTransaction = T
 
@@ -269,7 +269,7 @@ object InMemoryStore {
       case Right(value) => value
     }
 
-  def create[T, C, P, A, K](
+  def create[F[_], T, C, P, A, K](
       trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]],
       branch: Branch
   )(
@@ -277,6 +277,6 @@ object InMemoryStore {
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K]
-  ): InMemoryStore[T, C, P, A, K] =
-    new InMemoryStore[T, C, P, A, K](trieStore, branch)(sc, sp, sa, sk)
+  ): IStore[F, C, P, A, K] =
+    new InMemoryStore[F, T, C, P, A, K](trieStore, branch)(sc, sp, sa, sk)
 }

@@ -24,7 +24,7 @@ import scodec.bits._
   */
 @SuppressWarnings(Array("org.wartremover.warts.Throw", "org.wartremover.warts.NonUnitStatements"))
 // TODO stop throwing exceptions
-class LMDBStore[C, P, A, K] private[rspace] (
+class LMDBStore[F[_], C, P, A, K] private[rspace] (
     val env: Env[ByteBuffer],
     protected[this] val databasePath: Path,
     private[this] val _dbGNATs: Dbi[ByteBuffer],
@@ -37,7 +37,7 @@ class LMDBStore[C, P, A, K] private[rspace] (
     codecP: Codec[P],
     codecA: Codec[A],
     codecK: Codec[K]
-) extends IStore[C, P, A, K]
+) extends IStore[F, C, P, A, K]
     with LMDBOps {
 
   protected val MetricsSource: String = RSpaceMetricsSource + ".lmdb"
@@ -294,13 +294,13 @@ class LMDBStore[C, P, A, K] private[rspace] (
 
 object LMDBStore {
 
-  def create[C, P, A, K](context: LMDBContext[C, P, A, K], branch: Branch = Branch.MASTER)(
+  def create[F[_], C, P, A, K](context: LMDBContext[F, C, P, A, K], branch: Branch = Branch.MASTER)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K]
-  ): LMDBStore[C, P, A, K] = {
+  ): IStore[F, C, P, A, K] = {
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec
     implicit val codecA: Codec[A] = sa.toCodec
@@ -309,7 +309,7 @@ object LMDBStore {
     val dbGnats: Dbi[ByteBuffer] = context.env.openDbi(s"${branch.name}-gnats", MDB_CREATE)
     val dbJoins: Dbi[ByteBuffer] = context.env.openDbi(s"${branch.name}-joins", MDB_CREATE)
 
-    new LMDBStore[C, P, A, K](
+    new LMDBStore[F, C, P, A, K](
       context.env,
       context.path,
       dbGnats,

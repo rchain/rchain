@@ -82,7 +82,7 @@ object RholangCLI {
     Console.println(PrettyPrinter().buildString(normalizedTerm))
   }
 
-  private def printStorageContents(store: RhoIStore): Unit = {
+  private def printStorageContents[F[_]](store: RhoIStore[F]): Unit = {
     Console.println("\nStorage Contents:")
     Console.println(StoragePrinter.prettyPrint(store))
   }

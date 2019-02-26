@@ -54,7 +54,7 @@ class CryptoChannelsSpec
 
   // this should consume from the `ack` channel effectively preparing tuplespace for next test
   def clearStore(
-      store: RhoIStore,
+      store: RhoIStore[Task],
       ackChannel: Par,
       timeout: Duration = 3.seconds
   )(implicit env: Env[Par], reduce: ChargingReducer[Task]): Unit = {
@@ -66,7 +66,7 @@ class CryptoChannelsSpec
   }
 
   def assertStoreContains(
-      store: RhoIStore
+      store: RhoIStore[Task]
   )(ackChannel: GString)(data: ListParWithRandom): Assertion = {
     val channel: Par = ackChannel
     val datum        = store.toMap(List(channel)).data.head
@@ -232,6 +232,6 @@ class CryptoChannelsSpec
   /** TODO(mateusz.gorski): once we refactor Rholang[AndScala]Dispatcher
     *  to push effect choice up until declaration site refactor to `Reduce[Coeval]`
     */
-  override type FixtureParam = (ChargingReducer[Task], RhoIStore)
+  override type FixtureParam = (ChargingReducer[Task], RhoIStore[Task])
 
 }

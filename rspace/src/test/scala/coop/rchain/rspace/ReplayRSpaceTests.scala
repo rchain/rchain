@@ -899,7 +899,7 @@ trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, 
     implicit val log: Log[Id] = Log.log[Id]
 
     val dbDir       = Files.createTempDirectory("rchain-storage-test-")
-    val context     = Context.create[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
+    val context     = Context.create[Id, C, P, A, K](dbDir, 1024L * 1024L * 4096L)
     val space       = RSpace.create[Id, C, P, E, A, A, K](context, Branch.MASTER)
     val replaySpace = ReplayRSpace.create[Id, C, P, E, A, A, K](context, Branch.REPLAY)
 
@@ -932,7 +932,7 @@ trait MixedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C,
     implicit val log: Log[Id] = Log.log[Id]
 
     val dbDir       = Files.createTempDirectory("rchain-storage-test-")
-    val context     = Context.createMixed[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
+    val context     = Context.createMixed[Id, C, P, A, K](dbDir, 1024L * 1024L * 4096L)
     val space       = RSpace.create[Id, C, P, E, A, A, K](context, Branch.MASTER)
     val replaySpace = ReplayRSpace.create[Id, C, P, E, A, A, K](context, Branch.REPLAY)
 
@@ -959,11 +959,11 @@ trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase
       oC: Ordering[C]
   ): S = {
 
-    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
-    implicit val log: Log[Id]    = Log.log[Id]
-    val ctx: Context[C, P, A, K] = Context.createInMemory()
-    val space                    = RSpace.create[Id, C, P, E, A, A, K](ctx, Branch.REPLAY)
-    val replaySpace              = ReplayRSpace.create[Id, C, P, E, A, A, K](ctx, Branch.REPLAY)
+    implicit val syncF: Sync[Id]     = coop.rchain.catscontrib.effect.implicits.syncId
+    implicit val log: Log[Id]        = Log.log[Id]
+    val ctx: Context[Id, C, P, A, K] = Context.createInMemory()
+    val space                        = RSpace.create[Id, C, P, E, A, A, K](ctx, Branch.REPLAY)
+    val replaySpace                  = ReplayRSpace.create[Id, C, P, E, A, A, K](ctx, Branch.REPLAY)
 
     try {
       f(space, replaySpace)
@@ -992,13 +992,13 @@ trait FaultyStoreReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsB
 
     val trieStore = InMemoryTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]]()
     val mainStore = InMemoryStore
-      .create[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
+      .create[Id, InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
         trieStore,
         Branch.REPLAY
       )
     val space = RSpace.create[Id, C, P, E, A, A, K](mainStore, Branch.REPLAY)
     val store =
-      new InMemoryStore[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
+      new InMemoryStore[Id, InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
         trieStore,
         Branch.REPLAY
       ) {

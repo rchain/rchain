@@ -26,7 +26,7 @@ private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, 
   /**
     * A store which satisfies the [[IStore]] interface.
     */
-  val store: IStore[C, P, A, K]
+  val store: IStore[F, C, P, A, K]
 
   val branch: Branch
 

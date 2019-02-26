@@ -31,11 +31,11 @@ class NoopTxn[S] extends InMemTransaction[S] {
   * It should be used with RSpace that solves high level locking (e.g. FineGrainedRSpace).
   */
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-class LockFreeInMemoryStore[T, C, P, A, K](
+class LockFreeInMemoryStore[F[_], T, C, P, A, K](
     val trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]],
     val trieBranch: Branch
 )(implicit sc: Serialize[C], sp: Serialize[P], sa: Serialize[A], sk: Serialize[K])
-    extends IStore[C, P, A, K]
+    extends IStore[F, C, P, A, K]
     with CloseOps {
 
   protected[rspace] type Transaction = InMemTransaction[State[C, P, A, K]]
@@ -253,7 +253,7 @@ class LockFreeInMemoryStore[T, C, P, A, K](
 
 object LockFreeInMemoryStore {
 
-  def create[T, C, P, A, K](
+  def create[F[_], T, C, P, A, K](
       trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]],
       branch: Branch
   )(
@@ -261,6 +261,6 @@ object LockFreeInMemoryStore {
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K]
-  ): LockFreeInMemoryStore[T, C, P, A, K] =
-    new LockFreeInMemoryStore[T, C, P, A, K](trieStore, branch)(sc, sp, sa, sk)
+  ): IStore[F, C, P, A, K] =
+    new LockFreeInMemoryStore[F, T, C, P, A, K](trieStore, branch)(sc, sp, sa, sk)
 }

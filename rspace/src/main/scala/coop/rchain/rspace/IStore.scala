@@ -13,7 +13,7 @@ import scala.collection.immutable.Seq
   * @tparam A a type representing an arbitrary piece of data
   * @tparam K a type representing a continuation
   */
-trait IStore[C, P, A, K] {
+trait IStore[F[_], C, P, A, K] {
 
   /**
     * The type of transactions

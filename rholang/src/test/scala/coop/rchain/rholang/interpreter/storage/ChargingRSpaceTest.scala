@@ -434,7 +434,7 @@ object ChargingRSpaceTest {
         })
 
     override def close(): Task[Unit] = rspace.close()
-    override val store: IStore[Par, BindPattern, ListParWithRandom, TaggedContinuation] =
+    override val store: IStore[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation] =
       rspace.store
     override def install(
         channels: immutable.Seq[Par],

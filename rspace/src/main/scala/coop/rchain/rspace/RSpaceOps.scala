@@ -17,7 +17,7 @@ import scala.util.Random
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove when Kamon replaced with Metrics API
 abstract class RSpaceOps[F[_], C, P, E, A, R, K](
-    val store: IStore[C, P, A, K],
+    val store: IStore[F, C, P, A, K],
     val branch: Branch
 )(
     implicit

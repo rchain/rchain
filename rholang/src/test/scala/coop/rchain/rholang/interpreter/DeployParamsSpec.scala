@@ -39,7 +39,11 @@ class DeployParamsSpec extends fixture.FlatSpec with Matchers {
     } yield (outcome)).unsafeRunSync
   }
 
-  def assertStoreContains(store: RhoIStore, ackChannel: Par, data: ListParWithRandom): Assertion = {
+  def assertStoreContains(
+      store: RhoIStore[Task],
+      ackChannel: Par,
+      data: ListParWithRandom
+  ): Assertion = {
     val datum = store.toMap(List(ackChannel)).data.head
     assert(datum.a.pars == data.pars)
     assert(datum.a.randomState == data.randomState)

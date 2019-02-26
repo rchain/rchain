@@ -24,9 +24,9 @@ trait IStoreTests
   "putDatum" should "put datum in a new channel" in forAll("channel", "datum") {
     (channel: String, datumValue: String) =>
       withTestSpace { space =>
-        val store: IStore[String, Pattern, String, StringsCaptor] = space.store
-        val key                                                   = List(channel)
-        val datum                                                 = Datum.create(channel, datumValue, false)
+        val store: IStore[Id, String, Pattern, String, StringsCaptor] = space.store
+        val key                                                       = List(channel)
+        val datum                                                     = Datum.create(channel, datumValue, false)
 
         store
           .withTxn(store.createTxnWrite()) { txn =>

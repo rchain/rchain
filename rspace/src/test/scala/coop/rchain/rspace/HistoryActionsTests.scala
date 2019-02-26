@@ -41,7 +41,7 @@ trait HistoryActionsTests[F[_]]
     * Helper for testing purposes only.
     */
   private[this] def getRootHash(
-      store: IStore[String, Pattern, String, StringsCaptor],
+      store: IStore[F, String, Pattern, String, StringsCaptor],
       branch: Branch
   ): Blake2b256Hash =
     store.withTxn(store.createTxnRead()) { txn =>

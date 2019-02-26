@@ -45,7 +45,7 @@ object Resources {
     import scala.concurrent.ExecutionContext.Implicits.global
 
     def mkRspace(dbDir: Path): F[RhoISpace[F]] = {
-      val context: RhoContext = Context.create(dbDir, mapSize)
+      val context: RhoContext[F] = Context.create(dbDir, mapSize)
 
       RSpace.create[
         F,

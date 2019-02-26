@@ -4,22 +4,21 @@ import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext
-
 import cats.effect.{ContextShift, Sync}
 import cats.implicits._
-
-import coop.rchain.catscontrib._, Catscontrib._
+import coop.rchain.catscontrib._
+import Catscontrib._
+import cats.Id
 import coop.rchain.shared.Log
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{Produce, Log => RSpaceLog, _}
-
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
 import kamon._
 import scodec.Codec
 
-class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
+class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch: Branch)(
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
@@ -412,7 +411,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Br
 
 object ReplayRSpace {
 
-  def create[F[_], C, P, E, A, R, K](context: Context[C, P, A, K], branch: Branch)(
+  def create[F[_], C, P, E, A, R, K](context: Context[F, C, P, A, K], branch: Branch)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -429,14 +428,14 @@ object ReplayRSpace {
     implicit val codecA: Codec[A] = sa.toCodec
     implicit val codecK: Codec[K] = sk.toCodec
 
-    val mainStore = context match {
-      case lmdbContext: LMDBContext[C, P, A, K] =>
-        LMDBStore.create[C, P, A, K](lmdbContext, branch)
+    val mainStore: IStore[F, C, P, A, K] = context match {
+      case lmdbContext: LMDBContext[F, C, P, A, K] =>
+        LMDBStore.create[F, C, P, A, K](lmdbContext, branch)
 
-      case memContext: InMemoryContext[C, P, A, K] =>
+      case memContext: InMemoryContext[F, C, P, A, K] =>
         InMemoryStore.create(memContext.trieStore, branch)
 
-      case mixedContext: MixedContext[C, P, A, K] =>
+      case mixedContext: MixedContext[F, C, P, A, K] =>
         LockFreeInMemoryStore.create(mixedContext.trieStore, branch)
     }
 
