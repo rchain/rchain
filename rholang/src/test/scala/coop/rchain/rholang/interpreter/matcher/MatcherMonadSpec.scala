@@ -36,7 +36,7 @@ class MatcherMonadSpec extends FlatSpec with Matchers {
 
   private def runWithCost[A](f: Task[A], phlo: Int) =
     (for {
-      _        <- cost.set(Cost(phlo))
+      _        <- cost.set(Cost(phlo, "initial cost"))
       result   <- f
       phloLeft <- cost.get
     } yield (phloLeft, result)).unsafeRunSync

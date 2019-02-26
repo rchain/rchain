@@ -16,13 +16,12 @@ object Cost {
     Cost(chargeable.cost(term), "")
   def apply[A](term: A, operation: String)(implicit chargeable: Chargeable[A]): Cost =
     Cost(chargeable.cost(term), operation)
-  def apply(value: Int): Cost                    = Cost(value.toLong, "")
   def apply(value: Int, operation: String): Cost = Cost(value.toLong, operation)
   def apply(cost: Cost, operation: String): Cost = Cost(cost.value, operation)
   def apply(value: Long): Cost                   = Cost(value, "")
 
   implicit val CostMonoid: Monoid[Cost] = new Monoid[Cost] {
-    override def empty: Cost                     = Cost(0)
+    override def empty: Cost                     = Cost(0, "empty")
     override def combine(x: Cost, y: Cost): Cost = x + y
   }
 

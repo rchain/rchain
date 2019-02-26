@@ -954,7 +954,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
   private def doMatchAndCharge(initialPhlo: Int) = {
     implicit val costL = costLog[Task]
     implicit val cost: _cost[Task] =
-      loggingCost(CostAccounting.unsafe[Task](Cost(initialPhlo)), costL)
+      loggingCost(CostAccounting.unsafe[Task](Cost(initialPhlo, "initial cost")), costL)
 
     val target: Par = EList(Seq(GInt(1), GInt(2), GInt(3)))
     val pattern: Par =
