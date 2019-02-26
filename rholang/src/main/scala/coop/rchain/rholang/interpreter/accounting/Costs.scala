@@ -7,8 +7,8 @@ import coop.rchain.models.{PCost, Par, ProtoM, StacksafeMessage}
 //TODO(mateusz.gorski): Adjust the costs of operations
 final case class Cost(value: Long, operation: String) {
   def *(base: Int): Cost   = Cost(value * base, s"($operation * $base)")
-  def +(other: Cost): Cost = Cost(value + other.value, s"($operation + ${other.operation})")
-  def -(other: Cost): Cost = Cost(value - other.value, s"($operation - ${other.operation})")
+  def +(other: Cost): Cost = Cost(value + other.value, "")
+  def -(other: Cost): Cost = Cost(value - other.value, "")
 }
 
 object Cost {
