@@ -44,6 +44,7 @@ import scala.concurrent.duration._
 
 class CasperPacketHandlerSpec extends WordSpec {
   private def setup() = new {
+    implicit val log            = new LogStub[Task]
     val scheduler  = Scheduler.io("test")
     val runtimeDir = BlockDagStorageTestFixture.blockStorageDir
     val activeRuntime =
@@ -85,7 +86,6 @@ class CasperPacketHandlerSpec extends WordSpec {
     implicit val transportLayer = new TransportLayerStub[Task]
     implicit val rpConf         = createRPConfAsk[Task](local)
     implicit val time           = TestTime.instance
-    implicit val log            = new LogStub[Task]
     implicit val errHandler =
       ApplicativeError_.applicativeError(new ApplicativeError[Task, CommError] {
         override def raiseError[A](e: CommError): Task[A] =
