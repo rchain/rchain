@@ -34,7 +34,7 @@ object RholangOnlyDispatcher {
     val pureSpace = PureRSpace[M].of(tuplespace)
 
     implicit val costAlg: CostAccounting[M] = CostAccounting.unsafe[M](Cost(0))
-    implicit val cost: _cost[M]             = costAlg
+    implicit val cost: _cost[M]             = loggingCost(costAlg, noOpCostLog[M])
 
     lazy val dispatcher: Dispatch[M, ListParWithRandomAndPhlos, TaggedContinuation] =
       new RholangOnlyDispatcher

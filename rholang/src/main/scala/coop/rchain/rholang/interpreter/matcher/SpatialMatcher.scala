@@ -1,10 +1,11 @@
 package coop.rchain.rholang.interpreter.matcher
 
+import cats.data._
 import cats.effect.Sync
 import cats.implicits._
-import cats.mtl.MonadState
+import cats.mtl._
 import cats.mtl.implicits._
-import cats.{FlatMap, Monad, MonoidK, Eval => _}
+import cats.{Functor, FlatMap, Monad, MonoidK, Eval => _}
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.models.Connective.ConnectiveInstance
@@ -47,6 +48,8 @@ object SpatialMatcher extends SpatialMatcherInstances {
       cost: _cost[M]
   ): M[Option[(FreeMap, Unit)]] = {
     type R[A] = MatcherMonadT[M, A]
+
+    implicit val _ = matcherMonadCostLog[M]
 
     val doMatch: R[Unit] = SpatialMatcher.spatialMatch[R, Par, Par](target, pattern)
 

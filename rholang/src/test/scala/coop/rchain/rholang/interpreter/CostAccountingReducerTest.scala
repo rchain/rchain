@@ -29,22 +29,25 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
   behavior of "Cost accounting in Reducer"
 
   it should "charge for the successful substitution" in {
-    val term: Expr => Par               = expr => Par(bundles = Seq(Bundle(Par(exprs = Seq(expr)))))
-    val substTerm                       = term(Expr(GString("1")))
-    val termCost                        = Chargeable[Par].cost(substTerm)
-    val initCost                        = Cost(1000)
-    implicit val costAlg: _cost[Coeval] = CostAccounting.unsafe[Coeval](initCost)
-    val res                             = Substitute.charge(Coeval.pure(substTerm), Cost(10000)).attempt.value
+    val term: Expr => Par = expr => Par(bundles = Seq(Bundle(Par(exprs = Seq(expr)))))
+    val substTerm         = term(Expr(GString("1")))
+    val termCost          = Chargeable[Par].cost(substTerm)
+    val initCost          = Cost(1000)
+    implicit val costAlg: _cost[Coeval] =
+      loggingCost(CostAccounting.unsafe[Coeval](initCost), noOpCostLog)
+    val res = Substitute.charge(Coeval.pure(substTerm), Cost(10000)).attempt.value
     assert(res === Right(substTerm))
     assert(costAlg.get() === (initCost - Cost(termCost)))
   }
 
   it should "charge for failed substitution" in {
-    val term: Expr => Par               = expr => Par(bundles = Seq(Bundle(Par(exprs = Seq(expr)))))
-    val varTerm                         = term(Expr(EVarBody(EVar(Var(FreeVar(0))))))
-    val originalTermCost                = Chargeable[Par].cost(varTerm)
-    val initCost                        = Cost(1000)
-    implicit val costAlg: _cost[Coeval] = CostAccounting.unsafe[Coeval](initCost)
+    val term: Expr => Par = expr => Par(bundles = Seq(Bundle(Par(exprs = Seq(expr)))))
+    val varTerm           = term(Expr(EVarBody(EVar(Var(FreeVar(0))))))
+    val originalTermCost  = Chargeable[Par].cost(varTerm)
+    val initCost          = Cost(1000)
+    implicit val costAlg: _cost[Coeval] =
+      loggingCost(CostAccounting.unsafe[Coeval](initCost), noOpCostLog)
+
     val res = Substitute
       .charge(Coeval.raiseError[Par](new RuntimeException("")), Cost(originalTermCost))
       .attempt
@@ -70,13 +73,13 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
       ): Task[Unit] = Task.raiseError(OutOfPhlogistonsError)
     }
 
-    implicit val errorLog          = new ErrorLog[Task]()
-    implicit val rand              = Blake2b512Random(128)
-    implicit val costAlg           = CostAccounting.unsafe[Task](Cost(1000))
-    implicit val cost: _cost[Task] = costAlg
-    val reducer                    = new DebruijnInterpreter[Task, Task.Par](tuplespaceAlg, Map.empty)
-    val send                       = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
-    val test                       = reducer.inj(send).attempt.runSyncUnsafe(1.second)
+    implicit val errorLog = new ErrorLog[Task]()
+    implicit val rand     = Blake2b512Random(128)
+    implicit val costAlg: _cost[Task] =
+      loggingCost(CostAccounting.unsafe[Task](Cost(1000)), noOpCostLog)
+    val reducer = new DebruijnInterpreter[Task, Task.Par](tuplespaceAlg, Map.empty)
+    val send    = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
+    val test    = reducer.inj(send).attempt.runSyncUnsafe(1.second)
     assert(test === Left(OutOfPhlogistonsError))
   }
 
