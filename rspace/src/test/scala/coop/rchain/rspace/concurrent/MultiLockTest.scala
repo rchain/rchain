@@ -19,17 +19,18 @@ class MultiLockTest extends FlatSpec with Matchers {
       Await.result(task.runToFuture, Duration.Inf)
   }
 
-  val tested = new DefaultMultiLock[String]()
+  val tested = new MultiLock[Task, String]
 
-  def acquire(m: mutable.Map[String, Int])(seq: Seq[String]) = Task.delay {
+  def acquire(m: mutable.Map[String, Int])(seq: Seq[String]) =
     tested.acquire(seq) {
-      for {
-        k <- seq
-        v = m.getOrElse(k, 0) + 1
-        _ = m.put(k, v)
-      } yield ()
+      Task.delay {
+        for {
+          k <- seq
+          v = m.getOrElse(k, 0) + 1
+          _ = m.put(k, v)
+        } yield ()
+      }
     }
-  }
 
   "DefaultMultiLock" should "not allow concurrent modifications of same keys" in {
 
@@ -89,7 +90,7 @@ class MultiLockTest extends FlatSpec with Matchers {
     implicit val ioContextShift: ContextShift[IO] =
       IO.contextShift(scala.concurrent.ExecutionContext.Implicits.global)
 
-    val tested = new FunctionalMultiLock[IO, String]()
+    val tested = new MultiLock[IO, String]()
 
     val m = scala.collection.mutable.Map.empty[String, Int]
 

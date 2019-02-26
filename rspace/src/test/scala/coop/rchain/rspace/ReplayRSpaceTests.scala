@@ -2,7 +2,7 @@ package coop.rchain.rspace
 
 import java.nio.file.Files
 
-import cats.{Functor, Id}
+import cats.Functor
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
 import cats.effect._
@@ -20,7 +20,7 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest._
 
-import scala.collection.{immutable, mutable}
+import scala.collection.immutable
 import scala.util.{Random, Right}
 
 object SchedulerPools {
