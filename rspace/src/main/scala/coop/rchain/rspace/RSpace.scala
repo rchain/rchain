@@ -1,5 +1,7 @@
 package coop.rchain.rspace
 
+import java.nio.ByteBuffer
+
 import scala.annotation.tailrec
 import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext
@@ -16,6 +18,7 @@ import coop.rchain.shared.SyncVarOps._
 
 import com.typesafe.scalalogging.Logger
 import kamon._
+import org.lmdbjava.Txn
 import scodec.Codec
 
 class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
@@ -336,7 +339,9 @@ object RSpace {
       log: Log[F],
       contextShift: ContextShift[F],
       scheduler: ExecutionContext
-  ): F[ISpace[F, C, P, E, A, R, K]] =
+  ): F[ISpace[F, C, P, E, A, R, K]] = {
+    type InMemTXN    = InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]]
+    type ByteBuffTXN = Txn[ByteBuffer]
     context match {
       case ctx: LMDBContext[C, P, A, K] =>
         create(LMDBStore.create[C, P, A, K](ctx, branch), branch)
@@ -347,6 +352,7 @@ object RSpace {
       case ctx: MixedContext[C, P, A, K] =>
         create(LockFreeInMemoryStore.create(ctx.trieStore, branch), branch)
     }
+  }
 
   def create[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
       implicit
