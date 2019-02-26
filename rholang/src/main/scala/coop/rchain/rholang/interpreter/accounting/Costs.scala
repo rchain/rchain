@@ -21,11 +21,6 @@ object Cost {
   // TODO remove the single-arg constructors and provide an operation description in all callsites
   def apply(value: Long): Cost = Cost(value, "")
 
-  implicit val CostMonoid: Monoid[Cost] = new Monoid[Cost] {
-    override def empty: Cost                     = Cost(0, "empty")
-    override def combine(x: Cost, y: Cost): Cost = x + y
-  }
-
   def toProto(c: Cost): PCost = PCost(c.value)
 }
 
