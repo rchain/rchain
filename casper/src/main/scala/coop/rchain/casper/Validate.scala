@@ -320,7 +320,7 @@ object Validate {
     for {
       parents <- ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
                   dag.lookup(parentHash).flatMap {
-                    case Some(p) => Sync[F].delay(p)
+                    case Some(p) => p.pure[F]
                     case None =>
                       Sync[F].raiseError[BlockMetadata](
                         new Exception(
