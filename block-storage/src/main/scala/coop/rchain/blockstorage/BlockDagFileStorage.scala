@@ -46,7 +46,7 @@ private final case class BlockDagFileStorageState[F[_]: Sync](
 )
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove!!
-final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIOError] private (
+final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] private (
     lock: Semaphore[F],
     latestMessagesDataFilePath: Path,
     latestMessagesCrcFilePath: Path,
@@ -152,7 +152,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
                      Option(children).pure[F]
                    case None =>
                      for {
-                       blockOpt <- BlockStore[F].get(blockHash)
+                       blockOpt <- none[BlockMessage].pure[F]
                        result <- blockOpt match {
                                   case Some(block) =>
                                     val number = blockNumber(block)
@@ -171,13 +171,9 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
                  }
       } yield result
     def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
-      dataLookup
-        .get(blockHash)
-        .fold(
-          BlockStore[F].get(blockHash).map(_.map(BlockMetadata.fromBlock))
-        )(blockMetadata => Option(blockMetadata).pure[F])
+      dataLookup.get(blockHash).pure[F]
     def contains(blockHash: BlockHash): F[Boolean] =
-      dataLookup.get(blockHash).fold(BlockStore[F].contains(blockHash))(_ => true.pure[F])
+      dataLookup.get(blockHash).fold(false.pure[F])(_ => true.pure[F])
     def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
       if (startBlockNumber >= sortOffset) {
         val offset = startBlockNumber - sortOffset
@@ -719,7 +715,7 @@ object BlockDagFileStorage {
                }
     } yield result
 
-  def create[F[_]: Concurrent: Sync: Capture: Log: BlockStore](
+  def create[F[_]: Concurrent: Sync: Capture: Log](
       config: Config
   ): F[BlockDagFileStorage[F]] = {
     implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
@@ -797,7 +793,7 @@ object BlockDagFileStorage {
       )
   }
 
-  def createEmptyFromGenesis[F[_]: Concurrent: Sync: Capture: Log: BlockStore](
+  def createEmptyFromGenesis[F[_]: Concurrent: Sync: Capture: Log](
       config: Config,
       genesis: BlockMessage
   ): F[BlockDagFileStorage[F]] = {
