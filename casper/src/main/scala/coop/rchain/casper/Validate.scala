@@ -342,17 +342,22 @@ object Validate {
     * creator justification, this check will fail as expected. The exception is when
     * B's creator justification is the genesis block.
     */
-  def sequenceNumber[F[_]: Monad: Log: BlockStore](
+  @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
+  def sequenceNumber[F[_]: Monad: Log](
       b: BlockMessage,
       dag: BlockDagRepresentation[F]
   ): F[Either[InvalidBlock, ValidBlock]] =
     for {
       creatorJustificationSeqNumber <- ProtoUtil.creatorJustification(b).foldM(-1) {
                                         case (_, Justification(_, latestBlockHash)) =>
-                                          for {
-                                            latestBlock <- ProtoUtil
-                                                            .unsafeGetBlock[F](latestBlockHash)
-                                          } yield latestBlock.seqNum
+                                          dag.lookup(latestBlockHash).map {
+                                            case Some(block) =>
+                                              block.seqNum
+                                            case None =>
+                                              throw new Exception(
+                                                s"Latest block hash ${PrettyPrinter.buildString(latestBlockHash)} is missing from block dag store."
+                                              )
+                                          }
                                       }
       number = b.seqNum
       result = creatorJustificationSeqNumber + 1 == number
