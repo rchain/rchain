@@ -1,7 +1,5 @@
 package coop.rchain.casper.genesis.contracts
 
-import coop.rchain.rholang.mint.BasicWalletFaucet
-
 /**
   * The purpose of a "Faucet" is to give a place where users
   * can obtain REV for testing their contracts for free on the
