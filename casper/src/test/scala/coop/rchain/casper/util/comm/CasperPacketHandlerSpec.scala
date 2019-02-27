@@ -44,7 +44,7 @@ import scala.concurrent.duration._
 
 class CasperPacketHandlerSpec extends WordSpec {
   private def setup() = new {
-    implicit val log            = new LogStub[Task]
+    implicit val log     = new LogStub[Task]
     implicit val metrics = new MetricsNOP[Task]
     val scheduler        = Scheduler.io("test")
     val runtimeDir       = BlockDagStorageTestFixture.blockStorageDir

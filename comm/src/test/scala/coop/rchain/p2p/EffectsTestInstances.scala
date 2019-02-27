@@ -115,25 +115,25 @@ object EffectsTestInstances {
       warns = List.empty[String]
       errors = List.empty[String]
     }
-    def isTraceEnabled(implicit ev: LogSource): F[Boolean]  = false.pure[F]
-    def trace(msg: String)(implicit ev: LogSource): F[Unit] = ().pure[F]
-    def debug(msg: String)(implicit ev: LogSource): F[Unit] = {
+    def isTraceEnabled(implicit ev: LogSource): F[Boolean]     = false.pure[F]
+    def trace(msg: => String)(implicit ev: LogSource): F[Unit] = ().pure[F]
+    def debug(msg: => String)(implicit ev: LogSource): F[Unit] = {
       debugs = debugs :+ msg
       ().pure[F]
     }
-    def info(msg: String)(implicit ev: LogSource): F[Unit] = {
+    def info(msg: => String)(implicit ev: LogSource): F[Unit] = {
       infos = infos :+ msg
       ().pure[F]
     }
-    def warn(msg: String)(implicit ev: LogSource): F[Unit] = {
+    def warn(msg: => String)(implicit ev: LogSource): F[Unit] = {
       warns = warns :+ msg
       ().pure[F]
     }
-    def error(msg: String)(implicit ev: LogSource): F[Unit] = {
+    def error(msg: => String)(implicit ev: LogSource): F[Unit] = {
       errors = errors :+ msg
       ().pure[F]
     }
-    def error(msg: String, cause: scala.Throwable)(implicit ev: LogSource): F[Unit] = {
+    def error(msg: => String, cause: scala.Throwable)(implicit ev: LogSource): F[Unit] = {
       errors = errors :+ msg
       ().pure[F]
     }
