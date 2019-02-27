@@ -30,7 +30,7 @@ import coop.rchain.shared._
   @param deployHistory
   */
 final case class CasperState(
-    blockBuffer: Set[BlockMessage] = Set.empty[BlockMessage],
+    blockBuffer: Set[BlockHash] = Set.empty[BlockHash],
     deployHistory: Set[DeployData] = Set.empty[DeployData],
     dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty
 )
@@ -112,7 +112,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
             case _ =>
               Cell[F, CasperState].modify { s =>
                 s.copy(
-                  blockBuffer = s.blockBuffer - b,
+                  blockBuffer = s.blockBuffer - b.blockHash,
                   dependencyDag = DoublyLinkedDagOperations.remove(s.dependencyDag, b.blockHash)
                 )
               }
@@ -198,7 +198,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       dag            <- blockDag
       dagContains    <- dag.contains(b.blockHash)
       state          <- Cell[F, CasperState].read
-      bufferContains = state.blockBuffer.exists(_.blockHash == b.blockHash)
+      bufferContains = state.blockBuffer.exists(_ == b.blockHash)
     } yield (dagContains || bufferContains)
 
   def deploy(d: DeployData): F[Either[Throwable, Unit]] =
@@ -448,7 +448,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
         } yield updatedDag
       case MissingBlocks =>
         Cell[F, CasperState].modify { s =>
-          s.copy(blockBuffer = s.blockBuffer + block)
+          s.copy(blockBuffer = s.blockBuffer + block.blockHash)
         } *> fetchMissingDependencies(block) *> dag.pure[F]
       case AdmissibleEquivocation =>
         val baseEquivocationBlockSeqNum = block.seqNum - 1
@@ -581,7 +581,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       state          <- Cell[F, CasperState].read
       dependencyFree = state.dependencyDag.dependencyFree
       dependencyFreeBlocks = state.blockBuffer
-        .filter(block => dependencyFree.contains(block.blockHash))
+        .filter(blockHash => dependencyFree.contains(blockHash))
         .toList
       attemptsWithDag <- dependencyFreeBlocks.foldM(
                           (
@@ -589,8 +589,18 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
                             dag
                           )
                         ) {
-                          case ((attempts, updatedDag), b) =>
+                          case ((attempts, updatedDag), blockHash) =>
                             for {
+                              maybeBlock <- BlockStore[F].get(blockHash)
+                              b <- maybeBlock
+                                    .map(_.pure[F])
+                                    .getOrElse(
+                                      Sync[F].raiseError(
+                                        new RuntimeException(
+                                          s"Could not find a block for hash $blockHash in the blockstore. Exiting..."
+                                        )
+                                      )
+                                    )
                               status <- attemptAdd(b, updatedDag)
                             } yield ((b, status) :: attempts, status._2)
                         }
@@ -622,7 +632,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
   private def unsafeRemoveFromBlockBuffer(
       successfulAdds: List[(BlockMessage, (BlockStatus, BlockDagRepresentation[F]))]
   ): F[Unit] = {
-    val addedBlocks = successfulAdds.map(_._1)
+    val addedBlocks = successfulAdds.map(_._1.blockHash)
     Cell[F, CasperState].modify { s =>
       s.copy(blockBuffer = s.blockBuffer -- addedBlocks)
     }
