@@ -57,8 +57,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
 
   private val emptyStateHash = runtimeManager.emptyStateHash
 
-  // TODO: Extract hardcoded fault tolerance threshold
-  private val faultToleranceThreshold         = 0f
   private val lastFinalizedBlockHashContainer = Ref.unsafe[F, BlockHash](genesis.blockHash)
 
   def addBlock(
@@ -123,72 +121,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
             case _ =>
               reAttemptBuffer(updatedDag) // reAttempt for any status that resulted in the adding of the block into the view
           }
-      estimates                     <- estimator(updatedDag)
-      tip                           = estimates.head
-      _                             <- Log[F].info(s"New fork-choice tip is block ${PrettyPrinter.buildString(tip.blockHash)}.")
-      lastFinalizedBlockHash        <- lastFinalizedBlockHashContainer.get
-      updatedLastFinalizedBlockHash <- updateLastFinalizedBlock(updatedDag, lastFinalizedBlockHash)
-      _                             <- lastFinalizedBlockHashContainer.set(updatedLastFinalizedBlockHash)
+      estimates <- estimator(updatedDag)
+      tip       = estimates.head
+      _         <- Log[F].info(s"New fork-choice tip is block ${PrettyPrinter.buildString(tip.blockHash)}.")
     } yield attempt
-
-  private def updateLastFinalizedBlock(
-      dag: BlockDagRepresentation[F],
-      lastFinalizedBlockHash: BlockHash
-  ): F[BlockHash] =
-    for {
-      childrenHashes <- dag
-                         .children(lastFinalizedBlockHash)
-                         .map(_.getOrElse(Set.empty[BlockHash]).toList)
-      maybeFinalizedChild <- ListContrib.findM(
-                              childrenHashes,
-                              (blockHash: BlockHash) =>
-                                isGreaterThanFaultToleranceThreshold(dag, blockHash)
-                            )
-      newFinalizedBlock <- maybeFinalizedChild match {
-                            case Some(finalizedChild) =>
-                              removeDeploysInFinalizedBlock(finalizedChild) *> updateLastFinalizedBlock(
-                                dag,
-                                finalizedChild
-                              )
-                            case None => lastFinalizedBlockHash.pure[F]
-                          }
-    } yield newFinalizedBlock
-
-  private def removeDeploysInFinalizedBlock(finalizedChild: BlockHash): F[Unit] =
-    for {
-      b                  <- ProtoUtil.unsafeGetBlock[F](finalizedChild)
-      deploys            = b.body.get.deploys.map(_.deploy.get).toList
-      stateBefore        <- Cell[F, CasperState].read
-      initialHistorySize = stateBefore.deployHistory.size
-      _ <- Cell[F, CasperState].modify { s =>
-            s.copy(deployHistory = s.deployHistory -- deploys)
-          }
-
-      stateAfter     <- Cell[F, CasperState].read
-      deploysRemoved = initialHistorySize - stateAfter.deployHistory.size
-      _ <- Log[F].info(
-            s"Removed $deploysRemoved deploys from deploy history as we finalized block ${PrettyPrinter
-              .buildString(finalizedChild)}."
-          )
-    } yield ()
-
-  /*
-   * On the first pass, block B is finalized if B's main parent block is finalized
-   * and the safety oracle says B's normalized fault tolerance is above the threshold.
-   * On the second pass, block B is finalized if any of B's children blocks are finalized.
-   *
-   * TODO: Implement the second pass in BlockAPI
-   */
-  private def isGreaterThanFaultToleranceThreshold(
-      dag: BlockDagRepresentation[F],
-      blockHash: BlockHash
-  ): F[Boolean] =
-    for {
-      faultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, blockHash)
-      _ <- Log[F].info(
-            s"Fault tolerance for block ${PrettyPrinter.buildString(blockHash)} is $faultTolerance."
-          )
-    } yield faultTolerance > faultToleranceThreshold
 
   def contains(
       b: BlockMessage
@@ -265,8 +201,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
 
   def lastFinalizedBlock: F[BlockMessage] =
     for {
+      dag                    <- blockDag
       lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
-      blockMessage           <- ProtoUtil.unsafeGetBlock[F](lastFinalizedBlockHash)
+      updatedLastFinalizedBlockHash <- LastFinalizedBlockCalculator
+                                        .run[F](dag, lastFinalizedBlockHash)
+      _            <- lastFinalizedBlockHashContainer.set(updatedLastFinalizedBlockHash)
+      blockMessage <- ProtoUtil.unsafeGetBlock[F](updatedLastFinalizedBlockHash)
     } yield blockMessage
 
   // TODO: Optimize for large number of deploys accumulated over history

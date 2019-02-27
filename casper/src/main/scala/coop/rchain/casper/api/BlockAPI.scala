@@ -426,12 +426,13 @@ object BlockAPI {
         case Some(hash) => hash
         case None       => ByteString.EMPTY
       }
-      timestamp                = header.timestamp
-      mainParent               = header.parentsHashList.headOption.getOrElse(ByteString.EMPTY)
-      parentsHashList          = header.parentsHashList
-      normalizedFaultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, block.blockHash)
-      initialFault             <- MultiParentCasper[F].normalizedInitialFault(ProtoUtil.weightMap(block))
-      bondsValidatorList       = ProtoUtil.bonds(block)
+      timestamp       = header.timestamp
+      mainParent      = header.parentsHashList.headOption.getOrElse(ByteString.EMPTY)
+      parentsHashList = header.parentsHashList
+      normalizedFaultTolerance <- SafetyOracle[F]
+                                   .normalizedFaultTolerance(dag, block.blockHash) // TODO: Warn about parent block finalization
+      initialFault       <- MultiParentCasper[F].normalizedInitialFault(ProtoUtil.weightMap(block))
+      bondsValidatorList = ProtoUtil.bonds(block)
       blockInfo <- constructor(
                     block,
                     version,
@@ -478,7 +479,7 @@ object BlockAPI {
         tupleSpaceHash = PrettyPrinter.buildStringNoLimit(tsHash),
         tupleSpaceDump = tsDesc,
         timestamp = timestamp,
-        faultTolerance = normalizedFaultTolerance - initialFault,
+        faultTolerance = normalizedFaultTolerance - initialFault, // TODO: Fix
         mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
         parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit),
         sender = PrettyPrinter.buildStringNoLimit(block.sender),
