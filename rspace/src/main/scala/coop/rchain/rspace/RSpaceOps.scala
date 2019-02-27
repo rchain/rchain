@@ -15,7 +15,6 @@ import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 import scala.util.Random
 
-@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove when Kamon replaced with Metrics API
 abstract class RSpaceOps[F[_]: Concurrent, C, P, E, A, R, K](
     val store: IStore[F, C, P, A, K],
     val branch: Branch

@@ -40,7 +40,6 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
   private[this] val consumeSpanLabel = Metrics.Source(MetricsSource, "consume")
   private[this] val produceSpanLabel = Metrics.Source(MetricsSource, "produce")
 
-  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove when Kamon replaced with Metrics API
   def consume(
       channels: Seq[C],
       patterns: Seq[P],
@@ -67,7 +66,6 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
 
   type MaybeConsumeResult = Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]
 
-  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove when Kamon replaced with Metrics API
   private[this] def lockedConsume(
       channels: Seq[C],
       patterns: Seq[P],
@@ -99,7 +97,6 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
                  }
       } yield result
 
-    @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove when Kamon replaced with Metrics API
     def storeWaitingContinuation(
         consumeRef: Consume,
         maybeCommRef: Option[COMM]
@@ -206,7 +203,6 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
     } yield r
   }
 
-  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove when Kamon replaced with Metrics API
   def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
       implicit m: Match[P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
@@ -222,7 +218,6 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
       } yield result
     }
 
-  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove when Kamon replaced with Metrics API
   private[this] def lockedProduce(
       channel: C,
       data: A,

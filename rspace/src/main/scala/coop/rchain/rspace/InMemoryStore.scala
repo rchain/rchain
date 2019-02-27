@@ -31,7 +31,6 @@ object State {
   def empty[C, P, A, K]: State[C, P, A, K] = State[C, P, A, K](Map.empty, Map.empty)
 }
 
-@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 class InMemoryStore[F[_], T, C, P, A, K](
     val trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]],
     val trieBranch: Branch
@@ -237,6 +236,7 @@ class InMemoryStore[F[_], T, C, P, A, K](
   private[this] def isOrphaned(gnat: GNAT[C, P, A, K]): Boolean =
     gnat.data.isEmpty && gnat.wks.isEmpty
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): Unit =
     update match {
       case TrieUpdate(_, Insert, channelsHash, gnat) =>
