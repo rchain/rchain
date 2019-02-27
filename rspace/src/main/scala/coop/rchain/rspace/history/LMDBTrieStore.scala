@@ -77,30 +77,15 @@ class LMDBTrieStore[K, V] private (
   ): Option[Blake2b256Hash] =
     getRoot(txn, branch)
       .map { currentRoot =>
-        val pastRoots = getPastRootsInBranch(txn, branch).filter(_ != currentRoot)
-        (currentRoot, currentRoot +: pastRoots)
-      }
-      .map {
-        case (currentRoot, updatedPastRoots) =>
-          _dbPastRoots.put(txn, branch, updatedPastRoots)
-          currentRoot
+        val hashBytes =
+          Codec[Blake2b256Hash].encode(currentRoot).map(_.bytes.toDirectByteBuffer).get
+        val branchBytes = Codec[Branch].encode(branch).map(_.bytes.toDirectByteBuffer).get
+        _dbPastRoots.put(txn, hashBytes, branchBytes)
+        currentRoot
       }
 
   private[rspace] def putRoot(txn: Txn[ByteBuffer], branch: Branch, hash: Blake2b256Hash): Unit =
     _dbRoot.put(txn, branch, hash)(Codec[Branch], Codec[Blake2b256Hash])
-
-  private[rspace] def getAllPastRoots(txn: Txn[ByteBuffer]): Seq[Blake2b256Hash] =
-    withResource(_dbPastRoots.iterate(txn)) { it: CursorIterator[ByteBuffer] =>
-      it.asScala.foldLeft(Seq.empty[Blake2b256Hash]) { (acc, keyVal) =>
-        acc ++ Codec[Seq[Blake2b256Hash]].decode(BitVector(keyVal.`val`())).map(_.value).get
-      }
-    }
-
-  private[this] def getPastRootsInBranch(
-      txn: Txn[ByteBuffer],
-      branch: Branch
-  ): Seq[Blake2b256Hash] =
-    _dbPastRoots.get(txn, branch)(Codec[Branch], Codec[Seq[Blake2b256Hash]]).getOrElse(Seq.empty)
 
   private[rspace] def validateAndPutRoot(
       txn: Txn[ByteBuffer],
@@ -110,20 +95,14 @@ class LMDBTrieStore[K, V] private (
     getRoot(txn, branch)
       .find(_ == hash)
       .orElse {
-        getPastRootsInBranch(txn, branch)
-          .find(_ == hash)
-          .map { blake: Blake2b256Hash =>
-            putRoot(txn, branch, blake)
-            blake
-          }
-      }
-      .orElse {
-        getAllPastRoots(txn)
-          .find(_ == hash)
-          .map { blake: Blake2b256Hash =>
-            putRoot(txn, branch, blake)
-            blake
-          }
+        val hashBytes  = Codec[Blake2b256Hash].encode(hash).map(_.bytes.toDirectByteBuffer).get
+        val maybeValue = Option(_dbPastRoots.get(txn, hashBytes))
+        maybeValue
+          .map(_ => hash)
+          .map(hash => {
+            putRoot(txn, branch, hash)
+            hash
+          })
       }
       .getOrElse(throw new Exception(s"Unknown root."))
 
