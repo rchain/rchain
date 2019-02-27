@@ -121,13 +121,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
             case _ =>
               reAttemptBuffer(updatedDag) // reAttempt for any status that resulted in the adding of the block into the view
           }
-      estimates              <- estimator(updatedDag)
-      tip                    = estimates.head
-      _                      <- Log[F].info(s"New fork-choice tip is block ${PrettyPrinter.buildString(tip.blockHash)}.")
-      lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
-      updatedLastFinalizedBlockHash <- LastFinalizedBlockCalculator
-                                        .run[F](dag, lastFinalizedBlockHash)
-      _ <- lastFinalizedBlockHashContainer.set(updatedLastFinalizedBlockHash)
+      estimates <- estimator(updatedDag)
+      tip       = estimates.head
+      _         <- Log[F].info(s"New fork-choice tip is block ${PrettyPrinter.buildString(tip.blockHash)}.")
     } yield attempt
 
   def contains(
@@ -205,8 +201,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
 
   def lastFinalizedBlock: F[BlockMessage] =
     for {
+      dag                    <- blockDag
       lastFinalizedBlockHash <- lastFinalizedBlockHashContainer.get
-      blockMessage           <- ProtoUtil.unsafeGetBlock[F](lastFinalizedBlockHash)
+      updatedLastFinalizedBlockHash <- LastFinalizedBlockCalculator
+                                        .run[F](dag, lastFinalizedBlockHash)
+      _            <- lastFinalizedBlockHashContainer.set(updatedLastFinalizedBlockHash)
+      blockMessage <- ProtoUtil.unsafeGetBlock[F](updatedLastFinalizedBlockHash)
     } yield blockMessage
 
   // TODO: Optimize for large number of deploys accumulated over history
