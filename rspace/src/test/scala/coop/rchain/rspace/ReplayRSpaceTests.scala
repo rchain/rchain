@@ -24,8 +24,8 @@ import scala.collection.immutable
 import scala.util.{Random, Right}
 
 object SchedulerPools {
-  implicit val global = Scheduler.fixedPool("GlobalPool", 1000)
-  val rspacePool      = Scheduler.fixedPool("RSpacePool", 100)
+  implicit val global = Scheduler.fixedPool("GlobalPool", 20)
+  val rspacePool      = Scheduler.fixedPool("RSpacePool", 5)
 }
 
 //noinspection ZeroIndexToHead,NameBooleanParameters
