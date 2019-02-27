@@ -669,7 +669,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     } yield result
   }
 
-  it should "allow bonding and distribute the joining fee" in effectTest {
+  it should "allow bonding" in effectTest {
     for {
       nodes <- HashSetCasperTestNode.networkEff(
                 validatorKeys :+ otherSk,
@@ -780,22 +780,12 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
           }
         )
 
-      joiningFee = minimumBond
-      n          = validatorBondsAndRanks.size
-      joiningFeeDistribution = (1 to n).map { k =>
-        k -> ((2L * minimumBond * (n + 1 - k)) / (n * (n + 1)))
-      }.toMap
-      total = joiningFeeDistribution.values.sum
-      finalFeesDist = joiningFeeDistribution.updated(
-        1,
-        joiningFeeDistribution(1) + joiningFee - total
-      )
       correctBonds = validatorBondsAndRanks.map {
-        case (key, stake, rank) =>
-          Bond(key, stake + finalFeesDist(rank))
+        case (keyA, stake, _) =>
+          Bond(keyA, stake)
       }.toSet + Bond(
         ByteString.copyFrom(otherPk),
-        wallets.head.initRevBalance.toLong - joiningFee
+        wallets.head.initRevBalance.toLong
       )
 
       newBonds = block2.getBody.getState.bonds

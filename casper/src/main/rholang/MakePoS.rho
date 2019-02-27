@@ -18,12 +18,11 @@ in {
   for(@(_, ListOps) <- ListOpsCh; @(_, Either) <- EitherCh) {
     contract MakePoS(purse, @minimumBond, @maximumBond, @initBonds, return) = {
       new 
-        this, bondsCh, joiningFeeCh, clonePurse, depositPurse, 
-        updateBonds, feeDistribution, paymentStore
+        this, bondsCh, clonePurse, depositPurse,
+        updateBonds, paymentStore
       in {
         bondsCh!(initBonds) |
-        joiningFeeCh!!(minimumBond) | //joining fee equal to minimum bond amount
-      
+
         //The purpose of this contract is to move the contents
         //of an existing purse into a new purse. This prevents
         //the owner of the given purse from modifying the balance
@@ -46,9 +45,9 @@ in {
         contract this(@"validateBondAmount", @bondPurse, return) = {
           new balanceCh in {
             @bondPurse!("getBalance", *balanceCh) |
-            for(@balance <- balanceCh; @joiningFee <- joiningFeeCh) {
-              if      (balance - joiningFee < minimumBond) { return!(("Left", "Bond less than minimum!")) }
-              else if (balance - joiningFee > maximumBond) { return!(("Left", "Bond greater than maximum!")) }
+            for(@balance <- balanceCh) {
+              if      (balance < minimumBond) { return!(("Left", "Bond less than minimum!")) }
+              else if (balance > maximumBond) { return!(("Left", "Bond greater than maximum!")) }
               else                                         { return!(("Right", bondPurse)) }
             }
           }
@@ -80,55 +79,11 @@ in {
             bondsCh!(bonds) | return!(bonds)
           }
         } |
-        
-        contract feeDistribution(@n, @joiningFee, return) = {
-          new rangeCh, feeDistFunc, feeDistCh, sum, nCh, totalCh in {
-            contract sum(@x, @y, return) = { return!(x + y) } |
-            contract feeDistFunc(@k, return) = { return!((2 * joiningFee * (n + 1 - k)) / (n * (n + 1))) } |
-            @ListOps!("range", 1, n + 1, *rangeCh) |
-            for(@range <- rangeCh) {
-              @ListOps!("map", range, *feeDistFunc, *feeDistCh) |
-              for(@feeDist <- feeDistCh) {
-                @ListOps!("fold", feeDist, 0, *sum, *totalCh) |
-                for(@total <- totalCh) {
-                  return!(
-                    //give remainder (non-zero from rounding) to first validator
-                    [feeDist.nth(0) + joiningFee - total] ++
-                      feeDist.slice(1, n)
-                  )
-                }
-              }
-            }
-          }
-        } |
 
         contract updateBonds(@publicKey, @sigVerify, @bondAmount, @rewardsForwarder, return) = {
-          new feeDistCh, bondUpdateLoop, bondsWithFeeCh in {
-            //update the stakes of existing validators with their share of the joining fee
-            contract bondUpdateLoop(@bondsMap, @feeDist, @updatedMap, return) = {
-              match bondsMap {
-                {key:(stake, sigVerify, rewardsForwarder, index) ...rest} => { 
-                  bondUpdateLoop!(
-                    rest, 
-                    feeDist, 
-                    updatedMap.set(key, (stake + feeDist.nth(index - 1), sigVerify, rewardsForwarder, index)),
-                    *return
-                  )
-                }
-                
-                _ => { return!(updatedMap) }
-              }
-            } |
-            for(@bonds <- bondsCh; @joiningFee <- joiningFeeCh) {
-              feeDistribution!(bonds.size(), joiningFee, *feeDistCh) |
-              for(@feeDist <- feeDistCh) {
-                bondUpdateLoop!(bonds, feeDist, {}, *bondsWithFeeCh) |
-                for(@bondsWithFee <- bondsWithFeeCh) {
-                  bondsCh!(bondsWithFee.set(publicKey, (bondAmount - joiningFee, sigVerify, rewardsForwarder, bonds.size() + 1))) |
-                  return!((true, "Bond successful!"))
-                }
-              }
-            }
+          for(@bonds <- bondsCh) {
+            bondsCh!(bonds.set(publicKey, (bondAmount, sigVerify, rewardsForwarder, bonds.size() + 1))) |
+            return!((true, "Bond successful!"))
           }
         } |
 
