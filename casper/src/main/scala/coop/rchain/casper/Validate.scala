@@ -192,7 +192,7 @@ object Validate {
                                _ => Validate.repeatDeploy[F](block, dag)
                              )
       blockNumberStatus <- repeatedDeployStatus.joinRight.traverse(
-                            _ => Validate.blockNumber[F](block)
+                            _ => Validate.blockNumber[F](block, dag)
                           )
       followsStatus <- blockNumberStatus.joinRight.traverse(
                         _ => Validate.justificationFollows[F](block, genesis, dag)
@@ -312,13 +312,17 @@ object Validate {
     } yield result
 
   // Agnostic of non-parent justifications
-  def blockNumber[F[_]: Monad: Log: BlockStore](
-      b: BlockMessage
+  def blockNumber[F[_]: Monad: Log](
+      b: BlockMessage,
+      dag: BlockDagRepresentation[F]
   ): F[Either[InvalidBlock, ValidBlock]] =
     for {
-      parents <- ProtoUtil.unsafeGetParents[F](b)
+      maybeParents <- ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
+                       dag.lookup(parentHash)
+                     }
+      parents = maybeParents.flatten
       maxBlockNumber = parents.foldLeft(-1L) {
-        case (acc, p) => math.max(acc, ProtoUtil.blockNumber(p))
+        case (acc, p) => math.max(acc, p.blockNum)
       }
       number = ProtoUtil.blockNumber(b)
       result = maxBlockNumber + 1 == number
