@@ -1909,13 +1909,14 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
   }
 
-  "Running out of phlogistons" should "stop the evaluation upon cost depletion in a single execution branch" in {
+  private[this] def testStoppingEvaluation(
+      initialPhlo: Int,
+      contract: String,
+      expectedCosts: Seq[Cost]
+  ) = {
     implicit val errorLog          = new ErrorLog[Task]()
     implicit val costL             = costLog[Task]
     implicit val cost: _cost[Task] = loggingCost(costAlg, costL)
-
-    val initialPhlo = Cost(1, "init")
-    val contract    = "@1!(1)"
 
     (for {
       costsLoggingProgram <- costL.listen(withTestSpace(errorLog) {
@@ -1925,41 +1926,29 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
                                 for {
                                   par <- Interpreter[Task].buildNormalizedTerm(contract)
-                                  _   <- reducer.setPhlo(initialPhlo)
+                                  _   <- reducer.setPhlo(Cost(initialPhlo, "init"))
                                   res <- reducer.eval(par)(env, splitRand)
                                 } yield (res)
                             }.attempt)
       (result, costLog) = costsLoggingProgram
       _                 = result shouldBe Left(OutOfPhlogistonsError)
-      _                 = costLog.toList should contain theSameElementsAs (List(Cost(4, "substitution")))
+      _                 = costLog.toList should contain theSameElementsAs (expectedCosts)
       res               <- errorLog.readAndClearErrorVector
     } yield (res should be(Vector.empty))).unsafeRunSync
+  }
+
+  "Running out of phlogistons" should "stop the evaluation upon cost depletion in a single execution branch" in {
+    val initialPhlo   = 1
+    val contract      = "@1!(1)"
+    val expectedCosts = List(Cost(4, "substitution"))
+    testStoppingEvaluation(initialPhlo, contract, expectedCosts)
   }
 
   it should "stop the evaluation of all execution branches when one of them runs out of phlo" ignore {
-    implicit val errorLog          = new ErrorLog[Task]()
-    implicit val costL             = costLog[Task]
-    implicit val cost: _cost[Task] = loggingCost(costAlg, costL)
-
-    val initialPhlo = Cost(1, "init")
-    val contract    = "@1!(1) | @2!(2) | @3!(3)"
-
-    (for {
-      costsLoggingProgram <- costL.listen(withTestSpace(errorLog) {
-                              case TestFixture(_, reducer) =>
-                                implicit val env = Env.makeEnv[Par]()
-                                val splitRand    = rand.splitByte(0)
-
-                                for {
-                                  par <- Interpreter[Task].buildNormalizedTerm(contract)
-                                  _   <- reducer.setPhlo(initialPhlo)
-                                  res <- reducer.eval(par)(env, splitRand)
-                                } yield (res)
-                            }.attempt)
-      (result, costLog) = costsLoggingProgram
-      _                 = result shouldBe Left(OutOfPhlogistonsError)
-      _                 = costLog.toList should contain theSameElementsAs (List(Cost(4, "substitution")))
-      res               <- errorLog.readAndClearErrorVector
-    } yield (res should be(Vector.empty))).unsafeRunSync
+    val initialPhlo   = 1
+    val contract      = "@1!(1) | @2!(2) | @3!(3)"
+    val expectedCosts = List(Cost(4, "substitution"))
+    testStoppingEvaluation(initialPhlo, contract, expectedCosts)
   }
+
 }
