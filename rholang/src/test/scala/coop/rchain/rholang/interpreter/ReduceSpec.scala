@@ -15,7 +15,8 @@ import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
-import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
@@ -35,11 +36,14 @@ import scala.concurrent.duration._
 final case class TestFixture(space: RhoISpace[Task], reducer: ChargingReducer[Task])
 
 trait PersistentStoreTester {
-  def withTestSpace[R](errorLog: ErrorLog[Task])(f: TestFixture => R): R = {
-    val dbDir                               = Files.createTempDirectory("rholang-interpreter-test-")
+
+  def withTestSpace[R](
+      errorLog: ErrorLog[Task]
+  )(f: TestFixture => R)(implicit CA: CostAccounting[Task], C: _cost[Task]): R = {
+    val dbDir                    = Files.createTempDirectory("rholang-interpreter-test-")
     val context: RhoContext[Task]           = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
-    implicit val logF: Log[Task]            = new Log.NOPLog[Task]
-    implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+    val context: RhoContext      = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
+    implicit val logF: Log[Task] = new Log.NOPLog[Task]
 
     val space = (RSpace
       .create[
@@ -67,6 +71,10 @@ trait PersistentStoreTester {
 
 class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
+
+  implicit val costAlg: CostAccounting[Task] = CostAccounting.unsafe[Task](Cost(0))
+  implicit val costL                         = costLog[Task]
+  implicit val cost: _cost[Task]             = loggingCost(costAlg, costL)
 
   def checkData(
       result: Map[

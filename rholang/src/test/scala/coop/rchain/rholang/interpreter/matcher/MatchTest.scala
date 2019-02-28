@@ -20,6 +20,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rholang.interpreter.PrettyPrinter
 import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.rholang.interpreter.errors.{InterpreterError, OutOfPhlogistonsError}
 import coop.rchain.rholang.interpreter.matcher.NonDetFreeMapWithCost._
 import monix.eval.{Coeval, Task}
@@ -938,18 +939,6 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
       spatialMatch[NonDetFreeMapWithCost, Par, Par](target, pattern).runFirstWithCost(Cost(0))
     res should be(Left(OutOfPhlogistonsError))
   }
-
-  def costLog[M[_]: Sync](): FunctorListen[M, Chain[Cost]] =
-    new DefaultFunctorListen[M, Chain[Cost]] {
-      override val functor: Functor[M]  = implicitly[Functor[M]]
-      private val ref                   = Ref.unsafe(Chain.empty[Cost])
-      def tell(l: Chain[Cost]): M[Unit] = ref.modify(c => (c.concat(l), ()))
-      def listen[A](fa: M[A]): M[(A, Chain[Cost])] =
-        for {
-          a <- fa
-          r <- ref.get
-        } yield ((a, r))
-    }
 
   private def doMatchAndCharge(initialPhlo: Int) = {
     implicit val costL = costLog[Task]
