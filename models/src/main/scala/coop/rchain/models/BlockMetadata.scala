@@ -60,7 +60,7 @@ object BlockMetadata {
       case Bond(validator, stake) => validator -> stake
     }.toMap
 
-  def fromBlock(b: BlockMessage): BlockMetadata =
+  def fromBlock(b: BlockMessage, invalid: Boolean): BlockMetadata =
     BlockMetadata(
       b.blockHash,
       b.header.fold(List.empty[ByteString])(_.parentsHashList.toList),
@@ -69,6 +69,6 @@ object BlockMetadata {
       weightMap(b),
       b.body.flatMap(_.state.map(_.blockNumber)).getOrElse(0L),
       b.seqNum,
-      b.invalid
+      invalid
     )
 }

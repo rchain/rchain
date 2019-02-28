@@ -433,7 +433,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
   def getRepresentation: F[BlockDagRepresentation[F]] =
     lock.withPermit(representation)
 
-  def insert(block: BlockMessage): F[BlockDagRepresentation[F]] =
+  def insert(block: BlockMessage, invalid: Boolean): F[BlockDagRepresentation[F]] =
     lock.withPermit(
       for {
         alreadyStored <- getDataLookup.map(_.contains(block.blockHash))
@@ -442,7 +442,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
             } else {
               for {
                 _             <- squashLatestMessagesDataFileIfNeeded()
-                blockMetadata = BlockMetadata.fromBlock(block)
+                blockMetadata = BlockMetadata.fromBlock(block, invalid)
                 _             = assert(block.blockHash.size == 32)
                 _             <- modifyDataLookup(_.updated(block.blockHash, blockMetadata))
                 _ <- modifyChildMap(
@@ -1049,7 +1049,7 @@ object BlockDagFileStorage {
       state = BlockDagFileStorageState(
         latestMessages = initialLatestMessages,
         childMap = Map(genesis.blockHash   -> Set.empty[BlockHash]),
-        dataLookup = Map(genesis.blockHash -> BlockMetadata.fromBlock(genesis)),
+        dataLookup = Map(genesis.blockHash -> BlockMetadata.fromBlock(genesis, false)),
         topoSort = Vector(Vector(genesis.blockHash)),
         equivocationsTracker = Set.empty,
         sortOffset = 0L,

@@ -41,7 +41,7 @@ trait BlockDagStorageTest
     forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
       withDagStorage { dagStorage =>
         for {
-          _   <- blockElements.traverse_(dagStorage.insert)
+          _   <- blockElements.traverse_(dagStorage.insert(_, false))
           dag <- dagStorage.getRepresentation
           blockElementLookups <- blockElements.traverse { b =>
                                   for {
@@ -55,9 +55,9 @@ trait BlockDagStorageTest
           _                   <- dagStorage.clear()
           _ = blockElementLookups.zip(blockElements).foreach {
             case ((blockMetadata, latestMessageHash, latestMessage), b) =>
-              blockMetadata shouldBe Some(BlockMetadata.fromBlock(b))
+              blockMetadata shouldBe Some(BlockMetadata.fromBlock(b, false))
               latestMessageHash shouldBe Some(b.blockHash)
-              latestMessage shouldBe Some(BlockMetadata.fromBlock(b))
+              latestMessage shouldBe Some(BlockMetadata.fromBlock(b, false))
           }
           _      = latestMessageHashes.size shouldBe blockElements.size
           result = latestMessages.size shouldBe blockElements.size
@@ -203,11 +203,11 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
     val (list, latestMessageHashes, latestMessages, topoSort, topoSortTail) = lookupResult
     val realLatestMessages = blockElements.foldLeft(Map.empty[Validator, BlockMetadata]) {
       case (lm, b) =>
-        lm.updated(b.sender, BlockMetadata.fromBlock(b))
+        lm.updated(b.sender, BlockMetadata.fromBlock(b, false))
     }
     list.zip(blockElements).foreach {
       case ((blockMetadata, latestMessageHash, latestMessage, children, contains), b) =>
-        blockMetadata shouldBe Some(BlockMetadata.fromBlock(b))
+        blockMetadata shouldBe Some(BlockMetadata.fromBlock(b, false))
         latestMessageHash shouldBe realLatestMessages.get(b.sender).map(_.blockHash)
         latestMessage shouldBe realLatestMessages.get(b.sender)
         children shouldBe
@@ -220,7 +220,9 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
         contains shouldBe true
     }
     latestMessageHashes shouldBe blockElements.map(b => b.sender -> b.blockHash).toMap
-    latestMessages shouldBe blockElements.map(b => b.sender      -> BlockMetadata.fromBlock(b)).toMap
+    latestMessages shouldBe blockElements
+      .map(b => b.sender -> BlockMetadata.fromBlock(b, false))
+      .toMap
 
     def normalize(topoSort: Vector[Vector[BlockHash]]): Vector[Vector[BlockHash]] =
       if (topoSort.size == 1 && topoSort.head.isEmpty)
@@ -238,7 +240,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
       withDagStorageLocation { (dagDataDir, blockStore) =>
         for {
           firstStorage  <- createAtDefaultLocation(dagDataDir)(blockStore)
-          _             <- blockElements.traverse_(firstStorage.insert)
+          _             <- blockElements.traverse_(firstStorage.insert(_, false))
           _             <- firstStorage.close()
           secondStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
           result        <- lookupElements(blockElements, secondStorage)
@@ -254,10 +256,10 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
         withDagStorageLocation { (dagDataDir, blockStore) =>
           for {
             firstStorage  <- createAtDefaultLocation(dagDataDir)(blockStore)
-            _             <- firstBlockElements.traverse_(firstStorage.insert)
+            _             <- firstBlockElements.traverse_(firstStorage.insert(_, false))
             _             <- firstStorage.close()
             secondStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
-            _             <- secondBlockElements.traverse_(secondStorage.insert)
+            _             <- secondBlockElements.traverse_(secondStorage.insert(_, false))
             _             <- secondStorage.close()
             thirdStorage  <- createAtDefaultLocation(dagDataDir)(blockStore)
             result        <- lookupElements(firstBlockElements ++ secondBlockElements, thirdStorage)
@@ -273,7 +275,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
       withDagStorageLocation { (dagDataDir, blockStore) =>
         for {
           firstStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
-          _            <- blockElements.traverse_(firstStorage.insert)
+          _            <- blockElements.traverse_(firstStorage.insert(_, false))
           _            <- firstStorage.close()
           garbageBytes = Array.fill[Byte](64)(0)
           _            <- Sync[Task].delay { Random.nextBytes(garbageBytes) }
@@ -298,9 +300,9 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
         withDagStorageLocation { (dagDataDir, blockStore) =>
           for {
             firstStorage      <- createAtDefaultLocation(dagDataDir)(blockStore)
-            _                 <- blockElements.traverse_(firstStorage.insert)
+            _                 <- blockElements.traverse_(firstStorage.insert(_, false))
             _                 <- firstStorage.close()
-            garbageByteString = BlockMetadata.fromBlock(garbageBlock).toByteString
+            garbageByteString = BlockMetadata.fromBlock(garbageBlock, false).toByteString
             garbageBytes      = garbageByteString.size.toByteString.concat(garbageByteString).toByteArray
             _ <- Sync[Task].delay {
                   Files.write(
@@ -340,9 +342,9 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
           withDagStorageLocation { (dagDataDir, blockStore) =>
             for {
               firstStorage  <- createAtDefaultLocation(dagDataDir, 2)(blockStore)
-              _             <- blockElements.traverse_(firstStorage.insert)
-              _             <- secondBlockElements.traverse_(firstStorage.insert)
-              _             <- thirdBlockElements.traverse_(firstStorage.insert)
+              _             <- blockElements.traverse_(firstStorage.insert(_, false))
+              _             <- secondBlockElements.traverse_(firstStorage.insert(_, false))
+              _             <- thirdBlockElements.traverse_(firstStorage.insert(_, false))
               _             <- firstStorage.close()
               secondStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
               result        <- lookupElements(blockElements, secondStorage)
@@ -364,7 +366,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
           withDagStorageLocation { (dagDataDir, blockStore) =>
             for {
               firstStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
-              _            <- blockElements.traverse_(firstStorage.insert)
+              _            <- blockElements.traverse_(firstStorage.insert(_, false))
               record = EquivocationRecord(
                 equivocator,
                 0,
@@ -393,7 +395,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
           withDagStorageLocation { (dagDataDir, blockStore) =>
             for {
               firstStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
-              _            <- blockElements.traverse_(firstStorage.insert)
+              _            <- blockElements.traverse_(firstStorage.insert(_, false))
               record = EquivocationRecord(
                 equivocator,
                 0,
@@ -438,7 +440,7 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
         for {
           firstStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
           _ <- blockElements.traverse_(
-                b => blockStore.put(b.blockHash, b) *> firstStorage.insert(b)
+                b => blockStore.put(b.blockHash, b) *> firstStorage.insert(b, false)
               )
           _ <- firstStorage.close()
           _ <- Sync[Task].delay {

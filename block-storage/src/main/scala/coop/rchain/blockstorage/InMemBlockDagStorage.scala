@@ -88,10 +88,10 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
       _              <- lock.release
     } yield InMemBlockDagRepresentation(latestMessages, childMap, dataLookup, topoSort)
 
-  override def insert(block: BlockMessage): F[BlockDagRepresentation[F]] =
+  override def insert(block: BlockMessage, invalid: Boolean): F[BlockDagRepresentation[F]] =
     for {
       _ <- lock.acquire
-      _ <- dataLookupRef.update(_.updated(block.blockHash, BlockMetadata.fromBlock(block)))
+      _ <- dataLookupRef.update(_.updated(block.blockHash, BlockMetadata.fromBlock(block, invalid)))
       _ <- childMapRef.update(
             childMap =>
               parentHashes(block).foldLeft(childMap) {

@@ -1524,10 +1524,8 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
           }(nodes(0).metricEff, nodes(0).logEff)
       _ <- validateBlockStore(nodes(1)) { blockStore =>
             for {
-              _ <- blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
-              result <- blockStore.get(signedBlock4.blockHash) shouldBeF Some(
-                         signedBlock4.copy(invalid = true)
-                       )
+              _      <- blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
+              result <- blockStore.get(signedBlock4.blockHash) shouldBeF Some(signedBlock4)
             } yield result
           }(nodes(1).metricEff, nodes(1).logEff)
       result <- validateBlockStore(nodes(2)) { blockStore =>

@@ -563,15 +563,15 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
             s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}."
           )
       // TODO: Slash block for status except InvalidUnslashableBlock
-      invalidBlock = block.copy(invalid = true)
-      updatedDag   <- addToState(invalidBlock)
+      _          <- BlockStore[F].put(block.blockHash, block)
+      updatedDag <- BlockDagStorage[F].insert(block, true)
     } yield updatedDag
 
   // TODO: should only call insert on BLockDagStorage
   private def addToState(block: BlockMessage): F[BlockDagRepresentation[F]] =
     for {
       _          <- BlockStore[F].put(block.blockHash, block)
-      updatedDag <- BlockDagStorage[F].insert(block)
+      updatedDag <- BlockDagStorage[F].insert(block, false)
     } yield updatedDag
 
   private def reAttemptBuffer(
