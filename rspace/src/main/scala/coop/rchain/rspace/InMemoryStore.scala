@@ -4,6 +4,7 @@ import cats.effect.Sync
 
 import scala.collection.immutable.Seq
 import cats.implicits._
+import coop.rchain.catscontrib.ski.kp
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.canonicalize
@@ -57,14 +58,20 @@ class InMemoryStore[F[_], T, C, P, A, K](
 
   private[rspace] def withTxnFlatF[R](txnF: F[Transaction])(f: Transaction => F[R]): F[R] =
     for {
-      txn    <- txnF
-      retErr <- f(txn).attempt
-      _ <- syncF.delay(retErr.map { _ =>
-            txn.readState({ state =>
-              entriesGauge.set(state.size)
-            })
-            txn.commit()
-          })
+      txn <- txnF
+      retErr <- f(txn)
+                 .flatMap(
+                   r =>
+                     syncF
+                       .delay {
+                         txn.readState { state =>
+                           entriesGauge.set(state.size)
+                         }
+                         txn.commit()
+                       }
+                       .as(r)
+                 )
+                 .attempt
       _   <- syncF.delay(txn.close())
       ret <- syncF.fromEither(retErr)
     } yield ret

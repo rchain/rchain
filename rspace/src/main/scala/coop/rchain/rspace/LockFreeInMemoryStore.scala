@@ -2,6 +2,7 @@ package coop.rchain.rspace
 
 import cats.effect.Sync
 import cats.implicits._
+import coop.rchain.catscontrib.ski.kp
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.immutable.Seq
@@ -54,8 +55,7 @@ class LockFreeInMemoryStore[F[_], T, C, P, A, K](
   private[rspace] def withTxnFlatF[R](txnF: F[Transaction])(f: Transaction => F[R]): F[R] =
     for {
       txn    <- txnF
-      retErr <- f(txn).attempt
-      _      <- syncF.delay(retErr.map(_ => txn.commit()))
+      retErr <- f(txn).flatMap(r => syncF.delay(txn.commit()).as(r)).attempt
       _      <- syncF.delay(updateGauges())
       _      <- syncF.delay(txn.close())
       ret    <- syncF.fromEither(retErr)
