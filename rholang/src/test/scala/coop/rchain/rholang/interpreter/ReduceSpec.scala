@@ -73,8 +73,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
 
   implicit val costAlg: CostAccounting[Task] = CostAccounting.unsafe[Task](Cost(0))
-  implicit val costL                         = costLog[Task]
-  implicit val cost: _cost[Task]             = loggingCost(costAlg, costL)
+  implicit val cost: _cost[Task]             = loggingCost(costAlg, noOpCostLog[Task])
 
   def checkData(
       result: Map[
@@ -1910,33 +1909,31 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
   }
 
-  "Running out of phlogistons" should "stop the evaluation" in {
-    implicit val errorLog = new ErrorLog[Task]()
+  "Running out of phlogistons" should "stop the evaluation upon cost depletion in a single execution branch" in {
+    implicit val errorLog          = new ErrorLog[Task]()
+    implicit val costL             = costLog[Task]
+    implicit val cost: _cost[Task] = loggingCost(costAlg, costL)
 
-    val test = withTestSpace(errorLog) {
-      case TestFixture(_, reducer) =>
-        implicit val env   = Env.makeEnv[Par]()
-        val notEnoughPhlos = Cost(5)
-        reducer.setPhlo(notEnoughPhlos).runSyncUnsafe(1.second)
-        val splitRand = rand.splitByte(0)
-        val receive =
-          Receive(
-            Seq(
-              ReceiveBind(
-                Seq(Par(exprs = Seq(EVar(FreeVar(0)), EVar(FreeVar(1)), EVar(FreeVar(2))))),
-                Par(exprs = Seq(GString("channel")))
-              )
-            ),
-            Par(),
-            false,
-            3,
-            BitSet()
-          )
-        reducer.eval(receive)(env, splitRand)
-    }
+    val initialPhlo = Cost(1, "init")
+    val contract    = "@1!(1)"
 
-    val result = test.attempt.runSyncUnsafe(1.second)
-    assert(result === Left(OutOfPhlogistonsError))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty)
+    (for {
+      costsLoggingProgram <- costL.listen(withTestSpace(errorLog) {
+                              case TestFixture(_, reducer) =>
+                                implicit val env = Env.makeEnv[Par]()
+                                val splitRand    = rand.splitByte(0)
+
+                                for {
+                                  par <- Interpreter[Task].buildNormalizedTerm(contract)
+                                  _   <- reducer.setPhlo(initialPhlo)
+                                  res <- reducer.eval(par)(env, splitRand)
+                                } yield (res)
+                            }.attempt)
+      (result, costLog) = costsLoggingProgram
+      _                 = result shouldBe Left(OutOfPhlogistonsError)
+      _                 = costLog.toList should contain theSameElementsAs (List(Cost(4, "substitution")))
+      res               <- errorLog.readAndClearErrorVector
+    } yield (res should be(Vector.empty))).unsafeRunSync
   }
+
 }
