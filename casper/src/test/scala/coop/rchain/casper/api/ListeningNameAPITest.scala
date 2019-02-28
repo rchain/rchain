@@ -18,9 +18,9 @@ import coop.rchain.rholang.interpreter.accounting
 
 import com.google.protobuf.ByteString
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest._
 
-class ListeningNameAPITest extends FlatSpec with Matchers {
+class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
 
   import HashSetCasperTest._
 
@@ -50,13 +50,15 @@ class ListeningNameAPITest extends FlatSpec with Matchers {
       resultData    = Par().copy(exprs = Seq(Expr(GInt(0))))
       listeningNameResponse1 <- BlockAPI
                                  .getListeningNameDataResponse[Effect](Int.MaxValue, listeningName)
-      _       = listeningNameResponse1.isRight shouldBe true
-      data1   = listeningNameResponse1.right.get.blockResults.map(_.postBlockData)
-      blocks1 = listeningNameResponse1.right.get.blockResults.map(_.block)
-      _       = data1 should be(List(List(resultData)))
-      _       = blocks1.length should be(1)
-      result  = listeningNameResponse1.right.get.length should be(1)
-    } yield result
+      _ = inside(listeningNameResponse1) {
+        case Right(ListeningNameDataResponse(blockResults, l)) =>
+          val data1   = blockResults.map(_.postBlockData)
+          val blocks1 = blockResults.map(_.block)
+          data1 should be(List(List(resultData)))
+          blocks1.length should be(1)
+          l should be(1)
+      }
+    } yield ()
   }
 
   it should "work across a chain" in effectTest {
@@ -84,13 +86,14 @@ class ListeningNameAPITest extends FlatSpec with Matchers {
                                    Int.MaxValue,
                                    listeningName
                                  )
-        _       = listeningNameResponse1.isRight shouldBe true
-        data1   = listeningNameResponse1.right.get.blockResults.map(_.postBlockData)
-        blocks1 = listeningNameResponse1.right.get.blockResults.map(_.block)
-        _       = data1 should be(List(List(resultData)))
-        _       = blocks1.length should be(1)
-        _       = listeningNameResponse1.right.get.length should be(1)
-
+        _ = inside(listeningNameResponse1) {
+          case Right(ListeningNameDataResponse(blockResults, l)) =>
+            val data1   = blockResults.map(_.postBlockData)
+            val blocks1 = blockResults.map(_.block)
+            data1 should be(List(List(resultData)))
+            blocks1.length should be(1)
+            l should be(1)
+        }
         createBlock2Result <- nodes(1).casperEff
                                .deploy(deployDatas(1)) *> nodes(1).casperEff.createBlock
         Created(block2) = createBlock2Result
@@ -116,20 +119,21 @@ class ListeningNameAPITest extends FlatSpec with Matchers {
                                    Int.MaxValue,
                                    listeningName
                                  )
-        _       = listeningNameResponse2.isRight shouldBe true
-        data2   = listeningNameResponse2.right.get.blockResults.map(_.postBlockData)
-        blocks2 = listeningNameResponse2.right.get.blockResults.map(_.block)
-        _ = data2 should be(
-          List(
-            List(resultData, resultData, resultData, resultData),
-            List(resultData, resultData, resultData),
-            List(resultData, resultData),
-            List(resultData)
-          )
-        )
-        _ = blocks2.length should be(4)
-        _ = listeningNameResponse2.right.get.length should be(4)
-
+        _ = inside(listeningNameResponse2) {
+          case Right(ListeningNameDataResponse(blockResults, l)) =>
+            val data2   = blockResults.map(_.postBlockData)
+            val blocks2 = blockResults.map(_.block)
+            data2 should be(
+              List(
+                List(resultData, resultData, resultData, resultData),
+                List(resultData, resultData, resultData),
+                List(resultData, resultData),
+                List(resultData)
+              )
+            )
+            blocks2.length should be(4)
+            l should be(4)
+        }
         createBlock5Result <- nodes(1).casperEff
                                .deploy(deployDatas(4)) *> nodes(1).casperEff.createBlock
         Created(block5) = createBlock5Result
@@ -155,45 +159,46 @@ class ListeningNameAPITest extends FlatSpec with Matchers {
                                    Int.MaxValue,
                                    listeningName
                                  )
-        _       = listeningNameResponse3.isRight shouldBe true
-        data3   = listeningNameResponse3.right.get.blockResults.map(_.postBlockData)
-        blocks3 = listeningNameResponse3.right.get.blockResults.map(_.block)
-        _ = data3 should be(
-          List(
-            List(
-              resultData,
-              resultData,
-              resultData,
-              resultData,
-              resultData,
-              resultData,
-              resultData
-            ),
-            List(resultData, resultData, resultData, resultData, resultData, resultData),
-            List(resultData, resultData, resultData, resultData, resultData),
-            List(resultData, resultData, resultData, resultData),
-            List(resultData, resultData, resultData),
-            List(resultData, resultData),
-            List(resultData)
-          )
-        )
-        _ = blocks3.length should be(7)
-        _ = listeningNameResponse3.right.get.length should be(7)
-
+        _ = inside(listeningNameResponse3) {
+          case Right(ListeningNameDataResponse(blockResults, l)) =>
+            val data3   = blockResults.map(_.postBlockData)
+            val blocks3 = blockResults.map(_.block)
+            data3 should be(
+              List(
+                List(
+                  resultData,
+                  resultData,
+                  resultData,
+                  resultData,
+                  resultData,
+                  resultData,
+                  resultData
+                ),
+                List(resultData, resultData, resultData, resultData, resultData, resultData),
+                List(resultData, resultData, resultData, resultData, resultData),
+                List(resultData, resultData, resultData, resultData),
+                List(resultData, resultData, resultData),
+                List(resultData, resultData),
+                List(resultData)
+              )
+            )
+            blocks3.length should be(7)
+            l should be(7)
+        }
         listeningNameResponse3UntilDepth <- BlockAPI
                                              .getListeningNameDataResponse[Effect](1, listeningName)
-        _ = listeningNameResponse3UntilDepth.isRight shouldBe true
-        _ = listeningNameResponse3UntilDepth.right.get.length should be(1)
-
+        _ = inside(listeningNameResponse3UntilDepth) {
+          case Right(ListeningNameDataResponse(_, l)) => l should be(1)
+        }
         listeningNameResponse3UntilDepth2 <- BlockAPI.getListeningNameDataResponse[Effect](
                                               2,
                                               listeningName
                                             )
-        _      = listeningNameResponse3UntilDepth2.isRight shouldBe true
-        result = listeningNameResponse3UntilDepth2.right.get.length should be(2)
-
+        _ = inside(listeningNameResponse3UntilDepth2) {
+          case Right(ListeningNameDataResponse(_, l)) => l should be(2)
+        }
         _ = nodes.foreach(_.tearDown())
-      } yield result
+      } yield ()
     }
   }
 
@@ -230,13 +235,14 @@ class ListeningNameAPITest extends FlatSpec with Matchers {
                                  Int.MaxValue,
                                  listeningNamesShuffled1
                                )
-      _              = listeningNameResponse1.isRight shouldBe true
-      continuations1 = listeningNameResponse1.right.get.blockResults.map(_.postBlockContinuations)
-      blocks1        = listeningNameResponse1.right.get.blockResults.map(_.block)
-      _              = continuations1 should be(List(List(desiredResult)))
-      _              = blocks1.length should be(1)
-      _              = listeningNameResponse1.right.get.length should be(1)
-
+      _ = inside(listeningNameResponse1) {
+        case Right(ListeningNameContinuationResponse(blockResults, l)) =>
+          val continuations1 = blockResults.map(_.postBlockContinuations)
+          val blocks1        = blockResults.map(_.block)
+          continuations1 should be(List(List(desiredResult)))
+          blocks1.length should be(1)
+          l should be(1)
+      }
       listeningNamesShuffled2 = List(
         Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3)))),
         Par().copy(exprs = Seq(Expr(GInt(1)), Expr(GInt(2))))
@@ -245,12 +251,14 @@ class ListeningNameAPITest extends FlatSpec with Matchers {
                                  Int.MaxValue,
                                  listeningNamesShuffled2
                                )
-      _              = listeningNameResponse2.isRight shouldBe true
-      continuations2 = listeningNameResponse2.right.get.blockResults.map(_.postBlockContinuations)
-      blocks2        = listeningNameResponse2.right.get.blockResults.map(_.block)
-      _              = continuations2 should be(List(List(desiredResult)))
-      _              = blocks2.length should be(1)
-      result         = listeningNameResponse2.right.get.length should be(1)
-    } yield result
+      _ = inside(listeningNameResponse2) {
+        case Right(ListeningNameContinuationResponse(blockResults, l)) =>
+          val continuations2 = blockResults.map(_.postBlockContinuations)
+          val blocks2        = blockResults.map(_.block)
+          continuations2 should be(List(List(desiredResult)))
+          blocks2.length should be(1)
+          l should be(1)
+      }
+    } yield ()
   }
 }
