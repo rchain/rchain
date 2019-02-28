@@ -43,6 +43,7 @@ final case class Tls(
 final case class Kamon(
     prometheus: Boolean,
     influxDb: Boolean,
+    influxDbUdp: Boolean,
     zipkin: Boolean,
     sigar: Boolean
 )

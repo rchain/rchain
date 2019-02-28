@@ -101,6 +101,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         |    metrics {
         |      prometheus = true
         |      influxdb = true
+        |      influxdb-udp = true
         |      zipkin = true
         |      sigar = true
         |    }
@@ -112,6 +113,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
       configuration.Kamon(
         prometheus = true,
         influxDb = true,
+        influxDbUdp = true,
         zipkin = true,
         sigar = true
       )
