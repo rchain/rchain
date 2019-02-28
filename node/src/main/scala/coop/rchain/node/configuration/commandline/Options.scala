@@ -279,6 +279,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val maxMessageSize =
       opt[Int](descr = "Maximum size of message that can be sent via transport layer")
 
+    val messageConsumers =
+      opt[Int](descr = "Number of incoming message consumers. Defaults to number of CPU cores")
+
     val threadPoolSize =
       opt[Int](descr = "Maximum number of threads used by rnode", hidden = true)
 

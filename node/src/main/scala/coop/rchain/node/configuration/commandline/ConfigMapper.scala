@@ -49,6 +49,7 @@ object ConfigMapper {
         add(keys.MapSize, run.mapSize)
         add(keys.MaxConnections, run.maxNumOfConnections)
         add(keys.MaxMessageSize, run.maxMessageSize)
+        add(keys.MessageConsumers, run.messageConsumers)
       }
 
       {

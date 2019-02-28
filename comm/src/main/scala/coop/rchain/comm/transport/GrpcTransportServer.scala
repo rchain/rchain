@@ -32,7 +32,8 @@ class GrpcTransportServer(
     cert: String,
     key: String,
     maxMessageSize: Int,
-    tempFolder: Path
+    tempFolder: Path,
+    parallelism: Int
 )(
     implicit scheduler: Scheduler,
     log: Log[Task]
@@ -40,11 +41,6 @@ class GrpcTransportServer(
   private def certInputStream = new ByteArrayInputStream(cert.getBytes())
   private def keyInputStream  = new ByteArrayInputStream(key.getBytes())
 
-  /**
-    * //TODO Bring back lvl of parallelism to Math.max(Runtime.getRuntime.availableProcessors(), 2) once
-    * MultiparentCasperImpl is not synchronous (uses semaphore)
-    */
-  private val parallelism = 1
   private val queueScheduler =
     Scheduler.fixedPool("tl-dispatcher-server", parallelism, reporter = UncaughtExceptionLogger)
 
@@ -104,14 +100,17 @@ object GrpcTransportServer {
       certPath: Path,
       keyPath: Path,
       maxMessageSize: Int,
-      folder: Path
+      folder: Path,
+      parallelism: Int
   )(
       implicit scheduler: Scheduler,
       log: Log[Task]
   ): TransportServer = {
     val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
     val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
-    new TransportServer(new GrpcTransportServer(port, cert, key, maxMessageSize, folder))
+    new TransportServer(
+      new GrpcTransportServer(port, cert, key, maxMessageSize, folder, parallelism)
+    )
   }
 }
 
