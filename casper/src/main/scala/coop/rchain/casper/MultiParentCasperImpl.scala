@@ -26,8 +26,9 @@ import coop.rchain.shared._
 /**
   Encapsulates mutable state of the MultiParentCasperImpl
 
-  @param blockBuffer
-  @param deployHistory
+  @param blockBuffer - holds hashes of blocks that were received but were not added because DAG does not have their parents yet
+  @param deployHistory - deploy data that will be eventually used to create block, removed when block holding it is finalizedchild
+  @param dependencyDag - dependency dag for block buffer // TODO they should be one structure
   */
 final case class CasperState(
     blockBuffer: Set[BlockHash] = Set.empty[BlockHash],
