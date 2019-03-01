@@ -6,6 +6,8 @@ import java.util.concurrent.TimeUnit
 import cats.effect.{ContextShift, Sync}
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
@@ -107,15 +109,16 @@ object BasicBench {
 
     implicit val syncF: Sync[Task]                 = Task.catsEffect
     implicit val logF: Log[Task]                   = new Log.NOPLog[Task]
+    implicit val noopMetrics: Metrics[Task]        = new metrics.Metrics.MetricsNOP[Task]
     implicit val contextShiftF: ContextShift[Task] = Task.contextShift
 
     private val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
 
-    val context: LMDBContext[Par, BindPattern, ListParWithRandom, TaggedContinuation] =
+    val context: LMDBContext[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation] =
       Context.create(dbDir, 1024L * 1024L * 1024L)
 
-    val testStore: LMDBStore[Par, BindPattern, ListParWithRandom, TaggedContinuation] =
-      LMDBStore.create[Par, BindPattern, ListParWithRandom, TaggedContinuation](
+    val testStore: IStore[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation] =
+      LMDBStore.create[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](
         context,
         Branch("bench")
       )

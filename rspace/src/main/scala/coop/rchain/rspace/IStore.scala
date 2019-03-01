@@ -13,7 +13,7 @@ import scala.collection.immutable.Seq
   * @tparam A a type representing an arbitrary piece of data
   * @tparam K a type representing a continuation
   */
-trait IStore[C, P, A, K] {
+trait IStore[F[_], C, P, A, K] {
 
   /**
     * The type of transactions
@@ -22,11 +22,13 @@ trait IStore[C, P, A, K] {
 
   private[rspace] type TrieTransaction
 
-  private[rspace] def createTxnRead(): Transaction
+  private[rspace] def createTxnReadF(): F[Transaction]
 
-  private[rspace] def createTxnWrite(): Transaction
+  private[rspace] def createTxnWriteF(): F[Transaction]
 
-  private[rspace] def withTxn[R](txn: Transaction)(f: Transaction => R): R
+  private[rspace] def withTxnF[R](txn: F[Transaction])(f: Transaction => R): F[R]
+
+  private[rspace] def withTxnFlatF[R](txn: F[Transaction])(f: Transaction => F[R]): F[R]
 
   private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash
 

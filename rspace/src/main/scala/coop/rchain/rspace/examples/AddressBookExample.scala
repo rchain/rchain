@@ -4,20 +4,21 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, 
 import java.nio.file.{Files, Path}
 
 import cats.Id
-import cats.effect.{ContextShift, Sync}
+import cats.effect.{Concurrent, ContextShift}
+import coop.rchain.metrics.Metrics
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Language.ignore
 import coop.rchain.shared.Log
 import coop.rchain.rspace.util._
+
 import scala.concurrent.ExecutionContext
 import scodec.bits.ByteVector
 
 import scala.collection.immutable.Seq
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
-
 import scala.concurrent.ExecutionContext.Implicits.global
 
 @SuppressWarnings(Array("org.wartremover.warts.EitherProjectionPartial"))
@@ -85,7 +86,7 @@ object AddressBookExample {
 
   object implicits {
 
-    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+    implicit val concurrentF: Concurrent[Id] = coop.rchain.catscontrib.effect.implicits.concurrentId
 
     implicit val contextShiftId: ContextShift[Id] =
       new ContextShift[Id] {
@@ -200,13 +201,14 @@ object AddressBookExample {
 
   def exampleOne(): Unit = {
 
-    implicit val log: Log[Id] = Log.log
+    implicit val log: Log[Id]          = Log.log
+    implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
 
     // Here we define a temporary place to put the store's files
     val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
 
     // Let's define our store
-    val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
+    val context = Context.create[Id, Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
     val space =
       RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
@@ -241,13 +243,14 @@ object AddressBookExample {
 
   def exampleTwo(): Unit = {
 
-    implicit val log: Log[Id] = Log.log
+    implicit val log: Log[Id]          = Log.log
+    implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
 
     // Here we define a temporary place to put the store's files
     val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
 
     // Let's define our store
-    val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
+    val context = Context.create[Id, Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
     val space =
       RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
@@ -337,11 +340,13 @@ object AddressBookExample {
       f: IdISpace[Channel, Pattern, Nothing, Entry, Entry, Printer] => Unit
   ) = {
 
-    implicit val log: Log[Id] = Log.log
+    implicit val log: Log[Id]          = Log.log
+    implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
+
     // Here we define a temporary place to put the store's files
     val storePath = Files.createTempDirectory("rspace-address-book-example-")
     // Let's define our store
-    val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
+    val context = Context.create[Id, Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
     val space =
       RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
     try {

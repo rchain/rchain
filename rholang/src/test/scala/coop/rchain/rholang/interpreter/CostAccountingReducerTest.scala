@@ -2,6 +2,8 @@ package coop.rchain.rholang.interpreter
 
 import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
@@ -96,9 +98,10 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     val program =
       Par(sends = Seq(Send(channel, Seq(a)), Send(channel, Seq(b))))
 
-    implicit val rand            = Blake2b512Random(Array.empty[Byte])
-    implicit val errLog          = new ErrorLog[Task]()
-    implicit val logF: Log[Task] = Log.log[Task]
+    implicit val rand                       = Blake2b512Random(Array.empty[Byte])
+    implicit val errLog                     = new ErrorLog[Task]()
+    implicit val logF: Log[Task]            = Log.log[Task]
+    implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
     def testImplementation(pureRSpace: RhoISpace[Task]): Task[
       (

@@ -75,10 +75,8 @@ trait InMemoryOps[S] extends CloseOps {
       private[this] val initial = stateRef.take
       private[this] var current = initial
 
-      override def commit(): Unit = {
+      override def commit(): Unit =
         stateRef.put(current)
-        updateGauges()
-      }
 
       override def abort(): Unit = stateRef.put(initial)
 

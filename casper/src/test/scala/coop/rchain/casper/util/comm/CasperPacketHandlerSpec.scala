@@ -26,7 +26,7 @@ import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
 import coop.rchain.comm.rp.ProtocolHelper
 import ProtocolHelper._
 import cats.{Applicative, ApplicativeError, Parallel}
-import cats.effect.{ContextShift, Sync}
+import cats.effect.{Concurrent, ContextShift, Sync}
 import coop.rchain.comm.{transport, _}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
@@ -44,14 +44,17 @@ import scala.concurrent.duration._
 
 class CasperPacketHandlerSpec extends WordSpec {
   private def setup() = new {
-    val scheduler  = Scheduler.io("test")
-    val runtimeDir = BlockDagStorageTestFixture.blockStorageDir
+    implicit val log     = new LogStub[Task]
+    implicit val metrics = new MetricsNOP[Task]
+    val scheduler        = Scheduler.io("test")
+    val runtimeDir       = BlockDagStorageTestFixture.blockStorageDir
     val activeRuntime =
       Runtime
         .create[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB)(
           ContextShift[Task],
-          Sync[Task],
+          Concurrent[Task],
           log,
+          metrics,
           Parallel[Task, Task.Par],
           scheduler
         )
@@ -85,7 +88,6 @@ class CasperPacketHandlerSpec extends WordSpec {
     implicit val transportLayer = new TransportLayerStub[Task]
     implicit val rpConf         = createRPConfAsk[Task](local)
     implicit val time           = TestTime.instance
-    implicit val log            = new LogStub[Task]
     implicit val errHandler =
       ApplicativeError_.applicativeError(new ApplicativeError[Task, CommError] {
         override def raiseError[A](e: CommError): Task[A] =
@@ -95,7 +97,6 @@ class CasperPacketHandlerSpec extends WordSpec {
         override def pure[A](x: A): Task[A]                           = Task.pure(x)
         override def ap[A, B](ff: Task[A => B])(fa: Task[A]): Task[B] = Applicative[Task].ap(ff)(fa)
       })
-    implicit val metrics = new MetricsNOP[Task]
     implicit val lab =
       LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val blockMap   = Ref.unsafe[Task, Map[BlockHash, BlockMessage]](Map.empty)

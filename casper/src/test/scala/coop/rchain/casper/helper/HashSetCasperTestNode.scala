@@ -7,7 +7,6 @@ import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.{Applicative, ApplicativeError, Id, Monad}
-
 import coop.rchain.blockstorage._
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.casper._
@@ -34,6 +33,7 @@ import coop.rchain.comm.rp.Connect
 import coop.rchain.comm.rp.Connect._
 import coop.rchain.comm.rp.HandleMessages.handle
 import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.p2p.effects.PacketHandler
@@ -41,9 +41,9 @@ import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rspace.Context
 import coop.rchain.shared._
 import coop.rchain.shared.PathOps.RichPath
-
 import monix.eval.Task
 import monix.execution.Scheduler
+
 import scala.collection.mutable
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.Random
@@ -152,7 +152,8 @@ object HashSetCasperTestNode {
   def createRuntime(storageDirectory: Path, storageSize: Long)(
       implicit scheduler: Scheduler
   ): (RuntimeManager[Effect], Close[Effect]) = {
-    implicit val log = new Log.NOPLog[Task]()
+    implicit val log                       = new Log.NOPLog[Task]()
+    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     val activeRuntime =
       Runtime.create[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB).unsafeRunSync
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync

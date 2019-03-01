@@ -1,22 +1,26 @@
 package coop.rchain.rspace.concurrent
 
-trait TwoStepLock[K] {
-  def acquire[R, S, W](keysA: Seq[K])(phaseTwo: () => Seq[K])(thunk: => W)(
+import cats.implicits._
+import cats.effect.Concurrent
+import scala.collection.immutable.Seq
+
+trait TwoStepLock[F[_], K] {
+  def acquire[R, S, W](keysA: Seq[K])(phaseTwo: () => F[Seq[K]])(thunk: => F[W])(
       implicit o: Ordering[K]
-  ): W
+  ): F[W]
 }
 
-class DefaultTwoStepLock[K] extends TwoStepLock[K] {
-  private[this] val phaseA: MultiLock[K] = new DefaultMultiLock[K]
-  private[this] val phaseB: MultiLock[K] = new DefaultMultiLock[K]
+class ConcurrentTwoStepLockF[F[_]: Concurrent, K] extends TwoStepLock[F, K] {
+  private[this] val phaseA: MultiLock[F, K] = new MultiLock[F, K]
+  private[this] val phaseB: MultiLock[F, K] = new MultiLock[F, K]
 
-  override def acquire[R, S, W](
-      keysA: Seq[K]
-  )(phaseTwo: () => Seq[K])(thunk: => W)(implicit o: Ordering[K]): W =
+  override def acquire[R, S, W](keysA: Seq[K])(phaseTwo: () => F[Seq[K]])(thunk: => F[W])(
+      implicit o: Ordering[K]
+  ): F[W] =
     phaseA.acquire(keysA) {
-      val keysB = phaseTwo
-      phaseB.acquire(keysB()) {
-        thunk
-      }
+      for {
+        keysB <- phaseTwo()
+        res   <- phaseB.acquire(keysB)(thunk)
+      } yield res
     }
 }
