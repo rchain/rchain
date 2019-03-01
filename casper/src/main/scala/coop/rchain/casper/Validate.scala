@@ -15,6 +15,7 @@ import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.models.BlockMetadata
 import coop.rchain.shared._
 
 import scala.util.{Failure, Success, Try}
@@ -173,7 +174,7 @@ object Validate {
   /*
    * TODO: Double check ordering of validity checks
    */
-  def blockSummary[F[_]: Monad: Log: Time: BlockStore](
+  def blockSummary[F[_]: Sync: Log: Time: BlockStore](
       block: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
@@ -483,7 +484,7 @@ object Validate {
    * Hence, we ignore justification regressions involving the block's sender and
    * let checkEquivocations handle it instead.
    */
-  def justificationRegressions[F[_]: Monad: Log: BlockStore](
+  def justificationRegressions[F[_]: Sync: Log](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F]
@@ -495,6 +496,7 @@ object Validate {
           ProtoUtil.toLatestMessageHashes(latestMessage.justifications)
         justificationRegressionsGivenLatestMessages[F](
           b,
+          dag,
           latestMessagesOfBlock,
           latestMessagesFromSenderView,
           genesis
@@ -504,8 +506,9 @@ object Validate {
         Applicative[F].pure(Right(Valid))
     }
 
-  private def justificationRegressionsGivenLatestMessages[F[_]: Monad: Log: BlockStore](
+  private def justificationRegressionsGivenLatestMessages[F[_]: Sync: Log](
       b: BlockMessage,
+      dag: BlockDagRepresentation[F],
       currentLatestMessages: Map[Validator, BlockHash],
       previousLatestMessages: Map[Validator, BlockHash],
       genesis: BlockMessage
@@ -526,6 +529,7 @@ object Validate {
             )
           Monad[F].ifM(
             isJustificationRegression[F](
+              dag,
               currentBlockJustificationHash,
               previousBlockJustificationHash
             )
@@ -543,15 +547,32 @@ object Validate {
         }
     }
 
-  private def isJustificationRegression[F[_]: Monad: Log: BlockStore](
+  private def isJustificationRegression[F[_]: Sync](
+      dag: BlockDagRepresentation[F],
       currentBlockJustificationHash: BlockHash,
       previousBlockJustificationHash: BlockHash
   ): F[Boolean] =
     for {
-      currentBlockJustification <- ProtoUtil
-                                    .unsafeGetBlock[F](currentBlockJustificationHash)
-      previousBlockJustification <- ProtoUtil
-                                     .unsafeGetBlock[F](previousBlockJustificationHash)
+      maybeCurrentBlockJustification <- dag.lookup(currentBlockJustificationHash)
+      currentBlockJustification <- maybeCurrentBlockJustification match {
+                                    case Some(block) => block.pure[F]
+                                    case None =>
+                                      Sync[F].raiseError[BlockMetadata](
+                                        new Exception(
+                                          s"Missing ${PrettyPrinter.buildString(currentBlockJustificationHash)} from block dag store."
+                                        )
+                                      )
+                                  }
+      maybePreviousBlockJustification <- dag.lookup(previousBlockJustificationHash)
+      previousBlockJustification <- maybePreviousBlockJustification match {
+                                     case Some(block) => block.pure[F]
+                                     case None =>
+                                       Sync[F].raiseError[BlockMetadata](
+                                         new Exception(
+                                           s"Missing ${PrettyPrinter.buildString(previousBlockJustificationHash)} from block dag store."
+                                         )
+                                       )
+                                   }
     } yield
       if (currentBlockJustification.seqNum < previousBlockJustification.seqNum) {
         true
