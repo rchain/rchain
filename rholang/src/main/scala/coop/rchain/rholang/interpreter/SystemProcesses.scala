@@ -3,7 +3,7 @@ package coop.rchain.rholang.interpreter
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.crypto.hash.{Blake2b256, Keccak256, Sha256}
+import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GString}
 import coop.rchain.models._
@@ -75,16 +75,23 @@ object SystemProcesses {
       private val UNLIMITED_MATCH_PHLO = matchListPar(Cost(Integer.MAX_VALUE))
 
       object ContractCall {
-        private def foldResult(
-            produceResult: Either[InterpreterError, Option[(ContWithMetaData, Channels)]]
-        ): F[Unit] =
-          produceResult.fold(
-            _ => F.raiseError(OutOfPhlogistonsError),
-            _.fold(F.unit) {
-              case (cont, channels) =>
-                dispatcher.dispatch(unpackCont(cont), channels.map(_.value), cont.sequenceNumber)
-            }
-          )
+        private def produce(rand : Blake2b512Random, sequenceNumber : Int)
+                           (values: Seq[Par], ch: Par): F[Unit] =
+          for {
+            produceResult <- space.produce(
+              ch,
+              ListParWithRandom(values, rand),
+              persist = false,
+              sequenceNumber
+            )(UNLIMITED_MATCH_PHLO)
+            _ <- produceResult.fold(
+              _ => F.raiseError(OutOfPhlogistonsError),
+              _.fold(F.unit) {
+                case (cont, channels) =>
+                  dispatcher.dispatch(unpackCont(cont), channels.map(_.value), cont.sequenceNumber)
+              }
+            )
+          } yield ()
 
         def unapply(contractArgs: (Seq[ListParWithRandomAndPhlos], Int)): Option[
           (Producer, Seq[Par])
@@ -100,18 +107,7 @@ object SystemProcesses {
                 ),
                 sequenceNumber
                 ) =>
-              def produce(values: Seq[Par], ch: Par): F[Unit] =
-                for {
-                  produceResult <- space.produce(
-                                    ch,
-                                    ListParWithRandom(values, rand),
-                                    persist = false,
-                                    sequenceNumber
-                                  )(UNLIMITED_MATCH_PHLO)
-                  _ <- foldResult(produceResult)
-                } yield ()
-
-              Some((produce, args))
+              Some((produce(rand, sequenceNumber), args))
             case _ => None
           }
       }
