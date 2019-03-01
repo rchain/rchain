@@ -267,6 +267,7 @@ message BlockMetadataInternal {
   repeated Bond bonds                   = 5 [(scalapb.field).collection_type="collection.immutable.List"];
   int64 blockNum                        = 6;
   int32 seqNum                          = 7;
+  bool invalid                          = 8; // whether the block was marked as invalid
 }
 
 message Header {

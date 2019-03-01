@@ -274,15 +274,12 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
                           ].createBlock
       Created(block) = createBlockResult
       invalidBlock   = block.withSig(ByteString.EMPTY)
-      _              <- MultiParentCasper[Effect].addBlock(invalidBlock, ignoreDoppelgangerCheck[Effect])
-
-      _ <- node.casperEff.contains(invalidBlock) shouldBeF false
-      _ = logEff.warns.head.contains("Ignoring block") should be(true)
-      _ <- node.tearDownNode()
-      result <- validateBlockStore(node) { blockStore =>
-                 blockStore.get(block.blockHash) shouldBeF None
-               }
-    } yield result
+      status         <- MultiParentCasper[Effect].addBlock(invalidBlock, ignoreDoppelgangerCheck[Effect])
+      _              = status shouldBe InvalidUnslashableBlock
+      _              <- node.casperEff.contains(invalidBlock) shouldBeF false
+      _              = logEff.warns.head.contains("Ignoring block") should be(true)
+      _              <- node.tearDownNode()
+    } yield ()
   }
 
   it should "not request invalid blocks from peers" in effectTest {
@@ -331,10 +328,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       _                    <- MultiParentCasper[Effect].addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
       _                    = logEff.warns.head.contains("Ignoring block") should be(true)
       _                    <- node.tearDownNode()
-      result <- validateBlockStore(node) { blockStore =>
-                 blockStore.get(signedBlock.blockHash) shouldBeF None
-               }
-    } yield result
+    } yield ()
   }
 
   it should "propose blocks it adds to peers" in effectTest {
@@ -1499,7 +1493,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       _ <- nodes(1).casperEff.contains(signedBlock1Prime) shouldBeF true
 
       _ <- nodes(1).casperEff
-            .contains(signedBlock4) shouldBeF true // However, in invalidBlockTracker
+            .contains(signedBlock4) shouldBeF true // However, marked as invalid
 
       _ = nodes(1).logEff.infos.count(_ startsWith "Added admissible equivocation") should be(1)
       _ = nodes(2).logEff.warns.size should be(0)

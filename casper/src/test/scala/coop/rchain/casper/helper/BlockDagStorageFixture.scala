@@ -115,6 +115,8 @@ object BlockDagStorageTestFixture {
         blockDagStorageDir.resolve("latest-messages-crc"),
         blockDagStorageDir.resolve("block-metadata-data"),
         blockDagStorageDir.resolve("block-metadata-crc"),
+        blockDagStorageDir.resolve("equivocations-tracker-data"),
+        blockDagStorageDir.resolve("equivocations-tracker-crc"),
         blockDagStorageDir.resolve("checkpoints")
       )
     )
