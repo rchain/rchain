@@ -5,7 +5,7 @@ import java.nio.file.StandardOpenOption
 import cats.implicits._
 import coop.rchain.shared.PathOps._
 import coop.rchain.catscontrib.TaskContrib.TaskOps
-import coop.rchain.catscontrib.Capture.taskCapture
+
 import cats.effect.Sync
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagRepresentation.Validator

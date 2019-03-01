@@ -116,7 +116,7 @@ object Genesis {
   }
 
   //TODO: Decide on version number and shard identifier
-  def fromInputFiles[F[_]: Concurrent: Capture: Log: Time](
+  def fromInputFiles[F[_]: Concurrent: Sync: Log: Time](
       maybeBondsPath: Option[String],
       numValidators: Int,
       genesisPath: Path,
@@ -177,13 +177,13 @@ object Genesis {
         } else none[File].pure[F]
     }
 
-  def getWallets[F[_]: Monad: Capture: Log](
+  def getWallets[F[_]: Monad: Sync: Log](
       walletsFile: Option[File],
       maybeWalletsPath: Option[String]
   ): F[Seq[PreWallet]] = {
     def walletFromFile(file: File): F[Seq[PreWallet]] =
       for {
-        maybeLines <- Capture[F].capture { Try(Source.fromFile(file).getLines().toList) }
+        maybeLines <- Sync[F].delay { Try(Source.fromFile(file).getLines().toList) }
         wallets <- maybeLines match {
                     case Success(lines) =>
                       lines
@@ -245,15 +245,15 @@ object Genesis {
           }
     }
 
-  def getBonds[F[_]: Monad: Capture: Log](
+  def getBonds[F[_]: Monad: Sync: Log](
       bondsFile: Option[File],
       numValidators: Int,
       genesisPath: Path
   ): F[Map[Array[Byte], Long]] =
     bondsFile match {
       case Some(file) =>
-        Capture[F]
-          .capture {
+        Sync[F]
+          .delay {
             Try {
               Source
                 .fromFile(file)
@@ -275,7 +275,7 @@ object Genesis {
       case None => newValidators[F](numValidators, genesisPath)
     }
 
-  private def newValidators[F[_]: Monad: Capture: Log](
+  private def newValidators[F[_]: Monad: Sync: Log](
       numValidators: Int,
       genesisPath: Path
   ): F[Map[Array[Byte], Long]] = {
@@ -285,8 +285,8 @@ object Genesis {
     val genBondsFile = genesisPath.resolve(s"bonds.txt").toFile
 
     val skFiles =
-      Capture[F].capture(genesisPath.toFile.mkdir()) >>
-        Capture[F].capture {
+      Sync[F].delay(genesisPath.toFile.mkdir()) >>
+        Sync[F].delay {
           keys.foreach { //create files showing the secret key for each public key
             case (sec, pub) =>
               val sk      = Base16.encode(sec)
@@ -301,14 +301,14 @@ object Genesis {
     //create bonds file for editing/future use
     for {
       _       <- skFiles
-      printer <- Capture[F].capture { new PrintWriter(genBondsFile) }
+      printer <- Sync[F].delay { new PrintWriter(genBondsFile) }
       _ <- Foldable[List].foldM[F, (Array[Byte], Long), Unit](bonds.toList, ()) {
             case (_, (pub, stake)) =>
               val pk = Base16.encode(pub)
               Log[F].info(s"Created validator $pk with bond $stake") *>
-                Capture[F].capture { printer.println(s"$pk $stake") }
+                Sync[F].delay { printer.println(s"$pk $stake") }
           }
-      _ <- Capture[F].capture { printer.close() }
+      _ <- Sync[F].delay { printer.close() }
     } yield bonds
   }
 

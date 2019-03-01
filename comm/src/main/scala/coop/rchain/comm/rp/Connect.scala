@@ -5,6 +5,7 @@ import scala.concurrent.duration._
 import cats._
 import cats.implicits._
 import cats.mtl._
+import cats.effect._
 
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.Catscontrib._
@@ -74,7 +75,7 @@ object Connect {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def clearConnections[F[_]: Capture: Monad: Time: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]
+  def clearConnections[F[_]: Sync: Monad: Time: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]
     : F[Int] = {
 
     def sendHeartbeat(peer: PeerNode): F[(PeerNode, CommErr[Protocol])] =
@@ -115,14 +116,14 @@ object Connect {
       } yield result
     }
 
-  def findAndConnect[F[_]: Capture: Monad: Log: Time: Metrics: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
+  def findAndConnect[F[_]: Sync: Monad: Log: Time: Metrics: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
       conn: (PeerNode, FiniteDuration) => F[Unit]
   ): F[List[PeerNode]] =
     for {
       connections      <- ConnectionsCell[F].read
       tout             <- RPConfAsk[F].reader(_.defaultTimeout)
       peers            <- NodeDiscovery[F].peers.map(p => (p.toSet -- connections).toList)
-      responses        <- peers.traverse(conn(_, tout).attempt)
+      responses        <- peers.traverse(p => ErrorHandler[F].attempt(conn(p, tout)))
       peersAndResonses = peers.zip(responses)
       _ <- peersAndResonses.traverse {
             case (peer, Left(error)) =>
@@ -132,13 +133,13 @@ object Connect {
           }
     } yield peersAndResonses.filter(_._2.isRight).map(_._1)
 
-  def connect[F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: ErrorHandler: ConnectionsCell: RPConfAsk](
+  def connect[F[_]: Sync: Monad: Log: Time: Metrics: TransportLayer: ErrorHandler: ConnectionsCell: RPConfAsk](
       peer: PeerNode,
       timeout: FiniteDuration
   ): F[Unit] =
     (
       for {
-        address  <- Capture[F].capture(peer.toAddress)
+        address  <- Sync[F].delay(peer.toAddress)
         _        <- Log[F].debug(s"Connecting to $address")
         _        <- Metrics[F].incrementCounter("connect")
         _        <- Log[F].debug(s"Initialize protocol handshake to $address")

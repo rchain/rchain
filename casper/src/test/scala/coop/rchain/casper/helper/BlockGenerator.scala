@@ -20,7 +20,7 @@ import scala.collection.immutable.HashMap
 import scala.language.higherKinds
 
 object BlockGenerator {
-  implicit val timeEff = new LogicalTime[Task]()(Capture.taskCapture)
+  implicit val timeEff = new LogicalTime[Task]
 
   def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStore: IndexedBlockDagStorage](
       id: Int,

@@ -12,8 +12,6 @@ import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.helper.{BlockDagStorageFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.catscontrib.Capture._
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 
 import com.google.protobuf.ByteString

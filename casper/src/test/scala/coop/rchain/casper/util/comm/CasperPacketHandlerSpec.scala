@@ -20,7 +20,7 @@ import coop.rchain.casper.util.comm.CasperPacketHandler.{
 import coop.rchain.casper.util.comm.CasperPacketHandlerSpec._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.catscontrib.{ApplicativeError_, Capture}
+import coop.rchain.catscontrib.ApplicativeError_
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
 import coop.rchain.comm.rp.ProtocolHelper
@@ -58,7 +58,6 @@ class CasperPacketHandlerSpec extends WordSpec {
         .unsafeRunSync(scheduler)
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync(scheduler)
 
-    implicit val captureTask       = Capture.taskCapture
     val (genesisSk, genesisPk)     = Ed25519.newKeyPair
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
     val bonds                      = createBonds(Seq(validatorPk))

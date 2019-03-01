@@ -21,7 +21,6 @@ import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.blockstorage.util.io._
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.EquivocationRecord.SequenceNumber
 import coop.rchain.models.{BlockMetadata, EquivocationRecord}
@@ -894,7 +893,7 @@ object BlockDagFileStorage {
                }
     } yield result
 
-  def create[F[_]: Concurrent: Sync: Capture: Log: BlockStore](
+  def create[F[_]: Concurrent: Sync: Log: BlockStore](
       config: Config
   ): F[BlockDagFileStorage[F]] = {
     implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
@@ -1001,7 +1000,7 @@ object BlockDagFileStorage {
       )
   }
 
-  def createEmptyFromGenesis[F[_]: Concurrent: Sync: Capture: Log: BlockStore](
+  def createEmptyFromGenesis[F[_]: Concurrent: Sync: Log: BlockStore](
       config: Config,
       genesis: BlockMessage
   ): F[BlockDagFileStorage[F]] = {

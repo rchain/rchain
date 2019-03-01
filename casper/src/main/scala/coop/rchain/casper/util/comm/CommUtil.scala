@@ -4,11 +4,12 @@ import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import com.google.protobuf.ByteString
 import cats.Monad
 import cats.implicits._
+import cats.effect._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
-import coop.rchain.catscontrib.Capture
+
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.protocol.routing.Packet
@@ -80,7 +81,7 @@ object CommUtil {
       _     <- TransportLayer[F].stream(peers, msg)
     } yield ()
 
-  def requestApprovedBlock[F[_]: Monad: Capture: LastApprovedBlock: Log: Time: Metrics: TransportLayer: ConnectionsCell: ErrorHandler: PacketHandler: RPConfAsk](
+  def requestApprovedBlock[F[_]: Monad: Sync: LastApprovedBlock: Log: Time: Metrics: TransportLayer: ConnectionsCell: ErrorHandler: PacketHandler: RPConfAsk](
       delay: FiniteDuration
   ): F[Unit] = {
     val request = ApprovedBlockRequest("PleaseSendMeAnApprovedBlock").toByteString
