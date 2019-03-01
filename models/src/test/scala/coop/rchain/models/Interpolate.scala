@@ -21,8 +21,9 @@ object Interpolate extends InterpolateInstances {
 
 trait InterpolateInstances {
   private def replaceSingleExpr(par: Par, interpolateMap: Map[String, Par]): Par =
-    par.singleExpr
-      .flatMap {
+    par
+      .singleExpr()
+      .map[Par] {
         case Expr(Expr.ExprInstance.GString(key)) if key.startsWith("#") =>
           interpolateMap.getOrElse(
             key,
