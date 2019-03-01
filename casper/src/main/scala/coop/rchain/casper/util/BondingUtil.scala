@@ -189,16 +189,17 @@ object BondingUtil {
     runtimeDirResource.flatMap(
       runtimeDir =>
         Resource
-          .make(
-            Runtime.create[F, M](runtimeDir, 1024L * 1024 * 1024, StoreType.LMDB)
-          )(
+          .make {
+            Runtime
+              .createWithEmptyCost[F, M](runtimeDir, 1024L * 1024 * 1024, StoreType.LMDB)
+          }(
             runtime => runtime.close()
           )
     )
 
   def makeRuntimeManagerResource[F[_]: Sync: Concurrent](
       runtimeResource: Resource[F, Runtime[F]]
-  )(implicit scheduler: ExecutionContext): Resource[F, RuntimeManager[F]] =
+  ): Resource[F, RuntimeManager[F]] =
     runtimeResource.flatMap(
       activeRuntime =>
         Resource.make(RuntimeManager.fromRuntime[F](activeRuntime))(_ => Sync[F].unit)

@@ -31,7 +31,7 @@ class DeployParamsSpec extends fixture.FlatSpec with Matchers {
     val dbDir     = Files.createTempDirectory(s"rchain-storage-test-$randomInt")
     val size      = 1024L * 1024 * 10
     (for {
-      runtime <- Runtime.create[Task, Task.Par](dbDir, size, StoreType.LMDB)
+      runtime <- Runtime.createWithEmptyCost[Task, Task.Par](dbDir, size, StoreType.LMDB)
       _       <- runtime.reducer.setPhlo(Cost(Integer.MAX_VALUE))
       outcome = try {
         test(runtime)

@@ -101,7 +101,9 @@ object BlockApproverProtocolTest {
     implicit val log                        = new Log.NOPLog[Task]()
     implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     val activeRuntime =
-      Runtime.create[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB).unsafeRunSync
+      Runtime
+        .createWithEmptyCost[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB)
+        .unsafeRunSync
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
 
     val deployTimestamp = 1L
