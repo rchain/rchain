@@ -70,7 +70,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
         )
         .as(BlockStatus.processing)
 
-    def doopelgangerAndAdd =
+    def doppelgangerAndAdd =
       for {
         dag <- blockDag
         _ <- validatorId match {
@@ -87,7 +87,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       kp(
         blockDag >>= (_.contains(b.blockHash)
           .||^(BlockStore[F].contains(b.blockHash))
-          .ifM(logAlreadyProcessed, doopelgangerAndAdd))
+          .ifM(logAlreadyProcessed, doppelgangerAndAdd))
       )
     )(kp(blockProcessingLock.release))
   }
