@@ -175,8 +175,19 @@ rnode {
 
 ## Development
 
-For getting started with development of RChain please refer to the [developer
-guide](DEVELOPER.md).
+Compile the project with:
+
+```bash
+$ sbt clean rholang/bnfc:clean rholang/bnfc:generate compile node/docker:publishLocal
+```
+
+Run the resulting binary with:
+
+```bash
+$ ./node/target/docker/stage/opt/docker/bin/rnode
+```
+
+For more detailed instructions, see the [developer guide](DEVELOPER.md).
 
 ## Caveats and filing issues
 
