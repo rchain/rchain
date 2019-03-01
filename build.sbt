@@ -252,7 +252,7 @@ lazy val node = (project in file("node"))
       "-deprecation",
       "-feature"
     ),
-    maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
+    maintainer := "RChain Cooperative https://www.rchain.coop/",
     packageSummary := "RChain Node",
     packageDescription := "RChain Node - the RChain blockchain node server software.",
     libraryDependencies ++=
