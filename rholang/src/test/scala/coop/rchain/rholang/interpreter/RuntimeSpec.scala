@@ -18,8 +18,6 @@ class RuntimeSpec extends FlatSpec with Matchers {
   implicit val logF: Log[Task]            = Log.log[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
-  //  val runtime = Runtime.create(Files.createTempDirectory(tmpPrefix), mapSize)
-
   private val channelReadOnlyError = "ReduceError: Trying to read from non-readable channel."
 
   "rho:io:stdout" should "not get intercepted" in {

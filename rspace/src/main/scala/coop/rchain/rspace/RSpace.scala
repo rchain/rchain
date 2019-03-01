@@ -240,8 +240,6 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
 
   /*
    * Find produce candidate
-   *
-   * Could also be implemented with a lazy `foldRight`.
    */
 
   private[this] def extractProduceCandidate(
