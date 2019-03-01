@@ -39,6 +39,23 @@ trait SystemProcesses[F[_]] {
   def validateRevAddress: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
 }
 
+object RhoType {
+  object ByteArray {
+    import coop.rchain.models.rholang.implicits._
+    def unapply(p: Par): Option[Array[Byte]] =
+      p.singleExpr().collect {
+        case Expr(GByteArray(bs)) => bs.toByteArray
+      }
+  }
+
+  object String {
+    def unapply(p: Par): Option[String] =
+      p.singleExpr().collect {
+        case Expr(GString(bs)) => bs
+      }
+  }
+}
+
 object SystemProcesses {
 
   def apply[F[_]](
@@ -118,7 +135,7 @@ object SystemProcesses {
         case (
             Seq(
               ListParWithRandomAndPhlos(
-                Seq(IsString("validate"), IsString(address), ack),
+                Seq(RhoType.String("validate"), RhoType.String(address), ack),
                 rand,
                 _
               )
@@ -137,26 +154,11 @@ object SystemProcesses {
           } yield ()
       }
 
-      object IsByteArray {
-        import coop.rchain.models.rholang.implicits._
-        def unapply(p: Par): Option[Array[Byte]] =
-          p.singleExpr().collect {
-            case Expr(GByteArray(bs)) => bs.toByteArray
-          }
-      }
-
-      object IsString {
-        def unapply(p: Par): Option[String] =
-          p.singleExpr().collect {
-            case Expr(GString(bs)) => bs
-          }
-      }
-
       def secp256k1Verify: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
         case (
             Seq(
               ListParWithRandomAndPhlos(
-                Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
+                Seq(RhoType.ByteArray(data), RhoType.ByteArray(signature), RhoType.ByteArray(pub), ack),
                 rand,
                 _
               )
@@ -184,7 +186,7 @@ object SystemProcesses {
         case (
             Seq(
               ListParWithRandomAndPhlos(
-                Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
+                Seq(RhoType.ByteArray(data), RhoType.ByteArray(signature), RhoType.ByteArray(pub), ack),
                 rand,
                 _
               )
@@ -210,7 +212,7 @@ object SystemProcesses {
 
       def sha256Hash: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
         case (
-            Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)),
+            Seq(ListParWithRandomAndPhlos(Seq(RhoType.ByteArray(input), ack), rand, _)),
             sequenceNumber
             ) =>
           for {
@@ -235,7 +237,7 @@ object SystemProcesses {
 
       def keccak256Hash: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
         case (
-            Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)),
+            Seq(ListParWithRandomAndPhlos(Seq(RhoType.ByteArray(input), ack), rand, _)),
             sequenceNumber
             ) =>
           for {
@@ -261,7 +263,7 @@ object SystemProcesses {
 
       def blake2b256Hash: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
         case (
-            Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)),
+            Seq(ListParWithRandomAndPhlos(Seq(RhoType.ByteArray(input), ack), rand, _)),
             sequenceNumber
             ) =>
           for {
