@@ -8,6 +8,7 @@ import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GString}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.RhoType.String
 import coop.rchain.rholang.interpreter.Runtime.ShortLeashParams.ShortLeashParameters
 import coop.rchain.rholang.interpreter.Runtime.{BlockTime, RhoISpace, ShortLeashParams}
 import coop.rchain.rholang.interpreter.accounting.Cost
@@ -46,6 +47,9 @@ object RhoType {
       p.singleExpr().collect {
         case Expr(GByteArray(bs)) => bs.toByteArray
       }
+
+    def apply(bytes : Array[Byte]) : Par =
+      Expr(GByteArray(ByteString.copyFrom(bytes)))
   }
 
   object String {
@@ -53,6 +57,12 @@ object RhoType {
       p.singleExpr().collect {
         case Expr(GString(bs)) => bs
       }
+
+    def apply(s : String) : Par = GString(s)
+  }
+
+  object Bool {
+    def apply(b : Boolean) = Expr(GBool(b))
   }
 }
 
@@ -147,22 +157,20 @@ object SystemProcesses {
           } yield ()
       }
 
-      def getErrorMessagePar(str: String): Par =
-        RevAddress
-          .parse(str)
-          .swap
-          .toOption
-          .fold(Par())(GString(_))
-
       def validateRevAddress: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
         case ContractCall(
             produce,
             Seq(RhoType.String("validate"), RhoType.String(address), ack)
             ) =>
-          for {
-            result <- F.delay(getErrorMessagePar(address))
-            _      <- produce(Seq(result), ack)
-          } yield ()
+          val errorMessage =
+            RevAddress
+              .parse(address)
+              .swap
+              .toOption
+              .map(RhoType.String(_))
+              .getOrElse(Par())
+
+          produce(Seq(errorMessage), ack)
       }
 
       def secp256k1Verify: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
@@ -177,7 +185,7 @@ object SystemProcesses {
             ) =>
           for {
             verified <- F.fromTry(Try(Secp256k1.verify(data, signature, pub)))
-            _        <- produce(Seq(Expr(GBool(verified))), ack)
+            _        <- produce(Seq(RhoType.Bool(verified)), ack)
           } yield ()
         case _ =>
           illegalArgumentException(
@@ -197,7 +205,7 @@ object SystemProcesses {
             ) =>
           for {
             verified <- F.fromTry(Try(Ed25519.verify(data, signature, pub)))
-            _        <- produce(Seq(Expr(GBool(verified))), ack)
+            _        <- produce(Seq(RhoType.Bool(verified)), ack)
           } yield ()
         case _ =>
           illegalArgumentException(
@@ -212,7 +220,7 @@ object SystemProcesses {
             ) =>
           for {
             hash <- F.fromTry(Try(Sha256.hash(input)))
-            _    <- produce(Seq(Expr(GByteArray(ByteString.copyFrom(hash)))), ack)
+            _    <- produce(Seq(RhoType.ByteArray(hash)), ack)
           } yield ()
         case _ =>
           illegalArgumentException(
@@ -227,7 +235,7 @@ object SystemProcesses {
             ) =>
           for {
             hash <- F.fromTry(Try(Keccak256.hash(input)))
-            _    <- produce(Seq(Expr(GByteArray(ByteString.copyFrom(hash)))), ack)
+            _    <- produce(Seq(RhoType.ByteArray(hash)), ack)
           } yield ()
 
         case _ =>
@@ -243,7 +251,7 @@ object SystemProcesses {
             ) =>
           for {
             hash <- F.fromTry(Try(Blake2b256.hash(input)))
-            _    <- produce(Seq(Expr(GByteArray(ByteString.copyFrom(hash)))), ack)
+            _    <- produce(Seq(RhoType.ByteArray(hash)), ack)
           } yield ()
         case _ =>
           illegalArgumentException(
