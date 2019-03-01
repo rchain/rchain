@@ -198,7 +198,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       dag            <- blockDag
       dagContains    <- dag.contains(b.blockHash)
       state          <- Cell[F, CasperState].read
-      bufferContains = state.blockBuffer.exists(_ == b.blockHash)
+      bufferContains = state.blockBuffer.contains(b.blockHash)
     } yield (dagContains || bufferContains)
 
   def deploy(d: DeployData): F[Either[Throwable, Unit]] =
