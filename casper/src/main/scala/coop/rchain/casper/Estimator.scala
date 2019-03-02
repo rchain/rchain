@@ -20,10 +20,10 @@ object Estimator {
 
   implicit val decreasingOrder = Ordering[Long].reverse
 
-  def tips[F[_]: Monad: BlockStore](
+  def tips[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
       genesis: BlockMessage
-  ): F[IndexedSeq[BlockMessage]] =
+  ): F[IndexedSeq[BlockHash]] =
     for {
       latestMessageHashes <- blockDag.latestMessageHashes
       result              <- Estimator.tips[F](blockDag, genesis, latestMessageHashes)
@@ -34,11 +34,11 @@ object Estimator {
     *
     * TODO: Remove lastFinalizedBlockHash in follow up PR
     */
-  def tips[F[_]: Monad: BlockStore](
+  def tips[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
       genesis: BlockMessage,
       latestMessagesHashes: Map[Validator, BlockHash]
-  ): F[IndexedSeq[BlockMessage]] =
+  ): F[IndexedSeq[BlockHash]] =
     for {
       lca       <- calculateLCA(blockDag, BlockMetadata.fromBlock(genesis, false), latestMessagesHashes)
       scoresMap <- buildScoresMap(blockDag, latestMessagesHashes, lca)
@@ -47,9 +47,7 @@ object Estimator {
                              blockDag,
                              scoresMap
                            )
-      maybeSortedChildren <- sortedChildrenHash.traverse(BlockStore[F].get)
-      sortedChildren      = maybeSortedChildren.flatten.toVector
-    } yield sortedChildren
+    } yield sortedChildrenHash
 
   private def calculateLCA[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
@@ -165,7 +163,7 @@ object Estimator {
       blocks: List[BlockHash],
       blockDag: BlockDagRepresentation[F],
       scores: Map[BlockHash, Long]
-  ): F[List[BlockHash]] =
+  ): F[IndexedSeq[BlockHash]] =
     // TODO: This ListContrib.sortBy will be improved on Thursday with Pawels help
     for {
       unsortedNewBlocks <- blocks.flatTraverse(replaceBlockHashWithChildren[F](_, blockDag, scores))
@@ -174,7 +172,7 @@ object Estimator {
         scores
       )
       result <- if (stillSame(blocks, newBlocks)) {
-                 blocks.pure[F]
+                 blocks.toVector.pure[F]
                } else {
                  sortChildren(newBlocks, blockDag, scores)
                }

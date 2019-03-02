@@ -320,21 +320,27 @@ object ProtoUtil {
     } yield ancestorChannels
 
   def chooseNonConflicting[F[_]: Monad: Log: BlockStore](
-      blocks: Seq[BlockMessage],
+      blockHashes: Seq[BlockHash],
       dag: BlockDagRepresentation[F]
   ): F[Seq[BlockMessage]] = {
     def nonConflicting(b: BlockMessage): BlockMessage => F[Boolean] =
       conflicts[F](_, b, dag).map(b => !b)
 
-    blocks.toList
-      .foldM(List.empty[BlockMessage]) {
-        case (acc, b) =>
-          Monad[F].ifM(acc.forallM(nonConflicting(b)))(
-            (b :: acc).pure[F],
-            acc.pure[F]
-          )
-      }
-      .map(_.reverse)
+    for {
+      blocks <- blockHashes.toList.traverse(hash => ProtoUtil.unsafeGetBlock[F](hash))
+      result <- blocks
+                 .foldM(List.empty[BlockMessage]) {
+                   case (acc, b) =>
+                     acc.forallM(nonConflicting(b)).map { isNonConflictingWithAll =>
+                       if (isNonConflictingWithAll) {
+                         b :: acc
+                       } else {
+                         acc
+                       }
+                     }
+                 }
+                 .map(_.reverse)
+    } yield result
   }
 
   def toJustification(
