@@ -48,7 +48,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
       persist: Boolean,
       sequenceNumber: Int
   )(
-      implicit m: Match[F, P, E, A, R]
+      implicit m: Match[F, P, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     contextShift.evalOn(scheduler) {
       if (channels.length =!= patterns.length) {
@@ -75,7 +75,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
       sequenceNumber: Int,
       span: Span[F]
   )(
-      implicit m: Match[F, P, E, A, R]
+      implicit m: Match[F, P, A, R]
   ): F[MaybeConsumeResult] = {
     def runMatcher(comm: COMM): F[Option[Seq[DataCandidate[C, R]]]] =
       for {
@@ -200,7 +200,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
   }
 
   def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
-      implicit m: Match[F, P, E, A, R]
+      implicit m: Match[F, P, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     contextShift.evalOn(scheduler) {
       for {
@@ -221,7 +221,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
       sequenceNumber: Int,
       span: Span[F]
   )(
-      implicit m: Match[F, P, E, A, R]
+      implicit m: Match[F, P, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] = {
     def runMatcher(
         comm: COMM,

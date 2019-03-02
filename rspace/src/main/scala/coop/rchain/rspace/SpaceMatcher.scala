@@ -50,7 +50,7 @@ private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, 
       pattern: P,
       prefix: Seq[(Datum[A], Int)]
   )(
-      implicit m: Match[F, P, E, A, R]
+      implicit m: Match[F, P, A, R]
   ): F[Option[(DataCandidate[C, R], Seq[(Datum[A], Int)])]] =
     data match {
       case (indexedDatum @ (Datum(matchCandidate, persist, produceRef), dataIndex)) +: remaining =>
@@ -90,7 +90,7 @@ private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, 
       channelPatternPairs: Seq[(C, P)],
       channelToIndexedData: Map[C, Seq[(Datum[A], Int)]],
       acc: Seq[Option[DataCandidate[C, R]]]
-  )(implicit m: Match[F, P, E, A, R]): F[Seq[Option[DataCandidate[C, R]]]] =
+  )(implicit m: Match[F, P, A, R]): F[Seq[Option[DataCandidate[C, R]]]] =
     channelPatternPairs match {
       case (channel, pattern) +: tail =>
         for {
@@ -120,7 +120,7 @@ private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, 
       channels: Seq[C],
       matchCandidates: Seq[(WaitingContinuation[P, K], Int)],
       channelToIndexedData: Map[C, Seq[(Datum[A], Int)]]
-  )(implicit m: Match[F, P, E, A, R]): F[Option[ProduceCandidate[C, P, R, K]]] =
+  )(implicit m: Match[F, P, A, R]): F[Option[ProduceCandidate[C, P, R, K]]] =
     matchCandidates match {
       case (p @ WaitingContinuation(patterns, _, _, _), index) +: remaining =>
         for {

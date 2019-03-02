@@ -390,7 +390,6 @@ object ChargingRSpaceTest {
         implicit m: Match[
           Task,
           BindPattern,
-          errors.InterpreterError,
           ListParWithRandom,
           ListParWithRandomAndPhlos
         ]
@@ -418,7 +417,6 @@ object ChargingRSpaceTest {
         implicit m: Match[
           Task,
           BindPattern,
-          errors.InterpreterError,
           ListParWithRandom,
           ListParWithRandomAndPhlos
         ]
@@ -448,7 +446,6 @@ object ChargingRSpaceTest {
         implicit m: Match[
           Task,
           BindPattern,
-          errors.InterpreterError,
           ListParWithRandom,
           ListParWithRandomAndPhlos
         ]

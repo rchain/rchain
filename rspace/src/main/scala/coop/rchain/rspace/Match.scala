@@ -4,11 +4,10 @@ package coop.rchain.rspace
   * Type class for matching patterns with data.
   *
   * @tparam P A type representing patterns
-  * @tparam E A type representing illegal state
   * @tparam A A type representing data
   * @tparam R A type representing a match result
   */
-trait Match[F[_], P, E, A, R] {
+trait Match[F[_], P, A, R] {
 
   def get(p: P, a: A): F[Option[R]]
 }

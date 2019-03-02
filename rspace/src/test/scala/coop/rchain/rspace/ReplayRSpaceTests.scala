@@ -46,7 +46,7 @@ trait ReplayRSpaceTests
       continuationCreator: Int => K,
       persist: Boolean
   )(
-      implicit matcher: Match[Task, P, Nothing, A, R]
+      implicit matcher: Match[Task, P, A, R]
   ): Task[List[Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     (if (shuffle) Random.shuffle(range.toList) else range.toList).parTraverse { i: Int =>
       logger.debug("Started consume {}", i)
@@ -67,7 +67,7 @@ trait ReplayRSpaceTests
       datumCreator: Int => A,
       persist: Boolean
   )(
-      implicit matcher: Match[Task, P, Nothing, A, R]
+      implicit matcher: Match[Task, P, A, R]
   ): Task[List[Option[(ContResult[C, P, K], immutable.Seq[Result[R]])]]] =
     (if (shuffle) Random.shuffle(range.toList) else range.toList).parTraverse { i: Int =>
       logger.debug("Started produce {}", i)

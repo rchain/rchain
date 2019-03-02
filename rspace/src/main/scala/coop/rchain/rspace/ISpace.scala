@@ -55,11 +55,11 @@ trait ISpace[F[_], C, P, E, A, R, K] {
       persist: Boolean,
       sequenceNumber: Int = 0
   )(
-      implicit m: Match[F, P, E, A, R]
+      implicit m: Match[F, P, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
 
   def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
-      implicit m: Match[F, P, E, A, R]
+      implicit m: Match[F, P, A, R]
   ): F[Option[(K, Seq[R])]]
 
   /** Searches the store for a continuation that has patterns that match the given data at the
@@ -86,7 +86,7 @@ trait ISpace[F[_], C, P, E, A, R, K] {
     * @param persist Whether or not to attempt to persist the data
     */
   def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int = 0)(
-      implicit m: Match[F, P, E, A, R]
+      implicit m: Match[F, P, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
 
   /** Creates a checkpoint.

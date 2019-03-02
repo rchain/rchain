@@ -28,8 +28,8 @@ object implicits {
 
   def matchListPar[F[_]: Sync](
       init: Cost
-  ): StorageMatch[F, BindPattern, InterpreterError, ListParWithRandom, ListParWithRandomAndPhlos] =
-    new StorageMatch[F, BindPattern, InterpreterError, ListParWithRandom, ListParWithRandomAndPhlos] {
+  ): StorageMatch[F, BindPattern, ListParWithRandom, ListParWithRandomAndPhlos] =
+    new StorageMatch[F, BindPattern, ListParWithRandom, ListParWithRandomAndPhlos] {
 
       private def calcUsed(init: Cost, left: Cost): Cost = init - left
 
