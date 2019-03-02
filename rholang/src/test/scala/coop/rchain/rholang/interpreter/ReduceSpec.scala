@@ -6,6 +6,8 @@ import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
@@ -34,9 +36,10 @@ final case class TestFixture(space: RhoISpace[Task], reducer: ChargingReducer[Ta
 
 trait PersistentStoreTester {
   def withTestSpace[R](errorLog: ErrorLog[Task])(f: TestFixture => R): R = {
-    val dbDir                    = Files.createTempDirectory("rholang-interpreter-test-")
-    val context: RhoContext      = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
-    implicit val logF: Log[Task] = new Log.NOPLog[Task]
+    val dbDir                               = Files.createTempDirectory("rholang-interpreter-test-")
+    val context: RhoContext[Task]           = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
+    implicit val logF: Log[Task]            = new Log.NOPLog[Task]
+    implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
     val space = (RSpace
       .create[

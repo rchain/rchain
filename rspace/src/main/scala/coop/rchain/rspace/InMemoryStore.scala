@@ -1,14 +1,14 @@
 package coop.rchain.rspace
 
+import cats.effect.Sync
+
 import scala.collection.immutable.Seq
-
 import cats.implicits._
-
+import coop.rchain.catscontrib.ski.kp
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.canonicalize
 import coop.rchain.shared.SeqOps.{dropIndex, removeFirst}
-
 import kamon._
 import scodec.Codec
 
@@ -32,13 +32,12 @@ object State {
   def empty[C, P, A, K]: State[C, P, A, K] = State[C, P, A, K](Map.empty, Map.empty)
 }
 
-@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-class InMemoryStore[T, C, P, A, K](
+class InMemoryStore[F[_], T, C, P, A, K](
     val trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]],
     val trieBranch: Branch
-)(implicit sc: Serialize[C], sp: Serialize[P], sa: Serialize[A], sk: Serialize[K])
+)(implicit sc: Serialize[C], sp: Serialize[P], sa: Serialize[A], sk: Serialize[K], syncF: Sync[F])
     extends InMemoryOps[State[C, P, A, K]]
-    with IStore[C, P, A, K] {
+    with IStore[F, C, P, A, K] {
 
   type TrieTransaction = T
 
@@ -53,10 +52,34 @@ class InMemoryStore[T, C, P, A, K](
   private[this] val refine        = Map("path" -> "inmem")
   private[this] val entriesGauge  = Kamon.gauge(MetricsSource + ".entries").refine(refine)
 
-  private[rspace] def updateGauges() =
-    withTxn(createTxnRead())(_.readState { state =>
-      entriesGauge.set(state.size)
-    })
+  private[rspace] def createTxnReadF(): F[Transaction] = syncF.delay(createTxnRead())
+
+  private[rspace] def createTxnWriteF(): F[Transaction] = syncF.delay(createTxnWrite())
+
+  private[rspace] def withTxnFlatF[R](txnF: F[Transaction])(f: Transaction => F[R]): F[R] =
+    for {
+      txn <- txnF
+      retErr <- f(txn)
+                 .flatMap(
+                   r =>
+                     syncF
+                       .delay {
+                         txn.readState { state =>
+                           entriesGauge.set(state.size)
+                         }
+                         txn.commit()
+                       }
+                       .as(r)
+                 )
+                 .attempt
+      _   <- syncF.delay(txn.close())
+      ret <- syncF.fromEither(retErr)
+    } yield ret
+
+  private[rspace] def withTxnF[R](txnF: F[Transaction])(f: Transaction => R): F[R] =
+    withTxnFlatF[R](txnF)(txn => syncF.delay { f(txn) })
+
+  private[rspace] def updateGauges(): Unit = ???
 
   private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash =
     StableHashProvider.hash(channels)
@@ -220,6 +243,7 @@ class InMemoryStore[T, C, P, A, K](
   private[this] def isOrphaned(gnat: GNAT[C, P, A, K]): Boolean =
     gnat.data.isEmpty && gnat.wks.isEmpty
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): Unit =
     update match {
       case TrieUpdate(_, Insert, channelsHash, gnat) =>
@@ -269,14 +293,15 @@ object InMemoryStore {
       case Right(value) => value
     }
 
-  def create[T, C, P, A, K](
+  def create[F[_], T, C, P, A, K](
       trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]],
       branch: Branch
   )(
       implicit sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]
-  ): InMemoryStore[T, C, P, A, K] =
-    new InMemoryStore[T, C, P, A, K](trieStore, branch)(sc, sp, sa, sk)
+      sk: Serialize[K],
+      syncF: Sync[F]
+  ): IStore[F, C, P, A, K] =
+    new InMemoryStore[F, T, C, P, A, K](trieStore, branch)(sc, sp, sa, sk, syncF)
 }

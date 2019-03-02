@@ -21,6 +21,8 @@ import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.{StoreType, Time}
 import coop.rchain.casper.scalatestcontrib._
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertion, BeforeAndAfterEach, FlatSpec, Matchers}
@@ -34,8 +36,9 @@ class ValidateTest
     with BeforeAndAfterEach
     with BlockGenerator
     with BlockDagStorageFixture {
-  implicit val log = new LogStub[Task]
-  val ed25519      = "ed25519"
+  implicit val log                        = new LogStub[Task]
+  implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+  val ed25519                             = "ed25519"
 
   override def beforeEach(): Unit = {
     log.reset()

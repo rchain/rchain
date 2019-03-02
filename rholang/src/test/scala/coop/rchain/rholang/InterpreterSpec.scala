@@ -2,6 +2,8 @@ package coop.rchain.rholang
 
 import java.io.StringReader
 
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
 import monix.execution.Scheduler.Implicits.global
@@ -18,7 +20,8 @@ class InterpreterSpec extends FlatSpec with Matchers {
   private val tmpPrefix   = "rspace-store-"
   private val maxDuration = 5.seconds
 
-  implicit val logF: Log[Task] = new Log.NOPLog[Task]
+  implicit val logF: Log[Task]            = new Log.NOPLog[Task]
+  implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
   behavior of "Interpreter"
 

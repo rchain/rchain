@@ -20,14 +20,14 @@ final class IndexedBlockDagStorage[F[_]: Monad](
       result <- underlying.getRepresentation
       _      <- lock.release
     } yield result
-  def insert(block: BlockMessage): F[BlockDagRepresentation[F]] =
+  def insert(block: BlockMessage, invalid: Boolean): F[BlockDagRepresentation[F]] =
     for {
       _          <- lock.acquire
-      _          <- underlying.insert(block)
+      _          <- underlying.insert(block, invalid)
       _          <- lock.release
       updatedDag <- getRepresentation
     } yield updatedDag
-  def insertIndexed(block: BlockMessage): F[BlockMessage] =
+  def insertIndexed(block: BlockMessage, invalid: Boolean): F[BlockMessage] =
     for {
       _                 <- lock.acquire
       body              = block.body.get
@@ -42,18 +42,23 @@ final class IndexedBlockDagStorage[F[_]: Monad](
         .withBody(body.withState(newPostState))
         .withHeader(header.withPostStateHash(ByteString.copyFrom(newPostStateHash)))
         .withSeqNum(nextCreatorSeqNum)
-      _ <- underlying.insert(modifiedBlock)
+      _ <- underlying.insert(modifiedBlock, invalid)
       _ <- idToBlocksRef.update(_.updated(nextId, modifiedBlock))
       _ <- currentIdRef.set(nextId)
       _ <- lock.release
     } yield modifiedBlock
-  def inject(index: Int, block: BlockMessage): F[Unit] =
+  def inject(index: Int, block: BlockMessage, invalid: Boolean): F[Unit] =
     for {
       _ <- lock.acquire
       _ <- idToBlocksRef.update(_.updated(index, block))
-      _ <- underlying.insert(block)
+      _ <- underlying.insert(block, invalid)
       _ <- lock.release
     } yield ()
+
+  def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A] =
+    lock.withPermit(
+      underlying.accessEquivocationsTracker(f)
+    )
   def checkpoint(): F[Unit] = underlying.checkpoint()
   def clear(): F[Unit] =
     for {

@@ -40,7 +40,7 @@ object Estimator {
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[IndexedSeq[BlockMessage]] =
     for {
-      gca       <- calculateLCA(blockDag, BlockMetadata.fromBlock(genesis), latestMessagesHashes)
+      gca       <- calculateLCA(blockDag, BlockMetadata.fromBlock(genesis, false), latestMessagesHashes)
       scoresMap <- buildScoresMap(blockDag, latestMessagesHashes, gca)
       sortedChildrenHash <- sortChildren(
                              List(gca),

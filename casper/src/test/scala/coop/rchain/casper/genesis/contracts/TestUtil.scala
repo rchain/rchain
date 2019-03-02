@@ -7,6 +7,8 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.Runtime
@@ -37,7 +39,8 @@ object TestUtil {
   def runtime(
       extraServices: Seq[SystemProcess.Definition[Task]] = Seq.empty
   )(implicit scheduler: Scheduler): Runtime[Task] = {
-    implicit val log: Log[Task] = new Log.NOPLog[Task]
+    implicit val log: Log[Task]            = new Log.NOPLog[Task]
+    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     for {
       runtime <- TestRuntime.create[Task, Task.Par](extraServices)
       _       <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)

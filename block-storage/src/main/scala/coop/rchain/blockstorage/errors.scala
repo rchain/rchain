@@ -14,6 +14,7 @@ final case class TopoSortLengthIsTooBig(length: Long)                         ex
 final case class BlockSenderIsMalformed(block: BlockMessage)                  extends StorageError
 final case class CheckpointDoesNotExist(offset: Long)                         extends StorageError
 final case object LatestMessagesLogIsMalformed                                extends StorageError
+final case object EquivocationsTrackerLogIsMalformed                          extends StorageError
 
 object StorageError {
   type StorageErr[A]        = Either[StorageError, A]
@@ -33,6 +34,8 @@ object StorageError {
         s"Requested a block with block number $offset, but there is no checkpoint for it"
       case LatestMessagesLogIsMalformed =>
         "Latest messages log is malformed"
+      case EquivocationsTrackerLogIsMalformed =>
+        "Equivocations tracker log is malformed"
     }
 
   implicit class StorageErrorToMessage(storageError: StorageError) {

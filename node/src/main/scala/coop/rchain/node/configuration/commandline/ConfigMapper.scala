@@ -64,6 +64,7 @@ object ConfigMapper {
         val add = addToMap(Key)
         add(keys.Prometheus, run.prometheus)
         add(keys.Influxdb, run.influxdb)
+        add(keys.InfluxdbUdp, run.influxdbUdp)
         add(keys.Zipkin, run.zipkin)
         add(keys.Sigar, run.sigar)
       }

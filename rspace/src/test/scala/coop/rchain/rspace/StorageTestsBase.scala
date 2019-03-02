@@ -7,7 +7,7 @@ import cats.implicits._
 import cats.effect._
 import com.typesafe.scalalogging.Logger
 import com.google.common.collect.HashMultiset
-import coop.rchain.rspace.ISpace.IdISpace
+import coop.rchain.metrics.Metrics
 
 import scala.collection.JavaConverters._
 import coop.rchain.rspace.examples.StringExamples._
@@ -27,8 +27,9 @@ import scala.concurrent.ExecutionContext.Implicits.global
 trait StorageTestsBase[F[_], C, P, E, A, K] extends FlatSpec with Matchers with OptionValues {
   type T = ISpace[F, C, P, E, A, A, K]
 
-  implicit def syncF: Sync[F]
+  implicit def concurrentF: Concurrent[F]
   implicit def logF: Log[F]
+  implicit def metricsF: Metrics[F]
   implicit def monadF: Monad[F]
   implicit def contextShiftF: ContextShift[F]
 
@@ -139,7 +140,7 @@ abstract class InMemoryStoreTestsBase[F[_]]
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
     val branch                                = Branch("inmem")
 
-    val ctx: Context[String, Pattern, String, StringsCaptor] = Context.createInMemory()
+    val ctx: Context[F, String, Pattern, String, StringsCaptor] = Context.createInMemory()
 
     run(for {
       testSpace <- RSpace.create[F, String, Pattern, Nothing, String, String, StringsCaptor](
@@ -149,13 +150,12 @@ abstract class InMemoryStoreTestsBase[F[_]]
       testStore = testSpace.store
       trieStore = testStore.trieStore
       _ <- testStore
-            .withTxn(testStore.createTxnWrite()) { txn =>
+            .withTxnF(testStore.createTxnWriteF()) { txn =>
               testStore.withTrieTxn(txn) { trieTxn =>
                 testStore.clear(txn)
                 testStore.trieStore.clear(trieTxn)
               }
             }
-            .pure[F]
       _   <- history.initialize(trieStore, branch).pure[F]
       _   <- testSpace.createCheckpoint()
       res <- f(testSpace)
@@ -186,7 +186,7 @@ abstract class LMDBStoreTestsBase[F[_]]
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
 
     val testBranch = Branch("test")
-    val env        = Context.create[String, Pattern, String, StringsCaptor](dbDir, mapSize)
+    val env        = Context.create[F, String, Pattern, String, StringsCaptor](dbDir, mapSize)
 
     run(for {
       testSpace <- RSpace.create[F, String, Pattern, Nothing, String, String, StringsCaptor](
@@ -195,13 +195,12 @@ abstract class LMDBStoreTestsBase[F[_]]
                   )
       testStore = testSpace.store
       _ <- testStore
-            .withTxn(testStore.createTxnWrite()) { txn =>
+            .withTxnF(testStore.createTxnWriteF()) { txn =>
               testStore.withTrieTxn(txn) { trieTxn =>
                 testStore.clear(txn)
                 testStore.trieStore.clear(trieTxn)
               }
             }
-            .pure[F]
       _   <- history.initialize(testStore.trieStore, testBranch).pure[F]
       _   <- testSpace.createCheckpoint()
       res <- f(testSpace)
@@ -233,7 +232,7 @@ abstract class MixedStoreTestsBase[F[_]]
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
 
     val testBranch = Branch("test")
-    val env        = Context.createMixed[String, Pattern, String, StringsCaptor](dbDir, mapSize)
+    val env        = Context.createMixed[F, String, Pattern, String, StringsCaptor](dbDir, mapSize)
 
     run(for {
       testSpace <- RSpace.create[F, String, Pattern, Nothing, String, String, StringsCaptor](
@@ -242,13 +241,12 @@ abstract class MixedStoreTestsBase[F[_]]
                   )
       testStore = testSpace.store
       _ <- testStore
-            .withTxn(testStore.createTxnWrite()) { txn =>
+            .withTxnF(testStore.createTxnWriteF()) { txn =>
               testStore.withTrieTxn(txn) { trieTxn =>
                 testStore.clear(txn)
                 testStore.trieStore.clear(trieTxn)
               }
             }
-            .pure[F]
       _   <- history.initialize(testStore.trieStore, testBranch).pure[F]
       _   <- testSpace.createCheckpoint()
       res <- f(testSpace)

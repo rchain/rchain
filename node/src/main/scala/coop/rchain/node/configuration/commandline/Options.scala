@@ -228,6 +228,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val influxdb =
       opt[Flag](descr = "Enable the InfluxDB metrics reporter")
 
+    val influxdbUdp =
+      opt[Flag](descr = "Enable the InfluxDB UDP metrics reporter")
+
     val zipkin =
       opt[Flag](descr = "Enable the Zipkin span reporter")
 

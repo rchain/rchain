@@ -9,13 +9,11 @@ import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace.trace.{Consume, Produce}
 
 object StoragePrinter {
-  def prettyPrint(store: RhoIStore): String = {
+  def prettyPrint[F[_]](store: RhoIStore[F]): String = {
     val pars: Seq[Par] = store.toMap.map {
       case (
-          (
           channels: Seq[Par],
           row: Row[BindPattern, ListParWithRandom, TaggedContinuation]
-          )
           ) => {
         def toSends(data: Seq[Datum[ListParWithRandom]]): Par = {
           val sends: Seq[Send] = data.flatMap {

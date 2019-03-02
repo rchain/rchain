@@ -63,7 +63,7 @@ object BlockGenerator {
       b.getBody.withState(updatedBlockPostState).withDeploys(processedDeploys)
     val updatedBlock = b.withBody(updatedBlockBody)
     BlockStore[F].put(b.blockHash, updatedBlock) *>
-      IndexedBlockDagStorage[F].inject(id, updatedBlock)
+      IndexedBlockDagStorage[F].inject(id, updatedBlock, false)
   }
 }
 
@@ -105,7 +105,7 @@ trait BlockGenerator {
         creator,
         shardId = shardId
       )
-      modifiedBlock <- IndexedBlockDagStorage[F].insertIndexed(block)
+      modifiedBlock <- IndexedBlockDagStorage[F].insertIndexed(block, false)
       _             <- BlockStore[F].put(serializedBlockHash, modifiedBlock)
     } yield modifiedBlock
 }

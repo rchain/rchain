@@ -93,8 +93,12 @@ package object io {
   def createFile[F[_]: Sync: RaiseIOError](filePath: Path): F[Path] =
     handleIo(Files.createFile(filePath), UnexpectedIOError.apply)
 
-  def writeToFile[F[_]: Sync: RaiseIOError](filePath: Path, bytes: Array[Byte]): F[Path] =
-    handleIo(Files.write(filePath, bytes), FileWriteFailed.apply)
+  def writeToFile[F[_]: Sync: RaiseIOError](
+      filePath: Path,
+      bytes: Array[Byte],
+      options: OpenOption*
+  ): F[Path] =
+    handleIo(Files.write(filePath, bytes, options: _*), FileWriteFailed.apply)
 
   def readAllBytesFromFile[F[_]: Sync: RaiseIOError](filePath: Path): F[Array[Byte]] =
     handleIo(Files.readAllBytes(filePath), FileReadFailed.apply)

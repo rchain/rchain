@@ -13,6 +13,7 @@ import "google/protobuf/empty.proto";
 
 import "scalapb/scalapb.proto";
 import "RhoTypes.proto";
+import "Either.proto";
 
 option (scalapb.options) = {
   package_name: "coop.rchain.casper.protocol"
@@ -28,24 +29,34 @@ option (scalapb.options) = {
 // To get results back, use `listenForDataAtName`.
 service DeployService {
   // Queue deployment of Rholang code (or fail to parse).
-  rpc DoDeploy(DeployData) returns (DeployServiceResponse) {}
+  // Returns on success DeployServiceResponse
+  rpc DoDeploy(DeployData) returns (Either) {}
   // Add a block including all pending deploys.
-  rpc createBlock(google.protobuf.Empty) returns (DeployServiceResponse) {}
+  // Returns on success DeployServiceResponse
+  rpc createBlock(google.protobuf.Empty) returns (Either) {}
   // Get details about a particular block.
-  rpc showBlock(BlockQuery) returns (BlockQueryResponse) {}
+  // Returns on success BlockQueryResponse
+  rpc showBlock(BlockQuery) returns (Either) {}
   // Get dag
-  rpc visualizeDag(VisualizeDagQuery) returns (VisualizeBlocksResponse) {}
-  rpc showMainChain(BlocksQuery) returns (stream BlockInfoWithoutTuplespace) {}
+  // Returns on success VisualizeBlocksResponse
+  rpc visualizeDag(VisualizeDagQuery) returns (Either) {}
+  // Returns on success BlockInfoWithoutTuplespace
+  rpc showMainChain(BlocksQuery) returns (stream Either) {}
   // Get a summary of blocks on the blockchain.
-  rpc showBlocks(BlocksQuery) returns (stream BlockInfoWithoutTuplespace) {}
+  // Returns on success BlockInfoWithoutTuplespace
+  rpc showBlocks(BlocksQuery) returns (stream Either) {}
   // Find data sent to a name.
-  rpc listenForDataAtName(DataAtNameQuery) returns (ListeningNameDataResponse) {}
+  // Returns on success ListeningNameDataResponse
+  rpc listenForDataAtName(DataAtNameQuery) returns (Either) {}
   // Find processes receiving on a name.
-  rpc listenForContinuationAtName(ContinuationAtNameQuery) returns (ListeningNameContinuationResponse) {}
+  // Returns on success ListeningNameContinuationResponse
+  rpc listenForContinuationAtName(ContinuationAtNameQuery) returns (Either) {}
   // Find block from a deploy.
-  rpc findBlockWithDeploy(FindDeployInBlockQuery) returns (BlockQueryResponse) {}
+  // Returns on success BlockQueryResponse
+  rpc findBlockWithDeploy(FindDeployInBlockQuery) returns (Either) {}
   // Preview new top-level unforgeable names (for example, to compute signatures over them).
-  rpc previewPrivateNames(PrivateNamePreviewQuery) returns (PrivateNamePreviewResponse) {}
+  // Returns on success PrivateNamePreviewResponse
+  rpc previewPrivateNames(PrivateNamePreviewQuery) returns (Either) {}
 }
 
 
@@ -101,8 +112,7 @@ message ContinuationAtNameQuery {
 }
 
 message DeployServiceResponse {
-  bool   success = 1;
-  string message = 2;
+  string message = 1;
 }
 
 message MaybeBlockMessage {
@@ -110,8 +120,7 @@ message MaybeBlockMessage {
 }
 
 message BlockQueryResponse {
-  string status = 1;
-  BlockInfo blockInfo = 2;
+  BlockInfo blockInfo = 1;
 }
 
 message VisualizeDagQuery {
@@ -120,20 +129,17 @@ message VisualizeDagQuery {
 }
 
 message VisualizeBlocksResponse {
-  string status =  1;
-  string content = 2;
+  string content = 1;
 }
 
 message ListeningNameDataResponse {
-  string status = 1;
-  repeated DataWithBlockInfo blockResults = 2;
-  int32 length = 3;
+  repeated DataWithBlockInfo blockResults = 1;
+  int32 length = 2;
 }
 
 message ListeningNameContinuationResponse {
-  string status = 1;
-  repeated ContinuationsWithBlockInfo blockResults = 2;
-  int32 length = 3;
+  repeated ContinuationsWithBlockInfo blockResults = 1;
+  int32 length = 2;
 }
 
 message DataWithBlockInfo {
@@ -261,6 +267,7 @@ message BlockMetadataInternal {
   repeated Bond bonds                   = 5 [(scalapb.field).collection_type="collection.immutable.List"];
   int64 blockNum                        = 6;
   int32 seqNum                          = 7;
+  bool invalid                          = 8; // whether the block was marked as invalid
 }
 
 message Header {

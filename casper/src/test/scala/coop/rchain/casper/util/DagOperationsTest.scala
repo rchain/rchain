@@ -5,6 +5,7 @@ import cats.{Id, Monad}
 import coop.rchain.casper.BlockHash
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.helper.BlockGenerator._
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.models.BlockMetadata
 import monix.eval.Task
@@ -25,7 +26,7 @@ class DagOperationsTest
   "lowest common ancestor" should "be computed properly" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       def createBlockWithMeta(bh: BlockHash*): Task[BlockMetadata] =
-        createBlock[Task](bh.toSeq).map(BlockMetadata.fromBlock)
+        createBlock[Task](bh.toSeq).map(b => BlockMetadata.fromBlock(b, false))
 
       implicit def blockMetadataToBlockHash(bm: BlockMetadata): BlockHash = bm.blockHash
 
@@ -61,11 +62,11 @@ class DagOperationsTest
 
         dag <- blockDagStorage.getRepresentation
 
-        _ <- DagOperations.lowestCommonAncestorF[Task](b1, b5, dag) shouldBeF b1
-        _ <- DagOperations.lowestCommonAncestorF[Task](b3, b2, dag) shouldBeF b1
-        _ <- DagOperations.lowestCommonAncestorF[Task](b6, b7, dag) shouldBeF b1
-        _ <- DagOperations.lowestCommonAncestorF[Task](b2, b2, dag) shouldBeF b2
-        _ <- DagOperations.lowestCommonAncestorF[Task](b10, b9, dag) shouldBeF b8
+        _      <- DagOperations.lowestCommonAncestorF[Task](b1, b5, dag) shouldBeF b1
+        _      <- DagOperations.lowestCommonAncestorF[Task](b3, b2, dag) shouldBeF b1
+        _      <- DagOperations.lowestCommonAncestorF[Task](b6, b7, dag) shouldBeF b1
+        _      <- DagOperations.lowestCommonAncestorF[Task](b2, b2, dag) shouldBeF b2
+        _      <- DagOperations.lowestCommonAncestorF[Task](b10, b9, dag) shouldBeF b8
         result <- DagOperations.lowestCommonAncestorF[Task](b3, b7, dag) shouldBeF b3
       } yield result
   }
@@ -86,7 +87,7 @@ class DagOperationsTest
          *            |  /
          *          genesis
          */
-        implicit def toMetadata = BlockMetadata.fromBlock _
+        implicit def toMetadata(b: BlockMessage) = BlockMetadata.fromBlock(b, false)
         for {
           genesis <- createBlock[Task](Seq.empty)
           b1      <- createBlock[Task](Seq(genesis.blockHash))

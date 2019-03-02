@@ -1,10 +1,9 @@
 package coop.rchain.shared
 
 import scala.collection.mutable.{Map => MutableMap}
-
 import cats.effect.Sync
-
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.metrics.Metrics.Source
 
 final case class Record(value: Long, count: Long)
 
@@ -49,4 +48,5 @@ class MetricsTestImpl[F[_]: Sync] extends Metrics[F] {
       set(name, recordsSeq)(records)
     }
   override def timer[A](name: String, block: F[A])(implicit ev: Metrics.Source): F[A] = block
+  override def span(source: Source): F[Span[F]]                                       = Sync[F].pure(NoopSpan())
 }
