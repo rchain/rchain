@@ -156,9 +156,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
     } yield ()
 
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockMessage]] =
-    for {
-      rankedEstimates <- Estimator.tips[F](dag, genesis)
-    } yield rankedEstimates
+    Estimator.tips[F](dag, genesis)
 
   /*
    * Logic:
