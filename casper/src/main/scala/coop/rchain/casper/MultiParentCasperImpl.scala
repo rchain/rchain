@@ -213,22 +213,23 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
     } yield blockMessage
 
   // TODO: Optimize for large number of deploys accumulated over history
-  private def remDeploys(dag: BlockDagRepresentation[F], p: Seq[BlockMessage]): F[Seq[DeployData]] =
+  private def remDeploys(
+      dag: BlockDagRepresentation[F],
+      parents: Seq[BlockMessage]
+  ): F[Seq[DeployData]] =
     for {
-      state <- Cell[F, CasperState].read
-      hist  = state.deployHistory
-      d <- DagOperations
-            .bfTraverseF[F, BlockMessage](p.toList)(ProtoUtil.unsafeGetParents[F])
-            .map { b =>
-              b.body
-                .map(_.deploys.flatMap(_.deploy))
-                .toSeq
-                .flatten
-            }
-            .toList
-      deploy = d.flatten
-      result = hist -- deploy
-    } yield (result.toSeq)
+      state   <- Cell[F, CasperState].read
+      deploys = state.deployHistory
+      deploysInCurrentChain <- DagOperations
+                                .bfTraverseF[F, BlockMessage](parents.toList)(
+                                  ProtoUtil.unsafeGetParents[F]
+                                )
+                                .map { b =>
+                                  ProtoUtil.deploys(b).flatMap(_.deploy)
+                                }
+                                .toList
+      result = (deploys -- deploysInCurrentChain.flatten).toSeq
+    } yield result
 
   private def createProposal(
       dag: BlockDagRepresentation[F],
