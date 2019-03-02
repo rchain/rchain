@@ -30,9 +30,7 @@ object Estimator {
     } yield result
 
   /**
-    * When the BlockDag has an empty latestMessages, tips will return IndexedSeq(genesis)
-    *
-    * TODO: Remove lastFinalizedBlockHash in follow up PR
+    * When the BlockDag has an empty latestMessages, tips will return IndexedSeq(genesis.blockHash)
     */
   def tips[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
@@ -40,14 +38,10 @@ object Estimator {
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[IndexedSeq[BlockHash]] =
     for {
-      lca       <- calculateLCA(blockDag, BlockMetadata.fromBlock(genesis, false), latestMessagesHashes)
-      scoresMap <- buildScoresMap(blockDag, latestMessagesHashes, lca)
-      sortedChildrenHash <- sortChildren(
-                             List(lca),
-                             blockDag,
-                             scoresMap
-                           )
-    } yield sortedChildrenHash
+      lca                        <- calculateLCA(blockDag, BlockMetadata.fromBlock(genesis, false), latestMessagesHashes)
+      scoresMap                  <- buildScoresMap(blockDag, latestMessagesHashes, lca)
+      rankedLatestMessagesHashes <- rankForkchoices(List(lca), blockDag, scoresMap)
+    } yield rankedLatestMessagesHashes
 
   private def calculateLCA[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
@@ -126,17 +120,14 @@ object Estimator {
             case (acc, children) =>
               children.filter(scoreMap.contains).toList.foldLeftM(acc) {
                 case (acc2, childHash) =>
-                  for {
-                    blockMetadataOpt <- blockDag.lookup(childHash)
-                    result = blockMetadataOpt match {
-                      case Some(blockMetaData)
-                          if blockMetaData.parents.size > 1 && blockMetaData.sender != validator =>
-                        val currScore       = acc2.getOrElse(childHash, 0L)
-                        val validatorWeight = blockMetaData.weightMap.getOrElse(validator, 0L)
-                        acc2.updated(childHash, currScore + validatorWeight)
-                      case _ => acc2
-                    }
-                  } yield result
+                  blockDag.lookup(childHash).map {
+                    case Some(childBlock)
+                        if childBlock.parents.size > 1 && childBlock.sender != validator =>
+                      val currScore       = acc2.getOrElse(childHash, 0L)
+                      val validatorWeight = childBlock.weightMap.getOrElse(validator, 0L)
+                      acc2.updated(childHash, currScore + validatorWeight)
+                    case _ => acc2
+                  }
               }
           }
       }
@@ -159,7 +150,7 @@ object Estimator {
     }
   }
 
-  private def sortChildren[F[_]: Monad](
+  private def rankForkchoices[F[_]: Monad](
       blocks: List[BlockHash],
       blockDag: BlockDagRepresentation[F],
       scores: Map[BlockHash, Long]
@@ -174,7 +165,7 @@ object Estimator {
       result <- if (stillSame(blocks, newBlocks)) {
                  blocks.toVector.pure[F]
                } else {
-                 sortChildren(newBlocks, blockDag, scores)
+                 rankForkchoices(newBlocks, blockDag, scores)
                }
     } yield result
 
@@ -188,17 +179,16 @@ object Estimator {
       blockDag: BlockDagRepresentation[F],
       scores: Map[BlockHash, Long]
   ): F[List[BlockHash]] =
-    for {
-      children <- blockDag
-                   .children(b)
-                   .map(maybeChildren => maybeChildren.getOrElse(Set.empty[BlockHash]))
-      scoredChildren = children.filter(scores.contains)
-      result = if (scoredChildren.nonEmpty) {
-        scoredChildren.toList
-      } else {
-        List(b)
-      }
-    } yield result
+    blockDag.children(b).map {
+      case Some(children) =>
+        val scoredChildren = children.filter(scores.contains)
+        if (scoredChildren.nonEmpty) {
+          scoredChildren.toList
+        } else {
+          List(b)
+        }
+      case None => List(b)
+    }
 
   private def stillSame(blocks: List[BlockHash], newBlocks: List[BlockHash]): Boolean =
     newBlocks == blocks
