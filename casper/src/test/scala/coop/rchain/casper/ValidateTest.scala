@@ -204,10 +204,13 @@ class ValidateTest
   "Block number validation" should "only accept 0 as the number for a block with no parents" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        _      <- createChain[Task](1)
-        block  <- blockDagStorage.lookupByIdUnsafe(0)
-        _      <- Validate.blockNumber[Task](block.withBlockNumber(1)) shouldBeF Left(InvalidBlockNumber)
-        _      <- Validate.blockNumber[Task](block) shouldBeF Right(Valid)
+        _     <- createChain[Task](1)
+        block <- blockDagStorage.lookupByIdUnsafe(0)
+        dag   <- blockDagStorage.getRepresentation
+        _ <- Validate.blockNumber[Task](block.withBlockNumber(1), dag) shouldBeF Left(
+              InvalidBlockNumber
+            )
+        _      <- Validate.blockNumber[Task](block, dag) shouldBeF Right(Valid)
         _      = log.warns.size should be(1)
         result = log.warns.head.contains("not zero, but block has no parents") should be(true)
       } yield result
@@ -218,10 +221,11 @@ class ValidateTest
       for {
         _     <- createChain[Task](2)
         block <- blockDagStorage.lookupByIdUnsafe(1)
-        _ <- Validate.blockNumber[Task](block.withBlockNumber(17)) shouldBeF Left(
+        dag   <- blockDagStorage.getRepresentation
+        _ <- Validate.blockNumber[Task](block.withBlockNumber(17), dag) shouldBeF Left(
               InvalidBlockNumber
             )
-        _ <- Validate.blockNumber[Task](block) shouldBeF Right(Valid)
+        _ <- Validate.blockNumber[Task](block, dag) shouldBeF Right(Valid)
         _ = log.warns.size should be(1)
         result = log.warns.head.contains("is not one more than maximum parent number") should be(
           true
@@ -233,15 +237,16 @@ class ValidateTest
     implicit blockStore => implicit blockDagStorage =>
       val n = 6
       for {
-        _  <- createChain[Task](n)
-        a0 <- blockDagStorage.lookupByIdUnsafe(0) >>= Validate.blockNumber[Task]
-        a1 <- blockDagStorage.lookupByIdUnsafe(1) >>= Validate.blockNumber[Task]
-        a2 <- blockDagStorage.lookupByIdUnsafe(2) >>= Validate.blockNumber[Task]
-        a3 <- blockDagStorage.lookupByIdUnsafe(3) >>= Validate.blockNumber[Task]
-        a4 <- blockDagStorage.lookupByIdUnsafe(4) >>= Validate.blockNumber[Task]
-        a5 <- blockDagStorage.lookupByIdUnsafe(5) >>= Validate.blockNumber[Task]
+        _   <- createChain[Task](n)
+        dag <- blockDagStorage.getRepresentation
+        a0  <- blockDagStorage.lookupByIdUnsafe(0) >>= (b => Validate.blockNumber[Task](b, dag))
+        a1  <- blockDagStorage.lookupByIdUnsafe(1) >>= (b => Validate.blockNumber[Task](b, dag))
+        a2  <- blockDagStorage.lookupByIdUnsafe(2) >>= (b => Validate.blockNumber[Task](b, dag))
+        a3  <- blockDagStorage.lookupByIdUnsafe(3) >>= (b => Validate.blockNumber[Task](b, dag))
+        a4  <- blockDagStorage.lookupByIdUnsafe(4) >>= (b => Validate.blockNumber[Task](b, dag))
+        a5  <- blockDagStorage.lookupByIdUnsafe(5) >>= (b => Validate.blockNumber[Task](b, dag))
         _ <- (0 until n).toList.forallM[Task] { i =>
-              (blockDagStorage.lookupByIdUnsafe(i) >>= Validate.blockNumber[Task])
+              (blockDagStorage.lookupByIdUnsafe(i) >>= (b => Validate.blockNumber[Task](b, dag)))
                 .map(_ == Right(Valid))
             } shouldBeF true
         result = log.warns should be(Nil)
@@ -249,28 +254,31 @@ class ValidateTest
   }
 
   it should "correctly validate a multiparent block where the parents have different block numbers" in withStorage {
-    implicit blockStore => _ =>
+    implicit blockStore => implicit blockDagStorage =>
       def createBlockWithNumber(
           n: Long,
           parentHashes: Seq[ByteString] = Nil
       ): Task[BlockMessage] = {
-        val blockWithNumber = BlockMessage.defaultInstance.withBlockNumber(n)
+        val blockWithNumber = BlockMessage().withBlockNumber(n)
         val header          = blockWithNumber.getHeader.withParentsHashList(parentHashes)
         val hash            = ProtoUtil.hashUnsignedBlock(header, Nil)
         val block           = blockWithNumber.withHeader(header).withBlockHash(hash)
 
-        blockStore.put(hash, block) *> block.pure[Task]
+        blockStore.put(hash, block) *> blockDagStorage.insert(block, false) *> block
+          .pure[Task]
       }
 
       for {
-        b1 <- createBlockWithNumber(3)
-        b2 <- createBlockWithNumber(7)
-        b3 <- createBlockWithNumber(8, Seq(b1.blockHash, b2.blockHash))
-        _  <- Validate.blockNumber[Task](b3) shouldBeF Right(Valid)
-        result <- Validate.blockNumber[Task](b3.withBlockNumber(4)) shouldBeF Left(
-                   InvalidBlockNumber
-                 )
-      } yield result
+        _   <- createChain[Task](8) // Note we need to create a useless chain to satisfy the assert in TopoSort
+        b1  <- createBlockWithNumber(3)
+        b2  <- createBlockWithNumber(7)
+        b3  <- createBlockWithNumber(8, Seq(b1.blockHash, b2.blockHash))
+        dag <- blockDagStorage.getRepresentation
+        s1  <- Validate.blockNumber[Task](b3, dag)
+        _   = s1 shouldBe Right(Valid)
+        s2  <- Validate.blockNumber[Task](b3.withBlockNumber(4), dag)
+        _   = s2 shouldBe Left(InvalidBlockNumber)
+      } yield ()
   }
 
   "Sequence number validation" should "only accept 0 as the number for a block with no parents" in withStorage {

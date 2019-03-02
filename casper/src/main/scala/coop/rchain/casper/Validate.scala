@@ -15,6 +15,7 @@ import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.models.BlockMetadata
 import coop.rchain.shared._
 
 import scala.util.{Failure, Success, Try}
@@ -173,7 +174,7 @@ object Validate {
   /*
    * TODO: Double check ordering of validity checks
    */
-  def blockSummary[F[_]: Monad: Log: Time: BlockStore](
+  def blockSummary[F[_]: Sync: Log: Time: BlockStore](
       block: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
@@ -192,7 +193,7 @@ object Validate {
                                _ => Validate.repeatDeploy[F](block, dag)
                              )
       blockNumberStatus <- repeatedDeployStatus.joinRight.traverse(
-                            _ => Validate.blockNumber[F](block)
+                            _ => Validate.blockNumber[F](block, dag)
                           )
       followsStatus <- blockNumberStatus.joinRight.traverse(
                         _ => Validate.justificationFollows[F](block, genesis, dag)
@@ -312,13 +313,24 @@ object Validate {
     } yield result
 
   // Agnostic of non-parent justifications
-  def blockNumber[F[_]: Monad: Log: BlockStore](
-      b: BlockMessage
+  def blockNumber[F[_]: Sync: Log](
+      b: BlockMessage,
+      dag: BlockDagRepresentation[F]
   ): F[Either[InvalidBlock, ValidBlock]] =
     for {
-      parents <- ProtoUtil.unsafeGetParents[F](b)
+      parents <- ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
+                  dag.lookup(parentHash).flatMap {
+                    case Some(p) => p.pure[F]
+                    case None =>
+                      Sync[F].raiseError[BlockMetadata](
+                        new Exception(
+                          s"Block dag store was missing ${PrettyPrinter.buildString(parentHash)}."
+                        )
+                      )
+                  }
+                }
       maxBlockNumber = parents.foldLeft(-1L) {
-        case (acc, p) => math.max(acc, ProtoUtil.blockNumber(p))
+        case (acc, p) => math.max(acc, p.blockNum)
       }
       number = ProtoUtil.blockNumber(b)
       result = maxBlockNumber + 1 == number
