@@ -259,24 +259,26 @@ class ValidateTest
           n: Long,
           parentHashes: Seq[ByteString] = Nil
       ): Task[BlockMessage] = {
-        val blockWithNumber = BlockMessage.defaultInstance.withBlockNumber(n)
+        val blockWithNumber = BlockMessage().withBlockNumber(n)
         val header          = blockWithNumber.getHeader.withParentsHashList(parentHashes)
         val hash            = ProtoUtil.hashUnsignedBlock(header, Nil)
         val block           = blockWithNumber.withHeader(header).withBlockHash(hash)
 
-        blockStore.put(hash, block) *> block.pure[Task]
+        blockStore.put(hash, block) *> blockDagStorage.insert(block, false) *> block
+          .pure[Task]
       }
 
       for {
-        dag <- blockDagStorage.getRepresentation
+        _   <- createChain[Task](8) // Note we need to create a useless chain to satisfy the assert in TopoSort
         b1  <- createBlockWithNumber(3)
         b2  <- createBlockWithNumber(7)
         b3  <- createBlockWithNumber(8, Seq(b1.blockHash, b2.blockHash))
-        _   <- Validate.blockNumber[Task](b3, dag) shouldBeF Right(Valid)
-        result <- Validate.blockNumber[Task](b3.withBlockNumber(4), dag) shouldBeF Left(
-                   InvalidBlockNumber
-                 )
-      } yield result
+        dag <- blockDagStorage.getRepresentation
+        s1  <- Validate.blockNumber[Task](b3, dag)
+        _   = s1 shouldBe Right(Valid)
+        s2  <- Validate.blockNumber[Task](b3.withBlockNumber(4), dag)
+        _   = s2 shouldBe Left(InvalidBlockNumber)
+      } yield ()
   }
 
   "Sequence number validation" should "only accept 0 as the number for a block with no parents" in withStorage {
