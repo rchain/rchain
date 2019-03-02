@@ -40,10 +40,10 @@ object Estimator {
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[IndexedSeq[BlockMessage]] =
     for {
-      gca       <- calculateLCA(blockDag, BlockMetadata.fromBlock(genesis, false), latestMessagesHashes)
-      scoresMap <- buildScoresMap(blockDag, latestMessagesHashes, gca)
+      lca       <- calculateLCA(blockDag, BlockMetadata.fromBlock(genesis, false), latestMessagesHashes)
+      scoresMap <- buildScoresMap(blockDag, latestMessagesHashes, lca)
       sortedChildrenHash <- sortChildren(
-                             List(gca),
+                             List(lca),
                              blockDag,
                              scoresMap
                            )
@@ -79,7 +79,7 @@ object Estimator {
   private def buildScoresMap[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
       latestMessagesHashes: Map[Validator, BlockHash],
-      lastFinalizedBlockHash: BlockHash
+      lowestCommonAncestor: BlockHash
   ): F[Map[BlockHash, Long]] = {
     def hashParents(hash: BlockHash, lastFinalizedBlockNumber: Long): F[List[BlockHash]] =
       for {
@@ -96,10 +96,10 @@ object Estimator {
         latestBlockHash: BlockHash
     ): F[Map[BlockHash, Long]] =
       for {
-        lastFinalizedBlockNum <- blockDag.lookup(lastFinalizedBlockHash).map(_.get.blockNum)
+        lcaBlockNum <- blockDag.lookup(lowestCommonAncestor).map(_.get.blockNum)
         result <- DagOperations
                    .bfTraverseF[F, BlockHash](List(latestBlockHash))(
-                     hashParents(_, lastFinalizedBlockNum)
+                     hashParents(_, lcaBlockNum)
                    )
                    .foldLeftF(scoreMap) {
                      case (acc, hash) =>
