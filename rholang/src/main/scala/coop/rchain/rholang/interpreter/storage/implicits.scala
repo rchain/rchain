@@ -36,7 +36,7 @@ object implicits {
       def get(
           pattern: BindPattern,
           data: ListParWithRandom
-      ): F[Either[InterpreterError, Option[ListParWithRandomAndPhlos]]] =
+      ): F[Option[ListParWithRandomAndPhlos]] =
         Sync[F]
           .delay {
             SpatialMatcher
@@ -47,25 +47,25 @@ object implicits {
               )
               .runFirstWithCost(init)
           }
-          .map {
-            _.map {
-              case (left, resultMatch) =>
-                val cost = calcUsed(init, left)
-                resultMatch
-                  .map {
-                    case (freeMap: FreeMap, caughtRem: Seq[Par]) =>
-                      val remainderMap = pattern.remainder match {
-                        case Some(Var(FreeVar(level))) =>
-                          freeMap + (level -> VectorPar().addExprs(EList(caughtRem.toVector)))
-                        case _ => freeMap
-                      }
-                      ListParWithRandomAndPhlos(
-                        toSeq(remainderMap, pattern.freeCount),
-                        data.randomState,
-                        cost.value
-                      )
-                  }
-            }
+          .flatMap {
+            case Left(err) => Sync[F].raiseError(err)
+            case Right((left, resultMatch)) =>
+              val cost = calcUsed(init, left)
+              resultMatch
+                .map {
+                  case (freeMap: FreeMap, caughtRem: Seq[Par]) =>
+                    val remainderMap = pattern.remainder match {
+                      case Some(Var(FreeVar(level))) =>
+                        freeMap + (level -> VectorPar().addExprs(EList(caughtRem.toVector)))
+                      case _ => freeMap
+                    }
+                    ListParWithRandomAndPhlos(
+                      toSeq(remainderMap, pattern.freeCount),
+                      data.randomState,
+                      cost.value
+                    )
+                }
+                .pure[F]
           }
     }
 

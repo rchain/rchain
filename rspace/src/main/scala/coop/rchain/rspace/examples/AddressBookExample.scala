@@ -168,10 +168,10 @@ object AddressBookExample {
     ): Match[F, Pattern, Nothing, Entry, Entry] =
       (p: Pattern, a: Entry) =>
         p match {
-          case NameMatch(last) if a.name.last == last        => apF.pure(Right(Some(a)))
-          case CityMatch(city) if a.address.city == city     => apF.pure(Right(Some(a)))
-          case StateMatch(state) if a.address.state == state => apF.pure(Right(Some(a)))
-          case _                                             => apF.pure(Right(None))
+          case NameMatch(last) if a.name.last == last        => apF.pure(Some(a))
+          case CityMatch(city) if a.address.city == city     => apF.pure(Some(a))
+          case StateMatch(state) if a.address.state == state => apF.pure(Some(a))
+          case _                                             => apF.pure(None)
         }
   }
 

@@ -52,7 +52,7 @@ object StringExamples {
   object implicits {
 
     implicit def stringMatch[F[_]: Sync]: Match[F, Pattern, Nothing, String, String] =
-      (p: Pattern, a: String) => Sync[F].pure(Right(Some(a).filter(p.isMatch)))
+      (p: Pattern, a: String) => Sync[F].pure(Some(a).filter(p.isMatch))
 
     implicit object stringSerialize extends Serialize[String] {
 

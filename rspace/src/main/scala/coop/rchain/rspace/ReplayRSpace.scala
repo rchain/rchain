@@ -90,7 +90,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
                                        .map(v => c -> v) // TODO inculde map in traverse?
                                    }
         result <- extractDataCandidates(channels.zip(patterns), channelToIndexedDataList.toMap, Nil)
-                   .map(_.flatMap(_.toOption).sequence)
+                   .map(_.sequence)
       } yield result
 
     def storeWaitingContinuation(
@@ -257,15 +257,14 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
                                            }
                                          }
               firstMatch <- extractFirstMatch(
-                   channels,
-                   matchCandidates,
-                   channelToIndexedDataList.toMap
-                 )
+                             channels,
+                             matchCandidates,
+                             channelToIndexedDataList.toMap
+                           )
             } yield
               firstMatch match {
-                case Right(None)             => remaining.asLeft[MaybeProduceCandidate]
-                case Right(produceCandidate) => produceCandidate.asRight[Seq[Seq[C]]]
-                case Left(_)                 => ???
+                case None             => remaining.asLeft[MaybeProduceCandidate]
+                case produceCandidate => produceCandidate.asRight[Seq[Seq[C]]]
               }
         }
       groupedChannels.tailRecM(go)

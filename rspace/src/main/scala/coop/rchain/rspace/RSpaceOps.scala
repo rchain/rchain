@@ -100,14 +100,12 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, E, A, R, K](
       c -> Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
     }.toMap
 
-    val options: F[Either[E, Option[Seq[DataCandidate[C, R]]]]] =
+    val options: F[Option[Seq[DataCandidate[C, R]]]] =
       extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil)
-        .map(_.sequence.map(_.sequence))
+        .map(_.sequence)
 
     options.map {
-      case Left(e) =>
-        throw new RuntimeException(s"Install never result in an invalid match: $e")
-      case Right(None) =>
+      case None =>
         installs.update(_.updated(channels, Install(patterns, continuation, m)))
         store.installWaitingContinuation(
           txn,
@@ -118,7 +116,7 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, E, A, R, K](
         logger.debug(s"""|storing <(patterns, continuation): ($patterns, $continuation)>
                          |at <channels: $channels>""".stripMargin.replace('\n', ' '))
         None
-      case Right(Some(_)) =>
+      case Some(_) =>
         throw new RuntimeException("Installing can be done only on startup")
     }
 

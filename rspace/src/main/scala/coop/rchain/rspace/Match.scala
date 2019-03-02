@@ -10,5 +10,5 @@ package coop.rchain.rspace
   */
 trait Match[F[_], P, E, A, R] {
 
-  def get(p: P, a: A): F[Either[E, Option[R]]]
+  def get(p: P, a: A): F[Option[R]]
 }

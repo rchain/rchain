@@ -194,13 +194,11 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
                                    channels.zip(patterns),
                                    channelToIndexedData,
                                    Nil
-                                 ).map(_.sequence.map(_.sequence))
+                                 ).map(_.sequence)
                        _ <- span.mark("extract-consume-candidate")
                        result <- options match {
-                                  case Left(e) =>
-                                    e.asLeft[MaybeDataCandidate].pure[F]
-                                  case Right(None) => storeWC(consumeRef)
-                                  case Right(Some(dataCandidates)) =>
+                                  case None => storeWC(consumeRef)
+                                  case Some(dataCandidates) =>
                                     for {
                                       _ <- metricsF.incrementCounter(consumeCommLabel)
                                       _ <- syncF.delay {
@@ -297,9 +295,8 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
                          )
           } yield
             firstMatch match {
-              case Left(e)     => e.asLeft[MaybeProduceCandidate].asRight[Seq[CandidateChannels]]
-              case Right(None) => remaining.asLeft[Either[E, MaybeProduceCandidate]]
-              case Right(produceCandidate) =>
+              case None => remaining.asLeft[Either[E, MaybeProduceCandidate]]
+              case produceCandidate =>
                 produceCandidate.asRight[E].asRight[Seq[CandidateChannels]]
             }
       }
