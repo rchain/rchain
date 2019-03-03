@@ -50,8 +50,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
 
   type Validator = ByteString
 
-  //TODO: Extract hardcoded version
-  private val version = 1L
+  //TODO: Extract hardcoded version and expirationThreshold
+  private val version             = 1L
+  private val expirationThreshold = 50
 
   private val emptyStateHash = runtimeManager.emptyStateHash
 
@@ -181,7 +182,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
         _ <- Log[F].info(
               s"${p.size} parents out of ${orderedHeads.size} latest blocks will be used."
             )
-        r                <- remDeploys(dag, p)
+        maxBlockNumber   = ProtoUtil.maxBlockNumber(p)
+        r                <- remDeploys(dag, p, maxBlockNumber)
         bondedValidators = bonds(p.head).map(_.validator).toSet
         //We ensure that only the justifications given in the block are those
         //which are bonded validators in the chosen parent. This is safe because
@@ -191,7 +193,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
         justifications = toJustification(latestMessages)
           .filter(j => bondedValidators.contains(j.validator))
         proposal <- if (r.nonEmpty || p.length > 1) {
-                     createProposal(dag, p, r, justifications)
+                     createProposal(dag, p, r, justifications, maxBlockNumber)
                    } else {
                      CreateBlockStatus.noNewDeploys.pure[F]
                    }
@@ -215,14 +217,18 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
   // TODO: Optimize for large number of deploys accumulated over history
   private def remDeploys(
       dag: BlockDagRepresentation[F],
-      parents: Seq[BlockMessage]
+      parents: Seq[BlockMessage],
+      maxBlockNumber: Long
   ): F[Seq[DeployData]] =
     for {
-      state   <- Cell[F, CasperState].read
-      deploys = state.deployHistory
+      state               <- Cell[F, CasperState].read
+      deploys             = state.deployHistory // TODO: Filter deploys based on validAfterBlockNum field and validate
+      earliestBlockNumber = maxBlockNumber + 1 - expirationThreshold
       deploysInCurrentChain <- DagOperations
                                 .bfTraverseF[F, BlockMessage](parents.toList)(
-                                  ProtoUtil.unsafeGetParents[F]
+                                  b =>
+                                    ProtoUtil
+                                      .unsafeGetParentsAboveBlockNumber[F](b, earliestBlockNumber)
                                 )
                                 .map { b =>
                                   ProtoUtil.deploys(b).flatMap(_.deploy)
@@ -235,7 +241,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       dag: BlockDagRepresentation[F],
       p: Seq[BlockMessage],
       r: Seq[DeployData],
-      justifications: Seq[Justification]
+      justifications: Seq[Justification],
+      maxBlockNumber: Long
   ): F[CreateBlockStatus] =
     for {
       now <- Time[F].currentMillis
@@ -268,29 +275,23 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
                        case _ => ().pure[F]
                      }
                      .flatMap(_ => {
-                       val maxBlockNumber: Long =
-                         p.foldLeft(-1L) {
-                           case (acc, b) => math.max(acc, blockNumber(b))
-                         }
-
                        runtimeManager
                          .computeBonds(postStateHash)
-                         .map {
-                           newBonds =>
-                             val postState = RChainState()
-                               .withPreStateHash(preStateHash)
-                               .withPostStateHash(postStateHash)
-                               .withBonds(newBonds)
-                               .withBlockNumber(maxBlockNumber + 1)
+                         .map { newBonds =>
+                           val postState = RChainState()
+                             .withPreStateHash(preStateHash)
+                             .withPostStateHash(postStateHash)
+                             .withBonds(newBonds)
+                             .withBlockNumber(maxBlockNumber + 1)
 
-                             val body = Body()
-                               .withState(postState)
-                               .withDeploys(
-                                 persistableDeploys.map(ProcessedDeployUtil.fromInternal)
-                               )
-                             val header = blockHeader(body, p.map(_.blockHash), version, now)
-                             val block  = unsignedBlockProto(body, header, justifications, shardId)
-                             CreateBlockStatus.created(block)
+                           val body = Body()
+                             .withState(postState)
+                             .withDeploys(
+                               persistableDeploys.map(ProcessedDeployUtil.fromInternal)
+                             )
+                           val header = blockHeader(body, p.map(_.blockHash), version, now)
+                           val block  = unsignedBlockProto(body, header, justifications, shardId)
+                           CreateBlockStatus.created(block)
                          }
                      })
                }
@@ -329,7 +330,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
     for {
       _ <- Log[F].info(s"Attempting to add Block ${PrettyPrinter.buildString(b.blockHash)} to DAG.")
       postValidationStatus <- Validate
-                               .blockSummary[F](b, genesis, dag, shardId)
+                               .blockSummary[F](b, genesis, dag, shardId, expirationThreshold)
       postTransactionsCheckStatus <- postValidationStatus.traverse(
                                       _ =>
                                         Validate.transactions[F](

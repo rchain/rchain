@@ -447,7 +447,8 @@ class ValidateTest
               signedBlock,
               BlockMessage.defaultInstance,
               dag,
-              "rchain"
+              "rchain",
+              Int.MaxValue
             ) shouldBeF Left(InvalidBlockNumber)
         result = log.warns.size should be(1)
       } yield result

@@ -10,7 +10,7 @@ import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
-import coop.rchain.casper.util.ProtoUtil.bonds
+import coop.rchain.casper.util.ProtoUtil.{blockNumber, bonds}
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.crypto.hash.Blake2b256
@@ -178,7 +178,8 @@ object Validate {
       block: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
-      shardId: String
+      shardId: String,
+      expirationThreshold: Int
   ): F[Either[BlockStatus, ValidBlock]] =
     for {
       blockHashStatus   <- Validate.blockHash[F](block)
@@ -190,7 +191,7 @@ object Validate {
                           _ => Validate.timestamp[F](block, dag)
                         )
       repeatedDeployStatus <- timestampStatus.joinRight.traverse(
-                               _ => Validate.repeatDeploy[F](block, dag)
+                               _ => Validate.repeatDeploy[F](block, dag, expirationThreshold)
                              )
       blockNumberStatus <- repeatedDeployStatus.joinRight.traverse(
                             _ => Validate.blockNumber[F](block, dag)
@@ -243,7 +244,8 @@ object Validate {
     */
   def repeatDeploy[F[_]: Monad: Log: BlockStore](
       block: BlockMessage,
-      dag: BlockDagRepresentation[F]
+      dag: BlockDagRepresentation[F],
+      expirationThreshold: Int
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val deployKeySet = (for {
       bd <- block.body.toList
@@ -251,25 +253,27 @@ object Validate {
     } yield (r.user, r.timestamp)).toSet
 
     for {
-      initParents <- ProtoUtil.unsafeGetParents[F](block)
+      initParents         <- ProtoUtil.unsafeGetParents[F](block)
+      maxBlockNumber      = ProtoUtil.maxBlockNumber(initParents)
+      earliestBlockNumber = maxBlockNumber + 1 - expirationThreshold
       duplicatedBlock <- DagOperations
-                          .bfTraverseF[F, BlockMessage](initParents)(ProtoUtil.unsafeGetParents[F])
-                          .find(
-                            _.body.exists(
-                              _.deploys
-                                .flatMap(_.deploy)
-                                .exists(
-                                  p => deployKeySet.contains((p.user, p.timestamp))
-                                )
-                            )
+                          .bfTraverseF[F, BlockMessage](initParents)(
+                            b =>
+                              ProtoUtil.unsafeGetParentsAboveBlockNumber[F](b, earliestBlockNumber)
                           )
+                          .find { b =>
+                            ProtoUtil
+                              .deploys(b)
+                              .flatMap(_.deploy)
+                              .exists(d => deployKeySet.contains((d.user, d.timestamp)))
+                          }
       result <- duplicatedBlock match {
                  case Some(b) =>
                    for {
                      _ <- Log[F].warn(
                            ignore(
                              block,
-                             s"found deploy by the same (user, millisecond timestamp) produced in the block(${b.blockHash})"
+                             s"found deploy by the same (user, millisecond timestamp) produced in the block ${b.blockHash}"
                            )
                          )
                    } yield Left(InvalidRepeatDeploy)
