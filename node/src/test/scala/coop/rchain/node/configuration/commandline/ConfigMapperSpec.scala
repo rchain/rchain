@@ -33,7 +33,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--casper-block-store-size 2000",
         "--map-size 1000",
         "--max-num-of-connections 500",
-        "--max-message-size 256"
+        "--max-message-size 256",
+        "--message-consumers 8"
       ).mkString(" ")
 
     val options = Options(args.split(' '))
@@ -60,7 +61,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         StoreType.LMDB,
         2000,
         500,
-        256
+        256,
+        8
       )
 
     val server = hocon.Server.fromConfig(config)

@@ -62,7 +62,7 @@ class TcpTransportLayerSpec
 
   def createTransportLayerServer(env: TcpTlsEnvironment): Task[TransportLayerServer[Task]] =
     Task.delay {
-      new GrpcTransportServer(env.port, env.cert, env.key, 4 * 1024 * 1024, tempFolder)
+      new GrpcTransportServer(env.port, env.cert, env.key, 4 * 1024 * 1024, tempFolder, 4)
     }
 }
 

@@ -34,6 +34,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
       |    map-size = 1G
       |    max-connections = 500
       |    max-message-size = 256K
+      |    message-consumers = 8
       |  }
       |}
     """.stripMargin
@@ -59,7 +60,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         StoreType.LMDB,
         1024 * 1024 * 1024,
         500,
-        256 * 1024
+        256 * 1024,
+        8
       )
 
     val server = Server.fromConfig(ConfigFactory.parseString(conf))

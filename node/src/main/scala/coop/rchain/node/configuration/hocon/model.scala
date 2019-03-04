@@ -22,6 +22,7 @@ object Configuration {
 
     def getStringOpt(path: String): Option[String] = getOpt(path, _.getString)
     def getLongOpt(path: String): Option[Long]     = getOpt(path, _.getLong)
+    def getIntOpt(path: String): Option[Int]       = getOpt(path, _.getInt)
     def getPath(path: String): Path                = Paths.get(underlying.getString(path))
     def getPathOpt(path: String): Option[Path]     = getOpt(path, _.getPath)
     def getFiniteDuration(path: String): FiniteDuration =
@@ -33,21 +34,22 @@ object Server {
   val Key = s"${Configuration.Key}.server"
 
   object keys {
-    val Bootstrap      = "bootstrap"
-    val StoreType      = "store-type"
-    val Host           = "host"
-    val HostDynamic    = "host-dynamic"
-    val Upnp           = "upnp"
-    val Port           = "port"
-    val PortHttp       = "port-http"
-    val PortKademlia   = "port-kademlia"
-    val SendTimeout    = "send-timeout"
-    val Standalone     = "standalone"
-    val DataDir        = "data-dir"
-    val StoreSize      = "store-size"
-    val MapSize        = "map-size"
-    val MaxConnections = "max-connections"
-    val MaxMessageSize = "max-message-size"
+    val Bootstrap        = "bootstrap"
+    val StoreType        = "store-type"
+    val Host             = "host"
+    val HostDynamic      = "host-dynamic"
+    val Upnp             = "upnp"
+    val Port             = "port"
+    val PortHttp         = "port-http"
+    val PortKademlia     = "port-kademlia"
+    val SendTimeout      = "send-timeout"
+    val Standalone       = "standalone"
+    val DataDir          = "data-dir"
+    val StoreSize        = "store-size"
+    val MapSize          = "map-size"
+    val MaxConnections   = "max-connections"
+    val MaxMessageSize   = "max-message-size"
+    val MessageConsumers = "message-consumers"
   }
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
@@ -70,6 +72,7 @@ object Server {
           s"$storeTypeStr is not a supported store type"
         )
     }
+    val messageConsumers = Math.max(Runtime.getRuntime.availableProcessors(), 2)
 
     configuration.Server(
       host = server.getStringOpt(keys.Host),
@@ -86,7 +89,8 @@ object Server {
       storeSize = server.getBytes(keys.StoreSize),
       mapSize = server.getBytes(keys.MapSize),
       maxNumOfConnections = server.getInt(keys.MaxConnections),
-      maxMessageSize = server.getBytes(keys.MaxMessageSize).toInt
+      maxMessageSize = server.getBytes(keys.MaxMessageSize).toInt,
+      messageConsumers = server.getIntOpt(keys.MessageConsumers).getOrElse(messageConsumers)
     )
   }
 }

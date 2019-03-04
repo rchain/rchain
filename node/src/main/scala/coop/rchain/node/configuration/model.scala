@@ -23,7 +23,8 @@ final case class Server(
     storeType: StoreType,
     storeSize: Long,
     maxNumOfConnections: Int,
-    maxMessageSize: Int
+    maxMessageSize: Int,
+    messageConsumers: Int
 )
 
 final case class GrpcServer(
