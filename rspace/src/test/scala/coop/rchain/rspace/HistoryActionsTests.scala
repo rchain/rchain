@@ -41,10 +41,10 @@ trait HistoryActionsTests[F[_]]
     * Helper for testing purposes only.
     */
   private[this] def getRootHash(
-      store: IStore[String, Pattern, String, StringsCaptor],
+      store: IStore[F, String, Pattern, String, StringsCaptor],
       branch: Branch
-  ): Blake2b256Hash =
-    store.withTxn(store.createTxnRead()) { txn =>
+  ): F[Blake2b256Hash] =
+    store.withTxnF(store.createTxnReadF()) { txn =>
       store.withTrieTxn(txn) { trieTxn =>
         store.trieStore.getRoot(trieTxn, branch).get
       }
@@ -91,7 +91,8 @@ trait HistoryActionsTests[F[_]]
               gnat.wks.head.persist
             )
         _          = history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None
-        retrieved  <- space.retrieve(getRootHash(space.store, space.store.trieBranch), channelsHash)
+        root       <- getRootHash(space.store, space.store.trieBranch)
+        retrieved  <- space.retrieve(root, channelsHash)
         _          = retrieved shouldBe None
         checkpoint <- space.createCheckpoint()
         _          = checkpoint.root shouldBe nodeHash
@@ -151,20 +152,16 @@ trait HistoryActionsTests[F[_]]
         _ = history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash1) shouldBe Some(
           gnat1
         )
-        retrieved1 <- space.retrieve(
-                       getRootHash(space.store, space.store.trieBranch),
-                       channelsHash1
-                     )
+        root       <- getRootHash(space.store, space.store.trieBranch)
+        retrieved1 <- space.retrieve(root, channelsHash1)
         _ = retrieved1 shouldBe Some(
           gnat1
         )
         _ = history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash2) shouldBe Some(
           gnat2
         )
-        retrieved2 <- space.retrieve(
-                       getRootHash(space.store, space.store.trieBranch),
-                       channelsHash2
-                     )
+        root2      <- getRootHash(space.store, space.store.trieBranch)
+        retrieved2 <- space.retrieve(root2, channelsHash2)
         _ = retrieved2 shouldBe Some(
           gnat2
         )
@@ -312,26 +309,26 @@ trait HistoryActionsTests[F[_]]
         root1                                                            = checkpoint1.root
         contents1: Map[Seq[String], Row[Pattern, String, StringsCaptor]] = space.store.toMap
         _                                                                = space.store.isEmpty shouldBe false
-        _ = space.store.withTxn(space.store.createTxnRead()) { txn =>
-          space.store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
-          space.store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
-        }
+        _ <- space.store.withTxnF(space.store.createTxnReadF()) { txn =>
+              space.store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
+              space.store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
+            }
 
         // Rollback to first checkpoint
         _ <- space.reset(root0)
         _ = space.store.isEmpty shouldBe true
-        _ = space.store.withTxn(space.store.createTxnRead()) { txn =>
-          space.store.getJoin(txn, "ch1") shouldBe Nil
-          space.store.getJoin(txn, "ch2") shouldBe Nil
-        }
+        _ <- space.store.withTxnF(space.store.createTxnReadF()) { txn =>
+              space.store.getJoin(txn, "ch1") shouldBe Nil
+              space.store.getJoin(txn, "ch2") shouldBe Nil
+            }
 
         // Rollback to second checkpoint
         _ <- space.reset(root1)
         _ = space.store.isEmpty shouldBe false
-        _ = space.store.withTxn(space.store.createTxnRead()) { txn =>
-          space.store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
-          space.store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
-        }
+        _ <- space.store.withTxnF(space.store.createTxnReadF()) { txn =>
+              space.store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
+              space.store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
+            }
 
       } yield (space.store.toMap shouldBe contents1)
   }
@@ -469,7 +466,8 @@ trait HistoryActionsTests[F[_]]
       expectedProduce1   = Produce.create(channels(0), data(0), false)
       expectedProduce2   = Produce.create(channels(1), data(1), false)
       commEvent          = COMM(expectedConsume, Seq(expectedProduce1, expectedProduce2))
-      Checkpoint(_, log) = space.createCheckpoint()
+      checkpoint         <- space.createCheckpoint()
+      Checkpoint(_, log) = checkpoint
     } yield
       (log should contain theSameElementsInOrderAs Seq(
         commEvent,

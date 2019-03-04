@@ -1,19 +1,24 @@
 package coop.rchain.rspace
 
 import internal._
-
 import java.nio.ByteBuffer
 import java.nio.file.Path
 
+import cats.effect.Sync
+import coop.rchain.catscontrib.ski._
+import cats.implicits._
 import org.lmdbjava.{Dbi, Env, Txn, TxnOps}
 import scodec.Codec
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.PathOps._
 import scodec.bits.BitVector
 import kamon._
+
 import scala.util.control.NonFatal
 
-trait LMDBOps extends CloseOps {
+trait LMDBOps[F[_]] extends CloseOps {
+
+  implicit val syncF: Sync[F]
 
   protected[rspace] type Transaction = Txn[ByteBuffer]
 
@@ -26,6 +31,10 @@ trait LMDBOps extends CloseOps {
     failIfClosed()
     env.txnWrite
   }
+
+  private[rspace] def createTxnReadF() = syncF.delay(createTxnRead())
+
+  private[rspace] def createTxnWriteF() = syncF.delay(createTxnWrite())
 
   protected[this] def databasePath: Path
   protected[this] def env: Env[ByteBuffer]
@@ -55,6 +64,18 @@ trait LMDBOps extends CloseOps {
       updateGauges()
       txn.close()
     }
+
+  private[rspace] def withTxnFlatF[R](txnF: F[Txn[ByteBuffer]])(f: Txn[ByteBuffer] => F[R]): F[R] =
+    for {
+      txn    <- txnF
+      retErr <- f(txn).flatMap(r => syncF.delay(txn.commit()).as(r)).attempt
+      _      <- syncF.delay(updateGauges())
+      _      <- syncF.delay(txn.close())
+      ret    <- syncF.fromEither(retErr)
+    } yield ret
+
+  private[rspace] def withTxnF[R](txnF: F[Txn[ByteBuffer]])(f: Txn[ByteBuffer] => R): F[R] =
+    withTxnFlatF[R](txnF)(txn => syncF.delay { f(txn) })
 
   /** The methods:
     * `def get[V](txn: Txn[ByteBuffer], key: Blake2b256Hash)`

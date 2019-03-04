@@ -370,14 +370,16 @@ class NodeRuntime private[node] (
     _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
     oracle = SafetyOracle.cliqueOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
     runtime <- {
-      implicit val s = rspaceScheduler
+      implicit val s                = rspaceScheduler
+      implicit val m: Metrics[Task] = metrics
       Runtime.create[Task, Task.Par](storagePath, storageSize, storeType, Seq.empty).toEffect
     }
     _ <- Runtime
           .injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
           .toEffect
     casperRuntime <- {
-      implicit val s = rspaceScheduler
+      implicit val s                = rspaceScheduler
+      implicit val m: Metrics[Task] = metrics
       Runtime.create[Task, Task.Par](casperStoragePath, storageSize, storeType, Seq.empty).toEffect
     }
     runtimeManager <- RuntimeManager.fromRuntime[Task](casperRuntime).toEffect

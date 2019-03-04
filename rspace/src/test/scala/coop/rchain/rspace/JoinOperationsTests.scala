@@ -11,7 +11,7 @@ trait JoinOperationsTests
   "joins" should "remove joins if no PsK" in withTestSpace { space =>
     val store = space.store
 
-    store.withTxn(store.createTxnWrite()) { txn =>
+    store.withTxnF(store.createTxnWriteF()) { txn =>
       store.putDatum(txn, List("ch1"), Datum.create("ch1", "datum1", persist = false))
       store.putDatum(txn, List("ch2"), Datum.create("ch2", "datum2", persist = false))
       store.addJoin(txn, "ch1", List("ch1", "ch2"))
@@ -22,17 +22,17 @@ trait JoinOperationsTests
       store.addJoin(txn, "ch2", List("ch1", "ch2"))
     }
 
-    store.withTxn(store.createTxnRead()) { txn =>
+    store.withTxnF(store.createTxnReadF()) { txn =>
       store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
       store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
     }
 
-    store.withTxn(store.createTxnWrite()) { txn =>
+    store.withTxnF(store.createTxnWriteF()) { txn =>
       store.removeJoin(txn, "ch1", List("ch1", "ch2"))
       store.removeJoin(txn, "ch2", List("ch1", "ch2"))
     }
 
-    store.withTxn(store.createTxnRead()) { txn =>
+    store.withTxnF(store.createTxnReadF()) { txn =>
       store.getJoin(txn, "ch1") shouldBe List.empty[List[String]]
       store.getJoin(txn, "ch2") shouldBe List.empty[List[String]]
     }
@@ -41,7 +41,7 @@ trait JoinOperationsTests
 
     //now ensure that garbage-collection works and all joins
     //are removed when we remove As
-    store.withTxn(store.createTxnWrite()) { txn =>
+    store.withTxnF(store.createTxnWriteF()) { txn =>
       store.removeDatum(txn, List("ch1"), 0)
       store.removeDatum(txn, List("ch2"), 0)
     }

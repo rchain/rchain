@@ -296,7 +296,8 @@ abstract class MixedInMemoryStoreStorageExamplesTestsBase[F[_]]
 
     val branch = Branch("inmem")
 
-    val ctx: Context[Channel, Pattern, Entry, EntriesCaptor] = Context.createMixed(dbDir, mapSize)
+    val ctx: Context[F, Channel, Pattern, Entry, EntriesCaptor] =
+      Context.createMixed(dbDir, mapSize)
 
     run(for {
       testSpace <- RSpace.create[F, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
@@ -305,7 +306,7 @@ abstract class MixedInMemoryStoreStorageExamplesTestsBase[F[_]]
                   )
       testStore = testSpace.store
       trieStore = testStore.trieStore
-      _         = testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
+      _         <- testStore.withTxnF(testStore.createTxnWriteF())(testStore.clear)
       _         = trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear)
       _         = initialize(trieStore, branch)
       res       <- f(testSpace)
@@ -340,7 +341,7 @@ abstract class InMemoryStoreStorageExamplesTestsBase[F[_]]
 
     val branch = Branch("inmem")
 
-    val ctx: Context[Channel, Pattern, Entry, EntriesCaptor] = Context.createInMemory()
+    val ctx: Context[F, Channel, Pattern, Entry, EntriesCaptor] = Context.createInMemory()
 
     run(for {
       testSpace <- RSpace.create[F, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
@@ -349,7 +350,7 @@ abstract class InMemoryStoreStorageExamplesTestsBase[F[_]]
                   )
       testStore = testSpace.store
       trieStore = testStore.trieStore
-      _         <- testStore.withTxn(testStore.createTxnWrite())(testStore.clear).pure[F]
+      _         <- testStore.withTxnF(testStore.createTxnWriteF())(testStore.clear)
       _         <- trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear).pure[F]
       _         = initialize(trieStore, branch)
       res       <- f(testSpace)
@@ -373,14 +374,14 @@ abstract class LMDBStoreStorageExamplesTestBase[F[_]]
   val noTls: Boolean = false
 
   override def withTestSpace[R](f: T => F[R]): R = {
-    val context   = Context.create[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
-    val testStore = LMDBStore.create[Channel, Pattern, Entry, EntriesCaptor](context)
+    val context   = Context.create[F, Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
+    val testStore = LMDBStore.create[F, Channel, Pattern, Entry, EntriesCaptor](context)
     run(for {
       testSpace <- RSpace.create[F, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
                     testStore,
                     Branch.MASTER
                   )
-      _   = testStore.withTxn(testStore.createTxnWrite())(txn => testStore.clear(txn))
+      _   <- testStore.withTxnF(testStore.createTxnWriteF())(testStore.clear)
       res <- f(testSpace)
     } yield {
       try {

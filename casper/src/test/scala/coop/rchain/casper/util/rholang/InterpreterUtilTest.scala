@@ -20,6 +20,8 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil._
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.models.PCost
 import coop.rchain.p2p.EffectsTestInstances.LogStub
@@ -36,9 +38,10 @@ class InterpreterUtilTest
     with Matchers
     with BlockGenerator
     with BlockDagStorageFixture {
-  implicit val logEff  = new LogStub[Task]
-  val storageSize      = 1024L * 1024
-  val storageDirectory = Files.createTempDirectory("casper-interp-util-test")
+  implicit val logEff                    = new LogStub[Task]
+  implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+  val storageSize                        = 1024L * 1024
+  val storageDirectory                   = Files.createTempDirectory("casper-interp-util-test")
   val activeRuntime =
     Runtime.create[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB).unsafeRunSync
 

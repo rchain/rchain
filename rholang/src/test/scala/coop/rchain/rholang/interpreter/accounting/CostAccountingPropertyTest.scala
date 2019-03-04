@@ -6,6 +6,8 @@ import cats._
 import cats.effect._
 import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.models._
 import coop.rchain.rholang.Resources.mkRhoISpace
 import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
@@ -96,7 +98,8 @@ object CostAccountingPropertyTest {
   }
 
   def costOfExecution(procs: Proc*): Task[Long] = {
-    implicit val logF: Log[Task] = new Log.NOPLog[Task]
+    implicit val logF: Log[Task]            = new Log.NOPLog[Task]
+    implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
     for {
       runtime <- TestRuntime.create[Task, Task.Par]()

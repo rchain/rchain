@@ -26,7 +26,7 @@ private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, 
   /**
     * A store which satisfies the [[IStore]] interface.
     */
-  val store: IStore[C, P, A, K]
+  val store: IStore[F, C, P, A, K]
 
   val branch: Branch
 
@@ -73,17 +73,13 @@ private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, 
     }
 
   def getData(channel: C): F[Seq[Datum[A]]] =
-    syncF.delay {
-      store.withTxn(store.createTxnRead()) { txn =>
-        store.getData(txn, Seq(channel))
-      }
+    store.withTxnF(store.createTxnReadF()) { txn =>
+      store.getData(txn, Seq(channel))
     }
 
   def getWaitingContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
-    syncF.delay {
-      store.withTxn(store.createTxnRead()) { txn =>
-        store.getWaitingContinuation(txn, channels)
-      }
+    store.withTxnF(store.createTxnReadF()) { txn =>
+      store.getWaitingContinuation(txn, channels)
     }
 
   /** Iterates through (channel, pattern) pairs looking for matching data.

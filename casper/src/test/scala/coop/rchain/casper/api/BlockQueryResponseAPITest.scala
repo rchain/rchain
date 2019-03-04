@@ -1,5 +1,6 @@
 package coop.rchain.casper.api
 
+import coop.rchain.catscontrib.TaskContrib._
 import scala.collection.immutable.HashMap
 
 import cats.effect.Sync
