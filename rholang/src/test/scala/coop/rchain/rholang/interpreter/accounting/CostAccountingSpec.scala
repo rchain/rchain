@@ -118,10 +118,9 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
     } yield ((result, costLog))).unsafeRunSync
   }
 
-  case class ContractWithCost(contract: String, cost: Long)
-
-  val shortslow = ContractWithCost(
-    """new loop in {
+  val contracts = Table(
+    ("contract", "expectedTotalCost"),
+    ("""new loop in {
          contract loop(@n) = {
            match n {
              0 => Nil
@@ -129,14 +128,16 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
            }
          } |
          loop!(10)
-       }""".stripMargin,
-    1766
+       }""".stripMargin, 1766L),
+    ("""42 | @0!(2) | for (x <- @0) { Nil }""", 48L)
   )
 
-  "Total cost of evaluation" should "be equal to the sum of all costs in the log" ignore {
+  "Total cost of evaluation" should "be equal to the sum of all costs in the log" ignore forAll(
+    contracts
+  ) { (contract: String, expectedTotalCost: Long) =>
     val initialPhlo       = 10000L
-    val expectedTotalCost = 1766L
-    val (result, costLog) = evaluateWithCostLog(initialPhlo, shortslow.contract)
+    val (result, costLog) = evaluateWithCostLog(initialPhlo, contract)
+    println(costLog)
     result shouldBe Right(EvaluateResult(Cost(expectedTotalCost), Vector.empty))
     costLog.map(_.value).toList.sum shouldEqual expectedTotalCost
   }
@@ -159,9 +160,11 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
     costLog.toList should contain theSameElementsAs (expectedCosts)
   }
 
-  it should "stop the evaluation of all execution branches when one of them runs out of phlo with a more sophisiticated contract" ignore {
-    check(forAllNoShrink(Gen.choose(1L, shortslow.cost - 1)) { initialPhlo =>
-      val (result, costLog) = evaluateWithCostLog(initialPhlo, shortslow.contract)
+  it should "stop the evaluation of all execution branches when one of them runs out of phlo with a more sophisiticated contract" ignore forAll(
+    contracts
+  ) { (contract: String, expectedTotalCost: Long) =>
+    check(forAllNoShrink(Gen.choose(1L, expectedTotalCost - 1)) { initialPhlo =>
+      val (result, costLog) = evaluateWithCostLog(initialPhlo, contract)
       result shouldBe Left(OutOfPhlogistonsError)
       val costs = costLog.map(_.value).toList
       // The sum of all costs but last needs to be <= initialPhlo, otherwise
