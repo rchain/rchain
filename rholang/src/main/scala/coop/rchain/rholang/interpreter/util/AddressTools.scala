@@ -55,11 +55,12 @@ class AddressTools(prefix: Array[Byte], keyLength: Int, checksumLength: Int) {
     }
 
     for {
-      decodedAddress <- Base58.decode(address)
-                              .toRight("Invalid Base58 encoding")
-      _              <- validateLength(decodedAddress)
-      payload        <- validateChecksum(decodedAddress)
-      address        <- parsePayload(payload)
+      decodedAddress <- Base58
+                         .decode(address)
+                         .toRight("Invalid Base58 encoding")
+      _       <- validateLength(decodedAddress)
+      payload <- validateChecksum(decodedAddress)
+      address <- parsePayload(payload)
     } yield address
   }
 }
