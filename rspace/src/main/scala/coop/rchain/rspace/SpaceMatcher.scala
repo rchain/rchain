@@ -38,6 +38,8 @@ private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, 
 
   /* Consume */
 
+  type MatchingDataCandidate = (DataCandidate[C, R], Seq[(Datum[A], Int)])
+
   /** Searches through data, looking for a match with a given pattern.
     *
     * If there is a match, we return the matching [[DataCandidate]],
@@ -51,7 +53,7 @@ private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, 
       prefix: Seq[(Datum[A], Int)]
   )(
       implicit m: Match[F, P, A, R]
-  ): F[Option[(DataCandidate[C, R], Seq[(Datum[A], Int)])]] =
+  ): F[Option[MatchingDataCandidate]] =
     data match {
       case (indexedDatum @ (Datum(matchCandidate, persist, produceRef), dataIndex)) +: remaining =>
         m.get(pattern, matchCandidate).flatMap {
@@ -65,7 +67,7 @@ private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, 
               prefix ++ remaining
             ).some.pure[F]
         }
-      case _ => none[(DataCandidate[C, R], Seq[(Datum[A], Int)])].pure[F]
+      case _ => none[MatchingDataCandidate].pure[F]
     }
 
   def getData(channel: C): F[Seq[Datum[A]]] =
