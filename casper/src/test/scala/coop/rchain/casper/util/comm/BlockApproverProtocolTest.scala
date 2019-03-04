@@ -6,7 +6,7 @@ import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.helper.{BlockDagStorageTestFixture, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.catscontrib.Capture._
+
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.transport

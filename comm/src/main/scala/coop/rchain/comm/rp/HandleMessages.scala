@@ -4,6 +4,7 @@ import scala.concurrent.duration._
 
 import cats._
 import cats.implicits._
+import cats.effect._
 
 import coop.rchain.catscontrib._
 import coop.rchain.comm._
@@ -23,7 +24,7 @@ object HandleMessages {
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "rp.handle")
 
-  def handle[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
+  def handle[F[_]: Monad: Sync: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
       protocol: Protocol,
       defaultTimeout: FiniteDuration
   ): F[CommunicationResponse] =
@@ -33,7 +34,7 @@ object HandleMessages {
       case Some(sender) => handle_[F](protocol, sender, defaultTimeout)
     }
 
-  private def handle_[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
+  private def handle_[F[_]: Monad: Sync: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
       proto: Protocol,
       sender: PeerNode,
       defaultTimeout: FiniteDuration
@@ -49,7 +50,7 @@ object HandleMessages {
           .pure[F]
     }
 
-  def handleDisconnect[F[_]: Monad: Capture: Metrics: TransportLayer: Log: ConnectionsCell](
+  def handleDisconnect[F[_]: Monad: Sync: Metrics: TransportLayer: Log: ConnectionsCell](
       sender: PeerNode,
       disconnect: Disconnect
   ): F[CommunicationResponse] =

@@ -79,12 +79,12 @@ object GrpcServer {
       )
     }
 
-  def acquireExternalServer[F[_]: Concurrent: Capture: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
+  def acquireExternalServer[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
       port: Int,
       grpcExecutor: Scheduler,
       blockApiLock: Semaphore[F]
   )(implicit worker: Scheduler): F[GrpcServer] =
-    Capture[F].capture {
+    Sync[F].delay {
       GrpcServer(
         NettyServerBuilder
           .forPort(port)

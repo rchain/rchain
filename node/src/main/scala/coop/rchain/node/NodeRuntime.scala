@@ -399,7 +399,6 @@ class NodeRuntime private[node] (
                               ErrorHandler[Effect],
                               eiterTrpConfAsk(rpConfAsk),
                               oracle,
-                              Capture[Effect],
                               Sync[Effect],
                               Concurrent[Effect],
                               Time.eitherTTime(Monad[Task], time),

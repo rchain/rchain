@@ -248,12 +248,13 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
       data: Datum[A]
   )(implicit m: Match[P, E, A, R]): F[Either[E, Option[ProduceCandidate[C, P, R, K]]]] = {
     type MaybeProduceCandidate = Option[ProduceCandidate[C, P, R, K]]
-    type CandidateChannels = Seq[C]
+    type CandidateChannels     = Seq[C]
     def go(
         acc: Seq[CandidateChannels]
     ): F[Either[Seq[CandidateChannels], Either[E, Option[ProduceCandidate[C, P, R, K]]]]] =
       acc match {
-        case Nil => none[ProduceCandidate[C, P, R, K]].asRight[E].asRight[Seq[CandidateChannels]].pure[F]
+        case Nil =>
+          none[ProduceCandidate[C, P, R, K]].asRight[E].asRight[Seq[CandidateChannels]].pure[F]
         case channels :: remaining =>
           for {
             matchCandidates <- store.withTxnF(store.createTxnReadF()) { txn =>
@@ -297,9 +298,10 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
               matchCandidates,
               channelToIndexedDataList.toMap
             ) match {
-              case Left(e)                 => e.asLeft[MaybeProduceCandidate].asRight[Seq[CandidateChannels]]
-              case Right(None)             => remaining.asLeft[Either[E, MaybeProduceCandidate]]
-              case Right(produceCandidate) => produceCandidate.asRight[E].asRight[Seq[CandidateChannels]]
+              case Left(e)     => e.asLeft[MaybeProduceCandidate].asRight[Seq[CandidateChannels]]
+              case Right(None) => remaining.asLeft[Either[E, MaybeProduceCandidate]]
+              case Right(produceCandidate) =>
+                produceCandidate.asRight[E].asRight[Seq[CandidateChannels]]
             }
       }
     groupedChannels.tailRecM(go)

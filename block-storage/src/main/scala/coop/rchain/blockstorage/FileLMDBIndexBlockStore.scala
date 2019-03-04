@@ -19,7 +19,6 @@ import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.blockstorage.util.io._
 import coop.rchain.blockstorage.util.io.IOError
-import coop.rchain.catscontrib.Capture
 import coop.rchain.shared.{AtomicMonadState, Log}
 import coop.rchain.shared.ByteStringOps._
 import monix.execution.atomic.AtomicAny
@@ -285,13 +284,13 @@ object FileLMDBIndexBlockStore {
       }
     } yield result
 
-  def create[F[_]: Concurrent: Capture: Log](
+  def create[F[_]: Concurrent: Sync: Log](
       env: Env[ByteBuffer],
       blockStoreDataDir: Path
   ): F[StorageErr[BlockStore[F]]] =
     create(env, blockStoreDataDir.resolve("storage"), blockStoreDataDir.resolve("checkpoints"))
 
-  def create[F[_]: Monad: Concurrent: Capture: Log](
+  def create[F[_]: Monad: Concurrent: Sync: Log](
       env: Env[ByteBuffer],
       storagePath: Path,
       checkpointsDirPath: Path
@@ -328,7 +327,7 @@ object FileLMDBIndexBlockStore {
     } yield result
   }
 
-  def create[F[_]: Monad: Concurrent: Capture: Log](
+  def create[F[_]: Monad: Concurrent: Sync: Log](
       config: Config
   ): F[StorageErr[BlockStore[F]]] =
     for {

@@ -65,7 +65,6 @@ class HashSetCasperTestNode[F[_]](
     createRuntime: (Path, Long) => (RuntimeManager[F], Close[F])
 )(
     implicit syncF: Sync[F],
-    captureF: Capture[F],
     concurrentF: Concurrent[F],
     val blockStore: BlockStore[F],
     val blockDagStorage: BlockDagStorage[F],
@@ -190,7 +189,6 @@ object HashSetCasperTestNode {
   )(
       implicit errorHandler: ErrorHandler[F],
       syncF: Sync[F],
-      captureF: Capture[F],
       concurrentF: Concurrent[F],
       testNetworkF: TestNetwork[F]
   ): F[HashSetCasperTestNode[F]] = {
@@ -219,7 +217,7 @@ object HashSetCasperTestNode {
                             blockDagDir.resolve("checkpoints")
                           ),
                           genesis
-                        )(Concurrent[F], Sync[F], Capture[F], Log[F], blockStore)
+                        )(Concurrent[F], Sync[F], Log[F], blockStore)
       blockProcessingLock <- Semaphore[F](1)
       casperState         <- Cell.mvarCell[F, CasperState](CasperState())
       node = new HashSetCasperTestNode[F](
@@ -239,7 +237,6 @@ object HashSetCasperTestNode {
         createRuntime
       )(
         syncF,
-        captureF,
         concurrentF,
         blockStore,
         blockDagStorage,
@@ -260,7 +257,6 @@ object HashSetCasperTestNode {
     standaloneF[Effect](genesis, sk, storageSize, createRuntime)(
       ApplicativeError_[Effect, CommError],
       syncEffectInstance,
-      Capture[Effect],
       Concurrent[Effect],
       testNetwork
     ).value.unsafeRunSync.right.get
@@ -273,7 +269,6 @@ object HashSetCasperTestNode {
   )(
       implicit errorHandler: ErrorHandler[F],
       syncF: Sync[F],
-      captureF: Capture[F],
       concurrentF: Concurrent[F],
       testNetworkF: TestNetwork[F]
   ): F[IndexedSeq[HashSetCasperTestNode[F]]] = {
@@ -315,7 +310,7 @@ object HashSetCasperTestNode {
                                     blockDagDir.resolve("checkpoints")
                                   ),
                                   genesis
-                                )(Concurrent[F], Sync[F], Capture[F], Log[F], blockStore)
+                                )(Concurrent[F], Sync[F], Log[F], blockStore)
               semaphore <- Semaphore[F](1)
               casperState <- Cell.mvarCell[F, CasperState](
                               CasperState()
@@ -337,7 +332,6 @@ object HashSetCasperTestNode {
                 createRuntime
               )(
                 syncF,
-                captureF,
                 concurrentF,
                 blockStore,
                 blockDagStorage,
@@ -378,7 +372,6 @@ object HashSetCasperTestNode {
     networkF[Effect](sks, genesis, storageSize, createRuntime)(
       ApplicativeError_[Effect, CommError],
       syncEffectInstance,
-      Capture[Effect],
       Concurrent[Effect],
       testNetwork
     )

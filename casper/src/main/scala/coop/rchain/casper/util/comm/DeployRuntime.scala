@@ -5,7 +5,7 @@ import scala.io.Source
 import scala.language.higherKinds
 import scala.util._
 
-import cats.{Id, Monad}
+import cats.{Functor, Id, Monad}
 import cats.data.EitherT
 import cats.effect.Sync
 import cats.implicits._
@@ -42,7 +42,7 @@ object DeployRuntime {
   ): F[Unit] =
     gracefulExit(DeployService[F].visualizeDag(VisualizeDagQuery(depth, showJustificationLines)))
 
-  def listenForDataAtName[F[_]: Sync: DeployService: Time: Capture](
+  def listenForDataAtName[F[_]: Functor: Sync: DeployService: Time](
       name: Id[Name]
   ): F[Unit] =
     gracefulExit {
@@ -52,7 +52,7 @@ object DeployRuntime {
       }.map(kp("")).value
     }
 
-  def listenForContinuationAtName[F[_]: Sync: Time: DeployService: Capture](
+  def listenForContinuationAtName[F[_]: Functor: Sync: Time: DeployService](
       names: List[Name]
   ): F[Unit] =
     gracefulExit {
