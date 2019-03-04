@@ -21,6 +21,7 @@ import scodec.Codec
 
 import scala.collection.immutable.Seq
 import coop.rchain.rspace.test.ArbitraryInstances._
+import monix.eval.Coeval
 import org.scalatest.enablers.Definition
 
 import scala.util.Random
@@ -1349,50 +1350,51 @@ trait MonadicStorageActionsTests[F[_]]
 }
 
 trait LegacyStorageActionsTests
-    extends StorageTestsBase[Id, String, Pattern, Nothing, String, StringsCaptor]
+    extends StorageTestsBase[Coeval, String, Pattern, Nothing, String, StringsCaptor]
     with TestImplicitHelpers
     with GeneratorDrivenPropertyChecks
     with Checkers {
 
   "consuming with a list of patterns that is a different length than the list of channels" should
-    "throw" in withTestSpace { space =>
+    "throw" in withTestSpaceNonF { space =>
     an[IllegalArgumentException] shouldBe thrownBy(
-      space.consume(List("ch1", "ch2"), List(Wildcard), new StringsCaptor, persist = false)
+      space.consume(List("ch1", "ch2"), List(Wildcard), new StringsCaptor, persist = false).apply()
     )
     space.store.isEmpty shouldBe true
   }
 
-  "an install" should "not allow installing after a produce operation" in withTestSpace { space =>
-    val channel  = "ch1"
-    val datum    = "datum1"
-    val key      = List(channel)
-    val patterns = List(Wildcard)
+  "an install" should "not allow installing after a produce operation" in withTestSpaceNonF {
+    space =>
+      val channel  = "ch1"
+      val datum    = "datum1"
+      val key      = List(channel)
+      val patterns = List(Wildcard)
 
-    val ex = the[RuntimeException] thrownBy {
-      space.produce(channel, datum, persist = false)
-      space.install(key, patterns, new StringsCaptor)
-    }
-    ex.getMessage shouldBe "Installing can be done only on startup"
+      val ex = the[RuntimeException] thrownBy {
+        space.produce(channel, datum, persist = false).apply()
+        space.install(key, patterns, new StringsCaptor).apply()
+      }
+      ex.getMessage shouldBe "Installing can be done only on startup"
   }
 
-  "after close space" should "throw RSpaceClosedException on all store operations" in withTestSpace {
+  "after close space" should "throw RSpaceClosedException on all store operations" in withTestSpaceNonF {
     val channel  = "ch1"
     val key      = List(channel)
     val patterns = List(Wildcard)
 
     space =>
-      space.close()
+      space.close().apply()
       //using some nulls here to ensure that exception is thrown even before args check
       an[RSpaceClosedException] shouldBe thrownBy(
-        space.install(key, patterns, null)
+        space.install(key, patterns, null).apply()
       )
 
       an[RSpaceClosedException] shouldBe thrownBy(
-        space.consume(key, patterns, null, false)
+        space.consume(key, patterns, null, false).apply()
       )
 
       an[RSpaceClosedException] shouldBe thrownBy(
-        space.produce(channel, "test data", false)
+        space.produce(channel, "test data", false).apply()
       )
   }
 }
@@ -1407,6 +1409,18 @@ trait IdTests[C, P, A, R, K] extends StorageTestsBase[Id, C, P, A, R, K] {
     coop.rchain.rspace.test.contextShiftId
 
   override def run[RES](f: Id[RES]): RES = f
+}
+
+trait CoevalTests[C, P, A, R, K] extends StorageTestsBase[Coeval, C, P, A, R, K] {
+  override implicit val concurrentF: Concurrent[Coeval] =
+    coop.rchain.rspace.test.concurrentCoeval
+  override implicit val logF: Log[Coeval]         = Log.log[Coeval]
+  override implicit val metricsF: Metrics[Coeval] = new Metrics.MetricsNOP[Coeval]()(concurrentF)
+  override implicit val monadF: Monad[Coeval]     = concurrentF
+  override implicit val contextShiftF: ContextShift[Coeval] =
+    coop.rchain.rspace.test.contextShiftCoeval
+
+  override def run[RES](f: Coeval[RES]): RES = f.apply()
 }
 
 import monix.eval.Task
@@ -1453,23 +1467,23 @@ class MixedStoreStorageActionsTests
     with MonadicStorageActionsTests[Task]
 
 class LegacyInMemoryStoreStorageActionsTests
-    extends InMemoryStoreTestsBase[Id]
-    with IdTests[String, Pattern, Nothing, String, StringsCaptor]
+    extends InMemoryStoreTestsBase[Coeval]
+    with CoevalTests[String, Pattern, Nothing, String, StringsCaptor]
     with JoinOperationsTests
     with LegacyStorageActionsTests
 
 class LegacyLMDBStoreActionsTests
-    extends LMDBStoreTestsBase[Id]
-    with IdTests[String, Pattern, Nothing, String, StringsCaptor]
-    with StorageActionsTests[Id]
+    extends LMDBStoreTestsBase[Coeval]
+    with CoevalTests[String, Pattern, Nothing, String, StringsCaptor]
+    with StorageActionsTests[Coeval]
     with JoinOperationsTests
     with BeforeAndAfterAll
     with LegacyStorageActionsTests
 
 class LegacyMixedStoreActionsTests
-    extends MixedStoreTestsBase[Id]
-    with IdTests[String, Pattern, Nothing, String, StringsCaptor]
-    with StorageActionsTests[Id]
+    extends MixedStoreTestsBase[Coeval]
+    with CoevalTests[String, Pattern, Nothing, String, StringsCaptor]
+    with StorageActionsTests[Coeval]
     with JoinOperationsTests
     with BeforeAndAfterAll
     with LegacyStorageActionsTests

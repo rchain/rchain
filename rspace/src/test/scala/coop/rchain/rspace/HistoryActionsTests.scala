@@ -12,9 +12,11 @@ import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal.{Datum, GNAT, Row, WaitingContinuation}
 import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
+import monix.eval.Coeval
 import org.scalacheck.Prop
 import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
+
 import scala.collection.immutable.Seq
 
 //noinspection ZeroIndexToHead
@@ -171,8 +173,8 @@ trait HistoryActionsTests[F[_]]
   "produce a bunch and then createCheckpoint" should "persist the expected values in the TrieStore" in
     forAll { (data: TestProduceMap) =>
       withTestSpace { space =>
-        (for {
-          gnats <- (data
+        for {
+          gnats <- data
                     .map {
                       case (channel, datum) =>
                         GNAT(
@@ -181,20 +183,20 @@ trait HistoryActionsTests[F[_]]
                           List.empty[WaitingContinuation[Pattern, StringsCaptor]]
                         )
                     }
-                    .toList)
+                    .toList
                     .pure[F]
-          _ = gnats.map {
-            case GNAT(List(channel), List(datum), _) =>
-              space.produce(channel, datum.a, datum.persist)
-          }
+          _ <- gnats.traverse {
+                case GNAT(List(channel), List(datum), _) =>
+                  space.produce(channel, datum.a, datum.persist)
+              }
           channelHashes = gnats.map(gnat => space.store.hashChannels(gnat.channels))
           _ = history
             .lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
           _ <- space.createCheckpoint()
         } yield
-          (history
+          history
             .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
-            .get should contain theSameElementsAs gnats))
+            .get should contain theSameElementsAs gnats
       }
     }
 
@@ -202,18 +204,18 @@ trait HistoryActionsTests[F[_]]
     forAll { (data: TestConsumeMap) =>
       withTestSpace { space =>
         for {
-          gnats <- (data
+          gnats <- data
                     .map {
                       case (channels, wk) =>
                         GNAT(channels, List.empty[Datum[String]], List(wk))
                     }
-                    .toList)
+                    .toList
                     .pure[F]
 
-          _ = gnats.map {
-            case GNAT(channels, _, List(wk)) =>
-              space.consume(channels, wk.patterns, wk.continuation, wk.persist)
-          }
+          _ <- gnats.traverse {
+                case GNAT(channels, _, List(wk)) =>
+                  space.consume(channels, wk.patterns, wk.continuation, wk.persist)
+              }
           channelHashMap                      = gnats.map(gnat => space.store.hashChannels(gnat.channels) -> gnat).toMap
           channelHashes: List[Blake2b256Hash] = channelHashMap.keys.toList
 
@@ -223,15 +225,14 @@ trait HistoryActionsTests[F[_]]
           _ = history
             .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
             .get should contain theSameElementsAs gnats
-          _ <- channelHashes
-                .map(
-                  channelHash =>
-                    space.retrieve(checkpoint.root, channelHash).map { retrieved =>
-                      retrieved.get shouldBe channelHashMap(channelHash)
-                    }
-                )
-                .sequence
-        } yield (())
+          result <- channelHashes
+                     .traverse(
+                       channelHash =>
+                         space.retrieve(checkpoint.root, channelHash).map { retrieved =>
+                           retrieved.get shouldBe channelHashMap(channelHash)
+                         }
+                     )
+        } yield result
       }
     }
 
@@ -342,13 +343,11 @@ trait HistoryActionsTests[F[_]]
         val states = data.zipWithIndex.map {
           case (produces, chunkNo) =>
             for {
-              produceEffects <- produces
-                                 .map {
+              produceEffects <- produces.toList
+                                 .traverse {
                                    case (channel, datum) =>
                                      space.produce(channel, datum.a, datum.persist)
                                  }
-                                 .toList
-                                 .sequence
               checkpoint <- space.createCheckpoint()
             } yield {
               val num  = "%02d".format(chunkNo)
@@ -359,7 +358,8 @@ trait HistoryActionsTests[F[_]]
         }
         for {
           stateEffect <- states.toList.sequence
-        } yield (validateIndexedStates(space, stateEffect, "produces_reset"))
+          res         <- validateIndexedStates(space, stateEffect, "produces_reset")
+        } yield res
 
       }
     }
@@ -375,8 +375,8 @@ trait HistoryActionsTests[F[_]]
         val states = data.zipWithIndex.map {
           case (consumes, chunkNo) =>
             for {
-              consumeEffects <- consumes
-                                 .map {
+              consumeEffects <- consumes.toList
+                                 .traverse {
                                    case (channels, wk) =>
                                      space.consume(
                                        channels,
@@ -385,8 +385,6 @@ trait HistoryActionsTests[F[_]]
                                        wk.persist
                                      )
                                  }
-                                 .toList
-                                 .sequence
               checkpoint <- space.createCheckpoint()
             } yield {
               val num  = "%02d".format(chunkNo)
@@ -397,7 +395,8 @@ trait HistoryActionsTests[F[_]]
         }
         for {
           stateEffect <- states.toList.sequence
-        } yield (validateIndexedStates(space, stateEffect, "consumes_reset"))
+          res         <- validateIndexedStates(space, stateEffect, "consumes_reset")
+        } yield res
       }
     }
     check(prop)
@@ -412,8 +411,8 @@ trait HistoryActionsTests[F[_]]
         val states = data.zipWithIndex.map {
           case ((consumes, produces), chunkNo) =>
             for {
-              consumeEffects <- consumes
-                                 .map {
+              consumeEffects <- consumes.toList
+                                 .traverse {
                                    case (channels, wk) =>
                                      space.consume(
                                        channels,
@@ -422,15 +421,11 @@ trait HistoryActionsTests[F[_]]
                                        wk.persist
                                      )
                                  }
-                                 .toList
-                                 .sequence
-              produceEffects <- produces
-                                 .map {
+              produceEffects <- produces.toList
+                                 .traverse {
                                    case (channel, datum) =>
                                      space.produce(channel, datum.a, datum.persist)
                                  }
-                                 .toList
-                                 .sequence
 
               checkpoint <- space.createCheckpoint()
             } yield {
@@ -446,7 +441,8 @@ trait HistoryActionsTests[F[_]]
         }
         for {
           stateEffect <- states.toList.sequence
-        } yield (validateIndexedStates(space, stateEffect, "produces_consumes_reset"))
+          res         <- validateIndexedStates(space, stateEffect, "produces_consumes_reset")
+        } yield res
       }
     }
     check(prop)
@@ -534,33 +530,33 @@ trait HistoryActionsTests[F[_]]
 }
 
 trait LegacyHistoryActionsTests
-    extends StorageTestsBase[Id, String, Pattern, Nothing, String, StringsCaptor]
+    extends StorageTestsBase[Coeval, String, Pattern, Nothing, String, StringsCaptor]
     with TestImplicitHelpers
     with GeneratorDrivenPropertyChecks
     with Checkers {
 
   "reset to an unknown checkpoint" should "result in an exception" in
-    withTestSpace { space =>
+    withTestSpaceNonF { space =>
       val unknownHash =
         Blake2b256Hash.fromHex("ff3c5e70a028b7956791a6b3d8db00000f469e0088db22dd3afbc86997fe86a0")
       (the[Exception] thrownBy {
-        space.reset(unknownHash)
+        space.reset(unknownHash).apply()
       } should have message "Unknown root.")
     }
 }
 
 class MixedStoreHistoryActionsTests
-    extends MixedStoreTestsBase[Id]
-    with HistoryActionsTests[Id]
+    extends MixedStoreTestsBase[Coeval]
+    with HistoryActionsTests[Coeval]
     with LegacyHistoryActionsTests
-    with IdTests[String, Pattern, Nothing, String, StringsCaptor]
+    with CoevalTests[String, Pattern, Nothing, String, StringsCaptor]
 class LMDBStoreHistoryActionsTests
-    extends LMDBStoreTestsBase[Id]
-    with HistoryActionsTests[Id]
+    extends LMDBStoreTestsBase[Coeval]
+    with HistoryActionsTests[Coeval]
     with LegacyHistoryActionsTests
-    with IdTests[String, Pattern, Nothing, String, StringsCaptor]
+    with CoevalTests[String, Pattern, Nothing, String, StringsCaptor]
 class InMemStoreHistoryActionsTests
-    extends InMemoryStoreTestsBase[Id]
-    with HistoryActionsTests[Id]
+    extends InMemoryStoreTestsBase[Coeval]
+    with HistoryActionsTests[Coeval]
     with LegacyHistoryActionsTests
-    with IdTests[String, Pattern, Nothing, String, StringsCaptor]
+    with CoevalTests[String, Pattern, Nothing, String, StringsCaptor]

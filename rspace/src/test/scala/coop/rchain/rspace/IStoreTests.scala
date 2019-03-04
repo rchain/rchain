@@ -8,13 +8,14 @@ import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.shared.GeneratorUtils._
+import monix.eval.Coeval
 import org.scalacheck.Gen
 import org.scalactic.anyvals.PosInt
 import org.scalatest.AppendedClues
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
 trait IStoreTests
-    extends StorageTestsBase[Id, String, Pattern, Nothing, String, StringsCaptor]
+    extends StorageTestsBase[Coeval, String, Pattern, Nothing, String, StringsCaptor]
     with GeneratorDrivenPropertyChecks
     with AppendedClues {
 
@@ -24,9 +25,9 @@ trait IStoreTests
   "putDatum" should "put datum in a new channel" in forAll("channel", "datum") {
     (channel: String, datumValue: String) =>
       withTestSpace { space =>
-        val store: IStore[Id, String, Pattern, String, StringsCaptor] = space.store
-        val key                                                       = List(channel)
-        val datum                                                     = Datum.create(channel, datumValue, false)
+        val store: IStore[Coeval, String, Pattern, String, StringsCaptor] = space.store
+        val key                                                           = List(channel)
+        val datum                                                         = Datum.create(channel, datumValue, false)
 
         store
           .withTxnF(store.createTxnWriteF()) { txn =>
@@ -54,7 +55,7 @@ trait IStoreTests
       }
   }
 
-  "hashChannels" should "return same hashes for unordered channels" in withTestSpace { space =>
+  "hashChannels" should "return same hashes for unordered channels" in withTestSpaceNonF { space =>
     val store  = space.store
     val hash12 = store.hashChannels(List("ch1", "ch2"))
     val hash21 = store.hashChannels(List("ch2", "ch1"))
@@ -205,13 +206,13 @@ trait IStoreTests
       }
     }
 
-  "collapse" should "work on empty history" in withTestSpace { space =>
+  "collapse" should "work on empty history" in withTestSpaceNonF { space =>
     space.store.collapse(List.empty) shouldBe List.empty
   }
 
   it should "return unmodified history when nothing to prune" in
     forAll("gnat") { (gnat: GNAT[String, Pattern, String, StringsCaptor]) =>
-      withTestSpace { space =>
+      withTestSpaceNonF { space =>
         gnat.wks
           .map(_.patterns.size)
           .distinct should contain only gnat.channels.size withClue "#patterns in each continuation should equal #channels"
@@ -224,7 +225,7 @@ trait IStoreTests
 
   it should "return unmodified history when nothing to prune in multiple gnats" in
     forAll(distinctListOf[GNAT[String, Pattern, String, StringsCaptor]], SizeRange(3)) {
-      withTestSpace { space => (gnats: Seq[GNAT[String, Pattern, String, StringsCaptor]]) =>
+      withTestSpaceNonF { space => (gnats: Seq[GNAT[String, Pattern, String, StringsCaptor]]) =>
         val store = space.store
         val history = gnats
           .flatMap(gnat => List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat)))
@@ -235,7 +236,7 @@ trait IStoreTests
 
   it should "remove all operations from history with the same hash when last operation is delete" in
     forAll("gnat1", "gnat2") {
-      withTestSpace {
+      withTestSpaceNonF {
         space =>
           {
             (
@@ -256,7 +257,7 @@ trait IStoreTests
 
   it should "remove all operations from history with the same hash when last operation is delete - longer case with same hash" in
     forAll("gnat1") { (gnat1: GNAT[String, Pattern, String, StringsCaptor]) =>
-      withTestSpace { space =>
+      withTestSpaceNonF { space =>
         val store = space.store
         val gnatOps = List(
           TrieUpdate(0, Insert, store.hashChannels(gnat1.channels), gnat1),
@@ -270,7 +271,7 @@ trait IStoreTests
 
   it should "remove all but the last operation from history with the same hash when last operation is insert" in
     forAll("gnat") { (gnat: GNAT[String, Pattern, String, StringsCaptor]) =>
-      withTestSpace { space =>
+      withTestSpaceNonF { space =>
         val store      = space.store
         val lastInsert = TrieUpdate(1, Insert, store.hashChannels(gnat.channels), gnat)
 
@@ -282,7 +283,7 @@ trait IStoreTests
 
   it should "remove all but the last operation from history with the same hash when operation with largest count is insert" in
     forAll("gnat") { (gnat: GNAT[String, Pattern, String, StringsCaptor]) =>
-      withTestSpace { space =>
+      withTestSpaceNonF { space =>
         val store      = space.store
         val lastInsert = TrieUpdate(2, Insert, store.hashChannels(gnat.channels), gnat)
 
@@ -297,14 +298,14 @@ trait IStoreTests
 }
 
 class InMemoryStoreTests
-    extends InMemoryStoreTestsBase[Id]
+    extends InMemoryStoreTestsBase[Coeval]
     with IStoreTests
-    with IdTests[String, Pattern, Nothing, String, StringsCaptor]
+    with CoevalTests[String, Pattern, Nothing, String, StringsCaptor]
 class LMDBStoreTests
-    extends LMDBStoreTestsBase[Id]
+    extends LMDBStoreTestsBase[Coeval]
     with IStoreTests
-    with IdTests[String, Pattern, Nothing, String, StringsCaptor]
+    with CoevalTests[String, Pattern, Nothing, String, StringsCaptor]
 class MixedStoreTests
-    extends MixedStoreTestsBase[Id]
+    extends MixedStoreTestsBase[Coeval]
     with IStoreTests
-    with IdTests[String, Pattern, Nothing, String, StringsCaptor]
+    with CoevalTests[String, Pattern, Nothing, String, StringsCaptor]
