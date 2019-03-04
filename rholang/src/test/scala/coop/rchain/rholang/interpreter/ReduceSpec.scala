@@ -40,10 +40,10 @@ trait PersistentStoreTester {
   def withTestSpace[R](
       errorLog: ErrorLog[Task]
   )(f: TestFixture => R)(implicit CA: CostAccounting[Task], C: _cost[Task]): R = {
-    val dbDir                    = Files.createTempDirectory("rholang-interpreter-test-")
-    val context: RhoContext[Task]           = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
-    val context: RhoContext      = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
-    implicit val logF: Log[Task] = new Log.NOPLog[Task]
+    val dbDir                              = Files.createTempDirectory("rholang-interpreter-test-")
+    val context: RhoContext[Task]          = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
+    implicit val logF: Log[Task]           = new Log.NOPLog[Task]
+    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
     val space = (RSpace
       .create[
