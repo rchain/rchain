@@ -87,28 +87,31 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
       initialPhlo: Long,
       contract: String
   ) = {
-    implicit val errorLog = new ErrorLog[Task]()
-    implicit val costAlg: CostAccounting[Task] =
-      CostAccounting.unsafe[Task](Cost(initialPhlo))
-    implicit val costL                     = costLog[Task]
-    implicit val cost: _cost[Task]         = loggingCost(costAlg, costL)
     val dbDir                              = Files.createTempDirectory("cost-accounting-spec-")
     val size                               = 1024L * 1024 * 1024
+    implicit val errorLog                  = new ErrorLog[Task]()
     implicit val logF: Log[Task]           = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
     (for {
-      costsLoggingProgram <- costL.listen({
-                              for {
-                                runtime <- Runtime
-                                            .create[Task, Task.Par](dbDir, size, StoreType.LMDB)
-                                par <- Interpreter[Task].buildNormalizedTerm(contract)
-                                res <- Interpreter[Task]
-                                        .evaluate(runtime, par, Cost(initialPhlo.toLong))
-                                _ <- runtime.close()
-                                _ <- Task.eval(dbDir.recursivelyDelete())
-                              } yield (res)
-                            }.attempt)
+      costAlg <- CostAccounting.of[Task](Cost(initialPhlo))
+      costL   <- costLog[Task]
+      cost    = loggingCost(costAlg, costL)
+      costsLoggingProgram <- {
+        costL.listen({
+          implicit val ca = costAlg
+          implicit val c  = cost
+          for {
+            runtime <- Runtime
+                        .create[Task, Task.Par](dbDir, size, StoreType.LMDB)
+            par <- Interpreter[Task].buildNormalizedTerm(contract)
+            res <- Interpreter[Task]
+                    .evaluate(runtime, par, Cost(initialPhlo.toLong))
+            _ <- runtime.close()
+            _ <- Task.eval(dbDir.recursivelyDelete())
+          } yield (res)
+        }.attempt)
+      }
       (result, costLog) = costsLoggingProgram
       res               <- errorLog.readAndClearErrorVector
       _                 = Task.now(res should be(Vector.empty))

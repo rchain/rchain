@@ -940,21 +940,23 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
     res should be(Left(OutOfPhlogistonsError))
   }
 
-  private def doMatchAndCharge(initialPhlo: Int) = {
-    implicit val costL = costLog[Task]
-    implicit val cost: _cost[Task] =
-      loggingCost(CostAccounting.unsafe[Task](Cost(initialPhlo, "initial cost")), costL)
-
+  private def doMatchAndCharge(initialPhlo: Long) = {
     val target: Par = EList(Seq(GInt(1), GInt(2), GInt(3)))
     val pattern: Par =
       EList(Seq(GInt(1), EVar(FreeVar(0)), EVar(FreeVar(1))), connectiveUsed = true)
 
-    val program = (for {
-      res      <- spatialMatchAndCharge[Task](target, pattern).attempt
-      phloLeft <- cost.get
-    } yield (phloLeft, res))
-
-    costL.listen(program).unsafeRunSync
+    (for {
+      costAlg <- CostAccounting.of[Task](Cost(initialPhlo))
+      costL   <- costLog[Task]
+      cost    = loggingCost(costAlg, costL)
+      program = {
+        implicit val c = cost
+        spatialMatchAndCharge[Task](target, pattern).attempt
+      }
+      r          <- costL.listen(program)
+      phloLeft   <- cost.get
+      (res, log) = r
+    } yield ((phloLeft, res), log)).unsafeRunSync
   }
 
   "spatialMatchAndCharge" should "short-circuit when runs out of phlo in the middle of matching" in {
