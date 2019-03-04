@@ -459,6 +459,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
         handleInvalidBlockEffect(status, block)
       case InvalidDeployCount =>
         handleInvalidBlockEffect(status, block)
+      case ContainsExpiredDeploy =>
+        handleInvalidBlockEffect(status, block)
+      case ContainsFutureDeploy =>
+        handleInvalidBlockEffect(status, block)
       case Processing =>
         throw new RuntimeException(s"A block should not be processing at this stage.")
       case BlockException(ex) =>

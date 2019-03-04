@@ -196,7 +196,15 @@ object Validate {
       blockNumberStatus <- repeatedDeployStatus.joinRight.traverse(
                             _ => Validate.blockNumber[F](block, dag)
                           )
-      followsStatus <- blockNumberStatus.joinRight.traverse(
+      futureTransactionStatus <- blockNumberStatus.joinRight.traverse(
+                                  _ => Validate.futureTransaction[F](block)
+                                )
+      transactionExpirationStatus <- futureTransactionStatus.joinRight.traverse(
+                                      _ =>
+                                        Validate
+                                          .transactionExpiration[F](block, expirationThreshold)
+                                    )
+      followsStatus <- transactionExpirationStatus.joinRight.traverse(
                         _ => Validate.justificationFollows[F](block, genesis, dag)
                       )
       parentsStatus <- followsStatus.joinRight.traverse(
@@ -351,6 +359,45 @@ object Validate {
                  } yield Left(InvalidBlockNumber)
                }
     } yield status
+
+  def futureTransaction[F[_]: Monad: Log](b: BlockMessage): F[Either[InvalidBlock, ValidBlock]] = {
+    val blockNumber = ProtoUtil.blockNumber(b)
+    val deploys     = ProtoUtil.deploys(b).flatMap(_.deploy)
+    deploys.find(_.validAfterBlockNumber > blockNumber) match {
+      case Some(futureDeploy) =>
+        for {
+          _ <- Log[F].warn(
+                ignore(
+                  b,
+                  s"block contains an future deploy with valid after block number of ${futureDeploy.validAfterBlockNumber}: ${futureDeploy.term}"
+                )
+              )
+        } yield Left(ContainsFutureDeploy)
+      case None =>
+        Applicative[F].pure(Right(Valid))
+    }
+  }
+
+  def transactionExpiration[F[_]: Monad: Log](
+      b: BlockMessage,
+      expirationThreshold: Int
+  ): F[Either[InvalidBlock, ValidBlock]] = {
+    val earliestAcceptableValidAfterBlockNumber = ProtoUtil.blockNumber(b) - expirationThreshold
+    val deploys                                 = ProtoUtil.deploys(b).flatMap(_.deploy)
+    deploys.find(_.validAfterBlockNumber < earliestAcceptableValidAfterBlockNumber) match {
+      case Some(expiredDeploy) =>
+        for {
+          _ <- Log[F].warn(
+                ignore(
+                  b,
+                  s"block contains an expired deploy with valid after block number of ${expiredDeploy.validAfterBlockNumber}: ${expiredDeploy.term}"
+                )
+              )
+        } yield Left(ContainsExpiredDeploy)
+      case None =>
+        Applicative[F].pure(Right(Valid))
+    }
+  }
 
   /**
     * Works with either efficient justifications or full explicit justifications.
