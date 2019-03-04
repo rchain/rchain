@@ -214,7 +214,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
       blockMessage <- ProtoUtil.unsafeGetBlock[F](updatedLastFinalizedBlockHash)
     } yield blockMessage
 
-  // TODO: Optimize for large number of deploys accumulated over history
+  // TODO: Remove no longer valid deploys here instead of with lastFinalizedBlock call
   private def remDeploys(
       dag: BlockDagRepresentation[F],
       parents: Seq[BlockMessage],
@@ -222,8 +222,13 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
   ): F[Seq[DeployData]] =
     for {
       state               <- Cell[F, CasperState].read
-      deploys             = state.deployHistory // TODO: Filter deploys based on validAfterBlockNum field and validate
-      earliestBlockNumber = maxBlockNumber + 1 - expirationThreshold
+      currentBlockNumber  = maxBlockNumber + 1
+      earliestBlockNumber = currentBlockNumber - expirationThreshold
+      deploys             = state.deployHistory
+      validDeploys = deploys.filter(
+        d =>
+          d.validAfterBlockNumber <= currentBlockNumber && d.validAfterBlockNumber >= earliestBlockNumber
+      )
       deploysInCurrentChain <- DagOperations
                                 .bfTraverseF[F, BlockMessage](parents.toList)(
                                   b =>
@@ -234,7 +239,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
                                   ProtoUtil.deploys(b).flatMap(_.deploy)
                                 }
                                 .toList
-      result = (deploys -- deploysInCurrentChain.flatten).toSeq
+      result = (validDeploys -- deploysInCurrentChain.flatten).toSeq
     } yield result
 
   private def createProposal(
