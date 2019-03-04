@@ -151,9 +151,9 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
   }
 
   it should "stop the evaluation of all execution branches when one of them runs out of phlo" ignore {
-    val initialPhlo       = 1L
+    val initialPhlo       = 5L
     val contract          = "@1!(1) | @2!(2) | @3!(3)"
-    val expectedCosts     = List(Cost(4, "substitution"))
+    val expectedCosts     = List(Cost(4, "substitution"), Cost(4, "substitution"))
     val (result, costLog) = evaluateWithCostLog(initialPhlo, contract)
     result shouldBe Left(OutOfPhlogistonsError)
     costLog.toList should contain theSameElementsAs (expectedCosts)
