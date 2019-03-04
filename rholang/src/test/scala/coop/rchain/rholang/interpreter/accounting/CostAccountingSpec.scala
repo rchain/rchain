@@ -129,7 +129,15 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
          } |
          loop!(10)
        }""".stripMargin, 1766L),
-    ("""42 | @0!(2) | for (x <- @0) { Nil }""", 48L)
+    ("""42 | @0!(2) | for (x <- @0) { Nil }""", 48L),
+    ("""@1!(1) |
+        for(x <- @1) { Nil } |
+        new x in { x!(10) | for(X <- x) { @2!(Set(X!(7)).add(*X).contains(10)) }} |
+        match 42 {
+          38 => Nil
+          42 => @3!(42)
+        }
+     """.stripMargin, 432L)
   )
 
   "Total cost of evaluation" should "be equal to the sum of all costs in the log" ignore forAll(
