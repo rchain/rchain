@@ -22,8 +22,6 @@ trait ITrieStore[T, K, V] {
 
   private[rspace] def putRoot(txn: T, branch: Branch, hash: Blake2b256Hash): Unit
 
-  private[rspace] def getAllPastRoots(txn: T): Seq[Blake2b256Hash]
-
   private[rspace] def validateAndPutRoot(txn: T, branch: Branch, hash: Blake2b256Hash): Unit
 
   private[rspace] def getEmptyRoot(txn: T): Blake2b256Hash

@@ -28,8 +28,8 @@ object RholangOnlyDispatcher {
   ): (Dispatch[M, ListParWithRandomAndPhlos, TaggedContinuation], ChargingReducer[M]) = {
 
     implicit val matchCost: Match[
+      M,
       BindPattern,
-      errors.InterpreterError,
       ListParWithRandom,
       ListParWithRandomAndPhlos
     ] = matchListPar(Cost(Integer.MAX_VALUE))

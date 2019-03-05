@@ -1,20 +1,21 @@
 package coop.rchain.rspace
 
+import cats.effect.{Concurrent, ContextShift}
+import cats.implicits._
+import com.google.common.collect.Multiset
+import com.typesafe.scalalogging.Logger
+import coop.rchain.catscontrib.Catscontrib._
+import coop.rchain.catscontrib._
+import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.internal._
+import coop.rchain.rspace.trace.{Produce, _}
+import coop.rchain.shared.Log
+import scodec.Codec
+
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext
-import cats.effect.{Concurrent, ContextShift}
-import cats.implicits._
-import coop.rchain.catscontrib._
-import Catscontrib._
-import coop.rchain.shared.Log
-import coop.rchain.rspace.history.Branch
-import coop.rchain.rspace.internal._
-import coop.rchain.rspace.trace.{Produce, Log => RSpaceLog, _}
-import com.google.common.collect.Multiset
-import com.typesafe.scalalogging.Logger
-import coop.rchain.metrics.{Metrics, Span}
-import scodec.Codec
 
 class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch: Branch)(
     implicit
@@ -47,7 +48,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
       persist: Boolean,
       sequenceNumber: Int
   )(
-      implicit m: Match[P, E, A, R]
+      implicit m: Match[F, P, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     contextShift.evalOn(scheduler) {
       if (channels.length =!= patterns.length) {
@@ -74,7 +75,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
       sequenceNumber: Int,
       span: Span[F]
   )(
-      implicit m: Match[P, E, A, R]
+      implicit m: Match[F, P, A, R]
   ): F[MaybeConsumeResult] = {
     def runMatcher(comm: COMM): F[Option[Seq[DataCandidate[C, R]]]] =
       for {
@@ -88,13 +89,8 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
                                        }
                                        .map(v => c -> v) // TODO inculde map in traverse?
                                    }
-        result <- syncF.delay {
-                   extractDataCandidates(
-                     channels.zip(patterns),
-                     channelToIndexedDataList.toMap,
-                     Nil
-                   ).flatMap(_.toOption).sequence
-                 }
+        result <- extractDataCandidates(channels.zip(patterns), channelToIndexedDataList.toMap, Nil)
+                   .map(_.sequence)
       } yield result
 
     def storeWaitingContinuation(
@@ -204,7 +200,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
   }
 
   def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
-      implicit m: Match[P, E, A, R]
+      implicit m: Match[F, P, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     contextShift.evalOn(scheduler) {
       for {
@@ -225,7 +221,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
       sequenceNumber: Int,
       span: Span[F]
   )(
-      implicit m: Match[P, E, A, R]
+      implicit m: Match[F, P, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] = {
     def runMatcher(
         comm: COMM,
@@ -260,12 +256,16 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
                                              }
                                            }
                                          }
-              result = extractFirstMatch(channels, matchCandidates, channelToIndexedDataList.toMap) match {
-                case Right(None)             => remaining.asLeft[MaybeProduceCandidate]
-                case Right(produceCandidate) => produceCandidate.asRight[Seq[Seq[C]]]
-                case Left(_)                 => ???
+              firstMatch <- extractFirstMatch(
+                             channels,
+                             matchCandidates,
+                             channelToIndexedDataList.toMap
+                           )
+            } yield
+              firstMatch match {
+                case None             => remaining.asLeft[MaybeProduceCandidate]
+                case produceCandidate => produceCandidate.asRight[Seq[Seq[C]]]
               }
-            } yield result
         }
       groupedChannels.tailRecM(go)
     }

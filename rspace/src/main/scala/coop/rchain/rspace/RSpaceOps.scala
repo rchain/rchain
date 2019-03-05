@@ -55,8 +55,8 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, E, A, R, K](
 
   protected[this] val logger: Logger
 
-  private[this] val installs: SyncVar[Installs[C, P, E, A, R, K]] = {
-    val installs = new SyncVar[Installs[C, P, E, A, R, K]]()
+  private[this] val installs: SyncVar[Installs[F, C, P, A, R, K]] = {
+    val installs = new SyncVar[Installs[F, C, P, A, R, K]]()
     installs.put(Map.empty)
     installs
   }
@@ -76,7 +76,7 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, E, A, R, K](
       channels: Seq[C],
       patterns: Seq[P],
       continuation: K
-  )(implicit m: Match[P, E, A, R]): F[Option[(K, Seq[R])]] = syncF.delay {
+  )(implicit m: Match[F, P, A, R]): F[Option[(K, Seq[R])]] = syncF.defer {
     if (channels.length =!= patterns.length) {
       val msg = "channels.length must equal patterns.length"
       logger.error(msg)
@@ -100,14 +100,12 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, E, A, R, K](
       c -> Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
     }.toMap
 
-    val options: Either[E, Option[Seq[DataCandidate[C, R]]]] =
-      extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).sequence
+    val options: F[Option[Seq[DataCandidate[C, R]]]] =
+      extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil)
         .map(_.sequence)
 
-    options match {
-      case Left(e) =>
-        throw new RuntimeException(s"Install never result in an invalid match: $e")
-      case Right(None) =>
+    options.map {
+      case None =>
         installs.update(_.updated(channels, Install(patterns, continuation, m)))
         store.installWaitingContinuation(
           txn,
@@ -118,14 +116,14 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, E, A, R, K](
         logger.debug(s"""|storing <(patterns, continuation): ($patterns, $continuation)>
                          |at <channels: $channels>""".stripMargin.replace('\n', ' '))
         None
-      case Right(Some(_)) =>
+      case Some(_) =>
         throw new RuntimeException("Installing can be done only on startup")
     }
 
   }
 
   override def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
-      implicit m: Match[P, E, A, R]
+      implicit m: Match[F, P, A, R]
   ): F[Option[(K, Seq[R])]] =
     store.withTxnFlatF(store.createTxnWriteF()) { txn =>
       install(txn, channels, patterns, continuation)
