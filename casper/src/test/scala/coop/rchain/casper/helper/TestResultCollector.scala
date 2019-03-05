@@ -86,6 +86,10 @@ case class RhoAssertEquals(testName: String, expected: Any, actual: Any, clue: S
     extends RhoTestAssertion {
   override val isSuccess: Boolean = actual == expected
 }
+case class RhoAssertNotEquals(testName: String, unexpected: Any, actual: Any, clue: String)
+    extends RhoTestAssertion {
+  override val isSuccess: Boolean = actual != unexpected
+}
 
 case class TestResult(
     assertions: Map[String, Map[Long, List[RhoTestAssertion]]],
@@ -153,6 +157,15 @@ class TestResultCollector[F[_]: Sync](result: Ref[F, TestResult]) {
         assertion match {
           case IsComparison(expected, "==", actual) => {
             val assertion = RhoAssertEquals(testName, expected, actual, clue)
+            runWithAck(
+              ctx,
+              ackedActionCtx,
+              result.update(_.addAssertion(attempt, assertion)),
+              Expr(GBool(assertion.isSuccess))
+            )
+          }
+          case IsComparison(unexpected, "!=", actual) => {
+            val assertion = RhoAssertNotEquals(testName, unexpected, actual, clue)
             runWithAck(
               ctx,
               ackedActionCtx,

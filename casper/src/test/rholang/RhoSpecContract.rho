@@ -37,6 +37,12 @@ in {
                     assert!(testName, attempt, (expected, "==", actual), clue, *ackCh)
                   }
                 }
+                (unexpected, "!= <-", actualCh) => {
+                  for (@actual <- @actualCh) {
+                    stdlog!("info", {"actual": actual, "unexpected": unexpected}) |
+                    assert!(testName, attempt, (unexpected, "!=", actual), clue, *ackCh)
+                  }
+                }
                 assertion => {
                   assert!(testName, attempt, assertion, clue, *ackCh)
                 }
@@ -80,6 +86,7 @@ in {
 
 
         contract runTest(@(testName, testBody), ackCh) = {
+          stdlog!("info", "Running test: " ++ testName) |
           runTest!((testName, testBody, 1), *ackCh)
         } |
 
