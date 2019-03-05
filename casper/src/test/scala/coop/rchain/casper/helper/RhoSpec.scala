@@ -25,7 +25,7 @@ object RhoSpec {
               Runtime.byteName(n.toByte),
               arity,
               n.toLong,
-              testResultCollector.handleMessage
+              ctx => testResultCollector.handleMessage(ctx)(_,_)
             )
         } ++ Seq(
         SystemProcess.Definition[Task](
@@ -33,7 +33,7 @@ object RhoSpec {
           Runtime.byteName(27),
           2,
           27L,
-          RhoLogger.handleMessage[Task]
+          ctx => RhoLogger.handleMessage(ctx)(_,_)
         )
       )
     TestUtil.runtime(testResultCollectorService)

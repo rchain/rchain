@@ -8,7 +8,6 @@ import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GString}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.RhoType.String
 import coop.rchain.rholang.interpreter.Runtime.ShortLeashParams.ShortLeashParameters
 import coop.rchain.rholang.interpreter.Runtime.{BlockTime, RhoISpace, ShortLeashParams}
 import coop.rchain.rholang.interpreter.accounting.Cost
@@ -48,7 +47,7 @@ object RhoType {
         case Expr(GByteArray(bs)) => bs.toByteArray
       }
 
-    def apply(bytes : Array[Byte]) : Par =
+    def apply(bytes: Array[Byte]): Par =
       Expr(GByteArray(ByteString.copyFrom(bytes)))
   }
 
@@ -58,16 +57,15 @@ object RhoType {
         case Expr(GString(bs)) => bs
       }
 
-    def apply(s : String) : Par = GString(s)
+    def apply(s: String): Par = GString(s)
   }
 
   object Bool {
-    def apply(b : Boolean) = Expr(GBool(b))
+    def apply(b: Boolean) = Expr(GBool(b))
   }
 }
 
 object SystemProcesses {
-
   def apply[F[_]](
       dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation],
       space: RhoISpace[F]
@@ -78,63 +76,20 @@ object SystemProcesses {
 
       type Channels = Seq[Result[ListParWithRandomAndPhlos]]
 
-      type Producer = (Seq[Par], Par) => F[Unit]
-
       private val prettyPrinter = PrettyPrinter()
 
-      private val UNLIMITED_MATCH_PHLO = matchListPar(Cost(Integer.MAX_VALUE))
-
-      object ContractCall {
-        private def produce(rand : Blake2b512Random, sequenceNumber : Int)
-                           (values: Seq[Par], ch: Par): F[Unit] =
-          for {
-            produceResult <- space.produce(
-              ch,
-              ListParWithRandom(values, rand),
-              persist = false,
-              sequenceNumber
-            )(UNLIMITED_MATCH_PHLO)
-            _ <- produceResult.fold(
-              _ => F.raiseError(OutOfPhlogistonsError),
-              _.fold(F.unit) {
-                case (cont, channels) =>
-                  dispatcher.dispatch(unpackCont(cont), channels.map(_.value), cont.sequenceNumber)
-              }
-            )
-          } yield ()
-
-        def unapply(contractArgs: (Seq[ListParWithRandomAndPhlos], Int)): Option[
-          (Producer, Seq[Par])
-        ] =
-          contractArgs match {
-            case (
-                Seq(
-                  ListParWithRandomAndPhlos(
-                    args,
-                    rand,
-                    _
-                  )
-                ),
-                sequenceNumber
-                ) =>
-              Some((produce(rand, sequenceNumber), args))
-            case _ => None
-          }
-      }
+      private val isContractCall = new ContractCall[F](space, dispatcher)
 
       private def illegalArgumentException(msg: String): F[Unit] =
         F.raiseError(new IllegalArgumentException(msg))
 
       def stdOut: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
-        case ContractCall(_, Seq(arg)) =>
+        case isContractCall(_, Seq(arg)) =>
           F.delay(Console.println(prettyPrinter.buildString(arg)))
       }
 
       def stdOutAck: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
-        case ContractCall(
-            produce,
-            Seq(arg, ack)
-            ) =>
+        case isContractCall(produce, Seq(arg, ack)) =>
           for {
             _ <- F.delay(Console.println(prettyPrinter.buildString(arg)))
             _ <- produce(Seq(Par.defaultInstance), ack)
@@ -142,15 +97,12 @@ object SystemProcesses {
       }
 
       def stdErr: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
-        case ContractCall(_, Seq(arg)) =>
+        case isContractCall(_, Seq(arg)) =>
           F.delay(Console.err.println(prettyPrinter.buildString(arg)))
       }
 
       def stdErrAck: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
-        case ContractCall(
-            produce,
-            Seq(arg, ack)
-            ) =>
+        case isContractCall(produce, Seq(arg, ack)) =>
           for {
             _ <- F.delay(Console.err.println(prettyPrinter.buildString(arg)))
             _ <- produce(Seq(Par.defaultInstance), ack)
@@ -158,7 +110,7 @@ object SystemProcesses {
       }
 
       def validateRevAddress: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
-        case ContractCall(
+        case isContractCall(
             produce,
             Seq(RhoType.String("validate"), RhoType.String(address), ack)
             ) =>
@@ -174,7 +126,7 @@ object SystemProcesses {
       }
 
       def secp256k1Verify: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
-        case ContractCall(
+        case isContractCall(
             produce,
             Seq(
               RhoType.ByteArray(data),
@@ -194,7 +146,7 @@ object SystemProcesses {
       }
 
       def ed25519Verify: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
-        case ContractCall(
+        case isContractCall(
             produce,
             Seq(
               RhoType.ByteArray(data),
@@ -214,10 +166,7 @@ object SystemProcesses {
       }
 
       def sha256Hash: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
-        case ContractCall(
-            produce,
-            Seq(RhoType.ByteArray(input), ack)
-            ) =>
+        case isContractCall(produce, Seq(RhoType.ByteArray(input), ack)) =>
           for {
             hash <- F.fromTry(Try(Sha256.hash(input)))
             _    <- produce(Seq(RhoType.ByteArray(hash)), ack)
@@ -229,10 +178,7 @@ object SystemProcesses {
       }
 
       def keccak256Hash: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
-        case ContractCall(
-            produce,
-            Seq(RhoType.ByteArray(input), ack)
-            ) =>
+        case isContractCall(produce, Seq(RhoType.ByteArray(input), ack)) =>
           for {
             hash <- F.fromTry(Try(Keccak256.hash(input)))
             _    <- produce(Seq(RhoType.ByteArray(hash)), ack)
@@ -245,10 +191,7 @@ object SystemProcesses {
       }
 
       def blake2b256Hash: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
-        case ContractCall(
-            produce,
-            Seq(RhoType.ByteArray(input), ack)
-            ) =>
+        case isContractCall(produce, Seq(RhoType.ByteArray(input), ack)) =>
           for {
             hash <- F.fromTry(Try(Blake2b256.hash(input)))
             _    <- produce(Seq(RhoType.ByteArray(hash)), ack)
@@ -263,10 +206,7 @@ object SystemProcesses {
       def getDeployParams(
           shortLeashParams: Runtime.ShortLeashParams[F]
       ): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
-        case ContractCall(
-            produce,
-            Seq(ack)
-            ) =>
+        case isContractCall(produce, Seq(ack)) =>
           for {
             parameters <- shortLeashParams.getParams
             _ <- parameters match {
@@ -281,10 +221,7 @@ object SystemProcesses {
       def blockTime(
           blocktime: Runtime.BlockTime[F]
       ): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
-        case ContractCall(
-            produce,
-            Seq(ack)
-            ) =>
+        case isContractCall(produce, Seq(ack)) =>
           for {
             time <- blocktime.timestamp.get
             _    <- produce(Seq(time), ack)
