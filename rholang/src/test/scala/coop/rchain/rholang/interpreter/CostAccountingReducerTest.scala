@@ -111,7 +111,8 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     ] = {
 
       lazy val (_, reducer, _) =
-        RholangAndScalaDispatcher.create[Task, Task.Par](pureRSpace, Map.empty, Map.empty)
+        RholangAndScalaDispatcher
+          .createWithEmptyCost[Task, Task.Par](pureRSpace, Map.empty, Map.empty)
 
       def plainSendCost(p: Par): Cost = {
         val storageCost = ChargingRSpace.storageCostProduce(

@@ -34,6 +34,7 @@ import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.shared.{Cell, Log, StoreType}
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -50,7 +51,7 @@ class CasperPacketHandlerSpec extends WordSpec {
     val runtimeDir       = BlockDagStorageTestFixture.blockStorageDir
     val activeRuntime =
       Runtime
-        .create[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB)(
+        .createWithEmptyCost[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB)(
           ContextShift[Task],
           Concurrent[Task],
           log,

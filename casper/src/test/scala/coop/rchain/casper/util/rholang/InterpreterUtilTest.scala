@@ -43,7 +43,9 @@ class InterpreterUtilTest
   val storageSize                        = 1024L * 1024
   val storageDirectory                   = Files.createTempDirectory("casper-interp-util-test")
   val activeRuntime =
-    Runtime.create[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB).unsafeRunSync
+    Runtime
+      .createWithEmptyCost[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB)
+      .unsafeRunSync
 
   val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
 

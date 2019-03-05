@@ -8,6 +8,7 @@ import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
 import cats.mtl.FunctorTell
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Expr.ExprInstance.GString
@@ -17,7 +18,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.ShortLeashParams.ShortLeashParameters
 import coop.rchain.rholang.interpreter.Runtime._
-import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.{InterpreterError, SetupError}
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
@@ -286,12 +287,36 @@ object Runtime {
     )
   )
 
+  def createWithEmptyCost[F[_]: ContextShift: Concurrent: Log: Metrics, M[_]](
+      dataDir: Path,
+      mapSize: Long,
+      storeType: StoreType,
+      extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
+  )(
+      implicit
+      P: Parallel[F, M],
+      executionContext: ExecutionContext
+  ): F[Runtime[F]] =
+    (for {
+      costAccounting <- CostAccounting.empty[F]
+      runtime <- {
+        implicit val ca: CostAccounting[F] = costAccounting
+        implicit val cost: _cost[F]        = loggingCost(ca, noOpCostLog)
+        create(dataDir, mapSize, storeType, extraSystemProcesses)
+      }
+    } yield (runtime))
+
   def create[F[_]: ContextShift: Concurrent: Log: Metrics, M[_]](
       dataDir: Path,
       mapSize: Long,
       storeType: StoreType,
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
-  )(implicit P: Parallel[F, M], executionContext: ExecutionContext): F[Runtime[F]] = {
+  )(
+      implicit P: Parallel[F, M],
+      executionContext: ExecutionContext,
+      cost: _cost[F],
+      costAccounting: CostAccounting[F]
+  ): F[Runtime[F]] = {
     val errorLog                               = new ErrorLog[F]()
     implicit val ft: FunctorTell[F, Throwable] = errorLog
 

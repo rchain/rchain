@@ -33,7 +33,6 @@ package object accounting extends Costs {
       amount: Cost
   )(implicit cost: _cost[F], error: _error[F]): F[Unit] =
     for {
-      _ <- error.ensure(cost.get)(OutOfPhlogistonsError)(_.value >= 0)
       _ <- cost.tell(Chain.one(amount))
       _ <- cost.modify(_ - amount)
       _ <- error.ensure(cost.get)(OutOfPhlogistonsError)(_.value >= 0)

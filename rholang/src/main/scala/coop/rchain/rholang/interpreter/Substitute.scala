@@ -27,7 +27,7 @@ object Substitute {
       .map(
         _.fold(
           th => (Left(th), failureCost),
-          substTerm => (Right(substTerm), Cost(substTerm))
+          substTerm => (Right(substTerm), Cost(substTerm, "substitution"))
         )
       )
       .flatMap({ case (result, cost) => accounting.charge[M](cost) *> Sync[M].pure(result) })

@@ -378,7 +378,9 @@ class NodeRuntime private[node] (
     runtime <- {
       implicit val s                = rspaceScheduler
       implicit val m: Metrics[Task] = metrics
-      Runtime.create[Task, Task.Par](storagePath, storageSize, storeType, Seq.empty).toEffect
+      Runtime
+        .createWithEmptyCost[Task, Task.Par](storagePath, storageSize, storeType, Seq.empty)
+        .toEffect
     }
     _ <- Runtime
           .injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
@@ -386,7 +388,14 @@ class NodeRuntime private[node] (
     casperRuntime <- {
       implicit val s                = rspaceScheduler
       implicit val m: Metrics[Task] = metrics
-      Runtime.create[Task, Task.Par](casperStoragePath, storageSize, storeType, Seq.empty).toEffect
+      Runtime
+        .createWithEmptyCost[Task, Task.Par](
+          casperStoragePath,
+          storageSize,
+          storeType,
+          Seq.empty
+        )
+        .toEffect
     }
     runtimeManager <- RuntimeManager.fromRuntime[Task](casperRuntime).toEffect
     casperPacketHandler <- CasperPacketHandler

@@ -784,6 +784,10 @@ class RholangMethodsCostsSpec
     }
   }
   def withReducer[R](f: ChargingReducer[Task] => Task[R])(implicit errLog: ErrorLog[Task]): R = {
+
+    implicit val costAlg: CostAccounting[Task] = CostAccounting.unsafe[Task](Cost(0))
+    implicit val cost: _cost[Task]             = loggingCost(costAlg, noOpCostLog[Task])
+
     val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space)._2
     val test = for {
       _   <- reducer.setPhlo(Cost(Integer.MAX_VALUE))
