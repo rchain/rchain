@@ -1,6 +1,7 @@
 package coop.rchain.casper
 
 import cats.Monad
+import cats.data.OptionT
 import cats.implicits._
 import cats.mtl.implicits._
 import com.google.protobuf.ByteString
@@ -133,6 +134,10 @@ object Estimator {
                }
     } yield result
 
+  private def toNonEmptyList[T](elements: Set[T]): Option[List[T]] =
+    if (elements.isEmpty) None
+    else Some(elements.toList)
+
   /**
     * Only include children that have been scored,
     * this ensures that the search does not go beyond
@@ -143,16 +148,16 @@ object Estimator {
       blockDag: BlockDagRepresentation[F],
       scores: Map[BlockHash, Long]
   ): F[List[BlockHash]] =
-    blockDag.children(b).map {
-      case Some(children) =>
-        val scoredChildren = children.filter(scores.contains)
-        if (scoredChildren.nonEmpty) {
-          scoredChildren.toList
-        } else {
-          List(b)
-        }
-      case None => List(b)
-    }
+    blockDag
+      .children(b)
+      .map(
+        maybeChildren =>
+          maybeChildren
+            .flatMap { children =>
+              toNonEmptyList(children.filter(scores.contains))
+            }
+            .getOrElse(List(b))
+      )
 
   private def stillSame(blocks: List[BlockHash], newBlocks: List[BlockHash]): Boolean =
     newBlocks == blocks
