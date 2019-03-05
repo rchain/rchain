@@ -5,7 +5,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
-import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray}
+import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GString}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.ShortLeashParams.ShortLeashParameters
@@ -13,6 +13,7 @@ import coop.rchain.rholang.interpreter.Runtime.{BlockTime, RhoISpace, ShortLeash
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.{InterpreterError, OutOfPhlogistonsError}
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
+import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.{ContResult, Result}
 
@@ -35,6 +36,7 @@ trait SystemProcesses[F[_]] {
       deployParameters: ShortLeashParams[F]
   ): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
   def blockTime(timestamp: BlockTime[F]): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
+  def validateRevAddress: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
 }
 
 object SystemProcesses {
@@ -105,11 +107,48 @@ object SystemProcesses {
           } yield ()
       }
 
+      def getErrorMessagePar(str: String): Par =
+        RevAddress
+          .parse(str)
+          .swap
+          .toOption
+          .fold(Par())(GString(_))
+
+      def validateRevAddress: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
+        case (
+            Seq(
+              ListParWithRandomAndPhlos(
+                Seq(IsString("validate"), IsString(address), ack),
+                rand,
+                _
+              )
+            ),
+            sequenceNumber
+            ) =>
+          for {
+            result <- F.delay(getErrorMessagePar(address))
+            produceResult <- space.produce(
+                              ack,
+                              ListParWithRandom(Seq(result), rand),
+                              persist = false,
+                              sequenceNumber
+                            )(UNLIMITED_MATCH_PHLO)
+            _ <- foldResult(produceResult)
+          } yield ()
+      }
+
       object IsByteArray {
         import coop.rchain.models.rholang.implicits._
         def unapply(p: Par): Option[Array[Byte]] =
           p.singleExpr().collect {
             case Expr(GByteArray(bs)) => bs.toByteArray
+          }
+      }
+
+      object IsString {
+        def unapply(p: Par): Option[String] =
+          p.singleExpr().collect {
+            case Expr(GString(bs)) => bs
           }
       }
 

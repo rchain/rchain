@@ -143,6 +143,7 @@ object Runtime {
     val REG_NONCE_INSERT_CALLBACK: Long    = 21L
     val GET_DEPLOY_PARAMS: Long            = 22L
     val GET_TIMESTAMP: Long                = 23L
+    val REV_ADDRESS: Long                  = 24L
   }
 
   def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
@@ -162,6 +163,7 @@ object Runtime {
     val REG_INSERT_SIGNED: Par = byteName(11)
     val GET_DEPLOY_PARAMS: Par = byteName(12)
     val GET_TIMESTAMP: Par     = byteName(13)
+    val REV_ADDRESS: Par       = byteName(14)
   }
 
   // because only we do installs
@@ -272,6 +274,14 @@ object Runtime {
       1,
       BodyRefs.GET_TIMESTAMP, { ctx =>
         ctx.systemProcesses.blockTime(ctx.blockTime)
+      }
+    ),
+    SystemProcess.Definition[F](
+      "rho:rev:address",
+      FixedChannels.REV_ADDRESS,
+      3,
+      BodyRefs.REV_ADDRESS, { ctx =>
+        ctx.systemProcesses.validateRevAddress
       }
     )
   )

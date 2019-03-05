@@ -17,7 +17,7 @@ object RhoSpec {
 
   private def mkRuntime(testResultCollector: TestResultCollector[Task]) = {
     val testResultCollectorService =
-      Seq((5, "assertAck", 24), (1, "testSuiteCompleted", 25))
+      Seq((5, "assertAck", 25), (1, "testSuiteCompleted", 26))
         .map {
           case (arity, name, n) =>
             SystemProcess.Definition[Task](
@@ -30,9 +30,9 @@ object RhoSpec {
         } ++ Seq(
         SystemProcess.Definition[Task](
           "rho:io:stdlog",
-          Runtime.byteName(26),
+          Runtime.byteName(27),
           2,
-          26L,
+          27L,
           RhoLogger.handleMessage[Task]
         )
       )
@@ -74,6 +74,8 @@ class RhoSpec(
           assertions.foreach {
             case RhoAssertEquals(_, expected, actual, clue) =>
               actual should be(expected) withClue clueMsg(clue)
+            case RhoAssertNotEquals(_, unexpected, actual, clue) =>
+              actual should not be (unexpected) withClue clueMsg(clue)
             case RhoAssertTrue(_, v, clue) => v should be(true) withClue clueMsg(clue)
           }
         }
