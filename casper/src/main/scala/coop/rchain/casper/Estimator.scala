@@ -103,51 +103,14 @@ object Estimator {
                    }
       } yield result
 
-    /**
-      * Add scores to the blocks implicitly supported through
-      * including a latest block as a "step parent"
-      *
-      * TODO: Add test where this matters
-      */
-    def addValidatorWeightToImplicitlySupported(
-        blockDag: BlockDagRepresentation[F],
-        scoreMap: Map[BlockHash, Long],
-        validator: Validator,
-        latestBlockHash: BlockHash
-    ): F[Map[BlockHash, Long]] =
-      blockDag.children(latestBlockHash).flatMap {
-        _.toList
-          .foldLeftM(scoreMap) {
-            case (acc, children) =>
-              children.filter(scoreMap.contains).toList.foldLeftM(acc) {
-                case (acc2, childHash) =>
-                  blockDag.lookup(childHash).map {
-                    case Some(childBlock)
-                        if childBlock.parents.size > 1 && childBlock.sender != validator =>
-                      val currScore       = acc2.getOrElse(childHash, 0L)
-                      val validatorWeight = childBlock.weightMap.getOrElse(validator, 0L)
-                      acc2.updated(childHash, currScore + validatorWeight)
-                    case _ => acc2
-                  }
-              }
-          }
-      }
-
+    // TODO: Since map scores are additive it should be possible to do this in parallel
     latestMessagesHashes.toList.foldLeftM(Map.empty[BlockHash, Long]) {
       case (acc, (validator: Validator, latestBlockHash: BlockHash)) =>
-        for {
-          postValidatorWeightScoreMap <- addValidatorWeightDownSupportingChain(
-                                          acc,
-                                          validator,
-                                          latestBlockHash
-                                        )
-          postImplicitlySupportedScoreMap <- addValidatorWeightToImplicitlySupported(
-                                              blockDag,
-                                              postValidatorWeightScoreMap,
-                                              validator,
-                                              latestBlockHash
-                                            )
-        } yield postImplicitlySupportedScoreMap
+        addValidatorWeightDownSupportingChain(
+          acc,
+          validator,
+          latestBlockHash
+        )
     }
   }
 
