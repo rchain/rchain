@@ -81,7 +81,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
       for {
         channelToIndexedDataList <- channels.toList.traverse { c: C =>
                                      store
-                                       .withTxnF(store.createTxnReadF()) { txn =>
+                                       .withReadTxnF { txn =>
                                          store.getData(txn, Seq(c)).zipWithIndex.filter {
                                            case (Datum(_, _, source), _) =>
                                              comm.produces.contains(source)
@@ -99,7 +99,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
     ): F[None.type] =
       for {
         _ <- store
-              .withTxnF(store.createTxnWriteF()) { txn =>
+              .withWriteTxnF { txn =>
                 store.putWaitingContinuation(
                   txn,
                   channels,
@@ -127,7 +127,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
               .traverse {
                 case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex) =>
                   if (!persistData) {
-                    store.withTxnF(store.createTxnWriteF()) { txn =>
+                    store.withWriteTxnF { txn =>
                       store.removeDatum(txn, Seq(candidateChannel), dataIndex)
                     }
                   } else ().pure[F]
@@ -236,13 +236,13 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
           case Nil => none[ProduceCandidate[C, P, R, K]].asRight[Seq[Seq[C]]].pure[F]
           case channels :: remaining =>
             for {
-              matchCandidates <- store.withTxnF(store.createTxnReadF()) { txn =>
+              matchCandidates <- store.withReadTxnF { txn =>
                                   store.getWaitingContinuation(txn, channels).zipWithIndex.filter {
                                     case (WaitingContinuation(_, _, _, source), _) =>
                                       comm.consume == source
                                   }
                                 }
-              channelToIndexedDataList <- store.withTxnF(store.createTxnReadF()) { txn =>
+              channelToIndexedDataList <- store.withReadTxnF { txn =>
                                            channels.map { c: C =>
                                              val as =
                                                store.getData(txn, Seq(c)).zipWithIndex.filter {
@@ -305,7 +305,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
     ): F[None.type] =
       for {
         _ <- store
-              .withTxnF(store.createTxnWriteF()) { txn =>
+              .withWriteTxnF { txn =>
                 store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
               }
         _ <- logF.debug(s"""|produce: no matching continuation found
@@ -330,7 +330,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
             //fixme replace with raiseError
             _ = assert(comms.contains(commRef), "COMM Event was not contained in the trace")
             _ <- if (!persistK) {
-                  store.withTxnF(store.createTxnWriteF()) { txn =>
+                  store.withWriteTxnF { txn =>
                     store.removeWaitingContinuation(txn, channels, continuationIndex)
                   }
                 } else {
@@ -340,7 +340,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
                   .sortBy(_.datumIndex)(Ordering[Int].reverse)
                   .traverse {
                     case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex) =>
-                      store.withTxnF(store.createTxnWriteF()) { txn =>
+                      store.withWriteTxnF { txn =>
                         if (!persistData && dataIndex >= 0) {
                           store.removeDatum(txn, Seq(candidateChannel), dataIndex)
                         }
@@ -362,7 +362,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
       }
 
     for {
-      groupedChannels <- store.withTxnF(store.createTxnReadF()) { txn =>
+      groupedChannels <- store.withReadTxnF { txn =>
                           store.getJoin(txn, channel)
                         }
       _ <- span.mark("after-fetch-joins")

@@ -46,7 +46,7 @@ trait HistoryActionsTests[F[_]]
       store: IStore[F, String, Pattern, String, StringsCaptor],
       branch: Branch
   ): F[Blake2b256Hash] =
-    store.withTxnF(store.createTxnReadF()) { txn =>
+    store.withReadTxnF { txn =>
       store.withTrieTxn(txn) { trieTxn =>
         store.trieStore.getRoot(trieTxn, branch).get
       }
@@ -310,7 +310,7 @@ trait HistoryActionsTests[F[_]]
         root1                                                            = checkpoint1.root
         contents1: Map[Seq[String], Row[Pattern, String, StringsCaptor]] = space.store.toMap
         _                                                                = space.store.isEmpty shouldBe false
-        _ <- space.store.withTxnF(space.store.createTxnReadF()) { txn =>
+        _ <- space.store.withReadTxnF { txn =>
               space.store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
               space.store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
             }
@@ -318,7 +318,7 @@ trait HistoryActionsTests[F[_]]
         // Rollback to first checkpoint
         _ <- space.reset(root0)
         _ = space.store.isEmpty shouldBe true
-        _ <- space.store.withTxnF(space.store.createTxnReadF()) { txn =>
+        _ <- space.store.withReadTxnF { txn =>
               space.store.getJoin(txn, "ch1") shouldBe Nil
               space.store.getJoin(txn, "ch2") shouldBe Nil
             }
@@ -326,7 +326,7 @@ trait HistoryActionsTests[F[_]]
         // Rollback to second checkpoint
         _ <- space.reset(root1)
         _ = space.store.isEmpty shouldBe false
-        _ <- space.store.withTxnF(space.store.createTxnReadF()) { txn =>
+        _ <- space.store.withReadTxnF { txn =>
               space.store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
               space.store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
             }
