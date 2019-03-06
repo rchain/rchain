@@ -34,9 +34,9 @@ trait Interpreter[F[_]] {
 
   def execute(runtime: Runtime[F], reader: Reader): F[Runtime[F]]
 
-  def evaluate(runtime: Runtime[F], par: Par): F[EvaluateResult]
+  def evaluatePar(runtime: Runtime[F], par: Par): F[EvaluateResult]
 
-  def evaluate(runtime: Runtime[F], par: Par, initialPhlo: Cost): F[EvaluateResult]
+  def evaluatePar(runtime: Runtime[F], par: Par, initialPhlo: Cost): F[EvaluateResult]
 }
 
 object Interpreter {
@@ -63,12 +63,12 @@ object Interpreter {
     def execute(runtime: Runtime[F], reader: Reader): F[Runtime[F]] =
       for {
         par    <- buildNormalizedTerm(reader)
-        errors <- evaluate(runtime, par).map(_.errors)
+        errors <- evaluatePar(runtime, par).map(_.errors)
         result <- if (errors.isEmpty) F.pure(runtime)
                  else F.raiseError(new RuntimeException(mkErrorMsg(errors)))
       } yield result
 
-    def evaluate(runtime: Runtime[F], par: Par, initialPhlo: Cost): F[EvaluateResult] = {
+    def evaluatePar(runtime: Runtime[F], par: Par, initialPhlo: Cost): F[EvaluateResult] = {
       implicit val rand: Blake2b512Random = Blake2b512Random(128)
       for {
         checkpoint    <- runtime.space.createCheckpoint()
@@ -81,9 +81,9 @@ object Interpreter {
       } yield EvaluateResult(cost, errors)
     }
 
-    def evaluate(runtime: Runtime[F], par: Par): F[EvaluateResult] = {
+    def evaluatePar(runtime: Runtime[F], par: Par): F[EvaluateResult] = {
       val initialPhlo = Cost(Integer.MAX_VALUE) //This is OK because evaluate is not called on deploy
-      evaluate(runtime, par, initialPhlo)
+      evaluatePar(runtime, par, initialPhlo)
     }
 
     private def buildAST(reader: Reader): F[Proc] =

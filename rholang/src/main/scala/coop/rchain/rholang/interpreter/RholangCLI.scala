@@ -181,7 +181,7 @@ object RholangCLI {
     val evaluatorTask =
       for {
         _      <- Task.now(printNormalizedTerm(par))
-        result <- Interpreter[Task].evaluate(runtime, par)
+        result <- Interpreter[Task].evaluatePar(runtime, par)
       } yield result
 
     waitForSuccess(evaluatorTask.runToFuture)

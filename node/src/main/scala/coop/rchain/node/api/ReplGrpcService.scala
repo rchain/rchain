@@ -79,7 +79,7 @@ private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
   def runEvaluate(runtime: Runtime[Task], term: Par): Task[EvaluateResult] =
     for {
       _      <- Task.now(printNormalizedTerm(term))
-      result <- Interpreter[Task].evaluate(runtime, term)
+      result <- Interpreter[Task].evaluatePar(runtime, term)
     } yield result
 
   private def printNormalizedTerm(normalizedTerm: Par): Unit = {
