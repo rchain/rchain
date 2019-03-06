@@ -481,7 +481,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
                       }
                     }
                 _ <- updateLatestMessagesFile(
-                      (newValidators + block.sender).toList,
+                      newValidatorsWithSender.toList,
                       block.blockHash
                     )
                 _ <- updateDataLookupFile(blockMetadata)
