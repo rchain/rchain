@@ -32,12 +32,10 @@ trait Interpreter[F[_]] {
 
   def buildPar(proc: Proc): F[Par]
 
-  def execute(runtime: Runtime[F], reader: Reader): F[Runtime[F]]
-
+  def evaluate(runtime: Runtime[F], term: String): F[EvaluateResult]
   def evaluate(runtime: Runtime[F], term: String, initialPhlo: Cost): F[EvaluateResult]
 
   def evaluatePar(runtime: Runtime[F], par: Par): F[EvaluateResult]
-
   def evaluatePar(runtime: Runtime[F], par: Par, initialPhlo: Cost): F[EvaluateResult]
 }
 
@@ -62,14 +60,6 @@ object Interpreter {
         sortedPar <- Sortable[Par].sortMatch(par)
       } yield sortedPar.term
 
-    def execute(runtime: Runtime[F], reader: Reader): F[Runtime[F]] =
-      for {
-        par    <- buildNormalizedTerm(reader)
-        errors <- evaluatePar(runtime, par).map(_.errors)
-        result <- if (errors.isEmpty) F.pure(runtime)
-                 else F.raiseError(new RuntimeException(mkErrorMsg(errors)))
-      } yield result
-
     def evaluatePar(runtime: Runtime[F], par: Par, initialPhlo: Cost): F[EvaluateResult] = {
       implicit val rand: Blake2b512Random = Blake2b512Random(128)
       for {
@@ -87,6 +77,9 @@ object Interpreter {
       val initialPhlo = Cost(Integer.MAX_VALUE) //This is OK because evaluate is not called on deploy
       evaluatePar(runtime, par, initialPhlo)
     }
+
+    def evaluate(runtime: Runtime[F], term: String): F[EvaluateResult] =
+      evaluate(runtime, term, Cost.Max)
 
     def evaluate(runtime: Runtime[F], term: String, initialPhlo: Cost): F[EvaluateResult] = {
       implicit val rand: Blake2b512Random = Blake2b512Random(128)
@@ -193,10 +186,5 @@ object Interpreter {
       F.delay(new parser(lexer, lexer.getSymbolFactory)).adaptError {
         case th: Throwable => ParserError("Parser construction error: " + th.getMessage)
       }
-
-    private def mkErrorMsg(errors: Vector[Throwable]) =
-      errors
-        .map(_.toString())
-        .mkString("Errors received during evaluation:\n", "\n", "\n")
   }
 }
