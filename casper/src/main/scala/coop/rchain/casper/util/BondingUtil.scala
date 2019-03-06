@@ -16,6 +16,8 @@ import coop.rchain.shared.Log
 import java.io.PrintWriter
 import java.nio.file.{Files, Path}
 
+import coop.rchain.metrics.Metrics
+
 import scala.concurrent.ExecutionContext
 
 object BondingUtil {
@@ -181,28 +183,29 @@ object BondingUtil {
       runtimeDir => Sync[F].delay { runtimeDir.recursivelyDelete() }
     )
 
-  def makeRuntimeResource[F[_]: Sync: ContextShift: Log, M[_]](
+  def makeRuntimeResource[F[_]: Concurrent: ContextShift: Log: Metrics, M[_]](
       runtimeDirResource: Resource[F, Path]
   )(implicit P: Parallel[F, M], scheduler: ExecutionContext): Resource[F, Runtime[F]] =
     runtimeDirResource.flatMap(
       runtimeDir =>
         Resource
-          .make(
-            Runtime.create[F, M](runtimeDir, 1024L * 1024 * 1024, StoreType.LMDB)
-          )(
+          .make {
+            Runtime
+              .createWithEmptyCost[F, M](runtimeDir, 1024L * 1024 * 1024, StoreType.LMDB)
+          }(
             runtime => runtime.close()
           )
     )
 
   def makeRuntimeManagerResource[F[_]: Sync: Concurrent](
       runtimeResource: Resource[F, Runtime[F]]
-  )(implicit scheduler: ExecutionContext): Resource[F, RuntimeManager[F]] =
+  ): Resource[F, RuntimeManager[F]] =
     runtimeResource.flatMap(
       activeRuntime =>
         Resource.make(RuntimeManager.fromRuntime[F](activeRuntime))(_ => Sync[F].unit)
     )
 
-  def writeIssuanceBasedRhoFiles[F[_]: Concurrent: ContextShift: Log, M[_]](
+  def writeIssuanceBasedRhoFiles[F[_]: Concurrent: ContextShift: Log: Metrics, M[_]](
       bondKey: String,
       ethAddress: String,
       amount: Long,
@@ -225,7 +228,7 @@ object BondingUtil {
     )
   }
 
-  def writeFaucetBasedRhoFiles[F[_]: Concurrent: ContextShift: Log, M[_]](
+  def writeFaucetBasedRhoFiles[F[_]: Concurrent: ContextShift: Log: Metrics, M[_]](
       amount: Long,
       sigAlgorithm: String,
       secKey: String,

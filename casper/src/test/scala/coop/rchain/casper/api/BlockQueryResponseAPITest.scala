@@ -1,5 +1,6 @@
 package coop.rchain.casper.api
 
+import coop.rchain.catscontrib.TaskContrib._
 import scala.collection.immutable.HashMap
 
 import cats.effect.Sync
@@ -12,8 +13,6 @@ import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.helper.{BlockDagStorageFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.catscontrib.Capture._
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 
 import com.google.protobuf.ByteString
@@ -192,8 +191,8 @@ class BlockQueryResponseAPITest
       blockDagStorage: BlockDagStorage[Task]
   ): Task[(LogStub[Task], MultiParentCasperRef[Task], SafetyOracle[Task])] =
     for {
-      _ <- blockDagStorage.insert(genesisBlock)
-      _ <- blockDagStorage.insert(secondBlock)
+      _ <- blockDagStorage.insert(genesisBlock, false)
+      _ <- blockDagStorage.insert(secondBlock, false)
       casperEffect <- NoOpsCasperEffect[Task](
                        HashMap[BlockHash, BlockMessage](
                          (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),

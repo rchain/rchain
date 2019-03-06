@@ -7,6 +7,8 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.Runtime
@@ -14,7 +16,6 @@ import coop.rchain.rholang.interpreter.TestRuntime
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
 import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.rholang.unittest.RhoSpecContract
 import coop.rchain.shared.StoreType.InMem
 import coop.rchain.shared.Log
 import monix.eval.Task
@@ -30,14 +31,15 @@ object TestUtil {
         "4ae94eb0b2d7df529f7ae68863221d5adda402fc54303a3d90a8a7a279326828"
       ),
       timestamp = 1539808849271L,
-      term = RhoSpecContract.code,
+      term = CompiledRholangSource("RhoSpecContract.rho").code,
       phloLimit = accounting.MAX_VALUE
     )
 
   def runtime(
       extraServices: Seq[SystemProcess.Definition[Task]] = Seq.empty
   )(implicit scheduler: Scheduler): Runtime[Task] = {
-    implicit val log: Log[Task] = new Log.NOPLog[Task]
+    implicit val log: Log[Task]            = new Log.NOPLog[Task]
+    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     for {
       runtime <- TestRuntime.create[Task, Task.Par](extraServices)
       _       <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)

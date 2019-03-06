@@ -151,8 +151,7 @@ lazy val casper = (project in file("casper"))
       catsMtl,
       monix,
       scalacheck % "slowcooker"
-    ),
-    rholangProtoBuildAssembly := (rholangProtoBuild / Compile / incrementalAssembly).value
+    )
   )
   .dependsOn(
     blockStorage % "compile->compile;test->test",
@@ -162,8 +161,7 @@ lazy val casper = (project in file("casper"))
     crypto,
     models,
     rspace,
-    rholang      % "compile->compile;test->test",
-    rholangProtoBuild
+    rholang      % "compile->compile;test->test"
   )
 
 lazy val comm = (project in file("comm"))
@@ -252,7 +250,7 @@ lazy val node = (project in file("node"))
       "-deprecation",
       "-feature"
     ),
-    maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
+    maintainer := "RChain Cooperative https://www.rchain.coop/",
     packageSummary := "RChain Node",
     packageDescription := "RChain Node - the RChain blockchain node server software.",
     libraryDependencies ++=
@@ -420,24 +418,6 @@ lazy val rholangCLI = (project in file("rholang-cli"))
   .settings(commonSettings: _*)
   .settings(
     mainClass in assembly := Some("coop.rchain.rholang.interpreter.RholangCLI")
-  )
-  .dependsOn(rholang)
-
-lazy val rholangProtoBuildJar = Def.task(
-  (assemblyOutputPath in (assembly)).value
-)
-lazy val incrementalAssembly2 = Def.taskDyn(
-  if (jarOutDated((rholangProtoBuildJar).value, (Compile / scalaSource).value))
-    (assembly)
-  else
-    rholangProtoBuildJar
-)
-lazy val incrementalAssembly = taskKey[File]("Only assemble if sources are newer than jar")
-lazy val rholangProtoBuild = (project in file("rholang-proto-build"))
-  .settings(commonSettings: _*)
-  .settings(
-    name := "rholang-proto-build",
-    incrementalAssembly in Compile := incrementalAssembly2.value
   )
   .dependsOn(rholang)
 

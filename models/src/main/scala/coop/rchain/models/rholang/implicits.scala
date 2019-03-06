@@ -291,8 +291,6 @@ object implicits {
       )
   }
 
-  implicit def fromPar[T](p: T)(implicit toPar: T => Par): Option[Par] = Some(p)
-
   implicit val ParLocallyFree: HasLocallyFree[Par] = new HasLocallyFree[Par] {
     def connectiveUsed(p: Par)          = p.connectiveUsed
     def locallyFree(p: Par, depth: Int) = p.locallyFree

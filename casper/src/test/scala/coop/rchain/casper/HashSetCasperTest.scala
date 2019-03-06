@@ -41,6 +41,7 @@ import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.comm.TestNetwork
 import coop.rchain.catscontrib.ski.kp2
 import coop.rchain.comm.rp.Connect.Connections
+import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared.Log
 import org.scalatest
@@ -274,15 +275,12 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
                           ].createBlock
       Created(block) = createBlockResult
       invalidBlock   = block.withSig(ByteString.EMPTY)
-      _              <- MultiParentCasper[Effect].addBlock(invalidBlock, ignoreDoppelgangerCheck[Effect])
-
-      _ <- node.casperEff.contains(invalidBlock) shouldBeF false
-      _ = logEff.warns.head.contains("Ignoring block") should be(true)
-      _ <- node.tearDownNode()
-      result <- validateBlockStore(node) { blockStore =>
-                 blockStore.get(block.blockHash) shouldBeF None
-               }
-    } yield result
+      status         <- MultiParentCasper[Effect].addBlock(invalidBlock, ignoreDoppelgangerCheck[Effect])
+      _              = status shouldBe InvalidUnslashableBlock
+      _              <- node.casperEff.contains(invalidBlock) shouldBeF false
+      _              = logEff.warns.head.contains("Ignoring block") should be(true)
+      _              <- node.tearDownNode()
+    } yield ()
   }
 
   it should "not request invalid blocks from peers" in effectTest {
@@ -331,10 +329,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       _                    <- MultiParentCasper[Effect].addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
       _                    = logEff.warns.head.contains("Ignoring block") should be(true)
       _                    <- node.tearDownNode()
-      result <- validateBlockStore(node) { blockStore =>
-                 blockStore.get(signedBlock.blockHash) shouldBeF None
-               }
-    } yield result
+    } yield ()
   }
 
   it should "propose blocks it adds to peers" in effectTest {
@@ -1499,7 +1494,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       _ <- nodes(1).casperEff.contains(signedBlock1Prime) shouldBeF true
 
       _ <- nodes(1).casperEff
-            .contains(signedBlock4) shouldBeF true // However, in invalidBlockTracker
+            .contains(signedBlock4) shouldBeF true // However, marked as invalid
 
       _ = nodes(1).logEff.infos.count(_ startsWith "Added admissible equivocation") should be(1)
       _ = nodes(2).logEff.warns.size should be(0)
@@ -1806,13 +1801,16 @@ object HashSetCasperTest {
       faucetCode: String => String,
       deployTimestamp: Long
   ): BlockMessage = {
-    val initial           = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "rchain")
-    val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
-    val storageSize: Long = 1024L * 1024
-    implicit val log      = new Log.NOPLog[Task]
+    val initial                            = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "rchain")
+    val storageDirectory                   = Files.createTempDirectory(s"hash-set-casper-test-genesis")
+    val storageSize: Long                  = 1024L * 1024
+    implicit val log                       = new Log.NOPLog[Task]
+    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
     val activeRuntime =
-      Runtime.create[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB).unsafeRunSync
+      Runtime
+        .createWithEmptyCost[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB)
+        .unsafeRunSync
     val runtimeManager = RuntimeManager.fromRuntime[Task](activeRuntime).unsafeRunSync
     val emptyStateHash = runtimeManager.emptyStateHash
     val validators     = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq

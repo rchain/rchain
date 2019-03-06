@@ -5,7 +5,7 @@ import cats.implicits._
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.casper.EquivocationRecord.SequenceNumber
+import coop.rchain.models.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.{DeployData, _}
 import coop.rchain.casper.util.ProtoUtil.basicDeployData
@@ -14,12 +14,12 @@ import coop.rchain.casper.util.implicits._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.models._
-import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.{Log, LogSource, Time}
 import java.nio.charset.StandardCharsets
 
 import cats.data.OptionT
+import cats.effect.Sync
 import coop.rchain.catscontrib.ski.id
 import coop.rchain.casper.protocol.Event.EventInstance.{Comm, Consume, Produce}
 
@@ -354,15 +354,24 @@ object ProtoUtil {
         acc.updated(validator, block)
     }
 
-  def toLatestMessage[F[_]: Monad: BlockStore](
+  def toLatestMessage[F[_]: Sync: BlockStore](
       justifications: Seq[Justification],
       dag: BlockDagRepresentation[F]
   ): F[immutable.Map[Validator, BlockMetadata]] =
     justifications.toList.foldM(Map.empty[Validator, BlockMetadata]) {
       case (acc, Justification(validator, hash)) =>
         for {
-          block <- ProtoUtil.unsafeGetBlock[F](hash)
-        } yield acc.updated(validator, BlockMetadata.fromBlock(block))
+          blockMetadataOpt <- dag.lookup(hash)
+          blockMetadata <- blockMetadataOpt
+                            .map(_.pure[F])
+                            .getOrElse(
+                              Sync[F].raiseError(
+                                new RuntimeException(
+                                  s"Could not find a block for $hash in the DAG storage"
+                                )
+                              )
+                            )
+        } yield acc.updated(validator, blockMetadata)
     }
 
   def protoHash[A <: { def toByteArray: Array[Byte] }](protoSeq: A*): ByteString =

@@ -4,21 +4,21 @@ import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 
+import cats.effect.Sync
+
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
-
 import coop.rchain.rspace.{Blake2b256Hash, LMDBOps, Serialize, _}
 import coop.rchain.rspace.internal._
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.Resources.withResource
-
 import org.lmdbjava._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import scodec.Codec
 import scodec.bits.{BitVector, ByteVector}
 
 @SuppressWarnings(Array("org.wartremover.warts.Throw", "org.wartremover.warts.NonUnitStatements")) // TODO stop throwing exceptions
-class LMDBTrieStore[K, V] private (
+class LMDBTrieStore[F[_], K, V] private (
     val env: Env[ByteBuffer],
     protected[this] val databasePath: Path,
     _dbTrie: Dbi[ByteBuffer],
@@ -28,9 +28,10 @@ class LMDBTrieStore[K, V] private (
 )(
     implicit
     codecK: Codec[K],
-    codecV: Codec[V]
+    codecV: Codec[V],
+    val syncF: Sync[F]
 ) extends ITrieStore[Txn[ByteBuffer], K, V]
-    with LMDBOps {
+    with LMDBOps[F] {
 
   protected val MetricsSource: String = RSpaceMetricsSource + ".history.lmdb"
 
@@ -77,30 +78,15 @@ class LMDBTrieStore[K, V] private (
   ): Option[Blake2b256Hash] =
     getRoot(txn, branch)
       .map { currentRoot =>
-        val pastRoots = getPastRootsInBranch(txn, branch).filter(_ != currentRoot)
-        (currentRoot, currentRoot +: pastRoots)
-      }
-      .map {
-        case (currentRoot, updatedPastRoots) =>
-          _dbPastRoots.put(txn, branch, updatedPastRoots)
-          currentRoot
+        val hashBytes =
+          Codec[Blake2b256Hash].encode(currentRoot).map(_.bytes.toDirectByteBuffer).get
+        val branchBytes = Codec[Branch].encode(branch).map(_.bytes.toDirectByteBuffer).get
+        _dbPastRoots.put(txn, hashBytes, branchBytes)
+        currentRoot
       }
 
   private[rspace] def putRoot(txn: Txn[ByteBuffer], branch: Branch, hash: Blake2b256Hash): Unit =
     _dbRoot.put(txn, branch, hash)(Codec[Branch], Codec[Blake2b256Hash])
-
-  private[rspace] def getAllPastRoots(txn: Txn[ByteBuffer]): Seq[Blake2b256Hash] =
-    withResource(_dbPastRoots.iterate(txn)) { it: CursorIterator[ByteBuffer] =>
-      it.asScala.foldLeft(Seq.empty[Blake2b256Hash]) { (acc, keyVal) =>
-        acc ++ Codec[Seq[Blake2b256Hash]].decode(BitVector(keyVal.`val`())).map(_.value).get
-      }
-    }
-
-  private[this] def getPastRootsInBranch(
-      txn: Txn[ByteBuffer],
-      branch: Branch
-  ): Seq[Blake2b256Hash] =
-    _dbPastRoots.get(txn, branch)(Codec[Branch], Codec[Seq[Blake2b256Hash]]).getOrElse(Seq.empty)
 
   private[rspace] def validateAndPutRoot(
       txn: Txn[ByteBuffer],
@@ -110,20 +96,14 @@ class LMDBTrieStore[K, V] private (
     getRoot(txn, branch)
       .find(_ == hash)
       .orElse {
-        getPastRootsInBranch(txn, branch)
-          .find(_ == hash)
-          .map { blake: Blake2b256Hash =>
-            putRoot(txn, branch, blake)
-            blake
-          }
-      }
-      .orElse {
-        getAllPastRoots(txn)
-          .find(_ == hash)
-          .map { blake: Blake2b256Hash =>
-            putRoot(txn, branch, blake)
-            blake
-          }
+        val hashBytes  = Codec[Blake2b256Hash].encode(hash).map(_.bytes.toDirectByteBuffer).get
+        val maybeValue = Option(_dbPastRoots.get(txn, hashBytes))
+        maybeValue
+          .map(_ => hash)
+          .map(hash => {
+            putRoot(txn, branch, hash)
+            hash
+          })
       }
       .getOrElse(throw new Exception(s"Unknown root."))
 
@@ -143,16 +123,17 @@ class LMDBTrieStore[K, V] private (
 
 object LMDBTrieStore {
 
-  def create[K, V](env: Env[ByteBuffer], path: Path)(
+  def create[F[_], K, V](env: Env[ByteBuffer], path: Path)(
       implicit
       codecK: Codec[K],
-      codecV: Codec[V]
-  ): LMDBTrieStore[K, V] = {
+      codecV: Codec[V],
+      syncF: Sync[F]
+  ): LMDBTrieStore[F, K, V] = {
     val dbTrie: Dbi[ByteBuffer]      = env.openDbi("Trie", MDB_CREATE)
     val dbRoots: Dbi[ByteBuffer]     = env.openDbi("Roots", MDB_CREATE)
     val dbEmptyRoot: Dbi[ByteBuffer] = env.openDbi("EmptyRoot", MDB_CREATE)
     val dbPastRoots: Dbi[ByteBuffer] = env.openDbi("PastRoots", MDB_CREATE)
-    new LMDBTrieStore[K, V](env, path, dbTrie, dbRoots, dbPastRoots, dbEmptyRoot)
+    new LMDBTrieStore[F, K, V](env, path, dbTrie, dbRoots, dbPastRoots, dbEmptyRoot)
   }
 
   private val stringSerialize: Serialize[String] = new Serialize[String] {

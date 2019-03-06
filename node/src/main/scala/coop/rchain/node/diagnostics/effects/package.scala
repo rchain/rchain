@@ -3,24 +3,21 @@ package coop.rchain.node.diagnostics
 import java.lang.management.{ManagementFactory, MemoryType}
 
 import scala.collection.JavaConverters._
-
 import cats.effect.Sync
 import cats.implicits._
-
-import coop.rchain.catscontrib.Capture
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.rp.Connect.ConnectionsCell
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.node.model.diagnostics._
-
 import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
+import coop.rchain.metrics.Metrics.Source
 import javax.management.ObjectName
 import monix.eval.Task
 
 package object effects {
 
-  def jvmMetrics[F[_]: Capture]: JvmMetrics[F] =
+  def jvmMetrics[F[_]: Sync]: JvmMetrics[F] =
     new JvmMetrics[F] {
 
       private def check[A](a: A)(implicit n: Numeric[A]): Option[A] = checkOpt(Some(a))
@@ -29,7 +26,7 @@ package object effects {
         a.filter(n.gteq(_, n.zero))
 
       def processCpu: F[ProcessCpu] =
-        Capture[F].capture {
+        Sync[F].delay {
           ManagementFactory.getOperatingSystemMXBean match {
             case b: com.sun.management.OperatingSystemMXBean =>
               ProcessCpu(check(b.getProcessCpuLoad), check(b.getProcessCpuTime))
@@ -38,7 +35,7 @@ package object effects {
         }
 
       def memoryUsage: F[MemoryUsage] =
-        Capture[F].capture {
+        Sync[F].delay {
           val b       = ManagementFactory.getMemoryMXBean
           val heap    = b.getHeapMemoryUsage
           val nonHeap = b.getNonHeapMemoryUsage
@@ -63,7 +60,7 @@ package object effects {
         }
 
       def garbageCollectors: F[Seq[GarbageCollector]] =
-        Capture[F].capture {
+        Sync[F].delay {
           ManagementFactory.getGarbageCollectorMXBeans.asScala.map {
             case b: com.sun.management.GarbageCollectorMXBean =>
               val last = Option(b.getLastGcInfo)
@@ -85,7 +82,7 @@ package object effects {
         }
 
       def memoryPools: F[Seq[MemoryPool]] =
-        Capture[F].capture {
+        Sync[F].delay {
           ManagementFactory.getMemoryPoolMXBeans.asScala.map { b =>
             val usage     = b.getUsage
             val peakUsage = b.getPeakUsage
@@ -116,7 +113,7 @@ package object effects {
         }
 
       def threads: F[Threads] =
-        Capture[F].capture {
+        Sync[F].delay {
           val b = ManagementFactory.getThreadMXBean
           Threads(
             threadCount = b.getThreadCount,
@@ -127,7 +124,7 @@ package object effects {
         }
     }
 
-  def nodeCoreMetrics[F[_]: Capture]: NodeMetrics[F] =
+  def nodeCoreMetrics[F[_]: Sync]: NodeMetrics[F] =
     new NodeMetrics[F] {
       private val mbs  = ManagementFactory.getPlatformMBeanServer
       private val name = ObjectName.getInstance(NodeMXBean.Name)
@@ -136,7 +133,7 @@ package object effects {
         map.getOrElse(name, 0)
 
       def metrics: F[NodeCoreMetrics] =
-        Capture[F].capture {
+        Sync[F].delay {
           val map = mbs
             .getAttributes(name, NodeMXBean.Attributes)
             .asList
@@ -163,6 +160,13 @@ package object effects {
   def metrics[F[_]: Sync]: Metrics[F] =
     new Metrics[F] {
       import kamon._
+      import kamon.trace.{Span => KSpan}
+
+      case class KamonSpan(span: KSpan) extends Span[F] {
+        @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
+        override def mark(name: String): F[Unit] = Sync[F].delay { span.mark(name) }
+        override def close(): F[Unit]            = Sync[F].delay { span.finish() }
+      }
 
       private val m = scala.collection.concurrent.TrieMap[String, metric.Metric[_]]()
 
@@ -226,6 +230,10 @@ package object effects {
               _ = t.stop()
             } yield r
         }
+
+      def span(source: Source): F[Span[F]] = Sync[F].delay {
+        KamonSpan(Kamon.buildSpan(source).start())
+      }
     }
 
   def grpc(

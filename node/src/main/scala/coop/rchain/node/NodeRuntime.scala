@@ -113,7 +113,8 @@ class NodeRuntime private[node] (
                               conf.tls.certificate,
                               conf.tls.key,
                               conf.server.maxMessageSize,
-                              conf.server.dataDir.resolve("tmp").resolve("comm")
+                              conf.server.dataDir.resolve("tmp").resolve("comm"),
+                              conf.server.messageConsumers
                             )(grpcScheduler, log)
                           )
                           .toEffect
@@ -334,7 +335,12 @@ class NodeRuntime private[node] (
     lab                  <- LastApprovedBlock.of[Task].toEffect
     labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
     commTmpFolder        = conf.server.dataDir.resolve("tmp").resolve("comm")
-    _                    <- commTmpFolder.deleteDirectory[Task]().toEffect
+    _ <- commTmpFolder.toFile
+          .exists()
+          .fold(
+            commTmpFolder.deleteDirectory[Task]().toEffect,
+            Task.unit.toEffect
+          )
     tl <- effects
            .transportClient(
              conf.tls.certificate,
@@ -370,15 +376,26 @@ class NodeRuntime private[node] (
     _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
     oracle = SafetyOracle.cliqueOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
     runtime <- {
-      implicit val s = rspaceScheduler
-      Runtime.create[Task, Task.Par](storagePath, storageSize, storeType, Seq.empty).toEffect
+      implicit val s                = rspaceScheduler
+      implicit val m: Metrics[Task] = metrics
+      Runtime
+        .createWithEmptyCost[Task, Task.Par](storagePath, storageSize, storeType, Seq.empty)
+        .toEffect
     }
     _ <- Runtime
           .injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
           .toEffect
     casperRuntime <- {
-      implicit val s = rspaceScheduler
-      Runtime.create[Task, Task.Par](casperStoragePath, storageSize, storeType, Seq.empty).toEffect
+      implicit val s                = rspaceScheduler
+      implicit val m: Metrics[Task] = metrics
+      Runtime
+        .createWithEmptyCost[Task, Task.Par](
+          casperStoragePath,
+          storageSize,
+          storeType,
+          Seq.empty
+        )
+        .toEffect
     }
     runtimeManager <- RuntimeManager.fromRuntime[Task](casperRuntime).toEffect
     casperPacketHandler <- CasperPacketHandler
@@ -397,7 +414,6 @@ class NodeRuntime private[node] (
                               ErrorHandler[Effect],
                               eiterTrpConfAsk(rpConfAsk),
                               oracle,
-                              Capture[Effect],
                               Sync[Effect],
                               Concurrent[Effect],
                               Time.eitherTTime(Monad[Task], time),

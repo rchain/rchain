@@ -126,7 +126,7 @@ object UPnP {
             Log[F].info("UPnP port forwarding was most likely successful!")
 
       _ <- Log[F].info(showPortMappingHeader)
-      _ <- getPortMappings(gateway).toList.map(showPortMapping).traverse(Log[F].info)
+      _ <- getPortMappings(gateway).toList.map(showPortMapping).traverse(v => Log[F].info(v))
     } yield Some(gateway.getExternalIPAddress)
 
   def assurePortForwarding[F[_]: Log: Sync](ports: List[Int]): F[Option[String]] =

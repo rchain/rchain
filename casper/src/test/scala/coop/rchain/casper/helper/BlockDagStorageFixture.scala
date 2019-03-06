@@ -11,8 +11,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.blockstorage._
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.catscontrib.Capture
-import coop.rchain.catscontrib.Capture.taskCapture
+
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.MetricsNOP
@@ -97,7 +96,7 @@ object BlockDagStorageTestFixture {
 
   val mapSize: Long = 1024L * 1024L * 100L
 
-  def createBlockStorage[F[_]: Concurrent: Metrics: Capture: Log](
+  def createBlockStorage[F[_]: Concurrent: Metrics: Sync: Log](
       blockStorageDir: Path
   ): F[BlockStore[F]] = {
     val env = Context.env(blockStorageDir, mapSize)
@@ -115,6 +114,8 @@ object BlockDagStorageTestFixture {
         blockDagStorageDir.resolve("latest-messages-crc"),
         blockDagStorageDir.resolve("block-metadata-data"),
         blockDagStorageDir.resolve("block-metadata-crc"),
+        blockDagStorageDir.resolve("equivocations-tracker-data"),
+        blockDagStorageDir.resolve("equivocations-tracker-crc"),
         blockDagStorageDir.resolve("checkpoints")
       )
     )

@@ -12,9 +12,11 @@ import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal.{Datum, GNAT, Row, WaitingContinuation}
 import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
+import monix.eval.Coeval
 import org.scalacheck.Prop
 import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
+
 import scala.collection.immutable.Seq
 
 //noinspection ZeroIndexToHead
@@ -41,10 +43,10 @@ trait HistoryActionsTests[F[_]]
     * Helper for testing purposes only.
     */
   private[this] def getRootHash(
-      store: IStore[String, Pattern, String, StringsCaptor],
+      store: IStore[F, String, Pattern, String, StringsCaptor],
       branch: Branch
-  ): Blake2b256Hash =
-    store.withTxn(store.createTxnRead()) { txn =>
+  ): F[Blake2b256Hash] =
+    store.withReadTxnF { txn =>
       store.withTrieTxn(txn) { trieTxn =>
         store.trieStore.getRoot(trieTxn, branch).get
       }
@@ -91,7 +93,8 @@ trait HistoryActionsTests[F[_]]
               gnat.wks.head.persist
             )
         _          = history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None
-        retrieved  <- space.retrieve(getRootHash(space.store, space.store.trieBranch), channelsHash)
+        root       <- getRootHash(space.store, space.store.trieBranch)
+        retrieved  <- space.retrieve(root, channelsHash)
         _          = retrieved shouldBe None
         checkpoint <- space.createCheckpoint()
         _          = checkpoint.root shouldBe nodeHash
@@ -151,20 +154,16 @@ trait HistoryActionsTests[F[_]]
         _ = history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash1) shouldBe Some(
           gnat1
         )
-        retrieved1 <- space.retrieve(
-                       getRootHash(space.store, space.store.trieBranch),
-                       channelsHash1
-                     )
+        root       <- getRootHash(space.store, space.store.trieBranch)
+        retrieved1 <- space.retrieve(root, channelsHash1)
         _ = retrieved1 shouldBe Some(
           gnat1
         )
         _ = history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash2) shouldBe Some(
           gnat2
         )
-        retrieved2 <- space.retrieve(
-                       getRootHash(space.store, space.store.trieBranch),
-                       channelsHash2
-                     )
+        root2      <- getRootHash(space.store, space.store.trieBranch)
+        retrieved2 <- space.retrieve(root2, channelsHash2)
         _ = retrieved2 shouldBe Some(
           gnat2
         )
@@ -174,8 +173,8 @@ trait HistoryActionsTests[F[_]]
   "produce a bunch and then createCheckpoint" should "persist the expected values in the TrieStore" in
     forAll { (data: TestProduceMap) =>
       withTestSpace { space =>
-        (for {
-          gnats <- (data
+        for {
+          gnats <- data
                     .map {
                       case (channel, datum) =>
                         GNAT(
@@ -184,20 +183,20 @@ trait HistoryActionsTests[F[_]]
                           List.empty[WaitingContinuation[Pattern, StringsCaptor]]
                         )
                     }
-                    .toList)
+                    .toList
                     .pure[F]
-          _ = gnats.map {
-            case GNAT(List(channel), List(datum), _) =>
-              space.produce(channel, datum.a, datum.persist)
-          }
+          _ <- gnats.traverse {
+                case GNAT(List(channel), List(datum), _) =>
+                  space.produce(channel, datum.a, datum.persist)
+              }
           channelHashes = gnats.map(gnat => space.store.hashChannels(gnat.channels))
           _ = history
             .lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
           _ <- space.createCheckpoint()
         } yield
-          (history
+          history
             .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
-            .get should contain theSameElementsAs gnats))
+            .get should contain theSameElementsAs gnats
       }
     }
 
@@ -205,18 +204,18 @@ trait HistoryActionsTests[F[_]]
     forAll { (data: TestConsumeMap) =>
       withTestSpace { space =>
         for {
-          gnats <- (data
+          gnats <- data
                     .map {
                       case (channels, wk) =>
                         GNAT(channels, List.empty[Datum[String]], List(wk))
                     }
-                    .toList)
+                    .toList
                     .pure[F]
 
-          _ = gnats.map {
-            case GNAT(channels, _, List(wk)) =>
-              space.consume(channels, wk.patterns, wk.continuation, wk.persist)
-          }
+          _ <- gnats.traverse {
+                case GNAT(channels, _, List(wk)) =>
+                  space.consume(channels, wk.patterns, wk.continuation, wk.persist)
+              }
           channelHashMap                      = gnats.map(gnat => space.store.hashChannels(gnat.channels) -> gnat).toMap
           channelHashes: List[Blake2b256Hash] = channelHashMap.keys.toList
 
@@ -226,15 +225,14 @@ trait HistoryActionsTests[F[_]]
           _ = history
             .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
             .get should contain theSameElementsAs gnats
-          _ <- channelHashes
-                .map(
-                  channelHash =>
-                    space.retrieve(checkpoint.root, channelHash).map { retrieved =>
-                      retrieved.get shouldBe channelHashMap(channelHash)
-                    }
-                )
-                .sequence
-        } yield (())
+          result <- channelHashes
+                     .traverse(
+                       channelHash =>
+                         space.retrieve(checkpoint.root, channelHash).map { retrieved =>
+                           retrieved.get shouldBe channelHashMap(channelHash)
+                         }
+                     )
+        } yield result
       }
     }
 
@@ -312,26 +310,26 @@ trait HistoryActionsTests[F[_]]
         root1                                                            = checkpoint1.root
         contents1: Map[Seq[String], Row[Pattern, String, StringsCaptor]] = space.store.toMap
         _                                                                = space.store.isEmpty shouldBe false
-        _ = space.store.withTxn(space.store.createTxnRead()) { txn =>
-          space.store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
-          space.store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
-        }
+        _ <- space.store.withReadTxnF { txn =>
+              space.store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
+              space.store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
+            }
 
         // Rollback to first checkpoint
         _ <- space.reset(root0)
         _ = space.store.isEmpty shouldBe true
-        _ = space.store.withTxn(space.store.createTxnRead()) { txn =>
-          space.store.getJoin(txn, "ch1") shouldBe Nil
-          space.store.getJoin(txn, "ch2") shouldBe Nil
-        }
+        _ <- space.store.withReadTxnF { txn =>
+              space.store.getJoin(txn, "ch1") shouldBe Nil
+              space.store.getJoin(txn, "ch2") shouldBe Nil
+            }
 
         // Rollback to second checkpoint
         _ <- space.reset(root1)
         _ = space.store.isEmpty shouldBe false
-        _ = space.store.withTxn(space.store.createTxnRead()) { txn =>
-          space.store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
-          space.store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
-        }
+        _ <- space.store.withReadTxnF { txn =>
+              space.store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
+              space.store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
+            }
 
       } yield (space.store.toMap shouldBe contents1)
   }
@@ -345,13 +343,11 @@ trait HistoryActionsTests[F[_]]
         val states = data.zipWithIndex.map {
           case (produces, chunkNo) =>
             for {
-              produceEffects <- produces
-                                 .map {
+              produceEffects <- produces.toList
+                                 .traverse {
                                    case (channel, datum) =>
                                      space.produce(channel, datum.a, datum.persist)
                                  }
-                                 .toList
-                                 .sequence
               checkpoint <- space.createCheckpoint()
             } yield {
               val num  = "%02d".format(chunkNo)
@@ -362,7 +358,8 @@ trait HistoryActionsTests[F[_]]
         }
         for {
           stateEffect <- states.toList.sequence
-        } yield (validateIndexedStates(space, stateEffect, "produces_reset"))
+          res         <- validateIndexedStates(space, stateEffect, "produces_reset")
+        } yield res
 
       }
     }
@@ -378,8 +375,8 @@ trait HistoryActionsTests[F[_]]
         val states = data.zipWithIndex.map {
           case (consumes, chunkNo) =>
             for {
-              consumeEffects <- consumes
-                                 .map {
+              consumeEffects <- consumes.toList
+                                 .traverse {
                                    case (channels, wk) =>
                                      space.consume(
                                        channels,
@@ -388,8 +385,6 @@ trait HistoryActionsTests[F[_]]
                                        wk.persist
                                      )
                                  }
-                                 .toList
-                                 .sequence
               checkpoint <- space.createCheckpoint()
             } yield {
               val num  = "%02d".format(chunkNo)
@@ -400,7 +395,8 @@ trait HistoryActionsTests[F[_]]
         }
         for {
           stateEffect <- states.toList.sequence
-        } yield (validateIndexedStates(space, stateEffect, "consumes_reset"))
+          res         <- validateIndexedStates(space, stateEffect, "consumes_reset")
+        } yield res
       }
     }
     check(prop)
@@ -415,8 +411,8 @@ trait HistoryActionsTests[F[_]]
         val states = data.zipWithIndex.map {
           case ((consumes, produces), chunkNo) =>
             for {
-              consumeEffects <- consumes
-                                 .map {
+              consumeEffects <- consumes.toList
+                                 .traverse {
                                    case (channels, wk) =>
                                      space.consume(
                                        channels,
@@ -425,15 +421,11 @@ trait HistoryActionsTests[F[_]]
                                        wk.persist
                                      )
                                  }
-                                 .toList
-                                 .sequence
-              produceEffects <- produces
-                                 .map {
+              produceEffects <- produces.toList
+                                 .traverse {
                                    case (channel, datum) =>
                                      space.produce(channel, datum.a, datum.persist)
                                  }
-                                 .toList
-                                 .sequence
 
               checkpoint <- space.createCheckpoint()
             } yield {
@@ -449,7 +441,8 @@ trait HistoryActionsTests[F[_]]
         }
         for {
           stateEffect <- states.toList.sequence
-        } yield (validateIndexedStates(space, stateEffect, "produces_consumes_reset"))
+          res         <- validateIndexedStates(space, stateEffect, "produces_consumes_reset")
+        } yield res
       }
     }
     check(prop)
@@ -469,7 +462,8 @@ trait HistoryActionsTests[F[_]]
       expectedProduce1   = Produce.create(channels(0), data(0), false)
       expectedProduce2   = Produce.create(channels(1), data(1), false)
       commEvent          = COMM(expectedConsume, Seq(expectedProduce1, expectedProduce2))
-      Checkpoint(_, log) = space.createCheckpoint()
+      checkpoint         <- space.createCheckpoint()
+      Checkpoint(_, log) = checkpoint
     } yield
       (log should contain theSameElementsInOrderAs Seq(
         commEvent,
@@ -536,33 +530,33 @@ trait HistoryActionsTests[F[_]]
 }
 
 trait LegacyHistoryActionsTests
-    extends StorageTestsBase[Id, String, Pattern, Nothing, String, StringsCaptor]
+    extends StorageTestsBase[Coeval, String, Pattern, Nothing, String, StringsCaptor]
     with TestImplicitHelpers
     with GeneratorDrivenPropertyChecks
     with Checkers {
 
   "reset to an unknown checkpoint" should "result in an exception" in
-    withTestSpace { space =>
+    withTestSpaceNonF { space =>
       val unknownHash =
         Blake2b256Hash.fromHex("ff3c5e70a028b7956791a6b3d8db00000f469e0088db22dd3afbc86997fe86a0")
       (the[Exception] thrownBy {
-        space.reset(unknownHash)
+        space.reset(unknownHash).apply()
       } should have message "Unknown root.")
     }
 }
 
 class MixedStoreHistoryActionsTests
-    extends MixedStoreTestsBase[Id]
-    with HistoryActionsTests[Id]
+    extends MixedStoreTestsBase[Coeval]
+    with HistoryActionsTests[Coeval]
     with LegacyHistoryActionsTests
-    with IdTests[String, Pattern, Nothing, String, StringsCaptor]
+    with CoevalTests[String, Pattern, Nothing, String, StringsCaptor]
 class LMDBStoreHistoryActionsTests
-    extends LMDBStoreTestsBase[Id]
-    with HistoryActionsTests[Id]
+    extends LMDBStoreTestsBase[Coeval]
+    with HistoryActionsTests[Coeval]
     with LegacyHistoryActionsTests
-    with IdTests[String, Pattern, Nothing, String, StringsCaptor]
+    with CoevalTests[String, Pattern, Nothing, String, StringsCaptor]
 class InMemStoreHistoryActionsTests
-    extends InMemoryStoreTestsBase[Id]
-    with HistoryActionsTests[Id]
+    extends InMemoryStoreTestsBase[Coeval]
+    with HistoryActionsTests[Coeval]
     with LegacyHistoryActionsTests
-    with IdTests[String, Pattern, Nothing, String, StringsCaptor]
+    with CoevalTests[String, Pattern, Nothing, String, StringsCaptor]

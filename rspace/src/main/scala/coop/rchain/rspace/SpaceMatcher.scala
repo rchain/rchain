@@ -2,6 +2,7 @@ package coop.rchain.rspace
 
 import cats.effect.Sync
 import cats.implicits._
+import cats.syntax._
 import coop.rchain.catscontrib._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
@@ -26,7 +27,7 @@ private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, 
   /**
     * A store which satisfies the [[IStore]] interface.
     */
-  val store: IStore[C, P, A, K]
+  val store: IStore[F, C, P, A, K]
 
   val branch: Branch
 
@@ -37,53 +38,46 @@ private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, 
 
   /* Consume */
 
+  type MatchingDataCandidate = (DataCandidate[C, R], Seq[(Datum[A], Int)])
+
   /** Searches through data, looking for a match with a given pattern.
     *
     * If there is a match, we return the matching [[DataCandidate]],
     * along with the remaining unmatched data. If an illegal state is reached
     * during searching for a match we short circuit and return the state.
     */
-  @tailrec
   private[rspace] final def findMatchingDataCandidate(
       channel: C,
       data: Seq[(Datum[A], Int)],
       pattern: P,
       prefix: Seq[(Datum[A], Int)]
-  )(implicit m: Match[P, E, A, R]): Either[E, Option[(DataCandidate[C, R], Seq[(Datum[A], Int)])]] =
+  )(
+      implicit m: Match[F, P, A, R]
+  ): F[Option[MatchingDataCandidate]] =
     data match {
       case (indexedDatum @ (Datum(matchCandidate, persist, produceRef), dataIndex)) +: remaining =>
-        m.get(pattern, matchCandidate) match {
-          case Left(ex) =>
-            Left(ex)
-          case Right(None) =>
+        m.get(pattern, matchCandidate).flatMap {
+          case None =>
             findMatchingDataCandidate(channel, remaining, pattern, indexedDatum +: prefix)
-          case Right(Some(mat)) if persist =>
-            Right(Some((DataCandidate(channel, Datum(mat, persist, produceRef), dataIndex), data)))
-          case Right(Some(mat)) =>
-            Right(
-              Some(
-                (
-                  DataCandidate(channel, Datum(mat, persist, produceRef), dataIndex),
-                  prefix ++ remaining
-                )
-              )
-            )
+          case Some(mat) if persist =>
+            (DataCandidate(channel, Datum(mat, persist, produceRef), dataIndex), data).some.pure[F]
+          case Some(mat) =>
+            (
+              DataCandidate(channel, Datum(mat, persist, produceRef), dataIndex),
+              prefix ++ remaining
+            ).some.pure[F]
         }
-      case _ => Right(None)
+      case _ => none[MatchingDataCandidate].pure[F]
     }
 
   def getData(channel: C): F[Seq[Datum[A]]] =
-    syncF.delay {
-      store.withTxn(store.createTxnRead()) { txn =>
-        store.getData(txn, Seq(channel))
-      }
+    store.withReadTxnF { txn =>
+      store.getData(txn, Seq(channel))
     }
 
   def getWaitingContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
-    syncF.delay {
-      store.withTxn(store.createTxnRead()) { txn =>
-        store.getWaitingContinuation(txn, channels)
-      }
+    store.withReadTxnF { txn =>
+      store.getWaitingContinuation(txn, channels)
     }
 
   /** Iterates through (channel, pattern) pairs looking for matching data.
@@ -94,58 +88,57 @@ private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, 
     * remaining matches. If an illegal state is reached when searching a matching candidate
     * we treat it as if no match was found and append the illegal state to result list.
     */
-  @tailrec
   private[rspace] final def extractDataCandidates(
       channelPatternPairs: Seq[(C, P)],
       channelToIndexedData: Map[C, Seq[(Datum[A], Int)]],
-      acc: Seq[Either[E, Option[DataCandidate[C, R]]]]
-  )(implicit m: Match[P, E, A, R]): Seq[Either[E, Option[DataCandidate[C, R]]]] =
+      acc: Seq[Option[DataCandidate[C, R]]]
+  )(implicit m: Match[F, P, A, R]): F[Seq[Option[DataCandidate[C, R]]]] =
     channelPatternPairs match {
       case (channel, pattern) +: tail =>
-        val maybeTuple: Either[E, Option[(DataCandidate[C, R], Seq[(Datum[A], Int)])]] =
-          channelToIndexedData.get(channel) match {
-            case Some(indexedData) =>
-              findMatchingDataCandidate(channel, indexedData, pattern, Nil)
-            case None =>
-              Right(None)
-          }
-
-        maybeTuple match {
-          case Left(e) =>
-            (Left(e) +: acc).reverse
-          case Right(Some((cand, rem))) =>
-            extractDataCandidates(
-              tail,
-              channelToIndexedData.updated(channel, rem),
-              Right(Some(cand)) +: acc
-            )
-          case Right(None) =>
-            extractDataCandidates(tail, channelToIndexedData, Right(None) +: acc)
-        }
-      case _ => acc.reverse
+        for {
+          maybeTuple <- channelToIndexedData.get(channel) match {
+                         case Some(indexedData) =>
+                           findMatchingDataCandidate(channel, indexedData, pattern, Nil)
+                         case None =>
+                           none[(DataCandidate[C, R], Seq[(Datum[A], Int)])].pure[F]
+                       }
+          dataCandidates <- maybeTuple match {
+                             case Some((cand, rem)) =>
+                               extractDataCandidates(
+                                 tail,
+                                 channelToIndexedData.updated(channel, rem),
+                                 Some(cand) +: acc
+                               )
+                             case None =>
+                               extractDataCandidates(tail, channelToIndexedData, None +: acc)
+                           }
+        } yield dataCandidates
+      case _ => acc.reverse.pure[F]
     }
 
   /* Produce */
 
-  @tailrec
   private[rspace] final def extractFirstMatch(
       channels: Seq[C],
       matchCandidates: Seq[(WaitingContinuation[P, K], Int)],
       channelToIndexedData: Map[C, Seq[(Datum[A], Int)]]
-  )(implicit m: Match[P, E, A, R]): Either[E, Option[ProduceCandidate[C, P, R, K]]] =
+  )(implicit m: Match[F, P, A, R]): F[Option[ProduceCandidate[C, P, R, K]]] =
     matchCandidates match {
       case (p @ WaitingContinuation(patterns, _, _, _), index) +: remaining =>
-        val maybeDataCandidates: Either[E, Option[Seq[DataCandidate[C, R]]]] =
-          extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).sequence
-            .map(_.sequence)
-        maybeDataCandidates match {
-          case Left(e) => Left(e)
-          case Right(None) =>
-            extractFirstMatch(channels, remaining, channelToIndexedData)
-          case Right(Some(dataCandidates)) =>
-            Right(Some(ProduceCandidate(channels, p, index, dataCandidates)))
-        }
-      case _ => Right(None)
+        for {
+          maybeDataCandidates <- extractDataCandidates(
+                                  channels.zip(patterns),
+                                  channelToIndexedData,
+                                  Nil
+                                ).map(_.sequence)
+          produceCandidates <- maybeDataCandidates match {
+                                case None =>
+                                  extractFirstMatch(channels, remaining, channelToIndexedData)
+                                case Some(dataCandidates) =>
+                                  ProduceCandidate(channels, p, index, dataCandidates).some.pure[F]
+                              }
+        } yield produceCandidates
+      case _ => none[ProduceCandidate[C, P, R, K]].pure[F]
     }
 
   override def close(): F[Unit] = syncF.delay { store.close() }

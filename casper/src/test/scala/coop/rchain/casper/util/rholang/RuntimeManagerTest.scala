@@ -7,8 +7,10 @@ import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.Resources._
-import coop.rchain.catscontrib.TestOutlaws._
+import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.interpreter.{accounting, Interpreter}
@@ -51,7 +53,8 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val correctRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!(2) }"""
     val deploy         = ProtoUtil.sourceDeployNow(correctRholang)
 
-    implicit val log: Log[Task] = new Log.NOPLog[Task]
+    implicit val log: Log[Task]            = new Log.NOPLog[Task]
+    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
     (for {
       reductionCost <- mkRuntime("casper-runtime")

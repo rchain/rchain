@@ -8,8 +8,10 @@ import java.util.concurrent.TimeUnit
 
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
 import coop.rchain.shared.{Log, StoreType}
 import monix.eval.{Coeval, Task}
@@ -34,11 +36,19 @@ abstract class WideBenchBaseState {
 
   var runTask: Task[Vector[Throwable]] = null
 
-  implicit def readErrors      = () => runtime.readAndClearErrorVector().unsafeRunSync
-  implicit val logF: Log[Task] = Log.log[Task]
+  implicit def readErrors                 = () => runtime.readAndClearErrorVector().unsafeRunSync
+  implicit val logF: Log[Task]            = Log.log[Task]
+  implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
   def createRuntime(): Runtime[Task] =
-    Runtime.create[Task, Task.Par](dbDir, mapSize, StoreType.LMDB).unsafeRunSync
+    (for {
+      costAccounting <- CostAccounting.empty[Task]
+      runtime <- {
+        implicit val ca: CostAccounting[Task] = costAccounting
+        implicit val cost: _cost[Task]        = loggingCost(ca, noOpCostLog)
+        Runtime.create[Task, Task.Par](dbDir, mapSize, StoreType.LMDB)
+      }
+    } yield (runtime)).unsafeRunSync
 
   @Setup(value = Level.Iteration)
   def doSetup(): Unit = {

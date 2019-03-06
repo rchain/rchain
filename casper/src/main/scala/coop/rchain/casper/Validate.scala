@@ -6,7 +6,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.catscontrib._
-import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
@@ -193,7 +193,7 @@ object Validate {
                                _ => Validate.repeatDeploy[F](block, dag)
                              )
       blockNumberStatus <- repeatedDeployStatus.joinRight.traverse(
-                            _ => Validate.blockNumber[F](block)
+                            _ => Validate.blockNumber[F](block, dag)
                           )
       followsStatus <- blockNumberStatus.joinRight.traverse(
                         _ => Validate.justificationFollows[F](block, genesis, dag)
@@ -216,14 +216,14 @@ object Validate {
   /**
     * Works with either efficient justifications or full explicit justifications
     */
-  def missingBlocks[F[_]: Monad: Log: BlockStore](
+  def missingBlocks[F[_]: Monad: Log](
       block: BlockMessage,
       dag: BlockDagRepresentation[F]
   ): F[Either[InvalidBlock, ValidBlock]] =
     for {
-      parentsPresent <- ProtoUtil.parentHashes(block).toList.forallM(p => BlockStore[F].contains(p))
+      parentsPresent <- ProtoUtil.parentHashes(block).toList.forallM(p => dag.contains(p))
       justificationsPresent <- block.justifications.toList
-                                .forallM(j => BlockStore[F].contains(j.latestBlockHash))
+                                .forallM(j => dag.contains(j.latestBlockHash))
       result <- if (parentsPresent && justificationsPresent) {
                  Applicative[F].pure(Right(Valid))
                } else {
@@ -313,13 +313,24 @@ object Validate {
     } yield result
 
   // Agnostic of non-parent justifications
-  def blockNumber[F[_]: Monad: Log: BlockStore](
-      b: BlockMessage
+  def blockNumber[F[_]: Sync: Log](
+      b: BlockMessage,
+      dag: BlockDagRepresentation[F]
   ): F[Either[InvalidBlock, ValidBlock]] =
     for {
-      parents <- ProtoUtil.unsafeGetParents[F](b)
+      parents <- ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
+                  dag.lookup(parentHash).flatMap {
+                    case Some(p) => p.pure[F]
+                    case None =>
+                      Sync[F].raiseError[BlockMetadata](
+                        new Exception(
+                          s"Block dag store was missing ${PrettyPrinter.buildString(parentHash)}."
+                        )
+                      )
+                  }
+                }
       maxBlockNumber = parents.foldLeft(-1L) {
-        case (acc, p) => math.max(acc, ProtoUtil.blockNumber(p))
+        case (acc, p) => math.max(acc, p.blockNum)
       }
       number = ProtoUtil.blockNumber(b)
       result = maxBlockNumber + 1 == number
@@ -343,17 +354,22 @@ object Validate {
     * creator justification, this check will fail as expected. The exception is when
     * B's creator justification is the genesis block.
     */
-  def sequenceNumber[F[_]: Monad: Log: BlockStore](
+  @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
+  def sequenceNumber[F[_]: Monad: Log](
       b: BlockMessage,
       dag: BlockDagRepresentation[F]
   ): F[Either[InvalidBlock, ValidBlock]] =
     for {
       creatorJustificationSeqNumber <- ProtoUtil.creatorJustification(b).foldM(-1) {
                                         case (_, Justification(_, latestBlockHash)) =>
-                                          for {
-                                            latestBlock <- ProtoUtil
-                                                            .unsafeGetBlock[F](latestBlockHash)
-                                          } yield latestBlock.seqNum
+                                          dag.lookup(latestBlockHash).map {
+                                            case Some(block) =>
+                                              block.seqNum
+                                            case None =>
+                                              throw new Exception(
+                                                s"Latest block hash ${PrettyPrinter.buildString(latestBlockHash)} is missing from block dag store."
+                                              )
+                                          }
                                       }
       number = b.seqNum
       result = creatorJustificationSeqNumber + 1 == number
@@ -606,24 +622,27 @@ object Validate {
     */
   def neglectedInvalidBlock[F[_]: Applicative](
       block: BlockMessage,
-      invalidBlockTracker: Set[BlockHash]
-  ): F[Either[InvalidBlock, ValidBlock]] = {
-    val invalidJustifications = block.justifications.filter(
-      justification => invalidBlockTracker.contains(justification.latestBlockHash)
-    )
-    val neglectedInvalidJustification = invalidJustifications.exists { justification =>
-      val slashedValidatorBond = bonds(block).find(_.validator == justification.validator)
-      slashedValidatorBond match {
-        case Some(bond) => bond.stake > 0
-        case None       => false
+      dag: BlockDagRepresentation[F]
+  ): F[Either[InvalidBlock, ValidBlock]] =
+    for {
+      invalidJustifications <- block.justifications.toList.filterA { justification =>
+                                for {
+                                  latestBlockOpt <- dag.lookup(justification.latestBlockHash)
+                                } yield latestBlockOpt.exists(_.invalid)
+                              }
+      neglectedInvalidJustification = invalidJustifications.exists { justification =>
+        val slashedValidatorBond = bonds(block).find(_.validator == justification.validator)
+        slashedValidatorBond match {
+          case Some(bond) => bond.stake > 0
+          case None       => false
+        }
       }
-    }
-    if (neglectedInvalidJustification) {
-      Applicative[F].pure(Left(NeglectedInvalidBlock))
-    } else {
-      Applicative[F].pure(Right(Valid))
-    }
-  }
+      result = if (neglectedInvalidJustification) {
+        Left(NeglectedInvalidBlock)
+      } else {
+        Right(Valid)
+      }
+    } yield result
 
   def bondsCache[F[_]: Log: Concurrent](
       b: BlockMessage,

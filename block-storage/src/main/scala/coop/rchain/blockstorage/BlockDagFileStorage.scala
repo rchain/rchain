@@ -21,9 +21,9 @@ import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.blockstorage.util.io._
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.models.BlockMetadata
+import coop.rchain.models.EquivocationRecord.SequenceNumber
+import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 import coop.rchain.shared.{AtomicMonadState, Log, LogSource}
 import monix.execution.atomic.AtomicAny
 
@@ -36,13 +36,16 @@ private final case class BlockDagFileStorageState[F[_]: Sync](
     childMap: Map[BlockHash, Set[BlockHash]],
     dataLookup: Map[BlockHash, BlockMetadata],
     topoSort: Vector[Vector[BlockHash]],
+    equivocationsTracker: Set[EquivocationRecord],
     sortOffset: Long,
     checkpoints: List[Checkpoint],
     latestMessagesLogOutputStream: FileOutputStreamIO[F],
     latestMessagesLogSize: Int,
     latestMessagesCrc: Crc32[F],
     blockMetadataLogOutputStream: FileOutputStreamIO[F],
-    blockMetadataCrc: Crc32[F]
+    blockMetadataCrc: Crc32[F],
+    equivocationsTrackerLogOutputStream: FileOutputStreamIO[F],
+    equivocationsTrackerCrc: Crc32[F]
 )
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove!!
@@ -53,6 +56,8 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
     latestMessagesLogMaxSizeFactor: Int,
     blockMetadataLogPath: Path,
     blockMetadataCrcPath: Path,
+    equivocationTrackerLogPath: Path,
+    equivocationTrackerCrcPath: Path,
     state: MonadState[F, BlockDagFileStorageState[F]]
 ) extends BlockDagStorage[F] {
   private implicit val logSource = LogSource(BlockDagFileStorage.getClass)
@@ -67,6 +72,8 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
     state.get.map(_.topoSort)
   private[this] def getSortOffset: F[Long] =
     state.get.map(_.sortOffset)
+  private[this] def getEquviocationsTracker: F[Set[EquivocationRecord]] =
+    state.get.map(_.equivocationsTracker)
   private[this] def getCheckpoints: F[List[Checkpoint]] =
     state.get.map(_.checkpoints)
   private[this] def getLatestMessagesLogOutputStream: F[FileOutputStreamIO[F]] =
@@ -79,6 +86,10 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
     state.get.map(_.blockMetadataLogOutputStream)
   private[this] def getBlockMetadataCrc: F[Crc32[F]] =
     state.get.map(_.blockMetadataCrc)
+  private[this] def getEquivocationsTrackerLogOutputStream: F[FileOutputStreamIO[F]] =
+    state.get.map(_.equivocationsTrackerLogOutputStream)
+  private[this] def getEquivocationsTrackerCrc: F[Crc32[F]] =
+    state.get.map(_.equivocationsTrackerCrc)
 
   private[this] def setLatestMessages(v: Map[Validator, BlockHash]): F[Unit] =
     state.modify(s => s.copy(latestMessages = v))
@@ -88,6 +99,8 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
     state.modify(s => s.copy(dataLookup = v))
   private[this] def setTopoSort(v: Vector[Vector[BlockHash]]): F[Unit] =
     state.modify(s => s.copy(topoSort = v))
+  private[this] def setEquviocationsTracker(v: Set[EquivocationRecord]): F[Unit] =
+    state.modify(s => s.copy(equivocationsTracker = v))
   private[this] def setSortOffset(v: Long): F[Unit] =
     state.modify(s => s.copy(sortOffset = v))
   private[this] def setCheckpoints(v: List[Checkpoint]): F[Unit] =
@@ -102,6 +115,10 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
     state.modify(s => s.copy(blockMetadataLogOutputStream = v))
   private[this] def setBlockMetadataCrc(v: Crc32[F]): F[Unit] =
     state.modify(s => s.copy(blockMetadataCrc = v))
+  private[this] def setEquivocationsTrackerLogOutputStream(v: FileOutputStreamIO[F]): F[Unit] =
+    state.modify(s => s.copy(equivocationsTrackerLogOutputStream = v))
+  private[this] def setEquivocationsTrackerCrc(v: Crc32[F]): F[Unit] =
+    state.modify(s => s.copy(equivocationsTrackerCrc = v))
 
   private[this] def modifyLatestMessages(
       f: Map[Validator, BlockHash] => Map[Validator, BlockHash]
@@ -119,6 +136,10 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
       f: Vector[Vector[BlockHash]] => Vector[Vector[BlockHash]]
   ): F[Unit] =
     state.modify(s => s.copy(topoSort = f(s.topoSort)))
+  private[this] def modifyEquivocationsTracker(
+      f: Set[EquivocationRecord] => Set[EquivocationRecord]
+  ): F[Unit] =
+    state.modify(s => s.copy(equivocationsTracker = f(s.equivocationsTracker)))
   private[this] def modifySortOffset(f: Long => Long): F[Unit] =
     state.modify(s => s.copy(sortOffset = f(s.sortOffset)))
   private[this] def modifyCheckpoints(f: List[Checkpoint] => List[Checkpoint]): F[Unit] =
@@ -171,13 +192,9 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
                  }
       } yield result
     def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
-      dataLookup
-        .get(blockHash)
-        .fold(
-          BlockStore[F].get(blockHash).map(_.map(BlockMetadata.fromBlock))
-        )(blockMetadata => Option(blockMetadata).pure[F])
+      dataLookup.get(blockHash).pure[F]
     def contains(blockHash: BlockHash): F[Boolean] =
-      dataLookup.get(blockHash).fold(BlockStore[F].contains(blockHash))(_ => true.pure[F])
+      dataLookup.get(blockHash).fold(false.pure[F])(_ => true.pure[F])
     def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
       if (startBlockNumber >= sortOffset) {
         val offset = startBlockNumber - sortOffset
@@ -227,6 +244,25 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
           case (validator, hash) => lookup(hash).map(validator -> _.get)
         }
         .map(_.toMap)
+  }
+
+  private object FileEquivocationsTracker extends EquivocationsTracker[F] {
+    override def equivocationRecords: F[Set[EquivocationRecord]] =
+      getEquviocationsTracker
+    override def insertEquivocationRecord(record: EquivocationRecord): F[Unit] =
+      modifyEquivocationsTracker(_ + record) >>
+        updateEquivocationsTrackerFile(record)
+    override def updateEquivocationRecord(
+        record: EquivocationRecord,
+        blockHash: BlockHash
+    ): F[Unit] = {
+      val updatedEquivocationDetectedBlockHashes =
+        record.equivocationDetectedBlockHashes + blockHash
+      val newRecord =
+        record.copy(equivocationDetectedBlockHashes = updatedEquivocationDetectedBlockHashes)
+      modifyEquivocationsTracker(_ - record + newRecord) >>
+        updateEquivocationsTrackerFile(newRecord)
+    }
   }
 
   private def loadDagInfo(checkpoint: Checkpoint): F[CheckpointedDagInfo] = {
@@ -365,6 +401,25 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
       _           <- replaceFile(tmpCrc, blockMetadataCrcPath)
     } yield ()
 
+  private def updateEquivocationsTrackerFile(equivocationRecord: EquivocationRecord): F[Unit] =
+    for {
+      equivocationsTrackerCrc             <- getEquivocationsTrackerCrc
+      equivocationsTrackerLogOutputStream <- getEquivocationsTrackerLogOutputStream
+      toAppend                            = equivocationRecord.toByteString.toByteArray
+      _                                   <- equivocationsTrackerLogOutputStream.write(toAppend)
+      _                                   <- equivocationsTrackerLogOutputStream.flush
+      _                                   <- equivocationsTrackerCrc.update(toAppend)
+      _                                   <- updateEquivocationsTrackerCrcFile(equivocationsTrackerCrc)
+    } yield ()
+
+  private def updateEquivocationsTrackerCrcFile(newCrc: Crc32[F]): F[Unit] =
+    for {
+      newCrcBytes <- newCrc.bytes
+      tmpCrc      <- createTemporaryFile("rchain-block-dag-file-storage-equivocations-tracker-", "-crc")
+      _           <- writeToFile[F](tmpCrc, newCrcBytes)
+      _           <- replaceFile(tmpCrc, equivocationTrackerCrcPath)
+    } yield ()
+
   private def representation: F[BlockDagRepresentation[F]] =
     for {
       latestMessages <- getLatestMessages
@@ -377,7 +432,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
   def getRepresentation: F[BlockDagRepresentation[F]] =
     lock.withPermit(representation)
 
-  def insert(block: BlockMessage): F[BlockDagRepresentation[F]] =
+  def insert(block: BlockMessage, invalid: Boolean): F[BlockDagRepresentation[F]] =
     lock.withPermit(
       for {
         alreadyStored <- getDataLookup.map(_.contains(block.blockHash))
@@ -386,7 +441,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
             } else {
               for {
                 _             <- squashLatestMessagesDataFileIfNeeded()
-                blockMetadata = BlockMetadata.fromBlock(block)
+                blockMetadata = BlockMetadata.fromBlock(block, invalid)
                 _             = assert(block.blockHash.size == 32)
                 _             <- modifyDataLookup(_.updated(block.blockHash, blockMetadata))
                 _ <- modifyChildMap(
@@ -436,6 +491,11 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
       } yield dag
     )
 
+  override def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A] =
+    lock.withPermit(
+      f(FileEquivocationsTracker)
+    )
+
   def checkpoint(): F[Unit] =
     ().pure[F]
 
@@ -458,24 +518,30 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
         _                             <- setChildMap(Map.empty)
         _                             <- setTopoSort(Vector.empty)
         _                             <- setLatestMessages(Map.empty)
+        _                             <- setEquviocationsTracker(Set.empty)
         newLatestMessagesLogOutputStream <- FileOutputStreamIO
                                              .open[F](latestMessagesDataFilePath, true)
         _                               <- setLatestMessagesLogOutputStream(newLatestMessagesLogOutputStream)
         newBlockMetadataLogOutputStream <- FileOutputStreamIO.open[F](blockMetadataLogPath, true)
         _                               <- setBlockMetadataLogOutputStream(newBlockMetadataLogOutputStream)
-        _                               <- setLatestMessagesLogSize(0)
-        _                               <- setLatestMessagesCrc(newLatestMessagesCrc)
-        _                               <- setBlockMetadataCrc(newBlockMetadataCrc)
+        newEquviocationsTrackerLogOutputStream <- FileOutputStreamIO
+                                                   .open[F](equivocationTrackerLogPath, true)
+        _ <- setEquivocationsTrackerLogOutputStream(newEquviocationsTrackerLogOutputStream)
+        _ <- setLatestMessagesLogSize(0)
+        _ <- setLatestMessagesCrc(newLatestMessagesCrc)
+        _ <- setBlockMetadataCrc(newBlockMetadataCrc)
       } yield ()
     )
 
   def close(): F[Unit] =
     lock.withPermit(
       for {
-        latestMessagesLogOutputStream <- getLatestMessagesLogOutputStream
-        _                             <- latestMessagesLogOutputStream.close
-        blockMetadataLogOutputStream  <- getBlockMetadataLogOutputStream
-        _                             <- blockMetadataLogOutputStream.close
+        latestMessagesLogOutputStream       <- getLatestMessagesLogOutputStream
+        _                                   <- latestMessagesLogOutputStream.close
+        blockMetadataLogOutputStream        <- getBlockMetadataLogOutputStream
+        _                                   <- blockMetadataLogOutputStream.close
+        equivocationsTrackerLogOutputStream <- getEquivocationsTrackerLogOutputStream
+        _                                   <- equivocationsTrackerLogOutputStream.close
       } yield ()
     )
 }
@@ -490,6 +556,8 @@ object BlockDagFileStorage {
       latestMessagesCrcPath: Path,
       blockMetadataLogPath: Path,
       blockMetadataCrcPath: Path,
+      equivocationsTrackerLogPath: Path,
+      equivocationsTrackerCrcPath: Path,
       checkpointsDirPath: Path,
       latestMessagesLogMaxSizeFactor: Int = 10
   )
@@ -667,6 +735,112 @@ object BlockDagFileStorage {
     }
   }
 
+  private def calculateEquivocationsTrackerCrc[F[_]: Monad](
+      equivocations: List[EquivocationRecord]
+  ): Crc32[F] =
+    Crc32[F](
+      equivocations
+        .foldLeft(ByteString.EMPTY) {
+          case (byteString, record) =>
+            byteString.concat(record.toByteString)
+        }
+        .toByteArray
+    )
+
+  private def readEquivocationsTrackerLog[F[_]: Sync](
+      randomAccessIO: RandomAccessIO[F]
+  ): F[List[EquivocationRecord]] = {
+    def readRec(
+        accumulator: List[EquivocationRecord]
+    ): F[List[EquivocationRecord]] = {
+      val equivocatorBytes = Array.ofDim[Byte](32)
+      for {
+        equivocatorRead     <- randomAccessIO.readFully(equivocatorBytes)
+        sequenceNumberOpt   <- randomAccessIO.readInt
+        blockHashSetSizeOpt <- randomAccessIO.readInt
+        result <- (equivocatorRead, sequenceNumberOpt, blockHashSetSizeOpt) match {
+                   case (Some(()), Some(sequenceNumber), Some(blockHashSetSize)) =>
+                     for {
+                       blockHashes <- (0 until blockHashSetSize).toList.traverse { _ =>
+                                       val blockHashBytes = Array.ofDim[Byte](32)
+                                       randomAccessIO.readFully(blockHashBytes).flatMap {
+                                         case Some(()) =>
+                                           ByteString.copyFrom(blockHashBytes).pure[F]
+                                         case None =>
+                                           Sync[F].raiseError[ByteString](
+                                             EquivocationsTrackerLogIsMalformed
+                                           )
+                                       }
+                                     }
+                       readRecord = EquivocationRecord(
+                         ByteString.copyFrom(equivocatorBytes),
+                         sequenceNumber,
+                         blockHashes.toSet
+                       )
+                       result <- readRec(readRecord :: accumulator)
+                     } yield result
+                   case (None, None, None) =>
+                     accumulator.reverse.pure[F]
+                   case _ =>
+                     Sync[F].raiseError[List[EquivocationRecord]](
+                       EquivocationsTrackerLogIsMalformed
+                     )
+                 }
+      } yield result
+    }
+    readRec(List.empty)
+  }
+
+  private def validateEquivocationsTrackerData[F[_]: Sync](
+      equivocationsTrackerRandomAccessIo: RandomAccessIO[F],
+      readEquivocationsTrackerCrc: Long,
+      equivocationsTrackerCrcPath: Path,
+      equivocationsTracker: List[EquivocationRecord]
+  ): F[(List[EquivocationRecord], Crc32[F])] = {
+    val fullCalculatedCrc = calculateEquivocationsTrackerCrc[F](equivocationsTracker)
+    fullCalculatedCrc.value.flatMap { fullCalculatedCrcValue =>
+      if (fullCalculatedCrcValue == readEquivocationsTrackerCrc) {
+        (equivocationsTracker, fullCalculatedCrc).pure[F]
+      } else if (equivocationsTracker.nonEmpty) {
+        val withoutLastCalculatedCrc =
+          calculateEquivocationsTrackerCrc[F](equivocationsTracker.init)
+        withoutLastCalculatedCrc.value.flatMap { withoutLastCalculatedCrcValue =>
+          if (withoutLastCalculatedCrcValue == readEquivocationsTrackerCrc) {
+            val lastRecord = equivocationsTracker.last
+            val lastRecordSize
+              : Long = 32L + 4L + 4L + lastRecord.equivocationDetectedBlockHashes.size * 32
+            for {
+              length <- equivocationsTrackerRandomAccessIo.length
+              _      <- equivocationsTrackerRandomAccessIo.setLength(length - lastRecordSize)
+            } yield (equivocationsTracker.init, withoutLastCalculatedCrc)
+          } else {
+            Sync[F].raiseError[(List[EquivocationRecord], Crc32[F])](
+              EquivocationsTrackerLogIsMalformed
+            )
+          }
+        }
+      } else {
+        Sync[F].raiseError[(List[EquivocationRecord], Crc32[F])](
+          EquivocationsTrackerLogIsMalformed
+        )
+      }
+    }
+  }
+
+  private def squashEquivocationsTracker(
+      equivocationsTrackerList: List[EquivocationRecord]
+  ): Set[EquivocationRecord] =
+    equivocationsTrackerList
+      .map { record =>
+        (record.equivocator, record.equivocationBaseBlockSeqNum) -> record.equivocationDetectedBlockHashes
+      }
+      .toMap
+      .map {
+        case ((equivocator, sequenceNumber), blockHashes) =>
+          EquivocationRecord(equivocator, sequenceNumber, blockHashes)
+      }
+      .toSet
+
   private def extractChildMap(
       dataLookup: List[(BlockHash, BlockMetadata)]
   ): Map[BlockHash, Set[BlockHash]] =
@@ -719,7 +893,7 @@ object BlockDagFileStorage {
                }
     } yield result
 
-  def create[F[_]: Concurrent: Sync: Capture: Log: BlockStore](
+  def create[F[_]: Concurrent: Sync: Log: BlockStore](
       config: Config
   ): F[BlockDagFileStorage[F]] = {
     implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
@@ -763,7 +937,27 @@ object BlockDagFileStorage {
       (dataLookupList, calculatedDataLookupCrc) = dataLookupResult
       childMap                                  = extractChildMap(dataLookupList)
       topoSort                                  = extractTopoSort(dataLookupList)
-      sortedCheckpoints                         <- loadCheckpoints(config.checkpointsDirPath)
+      equivocationsTrackerFileResource = Resource.make(
+        RandomAccessIO.open[F](config.equivocationsTrackerLogPath, RandomAccessIO.ReadWrite)
+      )(_.close)
+      readEquivocationsTrackerCrc <- readCrc[F](config.equivocationsTrackerCrcPath)
+      equivocationsTrackerResult <- equivocationsTrackerFileResource.use {
+                                     equivocationsTrackerFile =>
+                                       for {
+                                         equivocationsTrackerList <- readEquivocationsTrackerLog(
+                                                                      equivocationsTrackerFile
+                                                                    )
+                                         result <- validateEquivocationsTrackerData(
+                                                    equivocationsTrackerFile,
+                                                    readEquivocationsTrackerCrc,
+                                                    config.equivocationsTrackerCrcPath,
+                                                    equivocationsTrackerList
+                                                  )
+                                       } yield result
+                                   }
+      (equivocationsTrackerList, calculatedEquivocationsTrackerCrc) = equivocationsTrackerResult
+      equivocationsTracker                                          = squashEquivocationsTracker(equivocationsTrackerList)
+      sortedCheckpoints                                             <- loadCheckpoints(config.checkpointsDirPath)
       latestMessagesLogOutputStream <- FileOutputStreamIO.open[F](
                                         config.latestMessagesLogPath,
                                         true
@@ -772,18 +966,25 @@ object BlockDagFileStorage {
                                        config.blockMetadataLogPath,
                                        true
                                      )
+      equivocationsTrackerLogOutputStream <- FileOutputStreamIO.open[F](
+                                              config.equivocationsTrackerLogPath,
+                                              true
+                                            )
       state = BlockDagFileStorageState(
         latestMessages = latestMessagesMap,
         childMap = childMap,
         dataLookup = dataLookupList.toMap,
         topoSort = topoSort,
+        equivocationsTracker = equivocationsTracker,
         sortOffset = sortedCheckpoints.lastOption.map(_.end).getOrElse(0L),
         checkpoints = sortedCheckpoints,
         latestMessagesLogOutputStream = latestMessagesLogOutputStream,
         latestMessagesLogSize = logSize,
         latestMessagesCrc = calculatedLatestMessagesCrc,
         blockMetadataLogOutputStream = blockMetadataLogOutputStream,
-        blockMetadataCrc = calculatedDataLookupCrc
+        blockMetadataCrc = calculatedDataLookupCrc,
+        equivocationsTrackerLogOutputStream = equivocationsTrackerLogOutputStream,
+        equivocationsTrackerCrc = calculatedEquivocationsTrackerCrc
       )
     } yield
       new BlockDagFileStorage[F](
@@ -793,11 +994,13 @@ object BlockDagFileStorage {
         config.latestMessagesLogMaxSizeFactor,
         config.blockMetadataLogPath,
         config.blockMetadataCrcPath,
+        config.equivocationsTrackerLogPath,
+        config.equivocationsTrackerCrcPath,
         new AtomicMonadState[F, BlockDagFileStorageState[F]](AtomicAny(state))
       )
   }
 
-  def createEmptyFromGenesis[F[_]: Concurrent: Sync: Capture: Log: BlockStore](
+  def createEmptyFromGenesis[F[_]: Concurrent: Sync: Log: BlockStore](
       config: Config,
       genesis: BlockMessage
   ): F[BlockDagFileStorage[F]] = {
@@ -837,18 +1040,26 @@ object BlockDagFileStorage {
                                        config.blockMetadataLogPath,
                                        true
                                      )
+      equivocationsTrackerLogOutputStream <- FileOutputStreamIO.open[F](
+                                              config.equivocationsTrackerLogPath,
+                                              true
+                                            )
+      equivocationsTrackerCrc = Crc32.empty[F]()
       state = BlockDagFileStorageState(
         latestMessages = initialLatestMessages,
         childMap = Map(genesis.blockHash   -> Set.empty[BlockHash]),
-        dataLookup = Map(genesis.blockHash -> BlockMetadata.fromBlock(genesis)),
+        dataLookup = Map(genesis.blockHash -> BlockMetadata.fromBlock(genesis, false)),
         topoSort = Vector(Vector(genesis.blockHash)),
+        equivocationsTracker = Set.empty,
         sortOffset = 0L,
         checkpoints = List.empty,
         latestMessagesLogOutputStream = latestMessagesLogOutputStream,
         latestMessagesLogSize = initialLatestMessages.size,
         latestMessagesCrc = latestMessagesCrc,
         blockMetadataLogOutputStream = blockMetadataLogOutputStream,
-        blockMetadataCrc = blockMetadataCrc
+        blockMetadataCrc = blockMetadataCrc,
+        equivocationsTrackerLogOutputStream = equivocationsTrackerLogOutputStream,
+        equivocationsTrackerCrc = equivocationsTrackerCrc
       )
     } yield
       new BlockDagFileStorage[F](
@@ -858,6 +1069,8 @@ object BlockDagFileStorage {
         config.latestMessagesLogMaxSizeFactor,
         config.blockMetadataLogPath,
         config.blockMetadataCrcPath,
+        config.equivocationsTrackerLogPath,
+        config.equivocationsTrackerCrcPath,
         new AtomicMonadState[F, BlockDagFileStorageState[F]](AtomicAny(state))
       )
   }

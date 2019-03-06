@@ -6,9 +6,10 @@ import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
 
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.metrics.Metrics
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.RhoIStore
-import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import monix.eval.{Coeval, Task}
@@ -53,11 +54,16 @@ object RholangCLI {
 
     val conf = new Conf(args)
 
-    implicit val log: Log[Task] = Log.log[Task]
+    implicit val log: Log[Task]          = Log.log[Task]
+    implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
 
     val runtime = (for {
-      runtime <- Runtime.create[Task, Task.Par](conf.dataDir(), conf.mapSize(), StoreType.LMDB)
-      _       <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
+      runtime <- Runtime.createWithEmptyCost[Task, Task.Par](
+                  conf.dataDir(),
+                  conf.mapSize(),
+                  StoreType.LMDB
+                )
+      _ <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
     } yield (runtime)).unsafeRunSync
 
     try {
@@ -82,7 +88,7 @@ object RholangCLI {
     Console.println(PrettyPrinter().buildString(normalizedTerm))
   }
 
-  private def printStorageContents(store: RhoIStore): Unit = {
+  private def printStorageContents[F[_]](store: RhoIStore[F]): Unit = {
     Console.println("\nStorage Contents:")
     Console.println(StoragePrinter.prettyPrint(store))
   }
