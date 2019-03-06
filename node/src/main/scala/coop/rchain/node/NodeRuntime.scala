@@ -11,7 +11,12 @@ import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.functor._
 import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.blockstorage.{BlockDagFileStorage, BlockStore, FileLMDBIndexBlockStore}
+import coop.rchain.blockstorage.{
+  BlockDagFileStorage,
+  BlockDagStorage,
+  BlockStore,
+  FileLMDBIndexBlockStore
+}
 import coop.rchain.casper._
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.protocol.BlockMessage
@@ -159,6 +164,7 @@ class NodeRuntime private[node] (
       transportShutdown: TransportLayerShutdown[Task],
       kademliaRPC: KademliaRPC[Task],
       blockStore: BlockStore[Effect],
+      blockDagStorage: BlockDagStorage[Effect],
       peerNodeAsk: PeerNodeAsk[Task]
   ): Unit =
     (for {
@@ -178,6 +184,8 @@ class NodeRuntime private[node] (
       _   <- runtime.close()
       _   <- log.info("Shutting down Casper runtime ...")
       _   <- casperRuntime.close()
+      _   <- log.info("Bringing DagStorage down ...")
+      _   <- blockDagStorage.close().value
       _   <- log.info("Bringing BlockStore down ...")
       _   <- blockStore.close().value
       _   <- log.info("Goodbye.")
@@ -187,6 +195,7 @@ class NodeRuntime private[node] (
       implicit transportShutdown: TransportLayerShutdown[Task],
       kademliaRPC: KademliaRPC[Task],
       blockStore: BlockStore[Effect],
+      blockDagStorage: BlockDagStorage[Effect],
       peerNodeAsk: PeerNodeAsk[Task]
   ): Task[Unit] =
     Task.delay(sys.addShutdownHook(clearResources(servers, runtime, casperRuntime)))
@@ -205,6 +214,7 @@ class NodeRuntime private[node] (
       kademliaRPC: KademliaRPC[Task],
       nodeDiscovery: NodeDiscovery[Task],
       rpConnectons: ConnectionsCell[Task],
+      blockDagStorage: BlockDagStorage[Effect],
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect],
       packetHandler: PacketHandler[Effect],
@@ -460,6 +470,7 @@ class NodeRuntime private[node] (
       kademliaRPC,
       nodeDiscovery,
       rpConnections,
+      blockDagStorage,
       blockStore,
       oracle,
       packetHandler,
