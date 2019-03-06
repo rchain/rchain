@@ -172,23 +172,8 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
                    case Some(children) =>
                      Option(children).pure[F]
                    case None =>
-                     for {
-                       blockOpt <- BlockStore[F].get(blockHash)
-                       result <- blockOpt match {
-                                  case Some(block) =>
-                                    val number = blockNumber(block)
-                                    if (number >= sortOffset) {
-                                      none[Set[BlockHash]].pure[F]
-                                    } else {
-                                      lock.withPermit(
-                                        for {
-                                          oldDagInfo <- loadCheckpoint(number)
-                                        } yield oldDagInfo.flatMap(_.childMap.get(blockHash))
-                                      )
-                                    }
-                                  case None => none[Set[BlockHash]].pure[F]
-                                }
-                     } yield result
+                     // TODO: Fix when we enable checkpoints
+                     none[Set[BlockHash]].pure[F]
                  }
       } yield result
     def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
