@@ -34,6 +34,8 @@ trait Interpreter[F[_]] {
 
   def execute(runtime: Runtime[F], reader: Reader): F[Runtime[F]]
 
+  def evaluate(runtime: Runtime[F], term: String, initialPhlo: Cost): F[EvaluateResult]
+
   def evaluatePar(runtime: Runtime[F], par: Par): F[EvaluateResult]
 
   def evaluatePar(runtime: Runtime[F], par: Par, initialPhlo: Cost): F[EvaluateResult]
@@ -84,6 +86,39 @@ object Interpreter {
     def evaluatePar(runtime: Runtime[F], par: Par): F[EvaluateResult] = {
       val initialPhlo = Cost(Integer.MAX_VALUE) //This is OK because evaluate is not called on deploy
       evaluatePar(runtime, par, initialPhlo)
+    }
+
+    def evaluate(runtime: Runtime[F], term: String, initialPhlo: Cost): F[EvaluateResult] = {
+      implicit val rand: Blake2b512Random = Blake2b512Random(128)
+      for {
+        checkpoint <- runtime.space.createCheckpoint()
+        _          <- runtime.reducer.setPhlo(initialPhlo)
+        res        <- injAttempt(runtime, term)
+        _          <- if (res.errors.nonEmpty) runtime.space.reset(checkpoint.root) else F.unit
+      } yield res
+    }
+
+    def injAttempt(
+        runtime: Runtime[F],
+        term: String
+    )(implicit rand: Blake2b512Random): F[EvaluateResult] = {
+      val parsingCost = accounting.parsingCost(term)
+      Interpreter[F].buildNormalizedTerm(term).attempt.flatMap {
+        case Right(parsed) =>
+          for {
+            result    <- runtime.reducer.inj(parsed).attempt
+            phlosLeft <- runtime.reducer.phlo
+            oldErrors <- runtime.errorLog.readAndClearErrorVector()
+            newErrors = result.swap.toSeq.toVector
+            allErrors = oldErrors |+| newErrors
+            cost      = phlosLeft - parsingCost
+          } yield EvaluateResult(cost, allErrors)
+        case Left(error) =>
+          for {
+            phlosLeft <- runtime.reducer.phlo
+            cost      = phlosLeft - parsingCost
+          } yield EvaluateResult(cost, Vector(error))
+      }
     }
 
     private def buildAST(reader: Reader): F[Proc] =
