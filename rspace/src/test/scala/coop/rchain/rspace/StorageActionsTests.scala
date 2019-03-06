@@ -54,7 +54,7 @@ trait StorageActionsTests[F[_]]
     for {
       r <- space.produce(key.head, "datum", persist = false)
 
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, keyHash) shouldBe key
             store.getPatterns(txn, key) shouldBe Nil
             store.getData(txn, key) shouldBe List(Datum.create(key.head, "datum", persist = false))
@@ -74,7 +74,7 @@ trait StorageActionsTests[F[_]]
 
     for {
       r1 <- space.produce(key.head, "datum1", persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, keyHash) shouldBe key
             store.getPatterns(txn, key) shouldBe Nil
             store.getData(txn, key) shouldBe List(Datum.create(key.head, "datum1", false))
@@ -82,7 +82,7 @@ trait StorageActionsTests[F[_]]
           }
       _  = r1 shouldBe Right(None)
       r2 <- space.produce(key.head, "datum2", persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, keyHash) shouldBe key
             store.getPatterns(txn, key) shouldBe Nil
             store.getData(txn, key) should contain theSameElementsAs List(
@@ -105,7 +105,7 @@ trait StorageActionsTests[F[_]]
 
     for {
       r <- space.consume(key, patterns, new StringsCaptor, persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, keyHash) shouldBe List("ch1")
             store.getPatterns(txn, key) shouldBe List(patterns)
             store.getData(txn, key) shouldBe Nil
@@ -125,7 +125,7 @@ trait StorageActionsTests[F[_]]
 
     for {
       r <- space.consume(key, patterns, new StringsCaptor, persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, keyHash) shouldBe key
             store.getPatterns(txn, key) shouldBe List(patterns)
             store.getData(txn, key) shouldBe Nil
@@ -144,7 +144,7 @@ trait StorageActionsTests[F[_]]
 
     for {
       r1 <- space.produce(key.head, "datum", persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, keyHash) shouldBe key
             store.getPatterns(txn, key) shouldBe Nil
             store.getData(txn, key) shouldBe List(Datum.create(key.head, "datum", false))
@@ -154,7 +154,7 @@ trait StorageActionsTests[F[_]]
 
       r2 <- space.consume(key, List(Wildcard), new StringsCaptor, persist = false)
       _  = store.isEmpty shouldBe true
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, keyHash) shouldBe Nil
             store.getPatterns(txn, key) shouldBe Nil
             store.getData(txn, key) shouldBe Nil
@@ -202,7 +202,7 @@ trait StorageActionsTests[F[_]]
 
     for {
       r1 <- space.produce(produceKey1.head, "datum1", persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, produceKey1Hash) shouldBe produceKey1
             store.getPatterns(txn, produceKey1) shouldBe Nil
             store.getData(txn, produceKey1) shouldBe List(
@@ -213,7 +213,7 @@ trait StorageActionsTests[F[_]]
       _ = r1 shouldBe Right(None)
 
       r2 <- space.consume(consumeKey, consumePattern, new StringsCaptor, persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, produceKey1Hash) shouldBe produceKey1
             store.getPatterns(txn, produceKey1) shouldBe Nil
             store.getData(txn, produceKey1) shouldBe List(
@@ -227,7 +227,7 @@ trait StorageActionsTests[F[_]]
           }
       _  = r2 shouldBe Right(None)
       r3 <- space.produce(produceKey2.head, "datum2", persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, produceKey1Hash) shouldBe Nil
             store.getPatterns(txn, produceKey1) shouldBe Nil
             store.getData(txn, produceKey1) shouldBe Nil
@@ -262,7 +262,7 @@ trait StorageActionsTests[F[_]]
 
     for {
       r1 <- space.produce(produceKey1.head, "datum1", persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, produceKey1Hash) shouldBe produceKey1
             store.getPatterns(txn, produceKey1) shouldBe Nil
             store.getData(txn, produceKey1) shouldBe List(
@@ -272,7 +272,7 @@ trait StorageActionsTests[F[_]]
           }
       _  = r1 shouldBe Right(None)
       r2 <- space.produce(produceKey2.head, "datum2", persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, produceKey2Hash) shouldBe produceKey2
             store.getPatterns(txn, produceKey2) shouldBe Nil
             store.getData(txn, produceKey2) shouldBe List(
@@ -282,7 +282,7 @@ trait StorageActionsTests[F[_]]
           }
       _  = r2 shouldBe Right(None)
       r3 <- space.produce(produceKey3.head, "datum3", persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, produceKey3Hash) shouldBe produceKey3
             store.getPatterns(txn, produceKey3) shouldBe Nil
             store.getData(txn, produceKey3) shouldBe List(
@@ -292,7 +292,7 @@ trait StorageActionsTests[F[_]]
           }
       _  = r3 shouldBe Right(None)
       r4 <- space.consume(List("ch1", "ch2", "ch3"), patterns, new StringsCaptor, persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, consumeKeyHash) shouldBe Nil
             store.getPatterns(txn, consumeKey) shouldBe Nil
             store.getData(txn, consumeKey) shouldBe Nil
@@ -321,7 +321,7 @@ trait StorageActionsTests[F[_]]
       r4 <- space.consume(key, List(Wildcard), captor, persist = false)
       r5 <- space.consume(key, List(Wildcard), captor, persist = false)
       r6 <- space.consume(key, List(Wildcard), captor, persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, store.hashChannels(key)) shouldBe Nil
             store.getData(txn, key) shouldBe Nil
             store.getPatterns(txn, key) shouldBe Nil
@@ -526,12 +526,12 @@ trait StorageActionsTests[F[_]]
       _ = r1 shouldBe Right(None)
       _ = r2 shouldBe Right(None)
 
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getData(txn, List("ch1", "ch2")) shouldBe Nil
             store.getData(txn, List("ch1")) shouldBe List(Datum.create("ch1", "datum1", false))
           }
 
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getWaitingContinuation(txn, List("ch1", "ch2")) should not be empty
             store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
             store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
@@ -564,7 +564,7 @@ trait StorageActionsTests[F[_]]
         .map(unpackEither[Id, String, Pattern, Nothing, StringsCaptor, String])
         .foreach(runK)
 
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getData(txn, List("ch1")) shouldBe Nil
             store.getData(txn, List("ch2")) shouldBe Nil
           }
@@ -593,7 +593,7 @@ trait StorageActionsTests[F[_]]
         r3 <- space.produce("ch1", "datum1", persist = false)
         r4 <- space.produce("ch2", "datum2", persist = false)
 
-        _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+        _ <- store.withReadTxnF { txn =>
               store.getWaitingContinuation(txn, List("ch1", "ch2")) should not be empty
               store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
               store.getWaitingContinuation(txn, List("ch2")) shouldBe Nil
@@ -608,7 +608,7 @@ trait StorageActionsTests[F[_]]
 
         _ = getK(r3).results should contain theSameElementsAs List(List("datum1"))
         //ensure that joins are cleaned-up after all
-        _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+        _ <- store.withReadTxnF { txn =>
               store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
               store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
             }
@@ -627,7 +627,7 @@ trait StorageActionsTests[F[_]]
     for {
       r1 <- space.produce(key.head, "datum", persist = false)
 
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, keyHash) shouldBe key
             store.getPatterns(txn, key) shouldBe Nil
             store.getData(txn, key) shouldBe List(Datum.create(key.head, "datum", false))
@@ -649,7 +649,7 @@ trait StorageActionsTests[F[_]]
 
       // the data has been consumed, so the write will "stick"
       r3 <- space.consume(key, List(Wildcard), new StringsCaptor, persist = true)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, keyHash) shouldBe List("ch1")
             store.getPatterns(txn, key) shouldBe List(List(Wildcard))
             store.getData(txn, key) shouldBe Nil
@@ -668,7 +668,7 @@ trait StorageActionsTests[F[_]]
       for {
         r1 <- space.produce(key.head, "datum1", persist = false)
 
-        _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+        _ <- store.withReadTxnF { txn =>
               store.getChannels(txn, keyHash) shouldBe key
               store.getPatterns(txn, key) shouldBe Nil
               store.getData(txn, key) shouldBe List(Datum.create(key.head, "datum1", false))
@@ -691,7 +691,7 @@ trait StorageActionsTests[F[_]]
         // All matching data has been consumed, so the write will "stick"
         r3 <- space.consume(key, List(Wildcard), new StringsCaptor, persist = true)
 
-        _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+        _ <- store.withReadTxnF { txn =>
               store.getChannels(txn, keyHash) shouldBe List("ch1")
               store.getPatterns(txn, key) shouldBe List(List(Wildcard))
               store.getData(txn, key) shouldBe Nil
@@ -702,7 +702,7 @@ trait StorageActionsTests[F[_]]
 
         r4 <- space.produce(key.head, "datum2", persist = false)
 
-        _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+        _ <- store.withReadTxnF { txn =>
               store.getChannels(txn, keyHash) shouldBe List("ch1")
               store.getPatterns(txn, key) shouldBe List(List(Wildcard))
               store.getData(txn, key) shouldBe Nil
@@ -723,7 +723,7 @@ trait StorageActionsTests[F[_]]
       for {
         r1 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
 
-        _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+        _ <- store.withReadTxnF { txn =>
               store.getData(txn, List("ch1")) shouldBe Nil
               store.getWaitingContinuation(txn, List("ch1")) should not be empty
             }
@@ -732,7 +732,7 @@ trait StorageActionsTests[F[_]]
 
         r2 <- space.produce("ch1", "datum1", persist = false)
 
-        _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+        _ <- store.withReadTxnF { txn =>
               store.getData(txn, List("ch1")) shouldBe Nil
               store.getWaitingContinuation(txn, List("ch1")) should not be empty
             }
@@ -745,7 +745,7 @@ trait StorageActionsTests[F[_]]
 
         r3 <- space.produce("ch1", "datum2", persist = false)
 
-        _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+        _ <- store.withReadTxnF { txn =>
               store.getData(txn, List("ch1")) shouldBe Nil
               store.getWaitingContinuation(txn, List("ch1")) should not be empty
             }
@@ -779,7 +779,7 @@ trait StorageActionsTests[F[_]]
       // All matching continuations have been produced, so the write will "stick"
       r3 <- space.produce("ch1", "datum1", persist = true)
       _  = r3 shouldBe Right(None)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getData(txn, List("ch1")) shouldBe List(Datum.create("ch1", "datum1", true))
             store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
           }
@@ -809,7 +809,7 @@ trait StorageActionsTests[F[_]]
         // All matching continuations have been produced, so the write will "stick"
         r3 <- space.produce("ch1", "datum1", persist = true)
 
-        _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+        _ <- store.withReadTxnF { txn =>
               store.getData(txn, List("ch1")) shouldBe List(Datum.create("ch1", "datum1", true))
               store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
             }
@@ -818,7 +818,7 @@ trait StorageActionsTests[F[_]]
 
         r4 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
-        _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+        _ <- store.withReadTxnF { txn =>
               store.getData(txn, List("ch1")) shouldBe List(Datum.create("ch1", "datum1", true))
               store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
             }
@@ -836,7 +836,7 @@ trait StorageActionsTests[F[_]]
     for {
       r1 <- space.produce("ch1", "datum1", persist = true)
 
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getData(txn, List("ch1")) shouldBe List(Datum.create("ch1", "datum1", true))
             store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
           }
@@ -845,7 +845,7 @@ trait StorageActionsTests[F[_]]
 
       r2 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getData(txn, List("ch1")) shouldBe List(Datum.create("ch1", "datum1", true))
             store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
           }
@@ -858,7 +858,7 @@ trait StorageActionsTests[F[_]]
 
       r3 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getData(txn, List("ch1")) shouldBe List(Datum.create("ch1", "datum1", true))
             store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
           }
@@ -885,7 +885,7 @@ trait StorageActionsTests[F[_]]
       // Matching data exists so the write will not "stick"
       r4 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
 
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getData(txn, List("ch1")) should contain atLeastOneOf (
               Datum.create("ch1", "datum1", false),
               Datum.create("ch1", "datum2", false),
@@ -903,7 +903,7 @@ trait StorageActionsTests[F[_]]
       // Matching data exists so the write will not "stick"
       r5 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
 
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getData(txn, List("ch1")) should contain oneOf (
               Datum.create("ch1", "datum1", false),
               Datum.create("ch1", "datum2", false),
@@ -932,7 +932,7 @@ trait StorageActionsTests[F[_]]
       // All matching data has been consumed, so the write will "stick"
       r7 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
 
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getData(txn, List("ch1")) shouldBe Nil
             store.getWaitingContinuation(txn, List("ch1")) should not be empty
           }
@@ -998,7 +998,7 @@ trait StorageActionsTests[F[_]]
       for {
         r <- space.consume(key, patterns, new StringsCaptor, persist = false)
 
-        _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+        _ <- store.withReadTxnF { txn =>
               store.getChannels(txn, keyHash) shouldBe List("ch1")
               store.getPatterns(txn, key) shouldBe List(patterns)
               store.getData(txn, key) shouldBe Nil

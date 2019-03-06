@@ -31,10 +31,6 @@ trait LMDBOps[F[_]] extends CloseOps {
     env.txnWrite
   }
 
-  private[rspace] def createTxnReadF() = syncF.delay(createTxnRead())
-
-  private[rspace] def createTxnWriteF() = syncF.delay(createTxnWrite())
-
   protected[this] def databasePath: Path
   protected[this] def env: Env[ByteBuffer]
 
@@ -64,16 +60,15 @@ trait LMDBOps[F[_]] extends CloseOps {
       txn.close()
     }
 
-  private[this] def txnResource(txnF: F[Txn[ByteBuffer]]) =
-    Resource.make(txnF)(txn => syncF.delay(txn.close()))
-
-  private[rspace] def withTxnFlatF[R](txnF: F[Txn[ByteBuffer]])(f: Txn[ByteBuffer] => F[R]): F[R] =
-    txnResource(txnF).use { txn =>
-      f(txn).flatMap(r => syncF.delay(txn.commit()).as(r))
+  private[rspace] def withReadTxnF[R](f: Txn[ByteBuffer] => R): F[R] =
+    syncF.delay {
+      withTxn(createTxnRead())(f)
     }
 
-  private[rspace] def withTxnF[R](txnF: F[Txn[ByteBuffer]])(f: Txn[ByteBuffer] => R): F[R] =
-    withTxnFlatF[R](txnF)(txn => syncF.delay { f(txn) })
+  def withWriteTxnF[R](f: Txn[ByteBuffer] => R): F[R] =
+    syncF.delay {
+      withTxn(createTxnWrite())(f)
+    }
 
   /** The methods:
     * `def get[V](txn: Txn[ByteBuffer], key: Blake2b256Hash)`

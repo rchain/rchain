@@ -156,7 +156,7 @@ abstract class InMemoryStoreTestsBase[F[_]]
       testStore = testSpace.store
       trieStore = testStore.trieStore
       _ <- testStore
-            .withTxnF(testStore.createTxnWriteF()) { txn =>
+            .withWriteTxnF { txn =>
               testStore.withTrieTxn(txn) { trieTxn =>
                 testStore.clear(txn)
                 testStore.trieStore.clear(trieTxn)
@@ -201,7 +201,7 @@ abstract class LMDBStoreTestsBase[F[_]]
                   )
       testStore = testSpace.store
       _ <- testStore
-            .withTxnF(testStore.createTxnWriteF()) { txn =>
+            .withWriteTxnF { txn =>
               testStore.withTrieTxn(txn) { trieTxn =>
                 testStore.clear(txn)
                 testStore.trieStore.clear(trieTxn)
@@ -247,7 +247,7 @@ abstract class MixedStoreTestsBase[F[_]]
                   )
       testStore = testSpace.store
       _ <- testStore
-            .withTxnF(testStore.createTxnWriteF()) { txn =>
+            .withWriteTxnF { txn =>
               testStore.withTrieTxn(txn) { trieTxn =>
                 testStore.clear(txn)
                 testStore.trieStore.clear(trieTxn)

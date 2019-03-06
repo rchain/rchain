@@ -48,37 +48,6 @@ class InMemoryStore[F[_], T, C, P, A, K](
 
   override def emptyState: State[C, P, A, K] = State.empty
 
-  private[this] val MetricsSource = RSpaceMetricsSource + ".in-mem"
-  private[this] val refine        = Map("path" -> "inmem")
-  private[this] val entriesGauge  = Kamon.gauge(MetricsSource + ".entries").refine(refine)
-
-  private[rspace] def createTxnReadF(): F[Transaction] = syncF.delay(createTxnRead())
-
-  private[rspace] def createTxnWriteF(): F[Transaction] = syncF.delay(createTxnWrite())
-
-  private[rspace] def withTxnFlatF[R](txnF: F[Transaction])(f: Transaction => F[R]): F[R] =
-    for {
-      txn <- txnF
-      retErr <- f(txn)
-                 .flatMap(
-                   r =>
-                     syncF
-                       .delay {
-                         txn.readState { state =>
-                           entriesGauge.set(state.size)
-                         }
-                         txn.commit()
-                       }
-                       .as(r)
-                 )
-                 .attempt
-      _   <- syncF.delay(txn.close())
-      ret <- syncF.fromEither(retErr)
-    } yield ret
-
-  private[rspace] def withTxnF[R](txnF: F[Transaction])(f: Transaction => R): F[R] =
-    withTxnFlatF[R](txnF)(txn => syncF.delay { f(txn) })
-
   private[rspace] def updateGauges(): Unit = ???
 
   private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash =
@@ -87,6 +56,16 @@ class InMemoryStore[F[_], T, C, P, A, K](
   override def withTrieTxn[R](txn: Transaction)(f: TrieTransaction => R): R =
     trieStore.withTxn(trieStore.createTxnWrite()) { ttxn =>
       f(ttxn)
+    }
+
+  private[rspace] def withReadTxnF[R](f: Transaction => R): F[R] =
+    syncF.delay {
+      withTxn(createTxnRead())(f)
+    }
+
+  private[rspace] def withWriteTxnF[R](f: Transaction => R): F[R] =
+    syncF.delay {
+      withTxn(createTxnWrite())(f)
     }
 
   private[rspace] def getChannels(txn: Transaction, key: Blake2b256Hash): Seq[C] =

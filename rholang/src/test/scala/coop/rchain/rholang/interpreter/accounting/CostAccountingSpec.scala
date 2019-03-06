@@ -114,7 +114,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
       }
       (result, costLog) = costsLoggingProgram
       res               <- errorLog.readAndClearErrorVector
-      _                 <- Task.now(res should be (Vector.empty))
+      _                 <- Task.now(res should be(Vector.empty))
     } yield ((result, costLog))).unsafeRunSync
   }
 

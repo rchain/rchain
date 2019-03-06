@@ -56,7 +56,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
    * affecting the actual store contents.
    */
   private[this] def fetchChannelToIndexData(channels: Seq[C]) =
-    store.withTxnF(store.createTxnReadF()) { txn =>
+    store.withReadTxnF { txn =>
       channels.map { c: C =>
         c -> Random.shuffle(
           store.getData(txn, Seq(c)).zipWithIndex
@@ -72,21 +72,20 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
       consumeRef: Consume
   ): F[Either[E, MaybeDataCandidate]] =
     for {
-      _ <- store
-            .withTxnF(store.createTxnWriteF()) { txn =>
-              store.putWaitingContinuation(
-                txn,
-                channels,
-                WaitingContinuation(
-                  patterns,
-                  continuation,
-                  persist,
-                  consumeRef
-                )
+      _ <- store.withWriteTxnF { txn =>
+            store.putWaitingContinuation(
+              txn,
+              channels,
+              WaitingContinuation(
+                patterns,
+                continuation,
+                persist,
+                consumeRef
               )
-              for (channel <- channels)
-                store.addJoin(txn, channel, channels)
-            }
+            )
+            for (channel <- channels)
+              store.addJoin(txn, channel, channels)
+          }
       _ <- logF.debug(s"""|consume: no data found,
                           |storing <(patterns, continuation): ($patterns, $continuation)>
                           |at <channels: $channels>""".stripMargin.replace('\n', ' '))
@@ -101,7 +100,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
             Datum(_, persistData, _),
             dataIndex
             ) if !persistData =>
-          store.withTxnF(store.createTxnWriteF()) { txn =>
+          store.withWriteTxnF { txn =>
             store.removeDatum(
               txn,
               Seq(candidateChannel),
@@ -253,7 +252,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
           none[ProduceCandidate[C, P, R, K]].asRight[E].asRight[Seq[CandidateChannels]].pure[F]
         case channels :: remaining =>
           for {
-            matchCandidates <- store.withTxnF(store.createTxnReadF()) { txn =>
+            matchCandidates <- store.withReadTxnF { txn =>
                                 Random.shuffle(
                                   store
                                     .getWaitingContinuation(txn, channels)
@@ -272,7 +271,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
              */
             channelToIndexedDataList <- channels.traverse { c: C =>
                                          store
-                                           .withTxnF(store.createTxnReadF()) { txn =>
+                                           .withReadTxnF { txn =>
                                              Random.shuffle(
                                                store
                                                  .getData(txn, Seq(c))
@@ -328,7 +327,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
 
         def maybePersistWaitingContinuation =
           if (!persistK) {
-            store.withTxnF(store.createTxnWriteF()) { txn =>
+            store.withWriteTxnF { txn =>
               store.removeWaitingContinuation(
                 txn,
                 channels,
@@ -346,7 +345,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
                   Datum(_, persistData, _),
                   dataIndex
                   ) =>
-                store.withTxnF(store.createTxnWriteF()) { txn =>
+                store.withWriteTxnF { txn =>
                   if (!persistData && dataIndex >= 0) {
                     store.removeDatum(
                       txn,
@@ -389,7 +388,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
     for {
       _ <- logF.debug(s"produce: no matching continuation found")
       _ <- store
-            .withTxnF(store.createTxnWriteF()) { txn =>
+            .withWriteTxnF { txn =>
               store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
             }
       _ <- logF.debug(s"produce: persisted <data: $data> at <channel: $channel>")
@@ -408,7 +407,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
                    for {
                      _ <- span.mark("produce-lock-acquired")
                      //TODO fix double join fetch
-                     groupedChannels <- store.withTxnF(store.createTxnReadF()) {
+                     groupedChannels <- store.withReadTxnF {
                                          store.getJoin(_, channel)
                                        }
                      _ <- span.mark("grouped-channels")

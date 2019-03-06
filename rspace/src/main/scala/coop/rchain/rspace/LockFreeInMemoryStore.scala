@@ -13,6 +13,8 @@ import coop.rchain.shared.SeqOps.{dropIndex, removeFirst}
 import kamon._
 import scodec.Codec
 
+import scala.util.control.NonFatal
+
 /**
   * This implementation of Transaction exists only to satisfy the requirements of IStore.
   * Ideally this can be dropped after InMemoryStore is removed.
@@ -42,27 +44,39 @@ class LockFreeInMemoryStore[F[_], T, C, P, A, K](
 
   protected[rspace] type Transaction = InMemTransaction[State[C, P, A, K]]
 
-  private[rspace] def createTxnReadF(): F[Transaction] = syncF.delay {
+  private[this] def createTxnRead(): Transaction = {
     failIfClosed()
     new NoopTxn[State[C, P, A, K]]
   }
 
-  private[rspace] def createTxnWriteF(): F[Transaction] = syncF.delay {
+  private[this] def createTxnWrite(): Transaction = {
     failIfClosed()
     new NoopTxn[State[C, P, A, K]]
   }
 
-  private[rspace] def withTxnFlatF[R](txnF: F[Transaction])(f: Transaction => F[R]): F[R] =
-    for {
-      txn    <- txnF
-      retErr <- f(txn).flatMap(r => syncF.delay(txn.commit()).as(r)).attempt
-      _      <- syncF.delay(updateGauges())
-      _      <- syncF.delay(txn.close())
-      ret    <- syncF.fromEither(retErr)
-    } yield ret
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  private[rspace] def withTxn[R](txn: Transaction)(f: Transaction => R): R =
+    try {
+      val ret: R = f(txn)
+      txn.commit()
+      ret
+    } catch {
+      case NonFatal(ex) =>
+        ex.printStackTrace()
+        throw ex
+    } finally {
+      txn.close()
+    }
 
-  private[rspace] def withTxnF[R](txnF: F[Transaction])(f: Transaction => R): F[R] =
-    withTxnFlatF[R](txnF)(txn => syncF.delay { f(txn) })
+  private[rspace] def withReadTxnF[R](f: Transaction => R): F[R] =
+    syncF.delay {
+      withTxn(createTxnRead())(f)
+    }
+
+  def withWriteTxnF[R](f: Transaction => R): F[R] =
+    syncF.delay {
+      withTxn(createTxnWrite())(f)
+    }
 
   override def close(): Unit = super.close()
 

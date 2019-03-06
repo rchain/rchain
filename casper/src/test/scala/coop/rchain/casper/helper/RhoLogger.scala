@@ -8,7 +8,7 @@ import coop.rchain.shared.{Log, LogSource}
 object RhoLogger {
   val prettyPrinter = PrettyPrinter()
 
-  def handleMessage[F[_]: Log : Sync](
+  def handleMessage[F[_]: Log: Sync](
       ctx: SystemProcess.Context[F]
   )(message: (Seq[ListParWithRandomAndPhlos], Int)): F[Unit] = {
     val isContractCall = new ContractCall(ctx.space, ctx.dispatcher)
