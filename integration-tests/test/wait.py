@@ -82,7 +82,6 @@ class LogsReMatch:
         args = ', '.join(repr(a) for a in (self.node.name, self.pattern))
         return '<{}({})>'.format(self.__class__.__name__, args)
 
-
     def is_satisfied(self) -> bool:
         match = self.pattern.search(self.node.logs())
         return bool(match)
