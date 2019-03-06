@@ -22,7 +22,7 @@ class BundleOpsSpec extends FunSuite {
       assert(!result.readFlag, "Name should not be readable")
       assert(result.writeFlag, "Name should be writeable")
       assert(
-        result.body.get === par,
+        result.body === par,
         "Flattened bundles should contain process found in the innermost bundle."
       )
     }
@@ -39,7 +39,7 @@ class BundleOpsSpec extends FunSuite {
       assert(!result.readFlag, "Name should not be readable")
       assert(!result.writeFlag, "Name should not be writeable")
       assert(
-        result.body.get === par,
+        result.body === par,
         "Flattened bundles should contain process found in the innermost bundle."
       )
     }

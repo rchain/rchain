@@ -88,7 +88,7 @@ class RhoSpec(
     .runSyncUnsafe(executionTimeout)
 
   it should "finish execution within timeout" in {
-    result.hasFinished should be(true) withClue s"timeout of $executionTimeout expired"
+    if (!result.hasFinished) fail(s"Timeout of $executionTimeout expired")
   }
 
   result.assertions

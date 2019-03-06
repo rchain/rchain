@@ -258,7 +258,7 @@ private[sorter] object ExprSortMatcher extends Sortable[Expr] {
           connectiveUsedScore = if (em.connectiveUsed) 1 else 0
         } yield
           constructExpr(
-            EMethodBody(em.withArguments(args.map(_.term.get)).withTarget(sortedTarget.term.get)),
+            EMethodBody(em.withArguments(args.map(_.term)).withTarget(sortedTarget.term)),
             Node(
               Seq(Leaf(Score.EMETHOD), Leaf(em.methodName), sortedTarget.score) ++ args
                 .map(_.score) ++ Seq(Leaf(connectiveUsedScore))
