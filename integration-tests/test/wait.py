@@ -1,7 +1,7 @@
 import re
 import time
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Pattern
 import typing_extensions
 
 import pytest
@@ -71,6 +71,21 @@ class BlockApproval(LogsContainMessage):
 class SentApprovedBlock(LogsContainMessage):
     def __init__(self, node: 'Node') -> None:
         super().__init__(node, 'c.r.c.u.c.ApproveBlockProtocol$ApproveBlockProtocolImpl - APPROVAL: Sent ApprovedBlock')
+
+
+class LogsReMatch:
+    def __init__(self, node: 'Node', pattern: Pattern) -> None:
+        self.node = node
+        self.pattern = pattern
+
+    def __str__(self) -> str:
+        args = ', '.join(repr(a) for a in (self.node.name, self.pattern))
+        return '<{}({})>'.format(self.__class__.__name__, args)
+
+
+    def is_satisfied(self) -> bool:
+        match = self.pattern.search(self.node.logs())
+        return bool(match)
 
 
 class HasAtLeastPeers:
@@ -242,3 +257,8 @@ def wait_for_sent_approved_block(context: TestingContext, node: 'Node') -> None:
 def wait_for_approved_block_received_handler(context: TestingContext, node: 'Node') -> None:
     predicate = ApprovedBlockReceivedHandlerStateEntered(node)
     wait_using_wall_clock_time(predicate, context.network_converge_timeout)
+
+
+def wait_for_log_match(context: TestingContext, node: 'Node', pattern: Pattern) -> None:
+    predicate = LogsReMatch(node, pattern)
+    wait_using_wall_clock_time_or_fail(predicate, context.command_timeout)
