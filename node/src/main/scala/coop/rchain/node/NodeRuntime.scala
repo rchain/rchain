@@ -1,7 +1,8 @@
 package coop.rchain.node
 
-import scala.concurrent.duration._
+import java.nio.file.Path
 
+import scala.concurrent.duration._
 import cats._
 import cats.data._
 import cats.effect._
@@ -9,7 +10,6 @@ import cats.effect.concurrent.{Ref, Semaphore}
 import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.functor._
-
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.{BlockDagFileStorage, BlockStore, FileLMDBIndexBlockStore}
 import coop.rchain.casper._
@@ -36,7 +36,6 @@ import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
 import coop.rchain.shared.PathOps._
 import coop.rchain.rspace.Context
-
 import com.typesafe.config.ConfigFactory
 import kamon._
 import kamon.system.SystemMetrics
@@ -358,15 +357,16 @@ class NodeRuntime private[node] (
     )
     nodeDiscovery <- effects
                       .nodeDiscovery(id, defaultTimeout)(initPeer)(log, time, metrics, kademliaRPC)
-    .toEffect
-    /** 
-      * We need to come up with a consistent way with folder creation. Some layers create folder on their own (if not available), 
-      * others (like blockstore) relay on the structure being created for them (and will fail if it does not exist). For now 
+                      .toEffect
+
+    /**
+      * We need to come up with a consistent way with folder creation. Some layers create folder on their own (if not available),
+      * others (like blockstore) relay on the structure being created for them (and will fail if it does not exist). For now
       * this small fix should suffice, but we should unify this.
       */
-    _ <- mkDirs(conf.server.dataDir.toFile.mkdirs())
-    _ <- mkDirs(blockstorePath.toFile.mkdirs())
-    _ <- mkDirs(dagStoragePath.toFile.mkdirs())
+    _             <- mkDirs(conf.server.dataDir)
+    _             <- mkDirs(blockstorePath)
+    _             <- mkDirs(dagStoragePath)
     blockstoreEnv = Context.env(blockstorePath, 100L * 1024L * 1024L * 4096L)
     blockStore <- FileLMDBIndexBlockStore
                    .create[Effect](blockstoreEnv, blockstorePath)(
