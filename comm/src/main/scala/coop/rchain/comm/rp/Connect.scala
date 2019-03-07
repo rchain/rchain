@@ -45,7 +45,7 @@ object Connect {
           case (_, rest) => rest ++ toBeAdded
         }
         val size = newConnections.size.toLong
-        Log[F].info(s"Peers: $size.") *>
+        Log[F].info(s"Peers: $size.") >>
           Metrics[F].setGauge("peers", size).as(newConnections)
       }
 
@@ -58,7 +58,7 @@ object Connect {
           case (_, rest) => rest
         }
         val size = newConnections.size.toLong
-        Log[F].info(s"Peers: $size.") *>
+        Log[F].info(s"Peers: $size.") >>
           Metrics[F].setGauge("peers", size).as(newConnections)
       }
     }

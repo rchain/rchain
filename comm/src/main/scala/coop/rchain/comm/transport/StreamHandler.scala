@@ -42,22 +42,22 @@ object StreamHandler {
       stream: Observable[Chunk],
       circuitBreaker: CircuitBreaker
   )(implicit log: Log[Task]): Task[Either[Throwable, StreamMessage]] =
-    (init(folder)
+    init(folder)
       .bracketE { initStmd =>
         (collect(initStmd, stream, circuitBreaker) >>= toResult).value
       }({
         // failed while collecting stream
         case (stmd, Right(Left(_))) =>
-          gracefullyClose[Task](stmd.fos).as(()) *>
+          gracefullyClose[Task](stmd.fos).as(()) >>
             stmd.path.deleteSingleFile[Task]
         // should not happend (errors handled witin bracket) but covered for safety
         case (stmd, Left(_)) =>
-          gracefullyClose[Task](stmd.fos).as(()) *>
+          gracefullyClose[Task](stmd.fos).as(()) >>
             stmd.path.deleteSingleFile[Task]
         // succesfully collected
         case (stmd, _) =>
           gracefullyClose[Task](stmd.fos).as(())
-      }))
+      })
       .attempt
       .map(_.flatten)
 

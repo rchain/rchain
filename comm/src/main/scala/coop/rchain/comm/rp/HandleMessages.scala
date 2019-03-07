@@ -46,7 +46,7 @@ object HandleMessages {
       case Protocol.Message.Disconnect(disconnect) => handleDisconnect[F](sender, disconnect)
       case Protocol.Message.Packet(packet)         => handlePacket[F](sender, packet)
       case msg =>
-        Log[F].error(s"Unexpected message type $msg") *> notHandled(unexpectedMessage(msg.toString))
+        Log[F].error(s"Unexpected message type $msg") >> notHandled(unexpectedMessage(msg.toString))
           .pure[F]
     }
 
