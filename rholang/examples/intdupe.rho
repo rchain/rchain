@@ -1,0 +1,61 @@
+// This code is designed to create a large number of comm events
+// For testing purposes. It strives to make the comm events on as wide
+// a range of channels as possible, but because rholang lacks explicit
+// substitution, some channels are bottlenecks.
+//
+// The technique is to create a single listen and a single send on each
+// integer channel up to some upper bound. The technique for creating the
+// sends and listens is illustrated by this tree. treeHelper essentially
+// takes an integer, produces a comm over the public channel represented
+// by that integer, and then does likewise for each of it's children.
+//
+// Notice that given a particular node, it's two children can be calculated
+// as 2n and 2n+1
+//
+//           1
+//        /      \
+//      2          3
+//    /   \      /   \
+//   4     5    6     7
+//
+// When run with a parameter of n, 2^n + 2^(n-1) + 1 comm events will be created
+// Here is the breakdown
+// 2^n non-contentious comms over the integer channels
+// 2^(n-1) bottlenecked comms over treeHelper
+// 1 comm over buildTree
+
+new buildTree,
+    treeHelper,
+    stdout(`rho:io:stdout`) in {
+
+  /**
+   * Users can customize how many comms are desired by changing this line.
+   * Roughly 2^(n + 1) comms will occur. Use -1 for essentially unlimited comms.
+   * Other lines will not need to be changed by end users.
+   */
+  buildTree!(10) |
+
+  contract buildTree(@depth) = {
+    // Always start the tree with a root of 1
+    treeHelper!((1, depth))
+  } |
+
+
+  contract treeHelper(@(n, depth)) = {
+    if (depth != 0) {
+
+      //stdout!(n) |
+
+      // Comm on this particular integer
+      // Ration of contentious to non-contentious comms
+      // can be made arbitrarily low by making this area more complex
+      // but a nicer solution would be to enable explicit substitution.
+      @n!(Nil) |
+      for (_ <- @n) { Nil} |
+
+      // Build remaining children nodes
+      treeHelper!((n * 2    , depth - 1)) |
+      treeHelper!((n * 2 + 1, depth - 1))
+    }
+  }
+}
