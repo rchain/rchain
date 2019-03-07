@@ -152,13 +152,13 @@ class GrpcTransportClient(
               GrpcTransport.stream(peer, Blob(sender, packet), messageSize)
             ).flatMap {
               case Left(error) =>
-                log.error(s"Error while streaming packet, error: $error") >> delay(
-                  handle(retryCount - 1)
-                )
-              case Right(_) =>
-                log.info(s"Streamed packet $path to $peer")
+                log.error(
+                  s"Error while streaming packet to $peer: ${error.message}"
+                ) >> delay(handle(retryCount - 1))
+              case Right(_) => log.info(s"Streamed packet $path to $peer")
             }
-          case Left(error) => log.error(s"Error while streaming packet, error: $error")
+          case Left(error) =>
+            log.error(s"Error while streaming packet $path to $peer: ${error.message}")
         } else log.debug(s"Giving up on streaming packet $path to $peer")
 
     handle(retries)
