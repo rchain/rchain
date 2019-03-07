@@ -11,7 +11,7 @@ import cats.implicits._
 import coop.rchain.catscontrib.ski.kp
 import coop.rchain.comm._
 import coop.rchain.comm.CachedConnections.ConnectionsCache
-import coop.rchain.comm.protocol.routing.{Protocol, RoutingGrpcMonix}
+import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.CommError.{protocolException, CommErr}
 import coop.rchain.grpc.implicits._
 import coop.rchain.metrics.Metrics
@@ -38,7 +38,6 @@ class GrpcTransportClient(
 ) extends TransportLayer[Task] {
 
   val DefaultSendTimeout: FiniteDuration                 = 5.seconds
-  val DefaultStreamTimeout: FiniteDuration               = 10.minutes
   private val cache: CachedConnections[Task, TcpConnTag] = connectionsCache(clientChannel)
 
   implicit val metricsSource: Metrics.Source =
@@ -144,16 +143,19 @@ class GrpcTransportClient(
     def delay[A](a: => Task[A]): Task[A] =
       Task.defer(a).delayExecution(delayBetweenRetries)
 
+    def timeout(packet: Packet): FiniteDuration =
+      Math.max(packet.content.size().toLong * 5, DefaultSendTimeout.toMicros).micros
+
     def handle(retryCount: Int): Task[Unit] =
       if (retryCount > 0)
         PacketOps.restore[Task](path) >>= {
           case Right(packet) =>
-            withClient(peer, DefaultStreamTimeout, enforce = false)(
+            withClient(peer, timeout(packet), enforce = false)(
               GrpcTransport.stream(peer, Blob(sender, packet), messageSize)
             ).flatMap {
               case Left(error) =>
                 log.error(
-                  s"Error while streaming packet to $peer: ${error.message}"
+                  s"Error while streaming packet to $peer (timeout: ${timeout(packet).toMillis}ms): ${error.message}"
                 ) >> delay(handle(retryCount - 1))
               case Right(_) => log.info(s"Streamed packet $path to $peer")
             }
