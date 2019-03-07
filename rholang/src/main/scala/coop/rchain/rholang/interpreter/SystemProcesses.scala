@@ -208,14 +208,11 @@ object SystemProcesses {
       ): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
         case isContractCall(produce, Seq(ack)) =>
           for {
-            parameters <- shortLeashParams.getParams
-            _ <- parameters match {
-                  case ShortLeashParameters(codeHash, phloRate, userId, timestamp) =>
-                    produce(Seq(codeHash, phloRate, userId, timestamp), ack)
-                  case _ =>
-                    illegalArgumentException("deployParameters expects only a return channel")
-                }
+            params <- shortLeashParams.getParams
+            _ <-produce(Seq(params.codeHash, params.phloRate, params.userId, params.timestamp), ack)
           } yield ()
+        case _ =>
+          illegalArgumentException("deployParameters expects only a return channel")
       }
 
       def blockTime(
