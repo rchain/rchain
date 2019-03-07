@@ -33,7 +33,7 @@ object RhoSpec {
           Runtime.byteName(27),
           2,
           27L,
-          ctx => RhoLogger.handleMessage(ctx)(_, _)
+          ctx => RhoLoggerContract.handleMessage(ctx)(_, _)
         )
       )
     TestUtil.runtime(testResultCollectorService)
