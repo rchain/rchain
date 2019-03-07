@@ -83,6 +83,42 @@ object SystemProcesses {
       private def illegalArgumentException(msg: String): F[Unit] =
         F.raiseError(new IllegalArgumentException(msg))
 
+      def verifySignatureContract(name : String,
+                                  algorithm : (Array[Byte], Array[Byte], Array[Byte]) => Boolean)
+      : (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
+        case isContractCall(
+          produce,
+          Seq(
+            RhoType.ByteArray(data),
+            RhoType.ByteArray(signature),
+            RhoType.ByteArray(pub),
+            ack
+          )
+        ) =>
+          for {
+            verified <- F.fromTry(Try(algorithm(data, signature, pub)))
+            _        <- produce(Seq(RhoType.Bool(verified)), ack)
+          } yield ()
+        case _ =>
+          illegalArgumentException(
+            s"$name expects data, signature, public key (all as byte arrays), and an acknowledgement channel"
+          )
+      }
+
+      def hashContract(name : String,
+                       algorithm : Array[Byte] => Array[Byte])
+      : (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]= {
+        case isContractCall(produce, Seq(RhoType.ByteArray(input), ack)) =>
+          for {
+            hash <- F.fromTry(Try(algorithm(input)))
+            _    <- produce(Seq(RhoType.ByteArray(hash)), ack)
+          } yield ()
+        case _ =>
+          illegalArgumentException(
+            s"$name expects a byte array and return channel"
+          )
+      }
+
       def stdOut: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
         case isContractCall(_, Seq(arg)) =>
           F.delay(Console.println(prettyPrinter.buildString(arg)))
@@ -125,82 +161,20 @@ object SystemProcesses {
           produce(Seq(errorMessage), ack)
       }
 
-      def secp256k1Verify: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
-        case isContractCall(
-            produce,
-            Seq(
-              RhoType.ByteArray(data),
-              RhoType.ByteArray(signature),
-              RhoType.ByteArray(pub),
-              ack
-            )
-            ) =>
-          for {
-            verified <- F.fromTry(Try(Secp256k1.verify(data, signature, pub)))
-            _        <- produce(Seq(RhoType.Bool(verified)), ack)
-          } yield ()
-        case _ =>
-          illegalArgumentException(
-            "secp256k1Verify expects data, signature, public key (all as byte arrays), and an acknowledgement channel"
-          )
-      }
+      def secp256k1Verify: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] =
+        verifySignatureContract("secp256k1Verify", Secp256k1.verify)
 
-      def ed25519Verify: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
-        case isContractCall(
-            produce,
-            Seq(
-              RhoType.ByteArray(data),
-              RhoType.ByteArray(signature),
-              RhoType.ByteArray(pub),
-              ack
-            )
-            ) =>
-          for {
-            verified <- F.fromTry(Try(Ed25519.verify(data, signature, pub)))
-            _        <- produce(Seq(RhoType.Bool(verified)), ack)
-          } yield ()
-        case _ =>
-          illegalArgumentException(
-            "ed25519Verify expects data, signature, public key (all as byte arrays), and an acknowledgement channel"
-          )
-      }
+      def ed25519Verify: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] =
+        verifySignatureContract("ed25519Verify", Ed25519.verify)
 
-      def sha256Hash: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
-        case isContractCall(produce, Seq(RhoType.ByteArray(input), ack)) =>
-          for {
-            hash <- F.fromTry(Try(Sha256.hash(input)))
-            _    <- produce(Seq(RhoType.ByteArray(hash)), ack)
-          } yield ()
-        case _ =>
-          illegalArgumentException(
-            "sha256Hash expects a byte array and return channel"
-          )
-      }
+      def sha256Hash: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] =
+        hashContract("sha256Hash", Sha256.hash)
 
-      def keccak256Hash: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
-        case isContractCall(produce, Seq(RhoType.ByteArray(input), ack)) =>
-          for {
-            hash <- F.fromTry(Try(Keccak256.hash(input)))
-            _    <- produce(Seq(RhoType.ByteArray(hash)), ack)
-          } yield ()
+      def keccak256Hash: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] =
+        hashContract("keccak256Hash", Keccak256.hash)
 
-        case _ =>
-          illegalArgumentException(
-            "keccak256Hash expects a byte array and return channel"
-          )
-      }
-
-      def blake2b256Hash: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
-        case isContractCall(produce, Seq(RhoType.ByteArray(input), ack)) =>
-          for {
-            hash <- F.fromTry(Try(Blake2b256.hash(input)))
-            _    <- produce(Seq(RhoType.ByteArray(hash)), ack)
-          } yield ()
-        case _ =>
-          illegalArgumentException(
-            "blake2b256Hash expects a byte array and return channel"
-          )
-      }
+      def blake2b256Hash: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] =
+        hashContract("blake2b256Hash", Blake2b256.hash)
 
       // TODO: rename this system process to "deployParameters"?
       def getDeployParams(
