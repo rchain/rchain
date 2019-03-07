@@ -13,7 +13,6 @@ class ContractCall[F[_]: Sync](
     space: RhoISpace[F],
     dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
 ) {
-
   type Producer = (Seq[Par], Par) => F[Unit]
 
   private val UNLIMITED_MATCH_PHLO = matchListPar(Cost(Integer.MAX_VALUE))
@@ -38,9 +37,7 @@ class ContractCall[F[_]: Sync](
           )
     } yield ()
 
-  def unapply(contractArgs: (Seq[ListParWithRandomAndPhlos], Int)): Option[
-    (Producer, Seq[Par])
-  ] =
+  def unapply(contractArgs: (Seq[ListParWithRandomAndPhlos], Int)): Option[(Producer, Seq[Par])] =
     contractArgs match {
       case (
           Seq(
