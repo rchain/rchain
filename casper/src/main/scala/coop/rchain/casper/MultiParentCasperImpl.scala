@@ -82,13 +82,16 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
         status <- internalAddBlock(b, dag)
       } yield status
 
-    Sync[F].bracket(blockProcessingLock.acquire)(
-      kp(
-        blockDag >>= (_.contains(b.blockHash)
-          .||^(BlockStore[F].contains(b.blockHash))
-          .ifM(logAlreadyProcessed, doppelgangerAndAdd))
-      )
-    )(kp(blockProcessingLock.release))
+    Sync[F].bracket(blockProcessingLock.acquire)(kp {
+      val exists = for {
+        dag         <- blockDag
+        cst         <- state.read
+        dagContains <- dag.contains(b.blockHash)
+      } yield dagContains || cst.blockBuffer.contains(b.blockHash)
+
+      exists.ifM(logAlreadyProcessed, doppelgangerAndAdd)
+
+    })(kp(blockProcessingLock.release))
   }
 
   private def internalAddBlock(

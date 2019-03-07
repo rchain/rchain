@@ -1,7 +1,7 @@
 package coop.rchain.node
 
+import java.nio.file.{Files, Path}
 import scala.concurrent.duration._
-
 import cats._
 import cats.data._
 import cats.effect._
@@ -9,13 +9,12 @@ import cats.effect.concurrent.{Ref, Semaphore}
 import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.functor._
-
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.{
   BlockDagFileStorage,
+  BlockDagStorage,
   BlockStore,
-  InMemBlockDagStorage,
-  InMemBlockStore
+  FileLMDBIndexBlockStore
 }
 import coop.rchain.casper._
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
@@ -40,7 +39,7 @@ import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
 import coop.rchain.shared.PathOps._
-
+import coop.rchain.rspace.Context
 import com.typesafe.config.ConfigFactory
 import kamon._
 import kamon.system.SystemMetrics
@@ -80,6 +79,8 @@ class NodeRuntime private[node] (
   /** Configuration */
   private val port              = conf.server.port
   private val kademliaPort      = conf.server.kademliaPort
+  private val blockstorePath    = conf.server.dataDir.resolve("blockstore")
+  private val dagStoragePath    = conf.server.dataDir.resolve("dagstorage")
   private val storagePath       = conf.server.dataDir.resolve("rspace")
   private val casperStoragePath = storagePath.resolve("casper")
   private val storageSize       = conf.server.mapSize
@@ -162,6 +163,7 @@ class NodeRuntime private[node] (
       transportShutdown: TransportLayerShutdown[Task],
       kademliaRPC: KademliaRPC[Task],
       blockStore: BlockStore[Effect],
+      blockDagStorage: BlockDagStorage[Effect],
       peerNodeAsk: PeerNodeAsk[Task]
   ): Unit =
     (for {
@@ -181,6 +183,8 @@ class NodeRuntime private[node] (
       _   <- runtime.close()
       _   <- log.info("Shutting down Casper runtime ...")
       _   <- casperRuntime.close()
+      _   <- log.info("Bringing DagStorage down ...")
+      _   <- blockDagStorage.close().value
       _   <- log.info("Bringing BlockStore down ...")
       _   <- blockStore.close().value
       _   <- log.info("Goodbye.")
@@ -190,6 +194,7 @@ class NodeRuntime private[node] (
       implicit transportShutdown: TransportLayerShutdown[Task],
       kademliaRPC: KademliaRPC[Task],
       blockStore: BlockStore[Effect],
+      blockDagStorage: BlockDagStorage[Effect],
       peerNodeAsk: PeerNodeAsk[Task]
   ): Task[Unit] =
     Task.delay(sys.addShutdownHook(clearResources(servers, runtime, casperRuntime)))
@@ -208,6 +213,7 @@ class NodeRuntime private[node] (
       kademliaRPC: KademliaRPC[Task],
       nodeDiscovery: NodeDiscovery[Task],
       rpConnectons: ConnectionsCell[Task],
+      blockDagStorage: BlockDagStorage[Effect],
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect],
       packetHandler: PacketHandler[Effect],
@@ -288,8 +294,6 @@ class NodeRuntime private[node] (
         } *> exit0.as(Right(()))
     )
 
-  private def syncEffect = cats.effect.Sync.catsEitherTSync[Task, CommError]
-
   private val rpClearConnConf = ClearConnetionsConf(
     conf.server.maxNumOfConnections,
     numOfConnectionsPinged = 10
@@ -297,6 +301,10 @@ class NodeRuntime private[node] (
 
   private def rpConf(local: PeerNode, bootstrapNode: Option[PeerNode]) =
     RPConf(local, bootstrapNode, defaultTimeout, rpClearConnConf)
+
+  // TODO this should use existing algebra
+  private def mkDirs(path: Path): Effect[Unit] =
+    Sync[Effect].delay(Files.createDirectories(path))
 
   /**
     * Main node entry. It will:
@@ -360,20 +368,39 @@ class NodeRuntime private[node] (
     nodeDiscovery <- effects
                       .nodeDiscovery(id, defaultTimeout)(initPeer)(log, time, metrics, kademliaRPC)
                       .toEffect
-    // TODO: This change is temporary until itegulov's BlockStore implementation is in
-    blockMap <- Ref.of[Effect, Map[BlockHash, BlockMessage]](Map.empty[BlockHash, BlockMessage])
-    blockStore = InMemBlockStore.create[Effect](
-      syncEffect,
-      blockMap,
-      Metrics.eitherT(Monad[Task], metrics)
+
+    /**
+      * We need to come up with a consistent way with folder creation. Some layers create folder on their own (if not available),
+      * others (like blockstore) relay on the structure being created for them (and will fail if it does not exist). For now
+      * this small fix should suffice, but we should unify this.
+      */
+    _             <- mkDirs(conf.server.dataDir)
+    _             <- mkDirs(blockstorePath)
+    _             <- mkDirs(dagStoragePath)
+    blockstoreEnv = Context.env(blockstorePath, 100L * 1024L * 1024L * 4096L)
+    blockStore <- FileLMDBIndexBlockStore
+                   .create[Effect](blockstoreEnv, blockstorePath)(
+                     Concurrent[Effect],
+                     Sync[Effect],
+                     Log.eitherTLog(Monad[Task], log)
+                   )
+                   .map(_.right.get) // TODO handle errors
+    dagConfig = BlockDagFileStorage.Config(
+      latestMessagesLogPath = dagStoragePath.resolve("latestMessagesLogPath"),
+      latestMessagesCrcPath = dagStoragePath.resolve("latestMessagesCrcPath"),
+      blockMetadataLogPath = dagStoragePath.resolve("blockMetadataLogPath"),
+      blockMetadataCrcPath = dagStoragePath.resolve("blockMetadataCrcPath"),
+      equivocationsTrackerLogPath = dagStoragePath.resolve("equivocationsTrackerLogPath"),
+      equivocationsTrackerCrcPath = dagStoragePath.resolve("equivocationsTrackerCrcPath"),
+      checkpointsDirPath = dagStoragePath.resolve("checkpointsDirPath"),
+      latestMessagesLogMaxSizeFactor = 10
     )
-    blockDagStorage <- InMemBlockDagStorage.create[Effect](
+    blockDagStorage <- BlockDagFileStorage.create[Effect](dagConfig)(
                         Concurrent[Effect],
                         Sync[Effect],
                         Log.eitherTLog(Monad[Task], log),
                         blockStore
                       )
-    _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
     oracle = SafetyOracle.cliqueOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
     runtime <- {
       implicit val s                = rspaceScheduler
@@ -442,6 +469,7 @@ class NodeRuntime private[node] (
       kademliaRPC,
       nodeDiscovery,
       rpConnections,
+      blockDagStorage,
       blockStore,
       oracle,
       packetHandler,
