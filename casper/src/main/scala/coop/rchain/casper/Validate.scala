@@ -500,74 +500,95 @@ object Validate {
    * Hence, we ignore justification regressions involving the block's sender and
    * let checkEquivocations handle it instead.
    */
-  def justificationRegressions[F[_]: Monad: Log: BlockStore](
+  def justificationRegressions[F[_]: Sync: Log](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F]
-  ): F[Either[InvalidBlock, ValidBlock]] = {
-    val latestMessagesOfBlock = ProtoUtil.toLatestMessageHashes(b.justifications)
-    for {
-      maybeLatestMessage <- dag.latestMessage(b.sender)
-      maybeLatestMessagesFromSenderView = maybeLatestMessage.map(
-        bm => ProtoUtil.toLatestMessageHashes(bm.justifications)
-      )
-      result <- maybeLatestMessagesFromSenderView match {
-                 case Some(latestMessagesFromSenderView) =>
-                   justificationRegressionsAux[F](
-                     b,
-                     latestMessagesOfBlock,
-                     latestMessagesFromSenderView,
-                     genesis
-                   )
-                 case None =>
-                   // We cannot have a justification regression if we don't have a previous latest message from sender
-                   Applicative[F].pure(Right(Valid))
-               }
-    } yield result
-  }
+  ): F[Either[InvalidBlock, ValidBlock]] =
+    dag.latestMessage(b.sender).flatMap {
+      case Some(latestMessage) =>
+        val latestMessagesOfBlock = ProtoUtil.toLatestMessageHashes(b.justifications)
+        val latestMessagesFromSenderView =
+          ProtoUtil.toLatestMessageHashes(latestMessage.justifications)
+        justificationRegressionsGivenLatestMessages[F](
+          b,
+          dag,
+          latestMessagesOfBlock,
+          latestMessagesFromSenderView,
+          genesis
+        )
+      case None =>
+        // We cannot have a justification regression if we don't have a previous latest message from sender
+        Applicative[F].pure(Right(Valid))
+    }
 
-  private def justificationRegressionsAux[F[_]: Monad: Log: BlockStore](
+  private def justificationRegressionsGivenLatestMessages[F[_]: Sync: Log](
       b: BlockMessage,
-      latestMessagesOfBlock: Map[Validator, BlockHash],
-      latestMessagesFromSenderView: Map[Validator, BlockHash],
+      dag: BlockDagRepresentation[F],
+      currentLatestMessages: Map[Validator, BlockHash],
+      previousLatestMessages: Map[Validator, BlockHash],
       genesis: BlockMessage
   ): F[Either[InvalidBlock, ValidBlock]] =
-    for {
-      containsJustificationRegression <- latestMessagesOfBlock.toList.existsM {
-                                          case (validator, currentBlockJustificationHash) =>
-                                            if (validator == b.sender) {
-                                              // We let checkEquivocations handle this case
-                                              false.pure[F]
-                                            } else {
-                                              val previousBlockJustificationHash =
-                                                latestMessagesFromSenderView.getOrElse(
-                                                  validator,
-                                                  genesis.blockHash
-                                                )
-                                              isJustificationRegression[F](
-                                                currentBlockJustificationHash,
-                                                previousBlockJustificationHash
-                                              )
-                                            }
-                                        }
-      status <- if (containsJustificationRegression) {
-                 for {
-                   _ <- Log[F].warn(ignore(b, "block contains justification regressions."))
-                 } yield Left(JustificationRegression)
-               } else {
-                 Applicative[F].pure(Right(Valid))
-               }
-    } yield status
+    currentLatestMessages.toList.tailRecM {
+      case Nil =>
+        // No more latest messages to check
+        Applicative[F].pure(Right(Right(Valid)))
+      case (validator, currentBlockJustificationHash) :: tail =>
+        if (validator == b.sender) {
+          // We let checkEquivocations handle this case
+          Applicative[F].pure(Left(tail))
+        } else {
+          val previousBlockJustificationHash =
+            previousLatestMessages.getOrElse(
+              validator,
+              genesis.blockHash
+            )
+          Monad[F].ifM(
+            isJustificationRegression[F](
+              dag,
+              currentBlockJustificationHash,
+              previousBlockJustificationHash
+            )
+          )(
+            {
+              val message =
+                s"block ${PrettyPrinter.buildString(currentBlockJustificationHash)} by ${PrettyPrinter
+                  .buildString(validator)} has a lower sequence number than ${PrettyPrinter.buildString(previousBlockJustificationHash)}."
+              Log[F].warn(ignore(b, message)) *> Applicative[F].pure(
+                Right(Left(JustificationRegression))
+              )
+            },
+            Applicative[F].pure(Left(tail))
+          )
+        }
+    }
 
-  private def isJustificationRegression[F[_]: Monad: Log: BlockStore](
+  private def isJustificationRegression[F[_]: Sync](
+      dag: BlockDagRepresentation[F],
       currentBlockJustificationHash: BlockHash,
       previousBlockJustificationHash: BlockHash
   ): F[Boolean] =
     for {
-      currentBlockJustification <- ProtoUtil
-                                    .unsafeGetBlock[F](currentBlockJustificationHash)
-      previousBlockJustification <- ProtoUtil
-                                     .unsafeGetBlock[F](previousBlockJustificationHash)
+      maybeCurrentBlockJustification <- dag.lookup(currentBlockJustificationHash)
+      currentBlockJustification <- maybeCurrentBlockJustification match {
+                                    case Some(block) => block.pure[F]
+                                    case None =>
+                                      Sync[F].raiseError[BlockMetadata](
+                                        new Exception(
+                                          s"Missing ${PrettyPrinter.buildString(currentBlockJustificationHash)} from block dag store."
+                                        )
+                                      )
+                                  }
+      maybePreviousBlockJustification <- dag.lookup(previousBlockJustificationHash)
+      previousBlockJustification <- maybePreviousBlockJustification match {
+                                     case Some(block) => block.pure[F]
+                                     case None =>
+                                       Sync[F].raiseError[BlockMetadata](
+                                         new Exception(
+                                           s"Missing ${PrettyPrinter.buildString(previousBlockJustificationHash)} from block dag store."
+                                         )
+                                       )
+                                   }
     } yield
       if (currentBlockJustification.seqNum < previousBlockJustification.seqNum) {
         true
