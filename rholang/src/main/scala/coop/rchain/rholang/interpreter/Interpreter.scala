@@ -12,6 +12,7 @@ import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.{
   LexerError,
+  OutOfPhlogistonsError,
   ParserError,
   SyntaxError,
   TopLevelFreeVariablesNotAllowedError,
@@ -60,22 +61,14 @@ object Interpreter {
         sortedPar <- Sortable[Par].sortMatch(par)
       } yield sortedPar.term
 
-    def evaluatePar(runtime: Runtime[F], par: Par, initialPhlo: Cost): F[EvaluateResult] = {
-      implicit val rand: Blake2b512Random = Blake2b512Random(128)
-      for {
-        checkpoint    <- runtime.space.createCheckpoint()
-        _             <- runtime.reducer.setPhlo(initialPhlo)
-        _             <- runtime.reducer.inj(par)(rand)
-        errors        <- runtime.readAndClearErrorVector()
-        remainingPhlo <- runtime.reducer.phlo
-        cost          = initialPhlo - remainingPhlo
-        _             <- if (errors.nonEmpty) runtime.space.reset(checkpoint.root) else F.unit
-      } yield EvaluateResult(cost, errors)
+    def evaluatePar(runtime: Runtime[F], par: Par): F[EvaluateResult] = {
+      val initialPhlo = Cost.Max
+      evaluatePar(runtime, par, initialPhlo)
     }
 
-    def evaluatePar(runtime: Runtime[F], par: Par): F[EvaluateResult] = {
-      val initialPhlo = Cost(Integer.MAX_VALUE) //This is OK because evaluate is not called on deploy
-      evaluatePar(runtime, par, initialPhlo)
+    def evaluatePar(runtime: Runtime[F], par: Par, initialPhlo: Cost): F[EvaluateResult] = {
+      val term = PrettyPrinter().buildString(par)
+      evaluate(runtime, term, initialPhlo)
     }
 
     def evaluate(runtime: Runtime[F], term: String): F[EvaluateResult] =
@@ -85,33 +78,37 @@ object Interpreter {
       implicit val rand: Blake2b512Random = Blake2b512Random(128)
       for {
         checkpoint <- runtime.space.createCheckpoint()
-        _          <- runtime.reducer.setPhlo(initialPhlo)
-        res        <- injAttempt(runtime, term)
+        res        <- injAttempt(runtime, term, initialPhlo)
         _          <- if (res.errors.nonEmpty) runtime.space.reset(checkpoint.root) else F.unit
       } yield res
     }
 
-    def injAttempt(
+    private[this] def injAttempt(
         runtime: Runtime[F],
-        term: String
+        term: String,
+        initialPhlo: Cost
     )(implicit rand: Blake2b512Random): F[EvaluateResult] = {
       val parsingCost = accounting.parsingCost(term)
-      Interpreter[F].buildNormalizedTerm(term).attempt.flatMap {
-        case Right(parsed) =>
-          for {
-            result    <- runtime.reducer.inj(parsed).attempt
-            phlosLeft <- runtime.reducer.phlo
-            oldErrors <- runtime.errorLog.readAndClearErrorVector()
-            newErrors = result.swap.toSeq.toVector
-            allErrors = oldErrors |+| newErrors
-            cost      = phlosLeft - parsingCost
-          } yield EvaluateResult(cost, allErrors)
-        case Left(error) =>
-          for {
-            phlosLeft <- runtime.reducer.phlo
-            cost      = phlosLeft - parsingCost
-          } yield EvaluateResult(cost, Vector(error))
-      }
+      // TODO: charge(parsingCost) so that it is visible in the cost log
+      val phloAfterParsing = initialPhlo - parsingCost
+      if (phloAfterParsing.value <= 0)
+        EvaluateResult(parsingCost, Vector(OutOfPhlogistonsError)).pure[F]
+      else
+        Interpreter[F].buildNormalizedTerm(term).attempt.flatMap {
+          case Right(parsed) =>
+            for {
+              _         <- runtime.reducer.setPhlo(phloAfterParsing)
+              result    <- runtime.reducer.inj(parsed).attempt
+              phlosLeft <- runtime.reducer.phlo
+              oldErrors <- runtime.errorLog.readAndClearErrorVector()
+              newErrors = result.swap.toSeq.toVector
+              allErrors = oldErrors |+| newErrors
+            } yield EvaluateResult(initialPhlo - phlosLeft, allErrors)
+          case Left(error) =>
+            for {
+              phlosLeft <- runtime.reducer.phlo
+            } yield EvaluateResult(initialPhlo - phlosLeft, Vector(error))
+        }
     }
 
     private def buildAST(reader: Reader): F[Proc] =
