@@ -87,4 +87,11 @@ object StandardDeploys {
       faucetCode: String => String,
       posParams: ProofOfStakeParams
   ): DeployData = toDeploy(new PreWalletRev(wallets, faucetCode, posParams), "", 0L)
+
+  def revVault: DeployData =
+    toDeploy(
+      CompiledRholangSource("RevVault.rho"),
+      "be8ae000e4d2f29c73f792705314d71b6c0d56d7c640c6b4df9fabf90518c623",
+      1551879405043L
+    )
 }
