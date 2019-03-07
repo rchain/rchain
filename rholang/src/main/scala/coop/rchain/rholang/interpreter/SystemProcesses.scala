@@ -2,19 +2,12 @@ package coop.rchain.rholang.interpreter
 
 import cats.effect.Sync
 import cats.implicits._
-import com.google.protobuf.ByteString
-import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random, Keccak256, Sha256}
+import coop.rchain.crypto.hash.{Blake2b256, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
-import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GString}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.ShortLeashParams.ShortLeashParameters
 import coop.rchain.rholang.interpreter.Runtime.{BlockTime, RhoISpace, ShortLeashParams}
-import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.rholang.interpreter.errors.{InterpreterError, OutOfPhlogistonsError}
-import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.rspace.util._
 import coop.rchain.rspace.{ContResult, Result}
 
 import scala.util.Try
@@ -37,32 +30,6 @@ trait SystemProcesses[F[_]] {
   ): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
   def blockTime(timestamp: BlockTime[F]): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
   def validateRevAddress: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
-}
-
-object RhoType {
-  object ByteArray {
-    import coop.rchain.models.rholang.implicits._
-    def unapply(p: Par): Option[Array[Byte]] =
-      p.singleExpr().collect {
-        case Expr(GByteArray(bs)) => bs.toByteArray
-      }
-
-    def apply(bytes: Array[Byte]): Par =
-      Expr(GByteArray(ByteString.copyFrom(bytes)))
-  }
-
-  object String {
-    def unapply(p: Par): Option[String] =
-      p.singleExpr().collect {
-        case Expr(GString(bs)) => bs
-      }
-
-    def apply(s: String): Par = GString(s)
-  }
-
-  object Bool {
-    def apply(b: Boolean) = Expr(GBool(b))
-  }
 }
 
 object SystemProcesses {
