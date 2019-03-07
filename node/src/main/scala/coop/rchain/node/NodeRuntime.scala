@@ -1,7 +1,6 @@
 package coop.rchain.node
 
-import java.nio.file.Path
-
+import java.nio.file.{Files, Path}
 import scala.concurrent.duration._
 import cats._
 import cats.data._
@@ -304,7 +303,8 @@ class NodeRuntime private[node] (
     RPConf(local, bootstrapNode, defaultTimeout, rpClearConnConf)
 
   // TODO this should use existing algebra
-  private def mkDirs(path: Path): Effect[Unit] = Sync[Effect].delay(path.toFile.mkdirs())
+  private def mkDirs(path: Path): Effect[Unit] =
+    Sync[Effect].delay(Files.createDirectories(path))
 
   /**
     * Main node entry. It will:
