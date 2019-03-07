@@ -38,6 +38,13 @@ trait Interpreter[F[_]] {
 
   def evaluatePar(runtime: Runtime[F], par: Par): F[EvaluateResult]
   def evaluatePar(runtime: Runtime[F], par: Par, initialPhlo: Cost): F[EvaluateResult]
+
+  def injAttempt(
+      reducer: ChargingReducer[F],
+      errorLog: ErrorLog[F],
+      term: String,
+      initialPhlo: Cost
+  )(implicit rand: Blake2b512Random): F[EvaluateResult]
 }
 
 object Interpreter {
@@ -78,13 +85,14 @@ object Interpreter {
       implicit val rand: Blake2b512Random = Blake2b512Random(128)
       for {
         checkpoint <- runtime.space.createCheckpoint()
-        res        <- injAttempt(runtime, term, initialPhlo)
+        res        <- injAttempt(runtime.reducer, runtime.errorLog, term, initialPhlo)
         _          <- if (res.errors.nonEmpty) runtime.space.reset(checkpoint.root) else F.unit
       } yield res
     }
 
-    private[this] def injAttempt(
-        runtime: Runtime[F],
+    def injAttempt(
+        reducer: ChargingReducer[F],
+        errorLog: ErrorLog[F],
         term: String,
         initialPhlo: Cost
     )(implicit rand: Blake2b512Random): F[EvaluateResult] = {
@@ -97,17 +105,17 @@ object Interpreter {
         Interpreter[F].buildNormalizedTerm(term).attempt.flatMap {
           case Right(parsed) =>
             for {
-              _         <- runtime.reducer.setPhlo(phloAfterParsing)
-              result    <- runtime.reducer.inj(parsed).attempt
-              phlosLeft <- runtime.reducer.phlo
-              oldErrors <- runtime.errorLog.readAndClearErrorVector()
+              _         <- reducer.setPhlo(phloAfterParsing)
+              result    <- reducer.inj(parsed).attempt
+              phlosLeft <- reducer.phlo
+              oldErrors <- errorLog.readAndClearErrorVector()
               newErrors = result.swap.toSeq.toVector
               allErrors = oldErrors |+| newErrors
             } yield EvaluateResult(initialPhlo - phlosLeft, allErrors)
           case Left(error) =>
             for {
-              phlosLeft <- runtime.reducer.phlo
-            } yield EvaluateResult(initialPhlo - phlosLeft, Vector(error))
+              phlosLeft <- reducer.phlo
+            } yield EvaluateResult(parsingCost, Vector(error))
         }
     }
 

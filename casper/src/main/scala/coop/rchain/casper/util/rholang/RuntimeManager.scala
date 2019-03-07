@@ -17,7 +17,13 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Interpreter
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rholang.interpreter.{accounting, ChargingReducer, ErrorLog, Runtime}
+import coop.rchain.rholang.interpreter.{
+  accounting,
+  ChargingReducer,
+  ErrorLog,
+  EvaluateResult,
+  Runtime
+}
 import coop.rchain.rspace.internal.Datum
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 
@@ -199,21 +205,27 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         terms match {
           case deploy +: rem =>
             for {
-              _              <- runtime.space.reset(hash)
-              availablePhlos = Cost(deploy.phloLimit)
-              _              <- runtime.reducer.setPhlo(availablePhlos)
+              _ <- runtime.space.reset(hash)
               (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(
                 deploy
               )
               _ <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
-
-              injResult           <- injAttempt(deploy, runtime.reducer, runtime.errorLog)
-              (phlosLeft, errors) = injResult
-              cost                = phlosLeft.copy(cost = availablePhlos.value - phlosLeft.cost)
-              newCheckpoint       <- runtime.space.createCheckpoint()
+              injResult <- {
+                implicit val rand: Blake2b512Random = Blake2b512Random(
+                  DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
+                )
+                Interpreter[F].injAttempt(
+                  runtime.reducer,
+                  runtime.errorLog,
+                  deploy.term,
+                  Cost(deploy.phloLimit)
+                )
+              }
+              EvaluateResult(evaluationCost, errors) = injResult
+              newCheckpoint                          <- runtime.space.createCheckpoint()
               deployResult = InternalProcessedDeploy(
                 deploy,
-                cost,
+                Cost.toProto(evaluationCost),
                 newCheckpoint.log,
                 DeployStatus.fromErrors(errors)
               )
@@ -242,18 +254,25 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       Concurrent[F].defer {
         terms match {
           case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
-            val availablePhlos = Cost(deploy.phloLimit)
+            val (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(
+              deploy
+            )
             for {
-              _ <- runtime.replayReducer.setPhlo(availablePhlos)
-              (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(
-                deploy
-              )
-              _         <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
-              _         <- runtime.replaySpace.rig(hash, log.toList)
-              injResult <- injAttempt(deploy, runtime.replayReducer, runtime.errorLog)
+              _ <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
+              _ <- runtime.replaySpace.rig(hash, log.toList)
+              injResult <- {
+                implicit val rand: Blake2b512Random = Blake2b512Random(
+                  DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
+                )
+                Interpreter[F].injAttempt(
+                  runtime.replayReducer,
+                  runtime.errorLog,
+                  deploy.term,
+                  Cost(deploy.phloLimit)
+                )
+              }
               //TODO: compare replay deploy cost to given deploy cost
-              (phlosLeft, errors) = injResult
-              cost                = phlosLeft.copy(cost = availablePhlos.value - phlosLeft.cost)
+              EvaluateResult(cost, errors) = injResult
               cont <- DeployStatus.fromErrors(errors) match {
                        case int: InternalErrors => Left(Some(deploy) -> int).pure[F]
                        case replayStatus =>
@@ -290,33 +309,6 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     doReplayEval(terms, Blake2b256Hash.fromByteArray(initHash.toByteArray))
   }
 
-  private def injAttempt(
-      deploy: DeployData,
-      reducer: ChargingReducer[F],
-      errorLog: ErrorLog[F]
-  ): F[(PCost, Vector[Throwable])] = {
-    implicit val rand: Blake2b512Random = Blake2b512Random(
-      DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
-    )
-
-    val parsingCost = accounting.parsingCost(deploy.term)
-
-    Interpreter[F].buildNormalizedTerm(deploy.term).attempt.flatMap {
-      case Right(parsed) =>
-        for {
-          result    <- reducer.inj(parsed).attempt
-          phlosLeft <- reducer.phlo
-          oldErrors <- errorLog.readAndClearErrorVector()
-          newErrors = result.swap.toSeq.toVector
-          allErrors = oldErrors |+| newErrors
-        } yield (Cost.toProto(phlosLeft - parsingCost) -> allErrors)
-      case Left(error) =>
-        for {
-          phlosLeft <- reducer.phlo
-        } yield (Cost.toProto(phlosLeft - parsingCost) -> Vector(error))
-    }
-
-  }
 }
 
 object RuntimeManager {
