@@ -63,8 +63,8 @@ package object io {
   def isRegularFile[F[_]: Sync: RaiseIOError](path: Path): F[Boolean] =
     handleIo(Files.isRegularFile(path), UnexpectedIOError.apply)
 
-  def makeDirectory[F[_]: Sync: RaiseIOError](dirPath: Path): F[Boolean] =
-    handleIo(dirPath.toFile.mkdirs(), UnexpectedIOError.apply)
+  def makeDirectory[F[_]: Sync: RaiseIOError](dirPath: Path): F[Path] =
+    handleIo(Files.createDirectories(dirPath), UnexpectedIOError.apply)
 
   def listInDirectory[F[_]: Sync: RaiseIOError](dirPath: Path): F[List[Path]] =
     for {
