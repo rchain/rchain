@@ -1,7 +1,9 @@
 package coop.rchain.rholang.interpreter.storage
 
 import cats.effect.{Resource, Sync}
+import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
@@ -14,7 +16,7 @@ import coop.rchain.rholang.Resources.mkRhoISpace
 import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoPureSpace}
 import coop.rchain.rholang.interpreter.accounting.{CostAccounting, _}
 import coop.rchain.rholang.interpreter.errors
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.errors.{InterpreterError, OutOfPhlogistonsError}
 import coop.rchain.rholang.interpreter.storage.ChargingRSpace._
 import coop.rchain.rholang.interpreter.storage.ChargingRSpaceTest.{ChargingRSpace, _}
 import coop.rchain.rspace.{Match, _}
@@ -334,12 +336,13 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
   override type FixtureParam = TestFixture
 
   override protected def withFixture(test: OneArgTest): Outcome = {
-    val costAlg = CostAccounting.unsafe[Task](Cost(0))
-
+    val costAlg: CostAccounting[Task] = CostAccounting.unsafe[Task](Cost(0))
+    val cost: _cost[Task]             = loggingCost(costAlg, noOpCostLog)
     def mkChargingRspace(rhoISpace: RhoISpace[Task]): Task[ChargingRSpace] = {
       val pureRSpace = ChargingRSpaceTest.createTestISpace(rhoISpace)
       val s          = implicitly[Sync[Task]]
-      Task.delay(ChargingRSpace.pureRSpace(pureRSpace)(s, costAlg))
+      val error      = FunctorRaise[Task, InterpreterError]
+      Task.delay(ChargingRSpace.pureRSpace(pureRSpace)(s, cost, error))
     }
 
     val chargingRSpaceResource =

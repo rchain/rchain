@@ -6,7 +6,7 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoPureSpace}
 import coop.rchain.rholang.interpreter.accounting.{CostAccounting, _}
-import coop.rchain.rholang.interpreter.errors
+import coop.rchain.rholang.interpreter.{_error, errors}
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rspace.util._
@@ -29,7 +29,9 @@ object ChargingRSpace {
   def storageCostProduce(channel: Par, data: ListParWithRandom): Cost =
     channel.storageCost + data.pars.storageCost
 
-  def pureRSpace[F[_]: Sync](space: RhoISpace[F])(implicit costAlg: CostAccounting[F]) =
+  def pureRSpace[F[_]: Sync](
+      space: RhoISpace[F]
+  )(implicit costAlg: CostAccounting[F], cost: _cost[F], error: _error[F]) =
     new RhoPureSpace[F] {
 
       override def consume(
@@ -42,7 +44,7 @@ object ChargingRSpace {
         (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandomAndPhlos]])
       ]]] =
         for {
-          _       <- costAlg.charge(storageCostConsume(channels, patterns, continuation))
+          _       <- charge[F](storageCostConsume(channels, patterns, continuation))
           balance <- costAlg.get()
           consRes <- space.consume(channels, patterns, continuation, persist, sequenceNumber)(
                       matchListPar(balance)
@@ -66,8 +68,8 @@ object ChargingRSpace {
         (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandomAndPhlos]])
       ]]] =
         for {
-          _       <- costAlg.charge(storageCostProduce(channel, data))
-          balance <- costAlg.get()
+          _       <- charge[F](storageCostProduce(channel, data))
+          balance <- cost.get
           prodRes <- space.produce(channel, data, persist, sequenceNumber)(matchListPar(balance))
           _       <- handleResult(prodRes)
         } yield prodRes
@@ -83,7 +85,7 @@ object ChargingRSpace {
         result match {
           case Left(oope) =>
             // if we run out of phlos during the match we have to zero phlos available
-            costAlg.get().flatMap(cost => costAlg.charge(cost)) >> Sync[F].raiseError(oope)
+            cost.get.flatMap(charge[F]) >> Sync[F].raiseError(oope)
 
           case Right(None) => Sync[F].unit
 
@@ -106,11 +108,11 @@ object ChargingRSpace {
             )
 
             for {
-              _           <- costAlg.charge(rspaceMatchCost)
+              _           <- charge[F](rspaceMatchCost)
               refundValue = refundForConsume + refundForProduces
               _ <- if (refundValue == Cost(0))
                     Sync[F].unit
-                  else costAlg.refund(refundValue)
+                  else cost.modify(_ + refundValue)
             } yield ()
         }
 
