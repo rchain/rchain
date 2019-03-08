@@ -36,9 +36,6 @@ trait Interpreter[F[_]] {
   def evaluate(runtime: Runtime[F], term: String): F[EvaluateResult]
   def evaluate(runtime: Runtime[F], term: String, initialPhlo: Cost): F[EvaluateResult]
 
-  def evaluatePar(runtime: Runtime[F], par: Par): F[EvaluateResult]
-  def evaluatePar(runtime: Runtime[F], par: Par, initialPhlo: Cost): F[EvaluateResult]
-
   def injAttempt(
       reducer: ChargingReducer[F],
       errorLog: ErrorLog[F],
@@ -67,16 +64,6 @@ object Interpreter {
         par       <- normalizeTerm(proc)
         sortedPar <- Sortable[Par].sortMatch(par)
       } yield sortedPar.term
-
-    def evaluatePar(runtime: Runtime[F], par: Par): F[EvaluateResult] = {
-      val initialPhlo = Cost.Max
-      evaluatePar(runtime, par, initialPhlo)
-    }
-
-    def evaluatePar(runtime: Runtime[F], par: Par, initialPhlo: Cost): F[EvaluateResult] = {
-      val term = PrettyPrinter().buildString(par)
-      evaluate(runtime, term, initialPhlo)
-    }
 
     def evaluate(runtime: Runtime[F], term: String): F[EvaluateResult] =
       evaluate(runtime, term, Cost.Max)

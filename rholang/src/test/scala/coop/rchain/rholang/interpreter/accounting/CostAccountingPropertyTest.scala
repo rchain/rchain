@@ -11,7 +11,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.models._
 import coop.rchain.rholang.Resources.mkRhoISpace
 import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
-import coop.rchain.rholang.interpreter._
+import coop.rchain.rholang.interpreter.{PrettyPrinter => PP, _}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{PPar, Proc}
 import coop.rchain.rholang.syntax.rholang_mercury.PrettyPrinter
@@ -92,9 +92,17 @@ object CostAccountingPropertyTest {
 
     for {
       program <- interpreter.buildPar(p)
-      res     <- interpreter.evaluatePar(runtime, program)
+      res     <- evaluatePar(runtime, program)
       cost    = res.cost
     } yield cost.value
+  }
+
+  def evaluatePar[F[_]: Sync](
+      runtime: Runtime[F],
+      par: Par
+  ): F[EvaluateResult] = {
+    val term = PP().buildString(par)
+    Interpreter[F].evaluate(runtime, term)
   }
 
   def costOfExecution(procs: Proc*): Task[Long] = {
