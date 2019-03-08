@@ -40,27 +40,22 @@ object ChargingRSpace {
           sequenceNumber: Int
       ): F[Either[errors.InterpreterError, Option[
         (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandomAndPhlos]])
-      ]]] = {
-        val storageCost = storageCostConsume(channels, patterns, continuation)
+      ]]] =
         for {
-          _      <- costAlg.charge(storageCost)
-          matchF <- costAlg.get().map(cost => matchListPar(cost))
+          _       <- costAlg.charge(storageCostConsume(channels, patterns, continuation))
+          balance <- costAlg.get()
           consRes <- space.consume(channels, patterns, continuation, persist, sequenceNumber)(
-                      matchF
+                      matchListPar(balance)
                     )
           _ <- handleResult(consRes)
         } yield consRes
-      }
 
       override def install(
           channels: Seq[Par],
           patterns: Seq[BindPattern],
           continuation: TaggedContinuation
       ): F[Option[(TaggedContinuation, Seq[ListParWithRandomAndPhlos])]] =
-        space
-          .install(channels, patterns, continuation)(
-            matchListPar(Cost(Integer.MAX_VALUE))
-          )
+        space.install(channels, patterns, continuation)(matchListPar(Cost(Integer.MAX_VALUE)))
 
       override def produce(
           channel: Par,
@@ -69,15 +64,13 @@ object ChargingRSpace {
           sequenceNumber: Int
       ): F[Either[errors.InterpreterError, Option[
         (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandomAndPhlos]])
-      ]]] = {
-        val storageCost = storageCostProduce(channel, data)
+      ]]] =
         for {
-          _       <- costAlg.charge(storageCost)
-          matchF  <- costAlg.get().map(cost => matchListPar(cost))
-          prodRes <- space.produce(channel, data, persist, sequenceNumber)(matchF)
+          _       <- costAlg.charge(storageCostProduce(channel, data))
+          balance <- costAlg.get()
+          prodRes <- space.produce(channel, data, persist, sequenceNumber)(matchListPar(balance))
           _       <- handleResult(prodRes)
         } yield prodRes
-      }
 
       private def handleResult(
           result: Either[InterpreterError, Option[

@@ -3,7 +3,7 @@ import cats.effect.Sync
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.{ListParWithRandom, ListParWithRandomAndPhlos, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
-import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rspace.util.unpackCont
@@ -16,8 +16,6 @@ class ContractCall[F[_]: Sync](
 
   type Producer = (Seq[Par], Par) => F[Unit]
 
-  private val UNLIMITED_MATCH_PHLO = matchListPar(Cost(Integer.MAX_VALUE))
-
   private def produce(
       rand: Blake2b512Random,
       sequenceNumber: Int
@@ -28,7 +26,7 @@ class ContractCall[F[_]: Sync](
                         ListParWithRandom(values, rand),
                         persist = false,
                         sequenceNumber
-                      )(UNLIMITED_MATCH_PHLO)
+                      )(matchListPar(Cost(Integer.MAX_VALUE)))
       _ <- produceResult.fold(
             _ => Sync[F].raiseError(OutOfPhlogistonsError),
             _.fold(Sync[F].unit) {

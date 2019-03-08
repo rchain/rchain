@@ -182,11 +182,12 @@ object Runtime {
             freeCount = arity
           )
         )
-        val continuation                   = TaggedContinuation(ScalaBodyRef(ref))
-        implicit val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
+        val continuation = TaggedContinuation(ScalaBodyRef(ref))
         List(
-          space.install(channels, patterns, continuation),
-          replaySpace.install(channels, patterns, continuation)
+          space.install(channels, patterns, continuation)(matchListPar(Cost(Integer.MAX_VALUE))),
+          replaySpace.install(channels, patterns, continuation)(
+            matchListPar(Cost(Integer.MAX_VALUE))
+          )
         )
     }.sequence
 
@@ -420,20 +421,20 @@ object Runtime {
         "for what rate of interest is there that can naturally be more proper than another?")
         .getBytes()
     )
-    implicit val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
+
     for {
       spaceResult <- space.produce(
                       Registry.registryRoot,
                       ListParWithRandom(Seq(Registry.emptyMap), rand),
                       false,
                       0
-                    )
+                    )(matchListPar(Cost(Integer.MAX_VALUE)))
       replayResult <- replaySpace.produce(
                        Registry.registryRoot,
                        ListParWithRandom(Seq(Registry.emptyMap), rand),
                        false,
                        0
-                     )
+                     )(matchListPar(Cost(Integer.MAX_VALUE)))
       _ <- spaceResult match {
             case Right(None) =>
               replayResult match {

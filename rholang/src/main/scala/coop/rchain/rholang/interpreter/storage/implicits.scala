@@ -3,13 +3,12 @@ package coop.rchain.rholang.interpreter.storage
 import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.implicits._
+import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.errors.InterpreterError
-import coop.rchain.rholang.interpreter.matcher.NonDetFreeMapWithCost._
 import coop.rchain.rholang.interpreter.matcher._
 import coop.rchain.rspace.{Serialize, Match => StorageMatch}
 
@@ -30,43 +29,39 @@ object implicits {
       init: Cost
   ): StorageMatch[F, BindPattern, ListParWithRandom, ListParWithRandomAndPhlos] =
     new StorageMatch[F, BindPattern, ListParWithRandom, ListParWithRandomAndPhlos] {
-
-      private def calcUsed(init: Cost, left: Cost): Cost = init - left
-
       def get(
           pattern: BindPattern,
           data: ListParWithRandom
-      ): F[Option[ListParWithRandomAndPhlos]] =
-        Sync[F]
-          .delay {
-            SpatialMatcher
-              .foldMatch[NonDetFreeMapWithCost, Par, Par](
-                data.pars,
-                pattern.patterns,
-                pattern.remainder
+      ): F[Option[ListParWithRandomAndPhlos]] = {
+        type R[A] = MatcherMonadT[F, A]
+        implicit val cost: _cost[F] = loggingCost(CostAccounting.unsafe[F](init), noOpCostLog)
+        implicit val _              = matcherMonadCostLog[F]()
+        for {
+          matchResult <- runFirst[F, Seq[Par]](
+                          SpatialMatcher
+                            .foldMatch[R, Par, Par](
+                              data.pars,
+                              pattern.patterns,
+                              pattern.remainder
+                            )
+                        )
+          left <- cost.get
+        } yield {
+          matchResult.map {
+            case (freeMap, caughtRem) =>
+              val remainderMap = pattern.remainder match {
+                case Some(Var(FreeVar(level))) =>
+                  freeMap + (level -> VectorPar().addExprs(EList(caughtRem.toVector)))
+                case _ => freeMap
+              }
+              ListParWithRandomAndPhlos(
+                toSeq(remainderMap, pattern.freeCount),
+                data.randomState,
+                (init - left).value
               )
-              .runFirstWithCost(init)
           }
-          .flatMap {
-            case Left(err) => Sync[F].raiseError(err)
-            case Right((left, resultMatch)) =>
-              val cost = calcUsed(init, left)
-              resultMatch
-                .map {
-                  case (freeMap: FreeMap, caughtRem: Seq[Par]) =>
-                    val remainderMap = pattern.remainder match {
-                      case Some(Var(FreeVar(level))) =>
-                        freeMap + (level -> VectorPar().addExprs(EList(caughtRem.toVector)))
-                      case _ => freeMap
-                    }
-                    ListParWithRandomAndPhlos(
-                      toSeq(remainderMap, pattern.freeCount),
-                      data.randomState,
-                      cost.value
-                    )
-                }
-                .pure[F]
-          }
+        }
+      }
     }
 
   /* Serialize instances */
