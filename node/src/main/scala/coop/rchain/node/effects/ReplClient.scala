@@ -64,6 +64,7 @@ class GrpcReplClient(host: String, port: Int, maxMessageSize: Int)
   private def processError(t: Throwable): Throwable =
     Option(t.getCause).getOrElse(t)
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   override def close(): Unit = {
     val terminated = channel.shutdown().awaitTermination(10, TimeUnit.SECONDS)
     if (!terminated) {

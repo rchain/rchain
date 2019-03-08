@@ -5,11 +5,11 @@ import scala.util.Try
 
 import cats.implicits._
 
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.comm.CachedConnections.ConnectionsCache
 import coop.rchain.comm.discovery.KademliaGrpcMonix.KademliaRPCServiceStub
+import coop.rchain.grpc.implicits._
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.implicits._
 import coop.rchain.shared.{Log, LogSource}
@@ -40,10 +40,9 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
       _     <- Metrics[Task].incrementCounter("ping")
       local <- peerNodeAsk.ask
       ping  = Ping().withSender(node(local))
-      pongErr <- withClient(peer)(
+      pongErr <- withClient(peer, timeout)(
                   _.sendPing(ping)
                     .timer("ping-time")
-                    .nonCancelingTimeout(timeout)
                 ).attempt
     } yield pongErr.fold(kp(false), kp(true))
 
@@ -52,10 +51,9 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
       _      <- Metrics[Task].incrementCounter("protocol-lookup-send")
       local  <- peerNodeAsk.ask
       lookup = Lookup().withId(ByteString.copyFrom(key.toArray)).withSender(node(local))
-      responseErr <- withClient(peer)(
+      responseErr <- withClient(peer, timeout)(
                       _.sendLookup(lookup)
                         .timer("lookup-time")
-                        .nonCancelingTimeout(timeout)
                     ).attempt
     } yield responseErr.fold(kp(Seq.empty[PeerNode]), _.nodes.map(toPeerNode))
 
@@ -73,12 +71,12 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
       } yield s.copy(connections = s.connections - peer)
     }
 
-  private def withClient[A](peer: PeerNode, enforce: Boolean = false)(
+  private def withClient[A](peer: PeerNode, timeout: FiniteDuration, enforce: Boolean = false)(
       f: KademliaRPCServiceStub => Task[A]
   ): Task[A] =
     for {
       channel <- cell.connection(peer, enforce)
-      stub    <- Task.delay(KademliaGrpcMonix.stub(channel))
+      stub    <- Task.delay(KademliaGrpcMonix.stub(channel).withDeadlineAfter(timeout))
       result <- f(stub).doOnFinish {
                  case Some(_) => disconnect(peer)
                  case _       => Task.unit
@@ -124,7 +122,7 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
 
     cell.read.flatMap { s =>
       if (s.shutdown) Task.unit
-      else shutdownServer *> disconnectFromPeers
+      else shutdownServer >> disconnectFromPeers
     }
   }
 

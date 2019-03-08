@@ -7,9 +7,9 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.SortTest.sort
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.rholang.sorter._
+import coop.rchain.models.testUtils.TestUtils.forAllSimilarA
 import monix.eval.Coeval
-import org.scalacheck.Arbitrary.arbitrary
-import org.scalacheck.{Arbitrary, Gen}
+import org.scalacheck.Arbitrary
 import org.scalatest._
 import org.scalatest.prop.PropertyChecks
 
@@ -50,18 +50,57 @@ class ScoredTermSpec extends FlatSpec with PropertyChecks with Matchers {
     )
     unsortedTerms.sorted should be(sortedTerms)
   }
+  it should "sort so that whenever scores differ then result terms have to differ and the other way around" in {
+    def check[A: Sortable: Arbitrary]: Unit =
+      forAllSimilarA[A] { (x, y) =>
+        val xSorted = sort(x)
+        val ySorted = sort(y)
+        assert((xSorted.term == ySorted.term) == (xSorted.score == ySorted.score))
+      }
+
+    import coop.rchain.models.testImplicits._
+    check[Bundle]
+    check[Connective]
+    check[Expr]
+    check[Match]
+    check[New]
+    check[Par]
+    check[Receive]
+    check[Send]
+    check[Var]
+  }
+
+  it should "sort so that whenever scores or result terms differ then the initial terms differ and the other way around" in {
+    def check[A: Sortable: Arbitrary]: Unit =
+      forAllSimilarA[A] { (x, y) =>
+        val xSorted = sort(x)
+        val ySorted = sort(y)
+        if (xSorted.score != ySorted.score || xSorted.term != ySorted.term)
+          assert(x != y)
+        else
+          assert(x == y)
+      }
+
+    import coop.rchain.models.testImplicits._
+    check[Bundle]
+    check[Connective]
+    check[Expr]
+    check[Match]
+    check[New]
+    check[Par]
+    check[Receive]
+    check[Send]
+    check[Var]
+  }
   it should "sort so that unequal terms have unequal scores and the other way around" in {
     def checkScoreEquality[A: Sortable: Arbitrary]: Unit =
-      // ScalaCheck generates similar A-s in subsequent calls which
-      // we need to hit the case where `x == y` more often
-      forAll(Gen.listOfN(5, arbitrary[A])) { as: List[A] =>
-        for (x :: y :: Nil <- as.combinations(2)) {
+      forAllSimilarA[A](
+        (x, y) =>
           if (x != y)
             assert(sort(x).score != sort(y).score)
           else
             assert(sort(x).score == sort(y).score)
-        }
-      }
+      )
 
     import coop.rchain.models.testImplicits._
 
@@ -74,6 +113,11 @@ class ScoredTermSpec extends FlatSpec with PropertyChecks with Matchers {
     checkScoreEquality[Receive]
     checkScoreEquality[Send]
     checkScoreEquality[Var]
+  }
+  it should "sort so that unequal EMethod have unequal scores" in {
+    val method1 = Expr(EMethodBody(EMethod(connectiveUsed = true)))
+    val method2 = Expr(EMethodBody(EMethod(connectiveUsed = false)))
+    assert(sort(method1).score != sort(method2).score)
   }
   it should "sort so that unequal ParMap have unequal scores" in {
     val map1 = Expr(EMapBody(ParMap(Seq.empty, connectiveUsed = true, BitSet(), None)))
@@ -124,7 +168,7 @@ class VarSortMatcherSpec extends FlatSpec with Matchers {
       locallyFree = BitSet(0, 1, 2),
       connectiveUsed = true
     )
-    val sortedParVars: Option[Par] = Par(
+    val sortedParVars = Par(
       exprs = List(
         EVar(BoundVar(0)),
         EVar(BoundVar(1)),
@@ -138,7 +182,7 @@ class VarSortMatcherSpec extends FlatSpec with Matchers {
       connectiveUsed = true
     )
     val result = sort(parVars)
-    result.term should be(sortedParVars.get)
+    result.term should be(sortedParVars)
   }
 }
 
@@ -149,19 +193,19 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
   it should "sort so that smaller integers come first" in {
     val parGround =
       Par(exprs = List(GInt(2), GInt(1), GInt(-1), GInt(-2), GInt(0)))
-    val sortedParGround: Option[Par] =
+    val sortedParGround: Par =
       Par(exprs = List(GInt(-2), GInt(-1), GInt(0), GInt(1), GInt(2)))
     val result = sort(parGround)
-    result.term should be(sortedParGround.get)
+    result.term should be(sortedParGround)
   }
 
   it should "sort in order of boolean, int, string, uri" in {
     val parGround =
       Par(exprs = List(GUri("https://www.rchain.coop/"), GInt(47), GString("Hello"), GBool(true)))
-    val sortedParGround: Option[Par] =
+    val sortedParGround =
       Par(exprs = List(GBool(true), GInt(47), GString("Hello"), GUri("https://www.rchain.coop/")))
     val result = sort(parGround)
-    result.term should be(sortedParGround.get)
+    result.term should be(sortedParGround)
   }
 
   it should "sort and deduplicate sets insides" in {
@@ -219,7 +263,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
     val parExpr: Par =
       EPlus(EPlus(GInt(1), GInt(3)), GInt(2))
     val result = sort(parExpr)
-    result.term should be(parExpr.get)
+    result.term should be(parExpr)
   }
 
   it should "sort according to PEMDAS" in {
@@ -242,7 +286,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
         )
       )
     val result = sort(parExpr)
-    result.term should be(sortedParExpr.get)
+    result.term should be(sortedParExpr)
   }
 
   it should "sort comparisons in order of LT, LTE, GT, GTE, EQ, NEQ" in {
@@ -257,7 +301,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EGte(GBool(false), GBool(true))
         )
       )
-    val sortedParExpr: Option[Par] =
+    val sortedParExpr =
       Par(
         exprs = List(
           ELt(GInt(1), GInt(5)),
@@ -269,7 +313,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
         )
       )
     val result = sort(parExpr)
-    result.term should be(sortedParExpr.get)
+    result.term should be(sortedParExpr)
   }
 
   it should "sort methods after other expressions" in {
@@ -281,7 +325,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EOr(EVar(BoundVar(3)), EVar(BoundVar(4)))
         )
       )
-    val sortedParExpr: Option[Par] =
+    val sortedParExpr =
       Par(
         exprs = List(
           EOr(EVar(BoundVar(0)), EVar(BoundVar(1))),
@@ -290,7 +334,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
         )
       )
     val result = sort(parExpr)
-    result.term should be(sortedParExpr.get)
+    result.term should be(sortedParExpr)
   }
 
   it should "sort methods based on methodName, target, and arguments" in {
@@ -303,7 +347,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EMethod("nth", EVar(BoundVar(2)), List(GInt(2)), locallyFree = BitSet(2))
         )
       )
-    val sortedParExpr: Option[Par] =
+    val sortedParExpr =
       Par(
         exprs = List(
           EMethod("mth", EVar(BoundVar(2)), List(GInt(1)), locallyFree = BitSet(2)),
@@ -313,7 +357,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
         )
       )
     val result = sort(parExpr)
-    result.term should be(sortedParExpr.get)
+    result.term should be(sortedParExpr)
   }
 
   it should "sort Sends based on their persistence, channel, data" in {
@@ -326,7 +370,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           Send(GInt(5), List(GInt(2)), false, BitSet())
         )
       )
-    val sortedParExpr: Option[Par] =
+    val sortedParExpr =
       Par(
         sends = List(
           Send(GInt(4), List(GInt(2)), false, BitSet()),
@@ -336,7 +380,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
         )
       )
     val result = sort(parExpr)
-    result.term should be(sortedParExpr.get)
+    result.term should be(sortedParExpr)
   }
 
   it should "sort Receives based on persistence, channels, patterns and then body" in {
@@ -380,7 +424,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           )
         )
       )
-    val sortedParExpr: Option[Par] =
+    val sortedParExpr =
       Par(
         receives = List(
           Receive(
@@ -415,7 +459,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
         )
       )
     val result = sort(parExpr)
-    result.term should be(sortedParExpr.get)
+    result.term should be(sortedParExpr)
   }
 
   it should "sort Match based on their value and then cases" in {
@@ -435,7 +479,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           )
         )
       )
-    val sortedParMatch: Option[Par] =
+    val sortedParMatch =
       Par(
         matches = List(
           Match(
@@ -452,7 +496,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
         )
       )
     val result = sort(parMatch)
-    result.term should be(sortedParMatch.get)
+    result.term should be(sortedParMatch)
   }
 
   it should "sort News based on bindCount, uri's and then body" in {
@@ -477,16 +521,16 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
         )
       )
     val result = sort(parNew)
-    result.term should be(sortedParNew.get)
+    result.term should be(sortedParNew)
   }
 
   it should "sort EVars based on their type and then levels" in {
     val parGround =
       Par(exprs = List(EVar(FreeVar(2)), EVar(FreeVar(1)), EVar(BoundVar(2)), EVar(BoundVar(1))))
-    val sortedParGround: Option[Par] =
+    val sortedParGround =
       Par(exprs = List(EVar(BoundVar(1)), EVar(BoundVar(2)), EVar(FreeVar(1)), EVar(FreeVar(2))))
     val result = sort(parGround)
-    result.term should be(sortedParGround.get)
+    result.term should be(sortedParGround)
   }
 
   it should "sort exprs in order of ground, vars, arithmetic, comparisons, logical" in {
@@ -500,7 +544,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           GInt(1)
         )
       )
-    val sortedParExpr: Option[Par] =
+    val sortedParExpr =
       Par(
         exprs = List(
           GInt(1),
@@ -511,7 +555,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
         )
       )
     val result = sort(parExpr)
-    result.term should be(sortedParExpr.get)
+    result.term should be(sortedParExpr)
   }
 
   it should "sort expressions inside bundle" in {

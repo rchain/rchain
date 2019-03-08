@@ -6,14 +6,16 @@ import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.helper.{BlockDagStorageTestFixture, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.catscontrib.Capture._
+
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.transport
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.shared.StoreType
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
+import coop.rchain.shared.{Log, StoreType}
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
@@ -38,7 +40,10 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
           _ = node.logEff.infos.exists(_.contains("Approval sent in response")) should be(true)
           _ = node.logEff.warns.isEmpty should be(true)
 
-          queue  <- node.transportLayerEff.msgQueues(node.local).get
+          queue <- {
+            implicit val network = node.transportLayerEff.testNetworkF
+            TestNetwork.peerQueue(node.local)
+          }
           result = queue.size should be(1)
         } yield result
     }
@@ -66,8 +71,11 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
                 runtimeManager
               )
 
-          _      = node.logEff.warns.count(_.contains("Received unexpected candidate")) should be(2)
-          queue  <- node.transportLayerEff.msgQueues(node.local).get
+          _ = node.logEff.warns.count(_.contains("Received unexpected candidate")) should be(2)
+          queue <- {
+            implicit val network = node.transportLayerEff.testNetworkF
+            TestNetwork.peerQueue(node.local)
+          }
           result = queue.isEmpty should be(true)
         } yield result
     }
@@ -89,9 +97,13 @@ object BlockApproverProtocolTest {
   ): Effect[(BlockApproverProtocol, HashSetCasperTestNode[Effect])] = {
     import monix.execution.Scheduler.Implicits.global
 
-    val runtimeDir = BlockDagStorageTestFixture.blockStorageDir
+    val runtimeDir                          = BlockDagStorageTestFixture.blockStorageDir
+    implicit val log                        = new Log.NOPLog[Task]()
+    implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     val activeRuntime =
-      Runtime.create[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB).unsafeRunSync
+      Runtime
+        .createWithEmptyCost[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB)
+        .unsafeRunSync
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
 
     val deployTimestamp = 1L

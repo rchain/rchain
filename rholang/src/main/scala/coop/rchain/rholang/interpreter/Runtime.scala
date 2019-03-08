@@ -4,11 +4,13 @@ import java.nio.file.{Files, Path}
 
 import cats._
 import cats.effect.concurrent.Ref
-import cats.effect.{ContextShift, Sync}
+import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
 import cats.mtl.FunctorTell
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
@@ -16,13 +18,13 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.ShortLeashParams.ShortLeashParameters
 import coop.rchain.rholang.interpreter.Runtime._
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
-import coop.rchain.rholang.interpreter.errors.{OutOfPhlogistonsError, SetupError}
+import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.errors.{InterpreterError, SetupError}
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.pure.PureRSpace
-import coop.rchain.shared.StoreType
+import coop.rchain.shared.{Log, StoreType}
 import coop.rchain.shared.StoreType._
 
 import scala.collection.immutable
@@ -34,7 +36,7 @@ class Runtime[F[_]: Sync] private (
     val space: RhoISpace[F],
     val replaySpace: RhoReplayISpace[F],
     val errorLog: ErrorLog[F],
-    val context: RhoContext,
+    val context: RhoContext[F],
     val shortLeashParams: Runtime.ShortLeashParams[F],
     val blockTime: Runtime.BlockTime[F]
 ) {
@@ -52,32 +54,22 @@ object Runtime {
   type RhoPureSpace[F[_]]    = TCPARK[F, PureRSpace]
   type RhoReplayISpace[F[_]] = TCPARK[F, IReplaySpace]
 
-  type RhoIStore  = CPAK[IStore]
-  type RhoContext = CPAK[Context]
+  type RhoIStore[F[_]]  = CPAK[F, IStore]
+  type RhoContext[F[_]] = CPAK[F, Context]
 
   type RhoDispatch[F[_]]    = Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
   type RhoSysFunction[F[_]] = (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
   type RhoDispatchMap[F[_]] = Map[Long, RhoSysFunction[F]]
 
-  type CPAK[F[_, _, _, _]] =
-    F[Par, BindPattern, ListParWithRandom, TaggedContinuation]
-
-  type CPARK[F[_, _, _, _, _, _]] =
-    F[
-      Par,
-      BindPattern,
-      OutOfPhlogistonsError.type,
-      ListParWithRandom,
-      ListParWithRandomAndPhlos,
-      TaggedContinuation
-    ]
+  type CPAK[M[_], F[_[_], _, _, _, _]] =
+    F[M, Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
   type TCPARK[M[_], F[_[_], _, _, _, _, _, _]] =
     F[
       M,
       Par,
       BindPattern,
-      OutOfPhlogistonsError.type,
+      InterpreterError,
       ListParWithRandom,
       ListParWithRandomAndPhlos,
       TaggedContinuation
@@ -152,6 +144,7 @@ object Runtime {
     val REG_NONCE_INSERT_CALLBACK: Long    = 21L
     val GET_DEPLOY_PARAMS: Long            = 22L
     val GET_TIMESTAMP: Long                = 23L
+    val REV_ADDRESS: Long                  = 24L
   }
 
   def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
@@ -171,12 +164,10 @@ object Runtime {
     val REG_INSERT_SIGNED: Par = byteName(11)
     val GET_DEPLOY_PARAMS: Par = byteName(12)
     val GET_TIMESTAMP: Par     = byteName(13)
+    val REV_ADDRESS: Par       = byteName(14)
   }
 
-  // because only we do installs
-  private val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
-
-  private def introduceSystemProcesses[F[_]: Applicative](
+  private def introduceSystemProcesses[F[_]: Sync](
       space: RhoISpace[F],
       replaySpace: RhoISpace[F],
       processes: List[(Name, Arity, Remainder, BodyRef)]
@@ -191,15 +182,16 @@ object Runtime {
             freeCount = arity
           )
         )
-        val continuation = TaggedContinuation(ScalaBodyRef(ref))
+        val continuation                   = TaggedContinuation(ScalaBodyRef(ref))
+        implicit val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
         List(
-          space.install(channels, patterns, continuation)(MATCH_UNLIMITED_PHLOS),
-          replaySpace.install(channels, patterns, continuation)(MATCH_UNLIMITED_PHLOS)
+          space.install(channels, patterns, continuation),
+          replaySpace.install(channels, patterns, continuation)
         )
     }.sequence
 
   object SystemProcess {
-    case class Context[F[_]: Sync](
+    final case class Context[F[_]: Sync](
         space: RhoISpace[F],
         dispatcher: RhoDispatch[F],
         registry: Registry[F],
@@ -209,7 +201,7 @@ object Runtime {
       val systemProcesses = SystemProcesses[F](dispatcher, space)
     }
 
-    case class Definition[F[_]](
+    final case class Definition[F[_]](
         urn: String,
         fixedChannel: Name,
         arity: Arity,
@@ -282,15 +274,47 @@ object Runtime {
       BodyRefs.GET_TIMESTAMP, { ctx =>
         ctx.systemProcesses.blockTime(ctx.blockTime)
       }
+    ),
+    SystemProcess.Definition[F](
+      "rho:rev:address",
+      FixedChannels.REV_ADDRESS,
+      3,
+      BodyRefs.REV_ADDRESS, { ctx =>
+        ctx.systemProcesses.validateRevAddress
+      }
     )
   )
 
-  def create[F[_]: ContextShift: Sync, M[_]](
+  def createWithEmptyCost[F[_]: ContextShift: Concurrent: Log: Metrics, M[_]](
       dataDir: Path,
       mapSize: Long,
       storeType: StoreType,
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
-  )(implicit P: Parallel[F, M], executionContext: ExecutionContext): F[Runtime[F]] = {
+  )(
+      implicit
+      P: Parallel[F, M],
+      executionContext: ExecutionContext
+  ): F[Runtime[F]] =
+    (for {
+      costAccounting <- CostAccounting.empty[F]
+      runtime <- {
+        implicit val ca: CostAccounting[F] = costAccounting
+        implicit val cost: _cost[F]        = loggingCost(ca, noOpCostLog)
+        create(dataDir, mapSize, storeType, extraSystemProcesses)
+      }
+    } yield (runtime))
+
+  def create[F[_]: ContextShift: Concurrent: Log: Metrics, M[_]](
+      dataDir: Path,
+      mapSize: Long,
+      storeType: StoreType,
+      extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
+  )(
+      implicit P: Parallel[F, M],
+      executionContext: ExecutionContext,
+      cost: _cost[F],
+      costAccounting: CostAccounting[F]
+  ): F[Runtime[F]] = {
     val errorLog                               = new ErrorLog[F]()
     implicit val ft: FunctorTell[F, Throwable] = errorLog
 
@@ -347,7 +371,7 @@ object Runtime {
       ) ++ (stdSystemProcesses[F] ++ extraSystemProcesses).map(_.toProcDefs)
     }
 
-    (for {
+    for {
       setup                         <- setupRSpace[F](dataDir, mapSize, storeType)
       (context, space, replaySpace) = setup
       (reducer, replayReducer) = {
@@ -383,7 +407,7 @@ object Runtime {
         shortLeashParams,
         blockTime
       )
-    })
+    }
   }
 
   def injectEmptyRegistryRoot[F[_]](space: RhoISpace[F], replaySpace: RhoReplayISpace[F])(
@@ -427,20 +451,20 @@ object Runtime {
     } yield ()
   }
 
-  def setupRSpace[F[_]: Sync: ContextShift](
+  def setupRSpace[F[_]: Concurrent: ContextShift: Log: Metrics](
       dataDir: Path,
       mapSize: Long,
       storeType: StoreType
-  )(implicit scheduler: ExecutionContext): F[(RhoContext, RhoISpace[F], RhoReplayISpace[F])] = {
+  )(implicit scheduler: ExecutionContext): F[(RhoContext[F], RhoISpace[F], RhoReplayISpace[F])] = {
     def createSpace(
-        context: RhoContext
-    ): F[(RhoContext, RhoISpace[F], RhoReplayISpace[F])] =
+        context: RhoContext[F]
+    ): F[(RhoContext[F], RhoISpace[F], RhoReplayISpace[F])] =
       for {
         space <- RSpace.create[
                   F,
                   Par,
                   BindPattern,
-                  OutOfPhlogistonsError.type,
+                  InterpreterError,
                   ListParWithRandom,
                   ListParWithRandomAndPhlos,
                   TaggedContinuation
@@ -449,25 +473,26 @@ object Runtime {
                         F,
                         Par,
                         BindPattern,
-                        OutOfPhlogistonsError.type,
+                        InterpreterError,
                         ListParWithRandom,
                         ListParWithRandomAndPhlos,
                         TaggedContinuation
                       ](context, Branch.REPLAY)
       } yield ((context, space, replaySpace))
+
+    def checkCreateDataDir: F[Unit] =
+      for {
+        notexists <- Sync[F].delay(Files.notExists(dataDir))
+        _         <- if (notexists) Sync[F].delay(Files.createDirectories(dataDir)) else ().pure[F]
+      } yield ()
+
     storeType match {
       case InMem =>
         createSpace(Context.createInMemory())
       case LMDB =>
-        if (Files.notExists(dataDir)) {
-          Files.createDirectories(dataDir)
-        }
-        createSpace(Context.create(dataDir, mapSize, true))
+        checkCreateDataDir >> createSpace(Context.create(dataDir, mapSize, true))
       case Mixed =>
-        if (Files.notExists(dataDir)) {
-          Files.createDirectories(dataDir)
-        }
-        createSpace(Context.createMixed(dataDir, mapSize))
+        checkCreateDataDir >> createSpace(Context.createMixed(dataDir, mapSize))
     }
   }
 }

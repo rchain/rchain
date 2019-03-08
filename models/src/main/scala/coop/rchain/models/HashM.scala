@@ -137,9 +137,9 @@ object HashM extends HashMDerivation {
   implicit val ApprovedBlockCandidateHash    = gen[ApprovedBlockCandidate]
   implicit val BlockApprovalHash             = gen[BlockApproval]
   implicit val BlockMessageHash              = gen[BlockMessage]
+  implicit val BlockMetadataInternalHash     = gen[BlockMetadataInternal]
   implicit val BodyHash                      = gen[Body]
   implicit val BondHash                      = gen[Bond]
-  implicit val DeployHash                    = gen[Deploy]
   implicit val DeployDataHash                = gen[DeployData]
   implicit val FindDeployInBlockQueryHash    = gen[FindDeployInBlockQuery]
   implicit val HeaderHash                    = gen[Header]
@@ -175,6 +175,7 @@ trait HashMDerivation {
 
   //copied and adapted from scala.util.hashing.MurmurHash3,
   //which is used in Scala's case class hash code implementation
+  @SuppressWarnings(Array("org.wartremover.warts.Var"))
   private def productHash(prefix: String, elements: Seq[Int]): Int = {
     val arr = elements.size
     // Case objects have the hashCode inlined directly into the

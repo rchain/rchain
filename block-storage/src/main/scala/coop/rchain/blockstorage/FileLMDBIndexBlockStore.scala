@@ -2,38 +2,57 @@ package coop.rchain.blockstorage
 
 import java.io._
 import java.nio.ByteBuffer
-import java.nio.file.{Files, NotDirectoryException, Path}
-import java.util.stream.Collectors
+import java.nio.file._
 
-import cats.Monad
-import cats.data.EitherT
+import cats.{Functor, Monad}
 import cats.effect.{Concurrent, ExitCase, Sync}
 import cats.implicits._
-import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.concurrent.Semaphore
+import cats.mtl.{FunctorRaise, MonadState}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.FileLMDBIndexBlockStore.Checkpoint
-import coop.rchain.blockstorage.StorageError.{StorageErr, StorageErrT, StorageIOErr, StorageIOErrT}
+import coop.rchain.blockstorage.StorageError.StorageErr
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.shared.Resources.withResource
 import coop.rchain.blockstorage.util.byteOps._
-import coop.rchain.shared.Log
+import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
+import coop.rchain.blockstorage.util.io._
+import coop.rchain.blockstorage.util.io.IOError
+import coop.rchain.shared.{AtomicMonadState, Log}
 import coop.rchain.shared.ByteStringOps._
+import monix.execution.atomic.AtomicAny
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
 
 import scala.collection.JavaConverters._
-import scala.ref.WeakReference
 import scala.util.control.NonFatal
 import scala.util.matching.Regex
 
-class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
+private final case class FileLMDBIndexBlockStoreState[F[_]: Sync](
+    blockMessageRandomAccessFile: RandomAccessIO[F],
+    checkpoints: Map[Int, Checkpoint],
+    currentIndex: Int
+)
+
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
+class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
     lock: Semaphore[F],
     env: Env[ByteBuffer],
     index: Dbi[ByteBuffer],
-    blockMessageRandomAccessFileRef: Ref[F, RandomAccessFile],
-    checkpointsRef: Ref[F, List[Checkpoint]]
+    storagePath: Path,
+    checkpointsDir: Path,
+    state: MonadState[F, FileLMDBIndexBlockStoreState[F]]
 ) extends BlockStore[F] {
+  private case class IndexEntry(checkpointIndex: Int, offset: Long)
+  private object IndexEntry {
+    def load(byteBuffer: ByteBuffer): IndexEntry = {
+      val index  = byteBuffer.getInt()
+      val offset = byteBuffer.getLong()
+      IndexEntry(index, offset)
+    }
+  }
+
   private[this] def withTxn[R](txnThunk: => Txn[ByteBuffer])(f: Txn[ByteBuffer] => R): F[R] =
     Sync[F].bracketCase(Sync[F].delay(txnThunk)) { txn =>
       Sync[F].delay {
@@ -55,43 +74,70 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
   private[this] def withReadTxn[R](f: Txn[ByteBuffer] => R): F[R] =
     withTxn(env.txnRead())(f)
 
-  private def readBlockMessage(offset: Long): StorageIOErrT[F, BlockMessage] =
+  private[this] def getBlockMessageRandomAccessFile: F[RandomAccessIO[F]] =
+    state.get.map(_.blockMessageRandomAccessFile)
+  private[this] def setBlockMessageRandomAccessFile(file: RandomAccessIO[F]): F[Unit] =
+    state.modify(_.copy(blockMessageRandomAccessFile = file))
+  private[this] def getCheckpoints: F[Map[Int, Checkpoint]] =
+    state.get.map(_.checkpoints)
+  private[this] def modifyCheckpoints(f: Map[Int, Checkpoint] => Map[Int, Checkpoint]): F[Unit] =
+    state.modify(s => s.copy(checkpoints = f(s.checkpoints)))
+  private[this] def getCurrentIndex: F[Int] =
+    state.get.map(_.currentIndex)
+  private[this] def modifyCurrentIndex(f: Int => Int): F[Unit] =
+    state.modify(s => s.copy(currentIndex = f(s.currentIndex)))
+
+  private def readBlockMessage(indexEntry: IndexEntry): F[BlockMessage] = {
+    def readBlockMessageFromFile(storageFile: RandomAccessIO[F]): F[BlockMessage] =
+      for {
+        _                      <- storageFile.seek(indexEntry.offset)
+        blockMessageSizeOpt    <- storageFile.readInt
+        blockMessagesByteArray = Array.ofDim[Byte](blockMessageSizeOpt.get)
+        _                      <- storageFile.readFully(blockMessagesByteArray)
+        blockMessage           = BlockMessage.parseFrom(blockMessagesByteArray)
+      } yield blockMessage
+
     for {
-      randomAccessFile <- EitherT.liftF[F, StorageIOError, RandomAccessFile](
-                           blockMessageRandomAccessFileRef.get
-                         )
-      _ <- EitherT(Sync[F].delay { randomAccessFile.seek(offset) }.attempt)
-            .leftMap[StorageIOError] {
-              case e: IOException => FileSeekFailed(e)
-              case e              => UnexpectedIOStorageError(e)
-            }
-      blockMessageSize <- EitherT(Sync[F].delay { randomAccessFile.readInt() }.attempt)
-                           .leftMap[StorageIOError] {
-                             case e: IOException => IntReadFailed(e)
-                             case e              => UnexpectedIOStorageError(e)
-                           }
-      blockMessagesByteArray = Array.ofDim[Byte](blockMessageSize)
-      _ <- EitherT(Sync[F].delay { randomAccessFile.readFully(blockMessagesByteArray) }.attempt)
-            .leftMap[StorageIOError] {
-              case e: IOException => ByteArrayReadFailed(e)
-              case e              => UnexpectedIOStorageError(e)
-            }
-      blockMessage = BlockMessage.parseFrom(blockMessagesByteArray)
+      currentIndex <- getCurrentIndex
+      blockMessage <- if (currentIndex == indexEntry.checkpointIndex)
+                       for {
+                         storageFile  <- getBlockMessageRandomAccessFile
+                         blockMessage <- readBlockMessageFromFile(storageFile)
+                       } yield blockMessage
+                     else
+                       for {
+                         checkpoints <- getCheckpoints
+                         result <- checkpoints.get(indexEntry.checkpointIndex) match {
+                                    case Some(checkpoint) =>
+                                      Sync[F].bracket {
+                                        RandomAccessIO.open[F](
+                                          checkpoint.storagePath,
+                                          RandomAccessIO.Read
+                                        )
+                                      } { storageFile =>
+                                        readBlockMessageFromFile(storageFile)
+                                      } { storageFile =>
+                                        storageFile.close
+                                      }
+                                    case None =>
+                                      RaiseIOError[F].raise[BlockMessage](
+                                        UnavailableReferencedCheckpoint(
+                                          indexEntry.checkpointIndex
+                                        )
+                                      )
+                                  }
+                       } yield result
     } yield blockMessage
+  }
 
   override def get(blockHash: BlockHash): F[Option[BlockMessage]] =
     lock.withPermit(
       for {
-        indexOpt <- withReadTxn { txn =>
-                     Option(index.get(txn, blockHash.toDirectByteBuffer))
-                       .map(r => r.getLong)
-                   }
-        readResult <- indexOpt.traverse(readBlockMessage).value
-        result <- readResult match {
-                   case Left(storageReadError) =>
-                     Log[F].error(storageReadError.message) *> none[BlockMessage].pure[F]
-                   case Right(block) => block.pure[F]
-                 }
+        indexEntryOpt <- withReadTxn { txn =>
+                          Option(index.get(txn, blockHash.toDirectByteBuffer))
+                            .map(IndexEntry.load)
+                        }
+        result <- indexEntryOpt.traverse(readBlockMessage)
       } yield result
     )
 
@@ -103,109 +149,89 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: Log] private (
                             iterator.asScala
                               .map(kv => (ByteString.copyFrom(kv.key()), kv.`val`()))
                               .withFilter { case (key, _) => p(key) }
-                              .map { case (key, value) => (key, value.getLong()) }
+                              .map { case (key, value) => (key, IndexEntry.load(value)) }
                               .toList
                           }
                         }
         result <- filteredIndex.flatTraverse {
-                   case (blockHash, offset) =>
-                     readBlockMessage(offset).value.flatMap {
-                       case Left(storageReadError) =>
-                         Log[F].error(storageReadError.message) *> List
-                           .empty[(BlockHash, BlockMessage)]
-                           .pure[F]
-                       case Right(block) =>
-                         List(blockHash -> block).pure[F]
-                     }
+                   case (blockHash, indexEntry) =>
+                     readBlockMessage(indexEntry)
+                       .map(block => List(blockHash -> block))
                  }
       } yield result
     )
 
-  override def put(f: => (BlockHash, BlockMessage)): F[StorageIOErr[Unit]] =
+  override def put(f: => (BlockHash, BlockMessage)): F[Unit] =
     lock.withPermit(
-      (for {
-        randomAccessFile <- EitherT.liftF[F, StorageIOError, RandomAccessFile](
-                             blockMessageRandomAccessFileRef.get
-                           )
-        endOfFileOffset <- EitherT(Sync[F].delay { randomAccessFile.length() }.attempt)
-                            .leftMap[StorageIOError](UnexpectedIOStorageError.apply)
-        _ <- EitherT(Sync[F].delay { randomAccessFile.seek(endOfFileOffset) }.attempt)
-              .leftMap[StorageIOError] {
-                case e: IOException => FileSeekFailed(e)
-                case e              => UnexpectedIOStorageError(e)
-              }
+      for {
+        randomAccessFile          <- getBlockMessageRandomAccessFile
+        currentIndex              <- getCurrentIndex
+        endOfFileOffset           <- randomAccessFile.length
+        _                         <- randomAccessFile.seek(endOfFileOffset)
         (blockHash, blockMessage) = f
         blockMessageByteArray     = blockMessage.toByteArray
-        _ <- EitherT(
-              Sync[F].delay { randomAccessFile.writeInt(blockMessageByteArray.length) }.attempt
-            ).leftMap[StorageIOError] {
-              case e: IOException => IntWriteFailed(e)
-              case e              => UnexpectedIOStorageError(e)
-            }
-        _ <- EitherT(Sync[F].delay { randomAccessFile.write(blockMessageByteArray) }.attempt)
-              .leftMap[StorageIOError] {
-                case e: IOException => ByteArrayWriteFailed(e)
-                case e              => UnexpectedIOStorageError(e)
-              }
-        _ <- EitherT.liftF[F, StorageIOError, Unit](withWriteTxn { txn =>
+        _                         <- randomAccessFile.writeInt(blockMessageByteArray.length)
+        _                         <- randomAccessFile.write(blockMessageByteArray)
+        _ <- withWriteTxn { txn =>
               index.put(
                 txn,
                 blockHash.toDirectByteBuffer,
-                endOfFileOffset.toByteString.toDirectByteBuffer
+                currentIndex.toByteString.concat(endOfFileOffset.toByteString).toDirectByteBuffer
               )
-            })
-      } yield ()).value
+            }
+      } yield ()
     )
 
   override def checkpoint(): F[Unit] =
-    ().pure[F]
-
-  override def clear(): F[StorageIOErr[Unit]] =
     lock.withPermit(
       for {
-        blockMessageRandomAccessFile <- blockMessageRandomAccessFileRef.get
+        checkpointIndex              <- getCurrentIndex
+        checkpointPath               = checkpointsDir.resolve(checkpointIndex.toString)
+        blockMessageRandomAccessFile <- getBlockMessageRandomAccessFile
+        _                            <- blockMessageRandomAccessFile.close
+        _                            <- moveFile(storagePath, checkpointPath, StandardCopyOption.ATOMIC_MOVE)
+        newBlockMessageRandomAccessFile <- RandomAccessIO
+                                            .open[F](storagePath, RandomAccessIO.ReadWrite)
+        _ <- setBlockMessageRandomAccessFile(newBlockMessageRandomAccessFile)
+        _ <- modifyCheckpoints(
+              _.updated(checkpointIndex, Checkpoint(checkpointIndex, checkpointPath))
+            )
+        _ <- modifyCurrentIndex(_ + 1)
+      } yield ()
+    )
+
+  override def clear(): F[Unit] =
+    lock.withPermit(
+      for {
+        blockMessageRandomAccessFile <- getBlockMessageRandomAccessFile
         _ <- withWriteTxn { txn =>
               index.drop(txn)
             }
-        storageFileClearAttempt <- Sync[F].delay { blockMessageRandomAccessFile.setLength(0) }.attempt
-        result = storageFileClearAttempt match {
-          case Left(e: IOException) =>
-            Left(ClearFileFailed(e))
-          case Left(t) =>
-            Left(UnexpectedIOStorageError(t))
-          case Right(_) =>
-            Right(())
-        }
+        result <- blockMessageRandomAccessFile.setLength(0)
       } yield result
     )
 
-  override def close(): F[StorageIOErr[Unit]] =
+  override def close(): F[Unit] =
     lock.withPermit(
-      (for {
-        blockMessageRandomAccessFile <- EitherT.liftF[F, StorageIOError, RandomAccessFile](
-                                         blockMessageRandomAccessFileRef.get
-                                       )
-        _ <- EitherT(Sync[F].delay { blockMessageRandomAccessFile.close() }.attempt)
-              .leftMap[StorageIOError] {
-                case e: IOException =>
-                  ClosingFailed(e)
-                case t =>
-                  UnexpectedIOStorageError(t)
-              }
-        _ <- EitherT(Sync[F].delay { env.close() }.attempt).leftMap[StorageIOError] {
-              case e: IOException =>
-                ClosingFailed(e)
-              case t =>
-                UnexpectedIOStorageError(t)
+      for {
+        blockMessageRandomAccessFile <- getBlockMessageRandomAccessFile
+        _                            <- blockMessageRandomAccessFile.close
+        envCloseResult               <- Sync[F].delay[Unit] { env.close() }.attempt
+        _ <- envCloseResult match {
+              case Right(_) => ().pure[F]
+              case Left(e: IOException) =>
+                RaiseIOError[F].raise[Unit](ClosingFailed(e))
+              case Left(t) =>
+                RaiseIOError[F].raise[Unit](UnexpectedIOError(t))
             }
-      } yield ()).value
+      } yield ()
     )
 }
 
 object FileLMDBIndexBlockStore {
-  private val checkpointPattern: Regex = "([0-9]+)-([0-9]+)".r
+  private val checkpointPattern: Regex = "([0-9]+)".r
 
-  case class Config(
+  final case class Config(
       storagePath: Path,
       indexPath: Path,
       checkpointsDirPath: Path,
@@ -215,138 +241,99 @@ object FileLMDBIndexBlockStore {
       noTls: Boolean = true
   )
 
-  private[blockstorage] case class CheckpointIndex(
+  private[blockstorage] final case class CheckpointIndex(
       env: Env[ByteBuffer],
       index: Dbi[ByteBuffer]
   )
 
-  private[blockstorage] case class Checkpoint(
-      start: Long,
-      end: Long,
-      dirPath: Path,
-      storagePath: Path,
-      indexPath: Path,
-      index: Option[WeakReference[CheckpointIndex]]
+  private[blockstorage] final case class Checkpoint(
+      index: Int,
+      storagePath: Path
   )
 
-  private def openRandomAccessFile[F[_]: Sync](path: Path): StorageErrT[F, RandomAccessFile] =
-    EitherT(Sync[F].delay { new RandomAccessFile(path.toFile, "rw") }.attempt).leftMap {
-      case e: FileNotFoundException => FileNotFound(e)
-      case e: SecurityException     => FileSecurityViolation(e)
-      case t                        => UnexpectedIOStorageError(t)
-    }
-
-  private def isDirectory[F[_]: Sync](path: Path): StorageErrT[F, Boolean] =
-    EitherT(Sync[F].delay { Files.isDirectory(path) }.attempt).leftMap[StorageError] {
-      case e: SecurityException => FileSecurityViolation(e)
-      case t                    => UnexpectedIOStorageError(t)
-    }
-
-  private def listInDirectory[F[_]: Sync](dirPath: Path): StorageErrT[F, List[Path]] =
-    for {
-      _ <- EitherT(Sync[F].delay { dirPath.toFile.mkdir() }.attempt).leftMap[StorageError] {
-            case e: SecurityException => FileSecurityViolation(e)
-            case t                    => UnexpectedIOStorageError(t)
-          }
-      directories <- EitherT(Sync[F].delay { Files.list(dirPath) }.attempt).leftMap[StorageError] {
-                      case e: NotDirectoryException => FileIsNotDirectory(e)
-                      case e: SecurityException     => FileSecurityViolation(e)
-                      case t                        => UnexpectedIOStorageError(t)
-                    }
-      directoriesList = directories
-        .collect(Collectors.toList[Path])
-        .asScala
-        .toList
-    } yield directoriesList
-
-  private def listDirectories[F[_]: Sync](dirPath: Path): StorageErrT[F, List[Path]] = {
-    type TEMP[A] = StorageErrT[F, A]
-    for {
-      inDirectoryList <- listInDirectory(dirPath)
-      directoryList   <- inDirectoryList.filterA[TEMP](isDirectory)
-    } yield directoryList
-  }
-
-  private def loadCheckpoints[F[_]: Sync: Log](
+  private def loadCheckpoints[F[_]: Sync: Log: RaiseIOError](
       checkpointsDirPath: Path
-  ): StorageErrT[F, List[Checkpoint]] =
+  ): F[StorageErr[List[Checkpoint]]] =
     for {
-      checkpointDirectoriesList <- listDirectories(checkpointsDirPath)
-      checkpoints <- EitherT.liftF[F, StorageError, List[Checkpoint]](
-                      checkpointDirectoriesList.flatTraverse { dirPath =>
-                        dirPath.getFileName.toString match {
-                          case checkpointPattern(start, end) =>
-                            List(
-                              Checkpoint(
-                                start.toLong,
-                                end.toLong,
-                                dirPath,
-                                dirPath.resolve("storage"),
-                                dirPath.resolve("index"),
-                                None
-                              )
-                            ).pure[F]
-                          case other =>
-                            Log[F]
-                              .warn(s"Ignoring directory '$other': not a valid checkpoint name") *>
-                              List.empty[Checkpoint].pure[F]
-                        }
+      _                   <- makeDirectory(checkpointsDirPath)
+      checkpointFilesList <- listRegularFiles(checkpointsDirPath)
+      checkpoints <- checkpointFilesList.flatTraverse { filePath =>
+                      filePath.getFileName.toString match {
+                        case checkpointPattern(index) =>
+                          List(Checkpoint(index.toInt, filePath)).pure[F]
+                        case other =>
+                          Log[F]
+                            .warn(s"Ignoring directory '$other': not a valid checkpoint name") *>
+                            List.empty[Checkpoint].pure[F]
                       }
-                    )
-      sortedCheckpoints = checkpoints.sortBy(_.start)
-      result <- EitherT.fromEither[F](if (sortedCheckpoints.headOption.forall(_.start == 0)) {
-                 if (sortedCheckpoints.isEmpty ||
-                     sortedCheckpoints.zip(sortedCheckpoints.tail).forall {
-                       case (current, next) => current.end == next.start
-                     }) {
-                   sortedCheckpoints.asRight[StorageError]
-                 } else {
-                   CheckpointsAreNotConsecutive(sortedCheckpoints.map(_.dirPath))
-                     .asLeft[List[Checkpoint]]
-                 }
-               } else {
-                 CheckpointsDoNotStartFromZero(sortedCheckpoints.map(_.dirPath))
-                   .asLeft[List[Checkpoint]]
-               })
+                    }
+      sortedCheckpoints = checkpoints.sortBy(_.index)
+      result = if (sortedCheckpoints.headOption.forall(_.index == 0)) {
+        if (sortedCheckpoints.isEmpty ||
+            sortedCheckpoints.zip(sortedCheckpoints.tail).forall {
+              case (current, next) => current.index + 1 == next.index
+            }) {
+          sortedCheckpoints.asRight[StorageError]
+        } else {
+          CheckpointsAreNotConsecutive(sortedCheckpoints.map(_.storagePath))
+            .asLeft[List[Checkpoint]]
+        }
+      } else {
+        CheckpointsDoNotStartFromZero(sortedCheckpoints.map(_.storagePath))
+          .asLeft[List[Checkpoint]]
+      }
     } yield result
 
-  def create[F[_]: Concurrent: Log](
+  def create[F[_]: Concurrent: Sync: Log](
       env: Env[ByteBuffer],
       blockStoreDataDir: Path
   ): F[StorageErr[BlockStore[F]]] =
     create(env, blockStoreDataDir.resolve("storage"), blockStoreDataDir.resolve("checkpoints"))
 
-  def create[F[_]: Monad: Concurrent: Log](
+  def create[F[_]: Monad: Concurrent: Sync: Log](
       env: Env[ByteBuffer],
       storagePath: Path,
       checkpointsDirPath: Path
-  ): F[StorageErr[BlockStore[F]]] =
-    (for {
-      lock <- EitherT.liftF[F, StorageError, Semaphore[F]](Semaphore[F](1))
-      index <- EitherT.liftF[F, StorageError, Dbi[ByteBuffer]](Sync[F].delay {
-                env.openDbi(s"block_store_index", MDB_CREATE)
-              })
-      blockMessageRandomAccessFile <- openRandomAccessFile[F](storagePath)
-      blockMessageRandomAccessFileRef <- EitherT.liftF[F, StorageError, Ref[F, RandomAccessFile]](
-                                          Ref.of[F, RandomAccessFile](blockMessageRandomAccessFile)
-                                        )
-      sortedCheckpoints <- loadCheckpoints(checkpointsDirPath)
-      checkpointsRef <- EitherT.liftF[F, StorageError, Ref[F, List[Checkpoint]]](
-                         Ref.of[F, List[Checkpoint]](sortedCheckpoints)
-                       )
-      result = new FileLMDBIndexBlockStore[F](
-        lock,
-        env,
-        index,
-        blockMessageRandomAccessFileRef,
-        checkpointsRef
-      )
-    } yield result: BlockStore[F]).value
-
-  def create[F[_]: Monad: Concurrent: Log](config: Config): F[StorageErr[BlockStore[F]]] =
+  ): F[StorageErr[BlockStore[F]]] = {
+    implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
     for {
+      lock <- Semaphore[F](1)
+      index <- Sync[F].delay {
+                env.openDbi(s"block_store_index", MDB_CREATE)
+              }
+      blockMessageRandomAccessFile <- RandomAccessIO.open(storagePath, RandomAccessIO.ReadWrite)
+      sortedCheckpointsEither      <- loadCheckpoints(checkpointsDirPath)
+      result = sortedCheckpointsEither match {
+        case Right(sortedCheckpoints) =>
+          val checkpointsMap = sortedCheckpoints.map(c => c.index -> c).toMap
+          val currentIndex   = sortedCheckpoints.lastOption.map(_.index + 1).getOrElse(0)
+          val initialState = FileLMDBIndexBlockStoreState[F](
+            blockMessageRandomAccessFile,
+            checkpointsMap,
+            currentIndex
+          )
+          (new FileLMDBIndexBlockStore[F](
+            lock,
+            env,
+            index,
+            storagePath,
+            checkpointsDirPath,
+            new AtomicMonadState[F, FileLMDBIndexBlockStoreState[F]](
+              AtomicAny(initialState)
+            )
+          ): BlockStore[F]).asRight[StorageError]
+        case Left(e) => e.asLeft[BlockStore[F]]
+      }
+    } yield result
+  }
+
+  def create[F[_]: Monad: Concurrent: Sync: Log](
+      config: Config
+  ): F[StorageErr[BlockStore[F]]] =
+    for {
+      notExists <- Sync[F].delay(Files.notExists(config.indexPath))
+      _         <- if (notExists) Sync[F].delay(Files.createDirectories(config.indexPath)) else ().pure[F]
       env <- Sync[F].delay {
-              if (Files.notExists(config.indexPath)) Files.createDirectories(config.indexPath)
               val flags = if (config.noTls) List(EnvFlags.MDB_NOTLS) else List.empty
               Env
                 .create()

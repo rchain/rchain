@@ -2,6 +2,7 @@ package coop.rchain.rspace.examples
 
 import java.nio.charset.StandardCharsets
 
+import cats.effect.Sync
 import coop.rchain.shared.Language.ignore
 import coop.rchain.rspace.{Match, Serialize}
 import scodec.bits.ByteVector
@@ -29,6 +30,7 @@ object StringExamples {
     *
     * It captures the data it consumes.
     */
+  @SuppressWarnings(Array("org.wartremover.warts.MutableDataStructures"))
   class StringsCaptor extends ((Seq[String]) => Unit) with Serializable {
 
     @transient
@@ -49,10 +51,8 @@ object StringExamples {
 
   object implicits {
 
-    implicit object stringMatch extends Match[Pattern, Nothing, String, String] {
-      def get(p: Pattern, a: String): Either[Nothing, Option[String]] =
-        Right(Some(a).filter(p.isMatch))
-    }
+    implicit def stringMatch[F[_]: Sync]: Match[F, Pattern, String, String] =
+      (p: Pattern, a: String) => Sync[F].pure(Some(a).filter(p.isMatch))
 
     implicit object stringSerialize extends Serialize[String] {
 

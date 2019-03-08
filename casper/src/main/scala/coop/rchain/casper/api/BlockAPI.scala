@@ -1,55 +1,68 @@
 package coop.rchain.casper.api
 
+import scala.collection.immutable
+
 import cats.Monad
 import cats.effect.concurrent.Semaphore
-import cats.effect.Concurrent
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import com.google.protobuf.ByteString
+
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
+import coop.rchain.casper._
 import coop.rchain.casper.Estimator.BlockHash
-import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
+import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.{EventConverter, ProtoUtil}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.graphz._
 import coop.rchain.models.Par
-import coop.rchain.rspace.StableHashProvider
-import coop.rchain.rspace.trace.{COMM, Consume, Produce}
-import coop.rchain.shared.Log
-import coop.rchain.models.serialization.implicits.mkProtobufInstance
 import coop.rchain.models.rholang.sorter.Sortable._
+import coop.rchain.models.serialization.implicits.mkProtobufInstance
+import coop.rchain.rspace.StableHashProvider
+import coop.rchain.rspace.trace._
+import coop.rchain.shared.Log
 
-import scala.collection.immutable
-import coop.rchain.casper.util.EventConverter
-import coop.rchain.casper._
-import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.util.ProtoUtil
+import com.google.protobuf.ByteString
 
 object BlockAPI {
 
-  def deploy[F[_]: Monad: MultiParentCasperRef: Log](d: DeployData): F[DeployServiceResponse] = {
-    def casperDeploy(implicit casper: MultiParentCasper[F]): F[DeployServiceResponse] =
+  type Error           = String
+  type ApiErr[A]       = Either[Error, A]
+  type Effect[F[_], A] = F[ApiErr[A]]
+
+  def deploy[F[_]: Monad: MultiParentCasperRef: Log](
+      d: DeployData
+  ): Effect[F, DeployServiceResponse] = {
+    def casperDeploy(
+        implicit casper: MultiParentCasper[F]
+    ): Effect[F, DeployServiceResponse] =
       for {
         r <- MultiParentCasper[F].deploy(d)
         re <- r match {
-               case Right(_)  => DeployServiceResponse(success = true, "Success!").pure[F]
-               case Left(err) => DeployServiceResponse(success = false, err.getMessage).pure[F]
+               case Right(_)  => DeployServiceResponse("Success!").asRight.pure[F]
+               case Left(err) => err.getMessage.asLeft.pure[F]
              }
       } yield re
 
+    val errorMessage = "Could not deploy, casper instance was not available yet."
+
     MultiParentCasperRef
-      .withCasper[F, DeployServiceResponse](
+      .withCasper[F, ApiErr[DeployServiceResponse]](
         casperDeploy(_),
-        DeployServiceResponse(success = false, s"Error: Casper instance not available")
+        Log[F]
+          .warn(errorMessage)
+          .as(s"Error: $errorMessage".asLeft)
       )
   }
 
   def createBlock[F[_]: Sync: Concurrent: MultiParentCasperRef: Log](
       blockApiLock: Semaphore[F]
-  ): F[DeployServiceResponse] =
-    MultiParentCasperRef.withCasper[F, DeployServiceResponse](
+  ): Effect[F, DeployServiceResponse] = {
+    val errorMessage = "Could not create block, casper instance was not available yet."
+    MultiParentCasperRef.withCasper[F, ApiErr[DeployServiceResponse]](
       casper => {
         Sync[F].bracket(blockApiLock.tryAcquire) {
           case true =>
@@ -57,10 +70,7 @@ object BlockAPI {
               maybeBlock <- casper.createBlock
               result <- maybeBlock match {
                          case err: NoBlock =>
-                           DeployServiceResponse(
-                             success = false,
-                             s"Error while creating block: $err"
-                           ).pure[F]
+                           s"Error while creating block: $err".asLeft[DeployServiceResponse].pure[F]
                          case Created(block) =>
                            casper
                              .addBlock(block, ignoreDoppelgangerCheck[F])
@@ -68,20 +78,27 @@ object BlockAPI {
                        }
             } yield result
           case false =>
-            DeployServiceResponse(success = false, "Error: There is another propose in progress.")
-              .pure[F]
+            "Error: There is another propose in progress.".asLeft[DeployServiceResponse].pure[F]
         } { _ =>
           blockApiLock.release
         }
       },
-      default = DeployServiceResponse(success = false, "Error: Casper instance not available")
+      default = Log[F]
+        .warn(errorMessage)
+        .as(s"Error: $errorMessage".asLeft)
     )
+  }
 
   def getListeningNameDataResponse[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int,
       listeningName: Par
-  ): F[ListeningNameDataResponse] = {
-    def casperResponse(implicit casper: MultiParentCasper[F]) =
+  ): Effect[F, ListeningNameDataResponse] = {
+
+    val errorMessage = "Could not get listening name data, casper instance was not available yet."
+
+    def casperResponse(
+        implicit casper: MultiParentCasper[F]
+    ): Effect[F, ListeningNameDataResponse] =
       for {
         mainChain           <- getMainChainFromTip[F](depth)
         maybeRuntimeManager <- casper.getRuntimeManager
@@ -97,22 +114,27 @@ object BlockAPI {
         blocksWithActiveName = maybeBlocksWithActiveName.flatten
       } yield
         ListeningNameDataResponse(
-          status = "Success",
           blockResults = blocksWithActiveName,
           length = blocksWithActiveName.length
-        )
+        ).asRight
 
-    MultiParentCasperRef.withCasper[F, ListeningNameDataResponse](
+    MultiParentCasperRef.withCasper[F, ApiErr[ListeningNameDataResponse]](
       casperResponse(_),
-      ListeningNameDataResponse(status = "Error: Casper instance not available")
+      Log[F]
+        .warn(errorMessage)
+        .as(s"Error: $errorMessage".asLeft)
     )
   }
 
   def getListeningNameContinuationResponse[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int,
       listeningNames: Seq[Par]
-  ): F[ListeningNameContinuationResponse] = {
-    def casperResponse(implicit casper: MultiParentCasper[F]) =
+  ): Effect[F, ListeningNameContinuationResponse] = {
+    val errorMessage =
+      "Could not get listening names continuation, casper instance was not available yet."
+    def casperResponse(
+        implicit casper: MultiParentCasper[F]
+    ): Effect[F, ListeningNameContinuationResponse] =
       for {
         mainChain           <- getMainChainFromTip[F](depth)
         maybeRuntimeManager <- casper.getRuntimeManager
@@ -129,14 +151,15 @@ object BlockAPI {
         blocksWithActiveName = maybeBlocksWithActiveName.flatten
       } yield
         ListeningNameContinuationResponse(
-          status = "Success",
           blockResults = blocksWithActiveName,
           length = blocksWithActiveName.length
-        )
+        ).asRight
 
-    MultiParentCasperRef.withCasper[F, ListeningNameContinuationResponse](
+    MultiParentCasperRef.withCasper[F, ApiErr[ListeningNameContinuationResponse]](
       casperResponse(_),
-      ListeningNameContinuationResponse(status = "Error: Casper instance not available")
+      Log[F]
+        .warn(errorMessage)
+        .as(s"Error: $errorMessage".asLeft)
     )
   }
 
@@ -191,7 +214,7 @@ object BlockAPI {
   private def isListeningNameReduced(
       block: BlockMessage,
       sortedListeningName: immutable.Seq[Par]
-  ) = {
+  ): Boolean = {
     val serializedLog = for {
       bd    <- block.body.toSeq
       pd    <- bd.deploys
@@ -223,9 +246,12 @@ object BlockAPI {
       d: Option[Int] = None,
       visualizer: (Vector[Vector[BlockHash]], String) => F[G[Graphz[G]]],
       stringify: G[Graphz[G]] => String
-  ): F[String] = {
+  ): Effect[F, VisualizeBlocksResponse] = {
 
-    def casperResponse(implicit casper: MultiParentCasper[F]): F[String] =
+    val errorMessage =
+      "Could not visualize graph, casper instance was not available yet."
+
+    def casperResponse(implicit casper: MultiParentCasper[F]): Effect[F, VisualizeBlocksResponse] =
       for {
         dag                <- MultiParentCasper[F].blockDag
         maxHeight          <- dag.topoSort(0L).map(_.length - 1)
@@ -234,17 +260,21 @@ object BlockAPI {
         topoSort           <- dag.topoSortTail(depth)
         lastFinalizedBlock <- MultiParentCasper[F].lastFinalizedBlock
         graph              <- visualizer(topoSort, PrettyPrinter.buildString(lastFinalizedBlock.blockHash))
-      } yield stringify(graph)
+      } yield VisualizeBlocksResponse(stringify(graph)).asRight
 
-    MultiParentCasperRef.withCasper[F, String](
+    MultiParentCasperRef.withCasper[F, ApiErr[VisualizeBlocksResponse]](
       casperResponse(_),
-      "no casper"
+      Log[F].warn(errorMessage).as(errorMessage.asLeft)
     )
   }
 
   def showBlocks[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int
   ): F[List[BlockInfoWithoutTuplespace]] = {
+
+    val errorMessage =
+      "Could not show blocks, casper instance was not available yet."
+
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
         dag         <- MultiParentCasper[F].blockDag
@@ -258,7 +288,7 @@ object BlockAPI {
 
     MultiParentCasperRef.withCasper[F, List[BlockInfoWithoutTuplespace]](
       casperResponse(_),
-      List.empty[BlockInfoWithoutTuplespace]
+      Log[F].warn(errorMessage).as(List.empty[BlockInfoWithoutTuplespace])
     )
   }
 
@@ -280,6 +310,10 @@ object BlockAPI {
   def showMainChain[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int
   ): F[List[BlockInfoWithoutTuplespace]] = {
+
+    val errorMessage =
+      "Could not show main chain, casper instance was not available yet."
+
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
         dag        <- MultiParentCasper[F].blockDag
@@ -291,7 +325,7 @@ object BlockAPI {
 
     MultiParentCasperRef.withCasper[F, List[BlockInfoWithoutTuplespace]](
       casperResponse(_),
-      List.empty[BlockInfoWithoutTuplespace]
+      Log[F].warn(errorMessage).as(List.empty[BlockInfoWithoutTuplespace])
     )
   }
 
@@ -299,8 +333,14 @@ object BlockAPI {
   def findBlockWithDeploy[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       user: ByteString,
       timestamp: Long
-  ): F[BlockQueryResponse] = {
-    def casperResponse(implicit casper: MultiParentCasper[F]): F[BlockQueryResponse] =
+  ): Effect[F, BlockQueryResponse] = {
+
+    val errorMessage =
+      "Could not find block with deploy, casper instance was not available yet."
+
+    def casperResponse(
+        implicit casper: MultiParentCasper[F]
+    ): Effect[F, BlockQueryResponse] =
       for {
         dag                <- MultiParentCasper[F].blockDag
         allBlocksTopoSort  <- dag.topoSort(0L)
@@ -308,21 +348,20 @@ object BlockAPI {
         blockQueryResponse <- maybeBlock.traverse(getFullBlockInfo[F])
       } yield
         blockQueryResponse.fold(
-          BlockQueryResponse(
-            status = s"Error: Failure to find block containing deploy signed by ${PrettyPrinter
-              .buildString(user)} with timestamp ${timestamp.toString}"
-          )
+          s"Error: Failure to find block containing deploy signed by ${PrettyPrinter
+            .buildString(user)} with timestamp ${timestamp.toString}".asLeft[BlockQueryResponse]
         )(
           blockInfo =>
             BlockQueryResponse(
-              status = "Success",
               blockInfo = Some(blockInfo)
-            )
+            ).asRight
         )
 
-    MultiParentCasperRef.withCasper[F, BlockQueryResponse](
+    MultiParentCasperRef.withCasper[F, ApiErr[BlockQueryResponse]](
       casperResponse(_),
-      BlockQueryResponse(status = "Error: Casper instance not available")
+      Log[F]
+        .warn(errorMessage)
+        .as(s"Error: errorMessage".asLeft)
     )
   }
 
@@ -332,13 +371,19 @@ object BlockAPI {
       timestamp: Long
   ): F[Option[BlockMessage]] =
     blockHashes.toStream
-      .traverse(ProtoUtil.unsafeGetBlock[F](_))
+      .traverse(ProtoUtil.unsafeGetBlock[F])
       .map(blocks => blocks.find(ProtoUtil.containsDeploy(_, user, timestamp)))
 
   def showBlock[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       q: BlockQuery
-  ): F[BlockQueryResponse] = {
-    def casperResponse(implicit casper: MultiParentCasper[F]) =
+  ): Effect[F, BlockQueryResponse] = {
+
+    val errorMessage =
+      "Could not show block, casper instance was not available yet."
+
+    def casperResponse(
+        implicit casper: MultiParentCasper[F]
+    ): Effect[F, BlockQueryResponse] =
       for {
         dag        <- MultiParentCasper[F].blockDag
         maybeBlock <- getBlock[F](q, dag)
@@ -346,21 +391,15 @@ object BlockAPI {
                                case Some(block) =>
                                  for {
                                    blockInfo <- getFullBlockInfo[F](block)
-                                 } yield
-                                   BlockQueryResponse(
-                                     status = "Success",
-                                     blockInfo = Some(blockInfo)
-                                   )
+                                 } yield BlockQueryResponse(blockInfo = Some(blockInfo)).asRight
                                case None =>
-                                 BlockQueryResponse(
-                                   status = s"Error: Failure to find block with hash ${q.hash}"
-                                 ).pure[F]
+                                 s"Error: Failure to find block with hash ${q.hash}".asLeft.pure[F]
                              }
       } yield blockQueryResponse
 
-    MultiParentCasperRef.withCasper[F, BlockQueryResponse](
+    MultiParentCasperRef.withCasper[F, ApiErr[BlockQueryResponse]](
       casperResponse(_),
-      BlockQueryResponse(status = "Error: Casper instance not available")
+      Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
     )
   }
 
@@ -375,7 +414,8 @@ object BlockAPI {
           BlockHash,
           Seq[BlockHash],
           Float,
-          Float
+          Float,
+          Seq[Bond]
       ) => F[A]
   ): F[A] =
     for {
@@ -387,11 +427,13 @@ object BlockAPI {
         case Some(hash) => hash
         case None       => ByteString.EMPTY
       }
-      timestamp                = header.timestamp
-      mainParent               = header.parentsHashList.headOption.getOrElse(ByteString.EMPTY)
-      parentsHashList          = header.parentsHashList
-      normalizedFaultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, block.blockHash)
-      initialFault             <- MultiParentCasper[F].normalizedInitialFault(ProtoUtil.weightMap(block))
+      timestamp       = header.timestamp
+      mainParent      = header.parentsHashList.headOption.getOrElse(ByteString.EMPTY)
+      parentsHashList = header.parentsHashList
+      normalizedFaultTolerance <- SafetyOracle[F]
+                                   .normalizedFaultTolerance(dag, block.blockHash) // TODO: Warn about parent block finalization
+      initialFault       <- MultiParentCasper[F].normalizedInitialFault(ProtoUtil.weightMap(block))
+      bondsValidatorList = ProtoUtil.bonds(block)
       blockInfo <- constructor(
                     block,
                     version,
@@ -401,7 +443,8 @@ object BlockAPI {
                     mainParent,
                     parentsHashList,
                     normalizedFaultTolerance,
-                    initialFault
+                    initialFault,
+                    bondsValidatorList
                   )
     } yield blockInfo
 
@@ -422,7 +465,8 @@ object BlockAPI {
       mainParent: BlockHash,
       parentsHashList: Seq[BlockHash],
       normalizedFaultTolerance: Float,
-      initialFault: Float
+      initialFault: Float,
+      bondsValidatorList: Seq[Bond]
   ): F[BlockInfo] =
     for {
       tsDesc <- MultiParentCasper[F].storageContents(tsHash)
@@ -436,11 +480,12 @@ object BlockAPI {
         tupleSpaceHash = PrettyPrinter.buildStringNoLimit(tsHash),
         tupleSpaceDump = tsDesc,
         timestamp = timestamp,
-        faultTolerance = normalizedFaultTolerance - initialFault,
+        faultTolerance = normalizedFaultTolerance - initialFault, // TODO: Fix
         mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
         parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit),
         sender = PrettyPrinter.buildStringNoLimit(block.sender),
-        shardId = block.shardId
+        shardId = block.shardId,
+        bondsValidatorList = bondsValidatorList.map(PrettyPrinter.buildString)
       )
 
   private def constructBlockInfoWithoutTuplespace[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
@@ -452,7 +497,8 @@ object BlockAPI {
       mainParent: BlockHash,
       parentsHashList: Seq[BlockHash],
       normalizedFaultTolerance: Float,
-      initialFault: Float
+      initialFault: Float,
+      bondsValidatorList: Seq[Bond]
   ): F[BlockInfoWithoutTuplespace] =
     BlockInfoWithoutTuplespace(
       blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
@@ -473,42 +519,38 @@ object BlockAPI {
       dag: BlockDagRepresentation[F]
   ): F[Option[BlockMessage]] =
     for {
-      findResult <- BlockStore[F].find(h => {
-                     Base16.encode(h.toByteArray).startsWith(q.hash)
-                   })
+      findResult <- BlockStore[F].find(h => Base16.encode(h.toByteArray).startsWith(q.hash))
     } yield
       findResult.headOption match {
-        case Some((_, block)) =>
-          Some(block)
-        case None =>
-          none[BlockMessage]
+        case Some((_, block)) => Some(block)
+        case None             => none[BlockMessage]
       }
 
-  private def addResponse(status: BlockStatus, block: BlockMessage): DeployServiceResponse =
+  private def addResponse(
+      status: BlockStatus,
+      block: BlockMessage
+  ): ApiErr[DeployServiceResponse] =
     status match {
       case _: InvalidBlock =>
-        DeployServiceResponse(success = false, s"Failure! Invalid block: $status")
+        s"Failure! Invalid block: $status".asLeft
       case _: ValidBlock =>
         val hash = PrettyPrinter.buildString(block.blockHash)
-        DeployServiceResponse(success = true, s"Success! Block $hash created and added.")
+        DeployServiceResponse(s"Success! Block $hash created and added.").asRight
       case BlockException(ex) =>
-        DeployServiceResponse(success = false, s"Error during block processing: $ex")
+        s"Error during block processing: $ex".asLeft
       case Processing =>
-        DeployServiceResponse(
-          success = false,
-          "No action taken since other thread is already processing the block."
-        )
+        "No action taken since other thread is already processing the block.".asLeft
     }
 
   def previewPrivateNames[F[_]: Monad: Log](
       user: ByteString,
       timestamp: Long,
       nameQty: Int
-  ): F[PrivateNamePreviewResponse] = {
+  ): Effect[F, PrivateNamePreviewResponse] = {
     val seed    = DeployData().withUser(user).withTimestamp(timestamp)
     val rand    = Blake2b512Random(DeployData.toByteArray(seed))
     val safeQty = nameQty min 1024
     val ids     = (0 until safeQty).map(_ => ByteString.copyFrom(rand.next()))
-    PrivateNamePreviewResponse(ids).pure[F]
+    PrivateNamePreviewResponse(ids).asRight[String].pure[F]
   }
 }

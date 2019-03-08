@@ -83,6 +83,7 @@ class GrpcDiagnosticsService(host: String, port: Int, maxMessageSize: Int)
   def threads: Task[Threads] =
     stub.getThreads(Empty())
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   override def close(): Unit = {
     val terminated = channel.shutdown().awaitTermination(10, TimeUnit.SECONDS)
     if (!terminated) {

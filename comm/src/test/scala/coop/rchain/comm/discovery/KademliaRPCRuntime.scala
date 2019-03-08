@@ -120,11 +120,6 @@ trait Environment {
   def port: Int
 }
 
-final class DispatcherCallback[F[_]: Functor](state: MVar[F, Unit]) {
-  def notifyThatDispatched(): F[Unit] = state.tryPut(()).void
-  def waitUntilDispatched(): F[Unit]  = state.take
-}
-
 abstract class Handler[F[_]: Monad: Timer, R] {
   def received: Seq[(PeerNode, R)] = receivedMessages
   protected val receivedMessages: mutable.MutableList[(PeerNode, R)] =
@@ -149,8 +144,8 @@ final class LookupHandler[F[_]: Monad: Timer](
   def handle(peer: PeerNode): (PeerNode, Array[Byte]) => F[Seq[PeerNode]] =
     (p, a) =>
       for {
-        _ <- delay.fold(().pure[F])(implicitly[Timer[F]].sleep)
         _ <- receivedMessages.synchronized(receivedMessages += ((peer, (p, a)))).pure[F]
+        _ <- delay.fold(().pure[F])(implicitly[Timer[F]].sleep)
       } yield response
 }
 

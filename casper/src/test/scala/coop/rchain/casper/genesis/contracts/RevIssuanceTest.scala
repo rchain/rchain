@@ -37,7 +37,7 @@ class RevIssuanceTest extends FlatSpec with Matchers {
   }
 
   "Rev" should "be issued and accessible based on inputs from Ethereum" in {
-    val activeRuntime  = TestSetUtil.runtime()
+    val activeRuntime  = TestUtil.runtime()
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
     val emptyHash      = runtimeManager.emptyStateHash
 
@@ -67,7 +67,6 @@ class RevIssuanceTest extends FlatSpec with Matchers {
           runtimeManager
         )
         .unsafeRunSync
-    val unlockDeploy = ProtoUtil.deployDataToDeploy(unlockDeployData)
 
     val nonce             = 0
     val amount            = 15L
@@ -83,16 +82,17 @@ class RevIssuanceTest extends FlatSpec with Matchers {
         secKey
       )(Concurrent[Task], runtimeManager)
       .unsafeRunSync
-    val transferDeploy = ProtoUtil.deployDataToDeploy(transferDeployData)
     val (postGenHash, _) =
       runtimeManager.computeState(emptyHash, genesisDeploys).runSyncUnsafe(10.seconds)
     val (postUnlockHash, _) =
-      runtimeManager.computeState(postGenHash, unlockDeploy :: Nil).runSyncUnsafe(10.seconds)
+      runtimeManager.computeState(postGenHash, unlockDeployData :: Nil).runSyncUnsafe(10.seconds)
     val unlockResult = getDataUnsafe(runtimeManager, postUnlockHash, statusOut)
     assert(unlockResult.head.exprs.head.getETupleBody.ps.head.exprs.head.getGBool) //assert unlock success
 
     val (postTransferHash, _) =
-      runtimeManager.computeState(postUnlockHash, transferDeploy :: Nil).runSyncUnsafe(10.seconds)
+      runtimeManager
+        .computeState(postUnlockHash, transferDeployData :: Nil)
+        .runSyncUnsafe(10.seconds)
     val transferSuccess = getDataUnsafe(runtimeManager, postTransferHash, transferStatusOut)
     val transferResult  = getDataUnsafe(runtimeManager, postTransferHash, destination)
     assert(transferSuccess.head.exprs.head.getGString == "Success") //assert transfer success

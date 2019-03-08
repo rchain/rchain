@@ -4,8 +4,8 @@ import java.nio.file.Path
 
 import cats.Monad
 import cats.implicits._
+import cats.effect._
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.shared.{Log, LogSource}
@@ -14,7 +14,7 @@ import scala.concurrent.duration.FiniteDuration
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
 
-case class CasperConf(
+final case class CasperConf(
     publicKeyBase16: Option[String],
     privateKey: Option[Either[String, Path]],
     sigAlgorithm: String,
@@ -38,7 +38,8 @@ case class CasperConf(
 object CasperConf {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def parseValidatorsFile[F[_]: Monad: Capture: Log](
+  @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
+  def parseValidatorsFile[F[_]: Monad: Sync: Log](
       knownValidatorsFile: Option[String]
   ): F[Set[ByteString]] =
     knownValidatorsFile match {
@@ -46,8 +47,8 @@ object CasperConf {
       case None => Set.empty[ByteString].pure[F]
 
       case Some(file) =>
-        Capture[F]
-          .capture {
+        Sync[F]
+          .delay {
             Try(
               Source
                 .fromFile(file)
@@ -66,6 +67,7 @@ object CasperConf {
           }
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def publicKey(
       givenPublicKey: Option[Array[Byte]],
       sigAlgorithm: String,

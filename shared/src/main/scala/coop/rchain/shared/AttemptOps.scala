@@ -7,6 +7,7 @@ object AttemptOps {
 
   implicit class RichAttempt[T](a: Attempt[T]) {
 
+    @SuppressWarnings(Array("org.wartremover.warts.Throw"))
     def get: T =
       a match {
         case Attempt.Successful(res) => res

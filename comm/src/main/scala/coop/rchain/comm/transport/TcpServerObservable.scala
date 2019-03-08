@@ -52,6 +52,7 @@ class TcpServerObservable(
             }
           }
 
+      @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
       def ask(request: TLRequest): Task[TLResponse] =
         request.protocol
           .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>
@@ -83,7 +84,7 @@ class TcpServerObservable(
 
         (StreamHandler.handleStream(tempFolder, observable, neverBreak) >>= {
           case Left(ex)   => logger.error(s"Could not receive stream! Details: ${ex.getMessage}", ex)
-          case Right(msg) => Task.delay(bufferBlobMessage.pushNext(msg))
+          case Right(msg) => Task.delay(bufferBlobMessage.pushNext(msg)).as(())
         }).as(ChunkResponse())
 
       }

@@ -1,12 +1,9 @@
 package coop.rchain.casper.api
 
 import cats.Id
-import com.google.protobuf.{ByteString, Int64Value}
-import coop.rchain.casper.protocol.DeployData
+
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.{GPrivate}
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 
 import org.scalatest.{FlatSpec, Matchers}
@@ -21,7 +18,7 @@ class PreviewPrivateNameTest extends FlatSpec with Matchers {
       nth + 1
     )
 
-    Base16.encode(preview.ids(nth).toByteArray)
+    Base16.encode(preview.right.get.ids(nth).toByteArray)
   }
 
   val myNodePk = "464f6780d71b724525be14348b59c53dc8795346dfd7576c9f01c397ee7523e6"

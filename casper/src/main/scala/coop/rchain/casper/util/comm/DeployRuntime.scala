@@ -5,7 +5,8 @@ import scala.io.Source
 import scala.language.higherKinds
 import scala.util._
 
-import cats.{Id, Monad}
+import cats.{Functor, Id, Monad}
+import cats.data.EitherT
 import cats.effect.Sync
 import cats.implicits._
 
@@ -17,6 +18,8 @@ import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.models.Par
 import coop.rchain.shared.Time
+import cats.syntax.either._
+import coop.rchain.shared.ThrowableOps._
 
 object DeployRuntime {
 
@@ -39,24 +42,24 @@ object DeployRuntime {
   ): F[Unit] =
     gracefulExit(DeployService[F].visualizeDag(VisualizeDagQuery(depth, showJustificationLines)))
 
-  def listenForDataAtName[F[_]: Sync: DeployService: Time: Capture](
+  def listenForDataAtName[F[_]: Functor: Sync: DeployService: Time](
       name: Id[Name]
   ): F[Unit] =
     gracefulExit {
       listenAtNameUntilChanges(name) { par: Par =>
         val request = DataAtNameQuery(Int.MaxValue, Some(par))
-        DeployService[F].listenForDataAtName(request) map (_.blockResults)
-      }.map(kp(Right("")))
+        EitherT(DeployService[F].listenForDataAtName(request))
+      }.map(kp("")).value
     }
 
-  def listenForContinuationAtName[F[_]: Sync: Time: DeployService: Capture](
+  def listenForContinuationAtName[F[_]: Functor: Sync: Time: DeployService](
       names: List[Name]
   ): F[Unit] =
     gracefulExit {
       listenAtNameUntilChanges(names) { pars: List[Par] =>
         val request = ContinuationAtNameQuery(Int.MaxValue, pars)
-        DeployService[F].listenForContinuationAtName(request) map (_.blockResults)
-      }.map(kp(Right("")))
+        EitherT(DeployService[F].listenForContinuationAtName(request))
+      }.map(kp("")).value
     }
 
   //Accepts a Rholang source file and deploys it to Casper
@@ -70,7 +73,7 @@ object DeployRuntime {
     gracefulExit(
       Sync[F].delay(Try(Source.fromFile(file).mkString).toEither).flatMap {
         case Left(ex) =>
-          Sync[F].delay(Left(new RuntimeException(s"Error with given file: \n${ex.getMessage}")))
+          Sync[F].delay(Left(Seq(s"Error with given file: \n${ex.getMessage}")))
         case Right(code) =>
           for {
             timestamp <- Sync[F].delay(System.currentTimeMillis())
@@ -99,25 +102,27 @@ object DeployRuntime {
             println(s"Sending the following to Casper: ${d.term}")
           }
       response <- DeployService[F].deploy(d)
-      msg      = response.fold(processError(_).getMessage, "Response: " + _)
+      msg      = response.fold(_.mkString(System.lineSeparator()), "Response: " + _)
       _        <- Sync[F].delay(println(msg))
       _        <- Time[F].sleep(4.seconds)
     } yield ()
 
-  private def gracefulExit[F[_]: Monad: Sync, A](program: F[Either[Throwable, String]]): F[Unit] =
+  private def gracefulExit[F[_]: Monad: Sync, A](
+      program: F[Either[Seq[String], String]]
+  ): F[Unit] =
     for {
       result <- Sync[F].attempt(program)
-      _ <- result.joinRight match {
-            case Left(ex) =>
+      _ <- processError(result).joinRight match {
+            case Left(errors) =>
               Sync[F].delay {
-                println(processError(ex).getMessage)
+                errors.foreach(error => println(error))
                 System.exit(1)
               }
             case Right(msg) => Sync[F].delay(println(msg))
           }
     } yield ()
 
-  private def processError(t: Throwable): Throwable =
-    Option(t.getCause).getOrElse(t)
+  private def processError[A](error: Either[Throwable, A]): Either[Seq[String], A] =
+    error.leftMap(_.toMessageList())
 
 }

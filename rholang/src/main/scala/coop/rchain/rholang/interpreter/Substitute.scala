@@ -10,7 +10,7 @@ import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.rholang.sorter._
-import coop.rchain.rholang.interpreter.accounting.{Chargeable, Cost, CostAccounting}
+import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.SubstituteError
 
 trait Substitute[M[_], A] {
@@ -19,7 +19,7 @@ trait Substitute[M[_], A] {
 }
 
 object Substitute {
-  def charge[A: Chargeable, M[_]: Sync: CostAccounting](
+  private[interpreter] def charge[A: Chargeable, M[_]: Sync: _cost: _error](
       substitutionResult: M[A],
       failureCost: Cost
   ): M[A] =
@@ -27,24 +27,23 @@ object Substitute {
       .map(
         _.fold(
           th => (Left(th), failureCost),
-          substTerm => (Right(substTerm), Cost(substTerm))
+          substTerm => (Right(substTerm), Cost(substTerm, "substitution"))
         )
       )
-      .flatMap({ case (result, cost) => CostAccounting[M].charge(cost) *> Sync[M].pure(result) })
+      .flatMap({ case (result, cost) => accounting.charge[M](cost) *> Sync[M].pure(result) })
       .rethrow
 
-  def substituteAndCharge[A: Chargeable, M[_]: CostAccounting: Substitute[?[_], A]: Sync](
+  def substituteAndCharge[A: Chargeable, M[_]: _cost: _error: Substitute[?[_], A]: Sync](
       term: A,
       depth: Int,
       env: Env[Par]
   ): M[A] =
     charge(Substitute[M, A].substitute(term)(depth, env), Cost(term))
 
-  def substituteNoSortAndCharge[A: Chargeable, M[_]: CostAccounting: Substitute[?[_], A]: Sync](
+  def substituteNoSortAndCharge[A: Chargeable, M[_]: _cost: _error: Substitute[?[_], A]: Sync](
       term: A,
       depth: Int,
-      env: Env[Par],
-      costAccountingAlg: CostAccounting[M]
+      env: Env[Par]
   ): M[A] =
     charge(Substitute[M, A].substituteNoSort(term)(depth, env), Cost(term))
 
@@ -102,14 +101,14 @@ object Substitute {
       import BundleOps._
 
       override def substitute(term: Bundle)(implicit depth: Int, env: Env[Par]): M[Bundle] =
-        substitutePar[M].substitute(term.body.get).map { subBundle =>
+        substitutePar[M].substitute(term.body).map { subBundle =>
           subBundle.singleBundle() match {
             case Some(value) => term.merge(value)
             case None        => term.copy(body = subBundle)
           }
         }
       override def substituteNoSort(term: Bundle)(implicit depth: Int, env: Env[Par]): M[Bundle] =
-        substitutePar[M].substituteNoSort(term.body.get).map { subBundle =>
+        substitutePar[M].substituteNoSort(term.body).map { subBundle =>
           subBundle.singleBundle() match {
             case Some(value) => term.merge(value)
             case None        => term.copy(body = subBundle)
@@ -193,7 +192,7 @@ object Substitute {
     new Substitute[M, Send] {
       override def substituteNoSort(term: Send)(implicit depth: Int, env: Env[Par]): M[Send] =
         for {
-          channelsSub <- substitutePar[M].substituteNoSort(term.chan.get)
+          channelsSub <- substitutePar[M].substituteNoSort(term.chan)
           parsSub     <- term.data.toVector.traverse(substitutePar[M].substituteNoSort(_))
           send = Send(
             chan = channelsSub,
@@ -222,7 +221,7 @@ object Substitute {
                                          )
                          } yield ReceiveBind(subPatterns, subChannel, rem, freeCount)
                      }
-          bodySub <- substitutePar[M].substituteNoSort(term.body.get)(
+          bodySub <- substitutePar[M].substituteNoSort(term.body)(
                       depth,
                       env.shift(term.bindCount)
                     )
@@ -244,7 +243,7 @@ object Substitute {
     new Substitute[M, New] {
       override def substituteNoSort(term: New)(implicit depth: Int, env: Env[Par]): M[New] =
         for {
-          newSub <- substitutePar[M].substituteNoSort(term.p.get)(depth, env.shift(term.bindCount))
+          newSub <- substitutePar[M].substituteNoSort(term.p)(depth, env.shift(term.bindCount))
           neu    = New(term.bindCount, newSub, term.uri, term.locallyFree.until(env.shift))
         } yield neu
       override def substitute(term: New)(implicit depth: Int, env: Env[Par]): M[New] =
@@ -255,7 +254,7 @@ object Substitute {
     new Substitute[M, Match] {
       override def substituteNoSort(term: Match)(implicit depth: Int, env: Env[Par]): M[Match] =
         for {
-          targetSub <- substitutePar[M].substituteNoSort(term.target.get)
+          targetSub <- substitutePar[M].substituteNoSort(term.target)
           casesSub <- term.cases.toVector.traverse {
                        case MatchCase(_case, _par, freeCount) =>
                          for {
@@ -280,38 +279,38 @@ object Substitute {
           s2: (Par, Par) => ((Par, Par) => Expr) => M[Expr]
       )(implicit env: Env[Par]): M[Expr] =
         term.exprInstance match {
-          case ENotBody(ENot(par)) => s1(par.get).map(ENot(_))
-          case ENegBody(ENeg(par)) => s1(par.get).map(ENeg(_))
+          case ENotBody(ENot(par)) => s1(par).map(ENot(_))
+          case ENegBody(ENeg(par)) => s1(par).map(ENeg(_))
           case EMultBody(EMult(par1, par2)) =>
-            s2(par1.get, par2.get)(EMult(_, _))
+            s2(par1, par2)(EMult(_, _))
           case EDivBody(EDiv(par1, par2)) =>
-            s2(par1.get, par2.get)(EDiv(_, _))
+            s2(par1, par2)(EDiv(_, _))
           case EPercentPercentBody(EPercentPercent(par1, par2)) =>
             s2(par1, par2)(EPercentPercent(_, _))
           case EPlusBody(EPlus(par1, par2)) =>
-            s2(par1.get, par2.get)(EPlus(_, _))
+            s2(par1, par2)(EPlus(_, _))
           case EMinusBody(EMinus(par1, par2)) =>
-            s2(par1.get, par2.get)(EMinus(_, _))
+            s2(par1, par2)(EMinus(_, _))
           case EPlusPlusBody(EPlusPlus(par1, par2)) =>
             s2(par1, par2)(EPlusPlus(_, _))
           case EMinusMinusBody(EMinusMinus(par1, par2)) =>
             s2(par1, par2)(EMinusMinus(_, _))
           case ELtBody(ELt(par1, par2)) =>
-            s2(par1.get, par2.get)(ELt(_, _))
+            s2(par1, par2)(ELt(_, _))
           case ELteBody(ELte(par1, par2)) =>
-            s2(par1.get, par2.get)(ELte(_, _))
+            s2(par1, par2)(ELte(_, _))
           case EGtBody(EGt(par1, par2)) =>
-            s2(par1.get, par2.get)(EGt(_, _))
+            s2(par1, par2)(EGt(_, _))
           case EGteBody(EGte(par1, par2)) =>
-            s2(par1.get, par2.get)(EGte(_, _))
+            s2(par1, par2)(EGte(_, _))
           case EEqBody(EEq(par1, par2)) =>
-            s2(par1.get, par2.get)(EEq(_, _))
+            s2(par1, par2)(EEq(_, _))
           case ENeqBody(ENeq(par1, par2)) =>
-            s2(par1.get, par2.get)(ENeq(_, _))
+            s2(par1, par2)(ENeq(_, _))
           case EAndBody(EAnd(par1, par2)) =>
-            s2(par1.get, par2.get)(EAnd(_, _))
+            s2(par1, par2)(EAnd(_, _))
           case EOrBody(EOr(par1, par2)) =>
-            s2(par1.get, par2.get)(EOr(_, _))
+            s2(par1, par2)(EOr(_, _))
           case EMatchesBody(EMatches(target, pattern)) =>
             s2(target, pattern)(EMatches(_, _))
           case EListBody(EList(ps, locallyFree, connectiveUsed, rem)) =>

@@ -7,7 +7,7 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoPureSpace}
 import coop.rchain.rholang.interpreter.accounting.{CostAccounting, _}
 import coop.rchain.rholang.interpreter.errors
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.{Blake2b256Hash, Checkpoint, ContResult, Result}
@@ -38,13 +38,13 @@ object ChargingRSpace {
           continuation: TaggedContinuation,
           persist: Boolean,
           sequenceNumber: Int
-      ): F[Either[errors.OutOfPhlogistonsError.type, Option[
+      ): F[Either[errors.InterpreterError, Option[
         (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandomAndPhlos]])
       ]]] = {
         val storageCost = storageCostConsume(channels, patterns, continuation)
         for {
           _      <- costAlg.charge(storageCost)
-          matchF <- costAlg.get().map(ca => matchListPar(ca.cost))
+          matchF <- costAlg.get().map(cost => matchListPar(cost))
           consRes <- space.consume(channels, patterns, continuation, persist, sequenceNumber)(
                       matchF
                     )
@@ -67,20 +67,20 @@ object ChargingRSpace {
           data: ListParWithRandom,
           persist: Boolean,
           sequenceNumber: Int
-      ): F[Either[errors.OutOfPhlogistonsError.type, Option[
+      ): F[Either[errors.InterpreterError, Option[
         (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandomAndPhlos]])
       ]]] = {
         val storageCost = storageCostProduce(channel, data)
         for {
           _       <- costAlg.charge(storageCost)
-          matchF  <- costAlg.get().map(ca => matchListPar(ca.cost))
+          matchF  <- costAlg.get().map(cost => matchListPar(cost))
           prodRes <- space.produce(channel, data, persist, sequenceNumber)(matchF)
           _       <- handleResult(prodRes)
         } yield prodRes
       }
 
       private def handleResult(
-          result: Either[OutOfPhlogistonsError.type, Option[
+          result: Either[InterpreterError, Option[
             (
                 ContResult[Par, BindPattern, TaggedContinuation],
                 Seq[Result[ListParWithRandomAndPhlos]]
@@ -90,7 +90,7 @@ object ChargingRSpace {
         result match {
           case Left(oope) =>
             // if we run out of phlos during the match we have to zero phlos available
-            costAlg.get().flatMap(ca => costAlg.charge(ca.cost)) >> Sync[F].raiseError(oope)
+            costAlg.get().flatMap(cost => costAlg.charge(cost)) >> Sync[F].raiseError(oope)
 
           case Right(None) => Sync[F].unit
 

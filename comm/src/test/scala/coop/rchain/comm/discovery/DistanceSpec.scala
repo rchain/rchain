@@ -2,9 +2,9 @@ package coop.rchain.comm.discovery
 
 import org.scalatest._
 
-import cats._
+import cats.{catsInstancesForId => _, _}
 import coop.rchain.comm.protocol.routing._
-import coop.rchain.catscontrib.TestOutlaws._
+import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.comm._
 import coop.rchain.crypto.codec.Base16
 

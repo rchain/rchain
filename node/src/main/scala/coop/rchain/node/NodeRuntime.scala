@@ -1,7 +1,7 @@
 package coop.rchain.node
 
+import java.nio.file.{Files, Path}
 import scala.concurrent.duration._
-
 import cats._
 import cats.data._
 import cats.effect._
@@ -9,13 +9,12 @@ import cats.effect.concurrent.{Ref, Semaphore}
 import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.functor._
-
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.{
   BlockDagFileStorage,
+  BlockDagStorage,
   BlockStore,
-  InMemBlockDagStorage,
-  InMemBlockStore
+  FileLMDBIndexBlockStore
 }
 import coop.rchain.casper._
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
@@ -40,7 +39,7 @@ import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
 import coop.rchain.shared.PathOps._
-
+import coop.rchain.rspace.Context
 import com.typesafe.config.ConfigFactory
 import kamon._
 import kamon.system.SystemMetrics
@@ -49,6 +48,7 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.blaze._
 
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 class NodeRuntime private[node] (
     conf: Configuration,
     id: NodeIdentifier,
@@ -79,13 +79,16 @@ class NodeRuntime private[node] (
   /** Configuration */
   private val port              = conf.server.port
   private val kademliaPort      = conf.server.kademliaPort
+  private val blockstorePath    = conf.server.dataDir.resolve("blockstore")
+  private val dagStoragePath    = conf.server.dataDir.resolve("dagstorage")
   private val storagePath       = conf.server.dataDir.resolve("rspace")
   private val casperStoragePath = storagePath.resolve("casper")
   private val storageSize       = conf.server.mapSize
   private val storeType         = conf.server.storeType
-  private val defaultTimeout    = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS) // TODO remove
+  private val defaultTimeout    = conf.server.defaultTimeout // TODO remove
 
   case class Servers(
+      transportServer: TransportServer,
       grpcServerExternal: GrpcServer,
       grpcServerInternal: GrpcServer,
       httpServer: Fiber[Task, Unit]
@@ -100,11 +103,22 @@ class NodeRuntime private[node] (
       nodeCoreMetrics: NodeMetrics[Task],
       jvmMetrics: JvmMetrics[Task],
       connectionsCell: ConnectionsCell[Task],
-      concurrent: Concurrent[Effect],
-      abstractContext: ToAbstractContext[Effect]
+      concurrent: Concurrent[Effect]
   ): Effect[Servers] = {
     implicit val s: Scheduler = scheduler
     for {
+      transportServer <- Task
+                          .delay(
+                            GrpcTransportServer.acquireServer(
+                              port,
+                              conf.tls.certificate,
+                              conf.tls.key,
+                              conf.server.maxMessageSize,
+                              conf.server.dataDir.resolve("tmp").resolve("comm"),
+                              conf.server.messageConsumers
+                            )(grpcScheduler, log)
+                          )
+                          .toEffect
       grpcServerExternal <- GrpcServer
                              .acquireExternalServer[Effect](
                                conf.grpcServer.portExternal,
@@ -133,65 +147,23 @@ class NodeRuntime private[node] (
                           .toEffect
 
       _ <- Task.delay {
-            val influxdb = conf.kamon.influxDb
-              .map { i =>
-                val authentication = i.authentication
-                  .map { a =>
-                    s"""
-                    |    authentication {
-                    |      user = "${a.user}"
-                    |      password = "${a.password}"
-                    |    }
-                    |""".stripMargin
-                  }
-                  .getOrElse("")
-
-                s"""
-                |  influxdb {
-                |    hostname = "${i.hostname}"
-                |    port = ${i.port}
-                |    database = "${i.database}"
-                |    protocol = "${i.protocol}"
-                |    $authentication
-                |  }
-                |""".stripMargin
-              }
-              .getOrElse("")
-            val kamonConf =
-              s"""
-               |kamon {
-               |  environment {
-               |    service = "rnode"
-               |    instance = "${id.toString}"
-               |  }
-               |  metric {
-               |    tick-interval = 10 seconds
-               |  }
-               |  system-metrics {
-               |    host {
-               |      enabled = ${conf.kamon.sigar}
-               |      sigar-native-folder = ${conf.server.dataDir.resolve("native")}
-               |    }
-               |  }
-               |  $influxdb
-               |}
-               |""".stripMargin
-            Kamon.reconfigure(ConfigFactory.parseString(kamonConf).withFallback(Kamon.config()))
-            if (conf.kamon.influxDb.isDefined)
-              Kamon.addReporter(new kamon.influxdb.InfluxDBReporter())
+            Kamon.reconfigure(conf.underlying.withFallback(Kamon.config()))
+            if (conf.kamon.influxDb) Kamon.addReporter(new BatchInfluxDBReporter())
+            if (conf.kamon.influxDbUdp) Kamon.addReporter(new UdpInfluxDBReporter())
             if (conf.kamon.prometheus) Kamon.addReporter(prometheusReporter)
             if (conf.kamon.zipkin) Kamon.addReporter(new ZipkinReporter())
             Kamon.addReporter(new JmxReporter())
-            SystemMetrics.startCollecting()
+            if (conf.kamon.sigar) SystemMetrics.startCollecting()
           }.toEffect
-    } yield Servers(grpcServerExternal, grpcServerInternal, httpServerFiber)
+    } yield Servers(transportServer, grpcServerExternal, grpcServerInternal, httpServerFiber)
   }
 
   def clearResources(servers: Servers, runtime: Runtime[Task], casperRuntime: Runtime[Task])(
       implicit
-      transport: TransportLayer[Task],
+      transportShutdown: TransportLayerShutdown[Task],
       kademliaRPC: KademliaRPC[Task],
       blockStore: BlockStore[Effect],
+      blockDagStorage: BlockDagStorage[Effect],
       peerNodeAsk: PeerNodeAsk[Task]
   ): Unit =
     (for {
@@ -199,9 +171,10 @@ class NodeRuntime private[node] (
       _   <- servers.grpcServerExternal.stop
       _   <- servers.grpcServerInternal.stop
       _   <- log.info("Shutting down transport layer, broadcasting DISCONNECT")
+      _   <- servers.transportServer.stop()
       loc <- peerNodeAsk.ask
       msg = ProtocolHelper.disconnect(loc)
-      _   <- transport.shutdown(msg)
+      _   <- transportShutdown(msg)
       _   <- kademliaRPC.shutdown()
       _   <- log.info("Shutting down HTTP server....")
       _   <- Task.delay(Kamon.stopAllReporters())
@@ -210,15 +183,18 @@ class NodeRuntime private[node] (
       _   <- runtime.close()
       _   <- log.info("Shutting down Casper runtime ...")
       _   <- casperRuntime.close()
+      _   <- log.info("Bringing DagStorage down ...")
+      _   <- blockDagStorage.close().value
       _   <- log.info("Bringing BlockStore down ...")
       _   <- blockStore.close().value
       _   <- log.info("Goodbye.")
     } yield ()).unsafeRunSync(scheduler)
 
   def addShutdownHook(servers: Servers, runtime: Runtime[Task], casperRuntime: Runtime[Task])(
-      implicit transport: TransportLayer[Task],
+      implicit transportShutdown: TransportLayerShutdown[Task],
       kademliaRPC: KademliaRPC[Task],
       blockStore: BlockStore[Effect],
+      blockDagStorage: BlockDagStorage[Effect],
       peerNodeAsk: PeerNodeAsk[Task]
   ): Task[Unit] =
     Task.delay(sys.addShutdownHook(clearResources(servers, runtime, casperRuntime)))
@@ -233,16 +209,17 @@ class NodeRuntime private[node] (
       peerNodeAsk: PeerNodeAsk[Task],
       metrics: Metrics[Task],
       transport: TransportLayer[Task],
+      transportShutdown: TransportLayerShutdown[Task],
       kademliaRPC: KademliaRPC[Task],
       nodeDiscovery: NodeDiscovery[Task],
       rpConnectons: ConnectionsCell[Task],
+      blockDagStorage: BlockDagStorage[Effect],
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect],
       packetHandler: PacketHandler[Effect],
       casperConstructor: MultiParentCasperRef[Effect],
       nodeCoreMetrics: NodeMetrics[Task],
-      jvmMetrics: JvmMetrics[Task],
-      abstractContext: ToAbstractContext[Effect]
+      jvmMetrics: JvmMetrics[Task]
   ): Effect[Unit] = {
 
     val info: Effect[Unit] =
@@ -291,7 +268,7 @@ class NodeRuntime private[node] (
       _ <- Log[Effect].info(
             s"gRPC internal server started at $host:${servers.grpcServerInternal.port}"
           )
-      _ <- TransportLayer[Effect].receive(
+      _ <- servers.transportServer.startWithEffects(
             pm => HandleMessages.handle[Effect](pm, defaultTimeout),
             blob => packetHandler.handlePacket(blob.sender, blob.packet).as(())
           )
@@ -317,8 +294,6 @@ class NodeRuntime private[node] (
         } *> exit0.as(Right(()))
     )
 
-  private def syncEffect = cats.effect.Sync.catsEitherTSync[Task, CommError]
-
   private val rpClearConnConf = ClearConnetionsConf(
     conf.server.maxNumOfConnections,
     numOfConnectionsPinged = 10
@@ -326,6 +301,10 @@ class NodeRuntime private[node] (
 
   private def rpConf(local: PeerNode, bootstrapNode: Option[PeerNode]) =
     RPConf(local, bootstrapNode, defaultTimeout, rpClearConnConf)
+
+  // TODO this should use existing algebra
+  private def mkDirs(path: Path): Effect[Unit] =
+    Sync[Effect].delay(Files.createDirectories(path))
 
   /**
     * Main node entry. It will:
@@ -347,7 +326,7 @@ class NodeRuntime private[node] (
               .toEffect
 
     // 2. set up configurations
-    defaultTimeout = conf.server.defaultTimeout.millis
+    defaultTimeout = conf.server.defaultTimeout
 
     // 3. create instances of typeclasses
     initPeer             = if (conf.server.standalone) None else Some(conf.server.bootstrap)
@@ -364,14 +343,21 @@ class NodeRuntime private[node] (
     lab                  <- LastApprovedBlock.of[Task].toEffect
     labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
     commTmpFolder        = conf.server.dataDir.resolve("tmp").resolve("comm")
-    _                    <- commTmpFolder.deleteDirectory[Task]().toEffect
-    transport = effects.tcpTransportLayer(
-      port,
-      conf.tls.certificate,
-      conf.tls.key,
-      conf.server.maxMessageSize,
-      commTmpFolder
-    )(grpcScheduler, log, metrics, tcpConnections)
+    _ <- commTmpFolder.toFile
+          .exists()
+          .fold(
+            commTmpFolder.deleteDirectory[Task]().toEffect,
+            Task.unit.toEffect
+          )
+    tl <- effects
+           .transportClient(
+             conf.tls.certificate,
+             conf.tls.key,
+             conf.server.maxMessageSize,
+             commTmpFolder
+           )(grpcScheduler, log, metrics, tcpConnections)
+           .toEffect
+    (transport, transportShutdown) = tl
     kademliaRPC = effects.kademliaRPC(kademliaPort, defaultTimeout)(
       grpcScheduler,
       peerNodeAsk,
@@ -382,39 +368,63 @@ class NodeRuntime private[node] (
     nodeDiscovery <- effects
                       .nodeDiscovery(id, defaultTimeout)(initPeer)(log, time, metrics, kademliaRPC)
                       .toEffect
-    // TODO: This change is temporary until itegulov's BlockStore implementation is in
-    blockMap <- Ref.of[Effect, Map[BlockHash, BlockMessage]](Map.empty[BlockHash, BlockMessage])
-    blockStore = InMemBlockStore.create[Effect](
-      syncEffect,
-      blockMap,
-      Metrics.eitherT(Monad[Task], metrics)
+
+    /**
+      * We need to come up with a consistent way with folder creation. Some layers create folder on their own (if not available),
+      * others (like blockstore) relay on the structure being created for them (and will fail if it does not exist). For now
+      * this small fix should suffice, but we should unify this.
+      */
+    _             <- mkDirs(conf.server.dataDir)
+    _             <- mkDirs(blockstorePath)
+    _             <- mkDirs(dagStoragePath)
+    blockstoreEnv = Context.env(blockstorePath, 100L * 1024L * 1024L * 4096L)
+    blockStore <- FileLMDBIndexBlockStore
+                   .create[Effect](blockstoreEnv, blockstorePath)(
+                     Concurrent[Effect],
+                     Sync[Effect],
+                     Log.eitherTLog(Monad[Task], log)
+                   )
+                   .map(_.right.get) // TODO handle errors
+    dagConfig = BlockDagFileStorage.Config(
+      latestMessagesLogPath = dagStoragePath.resolve("latestMessagesLogPath"),
+      latestMessagesCrcPath = dagStoragePath.resolve("latestMessagesCrcPath"),
+      blockMetadataLogPath = dagStoragePath.resolve("blockMetadataLogPath"),
+      blockMetadataCrcPath = dagStoragePath.resolve("blockMetadataCrcPath"),
+      equivocationsTrackerLogPath = dagStoragePath.resolve("equivocationsTrackerLogPath"),
+      equivocationsTrackerCrcPath = dagStoragePath.resolve("equivocationsTrackerCrcPath"),
+      checkpointsDirPath = dagStoragePath.resolve("checkpointsDirPath"),
+      latestMessagesLogMaxSizeFactor = 10
     )
-    blockDagStorage <- InMemBlockDagStorage.create[Effect](
+    blockDagStorage <- BlockDagFileStorage.create[Effect](dagConfig)(
                         Concurrent[Effect],
                         Sync[Effect],
                         Log.eitherTLog(Monad[Task], log),
                         blockStore
                       )
-    _      <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
     oracle = SafetyOracle.cliqueOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
     runtime <- {
-      implicit val s = rspaceScheduler
-      Runtime.create[Task, Task.Par](storagePath, storageSize, storeType, Seq.empty).toEffect
+      implicit val s                = rspaceScheduler
+      implicit val m: Metrics[Task] = metrics
+      Runtime
+        .createWithEmptyCost[Task, Task.Par](storagePath, storageSize, storeType, Seq.empty)
+        .toEffect
     }
     _ <- Runtime
           .injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
           .toEffect
     casperRuntime <- {
-      implicit val s = rspaceScheduler
-      Runtime.create[Task, Task.Par](casperStoragePath, storageSize, storeType, Seq.empty).toEffect
+      implicit val s                = rspaceScheduler
+      implicit val m: Metrics[Task] = metrics
+      Runtime
+        .createWithEmptyCost[Task, Task.Par](
+          casperStoragePath,
+          storageSize,
+          storeType,
+          Seq.empty
+        )
+        .toEffect
     }
-    runtimeManager <- {
-      implicit val s = scheduler
-      RuntimeManager.fromRuntime[Task](casperRuntime).toEffect
-    }
-    abs = new ToAbstractContext[Effect] {
-      def fromTask[A](fa: Task[A]): Effect[A] = fa.toEffect
-    }
+    runtimeManager <- RuntimeManager.fromRuntime[Task](casperRuntime).toEffect
     casperPacketHandler <- CasperPacketHandler
                             .of[Effect](
                               conf.casper,
@@ -431,7 +441,6 @@ class NodeRuntime private[node] (
                               ErrorHandler[Effect],
                               eiterTrpConfAsk(rpConfAsk),
                               oracle,
-                              Capture[Effect],
                               Sync[Effect],
                               Concurrent[Effect],
                               Time.eitherTTime(Monad[Task], time),
@@ -456,16 +465,17 @@ class NodeRuntime private[node] (
       peerNodeAsk,
       metrics,
       transport,
+      transportShutdown,
       kademliaRPC,
       nodeDiscovery,
       rpConnections,
+      blockDagStorage,
       blockStore,
       oracle,
       packetHandler,
       multiParentCasperRef,
       nodeCoreMetrics,
-      jvmMetrics,
-      abs
+      jvmMetrics
     )
     _ <- handleUnrecoverableErrors(program)
   } yield ()

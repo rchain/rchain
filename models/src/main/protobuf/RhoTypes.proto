@@ -57,12 +57,10 @@ message ParWithRandom {
 }
 
 /**
- * A measure of processing cost: a number of iterations and the sum
- * cost of the iterations.
+ * Cost of the performed operations.
  */
 message PCost {
-    int32 iterations = 1;
-    uint64 cost = 2;
+    uint64 cost = 1;
 }
 
 message ListParWithRandom {

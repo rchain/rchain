@@ -178,15 +178,26 @@ private[sorter] object ExprSortMatcher extends Sortable[Expr] {
             Node(Score.EMINUSMINUS, sortedPar1.score, sortedPar2.score)
           )
       case EMapBody(parMap) =>
+        def sortKeyValuePair(key: Par, value: Par): F[ScoredTerm[(Par, Par)]] =
+          for {
+            sortedKey   <- Sortable.sortMatch(key)
+            sortedValue <- Sortable.sortMatch(value)
+          } yield ScoredTerm((sortedKey.term, sortedValue.term), sortedKey.score)
+
         for {
-          sortedPars <- parMap.ps.sortedList
-                         .flatMap(t => List(t._1, t._2))
-                         .traverse(Sortable[Par].sortMatch[F])
+          sortedPars          <- parMap.ps.sortedList.traverse(kv => sortKeyValuePair(kv._1, kv._2))
           remainderScore      <- remainderScore(parMap.remainder)
           connectiveUsedScore = if (parMap.connectiveUsed) 1 else 0
         } yield
           constructExpr(
-            EMapBody(parMap),
+            EMapBody(
+              ParMap(
+                sortedPars.map(_.term),
+                parMap.connectiveUsed,
+                parMap.locallyFree,
+                parMap.remainder
+              )
+            ),
             Node(
               Seq(Leaf(Score.EMAP), remainderScore) ++ sortedPars.map(_.score) ++ Seq(
                 Leaf(connectiveUsedScore)
@@ -200,7 +211,14 @@ private[sorter] object ExprSortMatcher extends Sortable[Expr] {
           connectiveUsedScore = if (parSet.connectiveUsed) 1 else 0
         } yield
           constructExpr(
-            ESetBody(parSet),
+            ESetBody(
+              ParSet(
+                SortedParHashSet(sortedPars.map(_.term)),
+                parSet.connectiveUsed,
+                parSet.locallyFree,
+                parSet.remainder
+              )
+            ),
             Node(
               Seq(Leaf(Score.ESET), remainderScore) ++ sortedPars
                 .map(_.score) ++ Seq(Leaf(connectiveUsedScore))
@@ -213,28 +231,55 @@ private[sorter] object ExprSortMatcher extends Sortable[Expr] {
           connectiveUsedScore = if (list.connectiveUsed) 1 else 0
         } yield
           constructExpr(
-            EListBody(list),
+            EListBody(
+              EList(pars.map(_.term), list.locallyFree, list.connectiveUsed, list.remainder)
+            ),
             Node(
               Seq(Leaf(Score.ELIST), remainderScore) ++ pars.map(_.score) ++ Seq(
                 Leaf(connectiveUsedScore)
               )
             )
           )
-      case EMethodBody(em) =>
+      case ETupleBody(tuple) =>
         for {
-          args         <- em.arguments.toList.traverse(Sortable[Par].sortMatch[F])
-          sortedTarget <- Sortable.sortMatch(em.target)
+          sortedPars          <- tuple.ps.toList.traverse(Sortable[Par].sortMatch[F])
+          connectiveUsedScore = if (tuple.connectiveUsed) 1 else 0
         } yield
-          constructExpr(
-            EMethodBody(em.withArguments(args.map(_.term.get)).withTarget(sortedTarget.term.get)),
+          ScoredTerm(
+            ETupleBody(tuple.withPs(sortedPars.map(_.term))),
             Node(
-              Seq(Leaf(Score.EMETHOD), Leaf(em.methodName), sortedTarget.score) ++ args.map(_.score)
+              Seq(Leaf(Score.ETUPLE)) ++ sortedPars.map(_.score) ++ Seq(Leaf(connectiveUsedScore))
             )
           )
-      case eg =>
+      case EMethodBody(em) =>
         for {
-          sortedGround <- Sortable.sortMatch(eg)
-        } yield constructExpr(sortedGround.term, sortedGround.score)
+          args                <- em.arguments.toList.traverse(Sortable[Par].sortMatch[F])
+          sortedTarget        <- Sortable.sortMatch(em.target)
+          connectiveUsedScore = if (em.connectiveUsed) 1 else 0
+        } yield
+          constructExpr(
+            EMethodBody(em.withArguments(args.map(_.term)).withTarget(sortedTarget.term)),
+            Node(
+              Seq(Leaf(Score.EMETHOD), Leaf(em.methodName), sortedTarget.score) ++ args
+                .map(_.score) ++ Seq(Leaf(connectiveUsedScore))
+            )
+          )
+      case gb: GBool =>
+        Sortable.sortMatch(gb).map { sorted =>
+          ScoredTerm(e, sorted.score)
+        }
+      case gi: GInt    => ScoredTerm(e, Leaves(Score.INT, gi.value)).pure[F]
+      case gs: GString => ScoredTerm(e, Node(Score.STRING, Leaf(gs.value))).pure[F]
+      case gu: GUri    => ScoredTerm(e, Node(Score.URI, Leaf(gu.value))).pure[F]
+      case GByteArray(ba) =>
+        ScoredTerm(e, Node(Score.EBYTEARR, Leaf(ba.toStringUtf8))).pure[F]
+      //TODO get rid of Empty nodes in Protobuf unless they represent sth indeed optional
+      case Empty =>
+        ScoredTerm(e, Node(Score.ABSENT)).pure[F]
+      case expr => //TODO(mateusz.gorski): rethink it
+        Sync[F].raiseError(
+          new IllegalArgumentException(s"ExprSortMatcher passed unknown Expr instance:\n$expr")
+        )
     }
   }
 }

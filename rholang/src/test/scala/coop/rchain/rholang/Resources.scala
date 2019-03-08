@@ -4,15 +4,17 @@ import java.nio.file.{Files, Path}
 
 import cats.Applicative
 import cats.effect.ExitCase.Error
-import cats.effect.{ContextShift, Resource, Sync}
+import cats.effect.{Concurrent, ContextShift, Resource}
 import com.typesafe.scalalogging.Logger
+import coop.rchain.metrics.Metrics
 import coop.rchain.models._
+import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Context, RSpace}
-import coop.rchain.shared.StoreType
+import coop.rchain.shared.{Log, StoreType}
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -35,22 +37,23 @@ object Resources {
         })
     )
 
-  def mkRhoISpace[F[_]: Sync: ContextShift](
+  def mkRhoISpace[F[_]: Concurrent: ContextShift: Log: Metrics](
       prefix: String = "",
       branch: String = "test",
       mapSize: Long = 1024L * 1024L * 4
   ): Resource[F, RhoISpace[F]] = {
     import coop.rchain.rholang.interpreter.storage.implicits._
+
     import scala.concurrent.ExecutionContext.Implicits.global
 
     def mkRspace(dbDir: Path): F[RhoISpace[F]] = {
-      val context: RhoContext = Context.create(dbDir, mapSize)
+      val context: RhoContext[F] = Context.create(dbDir, mapSize)
 
       RSpace.create[
         F,
         Par,
         BindPattern,
-        OutOfPhlogistonsError.type,
+        InterpreterError,
         ListParWithRandom,
         ListParWithRandomAndPhlos,
         TaggedContinuation
@@ -65,12 +68,23 @@ object Resources {
       prefix: String,
       storageSize: Long = 1024 * 1024,
       storeType: StoreType = StoreType.LMDB
-  )(implicit scheduler: Scheduler): Resource[Task, Runtime[Task]] =
+  )(
+      implicit log: Log[Task],
+      scheduler: Scheduler,
+      metrics: Metrics[Task]
+  ): Resource[Task, Runtime[Task]] =
     mkTempDir[Task](prefix)
       .flatMap { tmpDir =>
-        Resource.make[Task, Runtime[Task]](Task.suspend {
-          Runtime.create[Task, Task.Par](tmpDir, storageSize, storeType)
-        })(
+        Resource.make[Task, Runtime[Task]] {
+          for {
+            costAccounting <- CostAccounting.empty[Task]
+            runtime <- {
+              implicit val ca: CostAccounting[Task] = costAccounting
+              implicit val cost: _cost[Task]        = loggingCost(ca, noOpCostLog)
+              Runtime.create[Task, Task.Par](tmpDir, storageSize, storeType)
+            }
+          } yield (runtime)
+        }(
           rt => rt.close()
         )
       }

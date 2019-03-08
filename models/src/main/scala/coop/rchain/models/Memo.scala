@@ -3,9 +3,8 @@ import com.typesafe.scalalogging.Logger
 import monix.eval.Coeval
 import monix.eval.Coeval.Eager
 
+@SuppressWarnings(Array("org.wartremover.warts.Var"))
 class Memo[A](f: => Coeval[A]) {
-
-  private[this] val logger = Logger("Memo")
 
   private[this] var thunk             = f
   private[this] var result: Coeval[A] = _
@@ -27,11 +26,15 @@ class Memo[A](f: => Coeval[A]) {
                   }
                 }
               case _ =>
-                logger.warn(s"Non-Eager result when the thunk is null: $result")
+                Memo.logger.warn(s"Non-Eager result when the thunk is null: $result")
                 result
             }
           }
         }
     }
   }
+}
+
+object Memo {
+  private[Memo] val logger = Logger("Memo")
 }

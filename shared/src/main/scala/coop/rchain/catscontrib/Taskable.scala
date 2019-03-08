@@ -29,20 +29,8 @@ sealed trait TaskableInstances0 {
           .toTask(fa.value)
           .flatMap {
             case Right(a) => Task.now(a)
-            case Left(e)  => Task.raiseError(ToTaskException(e))
+            case Left(e)  => Task.raiseError[A](ToTaskException(e))
           }
 
     }
-}
-
-trait ToAbstractContext[F[_]] {
-  def fromTask[A](fa: Task[A]): F[A]
-}
-
-object ToAbstractContext {
-  def apply[F[_]](implicit ev: ToAbstractContext[F]): ToAbstractContext[F] = ev
-  implicit val taskToAbstractContext: ToAbstractContext[Task] = new ToAbstractContext[Task] {
-    def fromTask[A](fa: Task[A]): Task[A] = fa
-  }
-
 }

@@ -26,7 +26,7 @@ object StreamHandler {
 
   type CircuitBreaker = Long => Boolean
 
-  private case class Streamed(
+  private final case class Streamed(
       sender: Option[PeerNode] = None,
       typeId: Option[String] = None,
       contentLength: Option[Int] = None,
@@ -42,10 +42,22 @@ object StreamHandler {
       stream: Observable[Chunk],
       circuitBreaker: CircuitBreaker
   )(implicit log: Log[Task]): Task[Either[Throwable, StreamMessage]] =
-    (init(folder)
-      .bracket { initStmd =>
+    init(folder)
+      .bracketE { initStmd =>
         (collect(initStmd, stream, circuitBreaker) >>= toResult).value
-      }(stmd => gracefullyClose[Task](stmd.fos).as(())))
+      }({
+        // failed while collecting stream
+        case (stmd, Right(Left(_))) =>
+          gracefullyClose[Task](stmd.fos).as(()) >>
+            stmd.path.deleteSingleFile[Task]
+        // should not happend (errors handled witin bracket) but covered for safety
+        case (stmd, Left(_)) =>
+          gracefullyClose[Task](stmd.fos).as(()) >>
+            stmd.path.deleteSingleFile[Task]
+        // succesfully collected
+        case (stmd, _) =>
+          gracefullyClose[Task](stmd.fos).as(())
+      })
       .attempt
       .map(_.flatten)
 
@@ -60,7 +72,7 @@ object StreamHandler {
       init: Streamed,
       stream: Observable[Chunk],
       circuitBreaker: CircuitBreaker
-  )(implicit log: Log[Task]): EitherT[Task, Throwable, Streamed] = {
+  ): EitherT[Task, Throwable, Streamed] = {
 
     def collectStream = stream.foldWhileLeftL(init) {
       case (stmd, Chunk(Chunk.Content.Header(ChunkHeader(sender, typeId, compressed, cl)))) =>
@@ -83,16 +95,21 @@ object StreamHandler {
           Left(stmd.copy(readSoFar = readSoFar))
     }
 
-    EitherT(collectStream.attempt >>= {
+    EitherT(collectStream.attempt.map {
       case Right(stmd) if stmd.circuitBroken =>
-        stmd.path.deleteSingleFile[Task].as(Left(new RuntimeException("Circuit was broken")))
-      case res @ Left(ex) => init.path.deleteSingleFile[Task].as(res)
-      case res            => res.pure[Task]
+        new RuntimeException("Circuit was broken").asLeft
+      case res => res
     })
 
   }
 
-  private def toResult(stmd: Streamed): EitherT[Task, Throwable, StreamMessage] =
+  private def toResult(
+      stmd: Streamed
+  ): EitherT[Task, Throwable, StreamMessage] = {
+    val notFullError = new RuntimeException(
+      s"received not full stream message, will not process. $stmd"
+    ).asLeft[StreamMessage]
+
     EitherT(Task.delay {
       stmd match {
         case Streamed(
@@ -100,16 +117,21 @@ object StreamHandler {
             Some(packetType),
             Some(contentLength),
             compressed,
-            _,
+            readSoFar,
             _,
             path,
             _
             ) =>
-          Right(StreamMessage(sender, packetType, path, compressed, contentLength))
-        case stmd =>
-          Left(new RuntimeException(s"received not full stream message, will not process. $stmd"))
+          val result =
+            StreamMessage(sender, packetType, path, compressed, contentLength).asRight[Throwable]
+          if (!compressed && readSoFar != contentLength)
+            notFullError
+          else result
+
+        case _ => notFullError
       }
     })
+  }
 
   def restore(msg: StreamMessage)(implicit logger: Log[Task]): Task[Either[Throwable, Blob]] =
     (fetchContent(msg.path).attempt >>= {

@@ -1,19 +1,23 @@
 package coop.rchain.rspace
 
 import internal._
-
 import java.nio.ByteBuffer
 import java.nio.file.Path
 
-import org.lmdbjava.{Dbi, Env, Txn, TxnOps}
+import cats.effect.{Resource, Sync}
+import cats.implicits._
+import org.lmdbjava.{Dbi, Env, Txn}
 import scodec.Codec
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.PathOps._
 import scodec.bits.BitVector
 import kamon._
+
 import scala.util.control.NonFatal
 
-trait LMDBOps extends CloseOps {
+trait LMDBOps[F[_]] extends CloseOps {
+
+  implicit val syncF: Sync[F]
 
   protected[rspace] type Transaction = Txn[ByteBuffer]
 
@@ -35,11 +39,14 @@ trait LMDBOps extends CloseOps {
   private[this] val sizeGauge    = Kamon.gauge(MetricsSource + ".size").refine(gaugeTags)
   private[this] val entriesGauge = Kamon.gauge(MetricsSource + ".entries").refine(gaugeTags)
 
+  //fixme disabled for testing purposes
   protected[this] def updateGauges() = {
     sizeGauge.set(databasePath.folderSize)
     entriesGauge.set(env.stat().entries)
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // TODO stop throwing exceptions
   private[rspace] def withTxn[R](txn: Txn[ByteBuffer])(f: Txn[ByteBuffer] => R): R =
     try {
       val ret: R = f(txn)
@@ -50,8 +57,17 @@ trait LMDBOps extends CloseOps {
         ex.printStackTrace
         throw ex
     } finally {
-      updateGauges()
       txn.close()
+    }
+
+  private[rspace] def withReadTxnF[R](f: Txn[ByteBuffer] => R): F[R] =
+    syncF.delay {
+      withTxn(createTxnRead())(f)
+    }
+
+  def withWriteTxnF[R](f: Txn[ByteBuffer] => R): F[R] =
+    syncF.delay {
+      withTxn(createTxnWrite())(f)
     }
 
   /** The methods:
@@ -71,6 +87,8 @@ trait LMDBOps extends CloseOps {
     *
     * a benchmark showing the difference can be found in the rspaceBench project (KeyBench)
     */
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // TODO stop throwing exceptions
   implicit class RichDbi(val dbi: Dbi[ByteBuffer]) {
 
     def get[V](txn: Txn[ByteBuffer], key: Blake2b256Hash)(implicit codecV: Codec[V]): Option[V] =

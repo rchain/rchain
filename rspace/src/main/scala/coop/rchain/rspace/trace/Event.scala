@@ -37,7 +37,7 @@ object Event {
   implicit def codecLog: Codec[Seq[Event]] = codecSeq[Event](codecEvent)
 }
 
-case class COMM(consume: Consume, produces: Seq[Produce]) extends Event {
+final case class COMM(consume: Consume, produces: Seq[Produce]) extends Event {
   def nextSequenceNumber: Int =
     Math.max(
       consume.sequenceNumber,
@@ -51,8 +51,11 @@ object COMM {
 
 sealed trait IOEvent extends Event
 
-case class Produce private (channelsHash: Blake2b256Hash, hash: Blake2b256Hash, sequenceNumber: Int)
-    extends IOEvent {
+final case class Produce private (
+    channelsHash: Blake2b256Hash,
+    hash: Blake2b256Hash,
+    sequenceNumber: Int
+) extends IOEvent {
 
   override def equals(obj: scala.Any): Boolean = obj match {
     case produce: Produce => produce.hash == hash && produce.sequenceNumber == sequenceNumber
@@ -89,7 +92,7 @@ object Produce {
     (Codec[Blake2b256Hash] :: Codec[Blake2b256Hash] :: int32).as[Produce]
 }
 
-case class Consume private (
+final case class Consume private (
     channelsHashes: Seq[Blake2b256Hash],
     hash: Blake2b256Hash,
     sequenceNumber: Int

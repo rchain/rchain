@@ -1,0 +1,8 @@
+new stdout(`rho:io:stdout`),
+rl(`rho:registry:lookup`), lookupResponse in {
+  rl!(`rho:id:@id_address@`, *lookupResponse) |
+  for(@val <- lookupResponse) {
+    stdout!("Read data ${data} from ${id_address}"
+              %%{"data":val,"id_address":"@id_address@"})
+  }
+}

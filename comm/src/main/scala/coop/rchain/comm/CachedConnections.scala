@@ -31,7 +31,7 @@ class CachedConnections[F[_]: Metrics, T](cell: Transport.TransportCell[F])(
 
   def modify(f: TransportState => F[TransportState])(implicit ms: Metrics.Source): F[Unit] =
     for {
-      _ <- cell.modify(f)
+      _ <- cell.flatModify(f)
       s <- read
       _ <- Metrics[F].setGauge("connections", s.connections.size.toLong)
     } yield ()
@@ -55,7 +55,7 @@ object Transport {
   type TransportCell[F[_]] = Cell[F, TransportState]
 }
 
-case class TransportState(
+final case class TransportState(
     connections: Transport.Connections = Map.empty,
     server: Option[Cancelable] = None,
     clientQueue: Option[Cancelable] = None,

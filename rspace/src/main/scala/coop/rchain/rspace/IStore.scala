@@ -13,7 +13,7 @@ import scala.collection.immutable.Seq
   * @tparam A a type representing an arbitrary piece of data
   * @tparam K a type representing a continuation
   */
-trait IStore[C, P, A, K] {
+trait IStore[F[_], C, P, A, K] {
 
   /**
     * The type of transactions
@@ -22,11 +22,9 @@ trait IStore[C, P, A, K] {
 
   private[rspace] type TrieTransaction
 
-  private[rspace] def createTxnRead(): Transaction
+  private[rspace] def withReadTxnF[R](f: Transaction => R): F[R]
 
-  private[rspace] def createTxnWrite(): Transaction
-
-  private[rspace] def withTxn[R](txn: Transaction)(f: Transaction => R): R
+  private[rspace] def withWriteTxnF[R](f: Transaction => R): F[R]
 
   private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash
 
@@ -84,12 +82,14 @@ trait IStore[C, P, A, K] {
   private val _trieUpdates: AtomicAny[(Long, List[TrieUpdate[C, P, A, K]])] =
     AtomicAny[(Long, List[TrieUpdate[C, P, A, K]])]((0L, Nil))
 
+  @SuppressWarnings(Array("org.wartremover.warts.Var"))
   def trieDelete(key: Blake2b256Hash, gnat: GNAT[C, P, A, K]): Unit =
     _trieUpdates.getAndTransform {
       case (count, list) =>
         (count + 1, TrieUpdate(count, Delete, key, gnat) :: list)
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Var"))
   def trieInsert(key: Blake2b256Hash, gnat: GNAT[C, P, A, K]): Unit =
     _trieUpdates.getAndTransform {
       case (count, list) =>
@@ -104,9 +104,12 @@ trait IStore[C, P, A, K] {
 
   protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): Unit
 
+  @SuppressWarnings(Array("org.wartremover.warts.Var"))
   private[rspace] def getAndClearTrieUpdates(): Seq[TrieUpdate[C, P, A, K]] =
     _trieUpdates.getAndTransform(kp((0L, Nil)))._2
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // TODO stop throwing exceptions
   def createCheckpoint(): Blake2b256Hash = {
     val trieUpdates = getAndClearTrieUpdates()
     collapse(trieUpdates).foreach(processTrieUpdate)

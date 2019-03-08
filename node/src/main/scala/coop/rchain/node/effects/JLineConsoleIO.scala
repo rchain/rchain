@@ -15,6 +15,7 @@ import coop.rchain.shared.StringOps.ColoredString
 import coop.rchain.shared.TerminalMode
 import monix.eval.Task
 
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 class JLineConsoleIO(console: ConsoleReader) extends ConsoleIO[Task] {
   private val mode = TerminalMode.readMode
 

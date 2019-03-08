@@ -2,12 +2,18 @@ package coop.rchain.casper
 
 import cats.Monad
 import cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockMetadata}
+import coop.rchain.catscontrib._
+import Catscontrib._
+import cats.data.OptionT
+import coop.rchain.blockstorage.BlockDagRepresentation
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import coop.rchain.casper.protocol.Justification
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.{Clique, DagOperations, ProtoUtil}
+import coop.rchain.models.BlockMetadata
 import coop.rchain.shared.Log
+import coop.rchain.catscontrib.ski.id
+import coop.rchain.shared.{Log, StreamT}
 
 /*
  * Implementation inspired by Ethereum's CBC casper simulator's clique oracle implementation.
@@ -94,25 +100,22 @@ sealed abstract class SafetyOracleInstances {
           weights <- computeMainParentWeightMap(blockDag, candidateBlockHash)
           agreeingWeights <- weights.toList.traverse {
                               case (validator, stake) =>
-                                for {
-                                  maybeLatestMessageHash <- blockDag.latestMessageHash(validator)
-                                  result <- maybeLatestMessageHash match {
-                                             case Some(latestMessageHash) =>
-                                               computeCompatibility(
-                                                 blockDag,
-                                                 candidateBlockHash,
-                                                 latestMessageHash
-                                               ).map { isCompatible =>
-                                                 if (isCompatible) {
-                                                   Some((validator, stake))
-                                                 } else {
-                                                   none[(Validator, Long)]
-                                                 }
-                                               }
-                                             case None =>
-                                               none[(Validator, Long)].pure[F]
-                                           }
-                                } yield result
+                                blockDag.latestMessageHash(validator).flatMap {
+                                  case Some(latestMessageHash) =>
+                                    computeCompatibility(
+                                      blockDag,
+                                      candidateBlockHash,
+                                      latestMessageHash
+                                    ).map { isCompatible =>
+                                      if (isCompatible) {
+                                        Some((validator, stake))
+                                      } else {
+                                        none[(Validator, Long)]
+                                      }
+                                    }
+                                  case None =>
+                                    none[(Validator, Long)].pure[F]
+                                }
                             }
         } yield agreeingWeights.flatten.toMap
 
@@ -132,111 +135,48 @@ sealed abstract class SafetyOracleInstances {
           candidateBlockHash: BlockHash,
           agreeingValidatorToWeight: Map[Validator, Long]
       ): F[Long] = {
-        def findAgreeingJustificationHash(
-            justificationHashes: List[BlockHash],
-            validator: Validator
-        ): F[Option[BlockHash]] =
-          justificationHashes.findM(justificationHash => {
-            for {
-              justificationOpt <- blockDag.lookup(justificationHash)
-              result <- justificationOpt match {
-                         case Some(justificationMetadata) =>
-                           computeCompatibility(blockDag, candidateBlockHash, justificationHash)
-                             .map { compatible =>
-                               compatible && justificationMetadata.sender == validator
-                             }
-                         case None => false.pure[F]
-                       }
-            } yield result
-          })
-
-        def seesAgreement(
-            first: Validator,
-            second: Validator
-        ): F[Boolean] =
-          for {
-            maybefirstLatestBlock <- blockDag.latestMessage(first)
-            result <- maybefirstLatestBlock match {
-                       case Some(firstLatestBlock) =>
-                         val justificationHashes =
-                           firstLatestBlock.justifications.map(_.latestBlockHash)
-                         findAgreeingJustificationHash(
-                           justificationHashes,
-                           second
-                         ).map(_.isDefined)
-                       case None => false.pure[F]
-                     }
-          } yield result
-
-        def filterChildren(
-            candidate: BlockMetadata,
-            validator: Validator
-        ): F[List[BlockHash]] =
-          for {
-            latestMessageByValidatorHashOpt <- blockDag.latestMessageHash(validator)
-            result <- latestMessageByValidatorHashOpt match {
-                       case Some(latestMessageByValidatorHash) =>
-                         DagOperations
-                           .bfTraverseF[F, BlockHash](List(latestMessageByValidatorHash)) {
-                             blockHash =>
-                               ProtoUtil.getCreatorJustificationAsListByInMemory(
-                                 blockDag,
-                                 blockHash,
-                                 validator,
-                                 b => b == candidate.blockHash
-                               )
-                           }
-                           .filterF(potentialChild => {
-                             for {
-                               metadata              <- blockDag.lookup(potentialChild).map(_.get)
-                               isFutureBlock         = candidate.seqNum <= metadata.seqNum
-                               validatorCreatedChild = metadata.sender == validator
-                             } yield validatorCreatedChild && isFutureBlock
-                           })
-                           .flatMap(_.toList)
-                       case None => List.empty[BlockHash].pure[F]
-                     }
-          } yield result
+        def filterChildren(block: BlockMetadata, validator: Validator): F[StreamT[F, BlockHash]] =
+          blockDag.latestMessageHash(validator).flatMap {
+            case Some(latestByValidatorHash) =>
+              val creatorJustificationOrGenesis = block.justifications
+                .find(_.validator == block.sender)
+                .fold(block.blockHash)(_.latestBlockHash)
+              DagOperations
+                .bfTraverseF[F, BlockHash](List(latestByValidatorHash)) { blockHash =>
+                  ProtoUtil.getCreatorJustificationAsListUntilGoalInMemory(
+                    blockDag,
+                    blockHash,
+                    b => b == creatorJustificationOrGenesis
+                  )
+                }
+                .pure[F]
+            case None => StreamT.empty[F, BlockHash].pure[F]
+          }
 
         def neverEventuallySeeDisagreement(
             first: Validator,
             second: Validator
         ): F[Boolean] =
-          for {
-            maybeFirstLatest <- blockDag.latestMessage(first)
-            result <- maybeFirstLatest match {
-                       case Some(firstLatestBlock) =>
-                         val justificationHashes =
-                           firstLatestBlock.justifications.map(_.latestBlockHash)
-                         for {
-                           justificationBlockSecondList <- justificationHashes.flatTraverse {
-                                                            justificationHash =>
-                                                              blockDag
-                                                                .lookup(justificationHash)
-                                                                .map(
-                                                                  _.filter(_.sender == second).toList
-                                                                )
-                                                          }
-                           justificationBlockSecond = justificationBlockSecondList.head
-                           _ = assert(
-                             justificationBlockSecondList
-                               .forall(b => b.blockHash == justificationBlockSecond.blockHash)
-                           )
-                           potentialDisagreements <- filterChildren(
-                                                      justificationBlockSecond,
-                                                      second
-                                                    )
-                           result <- potentialDisagreements.forallM { potentialDisagreement =>
-                                      computeCompatibility(
-                                        blockDag,
-                                        candidateBlockHash,
-                                        potentialDisagreement
-                                      )
-                                    }
-                         } yield result
-                       case None => false.pure[F]
-                     }
-          } yield result
+          (for {
+            firstLatestBlock <- OptionT(blockDag.latestMessage(first))
+            secondLatestOfFirstLatestHash <- OptionT.fromOption[F](
+                                              firstLatestBlock.justifications
+                                                .find {
+                                                  case Justification(validator, _) =>
+                                                    validator == second
+                                                }
+                                                .map(_.latestBlockHash)
+                                            )
+            secondLatestOfFirstLatest <- OptionT(blockDag.lookup(secondLatestOfFirstLatestHash))
+            potentialDisagreements <- OptionT.liftF(
+                                       filterChildren(secondLatestOfFirstLatest, second)
+                                     )
+            // TODO: Implement forallM on StreamT
+            result <- OptionT.liftF(potentialDisagreements.toList.flatMap(_.forallM {
+                       potentialDisagreement =>
+                         computeCompatibility(blockDag, candidateBlockHash, potentialDisagreement)
+                     }))
+          } yield result).fold(false)(id)
 
         def computeAgreementGraphEdges: F[List[(Validator, Validator)]] =
           (for {
@@ -245,10 +185,10 @@ sealed abstract class SafetyOracleInstances {
             if x.toString > y.toString // TODO: Order ByteString
           } yield (x, y)).toList.filterA {
             case (first: Validator, second: Validator) =>
-              seesAgreement(first, second) &&^ seesAgreement(second, first) &&^ neverEventuallySeeDisagreement(
-                first,
-                second
-              ) &&^ neverEventuallySeeDisagreement(second, first)
+              neverEventuallySeeDisagreement(first, second) &&^ neverEventuallySeeDisagreement(
+                second,
+                first
+              )
           }
 
         computeAgreementGraphEdges.map { edges =>

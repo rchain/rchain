@@ -15,7 +15,7 @@ import coop.rchain.casper.util.rholang.{
   ProcessedDeployUtil,
   RuntimeManager
 }
-import coop.rchain.catscontrib.Capture
+
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.protocol.routing.Packet
@@ -46,7 +46,7 @@ class BlockApproverProtocol(
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1) -> e._2)
 
-  def unapprovedBlockPacketHandler[F[_]: Capture: Concurrent: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
+  def unapprovedBlockPacketHandler[F[_]: Concurrent: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
       peer: PeerNode,
       u: UnapprovedBlock,
       runtimeManager: RuntimeManager[F]
@@ -133,16 +133,7 @@ object BlockApproverProtocol {
           .defaultBlessedTerms(timestamp, posParams, wallets, faucetCode)
           .toSet
         blockDeploys          = body.deploys.flatMap(ProcessedDeployUtil.toInternal)
-        genesisBlessedTerms   = genesisBlessedContracts.flatMap(_.term)
-        genesisBlessedDeploys = genesisBlessedContracts.flatMap(_.raw)
-        _ <- blockDeploys
-              .forall(
-                d =>
-                  genesisBlessedTerms.contains(d.deploy.term.get) && genesisBlessedDeploys
-                    .exists(dd => deployDataEq.eqv(dd, d.deploy.raw.get))
-              )
-              .either(())
-              .or("Candidate deploys do not match expected deploys.")
+        genesisBlessedDeploys = genesisBlessedContracts
         _ <- (blockDeploys.size == genesisBlessedContracts.size)
               .either(())
               .or("Mismatch between number of candidate deploys and expected number of deploys.")

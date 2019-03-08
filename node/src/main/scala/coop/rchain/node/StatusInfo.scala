@@ -10,7 +10,7 @@ import org.http4s.HttpRoutes
 
 object StatusInfo {
 
-  case class Status(
+  final case class Status(
       version: String,
       peers: Int,
       nodes: Int

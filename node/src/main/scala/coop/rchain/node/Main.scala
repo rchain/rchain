@@ -9,6 +9,8 @@ import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.util.BondingUtil
 import coop.rchain.comm._
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.node.configuration._
 import coop.rchain.node.diagnostics.client.GrpcDiagnosticsService
 import coop.rchain.node.effects._
@@ -32,7 +34,7 @@ object Main {
 
     val exec: Task[Unit] =
       for {
-        conf <- Configuration(args)
+        conf <- Configuration.build(args)
         _    <- Task.defer(mainProgram(conf))
       } yield ()
 
@@ -77,9 +79,11 @@ object Main {
       case ContAtName(names) => DeployRuntime.listenForContinuationAtName[Task](names)
       case Run               => nodeProgram(conf)
       case BondingDeployGen(bondKey, ethAddress, amount, secKey, pubKey) =>
+        implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
         BondingUtil
           .writeIssuanceBasedRhoFiles[Task, Task.Par](bondKey, ethAddress, amount, secKey, pubKey)
       case FaucetBondingDeployGen(amount, sigAlgorithm, secKey, pubKey) =>
+        implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
         BondingUtil.writeFaucetBasedRhoFiles[Task, Task.Par](amount, sigAlgorithm, secKey, pubKey)
       case _ => conf.printHelp()
     }
@@ -108,13 +112,14 @@ object Main {
       case Left(CouldNotConnectToBootstrap) =>
         log.error("Node could not connect to bootstrap node.")
       case Left(InitializationError(msg)) =>
-        log.error(msg)
-        Task.delay(System.exit(-1))
+        log.error(msg) >>
+          Task.delay(System.exit(-1))
       case Left(error) =>
         log.error(s"Failed! Reason: '$error")
     }
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   implicit private def consoleIO: ConsoleIO[Task] = {
     val console = new ConsoleReader()
     console.setHistoryEnabled(true)

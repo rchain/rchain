@@ -32,6 +32,7 @@ inner hash length to 64.
 This class is an abbreviated version of Blake2bDigest.java from BouncyCastle
 https://github.com/bcgit/bc-java/blob/master/core/src/main/java/org/bouncycastle/crypto/digests/Blake2bDigest.java
   */
+@SuppressWarnings(Array("org.wartremover.warts.Var"))
 class Blake2b512Block {
   import Blake2b512Block._
   private val chainValue: Array[Long] = new Array[Long](CHAIN_VALUE_LENGTH)
@@ -156,6 +157,7 @@ class Blake2b512Block {
   }
 }
 
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 object Blake2b512Block {
   /*
   def apply(): Blake2b512Block = {

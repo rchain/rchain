@@ -27,6 +27,7 @@ import coop.rchain.catscontrib._
 import ski._
 
 class GrpcServer(server: Server) {
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def start: Task[Unit] = Task.delay(server.start())
 
   private def attemptShutdown: Task[Boolean] =
@@ -78,12 +79,12 @@ object GrpcServer {
       )
     }
 
-  def acquireExternalServer[F[_]: Concurrent: Capture: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable: ToAbstractContext](
+  def acquireExternalServer[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
       port: Int,
       grpcExecutor: Scheduler,
       blockApiLock: Semaphore[F]
   )(implicit worker: Scheduler): F[GrpcServer] =
-    Capture[F].capture {
+    Sync[F].delay {
       GrpcServer(
         NettyServerBuilder
           .forPort(port)

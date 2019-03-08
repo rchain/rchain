@@ -48,12 +48,14 @@ object CertificateHelper {
   def from(certFilePath: String): X509Certificate =
     fromFile(new File(certFilePath))
 
+  @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   def fromFile(certFile: File): X509Certificate = {
     val cf = CertificateFactory.getInstance("X.509")
     val is = new FileInputStream(certFile)
     cf.generateCertificate(is).asInstanceOf[X509Certificate]
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   def readKeyPair(keyFile: File): KeyPair = {
     import coop.rchain.shared.Resources._
     val str = withResource(Source.fromFile(keyFile)) {
@@ -79,6 +81,7 @@ object CertificateHelper {
     kpg.generateKeyPair
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   def generate(keyPair: KeyPair): X509Certificate = {
     import sun.security.x509._
 
@@ -104,20 +107,20 @@ object CertificateHelper {
     info.set(X509CertInfo.ALGORITHM_ID, new CertificateAlgorithmId(algorithmId))
 
     // Sign the cert to identify the algorithm that's used.
-    var cert = new X509CertImpl(info)
+    val cert = new X509CertImpl(info)
     cert.sign(privateKey, algorythm)
 
     // Update the algorith, and resign.
     val algorithmId2 = cert.get(X509CertImpl.SIG_ALG).asInstanceOf[AlgorithmId]
     info.set(CertificateAlgorithmId.NAME + "." + CertificateAlgorithmId.ALGORITHM, algorithmId2)
-    cert = new X509CertImpl(info)
-    cert.sign(privateKey, algorythm)
-    cert
+    val cert2 = new X509CertImpl(info)
+    cert2.sign(privateKey, algorythm)
+    cert2
   }
 
 }
 
-case class ParameterSpec(
+final case class ParameterSpec(
     curve: EllipticCurve,
     generator: ECPoint,
     order: BigInt,

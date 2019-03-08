@@ -4,13 +4,15 @@ import cats.Monad
 import cats.implicits._
 import cats.mtl.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.util.BlockMessageUtil
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.util.DagOperations
+import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.weightFromValidatorByDag
 
 import scala.collection.immutable.{Map, Set}
 import coop.rchain.catscontrib.ListContrib
+import coop.rchain.models.BlockMetadata
 
 object Estimator {
   type BlockHash = ByteString
@@ -20,70 +22,61 @@ object Estimator {
 
   def tips[F[_]: Monad: BlockStore](
       blockDag: BlockDagRepresentation[F],
-      lastFinalizedBlockHash: BlockHash
+      genesis: BlockMessage
   ): F[IndexedSeq[BlockMessage]] =
     for {
       latestMessageHashes <- blockDag.latestMessageHashes
-      result              <- Estimator.tips[F](blockDag, lastFinalizedBlockHash, latestMessageHashes)
+      result              <- Estimator.tips[F](blockDag, genesis, latestMessageHashes)
     } yield result
 
   /**
     * When the BlockDag has an empty latestMessages, tips will return IndexedSeq(genesis)
+    *
+    * TODO: Remove lastFinalizedBlockHash in follow up PR
     */
   def tips[F[_]: Monad: BlockStore](
       blockDag: BlockDagRepresentation[F],
-      lastFinalizedBlockHash: BlockHash,
+      genesis: BlockMessage,
       latestMessagesHashes: Map[Validator, BlockHash]
-  ): F[IndexedSeq[BlockMessage]] = {
-    def sortChildren(
-        blocks: List[BlockHash],
-        blockDag: BlockDagRepresentation[F],
-        scores: Map[BlockHash, Long]
-    ): F[List[BlockHash]] =
-      // TODO: This ListContrib.sortBy will be improved on Thursday with Pawels help
-      for {
-        unsortedNewBlocks <- blocks.flatTraverse(replaceBlockHashWithChildren(_, blockDag, scores))
-        newBlocks = ListContrib.sortBy[BlockHash, Long](
-          unsortedNewBlocks.distinct,
-          scores
-        )
-        result <- if (stillSame(blocks, newBlocks)) {
-                   blocks.pure[F]
-                 } else {
-                   sortChildren(newBlocks, blockDag, scores)
-                 }
-      } yield result
-
-    /**
-      * Only include children that have been scored,
-      * this ensures that the search does not go beyond
-      * the messages defined by blockDag.latestMessages
-      */
-    def replaceBlockHashWithChildren(
-        b: BlockHash,
-        blockDag: BlockDagRepresentation[F],
-        scores: Map[BlockHash, Long]
-    ): F[List[BlockHash]] =
-      for {
-        c <- blockDag.children(b).map(_.getOrElse(Set.empty[BlockHash]).filter(scores.contains))
-      } yield if (c.nonEmpty) c.toList else List(b)
-
-    def stillSame(blocks: List[BlockHash], newBlocks: List[BlockHash]) =
-      newBlocks == blocks
-
+  ): F[IndexedSeq[BlockMessage]] =
     for {
-      scoresMap <- buildScoresMap(blockDag, latestMessagesHashes, lastFinalizedBlockHash)
+      gca       <- calculateLCA(blockDag, BlockMetadata.fromBlock(genesis, false), latestMessagesHashes)
+      scoresMap <- buildScoresMap(blockDag, latestMessagesHashes, gca)
       sortedChildrenHash <- sortChildren(
-                             List(lastFinalizedBlockHash),
+                             List(gca),
                              blockDag,
                              scoresMap
                            )
       maybeSortedChildren <- sortedChildrenHash.traverse(BlockStore[F].get)
       sortedChildren      = maybeSortedChildren.flatten.toVector
     } yield sortedChildren
-  }
 
-  def buildScoresMap[F[_]: Monad](
+  private def calculateLCA[F[_]: Monad](
+      blockDag: BlockDagRepresentation[F],
+      genesis: BlockMetadata,
+      latestMessagesHashes: Map[Validator, BlockHash]
+  ): F[BlockHash] =
+    for {
+      latestMessages <- latestMessagesHashes.values.toStream
+                         .traverse(hash => blockDag.lookup(hash))
+                         .map(_.flatten)
+      result <- if (latestMessages.isEmpty) {
+                 genesis.blockHash.pure[F]
+               } else {
+                 latestMessages
+                   .foldM(latestMessages.head) {
+                     case (acc, latestMessage) =>
+                       DagOperations.lowestCommonAncestorF[F](
+                         acc,
+                         latestMessage,
+                         blockDag
+                       )
+                   }
+                   .map(_.blockHash)
+               }
+    } yield result
+
+  private def buildScoresMap[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
       latestMessagesHashes: Map[Validator, BlockHash],
       lastFinalizedBlockHash: BlockHash
@@ -167,4 +160,48 @@ object Estimator {
         } yield postImplicitlySupportedScoreMap
     }
   }
+
+  private def sortChildren[F[_]: Monad](
+      blocks: List[BlockHash],
+      blockDag: BlockDagRepresentation[F],
+      scores: Map[BlockHash, Long]
+  ): F[List[BlockHash]] =
+    // TODO: This ListContrib.sortBy will be improved on Thursday with Pawels help
+    for {
+      unsortedNewBlocks <- blocks.flatTraverse(replaceBlockHashWithChildren[F](_, blockDag, scores))
+      newBlocks = ListContrib.sortBy[BlockHash, Long](
+        unsortedNewBlocks.distinct,
+        scores
+      )
+      result <- if (stillSame(blocks, newBlocks)) {
+                 blocks.pure[F]
+               } else {
+                 sortChildren(newBlocks, blockDag, scores)
+               }
+    } yield result
+
+  /**
+    * Only include children that have been scored,
+    * this ensures that the search does not go beyond
+    * the messages defined by blockDag.latestMessages
+    */
+  private def replaceBlockHashWithChildren[F[_]: Monad](
+      b: BlockHash,
+      blockDag: BlockDagRepresentation[F],
+      scores: Map[BlockHash, Long]
+  ): F[List[BlockHash]] =
+    for {
+      children <- blockDag
+                   .children(b)
+                   .map(maybeChildren => maybeChildren.getOrElse(Set.empty[BlockHash]))
+      scoredChildren = children.filter(scores.contains)
+      result = if (scoredChildren.nonEmpty) {
+        scoredChildren.toList
+      } else {
+        List(b)
+      }
+    } yield result
+
+  private def stillSame(blocks: List[BlockHash], newBlocks: List[BlockHash]): Boolean =
+    newBlocks == blocks
 }

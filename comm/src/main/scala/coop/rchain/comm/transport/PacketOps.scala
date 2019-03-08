@@ -22,8 +22,8 @@ object PacketOps {
       packetErr <- Sync[F].delay(Packet.parseFrom(fin)).attempt
       resErr <- packetErr match {
                  case Left(th) =>
-                   gracefullyClose(fin) *> Left(unabletoRestorePacket(file, th)).pure[F]
-                 case Right(packet) => gracefullyClose(fin) *> Right(packet).pure[F]
+                   gracefullyClose(fin) >> Left(unableToRestorePacket(file, th)).pure[F]
+                 case Right(packet) => gracefullyClose(fin) >> Right(packet).pure[F]
                }
     } yield resErr
 
@@ -39,7 +39,7 @@ object PacketOps {
                 }.attempt
         resErr <- orErr match {
                    case Left(th) =>
-                     gracefullyClose(fos) *> Left(unableToStorePacket(packet, th)).pure[F]
+                     gracefullyClose(fos) >> Left(unableToStorePacket(packet, th)).pure[F]
                    case Right(_) =>
                      gracefullyClose(fos) map {
                        case Left(th) => Left(unableToStorePacket(packet, th))
@@ -49,7 +49,7 @@ object PacketOps {
       } yield resErr
   }
 
-  case class PacketFile(file: Path, fos: FileOutputStream)
+  final case class PacketFile(file: Path, fos: FileOutputStream)
 
   def createPacketFile[F[_]: Sync](folder: Path, postfix: String): F[PacketFile] =
     for {

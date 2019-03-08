@@ -2,11 +2,12 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.Files
 
-import cats.effect.Sync
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
@@ -14,16 +15,18 @@ import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
-import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
+import coop.rchain.shared.Log
+import coop.rchain.shared.PathOps._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertion, FlatSpec, Matchers}
-import coop.rchain.shared.PathOps._
 
 import scala.collection.immutable.BitSet
 import scala.collection.mutable.HashMap
@@ -33,15 +36,21 @@ import scala.concurrent.duration._
 final case class TestFixture(space: RhoISpace[Task], reducer: ChargingReducer[Task])
 
 trait PersistentStoreTester {
-  def withTestSpace[R](errorLog: ErrorLog[Task])(f: TestFixture => R): R = {
-    val dbDir               = Files.createTempDirectory("rholang-interpreter-test-")
-    val context: RhoContext = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
+
+  def withTestSpace[R](
+      errorLog: ErrorLog[Task]
+  )(f: TestFixture => R)(implicit CA: CostAccounting[Task], C: _cost[Task]): R = {
+    val dbDir                              = Files.createTempDirectory("rholang-interpreter-test-")
+    val context: RhoContext[Task]          = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
+    implicit val logF: Log[Task]           = new Log.NOPLog[Task]
+    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+
     val space = (RSpace
       .create[
         Task,
         Par,
         BindPattern,
-        OutOfPhlogistonsError.type,
+        InterpreterError,
         ListParWithRandom,
         ListParWithRandomAndPhlos,
         TaggedContinuation
@@ -62,6 +71,9 @@ trait PersistentStoreTester {
 
 class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
+
+  implicit val costAlg: CostAccounting[Task] = CostAccounting.unsafe[Task](Cost(0))
+  implicit val cost: _cost[Task]             = loggingCost(costAlg, noOpCostLog[Task])
 
   def checkData(
       result: Map[
@@ -921,7 +933,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand = rand.splitByte(0)
-    import coop.rchain.models.serialization.implicits._
     val proc = Receive(
       Seq(ReceiveBind(Seq(EVar(FreeVar(0))), GString("channel"))),
       Par(),
@@ -998,7 +1009,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "eval of hexToBytes" should "transform encoded string to byte array (not the rholang term)" in {
-    import coop.rchain.models.serialization.implicits._
     implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand                 = rand.splitByte(0)
@@ -1026,7 +1036,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "eval of `toUtf8Bytes`" should "transform string to UTF-8 byte array (not the rholang term)" in {
-    import coop.rchain.models.serialization.implicits._
     implicit val errorLog         = new ErrorLog[Task]()
     val splitRand                 = rand.splitByte(0)
     val testString                = "testing testing"
@@ -1900,33 +1909,4 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
   }
 
-  "Running out of phlogistons" should "stop the evaluation" in {
-    implicit val errorLog = new ErrorLog[Task]()
-
-    val test = withTestSpace(errorLog) {
-      case TestFixture(_, reducer) =>
-        implicit val env   = Env.makeEnv[Par]()
-        val notEnoughPhlos = Cost(5)
-        reducer.setPhlo(notEnoughPhlos).runSyncUnsafe(1.second)
-        val splitRand = rand.splitByte(0)
-        val receive =
-          Receive(
-            Seq(
-              ReceiveBind(
-                Seq(Par(exprs = Seq(EVar(FreeVar(0)), EVar(FreeVar(1)), EVar(FreeVar(2))))),
-                Par(exprs = Seq(GString("channel")))
-              )
-            ),
-            Par(),
-            false,
-            3,
-            BitSet()
-          )
-        reducer.eval(receive)(env, splitRand)
-    }
-
-    val result = test.attempt.runSyncUnsafe(1.second)
-    assert(result === Left(OutOfPhlogistonsError))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty)
-  }
 }

@@ -21,6 +21,19 @@ lazy val projectSettings = Seq(
     Resolver.sonatypeRepo("snapshots"),
     "jitpack" at "https://jitpack.io"
   ),
+  wartremoverExcluded += sourceManaged.value,
+  wartremoverErrors in (Compile, compile) ++= Warts.allBut(
+    // those we want
+    Wart.DefaultArguments, Wart.ImplicitParameter, Wart.ImplicitConversion,
+    Wart.LeakingSealed, Wart.Recursion,
+    // those don't want
+    Wart.Overloading, Wart.Nothing,
+    Wart.Equals, Wart.PublicInference, Wart.TraversableOps, Wart.ArrayEquals,
+    Wart.While, Wart.Any, Wart.Product, Wart.Serializable, Wart.OptionPartial,
+    Wart.EitherProjectionPartial, Wart.Option2Iterable, Wart.ToString, Wart.JavaConversions,
+    Wart.MutableDataStructures, Wart.FinalVal, Wart.Null, Wart.AsInstanceOf, Wart.ExplicitImplicitTypes,
+    Wart.StringPlusAny, Wart.AnyVal
+  ),
   scalafmtOnCompile := sys.env.get("CI").isEmpty, // disable in CI environments
   scapegoatVersion in ThisBuild := "1.3.4",
   testOptions in Test += Tests.Argument("-oD"), //output test durations
@@ -47,7 +60,7 @@ lazy val projectSettings = Seq(
     case path => MergeStrategy.defaultMergeStrategy(path)
   }
 ) ++
-// skip api doc generation if SKIP_DOC env variable is defined 
+// skip api doc generation if SKIP_DOC env variable is defined
 Seq(sys.env.get("SKIP_DOC")).flatMap { _ =>
   Seq(
     publishArtifact in (Compile, packageDoc) := false,
@@ -55,6 +68,9 @@ Seq(sys.env.get("SKIP_DOC")).flatMap { _ =>
     sources in (Compile, doc) := Seq.empty
   )
 }
+
+// a namespace for generative tests (or other tests that take a long time)
+lazy val SlowcookerTest = config("slowcooker") extend(Test)
 
 lazy val coverageSettings = Seq(
   coverageMinimum := 90,
@@ -85,6 +101,12 @@ lazy val shared = (project in file("shared"))
   .settings(commonSettings: _*)
   .settings(
     version := "0.1",
+    scalacOptions ++= Seq(
+      "-Xfatal-warnings",
+      "-unchecked",
+      "-deprecation",
+      "-feature"
+    ),
     libraryDependencies ++= commonDependencies ++ Seq(
       catsCore,
       catsEffect,
@@ -103,6 +125,12 @@ lazy val graphz = (project in file("graphz"))
   .settings(commonSettings: _*)
   .settings(
     version := "0.1",
+    scalacOptions ++= Seq(
+      "-Xfatal-warnings",
+      "-unchecked",
+      "-deprecation",
+      "-feature"
+    ),
     libraryDependencies ++= commonDependencies ++ Seq(
       catsCore,
       catsEffect,
@@ -111,16 +139,19 @@ lazy val graphz = (project in file("graphz"))
   ).dependsOn(shared)
 
 lazy val casper = (project in file("casper"))
+  .configs(SlowcookerTest)
   .settings(commonSettings: _*)
   .settings(rholangSettings: _*)
+  .settings(inConfig(SlowcookerTest)(Defaults.testSettings) : _*)
+  .settings(inConfig(SlowcookerTest)(org.scalafmt.sbt.ScalafmtPlugin.scalafmtConfigSettings))
   .settings(
     name := "casper",
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       catsCore,
       catsMtl,
-      monix
-    ),
-    rholangProtoBuildAssembly := (rholangProtoBuild / Compile / incrementalAssembly).value
+      monix,
+      scalacheck % "slowcooker"
+    )
   )
   .dependsOn(
     blockStorage % "compile->compile;test->test",
@@ -130,14 +161,19 @@ lazy val casper = (project in file("casper"))
     crypto,
     models,
     rspace,
-    rholang      % "compile->compile;test->test",
-    rholangProtoBuild
+    rholang      % "compile->compile;test->test"
   )
 
 lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
   .settings(
     version := "0.1",
+    scalacOptions ++= Seq(
+      "-Xfatal-warnings",
+      "-unchecked",
+      "-deprecation",
+      "-feature"
+    ),
     dependencyOverrides += "org.slf4j" % "slf4j-api" % "1.7.25",
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
       grpcNetty,
@@ -163,10 +199,16 @@ lazy val crypto = (project in file("crypto"))
   .settings(commonSettings: _*)
   .settings(
     name := "crypto",
+    scalacOptions ++= Seq(
+      "-Xfatal-warnings",
+      "-unchecked",
+      "-deprecation",
+      "-feature"
+    ),
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       guava,
       bouncyCastle,
-      scalacheckNoTest,
+      scalacheck,
       kalium,
       jaxb,
       secp256k1Java,
@@ -183,7 +225,7 @@ lazy val models = (project in file("models"))
       catsCore,
       magnolia,
       scalapbCompiler,
-      scalacheck,
+      scalacheck % "test",
       scalacheckShapeless,
       scalapbRuntimegGrpc
     ),
@@ -194,15 +236,21 @@ lazy val models = (project in file("models"))
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(rspace)
+  .dependsOn(shared % "compile->compile;test->test", rspace)
 
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.8.2",
+    version := "0.8.4" + git.gitHeadCommit.value.map(".git" + _.take(8)).getOrElse(""),
     name := "rnode",
-    maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
+    scalacOptions ++= Seq(
+      "-Xfatal-warnings",
+      "-unchecked",
+      "-deprecation",
+      "-feature"
+    ),
+    maintainer := "RChain Cooperative https://www.rchain.coop/",
     packageSummary := "RChain Node",
     packageDescription := "RChain Node - the RChain blockchain node server software.",
     libraryDependencies ++=
@@ -259,8 +307,6 @@ lazy val node = (project in file("node"))
     """,
     /* Dockerization */
     dockerUsername := Some(organization.value),
-    version in Docker := version.value +
-      git.gitHeadCommit.value.map("-git" + _.take(8)).getOrElse(""),
     dockerAliases ++=
       sys.env.get("DRONE_BUILD_NUMBER")
         .toSeq.map(num => dockerAlias.value.withTag(Some(s"DRONE-${num}"))),
@@ -375,45 +421,6 @@ lazy val rholangCLI = (project in file("rholang-cli"))
   )
   .dependsOn(rholang)
 
-lazy val rholangProtoBuildJar = Def.task(
-  (assemblyOutputPath in (assembly)).value
-)
-lazy val incrementalAssembly2 = Def.taskDyn(
-  if (jarOutDated((rholangProtoBuildJar).value, (Compile / scalaSource).value))
-    (assembly)
-  else
-    rholangProtoBuildJar
-)
-lazy val incrementalAssembly = taskKey[File]("Only assemble if sources are newer than jar")
-lazy val rholangProtoBuild = (project in file("rholang-proto-build"))
-  .settings(commonSettings: _*)
-  .settings(
-    name := "rholang-proto-build",
-    incrementalAssembly in Compile := incrementalAssembly2.value
-  )
-  .dependsOn(rholang)
-
-lazy val roscalaMacros = (project in file("roscala/macros"))
-  .settings(commonSettings: _*)
-  .settings(
-    libraryDependencies ++= commonDependencies ++ Seq(
-      "org.scala-lang" % "scala-reflect" % scalaVersion.value
-    )
-  )
-
-lazy val roscala = (project in file("roscala"))
-  .settings(commonSettings: _*)
-  .settings(
-    name := "Rosette",
-    mainClass in assembly := Some("coop.rchain.rosette.Main"),
-    assemblyJarName in assembly := "rosette.jar",
-    inThisBuild(
-      List(addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full))
-    ),
-    libraryDependencies ++= commonDependencies
-  )
-  .dependsOn(roscalaMacros)
-
 lazy val blockStorage = (project in file("block-storage"))
   .settings(commonSettings: _*)
   .settings(
@@ -426,7 +433,7 @@ lazy val blockStorage = (project in file("block-storage"))
       catsMtl
     )
   )
-  .dependsOn(shared, models)
+  .dependsOn(shared, models % "compile->compile;test->test")
 
 lazy val rspace = (project in file("rspace"))
   .configs(IntegrationTest extend Test)
@@ -497,7 +504,7 @@ lazy val rspace = (project in file("rspace"))
       )
     )
   )
-  .dependsOn(shared, crypto)
+  .dependsOn(shared % "compile->compile;test->test", crypto)
 
 lazy val rspaceBench = (project in file("rspace-bench"))
   .settings(
@@ -530,7 +537,6 @@ lazy val rchain = (project in file("."))
     regex,
     rholang,
     rholangCLI,
-    roscala,
     rspace,
     rspaceBench,
     shared

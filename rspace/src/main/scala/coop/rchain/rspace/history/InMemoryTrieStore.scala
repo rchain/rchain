@@ -6,10 +6,10 @@ import coop.rchain.rspace.{Blake2b256Hash, InMemoryOps, InMemTransaction, _}
 
 import kamon.Kamon
 
-case class State[K, V](
+final case class State[K, V](
     _dbTrie: Map[Blake2b256Hash, Trie[K, V]],
     _dbRoot: Map[Branch, Blake2b256Hash],
-    _dbPastRoots: Map[Branch, Seq[Blake2b256Hash]],
+    _dbPastRoots: Set[Blake2b256Hash],
     _dbEmptyRoot: Option[Blake2b256Hash]
 ) {
 
@@ -19,7 +19,7 @@ case class State[K, V](
   def changeRoot(newRoot: Map[Branch, Blake2b256Hash]): State[K, V] =
     State(_dbTrie, newRoot, _dbPastRoots, _dbEmptyRoot)
 
-  def changePastRoots(newPastRoots: Map[Branch, Seq[Blake2b256Hash]]): State[K, V] =
+  def changePastRoots(newPastRoots: Set[Blake2b256Hash]): State[K, V] =
     State(_dbTrie, _dbRoot, newPastRoots, _dbEmptyRoot)
 
   def changeEmptyRoot(emptyRoot: Blake2b256Hash): State[K, V] =
@@ -27,9 +27,10 @@ case class State[K, V](
 }
 
 object State {
-  def empty[K, V]: State[K, V] = State[K, V](Map.empty, Map.empty, Map.empty, None)
+  def empty[K, V]: State[K, V] = State[K, V](Map.empty, Map.empty, Set.empty, None)
 }
 
+@SuppressWarnings(Array("org.wartremover.warts.Throw", "org.wartremover.warts.NonUnitStatements")) // TODO stop throwing exceptions
 class InMemoryTrieStore[K, V]
     extends InMemoryOps[State[K, V]]
     with ITrieStore[InMemTransaction[State[K, V]], K, V] {
@@ -57,22 +58,11 @@ class InMemoryTrieStore[K, V]
   ): Option[Blake2b256Hash] =
     getRoot(txn, branch)
       .map { currentRoot =>
-        val pastRoots = getPastRootsInBranch(txn, branch).filter(_ != currentRoot)
-        (currentRoot, currentRoot +: pastRoots)
+        txn.writeState(
+          state => (state.changePastRoots(state._dbPastRoots + currentRoot), ())
+        )
+        currentRoot
       }
-      .map {
-        case (currentRoot, updatedPastRoots) =>
-          txn.writeState(
-            state => (state.changePastRoots(state._dbPastRoots + (branch -> updatedPastRoots)), ())
-          )
-          currentRoot
-      }
-
-  private[this] def getPastRootsInBranch(
-      txn: InMemTransaction[State[K, V]],
-      branch: Branch
-  ): Seq[Blake2b256Hash] =
-    txn.readState(state => state._dbPastRoots.getOrElse(branch, Seq.empty))
 
   override private[rspace] def putRoot(
       txn: InMemTransaction[State[K, V]],
@@ -81,12 +71,11 @@ class InMemoryTrieStore[K, V]
   ): Unit =
     txn.writeState(state => (state.changeRoot(state._dbRoot + (branch -> hash)), ()))
 
-  override private[rspace] def getAllPastRoots(
+  private[rspace] def getAllPastRoots(
       txn: InMemTransaction[State[K, V]]
-  ): Seq[Blake2b256Hash] =
+  ): Set[Blake2b256Hash] =
     txn.readState(
-      state =>
-        state._dbPastRoots.values.foldLeft(Seq.empty[Blake2b256Hash])((acc, value) => acc ++ value)
+      state => state._dbPastRoots
     )
 
   override private[rspace] def validateAndPutRoot(
@@ -96,14 +85,6 @@ class InMemoryTrieStore[K, V]
   ): Unit =
     getRoot(txn, branch)
       .find(_ == hash)
-      .orElse {
-        getPastRootsInBranch(txn, branch)
-          .find(_ == hash)
-          .map { blake: Blake2b256Hash =>
-            putRoot(txn, branch, blake)
-            blake
-          }
-      }
       .orElse {
         getAllPastRoots(txn)
           .find(_ == hash)

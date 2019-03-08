@@ -3,7 +3,7 @@ package coop.rchain.shared
 import scala.util.Try
 
 object StringOps {
-  case class ColoredString(str: String, color: String) {
+  final case class ColoredString(str: String, color: String) {
     def colorize: String = color + str + "\u001B[0m"
   }
 
@@ -17,7 +17,7 @@ object StringOps {
   implicit class BracesOps(expr: String) {
     // Wrap if it's sth more than just a number
     def wrapWithBraces: String =
-      Try(new Integer(expr)).fold(
+      Try(Integer.valueOf(expr)).fold(
         _ =>
           if (expr.startsWith("(") && expr.endsWith(")")) {
             expr

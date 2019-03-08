@@ -4,6 +4,7 @@ import scala.concurrent.duration._
 
 import cats._
 import cats.implicits._
+import cats.effect._
 
 import coop.rchain.catscontrib._
 import coop.rchain.comm._
@@ -23,7 +24,7 @@ object HandleMessages {
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "rp.handle")
 
-  def handle[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
+  def handle[F[_]: Monad: Sync: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
       protocol: Protocol,
       defaultTimeout: FiniteDuration
   ): F[CommunicationResponse] =
@@ -33,7 +34,7 @@ object HandleMessages {
       case Some(sender) => handle_[F](protocol, sender, defaultTimeout)
     }
 
-  private def handle_[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
+  private def handle_[F[_]: Monad: Sync: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
       proto: Protocol,
       sender: PeerNode,
       defaultTimeout: FiniteDuration
@@ -45,18 +46,18 @@ object HandleMessages {
       case Protocol.Message.Disconnect(disconnect) => handleDisconnect[F](sender, disconnect)
       case Protocol.Message.Packet(packet)         => handlePacket[F](sender, packet)
       case msg =>
-        Log[F].error(s"Unexpected message type $msg") *> notHandled(unexpectedMessage(msg.toString))
+        Log[F].error(s"Unexpected message type $msg") >> notHandled(unexpectedMessage(msg.toString))
           .pure[F]
     }
 
-  def handleDisconnect[F[_]: Monad: Capture: Metrics: TransportLayer: Log: ConnectionsCell](
+  def handleDisconnect[F[_]: Monad: Sync: Metrics: TransportLayer: Log: ConnectionsCell](
       sender: PeerNode,
       disconnect: Disconnect
   ): F[CommunicationResponse] =
     for {
       _ <- Log[F].info(s"Forgetting about ${sender.toAddress}.")
       _ <- TransportLayer[F].disconnect(sender)
-      _ <- ConnectionsCell[F].modify(_.removeConn[F](sender))
+      _ <- ConnectionsCell[F].flatModify(_.removeConn[F](sender))
       _ <- Metrics[F].incrementCounter("disconnect")
     } yield handledWithoutMessage
 
@@ -86,7 +87,7 @@ object HandleMessages {
 
     def handledHandshake(local: PeerNode): F[CommunicationResponse] =
       for {
-        _ <- ConnectionsCell[F].modify(_.addConn[F](peer))
+        _ <- ConnectionsCell[F].flatModify(_.addConn[F](peer))
         _ <- Log[F].info(s"Responded to protocol handshake request from $peer")
       } yield handledWithMessage(ProtocolHelper.protocolHandshakeResponse(local))
 

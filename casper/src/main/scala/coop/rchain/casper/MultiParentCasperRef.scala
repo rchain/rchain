@@ -7,7 +7,6 @@ import cats.implicits._
 import coop.rchain.shared.{Log, LogSource, MaybeCell}
 
 object MultiParentCasperRef {
-  private implicit val logSource: LogSource = LogSource(this.getClass)
 
   type MultiParentCasperRef[F[_]] = MaybeCell[F, MultiParentCasper[F]]
 
@@ -21,11 +20,10 @@ object MultiParentCasperRef {
 
   def withCasper[F[_]: Monad: Log: MultiParentCasperRef, A](
       f: MultiParentCasper[F] => F[A],
-      default: A
+      default: F[A]
   ): F[A] =
     MultiParentCasperRef[F].get flatMap {
       case Some(casper) => f(casper)
-      case None =>
-        Log[F].warn(s"Casper instance was not available.").map(_ => default)
+      case None         => default
     }
 }

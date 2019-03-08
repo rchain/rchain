@@ -24,7 +24,7 @@ object PrettyPrinter {
     def cap() = Printer.OUTPUT_CAPPED.map(n => s"${str.take(n)}...").getOrElse(str)
   }
 }
-case class PrettyPrinter(
+final case class PrettyPrinter(
     freeShift: Int,
     boundShift: Int,
     newsShiftIndices: Vector[Int],
@@ -47,6 +47,7 @@ case class PrettyPrinter(
   def buildString(v: Var): String              = buildStringM(v).value.cap()
   def buildString(m: GeneratedMessage): String = buildStringM(m).value.cap()
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   private def buildStringM(e: Expr): Coeval[String] = Coeval.defer {
     e.exprInstance match {
 
@@ -155,6 +156,7 @@ case class PrettyPrinter(
 
   private def buildStringM(t: GeneratedMessage): Coeval[String] = buildStringM(t, 0)
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   private def buildStringM(t: GeneratedMessage, indent: Int): Coeval[String] = Coeval.defer {
     val content = t match {
       case v: Var => buildStringM(v)
@@ -219,7 +221,7 @@ case class PrettyPrinter(
           (pure("") /: m.cases.zipWithIndex) {
             case (string, (matchCase, i)) =>
               string |+| pure(indentStr * (indent + 1)) |+| buildMatchCase(matchCase, indent + 1) |+| pure {
-                if (i != m.cases.length - 1) " ;\n"
+                if (i != m.cases.length - 1) "\n"
                 else ""
               }
           } |+| pure("\n" + (indentStr * indent) + "}")
@@ -233,13 +235,12 @@ case class PrettyPrinter(
           case ConnOrBody(value) =>
             pure("{") |+| value.ps.map(buildStringM).toList.intercalate(pure(" \\/ ")) |+| pure("}")
           case ConnNotBody(value) => pure("~{") |+| buildStringM(value) |+| pure("}")
-          case VarRefBody(value) =>
-            pure("=") |+| buildStringM(Var(FreeVar(value.index)))
-          case _: ConnBool      => pure("Bool")
-          case _: ConnInt       => pure("Int")
-          case _: ConnString    => pure("String")
-          case _: ConnUri       => pure("Uri")
-          case _: ConnByteArray => pure("ByteArray")
+          case VarRefBody(value)  => pure(s"=$freeId${freeShift - value.index - 1}")
+          case _: ConnBool        => pure("Bool")
+          case _: ConnInt         => pure("Int")
+          case _: ConnString      => pure("String")
+          case _: ConnUri         => pure("Uri")
+          case _: ConnByteArray   => pure("ByteArray")
         }
 
       case par: Par =>

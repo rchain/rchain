@@ -7,6 +7,7 @@ import coop.rchain.shared.{Log, LogSource}
 
 import com.google.common.util.concurrent.ListenableFuture
 import io.grpc.stub.StreamObserver
+import io.grpc.{Status, StatusRuntimeException}
 import monix.eval.Task
 import monix.execution._
 import monix.execution.Ack.{Continue, Stop}
@@ -37,6 +38,7 @@ object GrpcMonix {
       grpcObserverToMonixSubscriber(inputObserver, outputSubsriber.scheduler)
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def monixSubscriberToGrpcObserver[T](subscriber: Subscriber[T]): StreamObserver[T] =
     new StreamObserver[T] {
       override def onError(t: Throwable): Unit = subscriber.onError(t)
@@ -44,6 +46,7 @@ object GrpcMonix {
       override def onNext(value: T): Unit      = subscriber.onNext(value)
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def reactiveSubscriberToGrpcObserver[T](subscriber: SubscriberR[_ >: T]): StreamObserver[T] =
     new StreamObserver[T] {
       override def onError(t: Throwable): Unit = subscriber.onError(t)
@@ -51,6 +54,7 @@ object GrpcMonix {
       override def onNext(value: T): Unit      = subscriber.onNext(value)
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def grpcObserverToMonixSubscriber[T](observer: StreamObserver[T], s: Scheduler): Subscriber[T] =
     new Subscriber[T] {
       override implicit def scheduler: Scheduler = s
@@ -75,6 +79,8 @@ object GrpcMonix {
           observer.onNext(value)
           observer.onCompleted()
         } catch {
+          case sre: StatusRuntimeException if sre.getStatus.getCode == Status.Code.CANCELLED =>
+            logger.warn(s"Failed to send a response: peer request timeout")
           case NonFatal(e) => logger.warn(s"Failed to send a response: ${e.getMessage}")
         }
     }
@@ -87,6 +93,7 @@ object GrpcMonix {
       grpcOperatorToMonixOperator(operator)
     )
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def unliftByTransformer[I, O](
       transformer: Transformer[I, O],
       subscriber: Subscriber[O]

@@ -9,7 +9,7 @@ trait DoublyLinkedDag[A] {
   val childToParentAdjacencyList: Map[A, Set[A]]
   val dependencyFree: Set[A]
 }
-case class BlockDependencyDag(
+final case class BlockDependencyDag(
     parentToChildAdjacencyList: Map[BlockHash, Set[BlockHash]],
     childToParentAdjacencyList: Map[BlockHash, Set[BlockHash]],
     dependencyFree: Set[BlockHash]
@@ -59,6 +59,7 @@ object DoublyLinkedDagOperations {
   }
 
   // If the element doesn't exist in the dag, the dag is returned as is
+  @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
   def remove[A](dag: DoublyLinkedDag[A], element: A): DoublyLinkedDag[A] = {
     val parentToChildAdjacencyList: Map[A, Set[A]] = dag.parentToChildAdjacencyList
     val childToParentAdjacencyList: Map[A, Set[A]] = dag.childToParentAdjacencyList

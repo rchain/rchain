@@ -5,13 +5,13 @@ import cats.effect._
 import cats.implicits._
 import coop.rchain.blockstorage.BlockDagRepresentation
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{BlockMetadata, BlockStore}
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.{BlockException, PrettyPrinter}
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.models.Par
+import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.rholang.interpreter.Interpreter
 import coop.rchain.rspace.ReplayException
 import coop.rchain.shared.{Log, LogSource}
@@ -140,7 +140,7 @@ object InterpreterUtil {
 
   def computeDeploysCheckpoint[F[_]: Sync: BlockStore](
       parents: Seq[BlockMessage],
-      deploys: Seq[Deploy],
+      deploys: Seq[DeployData],
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
       time: Option[Long] = None

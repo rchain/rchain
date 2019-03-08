@@ -19,6 +19,7 @@ package object examples {
           ByteVector.view(baos.toByteArray)
         }
 
+      @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
       def decode(bytes: ByteVector): Either[Throwable, T] =
         Either.catchNonFatal {
           withResource(new ByteArrayInputStream(bytes.toArray)) { bais =>

@@ -9,9 +9,10 @@ import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.rholang.sorter.Sortable
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
+import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.{
   LexerError,
+  OutOfPhlogistonsError,
   ParserError,
   SyntaxError,
   TopLevelFreeVariablesNotAllowedError,
@@ -22,7 +23,7 @@ import coop.rchain.rholang.interpreter.errors.{
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 
-final case class EvaluateResult(cost: CostAccount, errors: Vector[Throwable])
+final case class EvaluateResult(cost: Cost, errors: Vector[Throwable])
 
 trait Interpreter[F[_]] {
 
@@ -32,10 +33,15 @@ trait Interpreter[F[_]] {
 
   def buildPar(proc: Proc): F[Par]
 
-  def execute(runtime: Runtime[F], reader: Reader): F[Runtime[F]]
+  def evaluate(runtime: Runtime[F], term: String): F[EvaluateResult]
+  def evaluate(runtime: Runtime[F], term: String, initialPhlo: Cost): F[EvaluateResult]
 
-  def evaluate(runtime: Runtime[F], par: Par): F[EvaluateResult]
-
+  def injAttempt(
+      reducer: ChargingReducer[F],
+      errorLog: ErrorLog[F],
+      term: String,
+      initialPhlo: Cost
+  )(implicit rand: Blake2b512Random): F[EvaluateResult]
 }
 
 object Interpreter {
@@ -59,26 +65,45 @@ object Interpreter {
         sortedPar <- Sortable[Par].sortMatch(par)
       } yield sortedPar.term
 
-    def execute(runtime: Runtime[F], reader: Reader): F[Runtime[F]] =
-      for {
-        par    <- buildNormalizedTerm(reader)
-        errors <- evaluate(runtime, par).map(_.errors)
-        result <- if (errors.isEmpty) F.pure(runtime)
-                 else F.raiseError(new RuntimeException(mkErrorMsg(errors)))
-      } yield result
+    def evaluate(runtime: Runtime[F], term: String): F[EvaluateResult] =
+      evaluate(runtime, term, Cost.Max)
 
-    def evaluate(runtime: Runtime[F], par: Par): F[EvaluateResult] = {
+    def evaluate(runtime: Runtime[F], term: String, initialPhlo: Cost): F[EvaluateResult] = {
       implicit val rand: Blake2b512Random = Blake2b512Random(128)
-      val initialPhlo                     = Cost(Integer.MAX_VALUE) //This is OK because evaluate is not called on deploy
       for {
-        checkpoint    <- runtime.space.createCheckpoint()
-        _             <- runtime.reducer.setPhlo(initialPhlo)
-        _             <- runtime.reducer.inj(par)(rand)
-        errors        <- runtime.readAndClearErrorVector()
-        remainingPhlo <- runtime.reducer.phlo
-        cost          = remainingPhlo.copy(cost = initialPhlo - remainingPhlo.cost)
-        _             <- if (errors.nonEmpty) runtime.space.reset(checkpoint.root) else F.unit
-      } yield EvaluateResult(cost, errors)
+        checkpoint <- runtime.space.createCheckpoint()
+        res        <- injAttempt(runtime.reducer, runtime.errorLog, term, initialPhlo)
+        _          <- if (res.errors.nonEmpty) runtime.space.reset(checkpoint.root) else F.unit
+      } yield res
+    }
+
+    def injAttempt(
+        reducer: ChargingReducer[F],
+        errorLog: ErrorLog[F],
+        term: String,
+        initialPhlo: Cost
+    )(implicit rand: Blake2b512Random): F[EvaluateResult] = {
+      val parsingCost = accounting.parsingCost(term)
+      // TODO: charge(parsingCost) so that it is visible in the cost log
+      val phloAfterParsing = initialPhlo - parsingCost
+      if (phloAfterParsing.value <= 0)
+        EvaluateResult(parsingCost, Vector(OutOfPhlogistonsError)).pure[F]
+      else
+        Interpreter[F].buildNormalizedTerm(term).attempt.flatMap {
+          case Right(parsed) =>
+            for {
+              _         <- reducer.setPhlo(phloAfterParsing)
+              result    <- reducer.inj(parsed).attempt
+              phlosLeft <- reducer.phlo
+              oldErrors <- errorLog.readAndClearErrorVector()
+              newErrors = result.swap.toSeq.toVector
+              allErrors = oldErrors |+| newErrors
+            } yield EvaluateResult(initialPhlo - phlosLeft, allErrors)
+          case Left(error) =>
+            for {
+              phlosLeft <- reducer.phlo
+            } yield EvaluateResult(parsingCost, Vector(error))
+        }
     }
 
     private def buildAST(reader: Reader): F[Proc] =
@@ -153,10 +178,5 @@ object Interpreter {
       F.delay(new parser(lexer, lexer.getSymbolFactory)).adaptError {
         case th: Throwable => ParserError("Parser construction error: " + th.getMessage)
       }
-
-    private def mkErrorMsg(errors: Vector[Throwable]) =
-      errors
-        .map(_.toString())
-        .mkString("Errors received during evaluation:\n", "\n", "\n")
   }
 }

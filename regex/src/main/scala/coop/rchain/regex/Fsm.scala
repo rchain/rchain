@@ -7,6 +7,7 @@ import scala.util.{Failure, Success, Try}
 /**
   * A companion object for the Fsm class.
   */
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 object Fsm {
 
   /**
@@ -244,7 +245,8 @@ object Fsm {
   * closure), intersected, and simplified.
   * The majority of these methods are available using operator overloads.
   */
-case class Fsm(
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
+final case class Fsm(
     alphabet: Set[Char],
     states: Set[Int],
     initialState: Int,
@@ -285,6 +287,7 @@ case class Fsm(
   /**
     * A state is "live" if a final state can be reached from it.
     */
+  @SuppressWarnings(Array("org.wartremover.warts.Return"))
   def isLive(state: Int): Boolean = {
     val reachable = mutable.Queue(state)
     val checked   = mutable.Set(state)
@@ -319,6 +322,7 @@ case class Fsm(
     * If `Fsm.AnythingElse` is in your alphabet, then any symbol not in your
     * alphabet will be converted to `Fsm.AnythingElse`
     */
+  @SuppressWarnings(Array("org.wartremover.warts.Return", "org.wartremover.warts.Var"))
   def accepts(input: String): Boolean = {
     var currentState = initialState
     for (currentSymbol <- input) {
@@ -346,6 +350,7 @@ case class Fsm(
     * If you fall into oblivion, then the derivative is an FSM accepting no
     * strings.
     */
+  @SuppressWarnings(Array("org.wartremover.warts.Return", "org.wartremover.warts.Var"))
   def derive(input: String): Try[Fsm] = {
     var currentState = initialState
     for (currentSymbol <- input) {
@@ -430,6 +435,7 @@ case class Fsm(
     * may be more efficient ways to do this, that I haven't investigated yet.
     * You can use this in list comprehensions.
     */
+  @SuppressWarnings(Array("org.wartremover.warts.Var"))
   def strings: Stream[String] = {
     // Many FSMs have "dead states". Once you reach a dead state, you can no
     // longer reach a final state. Since many strings may end up here, it's
@@ -573,6 +579,7 @@ case class Fsm(
     * Consider the FSM as a set of strings and return the cardinality of thatset
     * - Some[Int], or None if there are infinitely many
     */
+  @SuppressWarnings(Array("org.wartremover.warts.Return"))
   def cardinality: Option[Int] = {
     val stateToCount = mutable.Map[Int, Option[Int]]()
     //no tail recursion here

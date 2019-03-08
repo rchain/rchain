@@ -3,27 +3,30 @@ package coop.rchain.rspace.examples
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
 import java.nio.file.{Files, Path}
 
-import cats.Id
-import cats.effect.{ContextShift, Sync}
+import cats.{Applicative, Id}
+import cats.effect.{Concurrent, ContextShift}
+import coop.rchain.metrics.Metrics
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Language.ignore
+import coop.rchain.shared.Log
 import coop.rchain.rspace.util._
+
 import scala.concurrent.ExecutionContext
 import scodec.bits.ByteVector
 
 import scala.collection.immutable.Seq
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
-
 import scala.concurrent.ExecutionContext.Implicits.global
 
+@SuppressWarnings(Array("org.wartremover.warts.EitherProjectionPartial"))
 object AddressBookExample {
 
   /* Here we define a type for channels */
 
-  case class Channel(name: String)
+  final case class Channel(name: String)
 
   /* Ordering for Channel */
 
@@ -32,9 +35,9 @@ object AddressBookExample {
 
   /* Here we define a type for data */
 
-  case class Name(first: String, last: String)
-  case class Address(street: String, city: String, state: String, zip: String)
-  case class Entry(name: Name, address: Address, email: String, phone: String)
+  final case class Name(first: String, last: String)
+  final case class Address(street: String, city: String, state: String, zip: String)
+  final case class Entry(name: Name, address: Address, email: String, phone: String)
 
   /* Here we define a type for patterns */
 
@@ -62,6 +65,7 @@ object AddressBookExample {
       }
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.MutableDataStructures"))
   class EntriesCaptor extends ((Seq[Entry]) => Unit) with Serializable {
 
     @transient
@@ -82,7 +86,7 @@ object AddressBookExample {
 
   object implicits {
 
-    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+    implicit val concurrentF: Concurrent[Id] = coop.rchain.catscontrib.effect.implicits.concurrentId
 
     implicit val contextShiftId: ContextShift[Id] =
       new ContextShift[Id] {
@@ -114,6 +118,7 @@ object AddressBookExample {
         }
       }
 
+      @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
       def decode(bytes: ByteVector): Either[Throwable, Channel] =
         try {
           val bais = new ByteArrayInputStream(bytes.toArray)
@@ -158,16 +163,16 @@ object AddressBookExample {
     /**
       * An instance of [[Match]] for [[Pattern]] and [[Entry]]
       */
-    implicit object matchPatternEntry extends Match[Pattern, Nothing, Entry, Entry] {
-      def get(p: Pattern, a: Entry): Either[Nothing, Option[Entry]] =
+    implicit def matchPatternEntry[F[_]](
+        implicit apF: Applicative[F]
+    ): Match[F, Pattern, Entry, Entry] =
+      (p: Pattern, a: Entry) =>
         p match {
-          case NameMatch(last) if a.name.last == last        => Right(Some(a))
-          case CityMatch(city) if a.address.city == city     => Right(Some(a))
-          case StateMatch(state) if a.address.state == state => Right(Some(a))
-          case _                                             => Right(None)
+          case NameMatch(last) if a.name.last == last        => apF.pure(Some(a))
+          case CityMatch(city) if a.address.city == city     => apF.pure(Some(a))
+          case StateMatch(state) if a.address.state == state => apF.pure(Some(a))
+          case _                                             => apF.pure(None)
         }
-
-    }
   }
 
   import implicits._
@@ -196,11 +201,14 @@ object AddressBookExample {
 
   def exampleOne(): Unit = {
 
+    implicit val log: Log[Id]          = Log.log
+    implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
+
     // Here we define a temporary place to put the store's files
     val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
 
     // Let's define our store
-    val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
+    val context = Context.create[Id, Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
     val space =
       RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
@@ -235,11 +243,14 @@ object AddressBookExample {
 
   def exampleTwo(): Unit = {
 
+    implicit val log: Log[Id]          = Log.log
+    implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
+
     // Here we define a temporary place to put the store's files
     val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
 
     // Let's define our store
-    val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
+    val context = Context.create[Id, Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
     val space =
       RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
@@ -328,10 +339,14 @@ object AddressBookExample {
   private[this] def withSpace(
       f: IdISpace[Channel, Pattern, Nothing, Entry, Entry, Printer] => Unit
   ) = {
+
+    implicit val log: Log[Id]          = Log.log
+    implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
+
     // Here we define a temporary place to put the store's files
     val storePath = Files.createTempDirectory("rspace-address-book-example-")
     // Let's define our store
-    val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
+    val context = Context.create[Id, Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
     val space =
       RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
     try {

@@ -4,10 +4,12 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 
 trait BlockDagStorage[F[_]] {
   def getRepresentation: F[BlockDagRepresentation[F]]
-  def insert(block: BlockMessage): F[Unit]
+  def insert(block: BlockMessage, invalid: Boolean): F[BlockDagRepresentation[F]]
+  def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A]
   def checkpoint(): F[Unit]
   def clear(): F[Unit]
   def close(): F[Unit]
@@ -32,4 +34,10 @@ trait BlockDagRepresentation[F[_]] {
 
 object BlockDagRepresentation {
   type Validator = ByteString
+}
+
+trait EquivocationsTracker[F[_]] {
+  def equivocationRecords: F[Set[EquivocationRecord]]
+  def insertEquivocationRecord(record: EquivocationRecord): F[Unit]
+  def updateEquivocationRecord(record: EquivocationRecord, blockHash: BlockHash): F[Unit]
 }

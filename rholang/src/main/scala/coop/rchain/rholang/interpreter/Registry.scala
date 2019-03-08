@@ -226,7 +226,7 @@ class RegistryImpl[F[_]](
             publicRegisterSignedPatterns,
             TaggedContinuation(ScalaBodyRef(BodyRefs.REG_PUBLIC_REGISTER_SIGNED))
           )
-    } yield Unit
+    } yield ()
 
   private val prefixRetReplacePattern = BindPattern(
     Seq(
@@ -562,7 +562,7 @@ class RegistryImpl[F[_]](
       val Some(Expr(ETupleBody(ETuple(Seq(newNonce, _), _, _)))) = replacement.singleExpr
       val Some(Expr(GInt(oldNonceInt)))                          = oldNonce.singleExpr
       val Some(Expr(GInt(newNonceInt)))                          = newNonce.singleExpr
-      return newNonceInt > oldNonceInt
+      newNonceInt > oldNonceInt
     }
     genericInsertCallback(args, nonceCheck, fetchDataNonceInsert, sequenceNumber)
   }

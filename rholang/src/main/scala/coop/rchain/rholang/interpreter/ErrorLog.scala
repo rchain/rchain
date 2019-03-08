@@ -5,6 +5,8 @@ import cats.effect._
 import cats.implicits._
 import cats.mtl.FunctorTell
 
+@SuppressWarnings(Array("org.wartremover.warts.Var"))
+// TODO remove/modify this monster!
 class ErrorLog[F[_]: Sync] extends FunctorTell[F, Throwable] {
   private var errorVector: Vector[Throwable] = Vector.empty
   val functor                                = implicitly[Functor[F]]

@@ -5,6 +5,7 @@ import scala.collection.mutable
 import scala.annotation.tailrec
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._
+import cats.effect._
 
 trait Keyed {
   def key: Seq[Byte]
@@ -28,6 +29,7 @@ object ReputationOrder extends Ordering[Reputable] {
   def compare(a: Reputable, b: Reputable) = a.reputation compare b.reputation
 }
 
+@SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.NonUnitStatements"))
 final case class PeerTableEntry[A](entry: A, gkey: A => Seq[Byte]) extends Keyed {
   var pinging           = false
   val key               = gkey(entry)
@@ -76,6 +78,7 @@ object PeerTable {
   * network discovery and routing protocol.
   *
   */
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 final class PeerTable[A <: PeerNode](
     localKey: Seq[Byte],
     private[discovery] val k: Int,
@@ -115,13 +118,13 @@ final class PeerTable[A <: PeerNode](
   private[discovery] def distance(otherKey: Seq[Byte]): Option[Int] = distance(localKey, otherKey)
   private[discovery] def distance(other: A): Option[Int]            = distance(other.key)
 
-  def updateLastSeen[F[_]: Monad: Capture: KademliaRPC](peer: A): F[Unit] = {
+  def updateLastSeen[F[_]: Monad: Sync: KademliaRPC](peer: A): F[Unit] = {
 
     def bucket: F[Option[mutable.ListBuffer[Entry]]] =
-      Capture[F].capture(distance(localKey, peer.key).filter(_ < 8 * width).map(table.apply))
+      Sync[F].delay(distance(localKey, peer.key).filter(_ < 8 * width).map(table.apply))
 
     def addUpdateOrPickOldPeer(ps: mutable.ListBuffer[Entry]): F[Option[Entry]] =
-      Capture[F].capture {
+      Sync[F].delay {
         ps synchronized {
           ps.find(_.key == peer.key) match {
             case Some(entry) =>

@@ -152,7 +152,6 @@
 
 
 #### A NOT successful genesis ceremony (not enough sigs)
-##### test: test/test_genesis_ceremony.py::test_not_successful_genesis_ceremony
 ##### steps:
 
 * `ceremonyMaster` is instatantied with flags `--required-sigs 3 --duration 5min --interval 10sec --bonds-file <holds two nodes validatorA and validatorB`.
@@ -334,7 +333,7 @@
 ##### steps:
 
 * initiate p2p with 5 validators `validatorA`, `validatorB`, `validatorC`, `validatorD` and `validatorE`
-* each validator runs 200 rounds of deploy and propose
+* each validator runs 100 rounds of deploy and propose
 * wait graceful period of 30 seconds
 * each validator should output exactly same DAG
 

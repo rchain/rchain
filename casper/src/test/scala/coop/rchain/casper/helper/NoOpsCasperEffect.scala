@@ -46,7 +46,9 @@ object NoOpsCasperEffect {
       estimatorFunc: IndexedSeq[BlockMessage] = Vector(BlockMessage())
   ): F[NoOpsCasperEffect[F]] =
     for {
-      _ <- blockStore.toList.traverse_((BlockStore[F].put _).tupled)
+      _ <- blockStore.toList.traverse_ {
+            case (blockHash, block) => BlockStore[F].put(blockHash, block)
+          }
     } yield new NoOpsCasperEffect[F](MutableMap(blockStore.toSeq: _*), estimatorFunc)
   def apply[F[_]: Sync: BlockStore: BlockDagStorage](): F[NoOpsCasperEffect[F]] =
     apply(Map.empty, Vector(BlockMessage()))

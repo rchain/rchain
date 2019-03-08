@@ -9,14 +9,13 @@ import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.{PrettyPrinter => RholangPP}
 
 object PrettyPrinter {
-  private val rpp = RholangPP()
 
   def buildStringNoLimit(b: ByteString): String = Base16.encode(b.toByteArray)
 
   def buildString(t: GeneratedMessage): String =
     t match {
       case b: BlockMessage => buildString(b)
-      case d: Deploy       => buildString(d)
+      case d: DeployData   => buildString(d)
       case _               => "Unknown consensus protocol message"
     }
 
@@ -48,12 +47,12 @@ object PrettyPrinter {
   def buildString(b: ByteString): String =
     limit(Base16.encode(b.toByteArray), 10)
 
-  private def buildString(par: Option[Par]): String =
-    par.map(p => limit(rpp.buildString(p), 25)).getOrElse("")
-
-  private def buildString(d: Deploy): String =
-    s"Deploy #${d.raw.fold(0L)(_.timestamp)} -- ${buildString(d.term)}"
+  private def buildString(d: DeployData): String =
+    s"DeployData #${d.timestamp} -- ${d.term}}"
 
   private def buildString(r: RChainState): String =
     buildString(r.postStateHash)
+
+  def buildString(b: Bond): String =
+    s"${buildStringNoLimit(b.validator)}: ${b.stake.toString}"
 }

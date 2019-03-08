@@ -1,7 +1,5 @@
 package coop.rchain.rholang.interpreter
 
-import java.io.StringReader
-
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random}
@@ -9,12 +7,11 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoDispatchMap
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccounting}
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.ISpace
 import coop.rchain.rspace.internal.{Datum, Row}
-import coop.rchain.rspace.pure.PureRSpace
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
@@ -25,7 +22,8 @@ import scala.concurrent.duration._
 trait RegistryTester extends PersistentStoreTester {
   implicit val errorLog = new ErrorLog[Task]()
   implicit val costAccounting =
-    CostAccounting.unsafe[Task](CostAccount(Integer.MAX_VALUE))
+    CostAccounting.unsafe[Task](Cost(Integer.MAX_VALUE))
+  implicit val cost: _cost[Task] = loggingCost(costAccounting, noOpCostLog[Task])
 
   private[this] def dispatchTableCreator(registry: Registry[Task]): RhoDispatchMap[Task] = {
     import coop.rchain.rholang.interpreter.Runtime.BodyRefs._
@@ -52,7 +50,7 @@ trait RegistryTester extends PersistentStoreTester {
             Task,
             Par,
             BindPattern,
-            OutOfPhlogistonsError.type,
+            InterpreterError,
             ListParWithRandom,
             ListParWithRandomAndPhlos,
             TaggedContinuation

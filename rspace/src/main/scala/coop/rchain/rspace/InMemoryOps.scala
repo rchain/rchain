@@ -1,5 +1,6 @@
 package coop.rchain.rspace
 import scala.concurrent.SyncVar
+import cats._, cats.data._, cats.implicits._
 
 trait InMemTransaction[S] {
   def commit(): Unit
@@ -25,6 +26,8 @@ trait InMemoryOps[S] extends CloseOps {
     sv
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // TODO stop throwing exceptions
   private[rspace] def withTxn[R](txn: Transaction)(f: Transaction => R): R =
     try {
       val ret: R = f(txn)
@@ -38,12 +41,14 @@ trait InMemoryOps[S] extends CloseOps {
       txn.close()
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // TODO stop throwing exceptions
   private[rspace] def createTxnRead(): InMemTransaction[S] = {
     failIfClosed()
 
     new InMemTransaction[S] {
 
-      val name: String = "read-" + Thread.currentThread().getId
+      val name: String = "read-" + Thread.currentThread().getId.show
 
       private[this] val state = stateRef.get
 
@@ -60,19 +65,18 @@ trait InMemoryOps[S] extends CloseOps {
     }
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Var"))
   private[rspace] def createTxnWrite(): InMemTransaction[S] = {
     failIfClosed()
 
     new InMemTransaction[S] {
-      val name: String = "write-" + Thread.currentThread().getId
+      val name: String = "write-" + Thread.currentThread().getId.show
 
       private[this] val initial = stateRef.take
       private[this] var current = initial
 
-      override def commit(): Unit = {
+      override def commit(): Unit =
         stateRef.put(current)
-        updateGauges()
-      }
 
       override def abort(): Unit = stateRef.put(initial)
 

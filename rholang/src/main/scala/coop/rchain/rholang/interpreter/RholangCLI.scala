@@ -6,18 +6,22 @@ import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
 
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.metrics.Metrics
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.RhoIStore
-import coop.rchain.rholang.interpreter.accounting.CostAccount
+import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
+import coop.rchain.shared.Resources
 import monix.eval.{Coeval, Task}
 import monix.execution.{CancelableFuture, Scheduler}
 import org.rogach.scallop.{stringListConverter, ScallopConf}
+import coop.rchain.shared.Log
 
 import scala.annotation.tailrec
 import scala.concurrent.Await
 import scala.concurrent.duration._
+import scala.io.Source
 import scala.util.{Failure, Success}
 
 object RholangCLI {
@@ -52,9 +56,16 @@ object RholangCLI {
 
     val conf = new Conf(args)
 
+    implicit val log: Log[Task]          = Log.log[Task]
+    implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
+
     val runtime = (for {
-      runtime <- Runtime.create[Task, Task.Par](conf.dataDir(), conf.mapSize(), StoreType.LMDB)
-      _       <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
+      runtime <- Runtime.createWithEmptyCost[Task, Task.Par](
+                  conf.dataDir(),
+                  conf.mapSize(),
+                  StoreType.LMDB
+                )
+      _ <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
     } yield (runtime)).unsafeRunSync
 
     try {
@@ -79,12 +90,12 @@ object RholangCLI {
     Console.println(PrettyPrinter().buildString(normalizedTerm))
   }
 
-  private def printStorageContents(store: RhoIStore): Unit = {
+  private def printStorageContents[F[_]](store: RhoIStore[F]): Unit = {
     Console.println("\nStorage Contents:")
     Console.println(StoragePrinter.prettyPrint(store))
   }
 
-  private def printCost(cost: CostAccount): Unit =
+  private def printCost(cost: Cost): Unit =
     Console.println(s"Estimated deploy cost: $cost")
 
   private def printErrors(errors: Vector[Throwable]) =
@@ -96,18 +107,12 @@ object RholangCLI {
     }
 
   @tailrec
+  @SuppressWarnings(Array("org.wartremover.warts.Return"))
   def repl(runtime: Runtime[Task])(implicit scheduler: Scheduler): Unit = {
     printPrompt()
     Option(scala.io.StdIn.readLine()) match {
       case Some(line) =>
-        Interpreter[Coeval].buildNormalizedTerm(line).runAttempt match {
-          case Right(par)                 => evaluatePar(runtime)(par)
-          case Left(ie: InterpreterError) =>
-            // we don't want to print stack trace for user errors
-            Console.err.print(ie.getMessage)
-          case Left(th) =>
-            th.printStackTrace(Console.err)
-        }
+        evaluate(runtime, line).unsafeRunSync
       case None =>
         Console.println("\nExiting...")
         return
@@ -121,7 +126,7 @@ object RholangCLI {
     val processTerm: Par => Unit =
       if (conf.binary()) writeBinary(fileName)
       else if (conf.text()) writeHumanReadable(fileName)
-      else evaluatePar(runtime)
+      else evaluatePar(runtime, Resources.withResource(Source.fromFile(fileName))(_.mkString))
 
     val source = reader(fileName)
 
@@ -129,9 +134,24 @@ object RholangCLI {
       .buildNormalizedTerm(source)
       .runAttempt
       .fold(_.printStackTrace(Console.err), processTerm)
+
   }
 
+  def evaluate(runtime: Runtime[Task], source: String): Task[Unit] =
+    Interpreter[Task].evaluate(runtime, source).map {
+      case EvaluateResult(_, Vector()) =>
+      case EvaluateResult(_, errors) =>
+        errors.foreach {
+          case ie: InterpreterError =>
+            // we don't want to print stack trace for user errors
+            Console.err.print(ie.getMessage)
+          case th =>
+            th.printStackTrace(Console.err)
+        }
+    }
+
   @tailrec
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def waitForSuccess(evaluatorFuture: CancelableFuture[EvaluateResult]): Unit =
     try {
       Await.ready(evaluatorFuture, 5.seconds).value match {
@@ -166,11 +186,13 @@ object RholangCLI {
     println(s"Compiled $fileName to $binaryFileName")
   }
 
-  def evaluatePar(runtime: Runtime[Task])(par: Par)(implicit scheduler: Scheduler): Unit = {
+  def evaluatePar(runtime: Runtime[Task], source: String)(
+      par: Par
+  )(implicit scheduler: Scheduler): Unit = {
     val evaluatorTask =
       for {
         _      <- Task.now(printNormalizedTerm(par))
-        result <- Interpreter[Task].evaluate(runtime, par)
+        result <- Interpreter[Task].evaluate(runtime, source)
       } yield result
 
     waitForSuccess(evaluatorTask.runToFuture)

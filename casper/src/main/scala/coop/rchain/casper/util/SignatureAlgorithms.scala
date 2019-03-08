@@ -3,6 +3,7 @@ import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 
 object SignatureAlgorithms {
   type SignatureAlgorithm = (Array[Byte], Array[Byte]) => Array[Byte]
+  @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
   def lookup(algorithm: String): SignatureAlgorithm =
     algorithm match {
       case "ed25519"   => Ed25519.sign

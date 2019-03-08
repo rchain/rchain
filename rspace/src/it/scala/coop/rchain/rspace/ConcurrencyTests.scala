@@ -1,10 +1,9 @@
 package coop.rchain.rspace
 
-import cats.Id
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
 import coop.rchain.rspace.util._
-import monix.eval.Task
+import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 
 import scala.concurrent.Await
@@ -12,13 +11,13 @@ import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration.Duration
 
 trait ConcurrencyTests
-    extends StorageTestsBase[Id, Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    extends StorageTestsBase[Coeval, Channel, Pattern, Nothing, Entry, EntriesCaptor]
     with TestImplicitHelpers {
 
   def version: String
 
-  "CORE-589 produce and consume in a multithreaded fashion" should
-    "show high performance" in withTestSpace { space =>
+  "CORE-589 produce and consume in a multi-threaded fashion" should
+    "show high performance" in withTestSpaceNonF { space =>
     val arrResults      = new Array[Long](Runtime.getRuntime.availableProcessors)
     val iterationsCount = 500
 
@@ -33,15 +32,15 @@ trait ConcurrencyTests
             List(CityMatch(city = "Crystal Lake"), CityMatch(city = "Crystal Lake")),
             new EntriesCaptor,
             persist = false
-          )
+          ).apply()
 
           r1 shouldBe Right(None)
 
-          val r2 = space.produce(channel, bob, persist = false)
+          val r2 = space.produce(channel, bob, persist = false).apply()
 
           r2 shouldBe Right(None)
 
-          val r3 = space.produce(channel, bob, persist = false)
+          val r3 = space.produce(channel, bob, persist = false).apply()
 
           r3 shouldBe defined
 
@@ -95,7 +94,7 @@ trait ConcurrencyTests
         s"${min.formatted("%.2f")} ms; max: ${max.formatted("%.2f")} ms")
   }
 
-  "produce and consume with monix.Tasks" should "work" in withTestSpace { space =>
+  "produce and consume with monix.Tasks" should "work" in withTestSpaceNonF { space =>
     val tasksCount      = Runtime.getRuntime.availableProcessors
     val iterationsCount = 500
 
@@ -105,11 +104,11 @@ trait ConcurrencyTests
         val start   = System.nanoTime()
 
         for (_ <- 1 to iterations) {
-          val r1 = space.produce(channel, bob, persist = false)
+          val r1 = space.produce(channel, bob, persist = false).apply()
 
           r1 shouldBe Right(None)
 
-          val r2 = space.produce(channel, bob, persist = false)
+          val r2 = space.produce(channel, bob, persist = false).apply()
 
           r2 shouldBe Right(None)
 
@@ -119,7 +118,7 @@ trait ConcurrencyTests
               List(CityMatch(city = "Crystal Lake"), CityMatch(city = "Crystal Lake")),
               new EntriesCaptor,
               persist = false
-            )
+            ).apply()
 
           r3 shouldBe defined
 
@@ -162,15 +161,15 @@ trait ConcurrencyTests
 }
 
 class InMemoryStoreConcurrencyTests
-    extends InMemoryStoreStorageExamplesTestsBase[Id]
-    with IdTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    extends InMemoryStoreStorageExamplesTestsBase[Coeval]
+    with CoevalTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
     with ConcurrencyTests {
   override def version: String = "InMemory"
 }
 
 class LMDBStoreConcurrencyTestsWithTls
-    extends LMDBStoreStorageExamplesTestBase[Id]
-      with IdTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    extends LMDBStoreStorageExamplesTestBase[Coeval]
+      with CoevalTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
     with ConcurrencyTests {
   override def version: String = "LMDB with TLS"
 
@@ -178,8 +177,8 @@ class LMDBStoreConcurrencyTestsWithTls
 }
 
 class LMDBStoreConcurrencyTestsNoTls
-    extends LMDBStoreStorageExamplesTestBase[Id]
-      with IdTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    extends LMDBStoreStorageExamplesTestBase[Coeval]
+      with CoevalTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
     with ConcurrencyTests {
 
   override def version: String = "LMDB NO_TLS"

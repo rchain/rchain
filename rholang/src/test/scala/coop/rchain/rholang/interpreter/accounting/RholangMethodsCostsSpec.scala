@@ -2,30 +2,27 @@ package coop.rchain.rholang.interpreter.accounting
 
 import java.nio.file.{Files, Path}
 
-import cats.Id
-import cats.effect.Sync
 import com.google.protobuf.ByteString
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter._
-import org.scalatest.{Assertion, BeforeAndAfterAll, Matchers, WordSpec}
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
+import coop.rchain.rholang.interpreter._
+import coop.rchain.rholang.interpreter.accounting.Chargeable._
+import coop.rchain.rholang.interpreter.errors.InterpreterError
+import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.{Context, RSpace}
+import coop.rchain.shared.Log
 import monix.eval.Task
-import org.scalatest.prop.PropertyChecks._
-
-import scala.concurrent.duration._
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
-import coop.rchain.models.testImplicits._
-import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
-import coop.rchain.rholang.interpreter.accounting.Chargeable._
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
-import coop.rchain.rspace.history.Branch
-import coop.rchain.rspace.{Context, ISpace, RSpace}
-import org.scalacheck.{Arbitrary, Gen}
-import org.scalatest.prop.TableFor1
+import org.scalatest.prop.PropertyChecks._
+import org.scalatest.{Assertion, BeforeAndAfterAll, Matchers, WordSpec}
 
 import scala.collection.immutable.BitSet
+import scala.concurrent.duration._
 
 class RholangMethodsCostsSpec
     extends WordSpec
@@ -62,7 +59,7 @@ class RholangMethodsCostsSpec
               err  <- reducer.evalExprToPar(method).attempt
               _    = assert(err.isLeft)
               cost <- methodCallCost(reducer)
-            } yield assert(cost === Cost(0))
+            } yield assert(cost.value === 0)
           }
         }
       }
@@ -96,7 +93,7 @@ class RholangMethodsCostsSpec
               err  <- reducer.evalExprToPar(method).attempt
               _    = assert(err.isLeft)
               cost <- methodCallCost(reducer)
-            } yield assert(cost === Cost(0))
+            } yield assert(cost.value === 0)
           }
         }
       }
@@ -746,7 +743,7 @@ class RholangMethodsCostsSpec
 
   def methodCallCost(reducer: ChargingReducer[Task]): Task[Cost] =
     reducer.phlo
-      .map(ca => Cost(Integer.MAX_VALUE) - ca.cost - METHOD_CALL_COST)
+      .map(cost => Cost(Integer.MAX_VALUE) - cost - METHOD_CALL_COST)
 
   def map(pairs: Seq[(Par, Par)]): Map[Par, Par] = Map(pairs: _*)
   def emptyMap: Map[Par, Par]                    = map(Seq.empty[(Par, Par)])
@@ -783,10 +780,14 @@ class RholangMethodsCostsSpec
       for {
         _    <- reducer.evalExprToPar(method)
         cost <- methodCallCost(reducer)
-      } yield assert(cost === expectedCost)
+      } yield assert(cost.value === expectedCost.value)
     }
   }
   def withReducer[R](f: ChargingReducer[Task] => Task[R])(implicit errLog: ErrorLog[Task]): R = {
+
+    implicit val costAlg: CostAccounting[Task] = CostAccounting.unsafe[Task](Cost(0))
+    implicit val cost: _cost[Task]             = loggingCost(costAlg, noOpCostLog[Task])
+
     val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space)._2
     val test = for {
       _   <- reducer.setPhlo(Cost(Integer.MAX_VALUE))
@@ -795,9 +796,12 @@ class RholangMethodsCostsSpec
     test.runSyncUnsafe(5.seconds)
   }
 
-  private var dbDir: Path            = null
-  private var context: RhoContext    = null
-  private var space: RhoISpace[Task] = null
+  private var dbDir: Path               = null
+  private var context: RhoContext[Task] = null
+  private var space: RhoISpace[Task]    = null
+
+  implicit val logF: Log[Task]            = new Log.NOPLog[Task]
+  implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
   override protected def beforeAll(): Unit = {
     import coop.rchain.catscontrib.TaskContrib._
@@ -809,7 +813,7 @@ class RholangMethodsCostsSpec
         Task,
         Par,
         BindPattern,
-        OutOfPhlogistonsError.type,
+        InterpreterError,
         ListParWithRandom,
         ListParWithRandomAndPhlos,
         TaggedContinuation
