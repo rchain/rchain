@@ -143,9 +143,9 @@ class TransportServer(server: GrpcTransportServer) {
     val dis: Protocol => Task[CommunicationResponse] = msg =>
       dispatch(msg).value.flatMap {
         case Left(err) =>
-          Log[Task].error(s"Error while handling message. Error: ${err.message}") *> Task.now(
-            notHandled(err)
-          )
+          Log[Task].error(
+            s"Error while handling message. Error: ${err.message}"
+          ) >> Task.now(notHandled(err))
         case Right(m) => Task.now(m)
       }
     val hb: Blob => Task[Unit] = b =>

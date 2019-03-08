@@ -52,12 +52,7 @@ object GrpcTransport {
       peer: PeerNode,
       response: Either[Throwable, TLResponse]
   ): CommErr[Option[Protocol]] =
-    response
-      .leftMap {
-        case PeerTimeout()     => CommError.timeout
-        case PeerUnavailable() => peerUnavailable(peer)
-        case e                 => protocolException(e)
-      }
+    processError(peer, response)
       .flatMap(
         tlr =>
           tlr.payload match {
@@ -67,6 +62,17 @@ object GrpcTransport {
               Left(internalCommunicationError("Got response: " + ise.error.toStringUtf8))
           }
       )
+
+  private def processError[R](
+      peer: PeerNode,
+      response: Either[Throwable, R]
+  ): CommErr[R] =
+    response
+      .leftMap {
+        case PeerTimeout()     => CommError.timeout
+        case PeerUnavailable() => peerUnavailable(peer)
+        case e                 => protocolException(e)
+      }
 
   def roundTrip(peer: PeerNode, msg: Protocol)(
       implicit metrics: Metrics[Task]
@@ -99,7 +105,7 @@ object GrpcTransport {
   def stream(peer: PeerNode, blob: Blob, messageSize: Int): Request[Unit] =
     ReaderT(
       _.stream(Observable.fromIterator(Chunker.chunkIt(blob, messageSize))).attempt
-        .map(_.fold(protocolException(_).asLeft, kp(().asRight)))
+        .map(r => processError(peer, r.map(kp(()))))
     )
 
 }
