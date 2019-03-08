@@ -29,7 +29,7 @@ object ChargingRSpace {
   def storageCostProduce(channel: Par, data: ListParWithRandom): Cost =
     channel.storageCost + data.pars.storageCost
 
-  def pureRSpace[F[_]: Sync](implicit costAlg: CostAccounting[F], space: RhoISpace[F]) =
+  def pureRSpace[F[_]: Sync](space: RhoISpace[F])(implicit costAlg: CostAccounting[F]) =
     new RhoPureSpace[F] {
 
       override def consume(

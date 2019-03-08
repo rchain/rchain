@@ -339,7 +339,7 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     def mkChargingRspace(rhoISpace: RhoISpace[Task]): Task[ChargingRSpace] = {
       val pureRSpace = ChargingRSpaceTest.createTestISpace(rhoISpace)
       val s          = implicitly[Sync[Task]]
-      Task.delay(ChargingRSpace.pureRSpace(s, costAlg, pureRSpace))
+      Task.delay(ChargingRSpace.pureRSpace(pureRSpace)(s, costAlg))
     }
 
     val chargingRSpaceResource =

@@ -91,7 +91,7 @@ object RholangAndScalaDispatcher {
     lazy val tuplespaceAlg = Tuplespace.rspaceTuplespace(chargingRSpace, dispatcher)
 
     lazy val chargingRSpace: RhoPureSpace[M] =
-      ChargingRSpace.pureRSpace(s, costAccounting, tuplespace)
+      ChargingRSpace.pureRSpace(tuplespace)
 
     val chargingReducer: ChargingReducer[M] = ChargingReducer[M]
 
