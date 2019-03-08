@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.{Expr, Par}
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
+import coop.rchain.rholang.interpreter.accounting.{_cost, Cost, CostAccounting}
 
 // TODO: After refactoring Reduce to not include implicits in methods,
 //       make ChargingReducer extend Reduce.
@@ -31,13 +31,13 @@ object ChargingReducer {
 
   implicit def chargingReducer[F[_]](
       implicit reducer: Reduce[F],
-      costAccounting: CostAccounting[F]
+      cost: _cost[F]
   ): ChargingReducer[F] = new ChargingReducer[F] {
     def phlo: F[Cost] =
-      costAccounting.get()
+      cost.get
 
     def setPhlo(limit: Cost): F[Unit] =
-      costAccounting.set(limit)
+      cost.set(limit)
 
     def eval(
         par: Par
