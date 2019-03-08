@@ -5,7 +5,7 @@ import java.io.StringReader
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
+import coop.rchain.rholang.interpreter.{EvaluateResult, Interpreter, Runtime}
 import monix.execution.Scheduler.Implicits.global
 import coop.rchain.rholang.Resources.mkRuntime
 import monix.eval.Task
@@ -112,17 +112,25 @@ class InterpreterSpec extends FlatSpec with Matchers {
     StoragePrinter.prettyPrint(runtime.space.store)
 
   private def success(runtime: Runtime[Task], rho: String): Task[Unit] =
-    execute(runtime, rho).map(_.swap.foreach(error => fail(s"""Execution failed for: $rho
-                                               |Cause:
-                                               |$error""".stripMargin)))
+    execute(runtime, rho).map(
+      res =>
+        assert(
+          res.errors.isEmpty,
+          s"""Execution failed for: $rho
+              |Cause:
+              |${res.errors}""".stripMargin
+        )
+    )
 
-  private def failure(runtime: Runtime[Task], rho: String): Task[Throwable] =
-    execute(runtime, rho).map(_.swap.getOrElse(fail(s"Expected $rho to fail - it didn't.")))
+  private def failure(runtime: Runtime[Task], rho: String): Task[Unit] =
+    execute(runtime, rho).map(
+      res => assert(res.errors.nonEmpty, s"Expected $rho to fail - it didn't.")
+    )
 
   private def execute(
       runtime: Runtime[Task],
       source: String
-  ): Task[Either[Throwable, Runtime[Task]]] =
-    Interpreter[Task].execute(runtime, new StringReader(source)).attempt
+  ): Task[EvaluateResult] =
+    Interpreter[Task].evaluate(runtime, source)
 
 }

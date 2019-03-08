@@ -6,7 +6,8 @@ import java.nio.file.{Files, Path, Paths}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
-import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
+import coop.rchain.rholang.interpreter.{EvaluateResult, Interpreter, Runtime}
+import coop.rchain.shared.Resources
 import monix.execution.Scheduler.Implicits.global
 import coop.rchain.rholang.Resources.mkRuntime
 import monix.eval.Task
@@ -15,6 +16,7 @@ import coop.rchain.shared.Log
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
+import scala.io.Source
 
 class CompilerTests extends FunSuite with Matchers {
   private val mapSize                     = 1024L * 1024L * 10
@@ -32,24 +34,23 @@ class CompilerTests extends FunSuite with Matchers {
   for (file <- testFiles if file.getFileName.toString.endsWith(".rho")) {
     test(file.toString.reverse.takeWhile(_ != '/').reverse) {
       val result = execute(file)
-      assert(result.isRight)
-      val resRuntime = result.right.get
-      val errorLog   = resRuntime.readAndClearErrorVector().unsafeRunSync
-      assert(errorLog.isEmpty)
+      result.errors shouldBe empty
     }
   }
 
   for (file <- failureTestFiles if file.getFileName.toString.endsWith(".rho")) {
     test(file.toString.reverse.takeWhile(_ != '/').reverse) {
       val result = execute(file)
-      assert(result.isLeft)
+      result.errors should not be empty
     }
   }
 
-  private def execute(file: Path): Either[Throwable, Runtime[Task]] =
+  private def execute(file: Path): EvaluateResult =
     mkRuntime(tmpPrefix, mapSize)
       .use { runtime =>
-        Interpreter[Task].execute(runtime, new FileReader(file.toString)).attempt
+        Resources.withResource(Source.fromFile(file.toString))(
+          fileContents => Interpreter[Task].evaluate(runtime, fileContents.mkString)
+        )
       }
       .runSyncUnsafe(maxDuration)
 
