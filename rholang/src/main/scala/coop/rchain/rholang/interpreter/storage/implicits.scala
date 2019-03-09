@@ -26,7 +26,8 @@ object implicits {
     }
 
   def matchListPar[F[_]: Sync](
-      init: Cost
+      implicit
+      cost: _cost[F]
   ): StorageMatch[F, BindPattern, ListParWithRandom, ListParWithRandomAndPhlos] =
     new StorageMatch[F, BindPattern, ListParWithRandom, ListParWithRandomAndPhlos] {
       def get(
@@ -34,9 +35,9 @@ object implicits {
           data: ListParWithRandom
       ): F[Option[ListParWithRandomAndPhlos]] = {
         type R[A] = MatcherMonadT[F, A]
-        implicit val cost: _cost[F] = loggingCost(CostAccounting.unsafe[F](init), noOpCostLog)
-        implicit val _              = matcherMonadCostLog[F]()
+        implicit val _ = matcherMonadCostLog[F]()
         for {
+          init <- cost.get
           matchResult <- runFirst[F, Seq[Par]](
                           SpatialMatcher
                             .foldMatch[R, Par, Par](

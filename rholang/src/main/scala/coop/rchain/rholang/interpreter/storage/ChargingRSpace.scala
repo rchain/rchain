@@ -9,8 +9,9 @@ import coop.rchain.rholang.interpreter.accounting.{CostAccounting, _}
 import coop.rchain.rholang.interpreter.{_error, errors}
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
+import coop.rchain.rspace
 import coop.rchain.rspace.util._
-import coop.rchain.rspace.{Blake2b256Hash, Checkpoint, ContResult, Result}
+import coop.rchain.rspace.{Blake2b256Hash, Checkpoint, ContResult, Result, Match => StorageMatch}
 
 import scala.collection.immutable.Seq
 
@@ -34,6 +35,9 @@ object ChargingRSpace {
   )(implicit cost: _cost[F], error: _error[F]) =
     new RhoPureSpace[F] {
 
+      implicit val m: StorageMatch[F, BindPattern, ListParWithRandom, ListParWithRandomAndPhlos] =
+        matchListPar[F]
+
       override def consume(
           channels: Seq[Par],
           patterns: Seq[BindPattern],
@@ -45,11 +49,8 @@ object ChargingRSpace {
       ]]] =
         for {
           _       <- charge[F](storageCostConsume(channels, patterns, continuation))
-          balance <- cost.get
-          consRes <- space.consume(channels, patterns, continuation, persist, sequenceNumber)(
-                      matchListPar(balance)
-                    )
-          _ <- handleResult(consRes)
+          consRes <- space.consume(channels, patterns, continuation, persist, sequenceNumber)
+          _       <- handleResult(consRes)
         } yield consRes
 
       override def install(
@@ -57,7 +58,7 @@ object ChargingRSpace {
           patterns: Seq[BindPattern],
           continuation: TaggedContinuation
       ): F[Option[(TaggedContinuation, Seq[ListParWithRandomAndPhlos])]] =
-        space.install(channels, patterns, continuation)(matchListPar(Cost(Integer.MAX_VALUE)))
+        space.install(channels, patterns, continuation)
 
       override def produce(
           channel: Par,
@@ -69,8 +70,7 @@ object ChargingRSpace {
       ]]] =
         for {
           _       <- charge[F](storageCostProduce(channel, data))
-          balance <- cost.get
-          prodRes <- space.produce(channel, data, persist, sequenceNumber)(matchListPar(balance))
+          prodRes <- space.produce(channel, data, persist, sequenceNumber)
           _       <- handleResult(prodRes)
         } yield prodRes
 
@@ -90,13 +90,6 @@ object ChargingRSpace {
           case Right(None) => Sync[F].unit
 
           case Right(Some((cont, dataList))) =>
-            val rspaceMatchCost = Cost(
-              dataList
-                .map(_.value.cost)
-                .toList
-                .sum
-            )
-
             val refundForConsume =
               if (cont.persistent) Cost(0)
               else
@@ -107,9 +100,9 @@ object ChargingRSpace {
               cont.channels
             )
 
+            val refundValue = refundForConsume + refundForProduces
+
             for {
-              _           <- charge[F](rspaceMatchCost)
-              refundValue = refundForConsume + refundForProduces
               _ <- if (refundValue == Cost(0))
                     Sync[F].unit
                   else cost.modify(_ + refundValue)
