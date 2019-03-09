@@ -270,13 +270,13 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                      capserHandlerInternal
                    )
                  case Some(approvedBlock) =>
-                   val blockMessage = approvedBlock.candidate.flatMap(_.block).get
+                   val genesis = approvedBlock.candidate.flatMap(_.block).get
                    for {
-                     _ <- BlockStore[F].put(blockMessage.blockHash, blockMessage)
+                     _ <- insertIntoBlockAndDagStore[F](genesis)
                      casper <- MultiParentCasper.hashSetCasper[F](
                                 runtimeManager,
                                 validatorId,
-                                blockMessage,
+                                genesis,
                                 shardId
                               )
                      _   <- MultiParentCasperRef[F].set(casper)
@@ -572,15 +572,15 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       isValid <- Validate.approvedBlock[F](b, validators)
       casper <- if (isValid) {
                  for {
-                   _            <- Log[F].info("Valid ApprovedBlock received!")
-                   blockMessage = b.candidate.flatMap(_.block).get
-                   _            <- BlockStore[F].put(blockMessage.blockHash, blockMessage)
-                   _            <- LastApprovedBlock[F].set(b)
+                   _       <- Log[F].info("Valid ApprovedBlock received!")
+                   genesis = b.candidate.flatMap(_.block).get
+                   _       <- insertIntoBlockAndDagStore[F](genesis)
+                   _       <- LastApprovedBlock[F].set(b)
                    casper <- MultiParentCasper
                               .hashSetCasper[F](
                                 runtimeManager,
                                 validatorId,
-                                blockMessage,
+                                genesis,
                                 shardId
                               )
                  } yield Option(casper)
@@ -589,6 +589,18 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                    .info("Invalid ApprovedBlock received; refusing to add.")
                    .map(_ => none[MultiParentCasper[F]])
     } yield casper
+
+  /*
+   * Note the ordering of the insertions is important.
+   * We always want the block dag store to be a subset of the block store.
+   */
+  private def insertIntoBlockAndDagStore[F[_]: Sync: Concurrent: ErrorHandler: TransportLayer: ConnectionsCell: Log: BlockStore: BlockDagStorage](
+      genesis: BlockMessage
+  ): F[Unit] =
+    for {
+      _ <- BlockStore[F].put(genesis.blockHash, genesis)
+      _ <- BlockDagStorage[F].insert(genesis, false)
+    } yield ()
 
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
       implicit C: CasperPacketHandler[F]
