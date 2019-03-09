@@ -313,8 +313,7 @@ object Runtime {
   )(
       implicit P: Parallel[F, M],
       executionContext: ExecutionContext,
-      cost: _cost[F],
-      costAccounting: CostAccounting[F]
+      cost: _cost[F]
   ): F[Runtime[F]] = {
     val errorLog                               = new ErrorLog[F]()
     implicit val ft: FunctorTell[F, Throwable] = errorLog

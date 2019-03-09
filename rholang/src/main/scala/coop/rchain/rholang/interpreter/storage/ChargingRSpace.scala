@@ -31,7 +31,7 @@ object ChargingRSpace {
 
   def pureRSpace[F[_]: Sync](
       space: RhoISpace[F]
-  )(implicit costAlg: CostAccounting[F], cost: _cost[F], error: _error[F]) =
+  )(implicit cost: _cost[F], error: _error[F]) =
     new RhoPureSpace[F] {
 
       override def consume(
@@ -45,7 +45,7 @@ object ChargingRSpace {
       ]]] =
         for {
           _       <- charge[F](storageCostConsume(channels, patterns, continuation))
-          balance <- costAlg.get()
+          balance <- cost.get
           consRes <- space.consume(channels, patterns, continuation, persist, sequenceNumber)(
                       matchListPar(balance)
                     )

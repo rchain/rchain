@@ -99,8 +99,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
       cost    = loggingCost(costAlg, costL)
       costsLoggingProgram <- {
         costL.listen({
-          implicit val ca = costAlg
-          implicit val c  = cost
+          implicit val c = cost
           for {
             runtime <- Runtime
                         .create[Task, Task.Par](dbDir, size, StoreType.LMDB)
