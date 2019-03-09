@@ -3,7 +3,7 @@ package coop.rchain.blockstorage
 import cats.Applicative
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage}
 
 import scala.language.higherKinds
 
@@ -27,6 +27,12 @@ trait BlockStore[F[_]] {
 
   def contains(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[Boolean] =
     get(blockHash).map(_.isDefined)
+
+  def getApprovedBlock(implicit applicativeF: Applicative[F]): F[Option[ApprovedBlock]] =
+    Option.empty[ApprovedBlock].pure[F]
+
+  def putApprovedBlock(block: ApprovedBlock)(implicit applicativeF: Applicative[F]): F[Unit] =
+    ().pure[F]
 
   def checkpoint(): F[Unit]
 
