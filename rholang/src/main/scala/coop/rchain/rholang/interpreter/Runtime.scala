@@ -183,10 +183,14 @@ object Runtime {
           )
         )
         val continuation = TaggedContinuation(ScalaBodyRef(ref))
+        val cost0: _cost[F] =
+          loggingCost(CostAccounting.unsafe[F](Cost(Integer.MAX_VALUE)), noOpCostLog)
+        val cost1: _cost[F] =
+          loggingCost(CostAccounting.unsafe[F](Cost(Integer.MAX_VALUE)), noOpCostLog)
         List(
-          space.install(channels, patterns, continuation)(matchListPar(Cost(Integer.MAX_VALUE))),
+          space.install(channels, patterns, continuation)(matchListPar(Sync[F], cost0)),
           replaySpace.install(channels, patterns, continuation)(
-            matchListPar(Cost(Integer.MAX_VALUE))
+            matchListPar(Sync[F], cost1)
           )
         )
     }.sequence
@@ -421,19 +425,24 @@ object Runtime {
         .getBytes()
     )
 
+    val cost0: _cost[F] =
+      loggingCost(CostAccounting.unsafe[F](Cost(Integer.MAX_VALUE)), noOpCostLog)
+    val cost1: _cost[F] =
+      loggingCost(CostAccounting.unsafe[F](Cost(Integer.MAX_VALUE)), noOpCostLog)
+
     for {
       spaceResult <- space.produce(
                       Registry.registryRoot,
                       ListParWithRandom(Seq(Registry.emptyMap), rand),
                       false,
                       0
-                    )(matchListPar(Cost(Integer.MAX_VALUE)))
+                    )(matchListPar(F, cost0))
       replayResult <- replaySpace.produce(
                        Registry.registryRoot,
                        ListParWithRandom(Seq(Registry.emptyMap), rand),
                        false,
                        0
-                     )(matchListPar(Cost(Integer.MAX_VALUE)))
+                     )(matchListPar(F, cost1))
       _ <- spaceResult match {
             case Right(None) =>
               replayResult match {

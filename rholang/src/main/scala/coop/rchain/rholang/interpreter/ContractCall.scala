@@ -16,6 +16,9 @@ class ContractCall[F[_]: Sync](
 
   type Producer = (Seq[Par], Par) => F[Unit]
 
+  implicit val cost: _cost[F] =
+    loggingCost(CostAccounting.unsafe[F](Cost(Integer.MAX_VALUE)), noOpCostLog)
+
   private def produce(
       rand: Blake2b512Random,
       sequenceNumber: Int
@@ -26,7 +29,7 @@ class ContractCall[F[_]: Sync](
                         ListParWithRandom(values, rand),
                         persist = false,
                         sequenceNumber
-                      )(matchListPar(Cost(Integer.MAX_VALUE)))
+                      )(matchListPar)
       _ <- produceResult.fold(
             _ => Sync[F].raiseError(OutOfPhlogistonsError),
             _.fold(Sync[F].unit) {
