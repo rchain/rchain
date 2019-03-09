@@ -21,20 +21,12 @@ object RholangOnlyDispatcher {
   def create[M[_], F[_]](tuplespace: RhoISpace[M], urnMap: Map[String, Par] = Map.empty)(
       implicit
       cost: _cost[M],
-      costAccounting: CostAccounting[M],
       parallel: Parallel[M, F],
       s: Sync[M],
       ft: FunctorTell[M, Throwable]
   ): (Dispatch[M, ListParWithRandomAndPhlos, TaggedContinuation], ChargingReducer[M]) = {
 
-    implicit val matchCost: Match[
-      M,
-      BindPattern,
-      ListParWithRandom,
-      ListParWithRandomAndPhlos
-    ] = matchListPar(Cost(Integer.MAX_VALUE))
-
-    val pureSpace = PureRSpace[M].of(tuplespace)
+    val pureSpace = PureRSpace[M].of(tuplespace)(matchListPar)
 
     lazy val dispatcher: Dispatch[M, ListParWithRandomAndPhlos, TaggedContinuation] =
       new RholangOnlyDispatcher

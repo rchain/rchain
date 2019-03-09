@@ -76,7 +76,6 @@ object RholangAndScalaDispatcher {
   )(
       implicit
       cost: _cost[M],
-      costAccounting: CostAccounting[M],
       parallel: Parallel[M, F],
       s: Sync[M],
       ft: FunctorTell[M, Throwable]
