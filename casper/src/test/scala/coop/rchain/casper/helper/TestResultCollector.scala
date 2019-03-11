@@ -5,7 +5,7 @@ import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.{ETupleBody, GBool}
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.{ETuple, Expr, ListParWithRandomAndPhlos, Par}
+import coop.rchain.models.{ETuple, Expr, ListParWithRandom, Par}
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
 import coop.rchain.rholang.interpreter.{ContractCall, RhoType}
 
@@ -91,7 +91,7 @@ class TestResultCollector[F[_]: Sync](result: Ref[F, TestResult]) {
 
   def handleMessage(
       ctx: SystemProcess.Context[F]
-  )(message: (Seq[ListParWithRandomAndPhlos], Int)): F[Unit] = {
+  )(message: (Seq[ListParWithRandom], Int)): F[Unit] = {
 
     val isContractCall = new ContractCall[F](ctx.space, ctx.dispatcher)
 

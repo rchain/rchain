@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter
 import cats.effect.Sync
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.{ListParWithRandom, ListParWithRandomAndPhlos, Par, TaggedContinuation}
+import coop.rchain.models.{ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
@@ -29,7 +29,7 @@ import cats.implicits._
   */
 class ContractCall[F[_]: Sync](
     space: RhoISpace[F],
-    dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
+    dispatcher: Dispatch[F, ListParWithRandom, TaggedContinuation]
 ) {
   type Producer = (Seq[Par], Par) => F[Unit]
 
@@ -56,14 +56,13 @@ class ContractCall[F[_]: Sync](
           )
     } yield ()
 
-  def unapply(contractArgs: (Seq[ListParWithRandomAndPhlos], Int)): Option[(Producer, Seq[Par])] =
+  def unapply(contractArgs: (Seq[ListParWithRandom], Int)): Option[(Producer, Seq[Par])] =
     contractArgs match {
       case (
           Seq(
-            ListParWithRandomAndPhlos(
+            ListParWithRandom(
               args,
-              rand,
-              _
+              rand
             )
           ),
           sequenceNumber

@@ -35,7 +35,7 @@ object ChargingRSpace {
   )(implicit cost: _cost[F], error: _error[F]) =
     new RhoPureSpace[F] {
 
-      implicit val m: StorageMatch[F, BindPattern, ListParWithRandom, ListParWithRandomAndPhlos] =
+      implicit val m: StorageMatch[F, BindPattern, ListParWithRandom, ListParWithRandom] =
         matchListPar[F]
 
       override def consume(
@@ -45,7 +45,7 @@ object ChargingRSpace {
           persist: Boolean,
           sequenceNumber: Int
       ): F[Either[errors.InterpreterError, Option[
-        (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandomAndPhlos]])
+        (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])
       ]]] =
         for {
           _       <- charge[F](storageCostConsume(channels, patterns, continuation))
@@ -57,7 +57,7 @@ object ChargingRSpace {
           channels: Seq[Par],
           patterns: Seq[BindPattern],
           continuation: TaggedContinuation
-      ): F[Option[(TaggedContinuation, Seq[ListParWithRandomAndPhlos])]] =
+      ): F[Option[(TaggedContinuation, Seq[ListParWithRandom])]] =
         space.install(channels, patterns, continuation)
 
       override def produce(
@@ -66,7 +66,7 @@ object ChargingRSpace {
           persist: Boolean,
           sequenceNumber: Int
       ): F[Either[errors.InterpreterError, Option[
-        (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandomAndPhlos]])
+        (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])
       ]]] =
         for {
           _       <- charge[F](storageCostProduce(channel, data))
@@ -78,7 +78,7 @@ object ChargingRSpace {
           result: Either[InterpreterError, Option[
             (
                 ContResult[Par, BindPattern, TaggedContinuation],
-                Seq[Result[ListParWithRandomAndPhlos]]
+                Seq[Result[ListParWithRandom]]
             )
           ]]
       ): F[Unit] =
@@ -110,7 +110,7 @@ object ChargingRSpace {
         }
 
       private def refundForRemovingProduces(
-          dataList: Seq[Result[ListParWithRandomAndPhlos]],
+          dataList: Seq[Result[ListParWithRandom]],
           channels: Seq[Par]
       ): Cost =
         dataList

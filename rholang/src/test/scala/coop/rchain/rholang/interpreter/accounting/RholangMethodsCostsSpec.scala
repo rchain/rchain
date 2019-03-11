@@ -815,7 +815,7 @@ class RholangMethodsCostsSpec
         BindPattern,
         InterpreterError,
         ListParWithRandom,
-        ListParWithRandomAndPhlos,
+        ListParWithRandom,
         TaggedContinuation
       ](
         context,

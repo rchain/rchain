@@ -52,7 +52,7 @@ trait PersistentStoreTester {
         BindPattern,
         InterpreterError,
         ListParWithRandom,
-        ListParWithRandomAndPhlos,
+        ListParWithRandom,
         TaggedContinuation
       ](context, Branch("test")))
       .unsafeRunSync

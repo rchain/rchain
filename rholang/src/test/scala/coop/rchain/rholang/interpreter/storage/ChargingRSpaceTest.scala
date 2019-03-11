@@ -346,10 +346,9 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
   override protected def withFixture(test: OneArgTest): Outcome = {
     val cost: _cost[Task] = loggingCost(CostAccounting.unsafe[Task](Cost(0)), noOpCostLog)
     def mkChargingRspace(rhoISpace: RhoISpace[Task]): Task[ChargingRSpace] = {
-      val pureRSpace = ChargingRSpaceTest.createTestISpace(rhoISpace)
-      val s          = implicitly[Sync[Task]]
-      val error      = FunctorRaise[Task, InterpreterError]
-      Task.delay(ChargingRSpace.pureRSpace(pureRSpace)(s, cost, error))
+      val s     = implicitly[Sync[Task]]
+      val error = FunctorRaise[Task, InterpreterError]
+      Task.delay(ChargingRSpace.pureRSpace(rhoISpace)(s, cost, error))
     }
 
     val chargingRSpaceResource =
@@ -364,24 +363,23 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
   private def matchCost(patterns: Seq[BindPattern], data: Seq[ListParWithRandom])(
       implicit
       _cost: _cost[Task] = loggingCost(CostAccounting.unsafe[Task](Cost(1000)), noOpCostLog)
-  ): Task[Cost] =
-    Foldable[List]
-      .foldM[Task, (BindPattern, ListParWithRandom), Cost](patterns.zip(data).toList, Cost(0)) {
-        case (cost, (pattern, datum)) =>
-          matchListPar[Task].get(pattern, datum).map {
-            case Some(listParWithRandomAndPhlos) =>
-              cost + Cost(listParWithRandomAndPhlos.cost)
-            case None => cost
+  ): Task[Cost] = {
+    import cats.implicits._
+
+    for {
+      initPhlos <- _cost.get
+      _ <- patterns.zip(data).toList.traverse {
+            case (pattern, pars) => matchListPar[Task].get(pattern, pars)
           }
-      }
+      phlosLeft <- _cost.get
+    } yield initPhlos - phlosLeft
+  }
 }
 
 object ChargingRSpaceTest {
   type ChargingRSpace = RhoPureSpace[Task]
   final case class TestFixture(chargingRSpace: ChargingRSpace, cost: _cost[Task])
 
-  val RSPACE_MATCH_PCOST     = 100L
-  val RSPACE_MATCH_COST      = Cost(RSPACE_MATCH_PCOST)
   val NilPar                 = ListParWithRandom().withPars(Seq(Par()))
   val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
 
@@ -396,98 +394,12 @@ object ChargingRSpaceTest {
         _ => BindPattern(Vector(EVar(Var(FreeVar(0)))), freeCount = 1)
       )
       .toList
+
   def continuation(
       par: Par = Par().withExprs(Seq(GInt(1))),
       r: Blake2b512Random = rand
   ): TaggedContinuation =
     TaggedContinuation(ParBody(ParWithRandom(par, r)))
-
-  // This test ISpace wraps regular RhoISpace but adds predictable match cost
-  def createTestISpace(rspace: RhoISpace[Task]): RhoISpace[Task] = new RhoISpace[Task] {
-    override def consume(
-        channels: immutable.Seq[Par],
-        patterns: immutable.Seq[BindPattern],
-        continuation: TaggedContinuation,
-        persist: Boolean,
-        sequenceNumber: Int
-    )(
-        implicit m: Match[
-          Task,
-          BindPattern,
-          ListParWithRandom,
-          ListParWithRandomAndPhlos
-        ]
-    ): Task[Either[errors.InterpreterError, Option[
-      (
-          ContResult[Par, BindPattern, TaggedContinuation],
-          immutable.Seq[Result[ListParWithRandomAndPhlos]]
-      )
-    ]]] =
-      rspace
-        .consume(channels, patterns, continuation, persist)
-        .map(_.map {
-          _.map {
-            case (cont, data) =>
-              cont -> data.map(r => r.copy(value = r.value.withCost(RSPACE_MATCH_PCOST)))
-          }
-        })
-
-    override def produce(
-        channel: Par,
-        data: ListParWithRandom,
-        persist: Boolean,
-        sequenceNumber: Int
-    )(
-        implicit m: Match[
-          Task,
-          BindPattern,
-          ListParWithRandom,
-          ListParWithRandomAndPhlos
-        ]
-    ): Task[Either[errors.InterpreterError, Option[
-      (
-          ContResult[Par, BindPattern, TaggedContinuation],
-          immutable.Seq[Result[ListParWithRandomAndPhlos]]
-      )
-    ]]] =
-      rspace
-        .produce(channel, data, persist)
-        .map(_.map {
-          _.map {
-            case (cont, data) =>
-              cont -> data.map(r => r.copy(value = r.value.withCost(RSPACE_MATCH_PCOST)))
-          }
-        })
-
-    override def close(): Task[Unit] = rspace.close()
-    override val store: IStore[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation] =
-      rspace.store
-    override def install(
-        channels: immutable.Seq[Par],
-        patterns: immutable.Seq[BindPattern],
-        continuation: TaggedContinuation
-    )(
-        implicit m: Match[
-          Task,
-          BindPattern,
-          ListParWithRandom,
-          ListParWithRandomAndPhlos
-        ]
-    ): Task[Option[(TaggedContinuation, immutable.Seq[ListParWithRandomAndPhlos])]] = ???
-    override def createCheckpoint(): Task[Checkpoint]                               = ???
-    override def reset(root: Blake2b256Hash): Task[Unit]                            = ???
-    override def retrieve(
-        root: Blake2b256Hash,
-        channelsHash: Blake2b256Hash
-    ): Task[Option[internal.GNAT[Par, BindPattern, ListParWithRandom, TaggedContinuation]]] =
-      ???
-    override def getData(channel: Par): Task[immutable.Seq[internal.Datum[ListParWithRandom]]] =
-      ???
-    override def getWaitingContinuations(
-        channels: immutable.Seq[Par]
-    ): Task[immutable.Seq[internal.WaitingContinuation[BindPattern, TaggedContinuation]]] = ???
-    override def clear(): Task[Unit]                                                      = ???
-  }
 
   implicit val logF: Log[Task]            = new Log.NOPLog[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]

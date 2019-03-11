@@ -52,7 +52,7 @@ trait RegistryTester extends PersistentStoreTester {
             BindPattern,
             InterpreterError,
             ListParWithRandom,
-            ListParWithRandomAndPhlos,
+            ListParWithRandom,
             TaggedContinuation
           ]
       ) => R

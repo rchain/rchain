@@ -57,8 +57,8 @@ object Runtime {
   type RhoIStore[F[_]]  = CPAK[F, IStore]
   type RhoContext[F[_]] = CPAK[F, Context]
 
-  type RhoDispatch[F[_]]    = Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
-  type RhoSysFunction[F[_]] = (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
+  type RhoDispatch[F[_]]    = Dispatch[F, ListParWithRandom, TaggedContinuation]
+  type RhoSysFunction[F[_]] = (Seq[ListParWithRandom], Int) => F[Unit]
   type RhoDispatchMap[F[_]] = Map[Long, RhoSysFunction[F]]
 
   type CPAK[M[_], F[_[_], _, _, _, _]] =
@@ -71,7 +71,7 @@ object Runtime {
       BindPattern,
       InterpreterError,
       ListParWithRandom,
-      ListParWithRandomAndPhlos,
+      ListParWithRandom,
       TaggedContinuation
     ]
 
@@ -171,7 +171,7 @@ object Runtime {
       space: RhoISpace[F],
       replaySpace: RhoISpace[F],
       processes: List[(Name, Arity, Remainder, BodyRef)]
-  ): F[List[Option[(TaggedContinuation, immutable.Seq[ListParWithRandomAndPhlos])]]] =
+  ): F[List[Option[(TaggedContinuation, immutable.Seq[ListParWithRandom])]]] =
     processes.flatMap {
       case (name, arity, remainder, ref) =>
         val channels = List(name)
@@ -211,12 +211,12 @@ object Runtime {
         fixedChannel: Name,
         arity: Arity,
         bodyRef: BodyRef,
-        handler: Context[F] => (Seq[ListParWithRandomAndPhlos], Int) => F[Unit],
+        handler: Context[F] => (Seq[ListParWithRandom], Int) => F[Unit],
         remainder: Remainder = None
     ) {
       def toDispatchTable(
           context: SystemProcess.Context[F]
-      ): (BodyRef, (Seq[ListParWithRandomAndPhlos], Arity) => F[Unit]) =
+      ): (BodyRef, (Seq[ListParWithRandom], Arity) => F[Unit]) =
         bodyRef -> handler(context)
 
       def toUrnMap: (String, Par) = {
@@ -475,7 +475,7 @@ object Runtime {
                   BindPattern,
                   InterpreterError,
                   ListParWithRandom,
-                  ListParWithRandomAndPhlos,
+                  ListParWithRandom,
                   TaggedContinuation
                 ](context, Branch.MASTER)
         replaySpace <- ReplayRSpace.create[
@@ -484,7 +484,7 @@ object Runtime {
                         BindPattern,
                         InterpreterError,
                         ListParWithRandom,
-                        ListParWithRandomAndPhlos,
+                        ListParWithRandom,
                         TaggedContinuation
                       ](context, Branch.REPLAY)
       } yield ((context, space, replaySpace))

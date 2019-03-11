@@ -24,11 +24,11 @@ object RholangOnlyDispatcher {
       parallel: Parallel[M, F],
       s: Sync[M],
       ft: FunctorTell[M, Throwable]
-  ): (Dispatch[M, ListParWithRandomAndPhlos, TaggedContinuation], ChargingReducer[M]) = {
+  ): (Dispatch[M, ListParWithRandom, TaggedContinuation], ChargingReducer[M]) = {
 
     val pureSpace = PureRSpace[M].of(tuplespace)(matchListPar)
 
-    lazy val dispatcher: Dispatch[M, ListParWithRandomAndPhlos, TaggedContinuation] =
+    lazy val dispatcher: Dispatch[M, ListParWithRandom, TaggedContinuation] =
       new RholangOnlyDispatcher
 
     lazy val tuplespaceAlg = Tuplespace.rspaceTuplespace(pureSpace, dispatcher)
@@ -43,11 +43,11 @@ object RholangOnlyDispatcher {
 }
 
 class RholangOnlyDispatcher[M[_]](implicit s: Sync[M], chargingReducer: ChargingReducer[M])
-    extends Dispatch[M, ListParWithRandomAndPhlos, TaggedContinuation] {
+    extends Dispatch[M, ListParWithRandom, TaggedContinuation] {
 
   def dispatch(
       continuation: TaggedContinuation,
-      dataList: Seq[ListParWithRandomAndPhlos],
+      dataList: Seq[ListParWithRandom],
       sequenceNumber: Int
   ): M[Unit] =
     for {

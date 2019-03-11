@@ -129,7 +129,7 @@ object BasicBench {
       BindPattern,
       InterpreterError,
       ListParWithRandom,
-      ListParWithRandomAndPhlos,
+      ListParWithRandom,
       TaggedContinuation
     ] =
       RSpace
@@ -139,7 +139,7 @@ object BasicBench {
           BindPattern,
           InterpreterError,
           ListParWithRandom,
-          ListParWithRandomAndPhlos,
+          ListParWithRandom,
           TaggedContinuation
         ](
           testStore,
