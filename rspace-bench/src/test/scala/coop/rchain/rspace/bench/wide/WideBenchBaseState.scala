@@ -12,7 +12,7 @@ import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
+import coop.rchain.rholang.interpreter.{ParBuilder, Runtime}
 import coop.rchain.shared.{Log, StoreType}
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler
@@ -53,14 +53,14 @@ abstract class WideBenchBaseState {
   @Setup(value = Level.Iteration)
   def doSetup(): Unit = {
     deleteOldStorage(dbDir)
-    setupTerm = Interpreter[Coeval]
+    setupTerm = ParBuilder[Coeval]
       .buildNormalizedTerm(resourceFileReader(rhoSetupScriptPath))
       .runAttempt match {
       case Right(par) => Some(par)
       case Left(err)  => throw err
     }
 
-    term = Interpreter[Coeval]
+    term = ParBuilder[Coeval]
       .buildNormalizedTerm(resourceFileReader(rhoScriptSource))
       .runAttempt match {
       case Right(par) => Some(par)
