@@ -41,7 +41,7 @@ private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
     extends ReplGrpcMonix.Repl {
 
   def exec(source: String): Task[ReplResponse] =
-    Interpreter[Task]
+    ParBuilder[Task]
       .buildNormalizedTerm(source)
       .attempt
       .flatMap {

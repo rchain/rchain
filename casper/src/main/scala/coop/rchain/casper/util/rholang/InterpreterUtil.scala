@@ -12,7 +12,7 @@ import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.{BlockException, PrettyPrinter}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.{BlockMetadata, Par}
-import coop.rchain.rholang.interpreter.Interpreter
+import coop.rchain.rholang.interpreter.{Interpreter, ParBuilder}
 import coop.rchain.rspace.ReplayException
 import coop.rchain.shared.{Log, LogSource}
 import monix.eval.Coeval
@@ -22,7 +22,7 @@ object InterpreterUtil {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def mkTerm(rho: String): Either[Throwable, Par] =
-    Interpreter[Coeval].buildNormalizedTerm(rho).runAttempt
+    ParBuilder[Coeval].buildNormalizedTerm(rho).runAttempt
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys

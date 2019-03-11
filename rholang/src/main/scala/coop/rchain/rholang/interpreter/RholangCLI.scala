@@ -130,7 +130,7 @@ object RholangCLI {
 
     val source = reader(fileName)
 
-    Interpreter[Coeval]
+    ParBuilder[Coeval]
       .buildNormalizedTerm(source)
       .runAttempt
       .fold(_.printStackTrace(Console.err), processTerm)

@@ -83,18 +83,19 @@ object SystemProcesses {
       private def illegalArgumentException(msg: String): F[Unit] =
         F.raiseError(new IllegalArgumentException(msg))
 
-      def verifySignatureContract(name : String,
-                                  algorithm : (Array[Byte], Array[Byte], Array[Byte]) => Boolean)
-      : (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
+      def verifySignatureContract(
+          name: String,
+          algorithm: (Array[Byte], Array[Byte], Array[Byte]) => Boolean
+      ): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
         case isContractCall(
-          produce,
-          Seq(
-            RhoType.ByteArray(data),
-            RhoType.ByteArray(signature),
-            RhoType.ByteArray(pub),
-            ack
-          )
-        ) =>
+            produce,
+            Seq(
+              RhoType.ByteArray(data),
+              RhoType.ByteArray(signature),
+              RhoType.ByteArray(pub),
+              ack
+            )
+            ) =>
           for {
             verified <- F.fromTry(Try(algorithm(data, signature, pub)))
             _        <- produce(Seq(RhoType.Bool(verified)), ack)
@@ -105,9 +106,10 @@ object SystemProcesses {
           )
       }
 
-      def hashContract(name : String,
-                       algorithm : Array[Byte] => Array[Byte])
-      : (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]= {
+      def hashContract(
+          name: String,
+          algorithm: Array[Byte] => Array[Byte]
+      ): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
         case isContractCall(produce, Seq(RhoType.ByteArray(input), ack)) =>
           for {
             hash <- F.fromTry(Try(algorithm(input)))
@@ -183,7 +185,10 @@ object SystemProcesses {
         case isContractCall(produce, Seq(ack)) =>
           for {
             params <- shortLeashParams.getParams
-            _ <-produce(Seq(params.codeHash, params.phloRate, params.userId, params.timestamp), ack)
+            _ <- produce(
+                  Seq(params.codeHash, params.phloRate, params.userId, params.timestamp),
+                  ack
+                )
           } yield ()
         case _ =>
           illegalArgumentException("deployParameters expects only a return channel")
