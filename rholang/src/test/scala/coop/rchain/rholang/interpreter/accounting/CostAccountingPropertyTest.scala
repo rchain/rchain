@@ -11,7 +11,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.models._
 import coop.rchain.rholang.Resources.mkRhoISpace
 import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
-import coop.rchain.rholang.interpreter._
+import coop.rchain.rholang.interpreter.{PrettyPrinter => PP, _}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{PPar, Proc}
 import coop.rchain.rholang.syntax.rholang_mercury.PrettyPrinter
@@ -39,7 +39,7 @@ class CostAccountingPropertyTest extends FlatSpec with PropertyChecks with Match
 
   implicit val taskExecutionDuration: FiniteDuration = 5.seconds
 
-  def cost(proc: Proc): Cost = Cost(Interpreter[Coeval].buildPar(proc).apply)
+  def cost(proc: Proc): Cost = Cost(ParBuilder[Coeval].buildPar(proc).apply)
 
   behavior of "Cost accounting in Reducer"
 
@@ -87,14 +87,19 @@ object CostAccountingPropertyTest {
       .map { _.sliding(2).forall { case List(r1, r2) => r1 == r2 } }
       .runSyncUnsafe(duration)
 
-  def execute[F[_]: Sync](runtime: Runtime[F], p: Proc): F[Long] = {
-    val interpreter = Interpreter[F]
-
+  def execute[F[_]: Sync](runtime: Runtime[F], p: Proc): F[Long] =
     for {
-      program <- interpreter.buildPar(p)
-      res     <- interpreter.evaluate(runtime, program)
+      program <- ParBuilder[F].buildPar(p)
+      res     <- evaluatePar(runtime, program)
       cost    = res.cost
     } yield cost.value
+
+  def evaluatePar[F[_]: Sync](
+      runtime: Runtime[F],
+      par: Par
+  ): F[EvaluateResult] = {
+    val term = PP().buildString(par)
+    Interpreter[F].evaluate(runtime, term)
   }
 
   def costOfExecution(procs: Proc*): Task[Long] = {

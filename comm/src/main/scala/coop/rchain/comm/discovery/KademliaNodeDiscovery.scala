@@ -42,7 +42,7 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Sync: Log: Time: Met
     } yield ()
 
   private def pingHandler(peer: PeerNode): F[Unit] =
-    addNode(peer) *> Metrics[F].incrementCounter("handle.ping")
+    addNode(peer) >> Metrics[F].incrementCounter("handle.ping")
 
   private def lookupHandler(peer: PeerNode, id: Array[Byte]): F[Seq[PeerNode]] =
     for {
@@ -61,7 +61,7 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Sync: Log: Time: Met
       _     <- peers.traverse(addNode)
     } yield ()
 
-    initRPC *> findNewAndAdd.forever
+    initRPC >> findNewAndAdd.forever
   }
 
   /**

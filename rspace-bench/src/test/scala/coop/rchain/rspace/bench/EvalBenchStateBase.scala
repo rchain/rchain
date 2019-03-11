@@ -10,7 +10,7 @@ import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
-import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
+import coop.rchain.rholang.interpreter.{ParBuilder, Runtime}
 import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.shared.StoreType
 import coop.rchain.shared.Log
@@ -35,7 +35,7 @@ trait EvalBenchStateBase {
   def doSetup(): Unit = {
     deleteOldStorage(dbDir)
 
-    term = Interpreter[Coeval]
+    term = ParBuilder[Coeval]
       .buildNormalizedTerm(resourceFileReader(rhoScriptSource))
       .runAttempt match {
       case Right(par) => Some(par)

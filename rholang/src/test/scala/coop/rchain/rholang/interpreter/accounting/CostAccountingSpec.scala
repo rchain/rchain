@@ -104,13 +104,12 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
           for {
             runtime <- Runtime
                         .create[Task, Task.Par](dbDir, size, StoreType.LMDB)
-            par <- Interpreter[Task].buildNormalizedTerm(contract)
             res <- Interpreter[Task]
-                    .evaluate(runtime, par, Cost(initialPhlo.toLong))
+                    .evaluate(runtime, contract, Cost(initialPhlo.toLong))
             _ <- runtime.close()
             _ <- Task.eval(dbDir.recursivelyDelete())
           } yield (res)
-        }.attempt)
+        })
       }
       (result, costLog) = costsLoggingProgram
       res               <- errorLog.readAndClearErrorVector
@@ -145,26 +144,27 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
   ) { (contract: String, expectedTotalCost: Long) =>
     val initialPhlo       = 10000L
     val (result, costLog) = evaluateWithCostLog(initialPhlo, contract)
-    println(costLog)
-    result shouldBe Right(EvaluateResult(Cost(expectedTotalCost), Vector.empty))
+    result shouldBe EvaluateResult(Cost(expectedTotalCost), Vector.empty)
     costLog.map(_.value).toList.sum shouldEqual expectedTotalCost
   }
 
   "Running out of phlogistons" should "stop the evaluation upon cost depletion in a single execution branch" in {
-    val initialPhlo       = 1L
-    val contract          = "@1!(1)"
-    val expectedCosts     = List(Cost(4, "substitution"))
-    val (result, costLog) = evaluateWithCostLog(initialPhlo, contract)
-    result shouldBe Left(OutOfPhlogistonsError)
+    val contract                                     = "@1!(1)"
+    val parsingCost                                  = accounting.parsingCost(contract).value
+    val initialPhlo                                  = 1L + parsingCost
+    val expectedCosts                                = List(Cost(4, "substitution"))
+    val (EvaluateResult(totalCost, errors), costLog) = evaluateWithCostLog(initialPhlo, contract)
+    totalCost.value shouldBe parsingCost + expectedCosts.head.value
+    errors shouldBe (List(OutOfPhlogistonsError))
     costLog.toList should contain theSameElementsAs (expectedCosts)
   }
 
   it should "stop the evaluation of all execution branches when one of them runs out of phlo" ignore {
-    val initialPhlo       = 5L
-    val contract          = "@1!(1) | @2!(2) | @3!(3)"
-    val expectedCosts     = List(Cost(4, "substitution"), Cost(4, "substitution"))
-    val (result, costLog) = evaluateWithCostLog(initialPhlo, contract)
-    result shouldBe Left(OutOfPhlogistonsError)
+    val contract                             = "@1!(1) | @2!(2) | @3!(3)"
+    val initialPhlo                          = 5L + parsingCost(contract).value
+    val expectedCosts                        = List(Cost(4, "substitution"), Cost(4, "substitution"))
+    val (EvaluateResult(_, errors), costLog) = evaluateWithCostLog(initialPhlo, contract)
+    errors shouldBe (List(OutOfPhlogistonsError))
     costLog.toList should contain theSameElementsAs (expectedCosts)
   }
 
@@ -172,8 +172,9 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
     contracts
   ) { (contract: String, expectedTotalCost: Long) =>
     check(forAllNoShrink(Gen.choose(1L, expectedTotalCost - 1)) { initialPhlo =>
-      val (result, costLog) = evaluateWithCostLog(initialPhlo, contract)
-      result shouldBe Left(OutOfPhlogistonsError)
+      val (EvaluateResult(_, errors), costLog) =
+        evaluateWithCostLog(initialPhlo + parsingCost(contract).value, contract)
+      errors shouldBe (List(OutOfPhlogistonsError))
       val costs = costLog.map(_.value).toList
       // The sum of all costs but last needs to be <= initialPhlo, otherwise
       // the last cost should have not been logged

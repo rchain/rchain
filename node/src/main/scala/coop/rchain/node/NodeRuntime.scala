@@ -148,7 +148,7 @@ class NodeRuntime private[node] (
 
       _ <- Task.delay {
             Kamon.reconfigure(conf.underlying.withFallback(Kamon.config()))
-            if (conf.kamon.influxDb) Kamon.addReporter(new kamon.influxdb.InfluxDBReporter())
+            if (conf.kamon.influxDb) Kamon.addReporter(new BatchInfluxDBReporter())
             if (conf.kamon.influxDbUdp) Kamon.addReporter(new UdpInfluxDBReporter())
             if (conf.kamon.prometheus) Kamon.addReporter(prometheusReporter)
             if (conf.kamon.zipkin) Kamon.addReporter(new ZipkinReporter())

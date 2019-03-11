@@ -40,9 +40,9 @@ import storage.StoragePrinter
 private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
     extends ReplGrpcMonix.Repl {
 
-  def exec(reader: Reader): Task[ReplResponse] =
-    Task
-      .coeval(Interpreter[Coeval].buildNormalizedTerm(reader))
+  def exec(source: String): Task[ReplResponse] =
+    ParBuilder[Task]
+      .buildNormalizedTerm(source)
       .attempt
       .flatMap {
         case Left(er) =>
@@ -51,19 +51,25 @@ private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
             case th: Throwable       => Task.now(s"Error: $th")
           }
         case Right(term) =>
-          runEvaluate(runtime, term).attempt.map {
-            case Left(ex) => s"Caught boxed exception: $ex"
-            case Right(EvaluateResult(cost, errors)) =>
-              val errorStr =
-                if (errors.isEmpty)
-                  ""
-                else
-                  errors
-                    .map(_.toString())
-                    .mkString("Errors received during evaluation:\n", "\n", "\n")
-              s"Deployment cost: $cost\n" +
-                s"${errorStr}Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.space.store)}"
-          }
+          Task
+            .now(printNormalizedTerm(term))
+            .flatMap { _ =>
+              Interpreter[Task]
+                .evaluate(runtime, source)
+                .map {
+                  case EvaluateResult(cost, errors) =>
+                    val errorStr =
+                      if (errors.isEmpty)
+                        ""
+                      else
+                        errors
+                          .map(_.toString())
+                          .mkString("Errors received during evaluation:\n", "\n", "\n")
+                    s"Deployment cost: $cost\n" +
+                      s"${errorStr}Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.space.store)}"
+
+                }
+            }
       }
       .map(ReplResponse(_))
 
@@ -71,16 +77,10 @@ private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
     Task.defer(task).executeOn(worker)
 
   def run(request: CmdRequest): Task[ReplResponse] =
-    defer(exec(new StringReader(request.line)))
+    defer(exec(request.line))
 
   def eval(request: EvalRequest): Task[ReplResponse] =
-    defer(exec(new StringReader(request.program)))
-
-  def runEvaluate(runtime: Runtime[Task], term: Par): Task[EvaluateResult] =
-    for {
-      _      <- Task.now(printNormalizedTerm(term))
-      result <- Interpreter[Task].evaluate(runtime, term)
-    } yield result
+    defer(exec(request.program))
 
   private def printNormalizedTerm(normalizedTerm: Par): Unit = {
     Console.println("\nEvaluating:")

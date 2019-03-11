@@ -122,7 +122,7 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
 
     cell.read.flatMap { s =>
       if (s.shutdown) Task.unit
-      else shutdownServer *> disconnectFromPeers
+      else shutdownServer >> disconnectFromPeers
     }
   }
 
