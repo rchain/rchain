@@ -18,7 +18,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.ShortLeashParams.ShortLeashParameters
 import coop.rchain.rholang.interpreter.Runtime._
-import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.accounting.{loggingCost, noOpCostLog, _}
 import coop.rchain.rholang.interpreter.errors.{InterpreterError, SetupError}
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
@@ -167,7 +167,7 @@ object Runtime {
     val REV_ADDRESS: Par       = byteName(14)
   }
 
-  private def introduceSystemProcesses[F[_]: Sync](
+  private def introduceSystemProcesses[F[_]: Sync: _cost](
       space: RhoISpace[F],
       replaySpace: RhoISpace[F],
       processes: List[(Name, Arity, Remainder, BodyRef)]
@@ -183,15 +183,9 @@ object Runtime {
           )
         )
         val continuation = TaggedContinuation(ScalaBodyRef(ref))
-        val cost0: _cost[F] =
-          loggingCost(CostAccounting.unsafe[F](Cost.UNSAFE_MAX), noOpCostLog)
-        val cost1: _cost[F] =
-          loggingCost(CostAccounting.unsafe[F](Cost.UNSAFE_MAX), noOpCostLog)
         List(
-          space.install(channels, patterns, continuation)(matchListPar(Sync[F], cost0)),
-          replaySpace.install(channels, patterns, continuation)(
-            matchListPar(Sync[F], cost1)
-          )
+          space.install(channels, patterns, continuation)(matchListPar),
+          replaySpace.install(channels, patterns, continuation)(matchListPar)
         )
     }.sequence
 
@@ -425,24 +419,21 @@ object Runtime {
         .getBytes()
     )
 
-    val cost0: _cost[F] =
-      loggingCost(CostAccounting.unsafe[F](Cost.UNSAFE_MAX), noOpCostLog)
-    val cost1: _cost[F] =
-      loggingCost(CostAccounting.unsafe[F](Cost.UNSAFE_MAX), noOpCostLog)
-
     for {
+      costAlg <- CostAccounting.of[F](Cost(0))
+      cost    = loggingCost(costAlg, noOpCostLog[F])
       spaceResult <- space.produce(
                       Registry.registryRoot,
                       ListParWithRandom(Seq(Registry.emptyMap), rand),
                       false,
                       0
-                    )(matchListPar(F, cost0))
+                    )(matchListPar(F, cost))
       replayResult <- replaySpace.produce(
                        Registry.registryRoot,
                        ListParWithRandom(Seq(Registry.emptyMap), rand),
                        false,
                        0
-                     )(matchListPar(F, cost1))
+                     )(matchListPar(F, cost))
       _ <- spaceResult match {
             case Right(None) =>
               replayResult match {
