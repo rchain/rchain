@@ -9,34 +9,6 @@ import sbt.io.Path.relativeTo
  */
 object Rholang {
 
-  def jarOutDated(jar: File, jarSources: File): Boolean = {
-    val scalaFiles   = (jarSources ** "*.scala").get
-    val latestSource = scalaFiles.maxBy(_.lastModified())
-
-    (!jar.exists()) || (jar.lastModified() < latestSource.lastModified())
-  }
-
-  def constructArtifacts(
-      jar: File,
-      rhoSourceDir: File,
-      srcManaged: File,
-      resources: File
-  ): Seq[File] = {
-    import scala.sys.process._
-
-    val command =
-      s"java -jar ${jar.getAbsolutePath()} ${rhoSourceDir.getAbsolutePath()} ${srcManaged
-        .getAbsolutePath()} ${resources.getAbsolutePath()}"
-
-    val status = command.!
-
-    if (status == 0) {
-      (srcManaged ** "*.scala").get
-    } else {
-      throw new Exception(s"Non-zero exit status during rholang artifact creation: $status")
-    }
-  }
-
   val rholangSource             = settingKey[File]("Default Rholang source directory.")
 
   lazy val rholangSettings = Seq(
