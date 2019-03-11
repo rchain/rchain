@@ -13,7 +13,7 @@ import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.Resources.mkRuntime
-import coop.rchain.rholang.interpreter.{accounting, Interpreter, ParBuilder}
+import coop.rchain.rholang.interpreter.{accounting, ParBuilder}
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.shared.Log
 import monix.eval.Task

@@ -12,7 +12,7 @@ import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.{BlockException, PrettyPrinter}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.{BlockMetadata, Par}
-import coop.rchain.rholang.interpreter.{Interpreter, ParBuilder}
+import coop.rchain.rholang.interpreter.ParBuilder
 import coop.rchain.rspace.ReplayException
 import coop.rchain.shared.{Log, LogSource}
 import monix.eval.Coeval
