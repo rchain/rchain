@@ -1,27 +1,10 @@
 package coop.rchain.rholang.interpreter
 
-import java.io.{Reader, StringReader}
-
 import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.Connective.ConnectiveInstance
-import coop.rchain.models.Par
-import coop.rchain.models.rholang.implicits.VectorPar
-import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.rholang.interpreter.errors.{
-  LexerError,
-  OutOfPhlogistonsError,
-  ParserError,
-  SyntaxError,
-  TopLevelFreeVariablesNotAllowedError,
-  TopLevelLogicalConnectivesNotAllowedError,
-  TopLevelWildcardsNotAllowedError,
-  UnrecognizedInterpreterError
-}
-import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
-import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
+import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 
 final case class EvaluateResult(cost: Cost, errors: Vector[Throwable])
 
