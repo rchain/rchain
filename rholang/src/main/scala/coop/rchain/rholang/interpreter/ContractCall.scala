@@ -3,11 +3,12 @@ import cats.effect.Sync
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.{ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
-import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.accounting.{loggingCost, noOpCostLog}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rspace.util.unpackCont
 import cats.implicits._
+import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
 
 /**
   * This is a tool for unapplying the messages sent to the system contracts.
@@ -33,20 +34,20 @@ class ContractCall[F[_]: Sync](
 ) {
   type Producer = (Seq[Par], Par) => F[Unit]
 
-  implicit val cost: _cost[F] =
-    loggingCost(CostAccounting.unsafe[F](Cost(Integer.MAX_VALUE)), noOpCostLog)
-
+  // TODO: pass _cost[F] as an implicit parameter
   private def produce(
       rand: Blake2b512Random,
       sequenceNumber: Int
   )(values: Seq[Par], ch: Par): F[Unit] =
     for {
+      costAlg <- CostAccounting.of(Cost(0))
+      cost    = loggingCost(costAlg, noOpCostLog[F])
       produceResult <- space.produce(
                         ch,
                         ListParWithRandom(values, rand),
                         persist = false,
                         sequenceNumber
-                      )(matchListPar)
+                      )(matchListPar(Sync[F], cost))
       _ <- produceResult.fold(
             _ => Sync[F].raiseError(OutOfPhlogistonsError),
             _.fold(Sync[F].unit) {
