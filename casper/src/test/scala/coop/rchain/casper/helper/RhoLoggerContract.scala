@@ -1,11 +1,11 @@
 package coop.rchain.casper.helper
 import cats.effect.Sync
-import coop.rchain.models.{ListParWithRandomAndPhlos, Par}
-import coop.rchain.rholang.interpreter.{ContractCall, PrettyPrinter}
+import coop.rchain.models.ListParWithRandomAndPhlos
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
+import coop.rchain.rholang.interpreter.{ContractCall, PrettyPrinter, RhoType}
 import coop.rchain.shared.{Log, LogSource}
 
-object RhoLogger {
+object RhoLoggerContract {
   val prettyPrinter = PrettyPrinter()
 
   def handleMessage[F[_]: Log: Sync](
@@ -14,7 +14,7 @@ object RhoLogger {
     val isContractCall = new ContractCall(ctx.space, ctx.dispatcher)
 
     message match {
-      case isContractCall(_, Seq(IsString(logLevel), par)) =>
+      case isContractCall(_, Seq(RhoType.String(logLevel), par)) =>
         val msg         = prettyPrinter.buildString(par)
         implicit val ev = LogSource.matLogSource
 

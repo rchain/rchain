@@ -2,19 +2,12 @@ package coop.rchain.rholang.interpreter
 
 import cats.effect.Sync
 import cats.implicits._
-import com.google.protobuf.ByteString
-import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random, Keccak256, Sha256}
+import coop.rchain.crypto.hash.{Blake2b256, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
-import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GString}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.ShortLeashParams.ShortLeashParameters
 import coop.rchain.rholang.interpreter.Runtime.{BlockTime, RhoISpace, ShortLeashParams}
-import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.rholang.interpreter.errors.{InterpreterError, OutOfPhlogistonsError}
-import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.rspace.util._
 import coop.rchain.rspace.{ContResult, Result}
 
 import scala.util.Try
@@ -23,49 +16,25 @@ import scala.util.Try
 //      so that implementation is not repetitive.
 //TODO: Make polymorphic over match type.
 trait SystemProcesses[F[_]] {
-  def stdOut: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
-  def stdOutAck: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
-  def stdErr: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
-  def stdErrAck: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
-  def secp256k1Verify: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
-  def ed25519Verify: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
-  def sha256Hash: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
-  def keccak256Hash: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
-  def blake2b256Hash: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
-  def getDeployParams(
-      deployParameters: ShortLeashParams[F]
-  ): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
-  def blockTime(timestamp: BlockTime[F]): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
-  def validateRevAddress: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
-}
+  import SystemProcesses.Contract
 
-object RhoType {
-  object ByteArray {
-    import coop.rchain.models.rholang.implicits._
-    def unapply(p: Par): Option[Array[Byte]] =
-      p.singleExpr().collect {
-        case Expr(GByteArray(bs)) => bs.toByteArray
-      }
-
-    def apply(bytes: Array[Byte]): Par =
-      Expr(GByteArray(ByteString.copyFrom(bytes)))
-  }
-
-  object String {
-    def unapply(p: Par): Option[String] =
-      p.singleExpr().collect {
-        case Expr(GString(bs)) => bs
-      }
-
-    def apply(s: String): Par = GString(s)
-  }
-
-  object Bool {
-    def apply(b: Boolean) = Expr(GBool(b))
-  }
+  def stdOut: Contract[F]
+  def stdOutAck: Contract[F]
+  def stdErr: Contract[F]
+  def stdErrAck: Contract[F]
+  def secp256k1Verify: Contract[F]
+  def ed25519Verify: Contract[F]
+  def sha256Hash: Contract[F]
+  def keccak256Hash: Contract[F]
+  def blake2b256Hash: Contract[F]
+  def getDeployParams(deployParameters: ShortLeashParams[F]): Contract[F]
+  def blockTime(timestamp: BlockTime[F]): Contract[F]
+  def validateRevAddress: Contract[F]
 }
 
 object SystemProcesses {
+  type Contract[F[_]] = (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
+
   def apply[F[_]](
       dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation],
       space: RhoISpace[F]
@@ -86,7 +55,7 @@ object SystemProcesses {
       def verifySignatureContract(
           name: String,
           algorithm: (Array[Byte], Array[Byte], Array[Byte]) => Boolean
-      ): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
+      ): Contract[F] = {
         case isContractCall(
             produce,
             Seq(
@@ -98,7 +67,7 @@ object SystemProcesses {
             ) =>
           for {
             verified <- F.fromTry(Try(algorithm(data, signature, pub)))
-            _        <- produce(Seq(RhoType.Bool(verified)), ack)
+            _        <- produce(Seq(RhoType.Boolean(verified)), ack)
           } yield ()
         case _ =>
           illegalArgumentException(
@@ -106,10 +75,7 @@ object SystemProcesses {
           )
       }
 
-      def hashContract(
-          name: String,
-          algorithm: Array[Byte] => Array[Byte]
-      ): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
+      def hashContract(name: String, algorithm: Array[Byte] => Array[Byte]): Contract[F] = {
         case isContractCall(produce, Seq(RhoType.ByteArray(input), ack)) =>
           for {
             hash <- F.fromTry(Try(algorithm(input)))
@@ -121,12 +87,12 @@ object SystemProcesses {
           )
       }
 
-      def stdOut: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
+      def stdOut: Contract[F] = {
         case isContractCall(_, Seq(arg)) =>
           F.delay(Console.println(prettyPrinter.buildString(arg)))
       }
 
-      def stdOutAck: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
+      def stdOutAck: Contract[F] = {
         case isContractCall(produce, Seq(arg, ack)) =>
           for {
             _ <- F.delay(Console.println(prettyPrinter.buildString(arg)))
@@ -134,12 +100,12 @@ object SystemProcesses {
           } yield ()
       }
 
-      def stdErr: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
+      def stdErr: Contract[F] = {
         case isContractCall(_, Seq(arg)) =>
           F.delay(Console.err.println(prettyPrinter.buildString(arg)))
       }
 
-      def stdErrAck: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
+      def stdErrAck: Contract[F] = {
         case isContractCall(produce, Seq(arg, ack)) =>
           for {
             _ <- F.delay(Console.err.println(prettyPrinter.buildString(arg)))
@@ -147,7 +113,7 @@ object SystemProcesses {
           } yield ()
       }
 
-      def validateRevAddress: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
+      def validateRevAddress: Contract[F] = {
         case isContractCall(
             produce,
             Seq(RhoType.String("validate"), RhoType.String(address), ack)
@@ -163,25 +129,25 @@ object SystemProcesses {
           produce(Seq(errorMessage), ack)
       }
 
-      def secp256k1Verify: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] =
+      def secp256k1Verify: Contract[F] =
         verifySignatureContract("secp256k1Verify", Secp256k1.verify)
 
-      def ed25519Verify: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] =
+      def ed25519Verify: Contract[F] =
         verifySignatureContract("ed25519Verify", Ed25519.verify)
 
-      def sha256Hash: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] =
+      def sha256Hash: Contract[F] =
         hashContract("sha256Hash", Sha256.hash)
 
-      def keccak256Hash: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] =
+      def keccak256Hash: Contract[F] =
         hashContract("keccak256Hash", Keccak256.hash)
 
-      def blake2b256Hash: (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] =
+      def blake2b256Hash: Contract[F] =
         hashContract("blake2b256Hash", Blake2b256.hash)
 
       // TODO: rename this system process to "deployParameters"?
       def getDeployParams(
           shortLeashParams: Runtime.ShortLeashParams[F]
-      ): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
+      ): Contract[F] = {
         case isContractCall(produce, Seq(ack)) =>
           for {
             params <- shortLeashParams.getParams
@@ -196,7 +162,7 @@ object SystemProcesses {
 
       def blockTime(
           blocktime: Runtime.BlockTime[F]
-      ): (Seq[ListParWithRandomAndPhlos], Int) => F[Unit] = {
+      ): Contract[F] = {
         case isContractCall(produce, Seq(ack)) =>
           for {
             time <- blocktime.timestamp.get
