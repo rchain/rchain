@@ -48,8 +48,6 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
       _         <- cost.set(minimumPhlos)
       _         <- chargingRSpace.consume(channels, patterns, cont, false)
       phlosLeft <- cost.get
-      // we expect Cost = 1 because there will be no match
-      // so we will pay only for the storage
       _ = phlosLeft.value shouldBe 0
     } yield ()
 
