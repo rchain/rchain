@@ -28,11 +28,9 @@ trait BlockStore[F[_]] {
   def contains(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[Boolean] =
     get(blockHash).map(_.isDefined)
 
-  def getApprovedBlock(implicit applicativeF: Applicative[F]): F[Option[ApprovedBlock]] =
-    Option.empty[ApprovedBlock].pure[F]
+  def getApprovedBlock: F[Option[ApprovedBlock]]
 
-  def putApprovedBlock(block: ApprovedBlock)(implicit applicativeF: Applicative[F]): F[Unit] =
-    ().pure[F]
+  def putApprovedBlock(block: ApprovedBlock): F[Unit]
 
   def checkpoint(): F[Unit]
 

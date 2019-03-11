@@ -7,12 +7,12 @@ import cats._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.casper.protocol.{BlockMessage, Header}
+import coop.rchain.casper.protocol._
 import coop.rchain.rspace.Context
 import coop.rchain.shared.PathOps._
 import coop.rchain.models.blockImplicits.{blockBatchesGen, blockElementGen, blockElementsGen}
 import cats.effect.Sync
-
+import cats.effect.concurrent.Ref
 import coop.rchain.blockstorage.InMemBlockStore.emptyMapRef
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.MetricsNOP
@@ -115,11 +115,12 @@ trait BlockStoreTest
 class InMemBlockStoreTest extends BlockStoreTest {
   override def withStore[R](f: BlockStore[Task] => Task[R]): R = {
     val test = for {
-      refTask <- emptyMapRef[Task]
-      metrics = new MetricsNOP[Task]()
-      store   = InMemBlockStore.create[Task](Monad[Task], refTask, metrics)
-      _       <- store.find(_ => true).map(map => assert(map.isEmpty))
-      result  <- f(store)
+      refTask          <- emptyMapRef[Task]
+      approvedBlockRef <- Ref[Task].of(none[ApprovedBlock])
+      metrics          = new MetricsNOP[Task]()
+      store            = InMemBlockStore.create[Task](Monad[Task], refTask, approvedBlockRef, metrics)
+      _                <- store.find(_ => true).map(map => assert(map.isEmpty))
+      result           <- f(store)
     } yield result
     test.unsafeRunSync
   }
@@ -213,6 +214,25 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
           _      <- secondStore.close()
         } yield result
       }
+    }
+  }
+
+  "FileLMDBIndexBlockStore" should "persist approved block on restart" in {
+    withStoreLocation { blockStoreDataDir =>
+      val approvedBlock =
+        ApprovedBlock(
+          Some(ApprovedBlockCandidate(Some(BlockMessage()), 1)),
+          List(Signature(ByteString.EMPTY, "", ByteString.EMPTY))
+        )
+      for {
+        firstStore          <- createBlockStore(blockStoreDataDir)
+        _                   <- firstStore.putApprovedBlock(approvedBlock)
+        _                   <- firstStore.close()
+        secondStore         <- createBlockStore(blockStoreDataDir)
+        storedApprovedBlock <- secondStore.getApprovedBlock
+        _                   = storedApprovedBlock shouldBe Some(approvedBlock)
+        _                   <- secondStore.close()
+      } yield ()
     }
   }
 

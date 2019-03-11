@@ -162,6 +162,7 @@ object Configuration {
       FileLMDBIndexBlockStore.Config(
         dataDir.resolve("casper-block-store").resolve("storage"),
         dataDir.resolve("casper-block-store").resolve("index"),
+        dataDir.resolve("casper-block-store").resolve("approved-block"),
         dataDir.resolve("casper-block-store").resolve("checkpoints"),
         server.storeSize
       )
