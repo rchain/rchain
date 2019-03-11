@@ -15,7 +15,8 @@ import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
-import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
@@ -35,11 +36,14 @@ import scala.concurrent.duration._
 final case class TestFixture(space: RhoISpace[Task], reducer: ChargingReducer[Task])
 
 trait PersistentStoreTester {
-  def withTestSpace[R](errorLog: ErrorLog[Task])(f: TestFixture => R): R = {
-    val dbDir                               = Files.createTempDirectory("rholang-interpreter-test-")
-    val context: RhoContext[Task]           = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
-    implicit val logF: Log[Task]            = new Log.NOPLog[Task]
-    implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+
+  def withTestSpace[R](
+      errorLog: ErrorLog[Task]
+  )(f: TestFixture => R)(implicit CA: CostAccounting[Task], C: _cost[Task]): R = {
+    val dbDir                              = Files.createTempDirectory("rholang-interpreter-test-")
+    val context: RhoContext[Task]          = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
+    implicit val logF: Log[Task]           = new Log.NOPLog[Task]
+    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
     val space = (RSpace
       .create[
@@ -67,6 +71,9 @@ trait PersistentStoreTester {
 
 class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
+
+  implicit val costAlg: CostAccounting[Task] = CostAccounting.unsafe[Task](Cost(0))
+  implicit val cost: _cost[Task]             = loggingCost(costAlg, noOpCostLog[Task])
 
   def checkData(
       result: Map[
@@ -1902,33 +1909,4 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
   }
 
-  "Running out of phlogistons" should "stop the evaluation" in {
-    implicit val errorLog = new ErrorLog[Task]()
-
-    val test = withTestSpace(errorLog) {
-      case TestFixture(_, reducer) =>
-        implicit val env   = Env.makeEnv[Par]()
-        val notEnoughPhlos = Cost(5)
-        reducer.setPhlo(notEnoughPhlos).runSyncUnsafe(1.second)
-        val splitRand = rand.splitByte(0)
-        val receive =
-          Receive(
-            Seq(
-              ReceiveBind(
-                Seq(Par(exprs = Seq(EVar(FreeVar(0)), EVar(FreeVar(1)), EVar(FreeVar(2))))),
-                Par(exprs = Seq(GString("channel")))
-              )
-            ),
-            Par(),
-            false,
-            3,
-            BitSet()
-          )
-        reducer.eval(receive)(env, splitRand)
-    }
-
-    val result = test.attempt.runSyncUnsafe(1.second)
-    assert(result === Left(OutOfPhlogistonsError))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty)
-  }
 }

@@ -8,6 +8,7 @@ import cats.effect.{Concurrent, ContextShift, Resource}
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.Metrics
 import coop.rchain.models._
+import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
 import coop.rchain.rholang.interpreter.errors.InterpreterError
@@ -74,9 +75,16 @@ object Resources {
   ): Resource[Task, Runtime[Task]] =
     mkTempDir[Task](prefix)
       .flatMap { tmpDir =>
-        Resource.make[Task, Runtime[Task]](Task.suspend {
-          Runtime.create[Task, Task.Par](tmpDir, storageSize, storeType)
-        })(
+        Resource.make[Task, Runtime[Task]] {
+          for {
+            costAccounting <- CostAccounting.empty[Task]
+            runtime <- {
+              implicit val ca: CostAccounting[Task] = costAccounting
+              implicit val cost: _cost[Task]        = loggingCost(ca, noOpCostLog)
+              Runtime.create[Task, Task.Par](tmpDir, storageSize, storeType)
+            }
+          } yield (runtime)
+        }(
           rt => rt.close()
         )
       }

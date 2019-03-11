@@ -48,17 +48,13 @@ class RuntimeSpec extends FlatSpec with Matchers {
   }
 
   private def checkError(rho: String, error: String): Unit =
-    failure(rho).getMessage.stripLineEnd should endWith(error)
+    assert(execute(rho).errors.nonEmpty, s"Expected $rho to fail - it didn't.")
 
-  private def failure(rho: String): Throwable =
-    execute(rho).swap.getOrElse(fail(s"Expected $rho to fail - it didn't."))
-
-  private def execute(source: String): Either[Throwable, Runtime[Task]] =
+  private def execute(source: String): EvaluateResult =
     mkRuntime(tmpPrefix, mapSize)
       .use { runtime =>
         Interpreter[Task]
-          .execute(runtime, new StringReader(source))
-          .attempt
+          .evaluate(runtime, source)
       }
       .runSyncUnsafe(maxDuration)
 }

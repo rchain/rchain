@@ -20,7 +20,7 @@ import coop.rchain.casper.util.comm.CasperPacketHandler.{
 import coop.rchain.casper.util.comm.CasperPacketHandlerSpec._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.catscontrib.{ApplicativeError_, Capture}
+import coop.rchain.catscontrib.ApplicativeError_
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
 import coop.rchain.comm.rp.ProtocolHelper
@@ -34,6 +34,7 @@ import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.shared.{Cell, Log, StoreType}
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -50,7 +51,7 @@ class CasperPacketHandlerSpec extends WordSpec {
     val runtimeDir       = BlockDagStorageTestFixture.blockStorageDir
     val activeRuntime =
       Runtime
-        .create[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB)(
+        .createWithEmptyCost[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB)(
           ContextShift[Task],
           Concurrent[Task],
           log,
@@ -61,7 +62,6 @@ class CasperPacketHandlerSpec extends WordSpec {
         .unsafeRunSync(scheduler)
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync(scheduler)
 
-    implicit val captureTask       = Capture.taskCapture
     val (genesisSk, genesisPk)     = Ed25519.newKeyPair
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
     val bonds                      = createBonds(Seq(validatorPk))

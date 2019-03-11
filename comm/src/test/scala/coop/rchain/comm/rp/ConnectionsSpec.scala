@@ -5,9 +5,9 @@ import coop.rchain.shared._
 import coop.rchain.comm._, CommError._
 import coop.rchain.p2p.effects._
 import coop.rchain.metrics.Metrics
-import cats._, cats.data._, cats.implicits._
+import cats.{catsInstancesForId => _, _}, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
-import coop.rchain.catscontrib.TestOutlaws._
+import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.p2p.EffectsTestInstances._
 import org.scalatest._
 

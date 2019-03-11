@@ -4,10 +4,9 @@ import internal._
 import java.nio.ByteBuffer
 import java.nio.file.Path
 
-import cats.effect.Sync
-import coop.rchain.catscontrib.ski._
+import cats.effect.{Resource, Sync}
 import cats.implicits._
-import org.lmdbjava.{Dbi, Env, Txn, TxnOps}
+import org.lmdbjava.{Dbi, Env, Txn}
 import scodec.Codec
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.PathOps._
@@ -32,10 +31,6 @@ trait LMDBOps[F[_]] extends CloseOps {
     env.txnWrite
   }
 
-  private[rspace] def createTxnReadF() = syncF.delay(createTxnRead())
-
-  private[rspace] def createTxnWriteF() = syncF.delay(createTxnWrite())
-
   protected[this] def databasePath: Path
   protected[this] def env: Env[ByteBuffer]
 
@@ -44,6 +39,7 @@ trait LMDBOps[F[_]] extends CloseOps {
   private[this] val sizeGauge    = Kamon.gauge(MetricsSource + ".size").refine(gaugeTags)
   private[this] val entriesGauge = Kamon.gauge(MetricsSource + ".entries").refine(gaugeTags)
 
+  //fixme disabled for testing purposes
   protected[this] def updateGauges() = {
     sizeGauge.set(databasePath.folderSize)
     entriesGauge.set(env.stat().entries)
@@ -61,21 +57,18 @@ trait LMDBOps[F[_]] extends CloseOps {
         ex.printStackTrace
         throw ex
     } finally {
-      updateGauges()
       txn.close()
     }
 
-  private[rspace] def withTxnFlatF[R](txnF: F[Txn[ByteBuffer]])(f: Txn[ByteBuffer] => F[R]): F[R] =
-    for {
-      txn    <- txnF
-      retErr <- f(txn).flatMap(r => syncF.delay(txn.commit()).as(r)).attempt
-      _      <- syncF.delay(updateGauges())
-      _      <- syncF.delay(txn.close())
-      ret    <- syncF.fromEither(retErr)
-    } yield ret
+  private[rspace] def withReadTxnF[R](f: Txn[ByteBuffer] => R): F[R] =
+    syncF.delay {
+      withTxn(createTxnRead())(f)
+    }
 
-  private[rspace] def withTxnF[R](txnF: F[Txn[ByteBuffer]])(f: Txn[ByteBuffer] => R): F[R] =
-    withTxnFlatF[R](txnF)(txn => syncF.delay { f(txn) })
+  def withWriteTxnF[R](f: Txn[ByteBuffer] => R): F[R] =
+    syncF.delay {
+      withTxn(createTxnWrite())(f)
+    }
 
   /** The methods:
     * `def get[V](txn: Txn[ByteBuffer], key: Blake2b256Hash)`

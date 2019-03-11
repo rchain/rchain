@@ -21,6 +21,7 @@ import scodec.Codec
 
 import scala.collection.immutable.Seq
 import coop.rchain.rspace.test.ArbitraryInstances._
+import monix.eval.Coeval
 import org.scalatest.enablers.Definition
 
 import scala.util.Random
@@ -53,7 +54,7 @@ trait StorageActionsTests[F[_]]
     for {
       r <- space.produce(key.head, "datum", persist = false)
 
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, keyHash) shouldBe key
             store.getPatterns(txn, key) shouldBe Nil
             store.getData(txn, key) shouldBe List(Datum.create(key.head, "datum", persist = false))
@@ -73,7 +74,7 @@ trait StorageActionsTests[F[_]]
 
     for {
       r1 <- space.produce(key.head, "datum1", persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, keyHash) shouldBe key
             store.getPatterns(txn, key) shouldBe Nil
             store.getData(txn, key) shouldBe List(Datum.create(key.head, "datum1", false))
@@ -81,7 +82,7 @@ trait StorageActionsTests[F[_]]
           }
       _  = r1 shouldBe Right(None)
       r2 <- space.produce(key.head, "datum2", persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, keyHash) shouldBe key
             store.getPatterns(txn, key) shouldBe Nil
             store.getData(txn, key) should contain theSameElementsAs List(
@@ -104,7 +105,7 @@ trait StorageActionsTests[F[_]]
 
     for {
       r <- space.consume(key, patterns, new StringsCaptor, persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, keyHash) shouldBe List("ch1")
             store.getPatterns(txn, key) shouldBe List(patterns)
             store.getData(txn, key) shouldBe Nil
@@ -124,7 +125,7 @@ trait StorageActionsTests[F[_]]
 
     for {
       r <- space.consume(key, patterns, new StringsCaptor, persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, keyHash) shouldBe key
             store.getPatterns(txn, key) shouldBe List(patterns)
             store.getData(txn, key) shouldBe Nil
@@ -143,7 +144,7 @@ trait StorageActionsTests[F[_]]
 
     for {
       r1 <- space.produce(key.head, "datum", persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, keyHash) shouldBe key
             store.getPatterns(txn, key) shouldBe Nil
             store.getData(txn, key) shouldBe List(Datum.create(key.head, "datum", false))
@@ -153,7 +154,7 @@ trait StorageActionsTests[F[_]]
 
       r2 <- space.consume(key, List(Wildcard), new StringsCaptor, persist = false)
       _  = store.isEmpty shouldBe true
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, keyHash) shouldBe Nil
             store.getPatterns(txn, key) shouldBe Nil
             store.getData(txn, key) shouldBe Nil
@@ -201,7 +202,7 @@ trait StorageActionsTests[F[_]]
 
     for {
       r1 <- space.produce(produceKey1.head, "datum1", persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, produceKey1Hash) shouldBe produceKey1
             store.getPatterns(txn, produceKey1) shouldBe Nil
             store.getData(txn, produceKey1) shouldBe List(
@@ -212,7 +213,7 @@ trait StorageActionsTests[F[_]]
       _ = r1 shouldBe Right(None)
 
       r2 <- space.consume(consumeKey, consumePattern, new StringsCaptor, persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, produceKey1Hash) shouldBe produceKey1
             store.getPatterns(txn, produceKey1) shouldBe Nil
             store.getData(txn, produceKey1) shouldBe List(
@@ -226,7 +227,7 @@ trait StorageActionsTests[F[_]]
           }
       _  = r2 shouldBe Right(None)
       r3 <- space.produce(produceKey2.head, "datum2", persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, produceKey1Hash) shouldBe Nil
             store.getPatterns(txn, produceKey1) shouldBe Nil
             store.getData(txn, produceKey1) shouldBe Nil
@@ -261,7 +262,7 @@ trait StorageActionsTests[F[_]]
 
     for {
       r1 <- space.produce(produceKey1.head, "datum1", persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, produceKey1Hash) shouldBe produceKey1
             store.getPatterns(txn, produceKey1) shouldBe Nil
             store.getData(txn, produceKey1) shouldBe List(
@@ -271,7 +272,7 @@ trait StorageActionsTests[F[_]]
           }
       _  = r1 shouldBe Right(None)
       r2 <- space.produce(produceKey2.head, "datum2", persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, produceKey2Hash) shouldBe produceKey2
             store.getPatterns(txn, produceKey2) shouldBe Nil
             store.getData(txn, produceKey2) shouldBe List(
@@ -281,7 +282,7 @@ trait StorageActionsTests[F[_]]
           }
       _  = r2 shouldBe Right(None)
       r3 <- space.produce(produceKey3.head, "datum3", persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, produceKey3Hash) shouldBe produceKey3
             store.getPatterns(txn, produceKey3) shouldBe Nil
             store.getData(txn, produceKey3) shouldBe List(
@@ -291,7 +292,7 @@ trait StorageActionsTests[F[_]]
           }
       _  = r3 shouldBe Right(None)
       r4 <- space.consume(List("ch1", "ch2", "ch3"), patterns, new StringsCaptor, persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, consumeKeyHash) shouldBe Nil
             store.getPatterns(txn, consumeKey) shouldBe Nil
             store.getData(txn, consumeKey) shouldBe Nil
@@ -320,7 +321,7 @@ trait StorageActionsTests[F[_]]
       r4 <- space.consume(key, List(Wildcard), captor, persist = false)
       r5 <- space.consume(key, List(Wildcard), captor, persist = false)
       r6 <- space.consume(key, List(Wildcard), captor, persist = false)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, store.hashChannels(key)) shouldBe Nil
             store.getData(txn, key) shouldBe Nil
             store.getPatterns(txn, key) shouldBe Nil
@@ -525,12 +526,12 @@ trait StorageActionsTests[F[_]]
       _ = r1 shouldBe Right(None)
       _ = r2 shouldBe Right(None)
 
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getData(txn, List("ch1", "ch2")) shouldBe Nil
             store.getData(txn, List("ch1")) shouldBe List(Datum.create("ch1", "datum1", false))
           }
 
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getWaitingContinuation(txn, List("ch1", "ch2")) should not be empty
             store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
             store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
@@ -563,7 +564,7 @@ trait StorageActionsTests[F[_]]
         .map(unpackEither[Id, String, Pattern, Nothing, StringsCaptor, String])
         .foreach(runK)
 
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getData(txn, List("ch1")) shouldBe Nil
             store.getData(txn, List("ch2")) shouldBe Nil
           }
@@ -592,7 +593,7 @@ trait StorageActionsTests[F[_]]
         r3 <- space.produce("ch1", "datum1", persist = false)
         r4 <- space.produce("ch2", "datum2", persist = false)
 
-        _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+        _ <- store.withReadTxnF { txn =>
               store.getWaitingContinuation(txn, List("ch1", "ch2")) should not be empty
               store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
               store.getWaitingContinuation(txn, List("ch2")) shouldBe Nil
@@ -607,7 +608,7 @@ trait StorageActionsTests[F[_]]
 
         _ = getK(r3).results should contain theSameElementsAs List(List("datum1"))
         //ensure that joins are cleaned-up after all
-        _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+        _ <- store.withReadTxnF { txn =>
               store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
               store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
             }
@@ -626,7 +627,7 @@ trait StorageActionsTests[F[_]]
     for {
       r1 <- space.produce(key.head, "datum", persist = false)
 
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, keyHash) shouldBe key
             store.getPatterns(txn, key) shouldBe Nil
             store.getData(txn, key) shouldBe List(Datum.create(key.head, "datum", false))
@@ -648,7 +649,7 @@ trait StorageActionsTests[F[_]]
 
       // the data has been consumed, so the write will "stick"
       r3 <- space.consume(key, List(Wildcard), new StringsCaptor, persist = true)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getChannels(txn, keyHash) shouldBe List("ch1")
             store.getPatterns(txn, key) shouldBe List(List(Wildcard))
             store.getData(txn, key) shouldBe Nil
@@ -667,7 +668,7 @@ trait StorageActionsTests[F[_]]
       for {
         r1 <- space.produce(key.head, "datum1", persist = false)
 
-        _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+        _ <- store.withReadTxnF { txn =>
               store.getChannels(txn, keyHash) shouldBe key
               store.getPatterns(txn, key) shouldBe Nil
               store.getData(txn, key) shouldBe List(Datum.create(key.head, "datum1", false))
@@ -690,7 +691,7 @@ trait StorageActionsTests[F[_]]
         // All matching data has been consumed, so the write will "stick"
         r3 <- space.consume(key, List(Wildcard), new StringsCaptor, persist = true)
 
-        _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+        _ <- store.withReadTxnF { txn =>
               store.getChannels(txn, keyHash) shouldBe List("ch1")
               store.getPatterns(txn, key) shouldBe List(List(Wildcard))
               store.getData(txn, key) shouldBe Nil
@@ -701,7 +702,7 @@ trait StorageActionsTests[F[_]]
 
         r4 <- space.produce(key.head, "datum2", persist = false)
 
-        _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+        _ <- store.withReadTxnF { txn =>
               store.getChannels(txn, keyHash) shouldBe List("ch1")
               store.getPatterns(txn, key) shouldBe List(List(Wildcard))
               store.getData(txn, key) shouldBe Nil
@@ -722,7 +723,7 @@ trait StorageActionsTests[F[_]]
       for {
         r1 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
 
-        _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+        _ <- store.withReadTxnF { txn =>
               store.getData(txn, List("ch1")) shouldBe Nil
               store.getWaitingContinuation(txn, List("ch1")) should not be empty
             }
@@ -731,7 +732,7 @@ trait StorageActionsTests[F[_]]
 
         r2 <- space.produce("ch1", "datum1", persist = false)
 
-        _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+        _ <- store.withReadTxnF { txn =>
               store.getData(txn, List("ch1")) shouldBe Nil
               store.getWaitingContinuation(txn, List("ch1")) should not be empty
             }
@@ -744,7 +745,7 @@ trait StorageActionsTests[F[_]]
 
         r3 <- space.produce("ch1", "datum2", persist = false)
 
-        _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+        _ <- store.withReadTxnF { txn =>
               store.getData(txn, List("ch1")) shouldBe Nil
               store.getWaitingContinuation(txn, List("ch1")) should not be empty
             }
@@ -778,7 +779,7 @@ trait StorageActionsTests[F[_]]
       // All matching continuations have been produced, so the write will "stick"
       r3 <- space.produce("ch1", "datum1", persist = true)
       _  = r3 shouldBe Right(None)
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getData(txn, List("ch1")) shouldBe List(Datum.create("ch1", "datum1", true))
             store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
           }
@@ -808,7 +809,7 @@ trait StorageActionsTests[F[_]]
         // All matching continuations have been produced, so the write will "stick"
         r3 <- space.produce("ch1", "datum1", persist = true)
 
-        _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+        _ <- store.withReadTxnF { txn =>
               store.getData(txn, List("ch1")) shouldBe List(Datum.create("ch1", "datum1", true))
               store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
             }
@@ -817,7 +818,7 @@ trait StorageActionsTests[F[_]]
 
         r4 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
-        _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+        _ <- store.withReadTxnF { txn =>
               store.getData(txn, List("ch1")) shouldBe List(Datum.create("ch1", "datum1", true))
               store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
             }
@@ -835,7 +836,7 @@ trait StorageActionsTests[F[_]]
     for {
       r1 <- space.produce("ch1", "datum1", persist = true)
 
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getData(txn, List("ch1")) shouldBe List(Datum.create("ch1", "datum1", true))
             store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
           }
@@ -844,7 +845,7 @@ trait StorageActionsTests[F[_]]
 
       r2 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getData(txn, List("ch1")) shouldBe List(Datum.create("ch1", "datum1", true))
             store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
           }
@@ -857,7 +858,7 @@ trait StorageActionsTests[F[_]]
 
       r3 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getData(txn, List("ch1")) shouldBe List(Datum.create("ch1", "datum1", true))
             store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
           }
@@ -884,7 +885,7 @@ trait StorageActionsTests[F[_]]
       // Matching data exists so the write will not "stick"
       r4 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
 
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getData(txn, List("ch1")) should contain atLeastOneOf (
               Datum.create("ch1", "datum1", false),
               Datum.create("ch1", "datum2", false),
@@ -902,7 +903,7 @@ trait StorageActionsTests[F[_]]
       // Matching data exists so the write will not "stick"
       r5 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
 
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getData(txn, List("ch1")) should contain oneOf (
               Datum.create("ch1", "datum1", false),
               Datum.create("ch1", "datum2", false),
@@ -931,7 +932,7 @@ trait StorageActionsTests[F[_]]
       // All matching data has been consumed, so the write will "stick"
       r7 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
 
-      _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+      _ <- store.withReadTxnF { txn =>
             store.getData(txn, List("ch1")) shouldBe Nil
             store.getWaitingContinuation(txn, List("ch1")) should not be empty
           }
@@ -997,7 +998,7 @@ trait StorageActionsTests[F[_]]
       for {
         r <- space.consume(key, patterns, new StringsCaptor, persist = false)
 
-        _ <- store.withTxnF(store.createTxnReadF()) { txn =>
+        _ <- store.withReadTxnF { txn =>
               store.getChannels(txn, keyHash) shouldBe List("ch1")
               store.getPatterns(txn, key) shouldBe List(patterns)
               store.getData(txn, key) shouldBe Nil
@@ -1349,50 +1350,51 @@ trait MonadicStorageActionsTests[F[_]]
 }
 
 trait LegacyStorageActionsTests
-    extends StorageTestsBase[Id, String, Pattern, Nothing, String, StringsCaptor]
+    extends StorageTestsBase[Coeval, String, Pattern, Nothing, String, StringsCaptor]
     with TestImplicitHelpers
     with GeneratorDrivenPropertyChecks
     with Checkers {
 
   "consuming with a list of patterns that is a different length than the list of channels" should
-    "throw" in withTestSpace { space =>
+    "throw" in withTestSpaceNonF { space =>
     an[IllegalArgumentException] shouldBe thrownBy(
-      space.consume(List("ch1", "ch2"), List(Wildcard), new StringsCaptor, persist = false)
+      space.consume(List("ch1", "ch2"), List(Wildcard), new StringsCaptor, persist = false).apply()
     )
     space.store.isEmpty shouldBe true
   }
 
-  "an install" should "not allow installing after a produce operation" in withTestSpace { space =>
-    val channel  = "ch1"
-    val datum    = "datum1"
-    val key      = List(channel)
-    val patterns = List(Wildcard)
+  "an install" should "not allow installing after a produce operation" in withTestSpaceNonF {
+    space =>
+      val channel  = "ch1"
+      val datum    = "datum1"
+      val key      = List(channel)
+      val patterns = List(Wildcard)
 
-    val ex = the[RuntimeException] thrownBy {
-      space.produce(channel, datum, persist = false)
-      space.install(key, patterns, new StringsCaptor)
-    }
-    ex.getMessage shouldBe "Installing can be done only on startup"
+      val ex = the[RuntimeException] thrownBy {
+        space.produce(channel, datum, persist = false).apply()
+        space.install(key, patterns, new StringsCaptor).apply()
+      }
+      ex.getMessage shouldBe "Installing can be done only on startup"
   }
 
-  "after close space" should "throw RSpaceClosedException on all store operations" in withTestSpace {
+  "after close space" should "throw RSpaceClosedException on all store operations" in withTestSpaceNonF {
     val channel  = "ch1"
     val key      = List(channel)
     val patterns = List(Wildcard)
 
     space =>
-      space.close()
+      space.close().apply()
       //using some nulls here to ensure that exception is thrown even before args check
       an[RSpaceClosedException] shouldBe thrownBy(
-        space.install(key, patterns, null)
+        space.install(key, patterns, null).apply()
       )
 
       an[RSpaceClosedException] shouldBe thrownBy(
-        space.consume(key, patterns, null, false)
+        space.consume(key, patterns, null, false).apply()
       )
 
       an[RSpaceClosedException] shouldBe thrownBy(
-        space.produce(channel, "test data", false)
+        space.produce(channel, "test data", false).apply()
       )
   }
 }
@@ -1407,6 +1409,18 @@ trait IdTests[C, P, A, R, K] extends StorageTestsBase[Id, C, P, A, R, K] {
     coop.rchain.rspace.test.contextShiftId
 
   override def run[RES](f: Id[RES]): RES = f
+}
+
+trait CoevalTests[C, P, A, R, K] extends StorageTestsBase[Coeval, C, P, A, R, K] {
+  override implicit val concurrentF: Concurrent[Coeval] =
+    coop.rchain.rspace.test.concurrentCoeval
+  override implicit val logF: Log[Coeval]         = Log.log[Coeval]
+  override implicit val metricsF: Metrics[Coeval] = new Metrics.MetricsNOP[Coeval]()(concurrentF)
+  override implicit val monadF: Monad[Coeval]     = concurrentF
+  override implicit val contextShiftF: ContextShift[Coeval] =
+    coop.rchain.rspace.test.contextShiftCoeval
+
+  override def run[RES](f: Coeval[RES]): RES = f.apply()
 }
 
 import monix.eval.Task
@@ -1453,23 +1467,23 @@ class MixedStoreStorageActionsTests
     with MonadicStorageActionsTests[Task]
 
 class LegacyInMemoryStoreStorageActionsTests
-    extends InMemoryStoreTestsBase[Id]
-    with IdTests[String, Pattern, Nothing, String, StringsCaptor]
+    extends InMemoryStoreTestsBase[Coeval]
+    with CoevalTests[String, Pattern, Nothing, String, StringsCaptor]
     with JoinOperationsTests
     with LegacyStorageActionsTests
 
 class LegacyLMDBStoreActionsTests
-    extends LMDBStoreTestsBase[Id]
-    with IdTests[String, Pattern, Nothing, String, StringsCaptor]
-    with StorageActionsTests[Id]
+    extends LMDBStoreTestsBase[Coeval]
+    with CoevalTests[String, Pattern, Nothing, String, StringsCaptor]
+    with StorageActionsTests[Coeval]
     with JoinOperationsTests
     with BeforeAndAfterAll
     with LegacyStorageActionsTests
 
 class LegacyMixedStoreActionsTests
-    extends MixedStoreTestsBase[Id]
-    with IdTests[String, Pattern, Nothing, String, StringsCaptor]
-    with StorageActionsTests[Id]
+    extends MixedStoreTestsBase[Coeval]
+    with CoevalTests[String, Pattern, Nothing, String, StringsCaptor]
+    with StorageActionsTests[Coeval]
     with JoinOperationsTests
     with BeforeAndAfterAll
     with LegacyStorageActionsTests

@@ -49,7 +49,10 @@ object IOError {
         Sync[F].raiseError(IOError.ExceptionWrapper(e))
     }
 
-  final case class ExceptionWrapper(e: IOError) extends Exception
+  final case class ExceptionWrapper(e: IOError) extends Exception {
+    override def getMessage: String =
+      e.message
+  }
 
   def errorMessage(error: IOError): String =
     error match {

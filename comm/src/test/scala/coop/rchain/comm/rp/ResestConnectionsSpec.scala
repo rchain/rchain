@@ -2,11 +2,11 @@ package coop.rchain.comm.rp
 
 import scala.concurrent.duration._
 
-import cats._
+import cats.{catsInstancesForId => _, _}
 
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.ski._
-import coop.rchain.catscontrib.TestOutlaws._
+import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.comm._
 import coop.rchain.comm.CommError._
 import coop.rchain.comm.protocol.routing._

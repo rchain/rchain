@@ -1,32 +1,20 @@
 package coop.rchain.casper.helper
+import cats.effect.Sync
 import coop.rchain.models.{ListParWithRandomAndPhlos, Par}
-import coop.rchain.rholang.interpreter.PrettyPrinter
+import coop.rchain.rholang.interpreter.{ContractCall, PrettyPrinter}
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
 import coop.rchain.shared.{Log, LogSource}
 
 object RhoLogger {
   val prettyPrinter = PrettyPrinter()
 
-  object IsLogMessage {
-    def unapply(p: Seq[ListParWithRandomAndPhlos]): Option[(String, Par)] =
-      p match {
-        case Seq(
-            ListParWithRandomAndPhlos(
-              Seq(IsString(logLevel), par),
-              _,
-              _
-            )
-            ) =>
-          Some((logLevel, par))
-        case _ => None
-      }
-  }
-
-  def handleMessage[F[_]: Log](
+  def handleMessage[F[_]: Log: Sync](
       ctx: SystemProcess.Context[F]
-  )(message: Seq[ListParWithRandomAndPhlos], x: Int): F[Unit] =
+  )(message: (Seq[ListParWithRandomAndPhlos], Int)): F[Unit] = {
+    val isContractCall = new ContractCall(ctx.space, ctx.dispatcher)
+
     message match {
-      case IsLogMessage(logLevel, par) =>
+      case isContractCall(_, Seq(IsString(logLevel), par)) =>
         val msg         = prettyPrinter.buildString(par)
         implicit val ev = LogSource.matLogSource
 
@@ -38,4 +26,5 @@ object RhoLogger {
           case "error" => Log[F].error(msg)
         }
     }
+  }
 }

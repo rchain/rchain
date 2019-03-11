@@ -3,7 +3,7 @@ package coop.rchain.rspace.examples
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
 import java.nio.file.{Files, Path}
 
-import cats.Id
+import cats.{Applicative, Id}
 import cats.effect.{Concurrent, ContextShift}
 import coop.rchain.metrics.Metrics
 import coop.rchain.rspace.ISpace.IdISpace
@@ -163,16 +163,16 @@ object AddressBookExample {
     /**
       * An instance of [[Match]] for [[Pattern]] and [[Entry]]
       */
-    implicit object matchPatternEntry extends Match[Pattern, Nothing, Entry, Entry] {
-      def get(p: Pattern, a: Entry): Either[Nothing, Option[Entry]] =
+    implicit def matchPatternEntry[F[_]](
+        implicit apF: Applicative[F]
+    ): Match[F, Pattern, Entry, Entry] =
+      (p: Pattern, a: Entry) =>
         p match {
-          case NameMatch(last) if a.name.last == last        => Right(Some(a))
-          case CityMatch(city) if a.address.city == city     => Right(Some(a))
-          case StateMatch(state) if a.address.state == state => Right(Some(a))
-          case _                                             => Right(None)
+          case NameMatch(last) if a.name.last == last        => apF.pure(Some(a))
+          case CityMatch(city) if a.address.city == city     => apF.pure(Some(a))
+          case StateMatch(state) if a.address.state == state => apF.pure(Some(a))
+          case _                                             => apF.pure(None)
         }
-
-    }
   }
 
   import implicits._

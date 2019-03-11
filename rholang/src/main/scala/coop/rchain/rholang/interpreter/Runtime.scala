@@ -8,6 +8,7 @@ import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
 import cats.mtl.FunctorTell
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Expr.ExprInstance.GString
@@ -17,7 +18,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.ShortLeashParams.ShortLeashParameters
 import coop.rchain.rholang.interpreter.Runtime._
-import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.{InterpreterError, SetupError}
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
@@ -143,6 +144,7 @@ object Runtime {
     val REG_NONCE_INSERT_CALLBACK: Long    = 21L
     val GET_DEPLOY_PARAMS: Long            = 22L
     val GET_TIMESTAMP: Long                = 23L
+    val REV_ADDRESS: Long                  = 24L
   }
 
   def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
@@ -162,12 +164,10 @@ object Runtime {
     val REG_INSERT_SIGNED: Par = byteName(11)
     val GET_DEPLOY_PARAMS: Par = byteName(12)
     val GET_TIMESTAMP: Par     = byteName(13)
+    val REV_ADDRESS: Par       = byteName(14)
   }
 
-  // because only we do installs
-  private val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
-
-  private def introduceSystemProcesses[F[_]: Applicative](
+  private def introduceSystemProcesses[F[_]: Sync](
       space: RhoISpace[F],
       replaySpace: RhoISpace[F],
       processes: List[(Name, Arity, Remainder, BodyRef)]
@@ -182,10 +182,11 @@ object Runtime {
             freeCount = arity
           )
         )
-        val continuation = TaggedContinuation(ScalaBodyRef(ref))
+        val continuation                   = TaggedContinuation(ScalaBodyRef(ref))
+        implicit val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
         List(
-          space.install(channels, patterns, continuation)(MATCH_UNLIMITED_PHLOS),
-          replaySpace.install(channels, patterns, continuation)(MATCH_UNLIMITED_PHLOS)
+          space.install(channels, patterns, continuation),
+          replaySpace.install(channels, patterns, continuation)
         )
     }.sequence
 
@@ -273,15 +274,47 @@ object Runtime {
       BodyRefs.GET_TIMESTAMP, { ctx =>
         ctx.systemProcesses.blockTime(ctx.blockTime)
       }
+    ),
+    SystemProcess.Definition[F](
+      "rho:rev:address",
+      FixedChannels.REV_ADDRESS,
+      3,
+      BodyRefs.REV_ADDRESS, { ctx =>
+        ctx.systemProcesses.validateRevAddress
+      }
     )
   )
+
+  def createWithEmptyCost[F[_]: ContextShift: Concurrent: Log: Metrics, M[_]](
+      dataDir: Path,
+      mapSize: Long,
+      storeType: StoreType,
+      extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
+  )(
+      implicit
+      P: Parallel[F, M],
+      executionContext: ExecutionContext
+  ): F[Runtime[F]] =
+    (for {
+      costAccounting <- CostAccounting.empty[F]
+      runtime <- {
+        implicit val ca: CostAccounting[F] = costAccounting
+        implicit val cost: _cost[F]        = loggingCost(ca, noOpCostLog)
+        create(dataDir, mapSize, storeType, extraSystemProcesses)
+      }
+    } yield (runtime))
 
   def create[F[_]: ContextShift: Concurrent: Log: Metrics, M[_]](
       dataDir: Path,
       mapSize: Long,
       storeType: StoreType,
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
-  )(implicit P: Parallel[F, M], executionContext: ExecutionContext): F[Runtime[F]] = {
+  )(
+      implicit P: Parallel[F, M],
+      executionContext: ExecutionContext,
+      cost: _cost[F],
+      costAccounting: CostAccounting[F]
+  ): F[Runtime[F]] = {
     val errorLog                               = new ErrorLog[F]()
     implicit val ft: FunctorTell[F, Throwable] = errorLog
 

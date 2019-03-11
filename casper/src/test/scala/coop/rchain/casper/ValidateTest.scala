@@ -603,8 +603,13 @@ class ValidateTest
       val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
       val storageSize: Long = 1024L * 1024
       for {
-        activeRuntime <- Runtime
-                          .create[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB)
+
+        activeRuntime <- Runtime.createWithEmptyCost[Task, Task.Par](
+                          storageDirectory,
+                          storageSize,
+                          StoreType.LMDB
+                        )
+
         runtimeManager <- RuntimeManager.fromRuntime[Task](activeRuntime)
 
         dag               <- blockDagStorage.getRepresentation

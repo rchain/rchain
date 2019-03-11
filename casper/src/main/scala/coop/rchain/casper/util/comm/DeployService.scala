@@ -51,7 +51,7 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
     stub.showBlock(q).map(_.toEither[BlockQueryResponse].map(_.toProtoString))
 
   def visualizeDag(q: VisualizeDagQuery): Task[Either[Seq[String], String]] =
-    stub.visualizeDag(q).map(_.toEither[VisualizeBlocksResponse].map(_.toProtoString))
+    stub.visualizeDag(q).map(_.toEither[VisualizeBlocksResponse].map(_.content))
 
   def showBlocks(q: BlocksQuery): Task[Either[Seq[String], String]] =
     stub

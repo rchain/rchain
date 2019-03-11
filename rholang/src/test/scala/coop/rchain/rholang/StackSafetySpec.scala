@@ -191,7 +191,7 @@ class StackSafetySpec extends FlatSpec with TableDrivenPropertyChecks with Match
       PrettyPrinter().buildString(ast)
       checkSuccess(rho) {
         mkRuntime(tmpPrefix, mapSize).use { runtime =>
-          Interpreter[Task].evaluate(runtime, ast)
+          Interpreter[Task].evaluate(runtime, rho)
         }
       }
     }

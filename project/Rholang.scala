@@ -38,32 +38,12 @@ object Rholang {
   }
 
   val rholangSource             = settingKey[File]("Default Rholang source directory.")
-  val rholangProtoBuildAssembly = taskKey[File]("Rholang proto build Jar")
-  val rholangScalaProto =
-    taskKey[Seq[File]]("Generates managed Scala sources and proto from Rholang.")
 
   lazy val rholangSettings = Seq(
     exportJars := true,
     rholangSource in Compile := (sourceDirectory in Compile).value / "rholang",
     rholangSource in Test := (sourceDirectory in Test).value / "rholang",
-    sourceGenerators in Compile += (rholangScalaProto in Compile).taskValue,
-    sourceGenerators in Test += (rholangScalaProto in Test).taskValue,
-    rholangScalaProto in Compile := {
-      constructArtifacts(
-        rholangProtoBuildAssembly.value,
-        (rholangSource in Compile).value,
-        (sourceManaged in Compile).value,
-        (resourceManaged in Compile).value
-      )
-    },
-    rholangScalaProto in Test := {
-      constructArtifacts(
-        rholangProtoBuildAssembly.value,
-        (rholangSource in Test).value,
-        (sourceManaged in Test).value,
-        (resourceManaged in Test).value
-      )
-    },
+
     mappings in (Compile, packageBin) ++= {
       val generatedProtos = (resourceManaged in Compile).value ** "*.proto"
       generatedProtos pair relativeTo((resourceManaged in Compile).value)

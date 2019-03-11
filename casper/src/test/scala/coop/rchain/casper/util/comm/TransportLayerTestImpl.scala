@@ -3,6 +3,7 @@ package coop.rchain.casper.util.comm
 import cats.Monad
 import cats.implicits._
 import cats.mtl.MonadState
+import cats.effect._
 
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.comm.protocol.routing._
@@ -58,7 +59,7 @@ object TestNetwork {
           }
     } yield ()
 
-  def empty[F[_]](implicit captureF: Capture[F], monadF: Monad[F]): TestNetwork[F] =
+  def empty[F[_]](implicit sync: Sync[F], monadF: Monad[F]): TestNetwork[F] =
     new AtomicMonadState[F, NodeMessageQueues](AtomicAny(Map.empty))
 }
 

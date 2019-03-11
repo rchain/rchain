@@ -14,7 +14,6 @@ import coop.rchain.casper.util.implicits._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.models._
-import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.{Log, LogSource, Time}
 import java.nio.charset.StandardCharsets

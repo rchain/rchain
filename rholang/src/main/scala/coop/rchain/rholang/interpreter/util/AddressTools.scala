@@ -1,7 +1,6 @@
 package coop.rchain.rholang.interpreter.util
 
-import java.nio.charset.StandardCharsets
-
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.rholang.interpreter.util.codec.Base58
 
@@ -17,9 +16,9 @@ class AddressTools(prefix: Array[Byte], keyLength: Int, checksumLength: Int) {
     * @param pk the public key from which the address is derived
     * @return None if the key length is invalid or Some if the address was created successfully
     */
-  def fromPublicKey(pk: Array[Byte]): Option[String] =
-    if (keyLength == pk.length) {
-      val keyHash = Blake2b256.hash(pk)
+  def fromPublicKey(pk: PublicKey): Option[String] =
+    if (keyLength == pk.bytes.length) {
+      val keyHash = Blake2b256.hash(pk.bytes)
       val payload = prefix ++ keyHash
       val address = payload ++ computeChecksum(payload)
 
@@ -52,14 +51,16 @@ class AddressTools(prefix: Array[Byte], keyLength: Int, checksumLength: Int) {
       val (actualPrefix, keyHash) = payload.splitAt(prefix.length)
 
       if (actualPrefix.deep == prefix.deep) Right(Address(actualPrefix, keyHash))
-      else Left("invalid prefix")
+      else Left("Invalid prefix")
     }
 
     for {
-      decodedAddress <- Base58.decode(address).toRight("Invalid Base58 encoding")
-      _              <- validateLength(decodedAddress)
-      payload        <- validateChecksum(decodedAddress)
-      address        <- parsePayload(payload)
+      decodedAddress <- Base58
+                         .decode(address)
+                         .toRight("Invalid Base58 encoding")
+      _       <- validateLength(decodedAddress)
+      payload <- validateChecksum(decodedAddress)
+      address <- parsePayload(payload)
     } yield address
   }
 }

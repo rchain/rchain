@@ -3,7 +3,7 @@ package coop.rchain.casper
 import cats.effect.Sync
 import cats.Monad
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.Capture.taskCapture
+
 import coop.rchain.blockstorage.IndexedBlockDagStorage
 import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.helper.BlockGenerator._

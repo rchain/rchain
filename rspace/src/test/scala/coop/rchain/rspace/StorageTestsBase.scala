@@ -49,6 +49,7 @@ trait StorageTestsBase[F[_], C, P, E, A, K] extends FlatSpec with Matchers with 
   /** A fixture for creating and running a test with a fresh instance of the test store.
     */
   def withTestSpace[R](f: T => F[R]): R
+  def withTestSpaceNonF[R](f: T => R): R = withTestSpace((t: T) => concurrentF.delay(f(t)))
   def run[S](f: F[S]): S
 
   def validateIndexedStates(
@@ -56,77 +57,82 @@ trait StorageTestsBase[F[_], C, P, E, A, K] extends FlatSpec with Matchers with 
       indexedStates: Seq[(State, Int)],
       reportName: String,
       differenceReport: Boolean = false
-  ): Boolean = {
+  ): F[Boolean] = {
     final case class SetRow(data: Set[Datum[A]], wks: Set[WaitingContinuation[P, K]])
 
     def convertMap(m: Map[Seq[C], Row[P, A, K]]): Map[Seq[C], SetRow] =
       m.map { case (channels, row) => channels -> SetRow(row.data.toSet, row.wks.toSet) }
 
-    val tests: Seq[Any] = indexedStates
-      .map {
+    val tests: F[List[Boolean]] = indexedStates.toList
+      .traverse {
         case (State(checkpoint, rawExpectedContents, expectedJoins), chunkNo) =>
-          space.reset(checkpoint)
-          val num = "%02d".format(chunkNo)
+          for {
+            _ <- space.reset(checkpoint)
+          } yield {
+            val num = "%02d".format(chunkNo)
 
-          val expectedContents = convertMap(rawExpectedContents)
-          val actualContents   = convertMap(space.store.toMap)
+            val expectedContents = convertMap(rawExpectedContents)
+            val actualContents   = convertMap(space.store.toMap)
 
-          val contentsTest = expectedContents == actualContents
+            val contentsTest = expectedContents == actualContents
 
-          val actualJoins = space.store.joinMap
+            val actualJoins = space.store.joinMap
 
-          val joinsTest =
-            expectedJoins.forall {
-              case (hash: Blake2b256Hash, expecteds: Seq[Seq[C]]) =>
-                val expected = HashMultiset.create[Seq[C]](expecteds.asJava)
-                val actual   = HashMultiset.create[Seq[C]](actualJoins(hash).asJava)
-                expected.equals(actual)
-            }
-
-          val result = contentsTest && joinsTest
-          if (!result) {
-            if (!contentsTest) {
-              logger.error(s"$num: store had unexpected contents ($reportName)")
-            }
-
-            if (!joinsTest) {
-              logger.error(s"$num: store had unexpected joins ($reportName)")
-            }
-
-            if (differenceReport) {
-              logger.error(s"difference report ($reportName)")
-              for ((expectedChannels, expectedRow) <- expectedContents) {
-                val actualRow = actualContents.get(expectedChannels)
-
-                actualRow match {
-                  case Some(row) =>
-                    if (row != expectedRow) {
-                      logger.error(
-                        s"key [$expectedChannels] invalid actual value: $row !== $expectedRow"
-                      )
-                    }
-                  case None => logger.error(s"key [$expectedChannels] not found in actual records")
-                }
+            val joinsTest =
+              expectedJoins.forall {
+                case (hash: Blake2b256Hash, expecteds: Seq[Seq[C]]) =>
+                  val expected = HashMultiset.create[Seq[C]](expecteds.asJava)
+                  val actual   = HashMultiset.create[Seq[C]](actualJoins(hash).asJava)
+                  expected.equals(actual)
               }
 
-              for ((actualChannels, actualRow) <- actualContents) {
-                val expectedRow = expectedContents.get(actualChannels)
+            val result = contentsTest && joinsTest
+            if (!result) {
+              if (!contentsTest) {
+                logger.error(s"$num: store had unexpected contents ($reportName)")
+              }
 
-                expectedRow match {
-                  case Some(row) =>
-                    if (row != actualRow) {
-                      logger.error(
-                        s"key[$actualChannels] invalid actual value: $actualRow !== $row"
-                      )
-                    }
-                  case None => logger.error(s"key [$actualChannels] not found in expected records")
+              if (!joinsTest) {
+                logger.error(s"$num: store had unexpected joins ($reportName)")
+              }
+
+              if (differenceReport) {
+                logger.error(s"difference report ($reportName)")
+                for ((expectedChannels, expectedRow) <- expectedContents) {
+                  val actualRow = actualContents.get(expectedChannels)
+
+                  actualRow match {
+                    case Some(row) =>
+                      if (row != expectedRow) {
+                        logger.error(
+                          s"key [$expectedChannels] invalid actual value: $row !== $expectedRow"
+                        )
+                      }
+                    case None =>
+                      logger.error(s"key [$expectedChannels] not found in actual records")
+                  }
+                }
+
+                for ((actualChannels, actualRow) <- actualContents) {
+                  val expectedRow = expectedContents.get(actualChannels)
+
+                  expectedRow match {
+                    case Some(row) =>
+                      if (row != actualRow) {
+                        logger.error(
+                          s"key[$actualChannels] invalid actual value: $actualRow !== $row"
+                        )
+                      }
+                    case None =>
+                      logger.error(s"key [$actualChannels] not found in expected records")
+                  }
                 }
               }
             }
+            result
           }
-          result
       }
-    !tests.contains(false)
+    tests.map(!_.contains(false))
   }
 }
 
@@ -150,7 +156,7 @@ abstract class InMemoryStoreTestsBase[F[_]]
       testStore = testSpace.store
       trieStore = testStore.trieStore
       _ <- testStore
-            .withTxnF(testStore.createTxnWriteF()) { txn =>
+            .withWriteTxnF { txn =>
               testStore.withTrieTxn(txn) { trieTxn =>
                 testStore.clear(txn)
                 testStore.trieStore.clear(trieTxn)
@@ -195,7 +201,7 @@ abstract class LMDBStoreTestsBase[F[_]]
                   )
       testStore = testSpace.store
       _ <- testStore
-            .withTxnF(testStore.createTxnWriteF()) { txn =>
+            .withWriteTxnF { txn =>
               testStore.withTrieTxn(txn) { trieTxn =>
                 testStore.clear(txn)
                 testStore.trieStore.clear(trieTxn)
@@ -241,7 +247,7 @@ abstract class MixedStoreTestsBase[F[_]]
                   )
       testStore = testSpace.store
       _ <- testStore
-            .withTxnF(testStore.createTxnWriteF()) { txn =>
+            .withWriteTxnF { txn =>
               testStore.withTrieTxn(txn) { trieTxn =>
                 testStore.clear(txn)
                 testStore.trieStore.clear(trieTxn)

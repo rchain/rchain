@@ -5,7 +5,7 @@ import java.nio.file.StandardOpenOption
 import cats.implicits._
 import coop.rchain.shared.PathOps._
 import coop.rchain.catscontrib.TaskContrib.TaskOps
-import coop.rchain.catscontrib.Capture.taskCapture
+
 import cats.effect.Sync
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagRepresentation.Validator
@@ -203,7 +203,11 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
     val (list, latestMessageHashes, latestMessages, topoSort, topoSortTail) = lookupResult
     val realLatestMessages = blockElements.foldLeft(Map.empty[Validator, BlockMetadata]) {
       case (lm, b) =>
-        lm.updated(b.sender, BlockMetadata.fromBlock(b, false))
+        // Ignore empty sender for genesis block
+        if (b.sender != ByteString.EMPTY)
+          lm.updated(b.sender, BlockMetadata.fromBlock(b, false))
+        else
+          lm
     }
     list.zip(blockElements).foreach {
       case ((blockMetadata, latestMessageHash, latestMessage, children, contains), b) =>
@@ -219,10 +223,8 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
           )
         contains shouldBe true
     }
-    latestMessageHashes shouldBe blockElements.map(b => b.sender -> b.blockHash).toMap
-    latestMessages shouldBe blockElements
-      .map(b => b.sender -> BlockMetadata.fromBlock(b, false))
-      .toMap
+    latestMessageHashes shouldBe realLatestMessages.mapValues(_.blockHash)
+    latestMessages shouldBe realLatestMessages
 
     def normalize(topoSort: Vector[Vector[BlockHash]]): Vector[Vector[BlockHash]] =
       if (topoSort.size == 1 && topoSort.head.isEmpty)
@@ -246,6 +248,28 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
           result        <- lookupElements(blockElements, secondStorage)
           _             <- secondStorage.close()
         } yield testLookupElementsResult(result, blockElements)
+      }
+    }
+  }
+
+  it should "be able to restore latest messages with genesis with empty sender field" in {
+    forAll(blockElementsWithParentsGen, minSize(0), sizeRange(10)) { blockElements =>
+      val blockElementsWithGenesis = blockElements match {
+        case x :: xs =>
+          val genesis = x.withSender(ByteString.EMPTY)
+          genesis :: xs
+        case Nil =>
+          Nil
+      }
+      withDagStorageLocation { (dagDataDir, blockStore) =>
+        for {
+          firstStorage  <- createAtDefaultLocation(dagDataDir)(blockStore)
+          _             <- blockElementsWithGenesis.traverse_(firstStorage.insert(_, false))
+          _             <- firstStorage.close()
+          secondStorage <- createAtDefaultLocation(dagDataDir)(blockStore)
+          result        <- lookupElements(blockElementsWithGenesis, secondStorage)
+          _             <- secondStorage.close()
+        } yield testLookupElementsResult(result, blockElementsWithGenesis)
       }
     }
   }

@@ -2,24 +2,23 @@ package coop.rchain.rholang.interpreter.util
 import coop.rchain.crypto.hash.Blake2b256
 import org.scalacheck._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import org.scalatest.{FlatSpec, Matchers, PropSpec}
-import cats.implicits._
-import coop.rchain.rholang.interpreter.util.codec.Base58
+import org.scalatest.{Matchers, PropSpec}
+import coop.rchain.crypto.PublicKey
 
 class AddressToolsSpec extends PropSpec with GeneratorDrivenPropertyChecks with Matchers {
   implicit val propertyCheckConfiguration =
     PropertyCheckConfiguration(minSuccessful = 10000, sizeRange = 200)
 
-  def genByteArrayOf(n: Int) = Gen.listOfN(n, Arbitrary.arbByte.arbitrary).map(_.toArray)
+  private def genByteArrayOf(n: Int) = Gen.listOfN(n, Arbitrary.arbByte.arbitrary).map(_.toArray)
 
-  val genArgs =
+  private val genArgs =
     for {
       prefixLength   <- Gen.posNum[Int]
       keyLength      <- Gen.posNum[Int]
       checksumLength <- Gen.choose(0, Blake2b256.hashLength)
       prefix         <- genByteArrayOf(prefixLength)
       publicKey      <- genByteArrayOf(keyLength)
-    } yield (prefix, keyLength, checksumLength, publicKey)
+    } yield (prefix, keyLength, checksumLength, PublicKey(publicKey))
 
   property("parse after fromPublicKey works correctly") {
 
@@ -32,7 +31,7 @@ class AddressToolsSpec extends PropSpec with GeneratorDrivenPropertyChecks with 
         val parsedAddress = tools.parse(address).right.get
 
         parsedAddress.prefix should be(prefix.deep)
-        parsedAddress.keyHash should be(Blake2b256.hash(pk))
+        parsedAddress.keyHash should be(Blake2b256.hash(pk.bytes))
     }
   }
 

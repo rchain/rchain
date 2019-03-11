@@ -14,7 +14,7 @@ private[sorter] object ConnectiveSortMatcher extends Sortable[Connective] {
           pars <- cb.ps.toList.traverse(Sortable[Par].sortMatch[F])
         } yield
           ScoredTerm(
-            Connective(ConnAndBody(cb.withPs(pars.map(_.term.get)))),
+            Connective(ConnAndBody(cb.withPs(pars.map(_.term)))),
             Node(Score.CONNECTIVE_AND, pars.map(_.score): _*)
           )
       case ConnOrBody(cb) =>
@@ -22,7 +22,7 @@ private[sorter] object ConnectiveSortMatcher extends Sortable[Connective] {
           pars <- cb.ps.toList.traverse(Sortable[Par].sortMatch[F])
         } yield
           ScoredTerm(
-            Connective(ConnOrBody(cb.withPs(pars.map(_.term.get)))),
+            Connective(ConnOrBody(cb.withPs(pars.map(_.term)))),
             Node(Score.CONNECTIVE_OR, pars.map(_.score): _*)
           )
       case ConnNotBody(p) =>
@@ -30,7 +30,7 @@ private[sorter] object ConnectiveSortMatcher extends Sortable[Connective] {
           scoredPar <- Sortable.sortMatch(p)
         } yield
           ScoredTerm(
-            Connective(ConnNotBody(scoredPar.term.get)),
+            Connective(ConnNotBody(scoredPar.term)),
             Node(Score.CONNECTIVE_NOT, scoredPar.score)
           )
       case v @ VarRefBody(VarRef(index, depth)) =>
