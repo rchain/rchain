@@ -87,11 +87,22 @@ package object io {
   def createTemporaryFile[F[_]: Sync: RaiseIOError](prefix: String, suffix: String): F[Path] =
     handleIo(Files.createTempFile(prefix, suffix), UnexpectedIOError.apply)
 
+  def createSameDirectoryTemporaryFile[F[_]: Sync: RaiseIOError](original: Path): F[Path] = {
+    val tmpFile = original.resolveSibling(original.getFileName + ".tmp")
+    deleteIfExists(tmpFile) >> createFile(tmpFile)
+  }
+
   def createNewFile[F[_]: Sync: RaiseIOError](filePath: Path): F[Boolean] =
     handleIo(filePath.toFile.createNewFile(), UnexpectedIOError.apply)
 
   def createFile[F[_]: Sync: RaiseIOError](filePath: Path): F[Path] =
     handleIo(Files.createFile(filePath), UnexpectedIOError.apply)
+
+  def deleteIfExists[F[_]: Sync: RaiseIOError](filePath: Path): F[Boolean] =
+    handleIo(Files.deleteIfExists(filePath), {
+      case e: DirectoryNotEmptyException => DirectoryNotEmpty(e)
+      case e                             => UnexpectedIOError(e)
+    })
 
   def writeToFile[F[_]: Sync: RaiseIOError](
       filePath: Path,

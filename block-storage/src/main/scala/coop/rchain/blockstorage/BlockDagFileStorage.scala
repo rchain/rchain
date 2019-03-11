@@ -327,7 +327,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
   private def updateLatestMessagesCrcFile(newCrc: Crc32[F]): F[Unit] =
     for {
       newCrcBytes <- newCrc.bytes
-      tmpCrc      <- createTemporaryFile("rchain-block-dag-file-storage-latest-messages-", "-crc")
+      tmpCrc      <- createSameDirectoryTemporaryFile(latestMessagesCrcFilePath)
       _           <- writeToFile[F](tmpCrc, newCrcBytes)
       _           <- replaceFile(tmpCrc, latestMessagesCrcFilePath)
     } yield ()
@@ -340,15 +340,9 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
       latestMessages                <- getLatestMessages
       latestMessagesLogOutputStream <- getLatestMessagesLogOutputStream
       _                             <- latestMessagesLogOutputStream.close
-      tmpSquashedData <- createTemporaryFile(
-                          "rchain-block-dag-store-latest-messages-",
-                          "-squashed-data"
-                        )
-      tmpSquashedCrc <- createTemporaryFile(
-                         "rchain-block-dag-store-latest-messages-",
-                         "-squashed-crc"
-                       )
-      dataByteBuffer = ByteBuffer.allocate(64 * latestMessages.size)
+      tmpSquashedData               <- createSameDirectoryTemporaryFile(latestMessagesDataFilePath)
+      tmpSquashedCrc                <- createSameDirectoryTemporaryFile(latestMessagesCrcFilePath)
+      dataByteBuffer                = ByteBuffer.allocate(64 * latestMessages.size)
       _ <- latestMessages.toList.traverse_ {
             case (validator, blockHash) =>
               Sync[F].delay {
@@ -396,7 +390,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
   private def updateDataLookupCrcFile(newCrc: Crc32[F]): F[Unit] =
     for {
       newCrcBytes <- newCrc.bytes
-      tmpCrc      <- createTemporaryFile[F]("rchain-block-dag-file-storage-data-lookup-", "-crc")
+      tmpCrc      <- createSameDirectoryTemporaryFile(blockMetadataCrcPath)
       _           <- writeToFile[F](tmpCrc, newCrcBytes)
       _           <- replaceFile(tmpCrc, blockMetadataCrcPath)
     } yield ()
@@ -415,7 +409,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
   private def updateEquivocationsTrackerCrcFile(newCrc: Crc32[F]): F[Unit] =
     for {
       newCrcBytes <- newCrc.bytes
-      tmpCrc      <- createTemporaryFile("rchain-block-dag-file-storage-equivocations-tracker-", "-crc")
+      tmpCrc      <- createSameDirectoryTemporaryFile(equivocationTrackerCrcPath)
       _           <- writeToFile[F](tmpCrc, newCrcBytes)
       _           <- replaceFile(tmpCrc, equivocationTrackerCrcPath)
     } yield ()
