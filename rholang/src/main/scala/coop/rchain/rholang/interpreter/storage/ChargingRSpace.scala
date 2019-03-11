@@ -84,8 +84,7 @@ object ChargingRSpace {
       ): F[Unit] =
         result match {
           case Left(oope) =>
-            // if we run out of phlos during the match we have to zero phlos available
-            cost.get.flatMap(charge[F]) >> Sync[F].raiseError(oope)
+            error.raise(oope)
 
           case Right(None) => Sync[F].unit
 
