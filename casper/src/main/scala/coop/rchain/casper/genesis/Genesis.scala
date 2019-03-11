@@ -48,6 +48,7 @@ object Genesis {
       StandardDeploys.basicWalletFaucet,
       StandardDeploys.walletCheck,
       StandardDeploys.systemInstances,
+      StandardDeploys.lockbox,
       StandardDeploys.rev(wallets, faucetCode, posParams)
     )
 

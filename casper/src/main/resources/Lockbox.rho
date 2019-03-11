@@ -1,0 +1,55 @@
+//scalapackage coop.rchain.rholang
+
+//Registry info:
+//  sk: 78623a45fb0de7c4bc35c7099e8037c09721fff814e58d419b0e1b21f5a630bb
+//  pk: 7e59141cbc0dfb24ca0e4fe57666895190740778871744be3cec262147e02f56
+//  user == pk
+//  timestamp: 1552131653401
+//Resulting unforgable name: Unforgeable(0xbcfcd4f7ab0b4e1f6c1018f38c42d9721180b9fc92ba4bbe8f00b5010513f80e)
+//  ==> signature data == 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a20d7da018b7065def0035d962198cf1581a6aae7509aff8ca75a4035ac5a2ce49c1001
+//  ==> signature == 5af8389f2e933cc7e3e701dbf53b75ac0a3ba05265a3fb166f010cf3b301a4837351f0ec752b334620f7efd56b9971ebedd9e6c137efcefe2bfa44627d866d0c
+//URI derived from pk == `rho:id:9dsr55z1js13x346yhhecx66ns486i3yqf6jafrd9p9hdrrbxjqmyu`
+new
+  Lockbox,
+  rs(`rho:registry:insertSigned:ed25519`),
+  uriOut,
+  getDeployData(`rho:deploy:params`)
+in {
+  contract Lockbox(@"lock", channel, retCh) = {
+    new privateCh, locker, getIdentity in {
+      contract getIdentity(retCh) = {
+        new ch in {
+          getDeployData ! (*ch) |
+          for (@_,@_,@userId, @_ <- ch) {
+            retCh ! (userId)
+          }
+        }
+      } |
+
+      getIdentity!(*privateCh) |
+      for(@deployer <- privateCh) {
+        contract locker(@"unlock", retCh) = {
+          new callerCh in {
+            getIdentity!(*callerCh) |
+            for(@caller <- callerCh) {
+              if (caller == deployer) {
+                retCh ! (*channel)
+              }
+              else {
+                retCh ! (Nil)
+              }
+            }
+          }
+        } |
+
+        retCh ! (bundle+{*locker})
+      }
+    }
+  } |
+  rs!(
+    "7e59141cbc0dfb24ca0e4fe57666895190740778871744be3cec262147e02f56".hexToBytes(),
+    (9223372036854775807, bundle+{*Lockbox}),
+    "095c952b451b9034b12d55383b71cc0e38069b5fc1cc2ecb2fb4828a045ccdb66ae042e2cf53ae57f0c6994c24e371f80f9eb107be3e11142ab798f42afcaf09".hexToBytes(),
+    *uriOut
+  )
+}
