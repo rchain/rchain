@@ -22,7 +22,7 @@ object Cost {
   def apply(value: Long): Cost = Cost(value, "")
 
   def toProto(c: Cost): PCost = PCost(c.value)
-  val Max                     = Cost(Integer.MAX_VALUE)
+  val UNSAFE_MAX              = Cost(Integer.MAX_VALUE)
 }
 
 trait Costs {

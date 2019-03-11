@@ -184,9 +184,9 @@ object Runtime {
         )
         val continuation = TaggedContinuation(ScalaBodyRef(ref))
         val cost0: _cost[F] =
-          loggingCost(CostAccounting.unsafe[F](Cost(Integer.MAX_VALUE)), noOpCostLog)
+          loggingCost(CostAccounting.unsafe[F](Cost.UNSAFE_MAX), noOpCostLog)
         val cost1: _cost[F] =
-          loggingCost(CostAccounting.unsafe[F](Cost(Integer.MAX_VALUE)), noOpCostLog)
+          loggingCost(CostAccounting.unsafe[F](Cost.UNSAFE_MAX), noOpCostLog)
         List(
           space.install(channels, patterns, continuation)(matchListPar(Sync[F], cost0)),
           replaySpace.install(channels, patterns, continuation)(
@@ -426,9 +426,9 @@ object Runtime {
     )
 
     val cost0: _cost[F] =
-      loggingCost(CostAccounting.unsafe[F](Cost(Integer.MAX_VALUE)), noOpCostLog)
+      loggingCost(CostAccounting.unsafe[F](Cost.UNSAFE_MAX), noOpCostLog)
     val cost1: _cost[F] =
-      loggingCost(CostAccounting.unsafe[F](Cost(Integer.MAX_VALUE)), noOpCostLog)
+      loggingCost(CostAccounting.unsafe[F](Cost.UNSAFE_MAX), noOpCostLog)
 
     for {
       spaceResult <- space.produce(

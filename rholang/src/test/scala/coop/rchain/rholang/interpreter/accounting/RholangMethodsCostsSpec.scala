@@ -743,7 +743,7 @@ class RholangMethodsCostsSpec
 
   def methodCallCost(reducer: ChargingReducer[Task]): Task[Cost] =
     reducer.phlo
-      .map(cost => Cost(Integer.MAX_VALUE) - cost - METHOD_CALL_COST)
+      .map(cost => Cost.UNSAFE_MAX - cost - METHOD_CALL_COST)
 
   def map(pairs: Seq[(Par, Par)]): Map[Par, Par] = Map(pairs: _*)
   def emptyMap: Map[Par, Par]                    = map(Seq.empty[(Par, Par)])
@@ -790,7 +790,7 @@ class RholangMethodsCostsSpec
 
     val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space)._2
     val test = for {
-      _   <- reducer.setPhlo(Cost(Integer.MAX_VALUE))
+      _   <- reducer.setPhlo(Cost.UNSAFE_MAX)
       res <- f(reducer)
     } yield res
     test.runSyncUnsafe(5.seconds)
