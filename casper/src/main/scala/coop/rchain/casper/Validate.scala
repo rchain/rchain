@@ -318,17 +318,7 @@ object Validate {
       dag: BlockDagRepresentation[F]
   ): F[Either[InvalidBlock, ValidBlock]] =
     for {
-      parents <- ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
-                  dag.lookup(parentHash).flatMap {
-                    case Some(p) => p.pure[F]
-                    case None =>
-                      Sync[F].raiseError[BlockMetadata](
-                        new Exception(
-                          s"Block dag store was missing ${PrettyPrinter.buildString(parentHash)}."
-                        )
-                      )
-                  }
-                }
+      parents <- ProtoUtil.parentHashes(b).toList.traverse(dag.unsafeLookup)
       maxBlockNumber = parents.foldLeft(-1L) {
         case (acc, p) => math.max(acc, p.blockNum)
       }
@@ -354,22 +344,14 @@ object Validate {
     * creator justification, this check will fail as expected. The exception is when
     * B's creator justification is the genesis block.
     */
-  @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
-  def sequenceNumber[F[_]: Monad: Log](
+  def sequenceNumber[F[_]: Sync: Log](
       b: BlockMessage,
       dag: BlockDagRepresentation[F]
   ): F[Either[InvalidBlock, ValidBlock]] =
     for {
       creatorJustificationSeqNumber <- ProtoUtil.creatorJustification(b).foldM(-1) {
                                         case (_, Justification(_, latestBlockHash)) =>
-                                          dag.lookup(latestBlockHash).map {
-                                            case Some(block) =>
-                                              block.seqNum
-                                            case None =>
-                                              throw new Exception(
-                                                s"Latest block hash ${PrettyPrinter.buildString(latestBlockHash)} is missing from block dag store."
-                                              )
-                                          }
+                                          dag.unsafeLookup(latestBlockHash).map(_.seqNum)
                                       }
       number = b.seqNum
       result = creatorJustificationSeqNumber + 1 == number
@@ -569,26 +551,8 @@ object Validate {
       previousBlockJustificationHash: BlockHash
   ): F[Boolean] =
     for {
-      maybeCurrentBlockJustification <- dag.lookup(currentBlockJustificationHash)
-      currentBlockJustification <- maybeCurrentBlockJustification match {
-                                    case Some(block) => block.pure[F]
-                                    case None =>
-                                      Sync[F].raiseError[BlockMetadata](
-                                        new Exception(
-                                          s"Missing ${PrettyPrinter.buildString(currentBlockJustificationHash)} from block dag store."
-                                        )
-                                      )
-                                  }
-      maybePreviousBlockJustification <- dag.lookup(previousBlockJustificationHash)
-      previousBlockJustification <- maybePreviousBlockJustification match {
-                                     case Some(block) => block.pure[F]
-                                     case None =>
-                                       Sync[F].raiseError[BlockMetadata](
-                                         new Exception(
-                                           s"Missing ${PrettyPrinter.buildString(previousBlockJustificationHash)} from block dag store."
-                                         )
-                                       )
-                                   }
+      currentBlockJustification  <- dag.unsafeLookup(currentBlockJustificationHash)
+      previousBlockJustification <- dag.unsafeLookup(previousBlockJustificationHash)
     } yield
       if (currentBlockJustification.seqNum < previousBlockJustification.seqNum) {
         true
