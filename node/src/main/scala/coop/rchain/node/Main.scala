@@ -24,7 +24,11 @@ object Main {
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private implicit val log: Log[Task]       = effects.log
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def main(args: Array[String]): Unit = {
+
+    val configuration = Configuration.build(args)
+    System.setProperty("rnode.data.dir", configuration.server.dataDir.toString) // NonUnitStatements
 
     implicit val scheduler: Scheduler = Scheduler.computation(
       Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
@@ -32,13 +36,7 @@ object Main {
       reporter = UncaughtExceptionLogger
     )
 
-    val exec: Task[Unit] =
-      for {
-        conf <- Configuration.build(args)
-        _    <- Task.defer(mainProgram(conf))
-      } yield ()
-
-    exec.unsafeRunSync
+    Task.defer(mainProgram(configuration)).unsafeRunSync
   }
 
   private def mainProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
@@ -102,6 +100,7 @@ object Main {
     val node =
       for {
         _       <- log.info(VersionInfo.get).toEffect
+        _       <- logConfiguration(conf).toEffect
         runtime <- NodeRuntime(conf)
         _       <- runtime.main
       } yield ()
@@ -118,6 +117,18 @@ object Main {
         log.error(s"Failed! Reason: '$error")
     }
   }
+
+  private def logConfiguration(conf: Configuration): Task[Unit] =
+    Task
+      .sequence(
+        Seq(
+          log.info(s"Starting with profile ${conf.profile}"),
+          log.info(s"Using configuration file: ${conf.configurationFile}"),
+          if (!conf.configurationFile.toFile.exists()) log.warn("Configuration file not found!")
+          else Task.unit
+        )
+      )
+      .void
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   implicit private def consoleIO: ConsoleIO[Task] = {
