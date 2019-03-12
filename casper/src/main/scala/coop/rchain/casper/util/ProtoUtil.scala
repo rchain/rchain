@@ -330,13 +330,10 @@ object ProtoUtil {
       result <- blocks
                  .foldM(List.empty[BlockMessage]) {
                    case (acc, b) =>
-                     acc.forallM(nonConflicting(b)).map { isNonConflictingWithAll =>
-                       if (isNonConflictingWithAll) {
-                         b :: acc
-                       } else {
-                         acc
-                       }
-                     }
+                     Monad[F].ifM(acc.forallM(nonConflicting(b)))(
+                       (b :: acc).pure[F],
+                       acc.pure[F]
+                     )
                  }
                  .map(_.reverse)
     } yield result
