@@ -99,8 +99,9 @@ class CasperPacketHandlerSpec extends WordSpec {
       })
     implicit val lab =
       LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
-    implicit val blockMap   = Ref.unsafe[Task, Map[BlockHash, BlockMessage]](Map.empty)
-    implicit val blockStore = InMemBlockStore.create[Task]
+    implicit val blockMap         = Ref.unsafe[Task, Map[BlockHash, BlockMessage]](Map.empty)
+    implicit val approvedBlockRef = Ref.unsafe[Task, Option[ApprovedBlock]](None)
+    implicit val blockStore       = InMemBlockStore.create[Task]
     implicit val blockDagStorage = InMemBlockDagStorage
       .create[Task]
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
