@@ -978,6 +978,137 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     } yield ()
   }
 
+  it should "XXXXXXXXXXXF" in effectTest {
+    val (otherSk, otherPk)          = Ed25519.newKeyPair
+    val (validatorKeys, validators) = (1 to 3).map(_ => Ed25519.newKeyPair).unzip
+    val (ethPivKeys, ethPubKeys)    = (1 to 3).map(_ => Secp256k1.newKeyPair).unzip
+    val ethAddresses =
+      ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.bytes.drop(1)).takeRight(20)))
+    val wallets = ethAddresses.map(addr => PreWallet(addr, BigInt(10001)))
+    val bonds = Map(
+      validators(0) -> 3L,
+      validators(1) -> 2L,
+      validators(2) -> 1L,
+    )
+    val minimumBond = 100L
+    val genesis =
+      buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, Faucet.basicWalletFaucet, 0L)
+
+    def deployment(i: Int, ts: Long): DeployData =
+      ProtoUtil.sourceDeploy(s"new x in { x!(0) }", ts, accounting.MAX_VALUE)
+
+    def deploy(
+                node: HashSetCasperTestNode[Effect],
+                dd: DeployData
+              ) = node.casperEff.deploy(dd)
+
+    def create(
+                node: HashSetCasperTestNode[Effect]
+              ) =
+      for {
+        createBlockResult1    <- node.casperEff.createBlock
+        Created(signedBlock1) = createBlockResult1
+      } yield signedBlock1
+
+    def add(node: HashSetCasperTestNode[Effect], signed: BlockMessage) =
+      Sync[Effect].attempt(
+        node.casperEff.addBlock(signed, ignoreDoppelgangerCheck[Effect])
+      )
+
+    def deployAndPropose(node: HashSetCasperTestNode[Effect], ts: Int) =
+      deploy(node, deployment(0, ts)) >> create(node) >>= (v1c1 => add(node, v1c1)) //V1#1
+
+    def deployX(node: HashSetCasperTestNode[Effect], ts: Int) =
+      deploy(node, deployment(0, ts)) >> create(node)
+
+    val network = TestNetwork.empty[Effect]
+
+    for {
+      nodes <- HashSetCasperTestNode
+        .networkEff(validatorKeys.take(3), genesis, testNetwork = network)
+        .map(_.toList)
+      v1   = nodes(0)
+      v2   = nodes(1)
+      v3   = nodes(2)
+      _ <- deployAndPropose(v2, 1)
+      _ <- deployAndPropose(v2, 2)
+      _    <- v2.receive()
+      _    <- v1.receive()
+      _    <- v3.receive()
+      _ <- deployAndPropose(v1, 3)
+      _ <- deployAndPropose(v3, 4)
+      _ <- deployAndPropose(v2, 5)
+      _ <- v1.receive()
+      _ <- deployAndPropose(v1, 6)
+      _ <- v1.receive()
+      _ <- deployAndPropose(v3, 7)
+      _ <- v1.receive()
+      _ <- v2.receive()
+      _ <- v1.receive()
+
+      dv11 <- deployX(v1, 8)
+      dv31 <- deployX(v3, 9)
+
+      _ <- deployAndPropose(v2, 10)
+
+      _ <- add(v3, dv31)
+
+      dv21 <- deployX(v2, 11)
+
+      _ <- add(v2, dv21)
+
+      _ <- add(v1, dv11)
+
+      _ <- v1.receive()
+      _ <- v3.receive()
+
+      _ <- deployAndPropose(v1, 12)
+      _ <- deployAndPropose(v1, 13)
+      _ <- deployAndPropose(v2, 14)
+
+      _ <- v3.receive()
+
+      _ <- deployAndPropose(v1, 15)
+      _ <- deployAndPropose(v3, 16)
+      _ <- deployAndPropose(v1, 17)
+      _ <- deployAndPropose(v1, 18)
+
+      _ <- v3.receive()
+
+      _ <- deployX(v3, 19)
+      _ <- v1.receive()
+
+      _ <- deployAndPropose(v1, 20)
+
+      _ <- v1.receive()
+
+      _ <- deployAndPropose(v1, 21)
+
+      _ <- deployX(v1, 22)
+
+      _ <- v3.receive()
+
+      dv22 <- deployX(v2, 23)
+      _ <- add(v2, dv22)
+
+      _ <- v1.receive()
+
+      r <- deployX(v2, 24)
+
+      _ = println(r)
+
+      _    = v3.logEff.warns shouldBe empty
+      _    = v1.logEff.warns shouldBe empty
+      _    = v2.logEff.warns shouldBe empty
+
+      _    = v3.logEff.errors shouldBe empty
+      _    = v1.logEff.errors shouldBe empty
+      _    = v2.logEff.errors shouldBe empty
+
+      _ <- nodes.map(_.tearDown()).sequence
+    } yield ()
+  }
+
   it should "estimate parent properly" in effectTest {
     val (otherSk, otherPk)          = Ed25519.newKeyPair
     val (validatorKeys, validators) = (1 to 5).map(_ => Ed25519.newKeyPair).unzip
