@@ -35,6 +35,15 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
       childMap.get(blockHash).pure[F]
     def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
       dataLookup.get(blockHash).pure[F]
+    def unsafeLookup(blockHash: BlockHash): F[BlockMetadata] =
+      dataLookup.get(blockHash) match {
+        case Some(block) => block.pure[F]
+        case None =>
+          val blockHashString = Base16.encode(blockHash.toByteArray)
+          Sync[F].raiseError[BlockMetadata](
+            new Exception(s"Missing block hash $blockHashString in block dag.")
+          )
+      }
     def contains(blockHash: BlockHash): F[Boolean] =
       dataLookup.contains(blockHash).pure[F]
     def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]] =

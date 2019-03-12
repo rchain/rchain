@@ -22,6 +22,7 @@ object BlockDagStorage {
 trait BlockDagRepresentation[F[_]] {
   def children(blockHash: BlockHash): F[Option[Set[BlockHash]]]
   def lookup(blockHash: BlockHash): F[Option[BlockMetadata]]
+  def unsafeLookup(blockHash: BlockHash): F[BlockMetadata]
   def contains(blockHash: BlockHash): F[Boolean]
   def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]]
   def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]]

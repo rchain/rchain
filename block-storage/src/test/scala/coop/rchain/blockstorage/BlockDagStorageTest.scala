@@ -45,17 +45,25 @@ trait BlockDagStorageTest
           dag <- dagStorage.getRepresentation
           blockElementLookups <- blockElements.traverse { b =>
                                   for {
-                                    blockMetadata     <- dag.lookup(b.blockHash)
-                                    latestMessageHash <- dag.latestMessageHash(b.sender)
-                                    latestMessage     <- dag.latestMessage(b.sender)
-                                  } yield (blockMetadata, latestMessageHash, latestMessage)
+                                    maybeBlockMetadata <- dag.lookup(b.blockHash)
+                                    blockMetadata      <- dag.unsafeLookup(b.blockHash)
+                                    latestMessageHash  <- dag.latestMessageHash(b.sender)
+                                    latestMessage      <- dag.latestMessage(b.sender)
+                                  } yield
+                                    (
+                                      maybeBlockMetadata,
+                                      blockMetadata,
+                                      latestMessageHash,
+                                      latestMessage
+                                    )
                                 }
           latestMessageHashes <- dag.latestMessageHashes
           latestMessages      <- dag.latestMessages
           _                   <- dagStorage.clear()
           _ = blockElementLookups.zip(blockElements).foreach {
-            case ((blockMetadata, latestMessageHash, latestMessage), b) =>
-              blockMetadata shouldBe Some(BlockMetadata.fromBlock(b, false))
+            case ((maybeBlockMetadata, blockMetadata, latestMessageHash, latestMessage), b) =>
+              maybeBlockMetadata shouldBe Some(BlockMetadata.fromBlock(b, false))
+              blockMetadata shouldBe BlockMetadata.fromBlock(b, false)
               latestMessageHash shouldBe Some(b.blockHash)
               latestMessage shouldBe Some(BlockMetadata.fromBlock(b, false))
           }
