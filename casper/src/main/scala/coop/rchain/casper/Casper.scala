@@ -63,8 +63,6 @@ sealed abstract class MultiParentCasperInstances {
       shardId: String
   ): F[MultiParentCasper[F]] =
     for {
-      // Initialize DAG storage with genesis block in case it is empty
-      _   <- BlockDagStorage[F].insert(genesis, false)
       dag <- BlockDagStorage[F].getRepresentation
       maybePostGenesisStateHash <- InterpreterUtil
                                     .validateBlockCheckpoint[F](
