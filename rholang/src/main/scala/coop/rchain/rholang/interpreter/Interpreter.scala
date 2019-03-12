@@ -27,8 +27,7 @@ object Interpreter {
   def apply[F[_]](implicit interpreter: Interpreter[F]): Interpreter[F] = interpreter
 
   implicit def interpreter[F[_]](
-      implicit M: Monad[F],
-      S: Sync[F],
+      implicit S: Sync[F],
       C: _cost[F],
       E: _error[F]
   ): Interpreter[F] =
@@ -42,7 +41,7 @@ object Interpreter {
         for {
           checkpoint <- runtime.space.createCheckpoint()
           res        <- injAttempt(runtime.reducer, runtime.errorLog, term, initialPhlo)
-          _          <- if (res.errors.nonEmpty) runtime.space.reset(checkpoint.root) else M.pure(())
+          _          <- if (res.errors.nonEmpty) runtime.space.reset(checkpoint.root) else S.pure(())
         } yield res
       }
 
