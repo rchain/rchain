@@ -12,6 +12,7 @@ import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, InMemoryTrieS
 import coop.rchain.rspace.internal.{codecGNAT, GNAT}
 import coop.rchain.rspace.util._
 import coop.rchain.shared.PathOps._
+import monix.eval.Coeval
 import org.scalatest.BeforeAndAfterAll
 import scodec.Codec
 
@@ -306,7 +307,7 @@ abstract class MixedInMemoryStoreStorageExamplesTestsBase[F[_]]
                   )
       testStore = testSpace.store
       trieStore = testStore.trieStore
-      _         <- testStore.withTxnF(testStore.createTxnWriteF())(testStore.clear)
+      _         <- testStore.withWriteTxnF(testStore.clear)
       _         = trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear)
       _         = initialize(trieStore, branch)
       res       <- f(testSpace)
@@ -350,7 +351,7 @@ abstract class InMemoryStoreStorageExamplesTestsBase[F[_]]
                   )
       testStore = testSpace.store
       trieStore = testStore.trieStore
-      _         <- testStore.withTxnF(testStore.createTxnWriteF())(testStore.clear)
+      _         <- testStore.withWriteTxnF(testStore.clear)
       _         <- trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear).pure[F]
       _         = initialize(trieStore, branch)
       res       <- f(testSpace)
@@ -381,7 +382,7 @@ abstract class LMDBStoreStorageExamplesTestBase[F[_]]
                     testStore,
                     Branch.MASTER
                   )
-      _   <- testStore.withTxnF(testStore.createTxnWriteF())(testStore.clear)
+      _   <- testStore.withWriteTxnF(testStore.clear)
       res <- f(testSpace)
     } yield {
       try {
@@ -401,16 +402,16 @@ abstract class LMDBStoreStorageExamplesTestBase[F[_]]
 }
 
 class InMemoryStoreStorageExamplesTests
-    extends InMemoryStoreStorageExamplesTestsBase[Id]
-    with IdTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
-    with StorageExamplesTests[Id]
+    extends InMemoryStoreStorageExamplesTestsBase[Coeval]
+    with CoevalTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    with StorageExamplesTests[Coeval]
 
 class MixedInMemoryStoreStorageExamplesTests
-    extends MixedInMemoryStoreStorageExamplesTestsBase[Id]
-    with IdTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
-    with StorageExamplesTests[Id]
+    extends MixedInMemoryStoreStorageExamplesTestsBase[Coeval]
+    with CoevalTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    with StorageExamplesTests[Coeval]
 
 class LMDBStoreStorageExamplesTest
-    extends LMDBStoreStorageExamplesTestBase[Id]
-    with IdTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
-    with StorageExamplesTests[Id]
+    extends LMDBStoreStorageExamplesTestBase[Coeval]
+    with CoevalTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    with StorageExamplesTests[Coeval]

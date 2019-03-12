@@ -4,9 +4,10 @@ new rl(`rho:registry:lookup`),
     RhoSpecCh,
     setup,
     stdlog(`rho:io:stdlog`),
-    testSetup, testAssertEquals, testAssertTrue, testAssertMany,
+    testSetup, testAssertEquals, testAssertNotEquals, testAssertTrue, testAssertMany,
     testAssertEqualsFromChannel, testAssertManyEqualsFromChannel,
-    testAssertEqualsForVariables,  testMultipleAttempts
+    testAssertEqualsForVariables,  testMultipleAttempts,
+    testAssertNotEqualsFromChannel
 in {
   stdlog!("info", "starting SuccessfulResultCollector...") |
   rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *RhoSpecCh) |
@@ -15,9 +16,11 @@ in {
     [
       ("setup runs correctly", *testSetup),
       ("assert equality", *testAssertEquals),
+      ("assert non equality", *testAssertNotEquals),
       ("assert boolean conditions", *testAssertTrue),
       ("assert many conditions", *testAssertMany),
       ("assert '== <-'", *testAssertEqualsFromChannel),
+      ("assert '!= <-'", *testAssertNotEqualsFromChannel),
       ("assertMany '== <-'", *testAssertManyEqualsFromChannel),
       ("run the test function multiple times", *testMultipleAttempts, 10)
     ])
@@ -41,6 +44,17 @@ in {
     }
   } |
 
+  contract testAssertNotEquals(rhoSpec, self, ackCh) = {
+    stdlog ! ("info", "testing nonequality") |
+    new privateAck in {
+      rhoSpec ! ("assert", ("abc", "!=", "xyz"), "strings should be not equal", *privateAck) |
+
+      for( _ <- privateAck) {
+        rhoSpec ! ("assert", (1, "!=", 0), "ints should not be equal", *ackCh)
+      }
+    }
+  } |
+
   contract testAssertTrue(rhoSpec, self, ackCh) = {
     rhoSpec ! ("assert", true, "boolean assertions should work", *ackCh)
   } |
@@ -58,6 +72,14 @@ in {
     new ch in {
       ch ! (1) |
       rhoSpec ! ("assert", (1, "== <-", *ch), "assert equals from channel", *ackCh)
+    }
+  } |
+
+  contract testAssertNotEqualsFromChannel(rhoSpec, self, ackCh) = {
+    stdlog ! ("info", "testing nonequality from channel") |
+    new ch in {
+      ch ! (1) |
+      rhoSpec ! ("assert", (0, "!= <-", *ch), "assert not equals from channel", *ackCh)
     }
   } |
 

@@ -3,49 +3,25 @@ import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.Expr.ExprInstance.{ETupleBody, GBool, GInt, GString}
+import coop.rchain.models.Expr.ExprInstance.{ETupleBody, GBool}
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.{ETuple, Expr, ListParWithRandomAndPhlos, Par, _}
+import coop.rchain.models.{ETuple, Expr, ListParWithRandomAndPhlos, Par}
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
-import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
-import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
-import coop.rchain.rspace.util.unpackCont
-
-object IsString {
-  def unapply(p: Par): Option[String] =
-    p.singleExpr().collect {
-      case Expr(GString(bs)) => bs
-    }
-}
-
-object IsBoolean {
-  def unapply(p: Par): Option[Boolean] =
-    p.singleExpr().collect {
-      case Expr(GBool(b)) => b
-    }
-}
-
-object IsNumber {
-  def unapply(p: Par): Option[Long] =
-    p.singleExpr().collect {
-      case Expr(GInt(v)) => v
-    }
-}
+import coop.rchain.rholang.interpreter.{ContractCall, RhoType}
 
 object IsAssert {
   def unapply(
-      p: Seq[ListParWithRandomAndPhlos]
-  ): Option[(String, Long, Par, String, AckedActionCtx)] =
+      p: Seq[Par]
+  ): Option[(String, Long, Par, String, Par)] =
     p match {
       case Seq(
-          ListParWithRandomAndPhlos(
-            Seq(IsString(testName), IsNumber(attempt), assertion, IsString(clue), ackChannel),
-            rand,
-            sequenceNumber
-          )
+          RhoType.String(testName),
+          RhoType.Number(attempt),
+          assertion,
+          RhoType.String(clue),
+          ackChannel
           ) =>
-        Some((testName, attempt, assertion, clue, AckedActionCtx(ackChannel, rand, sequenceNumber)))
+        Some((testName, attempt, assertion, clue, ackChannel))
       case _ => None
     }
 }
@@ -55,20 +31,14 @@ object IsComparison {
       p: Par
   ): Option[(Par, String, Par)] =
     p.singleExpr().collect {
-      case Expr(ETupleBody(ETuple(List(expected, IsString(operator), actual), _, _))) =>
+      case Expr(ETupleBody(ETuple(List(expected, RhoType.String(operator), actual), _, _))) =>
         (expected, operator, actual)
     }
 }
 object IsSetFinished {
-  def unapply(p: Seq[ListParWithRandomAndPhlos]): Option[Boolean] =
+  def unapply(p: Seq[Par]): Option[Boolean] =
     p match {
-      case Seq(
-          ListParWithRandomAndPhlos(
-            Seq(IsBoolean(hasFinished)),
-            _,
-            _
-          )
-          ) =>
+      case Seq(RhoType.Boolean(hasFinished)) =>
         Some(hasFinished)
       case _ => None
     }
@@ -85,6 +55,10 @@ case class RhoAssertTrue(testName: String, override val isSuccess: Boolean, clue
 case class RhoAssertEquals(testName: String, expected: Any, actual: Any, clue: String)
     extends RhoTestAssertion {
   override val isSuccess: Boolean = actual == expected
+}
+case class RhoAssertNotEquals(testName: String, unexpected: Any, actual: Any, clue: String)
+    extends RhoTestAssertion {
+  override val isSuccess: Boolean = actual != unexpected
 }
 
 case class TestResult(
@@ -115,76 +89,50 @@ class TestResultCollector[F[_]: Sync](result: Ref[F, TestResult]) {
 
   def getResult: F[TestResult] = result.get
 
-  private def runWithAck[T](
-      ctx: SystemProcess.Context[F],
-      actionCtx: AckedActionCtx,
-      action: F[T],
-      ackValue: Par
-  ): F[T] = {
-    val UNLIMITED_MATCH_PHLO = matchListPar(Cost(Integer.MAX_VALUE))
-
-    def sendAck(ackValue: Par) =
-      for {
-        produceResult <- ctx.space.produce(
-                          actionCtx.ackChannel,
-                          ListParWithRandom(Seq(ackValue), actionCtx.rand),
-                          persist = false,
-                          actionCtx.sequenceNumber.toInt
-                        )(UNLIMITED_MATCH_PHLO)
-
-        _ <- produceResult.fold(
-              _ => Sync[F].raiseError(OutOfPhlogistonsError),
-              _.fold(Sync[F].unit) {
-                case (cont, channels) =>
-                  ctx.dispatcher
-                    .dispatch(unpackCont(cont), channels.map(_.value), cont.sequenceNumber)
-              }
-            )
-      } yield ()
-
-    action <* sendAck(ackValue)
-  }
-
   def handleMessage(
       ctx: SystemProcess.Context[F]
-  )(message: Seq[ListParWithRandomAndPhlos], x: Int): F[Unit] =
+  )(message: (Seq[ListParWithRandomAndPhlos], Int)): F[Unit] = {
+
+    val isContractCall = new ContractCall[F](ctx.space, ctx.dispatcher)
+
     message match {
-      case IsAssert(testName, attempt, assertion, clue, ackedActionCtx) =>
+      case isContractCall(produce, IsAssert(testName, attempt, assertion, clue, ackChannel)) =>
         assertion match {
-          case IsComparison(expected, "==", actual) => {
+          case IsComparison(expected, "==", actual) =>
             val assertion = RhoAssertEquals(testName, expected, actual, clue)
-            runWithAck(
-              ctx,
-              ackedActionCtx,
-              result.update(_.addAssertion(attempt, assertion)),
-              Expr(GBool(assertion.isSuccess))
-            )
-          }
-          case IsBoolean(condition) =>
-            runWithAck(
-              ctx,
-              ackedActionCtx,
-              result.update(_.addAssertion(attempt, RhoAssertTrue(testName, condition, clue))),
-              Expr(GBool(condition))
-            )
+            for {
+              _ <- result.update(_.addAssertion(attempt, assertion))
+              _ <- produce(Seq(Expr(GBool(assertion.isSuccess))), ackChannel)
+            } yield ()
+          case IsComparison(unexpected, "!=", actual) =>
+            val assertion = RhoAssertNotEquals(testName, unexpected, actual, clue)
+            for {
+              _ <- result.update(_.addAssertion(attempt, assertion))
+              _ <- produce(Seq(Expr(GBool(assertion.isSuccess))), ackChannel)
+            } yield ()
+          case RhoType.Boolean(condition) =>
+            for {
+              _ <- result.update(_.addAssertion(attempt, RhoAssertTrue(testName, condition, clue)))
+              _ <- produce(Seq(Expr(GBool(condition))), ackChannel)
+            } yield ()
 
           case _ =>
-            runWithAck(
-              ctx,
-              ackedActionCtx,
-              result.update(
-                _.addAssertion(
-                  attempt,
-                  RhoAssertTrue(
-                    testName,
-                    isSuccess = false,
-                    s"Failed to evaluate assertion $assertion"
+            for {
+              _ <- result.update(
+                    _.addAssertion(
+                      attempt,
+                      RhoAssertTrue(
+                        testName,
+                        isSuccess = false,
+                        s"Failed to evaluate assertion $assertion"
+                      )
+                    )
                   )
-                )
-              ),
-              Expr(GBool(false))
-            )
+              _ <- produce(Seq(Expr(GBool(false))), ackChannel)
+            } yield ()
         }
-      case IsSetFinished(hasFinished) => result.update(_.setFinished(hasFinished))
+      case isContractCall(_, IsSetFinished(hasFinished)) =>
+        result.update(_.setFinished(hasFinished))
     }
+  }
 }

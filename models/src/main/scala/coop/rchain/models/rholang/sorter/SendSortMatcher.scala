@@ -12,7 +12,7 @@ private[sorter] object SendSortMatcher extends Sortable[Send] {
       sortedData <- s.data.toList.traverse(Sortable[Par].sortMatch[F])
       sortedSend = Send(
         chan = sortedChan.term,
-        data = sortedData.map(_.term.get),
+        data = sortedData.map(_.term),
         persistent = s.persistent,
         locallyFree = s.locallyFree,
         connectiveUsed = s.connectiveUsed

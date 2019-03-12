@@ -25,10 +25,7 @@ class StreamObservable(bufferSize: Int, folder: Path)(implicit log: Log[Task], s
     val storeBlob: Task[Option[Path]] =
       blob.packet.store[Task](folder) >>= {
         case Right(file) => Task.pure(Some(file))
-        case Left(UnableToStorePacket(p, er)) =>
-          log.error(s"Could not serialize packet $p. Error message: $er") *> None.pure[Task]
-        case Left(er) =>
-          log.error(s"Could not serialize packet ${blob.packet}. Error: $er") *> None.pure[Task]
+        case Left(e)     => log.error(e.message) >> None.pure[Task]
       }
 
     def push(file: Path): Task[Boolean] =
@@ -39,7 +36,7 @@ class StreamObservable(bufferSize: Int, folder: Path)(implicit log: Log[Task], s
 
     def retry(file: Path): Task[Unit] =
       Task
-        .defer(log.warn("Retrying push to client stream") *> propose(file))
+        .defer(log.warn("Retrying push to client stream") >> propose(file))
         .delayExecution(1.second)
 
     storeBlob >>= (_.fold(Task.unit)(propose))

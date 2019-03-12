@@ -9,7 +9,6 @@ import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.catscontrib.Capture._
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models._
 import coop.rchain.models.Expr.ExprInstance.GInt

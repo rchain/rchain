@@ -63,8 +63,8 @@ package object io {
   def isRegularFile[F[_]: Sync: RaiseIOError](path: Path): F[Boolean] =
     handleIo(Files.isRegularFile(path), UnexpectedIOError.apply)
 
-  def makeDirectory[F[_]: Sync: RaiseIOError](dirPath: Path): F[Boolean] =
-    handleIo(dirPath.toFile.mkdir(), UnexpectedIOError.apply)
+  def makeDirectory[F[_]: Sync: RaiseIOError](dirPath: Path): F[Path] =
+    handleIo(Files.createDirectories(dirPath), UnexpectedIOError.apply)
 
   def listInDirectory[F[_]: Sync: RaiseIOError](dirPath: Path): F[List[Path]] =
     for {
@@ -87,11 +87,22 @@ package object io {
   def createTemporaryFile[F[_]: Sync: RaiseIOError](prefix: String, suffix: String): F[Path] =
     handleIo(Files.createTempFile(prefix, suffix), UnexpectedIOError.apply)
 
+  def createSameDirectoryTemporaryFile[F[_]: Sync: RaiseIOError](original: Path): F[Path] = {
+    val tmpFile = original.resolveSibling(original.getFileName + ".tmp")
+    deleteIfExists(tmpFile) >> createFile(tmpFile)
+  }
+
   def createNewFile[F[_]: Sync: RaiseIOError](filePath: Path): F[Boolean] =
     handleIo(filePath.toFile.createNewFile(), UnexpectedIOError.apply)
 
   def createFile[F[_]: Sync: RaiseIOError](filePath: Path): F[Path] =
     handleIo(Files.createFile(filePath), UnexpectedIOError.apply)
+
+  def deleteIfExists[F[_]: Sync: RaiseIOError](filePath: Path): F[Boolean] =
+    handleIo(Files.deleteIfExists(filePath), {
+      case e: DirectoryNotEmptyException => DirectoryNotEmpty(e)
+      case e                             => UnexpectedIOError(e)
+    })
 
   def writeToFile[F[_]: Sync: RaiseIOError](
       filePath: Path,

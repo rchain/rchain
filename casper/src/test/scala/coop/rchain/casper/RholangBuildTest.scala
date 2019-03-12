@@ -7,7 +7,6 @@ import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.rholang.collection.ListOps
 import coop.rchain.rholang.interpreter.accounting
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}

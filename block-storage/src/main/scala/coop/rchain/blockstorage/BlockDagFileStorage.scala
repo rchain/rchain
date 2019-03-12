@@ -21,7 +21,6 @@ import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.blockstorage.util.io._
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.EquivocationRecord.SequenceNumber
 import coop.rchain.models.{BlockMetadata, EquivocationRecord}
@@ -328,7 +327,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
   private def updateLatestMessagesCrcFile(newCrc: Crc32[F]): F[Unit] =
     for {
       newCrcBytes <- newCrc.bytes
-      tmpCrc      <- createTemporaryFile("rchain-block-dag-file-storage-latest-messages-", "-crc")
+      tmpCrc      <- createSameDirectoryTemporaryFile(latestMessagesCrcFilePath)
       _           <- writeToFile[F](tmpCrc, newCrcBytes)
       _           <- replaceFile(tmpCrc, latestMessagesCrcFilePath)
     } yield ()
@@ -341,15 +340,9 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
       latestMessages                <- getLatestMessages
       latestMessagesLogOutputStream <- getLatestMessagesLogOutputStream
       _                             <- latestMessagesLogOutputStream.close
-      tmpSquashedData <- createTemporaryFile(
-                          "rchain-block-dag-store-latest-messages-",
-                          "-squashed-data"
-                        )
-      tmpSquashedCrc <- createTemporaryFile(
-                         "rchain-block-dag-store-latest-messages-",
-                         "-squashed-crc"
-                       )
-      dataByteBuffer = ByteBuffer.allocate(64 * latestMessages.size)
+      tmpSquashedData               <- createSameDirectoryTemporaryFile(latestMessagesDataFilePath)
+      tmpSquashedCrc                <- createSameDirectoryTemporaryFile(latestMessagesCrcFilePath)
+      dataByteBuffer                = ByteBuffer.allocate(64 * latestMessages.size)
       _ <- latestMessages.toList.traverse_ {
             case (validator, blockHash) =>
               Sync[F].delay {
@@ -397,7 +390,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
   private def updateDataLookupCrcFile(newCrc: Crc32[F]): F[Unit] =
     for {
       newCrcBytes <- newCrc.bytes
-      tmpCrc      <- createTemporaryFile[F]("rchain-block-dag-file-storage-data-lookup-", "-crc")
+      tmpCrc      <- createSameDirectoryTemporaryFile(blockMetadataCrcPath)
       _           <- writeToFile[F](tmpCrc, newCrcBytes)
       _           <- replaceFile(tmpCrc, blockMetadataCrcPath)
     } yield ()
@@ -416,7 +409,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
   private def updateEquivocationsTrackerCrcFile(newCrc: Crc32[F]): F[Unit] =
     for {
       newCrcBytes <- newCrc.bytes
-      tmpCrc      <- createTemporaryFile("rchain-block-dag-file-storage-equivocations-tracker-", "-crc")
+      tmpCrc      <- createSameDirectoryTemporaryFile(equivocationTrackerCrcPath)
       _           <- writeToFile[F](tmpCrc, newCrcBytes)
       _           <- replaceFile(tmpCrc, equivocationTrackerCrcPath)
     } yield ()
@@ -482,7 +475,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
                       }
                     }
                 _ <- updateLatestMessagesFile(
-                      (newValidators + block.sender).toList,
+                      newValidatorsWithSender.toList,
                       block.blockHash
                     )
                 _ <- updateDataLookupFile(blockMetadata)
@@ -894,7 +887,7 @@ object BlockDagFileStorage {
                }
     } yield result
 
-  def create[F[_]: Concurrent: Sync: Capture: Log: BlockStore](
+  def create[F[_]: Concurrent: Sync: Log: BlockStore](
       config: Config
   ): F[BlockDagFileStorage[F]] = {
     implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
@@ -1001,7 +994,7 @@ object BlockDagFileStorage {
       )
   }
 
-  def createEmptyFromGenesis[F[_]: Concurrent: Sync: Capture: Log: BlockStore](
+  def createEmptyFromGenesis[F[_]: Concurrent: Sync: Log: BlockStore](
       config: Config,
       genesis: BlockMessage
   ): F[BlockDagFileStorage[F]] = {

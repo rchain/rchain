@@ -17,7 +17,7 @@ object RhoSpec {
 
   private def mkRuntime(testResultCollector: TestResultCollector[Task]) = {
     val testResultCollectorService =
-      Seq((5, "assertAck", 24), (1, "testSuiteCompleted", 25))
+      Seq((5, "assertAck", 25), (1, "testSuiteCompleted", 26))
         .map {
           case (arity, name, n) =>
             SystemProcess.Definition[Task](
@@ -25,15 +25,15 @@ object RhoSpec {
               Runtime.byteName(n.toByte),
               arity,
               n.toLong,
-              testResultCollector.handleMessage
+              ctx => testResultCollector.handleMessage(ctx)(_, _)
             )
         } ++ Seq(
         SystemProcess.Definition[Task](
           "rho:io:stdlog",
-          Runtime.byteName(26),
+          Runtime.byteName(27),
           2,
-          26L,
-          RhoLogger.handleMessage[Task]
+          27L,
+          ctx => RhoLoggerContract.handleMessage(ctx)(_, _)
         )
       )
     TestUtil.runtime(testResultCollectorService)
@@ -74,6 +74,8 @@ class RhoSpec(
           assertions.foreach {
             case RhoAssertEquals(_, expected, actual, clue) =>
               actual should be(expected) withClue clueMsg(clue)
+            case RhoAssertNotEquals(_, unexpected, actual, clue) =>
+              actual should not be (unexpected) withClue clueMsg(clue)
             case RhoAssertTrue(_, v, clue) => v should be(true) withClue clueMsg(clue)
           }
         }
@@ -86,7 +88,7 @@ class RhoSpec(
     .runSyncUnsafe(executionTimeout)
 
   it should "finish execution within timeout" in {
-    result.hasFinished should be(true) withClue s"timeout of $executionTimeout expired"
+    if (!result.hasFinished) fail(s"Timeout of $executionTimeout expired")
   }
 
   result.assertions

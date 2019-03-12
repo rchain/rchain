@@ -1808,7 +1808,9 @@ object HashSetCasperTest {
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
     val activeRuntime =
-      Runtime.create[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB).unsafeRunSync
+      Runtime
+        .createWithEmptyCost[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB)
+        .unsafeRunSync
     val runtimeManager = RuntimeManager.fromRuntime[Task](activeRuntime).unsafeRunSync
     val emptyStateHash = runtimeManager.emptyStateHash
     val validators     = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq

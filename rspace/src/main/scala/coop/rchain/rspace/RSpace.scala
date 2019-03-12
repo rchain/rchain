@@ -56,7 +56,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
    * affecting the actual store contents.
    */
   private[this] def fetchChannelToIndexData(channels: Seq[C]) =
-    store.withTxnF(store.createTxnReadF()) { txn =>
+    store.withReadTxnF { txn =>
       channels.map { c: C =>
         c -> Random.shuffle(
           store.getData(txn, Seq(c)).zipWithIndex
@@ -72,21 +72,20 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
       consumeRef: Consume
   ): F[Either[E, MaybeDataCandidate]] =
     for {
-      _ <- store
-            .withTxnF(store.createTxnWriteF()) { txn =>
-              store.putWaitingContinuation(
-                txn,
-                channels,
-                WaitingContinuation(
-                  patterns,
-                  continuation,
-                  persist,
-                  consumeRef
-                )
+      _ <- store.withWriteTxnF { txn =>
+            store.putWaitingContinuation(
+              txn,
+              channels,
+              WaitingContinuation(
+                patterns,
+                continuation,
+                persist,
+                consumeRef
               )
-              for (channel <- channels)
-                store.addJoin(txn, channel, channels)
-            }
+            )
+            for (channel <- channels)
+              store.addJoin(txn, channel, channels)
+          }
       _ <- logF.debug(s"""|consume: no data found,
                           |storing <(patterns, continuation): ($patterns, $continuation)>
                           |at <channels: $channels>""".stripMargin.replace('\n', ' '))
@@ -101,7 +100,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
             Datum(_, persistData, _),
             dataIndex
             ) if !persistData =>
-          store.withTxnF(store.createTxnWriteF()) { txn =>
+          store.withWriteTxnF { txn =>
             store.removeDatum(
               txn,
               Seq(candidateChannel),
@@ -148,7 +147,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
       persist: Boolean,
       sequenceNumber: Int
   )(
-      implicit m: Match[P, E, A, R]
+      implicit m: Match[F, P, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] = {
     def storeWC(consumeRef: Consume) =
       storeWaitingContinuation(channels, patterns, continuation, persist, consumeRef)
@@ -190,19 +189,15 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
                        channelToIndexedData <- fetchChannelToIndexData(channels)
                        _                    <- span.mark("channel-to-indexed-data-fetched")
 
-                       options <- syncF.delay {
-                                   extractDataCandidates(
-                                     channels.zip(patterns),
-                                     channelToIndexedData,
-                                     Nil
-                                   ).sequence.map(_.sequence)
-                                 }
+                       options <- extractDataCandidates(
+                                   channels.zip(patterns),
+                                   channelToIndexedData,
+                                   Nil
+                                 ).map(_.sequence)
                        _ <- span.mark("extract-consume-candidate")
                        result <- options match {
-                                  case Left(e) =>
-                                    e.asLeft[MaybeDataCandidate].pure[F]
-                                  case Right(None) => storeWC(consumeRef)
-                                  case Right(Some(dataCandidates)) =>
+                                  case None => storeWC(consumeRef)
+                                  case Some(dataCandidates) =>
                                     for {
                                       _ <- metricsF.incrementCounter(consumeCommLabel)
                                       _ <- syncF.delay {
@@ -246,17 +241,18 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
       groupedChannels: Seq[Seq[C]],
       batChannel: C,
       data: Datum[A]
-  )(implicit m: Match[P, E, A, R]): F[Either[E, Option[ProduceCandidate[C, P, R, K]]]] = {
+  )(implicit m: Match[F, P, A, R]): F[Either[E, Option[ProduceCandidate[C, P, R, K]]]] = {
     type MaybeProduceCandidate = Option[ProduceCandidate[C, P, R, K]]
-    type CandidateChannels = Seq[C]
+    type CandidateChannels     = Seq[C]
     def go(
         acc: Seq[CandidateChannels]
     ): F[Either[Seq[CandidateChannels], Either[E, Option[ProduceCandidate[C, P, R, K]]]]] =
       acc match {
-        case Nil => none[ProduceCandidate[C, P, R, K]].asRight[E].asRight[Seq[CandidateChannels]].pure[F]
+        case Nil =>
+          none[ProduceCandidate[C, P, R, K]].asRight[E].asRight[Seq[CandidateChannels]].pure[F]
         case channels :: remaining =>
           for {
-            matchCandidates <- store.withTxnF(store.createTxnReadF()) { txn =>
+            matchCandidates <- store.withReadTxnF { txn =>
                                 Random.shuffle(
                                   store
                                     .getWaitingContinuation(txn, channels)
@@ -275,7 +271,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
              */
             channelToIndexedDataList <- channels.traverse { c: C =>
                                          store
-                                           .withTxnF(store.createTxnReadF()) { txn =>
+                                           .withReadTxnF { txn =>
                                              Random.shuffle(
                                                store
                                                  .getData(txn, Seq(c))
@@ -291,15 +287,16 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
                                                }
                                            )
                                        }
+            firstMatch <- extractFirstMatch(
+                           channels,
+                           matchCandidates,
+                           channelToIndexedDataList.toMap
+                         )
           } yield
-            extractFirstMatch(
-              channels,
-              matchCandidates,
-              channelToIndexedDataList.toMap
-            ) match {
-              case Left(e)                 => e.asLeft[MaybeProduceCandidate].asRight[Seq[CandidateChannels]]
-              case Right(None)             => remaining.asLeft[Either[E, MaybeProduceCandidate]]
-              case Right(produceCandidate) => produceCandidate.asRight[E].asRight[Seq[CandidateChannels]]
+            firstMatch match {
+              case None => remaining.asLeft[Either[E, MaybeProduceCandidate]]
+              case produceCandidate =>
+                produceCandidate.asRight[E].asRight[Seq[CandidateChannels]]
             }
       }
     groupedChannels.tailRecM(go)
@@ -330,7 +327,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
 
         def maybePersistWaitingContinuation =
           if (!persistK) {
-            store.withTxnF(store.createTxnWriteF()) { txn =>
+            store.withWriteTxnF { txn =>
               store.removeWaitingContinuation(
                 txn,
                 channels,
@@ -348,7 +345,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
                   Datum(_, persistData, _),
                   dataIndex
                   ) =>
-                store.withTxnF(store.createTxnWriteF()) { txn =>
+                store.withWriteTxnF { txn =>
                   if (!persistData && dataIndex >= 0) {
                     store.removeDatum(
                       txn,
@@ -391,14 +388,14 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
     for {
       _ <- logF.debug(s"produce: no matching continuation found")
       _ <- store
-            .withTxnF(store.createTxnWriteF()) { txn =>
+            .withWriteTxnF { txn =>
               store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
             }
       _ <- logF.debug(s"produce: persisted <data: $data> at <channel: $channel>")
     } yield Right(None)
 
   override def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
-      implicit m: Match[P, E, A, R]
+      implicit m: Match[F, P, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     contextShift.evalOn(scheduler) {
       for {
@@ -410,7 +407,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
                    for {
                      _ <- span.mark("produce-lock-acquired")
                      //TODO fix double join fetch
-                     groupedChannels <- store.withTxnF(store.createTxnReadF()) {
+                     groupedChannels <- store.withReadTxnF {
                                          store.getJoin(_, channel)
                                        }
                      _ <- span.mark("grouped-channels")

@@ -388,8 +388,8 @@ object ChargingRSpaceTest {
         sequenceNumber: Int
     )(
         implicit m: Match[
+          Task,
           BindPattern,
-          errors.InterpreterError,
           ListParWithRandom,
           ListParWithRandomAndPhlos
         ]
@@ -415,8 +415,8 @@ object ChargingRSpaceTest {
         sequenceNumber: Int
     )(
         implicit m: Match[
+          Task,
           BindPattern,
-          errors.InterpreterError,
           ListParWithRandom,
           ListParWithRandomAndPhlos
         ]
@@ -444,8 +444,8 @@ object ChargingRSpaceTest {
         continuation: TaggedContinuation
     )(
         implicit m: Match[
+          Task,
           BindPattern,
-          errors.InterpreterError,
           ListParWithRandom,
           ListParWithRandomAndPhlos
         ]

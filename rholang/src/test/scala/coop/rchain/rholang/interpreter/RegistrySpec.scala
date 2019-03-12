@@ -7,7 +7,7 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoDispatchMap
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
+import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.ISpace
@@ -23,6 +23,7 @@ trait RegistryTester extends PersistentStoreTester {
   implicit val errorLog = new ErrorLog[Task]()
   implicit val costAccounting =
     CostAccounting.unsafe[Task](Cost(Integer.MAX_VALUE))
+  implicit val cost: _cost[Task] = loggingCost(costAccounting, noOpCostLog[Task])
 
   private[this] def dispatchTableCreator(registry: Registry[Task]): RhoDispatchMap[Task] = {
     import coop.rchain.rholang.interpreter.Runtime.BodyRefs._
@@ -209,7 +210,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         r!("0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2".hexToBytes(), "result2")
       }"""
 
-    val lookupPar: Par = Interpreter[Coeval].buildNormalizedTerm(lookupString).value
+    val lookupPar: Par = ParBuilder[Coeval].buildNormalizedTerm(lookupString).value
 
     val completePar                     = lookupPar.addSends(rootSend, branchSend)
     implicit val rand: Blake2b512Random = baseRand.splitByte(1)
@@ -268,7 +269,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
             }
           }
         }"""
-    val insertPar: Par                      = Interpreter[Coeval].buildNormalizedTerm(insertString).value
+    val insertPar: Par                      = ParBuilder[Coeval].buildNormalizedTerm(insertString).value
     val completePar                         = insertPar.addSends(rootSend, branchSend)
     implicit val evalRand: Blake2b512Random = baseRand.splitByte(2)
 
@@ -384,7 +385,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
           }
         }
       }"""
-    val deletePar: Par                  = Interpreter[Coeval].buildNormalizedTerm(deleteString).value
+    val deletePar: Par                  = ParBuilder[Coeval].buildNormalizedTerm(deleteString).value
     val completePar                     = deletePar.addSends(rootSend, fullBranchSend)
     implicit val rand: Blake2b512Random = baseRand.splitByte(3)
 
@@ -474,7 +475,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         r!(`rho:id:bnm61w3958nhr5u6wx9yx6c4js77hcxmftc9o1yo4y9yxdu7g8bnq3`, "result0") |
         r!(`rho:id:bnmzm3i5h5hj8qyoh3ubmbu57zuqn56xrk175bw5sf6kook9bq8ny3`, "result1")
       }"""
-    val lookupPar: Par                  = Interpreter[Coeval].buildNormalizedTerm(lookupString).value
+    val lookupPar: Par                  = ParBuilder[Coeval].buildNormalizedTerm(lookupString).value
     val completePar                     = lookupPar.addSends(rootSend, branchSend)
     implicit val rand: Blake2b512Random = baseRand.splitByte(4)
     val newRand                         = rand.splitByte(2)
@@ -499,7 +500,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
           rl!(uri, "result1")
         }
       }"""
-    val registerPar: Par                = Interpreter[Coeval].buildNormalizedTerm(registerString).value
+    val registerPar: Par                = ParBuilder[Coeval].buildNormalizedTerm(registerString).value
     val completePar                     = registerPar.addSends(rootSend, branchSend)
     implicit val rand: Blake2b512Random = baseRand.splitByte(5)
     val newRand                         = rand.splitByte(2)
@@ -592,7 +593,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
           }
         }
       }"""
-    val registerPar: Par                = Interpreter[Coeval].buildNormalizedTerm(registerString).value
+    val registerPar: Par                = ParBuilder[Coeval].buildNormalizedTerm(registerString).value
     val completePar                     = registerPar.addSends(rootSend, branchSend)
     implicit val rand: Blake2b512Random = baseRand.splitByte(6)
     val newRand                         = rand.splitByte(2)

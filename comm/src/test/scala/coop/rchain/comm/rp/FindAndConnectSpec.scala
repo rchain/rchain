@@ -7,9 +7,9 @@ import coop.rchain.metrics.Metrics
 import scala.concurrent.duration._
 import org.scalatest._
 import org.scalatest.enablers.Containing
-import cats._, cats.data._, cats.implicits._
+import cats.{catsInstancesForId => _, _}, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
-import coop.rchain.catscontrib.TestOutlaws._
+import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.shared._
 import coop.rchain.comm.transport._
 import coop.rchain.comm.rp.ProtocolHelper._

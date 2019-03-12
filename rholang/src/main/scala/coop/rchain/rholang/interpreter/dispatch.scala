@@ -53,7 +53,7 @@ class RholangAndScalaDispatcher[M[_]] private (
 
 object RholangAndScalaDispatcher {
 
-  def create[M[_], F[_]](
+  def createWithEmptyCost[M[_], F[_]](
       tuplespace: RhoISpace[M],
       dispatchTable: => Map[Long, (Seq[ListParWithRandomAndPhlos], Int) => M[Unit]],
       urnMap: Map[String, Par]
@@ -65,6 +65,22 @@ object RholangAndScalaDispatcher {
   ): (Dispatch[M, ListParWithRandomAndPhlos, TaggedContinuation], ChargingReducer[M], Registry[M]) = {
     implicit val costAlg: CostAccounting[M] = CostAccounting.unsafe[M](Cost(0))
     implicit val cost: _cost[M]             = loggingCost(costAlg, noOpCostLog)
+    create(tuplespace, dispatchTable, urnMap)
+
+  }
+
+  def create[M[_], F[_]](
+      tuplespace: RhoISpace[M],
+      dispatchTable: => Map[Long, (Seq[ListParWithRandomAndPhlos], Int) => M[Unit]],
+      urnMap: Map[String, Par]
+  )(
+      implicit
+      cost: _cost[M],
+      costAccounting: CostAccounting[M],
+      parallel: Parallel[M, F],
+      s: Sync[M],
+      ft: FunctorTell[M, Throwable]
+  ): (Dispatch[M, ListParWithRandomAndPhlos, TaggedContinuation], ChargingReducer[M], Registry[M]) = {
 
     implicit lazy val dispatcher: Dispatch[M, ListParWithRandomAndPhlos, TaggedContinuation] =
       new RholangAndScalaDispatcher(dispatchTable)
@@ -74,7 +90,8 @@ object RholangAndScalaDispatcher {
 
     lazy val tuplespaceAlg = Tuplespace.rspaceTuplespace(chargingRSpace, dispatcher)
 
-    lazy val chargingRSpace: RhoPureSpace[M] = ChargingRSpace.pureRSpace(s, costAlg, tuplespace)
+    lazy val chargingRSpace: RhoPureSpace[M] =
+      ChargingRSpace.pureRSpace(s, costAccounting, tuplespace)
 
     val chargingReducer: ChargingReducer[M] = ChargingReducer[M]
 

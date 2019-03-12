@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter.storage
 
+import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.implicits._
 import coop.rchain.models.Var.VarInstance.FreeVar
@@ -25,34 +26,30 @@ object implicits {
       }
     }
 
-  def matchListPar(init: Cost): StorageMatch[
-    BindPattern,
-    InterpreterError,
-    ListParWithRandom,
-    ListParWithRandomAndPhlos
-  ] =
-    new StorageMatch[
-      BindPattern,
-      InterpreterError,
-      ListParWithRandom,
-      ListParWithRandomAndPhlos
-    ] {
+  def matchListPar[F[_]: Sync](
+      init: Cost
+  ): StorageMatch[F, BindPattern, ListParWithRandom, ListParWithRandomAndPhlos] =
+    new StorageMatch[F, BindPattern, ListParWithRandom, ListParWithRandomAndPhlos] {
 
       private def calcUsed(init: Cost, left: Cost): Cost = init - left
 
       def get(
           pattern: BindPattern,
           data: ListParWithRandom
-      ): Either[InterpreterError, Option[ListParWithRandomAndPhlos]] =
-        SpatialMatcher
-          .foldMatch[NonDetFreeMapWithCost, Par, Par](
-            data.pars,
-            pattern.patterns,
-            pattern.remainder
-          )
-          .runFirstWithCost(init)
-          .map {
-            case (left, resultMatch) =>
+      ): F[Option[ListParWithRandomAndPhlos]] =
+        Sync[F]
+          .delay {
+            SpatialMatcher
+              .foldMatch[NonDetFreeMapWithCost, Par, Par](
+                data.pars,
+                pattern.patterns,
+                pattern.remainder
+              )
+              .runFirstWithCost(init)
+          }
+          .flatMap {
+            case Left(err) => Sync[F].raiseError(err)
+            case Right((left, resultMatch)) =>
               val cost = calcUsed(init, left)
               resultMatch
                 .map {
@@ -68,6 +65,7 @@ object implicits {
                       cost.value
                     )
                 }
+                .pure[F]
           }
     }
 

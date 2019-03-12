@@ -4,8 +4,8 @@ import java.nio.file.Path
 
 import cats.Monad
 import cats.implicits._
+import cats.effect._
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.shared.{Log, LogSource}
@@ -39,7 +39,7 @@ object CasperConf {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
-  def parseValidatorsFile[F[_]: Monad: Capture: Log](
+  def parseValidatorsFile[F[_]: Monad: Sync: Log](
       knownValidatorsFile: Option[String]
   ): F[Set[ByteString]] =
     knownValidatorsFile match {
@@ -47,8 +47,8 @@ object CasperConf {
       case None => Set.empty[ByteString].pure[F]
 
       case Some(file) =>
-        Capture[F]
-          .capture {
+        Sync[F]
+          .delay {
             Try(
               Source
                 .fromFile(file)

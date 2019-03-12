@@ -18,6 +18,8 @@ trait CostAccounting[F[_]] {
 object CostAccounting {
   def of[F[_]: Sync](init: Cost): F[CostAccounting[F]] =
     Ref[F].of(init).map(ref => new CostAccountingImpl[F](ref))
+  def empty[F[_]: Sync]: F[CostAccounting[F]] =
+    this.of(Cost(0, "init"))
 
   def apply[F[_]](implicit ev: CostAccounting[F]): CostAccounting[F] = ev
 

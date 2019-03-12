@@ -15,7 +15,7 @@ import coop.rchain.casper.util._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang._
-import coop.rchain.catscontrib.{Capture, ListContrib}
+import coop.rchain.catscontrib.ListContrib
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
@@ -36,7 +36,7 @@ final case class CasperState(
     dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty
 )
 
-class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage](
+class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk: BlockDagStorage](
     runtimeManager: RuntimeManager[F],
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
@@ -83,13 +83,16 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Capture: ConnectionsCell: Tr
         status <- internalAddBlock(b, dag)
       } yield status
 
-    Sync[F].bracket(blockProcessingLock.acquire)(
-      kp(
-        blockDag >>= (_.contains(b.blockHash)
-          .||^(BlockStore[F].contains(b.blockHash))
-          .ifM(logAlreadyProcessed, doppelgangerAndAdd))
-      )
-    )(kp(blockProcessingLock.release))
+    Sync[F].bracket(blockProcessingLock.acquire)(kp {
+      val exists = for {
+        dag         <- blockDag
+        cst         <- state.read
+        dagContains <- dag.contains(b.blockHash)
+      } yield dagContains || cst.blockBuffer.contains(b.blockHash)
+
+      exists.ifM(logAlreadyProcessed, doppelgangerAndAdd)
+
+    })(kp(blockProcessingLock.release))
   }
 
   private def internalAddBlock(

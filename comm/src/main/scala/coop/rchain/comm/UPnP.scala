@@ -133,7 +133,7 @@ object UPnP {
     for {
       _       <- Log[F].info("trying to open ports using UPnP....")
       devices <- Sync[F].delay(discover)
-      res <- if (devices.gateways.isEmpty) logGatewayEmpty(devices) *> None.pure[F]
+      res <- if (devices.gateways.isEmpty) logGatewayEmpty(devices) >> None.pure[F]
             else tryOpenPorts(ports, devices)
     } yield res
 
