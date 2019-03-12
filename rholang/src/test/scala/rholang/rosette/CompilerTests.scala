@@ -7,6 +7,7 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.rholang.interpreter.{EvaluateResult, Interpreter, Runtime}
+import coop.rchain.rholang.interpreter.test._
 import coop.rchain.shared.Resources
 import monix.execution.Scheduler.Implicits.global
 import coop.rchain.rholang.Resources.mkRuntime
@@ -49,7 +50,10 @@ class CompilerTests extends FunSuite with Matchers {
     mkRuntime(tmpPrefix, mapSize)
       .use { runtime =>
         Resources.withResource(Source.fromFile(file.toString))(
-          fileContents => Interpreter[Task].evaluate(runtime, fileContents.mkString)
+          fileContents => {
+            interpreter[Task]
+              .evaluate(runtime, fileContents.mkString)
+          }
         )
       }
       .runSyncUnsafe(maxDuration)

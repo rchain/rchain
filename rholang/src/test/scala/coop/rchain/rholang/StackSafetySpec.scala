@@ -9,6 +9,7 @@ import coop.rchain.models.serialization.implicits._
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.StackSafetySpec.findMaxRecursionDepth
 import coop.rchain.rholang.interpreter.{Interpreter, ParBuilder, PrettyPrinter}
+import coop.rchain.rholang.interpreter.test
 import coop.rchain.rspace.Serialize
 import coop.rchain.shared.Log
 import monix.eval.{Coeval, Task}
@@ -191,7 +192,7 @@ class StackSafetySpec extends FlatSpec with TableDrivenPropertyChecks with Match
       PrettyPrinter().buildString(ast)
       checkSuccess(rho) {
         mkRuntime(tmpPrefix, mapSize).use { runtime =>
-          Interpreter[Task].evaluate(runtime, rho)
+          test.interpreter[Task].evaluate(runtime, rho)
         }
       }
     }

@@ -53,8 +53,7 @@ class RuntimeSpec extends FlatSpec with Matchers {
   private def execute(source: String): EvaluateResult =
     mkRuntime(tmpPrefix, mapSize)
       .use { runtime =>
-        Interpreter[Task]
-          .evaluate(runtime, source)
+        test.interpreter[Task].evaluate(runtime, source)
       }
       .runSyncUnsafe(maxDuration)
 }

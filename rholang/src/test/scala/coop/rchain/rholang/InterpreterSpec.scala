@@ -2,10 +2,13 @@ package coop.rchain.rholang
 
 import java.io.StringReader
 
+import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{EvaluateResult, Interpreter, Runtime}
+import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.test
 import monix.execution.Scheduler.Implicits.global
 import coop.rchain.rholang.Resources.mkRuntime
 import monix.eval.Task
@@ -131,6 +134,6 @@ class InterpreterSpec extends FlatSpec with Matchers {
       runtime: Runtime[Task],
       source: String
   ): Task[EvaluateResult] =
-    Interpreter[Task].evaluate(runtime, source)
+    test.interpreter[Task]().evaluate(runtime, source)
 
 }

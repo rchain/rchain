@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter.accounting
 
 import java.nio.file.Files
 
+import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.accounting.utils._
@@ -152,9 +153,9 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
     val contract                                     = "@1!(1)"
     val parsingCost                                  = accounting.parsingCost(contract).value
     val initialPhlo                                  = 1L + parsingCost
-    val expectedCosts                                = List(Cost(4, "substitution"))
+    val expectedCosts                                = List(Cost(6, "parsing"), Cost(4, "substitution"))
     val (EvaluateResult(totalCost, errors), costLog) = evaluateWithCostLog(initialPhlo, contract)
-    totalCost.value shouldBe parsingCost + expectedCosts.head.value
+    totalCost.value shouldBe expectedCosts.map(_.value).sum
     errors shouldBe (List(OutOfPhlogistonsError))
     costLog.toList should contain theSameElementsAs (expectedCosts)
   }

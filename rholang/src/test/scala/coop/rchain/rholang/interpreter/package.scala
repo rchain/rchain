@@ -12,14 +12,10 @@ import coop.rchain.rholang.interpreter.accounting._
 
 package object test {
 
-  def interpreter[M[_]: Sync](): M[Interpreter[M]] =
-    for {
-      costAlg <- CostAccounting.of[M](Cost.Max)
-      cost    = loggingCost[M](costAlg, noOpCostLog)
-      result = {
-        //implicit val c = cost
-        Interpreter[M]
-      }
-    } yield result
+  def interpreter[M[_]: Sync](): Interpreter[M] = {
+    implicit val costAlg = CostAccounting.unsafe[M](Cost.Max)
+    implicit val cost    = loggingCost[M](costAlg, noOpCostLog)
+    Interpreter[M]
+  }
 
 }
