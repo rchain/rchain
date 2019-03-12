@@ -66,6 +66,7 @@ class LockFreeInMemoryStore[F[_], T, C, P, A, K](
         throw ex
     } finally {
       txn.close()
+      updateGauges()
     }
 
   private[rspace] def withReadTxnF[R](f: Transaction => R): F[R] =

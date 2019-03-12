@@ -48,7 +48,18 @@ class InMemoryStore[F[_], T, C, P, A, K](
 
   override def emptyState: State[C, P, A, K] = State.empty
 
-  private[rspace] def updateGauges(): Unit = ???
+  private[this] val MetricsSource = RSpaceMetricsSource + ".in-mem"
+  private[this] val refine        = Map("path" -> "inmem")
+  private[this] val entriesGauge  = Kamon.gauge(MetricsSource + ".entries").refine(refine)
+
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // TODO stop throwing exceptions
+  private[rspace] def updateGauges(): Unit =
+    updateGauges { txn =>
+      txn.readState { state =>
+        entriesGauge.set(state.size)
+      }
+    }
 
   private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash =
     StableHashProvider.hash(channels)
