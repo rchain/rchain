@@ -160,6 +160,17 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
     costLog.toList should contain theSameElementsAs (expectedCosts)
   }
 
+  it should "not attempt reduction when there wasn't enought phlo for parsing" in {
+    val contract                                     = "@1!(1)"
+    val parsingCost                                  = accounting.parsingCost(contract).value
+    val initialPhlo                                  = parsingCost - 1
+    val expectedCosts                                = List(Cost(6, "parsing"))
+    val (EvaluateResult(totalCost, errors), costLog) = evaluateWithCostLog(initialPhlo, contract)
+    totalCost.value shouldBe expectedCosts.map(_.value).sum
+    errors shouldBe (List(OutOfPhlogistonsError))
+    costLog.toList should contain theSameElementsAs (expectedCosts)
+  }
+
   it should "stop the evaluation of all execution branches when one of them runs out of phlo" ignore {
     val contract                             = "@1!(1) | @2!(2) | @3!(3)"
     val initialPhlo                          = 5L + parsingCost(contract).value

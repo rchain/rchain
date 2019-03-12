@@ -52,22 +52,28 @@ object Interpreter {
           initialPhlo: Cost
       )(implicit rand: Blake2b512Random): F[EvaluateResult] = {
         val parsingCost = accounting.parsingCost(term)
-        ParBuilder[F].buildNormalizedTerm(term).attempt.flatMap {
-          case Right(parsed) =>
-            for {
-              _         <- reducer.setPhlo(initialPhlo)
-              _         <- charge[F](parsingCost).attempt
-              result    <- reducer.inj(parsed).attempt
-              phlosLeft <- reducer.phlo
-              oldErrors <- errorLog.readAndClearErrorVector()
-              newErrors = result.swap.toSeq.toVector
-              allErrors = oldErrors |+| newErrors
-            } yield EvaluateResult(initialPhlo - phlosLeft, allErrors)
-          case Left(error) =>
-            for {
-              _ <- charge[F](parsingCost).attempt
-            } yield EvaluateResult(parsingCost, Vector(error))
-        }
+        for {
+          _           <- reducer.setPhlo(initialPhlo)
+          parseResult <- charge[F](parsingCost).attempt
+          res <- parseResult match {
+                  case Right(_) =>
+                    ParBuilder[F].buildNormalizedTerm(term).attempt.flatMap {
+                      case Right(parsed) =>
+                        for {
+                          result    <- reducer.inj(parsed).attempt
+                          phlosLeft <- reducer.phlo
+                          oldErrors <- errorLog.readAndClearErrorVector()
+                          newErrors = result.swap.toSeq.toVector
+                          allErrors = oldErrors |+| newErrors
+                        } yield EvaluateResult(initialPhlo - phlosLeft, allErrors)
+                      case Left(error) =>
+                        EvaluateResult(parsingCost, Vector(error)).pure[F]
+                    }
+                  case Left(error) =>
+                    EvaluateResult(parsingCost, Vector(error)).pure[F]
+                }
+        } yield res
+
       }
 
     }
