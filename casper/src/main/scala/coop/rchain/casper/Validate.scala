@@ -363,7 +363,7 @@ object Validate {
   def futureTransaction[F[_]: Monad: Log](b: BlockMessage): F[Either[InvalidBlock, ValidBlock]] = {
     val blockNumber = ProtoUtil.blockNumber(b)
     val deploys     = ProtoUtil.deploys(b).flatMap(_.deploy)
-    deploys.find(_.validAfterBlockNumber > blockNumber) match {
+    deploys.find(_.validAfterBlockNumber >= blockNumber) match {
       case Some(futureDeploy) =>
         for {
           _ <- Log[F].warn(
@@ -384,7 +384,7 @@ object Validate {
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val earliestAcceptableValidAfterBlockNumber = ProtoUtil.blockNumber(b) - expirationThreshold
     val deploys                                 = ProtoUtil.deploys(b).flatMap(_.deploy)
-    deploys.find(_.validAfterBlockNumber < earliestAcceptableValidAfterBlockNumber) match {
+    deploys.find(_.validAfterBlockNumber <= earliestAcceptableValidAfterBlockNumber) match {
       case Some(expiredDeploy) =>
         for {
           _ <- Log[F].warn(

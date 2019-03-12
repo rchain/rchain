@@ -284,10 +284,12 @@ class ValidateTest
   "Future deploy validation" should "not accept blocks with a deploy for a future block number" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        deploy <- ProtoUtil.basicProcessedDeploy[Task](0)
+        deploy            <- ProtoUtil.basicProcessedDeploy[Task](0)
+        deployData        = deploy.deploy.get
+        updatedDeployData = deployData.withValidAfterBlockNumber(-1)
         block <- createBlock[Task](
                   Seq.empty[BlockHash],
-                  deploys = Seq(deploy)
+                  deploys = Seq(deploy.withDeploy(updatedDeployData))
                 )
         status <- Validate.futureTransaction[Task](block)
         _      = status should be(Right(Valid))

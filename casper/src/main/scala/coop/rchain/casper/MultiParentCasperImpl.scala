@@ -230,7 +230,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
       deploys             = state.deployHistory
       validDeploys = deploys.filter(
         d =>
-          d.validAfterBlockNumber <= currentBlockNumber && d.validAfterBlockNumber >= earliestBlockNumber
+          d.validAfterBlockNumber < currentBlockNumber && d.validAfterBlockNumber > earliestBlockNumber
       )
       deploysInCurrentChain <- DagOperations
                                 .bfTraverseF[F, BlockMessage](parents.toList)(
