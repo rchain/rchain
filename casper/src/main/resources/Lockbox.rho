@@ -15,8 +15,9 @@ new
   uriOut,
   getDeployData(`rho:deploy:params`)
 in {
-  contract Lockbox(@"lock", channel, retCh) = {
-    new privateCh, locker, getIdentity in {
+  contract Lockbox(@"lock", @ownerPubKeyBytes, protected, ret) = {
+    new locker, getIdentity in {
+
       contract getIdentity(retCh) = {
         new ch in {
           getDeployData ! (*ch) |
@@ -26,24 +27,24 @@ in {
         }
       } |
 
-      getIdentity!(*privateCh) |
-      for(@deployer <- privateCh) {
-        contract locker(@"unlock", retCh) = {
-          new callerCh in {
-            getIdentity!(*callerCh) |
-            for(@caller <- callerCh) {
-              if (caller == deployer) {
-                retCh ! (*channel)
-              }
-              else {
-                retCh ! (Nil)
-              }
-            }
-          }
-        } |
+      contract locker(@"unlock", retCh) = {
 
-        retCh ! (bundle+{*locker})
-      }
+        new callerCh in {
+          getIdentity!(*callerCh) |
+          for(@callerPubKeyBytes <- callerCh) {
+
+            if (callerPubKeyBytes == ownerPubKeyBytes) {
+              retCh ! (*protected)
+            }
+            else {
+              retCh ! (Nil)
+            }
+
+          }
+        }
+      } |
+
+      ret ! (bundle+{*locker})
     }
   } |
   rs!(

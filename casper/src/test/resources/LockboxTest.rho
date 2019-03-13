@@ -21,9 +21,9 @@ in {
 
     contract setup(returnCh) = {
       new privateCh in {
-        setDeployData ! ("userId", "1010".hexToBytes(), *privateCh) |
+        setDeployData ! ("userId", "0000".hexToBytes(), *privateCh) |
         for (_ <- privateCh) {
-          @Lockbox ! ("lock", *protectedChannel, *returnCh)
+          @Lockbox ! ("lock", "1010".hexToBytes(), *protectedChannel, *returnCh)
         }
       }
     } |
@@ -31,13 +31,17 @@ in {
     contract test_same_deployer(rhoSpec, box, ackCh) = {
       new retCh in {
         stdlog!("info", "Test same deployer...") |
-        box !("unlock", *retCh) |
-        rhoSpec!("assert",
-          (*protectedChannel, "== <-", *retCh),
-          "access should be allowed",
-          *ackCh)
+        setDeployData ! ("userId", "1010".hexToBytes(), *retCh) |
+        for (_ <- retCh) {
+          stdlog !("info", "Same userId set") |
+          box !("unlock", *retCh) |
+          rhoSpec!("assert",
+            (*protectedChannel, "== <-", *retCh),
+            "access should be allowed",
+            *ackCh)
+        }
       }
-    }|
+    } |
 
     contract test_different_deployer(rhoSpec, box, ackCh) = {
       new retCh in {
