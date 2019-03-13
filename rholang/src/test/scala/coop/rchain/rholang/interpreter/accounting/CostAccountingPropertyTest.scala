@@ -5,6 +5,7 @@ import java.nio.file.Files
 import cats._
 import cats.effect._
 import cats.implicits._
+import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
@@ -87,18 +88,19 @@ object CostAccountingPropertyTest {
       .map { _.sliding(2).forall { case List(r1, r2) => r1 == r2 } }
       .runSyncUnsafe(duration)
 
-  def execute[F[_]: Sync](runtime: Runtime[F], p: Proc): F[Long] =
+  def execute[F[_]: Sync: _cost](runtime: Runtime[F], p: Proc): F[Long] =
     for {
       program <- ParBuilder[F].buildPar(p)
       res     <- evaluatePar(runtime, program)
       cost    = res.cost
     } yield cost.value
 
-  def evaluatePar[F[_]: Sync](
+  def evaluatePar[F[_]: Monad: Sync: _cost](
       runtime: Runtime[F],
       par: Par
   ): F[EvaluateResult] = {
     val term = PP().buildString(par)
+
     Interpreter[F].evaluate(runtime, term)
   }
 
@@ -109,9 +111,14 @@ object CostAccountingPropertyTest {
     for {
       runtime <- TestRuntime.create[Task, Task.Par]()
       _       <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
-      res <- procs.toStream
-              .traverse(execute(runtime, _))
-              .map(_.sum)
+      costAlg <- CostAccounting.of[Task](Cost.Max)
+      cost    = loggingCost[Task](costAlg, noOpCostLog)
+      res <- {
+        implicit val c = cost
+        procs.toStream
+          .traverse(execute(runtime, _))
+          .map(_.sum)
+      }
     } yield res
 
   }

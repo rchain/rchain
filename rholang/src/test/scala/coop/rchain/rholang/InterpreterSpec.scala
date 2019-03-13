@@ -2,10 +2,12 @@ package coop.rchain.rholang
 
 import java.io.StringReader
 
+import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{EvaluateResult, Interpreter, Runtime}
+import coop.rchain.rholang.interpreter.accounting._
 import monix.execution.Scheduler.Implicits.global
 import coop.rchain.rholang.Resources.mkRuntime
 import monix.eval.Task
@@ -108,6 +110,38 @@ class InterpreterSpec extends FlatSpec with Matchers {
     )
   }
 
+  it should "capture rholang parsing errors and charge for parsing" in {
+    val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!("hi") """
+    val EvaluateResult(cost, errors) =
+      mkRuntime(tmpPrefix, mapSize)
+        .use { runtime =>
+          for {
+            res <- execute(runtime, badRholang)
+          } yield (res)
+        }
+        .runSyncUnsafe(maxDuration)
+
+    errors should not be empty
+    cost.value shouldEqual (parsingCost(badRholang).value)
+  }
+
+  it should "charge for parsing even when there's not enough phlo to complete it" in {
+    val sendRho = "@{0}!(0)"
+    val EvaluateResult(cost, errors) =
+      mkRuntime(tmpPrefix, mapSize)
+        .use { runtime =>
+          implicit val c = runtime.cost
+          for {
+            res <- Interpreter[Task]
+                    .evaluate(runtime, sendRho, parsingCost(sendRho) - Cost(1))
+          } yield (res)
+        }
+        .runSyncUnsafe(maxDuration)
+
+    errors should not be empty
+    cost.value shouldEqual (parsingCost(sendRho).value)
+  }
+
   private def storageContents(runtime: Runtime[Task]): String =
     StoragePrinter.prettyPrint(runtime.space.store)
 
@@ -130,7 +164,9 @@ class InterpreterSpec extends FlatSpec with Matchers {
   private def execute(
       runtime: Runtime[Task],
       source: String
-  ): Task[EvaluateResult] =
+  ): Task[EvaluateResult] = {
+    implicit val c = runtime.cost
     Interpreter[Task].evaluate(runtime, source)
+  }
 
 }

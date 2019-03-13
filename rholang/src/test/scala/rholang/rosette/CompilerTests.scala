@@ -49,7 +49,11 @@ class CompilerTests extends FunSuite with Matchers {
     mkRuntime(tmpPrefix, mapSize)
       .use { runtime =>
         Resources.withResource(Source.fromFile(file.toString))(
-          fileContents => Interpreter[Task].evaluate(runtime, fileContents.mkString)
+          fileContents => {
+            implicit val c = runtime.cost
+            Interpreter[Task]
+              .evaluate(runtime, fileContents.mkString)
+          }
         )
       }
       .runSyncUnsafe(maxDuration)

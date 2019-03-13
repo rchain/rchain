@@ -15,7 +15,7 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Interpreter
-import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{
   accounting,
@@ -210,7 +210,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
                 deploy
               )
               _                                      <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
-              injResult                              <- doInj(deploy, runtime.reducer, runtime.errorLog)
+              injResult                              <- doInj(deploy, runtime.reducer, runtime.errorLog)(runtime.cost)
               EvaluateResult(evaluationCost, errors) = injResult
               newCheckpoint                          <- runtime.space.createCheckpoint()
               deployResult = InternalProcessedDeploy(
@@ -250,7 +250,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
             for {
               _         <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
               _         <- runtime.replaySpace.rig(hash, log.toList)
-              injResult <- doInj(deploy, runtime.replayReducer, runtime.errorLog)
+              injResult <- doInj(deploy, runtime.replayReducer, runtime.errorLog)(runtime.cost)
               //TODO: compare replay deploy cost to given deploy cost
               EvaluateResult(cost, errors) = injResult
               cont <- DeployStatus.fromErrors(errors) match {
@@ -293,7 +293,8 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       deploy: DeployData,
       reducer: ChargingReducer[F],
       errorLog: ErrorLog[F]
-  ) = {
+  )(implicit C: _cost[F]) = {
+    import coop.rchain.catscontrib.mtl.implicits._
     implicit val rand: Blake2b512Random = Blake2b512Random(
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
     )

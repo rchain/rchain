@@ -36,6 +36,7 @@ class Runtime[F[_]: Sync] private (
     val space: RhoISpace[F],
     val replaySpace: RhoReplayISpace[F],
     val errorLog: ErrorLog[F],
+    val cost: _cost[F],
     val context: RhoContext[F],
     val shortLeashParams: Runtime.ShortLeashParams[F],
     val blockTime: Runtime.BlockTime[F]
@@ -414,6 +415,7 @@ object Runtime {
         space,
         replaySpace,
         errorLog,
+        cost,
         context,
         shortLeashParams,
         blockTime
