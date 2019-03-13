@@ -81,7 +81,12 @@ object Estimator {
         result <- if (currentBlockNumber < lastFinalizedBlockNumber)
                    List.empty[BlockHash].pure[F]
                  else
-                   blockDag.lookup(hash).map(_.get.parents)
+                   blockDag.lookup(hash).map { b =>
+                     b.get.parents.headOption match {
+                       case Some(head) => List(head)
+                       case None       => List.empty[BlockHash]
+                     }
+                   }
       } yield result
 
     def addValidatorWeightDownSupportingChain(
