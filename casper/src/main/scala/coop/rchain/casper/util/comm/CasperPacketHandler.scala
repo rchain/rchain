@@ -125,11 +125,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                       conf.approveGenesisDuration,
                       conf.approveGenesisInterval
                     )
-                    .map(protocol => {
-                      // TODO FIX-ME my god!!! fix fix fix!
-                      val future = toTask(protocol.run()).forkAndForget.runToFuture
-                      protocol
-                    })
+            // TOOD this returns a fiber, should we consider cancelling on shutdown?
+            _ <- Concurrent[F].start(abp.run())
             standalone <- Ref.of[F, CasperPacketHandlerInternal[F]](
                            new StandaloneCasperHandler[F](abp)
                          )
@@ -160,14 +157,11 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                           )
                         )
             casperPacketHandler = new CasperPacketHandlerImpl[F](bootstrap)
-            _ <- Sync[F].delay {
-                  implicit val ph: PacketHandler[F] =
-                    PacketHandler.pf[F](casperPacketHandler.handle)
-                  val rb = CommUtil.requestApprovedBlock[F](delay)
-                  // TODO FIX-ME my god!!! fix fix fix!
-                  val future = toTask(rb).forkAndForget.runToFuture
-                  ().pure[F]
-                }
+            // TOOD this returns a fiber, should we consider cancelling on shutdown?
+            _ <- {
+              implicit val ph: PacketHandler[F] = PacketHandler.pf[F](casperPacketHandler.handle)
+              Concurrent[F].start(CommUtil.requestApprovedBlock[F](delay))
+            }
           } yield casperPacketHandler
         }
     }
