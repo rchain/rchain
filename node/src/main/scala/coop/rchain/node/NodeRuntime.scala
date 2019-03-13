@@ -2,13 +2,9 @@ package coop.rchain.node
 
 import java.nio.file.{Files, Path}
 import scala.concurrent.duration._
-import cats._
-import cats.data._
+import cats._, cats.data._, cats.implicits._
 import cats.effect._
 import cats.effect.concurrent.{Ref, Semaphore}
-import cats.syntax.applicative._
-import cats.syntax.apply._
-import cats.syntax.functor._
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.{
   BlockDagFileStorage,
@@ -201,7 +197,11 @@ class NodeRuntime private[node] (
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
-  private def nodeProgram(runtime: Runtime[Task], casperRuntime: Runtime[Task])(
+  private def nodeProgram(
+      runtime: Runtime[Task],
+      casperRuntime: Runtime[Task],
+      casperPacketHandler: CasperPacketHandler[Effect]
+  )(
       implicit
       time: Time[Task],
       rpConfState: RPConfState[Task],
@@ -240,10 +240,16 @@ class NodeRuntime private[node] (
 
     val loop: Effect[Unit] =
       for {
-        _ <- time.sleep(1.minute).toEffect
         _ <- dynamicIpCheck.toEffect
         _ <- Connect.clearConnections[Effect]
         _ <- Connect.findAndConnect[Effect](Connect.connect[Effect])
+        _ <- time.sleep(1.minute).toEffect
+      } yield ()
+
+    def waitForFirstConnetion: Effect[Unit] =
+      for {
+        _ <- time.sleep(10.second).toEffect
+        _ <- ConnectionsCell[Effect].read.map(_.isEmpty).ifM(waitForFirstConnetion, ().pure[Effect])
       } yield ()
 
     val casperLoop: Effect[Unit] =
@@ -273,10 +279,13 @@ class NodeRuntime private[node] (
             blob => packetHandler.handlePacket(blob.sender, blob.packet).as(())
           )
       _       <- NodeDiscovery[Task].discover.attemptAndLog.executeOn(loopScheduler).start.toEffect
-      _       <- Task.defer(casperLoop.forever.value).executeOn(loopScheduler).start.toEffect
       address = s"rnode://$id@$host?protocol=$port&discovery=$kademliaPort"
       _       <- Log[Effect].info(s"Listening for traffic on $address.")
-      _       <- EitherT(Task.defer(loop.forever.value).executeOn(loopScheduler))
+      _       <- Task.defer(loop.forever.value).executeOn(loopScheduler).start.toEffect
+      _ <- if (conf.server.standalone) ().pure[Effect]
+          else Log[Effect].info(s"Waiting for first connection.") >> waitForFirstConnetion
+      _ <- Concurrent[Effect].start(casperPacketHandler.init)
+      _ <- Task.defer(casperLoop.forever.value).executeOn(loopScheduler).toEffect
     } yield ()
   }
 
@@ -458,7 +467,7 @@ class NodeRuntime private[node] (
     jvmMetrics      = diagnostics.effects.jvmMetrics[Task]
 
     // 4. run the node program.
-    program = nodeProgram(runtime, casperRuntime)(
+    program = nodeProgram(runtime, casperRuntime, casperPacketHandler)(
       time,
       rpConfState,
       rpConfAsk,
