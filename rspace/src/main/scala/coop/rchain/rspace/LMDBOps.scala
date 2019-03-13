@@ -33,14 +33,13 @@ trait LMDBOps[F[_]] extends CloseOps {
 
   protected[this] def databasePath: Path
   protected[this] def env: Env[ByteBuffer]
+  protected[this] def metricsSource: String
 
-  protected def MetricsSource: String
   private[this] val gaugeTags    = Map("path" -> databasePath.toString)
-  private[this] val sizeGauge    = Kamon.gauge(MetricsSource + ".size").refine(gaugeTags)
-  private[this] val entriesGauge = Kamon.gauge(MetricsSource + ".entries").refine(gaugeTags)
+  private[this] val sizeGauge    = Kamon.gauge(metricsSource + ".size").refine(gaugeTags)
+  private[this] val entriesGauge = Kamon.gauge(metricsSource + ".entries").refine(gaugeTags)
 
-  //fixme disabled for testing purposes
-  protected[this] def updateGauges() = {
+  protected[this] def updateGauges(): Unit = {
     sizeGauge.set(databasePath.folderSize)
     entriesGauge.set(env.stat().entries)
   }
@@ -54,10 +53,11 @@ trait LMDBOps[F[_]] extends CloseOps {
       ret
     } catch {
       case NonFatal(ex) =>
-        ex.printStackTrace
+        ex.printStackTrace()
         throw ex
     } finally {
       txn.close()
+      updateGauges()
     }
 
   private[rspace] def withReadTxnF[R](f: Txn[ByteBuffer] => R): F[R] =

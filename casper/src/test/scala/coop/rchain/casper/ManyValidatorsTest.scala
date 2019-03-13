@@ -70,7 +70,7 @@ class ManyValidatorsTest
                            )
       newIndexedBlockDagStorage <- IndexedBlockDagStorage.create(newBlockDagStorage)
       dag                       <- newIndexedBlockDagStorage.getRepresentation
-      tips                      <- Estimator.tips[Task](dag, genesis)(Monad[Task], blockStore)
+      tips                      <- Estimator.tips[Task](dag, genesis)(Monad[Task])
       casperEffect <- NoOpsCasperEffect[Task](
                        HashMap.empty[BlockHash, BlockMessage],
                        tips.toIndexedSeq
