@@ -74,6 +74,14 @@ object StandardDeploys {
       "08a0f8fccace949453dcb6a885e9f50dd96a58ed51c49fc2e346aa4d42ffb7c1",
       1540563894858L
     )
+
+  def lockbox: DeployData =
+    toDeploy(
+      CompiledRholangSource("Lockbox.rho"),
+      "7e59141cbc0dfb24ca0e4fe57666895190740778871744be3cec262147e02f56",
+      1552131653401L
+    )
+
   def rev(
       wallets: Seq[PreWallet],
       faucetCode: String => String,

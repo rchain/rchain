@@ -40,7 +40,7 @@ class ContractCall[F[_]: Sync](
       sequenceNumber: Int
   )(values: Seq[Par], ch: Par): F[Unit] =
     for {
-      costAlg <- CostAccounting.of(Cost(0))
+      costAlg <- CostAccounting.of(Cost.UNSAFE_MAX)
       cost    = loggingCost(costAlg, noOpCostLog[F])
       produceResult <- space.produce(
                         ch,
