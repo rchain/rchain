@@ -110,6 +110,38 @@ class InterpreterSpec extends FlatSpec with Matchers {
     )
   }
 
+  it should "capture rholang parsing errors and charge for parsing" in {
+    val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!("hi") """
+    val EvaluateResult(cost, errors) =
+      mkRuntime(tmpPrefix, mapSize)
+        .use { runtime =>
+          for {
+            res <- execute(runtime, badRholang)
+          } yield (res)
+        }
+        .runSyncUnsafe(maxDuration)
+
+    errors should not be empty
+    cost.value shouldEqual (parsingCost(badRholang).value)
+  }
+
+  it should "charge for parsing even when there's not enough phlo to complete it" in {
+    val sendRho = "@{0}!(0)"
+    val EvaluateResult(cost, errors) =
+      mkRuntime(tmpPrefix, mapSize)
+        .use { runtime =>
+          implicit val c = runtime.cost
+          for {
+            res <- Interpreter[Task]
+                    .evaluate(runtime, sendRho, parsingCost(sendRho) - Cost(1))
+          } yield (res)
+        }
+        .runSyncUnsafe(maxDuration)
+
+    errors should not be empty
+    cost.value shouldEqual (parsingCost(sendRho).value)
+  }
+
   private def storageContents(runtime: Runtime[Task]): String =
     StoragePrinter.prettyPrint(runtime.space.store)
 
