@@ -435,7 +435,7 @@ object Runtime {
     )
 
     for {
-      costAlg <- CostAccounting.of[F](Cost(0))
+      costAlg <- CostAccounting.of[F](Cost.UNSAFE_MAX)
       cost    = loggingCost(costAlg, noOpCostLog[F])
       spaceResult <- space.produce(
                       Registry.registryRoot,
