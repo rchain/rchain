@@ -1,36 +1,124 @@
-//scalapackage coop.rchain.rholang.collection
+// Match a list of known valid publicKey -> RevAddress pairs to bind them to veriables
+match (
+    "0000000000000000000000000000000000000000000000000000000000000000".hexToBytes(),
+    "111123jwD7acNy6vfYwzWXAbnSQ8z8Bv24cCkVcVbd6SuP2LtFK7w7",
+    "1111111111111111111111111111111111111111111111111111111111111111".hexToBytes(),
+    "11112comWwT626KfXkvnWRHDwPDm4VefqSr6ijvinhVHGTuXe6wWmk",
+    "2222222222222222222222222222222222222222222222222222222222222222".hexToBytes(),
+    "11112ipm5NY9BqyQ3p3sUx8pdFWV5jFQ5qqMcUzZWe19hwz3USbHBG"
+) {
+  (
+    genesisPubKey,
+    genesisRevAddress,
+    alicePubKey,
+    aliceRevAddress,
+    bobPubKey,
+    bobRevAddress
+  ) => {
 
-new
-  rl(`rho:registry:lookup`), RhoSpecCh,
-  stdlog(`rho:io:stdlog`), stdout(`rho:io:stdout`),
-  setup, test1, test_flatmap, test_compose,
-  RevVault
-in {
-  rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *RhoSpecCh) |
-  for(@(_, RhoSpec) <- RhoSpecCh) {
-    @RhoSpec!("testSuite", *setup,
-      [
-        ("test1", *test1),
-      ])
-  } |
+    new
+      rl(`rho:registry:lookup`),
+      RhoSpecCh,
+      stdout(`rho:io:stdout`),
+      setDeployData(`rho:test:deploy:set`),
+      setup,
+      testCreateGenesisVault,
+      testCreateAliceVaultLocked,
+      testCreateAliceVaultUnlocked,
+      testTransfer,
+      withAliceVaultUnlocked
+    in {
+      rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *RhoSpecCh) |
+      for(@(_, RhoSpec) <- RhoSpecCh) {
+        @RhoSpec!("testSuite", *setup,
+          [
+            ("Create genesis vault with expected balance", *testCreateGenesisVault),
+            ("Create Alice vault and see it is locked", *testCreateAliceVaultLocked),
+            ("Create Alice vault, unlock it and check balance", *testCreateAliceVaultUnlocked),
+            ("Transfer from genesis to Alice", *testTransfer),
+          ])
+      } |
 
-  contract setup(ret) = {
-    new RevVaultCh in {
-      rl!(`rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z`, *RevVaultCh) |
-      for (@(_, RevVault) <- RevVaultCh) {
-        ret!(RevVault)
+      contract setup(ret) = {
+        new RevVaultCh, identitySet in {
+          rl!(`rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z`, *RevVaultCh) |
+          setDeployData!("userId", genesisPubKey, *identitySet) |
+          for (@(_, RevVault) <- RevVaultCh; _ <- identitySet) {
+            ret!(RevVault)
+          }
+        }
+      } |
+
+      contract testCreateGenesisVault(rhoSpec, RevVault, ackCh) = {
+        new genesisVaultCh, balanceCh in {
+          RevVault!("createGenesisVault", genesisPubKey, 9000, *genesisVaultCh) |
+          for (genesisVault <- genesisVaultCh) {
+            // so far, access to genesisVault is not secured. This will be changd.
+            genesisVault!("balance", *balanceCh) |
+            rhoSpec!("assert", (9000, "== <-", *balanceCh), "balance is as expected", *ackCh)
+          }
+        }
+      } |
+
+      contract testCreateAliceVaultLocked(rhoSpec, RevVault, ackCh) = {
+        new aliceVaultLockedCh, unlockFail in {
+          RevVault!("findOrCreate", alicePubKey, *aliceVaultLockedCh) |
+          for (aliceVaultLocked <- aliceVaultLockedCh) {
+            aliceVaultLocked!("unlock", *unlockFail) |
+            rhoSpec!("assertMany",
+              [
+                ((Nil, "== <-", *unlockFail), "can't unlock without proper identity"),
+              ], *ackCh
+            )
+          }
+        }
+      } |
+
+      contract testCreateAliceVaultUnlocked(rhoSpec, RevVault, ackCh) = {
+        new balanceCh, aliceVaultCh in {
+          withAliceVaultUnlocked!(*RevVault, *aliceVaultCh) |
+          for (aliceVault <- aliceVaultCh) {
+            aliceVault!("balance", *balanceCh) |
+            rhoSpec!("assertMany",
+              [
+                ((Nil, "!=", *aliceVault), "can unlock with proper identity"),
+                ((0, "== <-", *balanceCh), "can check balance"),
+              ], *ackCh
+            )
+          }
+        }
+      } |
+
+      contract testTransfer(rhoSpec, RevVault, ackCh) = {
+        new genesisVaultCh, aliceVaultCh, ret, genesisBalanceCh, aliceBalanceCh in {
+          RevVault!("createGenesisVault", genesisPubKey, 9000, *genesisVaultCh) |
+          withAliceVaultUnlocked!(*RevVault, *aliceVaultCh) |
+          for (genesisVault <- genesisVaultCh; aliceVault <- aliceVaultCh) {
+
+            genesisVault!("transfer", aliceRevAddress, 1000, *ret) |
+            for (_ <- ret) {
+              genesisVault!("balance", *genesisBalanceCh) |
+              aliceVault!("balance", *aliceBalanceCh) |
+              rhoSpec!("assertMany",
+                [
+                  ((8000, "== <-", *genesisBalanceCh), "genesis balance correct"),
+                  ((1000, "== <-", *aliceBalanceCh), "alice balance correct"),
+                ], *ackCh
+              )
+            }
+          }
+        }
+      } |
+
+      contract withAliceVaultUnlocked(RevVault, cont) = {
+        new aliceVaultLockedCh, identityChanged, alliceVaultCh in {
+          setDeployData!("userId", alicePubKey, *identityChanged) |
+          RevVault!("findOrCreate", alicePubKey, *aliceVaultLockedCh) |
+          for (aliceVaultLocked <- aliceVaultLockedCh; _ <- identityChanged) {
+            aliceVaultLocked!("unlock", *cont)
+          }
+        }
       }
-    }
-  } |
-
-  contract test1(rhoSpec, RevVault, ackCh) = {
-    new r1 in {
-      RevVault!(*r1) |
-      rhoSpec!("assertMany",
-        [
-          (("Hello!", "== <-", *r1), "greeeting"),
-        ], *ackCh
-      )
     }
   }
 }

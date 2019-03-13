@@ -8,6 +8,11 @@ import scala.concurrent.duration._
 class RevVaultSpec
     extends RhoSpec(
       CompiledRholangSource("RevVaultTest.rho"),
-      Seq(StandardDeploys.revVault),
+      Seq(
+        StandardDeploys.nonNegativeNumber,
+        StandardDeploys.makeMint,
+        StandardDeploys.lockbox,
+        StandardDeploys.revVault
+      ),
       3.seconds
     )
