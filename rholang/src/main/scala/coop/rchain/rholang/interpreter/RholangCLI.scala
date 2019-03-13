@@ -52,16 +52,6 @@ object RholangCLI {
     verify()
   }
 
-  private[this] def interpreter() =
-    for {
-      costAlg <- CostAccounting.of[Task](Cost.Max)
-      cost    = loggingCost[Task](costAlg, noOpCostLog)
-      result = {
-        implicit val c = cost
-        Interpreter[Task]
-      }
-    } yield result
-
   def main(args: Array[String]): Unit = {
     import monix.execution.Scheduler.Implicits.global
 
@@ -148,8 +138,9 @@ object RholangCLI {
 
   }
 
-  def evaluate(runtime: Runtime[Task], source: String): Task[Unit] =
-    interpreter.flatMap(_.evaluate(runtime, source).map {
+  def evaluate(runtime: Runtime[Task], source: String): Task[Unit] = {
+    implicit val c = runtime.cost
+    Interpreter[Task].evaluate(runtime, source).map {
       case EvaluateResult(_, Vector()) =>
       case EvaluateResult(_, errors) =>
         errors.foreach {
@@ -159,7 +150,8 @@ object RholangCLI {
           case th =>
             th.printStackTrace(Console.err)
         }
-    })
+    }
+  }
 
   @tailrec
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
@@ -202,11 +194,9 @@ object RholangCLI {
   )(implicit scheduler: Scheduler): Unit = {
     val evaluatorTask =
       for {
-        _       <- Task.now(printNormalizedTerm(par))
-        costAlg <- CostAccounting.of[Task](Cost.Max)
-        cost    = loggingCost[Task](costAlg, noOpCostLog)
+        _ <- Task.now(printNormalizedTerm(par))
         result <- {
-          implicit val c = cost
+          implicit val c = runtime.cost
           Interpreter[Task].evaluate(runtime, source)
         }
       } yield result

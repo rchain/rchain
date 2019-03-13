@@ -42,16 +42,6 @@ import storage.StoragePrinter
 private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
     extends ReplGrpcMonix.Repl {
 
-  private[this] def interpreter() =
-    for {
-      costAlg <- CostAccounting.of[Task](Cost.Max)
-      cost    = loggingCost[Task](costAlg, noOpCostLog)
-      result = {
-        implicit val c = cost
-        Interpreter[Task]
-      }
-    } yield result
-
   def exec(source: String): Task[ReplResponse] =
     ParBuilder[Task]
       .buildNormalizedTerm(source)
@@ -64,9 +54,11 @@ private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
           }
         case Right(term) =>
           for {
-            _                            <- Task.now(printNormalizedTerm(term))
-            interpreter                  <- interpreter()
-            res                          <- interpreter.evaluate(runtime, source)
+            _ <- Task.now(printNormalizedTerm(term))
+            res <- {
+              implicit val c = runtime.cost
+              Interpreter[Task].evaluate(runtime, source)
+            }
             EvaluateResult(cost, errors) = res
           } yield {
             val errorStr =
