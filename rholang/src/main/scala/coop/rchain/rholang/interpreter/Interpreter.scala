@@ -41,7 +41,7 @@ object Interpreter {
         for {
           checkpoint <- runtime.space.createCheckpoint()
           res        <- injAttempt(runtime.reducer, runtime.errorLog, term, initialPhlo)
-          _          <- if (res.errors.nonEmpty) runtime.space.reset(checkpoint.root) else S.pure(())
+          _          <- if (res.errors.nonEmpty) runtime.space.reset(checkpoint.root) else S.unit
         } yield res
       }
 
