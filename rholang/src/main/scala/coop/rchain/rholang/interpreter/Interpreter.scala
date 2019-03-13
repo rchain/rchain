@@ -53,7 +53,7 @@ object Interpreter {
       )(implicit rand: Blake2b512Random): F[EvaluateResult] = {
         val parsingCost = accounting.parsingCost(term)
         for {
-          _           <- reducer.setPhlo(initialPhlo)
+          _           <- C.set(initialPhlo)
           parseResult <- charge[F](parsingCost).attempt
           res <- parseResult match {
                   case Right(_) =>
@@ -61,7 +61,7 @@ object Interpreter {
                       case Right(parsed) =>
                         for {
                           result    <- reducer.inj(parsed).attempt
-                          phlosLeft <- reducer.phlo
+                          phlosLeft <- C.get
                           oldErrors <- errorLog.readAndClearErrorVector()
                           newErrors = result.swap.toSeq.toVector
                           allErrors = oldErrors |+| newErrors
