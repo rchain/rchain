@@ -3,6 +3,7 @@ package coop.rchain.rholang.interpreter
 import cats._
 import cats.effect.Sync
 import cats.implicits._
+import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
@@ -28,8 +29,7 @@ object Interpreter {
 
   implicit def interpreter[F[_]](
       implicit S: Sync[F],
-      C: _cost[F],
-      E: _error[F]
+      C: _cost[F]
   ): Interpreter[F] =
     new Interpreter[F] {
 

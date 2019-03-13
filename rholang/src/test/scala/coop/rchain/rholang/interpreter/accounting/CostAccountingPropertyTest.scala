@@ -88,7 +88,7 @@ object CostAccountingPropertyTest {
       .map { _.sliding(2).forall { case List(r1, r2) => r1 == r2 } }
       .runSyncUnsafe(duration)
 
-  def execute[F[_]: Monad: Sync: _cost](runtime: Runtime[F], p: Proc): F[Long] =
+  def execute[F[_]: Sync: _cost](runtime: Runtime[F], p: Proc): F[Long] =
     for {
       program <- ParBuilder[F].buildPar(p)
       res     <- evaluatePar(runtime, program)
