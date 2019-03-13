@@ -16,7 +16,7 @@ new
   getDeployData(`rho:deploy:params`)
 in {
   contract Lockbox(@"lock", @ownerPubKeyBytes, protected, ret) = {
-    new locker, getIdentity in {
+    new lockbox, getIdentity in {
 
       contract getIdentity(retCh) = {
         new ch in {
@@ -27,7 +27,7 @@ in {
         }
       } |
 
-      contract locker(@"unlock", retCh) = {
+      contract lockbox(@"unlock", retCh) = {
 
         new callerCh in {
           getIdentity!(*callerCh) |
@@ -44,7 +44,7 @@ in {
         }
       } |
 
-      ret ! (bundle+{*locker})
+      ret ! (bundle+{*lockbox})
     }
   } |
   rs!(
