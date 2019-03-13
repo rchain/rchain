@@ -990,7 +990,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     val bonds = Map(
       validators(0) -> 3L,
       validators(1) -> 2L,
-      validators(2) -> 1L,
+      validators(2) -> 1L
     )
     val minimumBond = 100L
     val genesis =
@@ -1000,13 +1000,13 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       ProtoUtil.sourceDeploy(s"new x in { x!(0) }", ts, accounting.MAX_VALUE)
 
     def deploy(
-                node: HashSetCasperTestNode[Effect],
-                dd: DeployData
-              ) = node.casperEff.deploy(dd)
+        node: HashSetCasperTestNode[Effect],
+        dd: DeployData
+    ) = node.casperEff.deploy(dd)
 
     def create(
-                node: HashSetCasperTestNode[Effect]
-              ) =
+        node: HashSetCasperTestNode[Effect]
+    ) =
       for {
         createBlockResult1    <- node.casperEff.createBlock
         Created(signedBlock1) = createBlockResult1
@@ -1027,26 +1027,26 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
 
     for {
       nodes <- HashSetCasperTestNode
-        .networkEff(validatorKeys.take(3), genesis, testNetwork = network)
-        .map(_.toList)
-      v1   = nodes(0)
-      v2   = nodes(1)
-      v3   = nodes(2)
-      _ <- deployAndPropose(v2, 1)
-      _ <- deployAndPropose(v2, 2)
-      _    <- v2.receive()
-      _    <- v1.receive()
-      _    <- v3.receive()
-      _ <- deployAndPropose(v1, 3)
-      _ <- deployAndPropose(v3, 4)
-      _ <- deployAndPropose(v2, 5)
-      _ <- v1.receive()
-      _ <- deployAndPropose(v1, 6)
-      _ <- v1.receive()
-      _ <- deployAndPropose(v3, 7)
-      _ <- v1.receive()
-      _ <- v2.receive()
-      _ <- v1.receive()
+                .networkEff(validatorKeys.take(3), genesis, testNetwork = network)
+                .map(_.toList)
+      v1 = nodes(0)
+      v2 = nodes(1)
+      v3 = nodes(2)
+      _  <- deployAndPropose(v2, 1)
+      _  <- deployAndPropose(v2, 2)
+      _  <- v2.receive()
+      _  <- v1.receive()
+      _  <- v3.receive()
+      _  <- deployAndPropose(v1, 3)
+      _  <- deployAndPropose(v3, 4)
+      _  <- deployAndPropose(v2, 5)
+      _  <- v1.receive()
+      _  <- deployAndPropose(v1, 6)
+      _  <- v1.receive()
+      _  <- deployAndPropose(v3, 7)
+      _  <- v1.receive()
+      _  <- v2.receive()
+      _  <- v1.receive()
 
       dv11 <- deployX(v1, 8)
       dv31 <- deployX(v3, 9)
@@ -1091,7 +1091,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       _ <- v3.receive()
 
       dv22 <- deployX(v2, 23)
-      _ <- add(v2, dv22)
+      _    <- add(v2, dv22)
 
       _ <- v1.receive()
 
@@ -1099,13 +1099,13 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
 
       _ = println(r)
 
-      _    = v3.logEff.warns shouldBe empty
-      _    = v1.logEff.warns shouldBe empty
-      _    = v2.logEff.warns shouldBe empty
+      _ = v3.logEff.warns shouldBe empty
+      _ = v1.logEff.warns shouldBe empty
+      _ = v2.logEff.warns shouldBe empty
 
-      _    = v3.logEff.errors shouldBe empty
-      _    = v1.logEff.errors shouldBe empty
-      _    = v2.logEff.errors shouldBe empty
+      _ = v3.logEff.errors shouldBe empty
+      _ = v1.logEff.errors shouldBe empty
+      _ = v2.logEff.errors shouldBe empty
 
       _ <- nodes.map(_.tearDown()).sequence
     } yield ()
