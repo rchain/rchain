@@ -8,7 +8,6 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{EvaluateResult, Interpreter, Runtime}
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.test
 import monix.execution.Scheduler.Implicits.global
 import coop.rchain.rholang.Resources.mkRuntime
 import monix.eval.Task
@@ -133,7 +132,9 @@ class InterpreterSpec extends FlatSpec with Matchers {
   private def execute(
       runtime: Runtime[Task],
       source: String
-  ): Task[EvaluateResult] =
-    test.interpreter[Task]().evaluate(runtime, source)
+  ): Task[EvaluateResult] = {
+    implicit val c = runtime.cost
+    Interpreter[Task].evaluate(runtime, source)
+  }
 
 }
