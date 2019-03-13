@@ -1194,15 +1194,24 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
         paymentDeployData
       )
       phloPurchasedPar = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(phloPrice * amount))))
-      _                = blockStatus shouldBe Valid
-      result = queryResult.head.exprs.head.getETupleBody.ps shouldBe Seq(
-        codeHashPar,
-        userIdPar,
-        timestampPar,
-        phloPurchasedPar
-      )
+
       _ <- node.tearDown()
-    } yield result
+    } yield {
+      blockStatus shouldBe Valid
+
+      queryResult.head.exprs.head.getETupleBody.ps match {
+        case Seq(
+            actualCodeHashPar,
+            actualUserIdPar,
+            actualTimestampPar,
+            actualPhloPurchasedPar
+            ) =>
+          actualCodeHashPar should be(codeHashPar)
+          actualUserIdPar should be(userIdPar)
+          actualTimestampPar should be(timestampPar)
+          actualPhloPurchasedPar should be(phloPurchasedPar)
+      }
+    }
   }
 
   it should "reject addBlock when there exist deploy by the same (user, millisecond timestamp) in the chain" in effectTest {

@@ -34,6 +34,13 @@ object RhoSpec {
           2,
           27L,
           ctx => RhoLoggerContract.handleMessage(ctx)(_, _)
+        ),
+        SystemProcess.Definition[Task](
+          "rho:test:deploy:set",
+          Runtime.byteName(28),
+          3,
+          28L,
+          ctx => DeployDataContract.set(ctx)(_, _)
         )
       )
     TestUtil.runtime(testResultCollectorService)
