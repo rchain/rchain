@@ -281,7 +281,7 @@ class ValidateTest
       } yield ()
   }
 
-  "Future deploy validation" should "not accept blocks with a deploy for a future block number" in withStorage {
+  "Future deploy validation" should "work" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
         deploy            <- ProtoUtil.basicProcessedDeploy[Task](0)
@@ -293,19 +293,25 @@ class ValidateTest
                 )
         status <- Validate.futureTransaction[Task](block)
         _      = status should be(Right(Valid))
+      } yield ()
+  }
 
+  "Future deploy validation" should "not accept blocks with a deploy for a future block number" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      for {
+        deploy            <- ProtoUtil.basicProcessedDeploy[Task](0)
         deployData        = deploy.deploy.get
         updatedDeployData = deployData.withValidAfterBlockNumber(Long.MaxValue)
         blockWithFutureDeploy <- createBlock[Task](
                                   Seq.empty[BlockHash],
                                   deploys = Seq(deploy.withDeploy(updatedDeployData))
                                 )
-        status2 <- Validate.futureTransaction[Task](blockWithFutureDeploy)
-        _       = status2 should be(Left(ContainsFutureDeploy))
+        status <- Validate.futureTransaction[Task](blockWithFutureDeploy)
+        _      = status should be(Left(ContainsFutureDeploy))
       } yield ()
   }
 
-  "Deploy expiration validation" should "not accept blocks with a deploy that is expired" in withStorage {
+  "Deploy expiration validation" should "work" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
         deploy <- ProtoUtil.basicProcessedDeploy[Task](0)
@@ -315,16 +321,22 @@ class ValidateTest
                 )
         status <- Validate.transactionExpiration[Task](block, expirationThreshold = 10)
         _      = status should be(Right(Valid))
+      } yield ()
+  }
 
+  "Deploy expiration validation" should "not accept blocks with a deploy that is expired" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      for {
+        deploy            <- ProtoUtil.basicProcessedDeploy[Task](0)
         deployData        = deploy.deploy.get
         updatedDeployData = deployData.withValidAfterBlockNumber(Long.MinValue)
         blockWithExpiredDeploy <- createBlock[Task](
                                    Seq.empty[BlockHash],
                                    deploys = Seq(deploy.withDeploy(updatedDeployData))
                                  )
-        status2 <- Validate
-                    .transactionExpiration[Task](blockWithExpiredDeploy, expirationThreshold = 10)
-        _ = status2 should be(Left(ContainsExpiredDeploy))
+        status <- Validate
+                   .transactionExpiration[Task](blockWithExpiredDeploy, expirationThreshold = 10)
+        _ = status should be(Left(ContainsExpiredDeploy))
       } yield ()
   }
 
