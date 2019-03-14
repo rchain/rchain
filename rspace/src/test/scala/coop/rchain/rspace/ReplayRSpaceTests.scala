@@ -30,7 +30,7 @@ object SchedulerPools {
 
 //noinspection ZeroIndexToHead,NameBooleanParameters
 trait ReplayRSpaceTests
-    extends ReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
+    extends ReplayRSpaceTestsBase[String, Pattern, String, String]
     with TestImplicitHelpers {
 
   import SchedulerPools.global
@@ -909,7 +909,7 @@ trait ReplayRSpaceTests
   }
 }
 
-trait ReplayRSpaceTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with OptionValues {
+trait ReplayRSpaceTestsBase[C, P, A, K] extends FlatSpec with Matchers with OptionValues {
   val logger = Logger(this.getClass.getName.stripSuffix("$"))
 
   override def withFixture(test: NoArgTest): Outcome = {
@@ -929,7 +929,7 @@ trait ReplayRSpaceTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with O
   ): S
 }
 
-trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
+trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, A, K] {
   import SchedulerPools.global
   override def withTestSpaces[S](
       f: (ISpace[Task, C, P, A, A, K], IReplaySpace[Task, C, P, A, A, K]) => Task[S]
@@ -986,7 +986,7 @@ trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, 
   }
 }
 
-trait MixedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
+trait MixedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, A, K] {
   import SchedulerPools.global
   override def withTestSpaces[S](
       f: (ISpace[Task, C, P, A, A, K], IReplaySpace[Task, C, P, A, A, K]) => Task[S]
@@ -1018,7 +1018,7 @@ trait MixedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C,
   }
 }
 
-trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
+trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, A, K] {
   import SchedulerPools.global
   override def withTestSpaces[S](
       f: (ISpace[Task, C, P, A, A, K], IReplaySpace[Task, C, P, A, A, K]) => Task[S]
@@ -1046,7 +1046,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase
   }
 }
 
-trait FaultyStoreReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
+trait FaultyStoreReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, A, K] {
   import SchedulerPools.global
   override def withTestSpaces[S](
       f: (ISpace[Task, C, P, A, A, K], IReplaySpace[Task, C, P, A, A, K]) => Task[S]
