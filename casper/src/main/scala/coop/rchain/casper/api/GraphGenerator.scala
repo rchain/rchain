@@ -20,23 +20,11 @@ final case class ValidatorBlock(
     justifications: List[String]
 )
 
-object ValidatorBlock {
-  implicit val validatorBlockMonoid: Monoid[ValidatorBlock] = new Monoid[ValidatorBlock] {
-    def empty: ValidatorBlock = ValidatorBlock("", List.empty[String], List.empty[String])
-    def combine(vb1: ValidatorBlock, vb2: ValidatorBlock): ValidatorBlock =
-      ValidatorBlock(
-        vb2.blockHash,
-        vb1.parentsHashes ++ vb2.parentsHashes,
-        vb1.justifications ++ vb2.justifications
-      )
-  }
-}
-
 final case class GraphConfig(showJustificationLines: Boolean = false)
 
 object GraphzGenerator {
 
-  type ValidatorsBlocks = Map[Long, ValidatorBlock]
+  type ValidatorsBlocks = Map[Long, List[ValidatorBlock]]
 
   final case class DagInfo[G[_]](
       validators: Map[String, ValidatorsBlocks] = Map.empty,
@@ -68,7 +56,7 @@ object GraphzGenerator {
         allAncestors = validatorsList
           .flatMap {
             case (_, blocks) =>
-              blocks.get(firstTs).map(_.parentsHashes).getOrElse(List.empty[String])
+              blocks.get(firstTs).map(_.flatMap(b => b.parentsHashes)).getOrElse(List.empty[String])
           }
           .toSet
           .toList
@@ -86,8 +74,8 @@ object GraphzGenerator {
         _ <- validatorsList.traverse {
               case (id, blocks) =>
                 allAncestors.traverse(ancestor => {
-                  val node = nodeForTs(id, firstTs, blocks, lastFinalizedBlockHash)._2
-                  g.edge(ancestor, node, style = Some(Invis))
+                  val nodes = nodesForTs(id, firstTs, blocks, lastFinalizedBlockHash).keys.toList
+                  nodes.traverse(node => g.edge(ancestor, node, style = Some(Invis)))
                 })
             }
         // draw clusters per validator
@@ -131,7 +119,7 @@ object GraphzGenerator {
             .toSet
             .toList
           val validatorBlocks =
-            Map(timeEntry -> ValidatorBlock(blockHash, parents, justifications))
+            Map(timeEntry -> List(ValidatorBlock(blockHash, parents, justifications)))
           Map(blockSenderHash -> validatorBlocks)
       }
     } yield
@@ -154,7 +142,7 @@ object GraphzGenerator {
       validators: List[ValidatorsBlocks]
   ): G[Unit] =
     validators
-      .flatMap(_.values.toList)
+      .flatMap(_.values.toList.flatten)
       .traverse {
         case ValidatorBlock(blockHash, parentsHashes, _) => {
           parentsHashes
@@ -168,7 +156,7 @@ object GraphzGenerator {
       validators: Map[String, ValidatorsBlocks]
   ): G[Unit] =
     validators.values.toList
-      .flatMap(_.values.toList)
+      .flatMap(_.values.toList.flatten)
       .traverse {
         case ValidatorBlock(blockHash, _, justifications) => {
           justifications
@@ -188,16 +176,19 @@ object GraphzGenerator {
       }
       .as(())
 
-  private def nodeForTs(
+  private def nodesForTs(
       validatorId: String,
       ts: Long,
       blocks: ValidatorsBlocks,
       lastFinalizedBlockHash: String
-  ): (Option[GraphStyle], String) =
+  ): Map[String, Option[GraphStyle]] =
     blocks.get(ts) match {
-      case Some(ValidatorBlock(blockHash, _, _)) =>
-        (styleFor(blockHash, lastFinalizedBlockHash), blockHash)
-      case None => (Some(Invis), s"${ts.show}_$validatorId")
+      case Some(tsBlocks) =>
+        (tsBlocks.map {
+          case ValidatorBlock(blockHash, _, _) =>
+            (blockHash -> styleFor(blockHash, lastFinalizedBlockHash))
+        }).toMap
+      case None => Map(s"${ts.show}_$validatorId" -> Some(Invis))
     }
 
   private def validatorCluster[G[_]: Monad: GraphSerializer](
@@ -208,12 +199,21 @@ object GraphzGenerator {
   ): G[Graphz[G]] =
     for {
       g     <- Graphz.subgraph[G](s"cluster_$id", DiGraph, label = Some(id))
-      nodes = timeseries.map(ts => nodeForTs(id, ts, blocks, lastFinalizedBlockHash))
-      _ <- nodes.traverse {
-            case (style, name) => g.node(name, style = style, shape = Box)
-          }
+      nodes = timeseries.map(ts => nodesForTs(id, ts, blocks, lastFinalizedBlockHash))
+      _ <- nodes.traverse(
+            ns =>
+              ns.toList.traverse {
+                case (name, style) => g.node(name, style = style, shape = Box)
+              }
+          )
       _ <- nodes.zip(nodes.drop(1)).traverse {
-            case ((_, n1), (_, n2)) => g.edge(n1, n2, style = Some(Invis))
+            case (n1s, n2s) =>
+              n1s.keys.toList.traverse { n1 =>
+                n2s.keys.toList.traverse { n2 =>
+                  g.edge(n1, n2, style = Some(Invis))
+                }
+
+              }
           }
       _ <- g.close
     } yield g
