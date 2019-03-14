@@ -12,6 +12,7 @@ class RevVaultSpec
         StandardDeploys.nonNegativeNumber,
         StandardDeploys.makeMint,
         StandardDeploys.lockbox,
+        StandardDeploys.either,
         StandardDeploys.revVault
       ),
       3.seconds

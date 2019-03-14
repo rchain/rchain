@@ -14,7 +14,7 @@
 // ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
 new
   RevVault, rs(`rho:registry:insertSigned:ed25519`), uriOut,
-  rl(`rho:registry:lookup`), RevAddress(`rho:rev:address`), MakeMintCh, LockboxCh,
+  rl(`rho:registry:lookup`), RevAddress(`rho:rev:address`), MakeMintCh, LockboxCh, EitherCh,
   _makeVault,
   _newVault,
   _getOrCreate,
@@ -23,7 +23,8 @@ new
 in {
   rl!(`rho:id:exunyijimapk7z43g3bbr69awqdz54kyroj9q43jgu3dh567fxsftx`, *MakeMintCh) |
   rl!(`rho:id:9dsr55z1js13x346yhhecx66ns486i3yqf6jafrd9p9hdrrbxjqmyu`, *LockboxCh) |
-  for(@(_, MakeMint) <- MakeMintCh; @(_, Lockbox) <- LockboxCh) {
+  rl!(`rho:id:j6trahbxycumerwpr5qype7j43b7eqh8auebwsa9nn68if47gswh73`, *EitherCh) |
+  for(@(_, MakeMint) <- MakeMintCh; @(_, Lockbox) <- LockboxCh; @(_, Either) <- EitherCh) {
 
     new mintCh, vaultMapStore in {
       vaultMapStore!({}) |
@@ -32,7 +33,6 @@ in {
 
         //FIXME the result of createGenesisVault is not protected, nor is the call to it. Both should be.
         contract RevVault(@"createGenesisVault", @ownerPubKeyBytes, @initialAmount, ret) = {
-
           new createGenesisVault in {
             _getOrCreate!(ownerPubKeyBytes, *createGenesisVault, *ret) |
             for (retCh <- createGenesisVault) {
@@ -48,10 +48,10 @@ in {
             _getOrCreate!(ownerPubKeyBytes, *createLockedVault, *ret) |
             for (retCh <- createLockedVault) {
 
-              new vaultCh in {
+              new vaultCh, lock in {
                 _makeVault!(ownerPubKeyBytes, 0, *vaultCh) |
-                for (@vault <- vaultCh) {
-
+                @Either!("map <-", *vaultCh, *lock, *retCh) |
+                for (@vault, retCh <- lock) {
                   @Lockbox!("lock", ownerPubKeyBytes, vault, *retCh)
                 }
               }
@@ -63,17 +63,19 @@ in {
           for (@vaultMap <- vaultMapStore) {
             match vaultMap.get(key) {
               Nil => {
-
                 new resCh in {
                   constructor!(*resCh) |
-                  for (@res <- resCh) {
-
-                    vaultMapStore!(vaultMap.set(key, res)) | ret!(res)
+                  for (@eitherVault <- resCh) {
+                    match eitherVault {
+                      ("Right", vault) => vaultMapStore!(vaultMap.set(key, vault))
+                      ("Left",  _    ) => vaultMapStore!(vaultMap)
+                    } |
+                    ret!(eitherVault)
                   }
                 }
               }
               value => {
-                vaultMapStore!(vaultMap) | ret!(value)
+                vaultMapStore!(vaultMap) | ret!(("Right", value))
               }
             }
           }
@@ -102,7 +104,7 @@ in {
         contract _newVault(@ownRevAddress, purse, ret) = {
           new revVault in {
 
-            ret!(bundle+{*revVault}) |
+            ret!(("Right", bundle+{*revVault})) |
 
             contract revVault(@"balance", ret) = {
               purse!("getBalance", *ret)

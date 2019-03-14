@@ -52,9 +52,9 @@ match (
       contract testCreateGenesisVault(rhoSpec, RevVault, ackCh) = {
         new genesisVaultCh, balanceCh in {
           RevVault!("createGenesisVault", genesisPubKey, 9000, *genesisVaultCh) |
-          for (genesisVault <- genesisVaultCh) {
+          for (@("Right", genesisVault) <- genesisVaultCh) {
             // so far, access to genesisVault is not secured. This will be changd.
-            genesisVault!("balance", *balanceCh) |
+            @genesisVault!("balance", *balanceCh) |
             rhoSpec!("assert", (9000, "== <-", *balanceCh), "balance is as expected", *ackCh)
           }
         }
@@ -63,8 +63,8 @@ match (
       contract testCreateAliceVaultLocked(rhoSpec, RevVault, ackCh) = {
         new aliceVaultLockedCh, unlockFail in {
           RevVault!("findOrCreate", alicePubKey, *aliceVaultLockedCh) |
-          for (aliceVaultLocked <- aliceVaultLockedCh) {
-            aliceVaultLocked!("unlock", *unlockFail) |
+          for (@("Right", aliceVaultLocked) <- aliceVaultLockedCh) {
+            @aliceVaultLocked!("unlock", *unlockFail) |
             rhoSpec!("assertMany",
               [
                 ((Nil, "== <-", *unlockFail), "can't unlock without proper identity"),
@@ -93,11 +93,11 @@ match (
         new genesisVaultCh, aliceVaultCh, ret, genesisBalanceCh, aliceBalanceCh in {
           RevVault!("createGenesisVault", genesisPubKey, 9000, *genesisVaultCh) |
           withAliceVaultUnlocked!(*RevVault, *aliceVaultCh) |
-          for (genesisVault <- genesisVaultCh; aliceVault <- aliceVaultCh) {
+          for (@("Right", genesisVault) <- genesisVaultCh; aliceVault <- aliceVaultCh) {
 
-            genesisVault!("transfer", aliceRevAddress, 1000, *ret) |
+            @genesisVault!("transfer", aliceRevAddress, 1000, *ret) |
             for (_ <- ret) {
-              genesisVault!("balance", *genesisBalanceCh) |
+              @genesisVault!("balance", *genesisBalanceCh) |
               aliceVault!("balance", *aliceBalanceCh) |
               rhoSpec!("assertMany",
                 [
@@ -114,8 +114,8 @@ match (
         new aliceVaultLockedCh, identityChanged, alliceVaultCh in {
           setDeployData!("userId", alicePubKey, *identityChanged) |
           RevVault!("findOrCreate", alicePubKey, *aliceVaultLockedCh) |
-          for (aliceVaultLocked <- aliceVaultLockedCh; _ <- identityChanged) {
-            aliceVaultLocked!("unlock", *cont)
+          for (@("Right", aliceVaultLocked) <- aliceVaultLockedCh; _ <- identityChanged) {
+            @aliceVaultLocked!("unlock", *cont)
           }
         }
       }
