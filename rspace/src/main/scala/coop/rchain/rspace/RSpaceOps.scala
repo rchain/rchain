@@ -25,7 +25,7 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, E, A, R, K](
     serializeP: Serialize[P],
     serializeK: Serialize[K],
     logF: Log[F]
-) extends SpaceMatcher[F, C, P, E, A, R, K] {
+) extends SpaceMatcher[F, C, P, A, R, K] {
 
   implicit val codecC = serializeC.toCodec
 
