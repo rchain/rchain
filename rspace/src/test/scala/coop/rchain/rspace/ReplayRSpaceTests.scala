@@ -1046,7 +1046,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase
   }
 }
 
-trait FaultyStoreReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, A, K] {
+trait FaultyStoreReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C, P, A, K] {
   import SchedulerPools.global
   override def withTestSpaces[S](
       f: (ISpace[Task, C, P, A, A, K], IReplaySpace[Task, C, P, A, A, K]) => Task[S]
@@ -1099,7 +1099,7 @@ class InMemoryReplayRSpaceTests
     with ReplayRSpaceTests {}
 
 class FaultyReplayRSpaceTests
-    extends FaultyStoreReplayRSpaceTestsBase[String, Pattern, Nothing, String, String] {
+    extends FaultyStoreReplayRSpaceTestsBase[String, Pattern, String, String] {
   import SchedulerPools.global
 
   "an exception thrown inside a consume" should "not make replay rspace unresponsive" in
