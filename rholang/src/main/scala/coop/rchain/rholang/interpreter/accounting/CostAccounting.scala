@@ -10,16 +10,19 @@ import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 object CostAccounting {
 
   def of[F[_]: Sync](init: Cost): F[MonadState[F, Cost]] =
-    Ref[F].of(init).map(ref => new CostAccountingImpl[F](ref))
+    Ref[F]
+      .of(init)
+      .map(
+        state =>
+          new DefaultMonadState[F, Cost] {
+            val monad: cats.Monad[F]                      = implicitly[Monad[F]]
+            def get: F[Cost]                              = state.get
+            def set(s: Cost): F[Unit]                     = state.set(s)
+            override def modify(f: Cost => Cost): F[Unit] = state.update(f)
+          }
+      )
 
   def empty[F[_]: Sync]: F[MonadState[F, Cost]] =
     this.of(Cost(0, "init"))
 
-  private class CostAccountingImpl[F[_]: Monad](state: Ref[F, Cost])
-      extends DefaultMonadState[F, Cost] {
-    val monad: cats.Monad[F]                      = implicitly[Monad[F]]
-    def get: F[Cost]                              = state.get
-    def set(s: Cost): F[Unit]                     = state.set(s)
-    override def modify(f: Cost => Cost): F[Unit] = state.update(f)
-  }
 }
