@@ -260,14 +260,13 @@ class RegistryImpl[F[_]](
 
   private def parByteArray(bs: ByteString): Par = GByteArray(bs)
 
-  private def handleResult[E <: Throwable](
-      resultF: F[Either[E, Option[(TaggedContinuation, Seq[ListParWithRandom], Int)]]]
+  private def handleResult(
+      resultF: F[Option[(TaggedContinuation, Seq[ListParWithRandom], Int)]]
   ): F[Unit] =
     resultF.flatMap({
-      case Right(Some((continuation, dataList, sequenceNumber))) =>
+      case Some((continuation, dataList, sequenceNumber)) =>
         dispatcher.dispatch(continuation, dataList, sequenceNumber)
-      case Right(None) => F.unit
-      case Left(err)   => F.raiseError(err)
+      case None => F.unit
     })
 
   private def singleSend(

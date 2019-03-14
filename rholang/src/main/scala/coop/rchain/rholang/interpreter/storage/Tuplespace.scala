@@ -41,13 +41,10 @@ object Tuplespace {
     ): F[Unit] = {
       // TODO: Handle the environment in the store
       def go(
-          res: Either[InterpreterError, Option[
-            (TaggedContinuation, Seq[ListParWithRandom], Int)
-          ]]
+          res: Option[(TaggedContinuation, Seq[ListParWithRandom], Int)]
       ): F[Unit] =
         res match {
-          case Left(oope) => F.raiseError(oope)
-          case Right(Some((continuation, dataList, updatedSequenceNumber))) =>
+          case Some((continuation, dataList, updatedSequenceNumber)) =>
             if (persistent) {
               Parallel
                 .parProduct(
@@ -58,8 +55,7 @@ object Tuplespace {
             } else {
               dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
             }
-
-          case Right(None) => F.unit
+          case None => F.unit
         }
 
       for {
@@ -79,13 +75,10 @@ object Tuplespace {
         case _ =>
           val (patterns: Seq[BindPattern], sources: Seq[Par]) = binds.unzip
           def go(
-              res: Either[InterpreterError, Option[
-                (TaggedContinuation, Seq[ListParWithRandom], Int)
-              ]]
+              res: Option[(TaggedContinuation, Seq[ListParWithRandom], Int)]
           ): F[Unit] =
             res match {
-              case Left(oope) => F.raiseError(oope)
-              case Right(Some((continuation, dataList, updatedSequenceNumber))) =>
+              case Some((continuation, dataList, updatedSequenceNumber)) =>
                 if (persistent) {
                   Parallel
                     .parProduct(
@@ -96,7 +89,7 @@ object Tuplespace {
                 } else {
                   dispatcher.dispatch(continuation, dataList, updatedSequenceNumber)
                 }
-              case Right(None) => F.unit
+              case None => F.unit
             }
 
           for {

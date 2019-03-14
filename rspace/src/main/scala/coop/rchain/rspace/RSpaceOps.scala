@@ -36,8 +36,8 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, E, A, R, K](
   protected[this] def consumeLockF(
       channels: Seq[C]
   )(
-      thunk: => F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
-  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] = {
+      thunk: => F[Option[(ContResult[C, P, K], Seq[Result[R]])]]
+  ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]] = {
     val hashes = channels.map(ch => StableHashProvider.hash(ch))
     lockF.acquire(hashes)(() => hashes.pure[F])(thunk)
   }
@@ -54,8 +54,8 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, E, A, R, K](
   protected[this] def produceLockF(
       channel: C
   )(
-      thunk: => F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
-  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
+      thunk: => F[Option[(ContResult[C, P, K], Seq[Result[R]])]]
+  ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]] =
     lockF.acquire(Seq(StableHashProvider.hash(channel)))(
       () =>
         store.withReadTxnF { txn =>

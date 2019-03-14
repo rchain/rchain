@@ -5,11 +5,9 @@ import cats.implicits._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoPureSpace}
-import coop.rchain.rholang.interpreter.accounting.{CostAccounting, _}
-import coop.rchain.rholang.interpreter.{_error, errors}
-import coop.rchain.rholang.interpreter.errors.InterpreterError
+import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter._error
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
-import coop.rchain.rspace
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.{Blake2b256Hash, Checkpoint, ContResult, Result, Match => StorageMatch}
 
@@ -44,9 +42,9 @@ object ChargingRSpace {
           continuation: TaggedContinuation,
           persist: Boolean,
           sequenceNumber: Int
-      ): F[Either[errors.InterpreterError, Option[
-        (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])
-      ]]] =
+      ): F[
+        Option[(ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])]
+      ] =
         for {
           _       <- charge[F](storageCostConsume(channels, patterns, continuation))
           consRes <- space.consume(channels, patterns, continuation, persist, sequenceNumber)
@@ -65,9 +63,9 @@ object ChargingRSpace {
           data: ListParWithRandom,
           persist: Boolean,
           sequenceNumber: Int
-      ): F[Either[errors.InterpreterError, Option[
-        (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])
-      ]]] =
+      ): F[
+        Option[(ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])]
+      ] =
         for {
           _       <- charge[F](storageCostProduce(channel, data))
           prodRes <- space.produce(channel, data, persist, sequenceNumber)
@@ -75,20 +73,15 @@ object ChargingRSpace {
         } yield prodRes
 
       private def handleResult(
-          result: Either[InterpreterError, Option[
-            (
-                ContResult[Par, BindPattern, TaggedContinuation],
-                Seq[Result[ListParWithRandom]]
-            )
-          ]]
+          result: Option[
+            (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])
+          ]
       ): F[Unit] =
         result match {
-          case Left(oope) =>
-            error.raise(oope)
 
-          case Right(None) => Sync[F].unit
+          case None => Sync[F].unit
 
-          case Right(Some((cont, dataList))) =>
+          case Some((cont, dataList)) =>
             val refundForConsume =
               if (cont.persistent) Cost(0)
               else

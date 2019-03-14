@@ -14,7 +14,7 @@ trait PureRSpace[F[_], C, P, E, A, R, K] {
       continuation: K,
       persist: Boolean,
       sequenceNumber: Int = 0
-  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
+  ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]]
 
   def install(channels: Seq[C], patterns: Seq[P], continuation: K): F[Option[(K, Seq[R])]]
 
@@ -23,7 +23,7 @@ trait PureRSpace[F[_], C, P, E, A, R, K] {
       data: A,
       persist: Boolean,
       sequenceNumber: Int = 0
-  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
+  ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]]
 
   def createCheckpoint(): F[Checkpoint]
 
@@ -46,7 +46,7 @@ object PureRSpace {
             continuation: K,
             persist: Boolean,
             sequenceNumber: Int
-        ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
+        ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]] =
           space.consume(channels, patterns, continuation, persist, sequenceNumber)
 
         def install(channels: Seq[C], patterns: Seq[P], continuation: K): F[Option[(K, Seq[R])]] =
@@ -57,7 +57,7 @@ object PureRSpace {
             data: A,
             persist: Boolean,
             sequenceNumber: Int
-        ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
+        ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]] =
           space.produce(channel, data, persist, sequenceNumber)
 
         def createCheckpoint(): F[Checkpoint] = space.createCheckpoint()

@@ -56,7 +56,7 @@ trait ISpace[F[_], C, P, E, A, R, K] {
       sequenceNumber: Int = 0
   )(
       implicit m: Match[F, P, A, R]
-  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
+  ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]]
 
   def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
       implicit m: Match[F, P, A, R]
@@ -87,7 +87,7 @@ trait ISpace[F[_], C, P, E, A, R, K] {
     */
   def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int = 0)(
       implicit m: Match[F, P, A, R]
-  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
+  ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]]
 
   /** Creates a checkpoint.
     *

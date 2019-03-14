@@ -53,9 +53,8 @@ trait ReplayRSpaceTests
       space
         .consume(channelsCreator(i), patterns, continuationCreator(i), persist)
         .map { r =>
-          val unpacked = r.right.get
           logger.debug("Finished consume {}", i)
-          unpacked
+          r
         }
     }
 
@@ -72,9 +71,8 @@ trait ReplayRSpaceTests
     (if (shuffle) Random.shuffle(range.toList) else range.toList).parTraverse { i: Int =>
       logger.debug("Started produce {}", i)
       space.produce(channelCreator(i), datumCreator(i), persist).map { r =>
-        val unpacked = r.right.get
         logger.debug("Finished produce {}", i)
-        unpacked
+        r
       }
     }
 
@@ -109,7 +107,7 @@ trait ReplayRSpaceTests
         resultProduce <- space.produce(channels(0), datum, false)
         rigPont       <- space.createCheckpoint()
 
-        _ = resultConsume shouldBe Right(None)
+        _ = resultConsume shouldBe None
         _ = resultProduce shouldBe defined
 
         _ <- replaySpace.rig(emptyPoint.root, rigPont.log)
@@ -118,7 +116,7 @@ trait ReplayRSpaceTests
         replayResultProduce <- replaySpace.produce(channels(0), datum, false)
         finalPoint          <- space.createCheckpoint()
 
-        _ = replayResultConsume shouldBe Right(None)
+        _ = replayResultConsume shouldBe None
         _ = replayResultProduce shouldBe resultProduce
         _ = finalPoint.root shouldBe rigPont.root
         _ = replaySpace.replayData shouldBe empty
@@ -758,14 +756,14 @@ trait ReplayRSpaceTests
         emptyPoint <- space.createCheckpoint()
 
         consume1 <- space.consume(channels, patterns, continuation, false)
-        _        = consume1 shouldBe Right(None)
+        _        = consume1 shouldBe None
 
         rigPoint <- space.createCheckpoint()
 
         _ <- replaySpace.rig(emptyPoint.root, rigPoint.log)
 
         consume2 <- replaySpace.consume(channels, patterns, continuation, false)
-        _        = consume2 shouldBe Right(None)
+        _        = consume2 shouldBe None
 
         replayStore = replaySpace.store
 
@@ -798,14 +796,14 @@ trait ReplayRSpaceTests
         emptyPoint <- space.createCheckpoint()
 
         consume1 <- space.consume(channels, patterns, continuation, false)
-        _        = consume1 shouldBe Right(None)
+        _        = consume1 shouldBe None
 
         rigPoint <- space.createCheckpoint()
 
         _ <- replaySpace.rig(emptyPoint.root, rigPoint.log)
 
         consume2 <- replaySpace.consume(channels, patterns, continuation, false)
-        _        = consume2 shouldBe Right(None)
+        _        = consume2 shouldBe None
 
         replayStore = replaySpace.store
 
@@ -853,7 +851,7 @@ trait ReplayRSpaceTests
     }
 
   "replay" should "not allow for ambiguous executions" in withTestSpaces { (space, replaySpace) =>
-    val noMatch                 = Right(None)
+    val noMatch                 = None
     val channel1                = "ch1"
     val channel2                = "ch2"
     val key1                    = List(channel1, channel2)
@@ -880,13 +878,11 @@ trait ReplayRSpaceTests
       _ <- space.produce(channel2, data1, false, 0) shouldBeF noMatch
 
       _ <- space
-            .consume(key1, patterns, continuation1, false, 0)
-            .map(_.right.get) shouldNotBeF Option.empty
+            .consume(key1, patterns, continuation1, false, 0) shouldNotBeF Option.empty
       //continuation1 produces data1 on ch2
       _ <- space.produce(channel2, data1, false, 1) shouldBeF noMatch
       _ <- space
-            .consume(key1, patterns, continuation2, false, 0)
-            .map(_.right.get) shouldNotBeF Option.empty
+            .consume(key1, patterns, continuation2, false, 0) shouldNotBeF Option.empty
       //continuation2 produces data2 on ch2
       _         <- space.produce(channel2, data2, false, 2) shouldBeF noMatch
       afterPlay <- space.createCheckpoint()
@@ -901,12 +897,10 @@ trait ReplayRSpaceTests
       _ <- replaySpace.consume(key1, patterns, continuation2, false, 0) shouldBeF noMatch
 
       _ <- replaySpace
-            .consume(key1, patterns, continuation1, false, 0)
-            .map(_.right.get) shouldNotBeF Option.empty
+            .consume(key1, patterns, continuation1, false, 0) shouldNotBeF Option.empty
       //continuation1 produces data1 on ch2
       _ <- replaySpace
-            .produce(channel2, data1, false, 1)
-            .map(_.right.get) shouldNotBeF Option.empty //matches continuation2
+            .produce(channel2, data1, false, 1) shouldNotBeF Option.empty //matches continuation2
       //continuation2 produces data2 on ch2
       _ <- replaySpace.produce(channel2, data2, false, 1) shouldBeF noMatch
 

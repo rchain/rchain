@@ -222,15 +222,13 @@ object AddressBookExample {
           Seq(CityMatch(city = "Crystal Lake")),
           new Printer,
           persist = true
-        )
-        .right
-        .get // it should be fine to do that -- type of left side is Nothing (no invalid states)
+        ) // it should be fine to do that -- type of left side is Nothing (no invalid states)
 
     assert(cres.isEmpty)
 
-    val pres1 = space.produce(Channel("friends"), alice, persist = false).right.get
-    val pres2 = space.produce(Channel("friends"), bob, persist = false).right.get
-    val pres3 = space.produce(Channel("friends"), carol, persist = false).right.get
+    val pres1 = space.produce(Channel("friends"), alice, persist = false)
+    val pres2 = space.produce(Channel("friends"), bob, persist = false)
+    val pres3 = space.produce(Channel("friends"), carol, persist = false)
 
     assert(pres1.nonEmpty)
     assert(pres2.nonEmpty)
@@ -257,9 +255,9 @@ object AddressBookExample {
 
     Console.printf("\nExample Two: Let's produce and then consume...\n")
 
-    val pres1 = space.produce(Channel("friends"), alice, persist = false).right.get
-    val pres2 = space.produce(Channel("friends"), bob, persist = false).right.get
-    val pres3 = space.produce(Channel("friends"), carol, persist = false).right.get
+    val pres1 = space.produce(Channel("friends"), alice, persist = false)
+    val pres2 = space.produce(Channel("friends"), bob, persist = false)
+    val pres3 = space.produce(Channel("friends"), carol, persist = false)
 
     assert(pres1.isEmpty)
     assert(pres2.isEmpty)
@@ -273,8 +271,6 @@ object AddressBookExample {
           new Printer,
           persist = false
         )
-        .right
-        .get
 
     val cres1 = consumer()
     val cres2 = consumer()
@@ -302,8 +298,6 @@ object AddressBookExample {
           new Printer,
           persist = false
         )
-        .right
-        .get
 
     assert(cres.isEmpty)
 
@@ -311,7 +305,7 @@ object AddressBookExample {
     val checkpointHash = space.createCheckpoint().root
 
     def produceAlice(): Option[(Printer, Seq[Entry], Int)] =
-      space.produce(Channel("friends"), alice, persist = false).right.get
+      unpackOption(space.produce(Channel("friends"), alice, persist = false))
 
     println("Rollback example: First produce result should return some data")
     assert(produceAlice.isDefined)

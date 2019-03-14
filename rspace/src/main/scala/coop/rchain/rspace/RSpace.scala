@@ -70,7 +70,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
       continuation: K,
       persist: Boolean,
       consumeRef: Consume
-  ): F[Either[E, MaybeDataCandidate]] =
+  ): F[MaybeDataCandidate] =
     for {
       _ <- store.withWriteTxnF { txn =>
             store.putWaitingContinuation(
@@ -89,7 +89,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
       _ <- logF.debug(s"""|consume: no data found,
                           |storing <(patterns, continuation): ($patterns, $continuation)>
                           |at <channels: $channels>""".stripMargin.replace('\n', ' '))
-    } yield None.asRight[E]
+    } yield None
 
   private[this] def storePersistentData(dataCandidates: Seq[DataCandidate[C, R]]) =
     dataCandidates.toList
@@ -118,22 +118,20 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
       persist: Boolean,
       consumeRef: Consume,
       dataCandidates: Seq[DataCandidate[C, R]]
-  ) = {
+  ): Some[(ContResult[C, P, K], Seq[Result[R]])] = {
     val contSequenceNumber: Int =
       nextSequenceNumber(consumeRef, dataCandidates)
-    Right(
-      Some(
-        (
-          ContResult(
-            continuation,
-            persist,
-            channels,
-            patterns,
-            contSequenceNumber
-          ),
-          dataCandidates
-            .map(dc => Result(dc.datum.a, dc.datum.persist))
-        )
+    Some(
+      (
+        ContResult(
+          continuation,
+          persist,
+          channels,
+          patterns,
+          contSequenceNumber
+        ),
+        dataCandidates
+          .map(dc => Result(dc.datum.a, dc.datum.persist))
       )
     )
   }
@@ -148,10 +146,13 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
       sequenceNumber: Int
   )(
       implicit m: Match[F, P, A, R]
-  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] = {
-    def storeWC(consumeRef: Consume) =
+  ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]] = {
+    def storeWC(consumeRef: Consume): F[MaybeDataCandidate] =
       storeWaitingContinuation(channels, patterns, continuation, persist, consumeRef)
-    def wrapResult(consumeRef: Consume, dataCandidates: Seq[DataCandidate[C, R]]) =
+    def wrapResult(
+        consumeRef: Consume,
+        dataCandidates: Seq[DataCandidate[C, R]]
+    ): Some[(ContResult[C, P, K], Seq[Result[R]])] =
       createContinuationResult(
         channels,
         patterns,
@@ -241,15 +242,15 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
       groupedChannels: Seq[Seq[C]],
       batChannel: C,
       data: Datum[A]
-  )(implicit m: Match[F, P, A, R]): F[Either[E, Option[ProduceCandidate[C, P, R, K]]]] = {
+  )(implicit m: Match[F, P, A, R]): F[Option[ProduceCandidate[C, P, R, K]]] = {
     type MaybeProduceCandidate = Option[ProduceCandidate[C, P, R, K]]
     type CandidateChannels     = Seq[C]
     def go(
         acc: Seq[CandidateChannels]
-    ): F[Either[Seq[CandidateChannels], Either[E, Option[ProduceCandidate[C, P, R, K]]]]] =
+    ): F[Either[Seq[CandidateChannels], Option[ProduceCandidate[C, P, R, K]]]] =
       acc match {
         case Nil =>
-          none[ProduceCandidate[C, P, R, K]].asRight[E].asRight[Seq[CandidateChannels]].pure[F]
+          none[ProduceCandidate[C, P, R, K]].asRight[Seq[CandidateChannels]].pure[F]
         case channels :: remaining =>
           for {
             matchCandidates <- store.withReadTxnF { txn =>
@@ -294,9 +295,8 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
                          )
           } yield
             firstMatch match {
-              case None => remaining.asLeft[Either[E, MaybeProduceCandidate]]
-              case produceCandidate =>
-                produceCandidate.asRight[E].asRight[Seq[CandidateChannels]]
+              case None             => remaining.asLeft[MaybeProduceCandidate]
+              case produceCandidate => produceCandidate.asRight[Seq[CandidateChannels]]
             }
       }
     groupedChannels.tailRecM(go)
@@ -304,7 +304,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
 
   private[this] def processMatchFound(
       pc: ProduceCandidate[C, P, R, K]
-  ): F[Either[E, Some[(ContResult[C, P, K], Seq[Result[R]])]]] =
+  ): F[Some[(ContResult[C, P, K], Seq[Result[R]])]] =
     pc match {
       case ProduceCandidate(
           channels,
@@ -370,7 +370,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
               ),
               dataCandidates.map(dc => Result(dc.datum.a, dc.datum.persist))
             )
-          ).asRight[E]
+          )
         }
 
         for {
@@ -384,7 +384,12 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
         } yield constructResult
     }
 
-  private[this] def storeData(channel: C, data: A, persist: Boolean, produceRef: Produce) =
+  private[this] def storeData(
+      channel: C,
+      data: A,
+      persist: Boolean,
+      produceRef: Produce
+  ): F[None.type] =
     for {
       _ <- logF.debug(s"produce: no matching continuation found")
       _ <- store
@@ -392,11 +397,11 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
               store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
             }
       _ <- logF.debug(s"produce: persisted <data: $data> at <channel: $channel>")
-    } yield Right(None)
+    } yield None
 
   override def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
       implicit m: Match[F, P, A, R]
-  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
+  ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]] =
     contextShift.evalOn(scheduler) {
       for {
         span       <- metricsF.span(produceSpanLabel)
@@ -425,9 +430,8 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
                                  )
                      _ <- span.mark("extract-produce-candidate")
                      r <- extracted match {
-                           case Left(e)         => Left(e).pure[F]
-                           case Right(Some(pc)) => processMatchFound(pc)
-                           case Right(None) =>
+                           case Some(pc) => processMatchFound(pc)
+                           case None =>
                              storeData(channel, data, persist, produceRef)
                          }
                      _ <- span.mark("process-matching")

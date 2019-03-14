@@ -27,7 +27,7 @@ class ReplayRSpaceBench {
   @Measurement(iterations = 1)
   def singleProduce(bh: Blackhole, state: ProduceInMemBenchState) = {
     val res = state.replaySpace.produce(state.produceChannel, bob, persist = true)
-    assert(res.right.get.isDefined)
+    assert(res.isDefined)
     bh.consume(res)
   }
 
@@ -44,7 +44,7 @@ class ReplayRSpaceBench {
       state.captor,
       persist = true
     )
-    assert(res.right.get.isDefined)
+    assert(res.isDefined)
     bh.consume(res)
   }
 }

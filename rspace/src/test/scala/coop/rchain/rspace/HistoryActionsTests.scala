@@ -243,7 +243,7 @@ trait HistoryActionsTests[F[_]]
 
       for {
         r1         <- space.consume(channels, List(Wildcard), new StringsCaptor, persist = false)
-        _          = r1 shouldBe Right(None)
+        _          = r1 shouldBe None
         r2         <- space.produce(channels.head, "datum", persist = false)
         _          = r2 shouldBe defined
         _          = history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None

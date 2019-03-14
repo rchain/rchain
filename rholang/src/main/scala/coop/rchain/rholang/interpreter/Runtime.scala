@@ -450,18 +450,16 @@ object Runtime {
                        0
                      )(matchListPar(F, cost))
       _ <- spaceResult match {
-            case Right(None) =>
+            case None =>
               replayResult match {
-                case Right(None) => F.unit
-                case Right(Some(_)) =>
+                case None => F.unit
+                case Some(_) =>
                   F.raiseError(
                     new SetupError("Registry insertion in replay fired continuation.")
                   )
-                case Left(err) => F.raiseError(err)
               }
-            case Right(Some(_)) =>
+            case Some(_) =>
               F.raiseError(new SetupError("Registry insertion fired continuation."))
-            case Left(err) => F.raiseError(err)
           }
     } yield ()
   }

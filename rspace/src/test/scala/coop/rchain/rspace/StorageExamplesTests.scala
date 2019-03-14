@@ -34,9 +34,9 @@ trait StorageExamplesTests[F[_]]
                new EntriesCaptor,
                persist = false
              )
-      _  = r1 shouldBe Right(None)
+      _  = r1 shouldBe None
       r2 <- space.produce(Channel("friends"), bob, persist = false)
-      _  = r2 shouldBe Right(None)
+      _  = r2 shouldBe None
       r3 <- space.produce(Channel("friends"), bob, persist = false)
       _  = r3 shouldBe defined
       _  = runK(r3)
@@ -50,9 +50,9 @@ trait StorageExamplesTests[F[_]]
 
     for {
       r1 <- space.produce(Channel("friends"), bob, persist = false)
-      _  = r1 shouldBe Right(None)
+      _  = r1 shouldBe None
       r2 <- space.produce(Channel("friends"), bob, persist = false)
-      _  = r2 shouldBe Right(None)
+      _  = r2 shouldBe None
       r3 <- space
              .consume(
                List(Channel("friends"), Channel("friends")),
@@ -82,11 +82,11 @@ trait StorageExamplesTests[F[_]]
                new EntriesCaptor,
                persist = false
              )
-      _  = r1 shouldBe Right(None)
+      _  = r1 shouldBe None
       r2 <- space.produce(Channel("friends"), bob, persist = false)
-      _  = r2 shouldBe Right(None)
+      _  = r2 shouldBe None
       r3 <- space.produce(Channel("friends"), bob, persist = false)
-      _  = r3 shouldBe Right(None)
+      _  = r3 shouldBe None
       r4 <- space.produce(Channel("colleagues"), alice, persist = false)
       _  = r4 shouldBe defined
       _  = runK(r4)
@@ -127,7 +127,7 @@ trait StorageExamplesTests[F[_]]
                new EntriesCaptor,
                persist = false
              )
-      _   = r1 shouldBe Right(None)
+      _   = r1 shouldBe None
       r2  <- space.produce(Channel("friends"), bob, persist = false)
       r3  <- space.produce(Channel("family"), carol, persist = false)
       r4  <- space.produce(Channel("colleagues"), alice, persist = false)
@@ -138,14 +138,14 @@ trait StorageExamplesTests[F[_]]
       r9  <- space.produce(Channel("family"), carol, persist = false)
       r10 <- space.produce(Channel("family"), carol, persist = false)
 
-      _ = r2 shouldBe Right(None)
-      _ = r3 shouldBe Right(None)
-      _ = r4 shouldBe Right(None)
-      _ = r5 shouldBe Right(None)
-      _ = r6 shouldBe Right(None)
-      _ = r7 shouldBe Right(None)
-      _ = r8 shouldBe Right(None)
-      _ = r9 shouldBe Right(None)
+      _ = r2 shouldBe None
+      _ = r3 shouldBe None
+      _ = r4 shouldBe None
+      _ = r5 shouldBe None
+      _ = r6 shouldBe None
+      _ = r7 shouldBe None
+      _ = r8 shouldBe None
+      _ = r9 shouldBe None
       _ = r10 shouldBe defined
 
       _ = runK(r10)
@@ -171,15 +171,15 @@ trait StorageExamplesTests[F[_]]
       r8 <- space.produce(Channel("family"), carol, persist = false)
       r9 <- space.produce(Channel("family"), carol, persist = false)
 
-      _ = r1 shouldBe Right(None)
-      _ = r2 shouldBe Right(None)
-      _ = r3 shouldBe Right(None)
-      _ = r4 shouldBe Right(None)
-      _ = r5 shouldBe Right(None)
-      _ = r6 shouldBe Right(None)
-      _ = r7 shouldBe Right(None)
-      _ = r8 shouldBe Right(None)
-      _ = r9 shouldBe Right(None)
+      _ = r1 shouldBe None
+      _ = r2 shouldBe None
+      _ = r3 shouldBe None
+      _ = r4 shouldBe None
+      _ = r5 shouldBe None
+      _ = r6 shouldBe None
+      _ = r7 shouldBe None
+      _ = r8 shouldBe None
+      _ = r9 shouldBe None
 
       r10 <- space
               .consume(
@@ -249,7 +249,7 @@ trait StorageExamplesTests[F[_]]
                persist = false
              )
 
-      _ = r1 shouldBe Right(None)
+      _ = r1 shouldBe None
 
       r2  <- space.produce(Channel("friends"), bob, persist = false)
       r3  <- space.produce(Channel("family"), carol, persist = false)
@@ -261,14 +261,14 @@ trait StorageExamplesTests[F[_]]
       r9  <- space.produce(Channel("family"), carol, persist = false)
       r10 <- space.produce(Channel("family"), carol, persist = false)
 
-      _ = r2 shouldBe Right(None)
-      _ = r3 shouldBe Right(None)
-      _ = r4 shouldBe Right(None)
-      _ = r5 shouldBe Right(None)
-      _ = r6 shouldBe Right(None)
-      _ = r7 shouldBe Right(None)
-      _ = r8 shouldBe Right(None)
-      _ = r9 shouldBe Right(None)
+      _ = r2 shouldBe None
+      _ = r3 shouldBe None
+      _ = r4 shouldBe None
+      _ = r5 shouldBe None
+      _ = r6 shouldBe None
+      _ = r7 shouldBe None
+      _ = r8 shouldBe None
+      _ = r9 shouldBe None
       _ = r10 shouldBe defined
 
       _ = runK(r10)

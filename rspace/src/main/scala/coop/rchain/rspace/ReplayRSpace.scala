@@ -49,7 +49,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
       sequenceNumber: Int
   )(
       implicit m: Match[F, P, A, R]
-  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
+  ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]] =
     contextShift.evalOn(scheduler) {
       if (channels.length =!= patterns.length) {
         val msg = "channels.length must equal patterns.length"
@@ -65,7 +65,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
         } yield result
     }
 
-  type MaybeConsumeResult = Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]
+  type MaybeConsumeResult = Option[(ContResult[C, P, K], Seq[Result[R]])]
 
   private[this] def lockedConsume(
       channels: Seq[C],
@@ -96,7 +96,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
     def storeWaitingContinuation(
         consumeRef: Consume,
         maybeCommRef: Option[COMM]
-    ): F[None.type] =
+    ): F[MaybeConsumeResult] =
       for {
         _ <- store
               .withWriteTxnF { txn =>
@@ -116,7 +116,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
         mats: Seq[DataCandidate[C, R]],
         consumeRef: Consume,
         comms: Multiset[COMM]
-    ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]] =
+    ): F[MaybeConsumeResult] =
       for {
         _       <- metricsF.incrementCounter(consumeCommLabel)
         commRef <- syncF.delay { COMM(consumeRef, mats.map(_.datum.source)) }
@@ -153,7 +153,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
     // TODO stop throwing exceptions
     def getCommOrDataCandidates(comms: Seq[COMM]): F[Either[COMM, Seq[DataCandidate[C, R]]]] = {
       type COMMOrData = Either[COMM, Seq[DataCandidate[C, R]]]
-      def go(comms: Seq[COMM]) =
+      def go(comms: Seq[COMM]): F[Either[Seq[COMM], Either[COMM, Seq[DataCandidate[C, R]]]]] =
         comms match {
           case Nil =>
             val msg = "List comms must not be empty"
@@ -183,16 +183,16 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
       _ <- span.mark("after-compute-consumeref")
       r <- replayData.get(consumeRef) match {
             case None =>
-              storeWaitingContinuation(consumeRef, None).map(_.asRight[E])
+              storeWaitingContinuation(consumeRef, None)
             case Some(comms) =>
               val commOrDataCandidates: F[Either[COMM, Seq[DataCandidate[C, R]]]] =
                 getCommOrDataCandidates(comms.iterator().asScala.toList)
 
-              val x: F[MaybeConsumeResult] = commOrDataCandidates flatMap {
+              val x: F[MaybeConsumeResult] = commOrDataCandidates.flatMap {
                 case Left(commRef) =>
-                  storeWaitingContinuation(consumeRef, Some(commRef)).map(_.asRight[E])
+                  storeWaitingContinuation(consumeRef, Some(commRef))
                 case Right(dataCandidates) =>
-                  handleMatches(dataCandidates, consumeRef, comms).map(_.asRight[E])
+                  handleMatches(dataCandidates, consumeRef, comms)
               }
               x
           }
@@ -201,7 +201,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
 
   def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
       implicit m: Match[F, P, A, R]
-  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
+  ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]] =
     contextShift.evalOn(scheduler) {
       for {
         span <- metricsF.span(produceSpanLabel)
@@ -222,7 +222,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
       span: Span[F]
   )(
       implicit m: Match[F, P, A, R]
-  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] = {
+  ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]] = {
     def runMatcher(
         comm: COMM,
         produceRef: Produce,
@@ -302,7 +302,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
     def storeDatum(
         produceRef: Produce,
         maybeCommRef: Option[COMM]
-    ): F[None.type] =
+    ): F[MaybeConsumeResult] =
       for {
         _ <- store
               .withWriteTxnF { txn =>
@@ -316,7 +316,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
         mat: ProduceCandidate[C, P, R, K],
         produceRef: Produce,
         comms: Multiset[COMM]
-    ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]] =
+    ): F[MaybeConsumeResult] =
       mat match {
         case ProduceCandidate(
             channels,
@@ -375,7 +375,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
       _          <- span.mark("after-compute-produceref")
       result <- replayData.get(produceRef) match {
                  case None =>
-                   storeDatum(produceRef, None).map(r => Right(r))
+                   storeDatum(produceRef, None)
                  case Some(comms) =>
                    val commOrProduceCandidate: F[Either[COMM, ProduceCandidate[C, P, R, K]]] =
                      getCommOrProduceCandidate(
@@ -383,11 +383,11 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
                        produceRef,
                        groupedChannels
                      )
-                   val r: F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] = commOrProduceCandidate flatMap {
+                   val r: F[MaybeConsumeResult] = commOrProduceCandidate.flatMap {
                      case Left(comm) =>
-                       storeDatum(produceRef, Some(comm)).map(r => Right(r))
+                       storeDatum(produceRef, Some(comm))
                      case Right(produceCandidate) =>
-                       handleMatch(produceCandidate, produceRef, comms).map(r => Right(r))
+                       handleMatch(produceCandidate, produceRef, comms)
                    }
                    r
                }
