@@ -86,12 +86,11 @@ object Connect {
   def clearConnections[F[_]: Sync: Monad: Time: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]
     : F[Int] = {
 
-    def sendHeartbeat(peer: PeerNode): F[(PeerNode, CommErr[Protocol])] =
+    def sendHeartbeat(peer: PeerNode): F[(PeerNode, CommErr[Unit])] =
       for {
-        local   <- RPConfAsk[F].reader(_.local)
-        timeout <- RPConfAsk[F].reader(_.defaultTimeout)
-        hb      = heartbeat(local)
-        res     <- TransportLayer[F].roundTrip(peer, hb, timeout)
+        local <- RPConfAsk[F].reader(_.local)
+        hb    = heartbeat(local)
+        res   <- TransportLayer[F].send(peer, hb)
       } yield (peer, res)
 
     def clear(connections: Connections): F[Int] =
