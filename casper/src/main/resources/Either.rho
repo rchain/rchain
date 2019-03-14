@@ -15,7 +15,61 @@
 new Either, rs(`rho:registry:insertSigned:ed25519`), uriOut, rl(`rho:registry:lookup`), ListOpsCh in {
   rl!(`rho:id:dputnspi15oxxnyymjrpu7rkaok3bjkiwq84z7cqcrx4ktqfpyapn4`, *ListOpsCh) |
   for(@(_, ListOps) <- ListOpsCh) {
-    //Right-biased flatMap; f must also return an Either
+
+    // Like fromNillable, except it takes `valueCh` and reads it to obtain the `value` parameter
+    contract Either(@"fromNillable <-", valueCh, @nilValue, return) = {
+      for (@value <- valueCh) {
+        Either!("fromNillable", value, nilValue, *return)
+      }
+    } |
+
+    // Lifts a value into Either, putting Nil-s into Left and using Right otherwise.
+    contract Either(@"fromNillable", @value, @nilValue, return) = {
+      match value {
+        Nil => return!(("Left", nilValue))
+        _   => return!(("Right", value))
+      }
+    } |
+
+    // Like fromBoolean, except it takes `successCh` and reads it to obtain the `success` parameter
+    contract Either(@"fromBoolean <-", successCh, @nilSuccess, return) = {
+      for (@success <- successCh) {
+        Either!("fromBoolean", success, nilSuccess, *return)
+      }
+    } |
+
+    // Lifts a Boolean into Either, making `false` into Left and using Right otherwise.
+    contract Either(@"fromBoolean", @success, @failureMessage, return) = {
+      match success {
+        Nil => return!(("Left", failureMessage))
+        _   => return!(("Right", Nil))
+      }
+    } |
+
+    // Like map2, except it takes `aCh` and `bCh` and reads them to obtain the `a` and `b` parameters
+    contract Either(@"map2 <-", aCh, bCh, f, return) = {
+      for (@a <- aCh; @b <- bCh) {
+        Either!("map2", a, b, *f, *return)
+      }
+    } |
+
+    // Composes two eithers `a: A` and `b: B` using the function `f`. See cats.Apply.map2 for details.`
+    contract Either(@"map2", @a, @b, f, return) = {
+      match (a, b) {
+        (("Left", _), _)               => return!(a)
+        (_, ("Left", _))               => return!(b)
+        (("Right", va), ("Right", vb)) => {
+          new ret in {
+            f!(va, vb, *ret) |
+            for (@v <- ret) {
+              return!(("Right", v))
+            }
+          }
+        }
+      }
+    } |
+
+    // Right-biased flatMap; f must also return an Either
     contract Either(@"flatMap", @either, f, return) = {
       match either {
         ("Right", value) => { f!(value, *return) }
@@ -23,7 +77,14 @@ new Either, rs(`rho:registry:insertSigned:ed25519`), uriOut, rl(`rho:registry:lo
       }
     } |
 
-    //Right-biased map to transform an Either
+    // Like map, except it takes `eitherCh` and reads them to obtain the `either` parameter
+    contract Either(@"map <-", eitherCh, f, return) = {
+      for (@either <- eitherCh) {
+        Either!("map", either, *f, *return)
+      }
+    } |
+
+    // Right-biased map to transform an Either
     contract Either(@"map", @either, f, return) = {
       match either {
         ("Right", value) => {
@@ -38,14 +99,14 @@ new Either, rs(`rho:registry:insertSigned:ed25519`), uriOut, rl(`rho:registry:lo
       }
     } |
 
-    //Composes a list of functions returning Either into a
-    //single result by using flatMap. Similar to following Scala code:
-    //for {
-    //  r0 <- Right(input)
-    //  r1 <- f1(r0)
-    //  r2 <- f2(r1)
-    //  ...
-    //} yield fn
+    // Composes a list of functions returning Either into a
+    // single result by using flatMap. Similar to following Scala code:
+    // for {
+    //   r0 <- Right(input)
+    //   r1 <- f1(r0)
+    //   r2 <- f2(r1)
+    //   ...
+    // } yield fn
     contract Either(@"compose", @input, @functions, return) = {
       new combinator in {
         contract combinator(@head, @accumulatedValue, return) = {
