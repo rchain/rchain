@@ -962,7 +962,7 @@ trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, 
       .unsafeRunSync
     val replaySpace =
       ReplayRSpace
-        .create[Task, C, P, E, A, A, K](context, Branch.REPLAY)(
+        .create[Task, C, P, A, A, K](context, Branch.REPLAY)(
           sc,
           sp,
           sa,
@@ -1005,7 +1005,7 @@ trait MixedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C,
     val context = Context.createMixed[Task, C, P, A, K](dbDir, 1024L * 1024L * 4096L)
     val space   = RSpace.create[Task, C, P, A, A, K](context, Branch.MASTER).unsafeRunSync
     val replaySpace =
-      ReplayRSpace.create[Task, C, P, E, A, A, K](context, Branch.REPLAY).unsafeRunSync
+      ReplayRSpace.create[Task, C, P, A, A, K](context, Branch.REPLAY).unsafeRunSync
 
     try {
       f(space, replaySpace).unsafeRunSync
@@ -1035,7 +1035,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase
 
     val ctx: Context[Task, C, P, A, K] = Context.createInMemory()
     val space                          = RSpace.create[Task, C, P, A, A, K](ctx, Branch.REPLAY).unsafeRunSync
-    val replaySpace                    = ReplayRSpace.create[Task, C, P, E, A, A, K](ctx, Branch.REPLAY).unsafeRunSync
+    val replaySpace                    = ReplayRSpace.create[Task, C, P, A, A, K](ctx, Branch.REPLAY).unsafeRunSync
 
     try {
       f(space, replaySpace).unsafeRunSync
@@ -1078,7 +1078,7 @@ trait FaultyStoreReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsB
           throw new RuntimeException("Couldn't write to underlying store")
       }
 
-    val replaySpace = new ReplayRSpace[Task, C, P, E, A, A, K](store, Branch.REPLAY)
+    val replaySpace = new ReplayRSpace[Task, C, P, A, A, K](store, Branch.REPLAY)
 
     try {
       f(space, replaySpace).unsafeRunSync

@@ -17,7 +17,7 @@ import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext
 
-class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch: Branch)(
+class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Branch)(
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
@@ -427,7 +427,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
 
 object ReplayRSpace {
 
-  def create[F[_], C, P, E, A, R, K](context: Context[F, C, P, A, K], branch: Branch)(
+  def create[F[_], C, P, A, R, K](context: Context[F, C, P, A, K], branch: Branch)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -438,7 +438,7 @@ object ReplayRSpace {
       contextShift: ContextShift[F],
       scheduler: ExecutionContext,
       metricsF: Metrics[F]
-  ): F[ReplayRSpace[F, C, P, E, A, R, K]] = {
+  ): F[ReplayRSpace[F, C, P, A, R, K]] = {
 
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec
@@ -456,7 +456,7 @@ object ReplayRSpace {
         LockFreeInMemoryStore.create(mixedContext.trieStore, branch)
     }
 
-    val replaySpace = new ReplayRSpace[F, C, P, E, A, R, K](mainStore, branch)
+    val replaySpace = new ReplayRSpace[F, C, P, A, R, K](mainStore, branch)
 
     /*
      * history.initialize returns true if the history trie contains no root (i.e. is empty).

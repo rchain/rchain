@@ -80,7 +80,7 @@ object ReplayRSpaceBench {
         testStore,
         Branch.MASTER
       )
-      replaySpace = ReplayRSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+      replaySpace = ReplayRSpace.create[Id, Channel, Pattern, Entry, Entry, EntriesCaptor](
         context,
         Branch.REPLAY
       )
