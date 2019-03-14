@@ -918,7 +918,7 @@ trait ReplayRSpaceTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with O
   }
 
   def withTestSpaces[S](
-      f: (ISpace[Task, C, P, A, A, K], IReplaySpace[Task, C, P, E, A, A, K]) => Task[S]
+      f: (ISpace[Task, C, P, A, A, K], IReplaySpace[Task, C, P, A, A, K]) => Task[S]
   )(
       implicit
       sc: Serialize[C],
@@ -932,7 +932,7 @@ trait ReplayRSpaceTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with O
 trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
   import SchedulerPools.global
   override def withTestSpaces[S](
-      f: (ISpace[Task, C, P, A, A, K], IReplaySpace[Task, C, P, E, A, A, K]) => Task[S]
+      f: (ISpace[Task, C, P, A, A, K], IReplaySpace[Task, C, P, A, A, K]) => Task[S]
   )(
       implicit
       sc: Serialize[C],
@@ -989,7 +989,7 @@ trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, 
 trait MixedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
   import SchedulerPools.global
   override def withTestSpaces[S](
-      f: (ISpace[Task, C, P, A, A, K], IReplaySpace[Task, C, P, E, A, A, K]) => Task[S]
+      f: (ISpace[Task, C, P, A, A, K], IReplaySpace[Task, C, P, A, A, K]) => Task[S]
   )(
       implicit
       sc: Serialize[C],
@@ -1021,7 +1021,7 @@ trait MixedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C,
 trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
   import SchedulerPools.global
   override def withTestSpaces[S](
-      f: (ISpace[Task, C, P, A, A, K], IReplaySpace[Task, C, P, E, A, A, K]) => Task[S]
+      f: (ISpace[Task, C, P, A, A, K], IReplaySpace[Task, C, P, A, A, K]) => Task[S]
   )(
       implicit
       sc: Serialize[C],
@@ -1049,7 +1049,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase
 trait FaultyStoreReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
   import SchedulerPools.global
   override def withTestSpaces[S](
-      f: (ISpace[Task, C, P, A, A, K], IReplaySpace[Task, C, P, E, A, A, K]) => Task[S]
+      f: (ISpace[Task, C, P, A, A, K], IReplaySpace[Task, C, P, A, A, K]) => Task[S]
   )(
       implicit
       sc: Serialize[C],
