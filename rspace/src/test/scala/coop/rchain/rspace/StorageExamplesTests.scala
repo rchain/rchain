@@ -19,7 +19,7 @@ import scodec.Codec
 import scala.concurrent.ExecutionContext.Implicits.global
 
 trait StorageExamplesTests[F[_]]
-    extends StorageTestsBase[F, Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor]
     with TestImplicitHelpers {
 
   "CORE-365: A joined consume on duplicate channels followed by two produces on that channel" should
@@ -280,7 +280,7 @@ trait StorageExamplesTests[F[_]]
 }
 
 abstract class MixedInMemoryStoreStorageExamplesTestsBase[F[_]]
-    extends StorageTestsBase[F, Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor]
     with BeforeAndAfterAll {
 
   val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
@@ -329,7 +329,7 @@ abstract class MixedInMemoryStoreStorageExamplesTestsBase[F[_]]
 }
 
 abstract class InMemoryStoreStorageExamplesTestsBase[F[_]]
-    extends StorageTestsBase[F, Channel, Pattern, Nothing, Entry, EntriesCaptor] {
+    extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor] {
 
   override def withTestSpace[R](f: T => F[R]): R = {
 
@@ -367,7 +367,7 @@ abstract class InMemoryStoreStorageExamplesTestsBase[F[_]]
 }
 
 abstract class LMDBStoreStorageExamplesTestBase[F[_]]
-    extends StorageTestsBase[F, Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor]
     with BeforeAndAfterAll {
 
   val dbDir: Path    = Files.createTempDirectory("rchain-storage-test-")
@@ -403,15 +403,15 @@ abstract class LMDBStoreStorageExamplesTestBase[F[_]]
 
 class InMemoryStoreStorageExamplesTests
     extends InMemoryStoreStorageExamplesTestsBase[Coeval]
-    with CoevalTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    with CoevalTests[Channel, Pattern, Entry, EntriesCaptor]
     with StorageExamplesTests[Coeval]
 
 class MixedInMemoryStoreStorageExamplesTests
     extends MixedInMemoryStoreStorageExamplesTestsBase[Coeval]
-    with CoevalTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    with CoevalTests[Channel, Pattern, Entry, EntriesCaptor]
     with StorageExamplesTests[Coeval]
 
 class LMDBStoreStorageExamplesTest
     extends LMDBStoreStorageExamplesTestBase[Coeval]
-    with CoevalTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    with CoevalTests[Channel, Pattern, Entry, EntriesCaptor]
     with StorageExamplesTests[Coeval]

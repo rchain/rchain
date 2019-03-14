@@ -15,7 +15,7 @@ import org.scalatest.AppendedClues
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
 trait IStoreTests
-    extends StorageTestsBase[Coeval, String, Pattern, Nothing, String, StringsCaptor]
+    extends StorageTestsBase[Coeval, String, Pattern, String, StringsCaptor]
     with GeneratorDrivenPropertyChecks
     with AppendedClues {
 
@@ -300,12 +300,12 @@ trait IStoreTests
 class InMemoryStoreTests
     extends InMemoryStoreTestsBase[Coeval]
     with IStoreTests
-    with CoevalTests[String, Pattern, Nothing, String, StringsCaptor]
+    with CoevalTests[String, Pattern, String, StringsCaptor]
 class LMDBStoreTests
     extends LMDBStoreTestsBase[Coeval]
     with IStoreTests
-    with CoevalTests[String, Pattern, Nothing, String, StringsCaptor]
+    with CoevalTests[String, Pattern, String, StringsCaptor]
 class MixedStoreTests
     extends MixedStoreTestsBase[Coeval]
     with IStoreTests
-    with CoevalTests[String, Pattern, Nothing, String, StringsCaptor]
+    with CoevalTests[String, Pattern, String, StringsCaptor]

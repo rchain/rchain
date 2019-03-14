@@ -27,7 +27,7 @@ import org.scalatest.enablers.Definition
 import scala.util.Random
 
 trait StorageActionsTests[F[_]]
-    extends StorageTestsBase[F, String, Pattern, Nothing, String, StringsCaptor]
+    extends StorageTestsBase[F, String, Pattern, String, StringsCaptor]
     with TestImplicitHelpers
     with GeneratorDrivenPropertyChecks
     with Checkers {
@@ -1298,7 +1298,7 @@ trait StorageActionsTests[F[_]]
 
 }
 trait MonadicStorageActionsTests[F[_]]
-    extends StorageTestsBase[F, String, Pattern, Nothing, String, StringsCaptor]
+    extends StorageTestsBase[F, String, Pattern, String, StringsCaptor]
     with TestImplicitHelpers
     with GeneratorDrivenPropertyChecks
     with Checkers {
@@ -1350,7 +1350,7 @@ trait MonadicStorageActionsTests[F[_]]
 }
 
 trait LegacyStorageActionsTests
-    extends StorageTestsBase[Coeval, String, Pattern, Nothing, String, StringsCaptor]
+    extends StorageTestsBase[Coeval, String, Pattern, String, StringsCaptor]
     with TestImplicitHelpers
     with GeneratorDrivenPropertyChecks
     with Checkers {
@@ -1399,7 +1399,7 @@ trait LegacyStorageActionsTests
   }
 }
 
-trait IdTests[C, P, A, R, K] extends StorageTestsBase[Id, C, P, A, R, K] {
+trait IdTests[C, P, A, R, K] extends StorageTestsBase[Id, C, P, R, K] {
   override implicit val concurrentF: Concurrent[Id] =
     coop.rchain.catscontrib.effect.implicits.concurrentId
   override implicit val logF: Log[Id]         = Log.log[Id]
@@ -1411,7 +1411,7 @@ trait IdTests[C, P, A, R, K] extends StorageTestsBase[Id, C, P, A, R, K] {
   override def run[RES](f: Id[RES]): RES = f
 }
 
-trait CoevalTests[C, P, A, R, K] extends StorageTestsBase[Coeval, C, P, A, R, K] {
+trait CoevalTests[C, P, R, K] extends StorageTestsBase[Coeval, C, P, R, K] {
   override implicit val concurrentF: Concurrent[Coeval] =
     coop.rchain.rspace.test.concurrentCoeval
   override implicit val logF: Log[Coeval]         = Log.log[Coeval]
@@ -1424,7 +1424,7 @@ trait CoevalTests[C, P, A, R, K] extends StorageTestsBase[Coeval, C, P, A, R, K]
 }
 
 import monix.eval.Task
-trait TaskTests[C, P, A, R, K] extends StorageTestsBase[Task, C, P, A, R, K] {
+trait TaskTests[C, P, A, R, K] extends StorageTestsBase[Task, C, P, R, K] {
   import coop.rchain.catscontrib.TaskContrib._
   import scala.concurrent.ExecutionContext
 
@@ -1468,13 +1468,13 @@ class MixedStoreStorageActionsTests
 
 class LegacyInMemoryStoreStorageActionsTests
     extends InMemoryStoreTestsBase[Coeval]
-    with CoevalTests[String, Pattern, Nothing, String, StringsCaptor]
+    with CoevalTests[String, Pattern, String, StringsCaptor]
     with JoinOperationsTests
     with LegacyStorageActionsTests
 
 class LegacyLMDBStoreActionsTests
     extends LMDBStoreTestsBase[Coeval]
-    with CoevalTests[String, Pattern, Nothing, String, StringsCaptor]
+    with CoevalTests[String, Pattern, String, StringsCaptor]
     with StorageActionsTests[Coeval]
     with JoinOperationsTests
     with BeforeAndAfterAll
@@ -1482,7 +1482,7 @@ class LegacyLMDBStoreActionsTests
 
 class LegacyMixedStoreActionsTests
     extends MixedStoreTestsBase[Coeval]
-    with CoevalTests[String, Pattern, Nothing, String, StringsCaptor]
+    with CoevalTests[String, Pattern, String, StringsCaptor]
     with StorageActionsTests[Coeval]
     with JoinOperationsTests
     with BeforeAndAfterAll
