@@ -227,8 +227,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
       earliestBlockNumber = currentBlockNumber - expirationThreshold
       deploys             = state.deployHistory
       validDeploys = deploys.filter(
-        d =>
-          d.validAfterBlockNumber < currentBlockNumber && d.validAfterBlockNumber > earliestBlockNumber
+        d => notFutureDeploy(currentBlockNumber, d) && notExpiredDeploy(earliestBlockNumber, d)
       )
       deploysInCurrentChain <- DagOperations
                                 .bfTraverseF[F, BlockMessage](parents.toList)(
@@ -241,6 +240,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
                                 }
                                 .toList
     } yield (validDeploys -- deploysInCurrentChain.flatten).toSeq
+
+  private def notExpiredDeploy(earliestBlockNumber: Long, d: DeployData): Boolean =
+    d.validAfterBlockNumber > earliestBlockNumber
+
+  private def notFutureDeploy(currentBlockNumber: Long, d: DeployData): Boolean =
+    d.validAfterBlockNumber < currentBlockNumber
 
   private def createProposal(
       dag: BlockDagRepresentation[F],
