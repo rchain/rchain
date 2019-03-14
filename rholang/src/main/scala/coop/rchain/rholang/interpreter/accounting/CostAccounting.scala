@@ -15,11 +15,6 @@ object CostAccounting {
   def empty[F[_]: Sync]: F[MonadState[F, Cost]] =
     this.of(Cost(0, "init"))
 
-  def unsafe[F[_]](init: Cost)(implicit F: Sync[F]): MonadState[F, Cost] = {
-    val ref = Ref.unsafe[F, Cost](init)
-    new CostAccountingImpl[F](ref)
-  }
-
   private class CostAccountingImpl[F[_]: Monad](state: Ref[F, Cost])
       extends DefaultMonadState[F, Cost] {
     val monad: cats.Monad[F]                      = implicitly[Monad[F]]

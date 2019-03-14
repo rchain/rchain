@@ -342,7 +342,8 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
   override type FixtureParam = TestFixture
 
   override protected def withFixture(test: OneArgTest): Outcome = {
-    val cost: _cost[Task] = loggingCost(CostAccounting.unsafe[Task](Cost(0)), noOpCostLog)
+    val cost: _cost[Task] =
+      loggingCost(CostAccounting.empty[Task].runSyncUnsafe(1.second), noOpCostLog)
     def mkChargingRspace(rhoISpace: RhoISpace[Task]): Task[ChargingRSpace] = {
       val s     = implicitly[Sync[Task]]
       val error = FunctorRaise[Task, InterpreterError]
@@ -360,7 +361,8 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
 
   private def actualMatchCost(patterns: Seq[BindPattern], data: Seq[ListParWithRandom])(
       implicit
-      _cost: _cost[Task] = loggingCost(CostAccounting.unsafe[Task](Cost(1000)), noOpCostLog)
+      _cost: _cost[Task] =
+        loggingCost(CostAccounting.of[Task](Cost(1000)).runSyncUnsafe(1.second), noOpCostLog)
   ): Task[Cost] = {
     import cats.implicits._
 
