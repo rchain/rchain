@@ -1018,7 +1018,7 @@ trait MixedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C,
   }
 }
 
-trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, A, K] {
+trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C, P, A, K] {
   import SchedulerPools.global
   override def withTestSpaces[S](
       f: (ISpace[Task, C, P, A, A, K], IReplaySpace[Task, C, P, A, A, K]) => Task[S]
@@ -1095,7 +1095,7 @@ class LMDBReplayRSpaceTests
     with ReplayRSpaceTests {}
 
 class InMemoryReplayRSpaceTests
-    extends InMemoryReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
+    extends InMemoryReplayRSpaceTestsBase[String, Pattern, String, String]
     with ReplayRSpaceTests {}
 
 class FaultyReplayRSpaceTests
