@@ -92,7 +92,9 @@ object Runtime {
       * @param update a function which takes the current value and returns the new one
       * @return the updated value
       */
-    def updateParams(update : ShortLeashParameters => ShortLeashParameters) : F[ShortLeashParameters] =
+    def updateParams(
+        update: ShortLeashParameters => ShortLeashParameters
+    ): F[ShortLeashParameters] =
       params.modify(v => {
         val newV = update(v)
         (newV, newV)

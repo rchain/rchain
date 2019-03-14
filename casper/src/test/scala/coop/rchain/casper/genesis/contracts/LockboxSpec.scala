@@ -7,4 +7,5 @@ class LockboxSpec
     extends RhoSpec(
       CompiledRholangSource("LockboxTest.rho"),
       Seq(StandardDeploys.lockbox),
-      10.seconds)
+      10.seconds
+    )

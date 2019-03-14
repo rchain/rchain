@@ -18,8 +18,8 @@ object DeployDataContract {
           Seq(RhoType.String("userId"), (pk @ RhoType.ByteArray(_)), ackCh)
           ) =>
         for {
-          _  <- ctx.shortLeashParams.updateParams(_.copy(userId = pk))
-          _  <- produce(Seq(Par()), ackCh)
+          _ <- ctx.shortLeashParams.updateParams(_.copy(userId = pk))
+          _ <- produce(Seq(Par()), ackCh)
         } yield ()
     }
   }
