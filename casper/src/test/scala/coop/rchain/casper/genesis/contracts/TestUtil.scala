@@ -49,7 +49,7 @@ object TestUtil {
   def evalDeploy(deploy: DeployData, runtime: Runtime[Task])(
       implicit scheduler: Scheduler
   ): Unit = {
-    runtime.reducer.setPhlo(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
+    runtime.reducer.setPhlo(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
     implicit val rand: Blake2b512Random = Blake2b512Random(
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
     )
@@ -61,7 +61,7 @@ object TestUtil {
       term: Par,
       runtime: Runtime[Task]
   )(implicit scheduler: Scheduler, rand: Blake2b512Random): Unit = {
-    runtime.reducer.setPhlo(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
+    runtime.reducer.setPhlo(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
     runtime.reducer.inj(term).unsafeRunSync
   }
 

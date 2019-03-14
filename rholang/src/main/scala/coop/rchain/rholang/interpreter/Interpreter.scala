@@ -34,7 +34,7 @@ object Interpreter {
     new Interpreter[F] {
 
       def evaluate(runtime: Runtime[F], term: String): F[EvaluateResult] =
-        evaluate(runtime, term, Cost.Max)
+        evaluate(runtime, term, Cost.UNSAFE_MAX)
 
       def evaluate(runtime: Runtime[F], term: String, initialPhlo: Cost): F[EvaluateResult] = {
         implicit val rand: Blake2b512Random = Blake2b512Random(128)

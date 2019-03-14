@@ -55,7 +55,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
     )
     val intermediate: Either[InterpreterError, (Cost, Option[(FreeMap, Unit)])] =
       spatialMatch[NonDetFreeMapWithCost, T, P](target, pattern)
-        .runFirstWithCost(Cost(Integer.MAX_VALUE))
+        .runFirstWithCost(Cost.UNSAFE_MAX)
     assert(intermediate.isRight)
     val result = intermediate.right.get._2.map(_._1)
     assert(prettyCaptures(result) == prettyCaptures(expectedCaptures))

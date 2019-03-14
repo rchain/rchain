@@ -82,7 +82,6 @@
     - [KeyValuePair](#.KeyValuePair)
     - [ListBindPatterns](#.ListBindPatterns)
     - [ListParWithRandom](#.ListParWithRandom)
-    - [ListParWithRandomAndPhlos](#.ListParWithRandomAndPhlos)
     - [Match](#.Match)
     - [MatchCase](#.MatchCase)
     - [New](#.New)
@@ -1401,27 +1400,6 @@ the grammar to construct them.
 | ----- | ---- | ----- | ----------- |
 | pars | [Par](#Par) | repeated |  |
 | randomState | [bytes](#bytes) |  |  |
-
-
-
-
-
-
-<a name=".ListParWithRandomAndPhlos"/>
-
-### ListParWithRandomAndPhlos
-
-
-
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| pars | [Par](#Par) | repeated |  |
-| randomState | [bytes](#bytes) |  |  |
-| cost | [uint64](#uint64) |  | cost of performing the spatial match |
-
-
-
-
 
 
 <a name=".Match"/>

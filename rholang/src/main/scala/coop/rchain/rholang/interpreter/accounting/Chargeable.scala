@@ -2,6 +2,9 @@ package coop.rchain.rholang.interpreter.accounting
 
 import coop.rchain.models.{ProtoM, StacksafeMessage}
 
+/* TODO: Make Chargeable instances for requisite rspace type parameters. Then, create an instance of PureRSpace
+         that uses the generic instances, _cost, and _error for a single, charging PureRSpace. */
+
 trait Chargeable[A] {
   def cost(a: A): Long
 }

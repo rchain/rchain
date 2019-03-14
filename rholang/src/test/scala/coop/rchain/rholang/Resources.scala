@@ -55,7 +55,7 @@ object Resources {
         BindPattern,
         InterpreterError,
         ListParWithRandom,
-        ListParWithRandomAndPhlos,
+        ListParWithRandom,
         TaggedContinuation
       ](context, Branch(branch))
     }
