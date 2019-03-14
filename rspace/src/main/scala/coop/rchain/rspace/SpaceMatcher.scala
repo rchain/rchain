@@ -22,7 +22,7 @@ import scala.concurrent.SyncVar
   * @tparam R a type representing a match result
   * @tparam K a type representing a continuation
   */
-private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, E, A, R, K] {
+private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, A, R, K] {
 
   /**
     * A store which satisfies the [[IStore]] interface.

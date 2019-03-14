@@ -37,7 +37,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
     scheduler: ExecutionContext,
     metricsF: Metrics[F]
 ) extends RSpaceOps[F, C, P, E, A, R, K](store, branch)
-    with ISpace[F, C, P, E, A, R, K] {
+    with ISpace[F, C, P, A, R, K] {
 
   override protected[this] val logger: Logger = Logger[this.type]
 
@@ -464,7 +464,7 @@ object RSpace {
       contextShift: ContextShift[F],
       scheduler: ExecutionContext,
       metricsF: Metrics[F]
-  ): F[ISpace[F, C, P, E, A, R, K]] = {
+  ): F[ISpace[F, C, P, A, R, K]] = {
     type InMemTXN    = InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]]
     type ByteBuffTXN = Txn[ByteBuffer]
 
@@ -494,14 +494,14 @@ object RSpace {
       contextShift: ContextShift[F],
       scheduler: ExecutionContext,
       metricsF: Metrics[F]
-  ): F[ISpace[F, C, P, E, A, R, K]] = {
+  ): F[ISpace[F, C, P, A, R, K]] = {
 
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec
     implicit val codecA: Codec[A] = sa.toCodec
     implicit val codecK: Codec[K] = sk.toCodec
 
-    val space: ISpace[F, C, P, E, A, R, K] =
+    val space: ISpace[F, C, P, A, R, K] =
       new RSpace[F, C, P, E, A, R, K](store, branch)
 
     /*

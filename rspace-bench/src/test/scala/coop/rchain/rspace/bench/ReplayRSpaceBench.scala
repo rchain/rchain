@@ -54,7 +54,7 @@ object ReplayRSpaceBench {
   import scala.concurrent.ExecutionContext.Implicits.global
 
   abstract class ReplayRSpaceBenchState {
-    var space: IdISpace[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor] = null
+    var space: IdISpace[Channel, Pattern, Entry, Entry, EntriesCaptor] = null
     var replaySpace: IReplaySpace[cats.Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor] =
       null
     implicit val logF: Log[Id]            = new Log.NOPLog[Id]

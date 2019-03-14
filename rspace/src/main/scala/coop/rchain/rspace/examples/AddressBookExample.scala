@@ -331,7 +331,7 @@ object AddressBookExample {
   }
 
   private[this] def withSpace(
-      f: IdISpace[Channel, Pattern, Nothing, Entry, Entry, Printer] => Unit
+      f: IdISpace[Channel, Pattern, Entry, Entry, Printer] => Unit
   ) = {
 
     implicit val log: Log[Id]          = Log.log

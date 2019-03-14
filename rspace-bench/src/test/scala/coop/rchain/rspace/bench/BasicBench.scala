@@ -127,7 +127,6 @@ object BasicBench {
       Task,
       Par,
       BindPattern,
-      InterpreterError,
       ListParWithRandom,
       ListParWithRandom,
       TaggedContinuation

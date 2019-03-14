@@ -18,12 +18,11 @@ final case class ContResult[C, P, R](
   *
   * @tparam C a type representing a channel
   * @tparam P a type representing a pattern
-  * @tparam E a type representing an illegal state in matching algorithm
   * @tparam A a type representing an arbitrary piece of data
   * @tparam R a type representing a match result
   * @tparam K a type representing a continuation
   */
-trait ISpace[F[_], C, P, E, A, R, K] {
+trait ISpace[F[_], C, P, A, R, K] {
 
   /** Searches the store for data matching all the given patterns at the given channels.
     *
@@ -122,5 +121,5 @@ trait ISpace[F[_], C, P, E, A, R, K] {
 }
 
 object ISpace {
-  type IdISpace[C, P, E, A, R, K] = ISpace[Id, C, P, E, A, R, K]
+  type IdISpace[C, P, A, R, K] = ISpace[Id, C, P, A, R, K]
 }

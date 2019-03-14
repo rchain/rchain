@@ -26,7 +26,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 @org.openjdk.jmh.annotations.State(Scope.Thread)
 trait RSpaceBench {
 
-  var space: ISpace[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor] = null
+  var space: ISpace[Id, Channel, Pattern, Entry, Entry, EntriesCaptor] = null
 
   val channel  = Channel("friends#" + 1.toString)
   val channels = List(channel)

@@ -5,7 +5,7 @@ import cats.implicits._
 import coop.rchain.rspace.trace._
 import coop.rchain.rspace.internal._
 
-trait IReplaySpace[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, E, A, R, K] {
+trait IReplaySpace[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, A, R, K] {
 
   private[rspace] val replayData: ReplayData = ReplayData.empty
 

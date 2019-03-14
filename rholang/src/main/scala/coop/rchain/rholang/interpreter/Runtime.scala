@@ -51,9 +51,9 @@ class Runtime[F[_]: Sync] private (
 
 object Runtime {
 
-  type RhoISpace[F[_]]       = TCPARK[F, ISpace]
-  type RhoPureSpace[F[_]]    = TCPARK[F, PureRSpace]
-  type RhoReplayISpace[F[_]] = TCPARK[F, IReplaySpace]
+  type RhoISpace[F[_]]       = TCPARK0[F, ISpace]
+  type RhoPureSpace[F[_]]    = TCPARK0[F, PureRSpace]
+  type RhoReplayISpace[F[_]] = TCPARK1[F, IReplaySpace]
 
   type RhoIStore[F[_]]  = CPAK[F, IStore]
   type RhoContext[F[_]] = CPAK[F, Context]
@@ -65,7 +65,17 @@ object Runtime {
   type CPAK[M[_], F[_[_], _, _, _, _]] =
     F[M, Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
-  type TCPARK[M[_], F[_[_], _, _, _, _, _, _]] =
+  type TCPARK0[M[_], F[_[_], _, _, _, _, _]] =
+    F[
+      M,
+      Par,
+      BindPattern,
+      ListParWithRandom,
+      ListParWithRandom,
+      TaggedContinuation
+    ]
+
+  type TCPARK1[M[_], F[_[_], _, _, _, _, _, _]] =
     F[
       M,
       Par,

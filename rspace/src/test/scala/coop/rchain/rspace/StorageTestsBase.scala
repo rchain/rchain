@@ -25,7 +25,7 @@ import scodec.Codec
 import scala.concurrent.ExecutionContext.Implicits.global
 
 trait StorageTestsBase[F[_], C, P, E, A, K] extends FlatSpec with Matchers with OptionValues {
-  type T = ISpace[F, C, P, E, A, A, K]
+  type T = ISpace[F, C, P, A, A, K]
 
   implicit def concurrentF: Concurrent[F]
   implicit def logF: Log[F]

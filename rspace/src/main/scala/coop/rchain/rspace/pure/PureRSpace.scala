@@ -7,7 +7,7 @@ import coop.rchain.rspace._
 
 import scala.collection.immutable.Seq
 
-trait PureRSpace[F[_], C, P, E, A, R, K] {
+trait PureRSpace[F[_], C, P, A, R, K] {
   def consume(
       channels: Seq[C],
       patterns: Seq[P],
@@ -37,9 +37,9 @@ object PureRSpace {
 
   final class PureRSpaceApplyBuilders[F[_]](val F: Sync[F]) extends AnyVal {
     def of[C, P, E, A, R, K](
-        space: ISpace[F, C, P, E, A, R, K]
-    )(implicit mat: Match[F, P, A, R]): PureRSpace[F, C, P, E, A, R, K] =
-      new PureRSpace[F, C, P, E, A, R, K] {
+        space: ISpace[F, C, P, A, R, K]
+    )(implicit mat: Match[F, P, A, R]): PureRSpace[F, C, P, A, R, K] =
+      new PureRSpace[F, C, P, A, R, K] {
         def consume(
             channels: Seq[C],
             patterns: Seq[P],

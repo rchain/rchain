@@ -50,7 +50,6 @@ trait RegistryTester extends PersistentStoreTester {
             Task,
             Par,
             BindPattern,
-            InterpreterError,
             ListParWithRandom,
             ListParWithRandom,
             TaggedContinuation
