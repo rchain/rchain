@@ -23,6 +23,7 @@ match (
       setDeployData(`rho:test:deploy:set`),
       setup,
       testCreateGenesisVault,
+      testCreateVaultFail,
       testCreateAliceVaultLocked,
       testCreateAliceVaultUnlocked,
       testTransfer,
@@ -33,6 +34,7 @@ match (
         @RhoSpec!("testSuite", *setup,
           [
             ("Create genesis vault with expected balance", *testCreateGenesisVault),
+            ("Return an error for invalid public key", *testCreateVaultFail),
             ("Create Alice vault and see it is locked", *testCreateAliceVaultLocked),
             ("Create Alice vault, unlock it and check balance", *testCreateAliceVaultUnlocked),
             ("Transfer from genesis to Alice", *testTransfer),
@@ -57,6 +59,17 @@ match (
             @genesisVault!("balance", *balanceCh) |
             rhoSpec!("assert", (9000, "== <-", *balanceCh), "balance is as expected", *ackCh)
           }
+        }
+      } |
+
+      contract testCreateVaultFail(rhoSpec, RevVault, ackCh) = {
+        new e1 in {
+          RevVault!("findOrCreate", "EEEE".hexToBytes(), *e1) |
+          rhoSpec!("assertMany",
+            [
+              ((("Left", "Invalid public key"), "== <-", *e1), "should be a failure")
+            ], *ackCh
+          )
         }
       } |
 

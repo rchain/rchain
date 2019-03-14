@@ -83,20 +83,12 @@ in {
 
         contract _makeVault(@ownerPubKeyBytes, @initialAmount, ret) = {
 
-          new revAddrCh in {
+          new revAddrCh, eitherRevAddrCh, purseCh, eitherPurseCh in {
             RevAddress!("fromPublicKey", ownerPubKeyBytes, *revAddrCh) |
-            for (@ownRevAddress <- revAddrCh) {
-
-              new purseCh in {
-                mint!("makePurse", initialAmount, *purseCh) |
-                for (@purse <- purseCh) {
-
-                  _newVault!(ownRevAddress, purse, *ret)
-
-                }
-              }
-            }
-
+            @Either!("fromNillable <-", *revAddrCh, "Invalid public key", *eitherRevAddrCh) |
+            mint!("makePurse", initialAmount, *purseCh) |
+            @Either!("fromNillable <-", *purseCh, "Couldn't create purse", *eitherPurseCh) |
+            @Either!("map2 <-", *eitherRevAddrCh, *eitherPurseCh, *_newVault, *ret)
           }
 
         } |
@@ -104,7 +96,7 @@ in {
         contract _newVault(@ownRevAddress, purse, ret) = {
           new revVault in {
 
-            ret!(("Right", bundle+{*revVault})) |
+            ret!(bundle+{*revVault}) |
 
             contract revVault(@"balance", ret) = {
               purse!("getBalance", *ret)
