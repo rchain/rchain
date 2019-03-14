@@ -4,7 +4,7 @@ import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
-import ski._
+import coop.rchain.catscontrib.ski._
 import coop.rchain.rspace.concurrent.{ConcurrentTwoStepLockF, TwoStepLock}
 import coop.rchain.rspace.history.{Branch, Leaf}
 import coop.rchain.rspace.internal._
@@ -33,11 +33,13 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
 
   private val lockF: TwoStepLock[F, Blake2b256Hash] = new ConcurrentTwoStepLockF()
 
+  type MaybeActionResult = Option[(ContResult[C, P, K], Seq[Result[R]])]
+
   protected[this] def consumeLockF(
       channels: Seq[C]
   )(
-      thunk: => F[Option[(ContResult[C, P, K], Seq[Result[R]])]]
-  ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]] = {
+      thunk: => F[MaybeActionResult]
+  ): F[MaybeActionResult] = {
     val hashes = channels.map(ch => StableHashProvider.hash(ch))
     lockF.acquire(hashes)(() => hashes.pure[F])(thunk)
   }
@@ -54,8 +56,8 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
   protected[this] def produceLockF(
       channel: C
   )(
-      thunk: => F[Option[(ContResult[C, P, K], Seq[Result[R]])]]
-  ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]] =
+      thunk: => F[MaybeActionResult]
+  ): F[MaybeActionResult] =
     lockF.acquire(Seq(StableHashProvider.hash(channel)))(
       () =>
         store.withReadTxnF { txn =>

@@ -49,7 +49,7 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
       sequenceNumber: Int
   )(
       implicit m: Match[F, P, A, R]
-  ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]] =
+  ): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
       if (channels.length =!= patterns.length) {
         val msg = "channels.length must equal patterns.length"
@@ -65,8 +65,6 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
         } yield result
     }
 
-  type MaybeConsumeResult = Option[(ContResult[C, P, K], Seq[Result[R]])]
-
   private[this] def lockedConsume(
       channels: Seq[C],
       patterns: Seq[P],
@@ -76,7 +74,7 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
       span: Span[F]
   )(
       implicit m: Match[F, P, A, R]
-  ): F[MaybeConsumeResult] = {
+  ): F[MaybeActionResult] = {
     def runMatcher(comm: COMM): F[Option[Seq[DataCandidate[C, R]]]] =
       for {
         channelToIndexedDataList <- channels.toList.traverse { c: C =>
@@ -96,7 +94,7 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
     def storeWaitingContinuation(
         consumeRef: Consume,
         maybeCommRef: Option[COMM]
-    ): F[MaybeConsumeResult] =
+    ): F[MaybeActionResult] =
       for {
         _ <- store
               .withWriteTxnF { txn =>
@@ -116,7 +114,7 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
         mats: Seq[DataCandidate[C, R]],
         consumeRef: Consume,
         comms: Multiset[COMM]
-    ): F[MaybeConsumeResult] =
+    ): F[MaybeActionResult] =
       for {
         _       <- metricsF.incrementCounter(consumeCommLabel)
         commRef <- syncF.delay { COMM(consumeRef, mats.map(_.datum.source)) }
@@ -188,7 +186,7 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
               val commOrDataCandidates: F[Either[COMM, Seq[DataCandidate[C, R]]]] =
                 getCommOrDataCandidates(comms.iterator().asScala.toList)
 
-              val x: F[MaybeConsumeResult] = commOrDataCandidates.flatMap {
+              val x: F[MaybeActionResult] = commOrDataCandidates.flatMap {
                 case Left(commRef) =>
                   storeWaitingContinuation(consumeRef, Some(commRef))
                 case Right(dataCandidates) =>
@@ -201,7 +199,7 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
 
   def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
       implicit m: Match[F, P, A, R]
-  ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]] =
+  ): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
       for {
         span <- metricsF.span(produceSpanLabel)
@@ -222,14 +220,15 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
       span: Span[F]
   )(
       implicit m: Match[F, P, A, R]
-  ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]] = {
+  ): F[MaybeActionResult] = {
+
+    type MaybeProduceCandidate = Option[ProduceCandidate[C, P, R, K]]
+
     def runMatcher(
         comm: COMM,
         produceRef: Produce,
         groupedChannels: Seq[Seq[C]]
-    ): F[Option[ProduceCandidate[C, P, R, K]]] = {
-
-      type MaybeProduceCandidate = Option[ProduceCandidate[C, P, R, K]]
+    ): F[MaybeProduceCandidate] = {
 
       def go(groupedChannels: Seq[Seq[C]]): F[Either[Seq[Seq[C]], MaybeProduceCandidate]] =
         groupedChannels match {
@@ -302,7 +301,7 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
     def storeDatum(
         produceRef: Produce,
         maybeCommRef: Option[COMM]
-    ): F[MaybeConsumeResult] =
+    ): F[MaybeActionResult] =
       for {
         _ <- store
               .withWriteTxnF { txn =>
@@ -316,7 +315,7 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
         mat: ProduceCandidate[C, P, R, K],
         produceRef: Produce,
         comms: Multiset[COMM]
-    ): F[MaybeConsumeResult] =
+    ): F[MaybeActionResult] =
       mat match {
         case ProduceCandidate(
             channels,
@@ -383,7 +382,7 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
                        produceRef,
                        groupedChannels
                      )
-                   val r: F[MaybeConsumeResult] = commOrProduceCandidate.flatMap {
+                   val r: F[MaybeActionResult] = commOrProduceCandidate.flatMap {
                      case Left(comm) =>
                        storeDatum(produceRef, Some(comm))
                      case Right(produceCandidate) =>
