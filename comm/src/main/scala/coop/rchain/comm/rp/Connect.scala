@@ -36,30 +36,38 @@ object Connect {
     def empty: Connections = List.empty[Connection]
     implicit class ConnectionsOps(connections: Connections) {
 
-      def addConn[F[_]: Monad: Log: Metrics](connection: Connection): F[Connections] =
+      def addConnAndReport[F[_]: Monad: Log: Metrics](connection: Connection): F[Connections] =
+        addConn[F](connection) >>= (_.reportConn[F])
+
+      def addConn[F[_]: Monad](connection: Connection): F[Connections] =
         addConn[F](List(connection))
 
-      def addConn[F[_]: Monad: Log: Metrics](toBeAdded: List[Connection]): F[Connections] = {
+      def addConn[F[_]: Monad](toBeAdded: List[Connection]): F[Connections] = {
         val ids = toBeAdded.map(_.id)
         val newConnections = connections.partition(peer => ids.contains(peer.id)) match {
           case (_, rest) => rest ++ toBeAdded
         }
-        val size = newConnections.size.toLong
-        Log[F].info(s"Peers: $size.") >>
-          Metrics[F].setGauge("peers", size).as(newConnections)
+        newConnections.pure[F]
       }
 
-      def removeConn[F[_]: Monad: Log: Metrics](connection: Connection): F[Connections] =
+      def removeConnAndReport[F[_]: Monad: Log: Metrics](connection: Connection): F[Connections] =
+        removeConn[F](connection) >>= (_.reportConn[F])
+
+      def removeConn[F[_]: Monad](connection: Connection): F[Connections] =
         removeConn[F](List(connection))
 
-      def removeConn[F[_]: Monad: Log: Metrics](toBeRemoved: List[Connection]): F[Connections] = {
+      def removeConn[F[_]: Monad](toBeRemoved: List[Connection]): F[Connections] = {
         val ids = toBeRemoved.map(_.id)
         val newConnections = connections.partition(peer => ids.contains(peer.id)) match {
           case (_, rest) => rest
         }
-        val size = newConnections.size.toLong
-        Log[F].info(s"Peers: $size.") >>
-          Metrics[F].setGauge("peers", size).as(newConnections)
+        newConnections.pure[F]
+      }
+
+      def reportConn[F[_]: Monad: Log: Metrics]: F[Connections] = {
+        val size = connections.size.toLong
+        Log[F].info(s"Peers: $size") >>
+          Metrics[F].setGauge("peers", size).as(connections)
       }
     }
   }
@@ -93,6 +101,7 @@ object Connect {
         results                <- toPing.traverse(sendHeartbeat)
         successfulPeers        = results.collect { case (peer, Right(_)) => peer }
         failedPeers            = results.collect { case (peer, Left(_)) => peer }
+        _                      <- failedPeers.traverse(p => Log[F].info(s"Removing peer $p from connections"))
         _ <- ConnectionsCell[F].flatModify { connections =>
               connections.removeConn[F](toPing) >>= (_.addConn[F](successfulPeers))
             }
@@ -102,6 +111,7 @@ object Connect {
       connections <- ConnectionsCell[F].read
       max         <- RPConfAsk[F].reader(_.clearConnections.maxNumOfConnections)
       cleared     <- if (connections.size > ((max * 2) / 3)) clear(connections) else 0.pure[F]
+      _           <- if (cleared > 0) ConnectionsCell[F].read >>= (_.reportConn[F]) else connections.pure[F]
     } yield cleared
   }
 
