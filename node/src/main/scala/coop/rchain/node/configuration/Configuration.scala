@@ -153,6 +153,14 @@ object Configuration {
           server.maxMessageSize
         )
       )
+    val grpcMaxMessageSize: Int =
+      Math.max(
+        MaxMessageSizeMinimumValue,
+        Math.min(
+          MaxMessageSizeMaximumValue,
+          grpcServer.maxMessageSize
+        )
+      )
 
     new Configuration(
       config,
@@ -160,7 +168,7 @@ object Configuration {
       profile,
       configFile,
       server.copy(maxMessageSize = maxMessageSize),
-      grpcServer,
+      grpcServer.copy(maxMessageSize = grpcMaxMessageSize),
       tls,
       casper.copy(createGenesis = server.standalone),
       blockStorage,

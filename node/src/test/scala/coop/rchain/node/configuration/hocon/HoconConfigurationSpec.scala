@@ -132,6 +132,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         |    host = localhost
         |    port-external = 40401
         |    port-internal = 40402
+        |    max-message-size = 4M
         |  }
         |}
       """.stripMargin
@@ -140,7 +141,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
       configuration.GrpcServer(
         "localhost",
         40401,
-        40402
+        40402,
+        4 * 1024 * 1024
       )
 
     val grpc = GrpcServer.fromConfig(ConfigFactory.parseString(conf))

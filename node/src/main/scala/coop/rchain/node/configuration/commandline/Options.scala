@@ -143,6 +143,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val grpcHost =
     opt[String](descr = "Hostname or IP of node on which gRPC service is running.")
 
+  val grpcMaxMessageSize =
+    opt[Int](descr = "Maximum size of message that can be sent via gRPC API")
+
   val diagnostics = new Subcommand("diagnostics") {
     descr("Node diagnostics")
   }

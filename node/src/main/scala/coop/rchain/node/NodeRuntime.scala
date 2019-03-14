@@ -113,7 +113,7 @@ class NodeRuntime private[node] (
                               port,
                               conf.tls.certificate,
                               conf.tls.key,
-                              conf.server.maxMessageSize,
+                              conf.grpcServer.maxMessageSize,
                               conf.server.dataDir.resolve("tmp").resolve("comm"),
                               conf.server.messageConsumers
                             )(grpcScheduler, log)

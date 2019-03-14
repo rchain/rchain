@@ -44,19 +44,19 @@ object Main {
       new GrpcReplClient(
         conf.grpcServer.host,
         conf.grpcServer.portInternal,
-        conf.server.maxMessageSize
+        conf.grpcServer.maxMessageSize
       )
     implicit val diagnosticsService: GrpcDiagnosticsService =
       new diagnostics.client.GrpcDiagnosticsService(
         conf.grpcServer.host,
         conf.grpcServer.portInternal,
-        conf.server.maxMessageSize
+        conf.grpcServer.maxMessageSize
       )
     implicit val deployService: GrpcDeployService =
       new GrpcDeployService(
         conf.grpcServer.host,
         conf.grpcServer.portExternal,
-        conf.server.maxMessageSize
+        conf.grpcServer.maxMessageSize
       )
 
     implicit val time: Time[Task] = effects.time
