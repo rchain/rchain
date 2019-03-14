@@ -110,9 +110,15 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
       )
     ] = {
 
+      implicit val cost: _cost[Task] =
+        (for {
+          costAlg <- CostAccounting.of[Task](Cost(0))
+        } yield loggingCost(costAlg, noOpCostLog[Task]))
+          .runSyncUnsafe(1.second)
+
       lazy val (_, reducer, _) =
         RholangAndScalaDispatcher
-          .createWithEmptyCost[Task, Task.Par](pureRSpace, Map.empty, Map.empty)
+          .create[Task, Task.Par](pureRSpace, Map.empty, Map.empty)
 
       def plainSendCost(p: Par): Cost = {
         val storageCost = ChargingRSpace.storageCostProduce(

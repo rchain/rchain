@@ -53,21 +53,6 @@ class RholangAndScalaDispatcher[M[_]] private (
 
 object RholangAndScalaDispatcher {
 
-  def createWithEmptyCost[M[_], F[_]](
-      tuplespace: RhoISpace[M],
-      dispatchTable: => Map[Long, (Seq[ListParWithRandom], Int) => M[Unit]],
-      urnMap: Map[String, Par]
-  )(
-      implicit
-      parallel: Parallel[M, F],
-      s: Sync[M],
-      ft: FunctorTell[M, Throwable]
-  ): (Dispatch[M, ListParWithRandom, TaggedContinuation], ChargingReducer[M], Registry[M]) = {
-    implicit val cost: _cost[M] = loggingCost(CostAccounting.unsafe[M](Cost(0)), noOpCostLog)
-    create(tuplespace, dispatchTable, urnMap)
-
-  }
-
   def create[M[_], F[_]](
       tuplespace: RhoISpace[M],
       dispatchTable: => Map[Long, (Seq[ListParWithRandom], Int) => M[Unit]],
