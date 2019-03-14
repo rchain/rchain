@@ -240,8 +240,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
                                   ProtoUtil.deploys(b).flatMap(_.deploy)
                                 }
                                 .toList
-      result = (validDeploys -- deploysInCurrentChain.flatten).toSeq
-    } yield result
+    } yield (validDeploys -- deploysInCurrentChain.flatten).toSeq
 
   private def createProposal(
       dag: BlockDagRepresentation[F],
@@ -284,24 +283,46 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
                        runtimeManager
                          .computeBonds(postStateHash)
                          .map { newBonds =>
-                           val postState = RChainState()
-                             .withPreStateHash(preStateHash)
-                             .withPostStateHash(postStateHash)
-                             .withBonds(newBonds)
-                             .withBlockNumber(maxBlockNumber + 1)
-
-                           val body = Body()
-                             .withState(postState)
-                             .withDeploys(
-                               persistableDeploys.map(ProcessedDeployUtil.fromInternal)
-                             )
-                           val header = blockHeader(body, p.map(_.blockHash), version, now)
-                           val block  = unsignedBlockProto(body, header, justifications, shardId)
-                           CreateBlockStatus.created(block)
+                           createBlock(
+                             now,
+                             p,
+                             justifications,
+                             maxBlockNumber,
+                             preStateHash,
+                             postStateHash,
+                             persistableDeploys,
+                             newBonds
+                           )
                          }
                      })
                }
     } yield result
+
+  private def createBlock(
+      now: Long,
+      p: Seq[BlockMessage],
+      justifications: Seq[Justification],
+      maxBlockNumber: Long,
+      preStateHash: StateHash,
+      postStateHash: StateHash,
+      persistableDeploys: Seq[InternalProcessedDeploy],
+      newBonds: Seq[Bond]
+  ): CreateBlockStatus = {
+    val postState = RChainState()
+      .withPreStateHash(preStateHash)
+      .withPostStateHash(postStateHash)
+      .withBonds(newBonds)
+      .withBlockNumber(maxBlockNumber + 1)
+
+    val body = Body()
+      .withState(postState)
+      .withDeploys(
+        persistableDeploys.map(ProcessedDeployUtil.fromInternal)
+      )
+    val header = blockHeader(body, p.map(_.blockHash), version, now)
+    val block  = unsignedBlockProto(body, header, justifications, shardId)
+    CreateBlockStatus.created(block)
+  }
 
   def blockDag: F[BlockDagRepresentation[F]] =
     BlockDagStorage[F].getRepresentation

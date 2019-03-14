@@ -275,19 +275,17 @@ object Validate {
                               .flatMap(_.deploy)
                               .exists(d => deployKeySet.contains((d.user, d.timestamp)))
                           }
-      result <- duplicatedBlock match {
-                 case Some(b) =>
-                   for {
-                     _ <- Log[F].warn(
+      maybeError <- duplicatedBlock
+                     .traverse(
+                       b =>
+                         Log[F].warn(
                            ignore(
                              block,
                              s"found deploy by the same (user, millisecond timestamp) produced in the block ${b.blockHash}"
                            )
-                         )
-                   } yield Left(InvalidRepeatDeploy)
-                 case None => Applicative[F].pure(Right(Valid))
-               }
-    } yield result
+                         ) >> InvalidRepeatDeploy.pure[F]
+                     )
+    } yield maybeError.toLeft(Valid)
   }
 
   // This is not a slashable offence
@@ -361,21 +359,19 @@ object Validate {
     } yield status
 
   def futureTransaction[F[_]: Monad: Log](b: BlockMessage): F[Either[InvalidBlock, ValidBlock]] = {
-    val blockNumber = ProtoUtil.blockNumber(b)
-    val deploys     = ProtoUtil.deploys(b).flatMap(_.deploy)
-    deploys.find(_.validAfterBlockNumber >= blockNumber) match {
-      case Some(futureDeploy) =>
-        for {
-          _ <- Log[F].warn(
-                ignore(
-                  b,
-                  s"block contains an future deploy with valid after block number of ${futureDeploy.validAfterBlockNumber}: ${futureDeploy.term}"
-                )
-              )
-        } yield Left(ContainsFutureDeploy)
-      case None =>
-        Applicative[F].pure(Right(Valid))
-    }
+    val blockNumber       = ProtoUtil.blockNumber(b)
+    val deploys           = ProtoUtil.deploys(b).flatMap(_.deploy)
+    val maybeFutureDeploy = deploys.find(_.validAfterBlockNumber >= blockNumber)
+    maybeFutureDeploy
+      .traverse { futureDeploy =>
+        Log[F].warn(
+          ignore(
+            b,
+            s"block contains an future deploy with valid after block number of ${futureDeploy.validAfterBlockNumber}: ${futureDeploy.term}"
+          )
+        ) >> ContainsFutureDeploy.pure[F]
+      }
+      .map(maybeError => maybeError.toLeft(Valid))
   }
 
   def transactionExpiration[F[_]: Monad: Log](
@@ -384,19 +380,18 @@ object Validate {
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val earliestAcceptableValidAfterBlockNumber = ProtoUtil.blockNumber(b) - expirationThreshold
     val deploys                                 = ProtoUtil.deploys(b).flatMap(_.deploy)
-    deploys.find(_.validAfterBlockNumber <= earliestAcceptableValidAfterBlockNumber) match {
-      case Some(expiredDeploy) =>
-        for {
-          _ <- Log[F].warn(
-                ignore(
-                  b,
-                  s"block contains an expired deploy with valid after block number of ${expiredDeploy.validAfterBlockNumber}: ${expiredDeploy.term}"
-                )
-              )
-        } yield Left(ContainsExpiredDeploy)
-      case None =>
-        Applicative[F].pure(Right(Valid))
-    }
+    val maybeExpiredDeploy =
+      deploys.find(_.validAfterBlockNumber <= earliestAcceptableValidAfterBlockNumber)
+    maybeExpiredDeploy
+      .traverse { expiredDeploy =>
+        Log[F].warn(
+          ignore(
+            b,
+            s"block contains an expired deploy with valid after block number of ${expiredDeploy.validAfterBlockNumber}: ${expiredDeploy.term}"
+          )
+        ) >> ContainsExpiredDeploy.pure[F]
+      }
+      .map(maybeError => maybeError.toLeft(Valid))
   }
 
   /**
