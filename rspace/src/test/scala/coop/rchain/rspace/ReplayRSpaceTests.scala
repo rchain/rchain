@@ -929,7 +929,7 @@ trait ReplayRSpaceTestsBase[C, P, A, K] extends FlatSpec with Matchers with Opti
   ): S
 }
 
-trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, A, K] {
+trait LMDBReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C, P, A, K] {
   import SchedulerPools.global
   override def withTestSpaces[S](
       f: (ISpace[Task, C, P, A, A, K], IReplaySpace[Task, C, P, A, A, K]) => Task[S]
@@ -986,7 +986,7 @@ trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, 
   }
 }
 
-trait MixedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, A, K] {
+trait MixedReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C, P, A, K] {
   import SchedulerPools.global
   override def withTestSpaces[S](
       f: (ISpace[Task, C, P, A, A, K], IReplaySpace[Task, C, P, A, A, K]) => Task[S]
@@ -1091,7 +1091,7 @@ trait FaultyStoreReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase
 }
 
 class LMDBReplayRSpaceTests
-    extends LMDBReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
+    extends LMDBReplayRSpaceTestsBase[String, Pattern, String, String]
     with ReplayRSpaceTests {}
 
 class InMemoryReplayRSpaceTests
