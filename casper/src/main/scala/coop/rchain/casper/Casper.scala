@@ -14,6 +14,7 @@ import coop.rchain.shared._
 import cats.effect.concurrent.Semaphore
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import coop.rchain.casper.Estimator.Validator
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.ski.kp2
 
@@ -28,7 +29,7 @@ trait Casper[F[_], A] {
   def createBlock: F[CreateBlockStatus]
 }
 
-trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]] {
+trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockHash]] {
   def blockDag: F[BlockDagRepresentation[F]]
   def fetchDependencies: F[Unit]
   // This is the weight of faults that have been accumulated so far.
@@ -46,11 +47,12 @@ object MultiParentCasper extends MultiParentCasperInstances {
   def ignoreDoppelgangerCheck[F[_]: Applicative]: (BlockMessage, Validator) => F[Unit] =
     kp2(().pure[F])
 
-  def forkChoiceTip[F[_]: MultiParentCasper: Monad]: F[BlockMessage] =
+  def forkChoiceTip[F[_]: MultiParentCasper: Monad: BlockStore]: F[BlockMessage] =
     for {
-      dag  <- MultiParentCasper[F].blockDag
-      tips <- MultiParentCasper[F].estimator(dag)
-      tip  = tips.head
+      dag       <- MultiParentCasper[F].blockDag
+      tipHashes <- MultiParentCasper[F].estimator(dag)
+      tipHash   = tipHashes.head
+      tip       <- ProtoUtil.unsafeGetBlock[F](tipHash)
     } yield tip
 }
 

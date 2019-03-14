@@ -127,9 +127,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
             case _ =>
               reAttemptBuffer(updatedDag) // reAttempt for any status that resulted in the adding of the block into the view
           }
-      estimates <- estimator(updatedDag)
-      tip       = estimates.head
-      _         <- Log[F].info(s"New fork-choice tip is block ${PrettyPrinter.buildString(tip.blockHash)}.")
+      tipHashes <- estimator(updatedDag)
+      tipHash   = tipHashes.head
+      _         <- Log[F].info(s"New fork-choice tip is block ${PrettyPrinter.buildString(tipHash)}.")
     } yield attempt
 
   def contains(
@@ -159,10 +159,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
       _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
     } yield ()
 
-  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockMessage]] =
-    for {
-      rankedEstimates <- Estimator.tips[F](dag, genesis)
-    } yield rankedEstimates
+  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
+    Estimator.tips[F](dag, genesis)
 
   /*
    * Logic:
@@ -179,11 +177,11 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
   def createBlock: F[CreateBlockStatus] = validatorId match {
     case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
       for {
-        dag          <- blockDag
-        orderedHeads <- estimator(dag)
-        p            <- chooseNonConflicting[F](orderedHeads, dag)
+        dag       <- blockDag
+        tipHashes <- estimator(dag)
+        p         <- chooseNonConflicting[F](tipHashes, dag)
         _ <- Log[F].info(
-              s"${p.size} parents out of ${orderedHeads.size} latest blocks will be used."
+              s"${p.size} parents out of ${tipHashes.size} latest blocks will be used."
             )
         maxBlockNumber   = ProtoUtil.maxBlockNumber(p)
         r                <- remDeploys(dag, p, maxBlockNumber)

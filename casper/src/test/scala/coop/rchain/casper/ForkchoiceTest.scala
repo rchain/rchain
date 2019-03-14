@@ -75,7 +75,7 @@ class ForkchoiceTest
                        genesis,
                        Map.empty[Validator, BlockHash]
                      )
-      } yield forkchoice.head should be(genesis)
+      } yield forkchoice.head should be(genesis.blockHash)
   }
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
@@ -140,8 +140,8 @@ class ForkchoiceTest
                        genesis,
                        latestBlocks
                      )
-        _      = forkchoice.head should be(b6)
-        result = forkchoice(1) should be(b8)
+        _      = forkchoice.head should be(b6.blockHash)
+        result = forkchoice(1) should be(b8.blockHash)
       } yield result
   }
 
@@ -210,8 +210,8 @@ class ForkchoiceTest
                        genesis,
                        latestBlocks
                      )
-        _      = forkchoice.head should be(b8)
-        result = forkchoice(1) should be(b7)
+        _      = forkchoice.head should be(b8.blockHash)
+        result = forkchoice(1) should be(b7.blockHash)
       } yield result
   }
 }

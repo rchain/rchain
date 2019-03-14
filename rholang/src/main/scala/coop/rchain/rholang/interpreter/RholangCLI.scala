@@ -5,6 +5,7 @@ import java.io.{BufferedOutputStream, FileOutputStream, FileReader, StringReader
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
 
+import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics.Metrics
 import coop.rchain.models._
@@ -137,7 +138,8 @@ object RholangCLI {
 
   }
 
-  def evaluate(runtime: Runtime[Task], source: String): Task[Unit] =
+  def evaluate(runtime: Runtime[Task], source: String): Task[Unit] = {
+    implicit val c = runtime.cost
     Interpreter[Task].evaluate(runtime, source).map {
       case EvaluateResult(_, Vector()) =>
       case EvaluateResult(_, errors) =>
@@ -149,6 +151,7 @@ object RholangCLI {
             th.printStackTrace(Console.err)
         }
     }
+  }
 
   @tailrec
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
@@ -191,11 +194,15 @@ object RholangCLI {
   )(implicit scheduler: Scheduler): Unit = {
     val evaluatorTask =
       for {
-        _      <- Task.now(printNormalizedTerm(par))
-        result <- Interpreter[Task].evaluate(runtime, source)
+        _ <- Task.now(printNormalizedTerm(par))
+        result <- {
+          implicit val c = runtime.cost
+          Interpreter[Task].evaluate(runtime, source)
+        }
       } yield result
 
     waitForSuccess(evaluatorTask.runToFuture)
     printStorageContents(runtime.space.store)
   }
+
 }

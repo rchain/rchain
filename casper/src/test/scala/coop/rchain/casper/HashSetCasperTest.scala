@@ -151,9 +151,10 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       _                    <- MultiParentCasper[Effect].addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
       _                    = logEff.warns.isEmpty should be(true)
       dag                  <- MultiParentCasper[Effect].blockDag
-      result               <- MultiParentCasper[Effect].estimator(dag) shouldBeF IndexedSeq(signedBlock)
+      estimate             <- MultiParentCasper[Effect].estimator(dag)
+      _                    = estimate shouldBe IndexedSeq(signedBlock.blockHash)
       _                    <- node.tearDown()
-    } yield result
+    } yield ()
   }
 
   it should "be able to use the registry" in effectTest {
@@ -236,12 +237,13 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       _                     <- MultiParentCasper[Effect].addBlock(signedBlock2, ignoreDoppelgangerCheck[Effect])
       storage               <- blockTuplespaceContents(signedBlock2)
 
-      _      = logEff.warns should be(Nil)
-      _      = ProtoUtil.parentHashes(signedBlock2) should be(Seq(signedBlock1.blockHash))
-      dag    <- MultiParentCasper[Effect].blockDag
-      _      <- MultiParentCasper[Effect].estimator(dag) shouldBeF IndexedSeq(signedBlock2)
-      result = storage.contains("!(12)") should be(true)
-      _      <- node.tearDown()
+      _        = logEff.warns should be(Nil)
+      _        = ProtoUtil.parentHashes(signedBlock2) should be(Seq(signedBlock1.blockHash))
+      dag      <- MultiParentCasper[Effect].blockDag
+      estimate <- MultiParentCasper[Effect].estimator(dag)
+      _        = estimate shouldBe IndexedSeq(signedBlock2.blockHash)
+      result   = storage.contains("!(12)") should be(true)
+      _        <- node.tearDown()
     } yield result
   }
 
@@ -1192,15 +1194,24 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
         paymentDeployData
       )
       phloPurchasedPar = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(phloPrice * amount))))
-      _                = blockStatus shouldBe Valid
-      result = queryResult.head.exprs.head.getETupleBody.ps shouldBe Seq(
-        codeHashPar,
-        userIdPar,
-        timestampPar,
-        phloPurchasedPar
-      )
+
       _ <- node.tearDown()
-    } yield result
+    } yield {
+      blockStatus shouldBe Valid
+
+      queryResult.head.exprs.head.getETupleBody.ps match {
+        case Seq(
+            actualCodeHashPar,
+            actualUserIdPar,
+            actualTimestampPar,
+            actualPhloPurchasedPar
+            ) =>
+          actualCodeHashPar should be(codeHashPar)
+          actualUserIdPar should be(userIdPar)
+          actualTimestampPar should be(timestampPar)
+          actualPhloPurchasedPar should be(phloPurchasedPar)
+      }
+    }
   }
 
   it should "reject addBlock when there exist deploy by the same (user, millisecond timestamp) in the chain" in effectTest {

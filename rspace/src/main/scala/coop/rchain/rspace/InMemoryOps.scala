@@ -28,6 +28,22 @@ trait InMemoryOps[S] extends CloseOps {
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   // TODO stop throwing exceptions
+  protected[this] def updateGauges(update: Transaction => Unit): Unit = {
+    val txn = createTxnRead()
+    try {
+      update(txn)
+      txn.commit()
+    } catch {
+      case ex: Throwable =>
+        txn.abort()
+        throw ex
+    } finally {
+      txn.close()
+    }
+  }
+
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  // TODO stop throwing exceptions
   private[rspace] def withTxn[R](txn: Transaction)(f: Transaction => R): R =
     try {
       val ret: R = f(txn)
@@ -39,6 +55,7 @@ trait InMemoryOps[S] extends CloseOps {
         throw ex
     } finally {
       txn.close()
+      updateGauges()
     }
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))

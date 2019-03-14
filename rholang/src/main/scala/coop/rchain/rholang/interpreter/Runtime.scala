@@ -36,6 +36,7 @@ class Runtime[F[_]: Sync] private (
     val space: RhoISpace[F],
     val replaySpace: RhoReplayISpace[F],
     val errorLog: ErrorLog[F],
+    val cost: _cost[F],
     val context: RhoContext[F],
     val shortLeashParams: Runtime.ShortLeashParams[F],
     val blockTime: Runtime.BlockTime[F]
@@ -85,6 +86,17 @@ object Runtime {
   ) {
     def setParams(codeHash: Par, phloRate: Par, userId: Par, timestamp: Par): F[Unit] =
       params.set(ShortLeashParameters(codeHash, phloRate, userId, timestamp))
+
+    /**
+      * updates the content of the storage and returns the new value
+      * @param update a function which takes the current value and returns the new one
+      * @return the updated value
+      */
+    def updateParams(update : ShortLeashParameters => ShortLeashParameters) : F[ShortLeashParameters] =
+      params.modify(v => {
+        val newV = update(v)
+        (newV, newV)
+      })
 
     def getParams: F[ShortLeashParameters] = params.get
   }
@@ -403,6 +415,7 @@ object Runtime {
         space,
         replaySpace,
         errorLog,
+        cost,
         context,
         shortLeashParams,
         blockTime

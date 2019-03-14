@@ -41,10 +41,12 @@ class InMemoryTrieStore[K, V]
   private[this] val refine        = Map("path" -> "inmemTrie")
   private[this] val entriesGauge  = Kamon.gauge(MetricsSource + ".entries").refine(refine)
 
-  override private[rspace] def updateGauges(): Unit =
-    withTxn(createTxnRead())(_.readState { state =>
-      entriesGauge.set(state._dbTrie.size.toLong)
-    })
+  private[rspace] def updateGauges(): Unit =
+    updateGauges { txn =>
+      txn.readState { state =>
+        entriesGauge.set(state._dbTrie.size.toLong)
+      }
+    }
 
   override private[rspace] def getRoot(
       txn: InMemTransaction[State[K, V]],

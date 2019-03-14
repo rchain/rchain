@@ -465,7 +465,8 @@ class ValidateTest
 
                        _ = log.warns.size should be(3)
                        result = log.warns.forall(
-                         _.contains("block parents did not match estimate based on justification")
+                         _.matches(".* block parents .* did not match estimate .* based on justification .*"
+                         )
                        ) should be(
                          true
                        )
