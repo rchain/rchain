@@ -22,7 +22,7 @@ object A {
   def main(args: Array[String]): Unit = {}
 }
 
-class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
+class RSpace[F[_], C, P, A, R, K] private[rspace] (
     store: IStore[F, C, P, A, K],
     branch: Branch
 )(
@@ -453,7 +453,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
 
 object RSpace {
 
-  def create[F[_], C, P, E, A, R, K](context: Context[F, C, P, A, K], branch: Branch)(
+  def create[F[_], C, P, A, R, K](context: Context[F, C, P, A, K], branch: Branch)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -483,7 +483,7 @@ object RSpace {
     }
   }
 
-  def create[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch: Branch)(
+  def create[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Branch)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -502,7 +502,7 @@ object RSpace {
     implicit val codecK: Codec[K] = sk.toCodec
 
     val space: ISpace[F, C, P, A, R, K] =
-      new RSpace[F, C, P, E, A, R, K](store, branch)
+      new RSpace[F, C, P, A, R, K](store, branch)
 
     /*
      * history.initialize returns true if the history trie contains no root (i.e. is empty).

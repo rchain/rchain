@@ -50,7 +50,6 @@ trait PersistentStoreTester {
         Task,
         Par,
         BindPattern,
-        InterpreterError,
         ListParWithRandom,
         ListParWithRandom,
         TaggedContinuation

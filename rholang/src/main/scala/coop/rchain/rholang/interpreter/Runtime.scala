@@ -476,7 +476,6 @@ object Runtime {
                   F,
                   Par,
                   BindPattern,
-                  InterpreterError,
                   ListParWithRandom,
                   ListParWithRandom,
                   TaggedContinuation

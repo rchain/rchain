@@ -211,7 +211,7 @@ object AddressBookExample {
     val context = Context.create[Id, Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
     val space =
-      RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
+      RSpace.create[Id, Channel, Pattern, Entry, Entry, Printer](context, Branch.MASTER)
 
     Console.printf("\nExample One: Let's consume and then produce...\n")
 
@@ -251,7 +251,7 @@ object AddressBookExample {
     val context = Context.create[Id, Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
     val space =
-      RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
+      RSpace.create[Id, Channel, Pattern, Entry, Entry, Printer](context, Branch.MASTER)
 
     Console.printf("\nExample Two: Let's produce and then consume...\n")
 
@@ -342,7 +342,7 @@ object AddressBookExample {
     // Let's define our store
     val context = Context.create[Id, Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
     val space =
-      RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, Printer](context, Branch.MASTER)
+      RSpace.create[Id, Channel, Pattern, Entry, Entry, Printer](context, Branch.MASTER)
     try {
       f(space)
     } finally {

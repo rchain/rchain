@@ -149,7 +149,7 @@ abstract class InMemoryStoreTestsBase[F[_]]
     val ctx: Context[F, String, Pattern, String, StringsCaptor] = Context.createInMemory()
 
     run(for {
-      testSpace <- RSpace.create[F, String, Pattern, Nothing, String, String, StringsCaptor](
+      testSpace <- RSpace.create[F, String, Pattern, String, String, StringsCaptor](
                     ctx,
                     branch
                   )
@@ -195,7 +195,7 @@ abstract class LMDBStoreTestsBase[F[_]]
     val env        = Context.create[F, String, Pattern, String, StringsCaptor](dbDir, mapSize)
 
     run(for {
-      testSpace <- RSpace.create[F, String, Pattern, Nothing, String, String, StringsCaptor](
+      testSpace <- RSpace.create[F, String, Pattern, String, String, StringsCaptor](
                     env,
                     testBranch
                   )
@@ -241,7 +241,7 @@ abstract class MixedStoreTestsBase[F[_]]
     val env        = Context.createMixed[F, String, Pattern, String, StringsCaptor](dbDir, mapSize)
 
     run(for {
-      testSpace <- RSpace.create[F, String, Pattern, Nothing, String, String, StringsCaptor](
+      testSpace <- RSpace.create[F, String, Pattern, String, String, StringsCaptor](
                     env,
                     testBranch
                   )

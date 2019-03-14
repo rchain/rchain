@@ -948,7 +948,7 @@ trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, 
     val dbDir   = Files.createTempDirectory("rchain-storage-test-")
     val context = Context.create[Task, C, P, A, K](dbDir, 1024L * 1024L * 4096L)
     val space = RSpace
-      .create[Task, C, P, E, A, A, K](context, Branch.MASTER)(
+      .create[Task, C, P, A, A, K](context, Branch.MASTER)(
         sc,
         sp,
         sa,
@@ -1003,7 +1003,7 @@ trait MixedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C,
 
     val dbDir   = Files.createTempDirectory("rchain-storage-test-")
     val context = Context.createMixed[Task, C, P, A, K](dbDir, 1024L * 1024L * 4096L)
-    val space   = RSpace.create[Task, C, P, E, A, A, K](context, Branch.MASTER).unsafeRunSync
+    val space   = RSpace.create[Task, C, P, A, A, K](context, Branch.MASTER).unsafeRunSync
     val replaySpace =
       ReplayRSpace.create[Task, C, P, E, A, A, K](context, Branch.REPLAY).unsafeRunSync
 
@@ -1034,7 +1034,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase
     implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
 
     val ctx: Context[Task, C, P, A, K] = Context.createInMemory()
-    val space                          = RSpace.create[Task, C, P, E, A, A, K](ctx, Branch.REPLAY).unsafeRunSync
+    val space                          = RSpace.create[Task, C, P, A, A, K](ctx, Branch.REPLAY).unsafeRunSync
     val replaySpace                    = ReplayRSpace.create[Task, C, P, E, A, A, K](ctx, Branch.REPLAY).unsafeRunSync
 
     try {
@@ -1067,7 +1067,7 @@ trait FaultyStoreReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsB
         trieStore,
         Branch.REPLAY
       )
-    val space = RSpace.create[Task, C, P, E, A, A, K](mainStore, Branch.REPLAY).unsafeRunSync
+    val space = RSpace.create[Task, C, P, A, A, K](mainStore, Branch.REPLAY).unsafeRunSync
     val store =
       new InMemoryStore[Task, InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
         trieStore,

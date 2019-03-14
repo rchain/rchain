@@ -76,7 +76,7 @@ object ReplayRSpaceBench {
       val testStore: IStore[Id, Channel, Pattern, Entry, EntriesCaptor] =
         InMemoryStore.create(context.trieStore, Branch.MASTER)
       assert(testStore.toMap.isEmpty)
-      space = RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+      space = RSpace.create[Id, Channel, Pattern, Entry, Entry, EntriesCaptor](
         testStore,
         Branch.MASTER
       )

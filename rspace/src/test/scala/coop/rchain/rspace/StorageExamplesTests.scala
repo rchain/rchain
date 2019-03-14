@@ -301,7 +301,7 @@ abstract class MixedInMemoryStoreStorageExamplesTestsBase[F[_]]
       Context.createMixed(dbDir, mapSize)
 
     run(for {
-      testSpace <- RSpace.create[F, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+      testSpace <- RSpace.create[F, Channel, Pattern, Entry, Entry, EntriesCaptor](
                     ctx,
                     branch
                   )
@@ -345,7 +345,7 @@ abstract class InMemoryStoreStorageExamplesTestsBase[F[_]]
     val ctx: Context[F, Channel, Pattern, Entry, EntriesCaptor] = Context.createInMemory()
 
     run(for {
-      testSpace <- RSpace.create[F, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+      testSpace <- RSpace.create[F, Channel, Pattern, Entry, Entry, EntriesCaptor](
                     ctx,
                     branch
                   )
@@ -378,7 +378,7 @@ abstract class LMDBStoreStorageExamplesTestBase[F[_]]
     val context   = Context.create[F, Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
     val testStore = LMDBStore.create[F, Channel, Pattern, Entry, EntriesCaptor](context)
     run(for {
-      testSpace <- RSpace.create[F, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+      testSpace <- RSpace.create[F, Channel, Pattern, Entry, Entry, EntriesCaptor](
                     testStore,
                     Branch.MASTER
                   )
