@@ -311,8 +311,7 @@ object Runtime {
     (for {
       costAccounting <- CostAccounting.empty[F]
       runtime <- {
-        implicit val ca: CostAccounting[F] = costAccounting
-        implicit val cost: _cost[F]        = loggingCost(ca, noOpCostLog)
+        implicit val cost: _cost[F] = loggingCost(costAccounting, noOpCostLog)
         create(dataDir, mapSize, storeType, extraSystemProcesses)
       }
     } yield (runtime))

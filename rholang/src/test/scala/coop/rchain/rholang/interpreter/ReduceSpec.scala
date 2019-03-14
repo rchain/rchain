@@ -72,8 +72,10 @@ trait PersistentStoreTester {
 class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
 
-  implicit val costAlg: CostAccounting[Task] = CostAccounting.unsafe[Task](Cost(0))
-  implicit val cost: _cost[Task]             = loggingCost(costAlg, noOpCostLog[Task])
+  implicit val cost: _cost[Task] =
+    (for {
+      costAlg <- CostAccounting.of[Task](Cost(0))
+    } yield loggingCost(costAlg, noOpCostLog[Task])).unsafeRunSync
 
   def checkData(
       result: Map[
