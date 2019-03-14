@@ -28,7 +28,7 @@ class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch:
     contextShift: ContextShift[F],
     scheduler: ExecutionContext,
     metricsF: Metrics[F]
-) extends RSpaceOps[F, C, P, E, A, R, K](store, branch)
+) extends RSpaceOps[F, C, P, A, R, K](store, branch)
     with IReplaySpace[F, C, P, A, R, K] {
 
   override protected[this] val logger: Logger = Logger[this.type]

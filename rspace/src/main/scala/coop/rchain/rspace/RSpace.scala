@@ -36,7 +36,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
     contextShift: ContextShift[F],
     scheduler: ExecutionContext,
     metricsF: Metrics[F]
-) extends RSpaceOps[F, C, P, E, A, R, K](store, branch)
+) extends RSpaceOps[F, C, P, A, R, K](store, branch)
     with ISpace[F, C, P, A, R, K] {
 
   override protected[this] val logger: Logger = Logger[this.type]

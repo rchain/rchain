@@ -16,7 +16,7 @@ import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 import scala.util.Random
 
-abstract class RSpaceOps[F[_]: Concurrent, C, P, E, A, R, K](
+abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
     val store: IStore[F, C, P, A, K],
     val branch: Branch
 )(
