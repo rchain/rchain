@@ -369,6 +369,11 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       required = true
     )
 
+    val validAfterBlockNumber = opt[Int](
+      descr = "[TBD]",
+      required = true
+    )
+
     val nonce = opt[Int](
       descr = "This allows you to overwrite your own pending transactions that use the same nonce."
     )

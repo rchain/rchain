@@ -65,8 +65,9 @@ object Main {
       case Eval(files) => new ReplRuntime().evalProgram[Task](files)
       case Repl        => new ReplRuntime().replProgram[Task].as(())
       case Diagnostics => diagnostics.client.Runtime.diagnosticsProgram[Task]
-      case Deploy(address, phlo, phloPrice, nonce, location) =>
-        DeployRuntime.deployFileProgram[Task](address, phlo, phloPrice, nonce, location)
+      case Deploy(address, phlo, phloPrice, nonce, location, validAfterBlock) =>
+        DeployRuntime
+          .deployFileProgram[Task](address, phlo, phloPrice, nonce, location, validAfterBlock)
       case DeployDemo        => DeployRuntime.deployDemoProgram[Task]
       case Propose           => DeployRuntime.propose[Task]()
       case ShowBlock(hash)   => DeployRuntime.showBlock[Task](hash)
