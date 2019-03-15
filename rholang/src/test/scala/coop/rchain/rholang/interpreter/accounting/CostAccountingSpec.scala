@@ -62,6 +62,10 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
 
   val contracts = Table(
     ("contract", "expectedTotalCost"),
+    ("""@0!(2)""", 33L),
+    ("""@0!(2) | @1!(1)""", 69L),
+    ("""for(x <- @0){ Nil }""", 64L),
+    ("""for(x <- @0){ Nil } | @0!(2)""", 76L),
     ("""new loop in {
          contract loop(@n) = {
            match n {
