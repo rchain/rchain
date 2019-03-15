@@ -53,7 +53,6 @@ object Resources {
         F,
         Par,
         BindPattern,
-        InterpreterError,
         ListParWithRandom,
         ListParWithRandom,
         TaggedContinuation

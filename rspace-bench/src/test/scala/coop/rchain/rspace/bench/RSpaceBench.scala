@@ -26,7 +26,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 @org.openjdk.jmh.annotations.State(Scope.Thread)
 trait RSpaceBench {
 
-  var space: ISpace[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor] = null
+  var space: ISpace[Id, Channel, Pattern, Entry, Entry, EntriesCaptor] = null
 
   val channel  = Channel("friends#" + 1.toString)
   val channels = List(channel)
@@ -49,7 +49,7 @@ trait RSpaceBench {
   def createTask(taskIndex: Int, iterations: Int): Task[Unit] =
     Task.delay {
       for (_ <- 1 to iterations) {
-        val r1 = space.produce(channel, bob, persist = false)
+        val r1 = unpackOption(space.produce(channel, bob, persist = false))
         runK(r1)
         getK(r1).results
       }
@@ -104,7 +104,7 @@ class LMDBBench extends RSpaceBench {
     val context   = Context.create[Id, Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
     val testStore = LMDBStore.create[Id, Channel, Pattern, Entry, EntriesCaptor](context)
     assert(testStore.toMap.isEmpty)
-    space = RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+    space = RSpace.create[Id, Channel, Pattern, Entry, Entry, EntriesCaptor](
       testStore,
       Branch.MASTER
     )
@@ -134,7 +134,7 @@ class InMemBench extends RSpaceBench {
     val testStore: IStore[Id, Channel, Pattern, Entry, EntriesCaptor] =
       InMemoryStore.create(context.trieStore, Branch.MASTER)
     assert(testStore.toMap.isEmpty)
-    space = RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+    space = RSpace.create[Id, Channel, Pattern, Entry, Entry, EntriesCaptor](
       testStore,
       Branch.MASTER
     )
@@ -167,7 +167,7 @@ class MixedBench extends RSpaceBench {
     val testStore: IStore[Id, Channel, Pattern, Entry, EntriesCaptor] =
       InMemoryStore.create(context.trieStore, Branch.MASTER)
     assert(testStore.toMap.isEmpty)
-    space = RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+    space = RSpace.create[Id, Channel, Pattern, Entry, Entry, EntriesCaptor](
       testStore,
       Branch.MASTER
     )

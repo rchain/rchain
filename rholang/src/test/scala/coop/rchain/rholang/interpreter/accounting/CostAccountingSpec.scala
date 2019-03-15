@@ -62,6 +62,10 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
 
   val contracts = Table(
     ("contract", "expectedTotalCost"),
+    ("""@0!(2)""", 33L),
+    ("""@0!(2) | @1!(1)""", 69L),
+    ("""for(x <- @0){ Nil }""", 64L),
+    ("""for(x <- @0){ Nil } | @0!(2)""", 76L),
     ("""new loop in {
          contract loop(@n) = {
            match n {
@@ -70,8 +74,8 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
            }
          } |
          loop!(10)
-       }""".stripMargin, 1766L),
-    ("""42 | @0!(2) | for (x <- @0) { Nil }""", 48L),
+       }""".stripMargin, 1936L),
+    ("""42 | @0!(2) | for (x <- @0) { Nil }""", 83L),
     ("""@1!(1) |
         for(x <- @1) { Nil } |
         new x in { x!(10) | for(X <- x) { @2!(Set(X!(7)).add(*X).contains(10)) }} |
@@ -79,10 +83,10 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
           38 => Nil
           42 => @3!(42)
         }
-     """.stripMargin, 432L)
+     """.stripMargin, 634L)
   )
 
-  "Total cost of evaluation" should "be equal to the sum of all costs in the log" ignore forAll(
+  "Total cost of evaluation" should "be equal to the sum of all costs in the log" in forAll(
     contracts
   ) { (contract: String, expectedTotalCost: Long) =>
     val initialPhlo       = 10000L

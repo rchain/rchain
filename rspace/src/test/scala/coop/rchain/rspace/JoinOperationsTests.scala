@@ -5,8 +5,7 @@ import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.internal._
 import monix.eval.Coeval
 
-trait JoinOperationsTests
-    extends StorageTestsBase[Coeval, String, Pattern, Nothing, String, StringsCaptor] {
+trait JoinOperationsTests extends StorageTestsBase[Coeval, String, Pattern, String, StringsCaptor] {
 
   "joins" should "remove joins if no PsK" in withTestSpace { space =>
     val store = space.store

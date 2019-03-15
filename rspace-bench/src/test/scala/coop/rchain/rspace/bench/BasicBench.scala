@@ -50,13 +50,13 @@ class BasicBench {
         )(state.matcher)
         .unsafeRunSync
 
-      assert(c1.right.get.isEmpty)
+      assert(c1.isEmpty)
       bh.consume(c1)
 
       val r2 =
         space.produce(state.channels(i), state.data(i), false)(state.matcher).unsafeRunSync
 
-      assert(r2.right.get.nonEmpty)
+      assert(r2.nonEmpty)
       bh.consume(r2)
       if (state.debug) {
         assert(space.store.isEmpty)
@@ -75,7 +75,7 @@ class BasicBench {
       val r2 =
         space.produce(state.channels(i), state.data(i), false)(state.matcher).unsafeRunSync
 
-      assert(r2.right.get.isEmpty)
+      assert(r2.isEmpty)
       bh.consume(r2)
 
       val c1 = space
@@ -87,7 +87,7 @@ class BasicBench {
         )(state.matcher)
         .unsafeRunSync
 
-      assert(c1.right.get.nonEmpty)
+      assert(c1.nonEmpty)
       bh.consume(c1)
       if (state.debug) {
         assert(space.store.isEmpty)
@@ -127,7 +127,6 @@ object BasicBench {
       Task,
       Par,
       BindPattern,
-      InterpreterError,
       ListParWithRandom,
       ListParWithRandom,
       TaggedContinuation
@@ -137,7 +136,6 @@ object BasicBench {
           Task,
           Par,
           BindPattern,
-          InterpreterError,
           ListParWithRandom,
           ListParWithRandom,
           TaggedContinuation

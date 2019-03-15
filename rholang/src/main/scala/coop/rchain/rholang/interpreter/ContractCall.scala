@@ -48,13 +48,10 @@ class ContractCall[F[_]: Sync](
                         persist = false,
                         sequenceNumber
                       )(matchListPar(Sync[F], cost))
-      _ <- produceResult.fold(
-            _ => Sync[F].raiseError(OutOfPhlogistonsError),
-            _.fold(Sync[F].unit) {
-              case (cont, channels) =>
-                dispatcher.dispatch(unpackCont(cont), channels.map(_.value), cont.sequenceNumber)
-            }
-          )
+      _ <- produceResult.fold(Sync[F].unit) {
+            case (cont, channels) =>
+              dispatcher.dispatch(unpackCont(cont), channels.map(_.value), cont.sequenceNumber)
+          }
     } yield ()
 
   def unapply(contractArgs: (Seq[ListParWithRandom], Int)): Option[(Producer, Seq[Par])] =

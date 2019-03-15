@@ -814,7 +814,6 @@ class RholangMethodsCostsSpec
         Task,
         Par,
         BindPattern,
-        InterpreterError,
         ListParWithRandom,
         ListParWithRandom,
         TaggedContinuation
