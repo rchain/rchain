@@ -104,7 +104,7 @@ object ChargingRSpace {
             for {
               _ <- if (refundValue == Cost(0))
                     Sync[F].unit
-                  else cost.modify(_ + refundValue)
+                  else charge[F](Cost(-refundValue.value, "storage refund"))
             } yield ()
         }
 
