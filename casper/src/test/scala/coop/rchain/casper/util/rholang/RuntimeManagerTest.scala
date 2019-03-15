@@ -2,7 +2,6 @@ package coop.rchain.casper.util.rholang
 
 import cats.Id
 import cats.effect.Resource
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.ProtoUtil
@@ -217,5 +216,50 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       )
     )
     assert((firstDeployCost + secondDeployCost) == compoundDeployCost)
+  }
+
+  "computeState" should "throw InsufficientPhloError when deploy phlo is less than intrinsic phlo" in {
+    implicit val timeId: LogicalTime[Id] = new LogicalTime[Id]
+    val term                             = """for(@x <- @"w") { @"z"!("Got x") }"""
+    val parsingCostTerm                  = accounting.parsingCost(term).value
+    val deploy                           = ProtoUtil.sourceDeployNowWithPhlo[Id](term, parsingCostTerm - 1)
+    val test =
+      runtimeManager
+        .use { mgr =>
+          for {
+            result                            <- mgr.computeState(mgr.emptyStateHash, deploy :: Nil)
+            (postState, Seq(processedDeploy)) = result
+            _                                 = assert(processedDeploy.status.isFailed === true)
+            _ = assert(
+              processedDeploy.status === UserErrors(
+                Vector(InsufficientPhloError(s"${deploy.phloLimit} < $parsingCostTerm"))
+              )
+            )
+            _ = assert(processedDeploy.log.isEmpty === true)
+            _ = assert(processedDeploy.cost.cost === parsingCostTerm)
+            _ = assert(postState === mgr.emptyStateHash)
+          } yield ()
+        }
+    test.runSyncUnsafe(10.seconds)
+  }
+
+  "replayComputeState" should "rethrow InsufficientPhloError when deploy phlo is less than intrinsic phlo" in {
+    implicit val timeId: LogicalTime[Id] = new LogicalTime[Id]
+    val term                             = """for(@x <- @"w") { @"z"!("Got x") }"""
+    val parsingCostTerm                  = accounting.parsingCost(term).value
+    val deploy                           = ProtoUtil.sourceDeployNowWithPhlo[Id](term, parsingCostTerm - 1)
+    val test =
+      runtimeManager
+        .use { mgr =>
+          for {
+            computeStateResult            <- mgr.computeState(mgr.emptyStateHash, deploy :: Nil)
+            (postState, processedDeploys) = computeStateResult
+            computeReplayStateResult      <- mgr.replayComputeState(mgr.emptyStateHash, processedDeploys)
+            Right(postStateReplay)        = computeReplayStateResult
+            _                             = assert(postState === mgr.emptyStateHash)
+            _                             = assert(postStateReplay === postState)
+          } yield ()
+        }
+    test.runSyncUnsafe(10.seconds)
   }
 }
