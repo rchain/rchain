@@ -68,13 +68,6 @@ message ListParWithRandom {
     bytes randomState = 2 [(scalapb.field).type = "coop.rchain.crypto.hash.Blake2b512Random"];
 }
 
-message ListParWithRandomAndPhlos {
-    repeated Par pars = 1;
-    bytes randomState = 2 [(scalapb.field).type = "coop.rchain.crypto.hash.Blake2b512Random"];
-    // cost of performing the spatial match
-    uint64 cost = 3;
-}
-
 // While we use vars in both positions, when producing the normalized
 // representation we need a discipline to track whether a var is a name or a
 // process.

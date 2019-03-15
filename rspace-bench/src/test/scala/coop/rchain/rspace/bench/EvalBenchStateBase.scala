@@ -28,7 +28,7 @@ trait EvalBenchStateBase {
     Runtime.createWithEmptyCost[Task, Task.Par](dbDir, mapSize, StoreType.LMDB).unsafeRunSync
   val rand: Blake2b512Random = Blake2b512Random(128)
   val costAccountAlg: CostAccounting[Task] =
-    CostAccounting.unsafe[Task](Cost(Integer.MAX_VALUE))
+    CostAccounting.unsafe[Task](Cost.UNSAFE_MAX)
   var term: Option[Par] = None
 
   @Setup

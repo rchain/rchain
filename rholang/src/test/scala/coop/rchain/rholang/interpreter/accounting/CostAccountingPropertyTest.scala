@@ -111,7 +111,7 @@ object CostAccountingPropertyTest {
     for {
       runtime <- TestRuntime.create[Task, Task.Par]()
       _       <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
-      costAlg <- CostAccounting.of[Task](Cost.Max)
+      costAlg <- CostAccounting.of[Task](Cost.UNSAFE_MAX)
       cost    = loggingCost[Task](costAlg, noOpCostLog)
       res <- {
         implicit val c = cost

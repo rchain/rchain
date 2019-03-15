@@ -1,13 +1,14 @@
 package coop.rchain.rholang.interpreter
 import cats.effect.Sync
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.{ListParWithRandom, ListParWithRandomAndPhlos, Par, TaggedContinuation}
+import coop.rchain.models.{ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
-import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.accounting.{loggingCost, noOpCostLog}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rspace.util.unpackCont
 import cats.implicits._
+import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
 
 /**
   * This is a tool for unapplying the messages sent to the system contracts.
@@ -29,23 +30,24 @@ import cats.implicits._
   */
 class ContractCall[F[_]: Sync](
     space: RhoISpace[F],
-    dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
+    dispatcher: Dispatch[F, ListParWithRandom, TaggedContinuation]
 ) {
   type Producer = (Seq[Par], Par) => F[Unit]
 
-  private val UNLIMITED_MATCH_PHLO = matchListPar(Cost(Integer.MAX_VALUE))
-
+  // TODO: pass _cost[F] as an implicit parameter
   private def produce(
       rand: Blake2b512Random,
       sequenceNumber: Int
   )(values: Seq[Par], ch: Par): F[Unit] =
     for {
+      costAlg <- CostAccounting.of(Cost.UNSAFE_MAX)
+      cost    = loggingCost(costAlg, noOpCostLog[F])
       produceResult <- space.produce(
                         ch,
                         ListParWithRandom(values, rand),
                         persist = false,
                         sequenceNumber
-                      )(UNLIMITED_MATCH_PHLO)
+                      )(matchListPar(Sync[F], cost))
       _ <- produceResult.fold(
             _ => Sync[F].raiseError(OutOfPhlogistonsError),
             _.fold(Sync[F].unit) {
@@ -55,14 +57,13 @@ class ContractCall[F[_]: Sync](
           )
     } yield ()
 
-  def unapply(contractArgs: (Seq[ListParWithRandomAndPhlos], Int)): Option[(Producer, Seq[Par])] =
+  def unapply(contractArgs: (Seq[ListParWithRandom], Int)): Option[(Producer, Seq[Par])] =
     contractArgs match {
       case (
           Seq(
-            ListParWithRandomAndPhlos(
+            ListParWithRandom(
               args,
-              rand,
-              _
+              rand
             )
           ),
           sequenceNumber

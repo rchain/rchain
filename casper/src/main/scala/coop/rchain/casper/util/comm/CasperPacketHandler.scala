@@ -34,7 +34,7 @@ import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.shared.{Log, LogSource, Time}
 import monix.eval.Task
 import monix.execution.Scheduler
-
+import coop.rchain.catscontrib.ski._
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Try
 
@@ -125,8 +125,6 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                       conf.approveGenesisDuration,
                       conf.approveGenesisInterval
                     )
-            // TOOD this returns a fiber, should we consider cancelling on shutdown?
-            _ <- Concurrent[F].start(abp.run())
             standalone <- Ref.of[F, CasperPacketHandlerInternal[F]](
                            new StandaloneCasperHandler[F](abp)
                          )
@@ -148,25 +146,23 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
           for {
             validators  <- CasperConf.parseValidatorsFile[F](conf.knownValidatorsFile)
             validatorId <- ValidatorIdentity.fromConfig[F](conf)
-            bootstrap <- Ref.of[F, CasperPacketHandlerInternal[F]](
+            bootstrap <- Ref.of[F, CasperPacketHandlerInternal[F]] {
                           new BootstrapCasperHandler(
                             runtimeManager,
                             conf.shardId,
                             validatorId,
-                            validators
+                            validators,
+                            CommUtil.requestApprovedBlock[F](delay)
                           )
-                        )
+                        }
             casperPacketHandler = new CasperPacketHandlerImpl[F](bootstrap)
-            // TOOD this returns a fiber, should we consider cancelling on shutdown?
-            _ <- {
-              implicit val ph: PacketHandler[F] = PacketHandler.pf[F](casperPacketHandler.handle)
-              Concurrent[F].start(CommUtil.requestApprovedBlock[F](delay))
-            }
           } yield casperPacketHandler
         }
     }
 
   trait CasperPacketHandlerInternal[F[_]] {
+    def init: F[Unit]
+
     def handleBlockMessage(peer: PeerNode, bm: BlockMessage): F[Unit]
 
     def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Unit]
@@ -197,6 +193,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       blockApprover: BlockApproverProtocol
   ) extends CasperPacketHandlerInternal[F] {
     private val noop: F[Unit] = Applicative[F].unit
+
+    override def init: F[Unit] = noop
 
     override def handleBlockMessage(peer: PeerNode, bm: BlockMessage): F[Unit] =
       noop
@@ -249,6 +247,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   ) extends CasperPacketHandlerInternal[F] {
 
     private val noop: F[Unit] = Applicative[F].unit
+
+    override def init: F[Unit] = approveProtocol.run()
 
     override def handleBlockMessage(peer: PeerNode, bm: BlockMessage): F[Unit] =
       noop
@@ -324,9 +324,12 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       runtimeManager: RuntimeManager[F],
       shardId: String,
       validatorId: Option[ValidatorIdentity],
-      validators: Set[ByteString]
+      validators: Set[ByteString],
+      theInit: F[Unit]
   ) extends CasperPacketHandlerInternal[F] {
     private val noop: F[Unit] = Applicative[F].unit
+
+    override def init: F[Unit] = theInit
 
     override def handleBlockMessage(peer: PeerNode, bm: BlockMessage): F[Unit] =
       noop
@@ -373,6 +376,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     implicit val _casper = casper
 
     private val noop: F[Unit] = Applicative[F].unit
+
+    override def init: F[Unit] = noop
 
     // Possible optimization in the future
     // TODO: accept update to approved block (this will be needed for checkpointing)
@@ -446,6 +451,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   class CasperPacketHandlerImpl[F[_]: Monad: RPConfAsk: BlockStore: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: LastApprovedBlock: MultiParentCasperRef](
       private val cphI: Ref[F, CasperPacketHandlerInternal[F]]
   ) extends CasperPacketHandler[F] {
+
+    override def init: F[Unit] = cphI.get >>= (_.init)
 
     override def handle(peer: PeerNode): PartialFunction[Packet, F[Unit]] =
       Function
@@ -594,6 +601,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       implicit C: CasperPacketHandler[F]
   ): CasperPacketHandler[T[F, ?]] =
     new CasperPacketHandler[T[F, ?]] {
+      override def init: T[F, Unit] = C.init.liftM[T]
+
       override def handle(peer: PeerNode): PartialFunction[Packet, T[F, Unit]] =
         PartialFunction { (p: Packet) =>
           C.handle(peer)(p).liftM[T]
@@ -620,6 +629,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
 
 trait CasperPacketHandler[F[_]] {
   def handle(peer: PeerNode): PartialFunction[Packet, F[Unit]]
+  def init: F[Unit]
 }
 
 abstract class CasperPacketHandlerInstances {

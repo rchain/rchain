@@ -45,7 +45,7 @@ package object matcher {
   ): F[Stream[(FreeMap, A)]] =
     StreamT.run(f.run(emptyMap))
 
-  private[matcher] def runFirst[F[_]: Monad, A](
+  private[rholang] def runFirst[F[_]: Monad, A](
       f: MatcherMonadT[F, A]
   ): F[Option[(FreeMap, A)]] =
     StreamT

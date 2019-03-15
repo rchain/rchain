@@ -11,7 +11,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
@@ -129,7 +129,7 @@ object BasicBench {
       BindPattern,
       InterpreterError,
       ListParWithRandom,
-      ListParWithRandomAndPhlos,
+      ListParWithRandom,
       TaggedContinuation
     ] =
       RSpace
@@ -139,7 +139,7 @@ object BasicBench {
           BindPattern,
           InterpreterError,
           ListParWithRandom,
-          ListParWithRandomAndPhlos,
+          ListParWithRandom,
           TaggedContinuation
         ](
           testStore,
@@ -147,7 +147,12 @@ object BasicBench {
         )
         .unsafeRunSync
 
-    implicit val matcher = matchListPar(Cost(10000000L))
+    implicit val cost: _cost[Task] = loggingCost(
+      CostAccounting.unsafe[Task](Cost.UNSAFE_MAX),
+      noOpCostLog
+    )
+
+    implicit val matcher = matchListPar
 
     val initSeed = 123456789L
 

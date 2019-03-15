@@ -62,7 +62,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                           implicit val rand: Blake2b512Random = Blake2b512Random(
                             DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
                           )
-                          val initialPhlo = Cost(accounting.MAX_VALUE)
+                          val initialPhlo = Cost.UNSAFE_MAX
                           for {
                             _             <- runtime.reducer.setPhlo(initialPhlo)
                             term          <- ParBuilder[Task].buildNormalizedTerm(deploy.term)

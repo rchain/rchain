@@ -124,7 +124,7 @@ class HashSetCasperTestNode[F[_]](
           .void
       }
 
-  def receive(): F[Unit] = tls.receive(p => handle[F](p, defaultTimeout), kp(().pure[F])).void
+  def receive(): F[Unit] = tls.receive(p => handle[F](p), kp(().pure[F])).void
 
   def tearDown(): F[Unit] =
     tearDownNode().map { _ =>
