@@ -56,8 +56,6 @@ message Protocol {
 
 service TransportLayer {
   rpc Tell (TLRequest) returns (TLResponse) {}
-  rpc Ask (TLRequest) returns (TLResponse) {}
-  // this eventually will become streamed API, for now regular call
   rpc Stream (stream Chunk) returns (ChunkResponse) {}
 }
 
