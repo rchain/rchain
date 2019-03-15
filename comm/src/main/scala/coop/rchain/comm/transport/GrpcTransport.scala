@@ -74,21 +74,6 @@ object GrpcTransport {
         case e                 => protocolException(e)
       }
 
-  def roundTrip(peer: PeerNode, msg: Protocol)(
-      implicit metrics: Metrics[Task]
-  ): Request[Protocol] =
-    for {
-      _ <- ReaderT.liftF(metrics.incrementCounter("round-trip"))
-      result <- transport(peer)(
-                 _.ask(TLRequest(msg.some))
-                   .timer("round-trip-time")
-               ).map(_.flatMap {
-                 case Some(p) => Right(p)
-                 case _ =>
-                   Left(internalCommunicationError("Was expecting message, nothing arrived"))
-               })
-    } yield result
-
   def send(peer: PeerNode, msg: Protocol)(implicit metrics: Metrics[Task]): Request[Unit] =
     for {
       _ <- ReaderT.liftF(metrics.incrementCounter("send"))

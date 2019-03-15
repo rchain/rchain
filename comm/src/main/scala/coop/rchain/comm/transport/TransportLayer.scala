@@ -11,7 +11,6 @@ import coop.rchain.comm.protocol.routing._
 final case class Blob(sender: PeerNode, packet: Packet)
 
 trait TransportLayer[F[_]] {
-  def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): F[CommErr[Protocol]]
   def send(peer: PeerNode, msg: Protocol): F[CommErr[Unit]]
   def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]]
   def stream(peers: Seq[PeerNode], blob: Blob): F[Unit]
@@ -19,7 +18,6 @@ trait TransportLayer[F[_]] {
 }
 
 object TransportLayer extends TransportLayerInstances {
-
   def apply[F[_]](implicit L: TransportLayer[F]): TransportLayer[F] = L
 }
 
@@ -28,13 +26,6 @@ sealed abstract class TransportLayerInstances {
       implicit evF: TransportLayer[F]
   ): TransportLayer[EitherT[F, CommError, ?]] =
     new TransportLayer[EitherT[F, CommError, ?]] {
-
-      def roundTrip(
-          peer: PeerNode,
-          msg: Protocol,
-          timeout: FiniteDuration
-      ): EitherT[F, CommError, CommErr[Protocol]] =
-        EitherT.liftF(evF.roundTrip(peer, msg, timeout))
 
       def send(peer: PeerNode, msg: Protocol): EitherT[F, CommError, CommErr[Unit]] =
         EitherT.liftF(evF.send(peer, msg))
