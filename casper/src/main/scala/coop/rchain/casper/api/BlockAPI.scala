@@ -417,7 +417,8 @@ object BlockAPI {
           Seq[BlockHash],
           Float,
           Float,
-          Seq[Bond]
+          Seq[Bond],
+          Seq[ProcessedDeploy]
       ) => F[A]
   ): F[A] =
     for {
@@ -436,6 +437,7 @@ object BlockAPI {
                                    .normalizedFaultTolerance(dag, block.blockHash) // TODO: Warn about parent block finalization
       initialFault       <- MultiParentCasper[F].normalizedInitialFault(ProtoUtil.weightMap(block))
       bondsValidatorList = ProtoUtil.bonds(block)
+      processedDeploy    = ProtoUtil.deploys(block)
       blockInfo <- constructor(
                     block,
                     version,
@@ -446,7 +448,8 @@ object BlockAPI {
                     parentsHashList,
                     normalizedFaultTolerance,
                     initialFault,
-                    bondsValidatorList
+                    bondsValidatorList,
+                    processedDeploy
                   )
     } yield blockInfo
 
@@ -468,7 +471,8 @@ object BlockAPI {
       parentsHashList: Seq[BlockHash],
       normalizedFaultTolerance: Float,
       initialFault: Float,
-      bondsValidatorList: Seq[Bond]
+      bondsValidatorList: Seq[Bond],
+      processedDeploys: Seq[ProcessedDeploy]
   ): F[BlockInfo] =
     for {
       tsDesc <- MultiParentCasper[F].storageContents(tsHash)
@@ -487,7 +491,8 @@ object BlockAPI {
         parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit),
         sender = PrettyPrinter.buildStringNoLimit(block.sender),
         shardId = block.shardId,
-        bondsValidatorList = bondsValidatorList.map(PrettyPrinter.buildString)
+        bondsValidatorList = bondsValidatorList.map(PrettyPrinter.buildString),
+        deployCost = processedDeploys.map(PrettyPrinter.buildString)
       )
 
   private def constructBlockInfoWithoutTuplespace[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
@@ -500,7 +505,8 @@ object BlockAPI {
       parentsHashList: Seq[BlockHash],
       normalizedFaultTolerance: Float,
       initialFault: Float,
-      bondsValidatorList: Seq[Bond]
+      bondsValidatorList: Seq[Bond],
+      processedDeploys: Seq[ProcessedDeploy]
   ): F[BlockInfoWithoutTuplespace] =
     BlockInfoWithoutTuplespace(
       blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
