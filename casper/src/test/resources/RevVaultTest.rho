@@ -28,7 +28,9 @@ match (
       testCreateAliceVaultLocked,
       testCreateAliceVaultUnlocked,
       testTransfer,
+      testFindOrCreate,
       withAliceVaultUnlocked,
+      transfer,
       assertBalances
     in {
       rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *RhoSpecCh) |
@@ -40,6 +42,7 @@ match (
             ("Create Alice vault and see it is locked", *testCreateAliceVaultLocked),
             ("Create Alice vault, unlock it and check balance", *testCreateAliceVaultUnlocked),
             ("Transfer from genesis to Alice", *testTransfer),
+            ("Return the existing wallet when calling testFindOrCreate", *testFindOrCreate),
           ])
       } |
 
@@ -116,6 +119,18 @@ match (
         }
       } |
 
+      contract testFindOrCreate(rhoSpec, RevVault, ackCh) = {
+        new genesisVaultCh, aliceVaultCh, now in {
+          //the below attempts to create a wallet are going to fetch the ones created in previous tests.
+          RevVault!("createGenesisVault", genesisPubKey, 0 /* irrelevant */, *genesisVaultCh) |
+          withAliceVaultUnlocked!(*RevVault, *aliceVaultCh) |
+          for (@("Right", g) <- genesisVaultCh; @a <- aliceVaultCh) {
+            now!(Nil) |
+            assertBalances!(*now, [(g, 8000), (a, 1000)], *rhoSpec, *ackCh)
+          }
+        }
+      } |
+
       contract withAliceVaultUnlocked(RevVault, cont) = {
         new aliceVaultLockedCh, identityChanged, alliceVaultCh in {
           setDeployData!("userId", alicePubKey, *identityChanged) |
@@ -123,6 +138,12 @@ match (
           for (@("Right", aliceVaultLocked) <- aliceVaultLockedCh; _ <- identityChanged) {
             @aliceVaultLocked!("unlock", *cont)
           }
+        }
+      } |
+
+      contract transfer(when, vault, @address, @amount, ret) = {
+        for (_ <- when) {
+          vault!("transfer", address, amount, *ret)
         }
       } |
 
