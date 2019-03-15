@@ -121,11 +121,12 @@ in {
 
             contract @{ownRevAddress | bundle0{*_revVault}}(@"_deposit", depositPurse, retCh) = {
 
-              new amountCh in {
+              new amountCh, depositSuccessCh in {
                 depositPurse!("getBalance", *amountCh) |
                 for (@amount <- amountCh) {
 
-                  purse!("deposit", amount, *depositPurse, *retCh)
+                  purse!("deposit", amount, *depositPurse, *depositSuccessCh) |
+                  @Either!("fromBoolean <-", *depositSuccessCh, "BUG FOUND: purse deposit failed", *retCh)
                 }
               }
             }

@@ -110,13 +110,14 @@ match (
       } |
 
       contract testTransfer(rhoSpec, RevVault, ackCh) = {
-        new genesisVaultCh, aliceVaultCh, ret, genesisBalanceCh, aliceBalanceCh in {
+        new genesisVaultCh, aliceVaultCh, ret, retOk  in {
           RevVault!("createGenesisVault", genesisPubKey, 9000, *genesisVaultCh) |
           withVaultUnlocked!(alicePubKey, *aliceVaultCh) |
           for (@("Right", genesisVault) <- genesisVaultCh; @aliceVault <- aliceVaultCh) {
 
             @genesisVault!("transfer", aliceRevAddress, 1000, *ret) |
-            assertBalances!(*ret, [(genesisVault, 8000), (aliceVault, 1000)], *rhoSpec, *ackCh)
+            rhoSpec!("assert", (("Right", Nil), "== <-", *ret), "transfer successful", *retOk) |
+            assertBalances!(*retOk, [(genesisVault, 8000), (aliceVault, 1000)], *rhoSpec, *ackCh)
           }
         }
       } |
