@@ -275,7 +275,7 @@ class NodeRuntime private[node] (
             s"gRPC internal server started at $host:${servers.grpcServerInternal.port}"
           )
       _ <- servers.transportServer.startWithEffects(
-            pm => HandleMessages.handle[Effect](pm, defaultTimeout),
+            pm => HandleMessages.handle[Effect](pm),
             blob => packetHandler.handlePacket(blob.sender, blob.packet).as(())
           )
       _       <- NodeDiscovery[Task].discover.attemptAndLog.executeOn(loopScheduler).start.toEffect

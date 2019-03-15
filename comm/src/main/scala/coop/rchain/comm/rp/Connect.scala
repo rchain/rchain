@@ -145,11 +145,7 @@ object Connect {
         _        <- Log[F].debug(s"Initialize protocol handshake to $address")
         local    <- RPConfAsk[F].reader(_.local)
         ph       = protocolHandshake(local)
-        response <- TransportLayer[F].roundTrip(peer, ph, timeout * 2) >>= ErrorHandler[F].fromEither
-        _ <- Log[F].debug(
-              s"Received protocol handshake response from ${ProtocolHelper.sender(response)}."
-            )
-        _ <- ConnectionsCell[F].flatModify(_.addConn[F](peer))
+        response <- TransportLayer[F].send(peer, ph) >>= ErrorHandler[F].fromEither
       } yield ()
     ).timer("connect-time")
 
