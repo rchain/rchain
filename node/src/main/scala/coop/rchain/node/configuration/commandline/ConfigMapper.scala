@@ -26,6 +26,7 @@ object ConfigMapper {
       add(keys.Host, options.grpcHost)
       add(keys.PortExternal, options.grpcPort)
       add(keys.PortInternal, options.grpcPortInternal)
+      add(keys.MaxMessageSize, options.grpcMaxMessageSize)
     }
 
     if (options.subcommand.contains(options.run)) {

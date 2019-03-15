@@ -30,7 +30,8 @@ final case class Server(
 final case class GrpcServer(
     host: String,
     portExternal: Int,
-    portInternal: Int
+    portInternal: Int,
+    maxMessageSize: Int
 )
 
 final case class Tls(
