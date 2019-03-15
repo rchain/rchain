@@ -45,6 +45,8 @@ final case object InvalidTransaction      extends InvalidBlock with Slashable
 final case object InvalidBondsCache       extends InvalidBlock with Slashable
 final case object InvalidBlockHash        extends InvalidBlock with Slashable
 final case object InvalidDeployCount      extends InvalidBlock with Slashable
+final case object ContainsExpiredDeploy   extends InvalidBlock with Slashable
+final case object ContainsFutureDeploy    extends InvalidBlock with Slashable
 
 object BlockStatus {
   def valid: BlockStatus                    = Valid

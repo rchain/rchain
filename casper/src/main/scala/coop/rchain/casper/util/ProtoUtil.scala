@@ -224,6 +224,14 @@ object ProtoUtil {
       ProtoUtil.unsafeGetBlock[F](parentHash)
     }
 
+  def unsafeGetParentsAboveBlockNumber[F[_]: Monad: BlockStore](
+      b: BlockMessage,
+      blockNumber: Long
+  ): F[List[BlockMessage]] =
+    ProtoUtil
+      .unsafeGetParents[F](b)
+      .map(parents => parents.filter(p => ProtoUtil.blockNumber(p) >= blockNumber))
+
   def containsDeploy(b: BlockMessage, user: ByteString, timestamp: Long): Boolean =
     deploys(b).toStream
       .flatMap(getDeployData)
@@ -258,6 +266,10 @@ object ProtoUtil {
       bd <- b.body
       ps <- bd.state
     } yield ps.blockNumber).getOrElse(0L)
+
+  def maxBlockNumber(blocks: Seq[BlockMessage]): Long = blocks.foldLeft(-1L) {
+    case (acc, b) => math.max(acc, ProtoUtil.blockNumber(b))
+  }
 
   /*
    * Block b1 conflicts with b2 if any of b1's ancestors contains a replay log entry that
