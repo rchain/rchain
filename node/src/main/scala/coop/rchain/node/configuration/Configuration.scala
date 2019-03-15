@@ -183,7 +183,7 @@ object Configuration {
           phloPrice(),
           nonce.getOrElse(0),
           location(),
-          validAfterBlockNumber()
+          validAfterBlockNumber.getOrElse(-1)
         )
       case Some(options.deployDemo) => DeployDemo
       case Some(options.propose)    => Propose
