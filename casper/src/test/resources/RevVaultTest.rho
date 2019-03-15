@@ -29,7 +29,7 @@ match (
       testCreateAliceVaultUnlocked,
       testTransfer,
       testFindOrCreate,
-      withAliceVaultUnlocked,
+      withVaultUnlocked,
       transfer,
       assertBalances
     in {
@@ -94,7 +94,7 @@ match (
 
       contract testCreateAliceVaultUnlocked(rhoSpec, RevVault, ackCh) = {
         new balanceCh, aliceVaultCh in {
-          withAliceVaultUnlocked!(*RevVault, *aliceVaultCh) |
+          withVaultUnlocked!(alicePubKey, *aliceVaultCh) |
           for (aliceVault <- aliceVaultCh) {
             aliceVault!("balance", *balanceCh) |
             rhoSpec!("assertMany",
@@ -110,7 +110,7 @@ match (
       contract testTransfer(rhoSpec, RevVault, ackCh) = {
         new genesisVaultCh, aliceVaultCh, ret, genesisBalanceCh, aliceBalanceCh in {
           RevVault!("createGenesisVault", genesisPubKey, 9000, *genesisVaultCh) |
-          withAliceVaultUnlocked!(*RevVault, *aliceVaultCh) |
+          withVaultUnlocked!(alicePubKey, *aliceVaultCh) |
           for (@("Right", genesisVault) <- genesisVaultCh; @aliceVault <- aliceVaultCh) {
 
             @genesisVault!("transfer", aliceRevAddress, 1000, *ret) |
@@ -123,7 +123,7 @@ match (
         new genesisVaultCh, aliceVaultCh, now in {
           //the below attempts to create a wallet are going to fetch the ones created in previous tests.
           RevVault!("createGenesisVault", genesisPubKey, 0 /* irrelevant */, *genesisVaultCh) |
-          withAliceVaultUnlocked!(*RevVault, *aliceVaultCh) |
+          withVaultUnlocked!(alicePubKey, *aliceVaultCh) |
           for (@("Right", g) <- genesisVaultCh; @a <- aliceVaultCh) {
             now!(Nil) |
             assertBalances!(*now, [(g, 8000), (a, 1000)], *rhoSpec, *ackCh)
@@ -131,13 +131,20 @@ match (
         }
       } |
 
-      contract withAliceVaultUnlocked(RevVault, cont) = {
-        new aliceVaultLockedCh, identityChanged, alliceVaultCh in {
-          setDeployData!("userId", alicePubKey, *identityChanged) |
-          RevVault!("findOrCreate", alicePubKey, *aliceVaultLockedCh) |
-          for (@("Right", aliceVaultLocked) <- aliceVaultLockedCh; _ <- identityChanged) {
-            @aliceVaultLocked!("unlock", *cont)
+      new RevVaultCh in {
+        rl!(`rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z`, *RevVaultCh) |
+        for (@(_, RevVault) <- RevVaultCh) {
+
+          contract withVaultUnlocked(@pubKey, ret) = {
+            new vaultLockedCh, identityChanged, alliceVaultCh in {
+              setDeployData!("userId", pubKey, *identityChanged) |
+              @RevVault!("findOrCreate", pubKey, *vaultLockedCh) |
+              for (@("Right", vaultLocked) <- vaultLockedCh; _ <- identityChanged) {
+                @vaultLocked!("unlock", *ret)
+              }
+            }
           }
+
         }
       } |
 
@@ -164,6 +171,7 @@ match (
             }
           }
         }
+
       }
     }
   }
