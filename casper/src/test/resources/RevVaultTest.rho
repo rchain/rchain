@@ -19,6 +19,7 @@ match (
     new
       rl(`rho:registry:lookup`),
       RhoSpecCh,
+      ListOpsCh,
       stdout(`rho:io:stdout`),
       setDeployData(`rho:test:deploy:set`),
       setup,
@@ -27,7 +28,8 @@ match (
       testCreateAliceVaultLocked,
       testCreateAliceVaultUnlocked,
       testTransfer,
-      withAliceVaultUnlocked
+      withAliceVaultUnlocked,
+      assertBalances
     in {
       rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *RhoSpecCh) |
       for(@(_, RhoSpec) <- RhoSpecCh) {
@@ -106,19 +108,10 @@ match (
         new genesisVaultCh, aliceVaultCh, ret, genesisBalanceCh, aliceBalanceCh in {
           RevVault!("createGenesisVault", genesisPubKey, 9000, *genesisVaultCh) |
           withAliceVaultUnlocked!(*RevVault, *aliceVaultCh) |
-          for (@("Right", genesisVault) <- genesisVaultCh; aliceVault <- aliceVaultCh) {
+          for (@("Right", genesisVault) <- genesisVaultCh; @aliceVault <- aliceVaultCh) {
 
             @genesisVault!("transfer", aliceRevAddress, 1000, *ret) |
-            for (_ <- ret) {
-              @genesisVault!("balance", *genesisBalanceCh) |
-              aliceVault!("balance", *aliceBalanceCh) |
-              rhoSpec!("assertMany",
-                [
-                  ((8000, "== <-", *genesisBalanceCh), "genesis balance correct"),
-                  ((1000, "== <-", *aliceBalanceCh), "alice balance correct"),
-                ], *ackCh
-              )
-            }
+            assertBalances!(*ret, [(genesisVault, 8000), (aliceVault, 1000)], *rhoSpec, *ackCh)
           }
         }
       } |
@@ -129,6 +122,25 @@ match (
           RevVault!("findOrCreate", alicePubKey, *aliceVaultLockedCh) |
           for (@("Right", aliceVaultLocked) <- aliceVaultLockedCh; _ <- identityChanged) {
             @aliceVaultLocked!("unlock", *cont)
+          }
+        }
+      } |
+
+      rl!(`rho:id:dputnspi15oxxnyymjrpu7rkaok3bjkiwq84z7cqcrx4ktqfpyapn4`, *ListOpsCh) |
+      for(@(_, ListOps) <- ListOpsCh) {
+
+        contract assertBalances(when, @balances, rhoSpec, ret) = {
+          for (_ <- when) {
+            new assertBalance in {
+              @ListOps!("foreach", balances, *assertBalance, *ret) |
+
+              contract assertBalance(@(vault, expectedBalance), retCh) = {
+                new balanceCh in {
+                  @vault!("balance", *balanceCh) |
+                  rhoSpec!("assert", (expectedBalance, "== <-", *balanceCh), "balance is as expected", *retCh)
+                }
+              }
+            }
           }
         }
       }
