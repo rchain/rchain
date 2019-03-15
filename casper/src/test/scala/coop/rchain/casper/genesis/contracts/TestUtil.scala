@@ -44,26 +44,27 @@ object TestUtil {
       runtime <- TestRuntime.create[Task, Task.Par](extraServices)
       _       <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
     } yield (runtime)
-  }.unsafeRunSync
+  }.runSyncUnsafe(5.seconds)
 
   def evalDeploy(deploy: DeployData, runtime: Runtime[Task])(
       implicit scheduler: Scheduler
   ): Unit = {
-    runtime.reducer.setPhlo(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
     implicit val rand: Blake2b512Random = Blake2b512Random(
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
     )
     val term = mkTerm(deploy.term).right.get
-    runtime.reducer.inj(term).unsafeRunSync
+    evalTerm(term, runtime)
   }
 
   def evalTerm(
       term: Par,
       runtime: Runtime[Task]
-  )(implicit scheduler: Scheduler, rand: Blake2b512Random): Unit = {
-    runtime.reducer.setPhlo(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
-    runtime.reducer.inj(term).unsafeRunSync
-  }
+  )(implicit scheduler: Scheduler, rand: Blake2b512Random): Unit =
+    (for {
+      _ <- runtime.reducer.setPhlo(Cost.UNSAFE_MAX)
+      _ <- runtime.reducer.inj(term)
+      _ <- runtime.reducer.phlo
+    } yield ()).runSyncUnsafe(5.seconds)
 
   def eval(
       code: String,

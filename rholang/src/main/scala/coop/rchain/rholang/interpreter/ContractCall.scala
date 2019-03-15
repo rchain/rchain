@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter
-import cats.effect.Sync
+
+import cats.effect.{Concurrent, Sync}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.{ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
@@ -28,7 +29,7 @@ import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
   * @param space the rspace instance
   * @param dispatcher the dispatcher
   */
-class ContractCall[F[_]: Sync](
+class ContractCall[F[_]: Concurrent](
     space: RhoISpace[F],
     dispatcher: Dispatch[F, ListParWithRandom, TaggedContinuation]
 ) {

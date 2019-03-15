@@ -61,7 +61,7 @@ object Interpreter {
                       case Right(parsed) =>
                         for {
                           result    <- reducer.inj(parsed).attempt
-                          phlosLeft <- C.get
+                          phlosLeft <- C.inspect(identity)
                           oldErrors <- errorLog.readAndClearErrorVector()
                           newErrors = result.swap.toSeq.toVector
                           allErrors = oldErrors |+| newErrors
@@ -72,6 +72,7 @@ object Interpreter {
                   case Left(error) =>
                     EvaluateResult(parsingCost, Vector(error)).pure[F]
                 }
+          _ <- C.get
         } yield res
 
       }

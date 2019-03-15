@@ -39,11 +39,16 @@ trait PersistentStoreTester {
 
   def withTestSpace[R](
       errorLog: ErrorLog[Task]
-  )(f: TestFixture => R)(implicit C: _cost[Task]): R = {
+  )(f: TestFixture => R): R = {
     val dbDir                              = Files.createTempDirectory("rholang-interpreter-test-")
     val context: RhoContext[Task]          = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
     implicit val logF: Log[Task]           = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+
+    implicit val cost: _cost[Task] =
+      (for {
+        costAlg <- CostAccounting.empty[Task]
+      } yield loggingCost(costAlg, noOpCostLog[Task])).unsafeRunSync
 
     val space = (RSpace
       .create[
@@ -70,11 +75,6 @@ trait PersistentStoreTester {
 
 class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
-
-  implicit val cost: _cost[Task] =
-    (for {
-      costAlg <- CostAccounting.of[Task](Cost(0))
-    } yield loggingCost(costAlg, noOpCostLog[Task])).unsafeRunSync
 
   def checkData(
       result: Map[
@@ -839,6 +839,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val result = withTestSpace(errorLog) {
       case TestFixture(space, _) =>
+        implicit val cost: _cost[Task] =
+          (for {
+            costAlg <- CostAccounting.empty[Task]
+          } yield loggingCost(costAlg, noOpCostLog[Task])).unsafeRunSync
+
         def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
         val reducer = RholangOnlyDispatcher
           .create[Task, Task.Par](space, Map("rho:test:foo" -> byteName(42)))

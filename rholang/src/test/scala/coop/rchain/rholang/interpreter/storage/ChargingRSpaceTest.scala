@@ -68,10 +68,10 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     val test = for {
       _                 <- cost.set(minimumPhlos)
       _                 <- chargingRSpace.produce(channels.head, data, false)
-      phlosAfterProduce <- cost.get
+      phlosAfterProduce <- cost.inspect(identity)
       _                 = phlosAfterProduce shouldBe (minimumPhlos - produceStorageCost)
       res               <- chargingRSpace.consume(channels, patterns, cont, false)
-      phlosLeft         <- cost.get
+      phlosLeft         <- cost.inspect(identity)
       _                 = phlosLeft.value shouldBe (consumeStorageCost.value + produceStorageCost.value)
     } yield ()
 
@@ -119,15 +119,15 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
       val test = for {
         _                   <- cost.set(minimumPhlos)
         _                   <- chargingRSpace.consume(channels, patterns, cont, false)
-        phlosAfterConsume   <- cost.get
+        phlosAfterConsume   <- cost.inspect(identity)
         _                   = phlosAfterConsume shouldBe (minimumPhlos - joinCost)
         res                 <- chargingRSpace.produce(channels(0), data, false)
-        phlosAfterFirstSend <- cost.get
+        phlosAfterFirstSend <- cost.inspect(identity)
         _                   = phlosAfterFirstSend shouldBe (phlosAfterConsume - firstProdCost)
         //FIXME(mateusz.gorski): This should be expected cost but rspace is doing match on join even if only one of the channels has data
         //_                 = phlosAfterFirstSend shouldBe (phlosAfterConsume - firstProdCost + RSPACE_MATCH_COST)
         _         <- chargingRSpace.produce(channels(1), data, false)
-        phlosLeft <- cost.get
+        phlosLeft <- cost.inspect(identity)
         _         = phlosLeft.value shouldBe (minimumPhlos - matchCost).value
       } yield ()
 
@@ -237,7 +237,7 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
       _         <- cost.set(initPhlos)
       _         <- chargingRSpace.produce(x, dataX, persist = true)
       _         <- chargingRSpace.produce(y, dataY, persist = false)
-      _         <- cost.set(initPhlos)
+      _         <- cost.modify(_ => initPhlos)
       _         <- chargingRSpace.consume(List(x, y), patterns, cont, false)
       phlosLeft <- cost.get
       _         = phlosLeft.value shouldBe (initPhlos + produceYCost - matchCost).value
@@ -266,7 +266,7 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     val test = for {
       _         <- cost.set(initPhlos)
       _         <- chargingRSpace.consume(List(x), patterns, cont, false)
-      _         <- cost.set(initPhlos)
+      _         <- cost.modify(_ => initPhlos)
       _         <- chargingRSpace.produce(x, data, persist = false)
       phlosLeft <- cost.get
       _         = phlosLeft.value shouldBe (initPhlos + consumeCost - matchCost).value
@@ -295,7 +295,7 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     val test = for {
       _         <- cost.set(initPhlos)
       _         <- chargingRSpace.produce(x, data, persist = false)
-      _         <- cost.set(initPhlos)
+      _         <- cost.modify(_ => initPhlos)
       _         <- chargingRSpace.consume(List(x), patterns, cont, false)
       phlosLeft <- cost.get
       _         = phlosLeft.value shouldBe (initPhlos + produceCost - matchCost).value
@@ -330,7 +330,7 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
       _         <- chargingRSpace.produce(x, dataX, false)
       _         <- chargingRSpace.produce(y, dataY, false)
       _         <- chargingRSpace.consume(List(x, y, z), patterns, cont, false)
-      _         <- cost.set(initPhlos)
+      _         <- cost.modify(_ => initPhlos)
       _         <- chargingRSpace.produce(z, dataZ, false)
       phlosLeft <- cost.get
       _         = phlosLeft.value shouldBe (initPhlos + produceXCost + produceYCost + consumeCost - matchCost).value
@@ -359,19 +359,19 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
       .runSyncUnsafe(10.seconds)
   }
 
-  private def actualMatchCost(patterns: Seq[BindPattern], data: Seq[ListParWithRandom])(
-      implicit
-      _cost: _cost[Task] =
-        loggingCost(CostAccounting.of[Task](Cost(1000)).runSyncUnsafe(1.second), noOpCostLog)
+  private def actualMatchCost(
+      patterns: Seq[BindPattern],
+      data: Seq[ListParWithRandom]
   ): Task[Cost] = {
     import cats.implicits._
-
+    implicit val _cost: _cost[Task] =
+      loggingCost(CostAccounting.of[Task](Cost(1000)).runSyncUnsafe(1.second), noOpCostLog)
     for {
-      initPhlos <- _cost.get
+      initPhlos <- _cost.inspect(identity)
       _ <- patterns.zip(data).toList.traverse {
             case (pattern, pars) => matchListPar[Task].get(pattern, pars)
           }
-      phlosLeft <- _cost.get
+      phlosLeft <- _cost.inspect(identity)
     } yield initPhlos - phlosLeft
   }
 }

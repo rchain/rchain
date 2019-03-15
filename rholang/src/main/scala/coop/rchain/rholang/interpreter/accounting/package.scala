@@ -33,9 +33,23 @@ package object accounting extends Costs {
       amount: Cost
   )(implicit cost: _cost[F], error: _error[F]): F[Unit] =
     for {
-      _ <- cost.tell(Chain.one(amount))
-      _ <- cost.modify(_ - amount)
-      _ <- error.ensure(cost.get)(OutOfPhlogistonsError)(_.value >= 0)
+      c <- cost.get
+      _ <- Monad[F].ifM[Unit]((c.value < 0).pure[F])(
+            ifTrue = {
+              for {
+                _ <- cost.set(c)
+                _ <- error.raise[Unit](OutOfPhlogistonsError)
+              } yield (())
+            },
+            ifFalse = {
+              for {
+                _        <- cost.tell(Chain.one(amount))
+                newValue = c - amount
+                _        <- cost.set(newValue)
+                _        <- error.ensure((newValue).pure[F])(OutOfPhlogistonsError)(_.value >= 0)
+              } yield (())
+            }
+          )
     } yield ()
 
   def noOpCostLog[M[_]: Applicative]: FunctorTell[M, Chain[Cost]] =

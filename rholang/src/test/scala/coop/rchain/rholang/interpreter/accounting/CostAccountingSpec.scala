@@ -6,7 +6,6 @@ import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.accounting.utils._
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared.StoreType
@@ -38,7 +37,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
     (for {
-      costAlg <- CostAccounting.of[Task](Cost(initialPhlo))
+      costAlg <- CostAccounting.empty[Task]
       costL   <- costLog[Task]
       cost    = loggingCost(costAlg, costL)
       costsLoggingProgram <- {
@@ -57,7 +56,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
       (result, costLog) = costsLoggingProgram
       res               <- errorLog.readAndClearErrorVector
       _                 <- Task.now(res should be(Vector.empty))
-    } yield ((result, costLog))).unsafeRunSync
+    } yield ((result, costLog))).runSyncUnsafe(25.seconds)
   }
 
   val contracts = Table(
@@ -117,29 +116,32 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
     costLog.toList should contain theSameElementsAs (expectedCosts)
   }
 
-  it should "stop the evaluation of all execution branches when one of them runs out of phlo" ignore {
-    val contract                             = "@1!(1) | @2!(2) | @3!(3)"
-    val initialPhlo                          = 5L + parsingCost(contract).value
-    val expectedCosts                        = List(Cost(4, "substitution"), Cost(4, "substitution"))
+  it should "stop the evaluation of all execution branches when one of them runs out of phlo" in {
+    val contract    = "@1!(1) | @2!(2) | @3!(3)"
+    val initialPhlo = 5L + parsingCost(contract).value
+    val expectedCosts =
+      List(parsingCost(contract), Cost(4, "substitution"), Cost(4, "substitution"))
     val (EvaluateResult(_, errors), costLog) = evaluateWithCostLog(initialPhlo, contract)
     errors shouldBe (List(OutOfPhlogistonsError))
     costLog.toList should contain theSameElementsAs (expectedCosts)
   }
 
-  it should "stop the evaluation of all execution branches when one of them runs out of phlo with a more sophisiticated contract" ignore forAll(
+  it should "stop the evaluation of all execution branches when one of them runs out of phlo with a more sophisiticated contract" in forAll(
     contracts
   ) { (contract: String, expectedTotalCost: Long) =>
     check(forAllNoShrink(Gen.choose(1L, expectedTotalCost - 1)) { initialPhlo =>
       val (EvaluateResult(_, errors), costLog) =
-        evaluateWithCostLog(initialPhlo + parsingCost(contract).value, contract)
+        evaluateWithCostLog(initialPhlo, contract)
       errors shouldBe (List(OutOfPhlogistonsError))
       val costs = costLog.map(_.value).toList
       // The sum of all costs but last needs to be <= initialPhlo, otherwise
       // the last cost should have not been logged
       costs.init.sum.toLong should be <= (initialPhlo)
+
       // The sum of ALL costs needs to be > initialPhlo, otherwise an error
       // should not have been reported
       costs.sum.toLong > (initialPhlo)
     })
   }
+
 }

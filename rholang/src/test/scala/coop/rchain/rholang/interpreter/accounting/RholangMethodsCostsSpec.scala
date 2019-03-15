@@ -786,7 +786,7 @@ class RholangMethodsCostsSpec
   def withReducer[R](f: ChargingReducer[Task] => Task[R])(implicit errLog: ErrorLog[Task]): R = {
 
     val test = for {
-      costAlg <- CostAccounting.of[Task](Cost(0))
+      costAlg <- CostAccounting.empty[Task]
       reducer = {
         implicit val cost: _cost[Task] = loggingCost(costAlg, noOpCostLog[Task])
         RholangOnlyDispatcher.create[Task, Task.Par](space)._2
