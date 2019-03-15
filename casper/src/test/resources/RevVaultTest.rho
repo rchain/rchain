@@ -29,6 +29,7 @@ match (
       testCreateAliceVaultUnlocked,
       testTransfer,
       testFindOrCreate,
+      testInsufficeintFunds,
       withVaultUnlocked,
       transfer,
       assertBalances
@@ -43,6 +44,7 @@ match (
             ("Create Alice vault, unlock it and check balance", *testCreateAliceVaultUnlocked),
             ("Transfer from genesis to Alice", *testTransfer),
             ("Return the existing wallet when calling testFindOrCreate", *testFindOrCreate),
+            ("Fail the transfer if there are insufficient funds", *testInsufficeintFunds),
           ])
       } |
 
@@ -127,6 +129,16 @@ match (
           for (@("Right", g) <- genesisVaultCh; @a <- aliceVaultCh) {
             now!(Nil) |
             assertBalances!(*now, [(g, 8000), (a, 1000)], *rhoSpec, *ackCh)
+          }
+        }
+      } |
+
+      contract testInsufficeintFunds(rhoSpec, RevVault, ackCh) = {
+        new aliceVaultCh, res in {
+          withVaultUnlocked!(alicePubKey, *aliceVaultCh) |
+          for (aliceVault <- aliceVaultCh) {
+              aliceVault!("transfer", bobRevAddress, 9000, *res) |
+              rhoSpec!("assert", (("Left", "Insufficient funds"), "== <-", *res), "transfer failed", *ackCh)
           }
         }
       } |
