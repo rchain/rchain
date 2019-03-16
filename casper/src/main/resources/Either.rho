@@ -41,8 +41,57 @@ new Either, rs(`rho:registry:insertSigned:ed25519`), uriOut, rl(`rho:registry:lo
     // Lifts a Boolean into Either, making `false` into Left and using Right otherwise.
     contract Either(@"fromBoolean", @success, @failureMessage, return) = {
       match success {
-        Nil => return!(("Left", failureMessage))
-        _   => return!(("Right", Nil))
+        false => return!(("Left", failureMessage))
+        true  => return!(("Right", Nil))
+      }
+    } |
+
+    // Like fromSingletonList, except it takes `listCh` and reads it to obtain the `list` parameter
+    contract Either(@"fromSingletonList <-", listCh, @failureMessage, return) = {
+      for (@list <- listCh) {
+        Either!("fromSingletonList", list, failureMessage, *return)
+      }
+    } |
+
+    // Converts a singleton list into Either, making the single element into Right
+    // and using Left if it's not a singleton list.
+    contract Either(@"fromSingletonList", @list, @failureMessage, return) = {
+      match list {
+        []      => return!(("Left", failureMessage))
+        [value] => return!(("Right", value))
+        _       => return!(("Left", "Invalid argument, expected a list of at most 1 element"))
+      }
+    } |
+
+    // Like fromNillableError, except it takes `errorCh` and reads it to obtain the `error` parameter
+    contract Either(@"fromNillableError <-", errorCh, return) = {
+      for (@error <- errorCh) {
+        Either!("fromNillableError", error, *return)
+      }
+    } |
+
+    // Lifts an error into Either, putting Nil-s into Right and using Left otherwise.
+    contract Either(@"fromNillableError", @error, return) = {
+      match error {
+        Nil => return!(("Right", Nil))
+        _   => return!(("Left", error))
+      }
+    } |
+
+    // Like productR, except it takes `aCh` and `bCh` and reads them to obtain the `a` and `b` parameters
+    contract Either(@"productR <-", aCh, bCh, return) = {
+      for (@a <- aCh; @b <- bCh) {
+        Either!("productR", a, b, *return)
+      }
+    } |
+
+    // Combines two eithers, discarding the first value and keeping the second
+    contract Either(@"productR", @a, @b, return) = {
+      new snd in {
+        Either!("map2", a, b, *snd, *return) |
+        for (@a, @b, ret <- snd) {
+          ret!(b)
+        }
       }
     } |
 
@@ -69,6 +118,13 @@ new Either, rs(`rho:registry:insertSigned:ed25519`), uriOut, rl(`rho:registry:lo
       }
     } |
 
+    // Like flatMap, except it takes `eitherCh` and reads it to obtain the `either` parameter
+    contract Either(@"flatMap <-", eitherCh, f, return) = {
+      for (@either <- eitherCh) {
+        Either!("flatMap", either, *f, *return)
+      }
+    } |
+
     // Right-biased flatMap; f must also return an Either
     contract Either(@"flatMap", @either, f, return) = {
       match either {
@@ -77,7 +133,7 @@ new Either, rs(`rho:registry:insertSigned:ed25519`), uriOut, rl(`rho:registry:lo
       }
     } |
 
-    // Like map, except it takes `eitherCh` and reads them to obtain the `either` parameter
+    // Like map, except it takes `eitherCh` and reads it to obtain the `either` parameter
     contract Either(@"map <-", eitherCh, f, return) = {
       for (@either <- eitherCh) {
         Either!("map", either, *f, *return)
