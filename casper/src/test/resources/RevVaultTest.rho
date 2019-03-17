@@ -30,6 +30,7 @@ match (
       testTransfer,
       testFindOrCreate,
       testInsufficeintFunds,
+      testInvalidRevAddress,
       withVaultUnlocked,
       transfer,
       assertBalances
@@ -45,6 +46,7 @@ match (
             ("Transfer from genesis to Alice", *testTransfer),
             ("Return the existing wallet when calling testFindOrCreate", *testFindOrCreate),
             ("Fail the transfer if there are insufficient funds", *testInsufficeintFunds),
+            ("Fail the transfer if the destination addresss is not a valid RevAddress", *testInvalidRevAddress),
           ])
       } |
 
@@ -140,6 +142,17 @@ match (
           for (aliceVault <- aliceVaultCh) {
               aliceVault!("transfer", bobRevAddress, 9000, *res) |
               rhoSpec!("assert", (("Left", "Insufficient funds"), "== <-", *res), "transfer failed", *ackCh)
+          }
+        }
+      } |
+
+      contract testInvalidRevAddress(rhoSpec, RevVault, ackCh) = {
+        stdout!("testInvalidRevAddress") |
+        new aliceVaultCh, res in {
+          withVaultUnlocked!(alicePubKey, *aliceVaultCh) |
+          for (aliceVault <- aliceVaultCh) {
+            aliceVault!("transfer", "pretty surely invalid rev address", 1, *res) |
+            rhoSpec!("assert", (("Left", "Invalid Base58 encoding"), "== <-", *res), "transfer failed", *ackCh)
           }
         }
       } |
