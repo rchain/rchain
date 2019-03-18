@@ -56,7 +56,6 @@ object GrpcTransport {
       .flatMap(
         tlr =>
           tlr.payload match {
-            case p if p.isProtocol   => Right(Some(tlr.getProtocol))
             case p if p.isNoResponse => Right(None)
             case TLResponse.Payload.InternalServerError(ise) =>
               Left(internalCommunicationError("Got response: " + ise.error.toStringUtf8))
