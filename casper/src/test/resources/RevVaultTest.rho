@@ -29,6 +29,7 @@ match (
       testCreateAliceVaultUnlocked,
       testTransfer,
       testFindOrCreate,
+      testTransferToSelf,
       testAmountNegative,
       testInsufficeintFunds,
       testInvalidRevAddress,
@@ -46,6 +47,7 @@ match (
             ("Create Alice vault, unlock it and check balance", *testCreateAliceVaultUnlocked),
             ("Transfer from genesis to Alice", *testTransfer),
             ("Return the existing wallet when calling testFindOrCreate", *testFindOrCreate),
+            ("Transfer to own account successfully", *testTransferToSelf),
             ("Fail the tranfer if the amount to transfer is negative", *testAmountNegative),
             ("Fail the transfer if there are insufficient funds", *testInsufficeintFunds),
             ("Fail the transfer if the destination addresss is not a valid RevAddress", *testInvalidRevAddress),
@@ -134,6 +136,19 @@ match (
           for (@("Right", g) <- genesisVaultCh; @a <- aliceVaultCh) {
             now!(Nil) |
             assertBalances!(*now, [(g, 8000), (a, 1000)], *rhoSpec, *ackCh)
+          }
+        }
+      } |
+
+      contract testTransferToSelf(rhoSpec, RevVault, ackCh) = {
+        new aliceVaultCh, now, balanceOk, transferResult, transferOk in {
+          withVaultUnlocked!(alicePubKey, *aliceVaultCh) |
+          for (@aliceVault <- aliceVaultCh) {
+            now!(Nil) |
+            assertBalances!(*now, [(aliceVault, 1000)], *rhoSpec, *balanceOk) |
+            transfer!(*balanceOk, aliceVault, aliceRevAddress, 1000, *transferResult) |
+            rhoSpec!("assert", (("Right", Nil), "== <-", *transferResult), "transfer successful", *transferOk) |
+            assertBalances!(*transferOk, [(aliceVault, 1000)], *rhoSpec, *ackCh)
           }
         }
       } |
