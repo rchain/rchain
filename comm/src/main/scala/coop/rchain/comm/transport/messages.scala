@@ -7,7 +7,7 @@ import monix.execution.Callback
 import coop.rchain.comm.PeerNode
 
 trait ServerMessage
-final case class Tell(msg: Protocol) extends ServerMessage
+final case class Send(msg: Protocol) extends ServerMessage
 final case class StreamMessage(
     sender: PeerNode,
     typeId: String,

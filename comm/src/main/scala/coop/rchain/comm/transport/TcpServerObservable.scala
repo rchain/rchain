@@ -44,7 +44,7 @@ class TcpServerObservable(
       def send(request: TLRequest): Task[TLResponse] =
         request.protocol
           .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>
-            Task.delay(bufferTell.pushNext(Tell(protocol))).map {
+            Task.delay(bufferTell.pushNext(Send(protocol))).map {
               case false => internalServerError("message dropped")
               case true  => noResponse
             }
