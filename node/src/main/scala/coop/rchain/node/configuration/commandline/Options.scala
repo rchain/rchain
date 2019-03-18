@@ -4,7 +4,9 @@ import java.nio.file.Path
 
 import coop.rchain.casper.util.comm.ListenAtName.{Name, PrivName, PubName}
 import coop.rchain.comm.PeerNode
+import coop.rchain.crypto.PublicKey
 import coop.rchain.node.BuildInfo
+import coop.rchain.rholang.interpreter.util.codec.Base58
 import coop.rchain.shared.StoreType
 import org.rogach.scallop._
 
@@ -381,7 +383,13 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "This allows you to overwrite your own pending transactions that use the same nonce."
     )
 
+    val userId = opt[PublicKey](
+      descr = "The deployer's ed25519 public key encoded as Base16",
+      required = false
+    )(Ed25519PubKeyConverter)
+
     val location = trailArg[String](required = true)
+
   }
   addSubcommand(deploy)
 

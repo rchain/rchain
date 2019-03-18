@@ -4,12 +4,10 @@ import scala.concurrent.duration._
 import scala.io.Source
 import scala.language.higherKinds
 import scala.util._
-
 import cats.{Functor, Id, Monad}
 import cats.data.EitherT
 import cats.effect.Sync
 import cats.implicits._
-
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.ListenAtName._
@@ -19,6 +17,8 @@ import coop.rchain.catscontrib.ski._
 import coop.rchain.models.Par
 import coop.rchain.shared.Time
 import cats.syntax.either._
+import com.google.protobuf.ByteString
+import coop.rchain.crypto.PublicKey
 import coop.rchain.shared.ThrowableOps._
 
 object DeployRuntime {
@@ -68,14 +68,20 @@ object DeployRuntime {
       phloLimit: Long,
       phloPrice: Long,
       nonce: Int,
-      file: String,
-      validAfterBlock: Int
+      validAfterBlock: Int,
+      maybeUserId: Option[PublicKey],
+      file: String
   ): F[Unit] =
     gracefulExit(
       Sync[F].delay(Try(Source.fromFile(file).mkString).toEither).flatMap {
         case Left(ex) =>
           Sync[F].delay(Left(Seq(s"Error with given file: \n${ex.getMessage}")))
         case Right(code) =>
+          val userId =
+            maybeUserId
+              .map(uid => ByteString.copyFrom(uid.bytes))
+              .getOrElse(ByteString.EMPTY)
+
           for {
             timestamp <- Sync[F].delay(System.currentTimeMillis())
             //TODO: allow user to specify their public key
@@ -85,6 +91,7 @@ object DeployRuntime {
               .withFrom(purseAddress)
               .withPhloLimit(phloLimit)
               .withPhloPrice(phloPrice)
+              .withUser(userId)
               .withNonce(nonce)
               .withValidAfterBlockNumber(validAfterBlock)
             response <- DeployService[F].deploy(d)

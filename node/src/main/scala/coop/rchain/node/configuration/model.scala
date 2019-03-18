@@ -3,9 +3,9 @@ package coop.rchain.node.configuration
 import java.nio.file.Path
 
 import scala.concurrent.duration.FiniteDuration
-
 import coop.rchain.casper.util.comm.ListenAtName.Name
 import coop.rchain.comm.PeerNode
+import coop.rchain.crypto.PublicKey
 import coop.rchain.shared.StoreType
 
 final case class Server(
@@ -59,8 +59,9 @@ final case class Deploy(
     phloLimit: Long,
     phloPrice: Long,
     nonce: Int,
-    location: String,
-    validAfterBlock: Int
+    validAfterBlock: Int,
+    userId: Option[PublicKey],
+    location: String
 ) extends Command
 final case object DeployDemo                                               extends Command
 final case object Propose                                                  extends Command
