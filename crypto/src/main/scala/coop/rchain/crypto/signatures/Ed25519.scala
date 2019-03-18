@@ -4,6 +4,8 @@ import org.abstractj.kalium.keys._
 
 object Ed25519 {
 
+  val publicKeyLength = 32
+
   //TODO: Make use of strongly typed keys
   def newKeyPair: (Array[Byte], Array[Byte]) = {
     val key = new SigningKey()

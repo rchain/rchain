@@ -4,13 +4,14 @@ import java.nio.file.{Path, Paths}
 
 import collection.JavaConverters._
 import scala.util.Try
-
 import coop.rchain.blockstorage.{BlockDagFileStorage, FileLMDBIndexBlockStore}
 import coop.rchain.casper.CasperConf
 import coop.rchain.node.configuration.commandline.ConfigMapper
-
 import com.typesafe.config._
+import coop.rchain.crypto.PublicKey
+import coop.rchain.rholang.interpreter.util.codec.Base58
 import monix.eval.Task
+import org.rogach.scallop.ScallopOption
 
 object Configuration {
 
@@ -190,8 +191,9 @@ object Configuration {
           phloLimit(),
           phloPrice(),
           nonce.getOrElse(0),
-          location(),
-          validAfterBlockNumber.getOrElse(-1)
+          validAfterBlockNumber.getOrElse(-1),
+          userId.toOption,
+          location()
         )
       case Some(options.deployDemo) => DeployDemo
       case Some(options.propose)    => Propose
