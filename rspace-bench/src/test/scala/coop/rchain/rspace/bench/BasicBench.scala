@@ -11,7 +11,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
@@ -50,13 +50,13 @@ class BasicBench {
         )(state.matcher)
         .unsafeRunSync
 
-      assert(c1.right.get.isEmpty)
+      assert(c1.isEmpty)
       bh.consume(c1)
 
       val r2 =
         space.produce(state.channels(i), state.data(i), false)(state.matcher).unsafeRunSync
 
-      assert(r2.right.get.nonEmpty)
+      assert(r2.nonEmpty)
       bh.consume(r2)
       if (state.debug) {
         assert(space.store.isEmpty)
@@ -75,7 +75,7 @@ class BasicBench {
       val r2 =
         space.produce(state.channels(i), state.data(i), false)(state.matcher).unsafeRunSync
 
-      assert(r2.right.get.isEmpty)
+      assert(r2.isEmpty)
       bh.consume(r2)
 
       val c1 = space
@@ -87,7 +87,7 @@ class BasicBench {
         )(state.matcher)
         .unsafeRunSync
 
-      assert(c1.right.get.nonEmpty)
+      assert(c1.nonEmpty)
       bh.consume(c1)
       if (state.debug) {
         assert(space.store.isEmpty)
@@ -127,9 +127,8 @@ object BasicBench {
       Task,
       Par,
       BindPattern,
-      InterpreterError,
       ListParWithRandom,
-      ListParWithRandomAndPhlos,
+      ListParWithRandom,
       TaggedContinuation
     ] =
       RSpace
@@ -137,9 +136,8 @@ object BasicBench {
           Task,
           Par,
           BindPattern,
-          InterpreterError,
           ListParWithRandom,
-          ListParWithRandomAndPhlos,
+          ListParWithRandom,
           TaggedContinuation
         ](
           testStore,
@@ -147,7 +145,12 @@ object BasicBench {
         )
         .unsafeRunSync
 
-    implicit val matcher = matchListPar(Cost(10000000L))
+    implicit val cost: _cost[Task] = loggingCost(
+      CostAccounting.of[Task](Cost.UNSAFE_MAX).unsafeRunSync,
+      noOpCostLog
+    )
+
+    implicit val matcher = matchListPar
 
     val initSeed = 123456789L
 

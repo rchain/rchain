@@ -22,7 +22,7 @@ import scala.concurrent.duration._
 trait RegistryTester extends PersistentStoreTester {
   implicit val errorLog = new ErrorLog[Task]()
   implicit val costAccounting =
-    CostAccounting.unsafe[Task](Cost(Integer.MAX_VALUE))
+    CostAccounting.of[Task](Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
   implicit val cost: _cost[Task] = loggingCost(costAccounting, noOpCostLog[Task])
 
   private[this] def dispatchTableCreator(registry: Registry[Task]): RhoDispatchMap[Task] = {
@@ -50,9 +50,8 @@ trait RegistryTester extends PersistentStoreTester {
             Task,
             Par,
             BindPattern,
-            InterpreterError,
             ListParWithRandom,
-            ListParWithRandomAndPhlos,
+            ListParWithRandom,
             TaggedContinuation
           ]
       ) => R
@@ -64,7 +63,7 @@ trait RegistryTester extends PersistentStoreTester {
         lazy val (dispatcher @ _, reducer, registry) =
           RholangAndScalaDispatcher
             .create(space, dispatchTable, Registry.testingUrnMap)
-        reducer.setPhlo(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
+        reducer.setPhlo(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
         registry.testInstall().runSyncUnsafe(1.second)
         f(reducer, space)
     }

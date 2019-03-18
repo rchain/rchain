@@ -2,27 +2,25 @@ package coop.rchain.rspace
 
 import java.nio.ByteBuffer
 
-import scala.collection.immutable.Seq
-import scala.concurrent.ExecutionContext
-import scala.util.Random
 import cats.effect.{Concurrent, ContextShift}
 import cats.implicits._
-import coop.rchain.shared.Log
+import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
+import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.Metrics.Source
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace._
+import coop.rchain.shared.Log
 import coop.rchain.shared.SyncVarOps._
-import com.typesafe.scalalogging.Logger
-import coop.rchain.metrics.Metrics
 import org.lmdbjava.Txn
 import scodec.Codec
 
-object A {
-  def main(args: Array[String]): Unit = {}
-}
+import scala.collection.immutable.Seq
+import scala.concurrent.ExecutionContext
+import scala.util.Random
 
-class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
+class RSpace[F[_], C, P, A, R, K] private[rspace] (
     store: IStore[F, C, P, A, K],
     branch: Branch
 )(
@@ -36,16 +34,16 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
     contextShift: ContextShift[F],
     scheduler: ExecutionContext,
     metricsF: Metrics[F]
-) extends RSpaceOps[F, C, P, E, A, R, K](store, branch)
-    with ISpace[F, C, P, E, A, R, K] {
+) extends RSpaceOps[F, C, P, A, R, K](store, branch)
+    with ISpace[F, C, P, A, R, K] {
 
   override protected[this] val logger: Logger = Logger[this.type]
 
-  private[this] implicit val MetricsSource = RSpaceMetricsSource
-  private[this] val consumeCommLabel       = "comm.consume"
-  private[this] val produceCommLabel       = "comm.produce"
-  private[this] val consumeSpanLabel       = Metrics.Source(MetricsSource, "consume")
-  private[this] val produceSpanLabel       = Metrics.Source(MetricsSource, "produce")
+  private[this] implicit val MetricsSource: Source = RSpaceMetricsSource
+  private[this] val consumeCommLabel               = "comm.consume"
+  private[this] val produceCommLabel               = "comm.produce"
+  private[this] val consumeSpanLabel               = Metrics.Source(MetricsSource, "consume")
+  private[this] val produceSpanLabel               = Metrics.Source(MetricsSource, "produce")
 
   /*
    * Here, we create a cache of the data at each channel as `channelToIndexedData`
@@ -55,7 +53,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
    * Put another way, this allows us to speculatively remove matching data without
    * affecting the actual store contents.
    */
-  private[this] def fetchChannelToIndexData(channels: Seq[C]) =
+  private[this] def fetchChannelToIndexData(channels: Seq[C]): F[Map[C, Seq[(Datum[A], Int)]]] =
     store.withReadTxnF { txn =>
       channels.map { c: C =>
         c -> Random.shuffle(
@@ -70,7 +68,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
       continuation: K,
       persist: Boolean,
       consumeRef: Consume
-  ): F[Either[E, MaybeDataCandidate]] =
+  ): F[MaybeActionResult] =
     for {
       _ <- store.withWriteTxnF { txn =>
             store.putWaitingContinuation(
@@ -89,9 +87,9 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
       _ <- logF.debug(s"""|consume: no data found,
                           |storing <(patterns, continuation): ($patterns, $continuation)>
                           |at <channels: $channels>""".stripMargin.replace('\n', ' '))
-    } yield None.asRight[E]
+    } yield None
 
-  private[this] def storePersistentData(dataCandidates: Seq[DataCandidate[C, R]]) =
+  private[this] def storePersistentData(dataCandidates: Seq[DataCandidate[C, R]]): F[List[Unit]] =
     dataCandidates.toList
       .sortBy(_.datumIndex)(Ordering[Int].reverse)
       .traverse {
@@ -118,27 +116,23 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
       persist: Boolean,
       consumeRef: Consume,
       dataCandidates: Seq[DataCandidate[C, R]]
-  ) = {
+  ): MaybeActionResult = {
     val contSequenceNumber: Int =
       nextSequenceNumber(consumeRef, dataCandidates)
-    Right(
-      Some(
-        (
-          ContResult(
-            continuation,
-            persist,
-            channels,
-            patterns,
-            contSequenceNumber
-          ),
-          dataCandidates
-            .map(dc => Result(dc.datum.a, dc.datum.persist))
-        )
+    Some(
+      (
+        ContResult(
+          continuation,
+          persist,
+          channels,
+          patterns,
+          contSequenceNumber
+        ),
+        dataCandidates
+          .map(dc => Result(dc.datum.a, dc.datum.persist))
       )
     )
   }
-
-  type MaybeDataCandidate = Option[(ContResult[C, P, K], Seq[Result[R]])]
 
   override def consume(
       channels: Seq[C],
@@ -148,10 +142,15 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
       sequenceNumber: Int
   )(
       implicit m: Match[F, P, A, R]
-  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] = {
-    def storeWC(consumeRef: Consume) =
+  ): F[MaybeActionResult] = {
+
+    def storeWC(consumeRef: Consume): F[MaybeActionResult] =
       storeWaitingContinuation(channels, patterns, continuation, persist, consumeRef)
-    def wrapResult(consumeRef: Consume, dataCandidates: Seq[DataCandidate[C, R]]) =
+
+    def wrapResult(
+        consumeRef: Consume,
+        dataCandidates: Seq[DataCandidate[C, R]]
+    ): MaybeActionResult =
       createContinuationResult(
         channels,
         patterns,
@@ -225,7 +224,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
   private[this] def nextSequenceNumber(
       consumeRef: Consume,
       dataCandidates: Seq[DataCandidate[C, R]]
-  ) =
+  ): Int =
     Math.max(
       consumeRef.sequenceNumber,
       dataCandidates.map {
@@ -237,19 +236,22 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
    * Find produce candidate
    */
 
+  type MaybeProduceCandidate = Option[ProduceCandidate[C, P, R, K]]
+
+  type CandidateChannels = Seq[C]
+
   private[this] def extractProduceCandidate(
-      groupedChannels: Seq[Seq[C]],
+      groupedChannels: Seq[CandidateChannels],
       batChannel: C,
       data: Datum[A]
-  )(implicit m: Match[F, P, A, R]): F[Either[E, Option[ProduceCandidate[C, P, R, K]]]] = {
-    type MaybeProduceCandidate = Option[ProduceCandidate[C, P, R, K]]
-    type CandidateChannels     = Seq[C]
+  )(implicit m: Match[F, P, A, R]): F[MaybeProduceCandidate] = {
+
     def go(
         acc: Seq[CandidateChannels]
-    ): F[Either[Seq[CandidateChannels], Either[E, Option[ProduceCandidate[C, P, R, K]]]]] =
+    ): F[Either[Seq[CandidateChannels], MaybeProduceCandidate]] =
       acc match {
         case Nil =>
-          none[ProduceCandidate[C, P, R, K]].asRight[E].asRight[Seq[CandidateChannels]].pure[F]
+          none[ProduceCandidate[C, P, R, K]].asRight[Seq[CandidateChannels]].pure[F]
         case channels :: remaining =>
           for {
             matchCandidates <- store.withReadTxnF { txn =>
@@ -294,9 +296,8 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
                          )
           } yield
             firstMatch match {
-              case None => remaining.asLeft[Either[E, MaybeProduceCandidate]]
-              case produceCandidate =>
-                produceCandidate.asRight[E].asRight[Seq[CandidateChannels]]
+              case None             => remaining.asLeft[MaybeProduceCandidate]
+              case produceCandidate => produceCandidate.asRight[Seq[CandidateChannels]]
             }
       }
     groupedChannels.tailRecM(go)
@@ -304,7 +305,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
 
   private[this] def processMatchFound(
       pc: ProduceCandidate[C, P, R, K]
-  ): F[Either[E, Some[(ContResult[C, P, K], Seq[Result[R]])]]] =
+  ): F[MaybeActionResult] =
     pc match {
       case ProduceCandidate(
           channels,
@@ -317,7 +318,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
           continuationIndex,
           dataCandidates
           ) =>
-        def registerCOMM =
+        def registerCOMM: F[Unit] =
           syncF.delay {
             eventLog
               .update(
@@ -325,7 +326,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
               )
           }
 
-        def maybePersistWaitingContinuation =
+        def maybePersistWaitingContinuation: F[Unit] =
           if (!persistK) {
             store.withWriteTxnF { txn =>
               store.removeWaitingContinuation(
@@ -336,7 +337,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
             }
           } else ().pure[F]
 
-        def removeMatchedDatumAndJoin =
+        def removeMatchedDatumAndJoin: F[Seq[Unit]] =
           dataCandidates
             .sortBy(_.datumIndex)(Ordering[Int].reverse)
             .traverse {
@@ -357,7 +358,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
                 }
             }
 
-        def constructResult = {
+        def constructResult: MaybeActionResult = {
           val contSequenceNumber = nextSequenceNumber(consumeRef, dataCandidates)
           Some(
             (
@@ -370,7 +371,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
               ),
               dataCandidates.map(dc => Result(dc.datum.a, dc.datum.persist))
             )
-          ).asRight[E]
+          )
         }
 
         for {
@@ -384,7 +385,12 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
         } yield constructResult
     }
 
-  private[this] def storeData(channel: C, data: A, persist: Boolean, produceRef: Produce) =
+  private[this] def storeData(
+      channel: C,
+      data: A,
+      persist: Boolean,
+      produceRef: Produce
+  ): F[MaybeActionResult] =
     for {
       _ <- logF.debug(s"produce: no matching continuation found")
       _ <- store
@@ -392,11 +398,11 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
               store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
             }
       _ <- logF.debug(s"produce: persisted <data: $data> at <channel: $channel>")
-    } yield Right(None)
+    } yield None
 
   override def produce(channel: C, data: A, persist: Boolean, sequenceNumber: Int)(
       implicit m: Match[F, P, A, R]
-  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
+  ): F[MaybeActionResult] =
     contextShift.evalOn(scheduler) {
       for {
         span       <- metricsF.span(produceSpanLabel)
@@ -425,9 +431,8 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
                                  )
                      _ <- span.mark("extract-produce-candidate")
                      r <- extracted match {
-                           case Left(e)         => Left(e).pure[F]
-                           case Right(Some(pc)) => processMatchFound(pc)
-                           case Right(None) =>
+                           case Some(pc) => processMatchFound(pc)
+                           case None =>
                              storeData(channel, data, persist, produceRef)
                          }
                      _ <- span.mark("process-matching")
@@ -449,7 +454,7 @@ class RSpace[F[_], C, P, E, A, R, K] private[rspace] (
 
 object RSpace {
 
-  def create[F[_], C, P, E, A, R, K](context: Context[F, C, P, A, K], branch: Branch)(
+  def create[F[_], C, P, A, R, K](context: Context[F, C, P, A, K], branch: Branch)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -460,7 +465,7 @@ object RSpace {
       contextShift: ContextShift[F],
       scheduler: ExecutionContext,
       metricsF: Metrics[F]
-  ): F[ISpace[F, C, P, E, A, R, K]] = {
+  ): F[ISpace[F, C, P, A, R, K]] = {
     type InMemTXN    = InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]]
     type ByteBuffTXN = Txn[ByteBuffer]
 
@@ -479,7 +484,7 @@ object RSpace {
     }
   }
 
-  def create[F[_], C, P, E, A, R, K](store: IStore[F, C, P, A, K], branch: Branch)(
+  def create[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Branch)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -490,15 +495,15 @@ object RSpace {
       contextShift: ContextShift[F],
       scheduler: ExecutionContext,
       metricsF: Metrics[F]
-  ): F[ISpace[F, C, P, E, A, R, K]] = {
+  ): F[ISpace[F, C, P, A, R, K]] = {
 
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec
     implicit val codecA: Codec[A] = sa.toCodec
     implicit val codecK: Codec[K] = sk.toCodec
 
-    val space: ISpace[F, C, P, E, A, R, K] =
-      new RSpace[F, C, P, E, A, R, K](store, branch)
+    val space: ISpace[F, C, P, A, R, K] =
+      new RSpace[F, C, P, A, R, K](store, branch)
 
     /*
      * history.initialize returns true if the history trie contains no root (i.e. is empty).

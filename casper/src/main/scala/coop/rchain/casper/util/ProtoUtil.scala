@@ -224,6 +224,14 @@ object ProtoUtil {
       ProtoUtil.unsafeGetBlock[F](parentHash)
     }
 
+  def unsafeGetParentsAboveBlockNumber[F[_]: Monad: BlockStore](
+      b: BlockMessage,
+      blockNumber: Long
+  ): F[List[BlockMessage]] =
+    ProtoUtil
+      .unsafeGetParents[F](b)
+      .map(parents => parents.filter(p => ProtoUtil.blockNumber(p) >= blockNumber))
+
   def containsDeploy(b: BlockMessage, user: ByteString, timestamp: Long): Boolean =
     deploys(b).toStream
       .flatMap(getDeployData)
@@ -258,6 +266,10 @@ object ProtoUtil {
       bd <- b.body
       ps <- bd.state
     } yield ps.blockNumber).getOrElse(0L)
+
+  def maxBlockNumber(blocks: Seq[BlockMessage]): Long = blocks.foldLeft(-1L) {
+    case (acc, b) => math.max(acc, ProtoUtil.blockNumber(b))
+  }
 
   /*
    * Block b1 conflicts with b2 if any of b1's ancestors contains a replay log entry that
@@ -319,21 +331,24 @@ object ProtoUtil {
     } yield ancestorChannels
 
   def chooseNonConflicting[F[_]: Monad: Log: BlockStore](
-      blocks: Seq[BlockMessage],
+      blockHashes: Seq[BlockHash],
       dag: BlockDagRepresentation[F]
   ): F[Seq[BlockMessage]] = {
     def nonConflicting(b: BlockMessage): BlockMessage => F[Boolean] =
       conflicts[F](_, b, dag).map(b => !b)
 
-    blocks.toList
-      .foldM(List.empty[BlockMessage]) {
-        case (acc, b) =>
-          Monad[F].ifM(acc.forallM(nonConflicting(b)))(
-            (b :: acc).pure[F],
-            acc.pure[F]
-          )
-      }
-      .map(_.reverse)
+    for {
+      blocks <- blockHashes.toList.traverse(hash => ProtoUtil.unsafeGetBlock[F](hash))
+      result <- blocks
+                 .foldM(List.empty[BlockMessage]) {
+                   case (acc, b) =>
+                     Monad[F].ifM(acc.forallM(nonConflicting(b)))(
+                       (b :: acc).pure[F],
+                       acc.pure[F]
+                     )
+                 }
+                 .map(_.reverse)
+    } yield result
   }
 
   def toJustification(

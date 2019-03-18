@@ -28,7 +28,7 @@ class MatcherMonadSpec extends FlatSpec with Matchers {
   val A: Alternative[F] = Alternative[F]
 
   implicit val cost: _cost[Task] =
-    loggingCost(CostAccounting.unsafe[Task](Cost(0)), noOpCostLog[Task])
+    loggingCost(CostAccounting.empty[Task].unsafeRunSync, noOpCostLog[Task])
   implicit val costF: _cost[F] = matcherMonadCostLog[Task]
 
   private def combineK[FF[_]: MonoidK, G[_]: Foldable, A](gfa: G[FF[A]]): FF[A] =

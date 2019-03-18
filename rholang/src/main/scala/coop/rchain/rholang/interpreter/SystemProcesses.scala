@@ -33,17 +33,17 @@ trait SystemProcesses[F[_]] {
 }
 
 object SystemProcesses {
-  type Contract[F[_]] = (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
+  type Contract[F[_]] = (Seq[ListParWithRandom], Int) => F[Unit]
 
   def apply[F[_]](
-      dispatcher: Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation],
+      dispatcher: Dispatch[F, ListParWithRandom, TaggedContinuation],
       space: RhoISpace[F]
   )(implicit F: Sync[F]): SystemProcesses[F] =
     new SystemProcesses[F] {
 
       type ContWithMetaData = ContResult[Par, BindPattern, TaggedContinuation]
 
-      type Channels = Seq[Result[ListParWithRandomAndPhlos]]
+      type Channels = Seq[Result[ListParWithRandom]]
 
       private val prettyPrinter = PrettyPrinter()
 

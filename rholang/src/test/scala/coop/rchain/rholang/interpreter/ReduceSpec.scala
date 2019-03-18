@@ -39,7 +39,7 @@ trait PersistentStoreTester {
 
   def withTestSpace[R](
       errorLog: ErrorLog[Task]
-  )(f: TestFixture => R)(implicit CA: CostAccounting[Task], C: _cost[Task]): R = {
+  )(f: TestFixture => R)(implicit C: _cost[Task]): R = {
     val dbDir                              = Files.createTempDirectory("rholang-interpreter-test-")
     val context: RhoContext[Task]          = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
     implicit val logF: Log[Task]           = new Log.NOPLog[Task]
@@ -50,15 +50,14 @@ trait PersistentStoreTester {
         Task,
         Par,
         BindPattern,
-        InterpreterError,
         ListParWithRandom,
-        ListParWithRandomAndPhlos,
+        ListParWithRandom,
         TaggedContinuation
       ](context, Branch("test")))
       .unsafeRunSync
     implicit val errLog = errorLog
     val reducer         = RholangOnlyDispatcher.create[Task, Task.Par](space)._2
-    reducer.setPhlo(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
+    reducer.setPhlo(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
     try {
       f(TestFixture(space, reducer))
     } finally {
@@ -72,8 +71,10 @@ trait PersistentStoreTester {
 class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
 
-  implicit val costAlg: CostAccounting[Task] = CostAccounting.unsafe[Task](Cost(0))
-  implicit val cost: _cost[Task]             = loggingCost(costAlg, noOpCostLog[Task])
+  implicit val cost: _cost[Task] =
+    (for {
+      costAlg <- CostAccounting.of[Task](Cost(0))
+    } yield loggingCost(costAlg, noOpCostLog[Task])).unsafeRunSync
 
   def checkData(
       result: Map[
@@ -842,7 +843,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val reducer = RholangOnlyDispatcher
           .create[Task, Task.Par](space, Map("rho:test:foo" -> byteName(42)))
           ._2
-        reducer.setPhlo(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
+        reducer.setPhlo(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
         implicit val env = Env[Par]()
         val nthTask      = reducer.eval(newProc)(env, splitRand)
         val inspectTask = for {

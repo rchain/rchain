@@ -126,7 +126,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
       Seq(
         "--grpc-host localhost",
         "--grpc-port 40401",
-        "--grpc-port-internal 40402"
+        "--grpc-port-internal 40402",
+        "--grpc-max-message-size 256"
       ).mkString(" ")
 
     val options = Options(args.split(' '))
@@ -136,7 +137,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
       configuration.GrpcServer(
         "localhost",
         40401,
-        40402
+        40402,
+        256
       )
 
     val grpc = hocon.GrpcServer.fromConfig(config)

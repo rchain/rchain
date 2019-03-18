@@ -13,6 +13,13 @@ import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper._
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.comm.CasperPacketHandler.{
+  insertIntoBlockAndDagStore,
+  ApprovedBlockReceivedHandler,
+  BootstrapCasperHandler,
+  CasperPacketHandlerImpl,
+  CasperPacketHandlerInternal
+}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.MonadTrans
@@ -27,7 +34,7 @@ import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.shared.{Log, LogSource, Time}
 import monix.eval.Task
 import monix.execution.Scheduler
-
+import coop.rchain.catscontrib.ski._
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Try
 
@@ -42,104 +49,120 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       runtimeManager: RuntimeManager[F],
       toTask: F[_] => Task[_]
   )(implicit scheduler: Scheduler): F[CasperPacketHandler[F]] =
-    if (conf.approveGenesis) {
-      for {
-        walletsFile <- Genesis.toFile[F](conf.walletsFile, conf.genesisPath.resolve("wallets.txt"))
-        wallets     <- Genesis.getWallets[F](walletsFile, conf.walletsFile)
-        timestamp   <- conf.deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
-        bondsFile   <- Genesis.toFile[F](conf.bondsFile, conf.genesisPath.resolve("bonds.txt"))
-        bonds <- Genesis
-                  .getBonds[F](bondsFile, conf.numValidators, conf.genesisPath)
-        validatorId <- ValidatorIdentity.fromConfig[F](conf)
-        bap = new BlockApproverProtocol(
-          validatorId.get,
-          timestamp,
-          bonds,
-          wallets,
-          conf.minimumBond,
-          conf.maximumBond,
-          conf.hasFaucet,
-          conf.requiredSigs
-        )
-        gv <- Ref.of[F, CasperPacketHandlerInternal[F]](
-               new GenesisValidatorHandler(
-                 runtimeManager,
-                 validatorId.get,
-                 conf.shardId,
-                 bap
-               )
-             )
-      } yield new CasperPacketHandlerImpl[F](gv)
-    } else if (conf.createGenesis) {
-      for {
-        genesis <- Genesis.fromInputFiles[F](
-                    conf.bondsFile,
-                    conf.numValidators,
-                    conf.genesisPath,
-                    conf.walletsFile,
-                    conf.minimumBond,
-                    conf.maximumBond,
-                    conf.hasFaucet,
-                    runtimeManager,
-                    conf.shardId,
-                    conf.deployTimestamp
-                  )
-        validatorId <- ValidatorIdentity.fromConfig[F](conf)
-        bondedValidators = genesis.body
-          .flatMap(_.state.map(_.bonds.map(_.validator).toSet))
-          .getOrElse(Set.empty)
-        abp <- ApproveBlockProtocol
-                .of[F](
-                  genesis,
-                  bondedValidators,
-                  conf.requiredSigs,
-                  conf.approveGenesisDuration,
-                  conf.approveGenesisInterval
-                )
-                .map(protocol => {
-                  // TODO FIX-ME my god!!! fix fix fix!
-                  val future = toTask(protocol.run()).forkAndForget.runToFuture
-                  protocol
-                })
-        standalone <- Ref.of[F, CasperPacketHandlerInternal[F]](new StandaloneCasperHandler[F](abp))
-        _ <- Sync[F].delay {
-              val _ = toTask(
-                StandaloneCasperHandler
-                  .approveBlockInterval(
-                    conf.approveGenesisInterval,
-                    conf.shardId,
-                    runtimeManager,
-                    validatorId,
-                    standalone
-                  )
-              ).forkAndForget.runToFuture
-              ().pure[F]
-            }
-      } yield new CasperPacketHandlerImpl[F](standalone)
-    } else {
-      for {
-        validators  <- CasperConf.parseValidatorsFile[F](conf.knownValidatorsFile)
-        validatorId <- ValidatorIdentity.fromConfig[F](conf)
-        bootstrap <- Ref.of[F, CasperPacketHandlerInternal[F]](
-                      new BootstrapCasperHandler(
+    BlockStore[F].getApprovedBlock.flatMap {
+      case Some(approvedBlock) =>
+        // We have an approved block so the network is already up and so no genesis ceremony needed.
+        val genesis = approvedBlock.candidate.flatMap(_.block).get
+        for {
+          validatorId <- ValidatorIdentity.fromConfig[F](conf)
+          casper <- MultiParentCasper.hashSetCasper[F](
+                     runtimeManager,
+                     validatorId,
+                     genesis,
+                     conf.shardId
+                   )
+          _                   <- MultiParentCasperRef[F].set(casper)
+          _                   <- Log[F].info("Making a transition to ApprovedBlockRecievedHandler state.")
+          abh                 = new ApprovedBlockReceivedHandler[F](casper, approvedBlock)
+          validator           <- Ref.of[F, CasperPacketHandlerInternal[F]](abh)
+          casperPacketHandler = new CasperPacketHandlerImpl[F](validator)
+        } yield casperPacketHandler
+      case None =>
+        // We don't have an approved block yet and so we need to do the genesis ceremony
+        // or at least the simplified 0 required sigs genesis ceremony.
+        if (conf.approveGenesis) {
+          for {
+            walletsFile <- Genesis
+                            .toFile[F](conf.walletsFile, conf.genesisPath.resolve("wallets.txt"))
+            wallets   <- Genesis.getWallets[F](walletsFile, conf.walletsFile)
+            timestamp <- conf.deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
+            bondsFile <- Genesis.toFile[F](conf.bondsFile, conf.genesisPath.resolve("bonds.txt"))
+            bonds <- Genesis
+                      .getBonds[F](bondsFile, conf.numValidators, conf.genesisPath)
+            validatorId <- ValidatorIdentity.fromConfig[F](conf)
+            bap = new BlockApproverProtocol(
+              validatorId.get,
+              timestamp,
+              bonds,
+              wallets,
+              conf.minimumBond,
+              conf.maximumBond,
+              conf.hasFaucet,
+              conf.requiredSigs
+            )
+            gv <- Ref.of[F, CasperPacketHandlerInternal[F]](
+                   new GenesisValidatorHandler(
+                     runtimeManager,
+                     validatorId.get,
+                     conf.shardId,
+                     bap
+                   )
+                 )
+          } yield new CasperPacketHandlerImpl[F](gv)
+        } else if (conf.createGenesis) {
+          for {
+            genesis <- Genesis.fromInputFiles[F](
+                        conf.bondsFile,
+                        conf.numValidators,
+                        conf.genesisPath,
+                        conf.walletsFile,
+                        conf.minimumBond,
+                        conf.maximumBond,
+                        conf.hasFaucet,
                         runtimeManager,
                         conf.shardId,
-                        validatorId,
-                        validators
+                        conf.deployTimestamp
                       )
+            validatorId <- ValidatorIdentity.fromConfig[F](conf)
+            bondedValidators = genesis.body
+              .flatMap(_.state.map(_.bonds.map(_.validator).toSet))
+              .getOrElse(Set.empty)
+            abp <- ApproveBlockProtocol
+                    .of[F](
+                      genesis,
+                      bondedValidators,
+                      conf.requiredSigs,
+                      conf.approveGenesisDuration,
+                      conf.approveGenesisInterval
                     )
-        casperPacketHandler = new CasperPacketHandlerImpl[F](bootstrap)
-        _ <- Sync[F].delay {
-              implicit val ph: PacketHandler[F] = PacketHandler.pf[F](casperPacketHandler.handle)
-              val rb                            = CommUtil.requestApprovedBlock[F](delay)
-              // TODO FIX-ME my god!!! fix fix fix!
-              val future = toTask(rb).forkAndForget.runToFuture
-              ().pure[F]
-            }
-      } yield casperPacketHandler
+            standalone <- Ref.of[F, CasperPacketHandlerInternal[F]](
+                           new StandaloneCasperHandler[F](abp)
+                         )
+            _ <- Sync[F].delay {
+                  val _ = toTask(
+                    StandaloneCasperHandler
+                      .approveBlockInterval(
+                        conf.approveGenesisInterval,
+                        conf.shardId,
+                        runtimeManager,
+                        validatorId,
+                        standalone
+                      )
+                  ).forkAndForget.runToFuture
+                  ().pure[F]
+                }
+          } yield new CasperPacketHandlerImpl[F](standalone)
+        } else {
+          for {
+            validators  <- CasperConf.parseValidatorsFile[F](conf.knownValidatorsFile)
+            validatorId <- ValidatorIdentity.fromConfig[F](conf)
+            bootstrap <- Ref.of[F, CasperPacketHandlerInternal[F]] {
+                          new BootstrapCasperHandler(
+                            runtimeManager,
+                            conf.shardId,
+                            validatorId,
+                            validators,
+                            CommUtil.requestApprovedBlock[F](delay)
+                          )
+                        }
+            casperPacketHandler = new CasperPacketHandlerImpl[F](bootstrap)
+          } yield casperPacketHandler
+        }
     }
 
   trait CasperPacketHandlerInternal[F[_]] {
+    def init: F[Unit]
+
     def handleBlockMessage(peer: PeerNode, bm: BlockMessage): F[Unit]
 
     def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Unit]
@@ -170,6 +193,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       blockApprover: BlockApproverProtocol
   ) extends CasperPacketHandlerInternal[F] {
     private val noop: F[Unit] = Applicative[F].unit
+
+    override def init: F[Unit] = noop
 
     override def handleBlockMessage(peer: PeerNode, bm: BlockMessage): F[Unit] =
       noop
@@ -223,6 +248,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
 
     private val noop: F[Unit] = Applicative[F].unit
 
+    override def init: F[Unit] = approveProtocol.run()
+
     override def handleBlockMessage(peer: PeerNode, bm: BlockMessage): F[Unit] =
       noop
     override def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Unit] =
@@ -270,13 +297,13 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                      capserHandlerInternal
                    )
                  case Some(approvedBlock) =>
-                   val blockMessage = approvedBlock.candidate.flatMap(_.block).get
+                   val genesis = approvedBlock.candidate.flatMap(_.block).get
                    for {
-                     _ <- BlockStore[F].put(blockMessage.blockHash, blockMessage)
+                     _ <- insertIntoBlockAndDagStore[F](genesis, approvedBlock)
                      casper <- MultiParentCasper.hashSetCasper[F](
                                 runtimeManager,
                                 validatorId,
-                                blockMessage,
+                                genesis,
                                 shardId
                               )
                      _   <- MultiParentCasperRef[F].set(casper)
@@ -297,9 +324,12 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       runtimeManager: RuntimeManager[F],
       shardId: String,
       validatorId: Option[ValidatorIdentity],
-      validators: Set[ByteString]
+      validators: Set[ByteString],
+      theInit: F[Unit]
   ) extends CasperPacketHandlerInternal[F] {
     private val noop: F[Unit] = Applicative[F].unit
+
+    override def init: F[Unit] = theInit
 
     override def handleBlockMessage(peer: PeerNode, bm: BlockMessage): F[Unit] =
       noop
@@ -346,6 +376,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     implicit val _casper = casper
 
     private val noop: F[Unit] = Applicative[F].unit
+
+    override def init: F[Unit] = noop
 
     // Possible optimization in the future
     // TODO: accept update to approved block (this will be needed for checkpointing)
@@ -420,6 +452,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       private val cphI: Ref[F, CasperPacketHandlerInternal[F]]
   ) extends CasperPacketHandler[F] {
 
+    override def init: F[Unit] = cphI.get >>= (_.init)
+
     override def handle(peer: PeerNode): PartialFunction[Packet, F[Unit]] =
       Function
         .unlift(
@@ -434,68 +468,27 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
               packetToNoApprovedBlockAvailable(p)
         )
         .andThen {
-          case br: BlockRequest =>
-            for {
-              cph <- cphI.get
-              res <- cph.handleBlockRequest(peer, br)
-            } yield res
-
-          case fctr: ForkChoiceTipRequest =>
-            for {
-              cph <- cphI.get
-              res <- cph.handleForkChoiceTipRequest(peer, fctr)
-            } yield res
-
+          case br: BlockRequest           => cphI.get >>= (_.handleBlockRequest(peer, br))
+          case fctr: ForkChoiceTipRequest => cphI.get >>= (_.handleForkChoiceTipRequest(peer, fctr))
           case ab: ApprovedBlock =>
-            for {
-              cph    <- cphI.get
-              casper <- cph.handleApprovedBlock(ab)
-              _ <- casper match {
-                    case None => ().pure[F]
-                    case Some(casperInstance) =>
-                      for {
-                        _ <- MultiParentCasperRef[F].set(casperInstance)
-                        _ <- Log[F].info(
-                              "Making a transition to ApprovedBlockRecievedHandler state."
-                            )
-                        abr = new ApprovedBlockReceivedHandler(casperInstance, ab)
-                        _   <- cphI.set(abr)
-                        _   <- CommUtil.sendForkChoiceTipRequest[F]
-                      } yield ()
-
-                  }
-            } yield ()
-
-          case abr: ApprovedBlockRequest =>
-            for {
-              cph <- cphI.get
-              res <- cph.handleApprovedBlockRequest(peer, abr)
-            } yield res
-
-          case bm: BlockMessage =>
-            for {
-              cph <- cphI.get
-              res <- cph.handleBlockMessage(peer, bm)
-            } yield res
-
-          case ba: BlockApproval =>
-            for {
-              cph <- cphI.get
-              res <- cph.handleBlockApproval(ba)
-            } yield res
-
-          case ub: UnapprovedBlock =>
-            for {
-              cph <- cphI.get
-              res <- cph.handleUnapprovedBlock(peer, ub)
-            } yield res
-
-          case nab: NoApprovedBlockAvailable =>
-            for {
-              cph <- cphI.get
-              res <- cph.handleNoApprovedBlockAvailable(nab)
-            } yield res
-
+            cphI.get >>= (_.handleApprovedBlock(ab)) >>= {
+              case None => ().pure[F]
+              case Some(casperInstance) =>
+                for {
+                  _ <- MultiParentCasperRef[F].set(casperInstance)
+                  _ <- Log[F].info(
+                        "Making a transition to ApprovedBlockRecievedHandler state."
+                      )
+                  abr = new ApprovedBlockReceivedHandler(casperInstance, ab)
+                  _   <- cphI.set(abr)
+                  _   <- CommUtil.sendForkChoiceTipRequest[F]
+                } yield ()
+            }
+          case abr: ApprovedBlockRequest     => cphI.get >>= (_.handleApprovedBlockRequest(peer, abr))
+          case bm: BlockMessage              => cphI.get >>= (_.handleBlockMessage(peer, bm))
+          case ba: BlockApproval             => cphI.get >>= (_.handleBlockApproval(ba))
+          case ub: UnapprovedBlock           => cphI.get >>= (_.handleUnapprovedBlock(peer, ub))
+          case nab: NoApprovedBlockAvailable => cphI.get >>= (_.handleNoApprovedBlockAvailable(nab))
         }
   }
 
@@ -572,15 +565,15 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       isValid <- Validate.approvedBlock[F](b, validators)
       casper <- if (isValid) {
                  for {
-                   _            <- Log[F].info("Valid ApprovedBlock received!")
-                   blockMessage = b.candidate.flatMap(_.block).get
-                   _            <- BlockStore[F].put(blockMessage.blockHash, blockMessage)
-                   _            <- LastApprovedBlock[F].set(b)
+                   _       <- Log[F].info("Valid ApprovedBlock received!")
+                   genesis = b.candidate.flatMap(_.block).get
+                   _       <- insertIntoBlockAndDagStore[F](genesis, b)
+                   _       <- LastApprovedBlock[F].set(b)
                    casper <- MultiParentCasper
                               .hashSetCasper[F](
                                 runtimeManager,
                                 validatorId,
-                                blockMessage,
+                                genesis,
                                 shardId
                               )
                  } yield Option(casper)
@@ -590,10 +583,26 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                    .map(_ => none[MultiParentCasper[F]])
     } yield casper
 
+  /*
+   * Note the ordering of the insertions is important.
+   * We always want the block dag store to be a subset of the block store.
+   */
+  private def insertIntoBlockAndDagStore[F[_]: Sync: Concurrent: ErrorHandler: TransportLayer: ConnectionsCell: Log: BlockStore: BlockDagStorage](
+      genesis: BlockMessage,
+      approvedBlock: ApprovedBlock
+  ): F[Unit] =
+    for {
+      _ <- BlockStore[F].put(genesis.blockHash, genesis)
+      _ <- BlockDagStorage[F].insert(genesis, invalid = false)
+      _ <- BlockStore[F].putApprovedBlock(approvedBlock)
+    } yield ()
+
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
       implicit C: CasperPacketHandler[F]
   ): CasperPacketHandler[T[F, ?]] =
     new CasperPacketHandler[T[F, ?]] {
+      override def init: T[F, Unit] = C.init.liftM[T]
+
       override def handle(peer: PeerNode): PartialFunction[Packet, T[F, Unit]] =
         PartialFunction { (p: Packet) =>
           C.handle(peer)(p).liftM[T]
@@ -620,6 +629,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
 
 trait CasperPacketHandler[F[_]] {
   def handle(peer: PeerNode): PartialFunction[Packet, F[Unit]]
+  def init: F[Unit]
 }
 
 abstract class CasperPacketHandlerInstances {

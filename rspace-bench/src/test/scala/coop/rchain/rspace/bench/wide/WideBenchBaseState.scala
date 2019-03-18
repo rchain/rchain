@@ -44,8 +44,7 @@ abstract class WideBenchBaseState {
     (for {
       costAccounting <- CostAccounting.empty[Task]
       runtime <- {
-        implicit val ca: CostAccounting[Task] = costAccounting
-        implicit val cost: _cost[Task]        = loggingCost(ca, noOpCostLog)
+        implicit val cost: _cost[Task] = loggingCost(costAccounting, noOpCostLog)
         Runtime.create[Task, Task.Par](dbDir, mapSize, StoreType.LMDB)
       }
     } yield (runtime)).unsafeRunSync
@@ -67,8 +66,8 @@ abstract class WideBenchBaseState {
       case Left(err)  => throw err
     }
     runtime = createRuntime()
-    runtime.reducer.setPhlo(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
-    runtime.replayReducer.setPhlo(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
+    runtime.reducer.setPhlo(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
+    runtime.replayReducer.setPhlo(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
 
     (for {
       emptyCheckpoint <- runtime.space.createCheckpoint()

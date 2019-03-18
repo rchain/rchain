@@ -50,8 +50,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
 
   type Validator = ByteString
 
-  //TODO: Extract hardcoded version
-  private val version = 1L
+  //TODO: Extract hardcoded version and expirationThreshold
+  private val version             = 1L
+  private val expirationThreshold = 50
 
   private val emptyStateHash = runtimeManager.emptyStateHash
 
@@ -126,9 +127,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
             case _ =>
               reAttemptBuffer(updatedDag) // reAttempt for any status that resulted in the adding of the block into the view
           }
-      estimates <- estimator(updatedDag)
-      tip       = estimates.head
-      _         <- Log[F].info(s"New fork-choice tip is block ${PrettyPrinter.buildString(tip.blockHash)}.")
+      tipHashes <- estimator(updatedDag)
+      tipHash   = tipHashes.head
+      _         <- Log[F].info(s"New fork-choice tip is block ${PrettyPrinter.buildString(tipHash)}.")
     } yield attempt
 
   def contains(
@@ -158,10 +159,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
       _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
     } yield ()
 
-  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockMessage]] =
-    for {
-      rankedEstimates <- Estimator.tips[F](dag, genesis)
-    } yield rankedEstimates
+  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
+    Estimator.tips[F](dag, genesis)
 
   /*
    * Logic:
@@ -178,13 +177,14 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
   def createBlock: F[CreateBlockStatus] = validatorId match {
     case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
       for {
-        dag          <- blockDag
-        orderedHeads <- estimator(dag)
-        p            <- chooseNonConflicting[F](orderedHeads, dag)
+        dag       <- blockDag
+        tipHashes <- estimator(dag)
+        p         <- chooseNonConflicting[F](tipHashes, dag)
         _ <- Log[F].info(
-              s"${p.size} parents out of ${orderedHeads.size} latest blocks will be used."
+              s"${p.size} parents out of ${tipHashes.size} latest blocks will be used."
             )
-        r                <- remDeploys(dag, p)
+        maxBlockNumber   = ProtoUtil.maxBlockNumber(p)
+        r                <- remDeploys(dag, p, maxBlockNumber)
         bondedValidators = bonds(p.head).map(_.validator).toSet
         //We ensure that only the justifications given in the block are those
         //which are bonded validators in the chosen parent. This is safe because
@@ -194,7 +194,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
         justifications = toJustification(latestMessages)
           .filter(j => bondedValidators.contains(j.validator))
         proposal <- if (r.nonEmpty || p.length > 1) {
-                     createProposal(dag, p, r, justifications)
+                     createProposal(dag, p, r, justifications, maxBlockNumber)
                    } else {
                      CreateBlockStatus.noNewDeploys.pure[F]
                    }
@@ -215,29 +215,44 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
       blockMessage <- ProtoUtil.unsafeGetBlock[F](updatedLastFinalizedBlockHash)
     } yield blockMessage
 
-  // TODO: Optimize for large number of deploys accumulated over history
-  private def remDeploys(dag: BlockDagRepresentation[F], p: Seq[BlockMessage]): F[Seq[DeployData]] =
+  // TODO: Remove no longer valid deploys here instead of with lastFinalizedBlock call
+  private def remDeploys(
+      dag: BlockDagRepresentation[F],
+      parents: Seq[BlockMessage],
+      maxBlockNumber: Long
+  ): F[Seq[DeployData]] =
     for {
-      state <- Cell[F, CasperState].read
-      hist  = state.deployHistory
-      d <- DagOperations
-            .bfTraverseF[F, BlockMessage](p.toList)(ProtoUtil.unsafeGetParents[F])
-            .map { b =>
-              b.body
-                .map(_.deploys.flatMap(_.deploy))
-                .toSeq
-                .flatten
-            }
-            .toList
-      deploy = d.flatten
-      result = hist -- deploy
-    } yield (result.toSeq)
+      state               <- Cell[F, CasperState].read
+      currentBlockNumber  = maxBlockNumber + 1
+      earliestBlockNumber = currentBlockNumber - expirationThreshold
+      deploys             = state.deployHistory
+      validDeploys = deploys.filter(
+        d => notFutureDeploy(currentBlockNumber, d) && notExpiredDeploy(earliestBlockNumber, d)
+      )
+      deploysInCurrentChain <- DagOperations
+                                .bfTraverseF[F, BlockMessage](parents.toList)(
+                                  b =>
+                                    ProtoUtil
+                                      .unsafeGetParentsAboveBlockNumber[F](b, earliestBlockNumber)
+                                )
+                                .map { b =>
+                                  ProtoUtil.deploys(b).flatMap(_.deploy)
+                                }
+                                .toList
+    } yield (validDeploys -- deploysInCurrentChain.flatten).toSeq
+
+  private def notExpiredDeploy(earliestBlockNumber: Long, d: DeployData): Boolean =
+    d.validAfterBlockNumber > earliestBlockNumber
+
+  private def notFutureDeploy(currentBlockNumber: Long, d: DeployData): Boolean =
+    d.validAfterBlockNumber < currentBlockNumber
 
   private def createProposal(
       dag: BlockDagRepresentation[F],
       p: Seq[BlockMessage],
       r: Seq[DeployData],
-      justifications: Seq[Justification]
+      justifications: Seq[Justification],
+      maxBlockNumber: Long
   ): F[CreateBlockStatus] =
     for {
       now <- Time[F].currentMillis
@@ -270,33 +285,49 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
                        case _ => ().pure[F]
                      }
                      .flatMap(_ => {
-                       val maxBlockNumber: Long =
-                         p.foldLeft(-1L) {
-                           case (acc, b) => math.max(acc, blockNumber(b))
-                         }
-
                        runtimeManager
                          .computeBonds(postStateHash)
-                         .map {
-                           newBonds =>
-                             val postState = RChainState()
-                               .withPreStateHash(preStateHash)
-                               .withPostStateHash(postStateHash)
-                               .withBonds(newBonds)
-                               .withBlockNumber(maxBlockNumber + 1)
-
-                             val body = Body()
-                               .withState(postState)
-                               .withDeploys(
-                                 persistableDeploys.map(ProcessedDeployUtil.fromInternal)
-                               )
-                             val header = blockHeader(body, p.map(_.blockHash), version, now)
-                             val block  = unsignedBlockProto(body, header, justifications, shardId)
-                             CreateBlockStatus.created(block)
+                         .map { newBonds =>
+                           createBlock(
+                             now,
+                             p,
+                             justifications,
+                             maxBlockNumber,
+                             preStateHash,
+                             postStateHash,
+                             persistableDeploys,
+                             newBonds
+                           )
                          }
                      })
                }
     } yield result
+
+  private def createBlock(
+      now: Long,
+      p: Seq[BlockMessage],
+      justifications: Seq[Justification],
+      maxBlockNumber: Long,
+      preStateHash: StateHash,
+      postStateHash: StateHash,
+      persistableDeploys: Seq[InternalProcessedDeploy],
+      newBonds: Seq[Bond]
+  ): CreateBlockStatus = {
+    val postState = RChainState()
+      .withPreStateHash(preStateHash)
+      .withPostStateHash(postStateHash)
+      .withBonds(newBonds)
+      .withBlockNumber(maxBlockNumber + 1)
+
+    val body = Body()
+      .withState(postState)
+      .withDeploys(
+        persistableDeploys.map(ProcessedDeployUtil.fromInternal)
+      )
+    val header = blockHeader(body, p.map(_.blockHash), version, now)
+    val block  = unsignedBlockProto(body, header, justifications, shardId)
+    CreateBlockStatus.created(block)
+  }
 
   def blockDag: F[BlockDagRepresentation[F]] =
     BlockDagStorage[F].getRepresentation
@@ -331,7 +362,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
     for {
       _ <- Log[F].info(s"Attempting to add Block ${PrettyPrinter.buildString(b.blockHash)} to DAG.")
       postValidationStatus <- Validate
-                               .blockSummary[F](b, genesis, dag, shardId)
+                               .blockSummary[F](b, genesis, dag, shardId, expirationThreshold)
       postTransactionsCheckStatus <- postValidationStatus.traverse(
                                       _ =>
                                         Validate.transactions[F](
@@ -459,6 +490,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
       case InvalidBlockHash =>
         handleInvalidBlockEffect(status, block)
       case InvalidDeployCount =>
+        handleInvalidBlockEffect(status, block)
+      case ContainsExpiredDeploy =>
+        handleInvalidBlockEffect(status, block)
+      case ContainsFutureDeploy =>
         handleInvalidBlockEffect(status, block)
       case Processing =>
         throw new RuntimeException(s"A block should not be processing at this stage.")

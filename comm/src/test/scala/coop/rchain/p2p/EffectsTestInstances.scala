@@ -82,7 +82,7 @@ object EffectsTestInstances {
     def send(peer: PeerNode, msg: Protocol): F[CommErr[Unit]] =
       Sync[F].delay {
         requests = requests :+ Request(peer, msg)
-        Right(())
+        reqresp.get.apply(peer).apply(msg).void
       }
 
     def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]] = Sync[F].delay {

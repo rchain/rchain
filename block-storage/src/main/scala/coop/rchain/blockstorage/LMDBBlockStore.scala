@@ -9,7 +9,7 @@ import cats._
 import cats.effect.{ExitCase, Sync}
 import cats.implicits._
 import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage}
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared.Resources.withResource
 import com.google.protobuf.ByteString
@@ -106,6 +106,12 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
               }
             }
     } yield ret
+
+  def getApprovedBlock: F[Option[ApprovedBlock]] =
+    none[ApprovedBlock].pure[F]
+
+  def putApprovedBlock(block: ApprovedBlock): F[Unit] =
+    ().pure[F]
 
   def checkpoint(): F[Unit] =
     ().pure[F]

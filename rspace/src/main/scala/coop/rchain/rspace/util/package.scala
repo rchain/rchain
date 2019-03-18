@@ -18,7 +18,7 @@ package object util {
   ): Either[E, Option[(K, Seq[R], Int)]] =
     v.map(unpackOption)
 
-  implicit def unpackEither[F[_], C, P, E, K, R](
+  implicit def unpackEitherF[F[_], C, P, E, K, R](
       v: F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
   )(implicit ev: Functor[F]): F[Either[E, Option[(K, Seq[R], Int)]]] =
     ev.map(v)(_.map(unpackOption))
@@ -27,6 +27,11 @@ package object util {
       v: Option[(ContResult[C, P, K], Seq[Result[R]])]
   ): Option[(K, Seq[R], Int)] =
     v.map(unpackTuple)
+
+  implicit def unpackOptionF[F[_], C, P, K, R](
+      v: F[Option[(ContResult[C, P, K], Seq[Result[R]])]]
+  )(implicit ev: Functor[F]): F[Option[(K, Seq[R], Int)]] =
+    ev.map(v)(unpackOption)
 
   implicit def unpackTuple[C, P, K, R](v: (ContResult[C, P, K], Seq[Result[R]])): (K, Seq[R], Int) =
     v match {
@@ -40,16 +45,16 @@ package object util {
   /**
     * Extracts a continuation from a produce result
     */
-  def getK[A, K](t: Option[(K, A)]): K =
+  def getK[A, K](t: Option[(K, A, Int)]): K =
     t.map(_._1).get
 
-  def getK[A, K](e: Either[_, Option[(K, A)]]): K =
+  def getK[A, K](e: Either[_, Option[(K, A, Int)]]): K =
     e.map(_.map(_._1).get).right.get
 
   /** Runs a continuation with the accompanying data
     */
-  def runK[T](e: Either[Nothing, Option[((T) => Unit, T, Int)]]): Unit =
-    e.right.get.foreach { case (k, data, _) => k(data) }
+  def runK[T](e: Option[((T) => Unit, T, Int)]): Unit =
+    e.foreach { case (k, data, _) => k(data) }
 
   /** Runs a list of continuations with the accompanying data
     */

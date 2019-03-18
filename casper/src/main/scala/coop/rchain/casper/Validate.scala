@@ -10,7 +10,7 @@ import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
-import coop.rchain.casper.util.ProtoUtil.bonds
+import coop.rchain.casper.util.ProtoUtil.{blockNumber, bonds}
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.crypto.hash.Blake2b256
@@ -178,7 +178,8 @@ object Validate {
       block: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
-      shardId: String
+      shardId: String,
+      expirationThreshold: Int
   ): F[Either[BlockStatus, ValidBlock]] =
     for {
       blockHashStatus   <- Validate.blockHash[F](block)
@@ -190,12 +191,20 @@ object Validate {
                           _ => Validate.timestamp[F](block, dag)
                         )
       repeatedDeployStatus <- timestampStatus.joinRight.traverse(
-                               _ => Validate.repeatDeploy[F](block, dag)
+                               _ => Validate.repeatDeploy[F](block, dag, expirationThreshold)
                              )
       blockNumberStatus <- repeatedDeployStatus.joinRight.traverse(
                             _ => Validate.blockNumber[F](block, dag)
                           )
-      followsStatus <- blockNumberStatus.joinRight.traverse(
+      futureTransactionStatus <- blockNumberStatus.joinRight.traverse(
+                                  _ => Validate.futureTransaction[F](block)
+                                )
+      transactionExpirationStatus <- futureTransactionStatus.joinRight.traverse(
+                                      _ =>
+                                        Validate
+                                          .transactionExpiration[F](block, expirationThreshold)
+                                    )
+      followsStatus <- transactionExpirationStatus.joinRight.traverse(
                         _ => Validate.justificationFollows[F](block, genesis, dag)
                       )
       parentsStatus <- followsStatus.joinRight.traverse(
@@ -243,7 +252,8 @@ object Validate {
     */
   def repeatDeploy[F[_]: Monad: Log: BlockStore](
       block: BlockMessage,
-      dag: BlockDagRepresentation[F]
+      dag: BlockDagRepresentation[F],
+      expirationThreshold: Int
   ): F[Either[InvalidBlock, ValidBlock]] = {
     val deployKeySet = (for {
       bd <- block.body.toList
@@ -251,31 +261,31 @@ object Validate {
     } yield (r.user, r.timestamp)).toSet
 
     for {
-      initParents <- ProtoUtil.unsafeGetParents[F](block)
+      initParents         <- ProtoUtil.unsafeGetParents[F](block)
+      maxBlockNumber      = ProtoUtil.maxBlockNumber(initParents)
+      earliestBlockNumber = maxBlockNumber + 1 - expirationThreshold
       duplicatedBlock <- DagOperations
-                          .bfTraverseF[F, BlockMessage](initParents)(ProtoUtil.unsafeGetParents[F])
-                          .find(
-                            _.body.exists(
-                              _.deploys
-                                .flatMap(_.deploy)
-                                .exists(
-                                  p => deployKeySet.contains((p.user, p.timestamp))
-                                )
-                            )
+                          .bfTraverseF[F, BlockMessage](initParents)(
+                            b =>
+                              ProtoUtil.unsafeGetParentsAboveBlockNumber[F](b, earliestBlockNumber)
                           )
-      result <- duplicatedBlock match {
-                 case Some(b) =>
-                   for {
-                     _ <- Log[F].warn(
+                          .find { b =>
+                            ProtoUtil
+                              .deploys(b)
+                              .flatMap(_.deploy)
+                              .exists(d => deployKeySet.contains((d.user, d.timestamp)))
+                          }
+      maybeError <- duplicatedBlock
+                     .traverse(
+                       b =>
+                         Log[F].warn(
                            ignore(
                              block,
-                             s"found deploy by the same (user, millisecond timestamp) produced in the block(${b.blockHash})"
+                             s"found deploy by the same (user, millisecond timestamp) produced in the block ${b.blockHash}"
                            )
-                         )
-                   } yield Left(InvalidRepeatDeploy)
-                 case None => Applicative[F].pure(Right(Valid))
-               }
-    } yield result
+                         ) >> InvalidRepeatDeploy.pure[F]
+                     )
+    } yield maybeError.toLeft(Valid)
   }
 
   // This is not a slashable offence
@@ -337,6 +347,42 @@ object Validate {
                  } yield Left(InvalidBlockNumber)
                }
     } yield status
+
+  def futureTransaction[F[_]: Monad: Log](b: BlockMessage): F[Either[InvalidBlock, ValidBlock]] = {
+    val blockNumber       = ProtoUtil.blockNumber(b)
+    val deploys           = ProtoUtil.deploys(b).flatMap(_.deploy)
+    val maybeFutureDeploy = deploys.find(_.validAfterBlockNumber >= blockNumber)
+    maybeFutureDeploy
+      .traverse { futureDeploy =>
+        Log[F].warn(
+          ignore(
+            b,
+            s"block contains an future deploy with valid after block number of ${futureDeploy.validAfterBlockNumber}: ${futureDeploy.term}"
+          )
+        ) >> ContainsFutureDeploy.pure[F]
+      }
+      .map(maybeError => maybeError.toLeft(Valid))
+  }
+
+  def transactionExpiration[F[_]: Monad: Log](
+      b: BlockMessage,
+      expirationThreshold: Int
+  ): F[Either[InvalidBlock, ValidBlock]] = {
+    val earliestAcceptableValidAfterBlockNumber = ProtoUtil.blockNumber(b) - expirationThreshold
+    val deploys                                 = ProtoUtil.deploys(b).flatMap(_.deploy)
+    val maybeExpiredDeploy =
+      deploys.find(_.validAfterBlockNumber <= earliestAcceptableValidAfterBlockNumber)
+    maybeExpiredDeploy
+      .traverse { expiredDeploy =>
+        Log[F].warn(
+          ignore(
+            b,
+            s"block contains an expired deploy with valid after block number of ${expiredDeploy.validAfterBlockNumber}: ${expiredDeploy.term}"
+          )
+        ) >> ContainsExpiredDeploy.pure[F]
+      }
+      .map(maybeError => maybeError.toLeft(Valid))
+  }
 
   /**
     * Works with either efficient justifications or full explicit justifications.
@@ -431,17 +477,27 @@ object Validate {
 
     for {
       latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure[F]
-      estimate             <- Estimator.tips[F](dag, genesis, latestMessagesHashes)
-      computedParents      <- ProtoUtil.chooseNonConflicting[F](estimate, dag)
+      tipHashes            <- Estimator.tips[F](dag, genesis, latestMessagesHashes)
+      computedParents      <- ProtoUtil.chooseNonConflicting[F](tipHashes, dag)
       computedParentHashes = computedParents.map(_.blockHash)
-      status <- if (parentHashes == computedParentHashes)
+      status <- if (parentHashes == computedParentHashes) {
                  Applicative[F].pure(Right(Valid))
-               else
+               } else {
+                 val parentsString =
+                   parentHashes.map(hash => PrettyPrinter.buildString(hash)).mkString(",")
+                 val estimateString =
+                   computedParentHashes.map(hash => PrettyPrinter.buildString(hash)).mkString(",")
+                 val justificationString = latestMessagesHashes.values
+                   .map(hash => PrettyPrinter.buildString(hash))
+                   .mkString(",")
+                 val message =
+                   s"block parents ${parentsString} did not match estimate ${estimateString} based on justification ${justificationString}."
                  for {
                    _ <- Log[F].warn(
-                         ignore(b, "block parents did not match estimate based on justification.")
+                         ignore(b, message)
                        )
                  } yield Left(InvalidParents)
+               }
     } yield status
   }
 

@@ -27,7 +27,7 @@ class ReplayRSpaceBench {
   @Measurement(iterations = 1)
   def singleProduce(bh: Blackhole, state: ProduceInMemBenchState) = {
     val res = state.replaySpace.produce(state.produceChannel, bob, persist = true)
-    assert(res.right.get.isDefined)
+    assert(res.isDefined)
     bh.consume(res)
   }
 
@@ -44,7 +44,7 @@ class ReplayRSpaceBench {
       state.captor,
       persist = true
     )
-    assert(res.right.get.isDefined)
+    assert(res.isDefined)
     bh.consume(res)
   }
 }
@@ -54,8 +54,8 @@ object ReplayRSpaceBench {
   import scala.concurrent.ExecutionContext.Implicits.global
 
   abstract class ReplayRSpaceBenchState {
-    var space: IdISpace[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor] = null
-    var replaySpace: IReplaySpace[cats.Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor] =
+    var space: IdISpace[Channel, Pattern, Entry, Entry, EntriesCaptor] = null
+    var replaySpace: IReplaySpace[cats.Id, Channel, Pattern, Entry, Entry, EntriesCaptor] =
       null
     implicit val logF: Log[Id]            = new Log.NOPLog[Id]
     implicit val noopMetrics: Metrics[Id] = new metrics.Metrics.MetricsNOP[Id]
@@ -76,11 +76,11 @@ object ReplayRSpaceBench {
       val testStore: IStore[Id, Channel, Pattern, Entry, EntriesCaptor] =
         InMemoryStore.create(context.trieStore, Branch.MASTER)
       assert(testStore.toMap.isEmpty)
-      space = RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+      space = RSpace.create[Id, Channel, Pattern, Entry, Entry, EntriesCaptor](
         testStore,
         Branch.MASTER
       )
-      replaySpace = ReplayRSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+      replaySpace = ReplayRSpace.create[Id, Channel, Pattern, Entry, Entry, EntriesCaptor](
         context,
         Branch.REPLAY
       )

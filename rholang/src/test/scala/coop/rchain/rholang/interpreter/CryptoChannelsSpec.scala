@@ -221,7 +221,7 @@ class CryptoChannelsSpec
 
     val runtime = (for {
       runtime <- Runtime.createWithEmptyCost[Task, Task.Par](dbDir, size, StoreType.LMDB)
-      _       <- runtime.reducer.setPhlo(Cost(Integer.MAX_VALUE))
+      _       <- runtime.reducer.setPhlo(Cost.UNSAFE_MAX)
     } yield (runtime)).unsafeRunSync
 
     try {

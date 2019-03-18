@@ -17,10 +17,9 @@ object TestRuntime {
       extraSystemProcesses: Seq[Runtime.SystemProcess.Definition[F]] = Seq.empty
   )(implicit P: Parallel[F, M], executionContext: ExecutionContext): F[Runtime[F]] =
     for {
-      costAccounting <- CostAccounting.of[F](Cost(Integer.MAX_VALUE))
+      costAccounting <- CostAccounting.of[F](Cost.UNSAFE_MAX)
       runtime <- {
-        implicit val ca: CostAccounting[F] = costAccounting
-        implicit val cost: _cost[F]        = loggingCost(ca, noOpCostLog)
+        implicit val cost: _cost[F] = loggingCost(costAccounting, noOpCostLog)
         Runtime.create[F, M](Paths.get("/not/a/path"), -1, InMem, extraSystemProcesses)
       }
     } yield (runtime)

@@ -18,7 +18,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.ShortLeashParams.ShortLeashParameters
 import coop.rchain.rholang.interpreter.Runtime._
-import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.accounting.{loggingCost, noOpCostLog, _}
 import coop.rchain.rholang.interpreter.errors.{InterpreterError, SetupError}
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
@@ -36,6 +36,7 @@ class Runtime[F[_]: Sync] private (
     val space: RhoISpace[F],
     val replaySpace: RhoReplayISpace[F],
     val errorLog: ErrorLog[F],
+    val cost: _cost[F],
     val context: RhoContext[F],
     val shortLeashParams: Runtime.ShortLeashParams[F],
     val blockTime: Runtime.BlockTime[F]
@@ -57,21 +58,20 @@ object Runtime {
   type RhoIStore[F[_]]  = CPAK[F, IStore]
   type RhoContext[F[_]] = CPAK[F, Context]
 
-  type RhoDispatch[F[_]]    = Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
-  type RhoSysFunction[F[_]] = (Seq[ListParWithRandomAndPhlos], Int) => F[Unit]
+  type RhoDispatch[F[_]]    = Dispatch[F, ListParWithRandom, TaggedContinuation]
+  type RhoSysFunction[F[_]] = (Seq[ListParWithRandom], Int) => F[Unit]
   type RhoDispatchMap[F[_]] = Map[Long, RhoSysFunction[F]]
 
   type CPAK[M[_], F[_[_], _, _, _, _]] =
     F[M, Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
-  type TCPARK[M[_], F[_[_], _, _, _, _, _, _]] =
+  type TCPARK[M[_], F[_[_], _, _, _, _, _]] =
     F[
       M,
       Par,
       BindPattern,
-      InterpreterError,
       ListParWithRandom,
-      ListParWithRandomAndPhlos,
+      ListParWithRandom,
       TaggedContinuation
     ]
 
@@ -85,6 +85,19 @@ object Runtime {
   ) {
     def setParams(codeHash: Par, phloRate: Par, userId: Par, timestamp: Par): F[Unit] =
       params.set(ShortLeashParameters(codeHash, phloRate, userId, timestamp))
+
+    /**
+      * updates the content of the storage and returns the new value
+      * @param update a function which takes the current value and returns the new one
+      * @return the updated value
+      */
+    def updateParams(
+        update: ShortLeashParameters => ShortLeashParameters
+    ): F[ShortLeashParameters] =
+      params.modify(v => {
+        val newV = update(v)
+        (newV, newV)
+      })
 
     def getParams: F[ShortLeashParameters] = params.get
   }
@@ -167,11 +180,11 @@ object Runtime {
     val REV_ADDRESS: Par       = byteName(14)
   }
 
-  private def introduceSystemProcesses[F[_]: Sync](
+  private def introduceSystemProcesses[F[_]: Sync: _cost](
       space: RhoISpace[F],
       replaySpace: RhoISpace[F],
       processes: List[(Name, Arity, Remainder, BodyRef)]
-  ): F[List[Option[(TaggedContinuation, immutable.Seq[ListParWithRandomAndPhlos])]]] =
+  ): F[List[Option[(TaggedContinuation, immutable.Seq[ListParWithRandom])]]] =
     processes.flatMap {
       case (name, arity, remainder, ref) =>
         val channels = List(name)
@@ -182,11 +195,10 @@ object Runtime {
             freeCount = arity
           )
         )
-        val continuation                   = TaggedContinuation(ScalaBodyRef(ref))
-        implicit val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
+        val continuation = TaggedContinuation(ScalaBodyRef(ref))
         List(
-          space.install(channels, patterns, continuation),
-          replaySpace.install(channels, patterns, continuation)
+          space.install(channels, patterns, continuation)(matchListPar),
+          replaySpace.install(channels, patterns, continuation)(matchListPar)
         )
     }.sequence
 
@@ -206,12 +218,12 @@ object Runtime {
         fixedChannel: Name,
         arity: Arity,
         bodyRef: BodyRef,
-        handler: Context[F] => (Seq[ListParWithRandomAndPhlos], Int) => F[Unit],
+        handler: Context[F] => (Seq[ListParWithRandom], Int) => F[Unit],
         remainder: Remainder = None
     ) {
       def toDispatchTable(
           context: SystemProcess.Context[F]
-      ): (BodyRef, (Seq[ListParWithRandomAndPhlos], Arity) => F[Unit]) =
+      ): (BodyRef, (Seq[ListParWithRandom], Arity) => F[Unit]) =
         bodyRef -> handler(context)
 
       def toUrnMap: (String, Par) = {
@@ -298,8 +310,7 @@ object Runtime {
     (for {
       costAccounting <- CostAccounting.empty[F]
       runtime <- {
-        implicit val ca: CostAccounting[F] = costAccounting
-        implicit val cost: _cost[F]        = loggingCost(ca, noOpCostLog)
+        implicit val cost: _cost[F] = loggingCost(costAccounting, noOpCostLog)
         create(dataDir, mapSize, storeType, extraSystemProcesses)
       }
     } yield (runtime))
@@ -312,8 +323,7 @@ object Runtime {
   )(
       implicit P: Parallel[F, M],
       executionContext: ExecutionContext,
-      cost: _cost[F],
-      costAccounting: CostAccounting[F]
+      cost: _cost[F]
   ): F[Runtime[F]] = {
     val errorLog                               = new ErrorLog[F]()
     implicit val ft: FunctorTell[F, Throwable] = errorLog
@@ -403,6 +413,7 @@ object Runtime {
         space,
         replaySpace,
         errorLog,
+        cost,
         context,
         shortLeashParams,
         blockTime
@@ -420,33 +431,33 @@ object Runtime {
         "for what rate of interest is there that can naturally be more proper than another?")
         .getBytes()
     )
-    implicit val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
+
     for {
+      costAlg <- CostAccounting.of[F](Cost.UNSAFE_MAX)
+      cost    = loggingCost(costAlg, noOpCostLog[F])
       spaceResult <- space.produce(
                       Registry.registryRoot,
                       ListParWithRandom(Seq(Registry.emptyMap), rand),
                       false,
                       0
-                    )
+                    )(matchListPar(F, cost))
       replayResult <- replaySpace.produce(
                        Registry.registryRoot,
                        ListParWithRandom(Seq(Registry.emptyMap), rand),
                        false,
                        0
-                     )
+                     )(matchListPar(F, cost))
       _ <- spaceResult match {
-            case Right(None) =>
+            case None =>
               replayResult match {
-                case Right(None) => F.unit
-                case Right(Some(_)) =>
+                case None => F.unit
+                case Some(_) =>
                   F.raiseError(
                     new SetupError("Registry insertion in replay fired continuation.")
                   )
-                case Left(err) => F.raiseError(err)
               }
-            case Right(Some(_)) =>
+            case Some(_) =>
               F.raiseError(new SetupError("Registry insertion fired continuation."))
-            case Left(err) => F.raiseError(err)
           }
     } yield ()
   }
@@ -464,18 +475,16 @@ object Runtime {
                   F,
                   Par,
                   BindPattern,
-                  InterpreterError,
                   ListParWithRandom,
-                  ListParWithRandomAndPhlos,
+                  ListParWithRandom,
                   TaggedContinuation
                 ](context, Branch.MASTER)
         replaySpace <- ReplayRSpace.create[
                         F,
                         Par,
                         BindPattern,
-                        InterpreterError,
                         ListParWithRandom,
-                        ListParWithRandomAndPhlos,
+                        ListParWithRandom,
                         TaggedContinuation
                       ](context, Branch.REPLAY)
       } yield ((context, space, replaySpace))

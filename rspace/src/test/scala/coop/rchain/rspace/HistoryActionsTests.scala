@@ -21,7 +21,7 @@ import scala.collection.immutable.Seq
 
 //noinspection ZeroIndexToHead
 trait HistoryActionsTests[F[_]]
-    extends StorageTestsBase[F, String, Pattern, Nothing, String, StringsCaptor]
+    extends StorageTestsBase[F, String, Pattern, String, StringsCaptor]
     with TestImplicitHelpers
     with GeneratorDrivenPropertyChecks
     with Checkers {
@@ -243,7 +243,7 @@ trait HistoryActionsTests[F[_]]
 
       for {
         r1         <- space.consume(channels, List(Wildcard), new StringsCaptor, persist = false)
-        _          = r1 shouldBe Right(None)
+        _          = r1 shouldBe None
         r2         <- space.produce(channels.head, "datum", persist = false)
         _          = r2 shouldBe defined
         _          = history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None
@@ -530,7 +530,7 @@ trait HistoryActionsTests[F[_]]
 }
 
 trait LegacyHistoryActionsTests
-    extends StorageTestsBase[Coeval, String, Pattern, Nothing, String, StringsCaptor]
+    extends StorageTestsBase[Coeval, String, Pattern, String, StringsCaptor]
     with TestImplicitHelpers
     with GeneratorDrivenPropertyChecks
     with Checkers {
@@ -549,14 +549,14 @@ class MixedStoreHistoryActionsTests
     extends MixedStoreTestsBase[Coeval]
     with HistoryActionsTests[Coeval]
     with LegacyHistoryActionsTests
-    with CoevalTests[String, Pattern, Nothing, String, StringsCaptor]
+    with CoevalTests[String, Pattern, String, StringsCaptor]
 class LMDBStoreHistoryActionsTests
     extends LMDBStoreTestsBase[Coeval]
     with HistoryActionsTests[Coeval]
     with LegacyHistoryActionsTests
-    with CoevalTests[String, Pattern, Nothing, String, StringsCaptor]
+    with CoevalTests[String, Pattern, String, StringsCaptor]
 class InMemStoreHistoryActionsTests
     extends InMemoryStoreTestsBase[Coeval]
     with HistoryActionsTests[Coeval]
     with LegacyHistoryActionsTests
-    with CoevalTests[String, Pattern, Nothing, String, StringsCaptor]
+    with CoevalTests[String, Pattern, String, StringsCaptor]

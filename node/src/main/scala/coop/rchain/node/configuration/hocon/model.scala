@@ -147,9 +147,10 @@ object GrpcServer {
   val Key = s"${Configuration.Key}.grpc"
 
   object keys {
-    val Host         = "host"
-    val PortExternal = "port-external"
-    val PortInternal = "port-internal"
+    val Host           = "host"
+    val PortExternal   = "port-external"
+    val PortInternal   = "port-internal"
+    val MaxMessageSize = "max-message-size"
   }
 
   def fromConfig(config: Config): configuration.GrpcServer = {
@@ -158,7 +159,8 @@ object GrpcServer {
     configuration.GrpcServer(
       host = grpc.getString(keys.Host),
       portExternal = grpc.getInt(keys.PortExternal),
-      portInternal = grpc.getInt(keys.PortInternal)
+      portInternal = grpc.getInt(keys.PortInternal),
+      maxMessageSize = grpc.getBytes(keys.MaxMessageSize).toInt
     )
   }
 }

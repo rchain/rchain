@@ -53,9 +53,8 @@ object Resources {
         F,
         Par,
         BindPattern,
-        InterpreterError,
         ListParWithRandom,
-        ListParWithRandomAndPhlos,
+        ListParWithRandom,
         TaggedContinuation
       ](context, Branch(branch))
     }
@@ -79,8 +78,7 @@ object Resources {
           for {
             costAccounting <- CostAccounting.empty[Task]
             runtime <- {
-              implicit val ca: CostAccounting[Task] = costAccounting
-              implicit val cost: _cost[Task]        = loggingCost(ca, noOpCostLog)
+              implicit val cost: _cost[Task] = loggingCost(costAccounting, noOpCostLog)
               Runtime.create[Task, Task.Par](tmpDir, storageSize, storeType)
             }
           } yield (runtime)

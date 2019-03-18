@@ -30,7 +30,8 @@ final case class Server(
 final case class GrpcServer(
     host: String,
     portExternal: Int,
-    portInternal: Int
+    portInternal: Int,
+    maxMessageSize: Int
 )
 
 final case class Tls(
@@ -58,7 +59,8 @@ final case class Deploy(
     phloLimit: Long,
     phloPrice: Long,
     nonce: Int,
-    location: String
+    location: String,
+    validAfterBlock: Int
 ) extends Command
 final case object DeployDemo                                               extends Command
 final case object Propose                                                  extends Command

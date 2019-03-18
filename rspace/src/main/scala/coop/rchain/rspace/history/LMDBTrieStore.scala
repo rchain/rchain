@@ -7,7 +7,6 @@ import java.nio.file.Path
 import cats.effect.Sync
 
 import scala.collection.JavaConverters._
-import scala.collection.immutable.Seq
 import coop.rchain.rspace.{Blake2b256Hash, LMDBOps, Serialize, _}
 import coop.rchain.rspace.internal._
 import coop.rchain.shared.ByteVectorOps._
@@ -33,7 +32,7 @@ class LMDBTrieStore[F[_], K, V] private (
 ) extends ITrieStore[Txn[ByteBuffer], K, V]
     with LMDBOps[F] {
 
-  protected val MetricsSource: String = RSpaceMetricsSource + ".history.lmdb"
+  override protected def metricsSource: String = RSpaceMetricsSource + ".history.lmdb"
 
   private[rspace] def put(txn: Txn[ByteBuffer], key: Blake2b256Hash, value: Trie[K, V]): Unit =
     _dbTrie.put(txn, key, value)

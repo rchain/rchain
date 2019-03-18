@@ -153,6 +153,10 @@ class GrpcTransportClient(
             withClient(peer, timeout(packet), enforce = false)(
               GrpcTransport.stream(peer, Blob(sender, packet), messageSize)
             ).flatMap {
+              case Left(error @ PeerUnavailable(_)) =>
+                log.debug(
+                  s"Error while streaming packet to $peer (timeout: ${timeout(packet).toMillis}ms): ${error.message}"
+                )
               case Left(error) =>
                 log.error(
                   s"Error while streaming packet to $peer (timeout: ${timeout(packet).toMillis}ms): ${error.message}"

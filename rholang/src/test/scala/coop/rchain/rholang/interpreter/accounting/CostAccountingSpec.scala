@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter.accounting
 
 import java.nio.file.Files
 
+import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.accounting.utils._
@@ -24,63 +25,6 @@ import org.scalatest.prop.PropertyChecks
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
-class LegacyCostAccountingSpec extends FlatSpec with TripleEqualsSupport {
-
-  behavior of "CostAccountingAlg"
-
-  val defaultCost = Cost(33)
-
-  def withCostAccAlg[T](
-      initState: Cost = defaultCost
-  )(f: CostAccounting[Task] => Task[T]): T = {
-    val test = for {
-      alg <- CostAccounting.of[Task](initState)
-      res <- f(alg)
-    } yield res
-    Await.result(test.runToFuture, 5.seconds)
-  }
-
-  "get" should "return current cost account" in withCostAccAlg() { alg =>
-    for {
-      s <- alg.get()
-    } yield assert(s === defaultCost)
-  }
-
-  "charge" should "modify underlying cost account" in withCostAccAlg() { alg =>
-    val c = Cost(13)
-    for {
-      _ <- alg.charge(c)
-      s <- alg.get()
-    } yield assert(defaultCost - c === s)
-  }
-
-  def assertOutOfPhloError[A](test: Task[A]): Task[Assertion] =
-    test.attempt.map(res => assert(res === Left(OutOfPhlogistonsError)))
-
-  it should "fail when cost account goes below zero" in withCostAccAlg() { alg =>
-    val cost = Cost(100)
-    val test = for {
-      _ <- alg.charge(cost)
-      s <- alg.get()
-    } yield s
-
-    assertOutOfPhloError(test)
-  }
-
-  it should "fail when tries to charge on the cost account that is already negative" in withCostAccAlg(
-    Cost(-100)
-  ) { alg =>
-    val cost = Cost(1)
-    val test = for {
-      _ <- alg.charge(cost)
-      s <- alg.get()
-    } yield s
-
-    assertOutOfPhloError(test)
-  }
-
-}
-
 class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
 
   private[this] def evaluateWithCostLog(
@@ -99,8 +43,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
       cost    = loggingCost(costAlg, costL)
       costsLoggingProgram <- {
         costL.listen({
-          implicit val ca = costAlg
-          implicit val c  = cost
+          implicit val c = cost
           for {
             runtime <- Runtime
                         .create[Task, Task.Par](dbDir, size, StoreType.LMDB)
@@ -119,6 +62,10 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
 
   val contracts = Table(
     ("contract", "expectedTotalCost"),
+    ("""@0!(2)""", 33L),
+    ("""@0!(2) | @1!(1)""", 69L),
+    ("""for(x <- @0){ Nil }""", 64L),
+    ("""for(x <- @0){ Nil } | @0!(2)""", 76L),
     ("""new loop in {
          contract loop(@n) = {
            match n {
@@ -127,8 +74,8 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
            }
          } |
          loop!(10)
-       }""".stripMargin, 1766L),
-    ("""42 | @0!(2) | for (x <- @0) { Nil }""", 48L),
+       }""".stripMargin, 1936L),
+    ("""42 | @0!(2) | for (x <- @0) { Nil }""", 83L),
     ("""@1!(1) |
         for(x <- @1) { Nil } |
         new x in { x!(10) | for(X <- x) { @2!(Set(X!(7)).add(*X).contains(10)) }} |
@@ -136,10 +83,10 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
           38 => Nil
           42 => @3!(42)
         }
-     """.stripMargin, 432L)
+     """.stripMargin, 634L)
   )
 
-  "Total cost of evaluation" should "be equal to the sum of all costs in the log" ignore forAll(
+  "Total cost of evaluation" should "be equal to the sum of all costs in the log" in forAll(
     contracts
   ) { (contract: String, expectedTotalCost: Long) =>
     val initialPhlo       = 10000L
@@ -152,9 +99,20 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
     val contract                                     = "@1!(1)"
     val parsingCost                                  = accounting.parsingCost(contract).value
     val initialPhlo                                  = 1L + parsingCost
-    val expectedCosts                                = List(Cost(4, "substitution"))
+    val expectedCosts                                = List(Cost(6, "parsing"), Cost(4, "substitution"))
     val (EvaluateResult(totalCost, errors), costLog) = evaluateWithCostLog(initialPhlo, contract)
-    totalCost.value shouldBe parsingCost + expectedCosts.head.value
+    totalCost.value shouldBe expectedCosts.map(_.value).sum
+    errors shouldBe (List(OutOfPhlogistonsError))
+    costLog.toList should contain theSameElementsAs (expectedCosts)
+  }
+
+  it should "not attempt reduction when there wasn't enought phlo for parsing" in {
+    val contract                                     = "@1!(1)"
+    val parsingCost                                  = accounting.parsingCost(contract).value
+    val initialPhlo                                  = parsingCost - 1
+    val expectedCosts                                = List(Cost(6, "parsing"))
+    val (EvaluateResult(totalCost, errors), costLog) = evaluateWithCostLog(initialPhlo, contract)
+    totalCost.value shouldBe expectedCosts.map(_.value).sum
     errors shouldBe (List(OutOfPhlogistonsError))
     costLog.toList should contain theSameElementsAs (expectedCosts)
   }

@@ -143,6 +143,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val grpcHost =
     opt[String](descr = "Hostname or IP of node on which gRPC service is running.")
 
+  val grpcMaxMessageSize =
+    opt[Int](descr = "Maximum size of message that can be sent via gRPC API")
+
   val diagnostics = new Subcommand("diagnostics") {
     descr("Node diagnostics")
   }
@@ -367,6 +370,11 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "The price of phlo for this transaction in units dust/phlo. Must be positive integer.",
       validate = _ > 0,
       required = true
+    )
+
+    val validAfterBlockNumber = opt[Int](
+      descr =
+        "Set this value to one less than the current block height: you have 50 blocks to get this transaction into the chain."
     )
 
     val nonce = opt[Int](

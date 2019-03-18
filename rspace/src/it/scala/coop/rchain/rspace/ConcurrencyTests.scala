@@ -11,7 +11,7 @@ import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration.Duration
 
 trait ConcurrencyTests
-    extends StorageTestsBase[Coeval, Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    extends StorageTestsBase[Coeval, Channel, Pattern, Entry, EntriesCaptor]
     with TestImplicitHelpers {
 
   def version: String
@@ -34,11 +34,11 @@ trait ConcurrencyTests
             persist = false
           ).apply()
 
-          r1 shouldBe Right(None)
+          r1 shouldBe None
 
           val r2 = space.produce(channel, bob, persist = false).apply()
 
-          r2 shouldBe Right(None)
+          r2 shouldBe None
 
           val r3 = space.produce(channel, bob, persist = false).apply()
 
@@ -106,11 +106,11 @@ trait ConcurrencyTests
         for (_ <- 1 to iterations) {
           val r1 = space.produce(channel, bob, persist = false).apply()
 
-          r1 shouldBe Right(None)
+          r1 shouldBe None
 
           val r2 = space.produce(channel, bob, persist = false).apply()
 
-          r2 shouldBe Right(None)
+          r2 shouldBe None
 
           val r3 = space
             .consume(
@@ -162,14 +162,14 @@ trait ConcurrencyTests
 
 class InMemoryStoreConcurrencyTests
     extends InMemoryStoreStorageExamplesTestsBase[Coeval]
-    with CoevalTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    with CoevalTests[Channel, Pattern, Entry, EntriesCaptor]
     with ConcurrencyTests {
   override def version: String = "InMemory"
 }
 
 class LMDBStoreConcurrencyTestsWithTls
     extends LMDBStoreStorageExamplesTestBase[Coeval]
-      with CoevalTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
+      with CoevalTests[Channel, Pattern, Entry, EntriesCaptor]
     with ConcurrencyTests {
   override def version: String = "LMDB with TLS"
 
@@ -178,7 +178,7 @@ class LMDBStoreConcurrencyTestsWithTls
 
 class LMDBStoreConcurrencyTestsNoTls
     extends LMDBStoreStorageExamplesTestBase[Coeval]
-      with CoevalTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
+      with CoevalTests[Channel, Pattern, Entry, EntriesCaptor]
     with ConcurrencyTests {
 
   override def version: String = "LMDB NO_TLS"

@@ -24,8 +24,8 @@ import scodec.Codec
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
-trait StorageTestsBase[F[_], C, P, E, A, K] extends FlatSpec with Matchers with OptionValues {
-  type T = ISpace[F, C, P, E, A, A, K]
+trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with OptionValues {
+  type T = ISpace[F, C, P, A, A, K]
 
   implicit def concurrentF: Concurrent[F]
   implicit def logF: Log[F]
@@ -137,7 +137,7 @@ trait StorageTestsBase[F[_], C, P, E, A, K] extends FlatSpec with Matchers with 
 }
 
 abstract class InMemoryStoreTestsBase[F[_]]
-    extends StorageTestsBase[F, String, Pattern, Nothing, String, StringsCaptor]
+    extends StorageTestsBase[F, String, Pattern, String, StringsCaptor]
     with BeforeAndAfterAll {
 
   override def withTestSpace[S](f: T => F[S]): S = {
@@ -149,7 +149,7 @@ abstract class InMemoryStoreTestsBase[F[_]]
     val ctx: Context[F, String, Pattern, String, StringsCaptor] = Context.createInMemory()
 
     run(for {
-      testSpace <- RSpace.create[F, String, Pattern, Nothing, String, String, StringsCaptor](
+      testSpace <- RSpace.create[F, String, Pattern, String, String, StringsCaptor](
                     ctx,
                     branch
                   )
@@ -180,7 +180,7 @@ abstract class InMemoryStoreTestsBase[F[_]]
 }
 
 abstract class LMDBStoreTestsBase[F[_]]
-    extends StorageTestsBase[F, String, Pattern, Nothing, String, StringsCaptor]
+    extends StorageTestsBase[F, String, Pattern, String, StringsCaptor]
     with BeforeAndAfterAll {
 
   val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
@@ -195,7 +195,7 @@ abstract class LMDBStoreTestsBase[F[_]]
     val env        = Context.create[F, String, Pattern, String, StringsCaptor](dbDir, mapSize)
 
     run(for {
-      testSpace <- RSpace.create[F, String, Pattern, Nothing, String, String, StringsCaptor](
+      testSpace <- RSpace.create[F, String, Pattern, String, String, StringsCaptor](
                     env,
                     testBranch
                   )
@@ -226,7 +226,7 @@ abstract class LMDBStoreTestsBase[F[_]]
 }
 
 abstract class MixedStoreTestsBase[F[_]]
-    extends StorageTestsBase[F, String, Pattern, Nothing, String, StringsCaptor]
+    extends StorageTestsBase[F, String, Pattern, String, StringsCaptor]
     with BeforeAndAfterAll {
 
   val dbDir: Path   = Files.createTempDirectory("rchain-mixed-storage-test-")
@@ -241,7 +241,7 @@ abstract class MixedStoreTestsBase[F[_]]
     val env        = Context.createMixed[F, String, Pattern, String, StringsCaptor](dbDir, mapSize)
 
     run(for {
-      testSpace <- RSpace.create[F, String, Pattern, Nothing, String, String, StringsCaptor](
+      testSpace <- RSpace.create[F, String, Pattern, String, String, StringsCaptor](
                     env,
                     testBranch
                   )

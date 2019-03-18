@@ -168,8 +168,9 @@ object BlockAPI {
   ): F[IndexedSeq[BlockMessage]] =
     for {
       dag       <- MultiParentCasper[F].blockDag
-      estimates <- MultiParentCasper[F].estimator(dag)
-      tip       = estimates.head
+      tipHashes <- MultiParentCasper[F].estimator(dag)
+      tipHash   = tipHashes.head
+      tip       <- ProtoUtil.unsafeGetBlock[F](tipHash)
       mainChain <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[BlockMessage], depth)
     } yield mainChain
 
@@ -317,8 +318,9 @@ object BlockAPI {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
         dag        <- MultiParentCasper[F].blockDag
-        estimates  <- MultiParentCasper[F].estimator(dag)
-        tip        = estimates.head
+        tipHashes  <- MultiParentCasper[F].estimator(dag)
+        tipHash    = tipHashes.head
+        tip        <- ProtoUtil.unsafeGetBlock[F](tipHash)
         mainChain  <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[BlockMessage], depth)
         blockInfos <- mainChain.toList.traverse(getBlockInfoWithoutTuplespace[F])
       } yield blockInfos

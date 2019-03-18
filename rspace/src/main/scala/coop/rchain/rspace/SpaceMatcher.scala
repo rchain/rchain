@@ -17,12 +17,11 @@ import scala.concurrent.SyncVar
   *
   * @tparam C a type representing a channel
   * @tparam P a type representing a pattern
-  * @tparam E a type representing an illegal state in matching algorithm
   * @tparam A a type representing an arbitrary piece of data
   * @tparam R a type representing a match result
   * @tparam K a type representing a continuation
   */
-private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, E, A, R, K] {
+private[rspace] trait SpaceMatcher[F[_], C, P, A, R, K] extends ISpace[F, C, P, A, R, K] {
 
   /**
     * A store which satisfies the [[IStore]] interface.

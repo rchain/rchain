@@ -68,7 +68,8 @@ object DeployRuntime {
       phloLimit: Long,
       phloPrice: Long,
       nonce: Int,
-      file: String
+      file: String,
+      validAfterBlock: Int
   ): F[Unit] =
     gracefulExit(
       Sync[F].delay(Try(Source.fromFile(file).mkString).toEither).flatMap {
@@ -85,6 +86,7 @@ object DeployRuntime {
               .withPhloLimit(phloLimit)
               .withPhloPrice(phloPrice)
               .withNonce(nonce)
+              .withValidAfterBlockNumber(validAfterBlock)
             response <- DeployService[F].deploy(d)
           } yield response.map(r => s"Response: $r")
       }
