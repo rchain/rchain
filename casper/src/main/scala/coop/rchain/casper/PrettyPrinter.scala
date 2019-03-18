@@ -50,7 +50,8 @@ object PrettyPrinter {
       user       = deployData.user
       pCost      <- d.cost
       cost       = pCost.cost
-    } yield s"${buildStringNoLimit(user)}: ${cost.toString}"
+    } yield s"User: ${buildStringNoLimit(user)}, Cost: ${cost.toString} " +
+            s"${buildString(deployData)}"
     deployString match {
       case Some(str) => str
       case None      => s"No deploy data"
