@@ -77,7 +77,7 @@ object GrpcTransport {
     for {
       _ <- ReaderT.liftF(metrics.incrementCounter("send"))
       result <- transport(peer)(
-                 _.tell(TLRequest(msg.some))
+                 _.send(TLRequest(msg.some))
                    .timer("send-time")
                ).map(_.flatMap {
                  case Some(p) =>

@@ -51,12 +51,8 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
 
   private class TestTransportLayer(response: Task[TLResponse])
       extends RoutingGrpcMonix.TransportLayer {
-    def tell(request: TLRequest): Task[TLResponse] = {
-      tellMessages += request
-      response
-    }
-    def ask(request: TLRequest): Task[TLResponse] = {
-      askMessages += request
+    def send(request: TLRequest): Task[TLResponse] = {
+      sendMessages += request
       response
     }
     def stream(input: Observable[Chunk]): Task[ChunkResponse] =
@@ -65,8 +61,7 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
         ChunkResponse()
       }
 
-    val tellMessages: mutable.MutableList[TLRequest]     = mutable.MutableList.empty[TLRequest]
-    val askMessages: mutable.MutableList[TLRequest]      = mutable.MutableList.empty[TLRequest]
+    val sendMessages: mutable.MutableList[TLRequest]     = mutable.MutableList.empty[TLRequest]
     val streamMessages: mutable.MutableList[List[Chunk]] = mutable.MutableList.empty[List[Chunk]]
   }
 
@@ -81,9 +76,8 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
         inside(result) {
           case Right(Right(p)) => p shouldEqual unit
         }
-        stub.tellMessages.length shouldBe 1
-        stub.tellMessages.head shouldBe TLRequest(Some(msg))
-        stub.askMessages.length shouldBe 0
+        stub.sendMessages.length shouldBe 1
+        stub.sendMessages.head shouldBe TLRequest(Some(msg))
         stub.streamMessages.length shouldBe 0
       }
     }
@@ -98,9 +92,8 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
           case Right(Left(p)) =>
             p shouldEqual internalCommunicationError("Got response: Test error")
         }
-        stub.tellMessages.length shouldBe 1
-        stub.tellMessages.head shouldBe TLRequest(Some(msg))
-        stub.askMessages.length shouldBe 0
+        stub.sendMessages.length shouldBe 1
+        stub.sendMessages.head shouldBe TLRequest(Some(msg))
         stub.streamMessages.length shouldBe 0
       }
     }
@@ -114,9 +107,8 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
           case Right(Left(p)) =>
             p shouldEqual peerUnavailable(peerRemote)
         }
-        stub.tellMessages.length shouldBe 1
-        stub.tellMessages.head shouldBe TLRequest(Some(msg))
-        stub.askMessages.length shouldBe 0
+        stub.sendMessages.length shouldBe 1
+        stub.sendMessages.head shouldBe TLRequest(Some(msg))
         stub.streamMessages.length shouldBe 0
       }
     }
@@ -130,9 +122,8 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
           case Right(Left(p)) =>
             p shouldEqual timeout
         }
-        stub.tellMessages.length shouldBe 1
-        stub.tellMessages.head shouldBe TLRequest(Some(msg))
-        stub.askMessages.length shouldBe 0
+        stub.sendMessages.length shouldBe 1
+        stub.sendMessages.head shouldBe TLRequest(Some(msg))
         stub.streamMessages.length shouldBe 0
       }
     }
@@ -146,9 +137,8 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
           case Right(Left(p)) =>
             p shouldEqual protocolException(testThrowable)
         }
-        stub.tellMessages.length shouldBe 1
-        stub.tellMessages.head shouldBe TLRequest(Some(msg))
-        stub.askMessages.length shouldBe 0
+        stub.sendMessages.length shouldBe 1
+        stub.sendMessages.head shouldBe TLRequest(Some(msg))
         stub.streamMessages.length shouldBe 0
       }
     }
@@ -174,8 +164,7 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
         result shouldBe Right(Right(()))
         stub.streamMessages.length shouldBe 1
         stub.streamMessages.head shouldBe chunks
-        stub.askMessages.length shouldBe 0
-        stub.tellMessages.length shouldBe 0
+        stub.sendMessages.length shouldBe 0
       }
     }
   }

@@ -54,7 +54,7 @@ message Protocol {
 }
 
 service TransportLayer {
-  rpc Tell (TLRequest) returns (TLResponse) {}
+  rpc Send (TLRequest) returns (TLResponse) {}
   rpc Stream (stream Chunk) returns (ChunkResponse) {}
 }
 

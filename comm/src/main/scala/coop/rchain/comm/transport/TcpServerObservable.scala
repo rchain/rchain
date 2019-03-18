@@ -41,7 +41,7 @@ class TcpServerObservable(
 
     val service = new RoutingGrpcMonix.TransportLayer {
 
-      def tell(request: TLRequest): Task[TLResponse] =
+      def send(request: TLRequest): Task[TLResponse] =
         request.protocol
           .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>
             Task.delay(bufferTell.pushNext(Tell(protocol))).map {
