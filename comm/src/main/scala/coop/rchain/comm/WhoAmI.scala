@@ -22,7 +22,7 @@ object WhoAmI {
       id: NodeIdentifier
   ): F[PeerNode] =
     for {
-      externalAddress <- retrieveExternalAddress(noUpnp, protocolPort)
+      externalAddress <- retrieveExternalAddress(noUpnp, List(protocolPort, discoveryPort))
       host            <- fetchHost(host, externalAddress)
       peerNode        = PeerNode.from(id, host, protocolPort, discoveryPort)
     } yield peerNode
@@ -50,10 +50,10 @@ object WhoAmI {
 
   private def retrieveExternalAddress[F[_]: Sync: Log](
       noUpnp: Boolean,
-      port: Int
+      ports: List[Int]
   ): F[Option[String]] =
     if (noUpnp) Option.empty[String].pure[F]
-    else UPnP.assurePortForwarding[F](List(port))
+    else UPnP.assurePortForwarding[F](ports)
 
   private def check[F[_]: Sync](source: String, from: String): F[(String, Option[String])] =
     checkFrom(from).map((source, _))
