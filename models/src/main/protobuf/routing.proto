@@ -46,11 +46,10 @@ message Protocol {
     Header header                                                 = 1;
     oneof message {
         Heartbeat                   heartbeat                     = 2;
-        HeartbeatResponse           heartbeat_response            = 3;
-        ProtocolHandshake           protocol_handshake            = 4;
-        ProtocolHandshakeResponse   protocol_handshake_response   = 5;
-        Packet                      packet                        = 6;
-        Disconnect                  disconnect                    = 7;
+        ProtocolHandshake           protocol_handshake            = 3;
+        ProtocolHandshakeResponse   protocol_handshake_response   = 4;
+        Packet                      packet                        = 5;
+        Disconnect                  disconnect                    = 6;
     }
 }
 

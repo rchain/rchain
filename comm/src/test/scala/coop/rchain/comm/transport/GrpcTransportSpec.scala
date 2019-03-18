@@ -31,9 +31,6 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
     PeerNode.from(id, "host", 0, 0)
   }
 
-  private def returnProtocol(protocol: Protocol): TLResponse =
-    TLResponse(TLResponse.Payload.Protocol(protocol))
-
   private val noResponse: TLResponse =
     TLResponse(TLResponse.Payload.NoResponse(NoResponse()))
 
@@ -83,23 +80,6 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
 
         inside(result) {
           case Right(Right(p)) => p shouldEqual unit
-        }
-        stub.tellMessages.length shouldBe 1
-        stub.tellMessages.head shouldBe TLRequest(Some(msg))
-        stub.askMessages.length shouldBe 0
-        stub.streamMessages.length shouldBe 0
-      }
-    }
-
-    "server replies with NoResponse" should {
-      "fail with an InternalCommunicationError" in {
-        val response = returnProtocol(ProtocolHelper.heartbeatResponse(peerRemote))
-        val stub     = new TestTransportLayer(Task.now(response))
-        val result   = GrpcTransport.send(peerRemote, msg).run(stub).attempt.runSyncUnsafe()
-
-        inside(result) {
-          case Right(Left(InternalCommunicationError(err))) =>
-            err should startWith("Was expecting no message. Response: ")
         }
         stub.tellMessages.length shouldBe 1
         stub.tellMessages.head shouldBe TLRequest(Some(msg))

@@ -250,21 +250,6 @@ final class Dispatcher[F[_]: Monad: Timer, R, S](
 }
 
 object Dispatcher {
-  def heartbeatResponseDispatcher[F[_]: Monad: Timer]
-    : Dispatcher[F, Protocol, CommunicationResponse] =
-    new Dispatcher[F, Protocol, CommunicationResponse](
-      peer => CommunicationResponse.handledWithMessage(ProtocolHelper.heartbeatResponse(peer)),
-      ignore = _.message.isDisconnect
-    )
-
-  def heartbeatResponseDispatcherWithDelay[F[_]: Monad: Timer](
-      delay: FiniteDuration
-  ): Dispatcher[F, Protocol, CommunicationResponse] =
-    new Dispatcher[F, Protocol, CommunicationResponse](
-      peer => CommunicationResponse.handledWithMessage(ProtocolHelper.heartbeatResponse(peer)),
-      delay = Some(delay),
-      ignore = _.message.isDisconnect
-    )
 
   def withoutMessageDispatcher[F[_]: Monad: Timer]: Dispatcher[F, Protocol, CommunicationResponse] =
     new Dispatcher[F, Protocol, CommunicationResponse](
