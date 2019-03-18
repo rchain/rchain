@@ -104,11 +104,20 @@ in {
 
             contract revVault(@"transfer", @revAddress, @amount, ret) = {
 
-              new amountPurseCh, revAddressValid, revAddressValidEither, eitherPurseCh, purseReadyCh, doDeposit in {
+              new
+                revAddressValid, revAddressValidEither, amountNonNegative, split,
+                eitherPurseCh, purseReadyCh, doDeposit
+              in {
                 RevAddress!("validate", revAddress, *revAddressValid) |
                 @Either!("fromNillableError <-", *revAddressValid, *revAddressValidEither) |
-                purse!("split", amount, *amountPurseCh) |
-                @Either!("fromSingletonList <-", *amountPurseCh, "Insufficient funds", *eitherPurseCh) |
+                @Either!("fromBoolean", amount >= 0, "Amount must be non-negative", *amountNonNegative) |
+                @Either!("flatMap <-", *amountNonNegative, *split, *eitherPurseCh) |
+                for (_, ret <- split) {
+                  new amountPurseCh in {
+                    purse!("split", amount, *amountPurseCh) |
+                    @Either!("fromSingletonList <-", *amountPurseCh, "Insufficient funds", *ret)
+                  }
+                } |
                 @Either!("productR <-", *revAddressValidEither, *eitherPurseCh, *purseReadyCh) |
                 @Either!("flatMap <-", *purseReadyCh, *doDeposit, *ret) |
                 for (@p, retCh <- doDeposit) {
