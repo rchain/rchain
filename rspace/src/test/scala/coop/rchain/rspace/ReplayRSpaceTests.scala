@@ -76,6 +76,43 @@ trait ReplayRSpaceTests
       }
     }
 
+  /**
+    * RSpace and RepayRSpace both have a reset functionality
+    * It has been shown that it's not obvious when it can be safely skipped
+    * (iow the store is already at desired root)
+    * This test shows that an internal mechanism 'isDirty' properly identifies such cases
+    */
+  "reset to the same checkpoint" should "work" in withTestSpaces {
+    (space, replaySpace) =>
+      for {
+        root0 <- space.createCheckpoint().map(_.root)
+        
+        _     = space.store.isEmpty shouldBe true
+        _     = replaySpace.store.isEmpty shouldBe true
+
+        //pollute the store
+        _     <- space.produce("ch1", "datum1", false)
+        _ = space.store.isEmpty shouldBe false
+
+        // space after an action is dirty
+        dirty1 <- space.isDirty(root0)
+        _ = dirty1 shouldBe true
+
+        _ <- space.reset(root0)
+        _ = space.store.isEmpty shouldBe true
+
+        // space after reset is clean
+        dirty2 <- space.isDirty(root0)
+        _ = dirty2 shouldBe false
+
+        _ <- space.reset(root0)
+        _ = space.store.isEmpty shouldBe true
+
+        _ <- replaySpace.reset(root0)
+        _ = replaySpace.store.isEmpty shouldBe true
+      } yield ()
+  }
+
   "reset to a checkpoint from a different branch" should "work" in withTestSpaces {
     (space, replaySpace) =>
       for {
