@@ -410,7 +410,12 @@ class NodeRuntime private[node] (
                         Log.eitherTLog(Monad[Task], log),
                         blockStore
                       )
-    oracle = SafetyOracle.cliqueOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
+    oracle = SafetyOracle
+      .cliqueOracle[Effect](
+        Monad[Effect],
+        Log.eitherTLog(Monad[Task], log),
+        Metrics.eitherT(Monad[Task], metrics)
+      )
     runtime <- {
       implicit val s                = rspaceScheduler
       implicit val m: Metrics[Task] = metrics
