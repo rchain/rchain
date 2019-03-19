@@ -444,11 +444,13 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
     }
 
   override def createCheckpoint(): F[Checkpoint] =
-    syncF.delay {
-      val root   = store.createCheckpoint()
-      val events = eventLog.take()
-      eventLog.put(Seq.empty)
-      Checkpoint(root, events)
+    contextShift.evalOn(scheduler) {
+      syncF.delay {
+        val root   = store.createCheckpoint()
+        val events = eventLog.take()
+        eventLog.put(Seq.empty)
+        Checkpoint(root, events)
+      }
     }
 }
 

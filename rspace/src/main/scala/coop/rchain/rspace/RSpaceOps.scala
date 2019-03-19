@@ -1,6 +1,6 @@
 package coop.rchain.rspace
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
@@ -13,7 +13,7 @@ import coop.rchain.shared.Log
 import coop.rchain.shared.SyncVarOps._
 
 import scala.collection.immutable.Seq
-import scala.concurrent.SyncVar
+import scala.concurrent.{ExecutionContext, SyncVar}
 import scala.util.Random
 
 abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
@@ -24,7 +24,9 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
     serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeK: Serialize[K],
-    logF: Log[F]
+    logF: Log[F],
+    contextShift: ContextShift[F],
+    scheduler: ExecutionContext
 ) extends SpaceMatcher[F, C, P, A, R, K] {
 
   implicit val codecC = serializeC.toCodec
@@ -153,11 +155,13 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
   override def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
       implicit m: Match[F, P, A, R]
   ): F[Option[(K, Seq[R])]] =
-    installLockF(channels) {
-      lockedInstall(channels, patterns, continuation)
+    contextShift.evalOn(scheduler) {
+      installLockF(channels) {
+        lockedInstall(channels, patterns, continuation)
+      }
     }
 
-  override def retrieve(
+  override protected[rspace] def retrieve(
       root: Blake2b256Hash,
       channelsHash: Blake2b256Hash
   ): F[Option[GNAT[C, P, A, K]]] =
@@ -165,33 +169,51 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
       history.lookup(store.trieStore, root, channelsHash)
     }
 
+  def getData(channel: C): F[Seq[Datum[A]]] =
+    contextShift.evalOn(scheduler) {
+      store.withReadTxnF { txn =>
+        store.getData(txn, Seq(channel))
+      }
+    }
+
+  def getWaitingContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
+    contextShift.evalOn(scheduler) {
+      store.withReadTxnF { txn =>
+        store.getWaitingContinuation(txn, channels)
+      }
+    }
+
   override def reset(root: Blake2b256Hash): F[Unit] =
-    for {
-      leaves <- store.withWriteTxnF { txn =>
-                 store
-                   .withTrieTxn(txn) { trieTxn =>
-                     store.trieStore.validateAndPutRoot(trieTxn, store.trieBranch, root)
-                     store.trieStore.getLeaves(trieTxn, root)
-                   }
-               }
-      _ <- syncF.delay { eventLog.update(kp(Seq.empty)) }
-      _ <- syncF.delay { store.getAndClearTrieUpdates() }
-      _ <- store.withWriteTxnF { txn =>
-            store.clear(txn)
-          }
-      _ <- restoreInstalls()
-      _ <- store.withWriteTxnF { txn =>
-            store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
-          }
-    } yield ()
+    contextShift.evalOn(scheduler) {
+      for {
+        leaves <- store.withWriteTxnF { txn =>
+                   store
+                     .withTrieTxn(txn) { trieTxn =>
+                       store.trieStore.validateAndPutRoot(trieTxn, store.trieBranch, root)
+                       store.trieStore.getLeaves(trieTxn, root)
+                     }
+                 }
+        _ <- syncF.delay { eventLog.update(kp(Seq.empty)) }
+        _ <- syncF.delay { store.getAndClearTrieUpdates() }
+        _ <- store.withWriteTxnF { txn =>
+              store.clear(txn)
+            }
+        _ <- restoreInstalls()
+        _ <- store.withWriteTxnF { txn =>
+              store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
+            }
+      } yield ()
+    }
 
   override def clear(): F[Unit] =
-    store
-      .withReadTxnF { txn =>
-        store.withTrieTxn(txn) { trieTxn =>
-          store.trieStore.getEmptyRoot(trieTxn)
+    contextShift.evalOn(scheduler) {
+      store
+        .withReadTxnF { txn =>
+          store.withTrieTxn(txn) { trieTxn =>
+            store.trieStore.getEmptyRoot(trieTxn)
+          }
         }
-      }
-      .flatMap(root => reset(root))
+        .flatMap(root => reset(root))
+    }
 
 }

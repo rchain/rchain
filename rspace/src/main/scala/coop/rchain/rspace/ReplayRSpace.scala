@@ -395,7 +395,7 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   @inline
-  private def removeBindingsFor(
+  private[this] def removeBindingsFor(
       commRef: COMM
   ): Unit =
     commRef.produces.foldLeft(replayData.removeBinding(commRef.consume, commRef)) {
@@ -404,16 +404,18 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
     }
 
   def createCheckpoint(): F[Checkpoint] =
-    for {
-      isEmpty <- syncF.delay(replayData.isEmpty)
-      checkpoint <- isEmpty.fold(
-                     syncF.delay { Checkpoint(store.createCheckpoint(), Seq.empty) }, {
-                       val msg =
-                         s"unused comm event: replayData multimap has ${replayData.size} elements left"
-                       logF.error(msg) *> syncF.raiseError[Checkpoint](new ReplayException(msg))
-                     }
-                   )
-    } yield checkpoint
+    contextShift.evalOn(scheduler) {
+      for {
+        isEmpty <- syncF.delay(replayData.isEmpty)
+        checkpoint <- isEmpty.fold(
+                       syncF.delay { Checkpoint(store.createCheckpoint(), Seq.empty) }, {
+                         val msg =
+                           s"unused comm event: replayData multimap has ${replayData.size} elements left"
+                         logF.error(msg) *> syncF.raiseError[Checkpoint](new ReplayException(msg))
+                       }
+                     )
+      } yield checkpoint
+    }
 
   override def clear(): F[Unit] =
     for {

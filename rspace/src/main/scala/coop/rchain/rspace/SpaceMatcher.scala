@@ -69,16 +69,6 @@ private[rspace] trait SpaceMatcher[F[_], C, P, A, R, K] extends ISpace[F, C, P, 
       case _ => none[MatchingDataCandidate].pure[F]
     }
 
-  def getData(channel: C): F[Seq[Datum[A]]] =
-    store.withReadTxnF { txn =>
-      store.getData(txn, Seq(channel))
-    }
-
-  def getWaitingContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
-    store.withReadTxnF { txn =>
-      store.getWaitingContinuation(txn, channels)
-    }
-
   /** Iterates through (channel, pattern) pairs looking for matching data.
     *
     * Potential match candidates are supplied by the `channelToIndexedData` cache.

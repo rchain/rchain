@@ -103,7 +103,10 @@ trait ISpace[F[_], C, P, A, R, K] {
   /**
     * Retrieves a GNAT from the history trie at a particular checkpoint and channels hash.
     */
-  def retrieve(root: Blake2b256Hash, channelsHash: Blake2b256Hash): F[Option[GNAT[C, P, A, K]]]
+  protected[rspace] def retrieve(
+      root: Blake2b256Hash,
+      channelsHash: Blake2b256Hash
+  ): F[Option[GNAT[C, P, A, K]]]
 
   def getData(channel: C): F[Seq[Datum[A]]]
 
