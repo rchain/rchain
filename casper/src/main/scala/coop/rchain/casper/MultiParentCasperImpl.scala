@@ -141,8 +141,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
           }
       _         <- span.mark("before-estimator")
       tipHashes <- estimator(updatedDag)
+      _         <- span.mark("after-estimator")
       tipHash   = tipHashes.head
       _         <- Log[F].info(s"New fork-choice tip is block ${PrettyPrinter.buildString(tipHash)}.")
+      _         <- span.close()
     } yield attempt
 
   def contains(

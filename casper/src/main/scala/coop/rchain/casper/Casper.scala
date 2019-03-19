@@ -78,6 +78,7 @@ sealed abstract class MultiParentCasperInstances {
                                       runtimeManager,
                                       genesisSpan
                                     )
+      _ <- genesisSpan.close()
       postGenesisStateHash <- maybePostGenesisStateHash match {
                                case Left(BlockException(ex)) => Sync[F].raiseError[StateHash](ex)
                                case Right(None) =>
