@@ -1,0 +1,63 @@
+new
+  revAddress(`rho:rev:address`), rl(`rho:registry:lookup`), RevVaultCh, getDeployData(`rho:deploy:params`),
+  getDeployerPubKey, deployerPubKey, withDeployerVaultUnlocked,
+  stdout(`rho:io:stdout`), log
+in {
+
+  rl!(`rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z`, *RevVaultCh) |
+  for (@(_, RevVault) <- RevVaultCh) {
+
+    log!(("3.transfer_funds.rho")) |
+
+    // REPLACE THE REV ADDRESS HERE vvv
+    match ("%REV_ADDR", 100) {
+      (revAddress, amount) => {
+
+        new vaultUnlockedCh in {
+          withDeployerVaultUnlocked!(*vaultUnlockedCh) |
+          for (vault <- vaultUnlockedCh) {
+
+            log!(("Beginning transfer of ", amount, "REV to", revAddress)) |
+
+            new resultCh in {
+              vault!("transfer", revAddress, amount, *resultCh) |
+              for (@result <- resultCh) {
+
+                log!(("Finished transfer of ", amount, "REV to", revAddress, "result was:", result))
+              }
+            }
+          }
+        }
+
+      }
+    } |
+
+    contract withDeployerVaultUnlocked(ret) = {
+      new vaultLockedCh, identityChanged, alliceVaultCh in {
+        getDeployerPubKey!(*deployerPubKey) |
+        for (@pubKey <- deployerPubKey) {
+          @RevVault!("findOrCreate", pubKey, *vaultLockedCh) |
+          for (@("Right", vaultLocked) <- vaultLockedCh) {
+            @vaultLocked!("unlock", *ret)
+          }
+        }
+      }
+    }
+
+  } |
+
+  contract getDeployerPubKey(retCh) = {
+    new ch in {
+      getDeployData!(*ch) |
+      for (_, _, @pubKey, _ <- ch) {
+        log!(("Deployer public key is:", pubKey)) |
+        retCh!(pubKey)
+      }
+    }
+  } |
+
+  contract log(@data) = {
+    @"DEMO"!(data) | stdout!(data)
+  }
+}
+
