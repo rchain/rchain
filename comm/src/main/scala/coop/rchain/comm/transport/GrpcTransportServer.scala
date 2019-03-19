@@ -66,12 +66,7 @@ class GrpcTransportServer(
 
     val dispatchInternal: ServerMessage => Task[Unit] = {
       // TODO: consider logging on failure (Left)
-      case Tell(protocol) => dispatch(protocol).attemptAndLog.void
-      case Ask(protocol, handle) if !handle.complete =>
-        dispatch(protocol).attempt.map {
-          case Left(e)         => handle.failWith(e)
-          case Right(response) => handle.reply(response)
-        }.void
+      case Send(protocol) => dispatch(protocol).attemptAndLog.void
       case msg: StreamMessage =>
         StreamHandler.restore(msg) >>= {
           case Left(ex) =>

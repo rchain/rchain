@@ -97,9 +97,6 @@ object HandleMessages {
   def handleHeartbeat[F[_]: Monad: Time: TransportLayer: ErrorHandler: RPConfAsk](
       peer: PeerNode,
       heartbeat: Heartbeat
-  ): F[CommunicationResponse] =
-    RPConfAsk[F].reader(_.local) map (
-        local => handledWithMessage(ProtocolHelper.heartbeatResponse(local))
-    )
+  ): F[CommunicationResponse] = handledWithoutMessage.pure[F]
 
 }

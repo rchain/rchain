@@ -26,7 +26,6 @@ class TcpServerObservable(
     serverSslContext: SslContext,
     maxMessageSize: Int,
     tellBufferSize: Int = 1024,
-    askBufferSize: Int = 1024,
     blobBufferSize: Int = 32,
     askTimeout: FiniteDuration = 5.second,
     tempFolder: Path
@@ -36,45 +35,19 @@ class TcpServerObservable(
   def unsafeSubscribeFn(subscriber: Subscriber[ServerMessage]): Cancelable = {
 
     val bufferTell        = buffer.LimitedBufferObservable.dropNew[ServerMessage](tellBufferSize)
-    val bufferAsk         = buffer.LimitedBufferObservable.dropNew[ServerMessage](askBufferSize)
     val bufferBlobMessage = buffer.LimitedBufferObservable.dropNew[ServerMessage](blobBufferSize)
     val merged =
-      Observable(bufferTell, bufferAsk, bufferBlobMessage).mergeMap(identity)(BackPressure(10))
+      Observable(bufferTell, bufferBlobMessage).mergeMap(identity)(BackPressure(10))
 
     val service = new RoutingGrpcMonix.TransportLayer {
 
-      def tell(request: TLRequest): Task[TLResponse] =
+      def send(request: TLRequest): Task[TLResponse] =
         request.protocol
           .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>
-            Task.delay(bufferTell.pushNext(Tell(protocol))).map {
+            Task.delay(bufferTell.pushNext(Send(protocol))).map {
               case false => internalServerError("message dropped")
               case true  => noResponse
             }
-          }
-
-      @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-      def ask(request: TLRequest): Task[TLResponse] =
-        request.protocol
-          .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>
-            Task
-              .create[CommunicationResponse] { (s, cb) =>
-                val reply = Reply(cb)
-                s.scheduleOnce(askTimeout)(reply.failWith(new TimeoutException))
-                bufferAsk.pushNext(Ask(protocol, reply)) match {
-                  case false => reply.failWith(new RuntimeException("message dropped"))
-                  case true  =>
-                }
-                Cancelable.empty
-              }
-              .map {
-                case NotHandled(error)            => internalServerError(error.message)
-                case HandledWitoutMessage         => noResponse
-                case HandledWithMessage(response) => returnProtocol(response)
-              }
-              .onErrorRecover {
-                case _: TimeoutException => internalServerError(CommError.timeout.message)
-                case NonFatal(ex)        => internalServerError(ex.getMessage)
-              }
           }
 
       def stream(observable: Observable[Chunk]): Task[ChunkResponse] = {
@@ -88,9 +61,6 @@ class TcpServerObservable(
         }).as(ChunkResponse())
 
       }
-
-      private def returnProtocol(protocol: Protocol): TLResponse =
-        TLResponse(TLResponse.Payload.Protocol(protocol))
 
       // TODO InternalServerError should take msg in constructor
       private def internalServerError(msg: String): TLResponse =

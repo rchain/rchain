@@ -111,19 +111,8 @@ class GrpcTransportClient(
       case Left(e)                                  => Task.now(Left(protocolException(e)))
     }
 
-  def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): Task[CommErr[Protocol]] =
-    withClient(peer, timeout, enforce = false)(GrpcTransport.roundTrip(peer, msg))
-
-  private def send(
-      peer: PeerNode,
-      msg: Protocol,
-      timeout: FiniteDuration,
-      enforce: Boolean
-  ): Task[CommErr[Unit]] =
-    withClient(peer, timeout, enforce)(GrpcTransport.send(peer, msg))
-
   def send(peer: PeerNode, msg: Protocol): Task[CommErr[Unit]] =
-    send(peer, msg, DefaultSendTimeout, enforce = false)
+    withClient(peer, DefaultSendTimeout, enforce = false)(GrpcTransport.send(peer, msg))
 
   def broadcast(peers: Seq[PeerNode], msg: Protocol): Task[Seq[CommErr[Unit]]] =
     Task.gatherUnordered(peers.map(send(_, msg)))
@@ -170,9 +159,6 @@ class GrpcTransportClient(
     handle(retries)
   }
 
-  private def innerBroadcast(peers: Seq[PeerNode], msg: Protocol): Task[Seq[CommErr[Unit]]] =
-    Task.gatherUnordered(peers.map(send(_, msg, 500.milliseconds, enforce = true)))
-
   def start(): Task[Unit] = {
 
     def initQueue(maybeQueue: Option[Cancelable])(create: Task[Cancelable]): Task[Cancelable] =
@@ -209,6 +195,16 @@ class GrpcTransportClient(
   }
 
   def shutdown(msg: Protocol): Task[Unit] = {
+
+    def innerBroadcast(peers: Seq[PeerNode], msg: Protocol): Task[Seq[CommErr[Unit]]] =
+      Task.gatherUnordered(
+        peers
+          .map(
+            peer =>
+              withClient(peer, DefaultSendTimeout, enforce = true)(GrpcTransport.send(peer, msg))
+          )
+      )
+
     def shutdownQueue: Task[Unit] = cache.modify { s =>
       for {
         _ <- log.info("Shutting down transport layer")
