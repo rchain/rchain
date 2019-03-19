@@ -319,6 +319,7 @@ final case class PrettyPrinter(
 
   private def buildMatchCase(matchCase: MatchCase, indent: Int): Coeval[String] = {
     val patternFree: Int = matchCase.freeCount
+    val isReceive        = matchCase.source.receives.nonEmpty
     this
       .copy(
         freeShift = boundShift,
@@ -327,9 +328,11 @@ final case class PrettyPrinter(
         baseId = setBaseId()
       )
       .buildStringM(matchCase.pattern, indent) |+| pure(" => ") |+|
+      pure(if (!isReceive) "" else s"{\n${indentStr * (indent + 1)}") |+|
       this
         .copy(boundShift = boundShift + patternFree)
-        .buildStringM(matchCase.source, indent)
+        .buildStringM(matchCase.source, if (!isReceive) indent else indent + 1) |+|
+      pure(if (!isReceive) "" else s"\n${indentStr * indent}}")
   }
 
   private def isEmpty(p: Par) =

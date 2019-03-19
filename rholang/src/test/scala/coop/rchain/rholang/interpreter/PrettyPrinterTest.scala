@@ -745,6 +745,18 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
         |}""".stripMargin
   }
 
+  it should "Print receive in curly brackets" in {
+    checkRoundTrip(
+      """match Nil {
+        |  _ => {
+        |    for( @{_} <- @{Nil} ) {
+        |      Nil
+        |    }
+        |  }
+        |}""".stripMargin
+    )
+  }
+
   "PIf" should "Print as a match" in {
     val condition = new PGround(new GroundBool(new BoolTrue()))
     val listSend  = new ListProc()
