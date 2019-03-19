@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import cats.effect.Sync
 import cats.implicits._
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.models._
@@ -127,6 +128,18 @@ object SystemProcesses {
               .getOrElse(Par())
 
           produce(Seq(errorMessage), ack)
+
+        case isContractCall(
+            produce,
+            Seq(RhoType.String("fromPublicKey"), RhoType.ByteArray(publicKey), ack)
+        ) =>
+          val response =
+            RevAddress
+              .fromPublicKey(PublicKey(publicKey))
+              .map(RhoType.String(_))
+              .getOrElse(Par())
+
+          produce(Seq(response), ack)
       }
 
       def secp256k1Verify: Contract[F] =

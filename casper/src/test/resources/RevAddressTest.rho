@@ -6,7 +6,7 @@ new
   revAddress(`rho:rev:address`),
   stdlog(`rho:io:stdlog`),
   setup,
-  test_valid_address, test_invalid_address
+  test_valid_address, test_invalid_address, test_fromPublicKey, test_fromPublicKey_invalid
 in {
   rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *RhoSpecCh) |
   for(@(_, RhoSpec) <- RhoSpecCh) {
@@ -14,6 +14,8 @@ in {
       [
         ("Validating a valid address returns Nil", *test_valid_address),
         ("Validating a invalid address returns a non-Nil value", *test_invalid_address),
+        ("Convert a public key into a RevAddress", *test_fromPublicKey),
+        ("Reject an invalid public key", *test_fromPublicKey_invalid),
       ])
   } |
 
@@ -29,10 +31,41 @@ in {
   } |
 
   contract test_valid_address(rhoSpec, _, ackCh) = {
-    stdlog!("info", "test valid address") |
     new retCh in {
       revAddress!("validate", "1111K9MczqzZrNkUNmNGrNFyz7F7LiCUgaCHXd28g2k5PxiaNuCAi", *retCh) |
       rhoSpec!("assert", (Nil, "== <-", *retCh), "expecting a Nil value since there are no errors", *ackCh)
+    }
+  } |
+
+  contract test_fromPublicKey(rhoSpec, _, ackCh) = {
+    new r1, r2, r3 in {
+      revAddress!(
+        "fromPublicKey",
+        "0000000000000000000000000000000000000000000000000000000000000000".hexToBytes(),
+        *r1
+      ) |
+      revAddress!(
+        "fromPublicKey",
+        "1111111111111111111111111111111111111111111111111111111111111111".hexToBytes(),
+        *r2
+      ) |
+      revAddress!(
+        "fromPublicKey",
+        "2222222222222222222222222222222222222222222222222222222222222222".hexToBytes(),
+        *r3
+      ) |
+      rhoSpec!("assertMany", [
+        (("111123jwD7acNy6vfYwzWXAbnSQ8z8Bv24cCkVcVbd6SuP2LtFK7w7", "== <-", *r1), "correct RevAddress"),
+        (("11112comWwT626KfXkvnWRHDwPDm4VefqSr6ijvinhVHGTuXe6wWmk", "== <-", *r2), "correct RevAddress"),
+        (("11112ipm5NY9BqyQ3p3sUx8pdFWV5jFQ5qqMcUzZWe19hwz3USbHBG", "== <-", *r3), "correct RevAddress"),
+      ], *ackCh)
+    }
+  } |
+
+  contract test_fromPublicKey_invalid(rhoSpec, _, ackCh) = {
+    new retCh in {
+      revAddress!("fromPublicKey", "F0F0".hexToBytes(), *retCh) |
+      rhoSpec!("assert", (Nil, "== <-", *retCh), "correct RevAddress", *ackCh)
     }
   }
 }

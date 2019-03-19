@@ -1,0 +1,154 @@
+// The table below describes the required computations and their dependencies
+//
+// No. | Dependency | Computation method | Result
+// ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+// 1.  |            | given              | sk = be8ae000e4d2f29c73f792705314d71b6c0d56d7c640c6b4df9fabf90518c623
+// 2.  |            | given              | timestamp = 1551879405043
+// 3.  |            | lastNonce          | nonce = 9223372036854775807
+// 4.  | 1,         | ed25519            | pk = f59e613088fd7e2e8a371b5115701f3a4f53f35ea6f60433923153ee7fbf83fd
+// 5.  | 4, 2,      | genIds             | uname = Unforgeable(0x5df3b04a7cc9aaa9dad1afa7b9bc9b1df9d6ccc76c5dff3c4d2d89b1ba6a3e8b)
+// 6.  | 3, 5,      | registry           | value = (9223372036854775807, bundle+ {   Unforgeable(0x5df3b04a7cc9aaa9dad1afa7b9bc9b1df9d6ccc76c5dff3c4d2d89b1ba6a3e8b) })
+// 7.  | 6,         | protobuf           | toSign = 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a205df3b04a7cc9aaa9dad1afa7b9bc9b1df9d6ccc76c5dff3c4d2d89b1ba6a3e8b1001
+// 8.  | 7, 1,      | ed25519            | sig = cd16cb789f128767d2d1224b931d0d5d47dce130266c72839d09d38bc9070a365234e0d9cce4a04e7ac4a1648db1b2ec1ba55751d0ead2c465dbfb55a5d13f01
+// 9.  | 4,         | registry           | uri = rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z
+// ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+new
+  RevVault, rs(`rho:registry:insertSigned:ed25519`), uriOut,
+  rl(`rho:registry:lookup`), RevAddress(`rho:rev:address`), MakeMintCh, LockboxCh, EitherCh,
+  _makeVault,
+  _newVault,
+  _getOrCreate,
+  _revVault,
+  stdout(`rho:io:stdout`)
+in {
+  rl!(`rho:id:exunyijimapk7z43g3bbr69awqdz54kyroj9q43jgu3dh567fxsftx`, *MakeMintCh) |
+  rl!(`rho:id:9dsr55z1js13x346yhhecx66ns486i3yqf6jafrd9p9hdrrbxjqmyu`, *LockboxCh) |
+  rl!(`rho:id:j6trahbxycumerwpr5qype7j43b7eqh8auebwsa9nn68if47gswh73`, *EitherCh) |
+  for(@(_, MakeMint) <- MakeMintCh; @(_, Lockbox) <- LockboxCh; @(_, Either) <- EitherCh) {
+
+    new mintCh, vaultMapStore in {
+      vaultMapStore!({}) |
+      @MakeMint!(*mintCh) |
+      for (mint <- mintCh) {
+
+        //FIXME the result of createGenesisVault is not protected, nor is the call to it. Both should be.
+        contract RevVault(@"createGenesisVault", @ownerPubKeyBytes, @initialAmount, ret) = {
+          new createGenesisVault in {
+            _getOrCreate!(ownerPubKeyBytes, *createGenesisVault, *ret) |
+            for (retCh <- createGenesisVault) {
+
+              _makeVault!(ownerPubKeyBytes, initialAmount, *retCh)
+            }
+          }
+        } |
+
+        contract RevVault(@"findOrCreate", @ownerPubKeyBytes, ret) = {
+
+          new createLockedVault in {
+            _getOrCreate!(ownerPubKeyBytes, *createLockedVault, *ret) |
+            for (retCh <- createLockedVault) {
+
+              new vaultCh, lock in {
+                _makeVault!(ownerPubKeyBytes, 0, *vaultCh) |
+                @Either!("map <-", *vaultCh, *lock, *retCh) |
+                for (@vault, retCh <- lock) {
+                  @Lockbox!("lock", ownerPubKeyBytes, vault, *retCh)
+                }
+              }
+            }
+          }
+        } |
+
+        contract _getOrCreate(@key, constructor, ret) = {
+          for (@vaultMap <- vaultMapStore) {
+            match vaultMap.get(key) {
+              Nil => {
+                new resCh in {
+                  constructor!(*resCh) |
+                  for (@eitherVault <- resCh) {
+                    match eitherVault {
+                      ("Right", vault) => vaultMapStore!(vaultMap.set(key, vault))
+                      ("Left",  _    ) => vaultMapStore!(vaultMap)
+                    } |
+                    ret!(eitherVault)
+                  }
+                }
+              }
+              value => {
+                vaultMapStore!(vaultMap) | ret!(("Right", value))
+              }
+            }
+          }
+        } |
+
+        contract _makeVault(@ownerPubKeyBytes, @initialAmount, ret) = {
+
+          new revAddrCh, eitherRevAddrCh, purseCh, eitherPurseCh in {
+            RevAddress!("fromPublicKey", ownerPubKeyBytes, *revAddrCh) |
+            @Either!("fromNillable <-", *revAddrCh, "Invalid public key", *eitherRevAddrCh) |
+            mint!("makePurse", initialAmount, *purseCh) |
+            @Either!("fromNillable <-", *purseCh, "Couldn't create purse", *eitherPurseCh) |
+            @Either!("map2 <-", *eitherRevAddrCh, *eitherPurseCh, *_newVault, *ret)
+          }
+
+        } |
+
+        contract _newVault(@ownRevAddress, purse, ret) = {
+          new revVault in {
+
+            ret!(bundle+{*revVault}) |
+
+            contract revVault(@"balance", ret) = {
+              purse!("getBalance", *ret)
+            } |
+
+            contract revVault(@"transfer", @revAddress, @amount, ret) = {
+
+              new
+                revAddressValid, revAddressValidEither, amountNonNegative, split,
+                eitherPurseCh, purseReadyCh, doDeposit
+              in {
+                RevAddress!("validate", revAddress, *revAddressValid) |
+                @Either!("fromNillableError <-", *revAddressValid, *revAddressValidEither) |
+                @Either!("fromBoolean", amount >= 0, "Amount must be non-negative", *amountNonNegative) |
+                @Either!("flatMap <-", *amountNonNegative, *split, *eitherPurseCh) |
+                for (_, ret <- split) {
+                  new amountPurseCh in {
+                    purse!("split", amount, *amountPurseCh) |
+                    @Either!("fromSingletonList <-", *amountPurseCh, "Insufficient funds", *ret)
+                  }
+                } |
+                @Either!("productR <-", *revAddressValidEither, *eitherPurseCh, *purseReadyCh) |
+                @Either!("flatMap <-", *purseReadyCh, *doDeposit, *ret) |
+                for (@p, retCh <- doDeposit) {
+                  @{revAddress | bundle0{*_revVault}}!("_deposit", p, *retCh)
+                }
+              }
+
+            } |
+
+            contract @{ownRevAddress | bundle0{*_revVault}}(@"_deposit", depositPurse, retCh) = {
+
+              new amountCh, depositSuccessCh in {
+                depositPurse!("getBalance", *amountCh) |
+                for (@amount <- amountCh) {
+
+                  purse!("deposit", amount, *depositPurse, *depositSuccessCh) |
+                  @Either!("fromBoolean <-", *depositSuccessCh, "BUG FOUND: purse deposit failed", *retCh)
+                }
+              }
+            }
+          }
+        } |
+
+        rs!(
+          "f59e613088fd7e2e8a371b5115701f3a4f53f35ea6f60433923153ee7fbf83fd".hexToBytes(),
+          (9223372036854775807, bundle+{*RevVault}),
+          "cd16cb789f128767d2d1224b931d0d5d47dce130266c72839d09d38bc9070a365234e0d9cce4a04e7ac4a1648db1b2ec1ba55751d0ead2c465dbfb55a5d13f01".hexToBytes(),
+          *uriOut
+        )
+
+      }
+    }
+  }
+}
