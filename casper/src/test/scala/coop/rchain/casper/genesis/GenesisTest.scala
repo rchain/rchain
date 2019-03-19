@@ -24,7 +24,7 @@ import java.nio.file.Path
 
 import cats.effect.Sync
 import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, NoopSpan}
 import monix.eval.Task
 
 class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
@@ -173,11 +173,13 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
             genesis <- fromInputFiles()(runtimeManager, genesisPath, log, time)
             _       <- BlockStore[Task].put(genesis.blockHash, genesis)
             dag     <- blockDagStorage.getRepresentation
+            span    = new NoopSpan[Task]
             maybePostGenesisStateHash <- InterpreterUtil
                                           .validateBlockCheckpoint[Task](
                                             genesis,
                                             dag,
-                                            runtimeManager
+                                            runtimeManager,
+                                            span
                                           )
           } yield maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
       }

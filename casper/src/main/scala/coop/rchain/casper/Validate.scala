@@ -15,6 +15,7 @@ import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.metrics.Span
 import coop.rchain.models.BlockMetadata
 import coop.rchain.shared._
 
@@ -179,44 +180,58 @@ object Validate {
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
       shardId: String,
-      expirationThreshold: Int
+      expirationThreshold: Int,
+      span: Span[F]
   ): F[Either[BlockStatus, ValidBlock]] =
     for {
+      _                 <- span.mark("before-block-hash-validation")
       blockHashStatus   <- Validate.blockHash[F](block)
+      _                 <- span.mark("before-deploy-count-validation")
       deployCountStatus <- blockHashStatus.traverse(_ => Validate.deployCount[F](block))
+      _                 <- span.mark("before-missing-blocks-validation")
       missingBlockStatus <- deployCountStatus.joinRight.traverse(
                              _ => Validate.missingBlocks[F](block, dag)
                            )
+      _ <- span.mark("before-timestamp-validation")
       timestampStatus <- missingBlockStatus.joinRight.traverse(
                           _ => Validate.timestamp[F](block, dag)
                         )
+      _ <- span.mark("before-repeat-deploy-validation")
       repeatedDeployStatus <- timestampStatus.joinRight.traverse(
                                _ => Validate.repeatDeploy[F](block, dag, expirationThreshold)
                              )
+      _ <- span.mark("before-block-number-validation")
       blockNumberStatus <- repeatedDeployStatus.joinRight.traverse(
                             _ => Validate.blockNumber[F](block, dag)
                           )
+      _ <- span.mark("before-future-transaction-validation")
       futureTransactionStatus <- blockNumberStatus.joinRight.traverse(
                                   _ => Validate.futureTransaction[F](block)
                                 )
+      _ <- span.mark("before-transaction-expired-validation")
       transactionExpirationStatus <- futureTransactionStatus.joinRight.traverse(
                                       _ =>
                                         Validate
                                           .transactionExpiration[F](block, expirationThreshold)
                                     )
+      _ <- span.mark("before-justification-follows-validation")
       followsStatus <- transactionExpirationStatus.joinRight.traverse(
                         _ => Validate.justificationFollows[F](block, genesis, dag)
                       )
+      _ <- span.mark("before-parents-validation")
       parentsStatus <- followsStatus.joinRight.traverse(
                         _ => Validate.parents[F](block, genesis, dag)
                       )
+      _ <- span.mark("before-sequence-number-validation")
       sequenceNumberStatus <- parentsStatus.joinRight.traverse(
                                _ => Validate.sequenceNumber[F](block, dag)
                              )
+      _ <- span.mark("before-justification-regression-validation")
       justificationRegressionsStatus <- sequenceNumberStatus.joinRight.traverse(
                                          _ =>
                                            Validate.justificationRegressions[F](block, genesis, dag)
                                        )
+      _ <- span.mark("before-shrad-identifier-validation")
       shardIdentifierStatus <- justificationRegressionsStatus.joinRight.traverse(
                                 _ => Validate.shardIdentifier[F](block, shardId)
                               )
@@ -656,14 +671,16 @@ object Validate {
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       emptyStateHash: StateHash,
-      runtimeManager: RuntimeManager[F]
+      runtimeManager: RuntimeManager[F],
+      span: Span[F]
   ): F[Either[BlockStatus, ValidBlock]] =
     for {
       maybeStateHash <- InterpreterUtil
                          .validateBlockCheckpoint[F](
                            block,
                            dag,
-                           runtimeManager
+                           runtimeManager,
+                           span
                          )
     } yield
       maybeStateHash match {

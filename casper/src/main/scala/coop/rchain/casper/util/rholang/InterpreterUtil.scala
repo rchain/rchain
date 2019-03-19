@@ -11,6 +11,7 @@ import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.{BlockException, PrettyPrinter}
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.metrics.Span
 import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.rholang.interpreter.ParBuilder
 import coop.rchain.rspace.ReplayException
@@ -29,7 +30,8 @@ object InterpreterUtil {
   def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore](
       b: BlockMessage,
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[F]
+      runtimeManager: RuntimeManager[F],
+      span: Span[F]
   ): F[Either[BlockException, Option[StateHash]]] = {
     val preStateHash    = ProtoUtil.preStateHash(b)
     val tsHash          = ProtoUtil.tuplespace(b)
@@ -37,13 +39,16 @@ object InterpreterUtil {
     val internalDeploys = deploys.flatMap(ProcessedDeployUtil.toInternal)
     val timestamp       = Some(b.header.get.timestamp) // TODO: Ensure header exists through type
     for {
+      _       <- span.mark("before-unsafe-get-parents")
       parents <- ProtoUtil.unsafeGetParents[F](b)
+      _       <- span.mark("before-compute-parents-post-state")
       possiblePreStateHash <- computeParentsPostState[F](
                                parents,
                                dag,
                                runtimeManager
                              )
       _ <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(b)}.")
+      _ <- span.mark("before-process-pre-state-hash")
       result <- processPossiblePreStateHash[F](
                  runtimeManager,
                  preStateHash,
