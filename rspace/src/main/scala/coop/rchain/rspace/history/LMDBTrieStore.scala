@@ -16,6 +16,8 @@ import org.lmdbjava.DbiFlags.MDB_CREATE
 import scodec.Codec
 import scodec.bits.{BitVector, ByteVector}
 
+import scala.collection.concurrent.TrieMap
+
 @SuppressWarnings(Array("org.wartremover.warts.Throw", "org.wartremover.warts.NonUnitStatements")) // TODO stop throwing exceptions
 class LMDBTrieStore[F[_], K, V] private (
     val env: Env[ByteBuffer],
@@ -32,13 +34,22 @@ class LMDBTrieStore[F[_], K, V] private (
 ) extends ITrieStore[Txn[ByteBuffer], K, V]
     with LMDBOps[F] {
 
+  private[this] val trieCache: TrieMap[Blake2b256Hash, Trie[K, V]] = TrieMap.empty
+
   override protected def metricsSource: String = RSpaceMetricsSource + ".history.lmdb"
 
-  private[rspace] def put(txn: Txn[ByteBuffer], key: Blake2b256Hash, value: Trie[K, V]): Unit =
+  private[rspace] def put(txn: Txn[ByteBuffer], key: Blake2b256Hash, value: Trie[K, V]): Unit = {
     _dbTrie.put(txn, key, value)
+    trieCache.put(key, value)
+  }
 
   private[rspace] def get(txn: Txn[ByteBuffer], key: Blake2b256Hash): Option[Trie[K, V]] =
-    _dbTrie.get(txn, key)(Codec[Trie[K, V]])
+    trieCache.get(key).orElse {
+      _dbTrie.get(txn, key)(Codec[Trie[K, V]]).map { value =>
+        trieCache.put(key, value)
+        value
+      }
+    }
 
   private[rspace] def toMap: Map[Blake2b256Hash, Trie[K, V]] =
     withTxn(createTxnRead()) { txn =>

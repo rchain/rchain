@@ -1,5 +1,6 @@
 package coop.rchain.rspace
 
+import cats.Monad
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
@@ -184,26 +185,34 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
     }
 
   override def reset(root: Blake2b256Hash): F[Unit] =
-    contextShift.evalOn(scheduler) {
-      for {
-        leaves <- store.withWriteTxnF { txn =>
-                   store
-                     .withTrieTxn(txn) { trieTxn =>
-                       store.trieStore.validateAndPutRoot(trieTxn, store.trieBranch, root)
-                       store.trieStore.getLeaves(trieTxn, root)
-                     }
-                 }
-        _ <- syncF.delay { eventLog.update(kp(Seq.empty)) }
-        _ <- syncF.delay { store.getAndClearTrieUpdates() }
-        _ <- store.withWriteTxnF { txn =>
-              store.clear(txn)
-            }
-        _ <- restoreInstalls()
-        _ <- store.withWriteTxnF { txn =>
-              store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
-            }
-      } yield ()
-    }
+    Monad[F].ifM(store.withWriteTxnF { txn =>
+      store
+        .withTrieTxn(txn) { trieTxn =>
+          store.trieStore.getRoot(trieTxn, store.trieBranch).get != root
+        }
+    })(
+      ifTrue = contextShift.evalOn(scheduler) {
+        for {
+          leaves <- store.withWriteTxnF { txn =>
+                     store
+                       .withTrieTxn(txn) { trieTxn =>
+                         store.trieStore.validateAndPutRoot(trieTxn, store.trieBranch, root)
+                         store.trieStore.getLeaves(trieTxn, root)
+                       }
+                   }
+          _ <- syncF.delay { eventLog.update(kp(Seq.empty)) }
+          _ <- syncF.delay { store.getAndClearTrieUpdates() }
+          _ <- store.withWriteTxnF { txn =>
+                store.clear(txn)
+              }
+          _ <- restoreInstalls()
+          _ <- store.withWriteTxnF { txn =>
+                store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
+              }
+        } yield ()
+      },
+      ifFalse = ().pure[F]
+    )
 
   override def clear(): F[Unit] =
     contextShift.evalOn(scheduler) {
