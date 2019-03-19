@@ -23,7 +23,7 @@ match (
       stdout(`rho:io:stdout`),
       setDeployData(`rho:test:deploy:set`),
       setup,
-      testCreateGenesisVault,
+      testFindOrCreateGenesisVault,
       testCreateVaultFail,
       testCreateAliceVaultLocked,
       testCreateAliceVaultUnlocked,
@@ -41,7 +41,7 @@ match (
       for(@(_, RhoSpec) <- RhoSpecCh) {
         @RhoSpec!("testSuite", *setup,
           [
-            ("Create genesis vault with expected balance", *testCreateGenesisVault),
+            ("Create genesis vault with expected balance", *testFindOrCreateGenesisVault),
             ("Return an error for invalid public key", *testCreateVaultFail),
             ("Create Alice vault and see it is locked", *testCreateAliceVaultLocked),
             ("Create Alice vault, unlock it and check balance", *testCreateAliceVaultUnlocked),
@@ -64,9 +64,9 @@ match (
         }
       } |
 
-      contract testCreateGenesisVault(rhoSpec, RevVault, ackCh) = {
+      contract testFindOrCreateGenesisVault(rhoSpec, RevVault, ackCh) = {
         new genesisVaultCh, balanceCh in {
-          RevVault!("createGenesisVault", genesisPubKey, 9000, *genesisVaultCh) |
+          RevVault!("findOrCreateGenesisVault", genesisPubKey, 9000, *genesisVaultCh) |
           for (@("Right", genesisVault) <- genesisVaultCh) {
             // so far, access to genesisVault is not secured. This will be changd.
             @genesisVault!("balance", *balanceCh) |
@@ -117,7 +117,7 @@ match (
 
       contract testTransfer(rhoSpec, RevVault, ackCh) = {
         new genesisVaultCh, aliceVaultCh, ret, retOk  in {
-          RevVault!("createGenesisVault", genesisPubKey, 9000, *genesisVaultCh) |
+          RevVault!("findOrCreateGenesisVault", genesisPubKey, 9000, *genesisVaultCh) |
           withVaultUnlocked!(alicePubKey, *aliceVaultCh) |
           for (@("Right", genesisVault) <- genesisVaultCh; @aliceVault <- aliceVaultCh) {
 
@@ -131,7 +131,7 @@ match (
       contract testFindOrCreate(rhoSpec, RevVault, ackCh) = {
         new genesisVaultCh, aliceVaultCh, now in {
           //the below attempts to create a wallet are going to fetch the ones created in previous tests.
-          RevVault!("createGenesisVault", genesisPubKey, 0 /* irrelevant */, *genesisVaultCh) |
+          RevVault!("findOrCreateGenesisVault", genesisPubKey, 0 /* irrelevant */, *genesisVaultCh) |
           withVaultUnlocked!(alicePubKey, *aliceVaultCh) |
           for (@("Right", g) <- genesisVaultCh; @a <- aliceVaultCh) {
             now!(Nil) |
