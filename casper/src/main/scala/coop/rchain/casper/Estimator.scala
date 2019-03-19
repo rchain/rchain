@@ -1,19 +1,19 @@
 package coop.rchain.casper
 
-import cats.Monad
-import cats.data.OptionT
-import cats.implicits._
-import cats.mtl.implicits._
-import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.util.BlockMessageUtil
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
-import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.util.{DagOperations, ProtoUtil}
-import coop.rchain.casper.util.ProtoUtil.weightFromValidatorByDag
-
 import scala.collection.immutable.{Map, Set}
+
+import cats.Monad
+import cats.implicits._
+
+import coop.rchain.blockstorage.BlockDagRepresentation
+import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.util.DagOperations
+import coop.rchain.casper.util.ProtoUtil.weightFromValidatorByDag
 import coop.rchain.catscontrib.ListContrib
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockMetadata
+
+import com.google.protobuf.ByteString
 
 object Estimator {
   type BlockHash = ByteString
@@ -21,27 +21,40 @@ object Estimator {
 
   implicit val decreasingOrder = Ordering[Long].reverse
 
-  def tips[F[_]: Monad](
+  private val EstimatorMetricsSource: Metrics.Source =
+    Metrics.Source(CasperMetricsSource, "estimator")
+  private val Tips0MetricsSource: Metrics.Source = Metrics.Source(EstimatorMetricsSource, "tips0")
+  private val Tips1MetricsSource: Metrics.Source = Metrics.Source(EstimatorMetricsSource, "tips1")
+
+  def tips[F[_]: Monad: Metrics](
       blockDag: BlockDagRepresentation[F],
       genesis: BlockMessage
   ): F[IndexedSeq[BlockHash]] =
     for {
+      span                <- Metrics[F].span(Tips0MetricsSource)
       latestMessageHashes <- blockDag.latestMessageHashes
+      _                   <- span.mark("latest-message-hashes")
       result              <- Estimator.tips[F](blockDag, genesis, latestMessageHashes)
+      _                   <- span.close()
     } yield result
 
   /**
     * When the BlockDag has an empty latestMessages, tips will return IndexedSeq(genesis.blockHash)
     */
-  def tips[F[_]: Monad](
+  def tips[F[_]: Monad: Metrics](
       blockDag: BlockDagRepresentation[F],
       genesis: BlockMessage,
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[IndexedSeq[BlockHash]] =
     for {
+      span                       <- Metrics[F].span(Tips1MetricsSource)
       lca                        <- calculateLCA(blockDag, BlockMetadata.fromBlock(genesis, false), latestMessagesHashes)
+      _                          <- span.mark("lca")
       scoresMap                  <- buildScoresMap(blockDag, latestMessagesHashes, lca)
+      _                          <- span.mark("score-map")
       rankedLatestMessagesHashes <- rankForkchoices(List(lca), blockDag, scoresMap)
+      _                          <- span.mark("ranked-latest-messages-hashes")
+      _                          <- span.close()
     } yield rankedLatestMessagesHashes
 
   private def calculateLCA[F[_]: Monad](

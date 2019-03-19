@@ -3,6 +3,7 @@ package coop.rchain.casper
 import cats.effect.{Concurrent, Sync}
 import cats.{Applicative, Monad}
 import cats.implicits._
+
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.catscontrib._
@@ -15,10 +16,9 @@ import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.metrics.Span
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockMetadata
 import coop.rchain.shared._
-
 import scala.util.{Failure, Success, Try}
 
 object Validate {
@@ -175,7 +175,7 @@ object Validate {
   /*
    * TODO: Double check ordering of validity checks
    */
-  def blockSummary[F[_]: Sync: Log: Time: BlockStore](
+  def blockSummary[F[_]: Sync: Log: Time: BlockStore: Metrics](
       block: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F],
@@ -497,7 +497,7 @@ object Validate {
   /**
     * Works only with fully explicit justifications.
     */
-  def parents[F[_]: Monad: Log: BlockStore](
+  def parents[F[_]: Monad: Log: BlockStore: Metrics](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDagRepresentation[F]
