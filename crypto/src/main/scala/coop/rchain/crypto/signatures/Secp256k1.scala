@@ -13,8 +13,9 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider
 
 object Secp256k1 extends SignaturesAlg {
 
-  private val provider  = new BouncyCastleProvider()
-  private val curveName = "secp256k1"
+  private val provider = new BouncyCastleProvider()
+
+  val name: String = "secp256k1"
 
   /**
     * Verifies the given secp256k1 signature in native code.
@@ -25,7 +26,7 @@ object Secp256k1 extends SignaturesAlg {
   @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   def newKeyPair: (PrivateKey, PublicKey) = {
     val kpg = KeyPairGenerator.getInstance("ECDSA", provider)
-    kpg.initialize(new ECGenParameterSpec(curveName), SecureRandomUtil.secureRandomNonBlocking)
+    kpg.initialize(new ECGenParameterSpec(name), SecureRandomUtil.secureRandomNonBlocking)
     val kp = kpg.generateKeyPair
 
     val padded =

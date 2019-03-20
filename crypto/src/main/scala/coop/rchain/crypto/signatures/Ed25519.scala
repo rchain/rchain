@@ -6,6 +6,8 @@ object Ed25519 extends SignaturesAlg {
 
   val publicKeyLength = 32
 
+  val name: String = "Ed25519".toLowerCase
+
   //TODO: Make use of strongly typed keys
   def newKeyPair: (Array[Byte], Array[Byte]) = {
     val key = new SigningKey()
