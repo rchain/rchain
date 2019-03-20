@@ -48,6 +48,15 @@ object GrpcTransport {
       }
   }
 
+  private object PeerMessageToLarge {
+    def unapply(e: Throwable): Boolean =
+      e match {
+        case sre: StatusRuntimeException =>
+          sre.getStatus.getCode == Status.Code.RESOURCE_EXHAUSTED
+        case _ => false
+      }
+  }
+
   private def processResponse(
       peer: PeerNode,
       response: Either[Throwable, TLResponse]
@@ -68,9 +77,10 @@ object GrpcTransport {
   ): CommErr[R] =
     response
       .leftMap {
-        case PeerTimeout()     => CommError.timeout
-        case PeerUnavailable() => peerUnavailable(peer)
-        case e                 => protocolException(e)
+        case PeerTimeout()        => CommError.timeout
+        case PeerUnavailable()    => peerUnavailable(peer)
+        case PeerMessageToLarge() => messageToLarge(peer)
+        case e                    => protocolException(e)
       }
 
   def send(peer: PeerNode, msg: Protocol)(implicit metrics: Metrics[Task]): Request[Unit] =
