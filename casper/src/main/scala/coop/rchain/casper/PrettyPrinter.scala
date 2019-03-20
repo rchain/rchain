@@ -52,10 +52,7 @@ object PrettyPrinter {
       cost       = pCost.cost
     } yield s"User: ${buildStringNoLimit(user)}, Cost: ${cost.toString} " +
             s"${buildString(deployData)}"
-    deployString match {
-      case Some(str) => str
-      case None      => s"No deploy data"
-    }
+    deployString.getOrElse("No deploy data")
   }
 
   def buildString(b: ByteString): String =
