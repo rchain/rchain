@@ -24,7 +24,7 @@ object SignDeployment {
     val hash      = Blake2b256.hash(toSign)
     val signature = alg.sign(hash, key)
 
-    fill(deployData)(alg.toPublic(key)), signature, alg.name)
+    fill(deployData)(alg.toPublic(key), signature, alg.name)
   }
 
 }
