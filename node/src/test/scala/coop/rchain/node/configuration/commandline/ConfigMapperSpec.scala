@@ -33,6 +33,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--casper-block-store-size 2000",
         "--map-size 1000",
         "--max-num-of-connections 500",
+        "--packet-chunk-size 64",
         "--max-message-size 256",
         "--message-consumers 8"
       ).mkString(" ")
@@ -62,6 +63,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         2000,
         500,
         256,
+        64,
         8
       )
 

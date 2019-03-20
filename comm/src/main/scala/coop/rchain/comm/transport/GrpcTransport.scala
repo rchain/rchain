@@ -86,10 +86,9 @@ object GrpcTransport {
                })
     } yield result
 
-  def stream(peer: PeerNode, blob: Blob, messageSize: Int): Request[Unit] =
+  def stream(peer: PeerNode, blob: Blob, packetChunkSize: Int): Request[Unit] =
     ReaderT(
-      _.stream(Observable.fromIterator(Chunker.chunkIt(blob, messageSize))).attempt
+      _.stream(Observable.fromIterator(Chunker.chunkIt(blob, packetChunkSize))).attempt
         .map(r => processError(peer, r.map(kp(()))))
     )
-
 }

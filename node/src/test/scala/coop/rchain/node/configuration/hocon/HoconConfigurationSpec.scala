@@ -34,6 +34,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
       |    map-size = 1G
       |    max-connections = 500
       |    max-message-size = 256K
+      |    packet-chunk-size = 64K
       |    message-consumers = 8
       |  }
       |}
@@ -61,6 +62,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         1024 * 1024 * 1024,
         500,
         256 * 1024,
+        64 * 1024,
         8
       )
 

@@ -24,6 +24,7 @@ final case class Server(
     storeSize: Long,
     maxNumOfConnections: Int,
     maxMessageSize: Int,
+    packetChunkSize: Int,
     messageConsumers: Int
 )
 
