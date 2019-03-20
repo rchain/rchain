@@ -106,14 +106,15 @@ sealed abstract class MetricsInstances {
 
       //todo make this sleeker
       def span(source: Metrics.Source): EitherT[F, E, Span[EitherT[F, E, ?]]] = {
-        val fSpan: F[Span[F]] = evF.span(source)
-        val temp: Span[EitherT[F, E, ?]] = new Span[EitherT[F, E, ?]] {
-          def mark(name: String): EitherT[F, E, Unit] =
-            EitherT.liftF(fSpan.flatMap(_.mark(name)))
-          def close(): EitherT[F, E, Unit] = EitherT.liftF(fSpan.flatMap(s => s.close()))
+        val fSpan = evF.span(source).map { s =>
+          new Span[EitherT[F, E, ?]] {
+            def mark(name: String): EitherT[F, E, Unit] =
+              EitherT.liftF(s.mark(name))
+            def close(): EitherT[F, E, Unit] = EitherT.liftF(s.close())
+          }
         }
 
-        EitherT.liftF(temp.pure[F])
+        EitherT.liftF(fSpan)
       }
     }
 }
