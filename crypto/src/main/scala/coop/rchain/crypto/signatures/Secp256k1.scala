@@ -32,7 +32,7 @@ object Secp256k1 extends SignaturesAlg {
 
     val padded =
       Strings.padStart(kp.getPrivate.asInstanceOf[ECPrivateKey].getS.toString(16), 64, '0')
-    val sec = Base16.decode(padded)
+    val sec = Base16.unsafeDecode(padded)
     val pub = Secp256k1.toPublic(sec)
 
     (PrivateKey(sec), PublicKey(pub))

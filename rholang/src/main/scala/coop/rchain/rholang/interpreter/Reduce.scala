@@ -978,7 +978,7 @@ object Reduce {
                 )
               for {
                 _           <- charge[M](hexToBytesCost(encoded))
-                encodingRes = Try(ByteString.copyFrom(Base16.decode(encoded)))
+                encodingRes = Try(ByteString.copyFrom(Base16.unsafeDecode(encoded)))
                 res <- encodingRes.fold(
                         th => s.raiseError(decodingError(th)),
                         ba => Applicative[M].pure[Par](Expr(GByteArray(ba)))

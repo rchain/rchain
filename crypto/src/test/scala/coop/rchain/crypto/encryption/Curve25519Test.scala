@@ -6,12 +6,12 @@ import org.scalatest.{AppendedClues, BeforeAndAfterEach, FunSpec, Matchers}
 class Curve25519Test extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
   describe("Curve25519 elliptic curve cryptography") {
 
-    val bobSec   = Base16.decode("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
-    val bobPub   = Base16.decode("de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f")
-    val aliceSec = Base16.decode("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
-    val alicePub = Base16.decode("8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a")
-    val nonce    = Base16.decode("69696ee955b62b73cd62bda875fc73d68219e0036b7a0b37")
-    val message = Base16.decode(
+    val bobSec   = Base16.unsafeDecode("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
+    val bobPub   = Base16.unsafeDecode("de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f")
+    val aliceSec = Base16.unsafeDecode("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
+    val alicePub = Base16.unsafeDecode("8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a")
+    val nonce    = Base16.unsafeDecode("69696ee955b62b73cd62bda875fc73d68219e0036b7a0b37")
+    val message = Base16.unsafeDecode(
       "be075fc53c81f2d5cf141316ebeb0c7b5228c52a4c62cbd44b66849b64244ffce5ecbaaf33bd751a1ac728d45e6c61296cdc3c01233561f41db66cce314adb310e3be8250c46f06dceea3a7fa1348057e2f6556ad6b1318a024a838f21af1fde048977eb48f59ffd4924ca1c60902e52f0a089bc76897040e082f937763848645e0705"
     )
     val cipher = Curve25519.encrypt(alicePub, bobSec, nonce, message)
