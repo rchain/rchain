@@ -24,7 +24,7 @@ import org.scalatest.prop.PropertyChecks
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
-class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
+class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with AppendedClues {
 
   private[this] def evaluateWithCostLog(
       initialPhlo: Long,
@@ -136,11 +136,11 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
       val costs = costLog.map(_.value).toList
       // The sum of all costs but last needs to be <= initialPhlo, otherwise
       // the last cost should have not been logged
-      costs.init.sum.toLong should be <= (initialPhlo)
+      costs.init.sum.toLong should be <= (initialPhlo) withClue (s", cost log was: $costLog")
 
       // The sum of ALL costs needs to be > initialPhlo, otherwise an error
       // should not have been reported
-      costs.sum.toLong > (initialPhlo)
+      costs.sum.toLong > (initialPhlo) withClue (s", cost log was: $costLog")
     })
   }
 
