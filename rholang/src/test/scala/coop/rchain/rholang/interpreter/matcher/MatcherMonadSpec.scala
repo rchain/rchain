@@ -29,7 +29,8 @@ class MatcherMonadSpec extends FlatSpec with Matchers {
 
   implicit val cost: _cost[Task] =
     loggingCost(CostAccounting.empty[Task].unsafeRunSync, noOpCostLog[Task])
-  implicit val costF: _cost[F] = matcherMonadCostLog[Task]
+  implicit val costF: _cost[F]   = matcherMonadCostLog[Task]
+  implicit val matcherMonadError = implicitly[Sync[F]]
 
   private def combineK[FF[_]: MonoidK, G[_]: Foldable, A](gfa: G[FF[A]]): FF[A] =
     gfa.foldLeft(MonoidK[FF].empty[A])(SemigroupK[FF].combineK[A])
@@ -116,7 +117,7 @@ class MatcherMonadSpec extends FlatSpec with Matchers {
 
   it should "fail all branches when using `_error[F].raise`" in {
     val a: F[Int] = 1.pure[F]
-    val b: F[Int] = 2.pure[F] >> _error[F].raise[Int](OutOfPhlogistonsError)
+    val b: F[Int] = 2.pure[F] >> _error[F].raiseError[Int](OutOfPhlogistonsError)
     val c: F[Int] = 3.pure[F]
 
     val combined = combineK(List(a, b, c))

@@ -66,8 +66,7 @@ object Reduce {
       parallel: cats.Parallel[M, F],
       s: Sync[M],
       fTell: FunctorTell[M, Throwable],
-      cost: _cost[M],
-      err: _error[M]
+      cost: _cost[M]
   ) extends Reduce[M] {
 
     /**

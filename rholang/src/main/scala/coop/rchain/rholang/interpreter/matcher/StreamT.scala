@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter.matcher
 import cats.mtl.lifting.MonadLayerControl
 import cats.{~>, Alternative, Applicative, Functor, Monad, MonadError, MonoidK}
+import cats.effect.Sync
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, SNil, Step}
 
@@ -189,6 +190,30 @@ trait StreamTInstances2 {
 
       def zero[A](state: Stream[A]): Boolean = state.isEmpty
     }
+
+  implicit def streamTSync[F[_]](implicit F0: Sync[F]): Sync[StreamT[F, ?]] =
+    new StreamTSync[F]() {
+      implicit val F = F0
+
+    }
+}
+
+private trait StreamTSync[F[_]] extends Sync[StreamT[F, ?]] with StreamTMonadError[F, Throwable] {
+  implicit def F: Sync[F]
+
+  import cats.effect.ExitCase
+
+  private[this] implicit def unlift[A](v: StreamT[F, A]): F[A] = F.map(StreamT.run(v))(_.head)
+
+  def bracketCase[A, B](acquire: StreamT[F, A])(use: A => StreamT[F, B])(
+      release: (A, ExitCase[Throwable]) => StreamT[F, Unit]
+  ): StreamT[F, B] =
+    StreamT.liftF(
+      F.bracketCase(acquire)(use.andThen(unlift(_)))((a, b) => release(a, b))
+    )
+
+  def suspend[A](thunk: => StreamT[F, A]): StreamT[F, A] = StreamT.liftF(F.suspend(thunk))
+
 }
 
 private trait StreamTMonadErrorMonad[F[_]]

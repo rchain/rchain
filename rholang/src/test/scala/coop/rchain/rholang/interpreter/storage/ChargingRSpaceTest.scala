@@ -345,9 +345,8 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     val cost: _cost[Task] =
       loggingCost(CostAccounting.empty[Task].runSyncUnsafe(1.second), noOpCostLog)
     def mkChargingRspace(rhoISpace: RhoISpace[Task]): Task[ChargingRSpace] = {
-      val s     = implicitly[Sync[Task]]
-      val error = FunctorRaise[Task, InterpreterError]
-      Task.delay(ChargingRSpace.pureRSpace(rhoISpace)(s, cost, error))
+      val s = implicitly[Sync[Task]]
+      Task.delay(ChargingRSpace.pureRSpace(rhoISpace)(s, cost))
     }
 
     val chargingRSpaceResource =

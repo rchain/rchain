@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import cats._
 import cats.data._
+import cats.effect.ExitCase._
 import cats.implicits._
 import cats.mtl._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
@@ -33,23 +34,27 @@ package object accounting extends Costs {
       amount: Cost
   )(implicit cost: _cost[F], error: _error[F]): F[Unit] =
     for {
-      c <- cost.get
-      _ <- Monad[F].ifM[Unit]((c.value < 0).pure[F])(
-            ifTrue = {
-              for {
-                _ <- cost.set(c)
-                _ <- error.raise[Unit](OutOfPhlogistonsError)
-              } yield (())
-            },
-            ifFalse = {
-              for {
-                _        <- cost.tell(Chain.one(amount))
-                newValue = c - amount
-                _        <- cost.set(newValue)
-                _        <- error.ensure((newValue).pure[F])(OutOfPhlogistonsError)(_.value >= 0)
-              } yield (())
-            }
-          )
+      _ <- error.bracketCase(cost.get)(
+            c =>
+              Monad[F].ifM[Unit]((c.value < 0).pure[F])(
+                ifTrue = {
+                  for {
+                    _ <- error.raiseError[Unit](OutOfPhlogistonsError)
+                  } yield (())
+                },
+                ifFalse = {
+                  for {
+                    _        <- cost.tell(Chain.one(amount))
+                    newValue = c - amount
+                    _        <- cost.set(newValue)
+                  } yield (())
+                }
+              )
+          ) {
+            case (_, Completed)    => error.unit
+            case (oldValue @ _, _) => cost.set(oldValue)
+          }
+      _ <- error.ensure(cost.inspect(identity))(OutOfPhlogistonsError)(_.value >= 0)
     } yield ()
 
   def noOpCostLog[M[_]: Applicative]: FunctorTell[M, Chain[Cost]] =
