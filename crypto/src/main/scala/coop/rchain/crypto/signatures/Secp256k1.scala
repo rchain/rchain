@@ -11,7 +11,7 @@ import org.bitcoin._
 import com.google.common.base.Strings
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 
-object Secp256k1 {
+object Secp256k1 extends SignaturesAlg {
 
   private val provider  = new BouncyCastleProvider()
   private val curveName = "secp256k1"
