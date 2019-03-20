@@ -1,5 +1,6 @@
 package coop.rchain.rspace
 
+import cats.Monad
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
@@ -165,25 +166,30 @@ abstract class RSpaceOps[F[_]: Concurrent, C, P, A, R, K](
       history.lookup(store.trieStore, root, channelsHash)
     }
 
+  protected[rspace] def isDirty(root: Blake2b256Hash): F[Boolean]
+
   override def reset(root: Blake2b256Hash): F[Unit] =
-    for {
-      leaves <- store.withWriteTxnF { txn =>
-                 store
-                   .withTrieTxn(txn) { trieTxn =>
-                     store.trieStore.validateAndPutRoot(trieTxn, store.trieBranch, root)
-                     store.trieStore.getLeaves(trieTxn, root)
-                   }
-               }
-      _ <- syncF.delay { eventLog.update(kp(Seq.empty)) }
-      _ <- syncF.delay { store.getAndClearTrieUpdates() }
-      _ <- store.withWriteTxnF { txn =>
-            store.clear(txn)
-          }
-      _ <- restoreInstalls()
-      _ <- store.withWriteTxnF { txn =>
-            store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
-          }
-    } yield ()
+    Monad[F].ifM(isDirty(root))(
+      ifTrue = for {
+        leaves <- store.withWriteTxnF { txn =>
+                   store
+                     .withTrieTxn(txn) { trieTxn =>
+                       store.trieStore.validateAndPutRoot(trieTxn, store.trieBranch, root)
+                       store.trieStore.getLeaves(trieTxn, root)
+                     }
+                 }
+        _ <- syncF.delay { eventLog.update(kp(Seq.empty)) }
+        _ <- syncF.delay { store.getAndClearTrieUpdates() }
+        _ <- store.withWriteTxnF { txn =>
+              store.clear(txn)
+            }
+        _ <- restoreInstalls()
+        _ <- store.withWriteTxnF { txn =>
+              store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
+            }
+      } yield (),
+      ifFalse = ().pure[F]
+    )
 
   override def clear(): F[Unit] =
     store
