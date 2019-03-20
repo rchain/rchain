@@ -132,7 +132,7 @@ object SystemProcesses {
         case isContractCall(
             produce,
             Seq(RhoType.String("fromPublicKey"), RhoType.ByteArray(publicKey), ack)
-        ) =>
+            ) =>
           val response =
             RevAddress
               .fromPublicKey(PublicKey(publicKey))
