@@ -485,7 +485,7 @@ object ProtoUtil {
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
 
   def stringToByteString(string: String): ByteString =
-    ByteString.copyFrom(Base16.decode(string))
+    ByteString.copyFrom(Base16.unsafeDecode(string))
 
   def basicDeployData[F[_]: Monad: Time](id: Int): F[DeployData] =
     Time[F].currentMillis.map(

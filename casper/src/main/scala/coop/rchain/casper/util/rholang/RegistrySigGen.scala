@@ -109,7 +109,7 @@ object Args {
 
     val id =
       unforgeableNameStr
-        .map(Base16.decode(_))
+        .map(Base16.unsafeDecode(_))
         .getOrElse(RegistrySigGen.generateUnforgeableNameId(keyPair._1, timestamp))
 
     // Now we can determine the unforgeable name
@@ -127,14 +127,14 @@ object Args {
         Args(
           contractName,
           timestampStr.toLong,
-          Some(Base16.decode(skBase16)),
+          Some(Base16.unsafeDecode(skBase16)),
           Some(unforgeableName)
         )
       case Array(contractName, timestampStr, skBase16) =>
         Args(
           contractName,
           timestampStr.toLong,
-          Some(Base16.decode(skBase16))
+          Some(Base16.unsafeDecode(skBase16))
         )
       case Array(contractName, timestampStr) => Args(contractName, timestampStr.toLong)
       case Array(contractName)               => Args(contractName)
