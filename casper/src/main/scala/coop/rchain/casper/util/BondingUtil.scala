@@ -45,7 +45,12 @@ object BondingUtil {
   )(
       implicit runtimeManager: RuntimeManager[F]
   ): F[String] =
-    preWalletUnlockDeploy(ethAddress, pubKey, Base16.unsafeDecode(secKey), s"${ethAddress}_unlockOut")
+    preWalletUnlockDeploy(
+      ethAddress,
+      pubKey,
+      Base16.unsafeDecode(secKey),
+      s"${ethAddress}_unlockOut"
+    )
 
   def issuanceBondDeploy[F[_]: Concurrent](
       amount: Long,
@@ -70,7 +75,9 @@ object BondingUtil {
       secKey: Array[Byte],
       statusOut: String
   )(implicit runtimeManager: RuntimeManager[F]): F[String] = {
-    require(Base16.encode(Keccak256.hash(Base16.unsafeDecode(pubKey)).drop(12)) == ethAddress.drop(2))
+    require(
+      Base16.encode(Keccak256.hash(Base16.unsafeDecode(pubKey)).drop(12)) == ethAddress.drop(2)
+    )
     val unlockSigDataTerm =
       sourceDeploy(
         s""" @"__SCALA__"!(["$pubKey", "$statusOut"].toByteArray())""",
