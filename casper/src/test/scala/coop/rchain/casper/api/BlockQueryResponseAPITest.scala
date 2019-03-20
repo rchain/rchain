@@ -13,6 +13,7 @@ import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.helper.{BlockDagStorageFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 
 import com.google.protobuf.ByteString
@@ -200,9 +201,10 @@ class BlockQueryResponseAPITest
                        )
                      )(Sync[Task], blockStore, blockDagStorage)
       logEff             = new LogStub[Task]()
+      metricsEff         = new Metrics.MetricsNOP[Task]
       casperRef          <- MultiParentCasperRef.of[Task]
       _                  <- casperRef.set(casperEffect)
-      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff)
+      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff, metricsEff)
     } yield (logEff, casperRef, cliqueOracleEffect)
 
   private def emptyEffects(
@@ -217,8 +219,9 @@ class BlockQueryResponseAPITest
                        )
                      )(Sync[Task], blockStore, blockDagStorage)
       logEff             = new LogStub[Task]()
+      metricsEff         = new Metrics.MetricsNOP[Task]
       casperRef          <- MultiParentCasperRef.of[Task]
       _                  <- casperRef.set(casperEffect)
-      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff)
+      cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff, metricsEff)
     } yield (logEff, casperRef, cliqueOracleEffect)
 }

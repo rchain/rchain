@@ -1,23 +1,26 @@
 package coop.rchain.casper
 
-import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.{BlockMessage, Bond}
-import org.scalatest.{FlatSpec, Matchers}
-import coop.rchain.catscontrib._
-import cats._
-import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import scala.collection.immutable.HashMap
+
+import coop.rchain.casper.protocol.Bond
+import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
-import monix.eval.Task
+import coop.rchain.metrics.Metrics
 
-import scala.collection.immutable.HashMap
+import com.google.protobuf.ByteString
+import monix.eval.Task
+import org.scalatest.{FlatSpec, Matchers}
 
 class ForkchoiceTest
     extends FlatSpec
     with Matchers
     with BlockGenerator
     with BlockDagStorageFixture {
+
+  implicit val metricsEff = new Metrics.MetricsNOP[Task]
+
   "Estimator on empty latestMessages" should "return the genesis regardless of DAG" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val v1     = generateValidator("Validator One")

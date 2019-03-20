@@ -70,7 +70,7 @@ class ManyValidatorsTest
                            )
       newIndexedBlockDagStorage <- IndexedBlockDagStorage.create(newBlockDagStorage)
       dag                       <- newIndexedBlockDagStorage.getRepresentation
-      tips                      <- Estimator.tips[Task](dag, genesis)(Monad[Task])
+      tips                      <- Estimator.tips[Task](dag, genesis)
       casperEffect <- NoOpsCasperEffect[Task](
                        HashMap.empty[BlockHash, BlockMessage],
                        tips.toIndexedSeq
@@ -87,6 +87,6 @@ class ManyValidatorsTest
                  blockStore
                )
     } yield result
-    testProgram.runSyncUnsafe(1 minute)(scheduler, CanBlock.permit)
+    testProgram.runSyncUnsafe(1.minute)(scheduler, CanBlock.permit)
   }
 }

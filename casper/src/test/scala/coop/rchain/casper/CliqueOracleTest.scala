@@ -1,20 +1,20 @@
 package coop.rchain.casper
 
-import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockDagRepresentation.Validator
+import scala.collection.immutable.HashMap
+import scala.collection.mutable
+
 import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
-import coop.rchain.casper.protocol.{BlockMessage, Bond}
-import org.scalatest.{FlatSpec, Matchers}
+import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
+import coop.rchain.casper.protocol.{BlockMessage, Bond}
+import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances.LogStub
-import monix.eval.Task
-import org.scalatest._
-import org.scalatest.Matchers._
 
-import scala.collection.immutable.HashMap
-import scala.collection.mutable
+import com.google.protobuf.ByteString
+import monix.eval.Task
+import org.scalatest.{FlatSpec, Matchers}
 
 class CliqueOracleTest
     extends FlatSpec
@@ -24,7 +24,8 @@ class CliqueOracleTest
 
   behavior of "Clique Oracle"
 
-  implicit val logEff = new LogStub[Task]
+  implicit val logEff     = new LogStub[Task]
+  implicit val metricsEff = new Metrics.MetricsNOP[Task]
 
   implicit def toImmutableMap(
       m: mutable.Map[Validator, BlockMessage]

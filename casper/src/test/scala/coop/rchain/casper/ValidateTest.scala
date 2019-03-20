@@ -2,33 +2,33 @@ package coop.rchain.casper
 
 import java.nio.file.Files
 
+import scala.collection.immutable.HashMap
+
 import cats.Monad
 import cats.implicits._
-import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore, IndexedBlockDagStorage}
-import coop.rchain.casper.Estimator.{BlockHash, Validator}
+
+import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
+import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
-import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.protocol.Event.EventInstance
+import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.{StoreType, Time}
-import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.metrics
-import coop.rchain.metrics.{Metrics, NoopSpan}
+
+import com.google.protobuf.ByteString
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{Assertion, BeforeAndAfterEach, FlatSpec, Matchers}
-
-import scala.concurrent.duration._
-import scala.collection.immutable.HashMap
+import org.scalatest._
 
 class ValidateTest
     extends FlatSpec
@@ -37,7 +37,7 @@ class ValidateTest
     with BlockGenerator
     with BlockDagStorageFixture {
   implicit val log                        = new LogStub[Task]
-  implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+  implicit val noopMetrics: Metrics[Task] = new Metrics.MetricsNOP[Task]
   val span                                = new NoopSpan[Task]
   val ed25519                             = "ed25519"
 
