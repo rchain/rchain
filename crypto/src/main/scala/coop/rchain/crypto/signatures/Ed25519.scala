@@ -2,7 +2,7 @@ package coop.rchain.crypto.signatures
 
 import org.abstractj.kalium.keys._
 
-object Ed25519 {
+object Ed25519 extends SignaturesAlg {
 
   val publicKeyLength = 32
 
