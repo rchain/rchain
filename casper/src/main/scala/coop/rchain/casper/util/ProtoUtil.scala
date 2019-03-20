@@ -388,6 +388,7 @@ object ProtoUtil {
   def stringToByteString(string: String): ByteString =
     ByteString.copyFrom(Base16.unsafeDecode(string))
 
+  @deprecated
   def basicDeployData[F[_]: Monad: Time](id: Int): F[DeployData] =
     Time[F].currentMillis.map(
       now =>
