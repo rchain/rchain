@@ -194,7 +194,6 @@ trait StreamTInstances2 {
   implicit def streamTSync[F[_]](implicit F0: Sync[F]): Sync[StreamT[F, ?]] =
     new StreamTSync[F]() {
       implicit val F = F0
-
     }
 }
 
