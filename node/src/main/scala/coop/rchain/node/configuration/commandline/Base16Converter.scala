@@ -8,7 +8,8 @@ object Base16Converter extends ValueConverter[Array[Byte]] {
       case (name, strings) => strings.map((name, _))
     } match {
       case List((name, v)) =>
-        Base16.decode(v.toLowerCase)
+        Base16
+          .decode(v.toLowerCase)
           .toRight(s"Error parsing $name. Invalid base16 encoding.")
           .map(Some(_))
       case List() => Right(None)
