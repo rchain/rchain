@@ -440,8 +440,12 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     checkRoundTrip(
       """for( @{x0}, @{x1} <- @{0} ) {
         |  match x0 {
-        |    =x0 => Nil
-        |    =x1 => Nil
+        |    =x0 => {
+        |      Nil
+        |    }
+        |    =x1 => {
+        |      Nil
+        |    }
         |  }
         |}""".stripMargin
     )
@@ -664,8 +668,12 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
         |    for( @{x6} <- @{x4} ) {
         |      x6 |
         |      match x6 {
-        |        42 => Nil
-        |        x7 => x3
+        |        42 => {
+        |          Nil
+        |        }
+        |        x7 => {
+        |          x3
+        |        }
         |      }
         |    }
         |  }
@@ -739,8 +747,12 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
       """@{Nil}!(47) |
         |for( @{x0} <- @{Nil} ) {
         |  match x0 {
-        |    42 => Nil
-        |    x1 => Nil
+        |    42 => {
+        |      Nil
+        |    }
+        |    x1 => {
+        |      Nil
+        |    }
         |  }
         |}""".stripMargin
   }
@@ -769,8 +781,12 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
       )
     result shouldBe
       """match true {
-        |  true => @{Nil}!(47)
-        |  false => Nil
+        |  true => {
+        |    @{Nil}!(47)
+        |  }
+        |  false => {
+        |    Nil
+        |  }
         |}""".stripMargin
   }
 
@@ -800,11 +816,15 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
       )
     result shouldBe
       """match (47 == 47) {
-        |  true => new x0 in {
-        |    x0!(47)
+        |  true => {
+        |    new x0 in {
+        |      x0!(47)
+        |    }
         |  }
-        |  false => new x0 in {
-        |    x0!(47)
+        |  false => {
+        |    new x0 in {
+        |      x0!(47)
+        |    }
         |  }
         |}""".stripMargin
   }
@@ -827,7 +847,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     val result = PrettyPrinter().buildString(
       ProcNormalizeMatcher.normalizeMatch[Coeval](input, inputs).value.par
     )
-    result shouldBe """for( @{match x0 | x1 { 47 => Nil }} <- @{Nil} ) {
+    result shouldBe """for( @{match x0 | x1 { 47 => { Nil } }} <- @{Nil} ) {
                       |  Nil
                       |}""".stripMargin
   }
