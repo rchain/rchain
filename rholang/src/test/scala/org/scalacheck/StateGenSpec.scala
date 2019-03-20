@@ -95,8 +95,8 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
       }(ArbF.arbF[EnvT, Par])
 
       body <- frequency((3, parGen), (1, matchGen))
-
-    } yield Receive(binds = List(bind), body = body)
+      isPersistent <- ArbEnv.liftF(Gen.oneOf(true, false))
+    } yield Receive(binds = List(bind), body = body, persistent = isPersistent)
   })
 
   implicit val arbFMatch: ArbF[EnvT, Match] = ArbF[EnvT, Match](Defer[EnvT[Gen, ?]].defer {
