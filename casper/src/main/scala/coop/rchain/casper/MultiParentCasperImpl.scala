@@ -142,13 +142,11 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
       bufferContains = state.blockBuffer.contains(b.blockHash)
     } yield (dagContains || bufferContains)
 
-  def deploy(d: DeployData): F[Either[Throwable, Unit]] =
+  def deploy(d: DeployData): F[Either[DeployError, Unit]] =
     InterpreterUtil.mkTerm(d.term) match {
-      case Right(_) =>
-        addDeploy(d).as(Right(()))
-
+      case Right(_) => addDeploy(d).as(Right(()))
       case Left(err) =>
-        Applicative[F].pure(Left(new Exception(s"Error in parsing term: \n$err")))
+        DeployError.parsingError(s"Error in parsing term: \n$err").asLeft[Unit].pure[F]
     }
 
   def addDeploy(deploy: DeployData): F[Unit] =

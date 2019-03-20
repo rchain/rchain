@@ -96,9 +96,9 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def addBlock(
       b: BlockMessage,
       handleDoppelganger: (BlockMessage, Validator) => F[Unit]
-  ): F[BlockStatus]                                     = underlying.addBlock(b, ignoreDoppelgangerCheck[F])
-  def contains(b: BlockMessage): F[Boolean]             = underlying.contains(b)
-  def deploy(d: DeployData): F[Either[Throwable, Unit]] = underlying.deploy(d)
+  ): F[BlockStatus]                                       = underlying.addBlock(b, ignoreDoppelgangerCheck[F])
+  def contains(b: BlockMessage): F[Boolean]               = underlying.contains(b)
+  def deploy(d: DeployData): F[Either[DeployError, Unit]] = underlying.deploy(d)
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     underlying.estimator(dag)
   def blockDag: F[BlockDagRepresentation[F]] = underlying.blockDag
