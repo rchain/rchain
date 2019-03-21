@@ -464,8 +464,15 @@ object Validate {
         b.header.get.postStateHash == postStateHashComputed) {
       Applicative[F].pure(Right(Valid))
     } else {
+      val computedHashString = PrettyPrinter.buildString(blockHashComputed)
+      val hashString         = PrettyPrinter.buildString(b.blockHash)
       for {
-        _ <- Log[F].warn(ignore(b, s"block hash does not match to computed value."))
+        _ <- Log[F].warn(
+              ignore(
+                b,
+                s"block hash ${hashString} does not match to computed value ${computedHashString}."
+              )
+            )
       } yield Left(InvalidBlockHash)
     }
   }
