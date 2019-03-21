@@ -7,7 +7,7 @@ import coop.rchain.crypto.hash.{Blake2b256, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.{BlockTime, RhoISpace, ShortLeashParams}
+import coop.rchain.rholang.interpreter.Runtime.{BlockTime, RhoISpace, ShortLeashParamsStorage}
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.{ContResult, Result}
 
@@ -28,7 +28,7 @@ trait SystemProcesses[F[_]] {
   def sha256Hash: Contract[F]
   def keccak256Hash: Contract[F]
   def blake2b256Hash: Contract[F]
-  def getDeployParams(deployParameters: ShortLeashParams[F]): Contract[F]
+  def getDeployParams(deployParameters: ShortLeashParamsStorage[F]): Contract[F]
   def blockTime(timestamp: BlockTime[F]): Contract[F]
   def validateRevAddress: Contract[F]
 }
@@ -159,7 +159,7 @@ object SystemProcesses {
 
       // TODO: rename this system process to "deployParameters"?
       def getDeployParams(
-          shortLeashParams: Runtime.ShortLeashParams[F]
+          shortLeashParams: Runtime.ShortLeashParamsStorage[F]
       ): Contract[F] = {
         case isContractCall(produce, Seq(ack)) =>
           for {

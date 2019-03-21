@@ -16,7 +16,7 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.ShortLeashParams.ShortLeashParameters
+import coop.rchain.rholang.interpreter.Runtime.ShortLeashParamsStorage.ShortLeashParameters
 import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.accounting.{loggingCost, noOpCostLog, _}
 import coop.rchain.rholang.interpreter.errors.{InterpreterError, SetupError}
@@ -38,7 +38,7 @@ class Runtime[F[_]: Sync] private (
     val errorLog: ErrorLog[F],
     val cost: _cost[F],
     val context: RhoContext[F],
-    val shortLeashParams: Runtime.ShortLeashParams[F],
+    val shortLeashParams: Runtime.ShortLeashParamsStorage[F],
     val blockTime: Runtime.BlockTime[F]
 ) {
   def readAndClearErrorVector(): F[Vector[Throwable]] = errorLog.readAndClearErrorVector()
@@ -80,7 +80,7 @@ object Runtime {
   type Remainder = Option[Var]
   type BodyRef   = Long
 
-  class ShortLeashParams[F[_]] private (
+  class ShortLeashParamsStorage[F[_]] private (
       private val params: Ref[F, ShortLeashParameters]
   ) {
     def setParams(codeHash: Par, phloRate: Par, userId: Par, timestamp: Par): F[Unit] =
@@ -102,17 +102,17 @@ object Runtime {
     def getParams: F[ShortLeashParameters] = params.get
   }
 
-  object ShortLeashParams {
+  object ShortLeashParamsStorage {
     final case class ShortLeashParameters(codeHash: Par, phloRate: Par, userId: Par, timestamp: Par)
     object ShortLeashParameters {
       val empty: ShortLeashParameters = ShortLeashParameters(Par(), Par(), Par(), Par())
     }
-    def apply[F[_]]()(implicit F: Sync[F]): F[ShortLeashParams[F]] =
-      Ref[F].of(ShortLeashParameters.empty).map(new ShortLeashParams(_))
+    def apply[F[_]]()(implicit F: Sync[F]): F[ShortLeashParamsStorage[F]] =
+      Ref[F].of(ShortLeashParameters.empty).map(new ShortLeashParamsStorage(_))
 
-    def unsafe[F[_]]()(implicit F: Sync[F]): ShortLeashParams[F] =
-      new ShortLeashParams[F](
-        Ref.unsafe[F, ShortLeashParams.ShortLeashParameters](ShortLeashParameters.empty)
+    def unsafe[F[_]]()(implicit F: Sync[F]): ShortLeashParamsStorage[F] =
+      new ShortLeashParamsStorage[F](
+        Ref.unsafe[F, ShortLeashParamsStorage.ShortLeashParameters](ShortLeashParameters.empty)
       )
   }
 
@@ -207,7 +207,7 @@ object Runtime {
         space: RhoISpace[F],
         dispatcher: RhoDispatch[F],
         registry: Registry[F],
-        shortLeashParams: ShortLeashParams[F],
+        shortLeashParams: ShortLeashParamsStorage[F],
         blockTime: BlockTime[F]
     ) {
       val systemProcesses = SystemProcesses[F](dispatcher, space)
@@ -332,7 +332,7 @@ object Runtime {
         space: RhoISpace[F],
         dispatcher: RhoDispatch[F],
         registry: Registry[F],
-        shortLeashParams: ShortLeashParams[F],
+        shortLeashParams: ShortLeashParamsStorage[F],
         blockTime: BlockTime[F]
     ): RhoDispatchMap[F] = {
       val systemProcesses = SystemProcesses[F](dispatcher, space)
@@ -366,7 +366,7 @@ object Runtime {
       "rho:registry:lookup" -> Bundle(FixedChannels.REG_LOOKUP, writeFlag = true)
     ) ++ (stdSystemProcesses[F] ++ extraSystemProcesses).map(_.toUrnMap)
 
-    val shortLeashParams = ShortLeashParams.unsafe[F]()
+    val shortLeashParams = ShortLeashParamsStorage.unsafe[F]()
     val blockTime        = BlockTime.unsafe[F]()
 
     val procDefs: List[(Name, Arity, Remainder, BodyRef)] = {
