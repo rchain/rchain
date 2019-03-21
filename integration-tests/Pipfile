@@ -13,3 +13,4 @@ dataclasses = "*"
 mypy = "*"
 
 [dev-packages]
+python-language-server = "*"
