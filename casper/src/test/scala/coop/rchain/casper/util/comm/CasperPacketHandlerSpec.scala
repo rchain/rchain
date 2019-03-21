@@ -78,7 +78,7 @@ class CasperPacketHandlerSpec extends WordSpec {
       Long.MaxValue,
       false,
       requiredSigs
-    )(scheduler)
+    )
     val local: PeerNode = peerNode("src", 40400)
     val shardId         = "test-shardId"
 

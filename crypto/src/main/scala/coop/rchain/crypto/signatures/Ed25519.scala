@@ -74,7 +74,6 @@ object Ed25519 extends SignaturesAlg {
   ): Array[Byte] =
     new SigningKey(sec).sign(data)
 
-  override def toPublic(
-      sec: crypto.PrivateKey): crypto.PublicKey =
+  override def toPublic(sec: crypto.PrivateKey): crypto.PublicKey =
     crypto.PublicKey(toPublic(sec.bytes))
 }

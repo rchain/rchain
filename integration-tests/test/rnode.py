@@ -278,7 +278,7 @@ class Node:
         return self.rnode_command('eval', rho_file_path)
 
     def deploy(self, rho_file_path: str) -> str:
-        return self.rnode_command('deploy', '--from=0x1', '--phlo-limit=1000000', '--phlo-price=1', '--nonce=0', rho_file_path)
+        return self.rnode_command('deploy', '--phlo-limit=1000000', '--phlo-price=1', rho_file_path)
 
     def deploy_string(self, rholang_code: str) -> str:
         quoted_rholang = shlex.quote(rholang_code)

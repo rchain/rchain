@@ -55,12 +55,10 @@ final case class Eval(files: List[String]) extends Command
 final case object Repl                     extends Command
 final case object Diagnostics              extends Command
 final case class Deploy(
-    address: String,
     phloLimit: Long,
     phloPrice: Long,
-    nonce: Int,
     validAfterBlock: Int,
-    userId: Option[PublicKey],
+    deployer: Option[PublicKey],
     location: String
 ) extends Command
 final case object DeployDemo                                               extends Command

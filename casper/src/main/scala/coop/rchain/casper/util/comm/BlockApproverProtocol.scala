@@ -42,7 +42,7 @@ class BlockApproverProtocol(
     maximumBond: Long,
     faucet: Boolean,
     requiredSigs: Int
-)(implicit scheduler: Scheduler) {
+) {
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1) -> e._2)
 
@@ -175,13 +175,11 @@ object BlockApproverProtocol {
 
   val deployDataEq: cats.kernel.Eq[DeployData] = new cats.kernel.Eq[DeployData] {
     override def eqv(x: DeployData, y: DeployData): Boolean =
-      x.user.equals(y.user) &&
+      x.deployer.equals(y.deployer) &&
         x.timestamp === y.timestamp &&
         x.sig.equals(y.sig) &&
         x.sigAlgorithm === y.sigAlgorithm &&
-        x.from === y.from &&
         x.phloPrice === y.phloPrice &&
-        x.phloLimit === y.phloLimit &&
-        x.nonce === y.nonce
+        x.phloLimit === y.phloLimit
   }
 }

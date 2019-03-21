@@ -27,7 +27,7 @@ object TestUtil {
 
   val rhoSpecDeploy: DeployData =
     DeployData(
-      user = ProtoUtil.stringToByteString(
+      deployer = ProtoUtil.stringToByteString(
         "4ae94eb0b2d7df529f7ae68863221d5adda402fc54303a3d90a8a7a279326828"
       ),
       timestamp = 1539808849271L,

@@ -171,10 +171,10 @@ object RegistrySigGen {
     * `user` (public key) and `timestamp`.
     *
     */
-  def generateUnforgeableNameId(user: Array[Byte], timestamp: Long) = {
+  def generateUnforgeableNameId(deployer: Array[Byte], timestamp: Long) = {
     val seed =
       DeployData()
-        .withUser(ByteString.copyFrom(user))
+        .withDeployer(ByteString.copyFrom(deployer))
         .withTimestamp(timestamp)
 
     val rnd = Blake2b512Random(DeployData.toByteArray(seed))

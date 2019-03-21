@@ -187,12 +187,10 @@ object Configuration {
         //TODO: change the defaults before main net
         import options.deploy._
         Deploy(
-          from.getOrElse("0x"),
           phloLimit(),
           phloPrice(),
-          nonce.getOrElse(0),
           validAfterBlockNumber.getOrElse(-1),
-          userId.toOption,
+          deployer.toOption,
           location()
         )
       case Some(options.deployDemo) => DeployDemo

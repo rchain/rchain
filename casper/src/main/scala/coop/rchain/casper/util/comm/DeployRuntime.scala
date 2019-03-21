@@ -64,12 +64,10 @@ object DeployRuntime {
 
   //Accepts a Rholang source file and deploys it to Casper
   def deployFileProgram[F[_]: Monad: Sync: DeployService](
-      purseAddress: String,
       phloLimit: Long,
       phloPrice: Long,
-      nonce: Int,
       validAfterBlock: Int,
-      maybeUserId: Option[PublicKey],
+      maybeDeployerId: Option[PublicKey],
       file: String
   ): F[Unit] =
     gracefulExit(
@@ -77,8 +75,8 @@ object DeployRuntime {
         case Left(ex) =>
           Sync[F].delay(Left(Seq(s"Error with given file: \n${ex.getMessage}")))
         case Right(code) =>
-          val userId =
-            maybeUserId
+          val deployerId =
+            maybeDeployerId
               .map(uid => ByteString.copyFrom(uid.bytes))
               .getOrElse(ByteString.EMPTY)
 
@@ -88,11 +86,9 @@ object DeployRuntime {
             d = DeployData()
               .withTimestamp(timestamp)
               .withTerm(code)
-              .withFrom(purseAddress)
               .withPhloLimit(phloLimit)
               .withPhloPrice(phloPrice)
-              .withUser(userId)
-              .withNonce(nonce)
+              .withDeployer(deployerId)
               .withValidAfterBlockNumber(validAfterBlock)
             response <- DeployService[F].deploy(d)
           } yield response.map(r => s"Response: $r")

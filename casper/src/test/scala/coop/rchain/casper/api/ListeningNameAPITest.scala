@@ -34,7 +34,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
     def basicDeployData: DeployData = {
       val timestamp = System.currentTimeMillis()
       DeployData()
-        .withUser(ByteString.EMPTY)
+        .withDeployer(ByteString.EMPTY)
         .withTimestamp(timestamp)
         .withTerm("@{ 3 | 2 | 1 }!(0)")
         .withPhloLimit(accounting.MAX_VALUE)
@@ -208,7 +208,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
     def basicDeployData: DeployData = {
       val timestamp = System.currentTimeMillis()
       DeployData()
-        .withUser(ByteString.EMPTY)
+        .withDeployer(ByteString.EMPTY)
         .withTimestamp(timestamp)
         .withTerm("for (@0 <- @{ 3 | 2 | 1 }; @1 <- @{ 2 | 1 }) { 0 }")
         .withPhloLimit(accounting.MAX_VALUE)
