@@ -3,16 +3,13 @@ package coop.rchain.comm.rp
 import scala.concurrent.duration._
 
 import cats._
+import cats.effect._
 import cats.implicits._
 import cats.mtl._
-import cats.effect._
 
-import coop.rchain.catscontrib._
-import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm._
 import coop.rchain.comm.CommError._
 import coop.rchain.comm.discovery._
-import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
@@ -83,6 +80,12 @@ object Connect {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
+  def hasMaxNumberOfConnections[F[_]: Monad: ConnectionsCell: RPConfAsk]: F[Boolean] =
+    for {
+      connections <- ConnectionsCell[F].read
+      max         <- RPConfAsk[F].reader(_.clearConnections.maxNumOfConnections)
+    } yield connections.length >= max
+
   def clearConnections[F[_]: Sync: Monad: Time: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]
     : F[Int] = {
 
@@ -127,20 +130,23 @@ object Connect {
 
   def findAndConnect[F[_]: Sync: Monad: Log: Time: Metrics: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
       conn: (PeerNode, FiniteDuration) => F[Unit]
-  ): F[List[PeerNode]] =
-    for {
-      connections      <- ConnectionsCell[F].read
-      tout             <- RPConfAsk[F].reader(_.defaultTimeout)
-      peers            <- NodeDiscovery[F].peers.map(p => (p.toSet -- connections).toList)
-      responses        <- peers.traverse(p => ErrorHandler[F].attempt(conn(p, tout)))
-      peersAndResonses = peers.zip(responses)
-      _ <- peersAndResonses.traverse {
-            case (peer, Left(error)) =>
-              Log[F].debug(s"Failed to connect to ${peer.toAddress}. Reason: ${error.message}")
-            case (peer, Right(_)) =>
-              Log[F].info(s"Connected to ${peer.toAddress}.")
-          }
-    } yield peersAndResonses.filter(_._2.isRight).map(_._1)
+  ): F[List[PeerNode]] = {
+    def find(): F[List[PeerNode]] =
+      for {
+        connections      <- ConnectionsCell[F].read
+        tout             <- RPConfAsk[F].reader(_.defaultTimeout)
+        peers            <- NodeDiscovery[F].peers.map(p => (p.toSet -- connections).toList)
+        responses        <- peers.traverse(p => ErrorHandler[F].attempt(conn(p, tout)))
+        peersAndResonses = peers.zip(responses)
+        _ <- peersAndResonses.traverse {
+              case (peer, Left(error)) =>
+                Log[F].debug(s"Failed to connect to ${peer.toAddress}. Reason: ${error.message}")
+              case _ => ().pure[F]
+            }
+      } yield peersAndResonses.filter(_._2.isRight).map(_._1)
+
+    hasMaxNumberOfConnections[F].ifM(List.empty[PeerNode].pure[F], find())
+  }
 
   def connect[F[_]: Sync: Monad: Log: Time: Metrics: TransportLayer: ErrorHandler: ConnectionsCell: RPConfAsk](
       peer: PeerNode,
