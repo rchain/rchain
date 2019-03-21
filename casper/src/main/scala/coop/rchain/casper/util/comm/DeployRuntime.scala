@@ -64,7 +64,6 @@ object DeployRuntime {
 
   //Accepts a Rholang source file and deploys it to Casper
   def deployFileProgram[F[_]: Monad: Sync: DeployService](
-      purseAddress: String,
       phloLimit: Long,
       phloPrice: Long,
       validAfterBlock: Int,
@@ -87,7 +86,6 @@ object DeployRuntime {
             d = DeployData()
               .withTimestamp(timestamp)
               .withTerm(code)
-              .withFrom(purseAddress)
               .withPhloLimit(phloLimit)
               .withPhloPrice(phloPrice)
               .withDeployer(deployerId)

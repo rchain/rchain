@@ -355,11 +355,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "on the configuration of the Casper instance."
     )
 
-    val from = opt[String](
-      descr = "Purse address that will be used to pay for the deployment.",
-      validate = addressCheck
-    )
-
     val phloLimit =
       opt[Long](
         descr =

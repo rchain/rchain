@@ -187,7 +187,6 @@ object Configuration {
         //TODO: change the defaults before main net
         import options.deploy._
         Deploy(
-          from.getOrElse("0x"),
           phloLimit(),
           phloPrice(),
           validAfterBlockNumber.getOrElse(-1),

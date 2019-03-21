@@ -179,7 +179,6 @@ object BlockApproverProtocol {
         x.timestamp === y.timestamp &&
         x.sig.equals(y.sig) &&
         x.sigAlgorithm === y.sigAlgorithm &&
-        x.from === y.from &&
         x.phloPrice === y.phloPrice &&
         x.phloLimit === y.phloLimit
   }
