@@ -96,6 +96,5 @@ object Secp256k1 extends SignaturesAlg {
   def toPublic(seckey: Array[Byte]): Array[Byte] =
     NativeSecp256k1.computePubkey(seckey)
 
-  override def toPublic(
-      sec: PrivateKey): PublicKey = PublicKey()
+  override def toPublic(sec: PrivateKey): PublicKey = PublicKey(toPublic(sec.bytes))
 }

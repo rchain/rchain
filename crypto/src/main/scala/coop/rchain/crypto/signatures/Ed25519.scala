@@ -29,6 +29,9 @@ object Ed25519 extends SignaturesAlg {
     key.getVerifyKey.toBytes
   }
 
+  override def toPublic(sec: crypto.PrivateKey): crypto.PublicKey =
+    crypto.PublicKey(toPublic(sec.bytes))
+
   /**
     * Verifies the given Ed25519 signature.
     *
@@ -73,7 +76,4 @@ object Ed25519 extends SignaturesAlg {
       sec: Array[Byte]
   ): Array[Byte] =
     new SigningKey(sec).sign(data)
-
-  override def toPublic(sec: crypto.PrivateKey): crypto.PublicKey =
-    crypto.PublicKey(toPublic(sec.bytes))
 }

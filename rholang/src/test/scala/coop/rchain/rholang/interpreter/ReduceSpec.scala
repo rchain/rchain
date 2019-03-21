@@ -1425,7 +1425,9 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         )
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
-    result.exprs should be(Seq(Expr(GByteArray(ByteString.copyFrom(Base16.unsafeDecode("deadbeef"))))))
+    result.exprs should be(
+      Seq(Expr(GByteArray(ByteString.copyFrom(Base16.unsafeDecode("deadbeef")))))
+    )
     errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 

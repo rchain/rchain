@@ -55,7 +55,8 @@ class RevIssuanceTest extends FlatSpec with Matchers {
         Faucet.noopFaucet
       )
 
-    val secKey = Base16.unsafeDecode("a68a6e6cca30f81bd24a719f3145d20e8424bd7b396309b0708a16c7d8000b76")
+    val secKey =
+      Base16.unsafeDecode("a68a6e6cca30f81bd24a719f3145d20e8424bd7b396309b0708a16c7d8000b76")
     val pubKey =
       "f700a417754b775d95421973bdbdadb2d23c8a5af46f1829b1431f5c136e549e8a0d61aa0c793f1a614f8e437711c7758473c6ceb0859ac7e9e07911ca66b5c4"
 

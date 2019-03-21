@@ -83,7 +83,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
   val ninetySevenByteArray: Par = GByteArray(ByteString.copyFrom(Array[Byte](0x97.toByte)))
   val branchName: Par = GPrivate(
     ByteString
-      .copyFrom(Base16.unsafeDecode("d5fd3d8daf9f295aa590b37b50d5518803b4596ed6940aa42d46b1413a1bb16e"))
+      .copyFrom(
+        Base16.unsafeDecode("d5fd3d8daf9f295aa590b37b50d5518803b4596ed6940aa42d46b1413a1bb16e")
+      )
   )
   // format: off
   val rootSend: Send = Send(
@@ -100,16 +102,24 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
   val efByteArray: Par        = GByteArray(ByteString.copyFrom(Array[Byte](0xef.toByte)))
   val emptyByteArray: Par     = GByteArray(ByteString.EMPTY)
   val branch1: Par = GByteArray(
-    ByteString.copyFrom(Base16.unsafeDecode("533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2"))
+    ByteString.copyFrom(
+      Base16.unsafeDecode("533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2")
+    )
   )
   val branch2: Par = GByteArray(
-    ByteString.copyFrom(Base16.unsafeDecode("e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e"))
+    ByteString.copyFrom(
+      Base16.unsafeDecode("e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e")
+    )
   )
   val branch3: Par = GByteArray(
-    ByteString.copyFrom(Base16.unsafeDecode("763354e4266d31c74b7a5be55fbfeb464fe65ce56ce9ccbfd9a1fddef0"))
+    ByteString.copyFrom(
+      Base16.unsafeDecode("763354e4266d31c74b7a5be55fbfeb464fe65ce56ce9ccbfd9a1fddef0")
+    )
   )
   val branch4: Par = GByteArray(
-    ByteString.copyFrom(Base16.unsafeDecode("7e047d2fc591185812e4a9526ded5509544e6586092c25a17abf366ea3"))
+    ByteString.copyFrom(
+      Base16.unsafeDecode("7e047d2fc591185812e4a9526ded5509544e6586092c25a17abf366ea3")
+    )
   )
   val branchSend: Send = Send(
     chan = branchName,
@@ -647,7 +657,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
 
     val expectedUri = Registry.buildURI(
       Blake2b256
-        .hash(Base16.unsafeDecode("11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d"))
+        .hash(
+          Base16.unsafeDecode("11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d")
+        )
     )
 
     val result = evaluate(completePar)
