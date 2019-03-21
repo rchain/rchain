@@ -2,7 +2,7 @@ package coop.rchain.casper.api
 
 import cats.implicits._
 
-import coop.rchain.casper.{Created, HashSetCasperTest}
+import coop.rchain.casper.{Created, DeployGenerator, HashSetCasperTest}
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
@@ -70,7 +70,9 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
       implicit val timeEff = new LogicalTime[Effect]
       for {
         deployDatas <- (0 to 7).toList
-                        .traverse[Effect, DeployData](_ => ProtoUtil.basicDeployData[Effect](0))
+                        .traverse[Effect, DeployData](
+                          _ => DeployGenerator.basicDeployData[Effect](0)
+                        )
 
         createBlock1Result <- nodes(0).casperEff
                                .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock

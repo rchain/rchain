@@ -284,7 +284,7 @@ class ValidateTest
   "Future deploy validation" should "work" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        deploy            <- ProtoUtil.basicProcessedDeploy[Task](0)
+        deploy            <- DeployGenerator.basicProcessedDeploy[Task](0)
         deployData        = deploy.deploy.get
         updatedDeployData = deployData.withValidAfterBlockNumber(-1)
         block <- createBlock[Task](
@@ -299,7 +299,7 @@ class ValidateTest
   "Future deploy validation" should "not accept blocks with a deploy for a future block number" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        deploy            <- ProtoUtil.basicProcessedDeploy[Task](0)
+        deploy            <- DeployGenerator.basicProcessedDeploy[Task](0)
         deployData        = deploy.deploy.get
         updatedDeployData = deployData.withValidAfterBlockNumber(Long.MaxValue)
         blockWithFutureDeploy <- createBlock[Task](
@@ -314,7 +314,7 @@ class ValidateTest
   "Deploy expiration validation" should "work" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        deploy <- ProtoUtil.basicProcessedDeploy[Task](0)
+        deploy <- DeployGenerator.basicProcessedDeploy[Task](0)
         block <- createBlock[Task](
                   Seq.empty[BlockHash],
                   deploys = Seq(deploy)
@@ -327,7 +327,7 @@ class ValidateTest
   "Deploy expiration validation" should "not accept blocks with a deploy that is expired" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        deploy            <- ProtoUtil.basicProcessedDeploy[Task](0)
+        deploy            <- DeployGenerator.basicProcessedDeploy[Task](0)
         deployData        = deploy.deploy.get
         updatedDeployData = deployData.withValidAfterBlockNumber(Long.MinValue)
         blockWithExpiredDeploy <- createBlock[Task](
@@ -425,7 +425,7 @@ class ValidateTest
       ): F[BlockMessage] =
         for {
           current <- Time[F].currentMillis
-          deploy  <- ProtoUtil.basicProcessedDeploy[F](current.toInt)
+          deploy  <- DeployGenerator.basicProcessedDeploy[F](current.toInt)
           block <- createBlock[F](
                     parents.map(_.blockHash),
                     creator = validators(validator),
@@ -610,7 +610,7 @@ class ValidateTest
           validator: Int
       ): F[BlockMessage] =
         for {
-          deploy <- ProtoUtil.basicProcessedDeploy[F](0)
+          deploy <- DeployGenerator.basicProcessedDeploy[F](0)
           result <- createBlock[F](
                      parents.map(_.blockHash),
                      creator = validators(validator),

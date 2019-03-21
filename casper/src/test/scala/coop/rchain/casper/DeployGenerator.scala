@@ -38,12 +38,16 @@ object DeployGenerator {
     )
 
   def basicDeployData[F[_]: Monad: Time](id: Int): F[DeployData] =
-    Time[F].currentMillis.map(
-      now =>
+    Time[F].currentMillis.map { now =>
+      sign(
         DeployData()
           .withUser(ByteString.copyFrom(pub.bytes))
           .withTimestamp(now)
           .withTerm(s"@${id}!($id)")
           .withPhloLimit(accounting.MAX_VALUE)
-    )
+      )
+    }
+
+  def basicProcessedDeploy[F[_]: Monad: Time](id: Int): F[ProcessedDeploy] =
+    basicDeployData[F](id).map(deploy => ProcessedDeploy(deploy = Some(deploy)))
 }

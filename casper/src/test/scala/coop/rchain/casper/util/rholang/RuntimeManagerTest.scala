@@ -154,7 +154,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
     import cats.implicits._
 
-    val terms = ProtoUtil.basicDeployData[Id](0) :: Nil
+    val terms = DeployGenerator.basicDeployData[Id](0) :: Nil
 
     def run =
       runtimeManager
