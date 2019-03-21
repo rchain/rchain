@@ -5,7 +5,7 @@ import org.abstractj.kalium.keys._
 
 object Ed25519 extends SignaturesAlg {
 
-  val publicKeyLength = 32
+  val keyLength = 32
 
   val name: String = "Ed25519".toLowerCase
 

@@ -4,9 +4,9 @@ import java.nio.file.Path
 
 import coop.rchain.casper.util.comm.ListenAtName.{Name, PrivName, PubName}
 import coop.rchain.comm.PeerNode
-import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.PrivateKey
 import coop.rchain.node.BuildInfo
-import coop.rchain.rholang.interpreter.util.codec.Base58
 import coop.rchain.shared.StoreType
 import org.rogach.scallop._
 
@@ -348,6 +348,12 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val hexCheck: String => Boolean     = _.matches("[0-9a-fA-F]+")
   val addressCheck: String => Boolean = addr => addr.startsWith("0x") && hexCheck(addr.drop(2))
 
+  def validateLength[T](expectedLength: Int)(array: Array[T]): Either[String, Option[Array[T]]] =
+    if (array.length == expectedLength)
+      Right(Some(array))
+    else
+      Left(s"Invalid parameter length. Expected length is $expectedLength bytes")
+
   val deploy = new Subcommand("deploy") {
     descr(
       "Deploy a Rholang source file to Casper on an existing running node. " +
@@ -374,10 +380,14 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "Set this value to one less than the current block height: you have 50 blocks to get this transaction into the chain."
     )
 
-    val deployer = opt[PublicKey](
-      descr = "The deployer's ed25519 public key encoded as Base16",
+    val privateKey = opt[PrivateKey](
+      descr = "The deployer's ed25519 private key encoded as Base16.",
       required = false
-    )(Ed25519PubKeyConverter)
+    )(
+      Base16Converter
+        .flatMap(validateLength(Ed25519.keyLength))
+        .map(PrivateKey)
+    )
 
     val location = trailArg[String](required = true)
 
