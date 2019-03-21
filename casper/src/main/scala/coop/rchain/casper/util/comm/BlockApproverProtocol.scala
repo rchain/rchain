@@ -42,7 +42,7 @@ class BlockApproverProtocol(
     maximumBond: Long,
     faucet: Boolean,
     requiredSigs: Int
-)(implicit scheduler: Scheduler) {
+) {
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1) -> e._2)
 
