@@ -42,28 +42,28 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
 
     val expectedServer =
       configuration.Server(
-        Some("1.2.3.4"),
-        40400,
-        40403,
-        40404,
+        host = Some("1.2.3.4"),
+        port = 40400,
+        httpPort = 40403,
+        kademliaPort = 40404,
         dynamicHostAddress = true,
         noUpnp = true,
-        2.seconds,
-        PeerNode
+        defaultTimeout = 2.seconds,
+        bootstrap = PeerNode
           .fromAddress(
             "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"
           )
           .right
           .get,
         standalone = true,
-        Paths.get("/root/.rnode"),
-        1024 * 1024 * 1024,
-        StoreType.LMDB,
-        1024 * 1024 * 1024,
-        500,
-        256 * 1024,
-        64 * 1024,
-        8
+        dataDir = Paths.get("/root/.rnode"),
+        mapSize = 1024 * 1024 * 1024,
+        storeType = StoreType.LMDB,
+        storeSize = 1024 * 1024 * 1024,
+        maxNumOfConnections = 500,
+        maxMessageSize = 256 * 1024,
+        packetChunkSize = 64 * 1024,
+        messageConsumers = 8
       )
 
     val server = Server.fromConfig(ConfigFactory.parseString(conf))
@@ -86,8 +86,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
 
     val expectedTls =
       configuration.Tls(
-        Paths.get("/root/node.certificate.pem"),
-        Paths.get("/root/node.key.pem"),
+        certificate = Paths.get("/root/node.certificate.pem"),
+        key = Paths.get("/root/node.key.pem"),
         customCertificateLocation = false,
         customKeyLocation = false,
         secureRandomNonBlocking = true
@@ -141,10 +141,10 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
 
     val expectedGrpc =
       configuration.GrpcServer(
-        "localhost",
-        40401,
-        40402,
-        4 * 1024 * 1024
+        host = "localhost",
+        portExternal = 40401,
+        portInternal = 40402,
+        maxMessageSize = 4 * 1024 * 1024
       )
 
     val grpc = GrpcServer.fromConfig(ConfigFactory.parseString(conf))
@@ -180,24 +180,24 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
 
     val expectedCasper =
       CasperConf(
-        Some("111111111111"),
-        Some(Right(Paths.get("/root/pk.pem"))),
-        "ed25519",
-        Some("/root/bonds.txt"),
-        Some("/root/validators.txt"),
-        5,
-        Paths.get("/root/.rnode/genesis"),
-        Some("/root/wallet.txt"),
-        1L,
-        Long.MaxValue,
+        publicKeyBase16 = Some("111111111111"),
+        privateKey = Some(Right(Paths.get("/root/pk.pem"))),
+        sigAlgorithm = "ed25519",
+        bondsFile = Some("/root/bonds.txt"),
+        knownValidatorsFile = Some("/root/validators.txt"),
+        numValidators = 5,
+        genesisPath = Paths.get("/root/.rnode/genesis"),
+        walletsFile = Some("/root/wallet.txt"),
+        minimumBond = 1L,
+        maximumBond = Long.MaxValue,
         hasFaucet = true,
-        0,
-        "rchain",
+        requiredSigs = 0,
+        shardId = "rchain",
         createGenesis = false,
         approveGenesis = true,
-        5.seconds,
-        5.minutes,
-        Some(333)
+        approveGenesisInterval = 5.seconds,
+        approveGenesisDuration = 5.minutes,
+        deployTimestamp = Some(333)
       )
 
     val casper = Casper.fromConfig(ConfigFactory.parseString(conf))
