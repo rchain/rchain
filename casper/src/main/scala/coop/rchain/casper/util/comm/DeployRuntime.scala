@@ -91,7 +91,7 @@ object DeployRuntime {
               .withPhloPrice(phloPrice)
               .withValidAfterBlockNumber(validAfterBlock)
               .withTimestamp(timestamp)
-            
+
             signedData = maybePrivateKey.fold(d)(SignDeployment(_, d))
 
             response <- DeployService[F].deploy(signedData)
