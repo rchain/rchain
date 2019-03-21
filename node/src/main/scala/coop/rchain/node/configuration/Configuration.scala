@@ -193,7 +193,6 @@ object Configuration {
           privateKey.toOption,
           location()
         )
-      case Some(options.deployDemo) => DeployDemo
       case Some(options.propose)    => Propose
       case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
       case Some(options.showBlocks) =>
