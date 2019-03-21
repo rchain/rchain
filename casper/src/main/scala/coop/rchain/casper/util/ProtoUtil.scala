@@ -402,21 +402,6 @@ object ProtoUtil {
   def basicProcessedDeploy[F[_]: Monad: Time](id: Int): F[ProcessedDeploy] =
     basicDeployData[F](id).map(deploy => ProcessedDeploy(deploy = Some(deploy)))
 
-  def sourceDeploy(source: String, timestamp: Long, phlos: Long): DeployData =
-    DeployData(
-      deployer = ByteString.EMPTY,
-      timestamp = timestamp,
-      term = source,
-      phloLimit = phlos
-    )
-
-  def sourceDeployNow(source: String): DeployData =
-    sourceDeploy(
-      source,
-      System.currentTimeMillis(),
-      accounting.MAX_VALUE
-    )
-
   /**
     * Strip a deploy down to the fields we are using to seed the Deterministic name generator.
     * Because we enforce that a deployment must be unique on the user, timestamp pair, we leave

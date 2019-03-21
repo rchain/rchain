@@ -3,9 +3,10 @@ package coop.rchain.casper.util
 import cats._
 import cats.effect._
 import cats.implicits._
+import coop.rchain.casper.protocol._
+import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.util.ProtoUtil.sourceDeploy
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
@@ -67,6 +68,14 @@ object BondingUtil {
       transferStatusOut(ethAddress),
       pubKey,
       Base16.unsafeDecode(secKey)
+    )
+
+  private def sourceDeploy(source: String, timestamp: Long, phlos: Long): DeployData =
+    DeployData(
+      user = ByteString.EMPTY,
+      timestamp = timestamp,
+      term = source,
+      phloLimit = phlos
     )
 
   def preWalletUnlockDeploy[F[_]: Concurrent](

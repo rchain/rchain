@@ -1,5 +1,6 @@
 package coop.rchain.casper.util.rholang
 
+import coop.rchain.casper.DeployGenerator
 import cats.Id
 import cats.effect.Resource
 import coop.rchain.catscontrib.TaskContrib._
@@ -28,7 +29,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
   "computeState" should "capture rholang errors" in {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
-    val deploy     = ProtoUtil.sourceDeployNow(badRholang)
+    val deploy     = DeployGenerator.sourceDeployNow(badRholang)
     val (_, Seq(result)) =
       runtimeManager
         .use(mgr => mgr.computeState(mgr.emptyStateHash, deploy :: Nil))
@@ -39,7 +40,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
   it should "capture rholang parsing errors and charge for parsing" in {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!("hi") """
-    val deploy     = ProtoUtil.sourceDeployNow(badRholang)
+    val deploy     = DeployGenerator.sourceDeployNow(badRholang)
     val (_, Seq(result)) =
       runtimeManager
         .use(mgr => mgr.computeState(mgr.emptyStateHash, deploy :: Nil))
@@ -51,7 +52,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
   it should "charge for parsing and execution" in {
     val correctRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!(2) }"""
-    val deploy         = ProtoUtil.sourceDeployNow(correctRholang)
+    val deploy         = DeployGenerator.sourceDeployNow(correctRholang)
 
     implicit val log: Log[Task]            = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
@@ -91,7 +92,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   "captureResult" should "return the value at the specified channel after a rholang computation" in {
     val purseValue     = "37"
     val captureChannel = "__PURSEVALUE__"
-    val deployData = ProtoUtil.sourceDeploy(
+    val deployData = DeployGenerator.sourceDeploy(
       s"""new rl(`rho:registry:lookup`), NonNegativeNumberCh in {
          |  rl!(`rho:id:nd74ztexkao5awjhj95e3octkza7tydwiy7euthnyrt5ihgi9rj495`, *NonNegativeNumberCh) |
          |  for(@(_, NonNegativeNumber) <- NonNegativeNumberCh) {
@@ -112,7 +113,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
               mgr
                 .captureResults(
                   hash,
-                  ProtoUtil.sourceDeploy(
+                  DeployGenerator.sourceDeploy(
                     s""" for(nn <- @"nn"){ nn!("value", "$captureChannel") } """,
                     0L,
                     accounting.MAX_VALUE
@@ -130,7 +131,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   it should "handle multiple results and no results appropriately" in {
     val n    = 8
     val code = (1 to n).map(i => s""" @"__SCALA__"!($i) """).mkString("|")
-    val term = ProtoUtil.sourceDeploy(code, 0L, accounting.MAX_VALUE)
+    val term = DeployGenerator.sourceDeploy(code, 0L, accounting.MAX_VALUE)
     val manyResults =
       runtimeManager
         .use(mgr => mgr.captureResults(mgr.emptyStateHash, term))
@@ -177,7 +178,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     def deployCost(p: Seq[InternalProcessedDeploy]): Long = p.map(_.cost.cost).sum
     val deploy = terms.map(
       t =>
-        ProtoUtil.sourceDeploy(
+        DeployGenerator.sourceDeploy(
           t,
           System.currentTimeMillis(),
           accounting.MAX_VALUE

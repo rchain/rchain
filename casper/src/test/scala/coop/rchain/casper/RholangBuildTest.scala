@@ -35,7 +35,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
         |    timeStore!("The timestamp is ${timestamp}" %% {"timestamp" : timestamp})
         |  }
         |}""".stripMargin
-    val deploy = ProtoUtil.sourceDeploy(code, 1L, accounting.MAX_VALUE)
+    val deploy = DeployGenerator.sourceDeploy(code, 1L, accounting.MAX_VALUE)
     for {
       createBlockResult    <- MultiParentCasper[Effect].deploy(deploy) *> MultiParentCasper[Effect].createBlock
       Created(signedBlock) = createBlockResult
