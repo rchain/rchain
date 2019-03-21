@@ -44,6 +44,17 @@ object PrettyPrinter {
       str
     }
 
+  def buildString(d: ProcessedDeploy): String = {
+    val deployString = for {
+      deployData <- d.deploy
+      user       = deployData.user
+      pCost      <- d.cost
+      cost       = pCost.cost
+    } yield s"User: ${buildStringNoLimit(user)}, Cost: ${cost.toString} " +
+            s"${buildString(deployData)}"
+    deployString.getOrElse("No deploy data")
+  }
+
   def buildString(b: ByteString): String =
     limit(Base16.encode(b.toByteArray), 10)
 

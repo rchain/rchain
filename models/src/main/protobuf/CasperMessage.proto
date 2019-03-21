@@ -188,6 +188,7 @@ message BlockInfo {
   string sender = 12;
   string shardId = 13;
   repeated string bondsValidatorList = 14;
+  repeated string deployCost = 15;
 }
 
 message PrivateNamePreviewQuery {
