@@ -23,6 +23,7 @@ final case object MissingSignature                      extends DeployError
 final case object MissingSignatureAlgorithm             extends DeployError
 final case object MissingUser                           extends DeployError
 final case class UnknownSignatureAlgorithm(alg: String) extends DeployError
+final case object SignatureVerificationFailed           extends DeployError
 
 object DeployError {
   def parsingError(details: String): DeployError          = ParsingError(details)
@@ -30,6 +31,7 @@ object DeployError {
   def missingSignatureAlgorithm: DeployError              = MissingSignatureAlgorithm
   def missingUser: DeployError                            = MissingUser
   def unknownSignatureAlgorithm(alg: String): DeployError = UnknownSignatureAlgorithm(alg)
+  def signatureVerificationFailed: DeployError            = SignatureVerificationFailed
 
   implicit val showDeployError: Show[DeployError] = new Show[DeployError] {
     def show(error: DeployError): String = error match {
@@ -38,6 +40,7 @@ object DeployError {
       case MissingSignatureAlgorithm      => s"Missing signature algorithm"
       case MissingUser                    => s"Missing user"
       case UnknownSignatureAlgorithm(alg) => s"Unknown signature algorithm '$alg'"
+      case SignatureVerificationFailed    => "Signature verification failed"
     }
   }
 }

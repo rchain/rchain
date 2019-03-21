@@ -28,6 +28,10 @@ object SignDeployment {
   }
 
   def verify(deployData: DeployData): Option[Boolean] =
-    SignaturesAlg(deployData.sigAlgorithm).map(_ => true)
+    SignaturesAlg(deployData.sigAlgorithm).map { alg =>
+      val toVerify = clear(deployData).toByteString.toByteArray
+      val hash     = Blake2b256.hash(toVerify)
+      alg.verify(hash, deployData.sig.toByteArray, PublicKey(deployData.user.toByteArray))
+    }
 
 }

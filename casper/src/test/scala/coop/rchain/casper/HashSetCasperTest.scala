@@ -136,6 +136,21 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     } yield deployResult should be(Left(UnknownSignatureAlgorithm("SOME_RANDOME_STUFF")))
   }
 
+  it should "not allow deploy if deploy is incorrectly signed" in effectTest {
+    val node             = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val casper           = node.casperEff
+    implicit val timeEff = new LogicalTime[Effect]
+
+    for {
+      correctDeploy <- DeployGenerator.basicDeployData[Effect](0)
+      incorrectDeploy = correctDeploy.withSig(
+        ByteString.copyFrom(correctDeploy.sig.toByteArray.reverse)
+      )
+      deployResult <- casper.deploy(incorrectDeploy)
+      _            <- node.tearDown()
+    } yield deployResult should be(Left(SignatureVerificationFailed))
+  }
+
   it should "not allow multiple threads to process the same block" in {
     val scheduler = Scheduler.fixedPool("three-threads", 3)
     val node      = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)(scheduler)

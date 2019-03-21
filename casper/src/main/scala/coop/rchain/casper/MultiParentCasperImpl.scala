@@ -149,9 +149,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
     case d if (d.user == ByteString.EMPTY) => missingUser.asLeft[Unit]
     case _ =>
       val maybeVerified = SignDeployment.verify(deployData)
-      maybeVerified.fold(unknownSignatureAlgorithm(deployData.sigAlgorithm).asLeft[Unit])(
-        kp(().asRight[DeployError])
-      )
+      maybeVerified.fold(unknownSignatureAlgorithm(deployData.sigAlgorithm).asLeft[Unit]) {
+        case false => signatureVerificationFailed.asLeft[Unit]
+        case true  => ().asRight[DeployError]
+      }
   }
 
   def deploy(d: DeployData): F[Either[DeployError, Unit]] =
