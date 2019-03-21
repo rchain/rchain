@@ -18,23 +18,26 @@ import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.ski.kp2
 
 sealed trait DeployError
-final case class ParsingError(details: String) extends DeployError
-final case object MissingSignature             extends DeployError
-final case object MissingSignatureAlgorithm    extends DeployError
-final case object MissingUser                  extends DeployError
+final case class ParsingError(details: String)          extends DeployError
+final case object MissingSignature                      extends DeployError
+final case object MissingSignatureAlgorithm             extends DeployError
+final case object MissingUser                           extends DeployError
+final case class UnknownSignatureAlgorithm(alg: String) extends DeployError
 
 object DeployError {
-  def parsingError(details: String): DeployError = ParsingError(details)
-  def missingSignature: DeployError              = MissingSignature
-  def missingSignatureAlgorithm: DeployError     = MissingSignatureAlgorithm
-  def missingUser: DeployError                   = MissingUser
+  def parsingError(details: String): DeployError          = ParsingError(details)
+  def missingSignature: DeployError                       = MissingSignature
+  def missingSignatureAlgorithm: DeployError              = MissingSignatureAlgorithm
+  def missingUser: DeployError                            = MissingUser
+  def unknownSignatureAlgorithm(alg: String): DeployError = UnknownSignatureAlgorithm(alg)
 
   implicit val showDeployError: Show[DeployError] = new Show[DeployError] {
     def show(error: DeployError): String = error match {
-      case ParsingError(details)     => s"Parsing error: $details"
-      case MissingSignature          => s"Missing signature"
-      case MissingSignatureAlgorithm => s"Missin signature algorithm"
-      case MissingUser               => s"Missin user"
+      case ParsingError(details)          => s"Parsing error: $details"
+      case MissingSignature               => s"Missing signature"
+      case MissingSignatureAlgorithm      => s"Missing signature algorithm"
+      case MissingUser                    => s"Missing user"
+      case UnknownSignatureAlgorithm(alg) => s"Unknown signature algorithm '$alg'"
     }
   }
 }

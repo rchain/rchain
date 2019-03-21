@@ -27,4 +27,7 @@ object SignDeployment {
     fill(deployData)(alg.toPublic(sec), signature, alg.name)
   }
 
+  def verify(deployData: DeployData): Option[Boolean] =
+    SignaturesAlg(deployData.sigAlgorithm).map(_ => true)
+
 }
