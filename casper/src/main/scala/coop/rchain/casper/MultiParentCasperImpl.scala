@@ -143,8 +143,11 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
       bufferContains = state.blockBuffer.contains(b.blockHash)
     } yield (dagContains || bufferContains)
 
-  private def validateDeploy(d: DeployData): Either[DeployError, Unit] =
-    if (d.sig == ByteString.EMPTY) missingSignature.asLeft[Unit] else ().asRight[DeployError]
+  private def validateDeploy(deployData: DeployData): Either[DeployError, Unit] = deployData match {
+    case d if (d.sig == ByteString.EMPTY) => missingSignature.asLeft[Unit]
+    case d if (d.sigAlgorithm == "")      => missingSignatureAlgorithm.asLeft[Unit]
+    case _                                => ().asRight[DeployError]
+  }
 
   def deploy(d: DeployData): F[Either[DeployError, Unit]] =
     validateDeploy(d).fold(

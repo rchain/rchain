@@ -193,8 +193,8 @@ object Configuration {
           privateKey.toOption,
           location()
         )
-      case Some(options.propose)    => Propose
-      case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
+      case Some(options.propose)   => Propose
+      case Some(options.showBlock) => ShowBlock(options.showBlock.hash())
       case Some(options.showBlocks) =>
         import options.showBlocks._
         ShowBlocks(depth.getOrElse(1))

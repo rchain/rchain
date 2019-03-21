@@ -20,15 +20,18 @@ import coop.rchain.catscontrib.ski.kp2
 sealed trait DeployError
 final case class ParsingError(details: String) extends DeployError
 final case object MissingSignature             extends DeployError
+final case object MissingSignatureAlgorithm    extends DeployError
 
 object DeployError {
   def parsingError(details: String): DeployError = ParsingError(details)
   def missingSignature: DeployError              = MissingSignature
+  def missingSignatureAlgorithm: DeployError     = MissingSignatureAlgorithm
 
   implicit val showDeployError: Show[DeployError] = new Show[DeployError] {
     def show(error: DeployError): String = error match {
-      case ParsingError(details) => s"Parsing error: $details"
-      case MissingSignature      => s"Missing signature"
+      case ParsingError(details)     => s"Parsing error: $details"
+      case MissingSignature          => s"Missing signature"
+      case MissingSignatureAlgorithm => s"Missing signature algorithm"
     }
   }
 }
