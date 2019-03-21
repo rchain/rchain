@@ -25,7 +25,7 @@ import coop.rchain.rholang.interpreter.{
   Runtime
 }
 import coop.rchain.rspace.internal.Datum
-import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
+import coop.rchain.rspace.{trace, Blake2b256Hash, ReplayException}
 
 import scala.collection.immutable
 
@@ -69,8 +69,8 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
       .bracket(runtimeContainer.take) { runtime =>
         //TODO: Is better error handling needed here?
         for {
-          evalR                     <- newEval(deploy :: Nil, runtime, start)
-          (_, Seq(processedDeploy)) = evalR
+          evalR           <- singleEvalWithoutCheckpoint(deploy, runtime, start)
+          processedDeploy = evalR
           result <- if (processedDeploy.status.isFailed) Seq.empty[Datum[ListParWithRandom]].pure[F]
                    else {
                      val r: F[Seq[Datum[ListParWithRandom]]] =
@@ -189,6 +189,28 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
           )
       }
     )
+
+  // TODO: Deduplicate with newEval
+  private def singleEvalWithoutCheckpoint(
+      deploy: DeployData,
+      runtime: Runtime[F],
+      initHash: StateHash
+  ): F[InternalProcessedDeploy] = {
+    val hash = Blake2b256Hash.fromByteArray(initHash.toByteArray)
+    for {
+      _                                        <- runtime.space.reset(hash)
+      (codeHash, phloPrice, userId, timestamp) = ProtoUtil.getRholangDeployParams(deploy)
+      _                                        <- runtime.shortLeashParams.setParams(codeHash, phloPrice, userId, timestamp)
+      injResult                                <- doInj(deploy, runtime.reducer, runtime.errorLog)(runtime.cost)
+      EvaluateResult(evaluationCost, errors)   = injResult
+      deployResult = InternalProcessedDeploy(
+        deploy,
+        Cost.toProto(evaluationCost),
+        Seq.empty[trace.Event],
+        DeployStatus.fromErrors(errors)
+      )
+    } yield deployResult
+  }
 
   private def newEval(
       terms: Seq[DeployData],
