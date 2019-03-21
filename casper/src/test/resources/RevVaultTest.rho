@@ -192,7 +192,7 @@ match (
         for (@(_, RevVault) <- RevVaultCh) {
 
           contract withVaultUnlocked(@pubKey, ret) = {
-            new vaultLockedCh, identityChanged, alliceVaultCh in {
+            new vaultLockedCh, identityChanged in {
               setDeployData!("userId", pubKey, *identityChanged) |
               @RevVault!("findOrCreate", pubKey, *vaultLockedCh) |
               for (@("Right", vaultLocked) <- vaultLockedCh; _ <- identityChanged) {
