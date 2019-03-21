@@ -1,5 +1,7 @@
 package coop.rchain.casper.util.comm
 
+import java.nio.charset.Charset
+
 import scala.concurrent.duration._
 import scala.io.Source
 import scala.language.higherKinds
@@ -18,7 +20,10 @@ import coop.rchain.models.Par
 import coop.rchain.shared.Time
 import cats.syntax.either._
 import com.google.protobuf.ByteString
-import coop.rchain.crypto.PublicKey
+import coop.rchain.casper.SignDeployment
+import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.shared.ThrowableOps._
 
 object DeployRuntime {
@@ -62,12 +67,12 @@ object DeployRuntime {
       }.map(kp("")).value
     }
 
-  //Accepts a Rholang source file and deploys it to Casper
+//Accepts a Rholang source file and deploys it to Casper
   def deployFileProgram[F[_]: Monad: Sync: DeployService](
       phloLimit: Long,
       phloPrice: Long,
       validAfterBlock: Int,
-      maybeDeployerId: Option[PublicKey],
+      maybePrivateKey: Option[PrivateKey],
       file: String
   ): F[Unit] =
     gracefulExit(
@@ -75,22 +80,21 @@ object DeployRuntime {
         case Left(ex) =>
           Sync[F].delay(Left(Seq(s"Error with given file: \n${ex.getMessage}")))
         case Right(code) =>
-          val deployerId =
-            maybeDeployerId
-              .map(uid => ByteString.copyFrom(uid.bytes))
-              .getOrElse(ByteString.EMPTY)
-
           for {
             timestamp <- Sync[F].delay(System.currentTimeMillis())
+
             //TODO: allow user to specify their public key
             d = DeployData()
               .withTimestamp(timestamp)
               .withTerm(code)
               .withPhloLimit(phloLimit)
               .withPhloPrice(phloPrice)
-              .withDeployer(deployerId)
               .withValidAfterBlockNumber(validAfterBlock)
-            response <- DeployService[F].deploy(d)
+              .withTimestamp(timestamp)
+
+            signedData = maybePrivateKey.fold(d)(SignDeployment(_, d))
+
+            response <- DeployService[F].deploy(signedData)
           } yield response.map(r => s"Response: $r")
       }
     )

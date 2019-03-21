@@ -1007,7 +1007,9 @@ class RegistryImpl[F[_]](
 object Registry {
   val registryRoot = GPrivate(
     ByteString
-      .copyFrom(Base16.decode("a4fd447dedfc960485983ee817632cf36d79f45fd1796019edfb4a84a81d1697"))
+      .copyFrom(
+        Base16.unsafeDecode("a4fd447dedfc960485983ee817632cf36d79f45fd1796019edfb4a84a81d1697")
+      )
   )
 
   val emptyMap: Par = EMapBody(ParMap(SortedParMap.empty))

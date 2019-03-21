@@ -924,7 +924,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         implicit val env = Env.makeEnv[Par](Expr(GString("deadbeef")))
         Await.result(reducer.evalExprToPar(hexToBytesCall).runToFuture, 3.seconds)
     }
-    val expectedResult: Par = Expr(GByteArray(ByteString.copyFrom(Base16.decode("deadbeef"))))
+    val expectedResult: Par = Expr(GByteArray(ByteString.copyFrom(Base16.unsafeDecode("deadbeef"))))
     directResult should be(expectedResult)
 
     errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
@@ -1418,14 +1418,16 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val inspectTask = reducer.evalExpr(
           EPlusPlusBody(
             EPlusPlus(
-              GByteArray(ByteString.copyFrom(Base16.decode("dead"))),
-              GByteArray(ByteString.copyFrom(Base16.decode("beef")))
+              GByteArray(ByteString.copyFrom(Base16.unsafeDecode("dead"))),
+              GByteArray(ByteString.copyFrom(Base16.unsafeDecode("beef")))
             )
           )
         )
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
-    result.exprs should be(Seq(Expr(GByteArray(ByteString.copyFrom(Base16.decode("deadbeef"))))))
+    result.exprs should be(
+      Seq(Expr(GByteArray(ByteString.copyFrom(Base16.unsafeDecode("deadbeef")))))
+    )
     errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 

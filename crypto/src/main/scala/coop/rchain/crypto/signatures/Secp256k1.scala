@@ -9,14 +9,12 @@ import coop.rchain.crypto.util.SecureRandomUtil
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import org.bitcoin._
 import com.google.common.base.Strings
-import coop.rchain.crypto
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 
 object Secp256k1 extends SignaturesAlg {
 
   private val provider = new BouncyCastleProvider()
-
-  val name: String = "secp256k1"
+  val name             = "secp256k1"
 
   /**
     * Verifies the given secp256k1 signature in native code.
@@ -32,7 +30,7 @@ object Secp256k1 extends SignaturesAlg {
 
     val padded =
       Strings.padStart(kp.getPrivate.asInstanceOf[ECPrivateKey].getS.toString(16), 64, '0')
-    val sec = Base16.decode(padded)
+    val sec = Base16.unsafeDecode(padded)
     val pub = Secp256k1.toPublic(sec)
 
     (PrivateKey(sec), PublicKey(pub))
@@ -92,11 +90,11 @@ object Secp256k1 extends SignaturesAlg {
     *
     * @param seckey ECDSA Secret key, 32 bytes
     *
-    * Return values ECDSA Public key, 33 or 65 bytes
+    * Return values
+    * @param pubkey ECDSA Public key, 33 or 65 bytes
     */
   def toPublic(seckey: Array[Byte]): Array[Byte] =
     NativeSecp256k1.computePubkey(seckey)
 
-  override def toPublic(sec: crypto.PrivateKey): crypto.PublicKey =
-    crypto.PublicKey(toPublic(sec.bytes))
+  override def toPublic(sec: PrivateKey): PublicKey = PublicKey(toPublic(sec.bytes))
 }

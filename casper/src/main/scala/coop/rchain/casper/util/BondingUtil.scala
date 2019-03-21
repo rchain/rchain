@@ -45,7 +45,12 @@ object BondingUtil {
   )(
       implicit runtimeManager: RuntimeManager[F]
   ): F[String] =
-    preWalletUnlockDeploy(ethAddress, pubKey, Base16.decode(secKey), s"${ethAddress}_unlockOut")
+    preWalletUnlockDeploy(
+      ethAddress,
+      pubKey,
+      Base16.unsafeDecode(secKey),
+      s"${ethAddress}_unlockOut"
+    )
 
   def issuanceBondDeploy[F[_]: Concurrent](
       amount: Long,
@@ -61,7 +66,7 @@ object BondingUtil {
       bondingForwarderAddress(ethAddress),
       transferStatusOut(ethAddress),
       pubKey,
-      Base16.decode(secKey)
+      Base16.unsafeDecode(secKey)
     )
 
   def preWalletUnlockDeploy[F[_]: Concurrent](
@@ -70,7 +75,9 @@ object BondingUtil {
       secKey: Array[Byte],
       statusOut: String
   )(implicit runtimeManager: RuntimeManager[F]): F[String] = {
-    require(Base16.encode(Keccak256.hash(Base16.decode(pubKey)).drop(12)) == ethAddress.drop(2))
+    require(
+      Base16.encode(Keccak256.hash(Base16.unsafeDecode(pubKey)).drop(12)) == ethAddress.drop(2)
+    )
     val unlockSigDataTerm =
       sourceDeploy(
         s""" @"__SCALA__"!(["$pubKey", "$statusOut"].toByteArray())""",
@@ -85,7 +92,7 @@ object BondingUtil {
       sigBytes      = capturedResults.head.exprs.head.getGByteArray.toByteArray
       unlockSigData = Keccak256.hash(sigBytes)
       unlockSig     = Secp256k1.sign(unlockSigData, secKey)
-      _             = assert(Secp256k1.verify(unlockSigData, unlockSig, Base16.decode("04" + pubKey)))
+      _             = assert(Secp256k1.verify(unlockSigData, unlockSig, Base16.unsafeDecode("04" + pubKey)))
       sigString     = Base16.encode(unlockSig)
     } yield s"""new rl(`rho:registry:lookup`), WalletCheckCh in {
            |  rl!(`rho:id:oqez475nmxx9ktciscbhps18wnmnwtm6egziohc3rkdzekkmsrpuyt`, *WalletCheckCh) |
@@ -240,7 +247,7 @@ object BondingUtil {
     runtimeManagerResource.use(
       implicit runtimeManager =>
         for {
-          bondCode    <- faucetBondDeploy[F](amount, sigAlgorithm, pubKey, Base16.decode(secKey))
+          bondCode    <- faucetBondDeploy[F](amount, sigAlgorithm, pubKey, Base16.unsafeDecode(secKey))
           forwardCode = bondingForwarderDeploy(pubKey, pubKey)
           _           <- writeFile[F](s"forward_${pubKey}.rho", forwardCode)
           _           <- writeFile[F](s"bond_${pubKey}.rho", bondCode)

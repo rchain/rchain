@@ -5,7 +5,7 @@ import org.abstractj.kalium.keys._
 
 object Ed25519 extends SignaturesAlg {
 
-  val publicKeyLength = 32
+  val keyLength = 32
 
   val name: String = "Ed25519".toLowerCase
 
@@ -28,6 +28,9 @@ object Ed25519 extends SignaturesAlg {
     val key = new SigningKey(sec)
     key.getVerifyKey.toBytes
   }
+
+  override def toPublic(sec: crypto.PrivateKey): crypto.PublicKey =
+    crypto.PublicKey(toPublic(sec.bytes))
 
   /**
     * Verifies the given Ed25519 signature.
@@ -73,7 +76,4 @@ object Ed25519 extends SignaturesAlg {
       sec: Array[Byte]
   ): Array[Byte] =
     new SigningKey(sec).sign(data)
-
-  override def toPublic(sec: crypto.PrivateKey): crypto.PublicKey =
-    crypto.PublicKey(toPublic(sec.bytes))
 }

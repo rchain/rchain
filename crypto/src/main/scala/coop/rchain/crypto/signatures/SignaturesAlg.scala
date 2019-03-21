@@ -15,8 +15,8 @@ trait SignaturesAlg {
 object SignaturesAlg {
   def apply(algorithm: String): Option[SignaturesAlg] =
     algorithm.toLowerCase match {
-      case "ed25519"   => Some(Ed25519)
-      case "secp256k1" => Some(Secp256k1)
-      case _           => None
+      case Ed25519.name   => Some(Ed25519)
+      case Secp256k1.name => Some(Secp256k1)
+      case _              => None
     }
 }
