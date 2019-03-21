@@ -110,6 +110,19 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     } yield deployResult should be(Left(MissingSignatureAlgorithm))
   }
 
+  it should "not allow deploy if deploy is missing user" in effectTest {
+    val node             = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val casper           = node.casperEff
+    implicit val timeEff = new LogicalTime[Effect]
+
+    for {
+      correctDeploy   <- DeployGenerator.basicDeployData[Effect](0)
+      incorrectDeploy = correctDeploy.withUser(ByteString.EMPTY)
+      deployResult    <- casper.deploy(incorrectDeploy)
+      _               <- node.tearDown()
+    } yield deployResult should be(Left(MissingUser))
+  }
+
   it should "not allow multiple threads to process the same block" in {
     val scheduler = Scheduler.fixedPool("three-threads", 3)
     val node      = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)(scheduler)
@@ -314,7 +327,9 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
   it should "not request invalid blocks from peers" in effectTest {
 
     val List(data0, data1) =
-      (0 to 1).map(i => DeployGenerator.sourceDeploy(s"@$i!($i)", i, accounting.MAX_VALUE)).toList
+      (0 to 1)
+        .map(i => DeployGenerator.sourceDeploy(s"@$i!($i)", i.toLong, accounting.MAX_VALUE))
+        .toList
 
     for {
       nodes              <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)

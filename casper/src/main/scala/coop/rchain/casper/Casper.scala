@@ -21,17 +21,20 @@ sealed trait DeployError
 final case class ParsingError(details: String) extends DeployError
 final case object MissingSignature             extends DeployError
 final case object MissingSignatureAlgorithm    extends DeployError
+final case object MissingUser                  extends DeployError
 
 object DeployError {
   def parsingError(details: String): DeployError = ParsingError(details)
   def missingSignature: DeployError              = MissingSignature
   def missingSignatureAlgorithm: DeployError     = MissingSignatureAlgorithm
+  def missingUser: DeployError                   = MissingUser
 
   implicit val showDeployError: Show[DeployError] = new Show[DeployError] {
     def show(error: DeployError): String = error match {
       case ParsingError(details)     => s"Parsing error: $details"
       case MissingSignature          => s"Missing signature"
-      case MissingSignatureAlgorithm => s"Missing signature algorithm"
+      case MissingSignatureAlgorithm => s"Missin signature algorithm"
+      case MissingUser               => s"Missin user"
     }
   }
 }
