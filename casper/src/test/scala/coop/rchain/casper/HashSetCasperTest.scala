@@ -84,6 +84,19 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     } yield result
   }
 
+  it should "not allow deploy if deploy is missing signature" in effectTest {
+    val node             = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val casper           = node.casperEff
+    implicit val timeEff = new LogicalTime[Effect]
+
+    for {
+      correctDeploy   <- DeployGenerator.basicDeployData[Effect](0)
+      incorrectDeploy = correctDeploy.withSig(ByteString.EMPTY)
+      deployResult    <- casper.deploy(incorrectDeploy)
+      _               <- node.tearDown()
+    } yield deployResult should be(Left(MissingSignature))
+  }
+
   it should "not allow multiple threads to process the same block" in {
     val scheduler = Scheduler.fixedPool("three-threads", 3)
     val node      = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)(scheduler)

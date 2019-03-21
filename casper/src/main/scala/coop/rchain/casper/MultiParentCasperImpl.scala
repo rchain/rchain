@@ -10,6 +10,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
 import coop.rchain.catscontrib._
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.DeployError._
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.comm.CommUtil
@@ -142,12 +143,18 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
       bufferContains = state.blockBuffer.contains(b.blockHash)
     } yield (dagContains || bufferContains)
 
+  private def validateDeploy(d: DeployData): Either[DeployError, Unit] =
+    if (d.sig == ByteString.EMPTY) missingSignature.asLeft[Unit] else ().asRight[DeployError]
+
   def deploy(d: DeployData): F[Either[DeployError, Unit]] =
-    InterpreterUtil.mkTerm(d.term) match {
-      case Right(_) => addDeploy(d).as(Right(()))
-      case Left(err) =>
-        DeployError.parsingError(s"Error in parsing term: \n$err").asLeft[Unit].pure[F]
-    }
+    validateDeploy(d).fold(
+      _.asLeft[Unit].pure[F],
+      kp(InterpreterUtil.mkTerm(d.term) match {
+        case Right(_) => addDeploy(d).as(Right(()))
+        case Left(err) =>
+          DeployError.parsingError(s"Error in parsing term: \n$err").asLeft[Unit].pure[F]
+      })
+    )
 
   def addDeploy(deploy: DeployData): F[Unit] =
     for {
