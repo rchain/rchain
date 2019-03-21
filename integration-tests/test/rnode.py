@@ -10,6 +10,7 @@ from threading import Event
 import contextlib
 from collections import defaultdict
 from multiprocessing import Queue, Process
+from collections import defaultdict
 from typing import (
     Dict,
     List,
@@ -38,7 +39,7 @@ from .wait import (
 
 
 DEFAULT_IMAGE = os.environ.get("DEFAULT_IMAGE", "rchain-integration-tests:latest")
-
+_PB_REPEATED_STR_SEP = "#$"
 
 rnode_binary = '/opt/docker/bin/rnode'
 rnode_directory = "/var/lib/rnode"
@@ -129,6 +130,7 @@ def parse_show_block_output(show_block_output: str) -> Dict[str, str]:
 
     lines = show_block_output.splitlines()
     bonds_validator = []
+    deploy_cost = []
     for line in lines:
         if line.startswith('status:') or line.startswith('blockInfo {') or line.startswith('}'):
             continue
@@ -138,15 +140,18 @@ def parse_show_block_output(show_block_output: str) -> Dict[str, str]:
         if key == "bondsValidatorList":
             validator_hash = value.strip('"')
             bonds_validator.append(validator_hash)
+        elif key == "deployCost":
+            deploy_cost.append(value.strip('"'))
         else:
             result[key] = value
-    result['bondsValidatorList'] = ','.join(bonds_validator)
+    result['bondsValidatorList'] = _PB_REPEATED_STR_SEP.join(bonds_validator)
+    result['deployCost'] = _PB_REPEATED_STR_SEP.join(deploy_cost)
     return result
 
 
 def extract_validator_stake_from_bonds_validator_str(out_put: str) -> Dict[str, float]:
     validator_stake_dict = {}
-    validator_stake_list = out_put.split(',')
+    validator_stake_list = out_put.split(_PB_REPEATED_STR_SEP)
     for validator_stake in validator_stake_list:
         validator, stake = validator_stake.split(': ')
         stake_f = float(stake)
@@ -163,6 +168,16 @@ def extract_block_hash_from_propose_output(propose_output: str) -> str:
     if match is None:
         raise UnexpectedProposeOutputFormatError(propose_output)
     return match.group(1)
+
+
+def extract_validator_stake_from_deploy_cost_str(out_put: str) -> Dict[str, float]:
+    deploy_cost_dict = defaultdict(lambda :0)
+    deploy_cost_list = out_put.split(_PB_REPEATED_STR_SEP)
+    for deploy_cost_str in deploy_cost_list:
+        match = re.match(r'User: (?P<user>[a-zA-Z0-9]*), Cost: (?P<cost>[0-9]*) DeployData \#(?P<timestamp>[0-9]*) -- .', deploy_cost_str)
+        if match:
+            deploy_cost_dict[match.group('user')] = int(match.group('cost'))
+    return deploy_cost_dict
 
 
 class Node:
