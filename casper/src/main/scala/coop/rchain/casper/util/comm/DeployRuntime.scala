@@ -67,7 +67,6 @@ object DeployRuntime {
       purseAddress: String,
       phloLimit: Long,
       phloPrice: Long,
-      nonce: Int,
       validAfterBlock: Int,
       maybeUserId: Option[PublicKey],
       file: String
@@ -92,7 +91,6 @@ object DeployRuntime {
               .withPhloLimit(phloLimit)
               .withPhloPrice(phloPrice)
               .withUser(userId)
-              .withNonce(nonce)
               .withValidAfterBlockNumber(validAfterBlock)
             response <- DeployService[F].deploy(d)
           } yield response.map(r => s"Response: $r")

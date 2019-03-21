@@ -58,7 +58,6 @@ final case class Deploy(
     address: String,
     phloLimit: Long,
     phloPrice: Long,
-    nonce: Int,
     validAfterBlock: Int,
     userId: Option[PublicKey],
     location: String

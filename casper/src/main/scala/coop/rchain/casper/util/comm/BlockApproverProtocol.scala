@@ -181,7 +181,6 @@ object BlockApproverProtocol {
         x.sigAlgorithm === y.sigAlgorithm &&
         x.from === y.from &&
         x.phloPrice === y.phloPrice &&
-        x.phloLimit === y.phloLimit &&
-        x.nonce === y.nonce
+        x.phloLimit === y.phloLimit
   }
 }

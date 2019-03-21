@@ -379,10 +379,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "Set this value to one less than the current block height: you have 50 blocks to get this transaction into the chain."
     )
 
-    val nonce = opt[Int](
-      descr = "This allows you to overwrite your own pending transactions that use the same nonce."
-    )
-
     val userId = opt[PublicKey](
       descr = "The deployer's ed25519 public key encoded as Base16",
       required = false
