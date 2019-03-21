@@ -175,7 +175,7 @@ object BlockApproverProtocol {
 
   val deployDataEq: cats.kernel.Eq[DeployData] = new cats.kernel.Eq[DeployData] {
     override def eqv(x: DeployData, y: DeployData): Boolean =
-      x.user.equals(y.user) &&
+      x.deployer.equals(y.deployer) &&
         x.timestamp === y.timestamp &&
         x.sig.equals(y.sig) &&
         x.sigAlgorithm === y.sigAlgorithm &&

@@ -235,7 +235,7 @@ object ProtoUtil {
   def containsDeploy(b: BlockMessage, user: ByteString, timestamp: Long): Boolean =
     deploys(b).toStream
       .flatMap(getDeployData)
-      .exists(deployData => deployData.user == user && deployData.timestamp == timestamp)
+      .exists(deployData => deployData.deployer == user && deployData.timestamp == timestamp)
 
   private def getDeployData(d: ProcessedDeploy): Option[DeployData] = d.deploy
 
@@ -491,7 +491,7 @@ object ProtoUtil {
     Time[F].currentMillis.map(
       now =>
         DeployData()
-          .withUser(ByteString.EMPTY)
+          .withDeployer(ByteString.EMPTY)
           .withTimestamp(now)
           .withTerm(s"@${id}!($id)")
           .withPhloLimit(accounting.MAX_VALUE)
@@ -502,7 +502,7 @@ object ProtoUtil {
 
   def sourceDeploy(source: String, timestamp: Long, phlos: Long): DeployData =
     DeployData(
-      user = ByteString.EMPTY,
+      deployer = ByteString.EMPTY,
       timestamp = timestamp,
       term = source,
       phloLimit = phlos
@@ -521,7 +521,7 @@ object ProtoUtil {
     * only those fields. This allows users to more readily pre-generate names for signing.
     */
   def stripDeployData(d: DeployData): DeployData =
-    DeployData().withUser(d.user).withTimestamp(d.timestamp)
+    DeployData().withDeployer(d.deployer).withTimestamp(d.timestamp)
 
   def computeCodeHash(dd: DeployData): Par = {
     val bytes             = dd.term.getBytes(StandardCharsets.UTF_8)
@@ -531,7 +531,7 @@ object ProtoUtil {
 
   def getRholangDeployParams(dd: DeployData): (Par, Par, Par, Par) = {
     val phloPrice: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(dd.phloPrice))))
-    val userId: Par    = Par(exprs = Seq(Expr(Expr.ExprInstance.GByteArray(dd.user))))
+    val userId: Par    = Par(exprs = Seq(Expr(Expr.ExprInstance.GByteArray(dd.deployer))))
     val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(dd.timestamp))))
     (computeCodeHash(dd), phloPrice, userId, timestamp)
   }

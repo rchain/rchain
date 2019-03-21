@@ -12,7 +12,7 @@ object StandardDeploys {
       timestamp: Long
   ): DeployData = {
     val deployData = DeployData(
-      user = stringToByteString(user),
+      deployer = stringToByteString(user),
       timestamp = timestamp,
       term = compiledSource.code,
       phloLimit = accounting.MAX_VALUE

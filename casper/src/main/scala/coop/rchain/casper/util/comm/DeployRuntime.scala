@@ -68,7 +68,7 @@ object DeployRuntime {
       phloLimit: Long,
       phloPrice: Long,
       validAfterBlock: Int,
-      maybeUserId: Option[PublicKey],
+      maybeDeployerId: Option[PublicKey],
       file: String
   ): F[Unit] =
     gracefulExit(
@@ -76,8 +76,8 @@ object DeployRuntime {
         case Left(ex) =>
           Sync[F].delay(Left(Seq(s"Error with given file: \n${ex.getMessage}")))
         case Right(code) =>
-          val userId =
-            maybeUserId
+          val deployerId =
+            maybeDeployerId
               .map(uid => ByteString.copyFrom(uid.bytes))
               .getOrElse(ByteString.EMPTY)
 
@@ -90,7 +90,7 @@ object DeployRuntime {
               .withFrom(purseAddress)
               .withPhloLimit(phloLimit)
               .withPhloPrice(phloPrice)
-              .withUser(userId)
+              .withDeployer(deployerId)
               .withValidAfterBlockNumber(validAfterBlock)
             response <- DeployService[F].deploy(d)
           } yield response.map(r => s"Response: $r")

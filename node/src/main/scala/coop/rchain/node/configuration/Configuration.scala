@@ -191,7 +191,7 @@ object Configuration {
           phloLimit(),
           phloPrice(),
           validAfterBlockNumber.getOrElse(-1),
-          userId.toOption,
+          deployer.toOption,
           location()
         )
       case Some(options.deployDemo) => DeployDemo

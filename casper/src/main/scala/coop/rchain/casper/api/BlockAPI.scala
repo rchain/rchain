@@ -551,11 +551,11 @@ object BlockAPI {
     }
 
   def previewPrivateNames[F[_]: Monad: Log](
-      user: ByteString,
+      deployer: ByteString,
       timestamp: Long,
       nameQty: Int
   ): Effect[F, PrivateNamePreviewResponse] = {
-    val seed    = DeployData().withUser(user).withTimestamp(timestamp)
+    val seed    = DeployData().withDeployer(deployer).withTimestamp(timestamp)
     val rand    = Blake2b512Random(DeployData.toByteArray(seed))
     val safeQty = nameQty min 1024
     val ids     = (0 until safeQty).map(_ => ByteString.copyFrom(rand.next()))

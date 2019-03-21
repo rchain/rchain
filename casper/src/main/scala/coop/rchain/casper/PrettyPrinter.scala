@@ -47,11 +47,11 @@ object PrettyPrinter {
   def buildString(d: ProcessedDeploy): String = {
     val deployString = for {
       deployData <- d.deploy
-      user       = deployData.user
       pCost      <- d.cost
       cost       = pCost.cost
-    } yield s"User: ${buildStringNoLimit(user)}, Cost: ${cost.toString} " +
-            s"${buildString(deployData)}"
+    } yield
+      s"User: ${buildStringNoLimit(deployData.deployer)}, Cost: ${cost.toString} " +
+        s"${buildString(deployData)}"
     deployString.getOrElse("No deploy data")
   }
 

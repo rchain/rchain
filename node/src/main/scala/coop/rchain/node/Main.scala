@@ -65,14 +65,14 @@ object Main {
       case Eval(files) => new ReplRuntime().evalProgram[Task](files)
       case Repl        => new ReplRuntime().replProgram[Task].as(())
       case Diagnostics => diagnostics.client.Runtime.diagnosticsProgram[Task]
-      case Deploy(address, phlo, phloPrice, validAfterBlock, userId, location) =>
+      case Deploy(address, phlo, phloPrice, validAfterBlock, deployer, location) =>
         DeployRuntime
           .deployFileProgram[Task](
             address,
             phlo,
             phloPrice,
             validAfterBlock,
-            userId,
+            deployer,
             location
           )
       case DeployDemo        => DeployRuntime.deployDemoProgram[Task]

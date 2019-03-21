@@ -379,7 +379,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "Set this value to one less than the current block height: you have 50 blocks to get this transaction into the chain."
     )
 
-    val userId = opt[PublicKey](
+    val deployer = opt[PublicKey](
       descr = "The deployer's ed25519 public key encoded as Base16",
       required = false
     )(Ed25519PubKeyConverter)

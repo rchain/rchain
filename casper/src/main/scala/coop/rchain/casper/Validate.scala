@@ -258,7 +258,7 @@ object Validate {
     val deployKeySet = (for {
       bd <- block.body.toList
       r  <- bd.deploys.flatMap(_.deploy)
-    } yield (r.user, r.timestamp)).toSet
+    } yield (r.deployer, r.timestamp)).toSet
 
     for {
       initParents         <- ProtoUtil.unsafeGetParents[F](block)
@@ -273,7 +273,7 @@ object Validate {
                             ProtoUtil
                               .deploys(b)
                               .flatMap(_.deploy)
-                              .exists(d => deployKeySet.contains((d.user, d.timestamp)))
+                              .exists(d => deployKeySet.contains((d.deployer, d.timestamp)))
                           }
       maybeError <- duplicatedBlock
                      .traverse(

@@ -10,9 +10,9 @@ object SignDeployment {
 
   private def fill(
       deployData: DeployData
-  )(user: PublicKey, sig: Array[Byte], sigAlgorithm: String): DeployData =
+  )(deployer: PublicKey, sig: Array[Byte], sigAlgorithm: String): DeployData =
     deployData
-      .withUser(ByteString.copyFrom(user.bytes))
+      .withDeployer(ByteString.copyFrom(deployer.bytes))
       .withSig(ByteString.copyFrom(sig))
       .withSigAlgorithm(sigAlgorithm)
 
