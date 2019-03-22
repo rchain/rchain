@@ -9,7 +9,7 @@ import coop.rchain.shared.{Log, LogSource, Time}
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
 import cats._, cats.data._, cats.implicits._
 
-object DeployGenerator {
+object ConstructDeploy {
 
   val sec = PrivateKey(
     Base16.unsafeDecode("b18e1d0045995ec3d010c387ccfeb984d783af8fbb0f40fa7db126d889f6dadd")
@@ -17,13 +17,18 @@ object DeployGenerator {
 
   val pub = Ed25519.toPublic(sec)
 
-  private def sign(deploy: DeployData): DeployData =
+  def sign(deploy: DeployData): DeployData =
     SignDeployment.sign(sec, deploy, Ed25519)
 
-  def sourceDeploy(source: String, timestamp: Long, phlos: Long): DeployData =
+  def sourceDeploy(
+      source: String,
+      timestamp: Long,
+      phlos: Long,
+      deployer: ByteString = ByteString.copyFrom(pub.bytes)
+  ): DeployData =
     sign(
       DeployData(
-        deployer = ByteString.copyFrom(pub.bytes),
+        deployer = deployer,
         timestamp = timestamp,
         term = source,
         phloLimit = phlos

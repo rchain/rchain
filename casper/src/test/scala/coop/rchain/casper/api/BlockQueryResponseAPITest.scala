@@ -56,7 +56,7 @@ class BlockQueryResponseAPITest
   val deployCount = 10
   val randomDeploys =
     (0 until deployCount).toList
-      .traverse(DeployGenerator.basicProcessedDeploy[Task])
+      .traverse(ConstructDeploy.basicProcessedDeploy[Task])
       .unsafeRunSync(scheduler)
   val body: Body                       = Body().withState(ps).withDeploys(randomDeploys)
   val parentsString                    = List(genesisHashString, "0000000001")
