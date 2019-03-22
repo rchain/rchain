@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter
 
+import cats.effect.concurrent.Semaphore
 import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
@@ -36,13 +37,13 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     val termCost          = Chargeable[Par].cost(substTerm)
     val initCost          = Cost(1000)
     (for {
-      costAlg <- CostAccounting.of[Task](initCost)
+      cost <- CostAccounting.initialCost[Task](initCost)
       res <- {
-        implicit val c = loggingCost(costAlg, noOpCostLog[Task])
+        implicit val c = cost
         Substitute.charge(Task.now(substTerm), Cost(10000)).attempt
       }
       _         = assert(res === Right(substTerm))
-      finalCost <- costAlg.get
+      finalCost <- cost.get
       _         = assert(finalCost === (initCost - Cost(termCost)))
     } yield ()).runSyncUnsafe(5.seconds)
   }
@@ -54,15 +55,15 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     val initCost          = Cost(1000)
 
     (for {
-      costAlg <- CostAccounting.of[Task](initCost)
+      cost <- CostAccounting.initialCost[Task](initCost)
       res <- {
-        implicit val c = loggingCost(costAlg, noOpCostLog[Task])
+        implicit val c = cost
         Substitute
           .charge(Task.raiseError[Par](new RuntimeException("")), Cost(originalTermCost))
           .attempt
       }
       _         = assert(res.isLeft)
-      finalCost <- costAlg.get
+      finalCost <- cost.get
       _         = assert(finalCost === (initCost - Cost(originalTermCost)))
     } yield ()).runSyncUnsafe(5.seconds)
   }
@@ -87,7 +88,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     implicit val errorLog = new ErrorLog[Task]()
     implicit val rand     = Blake2b512Random(128)
     implicit val costAlg: _cost[Task] =
-      loggingCost(CostAccounting.of[Task](Cost(1000)).runSyncUnsafe(1.second), noOpCostLog)
+      CostAccounting.initialCost[Task](Cost(1000)).runSyncUnsafe(1.second)
     val reducer = new DebruijnInterpreter[Task, Task.Par](tuplespaceAlg, Map.empty)
     val send    = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
     val test    = reducer.inj(send).attempt.runSyncUnsafe(1.second)
@@ -119,11 +120,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
       )
     ] = {
 
-      implicit val cost: _cost[Task] =
-        (for {
-          costAlg <- CostAccounting.empty[Task]
-        } yield loggingCost(costAlg, noOpCostLog[Task]))
-          .runSyncUnsafe(1.second)
+      implicit val cost: _cost[Task] = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
 
       lazy val (_, reducer, _) =
         RholangAndScalaDispatcher

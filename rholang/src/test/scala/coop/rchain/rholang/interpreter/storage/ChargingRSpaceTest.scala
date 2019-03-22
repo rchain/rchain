@@ -342,8 +342,7 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
   override type FixtureParam = TestFixture
 
   override protected def withFixture(test: OneArgTest): Outcome = {
-    val cost: _cost[Task] =
-      loggingCost(CostAccounting.empty[Task].runSyncUnsafe(1.second), noOpCostLog)
+    val cost: _cost[Task] = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
     def mkChargingRspace(rhoISpace: RhoISpace[Task]): Task[ChargingRSpace] = {
       val s = implicitly[Sync[Task]]
       Task.delay(ChargingRSpace.pureRSpace(rhoISpace)(s, cost))
@@ -363,14 +362,16 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
       data: Seq[ListParWithRandom]
   ): Task[Cost] = {
     import cats.implicits._
-    implicit val _cost: _cost[Task] =
-      loggingCost(CostAccounting.of[Task](Cost(1000)).runSyncUnsafe(1.second), noOpCostLog)
     for {
-      initPhlos <- _cost.inspect(identity)
+      cost      <- CostAccounting.initialCost[Task](Cost(1000))
+      initPhlos <- cost.inspect(identity)
       _ <- patterns.zip(data).toList.traverse {
-            case (pattern, pars) => matchListPar[Task].get(pattern, pars)
+            case (pattern, pars) => {
+              implicit val c = cost
+              matchListPar[Task].get(pattern, pars)
+            }
           }
-      phlosLeft <- _cost.inspect(identity)
+      phlosLeft <- cost.inspect(identity)
     } yield initPhlos - phlosLeft
   }
 }

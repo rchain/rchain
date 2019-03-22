@@ -308,9 +308,9 @@ object Runtime {
       executionContext: ExecutionContext
   ): F[Runtime[F]] =
     (for {
-      costAccounting <- CostAccounting.empty[F]
+      cost <- CostAccounting.emptyCost[F]
       runtime <- {
-        implicit val cost: _cost[F] = loggingCost(costAccounting, noOpCostLog)
+        implicit val c = cost
         create(dataDir, mapSize, storeType, extraSystemProcesses)
       }
     } yield (runtime))
@@ -433,8 +433,7 @@ object Runtime {
     )
 
     for {
-      costAlg <- CostAccounting.of[F](Cost.UNSAFE_MAX)
-      cost    = loggingCost(costAlg, noOpCostLog[F])
+      cost <- CostAccounting.initialCost[F](Cost.UNSAFE_MAX)
       spaceResult <- space.produce(
                       Registry.registryRoot,
                       ListParWithRandom(Seq(Registry.emptyMap), rand),

@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import cats.effect.{Concurrent, Sync}
+import cats.effect.concurrent.Semaphore
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.{ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
@@ -41,8 +42,7 @@ class ContractCall[F[_]: Concurrent](
       sequenceNumber: Int
   )(values: Seq[Par], ch: Par): F[Unit] =
     for {
-      costAlg <- CostAccounting.of(Cost.UNSAFE_MAX)
-      cost    = loggingCost(costAlg, noOpCostLog[F])
+      cost <- CostAccounting.initialCost(Cost.UNSAFE_MAX)
       produceResult <- space.produce(
                         ch,
                         ListParWithRandom(values, rand),

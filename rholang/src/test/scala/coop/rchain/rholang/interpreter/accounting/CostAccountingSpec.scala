@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter.accounting
 
 import java.nio.file.Files
 
+import cats.effect.concurrent.Semaphore
 import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
@@ -37,9 +38,10 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
     (for {
+      s       <- Semaphore[Task](1)
       costAlg <- CostAccounting.empty[Task]
       costL   <- costLog[Task]
-      cost    = loggingCost(costAlg, costL)
+      cost    = loggingCost(costAlg, costL, s)
       costsLoggingProgram <- {
         costL.listen({
           implicit val c = cost
@@ -48,8 +50,8 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
                         .create[Task, Task.Par](dbDir, size, StoreType.LMDB)
             res <- Interpreter[Task]
                     .evaluate(runtime, contract, Cost(initialPhlo.toLong))
-            _ <- runtime.close()
-            _ <- Task.eval(dbDir.recursivelyDelete())
+            _ <- Task.delay(runtime.close())
+            _ <- Task.now(dbDir.recursivelyDelete())
           } yield (res)
         })
       }

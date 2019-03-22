@@ -3,6 +3,7 @@ package coop.rchain.rholang.interpreter.matcher
 import cats._
 import cats.data._
 import cats.effect._
+import cats.effect.concurrent.Semaphore
 import cats.mtl._
 import cats.mtl.implicits._
 import cats.{Eval => _}
@@ -53,10 +54,10 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
 
     implicit val matcherMonadError = implicitly[Sync[F]]
     (for {
-      costAccounting <- CostAccounting.of[Task](Cost.UNSAFE_MAX)
+      costAccounting <- CostAccounting.initialCost[Task](Cost.UNSAFE_MAX)
       maybeResultWithCost <- {
-        implicit val cost            = loggingCost(costAccounting, noOpCostLog[Task])
-        implicit val costF: _cost[F] = matcherMonadCostLog[Task]
+        implicit val cost: _cost[Task] = costAccounting
+        implicit val costF: _cost[F]   = matcherMonadCostLog[Task]
         runFirst(spatialMatch[F, Par, Par](target, pattern))
       }
       result = maybeResultWithCost.map(_._1)
@@ -936,8 +937,9 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
 
     (for {
       costAlg <- CostAccounting.of[Task](Cost(initialPhlo))
+      s       <- Semaphore[Task](1)
       costL   <- costLog[Task]
-      cost    = loggingCost(costAlg, costL)
+      cost    = loggingCost(costAlg, costL, s)
       program = {
         implicit val c = cost
         spatialMatchAndCharge[Task](target, pattern).attempt

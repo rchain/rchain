@@ -45,10 +45,7 @@ trait PersistentStoreTester {
     implicit val logF: Log[Task]           = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
-    implicit val cost: _cost[Task] =
-      (for {
-        costAlg <- CostAccounting.empty[Task]
-      } yield loggingCost(costAlg, noOpCostLog[Task])).unsafeRunSync
+    implicit val cost: _cost[Task] = CostAccounting.emptyCost[Task].unsafeRunSync
 
     val space = (RSpace
       .create[
@@ -839,12 +836,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val result = withTestSpace(errorLog) {
       case TestFixture(space, _) =>
-        implicit val cost: _cost[Task] =
-          (for {
-            costAlg <- CostAccounting.empty[Task]
-          } yield loggingCost(costAlg, noOpCostLog[Task])).unsafeRunSync
-
-        def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
+        implicit val cost: _cost[Task] = CostAccounting.emptyCost[Task].unsafeRunSync
+        def byteName(b: Byte): Par     = GPrivate(ByteString.copyFrom(Array[Byte](b)))
         val reducer = RholangOnlyDispatcher
           .create[Task, Task.Par](space, Map("rho:test:foo" -> byteName(42)))
           ._2

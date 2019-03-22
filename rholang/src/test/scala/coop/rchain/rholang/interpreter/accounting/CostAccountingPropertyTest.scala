@@ -112,8 +112,7 @@ object CostAccountingPropertyTest {
       runtime <- TestRuntime.create[Task, Task.Par]()
       _       <- runtime.reducer.setPhlo(Cost.UNSAFE_MAX)
       _       <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
-      costAlg <- CostAccounting.empty[Task]
-      cost    = loggingCost[Task](costAlg, noOpCostLog)
+      cost    <- CostAccounting.emptyCost[Task]
       res <- {
         implicit val c = cost
         procs.toStream

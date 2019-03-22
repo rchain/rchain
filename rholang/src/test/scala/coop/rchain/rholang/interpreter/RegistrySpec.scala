@@ -55,10 +55,8 @@ trait RegistryTester extends PersistentStoreTester {
   ): R =
     withTestSpace(errorLog) {
       case TestFixture(space, _) =>
-        val _ = errorLog.readAndClearErrorVector().runSyncUnsafe(1.second)
-        implicit val costAccounting =
-          CostAccounting.empty[Task].runSyncUnsafe(1.second)
-        implicit val cost: _cost[Task] = loggingCost(costAccounting, noOpCostLog[Task])
+        val _                          = errorLog.readAndClearErrorVector().runSyncUnsafe(1.second)
+        implicit val cost: _cost[Task] = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
 
         lazy val dispatchTable: RhoDispatchMap[Task] = dispatchTableCreator(registry)
         lazy val (dispatcher @ _, reducer, registry) =

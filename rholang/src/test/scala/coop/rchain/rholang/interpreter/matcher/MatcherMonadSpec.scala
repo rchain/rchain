@@ -26,8 +26,8 @@ class MatcherMonadSpec extends FlatSpec with Matchers {
 
   val A: Alternative[F] = Alternative[F]
 
-  implicit val cost: _cost[Task] =
-    loggingCost(CostAccounting.empty[Task].unsafeRunSync, noOpCostLog[Task])
+  implicit val cost: _cost[Task] = CostAccounting.emptyCost[Task].unsafeRunSync
+
   implicit val costF: _cost[F]   = matcherMonadCostLog[Task]
   implicit val matcherMonadError = implicitly[Sync[F]]
 
