@@ -48,21 +48,23 @@ object BlockCreator {
       _              <- updateDeployHistory[F](state, maxBlockNumber)
       deploys        <- extractDeploys[F](dag, parents, maxBlockNumber, expirationThreshold)
       justifications <- computeJustifications[F](dag, parents)
-      proposal <- if (deploys.nonEmpty || parents.length > 1) {
-                   createProposal[F](
-                     dag,
-                     runtimeManager,
-                     parents,
-                     deploys,
-                     justifications,
-                     maxBlockNumber,
-                     shardId,
-                     version
-                   )
-                 } else {
-                   CreateBlockStatus.noNewDeploys.pure[F]
-                 }
-      signedBlock <- proposal.mapF(
+      now            <- Time[F].currentMillis
+      unsignedBlock <- if (deploys.nonEmpty || parents.length > 1) {
+                        processDeploysAndCreateBlock[F](
+                          dag,
+                          runtimeManager,
+                          parents,
+                          deploys,
+                          justifications,
+                          maxBlockNumber,
+                          shardId,
+                          version,
+                          now
+                        )
+                      } else {
+                        CreateBlockStatus.noNewDeploys.pure[F]
+                      }
+      signedBlock <- unsignedBlock.mapF(
                       signBlock(_, dag, publicKey, privateKey, sigAlgorithm, shardId)
                     )
     } yield signedBlock
@@ -143,66 +145,63 @@ object BlockCreator {
     }
   }
 
-  private def createProposal[F[_]: Sync: Log: Time: BlockStore](
+  private def processDeploysAndCreateBlock[F[_]: Sync: Log: BlockStore](
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
-      p: Seq[BlockMessage],
-      r: Seq[DeployData],
+      parents: Seq[BlockMessage],
+      deploys: Seq[DeployData],
       justifications: Seq[Justification],
       maxBlockNumber: Long,
       shardId: String,
-      version: Long
+      version: Long,
+      now: Long
   ): F[CreateBlockStatus] =
-    for {
-      now <- Time[F].currentMillis
-      possibleProcessedDeploys <- InterpreterUtil.computeDeploysCheckpoint[F](
-                                   p,
-                                   r,
-                                   dag,
-                                   runtimeManager,
-                                   Some(now)
-                                 )
-      result <- possibleProcessedDeploys match {
-                 case Left(ex) =>
-                   Log[F]
-                     .error(
-                       s"Critical error encountered while processing deploys: ${ex.getMessage}"
-                     )
-                     .map(_ => CreateBlockStatus.internalDeployError(ex))
+    InterpreterUtil
+      .computeDeploysCheckpoint[F](
+        parents,
+        deploys,
+        dag,
+        runtimeManager,
+        Some(now)
+      )
+      .flatMap {
+        case Left(ex) =>
+          Log[F]
+            .error(
+              s"Critical error encountered while processing deploys: ${ex.getMessage}"
+            )
+            .map(_ => CreateBlockStatus.internalDeployError(ex))
 
-                 case Right((preStateHash, postStateHash, processedDeploys)) =>
-                   val (internalErrors, persistableDeploys) =
-                     processedDeploys.partition(_.status.isInternalError)
-                   internalErrors.toList
-                     .traverse {
-                       case InternalProcessedDeploy(deploy, _, _, InternalErrors(errors)) =>
-                         val errorsMessage = errors.map(_.getMessage).mkString("\n")
-                         Log[F].error(
-                           s"Internal error encountered while processing deploy ${PrettyPrinter
-                             .buildString(deploy)}: $errorsMessage"
-                         )
-                       case _ => ().pure[F]
-                     }
-                     .flatMap(_ => {
-                       runtimeManager
-                         .computeBonds(postStateHash)
-                         .map { newBonds =>
-                           createBlock(
-                             now,
-                             p,
-                             justifications,
-                             maxBlockNumber,
-                             preStateHash,
-                             postStateHash,
-                             persistableDeploys,
-                             newBonds,
-                             shardId,
-                             version
-                           )
-                         }
-                     })
-               }
-    } yield result
+        case Right((preStateHash, postStateHash, processedDeploys)) =>
+          val (internalErrors, persistableDeploys) =
+            processedDeploys.partition(_.status.isInternalError)
+          internalErrors.toList
+            .traverse {
+              case InternalProcessedDeploy(deploy, _, _, InternalErrors(errors)) =>
+                val errorsMessage = errors.map(_.getMessage).mkString("\n")
+                Log[F].error(
+                  s"Internal error encountered while processing deploy ${PrettyPrinter
+                    .buildString(deploy)}: $errorsMessage"
+                )
+              case _ => ().pure[F]
+            } >>
+            runtimeManager
+              .computeBonds(postStateHash)
+              .map { newBonds =>
+                createBlock(
+                  now,
+                  parents,
+                  justifications,
+                  maxBlockNumber,
+                  preStateHash,
+                  postStateHash,
+                  persistableDeploys,
+                  newBonds,
+                  shardId,
+                  version
+                )
+              }
+      }
 
   private def createBlock(
       now: Long,
