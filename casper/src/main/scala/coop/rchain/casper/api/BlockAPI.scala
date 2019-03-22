@@ -37,11 +37,13 @@ object BlockAPI {
   def deploy[F[_]: Monad: MultiParentCasperRef: Log](
       d: DeployData
   ): Effect[F, DeployServiceResponse] = {
+
     def casperDeploy(casper: MultiParentCasper[F]): Effect[F, DeployServiceResponse] =
-      casper.deploy(d) map {
-        case Right(_)  => DeployServiceResponse("Success!").asRight
-        case Left(err) => err.show.asLeft
-      }
+      casper
+        .deploy(d)
+        .map(
+          _.bimap(err => err.show, _ => DeployServiceResponse("Success!"))
+        )
 
     val errorMessage = "Could not deploy, casper instance was not available yet."
 

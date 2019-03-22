@@ -92,7 +92,7 @@ object DeployRuntime {
               .withValidAfterBlockNumber(validAfterBlock)
               .withTimestamp(timestamp)
 
-            signedData = maybePrivateKey.fold(d)(SignDeployment(_, d))
+            signedData = maybePrivateKey.fold(d)(SignDeployment.sign(_, d))
 
             response <- DeployService[F].deploy(signedData)
           } yield response.map(r => s"Response: $r")

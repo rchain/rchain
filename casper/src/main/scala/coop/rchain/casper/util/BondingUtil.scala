@@ -72,7 +72,7 @@ object BondingUtil {
 
   private def sourceDeploy(source: String, timestamp: Long, phlos: Long): DeployData =
     DeployData(
-      user = ByteString.EMPTY,
+      deployer = ByteString.EMPTY,
       timestamp = timestamp,
       term = source,
       phloLimit = phlos

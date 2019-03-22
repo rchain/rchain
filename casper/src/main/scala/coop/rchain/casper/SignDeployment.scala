@@ -19,7 +19,7 @@ object SignDeployment {
   private def clear(deployData: DeployData): DeployData =
     fill(deployData)(PublicKey(Array.empty[Byte]), Array.empty[Byte], "")
 
-  def apply(sec: PrivateKey, deployData: DeployData, alg: SignaturesAlg = Ed25519): DeployData = {
+  def sign(sec: PrivateKey, deployData: DeployData, alg: SignaturesAlg = Ed25519): DeployData = {
     val toSign    = clear(deployData).toByteString.toByteArray
     val hash      = Blake2b256.hash(toSign)
     val signature = alg.sign(hash, sec)
@@ -31,7 +31,7 @@ object SignDeployment {
     SignaturesAlg(deployData.sigAlgorithm).map { alg =>
       val toVerify = clear(deployData).toByteString.toByteArray
       val hash     = Blake2b256.hash(toVerify)
-      alg.verify(hash, deployData.sig.toByteArray, PublicKey(deployData.user.toByteArray))
+      alg.verify(hash, deployData.sig.toByteArray, PublicKey(deployData.deployer.toByteArray))
     }
 
 }

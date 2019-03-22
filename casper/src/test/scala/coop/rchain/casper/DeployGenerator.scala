@@ -12,18 +12,18 @@ import cats._, cats.data._, cats.implicits._
 object DeployGenerator {
 
   val sec = PrivateKey(
-    Base16.decode("b18e1d0045995ec3d010c387ccfeb984d783af8fbb0f40fa7db126d889f6dadd")
+    Base16.unsafeDecode("b18e1d0045995ec3d010c387ccfeb984d783af8fbb0f40fa7db126d889f6dadd")
   )
 
   val pub = Ed25519.toPublic(sec)
 
   private def sign(deploy: DeployData): DeployData =
-    SignDeployment(sec, deploy, Ed25519)
+    SignDeployment.sign(sec, deploy, Ed25519)
 
   def sourceDeploy(source: String, timestamp: Long, phlos: Long): DeployData =
     sign(
       DeployData(
-        user = ByteString.copyFrom(pub.bytes),
+        deployer = ByteString.copyFrom(pub.bytes),
         timestamp = timestamp,
         term = source,
         phloLimit = phlos
@@ -41,7 +41,7 @@ object DeployGenerator {
     Time[F].currentMillis.map { now =>
       sign(
         DeployData()
-          .withUser(ByteString.copyFrom(pub.bytes))
+          .withDeployer(ByteString.copyFrom(pub.bytes))
           .withTimestamp(now)
           .withTerm(s"@${id}!($id)")
           .withPhloLimit(accounting.MAX_VALUE)

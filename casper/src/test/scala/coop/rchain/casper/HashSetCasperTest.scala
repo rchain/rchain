@@ -117,7 +117,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
 
     for {
       correctDeploy   <- DeployGenerator.basicDeployData[Effect](0)
-      incorrectDeploy = correctDeploy.withUser(ByteString.EMPTY)
+      incorrectDeploy = correctDeploy.withDeployer(ByteString.EMPTY)
       deployResult    <- casper.deploy(incorrectDeploy)
       _               <- node.tearDown()
     } yield deployResult should be(Left(MissingUser))
