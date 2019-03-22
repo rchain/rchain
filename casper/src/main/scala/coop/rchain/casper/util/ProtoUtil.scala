@@ -101,25 +101,6 @@ object ProtoUtil {
           validator == block.sender
       }
 
-  def findCreatorJustificationAncestorWithSeqNum[F[_]: Monad: BlockStore](
-      blockDag: BlockDagRepresentation[F],
-      b: BlockMessage,
-      seqNum: SequenceNumber
-  ): F[Option[BlockHash]] =
-    if (b.seqNum == seqNum) {
-      Option(b.blockHash).pure[F]
-    } else {
-      DagOperations
-        .bfTraverseF(List(b.blockHash)) { blockHash =>
-          getCreatorJustificationAsListUntilGoalInMemory[F](blockDag, blockHash)
-        }
-        .findF { blockHash =>
-          for {
-            blockMeta <- blockDag.lookup(blockHash)
-          } yield blockMeta.get.seqNum == seqNum
-        }
-    }
-
   /**
     * Since the creator justification is unique
     * we don't need to return a list. However, the bfTraverseF

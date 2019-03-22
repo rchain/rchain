@@ -9,12 +9,12 @@ import coop.rchain.blockstorage.{
   BlockStore,
   EquivocationsTracker
 }
-import coop.rchain.casper.Estimator.Validator
+import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
-import coop.rchain.casper.util.{DoublyLinkedDag, ProtoUtil}
+import coop.rchain.casper.util.{DagOperations, DoublyLinkedDag, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.{
   bonds,
-  findCreatorJustificationAncestorWithSeqNum,
+  getCreatorJustificationAsListUntilGoalInMemory,
   toLatestMessageHashes
 }
 import coop.rchain.models.EquivocationRecord.SequenceNumber
@@ -344,5 +344,24 @@ object EquivocationDetector {
         throw new Exception(
           "creator justification ancestor with lower sequence number hasn't been added to the blockDAG yet."
         )
+    }
+
+  private def findCreatorJustificationAncestorWithSeqNum[F[_]: Monad](
+      blockDag: BlockDagRepresentation[F],
+      b: BlockMessage,
+      seqNum: SequenceNumber
+  ): F[Option[BlockHash]] =
+    if (b.seqNum == seqNum) {
+      Option(b.blockHash).pure[F]
+    } else {
+      DagOperations
+        .bfTraverseF(List(b.blockHash)) { blockHash =>
+          getCreatorJustificationAsListUntilGoalInMemory[F](blockDag, blockHash)
+        }
+        .findF { blockHash =>
+          for {
+            blockMeta <- blockDag.lookup(blockHash)
+          } yield blockMeta.get.seqNum == seqNum
+        }
     }
 }
