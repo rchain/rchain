@@ -936,10 +936,8 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
       EList(Seq(GInt(1), EVar(FreeVar(0)), EVar(FreeVar(1))), connectiveUsed = true)
 
     (for {
-      costAlg <- CostAccounting.of[Task](Cost(initialPhlo))
-      s       <- Semaphore[Task](1)
-      costL   <- costLog[Task]
-      cost    = loggingCost(costAlg, costL, s)
+      costL <- costLog[Task]
+      cost  <- CostAccounting.initialCost[Task](Cost(initialPhlo))(Concurrent[Task], costL)
       program = {
         implicit val c = cost
         spatialMatchAndCharge[Task](target, pattern).attempt
