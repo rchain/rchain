@@ -162,18 +162,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     Estimator.tips[F](dag, genesis)
 
-  /*
-   * Logic:
-   *  -Score each of the blockDAG heads extracted from the block messages via GHOST
-   *  -Let P = subset of heads such that P contains no conflicts and the total score is maximized
-   *  -Let R = subset of deploy messages which are not included in DAG obtained by following blocks in P
-   *  -If R is non-empty then create a new block with parents equal to P and (non-conflicting) txns obtained from R
-   *  -Else if R is empty and |P| > 1 then create a block with parents equal to P and no transactions
-   *  -Else None
-   *
-   *  TODO: Make this return Either so that we get more information about why not block was
-   *  produced (no deploys, already processing, no validator id)
-   */
   def createBlock: F[CreateBlockStatus] = validatorId match {
     case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
       BlockDagStorage[F].getRepresentation.flatMap { dag =>

@@ -19,6 +19,17 @@ import coop.rchain.casper.util.rholang._
 import coop.rchain.shared.{Cell, Log, Time}
 
 object BlockCreator {
+  /*
+   * Overview of createBlock
+   *
+   *  1. Rank each of the block DAG's latest messages (blocks) via the LMD GHOST estimator.
+   *  2. Let each latest message have a score of 2^(-i) where i is the index of that latest message in the ranking.
+   *     Take a subset S of the latest messages such that the sum of scores is the greatest and
+   *     none of the blocks in S conflicts with each other. S will become the parents of the
+   *     about-to-be-created block.
+   *  3. Extract all valid deploys that aren't already in all ancestors of S (the parents).
+   *  4. Create a new block that contains the deploys from the previous step.
+   */
   def createBlock[F[_]: Sync: Log: Time: BlockStore](
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage,
@@ -29,49 +40,20 @@ object BlockCreator {
       version: Long,
       expirationThreshold: Int,
       runtimeManager: RuntimeManager[F]
-  )(implicit state: Cell[F, CasperState]): F[CreateBlockStatus] = {
-    def updateDeployValidAfterBlock(deployData: DeployData, max: Long): DeployData =
-      if (deployData.validAfterBlockNumber == -1)
-        deployData.withValidAfterBlockNumber(max)
-      else
-        deployData
-
-    def updateDeployHistory(state: CasperState, max: Long): CasperState =
-      state.copy(deployHistory = state.deployHistory.map(deployData => {
-        updateDeployValidAfterBlock(deployData, max)
-      }))
-
+  )(implicit state: Cell[F, CasperState]): F[CreateBlockStatus] =
     for {
-      tipHashes <- Estimator.tips[F](dag, genesis)
-      p         <- chooseNonConflicting[F](tipHashes, dag)
-      _ <- Log[F].info(
-            s"${p.size} parents out of ${tipHashes.size} latest blocks will be used."
-          )
-      maxBlockNumber = ProtoUtil.maxBlockNumber(p)
-      /*
-       * This mechanism is a first effort to make life of a deploying party easier.
-       * Instead of expecting the user to guess the current block number we assume that
-       * if no value is given (default: -1) rchain should try to deploy
-       * with the current known max block number.
-       *
-       * TODO make more developer friendly by introducing Option instead of a magic number
-       */
-      _                <- state.modify(state => updateDeployHistory(state, maxBlockNumber))
-      r                <- remDeploys(dag, p, maxBlockNumber, expirationThreshold)
-      bondedValidators = bonds(p.head).map(_.validator).toSet
-      //We ensure that only the justifications given in the block are those
-      //which are bonded validators in the chosen parent. This is safe because
-      //any latest message not from a bonded validator will not change the
-      //final fork-choice.
-      latestMessages <- dag.latestMessages
-      justifications = toJustification(latestMessages)
-        .filter(j => bondedValidators.contains(j.validator))
-      proposal <- if (r.nonEmpty || p.length > 1) {
+      tipHashes      <- Estimator.tips[F](dag, genesis)
+      parents        <- chooseNonConflicting[F](tipHashes, dag)
+      maxBlockNumber = ProtoUtil.maxBlockNumber(parents)
+      _              <- updateDeployHistory[F](state, maxBlockNumber)
+      deploys        <- extractDeploys[F](dag, parents, maxBlockNumber, expirationThreshold)
+      justifications <- computeJustifications[F](dag, parents)
+      proposal <- if (deploys.nonEmpty || parents.length > 1) {
                    createProposal[F](
                      dag,
                      runtimeManager,
-                     p,
-                     r,
+                     parents,
+                     deploys,
                      justifications,
                      maxBlockNumber,
                      shardId,
@@ -84,10 +66,35 @@ object BlockCreator {
                       signBlock(_, dag, publicKey, privateKey, sigAlgorithm, shardId)
                     )
     } yield signedBlock
+
+  /*
+   * This mechanism is a first effort to make life of a deploying party easier.
+   * Instead of expecting the user to guess the current block number we assume that
+   * if no value is given (default: -1) rchain should try to deploy
+   * with the current known max block number.
+   *
+   * TODO: Make more developer friendly by introducing Option instead of a magic number
+   */
+  private def updateDeployHistory[F[_]: Sync: Log: Time: BlockStore](
+      state: Cell[F, CasperState],
+      maxBlockNumber: Long
+  ): F[Unit] = {
+    def updateDeployValidAfterBlock(deployData: DeployData, max: Long): DeployData =
+      if (deployData.validAfterBlockNumber == -1)
+        deployData.withValidAfterBlockNumber(max)
+      else
+        deployData
+
+    def updateDeployHistory(state: CasperState, max: Long): CasperState =
+      state.copy(deployHistory = state.deployHistory.map(deployData => {
+        updateDeployValidAfterBlock(deployData, max)
+      }))
+
+    state.modify(state => updateDeployHistory(state, maxBlockNumber))
   }
 
   // TODO: Remove no longer valid deploys here instead of with lastFinalizedBlock call
-  private def remDeploys[F[_]: Monad: Log: Time: BlockStore](
+  private def extractDeploys[F[_]: Monad: Log: Time: BlockStore](
       dag: BlockDagRepresentation[F],
       parents: Seq[BlockMessage],
       maxBlockNumber: Long,
@@ -118,6 +125,23 @@ object BlockCreator {
 
   private def notFutureDeploy(currentBlockNumber: Long, d: DeployData): Boolean =
     d.validAfterBlockNumber < currentBlockNumber
+
+  /*
+   * We ensure that only the justifications given in the block are those
+   * which are bonded validators in the chosen parent. This is safe because
+   * any latest message not from a bonded validator will not change the
+   * final fork-choice.
+   */
+  private def computeJustifications[F[_]: Monad](
+      dag: BlockDagRepresentation[F],
+      parents: Seq[BlockMessage]
+  ): F[Seq[Justification]] = {
+    val bondedValidators = bonds(parents.head).map(_.validator).toSet
+    dag.latestMessages.map { latestMessages =>
+      toJustification(latestMessages)
+        .filter(j => bondedValidators.contains(j.validator))
+    }
+  }
 
   private def createProposal[F[_]: Sync: Log: Time: BlockStore](
       dag: BlockDagRepresentation[F],
