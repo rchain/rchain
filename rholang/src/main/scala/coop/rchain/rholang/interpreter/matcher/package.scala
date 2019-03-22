@@ -19,12 +19,6 @@ package object matcher {
 
   type FreeMap = Map[Int, Par]
 
-  //FreeMap => Cost => Either[InterpreterError, (Cost, Stream[(FreeMap, A)])]
-  type NonDetFreeMapWithCost[A] = StateT[StreamWithCost, FreeMap, A]
-  type StreamWithCost[A]        = StreamT[ErroredOrCost, A]
-  type ErroredOrCost[A]         = StateT[Err, Cost, A]
-  type Err[A]                   = Either[InterpreterError, A]
-
   type MatcherMonadT[F[_], A] = StateT[StreamT[F, ?], FreeMap, A]
 
   import coop.rchain.rholang.interpreter.matcher.StreamT
@@ -59,38 +53,6 @@ package object matcher {
   )(implicit short: _short[F]): F[Option[A]] = {
     import short.instance
     f.attempt.map(_.fold(_ => None, Some(_)))
-  }
-
-  object NonDetFreeMapWithCost {
-
-    class NonDetFreeMapWithCostOps[A](s: NonDetFreeMapWithCost[A]) {
-
-      def runWithCost(
-          initCost: Cost
-      ): Either[InterpreterError, (Cost, Stream[(FreeMap, A)])] =
-        runFreeMapAndStream.run(initCost)
-
-      def runFirstWithCost(
-          initCost: Cost
-      ): Either[InterpreterError, (Cost, Option[(FreeMap, A)])] =
-        runFreeMapAndStream.map(_.headOption).run(initCost)
-
-      private def runFreeMapAndStream: ErroredOrCost[Stream[(FreeMap, A)]] =
-        StreamT.run(s.run(Map.empty))
-
-    }
-
-    implicit def cost(
-        implicit ms: MonadState[NonDetFreeMapWithCost, Cost]
-    ): _cost[NonDetFreeMapWithCost] =
-      loggingCost(
-        ms,
-        noOpCostLog[NonDetFreeMapWithCost]
-      )
-
-    implicit def toNonDetFreeMapWithCostOps[A](s: NonDetFreeMapWithCost[A]) =
-      new NonDetFreeMapWithCostOps[A](s)
-
   }
 
   def emptyMap: FreeMap = Map.empty[Int, Par]

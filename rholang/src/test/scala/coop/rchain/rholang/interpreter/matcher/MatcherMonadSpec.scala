@@ -15,7 +15,6 @@ import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.accounting.CostAccounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.matcher.{run => runMatcher, _}
-import coop.rchain.rholang.interpreter.matcher.NonDetFreeMapWithCost._
 import org.scalatest._
 
 import monix.eval.Task
