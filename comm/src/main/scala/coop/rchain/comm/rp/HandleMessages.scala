@@ -83,7 +83,7 @@ object HandleMessages {
 
     def sendDisconnect(): F[Unit] =
       for {
-        _ <- Log[F].info(
+        _ <- Log[F].debug(
               s"Ignoring handshake response from $peer. Maximum number of connections exceeded"
             )
         local <- RPConfAsk[F].reader(_.local)
@@ -115,7 +115,7 @@ object HandleMessages {
     Connect
       .hasMaxNumberOfConnections[F]
       .ifM(
-        Log[F].info(s"Ignoring handshake from $peer. Maximum number of connections exceeded"),
+        Log[F].debug(s"Ignoring handshake from $peer. Maximum number of connections exceeded"),
         sendHandshakeResponse()
       )
       .map(kp(handledWithoutMessage))
