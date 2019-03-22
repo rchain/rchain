@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter.matcher
 import cats.mtl.lifting.MonadLayerControl
-import cats.{~>, Alternative, Applicative, Functor, Monad, MonadError, MonoidK}
+import cats.{~>, Alternative, Applicative, Functor, FunctorFilter, Monad, MonadError, MonoidK}
+import cats.data.OptionT
 import cats.effect.Sync
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, SNil, Step}
@@ -191,27 +192,45 @@ trait StreamTInstances2 {
       def zero[A](state: Stream[A]): Boolean = state.isEmpty
     }
 
-  implicit def streamTSync[F[_]](implicit F0: Sync[F]): Sync[StreamT[F, ?]] =
+  implicit def streamTSync[F[_]](
+      implicit F0: Sync[F],
+      AL0: Alternative[StreamT[F, ?]]
+  ): Sync[StreamT[F, ?]] =
     new StreamTSync[F]() {
-      implicit val F = F0
+      implicit val F  = F0
+      implicit val AL = AL0
     }
 }
 
 private trait StreamTSync[F[_]] extends Sync[StreamT[F, ?]] with StreamTMonadError[F, Throwable] {
   implicit def F: Sync[F]
+  implicit def AL: Alternative[StreamT[F, ?]]
 
   import cats.effect.ExitCase
-
-  private[this] implicit def unlift[A](v: StreamT[F, A]): F[A] = F.map(StreamT.run(v))(_.head)
 
   def bracketCase[A, B](acquire: StreamT[F, A])(use: A => StreamT[F, B])(
       release: (A, ExitCase[Throwable]) => StreamT[F, Unit]
   ): StreamT[F, B] =
-    StreamT.liftF(
-      F.bracketCase(acquire)(use.andThen(unlift(_)))((a, b) => release(a, b))
+    StreamT.fromStream(
+      F.bracketCase[Stream[A], Stream[B]](StreamT.run(acquire)) {
+        case Stream.Empty => F.pure[Stream[B]](Stream.empty)
+        case cons: Cons[A] =>
+          StreamT
+            .run(cons.map(use).fold(StreamT.empty[F, B])(AL.combineK))
+      } {
+        case (Stream.Empty, _) => F.pure[Unit](())
+        case (cons: Cons[A], ec) =>
+          F.as(
+            StreamT
+              .run(cons.map(e => release(e, ec)).fold(StreamT.empty[F, Unit])(AL.combineK)),
+            ()
+          )
+
+      }
     )
 
-  def suspend[A](thunk: => StreamT[F, A]): StreamT[F, A] = StreamT.liftF(F.suspend(thunk))
+  def suspend[A](thunk: => StreamT[F, A]): StreamT[F, A] =
+    StreamT(F.suspend(thunk.next))
 
 }
 

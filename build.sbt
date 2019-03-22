@@ -116,6 +116,7 @@ lazy val shared = (project in file("shared"))
       scodecCore,
       scodecBits,
       scalapbRuntimegGrpc,
+      catsEffectLawsTest,
       catsLawsTest,
       catsLawsTestkitTest
     )
