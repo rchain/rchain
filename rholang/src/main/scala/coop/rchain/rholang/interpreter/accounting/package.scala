@@ -2,6 +2,8 @@ package coop.rchain.rholang.interpreter
 
 import cats._
 import cats.data._
+import cats.effect.Sync
+import cats.effect.ExitCase
 import cats.effect.ExitCase._
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
@@ -74,7 +76,7 @@ package object accounting extends Costs {
       def tell(l: Chain[Cost]): M[Unit] = Applicative[M].pure(())
     }
 
-  implicit def ntCostLog[F[_]: Monad, G[_]: Monad](
+  implicit def ntCostLog[F[_]: Monad, G[_]: Monad: Sync](
       nt: F ~> G
   )(implicit C: _cost[F]): _cost[G] =
     new Semaphore[G] with MonadState[G, Cost] with FunctorTell[G, Chain[Cost]] {
@@ -94,7 +96,12 @@ package object accounting extends Costs {
       override def count: G[Long]                   = nt(C.count)
       override def releaseN(n: Long): G[Unit]       = nt(C.releaseN(n))
       override def tryAcquireN(n: Long): G[Boolean] = nt(C.tryAcquireN(n))
-      override def withPermit[A](t: G[A]): G[A]     = ???
+      override def withPermit[A](t: G[A]): G[A] =
+        Sync[G].bracket[Unit, A](acquire) { _ =>
+          t
+        }(
+          r => Applicative[G].pure[Unit](r)
+        )
     }
 
 }

@@ -23,7 +23,7 @@ package object matcher {
 
   import coop.rchain.rholang.interpreter.matcher.StreamT
 
-  implicit def matcherMonadCostLog[F[_]: Monad: _cost](): _cost[MatcherMonadT[F, ?]] =
+  implicit def matcherMonadCostLog[F[_]: Monad: Sync: _cost](): _cost[MatcherMonadT[F, ?]] =
     λ[F ~> MatcherMonadT[F, ?]](fa => StateT.liftF(StreamT.liftF(fa)))
 
   // The naming convention means: this is an effect-type alias.
