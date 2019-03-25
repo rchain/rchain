@@ -1,0 +1,60 @@
+// A set of testnet admin-controlled 'genesis vault'-s will be our approach for providing
+// a testnet-token supply for the Testnet 1.
+// Everything regarding the genesis vaults is subject to change.
+
+new
+  rl(`rho:registry:lookup`), revAddress(`rho:rev:address`), RevVaultCh, getDeployData(`rho:deploy:params`),
+  deployerPubKeyCh, vaultCh, getDeployerPubKey,
+  stdout(`rho:io:stdout`), log
+in {
+
+  rl!(`rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z`, *RevVaultCh) |
+  getDeployerPubKey!(*deployerPubKeyCh) |
+  for (@(_, RevVault) <- RevVaultCh; @pubKey <- deployerPubKeyCh) {
+
+    log!(("0.create_genesis_vault.rho")) |
+    log!(("Using public key:", pubKey, "to obtain a `deployer's-pubkey-bound` vault")) |
+
+    @RevVault!("findOrCreateGenesisVault", pubKey, 9000, *vaultCh ) |
+
+    // most Vault methods return an `Either[String, A] = ("Left", String) \/ ("Right", A)`
+    for (@("Right", vault) <- vaultCh) {
+
+      log!(("Genesis vault obtained")) |
+
+      match ("%REV_ADDR", 100) {
+        (revAddress, amount) => {
+  
+          log!(("Beginning transfer of ", amount, "REV to", revAddress)) |
+
+          new resultCh in {
+            @vault!("transfer", revAddress, amount, *resultCh) |
+            for (@result <- resultCh) {
+
+              log!(("Finished transfer of ", amount, "REV to", revAddress, "result was:", result))
+            }
+          }
+  
+        }
+      }
+    }
+
+  } |
+
+  contract getDeployerPubKey(retCh) = {
+    new ch in {
+      getDeployData!(*ch) |
+      for (_, _, @pubKey, _ <- ch) {
+        log!(("Deployer public key is:", pubKey)) |
+        retCh!(pubKey)
+      }
+    }
+  } |
+
+  // for simplicity, we're sending to a public, forgable name obtained from quoting the "DEMO" process.
+  contract log(@data) = {
+    @"DEMO"!(data) | stdout!(data)
+  }
+}
+
+
