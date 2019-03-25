@@ -25,13 +25,10 @@ import coop.rchain.shared._
 
 /**
   Encapsulates mutable state of the MultiParentCasperImpl
-
-  @param blockBuffer - holds hashes of blocks that were received but were not added because DAG does not have their parents yet
   @param deployHistory - deploy data that will be eventually used to create block, removed when block holding it is finalizedchild
-  @param dependencyDag - dependency dag for block buffer // TODO they should be one structure
+  @param dependencyDag - holds dependency dag of hashes of blocks that were received but were not added because DAG does not have their parents yet
   */
 final case class CasperState(
-    blockBuffer: Set[BlockHash] = Set.empty[BlockHash],
     deployHistory: Set[DeployData] = Set.empty[DeployData],
     dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty
 )
@@ -88,7 +85,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
         dag         <- blockDag
         cst         <- state.read
         dagContains <- dag.contains(b.blockHash)
-      } yield dagContains || cst.blockBuffer.contains(b.blockHash)
+      } yield dagContains || cst.dependencyDag.contains(b.blockHash)
 
       exists.ifM(logAlreadyProcessed, doppelgangerAndAdd)
 
@@ -115,7 +112,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
             case _ =>
               Cell[F, CasperState].modify { s =>
                 s.copy(
-                  blockBuffer = s.blockBuffer - b.blockHash,
                   dependencyDag = DoublyLinkedDagOperations.remove(s.dependencyDag, b.blockHash)
                 )
               }
@@ -139,8 +135,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
       dag            <- blockDag
       dagContains    <- dag.contains(b.blockHash)
       state          <- Cell[F, CasperState].read
-      bufferContains = state.blockBuffer.contains(b.blockHash)
-    } yield (dagContains || bufferContains)
+      bufferContains = state.dependencyDag.contains(b.blockHash)
+    } yield dagContains || bufferContains
 
   def deploy(d: DeployData): F[Either[Throwable, Unit]] =
     InterpreterUtil.mkTerm(d.term) match {
@@ -441,10 +437,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
                 s"Added ${PrettyPrinter.buildString(block.blockHash)}"
               )
         } yield updatedDag
-      case MissingBlocks =>
-        Cell[F, CasperState].modify { s =>
-          s.copy(blockBuffer = s.blockBuffer + block.blockHash)
-        } *> fetchMissingDependencies(block) *> dag.pure[F]
+      case MissingBlocks => fetchMissingDependencies(block) *> dag.pure[F]
       case AdmissibleEquivocation =>
         val baseEquivocationBlockSeqNum = block.seqNum - 1
         for {
@@ -586,11 +579,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
   ): F[Unit] =
     for {
       state          <- Cell[F, CasperState].read
-      dependencyFree = state.dependencyDag.dependencyFree
-      dependencyFreeBlocks = state.blockBuffer
-        .filter(blockHash => dependencyFree.contains(blockHash))
-        .toList
-      attemptsWithDag <- dependencyFreeBlocks.foldM(
+      dependencyFree = state.dependencyDag.dependencyFree.toList
+      attemptsWithDag <- dependencyFree.foldM(
                           (
                             List.empty[(BlockMessage, (BlockStatus, BlockDagRepresentation[F]))],
                             dag
@@ -625,24 +615,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
   private def removeAdded(
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
       attempts: List[(BlockMessage, (BlockStatus, BlockDagRepresentation[F]))]
-  ): F[Unit] =
-    for {
-      successfulAdds <- attempts
-                         .filter {
-                           case (_, (status, _)) => status.inDag
-                         }
-                         .pure[F]
-      _ <- unsafeRemoveFromBlockBuffer(successfulAdds)
-      _ <- removeFromBlockBufferDependencyDag(blockBufferDependencyDag, successfulAdds)
-    } yield ()
-
-  private def unsafeRemoveFromBlockBuffer(
-      successfulAdds: List[(BlockMessage, (BlockStatus, BlockDagRepresentation[F]))]
   ): F[Unit] = {
-    val addedBlocks = successfulAdds.map(_._1.blockHash)
-    Cell[F, CasperState].modify { s =>
-      s.copy(blockBuffer = s.blockBuffer -- addedBlocks)
-    }
+    val successfulAdds = attempts.filter { case (_, (status, _)) => status.inDag }
+    removeFromBlockBufferDependencyDag(blockBufferDependencyDag, successfulAdds)
   }
 
   private def removeFromBlockBufferDependencyDag(
