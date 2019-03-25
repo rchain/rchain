@@ -9,7 +9,7 @@ trait DoublyLinkedDag[A] {
   val childToParentAdjacencyList: Map[A, Set[A]]
   val dependencyFree: Set[A]
   def contains(element: A): Boolean =
-    (parentToChildAdjacencyList.values.toSet ++ childToParentAdjacencyList.values.toSet)
+    (parentToChildAdjacencyList.values.toSet ++ childToParentAdjacencyList.values.toSet - dependencyFree.toSet)
       .contains(Set(element))
 }
 final case class BlockDependencyDag(
