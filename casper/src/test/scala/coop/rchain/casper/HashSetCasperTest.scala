@@ -1306,20 +1306,35 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
 
       _ = nodes(2).logEff.infos
         .count(_ startsWith "Requested missing block") should be(1)
-      result = nodes(1).logEff.infos.count(
+      _ = nodes(1).logEff.infos.count(
         s => (s startsWith "Received request for block") && (s endsWith "Response sent.")
       ) should be(1)
-
       _ <- nodes.map(_.tearDownNode()).toList.sequence
-      _ <- nodes.toList.traverse_[Effect, Assertion] { node =>
-            validateBlockStore(node) { blockStore =>
-              for {
-                _      <- blockStore.get(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
-                result <- blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
-              } yield result
-            }(nodes(0).metricEff, nodes(0).logEff)
-          }
-    } yield result
+      _ <- validateBlockStore(nodes(0)) { blockStore =>
+            for {
+              b1 <- blockStore.get(signedBlock1.blockHash)
+              _  = b1 shouldBe Some(signedBlock1)
+              b2 <- blockStore.get(signedBlock2.blockHash)
+              _  = b2 shouldBe Some(signedBlock2)
+            } yield ()
+          }(nodes(0).metricEff, nodes(0).logEff)
+      _ <- validateBlockStore(nodes(1)) { blockStore =>
+            for {
+              b1 <- blockStore.get(signedBlock1.blockHash)
+              _  = b1 shouldBe Some(signedBlock1)
+              b2 <- blockStore.get(signedBlock2.blockHash)
+              _  = b2 shouldBe Some(signedBlock2)
+            } yield ()
+          }(nodes(1).metricEff, nodes(1).logEff)
+      _ <- validateBlockStore(nodes(2)) { blockStore =>
+            for {
+              b1 <- blockStore.get(signedBlock1.blockHash)
+              _  = b1 shouldBe Some(signedBlock1)
+              b2 <- blockStore.get(signedBlock2.blockHash)
+              _  = b2 shouldBe Some(signedBlock2)
+            } yield ()
+          }(nodes(2).metricEff, nodes(2).logEff)
+    } yield ()
   }
 
   /*
@@ -1770,7 +1785,9 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
 object HashSetCasperTest {
   def validateBlockStore[R](
       node: HashSetCasperTestNode[Effect]
-  )(f: BlockStore[Effect] => Effect[R])(implicit metrics: Metrics[Effect], log: Log[Effect]) =
+  )(
+      f: BlockStore[Effect] => Effect[R]
+  )(implicit metrics: Metrics[Effect], log: Log[Effect]): EitherT[Task, CommError, R] =
     for {
       bs     <- BlockDagStorageTestFixture.createBlockStorage[Effect](node.blockStoreDir)
       result <- f(bs)
