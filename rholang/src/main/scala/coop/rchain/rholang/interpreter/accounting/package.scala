@@ -50,18 +50,12 @@ package object accounting extends Costs {
               for {
                 c <- cost.get
                 _ <- Monad[F].ifM[Unit]((c.value < 0).pure[F])(
-                      ifTrue = {
-                        for {
-                          _ <- error.raiseError[Unit](OutOfPhlogistonsError)
-                        } yield (())
-                      },
-                      ifFalse = {
-                        for {
-                          _        <- cost.tell(Chain.one(amount))
-                          newValue = c - amount
-                          _        <- cost.set(newValue)
-                        } yield (())
-                      }
+                      ifTrue = error.raiseError[Unit](OutOfPhlogistonsError),
+                      ifFalse = for {
+                        _        <- cost.tell(Chain.one(amount))
+                        newValue = c - amount
+                        _        <- cost.set(newValue)
+                      } yield (())
                     )
               } yield ()
           ) { _ =>
