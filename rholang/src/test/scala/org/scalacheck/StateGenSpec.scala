@@ -72,10 +72,12 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
   implicit val arbFReceiveBind: ArbF[EnvT, ReceiveBind] =
     ArbF[EnvT, ReceiveBind](Defer[EnvT[Gen, ?]].defer {
       for {
-        bindCount <- ArbEnv.askBindCount
-        name      <- genName(bindCount)
-        pattern   <- genPattern(name)
-      } yield ReceiveBind(patterns = List(pattern), source = EVar(BoundVar(name)), freeCount = 1)
+        bindCount            <- ArbEnv.askBindCount
+        name                 <- genName(bindCount)
+        r                    <- genPattern(name)
+        (pattern, freeCount) = r
+      } yield
+        ReceiveBind(patterns = List(pattern), source = EVar(BoundVar(name)), freeCount = freeCount)
     })
 
   implicit val arbFReceive: ArbF[EnvT, Receive] = ArbF[EnvT, Receive](Defer[EnvT[Gen, ?]].defer {
@@ -173,8 +175,8 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
   private def genName(bindCount: BindCount): EnvT[Gen, Int] =
     ArbEnv.liftF(Gen.chooseNum(0, bindCount - 1))
 
-  private def genPattern(name: BindCount): EnvT[Gen, Par] =
-    ArbEnv.liftF(Gen.const(EVar(FreeVar(0))))
+  private def genPattern(name: BindCount): EnvT[Gen, (Par, Int)] =
+    ArbEnv.liftF(Gen.const((EVar(FreeVar(0)), 1)))
 
   private def frequency[T](gs: (Int, EnvT[Gen, T])*): EnvT[Gen, T] = {
     def zip(listT: Seq[T], ints: Seq[Int]): List[(Int, Gen[T])] =
