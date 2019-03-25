@@ -537,8 +537,16 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
       missingUnseenDependencies <- missingDependencies.filterA(
                                     blockHash => ~^(BlockStore[F].contains(blockHash))
                                   )
-      _ <- missingDependencies.traverse(hash => handleMissingDependency(hash, b))
-      _ <- missingUnseenDependencies.traverse(hash => requestMissingDependency(hash))
+      _ <- if (missingDependencies.isEmpty) {
+            Sync[F].raiseError[Unit](
+              new RuntimeException(
+                s"Block ${PrettyPrinter.buildString(b)} has a status of MissingBlocks but is not missing any dependencies."
+              )
+            )
+          } else {
+            missingDependencies.traverse(hash => handleMissingDependency(hash, b)) >> missingUnseenDependencies
+              .traverse(hash => requestMissingDependency(hash))
+          }
     } yield ()
 
   private def handleMissingDependency(hash: BlockHash, childBlock: BlockMessage): F[Unit] =
