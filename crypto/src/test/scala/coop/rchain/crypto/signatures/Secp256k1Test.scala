@@ -25,17 +25,20 @@ class Secp256k1Test extends FunSpec with Matchers with BeforeAndAfterEach with A
     }
     it("packaged in libsecp256k1 creates an ECDSA signature") {
       val data = Sha256.hash("testing".getBytes)
-      val sec  = Base16.unsafeDecode("67E56582298859DDAE725F972992A07C6C4FB9F62A8FFF58CE3CA926A1063530")
+      val sec =
+        Base16.unsafeDecode("67E56582298859DDAE725F972992A07C6C4FB9F62A8FFF58CE3CA926A1063530")
       Base16
         .encode(Secp256k1.sign(data, sec))
         .toUpperCase() shouldBe "30440220182A108E1448DC8F1FB467D06A0F3BB8EA0533584CB954EF8DA112F1D60E39A202201C66F36DA211C087F3AF88B50EDF4F9BDAA6CF5FD6817E74DCA34DB12390C6E9"
     }
     it("verify returns true if valid, false if invalid") {
-      val sec = Base16.unsafeDecode("67E56582298859DDAE725F972992A07C6C4FB9F62A8FFF58CE3CA926A1063530")
+      val sec =
+        Base16.unsafeDecode("67E56582298859DDAE725F972992A07C6C4FB9F62A8FFF58CE3CA926A1063530")
       Secp256k1.secKeyVerify(sec) shouldBe true
     }
     it("computes public key from secret key") {
-      val sec = Base16.unsafeDecode("67E56582298859DDAE725F972992A07C6C4FB9F62A8FFF58CE3CA926A1063530")
+      val sec =
+        Base16.unsafeDecode("67E56582298859DDAE725F972992A07C6C4FB9F62A8FFF58CE3CA926A1063530")
       Base16
         .encode(Secp256k1.toPublic(sec))
         .toUpperCase() shouldBe "04C591A8FF19AC9C4E4E5793673B83123437E975285E7B442F4EE2654DFFCA5E2D2103ED494718C697AC9AEBCFD19612E224DB46661011863ED2FC54E71861E2A6"
