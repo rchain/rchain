@@ -28,6 +28,7 @@ class GrpcTransportClient(
     cert: String,
     key: String,
     maxMessageSize: Int,
+    packetChunkSize: Int,
     tempFolder: Path,
     clientQueueSize: Int
 )(
@@ -124,7 +125,6 @@ class GrpcTransportClient(
       path: Path,
       peer: PeerNode,
       sender: PeerNode,
-      messageSize: Int,
       retries: Int = 3,
       delayBetweenRetries: FiniteDuration = 1.second
   ): Task[Unit] = {
@@ -140,7 +140,7 @@ class GrpcTransportClient(
         PacketOps.restore[Task](path) >>= {
           case Right(packet) =>
             withClient(peer, timeout(packet), enforce = false)(
-              GrpcTransport.stream(peer, Blob(sender, packet), messageSize)
+              GrpcTransport.stream(peer, Blob(sender, packet), packetChunkSize)
             ).flatMap {
               case Left(error @ PeerUnavailable(_)) =>
                 log.debug(
@@ -183,7 +183,7 @@ class GrpcTransportClient(
                               Observable
                                 .fromIterable(s.peers)
                                 .mapParallelUnordered(parallelism)(
-                                  streamBlobFile(s.path, _, s.sender, maxMessageSize)
+                                  streamBlobFile(s.path, _, s.sender)
                                 )
                                 .guarantee(s.path.deleteSingleFile[Task]())
                             }
