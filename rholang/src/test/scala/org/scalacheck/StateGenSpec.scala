@@ -37,9 +37,10 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
     override def defer                               = Defer[EnvT[Gen, ?]]
     override def monad                               = Monad[EnvT[Gen, ?]]
     override def liftF[A](gen: Gen[A]): EnvT[Gen, A] = ReaderT.liftF(gen)
+    def ask: EnvT[Gen, Env]                          = ReaderT.ask[Gen, Env]
+    def askBindCount: EnvT[Gen, BindCount]           = ReaderT.ask[Gen, Env].map(_._1)
+    def askSize: EnvT[Gen, Size]                     = ReaderT.ask[Gen, Env].map(_._2)
   }
-
-  private def ask = ReaderT.ask[Gen, Env]
 
   case class Shape(breadth: Int, depths: List[Size]) {
     assert(breadth == depths.length)
@@ -62,22 +63,18 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
 
   implicit val arbFSend: ArbF[EnvT, Send] = ArbF[EnvT, Send](Defer[EnvT[Gen, ?]].defer {
     for {
-      env            <- ask
-      (bindCount, _) = env
-
-      name <- genName(bindCount)
-      expr <- ArbF.arbF[EnvT, Expr]
+      bindCount <- ArbEnv.askBindCount
+      name      <- genName(bindCount)
+      expr      <- ArbF.arbF[EnvT, Expr]
     } yield Send(chan = EVar(BoundVar(name)), data = List(expr))
   })
 
   implicit val arbFReceiveBind: ArbF[EnvT, ReceiveBind] =
     ArbF[EnvT, ReceiveBind](Defer[EnvT[Gen, ?]].defer {
       for {
-        env            <- ask
-        (bindCount, _) = env
-
-        name    <- genName(bindCount)
-        pattern <- genPattern(name)
+        bindCount <- ArbEnv.askBindCount
+        name      <- genName(bindCount)
+        pattern   <- genPattern(name)
       } yield ReceiveBind(patterns = List(pattern), source = EVar(BoundVar(name)), freeCount = 1)
     })
 
@@ -94,17 +91,15 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
         (env._1 + bind.freeCount, env._2 - 1)
       }(ArbF.arbF[EnvT, Par])
 
-      body <- frequency((3, parGen), (1, matchGen))
+      body         <- frequency((3, parGen), (1, matchGen))
       isPersistent <- ArbEnv.liftF(Gen.oneOf(true, false))
     } yield Receive(binds = List(bind), body = body, persistent = isPersistent)
   })
 
   implicit val arbFMatch: ArbF[EnvT, Match] = ArbF[EnvT, Match](Defer[EnvT[Gen, ?]].defer {
     for {
-      env            <- ask
-      (bindCount, _) = env
-
-      target <- genName(bindCount)
+      bindCount <- ArbEnv.askBindCount
+      target    <- genName(bindCount)
       par <- ReaderT.local { env: Env =>
               (env._1, env._2 - 1)
             }(ArbF.arbF[EnvT, Par])
@@ -115,9 +110,7 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
 
   implicit val arbFPar: ArbF[EnvT, Par] = ArbF[EnvT, Par](Defer[EnvT[Gen, ?]].defer {
     for {
-      env       <- ask
-      (_, size) = env
-
+      size <- ArbEnv.askSize
       par <- if (size > 0) {
               for {
                 // Split size between receives and sends
@@ -154,15 +147,13 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
 
               } yield Par(sends = sends, receives = receives)
             } else nil
-
     } yield par
   })
 
   implicit val arbFNew: ArbF[EnvT, New] = ArbF[EnvT, New](Defer[EnvT[Gen, ?]].defer {
     for {
-      env            <- ask
-      (bindCount, _) = env
-      par            <- ArbF.arbF[EnvT, Par]
+      bindCount <- ArbEnv.askBindCount
+      par       <- ArbF.arbF[EnvT, Par]
     } yield New(bindCount = bindCount, p = par)
   })
 
