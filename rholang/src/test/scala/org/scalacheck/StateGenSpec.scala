@@ -46,6 +46,10 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
     assert(breadth == depths.length)
   }
 
+  val setSize      = (size: Size) => (env: Env) => (env._1, size)
+  val decreaseSize = (env: Env) => (env._1, env._2 - 1)
+  val addFreeVars  = (freeCount: Int) => (env: Env) => (env._1 + freeCount, env._2)
+
   implicit val arbFExpr: ArbF[EnvT, Expr] = ArbF[EnvT, Expr](Defer[EnvT[Gen, ?]].defer {
     val genInt: Gen[GInt]       = Gen.chooseNum(-5, 5).map(i => GInt(i.toLong))
     val genBool: Gen[GBool]     = Gen.oneOf(GBool(true), GBool(false))
@@ -84,14 +88,10 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
     for {
       bind <- ArbF.arbF[EnvT, ReceiveBind]
       matchGen = ReaderT
-        .local { env: Env =>
-          (env._1 + bind.freeCount, env._2 - 1)
-        }(ArbF.arbF[EnvT, Match])
+        .local(addFreeVars(bind.freeCount) andThen decreaseSize)(ArbF.arbF[EnvT, Match])
         .asPar()
 
-      parGen = ReaderT.local { env: Env =>
-        (env._1 + bind.freeCount, env._2 - 1)
-      }(ArbF.arbF[EnvT, Par])
+      parGen = ReaderT.local(addFreeVars(bind.freeCount) andThen decreaseSize)(ArbF.arbF[EnvT, Par])
 
       body         <- frequency((3, parGen), (1, matchGen))
       isPersistent <- ArbEnv.liftF(Gen.oneOf(true, false))
@@ -102,9 +102,7 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
     for {
       bindCount <- ArbEnv.askBindCount
       target    <- genName(bindCount)
-      par <- ReaderT.local { env: Env =>
-              (env._1, env._2 - 1)
-            }(ArbF.arbF[EnvT, Par])
+      par       <- ReaderT.local(decreaseSize)(ArbF.arbF[EnvT, Par])
       // TODO: Add more match cases
       wildcardCase = MatchCase(pattern = EVar(Wildcard(WildcardMsg())), source = par)
     } yield Match(target = EVar(BoundVar(target)), cases = List(wildcardCase))
@@ -124,10 +122,7 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
                                shape <- genShape(nReceives)
                                r <- shape.depths
                                      .map(
-                                       d =>
-                                         ReaderT.local { env: Env =>
-                                           (env._1, d)
-                                         }(ArbF.arbF[EnvT, Receive])
+                                       d => ReaderT.local(setSize(d))(ArbF.arbF[EnvT, Receive])
                                      )
                                      .sequence
                              } yield r
@@ -138,10 +133,7 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
                             shape <- genShape(nSends)
                             s <- shape.depths
                                   .map(
-                                    d =>
-                                      ReaderT.local { env: Env =>
-                                        (env._1, d)
-                                      }(ArbF.arbF[EnvT, Send])
+                                    d => ReaderT.local(setSize(d))(ArbF.arbF[EnvT, Send])
                                   )
                                   .sequence
                           } yield s
