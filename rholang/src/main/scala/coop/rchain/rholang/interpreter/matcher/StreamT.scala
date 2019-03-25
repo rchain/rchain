@@ -194,16 +194,19 @@ trait StreamTInstances2 {
 
   implicit def streamTSync[F[_]](
       implicit F0: Sync[F],
+      M0: Monad[StreamT[F, ?]],
       AL0: Alternative[StreamT[F, ?]]
   ): Sync[StreamT[F, ?]] =
     new StreamTSync[F]() {
       implicit val F  = F0
+      implicit val M  = M0
       implicit val AL = AL0
     }
 }
 
 private trait StreamTSync[F[_]] extends Sync[StreamT[F, ?]] with StreamTMonadError[F, Throwable] {
   implicit def F: Sync[F]
+  implicit def M: Monad[StreamT[F, ?]]
   implicit def AL: Alternative[StreamT[F, ?]]
 
   import cats.effect.ExitCase
@@ -211,21 +214,17 @@ private trait StreamTSync[F[_]] extends Sync[StreamT[F, ?]] with StreamTMonadErr
   def bracketCase[A, B](acquire: StreamT[F, A])(use: A => StreamT[F, B])(
       release: (A, ExitCase[Throwable]) => StreamT[F, Unit]
   ): StreamT[F, B] =
-    StreamT.fromStream(
-      F.bracketCase[Stream[A], Stream[B]](StreamT.run(acquire)) {
-        case Stream.Empty => F.pure[Stream[B]](Stream.empty)
-        case cons: Cons[A] =>
-          StreamT
-            .run(cons.map(use).fold(StreamT.empty[F, B])(AL.combineK))
+    StreamT(
+      F.bracketCase[Step[F, A], Step[F, B]](acquire.next) {
+        case SNil() => F.pure(SNil())
+        case SCons(head, tail) => {
+          AL.combineK(use(head), M.flatMap(tail)(use)).next
+        }
       } {
-        case (Stream.Empty, _) => F.pure[Unit](())
-        case (cons: Cons[A], ec) =>
-          F.as(
-            StreamT
-              .run(cons.map(e => release(e, ec)).fold(StreamT.empty[F, Unit])(AL.combineK)),
-            ()
-          )
-
+        case (SNil(), _) => F.pure(())
+        case (SCons(head, _), ec) => {
+          F.map(release(head, ec).next)(_ => ())
+        }
       }
     )
 
