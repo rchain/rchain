@@ -19,8 +19,13 @@ import coop.rchain.shared.StringOps._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.slf4j.LoggerFactory
+import org.slf4j.bridge.SLF4JBridgeHandler
 
 object Main {
+
+  // https://www.slf4j.org/legacy.html#jul-to-slf4j
+  SLF4JBridgeHandler.removeHandlersForRootLogger()
+  SLF4JBridgeHandler.install()
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private implicit val log: Log[Task]       = effects.log

@@ -74,6 +74,7 @@ object Dependencies {
   val tomlScala           = "tech.sparse"                %% "toml-scala"                % "0.1.1"
   val logstashLogback     = "net.logstash.logback"        % "logstash-logback-encoder"  % "5.3"
   val slf4j               = "org.slf4j"                   % "slf4j-api"                 % slf4jVersion
+  val julToSlf4j          = "org.slf4j"                   % "jul-to-slf4j"              % slf4jVersion
   // format: on
 
   val overrides = Seq(
@@ -98,7 +99,7 @@ object Dependencies {
 
   private val testing = Seq(scalactic, scalatest, scalacheck)
 
-  private val logging = Seq(slf4j, scalaLogging, logbackClassic, logstashLogback)
+  private val logging = Seq(slf4j, julToSlf4j, scalaLogging, logbackClassic, logstashLogback)
 
   private val circeDependencies: Seq[ModuleID] =
     Seq(circeCore, circeGeneric, circeGenericExtras, circeParser, circeLiteral)
