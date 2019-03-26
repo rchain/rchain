@@ -32,60 +32,64 @@ in {
       for (mint <- mintCh) {
 
         //FIXME the result of findOrCreateGenesisVault is not protected, nor is the call to it. Both should be.
-        contract RevVault(@"findOrCreateGenesisVault", @ownerPubKeyBytes, @initialAmount, ret) = {
+        contract RevVault(@"findOrCreateGenesisVault", @ownerRevAddress, @initialAmount, ret) = {
           new findOrCreateGenesisVault in {
-            _getOrCreate!(ownerPubKeyBytes, *findOrCreateGenesisVault, *ret) |
+            _getOrCreate!(ownerRevAddress, *findOrCreateGenesisVault, *ret) |
             for (retCh <- findOrCreateGenesisVault) {
 
-              _makeVault!(ownerPubKeyBytes, initialAmount, *retCh)
+              _makeVault!(ownerRevAddress, initialAmount, *retCh)
             }
           }
         } |
 
-        contract RevVault(@"findOrCreate", @ownerPubKeyBytes, ret) = {
+        contract RevVault(@"findOrCreate", @ownerRevAddress, ret) = {
 
           new createLockedVault in {
-            _getOrCreate!(ownerPubKeyBytes, *createLockedVault, *ret) |
+            _getOrCreate!(ownerRevAddress, *createLockedVault, *ret) |
             for (retCh <- createLockedVault) {
 
               new vaultCh, lock in {
-                _makeVault!(ownerPubKeyBytes, 0, *vaultCh) |
+                _makeVault!(ownerRevAddress, 0, *vaultCh) |
                 @Either!("map <-", *vaultCh, *lock, *retCh) |
                 for (@vault, retCh <- lock) {
-                  @Lockbox!("lock", ownerPubKeyBytes, vault, *retCh)
+                  @Lockbox!("lock", ownerRevAddress, vault, *retCh)
                 }
               }
             }
           }
         } |
 
-        contract _getOrCreate(@key, constructor, ret) = {
-          for (@vaultMap <- vaultMapStore) {
-            match vaultMap.get(key) {
-              Nil => {
-                new resCh in {
-                  constructor!(*resCh) |
-                  for (@eitherVault <- resCh) {
-                    match eitherVault {
-                      ("Right", vault) => vaultMapStore!(vaultMap.set(key, vault))
-                      ("Left",  _    ) => vaultMapStore!(vaultMap)
-                    } |
-                    ret!(eitherVault)
+        contract _getOrCreate(@revAddress, constructor, retCh) = {
+          new revAddressValidCh, revAddressValidEitherCh, getOrCreate in {
+            RevAddress!("validate", revAddress, *revAddressValidCh) |
+            @Either!("fromNillableError <-", *revAddressValidCh, *revAddressValidEitherCh) |
+            @Either!("flatMap <-", *revAddressValidEitherCh, *getOrCreate, *retCh) |
+            for (_, ret <- getOrCreate; @vaultMap <- vaultMapStore) {
+              match vaultMap.get(revAddress) {
+                Nil => {
+                  new resCh in {
+                    constructor!(*resCh) |
+                    for (@eitherVault <- resCh) {
+                      match eitherVault {
+                        ("Right", vault) => vaultMapStore!(vaultMap.set(revAddress, vault))
+                        ("Left",  _    ) => vaultMapStore!(vaultMap)
+                      } |
+                      ret!(eitherVault)
+                    }
                   }
                 }
-              }
-              value => {
-                vaultMapStore!(vaultMap) | ret!(("Right", value))
+                value => {
+                  vaultMapStore!(vaultMap) | ret!(("Right", value))
+                }
               }
             }
           }
         } |
 
-        contract _makeVault(@ownerPubKeyBytes, @initialAmount, ret) = {
+        contract _makeVault(@ownerRevAddress, @initialAmount, ret) = {
 
           new revAddrCh, eitherRevAddrCh, purseCh, eitherPurseCh in {
-            RevAddress!("fromPublicKey", ownerPubKeyBytes, *revAddrCh) |
-            @Either!("fromNillable <-", *revAddrCh, "Invalid public key", *eitherRevAddrCh) |
+            @Either!("fromNillable", ownerRevAddress, "Required `revAddress` parameter was Nil", *eitherRevAddrCh) |
             mint!("makePurse", initialAmount, *purseCh) |
             @Either!("fromNillable <-", *purseCh, "Couldn't create purse", *eitherPurseCh) |
             @Either!("map2 <-", *eitherRevAddrCh, *eitherPurseCh, *_newVault, *ret)
