@@ -1,23 +1,23 @@
 package coop.rchain.casper.api
 
-import coop.rchain.catscontrib.TaskContrib._
-import scala.collection.immutable.HashMap
-import coop.rchain.crypto.signatures.Ed25519
 import cats.effect.Sync
 import cats.implicits._
-import coop.rchain.crypto.{PrivateKey, PublicKey}
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagStorage, BlockStore}
-import coop.rchain.casper._
 import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
+import coop.rchain.casper._
 import coop.rchain.casper.helper.{BlockDagStorageFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
-
-import com.google.protobuf.ByteString
 import monix.eval.Task
 import org.scalatest._
+
+import scala.collection.immutable.HashMap
 
 class BlockQueryResponseAPITest
     extends FlatSpec
@@ -66,7 +66,7 @@ class BlockQueryResponseAPITest
   val parentsString                    = List(genesisHashString, "0000000001")
   val parentsHashList: List[BlockHash] = parentsString.map(ProtoUtil.stringToByteString)
   val header: Header                   = ProtoUtil.blockHeader(body, parentsHashList, version, timestamp)
-  val shardId: String               = "abcdefgh"
+  val shardId: String                  = "abcdefgh"
   val secondBlock: BlockMessage =
     BlockMessage()
       .withBlockHash(blockHash)

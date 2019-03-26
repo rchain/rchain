@@ -86,6 +86,8 @@ trait Costs {
   // if underlying string is shorter then the `to` value.
   def sliceCost(to: Int): Cost = Cost(to, "slice")
 
+  def toListCost(size: Int): Cost = Cost(size, "toList")
+
   def parsingCost(term: String): Cost = Cost(term.getBytes.size, "parsing")
 
   final val NTH_METHOD_CALL_COST: Cost = Cost(10, "nth method call")
