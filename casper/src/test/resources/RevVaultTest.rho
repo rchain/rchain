@@ -167,11 +167,12 @@ match (
       } |
 
       contract testInsufficeintFunds(rhoSpec, RevVault, ackCh) = {
-        new aliceVaultCh, res in {
+        new aliceVaultCh, res, resOk in {
           withVaultUnlocked!(alicePubKey, *aliceVaultCh) |
           for (aliceVault <- aliceVaultCh) {
               aliceVault!("transfer", bobRevAddress, 9000, *res) |
-              rhoSpec!("assert", (("Left", "Insufficient funds"), "== <-", *res), "transfer failed", *ackCh)
+              rhoSpec!("assert", (("Left", "Insufficient funds"), "== <-", *res), "transfer failed", *resOk) |
+              assertBalances!(*resOk, [(*aliceVault, 1000)], *rhoSpec, *ackCh)
           }
         }
       } |
