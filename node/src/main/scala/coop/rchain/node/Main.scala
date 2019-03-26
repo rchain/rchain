@@ -18,6 +18,7 @@ import coop.rchain.shared._
 import coop.rchain.shared.StringOps._
 import monix.eval.Task
 import monix.execution.Scheduler
+import org.slf4j.LoggerFactory
 
 object Main {
 
@@ -26,6 +27,11 @@ object Main {
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def main(args: Array[String]): Unit = {
+    // Catch-all for unhandled exceptions. Use only JDK and SLF4J.
+    Thread.setDefaultUncaughtExceptionHandler((thread, ex) => {
+      LoggerFactory.getLogger(getClass).error("Unhandled exception in thread " + thread.getName, ex)
+      ex.printStackTrace()
+    })
 
     val configuration = Configuration.build(args)
     System.setProperty("rnode.data.dir", configuration.server.dataDir.toString) // NonUnitStatements
