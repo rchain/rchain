@@ -178,11 +178,12 @@ match (
 
       contract testInvalidRevAddress(rhoSpec, RevVault, ackCh) = {
         stdout!("testInvalidRevAddress") |
-        new aliceVaultCh, res in {
+        new aliceVaultCh, res, resOk in {
           withVaultUnlocked!(alicePubKey, *aliceVaultCh) |
           for (aliceVault <- aliceVaultCh) {
             aliceVault!("transfer", "pretty surely invalid rev address", 1, *res) |
-            rhoSpec!("assert", (("Left", "Invalid Base58 encoding"), "== <-", *res), "transfer failed", *ackCh)
+            rhoSpec!("assert", (("Left", "Invalid Base58 encoding"), "== <-", *res), "transfer failed", *resOk) |
+            assertBalances!(*resOk, [(*aliceVault, 1000)], *rhoSpec, *ackCh)
           }
         }
       } |
