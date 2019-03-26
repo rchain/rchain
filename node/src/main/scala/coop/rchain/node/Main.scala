@@ -23,10 +23,6 @@ import org.slf4j.bridge.SLF4JBridgeHandler
 
 object Main {
 
-  // https://www.slf4j.org/legacy.html#jul-to-slf4j
-  SLF4JBridgeHandler.removeHandlersForRootLogger()
-  SLF4JBridgeHandler.install()
-
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private implicit val log: Log[Task]       = effects.log
 
@@ -115,6 +111,11 @@ object Main {
   }
 
   private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
+    // XXX: Enable it earlier once we have JDK with https://bugs.openjdk.java.net/browse/JDK-8218960 fixed
+    // https://www.slf4j.org/legacy.html#jul-to-slf4j
+    SLF4JBridgeHandler.removeHandlersForRootLogger()
+    SLF4JBridgeHandler.install()
+
     val node =
       for {
         _       <- log.info(VersionInfo.get).toEffect
