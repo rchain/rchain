@@ -71,6 +71,7 @@ object Dependencies {
   // see https://jitpack.io/#rchain/secp256k1-java
   val secp256k1Java       = "com.github.rchain"           % "secp256k1-java"            % "0.1"
   val tomlScala           = "tech.sparse"                %% "toml-scala"                % "0.1.1"
+  val logstashLogback     = "net.logstash.logback"        % "logstash-logback-encoder"  % "5.3"
   // format: on
 
   val overrides = Seq(
@@ -95,7 +96,7 @@ object Dependencies {
 
   private val testing = Seq(scalactic, scalatest, scalacheck)
 
-  private val logging = Seq(scalaLogging, logbackClassic)
+  private val logging = Seq(scalaLogging, logbackClassic, logstashLogback)
 
   private val circeDependencies: Seq[ModuleID] =
     Seq(circeCore, circeGeneric, circeGenericExtras, circeParser, circeLiteral)
