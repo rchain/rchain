@@ -3,7 +3,7 @@ package coop.rchain.rholang.interpreter.matcher
 import cats.arrow.FunctionK
 import cats.data.{EitherT, WriterT}
 import cats.implicits._
-import cats.effect.laws.discipline.SyncTests
+import cats.effect.laws.discipline.{BracketTests, SyncTests}
 import cats.effect.laws.discipline.arbitrary._
 import cats.laws.discipline.{AlternativeTests, MonadErrorTests, MonadTests}
 import cats.mtl.laws.discipline.MonadLayerControlTests
@@ -181,6 +181,18 @@ class StreamTLawsSpec
   )
 
   checkAll("StreamT.SyncLaws", SyncTests[StreamTEffect].sync[Int, Int, String])
+
+  checkAll(
+    "StreamT.SyncLaws", {
+      val fromEffect =
+        λ[Effect ~> StreamTEffect[?]](
+          e => StreamT.liftF(e)
+        )
+      BracketTests[StreamTEffect[?], Throwable].bracketTrans[Effect, Int, Int](
+        fromEffect
+      )
+    }
+  )
 }
 
 trait LowPriorityDerivations {
