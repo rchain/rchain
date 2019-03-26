@@ -203,7 +203,7 @@ object Runtime {
     }.sequence
 
   object SystemProcess {
-    final case class Context[F[_]: Sync](
+    final case class Context[F[_]: Concurrent](
         space: RhoISpace[F],
         dispatcher: RhoDispatch[F],
         registry: Registry[F],
@@ -308,9 +308,9 @@ object Runtime {
       executionContext: ExecutionContext
   ): F[Runtime[F]] =
     (for {
-      costAccounting <- CostAccounting.empty[F]
+      cost <- CostAccounting.emptyCost[F]
       runtime <- {
-        implicit val cost: _cost[F] = loggingCost(costAccounting, noOpCostLog)
+        implicit val c = cost
         create(dataDir, mapSize, storeType, extraSystemProcesses)
       }
     } yield (runtime))
@@ -422,7 +422,7 @@ object Runtime {
   }
 
   def injectEmptyRegistryRoot[F[_]](space: RhoISpace[F], replaySpace: RhoReplayISpace[F])(
-      implicit F: Sync[F]
+      implicit F: Concurrent[F]
   ): F[Unit] = {
     // This random value stays dead in the tuplespace, so we can have some fun.
     // This is from Jeremy Bentham's "Defence of Usury"
@@ -433,8 +433,7 @@ object Runtime {
     )
 
     for {
-      costAlg <- CostAccounting.of[F](Cost.UNSAFE_MAX)
-      cost    = loggingCost(costAlg, noOpCostLog[F])
+      cost <- CostAccounting.initialCost[F](Cost.UNSAFE_MAX)
       spaceResult <- space.produce(
                       Registry.registryRoot,
                       ListParWithRandom(Seq(Registry.emptyMap), rand),
