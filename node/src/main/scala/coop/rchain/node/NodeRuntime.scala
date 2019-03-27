@@ -321,13 +321,12 @@ class NodeRuntime private[node] (
         } *> exit0.as(Right(()))
     )
 
-  private val rpClearConnConf = ClearConnetionsConf(
-    conf.server.maxNumOfConnections,
+  private val rpClearConnConf = ClearConnectionsConf(
     numOfConnectionsPinged = 10
   ) // TODO read from conf
 
   private def rpConf(local: PeerNode, bootstrapNode: Option[PeerNode]) =
-    RPConf(local, bootstrapNode, defaultTimeout, rpClearConnConf)
+    RPConf(local, bootstrapNode, defaultTimeout, conf.server.maxNumOfConnections, rpClearConnConf)
 
   // TODO this should use existing algebra
   private def mkDirs(path: Path): Effect[Unit] =

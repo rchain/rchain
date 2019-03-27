@@ -28,6 +28,12 @@ object Connect {
 
   object ConnectionsCell {
     def apply[F[_]](implicit ev: ConnectionsCell[F]): ConnectionsCell[F] = ev
+
+    def random[F[_]: Monad: ConnectionsCell: RPConfAsk]: F[Connections] =
+      for {
+        max   <- RPConfAsk[F].reader(_.maxNumOfConnections)
+        peers <- ConnectionsCell[F].read
+      } yield Random.shuffle(peers).take(max)
   }
 
   object Connections {
@@ -106,7 +112,7 @@ object Connect {
 
     for {
       connections <- ConnectionsCell[F].read
-      max         <- RPConfAsk[F].reader(_.clearConnections.maxNumOfConnections)
+      max         <- RPConfAsk[F].reader(_.maxNumOfConnections)
       cleared     <- if (connections.size > ((max * 2) / 3)) clear(connections) else 0.pure[F]
       _           <- if (cleared > 0) ConnectionsCell[F].read >>= (_.reportConn[F]) else connections.pure[F]
     } yield cleared

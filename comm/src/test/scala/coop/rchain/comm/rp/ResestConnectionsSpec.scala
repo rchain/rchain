@@ -67,10 +67,11 @@ class ResestConnectionsSpec
   ): RPConfAsk[Id] =
     new ConstApplicativeAsk(
       RPConf(
-        clearConnections = ClearConnetionsConf(maxNumOfConnections, numOfConnectionsPinged),
+        clearConnections = ClearConnectionsConf(numOfConnectionsPinged),
         defaultTimeout = 1.milli,
         local = peer("src"),
-        bootstrap = None
+        bootstrap = None,
+        maxNumOfConnections = maxNumOfConnections
       )
     )
 
