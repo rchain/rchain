@@ -22,6 +22,7 @@ import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.comm.{transport, CommError, TimeOut}
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
@@ -892,7 +893,9 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       source = createWalletCode,
       timestamp = 1540570144121L,
       phlos = accounting.MAX_VALUE,
-      deployer = ProtoUtil.stringToByteString(pkStr)
+      sec = PrivateKey(
+        Base16.unsafeDecode("6061f3ea36d0419d1e9e23c33bba88ed1435427fa2a8f7300ff210b4e9f18a14")
+      )
     )
 
     for {
@@ -909,7 +912,10 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
            |  }
            |}""".stripMargin,
         0L,
-        accounting.MAX_VALUE
+        accounting.MAX_VALUE,
+        sec = PrivateKey(
+          Base16.unsafeDecode("6061f3ea36d0419d1e9e23c33bba88ed1435427fa2a8f7300ff210b4e9f18a14")
+        )
       )
       newWalletBalance <- node.runtimeManager
                            .captureResults(
@@ -1211,9 +1217,9 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       .sourceDeploy(
         s"""new retCh in { @"blake2b256Hash"!([0, $amount, *retCh].toByteArray(), "__SCALA__") }""",
         timestamp,
-        accounting.MAX_VALUE
+        accounting.MAX_VALUE,
+        sec = PrivateKey(sk)
       )
-      .withDeployer(user)
     for {
       capturedResults <- node.runtimeManager
                           .captureResults(
@@ -1241,9 +1247,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
          |  }
          |}""".stripMargin
       paymentDeployData = ConstructDeploy
-        .sourceDeploy(paymentCode, timestamp, accounting.MAX_VALUE)
-        .withPhloPrice(phloPrice)
-        .withDeployer(user)
+        .sourceDeploy(paymentCode, timestamp, phloPrice, sec = PrivateKey(sk))
 
       paymentQuery = ConstructDeploy.sourceDeploy(
         """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
@@ -1254,7 +1258,8 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
         |  }
         |}""".stripMargin,
         0L,
-        accounting.MAX_VALUE
+        accounting.MAX_VALUE,
+        sec = PrivateKey(sk)
       )
 
       deployQueryResult <- deployAndQuery(
@@ -1533,7 +1538,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     for {
       nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
       deployDatas <- (0 to 5).toList
-                      .traverse[Effect, DeployData](ConstructDeploy.basicDeployData[Effect])
+                      .traverse[Effect, DeployData](i => ConstructDeploy.basicDeployData[Effect](i))
 
       // Creates a pair that constitutes equivocation blocks
       createBlockResult1 <- nodes(0).casperEff
@@ -1794,7 +1799,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     implicit val timeEff = new LogicalTime[Effect]
 
     for {
-      deployData        <- ConstructDeploy.basicDeployData[Effect](0).map(_.withPhloLimit(1))
+      deployData        <- ConstructDeploy.basicDeployData[Effect](0, phlos = 1)
       _                 <- node.casperEff.deploy(deployData)
       createBlockResult <- MultiParentCasper[Effect].createBlock
       Created(block)    = createBlockResult
@@ -1807,7 +1812,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     implicit val timeEff = new LogicalTime[Effect]
 
     for {
-      deployData <- ConstructDeploy.basicDeployData[Effect](0).map(_.withPhloLimit(100))
+      deployData <- ConstructDeploy.basicDeployData[Effect](0, phlos = 100)
       _          <- node.casperEff.deploy(deployData)
 
       createBlockResult <- MultiParentCasper[Effect].createBlock
@@ -1870,7 +1875,7 @@ object HashSetCasperTest {
       query: DeployData
   ): Effect[(BlockStatus, Seq[Par])] =
     for {
-      createBlockResult <- node.casperEff.deploy(dd) *> node.casperEff.createBlock
+      createBlockResult <- node.casperEff.deploy(dd) >> node.casperEff.createBlock
       Created(block)    = createBlockResult
       blockStatus       <- node.casperEff.addBlock(block, ignoreDoppelgangerCheck[Effect])
       queryResult <- node.runtimeManager

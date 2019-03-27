@@ -2,10 +2,10 @@ package coop.rchain.casper.api
 
 import coop.rchain.catscontrib.TaskContrib._
 import scala.collection.immutable.HashMap
-
+import coop.rchain.crypto.signatures.Ed25519
 import cats.effect.Sync
 import cats.implicits._
-
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.blockstorage.{BlockDagStorage, BlockStore}
 import coop.rchain.casper._
 import coop.rchain.casper.Estimator.BlockHash
@@ -25,6 +25,7 @@ class BlockQueryResponseAPITest
     with Inside
     with BlockDagStorageFixture {
   implicit val timeEff = new LogicalTime[Task]
+  private val (sk, pk) = Ed25519.newKeyPair
   val secondBlockQuery = "1234"
   val badTestHashQuery = "No such a hash"
 
@@ -56,7 +57,7 @@ class BlockQueryResponseAPITest
   val deployCount = 10
   val randomDeploys =
     (0 until deployCount).toList
-      .traverse(ConstructDeploy.basicProcessedDeploy[Task])
+      .traverse(i => ConstructDeploy.basicProcessedDeploy[Task](i, PrivateKey(sk)))
       .unsafeRunSync(scheduler)
   val body: Body                       = Body().withState(ps).withDeploys(randomDeploys)
   val parentsString                    = List(genesisHashString, "0000000001")
@@ -139,7 +140,7 @@ class BlockQueryResponseAPITest
       for {
         effects                                 <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
         (logEff, casperRef, cliqueOracleEffect) = effects
-        user                                    = ByteString.EMPTY
+        user                                    = ByteString.copyFrom(pk)
         timestamp                               = 1L
         blockQueryResponse <- BlockAPI.findBlockWithDeploy[Task](user, timestamp)(
                                Sync[Task],

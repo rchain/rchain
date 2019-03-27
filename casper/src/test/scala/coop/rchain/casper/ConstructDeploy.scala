@@ -11,29 +11,27 @@ import cats._, cats.data._, cats.implicits._
 
 object ConstructDeploy {
 
-  val sec = PrivateKey(
+  private val defaultSec = PrivateKey(
     Base16.unsafeDecode("b18e1d0045995ec3d010c387ccfeb984d783af8fbb0f40fa7db126d889f6dadd")
   )
 
-  val pub = Ed25519.toPublic(sec)
-
-  def sign(deploy: DeployData): DeployData =
+  def sign(deploy: DeployData, sec: PrivateKey = defaultSec): DeployData =
     SignDeployment.sign(sec, deploy, Ed25519)
 
   def sourceDeploy(
       source: String,
       timestamp: Long,
       phlos: Long,
-      deployer: ByteString = ByteString.copyFrom(pub.bytes)
-  ): DeployData =
-    sign(
-      DeployData(
-        deployer = deployer,
-        timestamp = timestamp,
-        term = source,
-        phloLimit = phlos
-      )
+      sec: PrivateKey = defaultSec
+  ): DeployData = {
+    val data = DeployData(
+      deployer = ByteString.copyFrom(Ed25519.toPublic(sec).bytes),
+      timestamp = timestamp,
+      term = source,
+      phloLimit = phlos
     )
+    sign(data, sec)
+  }
 
   def sourceDeployNow(source: String): DeployData =
     sourceDeploy(
@@ -42,17 +40,23 @@ object ConstructDeploy {
       accounting.MAX_VALUE
     )
 
-  def basicDeployData[F[_]: Monad: Time](id: Int): F[DeployData] =
+  def basicDeployData[F[_]: Monad: Time](
+      id: Int,
+      sec: PrivateKey = defaultSec,
+      phlos: Int = accounting.MAX_VALUE
+  ): F[DeployData] =
     Time[F].currentMillis.map { now =>
-      sign(
-        DeployData()
-          .withDeployer(ByteString.copyFrom(pub.bytes))
-          .withTimestamp(now)
-          .withTerm(s"@${id}!($id)")
-          .withPhloLimit(accounting.MAX_VALUE)
-      )
+      val data = DeployData()
+        .withDeployer(ByteString.copyFrom(Ed25519.toPublic(sec).bytes))
+        .withTimestamp(now)
+        .withTerm(s"@${id}!($id)")
+        .withPhloLimit(phlos)
+      sign(data, sec)
     }
 
-  def basicProcessedDeploy[F[_]: Monad: Time](id: Int): F[ProcessedDeploy] =
-    basicDeployData[F](id).map(deploy => ProcessedDeploy(deploy = Some(deploy)))
+  def basicProcessedDeploy[F[_]: Monad: Time](
+      id: Int,
+      sec: PrivateKey = defaultSec
+  ): F[ProcessedDeploy] =
+    basicDeployData[F](id, sec).map(deploy => ProcessedDeploy(deploy = Some(deploy)))
 }
