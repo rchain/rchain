@@ -28,8 +28,9 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
   import GenInstances._
 
   type BindCount     = Int
+  type VarCount      = Int
   type Size          = Int
-  type Env           = (BindCount, Size)
+  type Env           = (BindCount, VarCount, Size)
   type EnvT[F[_], A] = ReaderT[F, Env, A]
   type ArbEnv[A]     = ArbF[EnvT, A]
 
@@ -39,17 +40,20 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
     override def liftF[A](gen: Gen[A]): EnvT[Gen, A] = ReaderT.liftF(gen)
     def ask: EnvT[Gen, Env]                          = ReaderT.ask[Gen, Env]
     def askBindCount: EnvT[Gen, BindCount]           = ReaderT.ask[Gen, Env].map(_._1)
-    def askSize: EnvT[Gen, Size]                     = ReaderT.ask[Gen, Env].map(_._2)
+    def askVarCount: EnvT[Gen, VarCount]             = ReaderT.ask[Gen, Env].map(_._2)
+    def askSize: EnvT[Gen, Size]                     = ReaderT.ask[Gen, Env].map(_._3)
   }
 
   case class Shape(breadth: Int, depths: List[Size]) {
     assert(breadth == depths.length)
   }
 
-  val setSize      = (size: Size) => (env: Env) => (env._1, size)
-  val setBindCount = (bindCount: BindCount) => (env: Env) => (bindCount, env._2)
-  val decreaseSize = (env: Env) => (env._1, env._2 - 1)
-  val addFreeVars  = (freeCount: Int) => (env: Env) => (env._1 + freeCount, env._2)
+  val setSize      = (size: Size) => (env: Env) => (env._1, env._2, size)
+  val setBindCount = (bindCount: BindCount) => (env: Env) => (bindCount, env._2, env._3)
+  val setVarCount  = (varCount: VarCount) => (env: Env) => (env._1, varCount, env._3)
+  val decreaseSize = (env: Env) => (env._1, env._2, env._3 - 1)
+  val addFreeVars = (freeCount: Int) =>
+    (env: Env) => (env._1 + freeCount, env._2 + freeCount, env._3)
 
   implicit val arbFExpr: ArbF[EnvT, Expr] = ArbF[EnvT, Expr](Defer[EnvT[Gen, ?]].defer {
     val genInt: Gen[GInt]       = Gen.chooseNum(-5, 5).map(i => GInt(i.toLong))
@@ -68,17 +72,15 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
 
   implicit val arbFSend: ArbF[EnvT, Send] = ArbF[EnvT, Send](Defer[EnvT[Gen, ?]].defer {
     for {
-      bindCount <- ArbEnv.askBindCount
-      name      <- genName(bindCount)
-      expr      <- ArbF.arbF[EnvT, Expr]
+      name <- genName
+      expr <- ArbF.arbF[EnvT, Expr]
     } yield Send(chan = EVar(BoundVar(name)), data = List(expr))
   })
 
   implicit val arbFReceiveBind: ArbF[EnvT, ReceiveBind] =
     ArbF[EnvT, ReceiveBind](Defer[EnvT[Gen, ?]].defer {
       for {
-        bindCount            <- ArbEnv.askBindCount
-        name                 <- genName(bindCount)
+        name                 <- genName
         r                    <- genPattern(name)
         (pattern, freeCount) = r
       } yield
@@ -101,9 +103,8 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
 
   implicit val arbFMatch: ArbF[EnvT, Match] = ArbF[EnvT, Match](Defer[EnvT[Gen, ?]].defer {
     for {
-      bindCount <- ArbEnv.askBindCount
-      target    <- genName(bindCount)
-      par       <- ReaderT.local(decreaseSize)(ArbF.arbF[EnvT, Par])
+      target <- genName
+      par    <- ReaderT.local(decreaseSize)(ArbF.arbF[EnvT, Par])
       // TODO: Add more match cases
       wildcardCase = MatchCase(pattern = EVar(Wildcard(WildcardMsg())), source = par)
     } yield Match(target = EVar(BoundVar(target)), cases = List(wildcardCase))
@@ -120,10 +121,13 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
                 nSends    = sizes(1)
                 nNews     = sizes(2)
 
-                receives <- genShaped[Receive](nReceives)
-                sends    <- genShaped[Send](nSends)
-                nVars    <- ArbEnv.liftF(Gen.chooseNum(1, 3))
-                news     <- ReaderT.local(setBindCount(nVars))(genShaped[New](nNews))
+                receives  <- genShaped[Receive](nReceives)
+                sends     <- genShaped[Send](nSends)
+                bindCount <- ArbEnv.liftF(Gen.chooseNum(1, 3))
+                varCount  <- ArbEnv.askVarCount
+                news <- ReaderT.local(
+                         setBindCount(bindCount) andThen setVarCount(bindCount + varCount)
+                       )(genShaped[New](nNews))
               } yield Par(sends = sends, receives = receives, news = news)
             } else nil
     } yield par
@@ -171,8 +175,11 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
     } yield Shape(breadth, depths)
   )
 
-  private def genName(bindCount: BindCount): EnvT[Gen, Int] =
-    ArbEnv.liftF(Gen.chooseNum(0, bindCount - 1))
+  private def genName: EnvT[Gen, Int] =
+    for {
+      varCount <- ArbEnv.askVarCount
+      name     <- ArbEnv.liftF(Gen.chooseNum(0, varCount - 1))
+    } yield name
 
   private def genPattern(name: BindCount): EnvT[Gen, (Par, Int)] =
     ArbEnv.liftF(Gen.const((EVar(FreeVar(0)), 1)))
@@ -213,8 +220,8 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
 
   implicit def validExp(implicit ev: ArbEnv[New]): Arbitrary[ValidExp] =
     Arbitrary(
-      // Run with 5 names introduced by initial `new` and a size of 4
-      ev.arb.run((5, 4)).map(ValidExp)
+      // Run with 5 names introduced by initial `new` and a size of 10
+      ev.arb.run((5, 5, 10)).map(ValidExp)
     )
 
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
