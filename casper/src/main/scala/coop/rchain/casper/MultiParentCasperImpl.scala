@@ -575,10 +575,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
     for {
       state          <- Cell[F, CasperState].read
       dependencyFree = state.dependencyDag.dependencyFree.toList
-      dependencyFreeBlocks = seenBlockHashes(state)
+      dependencyFreeAndSeen = seenBlockHashes(state)
         .filter(blockHash => dependencyFree.contains(blockHash))
         .toList
-      attemptsWithDag <- dependencyFreeBlocks.foldM(
+      attemptsWithDag <- dependencyFreeAndSeen.foldM(
                           (
                             List.empty[(BlockMessage, (BlockStatus, BlockDagRepresentation[F]))],
                             dag
