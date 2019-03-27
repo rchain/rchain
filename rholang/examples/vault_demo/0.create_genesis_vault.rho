@@ -11,12 +11,14 @@ in {
   rl!(`rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z`, *RevVaultCh) |
   for (@(_, RevVault) <- RevVaultCh) {
 
+    log!(("0.create_genesis_vault.rho")) |
+
     match "%REV_ADDR" {
       revAddress => {
 
-        log!(("0.create_genesis_vault.rho")) |
         log!(("Using RevAddress:", revAddress, "to obtain a `deployer's-revAddress-bound` vault")) |
 
+        // so far, this call is not secured. This will be changed. Most likely, the method will disappear.
         @RevVault!("findOrCreateGenesisVault", revAddress, 9000, *vaultCh ) |
 
         // most Vault methods return an `Either[String, A] = (false, String) \/ (true, A)`
@@ -25,7 +27,6 @@ in {
           log!(("Genesis vault created")) |
 
           new balanceCh in {
-            // so far, access to genesisVault methods is not secured. This will be changd.
             @vault!("balance", *balanceCh) |
             for (@balance <- balanceCh) {
               log!(("Genesis vault balance is", balance))

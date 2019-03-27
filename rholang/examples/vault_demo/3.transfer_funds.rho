@@ -1,6 +1,5 @@
 new
   rl(`rho:registry:lookup`), RevVaultCh,
-  revVaultkey, withDeployerVaultUnlocked,
   stdout(`rho:io:stdout`), log
 in {
 
@@ -17,14 +16,15 @@ in {
     ) {
       (from, to, amount) => {
 
-        new vaultUnlockedCh in {
-          withDeployerVaultUnlocked!(from, *vaultUnlockedCh) |
-          for (vault <- vaultUnlockedCh) {
+        new vaultCh, revVaultkeyCh in {
+          @RevVault!("findOrCreate", from, *vaultCh) |
+          @RevVault!("deployerAuthKey", *revVaultkeyCh) |
+          for (@(true, vault) <- vaultCh; key <- revVaultkeyCh) {
 
             log!(("Beginning transfer of ", amount, "REV from", from, "to", to)) |
 
             new resultCh in {
-              vault!("transfer", to, amount, *resultCh) |
+              @vault!("transfer", to, amount, *key, *resultCh) |
               for (@result <- resultCh) {
 
                 log!(("Finished transfer of ", amount, "REV to", to, "result was:", result))
@@ -32,23 +32,11 @@ in {
             }
           }
         }
-
-      }
-    } |
-
-    contract withDeployerVaultUnlocked(@revAddress, ret) = {
-      new vaultLockedCh in {
-        @RevVault!("findOrCreate", revAddress, *vaultLockedCh) |
-        for (@(true, vaultLocked) <- vaultLockedCh) {
-          @vaultLocked!("unlock", *ret)
-        }
       }
     }
-
   } |
 
   contract log(@data) = {
     @"DEMO"!(data) | stdout!(data)
   }
 }
-
