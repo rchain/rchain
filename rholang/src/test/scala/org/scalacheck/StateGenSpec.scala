@@ -47,6 +47,7 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
   }
 
   val setSize      = (size: Size) => (env: Env) => (env._1, size)
+  val setBindCount = (bindCount: BindCount) => (env: Env) => (bindCount, env._2)
   val decreaseSize = (env: Env) => (env._1, env._2 - 1)
   val addFreeVars  = (freeCount: Int) => (env: Env) => (env._1 + freeCount, env._2)
 
@@ -113,33 +114,17 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
       size <- ArbEnv.askSize
       par <- if (size > 0) {
               for {
-                // Split size between receives and sends
-                nReceives <- ArbEnv.liftF(Gen.chooseNum(0, size))
-                nSends    = size - nReceives
+                // Split size between receives, sends and news
+                sizes     <- splitSize(3, size)
+                nReceives = sizes.head
+                nSends    = sizes(1)
+                nNews     = sizes(2)
 
-                receives <- if (nReceives > 0) {
-                             for {
-                               shape <- genShape(nReceives)
-                               r <- shape.depths
-                                     .map(
-                                       d => ReaderT.local(setSize(d))(ArbF.arbF[EnvT, Receive])
-                                     )
-                                     .sequence
-                             } yield r
-                           } else emptyList[Receive]
-
-                sends <- if (nSends > 0) {
-                          for {
-                            shape <- genShape(nSends)
-                            s <- shape.depths
-                                  .map(
-                                    d => ReaderT.local(setSize(d))(ArbF.arbF[EnvT, Send])
-                                  )
-                                  .sequence
-                          } yield s
-                        } else emptyList[Send]
-
-              } yield Par(sends = sends, receives = receives)
+                receives <- genShaped[Receive](nReceives)
+                sends    <- genShaped[Send](nSends)
+                nVars    <- ArbEnv.liftF(Gen.chooseNum(1, 3))
+                news     <- ReaderT.local(setBindCount(nVars))(genShaped[New](nNews))
+              } yield Par(sends = sends, receives = receives, news = news)
             } else nil
     } yield par
   })
@@ -151,9 +136,31 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
     } yield New(bindCount = bindCount, p = par)
   })
 
-  private def nil: EnvT[Gen, Par] = ArbEnv.liftF(Gen.const(Par()))
+  private def splitSize(chunks: Int, size: Size): EnvT[Gen, List[Size]] =
+    for {
+      boundaries <- if (chunks < size)
+                     ArbEnv
+                       .liftF(Gen.pick(chunks - 1, 0 until size))
+                       .map(0 +: _ :+ size)
+                       .map(_.sorted)
+                   else
+                     ArbEnv
+                       .liftF(Gen.pick(size - 1, 0 until size))
+                       .map(0 +: _ :+ size)
+                       .map(_.sorted)
+                       .map(List.fill(chunks - size)(0) ++ _)
+      sizes = boundaries.sliding(2).map(pair => pair(1) - pair.head)
+    } yield Random.shuffle(sizes.toList)
 
-  private def emptyList[T]: EnvT[Gen, List[T]] = ArbEnv.liftF(Gen.const(List[T]()))
+  private def genShaped[T](size: Size)(implicit arbFT: ArbF[EnvT, T]): EnvT[Gen, List[T]] =
+    if (size > 0) {
+      for {
+        shape <- genShape(size)
+        listOfT <- shape.depths
+                    .map(d => ReaderT.local(setSize(d))(ArbF.arbF[EnvT, T]))
+                    .sequence
+      } yield listOfT
+    } else emptyList[T]
 
   // Decides how given size is split up between breadth and depth
   private def genShape(size: Size): EnvT[Gen, Shape] = ArbEnv.liftF(
@@ -193,6 +200,10 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
       }
     split(list, chunks, list.size, Nil).reverse
   }
+
+  private def nil: EnvT[Gen, Par] = ArbEnv.liftF(Gen.const(Par()))
+
+  private def emptyList[T]: EnvT[Gen, List[T]] = ArbEnv.liftF(Gen.const(List[T]()))
 
   implicit class RichMatch(val a: EnvT[Gen, Match]) {
     def asPar(): EnvT[Gen, Par] = a.map(m => Par(matches = List(m)))
