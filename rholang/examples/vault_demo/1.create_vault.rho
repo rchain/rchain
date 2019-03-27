@@ -20,7 +20,7 @@ in {
         @RevVault!("findOrCreate", publicKey.hexToBytes(), *vaultLockedCh) |
         revAddress!("fromPublicKey", publicKey.hexToBytes(), *revAddressCh) |
     
-        for (@("Right", vaultLocked) <- vaultLockedCh; @revAddress <- revAddressCh) {
+        for (@(true, vaultLocked) <- vaultLockedCh; @revAddress <- revAddressCh) {
           log!(("Vault for publicKey / RevAddress", publicKey, "/", revAddress, "created, trying to use it")) |
     
           new balanceCh in {

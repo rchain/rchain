@@ -15,10 +15,9 @@ in {
 
       log!(("Using public key:", pubKey, "to obtain a `deployer's-pubkey-bound` vault")) |
 
-      // most RevVault methods return an `Either[String, A] = ("Left", String) \/ ("Right", A)`
-      // the Either type is going to be restated as `Either[String, A] = (false, String) \/ (true, A)`
+      // most RevVault methods return an `Either[String, A] = (false, String) \/ (true, A)`
       @RevVault!("findOrCreate", pubKey, *vaultLockedCh) |
-      for (@("Right", vaultLocked) <- vaultLockedCh) {
+      for (@(true, vaultLocked) <- vaultLockedCh) {
 
         log!("Unlocking vault") |
 

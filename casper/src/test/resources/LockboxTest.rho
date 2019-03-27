@@ -1,59 +1,74 @@
-new
-  rl(`rho:registry:lookup`), RhoSpecCh,
-  LockboxCh,
-  setDeployData(`rho:test:deploy:set`),
-  stdlog(`rho:io:stdlog`),
-  setup,
-  test_same_deployer, test_different_deployer,
-  ackCh,
-  protectedChannel
-in {
-  stdlog!("info", "Starting Lockbox test") |
-  rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *RhoSpecCh) |
-  rl!(`rho:id:9dsr55z1js13x346yhhecx66ns486i3yqf6jafrd9p9hdrrbxjqmyu`, *LockboxCh) |
-  for(@(_, RhoSpec) <- RhoSpecCh; @(_, Lockbox) <- LockboxCh) {
-    stdlog!("info", "RhoSpec and Lockbox found") |
-    @RhoSpec!("testSuite", *setup,
-      [
-        ("If the deployer is the same then the lockbox returns the protected channel", *test_same_deployer),
-        ("If the deployer is different then the lockbox returns Nil", *test_different_deployer)
-      ]) |
+// Match a list of known valid publicKey -> RevAddress pairs to bind them to veriables
+match (
+    "1111111111111111111111111111111111111111111111111111111111111111".hexToBytes(),
+    "11112comWwT626KfXkvnWRHDwPDm4VefqSr6ijvinhVHGTuXe6wWmk",
+    "2222222222222222222222222222222222222222222222222222222222222222".hexToBytes(),
+    "11112ipm5NY9BqyQ3p3sUx8pdFWV5jFQ5qqMcUzZWe19hwz3USbHBG"
+) {
+  (
+    alicePubKey,
+    aliceRevAddress,
+    bobPubKey,
+    bobRevAddress
+  ) => {
+    new
+      rl(`rho:registry:lookup`), RhoSpecCh,
+      LockboxCh,
+      setDeployData(`rho:test:deploy:set`),
+      stdlog(`rho:io:stdlog`),
+      setup,
+      test_same_deployer, test_different_deployer,
+      ackCh,
+      protectedChannel
+    in {
+      stdlog!("info", "Starting Lockbox test") |
+      rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *RhoSpecCh) |
+      rl!(`rho:id:9dsr55z1js13x346yhhecx66ns486i3yqf6jafrd9p9hdrrbxjqmyu`, *LockboxCh) |
+      for(@(_, RhoSpec) <- RhoSpecCh; @(_, Lockbox) <- LockboxCh) {
+        stdlog!("info", "RhoSpec and Lockbox found") |
+        @RhoSpec!("testSuite", *setup,
+          [
+            ("If the deployer is the same then the lockbox returns the protected channel", *test_same_deployer),
+            ("If the deployer is different then the lockbox returns Nil", *test_different_deployer)
+          ]) |
 
-    contract setup(returnCh) = {
-      new privateCh in {
-        setDeployData ! ("userId", "0000".hexToBytes(), *privateCh) |
-        for (_ <- privateCh) {
-          @Lockbox ! ("lock", "1010".hexToBytes(), *protectedChannel, *returnCh)
-        }
-      }
-    } |
+        contract setup(returnCh) = {
+          new privateCh in {
+            setDeployData ! ("userId", alicePubKey, *privateCh) |
+            for (_ <- privateCh) {
+              @Lockbox ! ("lock", aliceRevAddress, *protectedChannel, *returnCh)
+            }
+          }
+        } |
 
-    contract test_same_deployer(rhoSpec, box, ackCh) = {
-      new retCh in {
-        stdlog!("info", "Test same deployer...") |
-        setDeployData ! ("userId", "1010".hexToBytes(), *retCh) |
-        for (_ <- retCh) {
-          stdlog !("info", "Same userId set") |
-          box !("unlock", *retCh) |
-          rhoSpec!("assert",
-            (*protectedChannel, "== <-", *retCh),
-            "access should be allowed",
-            *ackCh)
-        }
-      }
-    } |
+        contract test_same_deployer(rhoSpec, box, ackCh) = {
+          new retCh in {
+            stdlog!("info", "Test same deployer...") |
+            setDeployData ! ("userId", alicePubKey, *retCh) |
+            for (_ <- retCh) {
+              stdlog !("info", "Same userId set") |
+              box !("unlock", *retCh) |
+              rhoSpec!("assert",
+                (*protectedChannel, "== <-", *retCh),
+                "access should be allowed",
+                *ackCh)
+            }
+          }
+        } |
 
-    contract test_different_deployer(rhoSpec, box, ackCh) = {
-      new retCh in {
-        stdlog!("info", "Test different deployer...") |
-        setDeployData ! ("userId", "F0F0".hexToBytes(), *retCh) |
-        for (_ <- retCh) {
-          stdlog !("info", "New userId set") |
-          box !("unlock", *retCh) |
-          rhoSpec!("assert",
-            (Nil, "== <-", *retCh),
-            "because access should be denied",
-            *ackCh)
+        contract test_different_deployer(rhoSpec, box, ackCh) = {
+          new retCh in {
+            stdlog!("info", "Test different deployer...") |
+            setDeployData ! ("userId", bobPubKey, *retCh) |
+            for (_ <- retCh) {
+              stdlog !("info", "New userId set") |
+              box !("unlock", *retCh) |
+              rhoSpec!("assert",
+                (Nil, "== <-", *retCh),
+                "because access should be denied",
+                *ackCh)
+            }
+          }
         }
       }
     }

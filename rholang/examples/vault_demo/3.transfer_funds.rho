@@ -37,7 +37,7 @@ in {
         getDeployerPubKey!(*deployerPubKey) |
         for (@pubKey <- deployerPubKey) {
           @RevVault!("findOrCreate", pubKey, *vaultLockedCh) |
-          for (@("Right", vaultLocked) <- vaultLockedCh) {
+          for (@(true, vaultLocked) <- vaultLockedCh) {
             @vaultLocked!("unlock", *ret)
           }
         }
