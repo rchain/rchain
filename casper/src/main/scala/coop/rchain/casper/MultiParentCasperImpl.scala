@@ -190,7 +190,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
       for {
         dag       <- blockDag
         tipHashes <- estimator(dag)
-        p         <- chooseNonConflicting[F](tipHashes, dag)
+        p         <- EstimatorHelper.chooseNonConflicting[F](tipHashes, dag)
         _ <- Log[F].info(
               s"${p.size} parents out of ${tipHashes.size} latest blocks will be used."
             )

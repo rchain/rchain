@@ -503,7 +503,7 @@ object Validate {
     for {
       latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure[F]
       tipHashes            <- Estimator.tips[F](dag, genesis, latestMessagesHashes)
-      computedParents      <- ProtoUtil.chooseNonConflicting[F](tipHashes, dag)
+      computedParents      <- EstimatorHelper.chooseNonConflicting[F](tipHashes, dag)
       computedParentHashes = computedParents.map(_.blockHash)
       status <- if (parentHashes == computedParentHashes) {
                  Applicative[F].pure(Right(Valid))
