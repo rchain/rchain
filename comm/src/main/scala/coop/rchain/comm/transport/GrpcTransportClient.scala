@@ -78,16 +78,6 @@ class GrpcTransportClient(
           }
     } yield c
 
-  private def createStub(
-      peer: PeerNode,
-      timeout: FiniteDuration,
-      enforce: Boolean
-  ): Task[RoutingGrpcMonix.TransportLayer] =
-    for {
-      channel <- cache.connection(peer, enforce)
-      stub    <- Task.delay(RoutingGrpcMonix.stub(channel).withDeadlineAfter(timeout))
-    } yield stub
-
   def disconnect(peer: PeerNode): Task[Unit] =
     cache.modify { s =>
       s.connections
@@ -99,21 +89,18 @@ class GrpcTransportClient(
         } map kp(s.copy(connections = s.connections - peer))
     }
 
-  private def withClient[A](peer: PeerNode, timeout: FiniteDuration, enforce: Boolean)(
+  private def withClient[A](peer: PeerNode, timeout: FiniteDuration)(
       request: GrpcTransport.Request[A]
   ): Task[CommErr[A]] =
     (for {
-      stub   <- createStub(peer, timeout, enforce)
-      result <- request(stub)
-      _      <- Task.unit.asyncBoundary // return control to caller thread
-    } yield result).attempt.flatMap {
-      case Right(result @ Left(PeerUnavailable(_))) => disconnect(peer).map(kp(result))
-      case Right(result)                            => Task.now(result)
-      case Left(e)                                  => Task.now(Left(protocolException(e)))
-    }
+      channel <- clientChannel(peer)
+      stub    <- Task.delay(RoutingGrpcMonix.stub(channel).withDeadlineAfter(timeout))
+      result  <- request(stub).doOnFinish(kp(Task.delay(channel.shutdown()).attempt.void))
+      _       <- Task.unit.asyncBoundary // return control to caller thread
+    } yield result).attempt.map(_.fold(e => Left(protocolException(e)), identity))
 
   def send(peer: PeerNode, msg: Protocol): Task[CommErr[Unit]] =
-    withClient(peer, DefaultSendTimeout, enforce = false)(GrpcTransport.send(peer, msg))
+    withClient(peer, DefaultSendTimeout)(GrpcTransport.send(peer, msg))
 
   def broadcast(peers: Seq[PeerNode], msg: Protocol): Task[Seq[CommErr[Unit]]] =
     Task.gatherUnordered(peers.map(send(_, msg)))
@@ -142,7 +129,7 @@ class GrpcTransportClient(
       if (retryCount > 0)
         PacketOps.restore[Task](path) >>= {
           case Right(packet) =>
-            withClient(peer, timeout(packet), enforce = false)(
+            withClient(peer, timeout(packet))(
               GrpcTransport.stream(peer, Blob(sender, packet), packetChunkSize)
             ).flatMap {
               case Left(error @ PeerUnavailable(_)) =>
@@ -203,8 +190,7 @@ class GrpcTransportClient(
       Task.gatherUnordered(
         peers
           .map(
-            peer =>
-              withClient(peer, DefaultSendTimeout, enforce = true)(GrpcTransport.send(peer, msg))
+            peer => withClient(peer, DefaultSendTimeout)(GrpcTransport.send(peer, msg))
           )
       )
 

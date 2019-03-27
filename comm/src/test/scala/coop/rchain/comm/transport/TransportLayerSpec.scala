@@ -70,49 +70,6 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
         }
     }
 
-    "shutting down" when {
-
-      "sending a message" should {
-        "not send the message" in
-          new TwoNodesRuntime[CommErr[Unit]]() {
-            def execute(
-                transportLayer: TransportLayer[F],
-                transportLayerShutdown: TransportLayerShutdown[F],
-                local: PeerNode,
-                remote: PeerNode
-            ): F[CommErr[Unit]] =
-              for {
-                _ <- transportLayerShutdown(ProtocolHelper.disconnect(local))
-                r <- sendHeartbeat(transportLayer, local, remote)
-              } yield r
-
-            run(false)
-            protocolDispatcher.received shouldBe 'empty
-          }
-      }
-
-      "broadcasting a message" should {
-        "not send any messages" in
-          new ThreeNodesRuntime[Seq[CommErr[Unit]]]() {
-            def execute(
-                transportLayer: TransportLayer[F],
-                transportLayerShutdown: TransportLayerShutdown[F],
-                local: PeerNode,
-                remote1: PeerNode,
-                remote2: PeerNode
-            ): F[Seq[CommErr[Unit]]] =
-              for {
-                _ <- transportLayerShutdown(ProtocolHelper.disconnect(local))
-                r <- broadcastHeartbeat(transportLayer, local, remote1, remote2)
-              } yield r
-
-            run(false)
-            protocolDispatcher.received shouldBe 'empty
-          }
-      }
-
-    }
-
     val bigContent: ByteString = {
       val b = 128.toByte
       ProtocolHelper.toProtocolBytes(
