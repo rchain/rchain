@@ -11,7 +11,7 @@ class RevVaultSpec
       Seq(
         StandardDeploys.nonNegativeNumber,
         StandardDeploys.makeMint,
-        StandardDeploys.lockbox,
+        StandardDeploys.authKey,
         StandardDeploys.either,
         StandardDeploys.revVault
       ),
