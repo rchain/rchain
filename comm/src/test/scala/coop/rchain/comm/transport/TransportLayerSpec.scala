@@ -26,7 +26,6 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
         new TwoNodesRuntime[CommErr[Unit]]() {
           def execute(
               transportLayer: TransportLayer[F],
-              transportLayerShutdown: TransportLayerShutdown[F],
               local: PeerNode,
               remote: PeerNode
           ): F[CommErr[Unit]] = sendHeartbeat(transportLayer, local, remote)
@@ -47,7 +46,6 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
         new ThreeNodesRuntime[Seq[CommErr[Unit]]]() {
           def execute(
               transportLayer: TransportLayer[F],
-              transportLayerShutdown: TransportLayerShutdown[F],
               local: PeerNode,
               remote1: PeerNode,
               remote2: PeerNode
@@ -82,7 +80,6 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
         new TwoNodesRuntime[Unit]() {
           def execute(
               transportLayer: TransportLayer[F],
-              transportLayerShutdown: TransportLayerShutdown[F],
               local: PeerNode,
               remote: PeerNode
           ): F[Unit] =
@@ -104,7 +101,6 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
         new ThreeNodesRuntime[Unit]() {
           def execute(
               transportLayer: TransportLayer[F],
-              transportLayerShutdown: TransportLayerShutdown[F],
               local: PeerNode,
               remote1: PeerNode,
               remote2: PeerNode
@@ -119,10 +115,10 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
           streamDispatcher.received should have length 2
           val (_, blob1) = streamDispatcher.received(0)
           val (_, blob2) = streamDispatcher.received(1)
-          blob1.packet.typeId shouldBe ("N/A")
-          blob1.packet.content shouldBe (bigContent)
-          blob2.packet.typeId shouldBe ("N/A")
-          blob2.packet.content shouldBe (bigContent)
+          blob1.packet.typeId shouldBe "N/A"
+          blob1.packet.content shouldBe bigContent
+          blob2.packet.typeId shouldBe "N/A"
+          blob2.packet.content shouldBe bigContent
         }
       }
 
