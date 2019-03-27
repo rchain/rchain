@@ -31,11 +31,11 @@ in {
       @MakeMint!(*mintCh) |
       for (mint <- mintCh) {
 
-        //FIXME the result of createGenesisVault is not protected, nor is the call to it. Both should be.
-        contract RevVault(@"createGenesisVault", @ownerPubKeyBytes, @initialAmount, ret) = {
-          new createGenesisVault in {
-            _getOrCreate!(ownerPubKeyBytes, *createGenesisVault, *ret) |
-            for (retCh <- createGenesisVault) {
+        //FIXME the result of findOrCreateGenesisVault is not protected, nor is the call to it. Both should be.
+        contract RevVault(@"findOrCreateGenesisVault", @ownerPubKeyBytes, @initialAmount, ret) = {
+          new findOrCreateGenesisVault in {
+            _getOrCreate!(ownerPubKeyBytes, *findOrCreateGenesisVault, *ret) |
+            for (retCh <- findOrCreateGenesisVault) {
 
               _makeVault!(ownerPubKeyBytes, initialAmount, *retCh)
             }

@@ -50,6 +50,7 @@ object ConfigMapper {
         add(keys.MapSize, run.mapSize)
         add(keys.MaxConnections, run.maxNumOfConnections)
         add(keys.MaxMessageSize, run.maxMessageSize)
+        add(keys.PacketChunkSize, run.packetChunkSize)
         add(keys.MessageConsumers, run.messageConsumers)
       }
 

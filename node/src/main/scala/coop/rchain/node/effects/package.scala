@@ -57,6 +57,7 @@ package object effects {
       certPath: Path,
       keyPath: Path,
       maxMessageSize: Int,
+      packetChunkSize: Int,
       folder: Path
   )(
       implicit scheduler: Scheduler,
@@ -68,7 +69,7 @@ package object effects {
       Task.delay {
         val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
         val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
-        new GrpcTransportClient(cert, key, maxMessageSize, folder, 1000)
+        new GrpcTransportClient(cert, key, maxMessageSize, packetChunkSize, folder, 1000)
       }
 
     for {

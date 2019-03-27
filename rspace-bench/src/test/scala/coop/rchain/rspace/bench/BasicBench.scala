@@ -145,11 +145,7 @@ object BasicBench {
         )
         .unsafeRunSync
 
-    implicit val cost: _cost[Task] = loggingCost(
-      CostAccounting.of[Task](Cost.UNSAFE_MAX).unsafeRunSync,
-      noOpCostLog
-    )
-
+    implicit val cost    = CostAccounting.initialCost[Task](Cost.UNSAFE_MAX).unsafeRunSync
     implicit val matcher = matchListPar
 
     val initSeed = 123456789L

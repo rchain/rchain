@@ -42,9 +42,9 @@ abstract class WideBenchBaseState {
 
   def createRuntime(): Runtime[Task] =
     (for {
-      costAccounting <- CostAccounting.empty[Task]
+      cost <- CostAccounting.emptyCost[Task]
       runtime <- {
-        implicit val cost: _cost[Task] = loggingCost(costAccounting, noOpCostLog)
+        implicit val c: _cost[Task] = cost
         Runtime.create[Task, Task.Par](dbDir, mapSize, StoreType.LMDB)
       }
     } yield (runtime)).unsafeRunSync

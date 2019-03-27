@@ -49,7 +49,8 @@ object Genesis {
       StandardDeploys.walletCheck,
       StandardDeploys.systemInstances,
       StandardDeploys.lockbox,
-      StandardDeploys.rev(wallets, faucetCode, posParams)
+      StandardDeploys.rev(wallets, faucetCode, posParams),
+      StandardDeploys.revVault
     )
 
   def withContracts[F[_]: Concurrent](

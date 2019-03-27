@@ -22,6 +22,7 @@ final case object EncryptionHandshakeIncorrectlySigned              extends Comm
 final case object BootstrapNotProvided                              extends CommError
 final case class PeerNodeNotFound(peer: PeerNode)                   extends CommError
 final case class PeerUnavailable(peer: PeerNode)                    extends CommError
+final case class MessageToLarge(peer: PeerNode)                     extends CommError
 final case class MalformedMessage(pm: Protocol)                     extends CommError
 final case object CouldNotConnectToBootstrap                        extends CommError
 final case class InternalCommunicationError(msg: String)            extends CommError
@@ -54,6 +55,7 @@ object CommError {
   def headerNotAvailable: CommError                      = HeaderNotAvailable
   def peerNodeNotFound(peer: PeerNode): CommError        = PeerNodeNotFound(peer)
   def peerUnavailable(peer: PeerNode): CommError         = PeerUnavailable(peer)
+  def messageToLarge(peer: PeerNode): CommError          = MessageToLarge(peer)
   def publicKeyNotAvailable(peer: PeerNode): CommError   = PublicKeyNotAvailable(peer)
   def couldNotConnectToBootstrap: CommError              = CouldNotConnectToBootstrap
   def internalCommunicationError(msg: String): CommError = InternalCommunicationError(msg)
@@ -71,6 +73,7 @@ object CommError {
   def errorMessage(ce: CommError): String =
     ce match {
       case PeerUnavailable(_) => "Peer is currently unavailable"
+      case MessageToLarge(p)  => s"Message rejected by peer $p because it was too large"
       case PongNotReceivedForPing(_) =>
         "Peer is behind a firewall and can't be accessed from outside"
       case CouldNotConnectToBootstrap      => "Node could not connect to bootstrap node"

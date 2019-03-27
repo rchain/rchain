@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter
 
+import cats.effect.concurrent.Semaphore
 import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
@@ -35,11 +36,16 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     val substTerm         = term(Expr(GString("1")))
     val termCost          = Chargeable[Par].cost(substTerm)
     val initCost          = Cost(1000)
-    implicit val costAlg: _cost[Coeval] =
-      loggingCost(CostAccounting.of[Coeval](initCost).value, noOpCostLog)
-    val res = Substitute.charge(Coeval.pure(substTerm), Cost(10000)).attempt.value
-    assert(res === Right(substTerm))
-    assert(costAlg.get() === (initCost - Cost(termCost)))
+    (for {
+      cost <- CostAccounting.initialCost[Task](initCost)
+      res <- {
+        implicit val c = cost
+        Substitute.charge(Task.now(substTerm), Cost(10000)).attempt
+      }
+      _         = assert(res === Right(substTerm))
+      finalCost <- cost.get
+      _         = assert(finalCost === (initCost - Cost(termCost)))
+    } yield ()).runSyncUnsafe(5.seconds)
   }
 
   it should "charge for failed substitution" in {
@@ -47,15 +53,19 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     val varTerm           = term(Expr(EVarBody(EVar(Var(FreeVar(0))))))
     val originalTermCost  = Chargeable[Par].cost(varTerm)
     val initCost          = Cost(1000)
-    implicit val costAlg: _cost[Coeval] =
-      loggingCost(CostAccounting.of[Coeval](initCost).value, noOpCostLog)
 
-    val res = Substitute
-      .charge(Coeval.raiseError[Par](new RuntimeException("")), Cost(originalTermCost))
-      .attempt
-      .value
-    assert(res.isLeft)
-    assert(costAlg.get() === (initCost - Cost(originalTermCost)))
+    (for {
+      cost <- CostAccounting.initialCost[Task](initCost)
+      res <- {
+        implicit val c = cost
+        Substitute
+          .charge(Task.raiseError[Par](new RuntimeException("")), Cost(originalTermCost))
+          .attempt
+      }
+      _         = assert(res.isLeft)
+      finalCost <- cost.get
+      _         = assert(finalCost === (initCost - Cost(originalTermCost)))
+    } yield ()).runSyncUnsafe(5.seconds)
   }
 
   it should "stop if OutOfPhloError is returned from RSpace" in {
@@ -77,11 +87,10 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
 
     implicit val errorLog = new ErrorLog[Task]()
     implicit val rand     = Blake2b512Random(128)
-    implicit val costAlg: _cost[Task] =
-      loggingCost(CostAccounting.of[Task](Cost(1000)).runSyncUnsafe(1.second), noOpCostLog)
-    val reducer = new DebruijnInterpreter[Task, Task.Par](tuplespaceAlg, Map.empty)
-    val send    = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
-    val test    = reducer.inj(send).attempt.runSyncUnsafe(1.second)
+    implicit val cost     = CostAccounting.initialCost[Task](Cost(1000)).runSyncUnsafe(1.second)
+    val reducer           = new DebruijnInterpreter[Task, Task.Par](tuplespaceAlg, Map.empty)
+    val send              = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
+    val test              = reducer.inj(send).attempt.runSyncUnsafe(1.second)
     assert(test === Left(OutOfPhlogistonsError))
   }
 
@@ -110,11 +119,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
       )
     ] = {
 
-      implicit val cost: _cost[Task] =
-        (for {
-          costAlg <- CostAccounting.of[Task](Cost(0))
-        } yield loggingCost(costAlg, noOpCostLog[Task]))
-          .runSyncUnsafe(1.second)
+      implicit val cost = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
 
       lazy val (_, reducer, _) =
         RholangAndScalaDispatcher

@@ -43,14 +43,21 @@ class TcpTransportLayerSpec
       TcpTlsEnvironment(host, port, cert, key, peer)
     }
 
-  def maxMessageSize: Int = 4 * 1024 * 1024
+  val maxMessageSize: Int = 256 * 1024
 
   def createTransportLayer(
       env: TcpTlsEnvironment
   ): Task[(TransportLayer[Task], TransportLayerShutdown[Task])] =
     for {
       client <- CachedConnections[Task, TcpConnTag].map { implicit cache =>
-                 new GrpcTransportClient(env.cert, env.key, 4 * 1024 * 1024, tempFolder, 100)
+                 new GrpcTransportClient(
+                   env.cert,
+                   env.key,
+                   maxMessageSize,
+                   maxMessageSize,
+                   tempFolder,
+                   100
+                 )
                }
       _ <- client.start()
     } yield (client, new TransportLayerShutdown(client.shutdown))
@@ -62,7 +69,7 @@ class TcpTransportLayerSpec
 
   def createTransportLayerServer(env: TcpTlsEnvironment): Task[TransportLayerServer[Task]] =
     Task.delay {
-      new GrpcTransportServer(env.port, env.cert, env.key, 4 * 1024 * 1024, tempFolder, 4)
+      new GrpcTransportServer(env.port, env.cert, env.key, maxMessageSize, tempFolder, 4)
     }
 }
 

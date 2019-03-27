@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter
 
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256, Sha256}
@@ -39,7 +39,7 @@ object SystemProcesses {
   def apply[F[_]](
       dispatcher: Dispatch[F, ListParWithRandom, TaggedContinuation],
       space: RhoISpace[F]
-  )(implicit F: Sync[F]): SystemProcesses[F] =
+  )(implicit F: Concurrent[F]): SystemProcesses[F] =
     new SystemProcesses[F] {
 
       type ContWithMetaData = ContResult[Par, BindPattern, TaggedContinuation]

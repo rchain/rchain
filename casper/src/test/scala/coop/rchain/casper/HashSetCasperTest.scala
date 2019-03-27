@@ -16,7 +16,7 @@ import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.helper.{BlockDagStorageTestFixture, BlockUtil, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.{BondingUtil, ProtoUtil}
-import coop.rchain.casper.util.ProtoUtil.{chooseNonConflicting, signBlock, toJustification}
+import coop.rchain.casper.util.ProtoUtil.{signBlock, toJustification}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
 import coop.rchain.catscontrib.TaskContrib.TaskOps
