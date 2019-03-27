@@ -81,15 +81,6 @@ object Connect {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def freeConnectionSlots[F[_]: Monad: ConnectionsCell: RPConfAsk]: F[Int] =
-    for {
-      connections <- ConnectionsCell[F].read
-      max         <- RPConfAsk[F].reader(_.clearConnections.maxNumOfConnections)
-    } yield max - connections.length
-
-  def hasMaxNumberOfConnections[F[_]: Monad: ConnectionsCell: RPConfAsk]: F[Boolean] =
-    freeConnectionSlots[F].map(_ <= 0)
-
   def clearConnections[F[_]: Sync: Monad: Time: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]
     : F[Int] = {
 
@@ -132,35 +123,29 @@ object Connect {
       } yield result
     }
 
-  def findAndConnect[F[_]: Sync: Monad: Log: Time: Metrics: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
+  def findAndConnect[F[_]: Monad: Log: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
       conn: (PeerNode, FiniteDuration) => F[Unit]
-  ): F[List[PeerNode]] = {
-    def find(): F[List[PeerNode]] =
-      for {
-        count             <- freeConnectionSlots[F]
-        connections       <- ConnectionsCell[F].read.map(_.toSet)
-        tout              <- RPConfAsk[F].reader(_.defaultTimeout)
-        ndPeers           <- NodeDiscovery[F].peers
-        peers             = Random.shuffle(ndPeers).toStream.filterNot(connections.contains).take(count).toList
-        responses         <- peers.traverse(p => ErrorHandler[F].attempt(conn(p, tout)))
-        peersAndResponses = peers.zip(responses)
-        _ <- peersAndResponses.traverse {
-              case (peer, Left(error)) =>
-                Log[F].debug(s"Failed to connect to ${peer.toAddress}. Reason: ${error.message}")
-              case _ => ().pure[F]
-            }
-      } yield peersAndResponses.filter(_._2.isRight).map(_._1)
+  ): F[List[PeerNode]] =
+    for {
+      connections       <- ConnectionsCell[F].read.map(_.toSet)
+      tout              <- RPConfAsk[F].reader(_.defaultTimeout)
+      peers             <- NodeDiscovery[F].peers.map(_.filterNot(connections.contains).toList)
+      responses         <- peers.traverse(p => ErrorHandler[F].attempt(conn(p, tout)))
+      peersAndResponses = peers.zip(responses)
+      _ <- peersAndResponses.traverse {
+            case (peer, Left(error)) =>
+              Log[F].debug(s"Failed to connect to ${peer.toAddress}. Reason: ${error.message}")
+            case _ => ().pure[F]
+          }
+    } yield peersAndResponses.filter(_._2.isRight).map(_._1)
 
-    hasMaxNumberOfConnections[F].ifM(List.empty[PeerNode].pure[F], find())
-  }
-
-  def connect[F[_]: Sync: Monad: Log: Time: Metrics: TransportLayer: ErrorHandler: ConnectionsCell: RPConfAsk](
+  def connect[F[_]: Monad: Log: Metrics: TransportLayer: ErrorHandler: RPConfAsk](
       peer: PeerNode,
       timeout: FiniteDuration
   ): F[Unit] =
     (
       for {
-        address  <- Sync[F].delay(peer.toAddress)
+        address  <- peer.toAddress.pure[F]
         _        <- Log[F].debug(s"Connecting to $address")
         _        <- Metrics[F].incrementCounter("connect")
         _        <- Log[F].debug(s"Initialize protocol handshake to $address")
