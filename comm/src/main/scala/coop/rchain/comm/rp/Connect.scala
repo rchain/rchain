@@ -68,6 +68,14 @@ object Connect {
         newConnections.pure[F]
       }
 
+      def refreshConn[F[_]: Monad](connection: Connection): F[Connections] = {
+        val newConnections = connections.partition(_.id == connection.id) match {
+          case (peer, rest) if peer.isEmpty => rest
+          case (peer, rest)                 => rest ++ peer
+        }
+        newConnections.pure[F]
+      }
+
       def reportConn[F[_]: Monad: Log: Metrics]: F[Connections] = {
         val size = connections.size.toLong
         Log[F].info(s"Peers: $size") >>
@@ -112,8 +120,7 @@ object Connect {
 
     for {
       connections <- ConnectionsCell[F].read
-      max         <- RPConfAsk[F].reader(_.maxNumOfConnections)
-      cleared     <- if (connections.size > ((max * 2) / 3)) clear(connections) else 0.pure[F]
+      cleared     <- clear(connections)
       _           <- if (cleared > 0) ConnectionsCell[F].read >>= (_.reportConn[F]) else connections.pure[F]
     } yield cleared
   }

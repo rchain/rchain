@@ -91,9 +91,11 @@ object HandleMessages {
       _        <- ConnectionsCell[F].flatModify(_.addConnAndReport[F](peer))
     } yield handledWithoutMessage
 
-  def handleHeartbeat[F[_]: Monad: Time: TransportLayer: ErrorHandler: RPConfAsk](
+  def handleHeartbeat[F[_]: Monad: ConnectionsCell](
       peer: PeerNode,
       heartbeat: Heartbeat
-  ): F[CommunicationResponse] = handledWithoutMessage.pure[F]
-
+  ): F[CommunicationResponse] =
+    ConnectionsCell[F]
+      .flatModify(_.refreshConn[F](peer))
+      .map(kp(handledWithoutMessage))
 }
