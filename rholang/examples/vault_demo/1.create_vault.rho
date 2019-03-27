@@ -1,8 +1,8 @@
 // A tesetnet admin will create vaults for you if you don't have a friend on-chain already
 
 new
-  rl(`rho:registry:lookup`), revAddress(`rho:rev:address`), RevVaultCh,
-  vaultLockedCh, revAddressCh, vaultLockedCh,
+  rl(`rho:registry:lookup`), RevVaultCh,
+  vaultLockedCh,
   stdout(`rho:io:stdout`), log
 in {
 
@@ -11,17 +11,16 @@ in {
 
     log!(("1.create_vault.rho")) |
 
-    // CHANGE THE PUBLIC KEY HERE vvv
-    match "%PUB_KEY" {
-      publicKey => {
+    // REPLACE THE REV ADDRESS HERE vvv
+    match "%REV_ADDR" {
+      revAddress => {
 
-        log!(("Creating vault for publicKey", publicKey)) |
+        log!(("Creating vault for publicKey", revAddress)) |
   
-        @RevVault!("findOrCreate", publicKey.hexToBytes(), *vaultLockedCh) |
-        revAddress!("fromPublicKey", publicKey.hexToBytes(), *revAddressCh) |
-    
-        for (@(true, vaultLocked) <- vaultLockedCh; @revAddress <- revAddressCh) {
-          log!(("Vault for publicKey / RevAddress", publicKey, "/", revAddress, "created, trying to use it")) |
+        @RevVault!("findOrCreate", revAddress, *vaultLockedCh) |
+
+        for (@(true, vaultLocked) <- vaultLockedCh) {
+          log!(("Vault for RevAddress", revAddress, "created, trying to use it")) |
     
           new balanceCh in {
             @vaultLocked!("balance", *balanceCh) |

@@ -1,6 +1,6 @@
 new
-  revAddress(`rho:rev:address`), rl(`rho:registry:lookup`), RevVaultCh, getDeployData(`rho:deploy:params`),
-  getDeployerPubKey, deployerPubKeyCh, vaultLockedCh, vaultUnlockedCh, balanceCh,
+  rl(`rho:registry:lookup`), RevVaultCh,
+  vaultLockedCh, vaultUnlockedCh, balanceCh,
   stdout(`rho:io:stdout`), log
 in {
 
@@ -10,31 +10,33 @@ in {
 
     log!(("2.access_your_own_vault.rho")) |
 
-    getDeployerPubKey!(*deployerPubKeyCh) |
-    for (@pubKey <- deployerPubKeyCh) {
+    // REPLACE THE REV ADDRESS HERE vvv
+    match "%REV_ADDR" {
+      revAddress => {
 
-      log!(("Using public key:", pubKey, "to obtain a `deployer's-pubkey-bound` vault")) |
+        log!(("Using RevAddress:", revAddress, "to obtain a `deployer's-pubkey-bound` vault")) |
 
-      // most RevVault methods return an `Either[String, A] = (false, String) \/ (true, A)`
-      @RevVault!("findOrCreate", pubKey, *vaultLockedCh) |
-      for (@(true, vaultLocked) <- vaultLockedCh) {
+        // most RevVault methods return an `Either[String, A] = (false, String) \/ (true, A)`
+        @RevVault!("findOrCreate", revAddress, *vaultLockedCh) |
+        for (@(true, vaultLocked) <- vaultLockedCh) {
 
-        log!("Unlocking vault") |
+          log!("Unlocking vault") |
 
-        @vaultLocked!("unlock", *vaultUnlockedCh) |
-        for (@res <- vaultUnlockedCh) {
+          @vaultLocked!("unlock", *vaultUnlockedCh) |
+          for (@res <- vaultUnlockedCh) {
 
-          match (res) {
-            Nil => {
-              log!("Unlocking failed")
-            }
-            vault => {
-              log!("Unlocking succeeded") |
+            match (res) {
+              Nil => {
+                log!("Unlocking failed")
+              }
+              vault => {
+                log!("Unlocking succeeded") |
 
-              @vault!("balance", *balanceCh) |
-              for (@balance <- balanceCh) {
+                @vault!("balance", *balanceCh) |
+                for (@balance <- balanceCh) {
 
-                log!(("Balance is", balance))
+                  log!(("Balance is", balance))
+                }
               }
             }
           }
@@ -42,16 +44,6 @@ in {
       }
     }
 
-  } |
-
-  contract getDeployerPubKey(retCh) = {
-    new ch in {
-      getDeployData!(*ch) |
-      for (_, _, @pubKey, _ <- ch) {
-        log!(("Deployer public key is:", pubKey)) |
-        retCh!(pubKey)
-      }
-    }
   } |
 
   contract log(@data) = {
