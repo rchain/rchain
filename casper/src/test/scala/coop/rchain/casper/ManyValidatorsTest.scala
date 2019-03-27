@@ -45,13 +45,13 @@ class ManyValidatorsTest
                           blockStore
                         )
       indexedBlockDagStorage <- IndexedBlockDagStorage.create(blockDagStorage)
-      genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)(
+      genesis <- createGenesis[Task](bonds = bonds)(
                   Monad[Task],
                   Time[Task],
                   blockStore,
                   indexedBlockDagStorage
                 )
-      b <- createBlock[Task](Seq(genesis.blockHash), v1, bonds, bonds.map {
+      b <- createBlock[Task](Seq(genesis.blockHash), genesis, v1, bonds, bonds.map {
             case Bond(validator, _) => validator -> genesis.blockHash
           }.toMap)(Monad[Task], Time[Task], blockStore, indexedBlockDagStorage)
       _                     <- indexedBlockDagStorage.close()

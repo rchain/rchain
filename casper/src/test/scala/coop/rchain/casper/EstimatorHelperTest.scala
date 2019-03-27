@@ -46,16 +46,16 @@ class EstimatorHelperTest
     implicit blockStore => implicit blockDagStorage =>
       for {
         deploys <- (0 until 6).toList.traverse(i => basicProcessedDeploy[Task](i))
-        genesis <- createBlock[Task](Seq())
-        b2      <- createBlock[Task](Seq(genesis.blockHash), deploys = Seq(deploys(0)))
-        b3      <- createBlock[Task](Seq(genesis.blockHash), deploys = Seq(deploys(1)))
-        b4      <- createBlock[Task](Seq(b2.blockHash), deploys = Seq(deploys(2)))
-        b5      <- createBlock[Task](Seq(b3.blockHash), deploys = Seq(deploys(2)))
-        b6      <- createBlock[Task](Seq(b2.blockHash, b3.blockHash), deploys = Seq(deploys(2)))
-        b7      <- createBlock[Task](Seq(b6.blockHash), deploys = Seq(deploys(3)))
-        b8      <- createBlock[Task](Seq(b6.blockHash), deploys = Seq(deploys(5)))
-        b9      <- createBlock[Task](Seq(b7.blockHash), deploys = Seq(deploys(5)))
-        b10     <- createBlock[Task](Seq(b8.blockHash), deploys = Seq(deploys(4)))
+        genesis <- createGenesis[Task]()
+        b2      <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = Seq(deploys(0)))
+        b3      <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = Seq(deploys(1)))
+        b4      <- createBlock[Task](Seq(b2.blockHash), genesis, deploys = Seq(deploys(2)))
+        b5      <- createBlock[Task](Seq(b3.blockHash), genesis, deploys = Seq(deploys(2)))
+        b6      <- createBlock[Task](Seq(b2.blockHash, b3.blockHash), genesis, deploys = Seq(deploys(2)))
+        b7      <- createBlock[Task](Seq(b6.blockHash), genesis, deploys = Seq(deploys(3)))
+        b8      <- createBlock[Task](Seq(b6.blockHash), genesis, deploys = Seq(deploys(5)))
+        b9      <- createBlock[Task](Seq(b7.blockHash), genesis, deploys = Seq(deploys(5)))
+        b10     <- createBlock[Task](Seq(b8.blockHash), genesis, deploys = Seq(deploys(4)))
 
         dag <- blockDagStorage.getRepresentation
         result <- mkRuntimeManager("casper-util-test").use { runtimeManager =>
@@ -69,6 +69,7 @@ class EstimatorHelperTest
                      (postGenStateHash, postGenProcessedDeploys) = computeBlockCheckpointResult
                      _ <- injectPostStateHash[Task](
                            0,
+                           genesis,
                            genesis,
                            postGenStateHash,
                            postGenProcessedDeploys

@@ -307,19 +307,20 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
                }
     } yield result
 
-  private def updateLatestMessagesFile(validators: List[Validator], blockHash: BlockHash): F[Unit] =
+  private def updateLatestMessagesFile(newLatestMessages: List[(Validator, BlockHash)]): F[Unit] =
     for {
       latestMessagesCrc <- getLatestMessagesCrc
-      _ <- validators.traverse_ { validator =>
-            val toAppend = validator.concat(blockHash).toByteArray
-            for {
-              latestMessagesLogOutputStream <- getLatestMessagesLogOutputStream
-              _                             <- latestMessagesLogOutputStream.write(toAppend)
-              _                             <- latestMessagesLogOutputStream.flush
-              _ <- latestMessagesCrc.update(toAppend).flatMap { _ =>
-                    updateLatestMessagesCrcFile(latestMessagesCrc)
-                  }
-            } yield ()
+      _ <- newLatestMessages.traverse_ {
+            case (validator, blockHash) =>
+              val toAppend = validator.concat(blockHash).toByteArray
+              for {
+                latestMessagesLogOutputStream <- getLatestMessagesLogOutputStream
+                _                             <- latestMessagesLogOutputStream.write(toAppend)
+                _                             <- latestMessagesLogOutputStream.flush
+                _ <- latestMessagesCrc.update(toAppend).flatMap { _ =>
+                      updateLatestMessagesCrcFile(latestMessagesCrc)
+                    }
+              } yield ()
           }
       _ <- modifyLatestMessagesLogSize(_ + 1)
     } yield ()
@@ -426,7 +427,11 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
   def getRepresentation: F[BlockDagRepresentation[F]] =
     lock.withPermit(representation)
 
-  def insert(block: BlockMessage, invalid: Boolean): F[BlockDagRepresentation[F]] =
+  def insert(
+      block: BlockMessage,
+      genesis: BlockMessage,
+      invalid: Boolean
+  ): F[BlockDagRepresentation[F]] =
     lock.withPermit(
       for {
         alreadyStored <- getDataLookup.map(_.contains(block.blockHash))
@@ -455,29 +460,34 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
                   .map(_.validator)
                   .toSet
                   .diff(block.justifications.map(_.validator).toSet)
-                newValidatorsWithSender <- if (block.sender.isEmpty) {
-                                            // Ignore empty sender for special cases such as genesis block
-                                            Log[F].warn(
-                                              s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
-                                            ) *> newValidators.pure[F]
-                                          } else if (block.sender.size() == 32) {
-                                            (newValidators + block.sender).pure[F]
-                                          } else {
-                                            Sync[F].raiseError[Set[ByteString]](
-                                              BlockSenderIsMalformed(block)
-                                            )
-                                          }
+                newValidatorsLatestMessages = newValidators.map(v => (v, genesis.blockHash))
+                newValidatorsWithSenderLatestMessages <- if (block.sender.isEmpty) {
+                                                          // Ignore empty sender for special cases such as genesis block
+                                                          Log[F].warn(
+                                                            s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
+                                                          ) *> newValidatorsLatestMessages.pure[F]
+                                                        } else if (block.sender.size() == 32) {
+                                                          (newValidatorsLatestMessages + (
+                                                            (
+                                                              block.sender,
+                                                              block.blockHash
+                                                            )
+                                                          )).pure[F]
+                                                        } else {
+                                                          Sync[F].raiseError[Set[
+                                                            (ByteString, ByteString)
+                                                          ]](
+                                                            BlockSenderIsMalformed(block)
+                                                          )
+                                                        }
                 _ <- modifyLatestMessages { latestMessages =>
-                      newValidatorsWithSender.foldLeft(latestMessages) {
+                      newValidatorsWithSenderLatestMessages.foldLeft(latestMessages) {
                         //Update new validators with block in which
-                        //they were bonded (i.e. this block)
-                        case (acc, v) => acc.updated(v, block.blockHash)
+                        //they were bonded (i.e. this block for the sender and genesis for newly bonded validators)
+                        case (acc, (validator, blockHash)) => acc.updated(validator, blockHash)
                       }
                     }
-                _ <- updateLatestMessagesFile(
-                      newValidatorsWithSender.toList,
-                      block.blockHash
-                    )
+                _ <- updateLatestMessagesFile(newValidatorsWithSenderLatestMessages.toList)
                 _ <- updateDataLookupFile(blockMetadata)
               } yield ()
             }

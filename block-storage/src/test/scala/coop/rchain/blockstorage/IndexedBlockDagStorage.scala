@@ -20,14 +20,18 @@ final class IndexedBlockDagStorage[F[_]: Monad](
       result <- underlying.getRepresentation
       _      <- lock.release
     } yield result
-  def insert(block: BlockMessage, invalid: Boolean): F[BlockDagRepresentation[F]] =
+  def insert(
+      block: BlockMessage,
+      genesis: BlockMessage,
+      invalid: Boolean
+  ): F[BlockDagRepresentation[F]] =
     for {
       _          <- lock.acquire
-      _          <- underlying.insert(block, invalid)
+      _          <- underlying.insert(block, genesis, invalid)
       _          <- lock.release
       updatedDag <- getRepresentation
     } yield updatedDag
-  def insertIndexed(block: BlockMessage, invalid: Boolean): F[BlockMessage] =
+  def insertIndexed(block: BlockMessage, genesis: BlockMessage, invalid: Boolean): F[BlockMessage] =
     for {
       _                 <- lock.acquire
       body              = block.body.get
@@ -42,16 +46,16 @@ final class IndexedBlockDagStorage[F[_]: Monad](
         .withBody(body.withState(newPostState))
         .withHeader(header.withPostStateHash(ByteString.copyFrom(newPostStateHash)))
         .withSeqNum(nextCreatorSeqNum)
-      _ <- underlying.insert(modifiedBlock, invalid)
+      _ <- underlying.insert(modifiedBlock, genesis, invalid)
       _ <- idToBlocksRef.update(_.updated(nextId, modifiedBlock))
       _ <- currentIdRef.set(nextId)
       _ <- lock.release
     } yield modifiedBlock
-  def inject(index: Int, block: BlockMessage, invalid: Boolean): F[Unit] =
+  def inject(index: Int, block: BlockMessage, genesis: BlockMessage, invalid: Boolean): F[Unit] =
     for {
       _ <- lock.acquire
       _ <- idToBlocksRef.update(_.updated(index, block))
-      _ <- underlying.insert(block, invalid)
+      _ <- underlying.insert(block, genesis, invalid)
       _ <- lock.release
     } yield ()
 

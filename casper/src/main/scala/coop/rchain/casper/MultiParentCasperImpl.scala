@@ -452,7 +452,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
       case Valid =>
         // Add successful! Send block to peers, log success, try to add other blocks
         for {
-          updatedDag <- BlockDagStorage[F].insert(block, invalid = false)
+          updatedDag <- BlockDagStorage[F].insert(block, genesis, invalid = false)
           _          <- CommUtil.sendBlock[F](block)
           _ <- Log[F].info(
                 s"Added ${PrettyPrinter.buildString(block.blockHash)}"
@@ -485,7 +485,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
                       }
                 } yield ()
               }
-          updatedDag <- BlockDagStorage[F].insert(block, invalid = false)
+          updatedDag <- BlockDagStorage[F].insert(block, genesis, invalid = false)
           _          <- CommUtil.sendBlock[F](block)
           _ <- Log[F].info(
                 s"Added admissible equivocation child block ${PrettyPrinter.buildString(block.blockHash)}"
@@ -577,7 +577,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
   ): F[BlockDagRepresentation[F]] =
     Log[F].warn(
       s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}."
-    ) >> BlockDagStorage[F].insert(block, invalid = true)
+    ) >> BlockDagStorage[F].insert(block, genesis, invalid = true)
 
   private def reAttemptBuffer(
       dag: BlockDagRepresentation[F]

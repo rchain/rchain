@@ -195,8 +195,8 @@ class BlockQueryResponseAPITest
       blockDagStorage: BlockDagStorage[Task]
   ): Task[(LogStub[Task], MultiParentCasperRef[Task], SafetyOracle[Task])] =
     for {
-      _ <- blockDagStorage.insert(genesisBlock, false)
-      _ <- blockDagStorage.insert(secondBlock, false)
+      _ <- blockDagStorage.insert(genesisBlock, genesisBlock, false)
+      _ <- blockDagStorage.insert(secondBlock, genesisBlock, false)
       casperEffect <- NoOpsCasperEffect[Task](
                        HashMap[BlockHash, BlockMessage](
                          (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
