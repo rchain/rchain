@@ -67,7 +67,7 @@ match (
       contract testFindOrCreateGenesisVault(rhoSpec, RevVault, ackCh) = {
         new genesisVaultCh, balanceCh in {
           RevVault!("findOrCreateGenesisVault", genesisRevAddress, 9000, *genesisVaultCh) |
-          for (@("Right", genesisVault) <- genesisVaultCh) {
+          for (@(true, genesisVault) <- genesisVaultCh) {
             // so far, access to genesisVault is not secured. This will be changd.
             @genesisVault!("balance", *balanceCh) |
             rhoSpec!("assert", (9000, "== <-", *balanceCh), "balance is as expected", *ackCh)
@@ -80,7 +80,7 @@ match (
           RevVault!("findOrCreate", "EEEE", *e1) |
           rhoSpec!("assertMany",
             [
-              ((("Left", "Invalid address length"), "== <-", *e1), "should be a failure")
+              (((false, "Invalid address length"), "== <-", *e1), "should be a failure")
             ], *ackCh
           )
         }
@@ -89,7 +89,7 @@ match (
       contract testCreateAliceVaultLocked(rhoSpec, RevVault, ackCh) = {
         new aliceVaultLockedCh, unlockFail in {
           RevVault!("findOrCreate", aliceRevAddress, *aliceVaultLockedCh) |
-          for (@("Right", aliceVaultLocked) <- aliceVaultLockedCh) {
+          for (@(true, aliceVaultLocked) <- aliceVaultLockedCh) {
             @aliceVaultLocked!("unlock", *unlockFail) |
             rhoSpec!("assertMany",
               [
@@ -119,10 +119,10 @@ match (
         new genesisVaultCh, aliceVaultCh, ret, retOk  in {
           RevVault!("findOrCreateGenesisVault", genesisRevAddress, 9000, *genesisVaultCh) |
           withVaultUnlocked!(alicePubKey, *aliceVaultCh) |
-          for (@("Right", genesisVault) <- genesisVaultCh; @aliceVault <- aliceVaultCh) {
+          for (@(true, genesisVault) <- genesisVaultCh; @aliceVault <- aliceVaultCh) {
 
             @genesisVault!("transfer", aliceRevAddress, 1000, *ret) |
-            rhoSpec!("assert", (("Right", Nil), "== <-", *ret), "transfer successful", *retOk) |
+            rhoSpec!("assert", ((true, Nil), "== <-", *ret), "transfer successful", *retOk) |
             assertBalances!(*retOk, [(genesisVault, 8000), (aliceVault, 1000)], *rhoSpec, *ackCh)
           }
         }
@@ -133,7 +133,7 @@ match (
           //the below attempts to create a wallet are going to fetch the ones created in previous tests.
           RevVault!("findOrCreateGenesisVault", genesisRevAddress, 0 /* irrelevant */, *genesisVaultCh) |
           withVaultUnlocked!(alicePubKey, *aliceVaultCh) |
-          for (@("Right", g) <- genesisVaultCh; @a <- aliceVaultCh) {
+          for (@(true, g) <- genesisVaultCh; @a <- aliceVaultCh) {
             now!(Nil) |
             assertBalances!(*now, [(g, 8000), (a, 1000)], *rhoSpec, *ackCh)
           }
@@ -147,7 +147,7 @@ match (
             now!(Nil) |
             assertBalances!(*now, [(aliceVault, 1000)], *rhoSpec, *balanceOk) |
             transfer!(*balanceOk, aliceVault, aliceRevAddress, 1000, *transferResult) |
-            rhoSpec!("assert", (("Right", Nil), "== <-", *transferResult), "transfer successful", *transferOk) |
+            rhoSpec!("assert", ((true, Nil), "== <-", *transferResult), "transfer successful", *transferOk) |
             assertBalances!(*transferOk, [(aliceVault, 1000)], *rhoSpec, *ackCh)
           }
         }
@@ -160,7 +160,7 @@ match (
             now!(Nil) |
             assertBalances!(*now, [(aliceVault, 1000)], *rhoSpec, *balanceOk) |
             transfer!(*balanceOk, aliceVault, bobRevAddress, -1, *transferResult) |
-            rhoSpec!("assert", (("Left", "Amount must be non-negative"), "== <-", *transferResult), "transfer failed", *transferOk) |
+            rhoSpec!("assert", ((false, "Amount must be non-negative"), "== <-", *transferResult), "transfer failed", *transferOk) |
             assertBalances!(*transferOk, [(aliceVault, 1000)], *rhoSpec, *ackCh)
           }
         }
@@ -171,7 +171,7 @@ match (
           withVaultUnlocked!(alicePubKey, *aliceVaultCh) |
           for (aliceVault <- aliceVaultCh) {
               aliceVault!("transfer", bobRevAddress, 9000, *res) |
-              rhoSpec!("assert", (("Left", "Insufficient funds"), "== <-", *res), "transfer failed", *resOk) |
+              rhoSpec!("assert", ((false, "Insufficient funds"), "== <-", *res), "transfer failed", *resOk) |
               assertBalances!(*resOk, [(*aliceVault, 1000)], *rhoSpec, *ackCh)
           }
         }
@@ -183,7 +183,7 @@ match (
           withVaultUnlocked!(alicePubKey, *aliceVaultCh) |
           for (aliceVault <- aliceVaultCh) {
             aliceVault!("transfer", "pretty surely invalid rev address", 1, *res) |
-            rhoSpec!("assert", (("Left", "Invalid Base58 encoding"), "== <-", *res), "transfer failed", *resOk) |
+            rhoSpec!("assert", ((false, "Invalid Base58 encoding"), "== <-", *res), "transfer failed", *resOk) |
             assertBalances!(*resOk, [(*aliceVault, 1000)], *rhoSpec, *ackCh)
           }
         }
@@ -199,7 +199,7 @@ match (
               RevAddress!("fromPublicKey", pubKey, *revAddrCh) |
               for (@revAddr <- revAddrCh) {
                 @RevVault!("findOrCreate", revAddr, *vaultLockedCh) |
-                for (@("Right", vaultLocked) <- vaultLockedCh; _ <- identityChanged) {
+                for (@(true, vaultLocked) <- vaultLockedCh; _ <- identityChanged) {
                   @vaultLocked!("unlock", *ret)
                 }
               }

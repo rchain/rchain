@@ -17,8 +17,8 @@ in {
 
     @RevVault!("findOrCreateGenesisVault", pubKey, 9000, *vaultCh ) |
 
-    // most Vault methods return an `Either[String, A] = ("Left", String) \/ ("Right", A)`
-    for (@("Right", vault) <- vaultCh) {
+    // most Vault methods return an `Either[String, A] = (false, String) \/ (true, A)`
+    for (@(true, vault) <- vaultCh) {
 
       log!(("Genesis vault obtained")) |
 

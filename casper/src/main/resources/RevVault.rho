@@ -71,15 +71,15 @@ in {
                     constructor!(*resCh) |
                     for (@eitherVault <- resCh) {
                       match eitherVault {
-                        ("Right", vault) => vaultMapStore!(vaultMap.set(revAddress, vault))
-                        ("Left",  _    ) => vaultMapStore!(vaultMap)
+                        (true, vault) => vaultMapStore!(vaultMap.set(revAddress, vault))
+                        (false,  _    ) => vaultMapStore!(vaultMap)
                       } |
                       ret!(eitherVault)
                     }
                   }
                 }
                 value => {
-                  vaultMapStore!(vaultMap) | ret!(("Right", value))
+                  vaultMapStore!(vaultMap) | ret!((true, value))
                 }
               }
             }

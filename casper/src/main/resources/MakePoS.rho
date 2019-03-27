@@ -34,8 +34,8 @@ in {
               givenPurse!("split", balance, *resultCh) |
               for(@result <- resultCh) {
                 match result {
-                  [] => { return!(("Left", "Could not extract funds from given purse")) }
-                  [newPurse] => { return!(("Right", (newPurse, balance))) }
+                  [] => { return!((false, "Could not extract funds from given purse")) }
+                  [newPurse] => { return!((true, (newPurse, balance))) }
                 }
               }
             }
@@ -46,24 +46,24 @@ in {
           new balanceCh in {
             @bondPurse!("getBalance", *balanceCh) |
             for(@balance <- balanceCh) {
-              if      (balance < minimumBond) { return!(("Left", "Bond less than minimum!")) }
-              else if (balance > maximumBond) { return!(("Left", "Bond greater than maximum!")) }
-              else                                         { return!(("Right", bondPurse)) }
+              if      (balance < minimumBond) { return!((false, "Bond less than minimum!")) }
+              else if (balance > maximumBond) { return!((false, "Bond greater than maximum!")) }
+              else                                         { return!((true, bondPurse)) }
             }
           }
         } |
 
         contract this(@"validateBondingRate", @bondPurse, return) = {
           //TODO: figure out rate-limiting of bonding
-          return!(("Right", bondPurse))
+          return!((true, bondPurse))
         } |
         
         contract depositPurse(@bondPurse, @amount, return) = {
           new successCh in {
             purse!("deposit", amount, bondPurse, *successCh) |
             for(@success <- successCh) {
-              if (success) { return!(("Right", bondPurse)) }
-              else         { return!(("Left", "Deposit failed.")) }
+              if (success) { return!((true, bondPurse)) }
+              else         { return!((false, "Deposit failed.")) }
             }
           }
         } |
@@ -99,8 +99,8 @@ in {
               new isBondedCh in {
                 this!("isBonded", publicKey, *isBondedCh) |
                 for(@isBonded <- isBondedCh) {
-                  if (isBonded) { ret!(("Left", "Public key ${pk} already bonded." %% {"pk" : publicKey})) }
-                  else          { ret!(("Right", x)) }
+                  if (isBonded) { ret!((false, "Public key ${pk} already bonded." %% {"pk" : publicKey})) }
+                  else          { ret!((true, x)) }
                 }
               }
             } |
@@ -113,7 +113,7 @@ in {
             clonePurse!(givenBondPurse, *bondPurseCh) |
             for(@cloneResult <- bondPurseCh) {
               match cloneResult {
-                ("Right", (bondPurse, bondAmount)) => {
+                (true, (bondPurse, bondAmount)) => {
                   for(_, ret <- depositClonePurse) {
                     depositPurse!(bondPurse, bondAmount, *ret)
                   } |
@@ -125,9 +125,9 @@ in {
                                         ], *resultCh) |
                   for(@result <- resultCh) {
                     match result {
-                      ("Right", _) => { updateBonds!(publicKey, sigVerify, bondAmount, rewardsForwarder, *return) }
+                      (true, _) => { updateBonds!(publicKey, sigVerify, bondAmount, rewardsForwarder, *return) }
 
-                      ("Left", message) => {
+                      (false, message) => {
                         //return funds to original purse since an error occurred
                         @givenBondPurse!("deposit", bondAmount, bondPurse, *resultCh) |
                         for(_ <- resultCh) { return!((false, message)) }
@@ -135,7 +135,7 @@ in {
                     }
                   }
                 }
-                ("Left", message) => { return!((false, message)) }
+                (false, message) => { return!((false, message)) }
               }
             }
           }
@@ -168,13 +168,13 @@ in {
               @codeHash, @phloRate, @userId, @timestamp <- paramsCh
             ) {
               match cloneResult {
-                ("Right", (payPurse, payAmount)) => {
+                (true, (payPurse, payAmount)) => {
                   this!("distribute", payPurse) | //distribute rev paid to validators
                   //update paymentStore
                   for(_ <- paymentStore){ paymentStore!((codeHash, userId, timestamp, phloRate * payAmount)) } |
                   return!(phloRate * payAmount) //return amount of phlo purchased to user (in case they care)
                 }
-                ("Left", message) => {
+                (false, message) => {
                   for(_ <- paymentStore){ paymentStore!((codeHash, userId, timestamp, 0)) } |
                   return!(0)
                 }
