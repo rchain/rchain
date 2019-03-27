@@ -118,16 +118,8 @@ object Connect {
     } yield cleared
   }
 
-  def resetConnections[F[_]: Monad: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]
-    : F[Unit] =
-    ConnectionsCell[F].flatModify { connections =>
-      for {
-        local  <- RPConfAsk[F].reader(_.local)
-        _      <- TransportLayer[F].broadcast(connections, disconnect(local))
-        _      <- connections.traverse(TransportLayer[F].disconnect)
-        result <- connections.removeConn[F](connections)
-      } yield result
-    }
+  def resetConnections[F[_]: Monad: ConnectionsCell]: F[Unit] =
+    ConnectionsCell[F].flatModify(c => c.removeConn[F](c))
 
   def findAndConnect[F[_]: Monad: Log: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
       conn: (PeerNode, FiniteDuration) => F[Unit]

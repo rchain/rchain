@@ -54,7 +54,6 @@ object HandleMessages {
   ): F[CommunicationResponse] =
     for {
       _ <- Log[F].info(s"Forgetting about ${sender.toAddress}.")
-      _ <- TransportLayer[F].disconnect(sender)
       _ <- ConnectionsCell[F].flatModify(_.removeConnAndReport[F](sender))
       _ <- Metrics[F].incrementCounter("disconnect")
     } yield handledWithoutMessage
