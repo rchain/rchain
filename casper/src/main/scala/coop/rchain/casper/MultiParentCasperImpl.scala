@@ -83,9 +83,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
     Sync[F].bracket(blockProcessingLock.acquire)(kp {
       val exists = for {
         dag         <- blockDag
-        cst         <- state.read
+        casperState <- state.read
         dagContains <- dag.contains(b.blockHash)
-      } yield dagContains || cst.dependencyDag.contains(b.blockHash)
+      } yield dagContains || seenBlockHashes(casperState).contains(b.blockHash)
 
       exists.ifM(logAlreadyProcessed, doppelgangerAndAdd)
 
@@ -132,11 +132,17 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
       b: BlockMessage
   ): F[Boolean] =
     for {
-      dag            <- blockDag
-      dagContains    <- dag.contains(b.blockHash)
-      state          <- Cell[F, CasperState].read
-      bufferContains = state.dependencyDag.contains(b.blockHash)
-    } yield dagContains || bufferContains
+      dag         <- blockDag
+      dagContains <- dag.contains(b.blockHash)
+      state       <- Cell[F, CasperState].read
+    } yield dagContains || seenBlockHashes(state).contains(b.blockHash)
+
+  /**
+    * We can just use `state.dependencyDag.parentToChildAdjacencyList.values` as
+    * all seen blocks are inserted into the dependencyDag as children.
+    */
+  private def seenBlockHashes(state: CasperState): Set[BlockHash] =
+    state.dependencyDag.parentToChildAdjacencyList.values.toSet.flatten
 
   def deploy(d: DeployData): F[Either[Throwable, Unit]] =
     InterpreterUtil.mkTerm(d.term) match {
@@ -569,7 +575,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
     for {
       state          <- Cell[F, CasperState].read
       dependencyFree = state.dependencyDag.dependencyFree.toList
-      attemptsWithDag <- dependencyFree.foldM(
+      dependencyFreeBlocks = seenBlockHashes(state)
+        .filter(blockHash => dependencyFree.contains(blockHash))
+        .toList
+      attemptsWithDag <- dependencyFreeBlocks.foldM(
                           (
                             List.empty[(BlockMessage, (BlockStatus, BlockDagRepresentation[F]))],
                             dag
