@@ -71,7 +71,7 @@ class BlockApproverProtocol(
                 .getApproval(candidate, validatorId)
                 .toByteString
               msg = Blob(local, Packet(transport.BlockApproval.id, serializedApproval))
-              _   <- TransportLayer[F].stream(Seq(peer), msg)
+              _   <- TransportLayer[F].stream(peer, msg)
               _ <- Log[F].info(
                     s"Received expected candidate from $peer. Approval sent in response."
                   )

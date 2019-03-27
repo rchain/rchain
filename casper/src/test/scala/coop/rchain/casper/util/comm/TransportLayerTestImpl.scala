@@ -75,6 +75,9 @@ class TransportLayerTestImpl[F[_]: Monad]()(
   def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]] =
     peers.toList.traverse(send(_, msg)).map(_.toSeq)
 
+  def stream(peer: PeerNode, blob: Blob): F[Unit] =
+    stream(Seq(peer), blob)
+
   def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] =
     broadcast(peers, protocol(blob.sender).withPacket(blob.packet)).void
 

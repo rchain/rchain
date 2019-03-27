@@ -130,7 +130,7 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
               remote: PeerNode
           ): F[Unit] =
             transportLayer.stream(
-              List(remote),
+              remote,
               Blob(local, Packet(BlockMessage.id, bigContent))
             )
 

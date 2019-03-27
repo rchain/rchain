@@ -402,7 +402,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         maybeMsg = serialized.map(
           serializedMessage => Blob(local, Packet(transport.BlockMessage.id, serializedMessage))
         )
-        _        <- maybeMsg.traverse(msg => TransportLayer[F].stream(Seq(peer), msg))
+        _        <- maybeMsg.traverse(msg => TransportLayer[F].stream(peer, msg))
         hash     = PrettyPrinter.buildString(br.hash)
         logIntro = s"Received request for block $hash from $peer."
         _ <- block match {
@@ -420,7 +420,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         tip   <- MultiParentCasper.forkChoiceTip
         local <- RPConfAsk[F].reader(_.local)
         msg   = Blob(local, Packet(transport.BlockMessage.id, tip.toByteString))
-        _     <- TransportLayer[F].stream(Seq(peer), msg)
+        _     <- TransportLayer[F].stream(peer, msg)
         _     <- Log[F].info(s"Sending Block ${tip.blockHash} to $peer")
       } yield ()
 
@@ -432,7 +432,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         local <- RPConfAsk[F].reader(_.local)
         _     <- Log[F].info(s"Received ApprovedBlockRequest from $peer")
         msg   = Blob(local, Packet(transport.ApprovedBlock.id, approvedBlock.toByteString))
-        _     <- TransportLayer[F].stream(Seq(peer), msg)
+        _     <- TransportLayer[F].stream(peer, msg)
         _     <- Log[F].info(s"Sending ApprovedBlock to $peer")
       } yield ()
 
@@ -610,7 +610,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       local <- RPConfAsk[F].reader(_.local)
       //TODO remove NoApprovedBlockAvailable.nodeIdentifier, use `sender` provided by TransportLayer
       msg = Blob(local, noApprovedBlockAvailable(local, identifier))
-      _   <- TransportLayer[F].stream(Seq(peer), msg)
+      _   <- TransportLayer[F].stream(peer, msg)
     } yield ()
 
   private def noApprovedBlockAvailable(peer: PeerNode, identifier: String): Packet = Packet(

@@ -118,6 +118,9 @@ class GrpcTransportClient(
   def broadcast(peers: Seq[PeerNode], msg: Protocol): Task[Seq[CommErr[Unit]]] =
     Task.gatherUnordered(peers.map(send(_, msg)))
 
+  def stream(peer: PeerNode, blob: Blob): Task[Unit] =
+    stream(Seq(peer), blob)
+
   def stream(peers: Seq[PeerNode], blob: Blob): Task[Unit] =
     streamObservable.stream(peers.toList, blob) >> log.info(s"stream to $peers blob")
 
