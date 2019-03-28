@@ -26,9 +26,6 @@ __pr_build_condiditions: &pr_build_conditions
 
 __buildenv: &buildenv
   image: rchain/buildenv:latest
-  when:
-    instance:
-      - drone.rchain-dev.tk
 
 __sbtcompileenv: &sbtcompileenv
   <<: *buildenv
@@ -141,6 +138,7 @@ pipeline:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
+
   notify:
     <<: *buildenv
     commands:
@@ -155,15 +153,3 @@ pipeline:
       event: [ push, tag ]
       branch: [ master, release*, testing* ]
       status: [ changed, failure ]
-
-  slowcooker:
-    <<: *buildenv
-    commands:
-      - sbt slowcooker:test
-    when:
-      instance:
-        - slow-cooking.rchain-dev.tk
-      event:
-        - push
-      branch:
-        - dev
