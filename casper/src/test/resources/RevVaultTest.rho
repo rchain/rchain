@@ -42,7 +42,7 @@ match (
           [
             ("Create genesis vault with expected balance", *testFindOrCreateGenesisVault),
             ("Return an error for invalid public key", *testCreateVaultFail),
-            ("Create vault and see it is secured", *testCreateVault),
+            ("Create vault and see that it is secured", *testCreateVault),
             ("Transfer from genesis to Alice", *testTransfer),
             ("Return the existing wallet when calling testFindOrCreate", *testFindOrCreate),
             ("Transfer to own account successfully", *testTransferToSelf),
