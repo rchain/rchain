@@ -176,6 +176,25 @@ in {
           }
         } |
 
+        new mkCoopVault in {
+          contract mkCoopVault(@pk, @initialAmount) = {
+            new makeVaultCh, addressCh, ret in {
+              RevAddress!("fromPublicKey", pk.hexToBytes(), *addressCh) |
+              for( @address <- addressCh) {
+                _getOrCreate!(address, *makeVaultCh, Nil) |
+                for (ch <- makeVaultCh) {
+                  _makeVault!(address, initialAmount, *ch)
+                }
+              }
+            }
+          } |
+
+          mkCoopVault!("d407b6f7dce3b2c17b68a9299f51ad9f0de7e7212437deac393922231a712986", 9223372036854775807) |
+          mkCoopVault!("0f4286a44125158b3c3eadb075cf0d41feb10bffb7365e523f99426641772348", 9223372036854775807) |
+          mkCoopVault!("748e1fcb5b3763fd45158338f1974b6b9762e1a266e021dc45641d521161215c", 9223372036854775807) |
+          mkCoopVault!("349b1465e1ee14548cf29e2edff7bc41da9eae8c47b3b59d7bb7ce08010f0b7d", 9223372036854775807)
+        } |
+
         rs!(
           "f59e613088fd7e2e8a371b5115701f3a4f53f35ea6f60433923153ee7fbf83fd".hexToBytes(),
           (9223372036854775807, bundle+{*RevVault}),
