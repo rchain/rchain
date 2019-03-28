@@ -1,0 +1,78 @@
+ /*
+ The table below describes the required computations and their dependencies
+
+ No. | Dependency | Computation method | Result
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ 1.  |            | given              | sk = b07ab04ff922adc0fd7963e4a17759643a15e51ae8843053499c0d0ebc2cd869
+ 2.  |            | given              | timestamp = 1553607754230
+ 3.  |            | lastNonce          | nonce = 9223372036854775807
+ 4.  | 1,         | ed25519            | pk = aca5cc65b4a7abbd558fb39dc3c2e9bf650ef91184529dcd856b6183dc64d8dc
+ 5.  | 4, 2,      | genIds             | uname = Unforgeable(0xed55dd92e8ae1950708fdfe1173a8809825a4f9a3464e96c6349d25093ce3284)
+ 6.  | 3, 5,      | registry           | value = (9223372036854775807, bundle+ {   Unforgeable(0xed55dd92e8ae1950708fdfe1173a8809825a4f9a3464e96c6349d25093ce3284) })
+ 7.  | 6,         | protobuf           | toSign = 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a20ed55dd92e8ae1950708fdfe1173a8809825a4f9a3464e96c6349d25093ce32841001
+ 8.  | 7, 1,      | ed25519            | sig = 974936757967d4d6aecc4b6e107485deab9a6f7e68a8fc9a39e2fb6317113d79d90647626b6affabb99d6a3178d1a4dc596bb636a524667d838ef34463af6b08
+ 9.  | 4,         | registry           | uri = rho:id:4njqcsc65mt8xrfx9nsz7je7oucgywgd1tj1n1gjtw3ndsophyisro
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ */
+new
+  AuthKey,
+  rs(`rho:registry:insertSigned:ed25519`),
+  uriOut,
+  getDeployData(`rho:deploy:params`),
+  _authKey,
+  stdout(`rho:io:stdout`)
+in {
+
+  // An `AuthKey` is a means for creating a safe authentication token based on a process / unfograble name
+  // (the `shape` of the key) without risking the leak of that process / name.
+  //
+  // Both the `make` and `check` methods would be used by a contract willing to add authentication
+  // around some of its methods.
+  //
+  // `check` would be used in the methods being guarded (they would take an additional `authKey` parameter).
+  //
+  // `make` would be used in an "issueKey" method that would customize the key so that it can't be re-made (forged)
+  // based on publicly availabe data (all purely-forgable names are public). One way to prevent forgrability of the
+  // `AuthKey` would be to mix a private, non-leaking unforgrable name into its `shape`.
+  //
+  // A good usage example (at the time of writing) is the RevVault contract.
+
+  // Creates an `AuthKey` based on the provided `shape` and retuns it on `ret`.
+  contract AuthKey(@"make", @shape, ret) = {
+    new authKey in {
+
+      // Notice that having this publicly-callable
+      // (and not secured from contract impersonation by using a private unforgable name as part of method name)
+      // is (AFAICT) needed for the `check` call to return in a synchronous manner.
+      // Despite this, the `shape` never leaks, as the impersonating contract's `challenge` is called with just a return
+      // channel, and the "original" implementation returns the shape via a bundle0, along with a "originality proof"
+      // (the non-leaking `_authKey` unforgable name).
+
+      // We could make the key 'usable once' by changing this to a single (vs persistent) receive
+      // and returning the response along with a nonce (an unforgable naem), created inside the "challenge" method.
+      contract authKey(@"challenge", retCh) = {
+        retCh!(bundle0{ (*_authKey, shape)})
+      } |
+
+      ret ! (bundle+{*authKey})
+    }
+  } |
+
+  // Returns `true` iff the provided `key` is of the provided `shape`. Returns `false` otherwise.
+  contract AuthKey(@"check", key, @shape, ret) = {
+    new responseCh in {
+      key!("challenge", *responseCh) |
+      for (@response <- responseCh) {
+        ret!(response == { bundle0{ (*_authKey, shape) } } )
+      }
+    }
+  } |
+
+  rs!(
+    "aca5cc65b4a7abbd558fb39dc3c2e9bf650ef91184529dcd856b6183dc64d8dc".hexToBytes(),
+    (9223372036854775807, bundle+{*AuthKey}),
+    "974936757967d4d6aecc4b6e107485deab9a6f7e68a8fc9a39e2fb6317113d79d90647626b6affabb99d6a3178d1a4dc596bb636a524667d838ef34463af6b08".hexToBytes(),
+    *uriOut
+  )
+}
+

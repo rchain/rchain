@@ -3,42 +3,36 @@
 // Everything regarding the genesis vaults is subject to change.
 
 new
-  rl(`rho:registry:lookup`), revAddress(`rho:rev:address`), RevVaultCh, getDeployData(`rho:deploy:params`),
-  deployerPubKeyCh, vaultCh, getDeployerPubKey,
+  rl(`rho:registry:lookup`), RevVaultCh,
+  vaultCh,
   stdout(`rho:io:stdout`), log
 in {
 
   rl!(`rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z`, *RevVaultCh) |
-  getDeployerPubKey!(*deployerPubKeyCh) |
-  for (@(_, RevVault) <- RevVaultCh; @pubKey <- deployerPubKeyCh) {
+  for (@(_, RevVault) <- RevVaultCh) {
 
     log!(("0.create_genesis_vault.rho")) |
-    log!(("Using public key:", pubKey, "to obtain a `deployer's-pubkey-bound` vault")) |
 
-    @RevVault!("findOrCreateGenesisVault", pubKey, 9000, *vaultCh ) |
+    match "%REV_ADDR" {
+      revAddress => {
 
-    // most Vault methods return an `Either[String, A] = (false, String) \/ (true, A)`
-    for (@(true, vault) <- vaultCh) {
+        log!(("Using RevAddress:", revAddress, "to obtain a `deployer's-revAddress-bound` vault")) |
 
-      log!(("Genesis vault created")) |
+        // so far, this call is not secured. This will be changed. Most likely, the method will disappear.
+        @RevVault!("findOrCreateGenesisVault", revAddress, 9000, *vaultCh ) |
 
-      new balanceCh in {
-        // so far, access to genesisVault methods is not secured. This will be changd.
-        @vault!("balance", *balanceCh) |
-        for (@balance <- balanceCh) {
-          log!(("Genesis vault balance is", balance))
+        // most Vault methods return an `Either[String, A] = (false, String) \/ (true, A)`
+        for (@(true, vault) <- vaultCh) {
+
+          log!(("Genesis vault created")) |
+
+          new balanceCh in {
+            @vault!("balance", *balanceCh) |
+            for (@balance <- balanceCh) {
+              log!(("Genesis vault balance is", balance))
+            }
+          }
         }
-      }
-    }
-
-  } |
-
-  contract getDeployerPubKey(retCh) = {
-    new ch in {
-      getDeployData!(*ch) |
-      for (_, _, @pubKey, _ <- ch) {
-        log!(("Deployer public key is:", pubKey)) |
-        retCh!(pubKey)
       }
     }
   } |
