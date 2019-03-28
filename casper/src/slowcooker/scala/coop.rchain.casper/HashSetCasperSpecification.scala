@@ -19,7 +19,7 @@ import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.CommError
 import monix.eval.Task
-import org.scalacheck.{Gen, Prop, Properties, Shrink}
+import org.scalacheck._
 import org.scalacheck.commands.Commands
 
 import scala.collection.immutable
@@ -30,6 +30,11 @@ case class RNode(idx: Int, name: String, deployed: Boolean)
 object HashSetCasperProperties extends Properties("HashSetCasper") {
   implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
   property("network") = HashSetCasperSpecification.property()
+}
+
+object HashSetCasperPropertiesApp {
+  def main(args: Array[String]): Unit =
+    HashSetCasperSpecification.property().check(_.withMinSuccessfulTests(1))
 }
 
 class NodeBox(val node: HashSetCasperTestNode[Effect], var lastBlock: Option[BlockMessage]) {
@@ -113,10 +118,15 @@ object HashSetCasperSpecification extends Commands {
       .networkEff(validatorKeys.take(state.size), genesis, testNetwork = network)
       .map(_.toList)
 
+    print(":")
+
     nodes.result.map(new NodeBox(_, None))
   }
 
-  override def destroySut(sut: Sut): Unit = sut.traverse_(_.node.tearDown()).result
+  override def destroySut(sut: Sut): Unit = {
+    print(".")
+    sut.traverse_(_.node.tearDown()).result
+  }
 
   override def genInitialState: Gen[State] =
     for {
