@@ -54,6 +54,17 @@ Let's execute as Bob and check his balance:
 
 Notice the transfer that was initiated previously has now been finished.
 
+## There's been a race
+
+You might've been lucky to observe a **race** between the balance check and the transfer arrival.
+So it might be that you've seen "Balance is 0" followed by "Finished transfer" instead of
+"Finished transfer" followed by "Balance is 100". This is OK though, the next deploy will no longer
+be subject to this race, as Bob's vault exists after the balance check has been done.
+
+This also means that the first access to one's vault needs to be done by a 3rd-party having the REV
+to pay for it. So the exchanges should not only do a `transfer`, but also at `findOrCreate`
+the destination vault. So should the Testnet operators distributing the funds.
+
 ## Transfer back to the genesis vault
 
     #check balances
