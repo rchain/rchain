@@ -1220,6 +1220,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
         accounting.MAX_VALUE,
         sec = PrivateKey(sk)
       )
+
     for {
       capturedResults <- node.runtimeManager
                           .captureResults(
@@ -1247,20 +1248,27 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
          |  }
          |}""".stripMargin
       paymentDeployData = ConstructDeploy
-        .sourceDeploy(paymentCode, timestamp, phloPrice, sec = PrivateKey(sk))
+        .sourceDeploy(
+          paymentCode,
+          timestamp,
+          accounting.MAX_VALUE,
+          phloPrice = phloPrice,
+          sec = PrivateKey(sk)
+        )
 
-      paymentQuery = ConstructDeploy.sourceDeploy(
-        """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
+      paymentQuery = ConstructDeploy
+        .sourceDeploy(
+          """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
         |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
         |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
         |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
         |    for(pos <- posCh){ pos!("lastPayment", "__SCALA__") }
         |  }
         |}""".stripMargin,
-        0L,
-        accounting.MAX_VALUE,
-        sec = PrivateKey(sk)
-      )
+          0L,
+          accounting.MAX_VALUE,
+          sec = PrivateKey(sk)
+        )
 
       deployQueryResult <- deployAndQuery(
                             node,

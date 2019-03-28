@@ -22,13 +22,15 @@ object ConstructDeploy {
       source: String,
       timestamp: Long,
       phlos: Long,
+      phloPrice: Long = 0L,
       sec: PrivateKey = defaultSec
   ): DeployData = {
     val data = DeployData(
       deployer = ByteString.copyFrom(Ed25519.toPublic(sec).bytes),
       timestamp = timestamp,
       term = source,
-      phloLimit = phlos
+      phloLimit = phlos,
+      phloPrice = phloPrice
     )
     sign(data, sec)
   }
