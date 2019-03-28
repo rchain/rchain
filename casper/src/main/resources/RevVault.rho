@@ -147,10 +147,10 @@ in {
                 @Either!("productR <-", *parametersOkCh, *authKeyValidEitherCh, *parametersAndAuthOkCh) |
 
                 @Either!("flatMap <-", *parametersAndAuthOkCh, *split, *eitherPurseCh) |
-                for (_, ret <- split) {
+                for (_, retCh <- split) {
                   new amountPurseCh in {
                     purse!("split", amount, *amountPurseCh) |
-                    @Either!("fromSingletonList <-", *amountPurseCh, "Insufficient funds", *ret)
+                    @Either!("fromSingletonList <-", *amountPurseCh, "Insufficient funds", *retCh)
                   }
                 } |
 
