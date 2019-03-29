@@ -1,0 +1,179 @@
+ /*
+ The table below describes the required computations and their dependencies
+
+ No. | Dependency | Computation method | Result
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ 1.  |            | given              | sk = d70491c21a5ba44ffb60a97d9bfbf3f3839b997bde107a3a8ab6872594282740
+ 2.  |            | given              | timestamp = 1553862086627
+ 3.  |            | lastNonce          | nonce = 9223372036854775807
+ 4.  | 1,         | ed25519            | pk = cc87bf7747a8c176714b417ca14a63897b07572876c5e38a7896b6007738ef81
+ 5.  | 4, 2,      | genIds             | uname = Unforgeable(0xf535bfc7781a46c6e5ef5d24beffb62fb5ac8c2f8bd1f7f55abeea2e416100da)
+ 6.  | 3, 5,      | registry           | value = (9223372036854775807, bundle+ {   Unforgeable(0xf535bfc7781a46c6e5ef5d24beffb62fb5ac8c2f8bd1f7f55abeea2e416100da) })
+ 7.  | 6,         | protobuf           | toSign = 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a20f535bfc7781a46c6e5ef5d24beffb62fb5ac8c2f8bd1f7f55abeea2e416100da1001
+ 8.  | 7, 1,      | ed25519            | sig = f6a7a48a5de507020211c2abdd660dfb3d2e6365f0167024ced4bd9454889ea5b9c9e871a996f79964ccdb9321d484a147ca4c33b9dfb61ee92fc747b694190d
+ 9.  | 4,         | registry           | uri = rho:id:cnec3pa8prp4out3yc8facon6grm3xbsotpd4ckjfx8ghuw77xadzt
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ */
+new
+  PoS, rs(`rho:registry:insertSigned:ed25519`), uriOut, stdout(`rho:io:stdout`)
+in {
+    contract PoS (@minimumBond, @maximumBond, @initialBonds, return) = {
+
+        match "11112GofKy1v5mPWZjZEYBByvpZ4ahYJp6vFN1hgGCn7L543rFSpyA".hexToBytes() {
+
+            posRevAddress => {
+
+                new eitherCh,
+                    revVaultCh,
+                    listCh,
+                    registryLookup(`rho:registry:lookup`) in {
+
+                    registryLookup!(`rho:id:j6trahbxycumerwpr5qype7j43b7eqh8auebwsa9nn68if47gswh73`, *eitherCh)
+                    | registryLookup!(`rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z`, *revVaultCh)
+                    | for (@(_, Either) <- eitherCh; @(_, RevVault) <- revVaultCh; @(_, ListOps) <- listCh) {
+
+                        new bondsCh,
+                            this,
+                            getParameters(`rho:deploy:params`),
+                            revAddressOps(`rho:rev:address`),
+                            paymentStore,
+                            deposit in {
+
+                            bondsCh!(initialBonds)
+
+                            | contract this (@"getBonds", return) = {
+                                for(@bonds <- bondsCh) {
+                                    bondsCh!(bonds) | return!(bonds)
+                                }
+                            }
+
+                            // TODO: Validate that the associated wallet comes from the same mint as the purse
+                            // TODO: Can we assume at this point that [[@pk]] is a valid public key?
+                            | contract this (@"bond", @bondAmount, @sigVerify, return) = {
+
+                                new bondResultCh,
+                                    isBonded,
+                                    validateBondAmount,
+                                    validateBondingRate,
+                                    validatePublicKey,
+                                    updateBonds,
+                                    parametersCh in {
+
+                                    @Either!(
+                                        "compose",
+                                        bondAmount,
+                                        [*validateBondAmount,
+                                        *validateBondingRate,
+                                        *validatePublicKey,
+                                        *deposit,
+                                        *updateBonds],
+                                        *return
+                                    )
+
+                                    | contract isBonded (@userPk, return) = {
+                                        for(@bonds <- bondsCh) {
+                                            bondsCh!(bonds) | return!(bonds.contains(userPk))
+                                        }
+                                    }
+
+                                    | contract validateBondAmount (@bondAmount, return) = {
+                                        if (bondAmount < minimumBond) {
+                                            return!((false, "Bond less than minimum!"))
+                                        } else if (bondAmount > maximumBond) {
+                                            return!((false, "Bond greater than maximum!"))
+                                        } else {
+                                            return!((true, bondAmount))
+                                        }
+                                    }
+
+                                    // TODO: figure out rate-limiting of bonding
+                                    | contract validateBondingRate (@bondAmount, return) = {
+                                        return!((true, bondAmount))
+                                    }
+
+                                    | contract validatePublicKey (@bondAmount, return) = {
+                                        new isBondedCh, parametersCh in {
+                                            getParameters!(*parametersCh)
+                                            | for (_, _, @userPk, _ <- parametersCh) {
+                                                isBonded!(userPk, *isBondedCh)
+                                                | for (@isBondedResult <- isBondedCh) {
+                                                    if (isBondedResult) {
+                                                        return!((false, "Public key ${pk} already bonded." %% {"pk" : userPk}))
+                                                    } else return!((true, bondAmount))
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    | contract updateBonds (@bondAmount, return) = {
+                                        new parametersCh in {
+                                            getParameters!(*parametersCh)
+                                            | for(@bonds <- bondsCh; _, _, @userPk, _ <- parametersCh) {
+                                                bondsCh!(
+                                                    bonds.set(
+                                                        userPk,
+                                                        [bondAmount, sigVerify, bonds.size() + 1]
+                                                    )
+                                                ) | return!((true, "Bond successful!"))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            //Assuming that user public key is valid, a vault should always be returned.
+                            | contract deposit (@amount, return) = {
+                                new parametersCh,
+                                    vaultCh,
+                                    revAddressCh in {
+                                    getParameters!(*parametersCh)
+                                    | for (_, _, @userPk, _ <- parametersCh) {
+                                        revAddressOps!("fromPublicKey", userPk, *revAddressCh)
+                                        | for (@revAddress <- revAddressCh) {
+                                            @RevVault!("findOrCreate", revAddress, *vaultCh)
+                                            | for (@(true, vault) <- vaultCh) {
+                                                @vault!("transfer", posRevAddress, amount, *return)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            | paymentStore!([Nil, Nil, Nil, Nil])
+
+                            //Make it easy to query the last payment so that validators
+                            //can check how much phlo there is for the deploy.
+                            | contract this(@"lastPayment", return) = {
+                                for(@payment <- paymentStore) {
+                                    paymentStore!(payment) | return!(payment)
+                                }
+                            }
+
+                            | contract this (@"pay", @amount, return) = {
+                                new parametersCh, depositRet in {
+                                    deposit!(amount, *depositRet)
+                                    | getParameters!(*parametersCh)
+                                    | for (@depositResult <- depositRet; @codeHash, @phloRate, @userPk, @timestamp <- parametersCh; lastPayment <- paymentStore) {
+                                        match depositResult {
+                                            (true, Nil) => { paymentStore!([codeHash, userPk, timestamp, phloRate * amount]) | return!(phloRate *amount) }
+                                            (false, err) => { paymentStore!([codeHash, userPk, timestamp, 0]) | return!(0) }
+                                        }
+                                    }
+                                }
+                            }
+
+                            | return!(bundle+{*this})
+                        }
+                    }
+                }
+            }
+        }
+  } |
+  rs!(
+    "cc87bf7747a8c176714b417ca14a63897b07572876c5e38a7896b6007738ef81".hexToBytes(),
+    (9223372036854775807, bundle+{*PoS}),
+    "f6a7a48a5de507020211c2abdd660dfb3d2e6365f0167024ced4bd9454889ea5b9c9e871a996f79964ccdb9321d484a147ca4c33b9dfb61ee92fc747b694190d".hexToBytes(),
+    *uriOut
+  )
+}
+  
