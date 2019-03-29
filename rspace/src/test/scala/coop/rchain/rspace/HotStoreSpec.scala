@@ -30,39 +30,44 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers {
   ): Unit
 
   val channels = List("ch1")
-  val patterns = Seq[Pattern](StringMatch("val"))
-  val continuations =
-    List(WaitingContinuation.create(channels, patterns, new StringsCaptor(), false))
 
-  "getContinuations when cache is empty" should "read data from history and put into the cache" in fixture {
+  val historyPatterns = Seq[Pattern](StringMatch("val1"))
+  val historyContinuations =
+    List(WaitingContinuation.create(channels, historyPatterns, new StringsCaptor(), false))
+
+  val cachedPatterns = Seq[Pattern](StringMatch("val2"))
+  val cachedContinuations =
+    List(
+      WaitingContinuation
+        .create(channels, cachedPatterns, new StringsCaptor(), false)
+    )
+
+  val insertedContinuation =
+    WaitingContinuation
+      .create(channels, Seq[Pattern](StringMatch("inserted")), new StringsCaptor(), false)
+
+  "getContinuations when cache is empty" should "read from history and put into the cache" in fixture {
     (state, history, hotStore) =>
-      {
-        for {
-          _                 <- history.putContinuations(channels, continuations)
-          cache             <- state.inspect(identity)
-          _                 = cache.continuations shouldBe empty
-          readContinuations <- hotStore.getContinuations(channels)
-          cache             <- state.inspect(identity)
-          _                 = cache.continuations(channels) shouldEqual continuations
-        } yield (readContinuations shouldEqual continuations)
-      }
+      for {
+        _                 <- history.putContinuations(channels, historyContinuations)
+        cache             <- state.inspect(identity)
+        _                 = cache.continuations shouldBe empty
+        readContinuations <- hotStore.getContinuations(channels)
+        cache             <- state.inspect(identity)
+        _                 = cache.continuations(channels) shouldEqual historyContinuations
+      } yield (readContinuations shouldEqual historyContinuations)
   }
 
-  "getContinuations when cache contains data" should "read data from cache ignoring history" in fixture {
+  "getContinuations when cache contains data" should "read from cache ignoring history" in fixture {
     (state, history, hotStore) =>
       {
-        val cachedContinuations =
-          List(WaitingContinuation.create(List("ch2"), patterns, new StringsCaptor(), false))
         for {
-          _ <- history.putContinuations(channels, continuations)
+          _ <- history.putContinuations(channels, historyContinuations)
           _ <- state.modify(
                 _ =>
                   Cache(
                     continuations = Map(
-                      channels -> List(
-                        WaitingContinuation
-                          .create(List("ch2"), patterns, new StringsCaptor(), false)
-                      )
+                      channels -> cachedContinuations
                     )
                   )
               )
@@ -72,6 +77,39 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers {
         } yield (readContinuations shouldEqual cachedContinuations)
       }
   }
+
+  "putContinuation when cache is empty" should "read from history and add the continuation to it" in fixture {
+    (state, history, hotStore) =>
+      {
+        for {
+          _     <- history.putContinuations(channels, historyContinuations)
+          _     <- hotStore.putContinuation(channels, insertedContinuation)
+          cache <- state.inspect(identity)
+        } yield
+          (cache.continuations(channels) shouldEqual insertedContinuation :: historyContinuations)
+      }
+  }
+
+  "putContinuation when cache contains data" should "read from the cache and add the continuation to it" in fixture {
+    (state, history, hotStore) =>
+      {
+        for {
+          _ <- history.putContinuations(channels, historyContinuations)
+          _ <- state.modify(
+                _ =>
+                  Cache(
+                    continuations = Map(
+                      channels -> cachedContinuations
+                    )
+                  )
+              )
+          _     <- hotStore.putContinuation(channels, insertedContinuation)
+          cache <- state.inspect(identity)
+        } yield
+          (cache.continuations(channels) shouldEqual insertedContinuation :: cachedContinuations)
+      }
+  }
+
 }
 
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
@@ -102,7 +140,6 @@ class InMemHotStoreSpec extends HotStoreSpec[Task] {
 
   type F[A] = Task[A]
   override implicit val M: Monad[F] = implicitly[Concurrent[Task]]
-
 
   private[rspace] implicit def liftToMonadState[V](
       state: MVar[F, V]

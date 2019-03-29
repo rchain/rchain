@@ -35,7 +35,11 @@ private class InMemHotStore[F[_]: Monad, C, P, A, K](
       _            <- S.set(updatedCache)
     } yield (res)
 
-  def putContinuation(channels: List[C], wc: WaitingContinuation[P, K]): F[Unit] = ???
+  def putContinuation(channels: List[C], wc: WaitingContinuation[P, K]): F[Unit] =
+    for {
+      continuations <- getContinuations(channels)
+      _             <- S.modify(cache => cache.copy(cache.continuations.updated(channels, wc :: continuations)))
+    } yield ()
 }
 
 object HotStore {
