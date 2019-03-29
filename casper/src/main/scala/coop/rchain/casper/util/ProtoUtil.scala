@@ -8,7 +8,6 @@ import coop.rchain.casper.PrettyPrinter
 import coop.rchain.models.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.{DeployData, _}
-import coop.rchain.casper.util.ProtoUtil.basicDeployData
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.casper.util.implicits._
 import coop.rchain.crypto.codec.Base16
@@ -387,34 +386,6 @@ object ProtoUtil {
 
   def stringToByteString(string: String): ByteString =
     ByteString.copyFrom(Base16.unsafeDecode(string))
-
-  def basicDeployData[F[_]: Monad: Time](id: Int): F[DeployData] =
-    Time[F].currentMillis.map(
-      now =>
-        DeployData()
-          .withDeployer(ByteString.EMPTY)
-          .withTimestamp(now)
-          .withTerm(s"@${id}!($id)")
-          .withPhloLimit(accounting.MAX_VALUE)
-    )
-
-  def basicProcessedDeploy[F[_]: Monad: Time](id: Int): F[ProcessedDeploy] =
-    basicDeployData[F](id).map(deploy => ProcessedDeploy(deploy = Some(deploy)))
-
-  def sourceDeploy(source: String, timestamp: Long, phlos: Long): DeployData =
-    DeployData(
-      deployer = ByteString.EMPTY,
-      timestamp = timestamp,
-      term = source,
-      phloLimit = phlos
-    )
-
-  def sourceDeployNow(source: String): DeployData =
-    sourceDeploy(
-      source,
-      System.currentTimeMillis(),
-      accounting.MAX_VALUE
-    )
 
   /**
     * Strip a deploy down to the fields we are using to seed the Deterministic name generator.

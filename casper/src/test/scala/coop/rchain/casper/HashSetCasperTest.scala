@@ -22,6 +22,7 @@ import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.comm.{transport, CommError, TimeOut}
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
@@ -75,7 +76,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     implicit val timeEff = new LogicalTime[Effect]
 
     for {
-      deploy <- ProtoUtil.basicDeployData[Effect](0)
+      deploy <- ConstructDeploy.basicDeployData[Effect](0)
       _      <- MultiParentCasper[Effect].deploy(deploy)
 
       _      = logEff.infos.size should be(2)
@@ -84,13 +85,80 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     } yield result
   }
 
+  it should "not allow deploy if deploy is missing signature" in effectTest {
+    val node             = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val casper           = node.casperEff
+    implicit val timeEff = new LogicalTime[Effect]
+
+    for {
+      correctDeploy   <- ConstructDeploy.basicDeployData[Effect](0)
+      incorrectDeploy = correctDeploy.withSig(ByteString.EMPTY)
+      deployResult    <- casper.deploy(incorrectDeploy)
+      _               <- node.tearDown()
+    } yield deployResult should be(Left(MissingSignature))
+  }
+
+  it should "not allow deploy if deploy is missing signature algorithm" in effectTest {
+    val node             = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val casper           = node.casperEff
+    implicit val timeEff = new LogicalTime[Effect]
+
+    for {
+      correctDeploy   <- ConstructDeploy.basicDeployData[Effect](0)
+      incorrectDeploy = correctDeploy.withSigAlgorithm("")
+      deployResult    <- casper.deploy(incorrectDeploy)
+      _               <- node.tearDown()
+    } yield deployResult should be(Left(MissingSignatureAlgorithm))
+  }
+
+  it should "not allow deploy if deploy is missing user" in effectTest {
+    val node             = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val casper           = node.casperEff
+    implicit val timeEff = new LogicalTime[Effect]
+
+    for {
+      correctDeploy   <- ConstructDeploy.basicDeployData[Effect](0)
+      incorrectDeploy = correctDeploy.withDeployer(ByteString.EMPTY)
+      deployResult    <- casper.deploy(incorrectDeploy)
+      _               <- node.tearDown()
+    } yield deployResult should be(Left(MissingUser))
+  }
+
+  it should "not allow deploy if deploy is holding non-existing algorithm" in effectTest {
+    val node             = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val casper           = node.casperEff
+    implicit val timeEff = new LogicalTime[Effect]
+
+    for {
+      correctDeploy   <- ConstructDeploy.basicDeployData[Effect](0)
+      incorrectDeploy = correctDeploy.withSigAlgorithm("SOME_RANDOME_STUFF")
+      deployResult    <- casper.deploy(incorrectDeploy)
+      _               <- node.tearDown()
+    } yield deployResult should be(Left(UnknownSignatureAlgorithm("SOME_RANDOME_STUFF")))
+  }
+
+  it should "not allow deploy if deploy is incorrectly signed" in effectTest {
+    val node             = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val casper           = node.casperEff
+    implicit val timeEff = new LogicalTime[Effect]
+
+    for {
+      correctDeploy <- ConstructDeploy.basicDeployData[Effect](0)
+      incorrectDeploy = correctDeploy.withSig(
+        ByteString.copyFrom(correctDeploy.sig.toByteArray.reverse)
+      )
+      deployResult <- casper.deploy(incorrectDeploy)
+      _            <- node.tearDown()
+    } yield deployResult should be(Left(SignatureVerificationFailed))
+  }
+
   it should "not allow multiple threads to process the same block" in {
     val scheduler = Scheduler.fixedPool("three-threads", 3)
     val node      = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)(scheduler)
     val casper    = node.casperEff
 
     val testProgram = for {
-      deploy <- ProtoUtil.basicDeployData[Effect](0)
+      deploy <- ConstructDeploy.basicDeployData[Effect](0)
       _      <- casper.deploy(deploy)
       block  <- casper.createBlock.map { case Created(block) => block }
       result <- EitherT(
@@ -120,7 +188,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     implicit val casper = node.casperEff
 
     for {
-      deploy <- ProtoUtil.basicDeployData[Effect](0)
+      deploy <- ConstructDeploy.basicDeployData[Effect](0)
       _      <- MultiParentCasper[Effect].deploy(deploy)
 
       createBlockResult <- MultiParentCasper[Effect].createBlock
@@ -144,7 +212,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     implicit val timeEff = new LogicalTime[Effect]
 
     for {
-      deploy               <- ProtoUtil.basicDeployData[Effect](0)
+      deploy               <- ConstructDeploy.basicDeployData[Effect](0)
       _                    <- MultiParentCasper[Effect].deploy(deploy)
       createBlockResult    <- MultiParentCasper[Effect].createBlock
       Created(signedBlock) = createBlockResult
@@ -162,7 +230,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     import node.casperEff
 
     def now = System.currentTimeMillis()
-    val registerDeploy = ProtoUtil.sourceDeploy(
+    val registerDeploy = ConstructDeploy.sourceDeploy(
       """new uriCh, rr(`rho:registry:insertArbitrary`), hello in {
         |  contract hello(@name, return) = { return!("Hello, ${name}!" %% {"name" : name}) } |
         |  rr!(bundle+{*hello}, *uriCh)
@@ -184,13 +252,13 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
                  .find(
                    _.contains(
                      //based on the timestamp of registerDeploy, this is uriCh
-                     "@{Unforgeable(0x744dc7e287a955d8f794054ce07fff6efeecec4473a1ebdf26728d93258e3ad6)}!"
+                     "@{Unforgeable(0xe2615f3fd74c2b83230a3bfc44001d38aded3d2ade5e9b15ffd20e8566d3426f)}!"
                    )
                  )
                  .get
                  .split('`')(1)
              )
-      callDeploy = ProtoUtil.sourceDeploy(
+      callDeploy = ConstructDeploy.sourceDeploy(
         s"""new rl(`rho:registry:lookup`), helloCh, out in {
            |  rl!(`$id`, *helloCh) |
            |  for(hello <- helloCh){ hello!("World", *out) }
@@ -222,7 +290,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     val deployDatas = Vector(
       "contract @\"add\"(@x, @y, ret) = { ret!(x + y) }",
       "new unforgable in { @\"add\"!(5, 7, *unforgable) }"
-    ).zipWithIndex.map(s => ProtoUtil.sourceDeploy(s._1, start + s._2, accounting.MAX_VALUE))
+    ).zipWithIndex.map(s => ConstructDeploy.sourceDeploy(s._1, start + s._2, accounting.MAX_VALUE))
 
     for {
       createBlockResult1 <- MultiParentCasper[Effect].deploy(deployDatas.head) *> MultiParentCasper[
@@ -254,7 +322,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     val startTime = System.currentTimeMillis()
     val source    = " for(@x <- @0){ @0!(x) } | @0!(0) "
     val deploys = (source #:: source #:: Stream.empty[String]).zipWithIndex
-      .map(s => ProtoUtil.sourceDeploy(s._1, startTime + s._2, accounting.MAX_VALUE))
+      .map(s => ConstructDeploy.sourceDeploy(s._1, startTime + s._2, accounting.MAX_VALUE))
     for {
       _                 <- deploys.traverse_(MultiParentCasper[Effect].deploy(_))
       createBlockResult <- MultiParentCasper[Effect].createBlock
@@ -271,7 +339,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     implicit val timeEff = new LogicalTime[Effect]
 
     for {
-      basicDeployData <- ProtoUtil.basicDeployData[Effect](0)
+      basicDeployData <- ConstructDeploy.basicDeployData[Effect](0)
       createBlockResult <- MultiParentCasper[Effect].deploy(basicDeployData) *> MultiParentCasper[
                             Effect
                           ].createBlock
@@ -289,7 +357,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
 
     val List(data0, data1) =
       (0 to 1)
-        .map(i => ProtoUtil.sourceDeploy(s"@$i!($i)", i, accounting.MAX_VALUE))
+        .map(i => ConstructDeploy.sourceDeploy(s"@$i!($i)", i.toLong, accounting.MAX_VALUE))
         .toList
 
     for {
@@ -323,7 +391,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     implicit val timeEff = new LogicalTime[Effect]
 
     for {
-      basicDeployData <- ProtoUtil.basicDeployData[Effect](0)
+      basicDeployData <- ConstructDeploy.basicDeployData[Effect](0)
       createBlockResult <- MultiParentCasper[Effect].deploy(basicDeployData) *> MultiParentCasper[
                             Effect
                           ].createBlock
@@ -337,7 +405,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
   it should "propose blocks it adds to peers" in effectTest {
     for {
       nodes                <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
-      deployData           <- ProtoUtil.basicDeployData[Effect](0)
+      deployData           <- ConstructDeploy.basicDeployData[Effect](0)
       createBlockResult    <- nodes(0).casperEff.deploy(deployData) *> nodes(0).casperEff.createBlock
       Created(signedBlock) = createBlockResult
       _                    <- nodes(0).casperEff.addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
@@ -355,7 +423,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
   it should "add a valid block from peer" in effectTest {
     for {
       nodes                      <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
-      deployData                 <- ProtoUtil.basicDeployData[Effect](1)
+      deployData                 <- ConstructDeploy.basicDeployData[Effect](1)
       createBlockResult          <- nodes(0).casperEff.deploy(deployData) *> nodes(0).casperEff.createBlock
       Created(signedBlock1Prime) = createBlockResult
       _                          <- nodes(0).casperEff.addBlock(signedBlock1Prime, ignoreDoppelgangerCheck[Effect])
@@ -374,11 +442,11 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
   it should "handle multi-parent blocks correctly" in effectTest {
     for {
       nodes       <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
-      deployData0 <- ProtoUtil.basicDeployData[Effect](0)
-      deployData2 <- ProtoUtil.basicDeployData[Effect](2)
+      deployData0 <- ConstructDeploy.basicDeployData[Effect](0)
+      deployData2 <- ConstructDeploy.basicDeployData[Effect](2)
       deploys = Vector(
         deployData0,
-        ProtoUtil.sourceDeploy(
+        ConstructDeploy.sourceDeploy(
           "@1!(1) | for(@x <- @1){ @1!(x) }",
           System.currentTimeMillis(),
           accounting.MAX_VALUE
@@ -425,8 +493,8 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     for {
       nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
       deploys = Vector(
-        ProtoUtil.sourceDeploy(echoContract(1), time + 1, accounting.MAX_VALUE),
-        ProtoUtil.sourceDeploy(echoContract(2), time + 2, accounting.MAX_VALUE)
+        ConstructDeploy.sourceDeploy(echoContract(1), time + 1, accounting.MAX_VALUE),
+        ConstructDeploy.sourceDeploy(echoContract(2), time + 2, accounting.MAX_VALUE)
       )
       createBlockResult0 <- nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
       createBlockResult1 <- nodes(1).casperEff.deploy(deploys(1)) *> nodes(1).casperEff.createBlock
@@ -459,18 +527,18 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     for {
       nodes    <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
       current0 <- timeEff.currentMillis
-      deploy0 = ProtoUtil.sourceDeploy(
+      deploy0 = ConstructDeploy.sourceDeploy(
         "@1!(47)",
         current0,
         accounting.MAX_VALUE
       )
       current1 <- timeEff.currentMillis
-      deploy1 = ProtoUtil.sourceDeploy(
+      deploy1 = ConstructDeploy.sourceDeploy(
         "for(@x <- @1){ @1!(x) }",
         current1,
         accounting.MAX_VALUE
       )
-      deploy2 <- ProtoUtil.basicDeployData[Effect](2)
+      deploy2 <- ConstructDeploy.basicDeployData[Effect](2)
       deploys = Vector(
         deploy0,
         deploy1,
@@ -505,7 +573,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
 
   it should "not produce UnusedCommEvent while merging non conflicting blocks in the presence of conflicting ones" in effectTest {
     def defineDeploy(source: String, t: Long) =
-      ProtoUtil.sourceDeploy(
+      ConstructDeploy.sourceDeploy(
         source,
         t,
         accounting.MAX_VALUE
@@ -621,18 +689,18 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     for {
       nodes    <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
       current0 <- timeEff.currentMillis
-      deploy0 = ProtoUtil.sourceDeploy(
+      deploy0 = ConstructDeploy.sourceDeploy(
         "@1!(47)",
         current0,
         accounting.MAX_VALUE
       )
       current1 <- timeEff.currentMillis
-      deploy1 = ProtoUtil.sourceDeploy(
+      deploy1 = ConstructDeploy.sourceDeploy(
         "for(@x <- @1; @y <- @2){ @1!(x) }",
         current1,
         accounting.MAX_VALUE
       )
-      deploy2 <- ProtoUtil.basicDeployData[Effect](2)
+      deploy2 <- ConstructDeploy.basicDeployData[Effect](2)
       deploys = Vector(
         deploy0,
         deploy1,
@@ -685,7 +753,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
                              "unlockOut"
                            )(Concurrent[Effect], runtimeManager)
       bondingForwarderAddress = BondingUtil.bondingForwarderAddress(ethAddress)
-      bondingForwarderDeploy = ProtoUtil.sourceDeploy(
+      bondingForwarderDeploy = ConstructDeploy.sourceDeploy(
         BondingUtil.bondingForwarderDeploy(bondKey, ethAddress),
         System.currentTimeMillis(),
         accounting.MAX_VALUE
@@ -712,7 +780,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       block2Status    <- nodes(1).casperEff.addBlock(block2, ignoreDoppelgangerCheck[Effect])
       _               <- nodes.toList.traverse_(_.receive())
 
-      helloWorldDeploy = ProtoUtil.sourceDeploy(
+      helloWorldDeploy = ConstructDeploy.sourceDeploy(
         """new s(`rho:io:stdout`) in { s!("Hello, World!") }""",
         System.currentTimeMillis(),
         accounting.MAX_VALUE
@@ -738,7 +806,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       _ = block3PrimeStatus shouldBe Valid
       _ = nodes.forall(_.logEff.warns.isEmpty) shouldBe true
 
-      rankedValidatorQuery = ProtoUtil.sourceDeploy(
+      rankedValidatorQuery = ConstructDeploy.sourceDeploy(
         """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
           |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
           |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
@@ -821,16 +889,20 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
          |}""".stripMargin
 
     //with the fixed user+timestamp we know that walletCh is registered at `rho:id:mrs88izurkgki71dpjqamzg6tgcjd6sk476c9msks7tumw4a6e39or`
-    val createWalletDeploy = ProtoUtil
-      .sourceDeploy(createWalletCode, System.currentTimeMillis(), accounting.MAX_VALUE)
-      .withTimestamp(1540570144121L)
-      .withDeployer(ProtoUtil.stringToByteString(pkStr))
+    val createWalletDeploy = ConstructDeploy.sourceDeploy(
+      source = createWalletCode,
+      timestamp = 1540570144121L,
+      phlos = accounting.MAX_VALUE,
+      sec = PrivateKey(
+        Base16.unsafeDecode("6061f3ea36d0419d1e9e23c33bba88ed1435427fa2a8f7300ff210b4e9f18a14")
+      )
+    )
 
     for {
       createBlockResult <- casperEff.deploy(createWalletDeploy) *> casperEff.createBlock
       Created(block)    = createBlockResult
       blockStatus       <- casperEff.addBlock(block, ignoreDoppelgangerCheck[Effect])
-      balanceQuery = ProtoUtil.sourceDeploy(
+      balanceQuery = ConstructDeploy.sourceDeploy(
         s"""new
            |  rl(`rho:registry:lookup`), walletFeedCh
            |in {
@@ -840,7 +912,10 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
            |  }
            |}""".stripMargin,
         0L,
-        accounting.MAX_VALUE
+        accounting.MAX_VALUE,
+        sec = PrivateKey(
+          Base16.unsafeDecode("6061f3ea36d0419d1e9e23c33bba88ed1435427fa2a8f7300ff210b4e9f18a14")
+        )
       )
       newWalletBalance <- node.runtimeManager
                            .captureResults(
@@ -866,12 +941,12 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
 
     for {
       bondingCode <- BondingUtil.faucetBondDeploy[Effect](amount, "ed25519", pkStr, sk)
-      forwardDeploy = ProtoUtil.sourceDeploy(
+      forwardDeploy = ConstructDeploy.sourceDeploy(
         forwardCode,
         System.currentTimeMillis(),
         accounting.MAX_VALUE
       )
-      bondingDeploy = ProtoUtil.sourceDeploy(
+      bondingDeploy = ConstructDeploy.sourceDeploy(
         bondingCode,
         forwardDeploy.timestamp + 1,
         accounting.MAX_VALUE
@@ -895,7 +970,11 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
 
   it should "allow bonding in an existing network" in effectTest {
     def deployment(i: Int): DeployData =
-      ProtoUtil.sourceDeploy(s"@$i!({$i})", System.currentTimeMillis() + i, accounting.MAX_VALUE)
+      ConstructDeploy.sourceDeploy(
+        s"@$i!({$i})",
+        System.currentTimeMillis() + i,
+        accounting.MAX_VALUE
+      )
 
     def deploy(
         node: HashSetCasperTestNode[Effect],
@@ -934,12 +1013,12 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       val forwardCode             = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
       for {
         bondingCode <- BondingUtil.faucetBondDeploy[Effect](amount, "ed25519", pkStr, sk)
-        forwardDeploy = ProtoUtil.sourceDeploy(
+        forwardDeploy = ConstructDeploy.sourceDeploy(
           forwardCode,
           System.currentTimeMillis(),
           accounting.MAX_VALUE
         )
-        bondingDeploy = ProtoUtil.sourceDeploy(
+        bondingDeploy = ConstructDeploy.sourceDeploy(
           bondingCode,
           forwardDeploy.timestamp + 1,
           accounting.MAX_VALUE
@@ -999,7 +1078,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, Faucet.basicWalletFaucet, 0L)
 
     def deployment(i: Int, ts: Long): DeployData =
-      ProtoUtil.sourceDeploy(s"new x in { x!(0) }", ts, accounting.MAX_VALUE)
+      ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts, accounting.MAX_VALUE)
 
     def deploy(
         node: HashSetCasperTestNode[Effect],
@@ -1063,12 +1142,12 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
                         Concurrent[Effect],
                         rm
                       )
-      forwardDeploy = ProtoUtil.sourceDeploy(
+      forwardDeploy = ConstructDeploy.sourceDeploy(
         forwardCode,
         System.currentTimeMillis(),
         accounting.MAX_VALUE
       )
-      bondingDeploy = ProtoUtil.sourceDeploy(
+      bondingDeploy = ConstructDeploy.sourceDeploy(
         bondingCode,
         forwardDeploy.timestamp + 1,
         accounting.MAX_VALUE
@@ -1088,7 +1167,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       createBlockResult2 <- {
         val n = nodes(1)
         import n.casperEff._
-        (ProtoUtil.basicDeployData[Effect](0) >>= deploy) *> createBlock
+        (ConstructDeploy.basicDeployData[Effect](0) >>= deploy) *> createBlock
       }
       Created(block2) = createBlockResult2
       status2         <- nodes(1).casperEff.addBlock(block2, ignoreDoppelgangerCheck[Effect])
@@ -1099,7 +1178,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       createBlockResult3 <- { //nodes(2) proposes a block
         val n = nodes(2)
         import n.casperEff._
-        (ProtoUtil.basicDeployData[Effect](1) >>= deploy) *> createBlock
+        (ConstructDeploy.basicDeployData[Effect](1) >>= deploy) *> createBlock
       }
       Created(block3) = createBlockResult3
       status3         <- nodes(2).casperEff.addBlock(block3, ignoreDoppelgangerCheck[Effect])
@@ -1111,7 +1190,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       createBlockResult4 <- { //nodes(0) proposes a new block
         val n = nodes.head
         import n.casperEff._
-        (ProtoUtil.basicDeployData[Effect](2) >>= deploy) *> createBlock
+        (ConstructDeploy.basicDeployData[Effect](2) >>= deploy) *> createBlock
       }
       Created(block4) = createBlockResult4
       status4         <- nodes.head.casperEff.addBlock(block4, ignoreDoppelgangerCheck[Effect])
@@ -1134,13 +1213,14 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     val timestamp = System.currentTimeMillis()
     val phloPrice = 1L
     val amount    = 847L
-    val sigDeployData = ProtoUtil
+    val sigDeployData = ConstructDeploy
       .sourceDeploy(
         s"""new retCh in { @"blake2b256Hash"!([0, $amount, *retCh].toByteArray(), "__SCALA__") }""",
         timestamp,
-        accounting.MAX_VALUE
+        accounting.MAX_VALUE,
+        sec = PrivateKey(sk)
       )
-      .withDeployer(user)
+
     for {
       capturedResults <- node.runtimeManager
                           .captureResults(
@@ -1167,22 +1247,28 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
          |    }
          |  }
          |}""".stripMargin
-      paymentDeployData = ProtoUtil
-        .sourceDeploy(paymentCode, timestamp, accounting.MAX_VALUE)
-        .withPhloPrice(phloPrice)
-        .withDeployer(user)
+      paymentDeployData = ConstructDeploy
+        .sourceDeploy(
+          paymentCode,
+          timestamp,
+          accounting.MAX_VALUE,
+          phloPrice = phloPrice,
+          sec = PrivateKey(sk)
+        )
 
-      paymentQuery = ProtoUtil.sourceDeploy(
-        """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
+      paymentQuery = ConstructDeploy
+        .sourceDeploy(
+          """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
         |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
         |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
         |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
         |    for(pos <- posCh){ pos!("lastPayment", "__SCALA__") }
         |  }
         |}""".stripMargin,
-        0L,
-        accounting.MAX_VALUE
-      )
+          0L,
+          accounting.MAX_VALUE,
+          sec = PrivateKey(sk)
+        )
 
       deployQueryResult <- deployAndQuery(
                             node,
@@ -1218,10 +1304,12 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     for {
       nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
       deployDatas <- (0 to 2).toList
-                      .traverse[Effect, DeployData](i => ProtoUtil.basicDeployData[Effect](i))
-      deployPrim0 = deployDatas(1)
-        .withTimestamp(deployDatas(0).timestamp)
-        .withDeployer(deployDatas(0).deployer) // deployPrim0 has the same (user, millisecond timestamp) with deployDatas(0)
+                      .traverse[Effect, DeployData](i => ConstructDeploy.basicDeployData[Effect](i))
+      deployPrim0 = ConstructDeploy.sign(
+        deployDatas(1)
+          .withTimestamp(deployDatas(0).timestamp)
+          .withDeployer(deployDatas(0).deployer)
+      ) // deployPrim0 has the same (user, millisecond timestamp) with deployDatas(0)
       createBlockResult1 <- nodes(0).casperEff
                              .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
       Created(signedBlock1) = createBlockResult1
@@ -1280,7 +1368,9 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
         "@2!(2)"
       ).zipWithIndex
         .map(
-          d => ProtoUtil.sourceDeploy(d._1, System.currentTimeMillis() + d._2, accounting.MAX_VALUE)
+          d =>
+            ConstructDeploy
+              .sourceDeploy(d._1, System.currentTimeMillis() + d._2, accounting.MAX_VALUE)
         )
 
       createBlockResult1 <- nodes(0).casperEff
@@ -1354,7 +1444,8 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       .map(
         d =>
           () =>
-            ProtoUtil.sourceDeploy(d._1, System.currentTimeMillis() + d._2, accounting.MAX_VALUE)
+            ConstructDeploy
+              .sourceDeploy(d._1, System.currentTimeMillis() + d._2, accounting.MAX_VALUE)
       )
     def deploy(node: HashSetCasperTestNode[Effect], dd: DeployData): Effect[BlockMessage] =
       for {
@@ -1421,11 +1512,11 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(2), genesis)
 
       // Creates a pair that constitutes equivocation blocks
-      basicDeployData0 <- ProtoUtil.basicDeployData[Effect](0)
+      basicDeployData0 <- ConstructDeploy.basicDeployData[Effect](0)
       createBlockResult1 <- nodes(0).casperEff
                              .deploy(basicDeployData0) *> nodes(0).casperEff.createBlock
       Created(signedBlock1) = createBlockResult1
-      basicDeployData1      <- ProtoUtil.basicDeployData[Effect](1)
+      basicDeployData1      <- ConstructDeploy.basicDeployData[Effect](1)
       createBlockResult1Prime <- nodes(0).casperEff
                                   .deploy(basicDeployData1) *> nodes(0).casperEff.createBlock
       Created(signedBlock1Prime) = createBlockResult1Prime
@@ -1453,8 +1544,9 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
   // See [[/docs/casper/images/minimal_equivocation_neglect.png]] but cross out genesis block
   it should "not ignore equivocation blocks that are required for parents of proper nodes" in effectTest {
     for {
-      nodes       <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
-      deployDatas <- (0 to 5).toList.traverse[Effect, DeployData](ProtoUtil.basicDeployData[Effect])
+      nodes <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
+      deployDatas <- (0 to 5).toList
+                      .traverse[Effect, DeployData](i => ConstructDeploy.basicDeployData[Effect](i))
 
       // Creates a pair that constitutes equivocation blocks
       createBlockResult1 <- nodes(0).casperEff
@@ -1544,7 +1636,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
   it should "prepare to slash an block that includes a invalid block pointer" in effectTest {
     for {
       nodes           <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
-      deploys         <- (0 to 5).toList.traverse(i => ProtoUtil.basicDeployData[Effect](i))
+      deploys         <- (0 to 5).toList.traverse(i => ConstructDeploy.basicDeployData[Effect](i))
       deploysWithCost = deploys.map(d => ProcessedDeploy(deploy = Some(d))).toIndexedSeq
 
       createBlockResult <- nodes(0).casperEff
@@ -1589,7 +1681,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
 
       _ <- (0 to 9).toList.traverse_[Effect, Unit] { i =>
             for {
-              deploy <- ProtoUtil.basicDeployData[Effect](i)
+              deploy <- ConstructDeploy.basicDeployData[Effect](i)
               createBlockResult <- nodes(0).casperEff
                                     .deploy(deploy) *> nodes(0).casperEff.createBlock
               Created(block) = createBlockResult
@@ -1598,7 +1690,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
               _ <- nodes(1).transportLayerEff.clear(nodes(1).local) //nodes(1) misses this block
             } yield ()
           }
-      deployData10 <- ProtoUtil.basicDeployData[Effect](10)
+      deployData10 <- ConstructDeploy.basicDeployData[Effect](10)
       createBlock11Result <- nodes(0).casperEff.deploy(deployData10) *> nodes(
                               0
                             ).casperEff.createBlock
@@ -1632,7 +1724,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       buildGenesis(Seq.empty, equalBonds, 1L, Long.MaxValue, Faucet.noopFaucet, 0L)
     for {
       nodes       <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesisWithEqualBonds)
-      deployDatas <- (0 to 7).toList.traverse(i => ProtoUtil.basicDeployData[Effect](i))
+      deployDatas <- (0 to 7).toList.traverse(i => ConstructDeploy.basicDeployData[Effect](i))
 
       createBlock1Result <- nodes(0).casperEff
                              .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
@@ -1715,7 +1807,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     implicit val timeEff = new LogicalTime[Effect]
 
     for {
-      deployData        <- ProtoUtil.basicDeployData[Effect](0).map(_.withPhloLimit(1))
+      deployData        <- ConstructDeploy.basicDeployData[Effect](0, phlos = 1)
       _                 <- node.casperEff.deploy(deployData)
       createBlockResult <- MultiParentCasper[Effect].createBlock
       Created(block)    = createBlockResult
@@ -1728,7 +1820,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     implicit val timeEff = new LogicalTime[Effect]
 
     for {
-      deployData <- ProtoUtil.basicDeployData[Effect](0).map(_.withPhloLimit(100))
+      deployData <- ConstructDeploy.basicDeployData[Effect](0, phlos = 100)
       _          <- node.casperEff.deploy(deployData)
 
       createBlockResult <- MultiParentCasper[Effect].createBlock
@@ -1791,7 +1883,7 @@ object HashSetCasperTest {
       query: DeployData
   ): Effect[(BlockStatus, Seq[Par])] =
     for {
-      createBlockResult <- node.casperEff.deploy(dd) *> node.casperEff.createBlock
+      createBlockResult <- node.casperEff.deploy(dd) >> node.casperEff.createBlock
       Created(block)    = createBlockResult
       blockStatus       <- node.casperEff.addBlock(block, ignoreDoppelgangerCheck[Effect])
       queryResult <- node.runtimeManager

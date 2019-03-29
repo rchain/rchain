@@ -10,7 +10,7 @@ import coop.rchain.casper.helper.BlockGenerator.{
 }
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
-import coop.rchain.casper.util.ProtoUtil.basicProcessedDeploy
+import coop.rchain.casper.ConstructDeploy.basicProcessedDeploy
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.EstimatorHelper.conflicts
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -45,7 +45,7 @@ class EstimatorHelperTest
 
     implicit blockStore => implicit blockDagStorage =>
       for {
-        deploys <- (0 until 6).toList.traverse(basicProcessedDeploy[Task])
+        deploys <- (0 until 6).toList.traverse(i => basicProcessedDeploy[Task](i))
         genesis <- createBlock[Task](Seq())
         b2      <- createBlock[Task](Seq(genesis.blockHash), deploys = Seq(deploys(0)))
         b3      <- createBlock[Task](Seq(genesis.blockHash), deploys = Seq(deploys(1)))

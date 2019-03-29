@@ -81,7 +81,6 @@ object Main {
             privateKey,
             location
           )
-      case DeployDemo        => DeployRuntime.deployDemoProgram[Task]
       case Propose           => DeployRuntime.propose[Task]()
       case ShowBlock(hash)   => DeployRuntime.showBlock[Task](hash)
       case ShowBlocks(depth) => DeployRuntime.showBlocks[Task](depth)

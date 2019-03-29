@@ -3,6 +3,7 @@ package coop.rchain.casper.genesis.contracts
 import cats.effect.Concurrent
 import cats.implicits._
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.casper.ConstructDeploy
 import coop.rchain.casper.HashSetCasperTest.createBonds
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.DeployData
@@ -111,7 +112,7 @@ object RevIssuanceTest {
       statusOut: String
   )(implicit runtimeManager: RuntimeManager[F]): F[DeployData] =
     BondingUtil.preWalletUnlockDeploy[F](ethAddress, pubKey, secKey, statusOut).map { code =>
-      ProtoUtil.sourceDeploy(
+      ConstructDeploy.sourceDeploy(
         code,
         System.currentTimeMillis(),
         accounting.MAX_VALUE
@@ -136,7 +137,7 @@ object RevIssuanceTest {
         secKey
       )
       .map { code =>
-        ProtoUtil.sourceDeploy(
+        ConstructDeploy.sourceDeploy(
           code,
           System.currentTimeMillis(),
           accounting.MAX_VALUE

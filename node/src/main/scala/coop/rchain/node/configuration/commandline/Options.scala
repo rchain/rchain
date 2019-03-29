@@ -341,13 +341,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(eval)
 
-  val deployDemo = new Subcommand("deploy-demo") {
-    descr(
-      "Demo sending some placeholder Deploy operations to Casper on an existing running node at regular intervals"
-    )
-  }
-  addSubcommand(deployDemo)
-
   val hexCheck: String => Boolean     = _.matches("[0-9a-fA-F]+")
   val addressCheck: String => Boolean = addr => addr.startsWith("0x") && hexCheck(addr.drop(2))
 
