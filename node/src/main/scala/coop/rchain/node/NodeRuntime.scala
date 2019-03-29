@@ -1,20 +1,18 @@
 package coop.rchain.node
 
 import java.nio.file.{Files, Path}
+
 import scala.concurrent.duration._
-import cats._, cats.data._, cats.implicits._
+
+import cats._
+import cats.data._
 import cats.effect._
-import cats.effect.concurrent.{Ref, Semaphore}
-import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.blockstorage.{
-  BlockDagFileStorage,
-  BlockDagStorage,
-  BlockStore,
-  FileLMDBIndexBlockStore
-}
+import cats.effect.concurrent.Semaphore
+import cats.implicits._
+
+import coop.rchain.blockstorage._
 import coop.rchain.casper._
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
-import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.comm.CasperPacketHandler
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib._
@@ -27,16 +25,16 @@ import coop.rchain.comm.discovery._
 import coop.rchain.comm.rp._
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
 import coop.rchain.comm.transport._
+import coop.rchain.grpc.Server
 import coop.rchain.metrics.Metrics
-import coop.rchain.node.api._
 import coop.rchain.node.configuration.Configuration
 import coop.rchain.node.diagnostics._
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rspace.Context
 import coop.rchain.shared._
 import coop.rchain.shared.PathOps._
-import coop.rchain.rspace.Context
-import com.typesafe.config.ConfigFactory
+
 import kamon._
 import kamon.system.SystemMetrics
 import kamon.zipkin.ZipkinReporter
@@ -85,8 +83,8 @@ class NodeRuntime private[node] (
 
   case class Servers(
       transportServer: TransportServer,
-      grpcServerExternal: GrpcServer,
-      grpcServerInternal: GrpcServer,
+      grpcServerExternal: Server[Effect],
+      grpcServerInternal: Server[Task],
       httpServer: Fiber[Task, Unit]
   )
 
@@ -115,13 +113,13 @@ class NodeRuntime private[node] (
                             )(grpcScheduler, log)
                           )
                           .toEffect
-      grpcServerExternal <- GrpcServer
+      grpcServerExternal <- api
                              .acquireExternalServer[Effect](
                                conf.grpcServer.portExternal,
                                grpcScheduler,
                                blockApiLock
                              )
-      grpcServerInternal <- GrpcServer
+      grpcServerInternal <- api
                              .acquireInternalServer(
                                conf.grpcServer.portInternal,
                                runtime,
@@ -164,7 +162,7 @@ class NodeRuntime private[node] (
   ): Unit =
     (for {
       _   <- log.info("Shutting down gRPC servers...")
-      _   <- servers.grpcServerExternal.stop
+      _   <- servers.grpcServerExternal.stop.value
       _   <- servers.grpcServerInternal.stop
       _   <- log.info("Shutting down transport layer, broadcasting DISCONNECT")
       _   <- servers.transportServer.stop()
@@ -266,7 +264,7 @@ class NodeRuntime private[node] (
       host         = local.endpoint.host
       servers      <- acquireServers(runtime, blockApiLock)
       _            <- addShutdownHook(servers, runtime, casperRuntime).toEffect
-      _            <- servers.grpcServerExternal.start.toEffect
+      _            <- servers.grpcServerExternal.start
       _ <- Log[Effect].info(
             s"gRPC external server started at $host:${servers.grpcServerExternal.port}"
           )
