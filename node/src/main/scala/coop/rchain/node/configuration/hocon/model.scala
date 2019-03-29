@@ -49,6 +49,7 @@ object Server {
     val MapSize          = "map-size"
     val MaxConnections   = "max-connections"
     val MaxMessageSize   = "max-message-size"
+    val PacketChunkSize  = "packet-chunk-size"
     val MessageConsumers = "message-consumers"
   }
 
@@ -90,6 +91,7 @@ object Server {
       mapSize = server.getBytes(keys.MapSize),
       maxNumOfConnections = server.getInt(keys.MaxConnections),
       maxMessageSize = server.getBytes(keys.MaxMessageSize).toInt,
+      packetChunkSize = server.getBytes(keys.PacketChunkSize).toInt,
       messageConsumers = server.getIntOpt(keys.MessageConsumers).getOrElse(messageConsumers)
     )
   }

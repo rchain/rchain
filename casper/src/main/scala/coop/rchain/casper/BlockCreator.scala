@@ -9,7 +9,6 @@ import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.{
   blockHeader,
   bonds,
-  chooseNonConflicting,
   signBlock,
   toJustification,
   unsignedBlockProto
@@ -43,7 +42,7 @@ object BlockCreator {
   )(implicit state: Cell[F, CasperState]): F[CreateBlockStatus] =
     for {
       tipHashes      <- Estimator.tips[F](dag, genesis)
-      parents        <- chooseNonConflicting[F](tipHashes, dag)
+      parents        <- EstimatorHelper.chooseNonConflicting[F](tipHashes, dag)
       maxBlockNumber = ProtoUtil.maxBlockNumber(parents)
       _              <- updateDeployHistory[F](state, maxBlockNumber)
       deploys        <- extractDeploys[F](dag, parents, maxBlockNumber, expirationThreshold)

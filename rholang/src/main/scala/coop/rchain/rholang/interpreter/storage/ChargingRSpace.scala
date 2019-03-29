@@ -30,7 +30,7 @@ object ChargingRSpace {
 
   def pureRSpace[F[_]: Sync](
       space: RhoISpace[F]
-  )(implicit cost: _cost[F], error: _error[F]) =
+  )(implicit cost: _cost[F]) =
     new RhoPureSpace[F] {
 
       implicit val m: StorageMatch[F, BindPattern, ListParWithRandom, ListParWithRandom] =

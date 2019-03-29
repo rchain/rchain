@@ -1,7 +1,7 @@
 //scalapackage coop.rchain.rholang.collection
 
 //Requires ListOps
-//Represents Either[A, B] as ("Left", A) or ("Right", B)
+//Represents Either[A, B] as (false, A) or (true, B)
 
 //Registry info:
 //  sk: 7545b56525751bf79daa6cf3ee5757632ea6f37bfa61e93aafc4449d8510df9b
@@ -26,8 +26,8 @@ new Either, rs(`rho:registry:insertSigned:ed25519`), uriOut, rl(`rho:registry:lo
     // Lifts a value into Either, putting Nil-s into Left and using Right otherwise.
     contract Either(@"fromNillable", @value, @nilValue, return) = {
       match value {
-        Nil => return!(("Left", nilValue))
-        _   => return!(("Right", value))
+        Nil => return!((false, nilValue))
+        _   => return!((true, value))
       }
     } |
 
@@ -41,8 +41,8 @@ new Either, rs(`rho:registry:insertSigned:ed25519`), uriOut, rl(`rho:registry:lo
     // Lifts a Boolean into Either, making `false` into Left and using Right otherwise.
     contract Either(@"fromBoolean", @success, @failureMessage, return) = {
       match success {
-        false => return!(("Left", failureMessage))
-        true  => return!(("Right", Nil))
+        false => return!((false, failureMessage))
+        true  => return!((true, Nil))
       }
     } |
 
@@ -57,9 +57,9 @@ new Either, rs(`rho:registry:insertSigned:ed25519`), uriOut, rl(`rho:registry:lo
     // and using Left if it's not a singleton list.
     contract Either(@"fromSingletonList", @list, @failureMessage, return) = {
       match list {
-        []      => return!(("Left", failureMessage))
-        [value] => return!(("Right", value))
-        _       => return!(("Left", "Invalid argument, expected a list of at most 1 element"))
+        []      => return!((false, failureMessage))
+        [value] => return!((true, value))
+        _       => return!((false, "Invalid argument, expected a list of at most 1 element"))
       }
     } |
 
@@ -73,8 +73,8 @@ new Either, rs(`rho:registry:insertSigned:ed25519`), uriOut, rl(`rho:registry:lo
     // Lifts an error into Either, putting Nil-s into Right and using Left otherwise.
     contract Either(@"fromNillableError", @error, return) = {
       match error {
-        Nil => return!(("Right", Nil))
-        _   => return!(("Left", error))
+        Nil => return!((true, Nil))
+        _   => return!((false, error))
       }
     } |
 
@@ -105,13 +105,13 @@ new Either, rs(`rho:registry:insertSigned:ed25519`), uriOut, rl(`rho:registry:lo
     // Composes two eithers `a: A` and `b: B` using the function `f`. See cats.Apply.map2 for details.`
     contract Either(@"map2", @a, @b, f, return) = {
       match (a, b) {
-        (("Left", _), _)               => return!(a)
-        (_, ("Left", _))               => return!(b)
-        (("Right", va), ("Right", vb)) => {
+        ((false, _), _)               => return!(a)
+        (_, (false, _))               => return!(b)
+        ((true, va), (true, vb)) => {
           new ret in {
             f!(va, vb, *ret) |
             for (@v <- ret) {
-              return!(("Right", v))
+              return!((true, v))
             }
           }
         }
@@ -128,8 +128,8 @@ new Either, rs(`rho:registry:insertSigned:ed25519`), uriOut, rl(`rho:registry:lo
     // Right-biased flatMap; f must also return an Either
     contract Either(@"flatMap", @either, f, return) = {
       match either {
-        ("Right", value) => { f!(value, *return) }
-        ("Left", _)      => { return!(either) }
+        (true, value) => { f!(value, *return) }
+        (false, _)      => { return!(either) }
       }
     } |
 
@@ -143,15 +143,15 @@ new Either, rs(`rho:registry:insertSigned:ed25519`), uriOut, rl(`rho:registry:lo
     // Right-biased map to transform an Either
     contract Either(@"map", @either, f, return) = {
       match either {
-        ("Right", value) => {
+        (true, value) => {
           new mappedResultCh in {
             f!(value, *mappedResultCh) |
             for(@mappedResult <- mappedResultCh) {
-              return!(("Right", mappedResult))
+              return!((true, mappedResult))
             }
           }
         }
-        ("Left", _) => return!(either)
+        (false, _) => return!(either)
       }
     } |
 
@@ -168,7 +168,7 @@ new Either, rs(`rho:registry:insertSigned:ed25519`), uriOut, rl(`rho:registry:lo
         contract combinator(@head, @accumulatedValue, return) = {
           Either!("flatMap", accumulatedValue, head, *return)
         } |
-        @ListOps!("fold", functions, ("Right", input), *combinator, *return)
+        @ListOps!("fold", functions, (true, input), *combinator, *return)
       }
     }
   } |

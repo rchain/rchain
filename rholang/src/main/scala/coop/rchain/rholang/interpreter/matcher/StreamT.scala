@@ -1,6 +1,9 @@
 package coop.rchain.rholang.interpreter.matcher
 import cats.mtl.lifting.MonadLayerControl
-import cats.{~>, Alternative, Applicative, Functor, Monad, MonadError, MonoidK}
+import cats.{~>, Alternative, Applicative, Functor, FunctorFilter, Monad, MonadError, MonoidK}
+import cats.data.OptionT
+import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, SNil, Step}
 
@@ -189,6 +192,55 @@ trait StreamTInstances2 {
 
       def zero[A](state: Stream[A]): Boolean = state.isEmpty
     }
+
+  implicit def streamTSync[F[_]](
+      implicit F0: Sync[F],
+      M0: Monad[StreamT[F, ?]],
+      AL0: Alternative[StreamT[F, ?]]
+  ): Sync[StreamT[F, ?]] =
+    new StreamTSync[F]() {
+      implicit val F  = F0
+      implicit val M  = M0
+      implicit val AL = AL0
+    }
+}
+
+private trait StreamTSync[F[_]] extends Sync[StreamT[F, ?]] with StreamTMonadError[F, Throwable] {
+  implicit def F: Sync[F]
+  implicit def M: Monad[StreamT[F, ?]]
+  implicit def AL: Alternative[StreamT[F, ?]]
+
+  import cats.effect.ExitCase
+
+  def bracketCase[A, B](acquire: StreamT[F, A])(use: A => StreamT[F, B])(
+      release: (A, ExitCase[Throwable]) => StreamT[F, Unit]
+  ): StreamT[F, B] =
+    flatMap(StreamT.liftF(Ref.of[F, Boolean](false))) { ref =>
+      StreamT(F.flatMap(F.bracketCase[Step[F, A], Step[F, B]](acquire.next) {
+        case SNil() => F.pure(SNil())
+        case SCons(head, tail) => {
+          AL.combineK(use(head), M.flatMap(tail)(use)).next
+        }
+      } {
+        case (SNil(), _) => F.pure(())
+        case (SCons(head, _), ExitCase.Completed) => {
+          F.flatMap(release(head, ExitCase.Completed).next) {
+            case SNil()      => ref.set(true)
+            case SCons(_, _) => F.unit
+          }
+        }
+        case (SCons(head, _), ec) => {
+          F.map(release(head, ec).next)(_ => ())
+        }
+      }) {
+        case s @ SCons(_, _) => F.map(ref.get)(b => if (b) SNil() else s)
+        case SNil()          => F.pure(SNil())
+      })
+    }
+
+  def suspend[A](thunk: => StreamT[F, A]): StreamT[F, A] =
+    StreamT(F.suspend(thunk.next))
+
 }
 
 private trait StreamTMonadErrorMonad[F[_]]

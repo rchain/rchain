@@ -3,8 +3,7 @@ package coop.rchain.rholang.interpreter.matcher
 import cats._
 import cats.data._
 import cats.effect._
-import cats.effect.concurrent.Ref
-import cats.implicits._
+import cats.effect.concurrent.Semaphore
 import cats.mtl._
 import cats.mtl.implicits._
 import cats.{Eval => _}
@@ -18,11 +17,10 @@ import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
 import coop.rchain.models.rholang.sorter.Sortable
-import coop.rchain.rholang.interpreter.PrettyPrinter
+import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.rholang.interpreter.errors.{InterpreterError, OutOfPhlogistonsError}
-import coop.rchain.rholang.interpreter.matcher.NonDetFreeMapWithCost._
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
@@ -31,6 +29,7 @@ import org.scalatest.concurrent.TimeLimits
 import scalapb.GeneratedMessage
 
 import scala.collection.immutable.BitSet
+import scala.concurrent.duration._
 
 class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleEqualsSupport {
   import SpatialMatcher._
@@ -38,33 +37,37 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
 
   private val printer = PrettyPrinter()
 
-  def assertSpatialMatch[T <: GeneratedMessage, P <: GeneratedMessage](
-      target: T,
-      pattern: P,
+  type F[A] = MatcherMonadT[Task, A]
+
+  def assertSpatialMatch(
+      target: Par,
+      pattern: Par,
       expectedCaptures: Option[FreeMap]
-  )(
-      implicit sm: SpatialMatcher[NonDetFreeMapWithCost, T, P],
-      ts: Sortable[T],
-      ps: Sortable[P]
   ): Assertion = {
+
     println(explainMatch(target, pattern, expectedCaptures))
     assertSorted(target, "target")
     assertSorted(pattern, "pattern")
     expectedCaptures.foreach(
       _.values.foreach((v: Par) => assertSorted(v, "expected captured term"))
     )
-    val intermediate: Either[InterpreterError, (Cost, Option[(FreeMap, Unit)])] =
-      spatialMatch[NonDetFreeMapWithCost, T, P](target, pattern)
-        .runFirstWithCost(Cost.UNSAFE_MAX)
-    assert(intermediate.isRight)
-    val result = intermediate.right.get._2.map(_._1)
-    assert(prettyCaptures(result) == prettyCaptures(expectedCaptures))
-    assert(result === expectedCaptures)
+
+    implicit val matcherMonadError = implicitly[Sync[F]]
+    (for {
+      costAccounting <- CostAccounting.initialCost[Task](Cost.UNSAFE_MAX)
+      maybeResultWithCost <- {
+        implicit val cost: _cost[Task] = costAccounting
+        implicit val costF: _cost[F]   = matcherMonadCostLog[Task]
+        runFirst(spatialMatch[F, Par, Par](target, pattern))
+      }
+      result = maybeResultWithCost.map(_._1)
+      _      = assert(prettyCaptures(result) == prettyCaptures(expectedCaptures))
+    } yield (assert(result === expectedCaptures))).runSyncUnsafe(5.seconds)
   }
 
-  private def explainMatch[P <: GeneratedMessage, T <: GeneratedMessage](
-      target: T,
-      pattern: P,
+  private def explainMatch(
+      target: Par,
+      pattern: Par,
       expectedCaptures: Option[FreeMap]
   ): String = {
 
@@ -81,15 +84,13 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
        |""".stripMargin
   }
 
-  private def prettyCaptures[T <: GeneratedMessage, P <: GeneratedMessage](
+  private def prettyCaptures(
       expectedCaptures: Option[FreeMap]
   ): Option[Map[Int, String]] =
     expectedCaptures.map(_.map(c => (c._1, printer.buildString(c._2))))
 
-  private def assertSorted[T <: GeneratedMessage](term: T, termName: String)(
-      implicit ts: Sortable[T]
-  ): Assertion = {
-    val sortedTerm = Sortable[T].sortMatch[Coeval](term).value.term
+  private def assertSorted(term: Par, termName: String): Assertion = {
+    val sortedTerm = Sortable[Par].sortMatch[Coeval](term).value.term
     val clue       = s"Invalid test case - ${termName} is not sorted"
     assert(printer.buildString(term) == printer.buildString(sortedTerm), clue)
     assert(term == sortedTerm, clue)
@@ -140,9 +141,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
     val pattern: Par = EVar(FreeVar(0))
 
     import org.scalatest.time.SpanSugar._
-    failAfter(5 seconds) {
-      assertSpatialMatch(target, pattern, Some(Map[Int, Par](0 -> target)))
-    }
+    assertSpatialMatch(target, pattern, Some(Map[Int, Par](0 -> target)))
   }
 
   "Matching a send's channel" should "work" in {
@@ -931,24 +930,14 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
     assertSpatialMatch(failTarget, pattern, None)
   }
 
-  "spatialMatch" should "short-circuit when runs out of phlo in the middle of matching" in {
-    val target: Par = EList(Seq(GInt(1), GInt(2), GInt(3)))
-    val pattern: Par =
-      EList(Seq(GInt(1), EVar(FreeVar(0)), EVar(FreeVar(1))), connectiveUsed = true)
-    val res =
-      spatialMatch[NonDetFreeMapWithCost, Par, Par](target, pattern).runFirstWithCost(Cost(0))
-    res should be(Left(OutOfPhlogistonsError))
-  }
-
   private def doMatchAndCharge(initialPhlo: Long) = {
     val target: Par = EList(Seq(GInt(1), GInt(2), GInt(3)))
     val pattern: Par =
       EList(Seq(GInt(1), EVar(FreeVar(0)), EVar(FreeVar(1))), connectiveUsed = true)
 
     (for {
-      costAlg <- CostAccounting.of[Task](Cost(initialPhlo))
-      costL   <- costLog[Task]
-      cost    = loggingCost(costAlg, costL)
+      costL <- costLog[Task]
+      cost  <- CostAccounting.initialCost[Task](Cost(initialPhlo))(Concurrent[Task], costL)
       program = {
         implicit val c = cost
         spatialMatchAndCharge[Task](target, pattern).attempt

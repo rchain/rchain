@@ -4,18 +4,21 @@ object Dependencies {
 
   val osClassifier: String = Detector.detect(Seq("fedora")).osClassifier
 
-  val circeVersion   = "0.10.0"
-  val http4sVersion  = "0.19.0"
-  val kamonVersion   = "1.1.5"
-  val catsVersion    = "1.5.0"
-  val catsMtlVersion = "0.4.0"
+  val circeVersion      = "0.10.0"
+  val http4sVersion     = "0.19.0"
+  val kamonVersion      = "1.1.5"
+  val catsVersion       = "1.5.0"
+  val catsEffectVersion = "1.2.0"
+  val catsMtlVersion    = "0.4.0"
+  val slf4jVersion      = "1.7.25"
 
   // format: off
   val bouncyCastle        = "org.bouncycastle"            % "bcprov-jdk15on"            % "1.60"
   val catsCore            = "org.typelevel"              %% "cats-core"                 % catsVersion
   val catsLawsTest        = "org.typelevel"              %% "cats-laws"                 % catsVersion % "test"
   val catsLawsTestkitTest = "org.typelevel"              %% "cats-testkit"              % catsVersion % "test"
-  val catsEffect          = "org.typelevel"              %% "cats-effect"               % "1.1.0"
+  val catsEffect          = "org.typelevel"              %% "cats-effect"               % catsEffectVersion
+  val catsEffectLawsTest  = "org.typelevel"              %% "cats-effect-laws"          % catsEffectVersion % "test"
   val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % catsMtlVersion
   val catsMtlLawsTest     = "org.typelevel"              %% "cats-mtl-laws"             % catsMtlVersion % "test"
   val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion
@@ -70,6 +73,9 @@ object Dependencies {
   // see https://jitpack.io/#rchain/secp256k1-java
   val secp256k1Java       = "com.github.rchain"           % "secp256k1-java"            % "0.1"
   val tomlScala           = "tech.sparse"                %% "toml-scala"                % "0.1.1"
+  val logstashLogback     = "net.logstash.logback"        % "logstash-logback-encoder"  % "5.3"
+  val slf4j               = "org.slf4j"                   % "slf4j-api"                 % slf4jVersion
+  val julToSlf4j          = "org.slf4j"                   % "jul-to-slf4j"              % slf4jVersion
   // format: on
 
   val overrides = Seq(
@@ -94,7 +100,7 @@ object Dependencies {
 
   private val testing = Seq(scalactic, scalatest, scalacheck)
 
-  private val logging = Seq(scalaLogging, logbackClassic)
+  private val logging = Seq(slf4j, julToSlf4j, scalaLogging, logbackClassic, logstashLogback)
 
   private val circeDependencies: Seq[ModuleID] =
     Seq(circeCore, circeGeneric, circeGenericExtras, circeParser, circeLiteral)

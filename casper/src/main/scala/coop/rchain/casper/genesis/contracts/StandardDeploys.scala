@@ -75,6 +75,13 @@ object StandardDeploys {
       1540563894858L
     )
 
+  def authKey: DeployData =
+    toDeploy(
+      CompiledRholangSource("AuthKey.rho"),
+      "b07ab04ff922adc0fd7963e4a17759643a15e51ae8843053499c0d0ebc2cd869",
+      1553607754230L
+    )
+
   def lockbox: DeployData =
     toDeploy(
       CompiledRholangSource("Lockbox.rho"),

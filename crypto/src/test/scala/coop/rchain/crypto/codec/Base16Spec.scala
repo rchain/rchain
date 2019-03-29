@@ -17,7 +17,7 @@ class Base16Spec extends PropSpec with GeneratorDrivenPropertyChecks with Matche
 
   property("decode fails if given non-hex characters") {
     forAll { (input: String) =>
-      val decoded = Base16.decode(input, "")
+      val decoded              = Base16.decode(input, "")
       val hasInvalidCharacters = input.replaceAll("[^0-9A-Fa-f]", "") != input
       decoded.isEmpty should equal(hasInvalidCharacters)
     }
@@ -25,9 +25,10 @@ class Base16Spec extends PropSpec with GeneratorDrivenPropertyChecks with Matche
 
   property("unsafeDecode is always successful") {
     forAll { (input: String) =>
-      try { Base16.unsafeDecode(input)}
-      catch {
-        case _ : Exception => Base16.unsafeDecode(input)
+      try {
+        Base16.unsafeDecode(input)
+      } catch {
+        case _: Exception => Base16.unsafeDecode(input)
       }
     }
   }

@@ -14,7 +14,8 @@
 // ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
 new
   RevVault, rs(`rho:registry:insertSigned:ed25519`), uriOut,
-  rl(`rho:registry:lookup`), RevAddress(`rho:rev:address`), MakeMintCh, LockboxCh, EitherCh,
+  rl(`rho:registry:lookup`), RevAddress(`rho:rev:address`), MakeMintCh, AuthKeyCh, EitherCh,
+  _getIdentity,
   _makeVault,
   _newVault,
   _getOrCreate,
@@ -22,70 +23,94 @@ new
   stdout(`rho:io:stdout`)
 in {
   rl!(`rho:id:exunyijimapk7z43g3bbr69awqdz54kyroj9q43jgu3dh567fxsftx`, *MakeMintCh) |
-  rl!(`rho:id:9dsr55z1js13x346yhhecx66ns486i3yqf6jafrd9p9hdrrbxjqmyu`, *LockboxCh) |
+  rl!(`rho:id:4njqcsc65mt8xrfx9nsz7je7oucgywgd1tj1n1gjtw3ndsophyisro`, *AuthKeyCh) |
   rl!(`rho:id:j6trahbxycumerwpr5qype7j43b7eqh8auebwsa9nn68if47gswh73`, *EitherCh) |
-  for(@(_, MakeMint) <- MakeMintCh; @(_, Lockbox) <- LockboxCh; @(_, Either) <- EitherCh) {
+  for(@(_, MakeMint) <- MakeMintCh; @(_, AuthKey) <- AuthKeyCh; @(_, Either) <- EitherCh) {
 
     new mintCh, vaultMapStore in {
       vaultMapStore!({}) |
       @MakeMint!(*mintCh) |
       for (mint <- mintCh) {
 
-        //FIXME the result of createGenesisVault is not protected, nor is the call to it. Both should be.
-        contract RevVault(@"createGenesisVault", @ownerPubKeyBytes, @initialAmount, ret) = {
-          new createGenesisVault in {
-            _getOrCreate!(ownerPubKeyBytes, *createGenesisVault, *ret) |
-            for (retCh <- createGenesisVault) {
+        contract RevVault(@"deployerAuthKey", ret) = {
 
-              _makeVault!(ownerPubKeyBytes, initialAmount, *retCh)
-            }
-          }
-        } |
+          new deployerPubKeyBytesCh in {
+            _getIdentity!(*deployerPubKeyBytesCh) |
+            for (@deployerPubKeyBytes <- deployerPubKeyBytesCh) {
 
-        contract RevVault(@"findOrCreate", @ownerPubKeyBytes, ret) = {
+              new RevAddress(`rho:rev:address`), revAddrCh in {
+                RevAddress!("fromPublicKey", deployerPubKeyBytes, *revAddrCh)|
+                for (@deployerRevAddress <- revAddrCh) {
 
-          new createLockedVault in {
-            _getOrCreate!(ownerPubKeyBytes, *createLockedVault, *ret) |
-            for (retCh <- createLockedVault) {
-
-              new vaultCh, lock in {
-                _makeVault!(ownerPubKeyBytes, 0, *vaultCh) |
-                @Either!("map <-", *vaultCh, *lock, *retCh) |
-                for (@vault, retCh <- lock) {
-                  @Lockbox!("lock", ownerPubKeyBytes, vault, *retCh)
+                  @AuthKey!("make", (*_revVault, deployerRevAddress), *ret)
                 }
               }
             }
           }
         } |
 
-        contract _getOrCreate(@key, constructor, ret) = {
-          for (@vaultMap <- vaultMapStore) {
-            match vaultMap.get(key) {
-              Nil => {
-                new resCh in {
-                  constructor!(*resCh) |
-                  for (@eitherVault <- resCh) {
-                    match eitherVault {
-                      ("Right", vault) => vaultMapStore!(vaultMap.set(key, vault))
-                      ("Left",  _    ) => vaultMapStore!(vaultMap)
-                    } |
-                    ret!(eitherVault)
+        contract _getIdentity(retCh) = {
+          new getDeployData(`rho:deploy:params`), ch in {
+            getDeployData ! (*ch) |
+            for (_, _, @userId, _ <- ch) {
+              retCh ! (userId)
+            }
+          }
+        } |
+
+        //FIXME remove this, create standard vaults instead and do a `_deposit` to them somehow
+        contract RevVault(@"findOrCreateGenesisVault", @ownerRevAddress, @initialAmount, ret) = {
+          new findOrCreateGenesisVault in {
+            _getOrCreate!(ownerRevAddress, *findOrCreateGenesisVault, *ret) |
+            for (retCh <- findOrCreateGenesisVault) {
+
+              _makeVault!(ownerRevAddress, initialAmount, *retCh)
+            }
+          }
+        } |
+
+        contract RevVault(@"findOrCreate", @ownerRevAddress, ret) = {
+
+          new createVault in {
+            _getOrCreate!(ownerRevAddress, *createVault, *ret) |
+            for (retCh <- createVault) {
+
+              _makeVault!(ownerRevAddress, 0, *retCh)
+            }
+          }
+        } |
+
+        contract _getOrCreate(@revAddress, constructor, retCh) = {
+          new revAddressValidCh, revAddressValidEitherCh, getOrCreate in {
+            RevAddress!("validate", revAddress, *revAddressValidCh) |
+            @Either!("fromNillableError <-", *revAddressValidCh, *revAddressValidEitherCh) |
+            @Either!("flatMap <-", *revAddressValidEitherCh, *getOrCreate, *retCh) |
+            for (_, ret <- getOrCreate; @vaultMap <- vaultMapStore) {
+              match vaultMap.get(revAddress) {
+                Nil => {
+                  new resCh in {
+                    constructor!(*resCh) |
+                    for (@eitherVault <- resCh) {
+                      match eitherVault {
+                        (true, vault) => vaultMapStore!(vaultMap.set(revAddress, vault))
+                        (false,  _    ) => vaultMapStore!(vaultMap)
+                      } |
+                      ret!(eitherVault)
+                    }
                   }
                 }
-              }
-              value => {
-                vaultMapStore!(vaultMap) | ret!(("Right", value))
+                value => {
+                  vaultMapStore!(vaultMap) | ret!((true, value))
+                }
               }
             }
           }
         } |
 
-        contract _makeVault(@ownerPubKeyBytes, @initialAmount, ret) = {
+        contract _makeVault(@ownerRevAddress, @initialAmount, ret) = {
 
           new revAddrCh, eitherRevAddrCh, purseCh, eitherPurseCh in {
-            RevAddress!("fromPublicKey", ownerPubKeyBytes, *revAddrCh) |
-            @Either!("fromNillable <-", *revAddrCh, "Invalid public key", *eitherRevAddrCh) |
+            @Either!("fromNillable", ownerRevAddress, "Required `revAddress` parameter was Nil", *eitherRevAddrCh) |
             mint!("makePurse", initialAmount, *purseCh) |
             @Either!("fromNillable <-", *purseCh, "Couldn't create purse", *eitherPurseCh) |
             @Either!("map2 <-", *eitherRevAddrCh, *eitherPurseCh, *_newVault, *ret)
@@ -102,24 +127,34 @@ in {
               purse!("getBalance", *ret)
             } |
 
-            contract revVault(@"transfer", @revAddress, @amount, ret) = {
+            contract revVault(@"transfer", @revAddress, @amount, authKey, ret) = {
 
               new
-                revAddressValid, revAddressValidEither, amountNonNegative, split,
-                eitherPurseCh, purseReadyCh, doDeposit
+                revAddressValid, revAddressValidEither, amountNonNegative,
+                authKeyValidCh, authKeyValidEitherCh,
+                parametersOkCh, parametersAndAuthOkCh,
+                split, eitherPurseCh, doDeposit
               in {
                 RevAddress!("validate", revAddress, *revAddressValid) |
                 @Either!("fromNillableError <-", *revAddressValid, *revAddressValidEither) |
+
                 @Either!("fromBoolean", amount >= 0, "Amount must be non-negative", *amountNonNegative) |
-                @Either!("flatMap <-", *amountNonNegative, *split, *eitherPurseCh) |
-                for (_, ret <- split) {
+
+                @AuthKey!("check", *authKey, (*_revVault, ownRevAddress), *authKeyValidCh) |
+                @Either!("fromBoolean <-", *authKeyValidCh, "Invalid AuthKey", *authKeyValidEitherCh) |
+
+                @Either!("productR <-", *revAddressValidEither, *amountNonNegative, *parametersOkCh) |
+                @Either!("productR <-", *parametersOkCh, *authKeyValidEitherCh, *parametersAndAuthOkCh) |
+
+                @Either!("flatMap <-", *parametersAndAuthOkCh, *split, *eitherPurseCh) |
+                for (_, retCh <- split) {
                   new amountPurseCh in {
                     purse!("split", amount, *amountPurseCh) |
-                    @Either!("fromSingletonList <-", *amountPurseCh, "Insufficient funds", *ret)
+                    @Either!("fromSingletonList <-", *amountPurseCh, "Insufficient funds", *retCh)
                   }
                 } |
-                @Either!("productR <-", *revAddressValidEither, *eitherPurseCh, *purseReadyCh) |
-                @Either!("flatMap <-", *purseReadyCh, *doDeposit, *ret) |
+
+                @Either!("flatMap <-", *eitherPurseCh, *doDeposit, *ret) |
                 for (@p, retCh <- doDeposit) {
                   @{revAddress | bundle0{*_revVault}}!("_deposit", p, *retCh)
                 }

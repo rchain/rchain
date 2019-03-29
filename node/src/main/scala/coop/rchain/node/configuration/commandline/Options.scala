@@ -282,7 +282,10 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       opt[Int](descr = "Maximum number of peers allowed to connect to the node")
 
     val maxMessageSize =
-      opt[Int](descr = "Maximum size of message that can be sent via transport layer")
+      opt[Int](descr = "Maximum size of message that can be received via transport layer")
+
+    val packetChunkSize =
+      opt[Int](descr = "Chunk size for streaming packets between nodes")
 
     val messageConsumers =
       opt[Int](descr = "Number of incoming message consumers. Defaults to number of CPU cores")

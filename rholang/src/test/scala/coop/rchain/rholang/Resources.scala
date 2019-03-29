@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import cats.Applicative
 import cats.effect.ExitCase.Error
 import cats.effect.{Concurrent, ContextShift, Resource}
+import cats.effect.concurrent.Semaphore
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.Metrics
 import coop.rchain.models._
@@ -76,9 +77,9 @@ object Resources {
       .flatMap { tmpDir =>
         Resource.make[Task, Runtime[Task]] {
           for {
-            costAccounting <- CostAccounting.empty[Task]
+            cost <- CostAccounting.emptyCost[Task]
             runtime <- {
-              implicit val cost: _cost[Task] = loggingCost(costAccounting, noOpCostLog)
+              implicit val c = cost
               Runtime.create[Task, Task.Par](tmpDir, storageSize, storeType)
             }
           } yield (runtime)

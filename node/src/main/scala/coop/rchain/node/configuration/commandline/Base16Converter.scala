@@ -1,4 +1,5 @@
 package coop.rchain.node.configuration.commandline
+
 import coop.rchain.crypto.codec.Base16
 import org.rogach.scallop.{ArgType, ValueConverter}
 

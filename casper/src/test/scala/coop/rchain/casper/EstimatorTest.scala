@@ -13,11 +13,7 @@ import monix.eval.Task
 
 import scala.collection.immutable.HashMap
 
-class ForkchoiceTest
-    extends FlatSpec
-    with Matchers
-    with BlockGenerator
-    with BlockDagStorageFixture {
+class EstimatorTest extends FlatSpec with Matchers with BlockGenerator with BlockDagStorageFixture {
   "Estimator on empty latestMessages" should "return the genesis regardless of DAG" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val v1     = generateValidator("Validator One")
