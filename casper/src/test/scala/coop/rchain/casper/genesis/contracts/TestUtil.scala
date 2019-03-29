@@ -64,7 +64,7 @@ object TestUtil {
       _ <- runtime.reducer.setPhlo(Cost.UNSAFE_MAX)
       _ <- runtime.reducer.inj(term)
       _ <- runtime.reducer.phlo
-    } yield ()).runSyncUnsafe(10.seconds)
+    } yield ()).runSyncUnsafe(30.seconds)
 
   def eval(
       code: String,
