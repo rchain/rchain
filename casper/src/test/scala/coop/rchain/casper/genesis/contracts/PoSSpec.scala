@@ -9,6 +9,11 @@ class PoSSpec
     extends RhoSpec(
       CompiledRholangSource("PoSTest.rho"),
       Seq(
+        StandardDeploys.nonNegativeNumber,
+        StandardDeploys.makeMint,
+        StandardDeploys.authKey,
+        StandardDeploys.either,
+        StandardDeploys.revVault,
         StandardDeploys.PoS
       ),
       10.seconds
