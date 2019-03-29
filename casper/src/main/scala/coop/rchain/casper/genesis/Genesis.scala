@@ -45,6 +45,7 @@ object Genesis {
       StandardDeploys.nonNegativeNumber,
       StandardDeploys.makeMint,
       StandardDeploys.makePoS,
+      StandardDeploys.PoS,
       StandardDeploys.basicWallet,
       StandardDeploys.basicWalletFaucet,
       StandardDeploys.walletCheck,
