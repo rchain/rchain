@@ -28,6 +28,9 @@ class DagOperationsTest
       def createBlockWithMeta(bh: BlockHash*): Task[BlockMetadata] =
         createBlock[Task](bh.toSeq).map(b => BlockMetadata.fromBlock(b, false))
 
+      def createBlockWithMetaAndSeq(seqNum: Int, bh: BlockHash*): Task[BlockMetadata] =
+        createBlock[Task](bh.toSeq, seqNum = seqNum).map(b => BlockMetadata.fromBlock(b, false))
+
       implicit def blockMetadataToBlockHash(bm: BlockMetadata): BlockHash = bm.blockHash
 
       /*
@@ -50,8 +53,8 @@ class DagOperationsTest
       for {
         genesis <- createBlock[Task](Seq.empty)
         b1      <- createBlockWithMeta(genesis.blockHash)
-        b2      <- createBlockWithMeta(b1)
-        b3      <- createBlockWithMeta(b1)
+        b2      <- createBlockWithMetaAndSeq(seqNum = 2, b1)
+        b3      <- createBlockWithMetaAndSeq(seqNum = 2, b1)
         b4      <- createBlockWithMeta(b3)
         b5      <- createBlockWithMeta(b3)
         b6      <- createBlockWithMeta(b2, b4)
@@ -63,6 +66,7 @@ class DagOperationsTest
         dag <- blockDagStorage.getRepresentation
 
         _      <- DagOperations.lowestCommonAncestorF[Task](b1, b5, dag) shouldBeF b1
+        _      <- DagOperations.lowestCommonAncestorF[Task](b2, b3, dag) shouldBeF b1
         _      <- DagOperations.lowestCommonAncestorF[Task](b3, b2, dag) shouldBeF b1
         _      <- DagOperations.lowestCommonAncestorF[Task](b6, b7, dag) shouldBeF b1
         _      <- DagOperations.lowestCommonAncestorF[Task](b2, b2, dag) shouldBeF b2

@@ -76,7 +76,8 @@ trait BlockGenerator {
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       tsHash: ByteString = ByteString.EMPTY,
       shardId: String = "rchain",
-      preStateHash: ByteString = ByteString.EMPTY
+      preStateHash: ByteString = ByteString.EMPTY,
+      seqNum: Int = 0
   ): F[BlockMessage] =
     for {
       now <- Time[F].currentMillis
@@ -103,7 +104,8 @@ trait BlockGenerator {
         Some(body),
         serializedJustifications,
         creator,
-        shardId = shardId
+        shardId = shardId,
+        seqNum = seqNum
       )
       modifiedBlock <- IndexedBlockDagStorage[F].insertIndexed(block, false)
       _             <- BlockStore[F].put(serializedBlockHash, modifiedBlock)

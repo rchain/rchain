@@ -33,7 +33,7 @@ final class IndexedBlockDagStorage[F[_]: Monad](
       body              = block.body.get
       header            = block.header.get
       currentId         <- currentIdRef.get
-      nextId            = currentId + 1L
+      nextId            = if (block.seqNum == 0) currentId + 1L else block.seqNum
       dag               <- underlying.getRepresentation
       nextCreatorSeqNum <- dag.latestMessage(block.sender).map(_.fold(-1)(_.seqNum) + 1)
       newPostState      = body.getState.withBlockNumber(nextId)
