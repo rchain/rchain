@@ -31,6 +31,12 @@ in {
             contract privateAssert(@assertion, @clue, ackCh) = {
               stdlog!("debug", "asserting: " ++ clue) |
               match assertion {
+                ("_ == <-", actualCh) => {
+                  for (_ <- @actualCh) {
+                    stdlog!("info", {"some value was received from channel"}) |
+                    assert!(testName, attempt, true, clue, *ackCh)
+                  }
+                }
                 (expected, "== <-", actualCh) => {
                   for (@actual <- @actualCh) {
                     stdlog!("info", {"actual": actual, "expected": expected}) |

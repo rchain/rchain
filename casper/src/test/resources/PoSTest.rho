@@ -1,25 +1,130 @@
-// Match a list of known valid publicKey -> RevAddress pairs to bind them to veriables
-new
-  rl(`rho:registry:lookup`), RhoSpecCh,
-  PosCh,
-  setup,
-  test, test_different_deployer,
-  ackCh
-in {
-  rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *RhoSpecCh) |
-  rl!(`rho:id:cnec3pa8prp4out3yc8facon6grm3xbsotpd4ckjfx8ghuw77xadzt`, *PosCh) |
-  for(@(_, RhoSpec) <- RhoSpecCh; @(_, Pos) <- PosCh) {
-    @RhoSpec!("testSuite", *setup,
-      [
-        ("work", *test),
-      ]) |
+//scalapackage coop.rchain.rholang.mint
 
-    contract setup(returnCh) = {
-      returnCh!(Nil)
-    } |
+//requires Pos, RhoSpec
 
-    contract test(rhoSpec, _, ackCh) = {
-      rhoSpec!("assert", (Nil, "!=", Pos), "ther is PoS", *ackCh)
+match (
+"0000000000000000000000000000000000000000000000000000000000000000".hexToBytes(),
+"111123jwD7acNy6vfYwzWXAbnSQ8z8Bv24cCkVcVbd6SuP2LtFK7w7"
+) {
+
+  (genesisPubKey, genesisRevAddress) => {
+
+    new
+      rl(`rho:registry:lookup`),
+      stdlog(`rho:io:stdlog`),
+      stdout(`rho:io:stdout`),
+      setDeployData(`rho:test:deploy:set`),
+      RhoSpecCh,
+      setup,
+      test_make_pos_succeeds, test_bonding_succeeds,
+      test_bonding_fails_if_signature_is_bad,
+      test_bonding_fails_if_bond_too_small,
+      test_bonding_fails_if_bond_too_big,
+      test_pay_succeeds
+    in {
+
+      new RhoSpecCh in {
+        rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *RhoSpecCh) |
+        for (@(_, RhoSpec) <- RhoSpecCh) {
+          @RhoSpec!("testSuite", *setup,
+            [
+              ("PoS succeeds again", *test_make_pos_succeeds),
+              ("bonding works", *test_bonding_succeeds),
+              ("pay works", *test_pay_succeeds),
+              ("bonding fails if signature is bad", *test_bonding_fails_if_signature_is_bad),
+              ("bonding fails is bond is too small", *test_bonding_fails_if_bond_too_small),
+              ("bonding fails if bond is too big", *test_bonding_fails_if_bond_too_big)
+            ]) |
+
+          contract setup(retCh) = {
+            new PoSCh, identitySet in {
+            rl!(`rho:id:cnec3pa8prp4out3yc8facon6grm3xbsotpd4ckjfx8ghuw77xadzt`, *PoSCh) |
+              setDeployData!("userId", genesisPubKey, *identitySet) |
+              for (@(_, PoS) <- PoSCh; _ <- identitySet) {
+                @PoS!(100, 200, {}) | retCh!(PoS)
+              }
+            }
+          } |
+
+          contract test_make_pos_succeeds(rhoSpec, pos, ackCh) = {
+            new retCh in {
+              pos!("getBonds", *retCh) |
+              rhoSpec!("assert",
+                ({}, "== <-", *retCh),
+                "bonds should be empty",
+                *ackCh
+              )
+            }
+          } |
+
+          contract test_bonding_succeeds(rhoSpec, pos, ackCh) = {
+            new retCh in {
+              pos!("bond", 100, *retCh) |
+              for ( @(true, _) <- retCh) {
+                pos!("getBonds", *retCh) |
+                rhoSpec!("assert",
+                  ({genesisPubKey : [100, 1]}, "== <-", *retCh),
+                  "the new bond is expected",
+                  *ackCh
+                )
+              }
+            }
+          } |
+
+          contract test_pay_succeeds(rhoSpec, pos, ackCh) = {
+            new retCh in {
+              pos!("pay", 100, *retCh) |
+              for ( @(true, _) <- retCh) {
+                pos!("lastPayment", *retCh) |
+                rhoSpec!("assert",
+                  ("todo", "== <-", *retCh),
+                  "the new bond is expected",
+                  *ackCh
+                )
+              }
+            }
+          } |
+
+          contract test_bonding_fails_if_bond_too_small(rhoSpec, pos, ackCh) = {
+            new retCh in {
+              pos!("bond", 0, *retCh) |
+              for ( @(result, _) <- retCh) {
+                rhoSpec!("assert",
+                  (result, "==", false),
+                  "the bond should fail",
+                  *ackCh
+                )
+              }
+            }
+          } |
+
+          contract test_bonding_fails_if_bond_too_big(rhoSpec, pos, ackCh) = {
+            new retCh in {
+              pos!("bond", 1000, *retCh) |
+              for ( @(result, _) <- retCh) {
+                rhoSpec!("assert",
+                  (result, "==", false),
+                  "the bond should fail",
+                  *ackCh
+                )
+              }
+            }
+          } |
+
+          contract test_bonding_fails_if_signature_is_bad(rhoSpec, pos, ackCh) = {
+            new retCh in {
+              pos!("bond", 150, *retCh) |
+              for ( @(result, _) <- retCh) {
+                rhoSpec!("assert",
+                  (result, "==", false),
+                  "the bond should fail",
+                  *ackCh
+                )
+              }
+            }
+          }
+        }
+      }
     }
   }
 }
