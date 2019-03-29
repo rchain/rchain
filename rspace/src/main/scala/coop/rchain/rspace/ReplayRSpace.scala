@@ -422,6 +422,8 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
           }
       _ <- super.clear()
     } yield ()
+
+  protected[rspace] def isDirty(root: Blake2b256Hash): F[Boolean] = true.pure[F]
 }
 
 object ReplayRSpace {

@@ -66,8 +66,7 @@ object Reduce {
       parallel: cats.Parallel[M, F],
       s: Sync[M],
       fTell: FunctorTell[M, Throwable],
-      cost: _cost[M],
-      err: _error[M]
+      cost: _cost[M]
   ) extends Reduce[M] {
 
     /**
@@ -978,7 +977,7 @@ object Reduce {
                 )
               for {
                 _           <- charge[M](hexToBytesCost(encoded))
-                encodingRes = Try(ByteString.copyFrom(Base16.decode(encoded)))
+                encodingRes = Try(ByteString.copyFrom(Base16.unsafeDecode(encoded)))
                 res <- encodingRes.fold(
                         th => s.raiseError(decodingError(th)),
                         ba => Applicative[M].pure[Par](Expr(GByteArray(ba)))

@@ -363,6 +363,7 @@ class NodeRuntime private[node] (
              conf.tls.certificate,
              conf.tls.key,
              conf.server.maxMessageSize,
+             conf.server.packetChunkSize,
              commTmpFolder
            )(grpcScheduler, log, metrics, tcpConnections)
            .toEffect

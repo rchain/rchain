@@ -1,5 +1,5 @@
 package coop.rchain.casper.helper
-import cats.effect.Sync
+import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -79,13 +79,13 @@ case class TestResult(
 case class AckedActionCtx(ackChannel: Par, rand: Blake2b512Random, sequenceNumber: Long)
 
 object TestResultCollector {
-  def apply[F[_]: Sync]: F[TestResultCollector[F]] =
+  def apply[F[_]: Concurrent]: F[TestResultCollector[F]] =
     Ref
       .of(TestResult(Map.empty, hasFinished = false))
       .map(new TestResultCollector(_))
 }
 
-class TestResultCollector[F[_]: Sync](result: Ref[F, TestResult]) {
+class TestResultCollector[F[_]: Concurrent](result: Ref[F, TestResult]) {
 
   def getResult: F[TestResult] = result.get
 

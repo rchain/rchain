@@ -273,7 +273,7 @@ object Validate {
     val deployKeySet = (for {
       bd <- block.body.toList
       r  <- bd.deploys.flatMap(_.deploy)
-    } yield (r.user, r.timestamp)).toSet
+    } yield (r.deployer, r.timestamp)).toSet
 
     for {
       initParents         <- ProtoUtil.unsafeGetParents[F](block)
@@ -288,7 +288,7 @@ object Validate {
                             ProtoUtil
                               .deploys(b)
                               .flatMap(_.deploy)
-                              .exists(d => deployKeySet.contains((d.user, d.timestamp)))
+                              .exists(d => deployKeySet.contains((d.deployer, d.timestamp)))
                           }
       maybeError <- duplicatedBlock
                      .traverse(
@@ -479,8 +479,15 @@ object Validate {
         b.header.get.postStateHash == postStateHashComputed) {
       Applicative[F].pure(Right(Valid))
     } else {
+      val computedHashString = PrettyPrinter.buildString(blockHashComputed)
+      val hashString         = PrettyPrinter.buildString(b.blockHash)
       for {
-        _ <- Log[F].warn(ignore(b, s"block hash does not match to computed value."))
+        _ <- Log[F].warn(
+              ignore(
+                b,
+                s"block hash ${hashString} does not match to computed value ${computedHashString}."
+              )
+            )
       } yield Left(InvalidBlockHash)
     }
   }
@@ -511,7 +518,7 @@ object Validate {
     for {
       latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure[F]
       tipHashes            <- Estimator.tips[F](dag, genesis, latestMessagesHashes)
-      computedParents      <- ProtoUtil.chooseNonConflicting[F](tipHashes, dag)
+      computedParents      <- EstimatorHelper.chooseNonConflicting[F](tipHashes, dag)
       computedParentHashes = computedParents.map(_.blockHash)
       status <- if (parentHashes == computedParentHashes) {
                  Applicative[F].pure(Right(Valid))

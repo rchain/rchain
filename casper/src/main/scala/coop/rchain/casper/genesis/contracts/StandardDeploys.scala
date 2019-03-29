@@ -12,7 +12,7 @@ object StandardDeploys {
       timestamp: Long
   ): DeployData = {
     val deployData = DeployData(
-      user = stringToByteString(user),
+      deployer = stringToByteString(user),
       timestamp = timestamp,
       term = compiledSource.code,
       phloLimit = accounting.MAX_VALUE
@@ -75,6 +75,13 @@ object StandardDeploys {
       1540563894858L
     )
 
+  def authKey: DeployData =
+    toDeploy(
+      CompiledRholangSource("AuthKey.rho"),
+      "b07ab04ff922adc0fd7963e4a17759643a15e51ae8843053499c0d0ebc2cd869",
+      1553607754230L
+    )
+
   def lockbox: DeployData =
     toDeploy(
       CompiledRholangSource("Lockbox.rho"),
@@ -87,4 +94,11 @@ object StandardDeploys {
       faucetCode: String => String,
       posParams: ProofOfStakeParams
   ): DeployData = toDeploy(new PreWalletRev(wallets, faucetCode, posParams), "", 0L)
+
+  def revVault: DeployData =
+    toDeploy(
+      CompiledRholangSource("RevVault.rho"),
+      "be8ae000e4d2f29c73f792705314d71b6c0d56d7c640c6b4df9fabf90518c623",
+      1551879405043L
+    )
 }

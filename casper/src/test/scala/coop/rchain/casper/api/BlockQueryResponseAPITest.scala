@@ -79,6 +79,7 @@ class BlockQueryResponseAPITest
 
   val bondValidatorHashList: List[String] = List(bondsValidator).map(PrettyPrinter.buildString)
 
+  val deployCostList: List[String] = randomDeploys.map(PrettyPrinter.buildString)
   // TODO: Test tsCheckpoint:
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
   "showBlock" should "return successful block info response" in withStorage {
@@ -107,6 +108,7 @@ class BlockQueryResponseAPITest
             blockInfo.sender should be(secondBlockSenderString)
             blockInfo.shardId should be(shardId)
             blockInfo.bondsValidatorList should be(bondValidatorHashList)
+            blockInfo.deployCost should be(deployCostList)
         }
       } yield ()
   }
@@ -160,6 +162,7 @@ class BlockQueryResponseAPITest
             blockInfo.sender should be(secondBlockSenderString)
             blockInfo.shardId should be(shardId)
             blockInfo.bondsValidatorList should be(bondValidatorHashList)
+            blockInfo.deployCost should be(deployCostList)
         }
       } yield ()
   }

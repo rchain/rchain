@@ -319,6 +319,8 @@ final case class PrettyPrinter(
 
   private def buildMatchCase(matchCase: MatchCase, indent: Int): Coeval[String] = {
     val patternFree: Int = matchCase.freeCount
+    val openBrace        = pure(s"{\n${indentStr * (indent + 1)}")
+    val closeBrace       = pure(s"\n${indentStr * indent}}")
     this
       .copy(
         freeShift = boundShift,
@@ -326,10 +328,11 @@ final case class PrettyPrinter(
         freeId = boundId,
         baseId = setBaseId()
       )
-      .buildStringM(matchCase.pattern, indent) |+| pure(" => ") |+|
+      .buildStringM(matchCase.pattern, indent) |+| pure(" => ") |+| openBrace |+|
       this
         .copy(boundShift = boundShift + patternFree)
-        .buildStringM(matchCase.source, indent)
+        .buildStringM(matchCase.source, indent + 1) |+|
+      closeBrace
   }
 
   private def isEmpty(p: Par) =

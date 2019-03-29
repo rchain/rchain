@@ -56,9 +56,6 @@ object ProtocolHelper {
       Left(UnknownProtocolError(s"Was expecting Heartbeat, got ${proto.message}"))
     )(Right(_))
 
-  def heartbeatResponse(src: PeerNode): Protocol =
-    protocol(src).withHeartbeatResponse(HeartbeatResponse())
-
   def packet(src: PeerNode, pType: PacketType, content: Array[Byte]): Protocol =
     packet(src, pType, ByteString.copyFrom(content))
 

@@ -41,8 +41,8 @@ object ValidatorIdentity {
       conf: CasperConf,
       privateKeyBase16: String
   ) = {
-    val privateKey     = Base16.decode(privateKeyBase16)
-    val maybePublicKey = conf.publicKeyBase16.map(Base16.decode)
+    val privateKey     = Base16.unsafeDecode(privateKeyBase16)
+    val maybePublicKey = conf.publicKeyBase16.map(Base16.unsafeDecode)
 
     val publicKey =
       CasperConf.publicKey(maybePublicKey, conf.sigAlgorithm, privateKey)

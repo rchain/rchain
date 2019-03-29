@@ -15,7 +15,6 @@ import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.accounting.CostAccounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.matcher.{run => runMatcher, _}
-import coop.rchain.rholang.interpreter.matcher.NonDetFreeMapWithCost._
 import org.scalatest._
 
 import monix.eval.Task
@@ -27,9 +26,10 @@ class MatcherMonadSpec extends FlatSpec with Matchers {
 
   val A: Alternative[F] = Alternative[F]
 
-  implicit val cost: _cost[Task] =
-    loggingCost(CostAccounting.empty[Task].unsafeRunSync, noOpCostLog[Task])
-  implicit val costF: _cost[F] = matcherMonadCostLog[Task]
+  implicit val cost = CostAccounting.emptyCost[Task].unsafeRunSync
+
+  implicit val costF: _cost[F]   = matcherMonadCostLog[Task]
+  implicit val matcherMonadError = implicitly[Sync[F]]
 
   private def combineK[FF[_]: MonoidK, G[_]: Foldable, A](gfa: G[FF[A]]): FF[A] =
     gfa.foldLeft(MonoidK[FF].empty[A])(SemigroupK[FF].combineK[A])
@@ -116,7 +116,7 @@ class MatcherMonadSpec extends FlatSpec with Matchers {
 
   it should "fail all branches when using `_error[F].raise`" in {
     val a: F[Int] = 1.pure[F]
-    val b: F[Int] = 2.pure[F] >> _error[F].raise[Int](OutOfPhlogistonsError)
+    val b: F[Int] = 2.pure[F] >> _error[F].raiseError[Int](OutOfPhlogistonsError)
     val c: F[Int] = 3.pure[F]
 
     val combined = combineK(List(a, b, c))

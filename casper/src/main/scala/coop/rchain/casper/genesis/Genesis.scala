@@ -49,7 +49,9 @@ object Genesis {
       StandardDeploys.walletCheck,
       StandardDeploys.systemInstances,
       StandardDeploys.lockbox,
-      StandardDeploys.rev(wallets, faucetCode, posParams)
+      StandardDeploys.authKey,
+      StandardDeploys.rev(wallets, faucetCode, posParams),
+      StandardDeploys.revVault
     )
 
   def withContracts[F[_]: Concurrent](
@@ -232,7 +234,7 @@ object Genesis {
                 .getLines()
                 .map(line => {
                   val Array(pk, _) = line.trim.split(" ")
-                  ByteString.copyFrom(Base16.decode(pk))
+                  ByteString.copyFrom(Base16.unsafeDecode(pk))
                 })
                 .toSet
             }
@@ -261,7 +263,7 @@ object Genesis {
                 .getLines()
                 .map(line => {
                   val Array(pk, stake) = line.trim.split(" ")
-                  Base16.decode(pk) -> (stake.toLong)
+                  Base16.unsafeDecode(pk) -> (stake.toLong)
                 })
                 .toMap
             }

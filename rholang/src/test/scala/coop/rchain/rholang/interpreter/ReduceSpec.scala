@@ -39,11 +39,13 @@ trait PersistentStoreTester {
 
   def withTestSpace[R](
       errorLog: ErrorLog[Task]
-  )(f: TestFixture => R)(implicit C: _cost[Task]): R = {
+  )(f: TestFixture => R): R = {
     val dbDir                              = Files.createTempDirectory("rholang-interpreter-test-")
     val context: RhoContext[Task]          = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
     implicit val logF: Log[Task]           = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+
+    implicit val cost = CostAccounting.emptyCost[Task].unsafeRunSync
 
     val space = (RSpace
       .create[
@@ -70,11 +72,6 @@ trait PersistentStoreTester {
 
 class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
-
-  implicit val cost: _cost[Task] =
-    (for {
-      costAlg <- CostAccounting.of[Task](Cost(0))
-    } yield loggingCost(costAlg, noOpCostLog[Task])).unsafeRunSync
 
   def checkData(
       result: Map[
@@ -839,6 +836,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val result = withTestSpace(errorLog) {
       case TestFixture(space, _) =>
+        implicit val cost          = CostAccounting.emptyCost[Task].unsafeRunSync
         def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
         val reducer = RholangOnlyDispatcher
           .create[Task, Task.Par](space, Map("rho:test:foo" -> byteName(42)))
@@ -924,7 +922,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         implicit val env = Env.makeEnv[Par](Expr(GString("deadbeef")))
         Await.result(reducer.evalExprToPar(hexToBytesCall).runToFuture, 3.seconds)
     }
-    val expectedResult: Par = Expr(GByteArray(ByteString.copyFrom(Base16.decode("deadbeef"))))
+    val expectedResult: Par = Expr(GByteArray(ByteString.copyFrom(Base16.unsafeDecode("deadbeef"))))
     directResult should be(expectedResult)
 
     errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
@@ -1418,14 +1416,16 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val inspectTask = reducer.evalExpr(
           EPlusPlusBody(
             EPlusPlus(
-              GByteArray(ByteString.copyFrom(Base16.decode("dead"))),
-              GByteArray(ByteString.copyFrom(Base16.decode("beef")))
+              GByteArray(ByteString.copyFrom(Base16.unsafeDecode("dead"))),
+              GByteArray(ByteString.copyFrom(Base16.unsafeDecode("beef")))
             )
           )
         )
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
-    result.exprs should be(Seq(Expr(GByteArray(ByteString.copyFrom(Base16.decode("deadbeef"))))))
+    result.exprs should be(
+      Seq(Expr(GByteArray(ByteString.copyFrom(Base16.unsafeDecode("deadbeef")))))
+    )
     errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 

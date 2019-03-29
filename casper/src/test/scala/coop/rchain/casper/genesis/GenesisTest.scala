@@ -151,7 +151,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
         _     = log.infos.isEmpty should be(true)
         result = validators
           .map {
-            case (v, i) => Bond(ByteString.copyFrom(Base16.decode(v)), i.toLong)
+            case (v, i) => Bond(ByteString.copyFrom(Base16.unsafeDecode(v)), i.toLong)
           }
           .forall(
             bonds.contains(_)
@@ -201,7 +201,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
         _       = log.infos.length should be(1)
         result = validators
           .map {
-            case (v, i) => Bond(ByteString.copyFrom(Base16.decode(v)), i.toLong)
+            case (v, i) => Bond(ByteString.copyFrom(Base16.unsafeDecode(v)), i.toLong)
           }
           .forall(
             bonds.contains(_)

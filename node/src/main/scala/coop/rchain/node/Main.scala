@@ -18,6 +18,8 @@ import coop.rchain.shared._
 import coop.rchain.shared.StringOps._
 import monix.eval.Task
 import monix.execution.Scheduler
+import org.slf4j.LoggerFactory
+import org.slf4j.bridge.SLF4JBridgeHandler
 
 object Main {
 
@@ -26,6 +28,11 @@ object Main {
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def main(args: Array[String]): Unit = {
+    // Catch-all for unhandled exceptions. Use only JDK and SLF4J.
+    Thread.setDefaultUncaughtExceptionHandler((thread, ex) => {
+      LoggerFactory.getLogger(getClass).error("Unhandled exception in thread " + thread.getName, ex)
+      ex.printStackTrace()
+    })
 
     val configuration = Configuration.build(args)
     System.setProperty("rnode.data.dir", configuration.server.dataDir.toString) // NonUnitStatements
@@ -65,9 +72,15 @@ object Main {
       case Eval(files) => new ReplRuntime().evalProgram[Task](files)
       case Repl        => new ReplRuntime().replProgram[Task].as(())
       case Diagnostics => diagnostics.client.Runtime.diagnosticsProgram[Task]
-      case Deploy(address, phlo, phloPrice, nonce, location, validAfterBlock) =>
+      case Deploy(phlo, phloPrice, validAfterBlock, privateKey, location) =>
         DeployRuntime
-          .deployFileProgram[Task](address, phlo, phloPrice, nonce, location, validAfterBlock)
+          .deployFileProgram[Task](
+            phlo,
+            phloPrice,
+            validAfterBlock,
+            privateKey,
+            location
+          )
       case DeployDemo        => DeployRuntime.deployDemoProgram[Task]
       case Propose           => DeployRuntime.propose[Task]()
       case ShowBlock(hash)   => DeployRuntime.showBlock[Task](hash)
@@ -98,6 +111,11 @@ object Main {
   }
 
   private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
+    // XXX: Enable it earlier once we have JDK with https://bugs.openjdk.java.net/browse/JDK-8218960 fixed
+    // https://www.slf4j.org/legacy.html#jul-to-slf4j
+    SLF4JBridgeHandler.removeHandlersForRootLogger()
+    SLF4JBridgeHandler.install()
+
     val node =
       for {
         _       <- log.info(VersionInfo.get).toEffect

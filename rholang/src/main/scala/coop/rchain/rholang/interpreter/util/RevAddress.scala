@@ -7,7 +7,7 @@ final case class RevAddress(val keyHash: Array[Byte])
 object RevAddress {
   private val coinId  = "000000"
   private val version = "00"
-  private val prefix  = Base16.decode(coinId + version)
+  private val prefix  = Base16.unsafeDecode(coinId + version)
 
   private val tools = new AddressTools(prefix, keyLength = 32, checksumLength = 4)
 

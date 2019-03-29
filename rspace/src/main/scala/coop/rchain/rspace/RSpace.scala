@@ -450,6 +450,14 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
       eventLog.put(Seq.empty)
       Checkpoint(root, events)
     }
+
+  override protected[rspace] def isDirty(root: Blake2b256Hash): F[Boolean] = store.withWriteTxnF {
+    txn =>
+      store
+        .withTrieTxn(txn) { trieTxn =>
+          (store.trieStore.getRoot(trieTxn, store.trieBranch).get != root) || eventLog.get.nonEmpty
+        }
+  }
 }
 
 object RSpace {

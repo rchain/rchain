@@ -15,7 +15,7 @@ new
   uriOut,
   getDeployData(`rho:deploy:params`)
 in {
-  contract Lockbox(@"lock", @ownerPubKeyBytes, protected, ret) = {
+  contract Lockbox(@"lock", @ownerRevAddress, protected, ret) = {
     new lockbox, getIdentity in {
 
       contract getIdentity(retCh) = {
@@ -33,11 +33,16 @@ in {
           getIdentity!(*callerCh) |
           for(@callerPubKeyBytes <- callerCh) {
 
-            if (callerPubKeyBytes == ownerPubKeyBytes) {
-              retCh ! (*protected)
-            }
-            else {
-              retCh ! (Nil)
+            new RevAddress(`rho:rev:address`), revAddrCh in {
+              RevAddress!("fromPublicKey", callerPubKeyBytes, *revAddrCh)|
+              for (@callerRevAddresss <- revAddrCh) {
+                if (callerRevAddresss == ownerRevAddress) {
+                  retCh ! (*protected)
+                }
+                else {
+                  retCh ! (Nil)
+                }
+              }
             }
 
           }

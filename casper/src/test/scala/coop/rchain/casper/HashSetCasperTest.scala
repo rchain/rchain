@@ -18,6 +18,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.{BondingUtil, ProtoUtil}
 import coop.rchain.casper.util.comm.TestNetwork
+import coop.rchain.casper.util.ProtoUtil.{signBlock, toJustification}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.comm.rp.ProtocolHelper.packet
@@ -814,7 +815,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     val createWalletDeploy = ProtoUtil
       .sourceDeploy(createWalletCode, System.currentTimeMillis(), accounting.MAX_VALUE)
       .withTimestamp(1540570144121L)
-      .withUser(ProtoUtil.stringToByteString(pkStr))
+      .withDeployer(ProtoUtil.stringToByteString(pkStr))
 
     for {
       createBlockResult <- casperEff.deploy(createWalletDeploy) *> casperEff.createBlock
@@ -1130,7 +1131,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
         timestamp,
         accounting.MAX_VALUE
       )
-      .withUser(user)
+      .withDeployer(user)
     for {
       capturedResults <- node.runtimeManager
                           .captureResults(
@@ -1160,7 +1161,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
       paymentDeployData = ProtoUtil
         .sourceDeploy(paymentCode, timestamp, accounting.MAX_VALUE)
         .withPhloPrice(phloPrice)
-        .withUser(user)
+        .withDeployer(user)
 
       paymentQuery = ProtoUtil.sourceDeploy(
         """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
@@ -1211,7 +1212,7 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
                       .traverse[Effect, DeployData](i => ProtoUtil.basicDeployData[Effect](i))
       deployPrim0 = deployDatas(1)
         .withTimestamp(deployDatas(0).timestamp)
-        .withUser(deployDatas(0).user) // deployPrim0 has the same (user, millisecond timestamp) with deployDatas(0)
+        .withDeployer(deployDatas(0).deployer) // deployPrim0 has the same (user, millisecond timestamp) with deployDatas(0)
       createBlockResult1 <- nodes(0).casperEff
                              .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
       Created(signedBlock1) = createBlockResult1

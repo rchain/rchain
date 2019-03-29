@@ -1,15 +1,15 @@
 package coop.rchain.casper.util.comm
 
+import java.nio.charset.Charset
+
 import scala.concurrent.duration._
 import scala.io.Source
 import scala.language.higherKinds
 import scala.util._
-
 import cats.{Functor, Id, Monad}
 import cats.data.EitherT
 import cats.effect.Sync
 import cats.implicits._
-
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.ListenAtName._
@@ -19,6 +19,11 @@ import coop.rchain.catscontrib.ski._
 import coop.rchain.models.Par
 import coop.rchain.shared.Time
 import cats.syntax.either._
+import com.google.protobuf.ByteString
+import coop.rchain.casper.SignDeployment
+import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.shared.ThrowableOps._
 
 object DeployRuntime {
@@ -62,14 +67,13 @@ object DeployRuntime {
       }.map(kp("")).value
     }
 
-  //Accepts a Rholang source file and deploys it to Casper
+//Accepts a Rholang source file and deploys it to Casper
   def deployFileProgram[F[_]: Monad: Sync: DeployService](
-      purseAddress: String,
       phloLimit: Long,
       phloPrice: Long,
-      nonce: Int,
-      file: String,
-      validAfterBlock: Int
+      validAfterBlock: Int,
+      maybePrivateKey: Option[PrivateKey],
+      file: String
   ): F[Unit] =
     gracefulExit(
       Sync[F].delay(Try(Source.fromFile(file).mkString).toEither).flatMap {
@@ -78,16 +82,19 @@ object DeployRuntime {
         case Right(code) =>
           for {
             timestamp <- Sync[F].delay(System.currentTimeMillis())
+
             //TODO: allow user to specify their public key
             d = DeployData()
               .withTimestamp(timestamp)
               .withTerm(code)
-              .withFrom(purseAddress)
               .withPhloLimit(phloLimit)
               .withPhloPrice(phloPrice)
-              .withNonce(nonce)
               .withValidAfterBlockNumber(validAfterBlock)
-            response <- DeployService[F].deploy(d)
+              .withTimestamp(timestamp)
+
+            signedData = maybePrivateKey.fold(d)(SignDeployment(_, d))
+
+            response <- DeployService[F].deploy(signedData)
           } yield response.map(r => s"Response: $r")
       }
     )

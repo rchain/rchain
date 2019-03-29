@@ -1,12 +1,13 @@
 package coop.rchain.rholang.interpreter
 
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.{BlockTime, RhoISpace, ShortLeashParams}
+import coop.rchain.rholang.interpreter.Runtime.{BlockTime, RhoISpace, ShortLeashParamsStorage}
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.{ContResult, Result}
 
@@ -27,7 +28,7 @@ trait SystemProcesses[F[_]] {
   def sha256Hash: Contract[F]
   def keccak256Hash: Contract[F]
   def blake2b256Hash: Contract[F]
-  def getDeployParams(deployParameters: ShortLeashParams[F]): Contract[F]
+  def getDeployParams(deployParameters: ShortLeashParamsStorage[F]): Contract[F]
   def blockTime(timestamp: BlockTime[F]): Contract[F]
   def validateRevAddress: Contract[F]
 }
@@ -38,7 +39,7 @@ object SystemProcesses {
   def apply[F[_]](
       dispatcher: Dispatch[F, ListParWithRandom, TaggedContinuation],
       space: RhoISpace[F]
-  )(implicit F: Sync[F]): SystemProcesses[F] =
+  )(implicit F: Concurrent[F]): SystemProcesses[F] =
     new SystemProcesses[F] {
 
       type ContWithMetaData = ContResult[Par, BindPattern, TaggedContinuation]
@@ -127,6 +128,18 @@ object SystemProcesses {
               .getOrElse(Par())
 
           produce(Seq(errorMessage), ack)
+
+        case isContractCall(
+            produce,
+            Seq(RhoType.String("fromPublicKey"), RhoType.ByteArray(publicKey), ack)
+            ) =>
+          val response =
+            RevAddress
+              .fromPublicKey(PublicKey(publicKey))
+              .map(RhoType.String(_))
+              .getOrElse(Par())
+
+          produce(Seq(response), ack)
       }
 
       def secp256k1Verify: Contract[F] =
@@ -146,7 +159,7 @@ object SystemProcesses {
 
       // TODO: rename this system process to "deployParameters"?
       def getDeployParams(
-          shortLeashParams: Runtime.ShortLeashParams[F]
+          shortLeashParams: Runtime.ShortLeashParamsStorage[F]
       ): Contract[F] = {
         case isContractCall(produce, Seq(ack)) =>
           for {

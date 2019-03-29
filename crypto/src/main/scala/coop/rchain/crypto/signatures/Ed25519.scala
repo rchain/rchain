@@ -1,29 +1,36 @@
 package coop.rchain.crypto.signatures
 
+import coop.rchain.crypto
 import org.abstractj.kalium.keys._
 
-object Ed25519 {
+object Ed25519 extends SignaturesAlg {
+
+  val keyLength = 32
+
+  val name: String = "Ed25519".toLowerCase
 
   //TODO: Make use of strongly typed keys
   def newKeyPair: (Array[Byte], Array[Byte]) = {
     val key = new SigningKey()
-    val sec = key.toBytes()
-    val pub = key.getVerifyKey().toBytes()
+    val sec = key.toBytes
+    val pub = key.getVerifyKey.toBytes
     (sec, pub)
   }
 
   /**
     * Ed25519 Compute Pubkey - computes public key from secret key
     *
-    * @param seckey Ed25519 Secret key, 32 bytes
+    * @param sec Ed25519 Secret key, 32 bytes
     *
-    * Return values
-    * @param pubkey Ed25519 Public key, 32 bytes
+    * @return Ed25519 Public key, 32 bytes
     */
   def toPublic(sec: Array[Byte]): Array[Byte] = {
     val key = new SigningKey(sec)
-    key.getVerifyKey().toBytes()
+    key.getVerifyKey.toBytes
   }
+
+  override def toPublic(sec: crypto.PrivateKey): crypto.PublicKey =
+    crypto.PublicKey(toPublic(sec.bytes))
 
   /**
     * Verifies the given Ed25519 signature.
@@ -61,8 +68,7 @@ object Ed25519 {
     * @param data Message hash, 32 bytes
     * @param sec Secret key, 32 bytes
     *
-    * Return value
-    * byte array of signature
+    * @return byte array of signature
     *
     */
   def sign(
@@ -70,5 +76,4 @@ object Ed25519 {
       sec: Array[Byte]
   ): Array[Byte] =
     new SigningKey(sec).sign(data)
-
 }

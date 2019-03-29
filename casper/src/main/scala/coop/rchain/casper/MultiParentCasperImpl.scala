@@ -195,17 +195,37 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
    */
   def createBlock: F[CreateBlockStatus] = validatorId match {
     case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
+      def updateDeployValidAfterBlock(deployData: DeployData, max: Long) =
+        if (deployData.validAfterBlockNumber == -1)
+          deployData.withValidAfterBlockNumber(max)
+        else
+          deployData
+
+      def updateDeployHistory(state: CasperState, max: Long) =
+        state.copy(deployHistory = state.deployHistory.map(deployData => {
+          updateDeployValidAfterBlock(deployData, max)
+        }))
+
       for {
         span      <- metricsF.span(CreateBlockMetricsSource)
         dag       <- blockDag
         tipHashes <- estimator(dag)
         _         <- span.mark("after-estimator")
-        p         <- chooseNonConflicting[F](tipHashes, dag)
+        p         <- EstimatorHelper.chooseNonConflicting[F](tipHashes, dag)
         _         <- span.mark("non-conflicting-parents")
         _ <- Log[F].info(
               s"${p.size} parents out of ${tipHashes.size} latest blocks will be used."
             )
-        maxBlockNumber   = ProtoUtil.maxBlockNumber(p)
+        maxBlockNumber = ProtoUtil.maxBlockNumber(p)
+        /*
+         * This mechanism is a first effort to make life of a deploying party easier.
+         * Instead of expecting the user to guess the current block number we assume that
+         * if no value is given (default: -1) rchain should try to deploy
+         * with the current known max block number.
+         *
+         * TODO make more developer friendly by introducing Option instead of a magic number
+         */
+        _                <- Cell[F, CasperState].modify(state => updateDeployHistory(state, maxBlockNumber))
         r                <- remDeploys(dag, p, maxBlockNumber)
         _                <- span.mark("removed-invalid-deploys")
         bondedValidators = bonds(p.head).map(_.validator).toSet
@@ -450,7 +470,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
       case Valid =>
         // Add successful! Send block to peers, log success, try to add other blocks
         for {
-          updatedDag <- addToState(block)
+          updatedDag <- BlockDagStorage[F].insert(block, invalid = false)
           _          <- CommUtil.sendBlock[F](block)
           _ <- Log[F].info(
                 s"Added ${PrettyPrinter.buildString(block.blockHash)}"
@@ -483,7 +503,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
                       }
                 } yield ()
               }
-          updatedDag <- addToState(block)
+          updatedDag <- BlockDagStorage[F].insert(block, invalid = false)
           _          <- CommUtil.sendBlock[F](block)
           _ <- Log[F].info(
                 s"Added admissible equivocation child block ${PrettyPrinter.buildString(block.blockHash)}"
@@ -568,25 +588,14 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
   private def requestMissingDependency(hash: BlockHash) =
     CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash))
 
+  // TODO: Slash block for status except InvalidUnslashableBlock
   private def handleInvalidBlockEffect(
       status: BlockStatus,
       block: BlockMessage
   ): F[BlockDagRepresentation[F]] =
-    for {
-      _ <- Log[F].warn(
-            s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}."
-          )
-      // TODO: Slash block for status except InvalidUnslashableBlock
-      _          <- BlockStore[F].put(block.blockHash, block)
-      updatedDag <- BlockDagStorage[F].insert(block, true)
-    } yield updatedDag
-
-  // TODO: should only call insert on BLockDagStorage
-  private def addToState(block: BlockMessage): F[BlockDagRepresentation[F]] =
-    for {
-      _          <- BlockStore[F].put(block.blockHash, block)
-      updatedDag <- BlockDagStorage[F].insert(block, false)
-    } yield updatedDag
+    Log[F].warn(
+      s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}."
+    ) >> BlockDagStorage[F].insert(block, invalid = true)
 
   private def reAttemptBuffer(
       dag: BlockDagRepresentation[F],

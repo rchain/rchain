@@ -1,7 +1,8 @@
 package coop.rchain.rholang.interpreter.matcher
 
 import cats.data._
-import cats.effect.Sync
+import cats.effect._
+import cats.effect.implicits._
 import cats.implicits._
 import cats.mtl._
 import cats.mtl.implicits._
@@ -43,13 +44,14 @@ object SpatialMatcher extends SpatialMatcherInstances {
   //Also, the following workaround is needed b/c of precisely this reason:
   type Alternative[F[_]] = Alternative_[F]
 
-  def spatialMatchAndCharge[M[_]: Sync](target: Par, pattern: Par)(
+  def spatialMatchAndCharge[M[_]: Sync: _error](target: Par, pattern: Par)(
       implicit
       cost: _cost[M]
   ): M[Option[(FreeMap, Unit)]] = {
     type R[A] = MatcherMonadT[M, A]
 
-    implicit val _ = matcherMonadCostLog[M]
+    implicit val _                            = matcherMonadCostLog[M]
+    implicit val matcherMonadError: _error[R] = implicitly[Sync[R]]
 
     val doMatch: R[Unit] = SpatialMatcher.spatialMatch[R, Par, Par](target, pattern)
 

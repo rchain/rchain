@@ -13,12 +13,7 @@ import com.google.protobuf.ByteString
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
-class ForkchoiceTest
-    extends FlatSpec
-    with Matchers
-    with BlockGenerator
-    with BlockDagStorageFixture {
-
+class EstimatorTest extends FlatSpec with Matchers with BlockGenerator with BlockDagStorageFixture {
   implicit val metricsEff = new Metrics.MetricsNOP[Task]
 
   "Estimator on empty latestMessages" should "return the genesis regardless of DAG" in withStorage {

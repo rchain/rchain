@@ -2,11 +2,11 @@ package coop.rchain.rholang.interpreter.accounting
 
 import java.nio.file.Files
 
+import cats.effect._
 import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.accounting.utils._
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared.StoreType
@@ -25,7 +25,7 @@ import org.scalatest.prop.PropertyChecks
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
-class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
+class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with AppendedClues {
 
   private[this] def evaluateWithCostLog(
       initialPhlo: Long,
@@ -38,9 +38,8 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
     (for {
-      costAlg <- CostAccounting.of[Task](Cost(initialPhlo))
-      costL   <- costLog[Task]
-      cost    = loggingCost(costAlg, costL)
+      costL <- costLog[Task]
+      cost  <- CostAccounting.emptyCost[Task](Concurrent[Task], costL)
       costsLoggingProgram <- {
         costL.listen({
           implicit val c = cost
@@ -49,15 +48,15 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
                         .create[Task, Task.Par](dbDir, size, StoreType.LMDB)
             res <- Interpreter[Task]
                     .evaluate(runtime, contract, Cost(initialPhlo.toLong))
-            _ <- runtime.close()
-            _ <- Task.eval(dbDir.recursivelyDelete())
+            _ <- Task.delay(runtime.close())
+            _ <- Task.now(dbDir.recursivelyDelete())
           } yield (res)
         })
       }
       (result, costLog) = costsLoggingProgram
       res               <- errorLog.readAndClearErrorVector
       _                 <- Task.now(res should be(Vector.empty))
-    } yield ((result, costLog))).unsafeRunSync
+    } yield ((result, costLog))).runSyncUnsafe(25.seconds)
   }
 
   val contracts = Table(
@@ -117,29 +116,32 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks {
     costLog.toList should contain theSameElementsAs (expectedCosts)
   }
 
-  it should "stop the evaluation of all execution branches when one of them runs out of phlo" ignore {
-    val contract                             = "@1!(1) | @2!(2) | @3!(3)"
-    val initialPhlo                          = 5L + parsingCost(contract).value
-    val expectedCosts                        = List(Cost(4, "substitution"), Cost(4, "substitution"))
+  it should "stop the evaluation of all execution branches when one of them runs out of phlo" in {
+    val contract    = "@1!(1) | @2!(2) | @3!(3)"
+    val initialPhlo = 5L + parsingCost(contract).value
+    val expectedCosts =
+      List(parsingCost(contract), Cost(4, "substitution"), Cost(4, "substitution"))
     val (EvaluateResult(_, errors), costLog) = evaluateWithCostLog(initialPhlo, contract)
     errors shouldBe (List(OutOfPhlogistonsError))
     costLog.toList should contain theSameElementsAs (expectedCosts)
   }
 
-  it should "stop the evaluation of all execution branches when one of them runs out of phlo with a more sophisiticated contract" ignore forAll(
+  it should "stop the evaluation of all execution branches when one of them runs out of phlo with a more sophisiticated contract" in forAll(
     contracts
   ) { (contract: String, expectedTotalCost: Long) =>
     check(forAllNoShrink(Gen.choose(1L, expectedTotalCost - 1)) { initialPhlo =>
       val (EvaluateResult(_, errors), costLog) =
-        evaluateWithCostLog(initialPhlo + parsingCost(contract).value, contract)
+        evaluateWithCostLog(initialPhlo, contract)
       errors shouldBe (List(OutOfPhlogistonsError))
       val costs = costLog.map(_.value).toList
       // The sum of all costs but last needs to be <= initialPhlo, otherwise
       // the last cost should have not been logged
-      costs.init.sum.toLong should be <= (initialPhlo)
+      costs.init.sum.toLong should be <= (initialPhlo) withClue (s", cost log was: $costLog")
+
       // The sum of ALL costs needs to be > initialPhlo, otherwise an error
       // should not have been reported
-      costs.sum.toLong > (initialPhlo)
+      costs.sum.toLong > (initialPhlo) withClue (s", cost log was: $costLog")
     })
   }
+
 }

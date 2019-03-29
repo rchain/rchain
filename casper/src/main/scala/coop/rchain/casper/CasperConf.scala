@@ -53,7 +53,7 @@ object CasperConf {
               Source
                 .fromFile(file)
                 .getLines()
-                .map(line => ByteString.copyFrom(Base16.decode(line)))
+                .map(line => ByteString.copyFrom(Base16.unsafeDecode(line)))
                 .toSet
             )
           }

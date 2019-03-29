@@ -48,6 +48,15 @@ object GrpcTransport {
       }
   }
 
+  private object PeerMessageToLarge {
+    def unapply(e: Throwable): Boolean =
+      e match {
+        case sre: StatusRuntimeException =>
+          sre.getStatus.getCode == Status.Code.RESOURCE_EXHAUSTED
+        case _ => false
+      }
+  }
+
   private def processResponse(
       peer: PeerNode,
       response: Either[Throwable, TLResponse]
@@ -56,7 +65,6 @@ object GrpcTransport {
       .flatMap(
         tlr =>
           tlr.payload match {
-            case p if p.isProtocol   => Right(Some(tlr.getProtocol))
             case p if p.isNoResponse => Right(None)
             case TLResponse.Payload.InternalServerError(ise) =>
               Left(internalCommunicationError("Got response: " + ise.error.toStringUtf8))
@@ -69,31 +77,17 @@ object GrpcTransport {
   ): CommErr[R] =
     response
       .leftMap {
-        case PeerTimeout()     => CommError.timeout
-        case PeerUnavailable() => peerUnavailable(peer)
-        case e                 => protocolException(e)
+        case PeerTimeout()        => CommError.timeout
+        case PeerUnavailable()    => peerUnavailable(peer)
+        case PeerMessageToLarge() => messageToLarge(peer)
+        case e                    => protocolException(e)
       }
-
-  def roundTrip(peer: PeerNode, msg: Protocol)(
-      implicit metrics: Metrics[Task]
-  ): Request[Protocol] =
-    for {
-      _ <- ReaderT.liftF(metrics.incrementCounter("round-trip"))
-      result <- transport(peer)(
-                 _.ask(TLRequest(msg.some))
-                   .timer("round-trip-time")
-               ).map(_.flatMap {
-                 case Some(p) => Right(p)
-                 case _ =>
-                   Left(internalCommunicationError("Was expecting message, nothing arrived"))
-               })
-    } yield result
 
   def send(peer: PeerNode, msg: Protocol)(implicit metrics: Metrics[Task]): Request[Unit] =
     for {
       _ <- ReaderT.liftF(metrics.incrementCounter("send"))
       result <- transport(peer)(
-                 _.tell(TLRequest(msg.some))
+                 _.send(TLRequest(msg.some))
                    .timer("send-time")
                ).map(_.flatMap {
                  case Some(p) =>
@@ -102,10 +96,9 @@ object GrpcTransport {
                })
     } yield result
 
-  def stream(peer: PeerNode, blob: Blob, messageSize: Int): Request[Unit] =
+  def stream(peer: PeerNode, blob: Blob, packetChunkSize: Int): Request[Unit] =
     ReaderT(
-      _.stream(Observable.fromIterator(Chunker.chunkIt(blob, messageSize))).attempt
+      _.stream(Observable.fromIterator(Chunker.chunkIt(blob, packetChunkSize))).attempt
         .map(r => processError(peer, r.map(kp(()))))
     )
-
 }

@@ -48,12 +48,7 @@ class SslSessionClientCallInterceptor[ReqT, RespT](next: ClientCall[ReqT, RespT]
 
     override def onMessage(message: RespT): Unit =
       message match {
-        case TLResponse(Payload.Protocol(Protocol(Some(Header(Some(sender))), msg))) =>
-          if (log.isTraceEnabled) {
-            val peerNode = ProtocolHelper.toPeerNode(sender)
-            val msgType  = msg.getClass.toString
-            log.trace(s"Response [$msgType] from peer ${peerNode.toAddress}")
-          }
+        case TLResponse(Payload.NoResponse(NoResponse(Some(Header(Some(sender)))))) =>
           val sslSession: Option[SSLSession] = Option(
             self.getAttributes.get(Grpc.TRANSPORT_ATTR_SSL_SESSION)
           )
@@ -73,12 +68,10 @@ class SslSessionClientCallInterceptor[ReqT, RespT](next: ClientCall[ReqT, RespT]
               }
             }
           }
-
         case _ => next.onMessage(message)
       }
 
     private def close(): Unit =
       throw Status.UNAUTHENTICATED.withDescription("Wrong public key").asRuntimeException()
-
   }
 }

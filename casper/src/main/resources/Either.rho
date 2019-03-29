@@ -1,7 +1,7 @@
 //scalapackage coop.rchain.rholang.collection
 
 //Requires ListOps
-//Represents Either[A, B] as ("Left", A) or ("Right", B)
+//Represents Either[A, B] as (false, A) or (true, B)
 
 //Registry info:
 //  sk: 7545b56525751bf79daa6cf3ee5757632ea6f37bfa61e93aafc4449d8510df9b
@@ -15,43 +15,160 @@
 new Either, rs(`rho:registry:insertSigned:ed25519`), uriOut, rl(`rho:registry:lookup`), ListOpsCh in {
   rl!(`rho:id:dputnspi15oxxnyymjrpu7rkaok3bjkiwq84z7cqcrx4ktqfpyapn4`, *ListOpsCh) |
   for(@(_, ListOps) <- ListOpsCh) {
-    //Right-biased flatMap; f must also return an Either
-    contract Either(@"flatMap", @either, f, return) = {
-      match either {
-        ("Right", value) => { f!(value, *return) }
-        ("Left", _)      => { return!(either) }
+
+    // Like fromNillable, except it takes `valueCh` and reads it to obtain the `value` parameter
+    contract Either(@"fromNillable <-", valueCh, @nilValue, return) = {
+      for (@value <- valueCh) {
+        Either!("fromNillable", value, nilValue, *return)
       }
     } |
 
-    //Right-biased map to transform an Either
-    contract Either(@"map", @either, f, return) = {
-      match either {
-        ("Right", value) => {
-          new mappedResultCh in {
-            f!(value, *mappedResultCh) |
-            for(@mappedResult <- mappedResultCh) {
-              return!(("Right", mappedResult))
+    // Lifts a value into Either, putting Nil-s into Left and using Right otherwise.
+    contract Either(@"fromNillable", @value, @nilValue, return) = {
+      match value {
+        Nil => return!((false, nilValue))
+        _   => return!((true, value))
+      }
+    } |
+
+    // Like fromBoolean, except it takes `successCh` and reads it to obtain the `success` parameter
+    contract Either(@"fromBoolean <-", successCh, @nilSuccess, return) = {
+      for (@success <- successCh) {
+        Either!("fromBoolean", success, nilSuccess, *return)
+      }
+    } |
+
+    // Lifts a Boolean into Either, making `false` into Left and using Right otherwise.
+    contract Either(@"fromBoolean", @success, @failureMessage, return) = {
+      match success {
+        false => return!((false, failureMessage))
+        true  => return!((true, Nil))
+      }
+    } |
+
+    // Like fromSingletonList, except it takes `listCh` and reads it to obtain the `list` parameter
+    contract Either(@"fromSingletonList <-", listCh, @failureMessage, return) = {
+      for (@list <- listCh) {
+        Either!("fromSingletonList", list, failureMessage, *return)
+      }
+    } |
+
+    // Converts a singleton list into Either, making the single element into Right
+    // and using Left if it's not a singleton list.
+    contract Either(@"fromSingletonList", @list, @failureMessage, return) = {
+      match list {
+        []      => return!((false, failureMessage))
+        [value] => return!((true, value))
+        _       => return!((false, "Invalid argument, expected a list of at most 1 element"))
+      }
+    } |
+
+    // Like fromNillableError, except it takes `errorCh` and reads it to obtain the `error` parameter
+    contract Either(@"fromNillableError <-", errorCh, return) = {
+      for (@error <- errorCh) {
+        Either!("fromNillableError", error, *return)
+      }
+    } |
+
+    // Lifts an error into Either, putting Nil-s into Right and using Left otherwise.
+    contract Either(@"fromNillableError", @error, return) = {
+      match error {
+        Nil => return!((true, Nil))
+        _   => return!((false, error))
+      }
+    } |
+
+    // Like productR, except it takes `aCh` and `bCh` and reads them to obtain the `a` and `b` parameters
+    contract Either(@"productR <-", aCh, bCh, return) = {
+      for (@a <- aCh; @b <- bCh) {
+        Either!("productR", a, b, *return)
+      }
+    } |
+
+    // Combines two eithers, discarding the first value and keeping the second
+    contract Either(@"productR", @a, @b, return) = {
+      new snd in {
+        Either!("map2", a, b, *snd, *return) |
+        for (@a, @b, ret <- snd) {
+          ret!(b)
+        }
+      }
+    } |
+
+    // Like map2, except it takes `aCh` and `bCh` and reads them to obtain the `a` and `b` parameters
+    contract Either(@"map2 <-", aCh, bCh, f, return) = {
+      for (@a <- aCh; @b <- bCh) {
+        Either!("map2", a, b, *f, *return)
+      }
+    } |
+
+    // Composes two eithers `a: A` and `b: B` using the function `f`. See cats.Apply.map2 for details.`
+    contract Either(@"map2", @a, @b, f, return) = {
+      match (a, b) {
+        ((false, _), _)               => return!(a)
+        (_, (false, _))               => return!(b)
+        ((true, va), (true, vb)) => {
+          new ret in {
+            f!(va, vb, *ret) |
+            for (@v <- ret) {
+              return!((true, v))
             }
           }
         }
-        ("Left", _) => return!(either)
       }
     } |
 
-    //Composes a list of functions returning Either into a
-    //single result by using flatMap. Similar to following Scala code:
-    //for {
-    //  r0 <- Right(input)
-    //  r1 <- f1(r0)
-    //  r2 <- f2(r1)
-    //  ...
-    //} yield fn
+    // Like flatMap, except it takes `eitherCh` and reads it to obtain the `either` parameter
+    contract Either(@"flatMap <-", eitherCh, f, return) = {
+      for (@either <- eitherCh) {
+        Either!("flatMap", either, *f, *return)
+      }
+    } |
+
+    // Right-biased flatMap; f must also return an Either
+    contract Either(@"flatMap", @either, f, return) = {
+      match either {
+        (true, value) => { f!(value, *return) }
+        (false, _)      => { return!(either) }
+      }
+    } |
+
+    // Like map, except it takes `eitherCh` and reads it to obtain the `either` parameter
+    contract Either(@"map <-", eitherCh, f, return) = {
+      for (@either <- eitherCh) {
+        Either!("map", either, *f, *return)
+      }
+    } |
+
+    // Right-biased map to transform an Either
+    contract Either(@"map", @either, f, return) = {
+      match either {
+        (true, value) => {
+          new mappedResultCh in {
+            f!(value, *mappedResultCh) |
+            for(@mappedResult <- mappedResultCh) {
+              return!((true, mappedResult))
+            }
+          }
+        }
+        (false, _) => return!(either)
+      }
+    } |
+
+    // Composes a list of functions returning Either into a
+    // single result by using flatMap. Similar to following Scala code:
+    // for {
+    //   r0 <- Right(input)
+    //   r1 <- f1(r0)
+    //   r2 <- f2(r1)
+    //   ...
+    // } yield fn
     contract Either(@"compose", @input, @functions, return) = {
       new combinator in {
         contract combinator(@head, @accumulatedValue, return) = {
           Either!("flatMap", accumulatedValue, head, *return)
         } |
-        @ListOps!("fold", functions, ("Right", input), *combinator, *return)
+        @ListOps!("fold", functions, (true, input), *combinator, *return)
       }
     }
   } |

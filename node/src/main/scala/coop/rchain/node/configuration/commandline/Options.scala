@@ -4,6 +4,8 @@ import java.nio.file.Path
 
 import coop.rchain.casper.util.comm.ListenAtName.{Name, PrivName, PubName}
 import coop.rchain.comm.PeerNode
+import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.PrivateKey
 import coop.rchain.node.BuildInfo
 import coop.rchain.shared.StoreType
 import org.rogach.scallop._
@@ -280,7 +282,10 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       opt[Int](descr = "Maximum number of peers allowed to connect to the node")
 
     val maxMessageSize =
-      opt[Int](descr = "Maximum size of message that can be sent via transport layer")
+      opt[Int](descr = "Maximum size of message that can be received via transport layer")
+
+    val packetChunkSize =
+      opt[Int](descr = "Chunk size for streaming packets between nodes")
 
     val messageConsumers =
       opt[Int](descr = "Number of incoming message consumers. Defaults to number of CPU cores")
@@ -346,16 +351,17 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val hexCheck: String => Boolean     = _.matches("[0-9a-fA-F]+")
   val addressCheck: String => Boolean = addr => addr.startsWith("0x") && hexCheck(addr.drop(2))
 
+  def validateLength[T](expectedLength: Int)(array: Array[T]): Either[String, Option[Array[T]]] =
+    if (array.length == expectedLength)
+      Right(Some(array))
+    else
+      Left(s"Invalid parameter length. Expected length is $expectedLength bytes")
+
   val deploy = new Subcommand("deploy") {
     descr(
       "Deploy a Rholang source file to Casper on an existing running node. " +
         "The deploy will be packaged and sent as a block to the network depending " +
         "on the configuration of the Casper instance."
-    )
-
-    val from = opt[String](
-      descr = "Purse address that will be used to pay for the deployment.",
-      validate = addressCheck
     )
 
     val phloLimit =
@@ -377,11 +383,17 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "Set this value to one less than the current block height: you have 50 blocks to get this transaction into the chain."
     )
 
-    val nonce = opt[Int](
-      descr = "This allows you to overwrite your own pending transactions that use the same nonce."
+    val privateKey = opt[PrivateKey](
+      descr = "The deployer's ed25519 private key encoded as Base16.",
+      required = false
+    )(
+      Base16Converter
+        .flatMap(validateLength(Ed25519.keyLength))
+        .map(PrivateKey)
     )
 
     val location = trailArg[String](required = true)
+
   }
   addSubcommand(deploy)
 

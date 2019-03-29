@@ -62,7 +62,7 @@ class InMemoryStore[F[_], T, C, P, A, K](
     }
 
   private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash =
-    StableHashProvider.hash(channels)
+    StableHashProvider.hash(channels)(Serialize.fromCodec(codecC))
 
   override def withTrieTxn[R](txn: Transaction)(f: TrieTransaction => R): R =
     trieStore.withTxn(trieStore.createTxnWrite()) { ttxn =>

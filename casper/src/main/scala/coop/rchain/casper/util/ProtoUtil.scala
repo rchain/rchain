@@ -101,25 +101,6 @@ object ProtoUtil {
           validator == block.sender
       }
 
-  def findCreatorJustificationAncestorWithSeqNum[F[_]: Monad: BlockStore](
-      blockDag: BlockDagRepresentation[F],
-      b: BlockMessage,
-      seqNum: SequenceNumber
-  ): F[Option[BlockHash]] =
-    if (b.seqNum == seqNum) {
-      Option(b.blockHash).pure[F]
-    } else {
-      DagOperations
-        .bfTraverseF(List(b.blockHash)) { blockHash =>
-          getCreatorJustificationAsListUntilGoalInMemory[F](blockDag, blockHash)
-        }
-        .findF { blockHash =>
-          for {
-            blockMeta <- blockDag.lookup(blockHash)
-          } yield blockMeta.get.seqNum == seqNum
-        }
-    }
-
   /**
     * Since the creator justification is unique
     * we don't need to return a list. However, the bfTraverseF
@@ -235,7 +216,7 @@ object ProtoUtil {
   def containsDeploy(b: BlockMessage, user: ByteString, timestamp: Long): Boolean =
     deploys(b).toStream
       .flatMap(getDeployData)
-      .exists(deployData => deployData.user == user && deployData.timestamp == timestamp)
+      .exists(deployData => deployData.deployer == user && deployData.timestamp == timestamp)
 
   private def getDeployData(d: ProcessedDeploy): Option[DeployData] = d.deploy
 
@@ -269,86 +250,6 @@ object ProtoUtil {
 
   def maxBlockNumber(blocks: Seq[BlockMessage]): Long = blocks.foldLeft(-1L) {
     case (acc, b) => math.max(acc, ProtoUtil.blockNumber(b))
-  }
-
-  /*
-   * Block b1 conflicts with b2 if any of b1's ancestors contains a replay log entry that
-   * touches a channel that any of b2's ancestors' (that are not common with b1's ancestors)
-   * replay log entries touch.
-   */
-  def conflicts[F[_]: Monad: Log: BlockStore](
-      b1: BlockMessage,
-      b2: BlockMessage,
-      dag: BlockDagRepresentation[F]
-  ): F[Boolean] =
-    dag.deriveOrdering(0L).flatMap { // TODO: Replace with something meaningful
-      implicit ordering =>
-        for {
-          b1MetaDataOpt        <- dag.lookup(b1.blockHash)
-          b2MetaDataOpt        <- dag.lookup(b2.blockHash)
-          blockMetaDataSeq     = Vector(b1MetaDataOpt.get, b2MetaDataOpt.get)
-          uncommonAncestorsMap <- DagOperations.uncommonAncestors[F](blockMetaDataSeq, dag)
-          (b1AncestorsMap, b2AncestorsMap) = uncommonAncestorsMap.partition {
-            case (_, bitSet) => bitSet == BitSet(0)
-          }
-          b1AncestorsMeta    = b1AncestorsMap.keys
-          b2AncestorsMeta    = b2AncestorsMap.keys
-          b1AncestorChannels <- buildBlockAncestorChannels[F](b1AncestorsMeta.toList)
-          b2AncestorChannels <- buildBlockAncestorChannels[F](b2AncestorsMeta.toList)
-          conflicts          = b1AncestorChannels.intersect(b2AncestorChannels).nonEmpty
-          _ <- if (conflicts) {
-                Log[F].info(
-                  s"Block ${PrettyPrinter.buildString(b1.blockHash)} and ${PrettyPrinter
-                    .buildString(b2.blockHash)} conflicts."
-                )
-              } else {
-                Log[F].info(
-                  s"Block ${PrettyPrinter
-                    .buildString(b1.blockHash)}'s channels ${b1AncestorChannels.map(PrettyPrinter.buildString).mkString(",")} and block ${PrettyPrinter
-                    .buildString(b2.blockHash)}'s channels ${b2AncestorChannels.map(PrettyPrinter.buildString).mkString(",")} don't intersect."
-                )
-              }
-        } yield conflicts
-    }
-
-  private def buildBlockAncestorChannels[F[_]: Monad: BlockStore](
-      blockAncestorsMeta: List[BlockMetadata]
-  ): F[Set[ByteString]] =
-    for {
-      maybeAncestors <- blockAncestorsMeta.traverse(
-                         blockAncestorMeta => BlockStore[F].get(blockAncestorMeta.blockHash)
-                       )
-      ancestors      = maybeAncestors.flatten
-      ancestorEvents = ancestors.flatMap(_.getBody.deploys.flatMap(_.log))
-      ancestorChannels = ancestorEvents.flatMap {
-        case Event(Produce(produce: ProduceEvent)) =>
-          Set(produce.channelsHash)
-        case Event(Consume(consume: ConsumeEvent)) =>
-          consume.channelsHashes.toSet
-        case Event(Comm(CommEvent(Some(consume: ConsumeEvent), produces))) =>
-          consume.channelsHashes.toSet ++ produces.map(_.channelsHash).toSet
-      }.toSet
-    } yield ancestorChannels
-
-  def chooseNonConflicting[F[_]: Monad: Log: BlockStore](
-      blockHashes: Seq[BlockHash],
-      dag: BlockDagRepresentation[F]
-  ): F[Seq[BlockMessage]] = {
-    def nonConflicting(b: BlockMessage): BlockMessage => F[Boolean] =
-      conflicts[F](_, b, dag).map(b => !b)
-
-    for {
-      blocks <- blockHashes.toList.traverse(hash => ProtoUtil.unsafeGetBlock[F](hash))
-      result <- blocks
-                 .foldM(List.empty[BlockMessage]) {
-                   case (acc, b) =>
-                     Monad[F].ifM(acc.forallM(nonConflicting(b)))(
-                       (b :: acc).pure[F],
-                       acc.pure[F]
-                     )
-                 }
-                 .map(_.reverse)
-    } yield result
   }
 
   def toJustification(
@@ -485,13 +386,13 @@ object ProtoUtil {
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
 
   def stringToByteString(string: String): ByteString =
-    ByteString.copyFrom(Base16.decode(string))
+    ByteString.copyFrom(Base16.unsafeDecode(string))
 
   def basicDeployData[F[_]: Monad: Time](id: Int): F[DeployData] =
     Time[F].currentMillis.map(
       now =>
         DeployData()
-          .withUser(ByteString.EMPTY)
+          .withDeployer(ByteString.EMPTY)
           .withTimestamp(now)
           .withTerm(s"@${id}!($id)")
           .withPhloLimit(accounting.MAX_VALUE)
@@ -502,7 +403,7 @@ object ProtoUtil {
 
   def sourceDeploy(source: String, timestamp: Long, phlos: Long): DeployData =
     DeployData(
-      user = ByteString.EMPTY,
+      deployer = ByteString.EMPTY,
       timestamp = timestamp,
       term = source,
       phloLimit = phlos
@@ -521,7 +422,7 @@ object ProtoUtil {
     * only those fields. This allows users to more readily pre-generate names for signing.
     */
   def stripDeployData(d: DeployData): DeployData =
-    DeployData().withUser(d.user).withTimestamp(d.timestamp)
+    DeployData().withDeployer(d.deployer).withTimestamp(d.timestamp)
 
   def computeCodeHash(dd: DeployData): Par = {
     val bytes             = dd.term.getBytes(StandardCharsets.UTF_8)
@@ -531,7 +432,7 @@ object ProtoUtil {
 
   def getRholangDeployParams(dd: DeployData): (Par, Par, Par, Par) = {
     val phloPrice: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(dd.phloPrice))))
-    val userId: Par    = Par(exprs = Seq(Expr(Expr.ExprInstance.GByteArray(dd.user))))
+    val userId: Par    = Par(exprs = Seq(Expr(Expr.ExprInstance.GByteArray(dd.deployer))))
     val timestamp: Par = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(dd.timestamp))))
     (computeCodeHash(dd), phloPrice, userId, timestamp)
   }

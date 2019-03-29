@@ -137,7 +137,7 @@ class ValidateTest
         _            <- createChain[Task](6)
         (_, wrongPk) = Ed25519.newKeyPair
         empty        = ByteString.EMPTY
-        invalidKey   = ByteString.copyFrom(Base16.decode("abcdef1234567890"))
+        invalidKey   = ByteString.copyFrom(Base16.unsafeDecode("abcdef1234567890"))
         block0       <- signedBlock(0).map(_.withSender(empty))
         block1       <- signedBlock(1).map(_.withSender(invalidKey))
         block2       <- signedBlock(2).map(_.withSender(ByteString.copyFrom(wrongPk)))
