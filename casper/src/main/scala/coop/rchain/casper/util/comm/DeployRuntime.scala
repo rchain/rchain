@@ -75,8 +75,8 @@ object DeployRuntime {
       validAfterBlock: Int,
       maybePrivateKeyFile: Option[String],
       file: String
-  ): F[Unit] =
-    gracefulExit(
+  ): F[Unit] = {
+    val readInputFiles: F[Either[Throwable, (String, Option[PrivateKey])]] =
       Sync[F]
         .delay(
           for {
@@ -97,28 +97,38 @@ object DeployRuntime {
                               )
           } yield (code, maybePrivateKey)
         )
+
+    def doDeploy(
+        code: String,
+        maybePrivateKey: Option[PrivateKey]
+    ): F[Either[Seq[String], String]] =
+      for {
+        timestamp <- Sync[F].delay(System.currentTimeMillis())
+
+        //TODO: allow user to specify their public key
+        d = DeployData()
+          .withTimestamp(timestamp)
+          .withTerm(code)
+          .withPhloLimit(phloLimit)
+          .withPhloPrice(phloPrice)
+          .withValidAfterBlockNumber(validAfterBlock)
+          .withTimestamp(timestamp)
+
+        signedData = maybePrivateKey.fold(d)(SignDeployment.sign(_, d))
+
+        response <- DeployService[F].deploy(signedData)
+      } yield response.map(r => s"Response: $r")
+
+    gracefulExit(
+      readInputFiles
         .flatMap {
           case Left(ex) =>
             Sync[F].delay(Left(Seq(s"Error with given file: \n${ex.getMessage}")))
           case Right((code, maybePrivateKey)) =>
-            for {
-              timestamp <- Sync[F].delay(System.currentTimeMillis())
-
-              //TODO: allow user to specify their public key
-              d = DeployData()
-                .withTimestamp(timestamp)
-                .withTerm(code)
-                .withPhloLimit(phloLimit)
-                .withPhloPrice(phloPrice)
-                .withValidAfterBlockNumber(validAfterBlock)
-                .withTimestamp(timestamp)
-
-              signedData = maybePrivateKey.fold(d)(SignDeployment.sign(_, d))
-
-              response <- DeployService[F].deploy(signedData)
-            } yield response.map(r => s"Response: $r")
+            doDeploy(code, maybePrivateKey)
         }
     )
+  }
 
   private def gracefulExit[F[_]: Monad: Sync, A](
       program: F[Either[Seq[String], String]]
