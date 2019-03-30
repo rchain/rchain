@@ -22,6 +22,7 @@ import cats.syntax.either._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.SignDeployment
 import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.shared.ThrowableOps._
@@ -72,31 +73,51 @@ object DeployRuntime {
       phloLimit: Long,
       phloPrice: Long,
       validAfterBlock: Int,
-      maybePrivateKey: Option[PrivateKey],
+      maybePrivateKeyFile: Option[String],
       file: String
   ): F[Unit] =
     gracefulExit(
-      Sync[F].delay(Try(Source.fromFile(file).mkString).toEither).flatMap {
-        case Left(ex) =>
-          Sync[F].delay(Left(Seq(s"Error with given file: \n${ex.getMessage}")))
-        case Right(code) =>
+      Sync[F]
+        .delay(
           for {
-            timestamp <- Sync[F].delay(System.currentTimeMillis())
+            code <- Try(Source.fromFile(file).mkString).toEither
+            maybePrivateKeyBase16 <- maybePrivateKeyFile
+                                      .traverse(f => Try(Source.fromFile(f).mkString).toEither)
 
-            //TODO: allow user to specify their public key
-            d = DeployData()
-              .withTimestamp(timestamp)
-              .withTerm(code)
-              .withPhloLimit(phloLimit)
-              .withPhloPrice(phloPrice)
-              .withValidAfterBlockNumber(validAfterBlock)
-              .withTimestamp(timestamp)
+            maybePrivateKey <- maybePrivateKeyBase16.traverse(
+                                k =>
+                                  Base16
+                                    .decode(k.toLowerCase)
+                                    .map(PrivateKey(_))
+                                    .toRight(
+                                      new Exception(
+                                        s"Error parsing private key file. Invalid base16 encoding."
+                                      )
+                                    )
+                              )
+          } yield (code, maybePrivateKey)
+        )
+        .flatMap {
+          case Left(ex) =>
+            Sync[F].delay(Left(Seq(s"Error with given file: \n${ex.getMessage}")))
+          case Right((code, maybePrivateKey)) =>
+            for {
+              timestamp <- Sync[F].delay(System.currentTimeMillis())
 
-            signedData = maybePrivateKey.fold(d)(SignDeployment.sign(_, d))
+              //TODO: allow user to specify their public key
+              d = DeployData()
+                .withTimestamp(timestamp)
+                .withTerm(code)
+                .withPhloLimit(phloLimit)
+                .withPhloPrice(phloPrice)
+                .withValidAfterBlockNumber(validAfterBlock)
+                .withTimestamp(timestamp)
 
-            response <- DeployService[F].deploy(signedData)
-          } yield response.map(r => s"Response: $r")
-      }
+              signedData = maybePrivateKey.fold(d)(SignDeployment.sign(_, d))
+
+              response <- DeployService[F].deploy(signedData)
+            } yield response.map(r => s"Response: $r")
+        }
     )
 
   private def gracefulExit[F[_]: Monad: Sync, A](

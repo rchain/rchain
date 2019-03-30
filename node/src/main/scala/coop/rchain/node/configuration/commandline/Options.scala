@@ -376,13 +376,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "Set this value to one less than the current block height: you have 50 blocks to get this transaction into the chain."
     )
 
-    val privateKey = opt[PrivateKey](
-      descr = "The deployer's ed25519 private key encoded as Base16.",
+    val privateKey = opt[String](
+      descr = "The text file containing the deployer's ed25519 private key encoded as Base16.",
       required = false
-    )(
-      Base16Converter
-        .flatMap(validateLength(Ed25519.keyLength))
-        .map(PrivateKey)
     )
 
     val location = trailArg[String](required = true)

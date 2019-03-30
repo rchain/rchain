@@ -59,7 +59,7 @@ final case class Deploy(
     phloLimit: Long,
     phloPrice: Long,
     validAfterBlock: Int,
-    privateKey: Option[PrivateKey],
+    privateKey: Option[String],
     location: String
 ) extends Command
 final case object Propose                                                  extends Command

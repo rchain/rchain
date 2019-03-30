@@ -17,6 +17,7 @@ from typing import (
     Generator,
     AbstractSet,
 )
+import tempfile
 
 from docker.client import DockerClient
 from docker.models.containers import Container
@@ -278,13 +279,18 @@ class Node:
         return self.rnode_command('eval', rho_file_path)
 
     def deploy(self, rho_file_path: str) -> str:
-        return self.rnode_command('deploy', '--private-key=b18e1d0045995ec3d010c387ccfeb984d783af8fbb0f40fa7db126d889f6dadd', '--phlo-limit=1000000', '--phlo-price=1', rho_file_path)
+        (fd, path) = tempfile.mkstemp(prefix="rnode-private-key", text=True)
+        os.write(fd, bytes("b18e1d0045995ec3d010c387ccfeb984d783af8fbb0f40fa7db126d889f6dadd", "utf-8"))
+        return self.rnode_command('deploy', '--private-key=' + path, '--phlo-limit=1000000', '--phlo-price=1', rho_file_path)
 
     def deploy_string(self, rholang_code: str) -> str:
         quoted_rholang = shlex.quote(rholang_code)
-        return self.shell_out('sh', '-c', 'echo {quoted_rholang} >/tmp/deploy_string.rho && {rnode_binary} deploy --private-key=b18e1d0045995ec3d010c387ccfeb984d783af8fbb0f40fa7db126d889f6dadd --phlo-limit=10000000000 --phlo-price=1 /tmp/deploy_string.rho'.format(
+        (fd, path) = tempfile.mkstemp(prefix="rnode-private-key", text=True)
+        os.write(fd, bytes("b18e1d0045995ec3d010c387ccfeb984d783af8fbb0f40fa7db126d889f6dadd", "utf-8"))
+        return self.shell_out('sh', '-c', 'echo {quoted_rholang} >/tmp/deploy_string.rho && {rnode_binary} deploy --private-key={path} --phlo-limit=10000000000 --phlo-price=1 /tmp/deploy_string.rho'.format(
             rnode_binary=rnode_binary,
             quoted_rholang=quoted_rholang,
+            path=path
         ))
 
     def propose(self) -> str:
