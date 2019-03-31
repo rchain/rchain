@@ -35,7 +35,7 @@ class GrpcServer(server: Server) {
       _          <- Task.delay(server.shutdown())
       _          <- Task.delay(server.awaitTermination(1000, TimeUnit.MILLISECONDS))
       terminated <- Task.delay(server.isTerminated)
-    } yield terminated).attempt map (_.fold(kp(false), id))
+    } yield terminated).attempt map (_.fold(kp(false), identity))
 
   private def shutdownImmediately: Task[Unit] =
     Task.delay(server.shutdownNow()).attempt.as(())
