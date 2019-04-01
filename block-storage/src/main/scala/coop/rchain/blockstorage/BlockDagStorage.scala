@@ -8,7 +8,11 @@ import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 
 trait BlockDagStorage[F[_]] {
   def getRepresentation: F[BlockDagRepresentation[F]]
-  def insert(block: BlockMessage, invalid: Boolean): F[BlockDagRepresentation[F]]
+  def insert(
+      block: BlockMessage,
+      genesis: BlockMessage,
+      invalid: Boolean
+  ): F[BlockDagRepresentation[F]]
   def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A]
   def checkpoint(): F[Unit]
   def clear(): F[Unit]

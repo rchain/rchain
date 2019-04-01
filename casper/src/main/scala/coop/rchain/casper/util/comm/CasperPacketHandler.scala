@@ -593,7 +593,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   ): F[Unit] =
     for {
       _ <- BlockStore[F].put(genesis.blockHash, genesis)
-      _ <- BlockDagStorage[F].insert(genesis, invalid = false)
+      _ <- BlockDagStorage[F].insert(genesis, genesis, invalid = false)
       _ <- BlockStore[F].putApprovedBlock(approvedBlock)
     } yield ()
 
