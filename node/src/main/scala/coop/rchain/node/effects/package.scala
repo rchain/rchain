@@ -46,14 +46,12 @@ package object effects {
       def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
     }
 
-  def kademliaRPC(port: Int, timeout: FiniteDuration)(
+  def kademliaRPC(timeout: FiniteDuration)(
       implicit
       scheduler: Scheduler,
       peerNodeAsk: PeerNodeAsk[Task],
-      metrics: Metrics[Task],
-      log: Log[Task],
-      cache: ConnectionsCache[Task, KademliaConnTag]
-  ): KademliaRPC[Task] = new GrpcKademliaRPC(port, timeout)
+      metrics: Metrics[Task]
+  ): KademliaRPC[Task] = new GrpcKademliaRPC(timeout)
 
   def transportClient(
       certPath: Path,

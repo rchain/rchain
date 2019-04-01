@@ -5,7 +5,6 @@ import coop.rchain.comm.PeerNode
 trait KademliaRPC[F[_]] {
   def ping(node: PeerNode): F[Boolean]
   def lookup(key: Seq[Byte], peer: PeerNode): F[Seq[PeerNode]]
-  def shutdown(): F[Unit]
 }
 
 object KademliaRPC {

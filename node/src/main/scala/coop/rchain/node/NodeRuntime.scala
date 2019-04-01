@@ -172,7 +172,6 @@ class NodeRuntime private[node] (
   def clearResources(servers: Servers, runtime: Runtime[Task], casperRuntime: Runtime[Task])(
       implicit
       transportShutdown: TransportLayerShutdown[Task],
-      kademliaRPC: KademliaRPC[Task],
       blockStore: BlockStore[Effect],
       blockDagStorage: BlockDagStorage[Effect],
       peerNodeAsk: PeerNodeAsk[Task]
@@ -188,7 +187,6 @@ class NodeRuntime private[node] (
       loc <- peerNodeAsk.ask
       msg = ProtocolHelper.disconnect(loc)
       _   <- transportShutdown(msg)
-      _   <- kademliaRPC.shutdown()
       _   <- log.info("Shutting down HTTP server....")
       _   <- Task.delay(Kamon.stopAllReporters())
       _   <- servers.httpServer.cancel
@@ -205,7 +203,6 @@ class NodeRuntime private[node] (
 
   def addShutdownHook(servers: Servers, runtime: Runtime[Task], casperRuntime: Runtime[Task])(
       implicit transportShutdown: TransportLayerShutdown[Task],
-      kademliaRPC: KademliaRPC[Task],
       blockStore: BlockStore[Effect],
       blockDagStorage: BlockDagStorage[Effect],
       peerNodeAsk: PeerNodeAsk[Task]
@@ -227,7 +224,6 @@ class NodeRuntime private[node] (
       metrics: Metrics[Task],
       transport: TransportLayer[Task],
       transportShutdown: TransportLayerShutdown[Task],
-      kademliaRPC: KademliaRPC[Task],
       kademliaStore: KademliaStore[Task],
       nodeDiscovery: NodeDiscovery[Task],
       rpConnectons: ConnectionsCell[Task],
@@ -366,7 +362,6 @@ class NodeRuntime private[node] (
     peerNodeAsk          = effects.peerNodeAsk(rpConfState)
     rpConnections        <- effects.rpConnections.toEffect
     metrics              = diagnostics.effects.metrics[Task]
-    kademliaConnections  <- CachedConnections[Task, KademliaConnTag](Task.catsAsync, metrics).toEffect
     tcpConnections       <- CachedConnections[Task, TcpConnTag](Task.catsAsync, metrics).toEffect
     time                 = effects.time
     timerTask            = Task.timer
@@ -390,16 +385,10 @@ class NodeRuntime private[node] (
            )(grpcScheduler, log, metrics, tcpConnections)
            .toEffect
     (transport, transportShutdown) = tl
-    kademliaRPC = effects.kademliaRPC(kademliaPort, defaultTimeout)(
-      grpcScheduler,
-      peerNodeAsk,
-      metrics,
-      log,
-      kademliaConnections
-    )
-    kademliaStore = effects.kademliaStore(id)(kademliaRPC, metrics)
-    _             <- initPeer.fold(Task.unit.toEffect)(p => kademliaStore.updateLastSeen(p).toEffect)
-    nodeDiscovery = effects.nodeDiscovery(id)(kademliaStore, kademliaRPC)
+    kademliaRPC                    = effects.kademliaRPC(defaultTimeout)(grpcScheduler, peerNodeAsk, metrics)
+    kademliaStore                  = effects.kademliaStore(id)(kademliaRPC, metrics)
+    _                              <- initPeer.fold(Task.unit.toEffect)(p => kademliaStore.updateLastSeen(p).toEffect)
+    nodeDiscovery                  = effects.nodeDiscovery(id)(kademliaStore, kademliaRPC)
 
     /**
       * We need to come up with a consistent way with folder creation. Some layers create folder on their own (if not available),
@@ -498,7 +487,6 @@ class NodeRuntime private[node] (
       metrics,
       transport,
       transportShutdown,
-      kademliaRPC,
       kademliaStore,
       nodeDiscovery,
       rpConnections,
