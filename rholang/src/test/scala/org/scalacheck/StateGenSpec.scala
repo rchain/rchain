@@ -58,7 +58,7 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
   implicit val arbFExpr: ArbF[EnvT, Expr] = ArbF[EnvT, Expr](Defer[EnvT[Gen, ?]].defer {
     val genInt: Gen[GInt]       = Gen.chooseNum(-5, 5).map(i => GInt(i.toLong))
     val genBool: Gen[GBool]     = Gen.oneOf(GBool(true), GBool(false))
-    val genString: Gen[GString] = Arbitrary.arbString.arbitrary.map(GString)
+    val genString: Gen[GString] = Gen.alphaStr.map(GString)
     ArbEnv.liftF(
       Gen
         .oneOf(
