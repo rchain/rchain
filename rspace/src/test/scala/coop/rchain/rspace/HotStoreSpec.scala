@@ -24,13 +24,14 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
   implicit def M: Monad[F]
 
   type Channel      = String
+  type Data         = Datum[String]
   type Continuation = WaitingContinuation[Pattern, StringsCaptor]
 
   def fixture(
       f: (
-          MonadState[F, Cache[String, Pattern, StringsCaptor]],
+          MonadState[F, Cache[String, Pattern, String, StringsCaptor]],
           History[F],
-          HotStore[F, String, Pattern, StringMatch, StringsCaptor]
+          HotStore[F, String, Pattern, String, StringsCaptor]
       ) => F[Unit]
   ): Unit
 
@@ -119,17 +120,99 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
       }
   }
 
+  "getData when cache is empty" should "read from history and put into the cache" in forAll {
+    (channel: Channel, historyData: List[Datum[String]]) =>
+      fixture { (state, history, hotStore) =>
+        for {
+          _        <- history.putData(channel, historyData)
+          cache    <- state.inspect(identity)
+          _        = cache.data shouldBe empty
+          readData <- hotStore.getData(channel)
+          cache    <- state.inspect(identity)
+          _        = cache.data(channel) shouldEqual historyData
+        } yield (readData shouldEqual historyData)
+      }
+  }
+
+  "getData when cache contains data" should "read from cache ignoring history" in forAll {
+    (
+        channel: Channel,
+        historyData: List[Data],
+        cachedData: List[Data]
+    ) =>
+      fixture { (state, history, hotStore) =>
+        {
+          for {
+            _ <- history.putData(channel, historyData)
+            _ <- state.modify(
+                  _ =>
+                    Cache(
+                      data = Map(
+                        channel -> cachedData
+                      )
+                    )
+                )
+            readData <- hotStore.getData(channel)
+            cache    <- state.get
+            _        = cache.data(channel) shouldEqual cachedData
+          } yield (readData shouldEqual cachedData)
+        }
+      }
+  }
+
+  "putData when cache is empty" should "read from history and add the continuation to it" in forAll {
+    (
+        channel: Channel,
+        historyData: List[Data],
+        insertedData: Data
+    ) =>
+      fixture { (state, history, hotStore) =>
+        {
+          for {
+            _     <- history.putData(channel, historyData)
+            _     <- hotStore.putDatum(channel, insertedData)
+            cache <- state.inspect(identity)
+          } yield (cache.data(channel) shouldEqual insertedData :: historyData)
+        }
+      }
+  }
+
+  "putData when cache contains data" should "read from the cache and add the continuation to it" in forAll {
+    (
+        channel: Channel,
+        historyData: List[Data],
+        cachedData: List[Data],
+        insertedData: Data
+    ) =>
+      fixture { (state, history, hotStore) =>
+        {
+          for {
+            _ <- history.putData(channel, historyData)
+            _ <- state.modify(
+                  _ =>
+                    Cache(
+                      data = Map(
+                        channel -> cachedData
+                      )
+                    )
+                )
+            _     <- hotStore.putDatum(channel, insertedData)
+            cache <- state.inspect(identity)
+          } yield (cache.data(channel) shouldEqual insertedData :: cachedData)
+        }
+      }
+  }
 }
 
-final case class HistoryState(
-    continuations: Map[List[String], List[WaitingContinuation[Pattern, StringsCaptor]]] = Map.empty
-)
+class History[F[_]: Monad](implicit R: Ref[F, Cache[String, Pattern, String, StringsCaptor]])
+    extends HistoryReader[F, String, Pattern, String, StringsCaptor] {
 
-class History[F[_]: Monad](implicit R: Ref[F, HistoryState])
-    extends HistoryReader[F, String, Pattern, StringMatch, StringsCaptor] {
+  def getJoins(channel: String): F[List[List[String]]] = ???
 
-  def getJoins(channel: String): F[List[List[String]]]      = ???
-  def getData(channel: String): F[List[Datum[StringMatch]]] = ???
+  def getData(channel: String): F[List[Datum[String]]] = R.get.map(_.data(channel))
+  def putData(channel: String, data: List[Datum[String]]): F[Unit] = R.modify { prev =>
+    (prev.copy(data = prev.data.+(channel -> data)), ())
+  }
 
   def getContinuations(
       channels: List[String]
@@ -166,26 +249,29 @@ class InMemHotStoreSpec extends HotStoreSpec[Task] {
 
   override def fixture(
       f: (
-          MonadState[F, Cache[String, Pattern, StringsCaptor]],
+          MonadState[F, Cache[String, Pattern, String, StringsCaptor]],
           History[F],
-          HotStore[F, String, Pattern, StringMatch, StringsCaptor]
+          HotStore[F, String, Pattern, String, StringsCaptor]
       ) => F[Unit]
   ) =
     (for {
-      historyState <- Ref.of[F, HistoryState](HistoryState())
+      historyState <- Ref.of[F, Cache[String, Pattern, String, StringsCaptor]](
+                       Cache[String, Pattern, String, StringsCaptor]()
+                     )
       history = {
         implicit val hs = historyState
         new History[F]
       }
-      mvarCache <- MVar.of[Task, Cache[String, Pattern, StringsCaptor]](
+      mvarCache <- MVar.of[Task, Cache[String, Pattern, String, StringsCaptor]](
                     Cache(
                       Map.empty[List[String], List[WaitingContinuation[Pattern, StringsCaptor]]]
                     )
                   )
       hotStore = {
-        implicit val hr                                                          = history
-        implicit val cache: MonadState[F, Cache[String, Pattern, StringsCaptor]] = mvarCache
-        HotStore.inMem[Task, String, Pattern, StringMatch, StringsCaptor]
+        implicit val hr = history
+        implicit val cache: MonadState[F, Cache[String, Pattern, String, StringsCaptor]] =
+          mvarCache
+        HotStore.inMem[Task, String, Pattern, String, StringsCaptor]
       }
       res <- f(mvarCache, history, hotStore)
     } yield res).runSyncUnsafe(1.second)

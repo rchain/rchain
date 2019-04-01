@@ -11,16 +11,18 @@ trait HotStore[F[_], C, P, A, K] {
   def getContinuations(channels: List[C]): F[List[WaitingContinuation[P, K]]]
   def putContinuation(channels: List[C], wc: WaitingContinuation[P, K]): F[Unit]
 
-  //def getData(channel: C): F[List[Datum[A]]]
+  def getData(channel: C): F[List[Datum[A]]]
+  def putDatum(channel: C, d: Datum[A]): F[Unit]
 }
 
-final case class Cache[C, P, K](
-    continuations: Map[List[C], List[WaitingContinuation[P, K]]]
+final case class Cache[C, P, A, K](
+    continuations: Map[List[C], List[WaitingContinuation[P, K]]] =
+      Map.empty[List[C], List[WaitingContinuation[P, K]]],
+    data: Map[C, List[Datum[A]]] = Map.empty[C, List[Datum[A]]]
 )
 
 private class InMemHotStore[F[_]: Monad, C, P, A, K](
-    )(
-    implicit S: MonadState[F, Cache[C, P, K]],
+    implicit S: MonadState[F, Cache[C, P, A, K]],
     HR: HistoryReader[F, C, P, A, K]
 ) extends HotStore[F, C, P, A, K] {
 
@@ -31,7 +33,7 @@ private class InMemHotStore[F[_]: Monad, C, P, A, K](
               case None                => HR.getContinuations(channels)
               case Some(continuations) => Applicative[F].pure(continuations)
             }
-      updatedCache = cache.copy(cache.continuations + (channels -> res))
+      updatedCache = cache.copy(continuations = cache.continuations + (channels -> res))
       _            <- S.set(updatedCache)
     } yield (res)
 
@@ -40,12 +42,29 @@ private class InMemHotStore[F[_]: Monad, C, P, A, K](
       continuations <- getContinuations(channels)
       _             <- S.modify(cache => cache.copy(cache.continuations.updated(channels, wc :: continuations)))
     } yield ()
+
+  def getData(channel: C): F[List[Datum[A]]] =
+    for {
+      cache <- S.get
+      res <- cache.data.get(channel) match {
+              case None       => HR.getData(channel)
+              case Some(data) => Applicative[F].pure(data)
+            }
+      updatedCache = cache.copy(data = cache.data + (channel -> res))
+      _            <- S.set(updatedCache)
+    } yield (res)
+
+  def putDatum(channel: C, datum: Datum[A]): F[Unit] =
+    for {
+      data <- getData(channel)
+      _    <- S.modify(cache => cache.copy(data = cache.data.updated(channel, datum :: data)))
+    } yield ()
 }
 
 object HotStore {
 
   def inMem[F[_]: Monad, C, P, A, K](
-      implicit S: MonadState[F, Cache[C, P, K]],
+      implicit S: MonadState[F, Cache[C, P, A, K]],
       HR: HistoryReader[F, C, P, A, K]
   ): HotStore[F, C, P, A, K] =
     new InMemHotStore[F, C, P, A, K]
