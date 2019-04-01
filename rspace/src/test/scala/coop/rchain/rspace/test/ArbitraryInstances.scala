@@ -123,6 +123,20 @@ object ArbitraryInstances {
         .map(_.toMap)
     )
 
+  implicit def arbitraryWaitingContinuation(
+      implicit
+      serializeString: Serialize[String],
+      serializePattern: Serialize[Pattern],
+      serializeStringsCaptor: Serialize[StringsCaptor]
+  ): Arbitrary[WaitingContinuation[Pattern, StringsCaptor]] =
+    Arbitrary(
+      for {
+        chans   <- Gen.nonEmptyListOf[String](Arbitrary.arbitrary[String])
+        pats    <- Gen.containerOfN[List, Pattern](chans.length, Arbitrary.arbitrary[Pattern])
+        boolean <- Arbitrary.arbitrary[Boolean]
+      } yield WaitingContinuation.create(chans, pats, new StringsCaptor, boolean)
+    )
+
   def arbitraryWaitingContinuation(chans: List[String])(
       implicit
       serializeString: Serialize[String],

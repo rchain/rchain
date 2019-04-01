@@ -10,16 +10,21 @@ import cats.mtl._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.internal._
+import coop.rchain.rspace.test.ArbitraryInstances._
 import org.scalatest._
+import org.scalatest.prop._
 
 import scala.collection.immutable.Seq
 import scala.concurrent.duration._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 
-trait HotStoreSpec[F[_]] extends FlatSpec with Matchers {
+trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
 
   implicit def M: Monad[F]
+
+  type Channel      = String
+  type Continuation = WaitingContinuation[Pattern, StringsCaptor]
 
   def fixture(
       f: (
@@ -29,90 +34,92 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers {
       ) => F[Unit]
   ): Unit
 
-  val channels = List("ch1")
-
-  val historyPatterns = Seq[Pattern](StringMatch("val1"))
-  val historyContinuations =
-    List(WaitingContinuation.create(channels, historyPatterns, new StringsCaptor(), false))
-
-  val cachedPatterns = Seq[Pattern](StringMatch("val2"))
-  val cachedContinuations =
-    List(
-      WaitingContinuation
-        .create(channels, cachedPatterns, new StringsCaptor(), false)
-    )
-
-  val insertedContinuation =
-    WaitingContinuation
-      .create(channels, Seq[Pattern](StringMatch("inserted")), new StringsCaptor(), false)
-
-  "getContinuations when cache is empty" should "read from history and put into the cache" in fixture {
-    (state, history, hotStore) =>
-      for {
-        _                 <- history.putContinuations(channels, historyContinuations)
-        cache             <- state.inspect(identity)
-        _                 = cache.continuations shouldBe empty
-        readContinuations <- hotStore.getContinuations(channels)
-        cache             <- state.inspect(identity)
-        _                 = cache.continuations(channels) shouldEqual historyContinuations
-      } yield (readContinuations shouldEqual historyContinuations)
-  }
-
-  "getContinuations when cache contains data" should "read from cache ignoring history" in fixture {
-    (state, history, hotStore) =>
-      {
+  "getContinuations when cache is empty" should "read from history and put into the cache" in forAll {
+    (channels: List[Channel], historyContinuations: List[Continuation]) =>
+      fixture { (state, history, hotStore) =>
         for {
-          _ <- history.putContinuations(channels, historyContinuations)
-          _ <- state.modify(
-                _ =>
-                  Cache(
-                    continuations = Map(
-                      channels -> cachedContinuations
-                    )
-                  )
-              )
+          _                 <- history.putContinuations(channels, historyContinuations)
+          cache             <- state.inspect(identity)
+          _                 = cache.continuations shouldBe empty
           readContinuations <- hotStore.getContinuations(channels)
-          cache             <- state.get
-          _                 = cache.continuations(channels) shouldEqual cachedContinuations
-        } yield (readContinuations shouldEqual cachedContinuations)
+          cache             <- state.inspect(identity)
+          _                 = cache.continuations(channels) shouldEqual historyContinuations
+        } yield (readContinuations shouldEqual historyContinuations)
       }
   }
 
-  "putContinuation when cache is empty" should "read from history and add the continuation to it" in fixture {
-    (state, history, hotStore) =>
-      {
-        for {
-          _     <- history.putContinuations(channels, historyContinuations)
-          _     <- hotStore.putContinuation(channels, insertedContinuation)
-          cache <- state.inspect(identity)
-        } yield
-          (cache.continuations(channels) shouldEqual insertedContinuation :: historyContinuations)
-      }
-  }
-
-  "putContinuation when cache contains data" should "read from the cache and add the continuation to it" in fixture {
-    (state, history, hotStore) =>
-      {
-        for {
-          _ <- history.putContinuations(channels, historyContinuations)
-          _ <- state.modify(
-                _ =>
-                  Cache(
-                    continuations = Map(
-                      channels -> cachedContinuations
+  "getContinuations when cache contains data" should "read from cache ignoring history" in forAll {
+    (
+        channels: List[Channel],
+        historyContinuations: List[Continuation],
+        cachedContinuations: List[Continuation]
+    ) =>
+      fixture { (state, history, hotStore) =>
+        {
+          for {
+            _ <- history.putContinuations(channels, historyContinuations)
+            _ <- state.modify(
+                  _ =>
+                    Cache(
+                      continuations = Map(
+                        channels -> cachedContinuations
+                      )
                     )
-                  )
-              )
-          _     <- hotStore.putContinuation(channels, insertedContinuation)
-          cache <- state.inspect(identity)
-        } yield
-          (cache.continuations(channels) shouldEqual insertedContinuation :: cachedContinuations)
+                )
+            readContinuations <- hotStore.getContinuations(channels)
+            cache             <- state.get
+            _                 = cache.continuations(channels) shouldEqual cachedContinuations
+          } yield (readContinuations shouldEqual cachedContinuations)
+        }
+      }
+  }
+
+  "putContinuation when cache is empty" should "read from history and add the continuation to it" in forAll {
+    (
+        channels: List[Channel],
+        historyContinuations: List[Continuation],
+        insertedContinuation: Continuation
+    ) =>
+      fixture { (state, history, hotStore) =>
+        {
+          for {
+            _     <- history.putContinuations(channels, historyContinuations)
+            _     <- hotStore.putContinuation(channels, insertedContinuation)
+            cache <- state.inspect(identity)
+          } yield
+            (cache.continuations(channels) shouldEqual insertedContinuation :: historyContinuations)
+        }
+      }
+  }
+
+  "putContinuation when cache contains data" should "read from the cache and add the continuation to it" in forAll {
+    (
+        channels: List[Channel],
+        historyContinuations: List[Continuation],
+        cachedContinuations: List[Continuation],
+        insertedContinuation: Continuation
+    ) =>
+      fixture { (state, history, hotStore) =>
+        {
+          for {
+            _ <- history.putContinuations(channels, historyContinuations)
+            _ <- state.modify(
+                  _ =>
+                    Cache(
+                      continuations = Map(
+                        channels -> cachedContinuations
+                      )
+                    )
+                )
+            _     <- hotStore.putContinuation(channels, insertedContinuation)
+            cache <- state.inspect(identity)
+          } yield
+            (cache.continuations(channels) shouldEqual insertedContinuation :: cachedContinuations)
+        }
       }
   }
 
 }
-
-import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 
 final case class HistoryState(
     continuations: Map[List[String], List[WaitingContinuation[Pattern, StringsCaptor]]] = Map.empty
