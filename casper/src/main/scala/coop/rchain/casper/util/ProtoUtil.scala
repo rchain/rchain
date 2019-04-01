@@ -19,7 +19,6 @@ import java.nio.charset.StandardCharsets
 
 import cats.data.OptionT
 import cats.effect.Sync
-import coop.rchain.catscontrib.ski.id
 import coop.rchain.casper.protocol.Event.EventInstance.{Comm, Consume, Produce}
 
 import scala.collection.{immutable, BitSet}
@@ -124,7 +123,7 @@ object ProtoUtil {
       } else {
         List(creatorJustification.blockHash)
       }
-    } yield creatorJustificationAsList).fold(List.empty[BlockHash])(id)
+    } yield creatorJustificationAsList).fold(List.empty[BlockHash])(identity)
 
   def weightMap(blockMessage: BlockMessage): Map[ByteString, Long] =
     blockMessage.body match {
