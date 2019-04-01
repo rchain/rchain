@@ -84,18 +84,6 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(
       _ <- Task.unit.asyncBoundary // return control to caller thread
     } yield result
 
-  def receive(
-      pingHandler: PeerNode => Task[Unit],
-      lookupHandler: (PeerNode, Array[Byte]) => Task[Seq[PeerNode]]
-  ): Task[Unit] =
-    cell.modify { s =>
-      for {
-        server        <- acquireKademliaRPCServer(port, pingHandler, lookupHandler)
-        _             <- server.start
-        c: Cancelable = () => server.stop.runSyncUnsafe()
-      } yield s.copy(server = Some(c))
-    }
-
   def shutdown(): Task[Unit] = {
     def shutdownServer: Task[Unit] = cell.modify { s =>
       for {

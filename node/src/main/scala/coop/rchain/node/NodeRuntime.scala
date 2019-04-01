@@ -82,14 +82,16 @@ class NodeRuntime private[node] (
   private val defaultTimeout    = conf.server.defaultTimeout // TODO remove
 
   case class Servers(
+      kademliaRPCServer: Server[Task],
       transportServer: TransportServer,
-      grpcServerExternal: Server[Effect],
-      grpcServerInternal: Server[Task],
+      externalApiServer: Server[Effect],
+      internalApiServer: Server[Task],
       httpServer: Fiber[Task, Unit]
   )
 
   def acquireServers(runtime: Runtime[Task], blockApiLock: Semaphore[Effect])(
       implicit
+      kademliaStore: KademliaStore[Task],
       nodeDiscovery: NodeDiscovery[Task],
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect],
@@ -97,10 +99,18 @@ class NodeRuntime private[node] (
       nodeCoreMetrics: NodeMetrics[Task],
       jvmMetrics: JvmMetrics[Task],
       connectionsCell: ConnectionsCell[Task],
-      concurrent: Concurrent[Effect]
+      concurrent: Concurrent[Effect],
+      metrics: Metrics[Task]
   ): Effect[Servers] = {
     implicit val s: Scheduler = scheduler
     for {
+      kademliaRPCServer <- discovery
+                            .acquireKademliaRPCServer(
+                              kademliaPort,
+                              KademliaHandleRPC.handlePing[Task],
+                              KademliaHandleRPC.handleLookup[Task]
+                            )(grpcScheduler)
+                            .toEffect
       transportServer <- Task
                           .delay(
                             GrpcTransportServer.acquireServer(
@@ -113,19 +123,19 @@ class NodeRuntime private[node] (
                             )(grpcScheduler, log)
                           )
                           .toEffect
-      grpcServerExternal <- api
-                             .acquireExternalServer[Effect](
-                               conf.grpcServer.portExternal,
-                               grpcScheduler,
-                               blockApiLock
-                             )
-      grpcServerInternal <- api
-                             .acquireInternalServer(
-                               conf.grpcServer.portInternal,
-                               runtime,
-                               grpcScheduler
-                             )
-                             .toEffect
+      externalApiServer <- api
+                            .acquireExternalServer[Effect](
+                              conf.grpcServer.portExternal,
+                              grpcScheduler,
+                              blockApiLock
+                            )
+      internalApiServer <- api
+                            .acquireInternalServer(
+                              conf.grpcServer.portInternal,
+                              runtime,
+                              grpcScheduler
+                            )
+                            .toEffect
 
       prometheusReporter = new NewPrometheusReporter()
       prometheusService  = NewPrometheusReporter.service[Task](prometheusReporter)
@@ -149,7 +159,14 @@ class NodeRuntime private[node] (
             Kamon.addReporter(new JmxReporter())
             if (conf.kamon.sigar) SystemMetrics.startCollecting()
           }.toEffect
-    } yield Servers(transportServer, grpcServerExternal, grpcServerInternal, httpServerFiber)
+    } yield
+      Servers(
+        kademliaRPCServer,
+        transportServer,
+        externalApiServer,
+        internalApiServer,
+        httpServerFiber
+      )
   }
 
   def clearResources(servers: Servers, runtime: Runtime[Task], casperRuntime: Runtime[Task])(
@@ -161,9 +178,11 @@ class NodeRuntime private[node] (
       peerNodeAsk: PeerNodeAsk[Task]
   ): Unit =
     (for {
-      _   <- log.info("Shutting down gRPC servers...")
-      _   <- servers.grpcServerExternal.stop.value
-      _   <- servers.grpcServerInternal.stop
+      _   <- log.info("Shutting down API servers...")
+      _   <- servers.externalApiServer.stop.value
+      _   <- servers.internalApiServer.stop
+      _   <- log.info("Shutting down Kademlia RPC server...")
+      _   <- servers.kademliaRPCServer.stop
       _   <- log.info("Shutting down transport layer, broadcasting DISCONNECT")
       _   <- servers.transportServer.stop()
       loc <- peerNodeAsk.ask
@@ -266,13 +285,17 @@ class NodeRuntime private[node] (
       host         = local.endpoint.host
       servers      <- acquireServers(runtime, blockApiLock)
       _            <- addShutdownHook(servers, runtime, casperRuntime).toEffect
-      _            <- servers.grpcServerExternal.start
+      _            <- servers.externalApiServer.start
       _ <- Log[Effect].info(
-            s"gRPC external server started at $host:${servers.grpcServerExternal.port}"
+            s"External API server started at $host:${servers.externalApiServer.port}"
           )
-      _ <- servers.grpcServerInternal.start.toEffect
+      _ <- servers.internalApiServer.start.toEffect
       _ <- Log[Effect].info(
-            s"gRPC internal server started at $host:${servers.grpcServerInternal.port}"
+            s"Internal API server started at $host:${servers.internalApiServer.port}"
+          )
+      _ <- servers.kademliaRPCServer.start.toEffect
+      _ <- Log[Effect].info(
+            s"Kademlia RPC server started at $host:${servers.kademliaRPCServer.port}"
           )
       _ <- servers.transportServer.startWithEffects(
             pm => HandleMessages.handle[Effect](pm),
@@ -281,12 +304,6 @@ class NodeRuntime private[node] (
       address = s"rnode://$id@$host?protocol=$port&discovery=$kademliaPort"
       _       <- Log[Effect].info(s"Listening for traffic on $address.")
       _       <- Task.defer(loop.forever.value).executeOn(loopScheduler).start.toEffect
-      _ <- kademliaRPC
-            .receive(
-              KademliaHandleRPC.handlePing[Task],
-              KademliaHandleRPC.handleLookup[Task]
-            )
-            .toEffect
       _ <- if (conf.server.standalone) ().pure[Effect]
           else Log[Effect].info(s"Waiting for first connection.") >> waitForFirstConnetion
       _ <- Concurrent[Effect].start(casperPacketHandler.init)
