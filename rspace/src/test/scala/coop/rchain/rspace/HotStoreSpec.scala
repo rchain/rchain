@@ -202,12 +202,56 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
         }
       }
   }
+
+  "getJoins when cache is empty" should "read from history and put into the cache" in forAll {
+    (channel: Channel, historyJoins: List[List[Channel]]) =>
+      fixture { (state, history, hotStore) =>
+        for {
+          _         <- history.putJoins(channel, historyJoins)
+          cache     <- state.inspect(identity)
+          _         = cache.joins shouldBe empty
+          readJoins <- hotStore.getJoins(channel)
+          cache     <- state.inspect(identity)
+          _         = cache.joins(channel) shouldEqual historyJoins
+        } yield (readJoins shouldEqual historyJoins)
+      }
+  }
+
+  "getJoins when cache contains data" should "read from cache ignoring history" in forAll {
+    (
+        channel: Channel,
+        historyJoins: List[List[Channel]],
+        cachedJoins: List[List[Channel]]
+    ) =>
+      fixture { (state, history, hotStore) =>
+        {
+          for {
+            _ <- history.putJoins(channel, historyJoins)
+            _ <- state.modify(
+                  _ =>
+                    Cache(
+                      joins = Map(
+                        channel -> cachedJoins
+                      )
+                    )
+                )
+            readJoins <- hotStore.getJoins(channel)
+            cache     <- state.get
+            _         = cache.joins(channel) shouldEqual cachedJoins
+          } yield (readJoins shouldEqual cachedJoins)
+        }
+      }
+  }
+
 }
 
 class History[F[_]: Monad](implicit R: Ref[F, Cache[String, Pattern, String, StringsCaptor]])
     extends HistoryReader[F, String, Pattern, String, StringsCaptor] {
 
-  def getJoins(channel: String): F[List[List[String]]] = ???
+  def getJoins(channel: String): F[List[List[String]]] = R.get.map(_.joins(channel))
+  def putJoins(channel: String, joins: List[List[String]]): F[Unit] = R.modify { prev =>
+    (prev.copy(joins = prev.joins.+(channel -> joins)), ())
+  }
 
   def getData(channel: String): F[List[Datum[String]]] = R.get.map(_.data(channel))
   def putData(channel: String, data: List[Datum[String]]): F[Unit] = R.modify { prev =>
@@ -217,7 +261,6 @@ class History[F[_]: Monad](implicit R: Ref[F, Cache[String, Pattern, String, Str
   def getContinuations(
       channels: List[String]
   ): F[List[WaitingContinuation[Pattern, StringsCaptor]]] = R.get.map(_.continuations(channels))
-
   def putContinuations(
       channels: List[String],
       continuations: List[WaitingContinuation[Pattern, StringsCaptor]]

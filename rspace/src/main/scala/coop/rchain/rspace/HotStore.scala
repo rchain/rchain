@@ -13,12 +13,15 @@ trait HotStore[F[_], C, P, A, K] {
 
   def getData(channel: C): F[List[Datum[A]]]
   def putDatum(channel: C, d: Datum[A]): F[Unit]
+
+  def getJoins(channel: C): F[List[List[C]]]
 }
 
 final case class Cache[C, P, A, K](
     continuations: Map[List[C], List[WaitingContinuation[P, K]]] =
       Map.empty[List[C], List[WaitingContinuation[P, K]]],
-    data: Map[C, List[Datum[A]]] = Map.empty[C, List[Datum[A]]]
+    data: Map[C, List[Datum[A]]] = Map.empty[C, List[Datum[A]]],
+    joins: Map[C, List[List[C]]] = Map.empty[C, List[List[C]]]
 )
 
 private class InMemHotStore[F[_]: Monad, C, P, A, K](
@@ -59,6 +62,17 @@ private class InMemHotStore[F[_]: Monad, C, P, A, K](
       data <- getData(channel)
       _    <- S.modify(cache => cache.copy(data = cache.data.updated(channel, datum :: data)))
     } yield ()
+
+  def getJoins(channel: C): F[List[List[C]]] =
+    for {
+      cache <- S.get
+      res <- cache.joins.get(channel) match {
+              case None        => HR.getJoins(channel)
+              case Some(joins) => Applicative[F].pure(joins)
+            }
+      updatedCache = cache.copy(joins = cache.joins + (channel -> res))
+      _            <- S.set(updatedCache)
+    } yield (res)
 }
 
 object HotStore {
