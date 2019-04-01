@@ -1,6 +1,7 @@
 package coop.rchain.comm
 
 import coop.rchain.grpc.{GrpcServer, Server}
+import coop.rchain.metrics.Metrics
 
 import com.google.protobuf.ByteString
 import io.grpc.netty.NettyServerBuilder
@@ -8,6 +9,9 @@ import monix.eval.Task
 import monix.execution.Scheduler
 
 package object discovery {
+  val DiscoveryMetricsSource: Metrics.Source =
+    Metrics.Source(CommMetricsSource, "discovery.kademlia")
+
   def acquireKademliaRPCServer(
       port: Int,
       pingHandler: PeerNode => Task[Unit],

@@ -209,6 +209,7 @@ class NodeRuntime private[node] (
       transport: TransportLayer[Task],
       transportShutdown: TransportLayerShutdown[Task],
       kademliaRPC: KademliaRPC[Task],
+      kademliaStore: KademliaStore[Task],
       nodeDiscovery: NodeDiscovery[Task],
       rpConnectons: ConnectionsCell[Task],
       blockDagStorage: BlockDagStorage[Effect],
@@ -239,6 +240,7 @@ class NodeRuntime private[node] (
     val loop: Effect[Unit] =
       for {
         _ <- dynamicIpCheck.toEffect
+        _ <- NodeDiscovery[Effect].discover
         _ <- Connect.clearConnections[Effect]
         _ <- Connect.findAndConnect[Effect](Connect.connect[Effect])
         _ <- time.sleep(1.minute).toEffect
@@ -276,10 +278,15 @@ class NodeRuntime private[node] (
             pm => HandleMessages.handle[Effect](pm),
             blob => packetHandler.handlePacket(blob.sender, blob.packet).as(())
           )
-      _       <- NodeDiscovery[Task].discover.attemptAndLog.executeOn(loopScheduler).start.toEffect
       address = s"rnode://$id@$host?protocol=$port&discovery=$kademliaPort"
       _       <- Log[Effect].info(s"Listening for traffic on $address.")
       _       <- Task.defer(loop.forever.value).executeOn(loopScheduler).start.toEffect
+      _ <- kademliaRPC
+            .receive(
+              KademliaHandleRPC.handlePing[Task],
+              KademliaHandleRPC.handleLookup[Task]
+            )
+            .toEffect
       _ <- if (conf.server.standalone) ().pure[Effect]
           else Log[Effect].info(s"Waiting for first connection.") >> waitForFirstConnetion
       _ <- Concurrent[Effect].start(casperPacketHandler.init)
@@ -373,9 +380,9 @@ class NodeRuntime private[node] (
       log,
       kademliaConnections
     )
-    nodeDiscovery <- effects
-                      .nodeDiscovery(id, defaultTimeout)(initPeer)(log, time, metrics, kademliaRPC)
-                      .toEffect
+    kademliaStore = effects.kademliaStore(id)(kademliaRPC, metrics)
+    _             <- initPeer.fold(Task.unit.toEffect)(p => kademliaStore.updateLastSeen(p).toEffect)
+    nodeDiscovery = effects.nodeDiscovery(id)(kademliaStore, kademliaRPC)
 
     /**
       * We need to come up with a consistent way with folder creation. Some layers create folder on their own (if not available),
@@ -475,6 +482,7 @@ class NodeRuntime private[node] (
       transport,
       transportShutdown,
       kademliaRPC,
+      kademliaStore,
       nodeDiscovery,
       rpConnections,
       blockDagStorage,

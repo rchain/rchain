@@ -1,12 +1,12 @@
 package coop.rchain.comm.discovery
 
-import org.scalatest._
-
 import cats.{catsInstancesForId => _, _}
-import coop.rchain.comm.protocol.routing._
+
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.comm._
 import coop.rchain.crypto.codec.Base16
+
+import org.scalatest._
 
 object b {
   val rand                   = new scala.util.Random(System.currentTimeMillis)
@@ -35,7 +35,7 @@ class DistanceSpec extends FlatSpec with Matchers {
   "A PeerNode of width n bytes" should "have distance to itself equal to 8n" in {
     for (i <- 1 to 64) {
       val home = PeerNode(NodeIdentifier(b.rand(i)), endpoint)
-      val nt   = PeerTable[PeerNode](home.key)
+      val nt   = PeerTable[PeerNode, Id](home.key)
       nt.distance(home) should be(Some(8 * nt.width))
     }
   }
@@ -57,7 +57,7 @@ class DistanceSpec extends FlatSpec with Matchers {
       }
 
     def testKey(key: Array[Byte]): Boolean = {
-      val table = PeerTable[PeerNode](key)
+      val table = PeerTable[PeerNode, Id](key)
       oneOffs(key).map(table.distance(_)) == (0 until 8 * width).map(Option[Int])
     }
 
@@ -80,50 +80,50 @@ class DistanceSpec extends FlatSpec with Matchers {
     }
 
     s"An empty table of width $width" should "have no peers" in {
-      val table = PeerTable[PeerNode](kr)
+      val table = PeerTable[PeerNode, Id](kr)
       assert(table.table.forall(_.isEmpty))
     }
 
     it should "return no peers" in {
-      val table = PeerTable[PeerNode](kr)
+      val table = PeerTable[PeerNode, Id](kr)
       table.peers.size should be(0)
     }
 
     it should "return no values on lookup" in {
-      val table = PeerTable[PeerNode](kr)
+      val table = PeerTable[PeerNode, Id](kr)
       table.lookup(b.rand(width)).size should be(0)
     }
 
     s"A table of width $width" should "add a key at most once" in {
-      val table = PeerTable[PeerNode](kr)
+      val table = PeerTable[PeerNode, Id](kr)
       val toAdd = oneOffs(kr).head
       val dist  = table.distance(toAdd).get
       for (i <- 1 to 10) {
-        table.updateLastSeen[Id](PeerNode(NodeIdentifier(toAdd), endpoint))
+        table.updateLastSeen(PeerNode(NodeIdentifier(toAdd), endpoint))
         table.table(dist).size should be(1)
       }
     }
 
     s"A table of width $width with peers at all distances" should "have no empty buckets" in {
-      val table = PeerTable[PeerNode](kr)
+      val table = PeerTable[PeerNode, Id](kr)
       for (k <- oneOffs(kr.toArray)) {
-        table.updateLastSeen[Id](PeerNode(NodeIdentifier(k), endpoint))
+        table.updateLastSeen(PeerNode(NodeIdentifier(k), endpoint))
       }
       assert(table.table.forall(_.nonEmpty))
     }
 
     it should s"return min(k, ${8 * width}) peers on lookup" in {
-      val table = PeerTable[PeerNode](kr)
+      val table = PeerTable[PeerNode, Id](kr)
       for (k <- oneOffs(kr.toArray)) {
-        table.updateLastSeen[Id](PeerNode(NodeIdentifier(k), endpoint))
+        table.updateLastSeen(PeerNode(NodeIdentifier(k), endpoint))
       }
       table.lookup(b.rand(width)).size should be(scala.math.min(table.k, 8 * width))
     }
 
     it should "not return sought peer on lookup" in {
-      val table = PeerTable[PeerNode](kr)
+      val table = PeerTable[PeerNode, Id](kr)
       for (k <- oneOffs(kr.toArray)) {
-        table.updateLastSeen[Id](PeerNode(NodeIdentifier(k), endpoint))
+        table.updateLastSeen(PeerNode(NodeIdentifier(k), endpoint))
       }
       val target = table.table(table.width * 4)(0)
       val resp   = table.lookup(target.key)
@@ -131,17 +131,17 @@ class DistanceSpec extends FlatSpec with Matchers {
     }
 
     it should s"return ${8 * width} peers when sequenced" in {
-      val table = PeerTable[PeerNode](kr)
+      val table = PeerTable[PeerNode, Id](kr)
       for (k <- oneOffs(kr.toArray)) {
-        table.updateLastSeen[Id](PeerNode(NodeIdentifier(k), endpoint))
+        table.updateLastSeen(PeerNode(NodeIdentifier(k), endpoint))
       }
       table.peers.size should be(8 * width)
     }
 
     it should "find each added peer" in {
-      val table = PeerTable[PeerNode](kr)
+      val table = PeerTable[PeerNode, Id](kr)
       for (k <- oneOffs(kr.toArray)) {
-        table.updateLastSeen[Id](PeerNode(NodeIdentifier(k), endpoint))
+        table.updateLastSeen(PeerNode(NodeIdentifier(k), endpoint))
       }
       for (k <- oneOffs(kr.toArray)) {
         table.find(k) should be(Some(PeerNode(NodeIdentifier(k), endpoint)))

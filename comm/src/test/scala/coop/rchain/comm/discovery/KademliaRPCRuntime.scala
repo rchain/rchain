@@ -8,7 +8,6 @@ import scala.util.Random
 
 import cats._
 import cats.effect.Timer
-import cats.effect.concurrent.MVar
 import cats.implicits._
 
 import coop.rchain.comm._
