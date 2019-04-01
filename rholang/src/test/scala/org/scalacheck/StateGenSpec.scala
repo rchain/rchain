@@ -1,22 +1,30 @@
 package org.scalacheck
 
-import cats.{Defer, Eq, Monad}
+import java.util.concurrent.TimeoutException
+
 import cats.data._
+import cats.implicits._
 import cats.laws.discipline.MonadTests
 import cats.mtl.laws.discipline.MonadStateTests
 import cats.tests.CatsSuite
+import cats.{Defer, Eq, Monad}
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.Expr.ExprInstance.{GBool, GInt, GString}
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
+import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.PrettyPrinter
+import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
+import coop.rchain.rholang.interpreter.{Interpreter, PrettyPrinter, Runtime, TestRuntime}
+import coop.rchain.shared.Log
+import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.rng.Seed
 import org.scalatest.prop.PropertyChecks
-import org.scalatest.{FlatSpec, Matchers}
-import cats.implicits._
-import coop.rchain.models.Var.WildcardMsg
+import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.annotation.tailrec
+import scala.concurrent.duration._
 import scala.util.{Failure, Random, Success, Try}
 
 class SubSpec extends FlatSpec with Matchers with PropertyChecks {
@@ -236,6 +244,31 @@ class SubSpec extends FlatSpec with Matchers with PropertyChecks {
 
   }
 
+  it should "execute without errors" in {
+    forAll { v: ValidExp =>
+      try {
+        success(print(v.e)).runSyncUnsafe(3.seconds)
+      } catch {
+        case _: TimeoutException => succeed
+      }
+    }
+  }
+
+  def success(term: String): Task[Assertion] = {
+    implicit val logF: Log[Task]            = new Log.NOPLog[Task]
+    implicit val noopMetrics: Metrics[Task] = new Metrics.MetricsNOP[Task]
+
+    for {
+      runtime <- TestRuntime.create[Task, Task.Par]()
+      _       <- runtime.reducer.setPhlo(Cost.UNSAFE_MAX)
+      _       <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
+      cost    <- CostAccounting.emptyCost[Task]
+      res     <- {
+        implicit val c = cost
+        Interpreter[Task].evaluate(runtime, term)
+      }
+    } yield assert(res.errors.isEmpty)
+  }
 }
 
 object EqInstances {
@@ -392,7 +425,7 @@ object GenShims {
 
   type P = Gen.Parameters
 
-  import Gen.{gen, r, R}
+  import Gen.{R, gen, r}
 
   def tailRecM[A, B](a0: A)(fn: A => Gen[Either[A, B]]): Gen[B] = {
 
