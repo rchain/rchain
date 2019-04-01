@@ -258,7 +258,7 @@ class NodeRuntime private[node] (
         _ <- NodeDiscovery[Effect].discover
         _ <- Connect.clearConnections[Effect]
         _ <- Connect.findAndConnect[Effect](Connect.connect[Effect])
-        _ <- time.sleep(1.minute).toEffect
+        _ <- time.sleep(20.seconds).toEffect
       } yield ()
 
     def waitForFirstConnetion: Effect[Unit] =
