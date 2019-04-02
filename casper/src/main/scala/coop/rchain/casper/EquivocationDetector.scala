@@ -9,7 +9,7 @@ import coop.rchain.blockstorage.{
   BlockStore,
   EquivocationsTracker
 }
-import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.casper.util.{DagOperations, DoublyLinkedDag, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.{

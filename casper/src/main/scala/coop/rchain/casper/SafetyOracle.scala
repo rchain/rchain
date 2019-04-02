@@ -6,7 +6,7 @@ import coop.rchain.catscontrib._
 import Catscontrib._
 import cats.data.OptionT
 import coop.rchain.blockstorage.BlockDagRepresentation
-import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.protocol.Justification
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.{Clique, DagOperations, ProtoUtil}
