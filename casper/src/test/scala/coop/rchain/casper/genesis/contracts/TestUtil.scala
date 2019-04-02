@@ -1,11 +1,8 @@
 package coop.rchain.casper.genesis.contracts
 
-import java.nio.file.Paths
-
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
@@ -16,7 +13,6 @@ import coop.rchain.rholang.interpreter.TestRuntime
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
 import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.shared.StoreType.InMem
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -78,14 +74,15 @@ object TestUtil {
   def runTestsWithDeploys(
       tests: CompiledRholangSource,
       otherLibs: Seq[DeployData],
-      runtime: Runtime[Task]
+      additionalSystemProcesses: Seq[SystemProcess.Definition[Task]]
   )(
       implicit scheduler: Scheduler
   ): Unit = {
-    val rand = Blake2b512Random(128)
+    val runtime = TestUtil.runtime(additionalSystemProcesses)
     evalDeploy(StandardDeploys.listOps, runtime)(implicitly)
     evalDeploy(rhoSpecDeploy, runtime)(implicitly)
     otherLibs.foreach(evalDeploy(_, runtime))
+    val rand = Blake2b512Random(128)
     eval(tests.code, runtime)(implicitly, rand.splitShort(1))
   }
 }

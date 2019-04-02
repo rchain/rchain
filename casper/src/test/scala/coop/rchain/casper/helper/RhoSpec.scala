@@ -15,7 +15,9 @@ import scala.concurrent.duration.Duration
 object RhoSpec {
   implicit val logger: Log[Task] = Log.log[Task]
 
-  private def mkRuntime(testResultCollector: TestResultCollector[Task]) = {
+  private def testFrameworkContracts(
+      testResultCollector: TestResultCollector[Task]
+  ): Seq[SystemProcess.Definition[Task]] = {
     val testResultCollectorService =
       Seq((5, "assertAck", 25), (1, "testSuiteCompleted", 26))
         .map {
@@ -43,7 +45,7 @@ object RhoSpec {
           ctx => DeployDataContract.set(ctx)(_, _)
         )
       )
-    TestUtil.runtime(testResultCollectorService)
+    testResultCollectorService
   }
 
   def getResults(testObject: CompiledRholangSource, otherLibs: Seq[DeployData]): Task[TestResult] =
@@ -52,7 +54,11 @@ object RhoSpec {
       testResultCollector <- TestResultCollector[Task]
 
       _ <- Task.delay {
-            TestUtil.runTestsWithDeploys(testObject, otherLibs, mkRuntime(testResultCollector))
+            TestUtil.runTestsWithDeploys(
+              testObject,
+              otherLibs,
+              testFrameworkContracts(testResultCollector)
+            )
           }
 
       result <- testResultCollector.getResult
