@@ -1,5 +1,6 @@
 package coop.rchain.casper.helper
 
+import cats.effect.Concurrent
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.rholang.build.CompiledRholangSource
@@ -15,14 +16,14 @@ import scala.concurrent.duration.Duration
 object RhoSpec {
   implicit val logger: Log[Task] = Log.log[Task]
 
-  private def testFrameworkContracts(
-      testResultCollector: TestResultCollector[Task]
-  ): Seq[SystemProcess.Definition[Task]] = {
+  private def testFrameworkContracts[F[_]: Log: Concurrent](
+      testResultCollector: TestResultCollector[F]
+  ): Seq[SystemProcess.Definition[F]] = {
     val testResultCollectorService =
       Seq((5, "assertAck", 25), (1, "testSuiteCompleted", 26))
         .map {
           case (arity, name, n) =>
-            SystemProcess.Definition[Task](
+            SystemProcess.Definition[F](
               s"rho:test:$name",
               Runtime.byteName(n.toByte),
               arity,
@@ -30,14 +31,14 @@ object RhoSpec {
               ctx => testResultCollector.handleMessage(ctx)(_, _)
             )
         } ++ Seq(
-        SystemProcess.Definition[Task](
+        SystemProcess.Definition[F](
           "rho:io:stdlog",
           Runtime.byteName(27),
           2,
           27L,
           ctx => RhoLoggerContract.handleMessage(ctx)(_, _)
         ),
-        SystemProcess.Definition[Task](
+        SystemProcess.Definition[F](
           "rho:test:deploy:set",
           Runtime.byteName(28),
           3,
