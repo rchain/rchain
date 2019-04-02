@@ -10,7 +10,6 @@ import cats.implicits._
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper._
 import coop.rchain.casper.DeployError._
-import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.protocol._

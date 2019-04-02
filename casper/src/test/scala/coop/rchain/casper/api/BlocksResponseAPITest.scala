@@ -4,7 +4,6 @@ import cats.Id
 import cats.effect.Sync
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
-import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.{genesis, _}
 import coop.rchain.casper.helper._

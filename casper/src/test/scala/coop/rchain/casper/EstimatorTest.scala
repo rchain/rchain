@@ -5,7 +5,6 @@ import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.catscontrib._
 import cats._
-import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator

@@ -12,7 +12,6 @@ import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.shared._
 import cats.effect.concurrent.Semaphore
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
-import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.ski.kp2

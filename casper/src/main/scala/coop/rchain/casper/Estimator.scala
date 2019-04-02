@@ -16,9 +16,6 @@ import coop.rchain.catscontrib.ListContrib
 import coop.rchain.models.BlockMetadata
 
 object Estimator {
-  type BlockHash = ByteString
-  type Validator = ByteString
-
   implicit val decreasingOrder = Ordering[Long].reverse
 
   def tips[F[_]: Monad](

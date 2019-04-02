@@ -6,7 +6,6 @@ import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore, IndexedBlockDagStorage}
-import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator

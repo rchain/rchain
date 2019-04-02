@@ -1,7 +1,7 @@
 package coop.rchain.casper.helper
 
 import com.google.protobuf.ByteString
-import coop.rchain.casper.Estimator.BlockHash
+import coop.rchain.casper.BlockHash
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.ProtoUtil.hashSignedBlock
 import coop.rchain.casper.util.implicits._

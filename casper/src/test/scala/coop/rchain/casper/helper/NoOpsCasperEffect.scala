@@ -4,12 +4,9 @@ import cats.effect.Sync
 import cats.implicits._
 import cats.{Applicative, Monad}
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
-import coop.rchain.casper.DeployError
-import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import coop.rchain.casper._
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.{BlockStatus, CreateBlockStatus, MultiParentCasper}
-import monix.eval.Task
 
 import scala.collection.mutable.{Map => MutableMap}
 

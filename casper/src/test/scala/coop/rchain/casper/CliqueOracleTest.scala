@@ -1,7 +1,6 @@
 package coop.rchain.casper
 
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import org.scalatest.{FlatSpec, Matchers}

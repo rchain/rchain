@@ -10,7 +10,6 @@ import cats.mtl.MonadState
 import cats.mtl.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.ConstructDeploy
-import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.helper.BlockGenerator
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
