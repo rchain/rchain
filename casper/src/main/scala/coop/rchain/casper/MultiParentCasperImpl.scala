@@ -282,7 +282,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
       updatedDag <- addEffects(status, b, dag)
     } yield (status, updatedDag)
 
-  @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
   // TODO: Handle slashing
   private def addEffects(
       status: BlockStatus,
@@ -374,7 +373,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
       case ContainsFutureDeploy =>
         handleInvalidBlockEffect(status, block)
       case Processing =>
-        throw new RuntimeException(s"A block should not be processing at this stage.")
+        Sync[F].raiseError[BlockDagRepresentation[F]](
+          new RuntimeException(s"A block should not be processing at this stage.")
+        )
       case BlockException(ex) =>
         Log[F].error(s"Encountered exception in while processing block ${PrettyPrinter
           .buildString(block.blockHash)}: ${ex.getMessage}") *> dag.pure[F]
