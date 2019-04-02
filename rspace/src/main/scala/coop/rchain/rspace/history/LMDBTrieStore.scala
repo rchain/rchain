@@ -32,7 +32,7 @@ class LMDBTrieStore[F[_], K, V] private (
 ) extends ITrieStore[Txn[ByteBuffer], K, V]
     with LMDBOps[F] {
 
-  override protected def metricsSource: String = RSpaceMetricsSource + ".history.lmdb"
+  protected override def metricsSource: String = RSpaceMetricsSource + ".history.lmdb"
 
   private[rspace] def put(txn: Txn[ByteBuffer], key: Blake2b256Hash, value: Trie[K, V]): Unit =
     _dbTrie.put(txn, key, value)
@@ -106,12 +106,12 @@ class LMDBTrieStore[F[_], K, V] private (
       }
       .getOrElse(throw new Exception(s"Unknown root."))
 
-  override private[rspace] def getEmptyRoot(txn: Txn[ByteBuffer]) =
+  private[rspace] override def getEmptyRoot(txn: Txn[ByteBuffer]) =
     Option(_dbEmptyRoots.get(txn, LMDBTrieStore.emptyRootKey))
       .map(bytes => Codec[Blake2b256Hash].decode(BitVector(bytes)).map(_.value).get)
       .getOrElse(throw new Exception(s"Missing empty root."))
 
-  override private[rspace] def putEmptyRoot(txn: Txn[ByteBuffer], hash: Blake2b256Hash): Unit =
+  private[rspace] override def putEmptyRoot(txn: Txn[ByteBuffer], hash: Blake2b256Hash): Unit =
     _dbEmptyRoots
       .put(
         txn,

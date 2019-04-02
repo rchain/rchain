@@ -13,7 +13,7 @@ object MaximumBipartiteMatch {
   ): MaximumBipartiteMatch[P, T, R, F] = {
     val fM = implicitly[Monad[F]]
     new MaximumBipartiteMatch[P, T, R, F] {
-      private[matcher] override implicit val fMonad: Monad[F] = fM
+      implicit private[matcher] override val fMonad: Monad[F] = fM
       private[matcher] override val matchFunction             = matchFun
     }
   }
@@ -43,7 +43,7 @@ object MaximumBipartiteMatch {
   */
 trait MaximumBipartiteMatch[P, T, R, F[_]] {
 
-  private[matcher] implicit val fMonad: Monad[F]
+  implicit private[matcher] val fMonad: Monad[F]
   private[matcher] val matchFunction: (P, T) => F[Option[R]]
 
   private case class S(matches: Map[Candidate, (Pattern, R)], seenTargets: Set[Candidate])

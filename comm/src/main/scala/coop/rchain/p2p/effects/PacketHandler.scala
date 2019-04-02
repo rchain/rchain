@@ -11,7 +11,7 @@ trait PacketHandler[F[_]] {
 }
 
 object PacketHandler extends PacketHandlerInstances {
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  implicit private val logSource: LogSource = LogSource(this.getClass)
 
   def apply[F[_]: PacketHandler]: PacketHandler[F] = implicitly[PacketHandler[F]]
 

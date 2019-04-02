@@ -23,8 +23,8 @@ import org.slf4j.bridge.SLF4JBridgeHandler
 
 object Main {
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
-  private implicit val log: Log[Task]       = effects.log
+  implicit private val logSource: LogSource = LogSource(this.getClass)
+  implicit private val log: Log[Task]       = effects.log
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def main(args: Array[String]): Unit = {

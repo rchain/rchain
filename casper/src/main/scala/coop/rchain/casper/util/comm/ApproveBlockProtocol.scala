@@ -98,8 +98,8 @@ object ApproveBlockProtocol {
       val interval: FiniteDuration,
       private val sigsF: Ref[F, Set[Signature]]
   ) extends ApproveBlockProtocol[F] {
-    private implicit val logSource: LogSource = LogSource(this.getClass)
-    private implicit val metricsSource: Metrics.Source =
+    implicit private val logSource: LogSource = LogSource(this.getClass)
+    implicit private val metricsSource: Metrics.Source =
       Metrics.Source(CasperMetricsSource, "approve-block")
 
     private val candidate                 = ApprovedBlockCandidate(Some(genesisBlock), requiredSigs)

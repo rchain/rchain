@@ -1356,24 +1356,24 @@ trait LegacyStorageActionsTests
 }
 
 trait IdTests[C, P, A, R, K] extends StorageTestsBase[Id, C, P, R, K] {
-  override implicit val concurrentF: Concurrent[Id] =
+  implicit override val concurrentF: Concurrent[Id] =
     coop.rchain.catscontrib.effect.implicits.concurrentId
-  override implicit val logF: Log[Id]         = Log.log[Id]
-  override implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()(concurrentF)
-  override implicit val monadF: Monad[Id]     = concurrentF
-  override implicit val contextShiftF: ContextShift[Id] =
+  implicit override val logF: Log[Id]         = Log.log[Id]
+  implicit override val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()(concurrentF)
+  implicit override val monadF: Monad[Id]     = concurrentF
+  implicit override val contextShiftF: ContextShift[Id] =
     coop.rchain.rspace.test.contextShiftId
 
   override def run[RES](f: Id[RES]): RES = f
 }
 
 trait CoevalTests[C, P, R, K] extends StorageTestsBase[Coeval, C, P, R, K] {
-  override implicit val concurrentF: Concurrent[Coeval] =
+  implicit override val concurrentF: Concurrent[Coeval] =
     coop.rchain.rspace.test.concurrentCoeval
-  override implicit val logF: Log[Coeval]         = Log.log[Coeval]
-  override implicit val metricsF: Metrics[Coeval] = new Metrics.MetricsNOP[Coeval]()(concurrentF)
-  override implicit val monadF: Monad[Coeval]     = concurrentF
-  override implicit val contextShiftF: ContextShift[Coeval] =
+  implicit override val logF: Log[Coeval]         = Log.log[Coeval]
+  implicit override val metricsF: Metrics[Coeval] = new Metrics.MetricsNOP[Coeval]()(concurrentF)
+  implicit override val monadF: Monad[Coeval]     = concurrentF
+  implicit override val contextShiftF: ContextShift[Coeval] =
     coop.rchain.rspace.test.contextShiftCoeval
 
   override def run[RES](f: Coeval[RES]): RES = f.apply()
@@ -1384,7 +1384,7 @@ trait TaskTests[C, P, A, R, K] extends StorageTestsBase[Task, C, P, R, K] {
   import coop.rchain.catscontrib.TaskContrib._
   import scala.concurrent.ExecutionContext
 
-  override implicit val concurrentF: Concurrent[Task] =
+  implicit override val concurrentF: Concurrent[Task] =
     new monix.eval.instances.CatsConcurrentEffectForTask()(
       monix.execution.Scheduler.Implicits.global,
       Task.defaultOptions
@@ -1392,8 +1392,8 @@ trait TaskTests[C, P, A, R, K] extends StorageTestsBase[Task, C, P, R, K] {
   implicit val logF: Log[Task]         = Log.log[Task]
   implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
 
-  override implicit val monadF: Monad[Task] = concurrentF
-  override implicit val contextShiftF: ContextShift[Task] = new ContextShift[Task] {
+  implicit override val monadF: Monad[Task] = concurrentF
+  implicit override val contextShiftF: ContextShift[Task] = new ContextShift[Task] {
     override def shift: Task[Unit] =
       Task.shift
     override def evalOn[B](ec: ExecutionContext)(fa: Task[B]): Task[B] =

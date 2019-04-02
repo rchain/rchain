@@ -19,7 +19,7 @@ import monix.eval.Coeval
 
 object InterpreterUtil {
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  implicit private val logSource: LogSource = LogSource(this.getClass)
 
   def mkTerm(rho: String): Either[Throwable, Par] =
     ParBuilder[Coeval].buildNormalizedTerm(rho).runAttempt

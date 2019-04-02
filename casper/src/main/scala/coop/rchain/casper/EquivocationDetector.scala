@@ -23,7 +23,7 @@ import coop.rchain.shared.{Cell, Log, LogSource}
 
 object EquivocationDetector {
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  implicit private val logSource: LogSource = LogSource(this.getClass)
 
   def checkEquivocations[F[_]: Monad: Log](
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash],

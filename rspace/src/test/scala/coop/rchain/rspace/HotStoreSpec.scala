@@ -1016,8 +1016,8 @@ class History[F[_]: Sync](implicit R: Cell[F, Cache[String, Pattern, String, Str
 trait InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {
 
   protected type F[A] = Task[A]
-  override implicit val S: Sync[F]                  = implicitly[Concurrent[Task]]
-  override implicit val P: Parallel[Task, Task.Par] = Task.catsParallel
+  implicit override val S: Sync[F]                  = implicitly[Concurrent[Task]]
+  implicit override val P: Parallel[Task, Task.Par] = Task.catsParallel
   def C: F[Cell[F, Cache[String, Pattern, String, StringsCaptor]]]
 
   override def fixture(
@@ -1047,12 +1047,12 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {
 }
 
 class MVarCachedInMemHotStoreSpec extends InMemHotStoreSpec {
-  override implicit def C: F[Cell[F, Cache[String, Pattern, String, StringsCaptor]]] =
+  implicit override def C: F[Cell[F, Cache[String, Pattern, String, StringsCaptor]]] =
     Cell.mvarCell[F, Cache[String, Pattern, String, StringsCaptor]](Cache())
 }
 
 class RefCachedInMemHotStoreSpec extends InMemHotStoreSpec {
-  override implicit def C: F[Cell[F, Cache[String, Pattern, String, StringsCaptor]]] =
+  implicit override def C: F[Cell[F, Cache[String, Pattern, String, StringsCaptor]]] =
     Cell.refCell[F, Cache[String, Pattern, String, StringsCaptor]](Cache())
 
 }

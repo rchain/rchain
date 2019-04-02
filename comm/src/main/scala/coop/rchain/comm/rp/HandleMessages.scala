@@ -18,8 +18,8 @@ import coop.rchain.shared._
 
 object HandleMessages {
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
-  private implicit val metricsSource: Metrics.Source =
+  implicit private val logSource: LogSource = LogSource(this.getClass)
+  implicit private val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "rp.handle")
 
   def handle[F[_]: Monad: Sync: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](

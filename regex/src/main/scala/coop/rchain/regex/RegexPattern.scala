@@ -146,7 +146,7 @@ sealed abstract class RegexPattern {
 
   final def toFsm(alphabet: Set[Char]): Fsm = toFsm(Some(alphabet))
 
-  final override def equals(obj: scala.Any): Boolean = obj match {
+  override final def equals(obj: scala.Any): Boolean = obj match {
     case pattern: RegexPattern => equivalent(pattern)
     case _                     => false
   }

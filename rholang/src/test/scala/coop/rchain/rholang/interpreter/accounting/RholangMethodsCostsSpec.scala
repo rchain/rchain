@@ -804,7 +804,7 @@ class RholangMethodsCostsSpec
   implicit val logF: Log[Task]            = new Log.NOPLog[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
-  override protected def beforeAll(): Unit = {
+  protected override def beforeAll(): Unit = {
     import coop.rchain.catscontrib.TaskContrib._
     import coop.rchain.rholang.interpreter.storage.implicits._
     dbDir = Files.createTempDirectory("rholang-interpreter-test-")
@@ -824,7 +824,7 @@ class RholangMethodsCostsSpec
       .unsafeRunSync
   }
 
-  override protected def afterAll(): Unit = {
+  protected override def afterAll(): Unit = {
     import coop.rchain.shared.PathOps._
     space.close()
     context.close()

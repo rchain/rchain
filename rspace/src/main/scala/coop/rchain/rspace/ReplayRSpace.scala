@@ -30,9 +30,9 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
 ) extends RSpaceOps[F, C, P, A, R, K](store, branch)
     with IReplaySpace[F, C, P, A, R, K] {
 
-  override protected[this] val logger: Logger = Logger[this.type]
+  protected[this] override val logger: Logger = Logger[this.type]
 
-  private[this] implicit val MetricsSource: Metrics.Source =
+  implicit private[this] val MetricsSource: Metrics.Source =
     Metrics.Source(RSpaceMetricsSource, "replay")
 
   private[this] val consumeCommLabel = "comm.consume"

@@ -82,10 +82,10 @@ class LockFreeInMemoryStore[F[_], T, C, P, A, K](
 
   type TrieTransaction = T
 
-  private implicit val codecC: Codec[C] = sc.toCodec
-  private implicit val codecP: Codec[P] = sp.toCodec
-  private implicit val codecA: Codec[A] = sa.toCodec
-  private implicit val codecK: Codec[K] = sk.toCodec
+  implicit private val codecC: Codec[C] = sc.toCodec
+  implicit private val codecP: Codec[P] = sp.toCodec
+  implicit private val codecA: Codec[A] = sa.toCodec
+  implicit private val codecK: Codec[K] = sk.toCodec
 
   private val stateGNAT: TrieMap[Blake2b256Hash, GNAT[C, P, A, K]] =
     TrieMap[Blake2b256Hash, GNAT[C, P, A, K]]()

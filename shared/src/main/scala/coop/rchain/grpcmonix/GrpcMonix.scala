@@ -21,7 +21,7 @@ import scalapb.grpc.Grpc
 object GrpcMonix {
 
   private val logger                        = Log.logId
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  implicit private val logSource: LogSource = LogSource(this.getClass)
 
   type GrpcOperator[I, O] = StreamObserver[O] => StreamObserver[I]
   type Transformer[I, O]  = Observable[I] => Observable[O]
@@ -57,7 +57,7 @@ object GrpcMonix {
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def grpcObserverToMonixSubscriber[T](observer: StreamObserver[T], s: Scheduler): Subscriber[T] =
     new Subscriber[T] {
-      override implicit def scheduler: Scheduler = s
+      implicit override def scheduler: Scheduler = s
       override def onError(t: Throwable): Unit   = observer.onError(t)
       override def onComplete(): Unit            = observer.onCompleted()
       override def onNext(value: T): Future[Ack] =
@@ -102,7 +102,7 @@ object GrpcMonix {
       private[this] val subject = PublishSubject[I]()
       transformer(subject).subscribe(subscriber)
 
-      override implicit def scheduler: Scheduler = subscriber.scheduler
+      implicit override def scheduler: Scheduler = subscriber.scheduler
       override def onError(t: Throwable): Unit   = subject.onError(t)
       override def onComplete(): Unit            = subject.onComplete()
       override def onNext(value: I): Future[Ack] = subject.onNext(value)

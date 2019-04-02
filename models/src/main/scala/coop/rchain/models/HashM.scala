@@ -70,7 +70,7 @@ object HashM extends HashMDerivation {
     * The extensive battery of generative tests comparing HashM.hash results with default hashCode
     * seems to agree this is fine though. See HashMSpec.
     */
-  private implicit val LongHash: HashM[Long] = new HashM[Long] {
+  implicit private val LongHash: HashM[Long] = new HashM[Long] {
 
     override def hash[F[_]: Sync](value: Long): F[Int] = Sync[F].pure(value.##)
 

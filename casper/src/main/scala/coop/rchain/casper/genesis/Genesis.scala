@@ -36,7 +36,7 @@ final case class Genesis(
 
 object Genesis {
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  implicit private val logSource: LogSource = LogSource(this.getClass)
 
   def defaultBlessedTerms(
       timestamp: Long,

@@ -31,7 +31,7 @@ final case class ValidatorIdentity(
 }
 
 object ValidatorIdentity {
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  implicit private val logSource: LogSource = LogSource(this.getClass)
 
   private def fileContent[F[_]: Sync](path: Path): F[String] = {
     val openFile = Sync[F].delay(new BufferedReader(new FileReader(path.toFile)))

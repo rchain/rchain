@@ -26,7 +26,7 @@ import org.scalatest.{FlatSpec, Matchers}
 class BlockApproverProtocolTest extends FlatSpec with Matchers {
   import BlockApproverProtocolTest._
 
-  private implicit val scheduler: Scheduler = Scheduler.fixedPool("block-approval-protocol-test", 4)
+  implicit private val scheduler: Scheduler = Scheduler.fixedPool("block-approval-protocol-test", 4)
 
   "BlockApproverProtocol" should "respond to valid ApprovedBlockCandidates" in {
     val n                          = 8

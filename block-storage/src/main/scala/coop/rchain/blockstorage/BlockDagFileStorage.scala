@@ -60,7 +60,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
     equivocationTrackerCrcPath: Path,
     state: MonadState[F, BlockDagFileStorageState[F]]
 ) extends BlockDagStorage[F] {
-  private implicit val logSource = LogSource(BlockDagFileStorage.getClass)
+  implicit private val logSource = LogSource(BlockDagFileStorage.getClass)
 
   private[this] def getLatestMessages: F[Map[Validator, BlockHash]] =
     state.get.map(_.latestMessages)
@@ -552,7 +552,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: BlockStore: RaiseIO
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove
 object BlockDagFileStorage {
-  private implicit val logSource       = LogSource(BlockDagFileStorage.getClass)
+  implicit private val logSource       = LogSource(BlockDagFileStorage.getClass)
   private val checkpointPattern: Regex = "([0-9]+)-([0-9]+)".r
 
   final case class Config(

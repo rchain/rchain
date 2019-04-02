@@ -20,7 +20,7 @@ import monix.reactive.Observable
 object GrpcTransport {
 
   type Request[A] = ReaderT[Task, RoutingGrpcMonix.TransportLayer, CommErr[A]]
-  private implicit val metricsSource: Metrics.Source =
+  implicit private val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "rp.transport")
 
   private def transport(

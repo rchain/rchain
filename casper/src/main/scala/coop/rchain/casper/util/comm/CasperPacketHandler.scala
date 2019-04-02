@@ -31,7 +31,7 @@ import scala.concurrent.duration.FiniteDuration
 import scala.util.Try
 
 object CasperPacketHandler extends CasperPacketHandlerInstances {
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  implicit private val logSource: LogSource = LogSource(this.getClass)
 
   def apply[F[_]](implicit ev: CasperPacketHandler[F]): CasperPacketHandler[F] = ev
 
