@@ -54,13 +54,11 @@ object RhoSpec {
       _                   <- logger.info("Starting tests from " + testObject.path)
       testResultCollector <- TestResultCollector[Task]
 
-      _ <- Task.delay {
-            TestUtil.runTestsWithDeploys(
-              testObject,
-              otherLibs,
-              testFrameworkContracts(testResultCollector)
-            )
-          }
+      _ <- TestUtil.runTestsWithDeploys[Task, Task.Par](
+            testObject,
+            otherLibs,
+            testFrameworkContracts(testResultCollector)
+          )
 
       result <- testResultCollector.getResult
     } yield result

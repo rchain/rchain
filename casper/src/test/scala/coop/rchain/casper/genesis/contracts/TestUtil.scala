@@ -16,11 +16,8 @@ import coop.rchain.rholang.interpreter.Runtime.SystemProcess
 import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.shared.Log
-import monix.eval.Task
 import monix.execution.Scheduler
 import cats.implicits._
-
-import scala.concurrent.duration._
 
 object TestUtil {
 
@@ -75,19 +72,19 @@ object TestUtil {
       .fromEither(mkTerm(code))
       .flatMap(evalTerm(_, runtime))
 
-  def runTestsWithDeploys(
+  def runTestsWithDeploys[F[_]: Concurrent: ContextShift, G[_]: Parallel[F, ?[_]]](
       tests: CompiledRholangSource,
       otherLibs: Seq[DeployData],
-      additionalSystemProcesses: Seq[SystemProcess.Definition[Task]]
+      additionalSystemProcesses: Seq[SystemProcess.Definition[F]]
   )(
       implicit scheduler: Scheduler
-  ): Unit =
-    (for {
-      runtime <- TestUtil.runtime[Task, Task.Par](additionalSystemProcesses)
+  ): F[Unit] =
+    for {
+      runtime <- TestUtil.runtime[F, G](additionalSystemProcesses)
       _       <- evalDeploy(StandardDeploys.listOps, runtime)
       _       <- evalDeploy(rhoSpecDeploy, runtime)
       _       <- otherLibs.toList.traverse(evalDeploy(_, runtime))
       rand    = Blake2b512Random(128)
       _       <- eval(tests.code, runtime)(implicitly, implicitly, rand.splitShort(1))
-    } yield ()).runSyncUnsafe(30.seconds)
+    } yield ()
 }
