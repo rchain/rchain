@@ -6,6 +6,6 @@ import scala.concurrent.duration._
 class LockboxSpec
     extends RhoSpec(
       CompiledRholangSource("LockboxTest.rho"),
-      Seq(StandardDeploys.lockbox),
+      Seq.empty,
       10.seconds
     )

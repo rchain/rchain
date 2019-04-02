@@ -18,6 +18,8 @@ import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import coop.rchain.catscontrib.TaskContrib._
 import scala.collection.mutable
 
+import scala.concurrent.duration._
+
 /**
   * This is a really handy class for working interactively with
   * Rholang at the Scala console.
@@ -53,7 +55,7 @@ class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler
   def tuplespace: String = StoragePrinter.prettyPrint(runtime.space.store)
 
   def eval(code: String): Unit = {
-    TestUtil.eval(code, runtime)
+    TestUtil.eval(code, runtime).runSyncUnsafe(Duration.Inf)
     val errors = runtime.errorLog.readAndClearErrorVector().unsafeRunSync
     if (errors.nonEmpty) {
       println("Errors during execution:")
@@ -95,6 +97,6 @@ object Interactive {
   def apply(): Interactive = {
     implicit val scheduler = Scheduler.io("rhoang-interpreter")
     implicit val log       = new Log.NOPLog[Task]
-    new Interactive(TestUtil.runtime())
+    new Interactive(TestUtil.runtime[Task, Task.Par]().runSyncUnsafe(5.seconds))
   }
 }

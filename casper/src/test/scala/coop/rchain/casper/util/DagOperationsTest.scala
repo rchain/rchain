@@ -28,8 +28,13 @@ class DagOperationsTest
       def createBlockWithMeta(genesis: BlockMessage, bh: BlockHash*): Task[BlockMetadata] =
         createBlock[Task](bh.toSeq, genesis).map(b => BlockMetadata.fromBlock(b, false))
 
-      def createBlockWithMetaAndSeq(genesis: BlockMessage, seqNum: Int, bh: BlockHash*): Task[BlockMetadata] =
-        createBlock[Task](bh.toSeq, genesis, seqNum = seqNum).map(b => BlockMetadata.fromBlock(b, false))
+      def createBlockWithMetaAndSeq(
+          genesis: BlockMessage,
+          seqNum: Int,
+          bh: BlockHash*
+      ): Task[BlockMetadata] =
+        createBlock[Task](bh.toSeq, genesis, seqNum = seqNum)
+          .map(b => BlockMetadata.fromBlock(b, false))
 
       implicit def blockMetadataToBlockHash(bm: BlockMetadata): BlockHash = bm.blockHash
 
