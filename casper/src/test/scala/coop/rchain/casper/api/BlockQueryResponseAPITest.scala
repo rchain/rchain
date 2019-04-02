@@ -34,7 +34,7 @@ class BlockQueryResponseAPITest
   val senderString: String =
     "3456789101112131415161718192345678910111213141516171819261718192"
   val sender: ByteString = ProtoUtil.stringToByteString(senderString)
-  val bondsValidator = Bond(sender, 1)
+  val bondsValidator     = Bond(sender, 1)
 
   def genesisBlock(genesisHashString: String, version: Long): BlockMessage = {
     val genesisHash = ProtoUtil.stringToByteString(genesisHashString)
@@ -65,7 +65,7 @@ class BlockQueryResponseAPITest
   val parentsString                    = List(genesisHashString, "0000000001")
   val parentsHashList: List[BlockHash] = parentsString.map(ProtoUtil.stringToByteString)
   val header: Header                   = ProtoUtil.blockHeader(body, parentsHashList, version, timestamp)
-  val shardId: String               = "abcdefgh"
+  val shardId: String                  = "abcdefgh"
   val secondBlock: BlockMessage =
     BlockMessage()
       .withBlockHash(blockHash)
