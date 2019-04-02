@@ -18,6 +18,7 @@ import monix.execution.Scheduler.Implicits.global
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.CommError
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import monix.eval.Task
 import org.scalacheck._
 import org.scalacheck.commands.Commands
@@ -44,12 +45,10 @@ class NodeBox(val node: HashSetCasperTestNode[Effect], var lastBlock: Option[Blo
 object HashSetCasperActions {
   import HashSetCasperTest._
 
-  type ValidatorKey = Array[Byte]
-
   def context(
       amount: Int,
-      bondsGen: Seq[ValidatorKey] => Map[ValidatorKey, Long]
-  ): (BlockMessage, immutable.IndexedSeq[ValidatorKey]) = {
+      bondsGen: Seq[PublicKey] => Map[PublicKey, Long]
+  ): (BlockMessage, immutable.IndexedSeq[PrivateKey]) = {
     val (validatorKeys, validators) = (1 to amount).map(_ => Ed25519.newKeyPair).unzip
     val (_, ethPubKeys)             = (1 to amount).map(_ => Secp256k1.newKeyPair).unzip
     val ethAddresses =

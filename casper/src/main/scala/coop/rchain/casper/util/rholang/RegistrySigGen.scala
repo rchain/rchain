@@ -1,14 +1,14 @@
 package coop.rchain.casper.util.rholang
 
 import com.google.protobuf.ByteString
-
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random}
-import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
-import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GInt, GString}
+import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.{Bundle, ETuple, Expr, GPrivate, Par}
+import coop.rchain.models.{Bundle, ETuple, GPrivate, Par}
 import coop.rchain.rholang.interpreter.{PrettyPrinter, Registry}
 
 /**
@@ -89,7 +89,7 @@ final case class Derivation(
 }
 
 final case class Args(
-    keyPair: (Array[Byte], Array[Byte]),
+    keyPair: (PrivateKey, PublicKey),
     timestamp: Long,
     unforgeableName: Par,
     contractName: String
@@ -99,7 +99,7 @@ object Args {
   def apply(
       contractName: String = "CONTRACT",
       timestamp: Long = System.currentTimeMillis,
-      skOption: Option[Array[Byte]] = None,
+      skOption: Option[PrivateKey] = None,
       unforgeableNameStr: Option[String] = None
   ): Args = {
     val keyPair =
@@ -109,8 +109,8 @@ object Args {
 
     val id =
       unforgeableNameStr
-        .map(Base16.unsafeDecode(_))
-        .getOrElse(RegistrySigGen.generateUnforgeableNameId(keyPair._1, timestamp))
+        .map(Base16.unsafeDecode)
+        .getOrElse(RegistrySigGen.generateUnforgeableNameId(keyPair._2, timestamp))
 
     // Now we can determine the unforgeable name
     // that will be allocated by
@@ -127,14 +127,14 @@ object Args {
         Args(
           contractName,
           timestampStr.toLong,
-          Some(Base16.unsafeDecode(skBase16)),
+          Some(PrivateKey(Base16.unsafeDecode(skBase16))),
           Some(unforgeableName)
         )
       case Array(contractName, timestampStr, skBase16) =>
         Args(
           contractName,
           timestampStr.toLong,
-          Some(Base16.unsafeDecode(skBase16))
+          Some(PrivateKey(Base16.unsafeDecode(skBase16)))
         )
       case Array(contractName, timestampStr) => Args(contractName, timestampStr.toLong)
       case Array(contractName)               => Args(contractName)
@@ -171,10 +171,10 @@ object RegistrySigGen {
     * `user` (public key) and `timestamp`.
     *
     */
-  def generateUnforgeableNameId(deployer: Array[Byte], timestamp: Long) = {
+  def generateUnforgeableNameId(deployer: PublicKey, timestamp: Long) = {
     val seed =
       DeployData()
-        .withDeployer(ByteString.copyFrom(deployer))
+        .withDeployer(ByteString.copyFrom(deployer.bytes))
         .withTimestamp(timestamp)
 
     val rnd = Blake2b512Random(DeployData.toByteArray(seed))
@@ -201,16 +201,16 @@ object RegistrySigGen {
     val toSign: Par = ETuple(Seq(GInt(lastNonce), access))
     val sig         = Ed25519.sign(toSign.toByteArray, secKey)
 
-    val keyHash = Blake2b256.hash(pubKey)
+    val keyHash = Blake2b256.hash(pubKey.bytes)
     val uri     = Registry.buildURI(keyHash)
 
     Derivation(
-      sk = Hex(secKey),
+      sk = Hex(secKey.bytes),
       timestamp = args.timestamp,
       uname = args.unforgeableName,
       toSign = toSign,
       result = InsertSigned(
-        Hex(pubKey),
+        Hex(pubKey.bytes),
         (lastNonce, contract),
         Hex(sig)
       ),

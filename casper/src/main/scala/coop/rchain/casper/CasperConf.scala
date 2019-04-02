@@ -3,11 +3,12 @@ package coop.rchain.casper
 import java.nio.file.Path
 
 import cats.Monad
-import cats.implicits._
 import cats.effect._
+import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.shared.{Log, LogSource}
 
 import scala.concurrent.duration.FiniteDuration
@@ -69,10 +70,10 @@ object CasperConf {
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def publicKey(
-      givenPublicKey: Option[Array[Byte]],
+      givenPublicKey: Option[PublicKey],
       sigAlgorithm: String,
-      privateKey: Array[Byte]
-  ): Array[Byte] = {
+      privateKey: PrivateKey
+  ): PublicKey = {
 
     val maybeInferred = sigAlgorithm match {
       case "ed25519" =>
@@ -86,7 +87,7 @@ object CasperConf {
 
     (maybeInferred, givenPublicKey) match {
       case (Some(k1), Some(k2)) =>
-        if (keysMatch(k1, k2)) k1
+        if (keysMatch(k1.bytes, k2.bytes)) k1
         else throw new Exception("Public key not compatible with given private key!")
 
       case (Some(k1), None) => k1

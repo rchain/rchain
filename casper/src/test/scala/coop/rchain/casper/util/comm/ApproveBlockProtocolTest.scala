@@ -1,33 +1,26 @@
 package coop.rchain.casper.util.comm
 
 import cats.effect.concurrent.Ref
-import coop.rchain.comm.rp.Connect, Connect._
-import coop.rchain.shared._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.HashSetCasperTest
+import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.TestTime
+import coop.rchain.casper.util.comm.ApproveBlockProtocolTest.TestFixture
+import coop.rchain.casper.{HashSetCasperTest, LastApprovedBlock}
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.catscontrib._
-import coop.rchain.comm.rp.Connect
 import coop.rchain.comm.rp.Connect.Connections
 import coop.rchain.comm.{Endpoint, NodeIdentifier, PeerNode}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.shared.Log.NOPLog
-import coop.rchain.shared.{Cell, Time}
+import coop.rchain.shared.{Cell, _}
 import monix.eval.Task
 import monix.execution.schedulers.TestScheduler
+import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.concurrent.duration._
-import org.scalatest.{FlatSpec, Matchers}
-import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
-import coop.rchain.casper.util.comm.ApproveBlockProtocolTest.TestFixture
-import coop.rchain.casper.{HashSetCasperTest, LastApprovedBlock}
-import org.scalatest.{Assertion, FlatSpec, Matchers}
-import coop.rchain.casper.util.TestTime
-
 import scala.util.Success
 
 class ApproveBlockProtocolTest extends FlatSpec with Matchers {
@@ -82,9 +75,9 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     implicit val logStub     = new LogStub[Task]()
     implicit val metricsTest = new MetricsTestImpl[Task]()
 
-    val (validatorSk, validatorPk) = Ed25519.newKeyPair
+    val (_, validatorPk) = Ed25519.newKeyPair
     val TestFixture(_, abp, candidate, _, sigs) =
-      ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 1.millisecond, Set(validatorSk))
+      ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 1.millisecond, Set(validatorPk))
     val a = ApproveBlockProtocolTest.invalidApproval(candidate)
 
     val cancelToken = abp.run().start.runToFuture
@@ -299,14 +292,14 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
 object ApproveBlockProtocolTest {
   def approval(
       c: ApprovedBlockCandidate,
-      validatorSk: Array[Byte],
-      validatorPk: Array[Byte]
+      validatorSk: PrivateKey,
+      validatorPk: PublicKey
   ): BlockApproval = {
     val sigData = Blake2b256.hash(c.toByteArray)
     val sig     = Ed25519.sign(sigData, validatorSk)
     BlockApproval(
       Some(c),
-      Some(Signature(ByteString.copyFrom(validatorPk), "ed25519", ByteString.copyFrom(sig)))
+      Some(Signature(ByteString.copyFrom(validatorPk.bytes), "ed25519", ByteString.copyFrom(sig)))
     )
   }
 
@@ -316,7 +309,7 @@ object ApproveBlockProtocolTest {
     val sig      = Ed25519.sign(sigData, sk)
     BlockApproval(
       Some(c),
-      Some(Signature(ByteString.copyFrom(pk), "ed25519", ByteString.copyFrom(sig)))
+      Some(Signature(ByteString.copyFrom(pk.bytes), "ed25519", ByteString.copyFrom(sig)))
     )
   }
 
@@ -332,7 +325,7 @@ object ApproveBlockProtocolTest {
       requiredSigs: Int,
       duration: FiniteDuration,
       interval: FiniteDuration,
-      validatorsPk: Set[Array[Byte]]
+      validatorsPk: Set[PublicKey]
   )(implicit logStub: LogStub[Task], metrics: MetricsTestImpl[Task]): TestFixture = {
     implicit val time            = TestTime.instance
     implicit val transportLayer  = new TransportLayerStub[Task]
@@ -345,7 +338,7 @@ object ApproveBlockProtocolTest {
     val (sk, pk)   = Ed25519.newKeyPair
     val bonds      = HashSetCasperTest.createBonds(Seq(pk))
     val genesis    = HashSetCasperTest.createGenesis(bonds)
-    val validators = validatorsPk.map(ByteString.copyFrom(_))
+    val validators = validatorsPk.map(pk => ByteString.copyFrom(pk.bytes))
     val candidate  = ApprovedBlockCandidate(Some(genesis), requiredSigs)
     val sigs       = Ref.unsafe[Task, Set[Signature]](Set.empty)
     val startTime  = System.currentTimeMillis()

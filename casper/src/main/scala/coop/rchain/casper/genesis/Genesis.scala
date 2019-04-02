@@ -9,24 +9,17 @@ import cats.{Applicative, Foldable, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil.{blockHeader, stringToByteString, unsignedBlockProto}
-import coop.rchain.casper.util.{EventConverter, Sorting}
-import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
+import coop.rchain.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
+import coop.rchain.casper.util.Sorting.byteArrayOrdering
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.casper.util.{EventConverter, Sorting}
-import coop.rchain.catscontrib._
+import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.shared.{Log, LogSource, Time}
-import monix.execution.Scheduler
 
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
-import coop.rchain.casper.util.Sorting.byteArrayOrdering
-import coop.rchain.rholang.interpreter.accounting
-import monix.eval.Task
-
-import scala.concurrent.duration.Duration
 
 object Genesis {
 
@@ -96,16 +89,16 @@ object Genesis {
       }
 
   def withoutContracts(
-      bonds: Map[Array[Byte], Long],
+      bonds: Map[PublicKey, Long],
       version: Long,
       timestamp: Long,
       shardId: String
   ): BlockMessage = {
-    import Sorting.byteArrayOrdering
+    import coop.rchain.crypto.util.Sorting.publicKeyOrdering
     //sort to have deterministic order (to get reproducible hash)
     val bondsProto = bonds.toIndexedSeq.sorted.map {
       case (pk, stake) =>
-        val validator = ByteString.copyFrom(pk)
+        val validator = ByteString.copyFrom(pk.bytes)
         Bond(validator, stake)
     }
 
@@ -253,7 +246,7 @@ object Genesis {
       bondsFile: Option[File],
       numValidators: Int,
       genesisPath: Path
-  ): F[Map[Array[Byte], Long]] =
+  ): F[Map[PublicKey, Long]] =
     bondsFile match {
       case Some(file) =>
         Sync[F]
@@ -264,7 +257,7 @@ object Genesis {
                 .getLines()
                 .map(line => {
                   val Array(pk, stake) = line.trim.split(" ")
-                  Base16.unsafeDecode(pk) -> (stake.toLong)
+                  PublicKey(Base16.unsafeDecode(pk)) -> (stake.toLong)
                 })
                 .toMap
             }
@@ -282,7 +275,7 @@ object Genesis {
   private def newValidators[F[_]: Monad: Sync: Log](
       numValidators: Int,
       genesisPath: Path
-  ): F[Map[Array[Byte], Long]] = {
+  ): F[Map[PublicKey, Long]] = {
     val keys         = Vector.fill(numValidators)(Ed25519.newKeyPair)
     val (_, pubKeys) = keys.unzip
     val bonds        = pubKeys.zipWithIndex.toMap.mapValues(_.toLong + 1L)
@@ -293,8 +286,8 @@ object Genesis {
         Sync[F].delay {
           keys.foreach { //create files showing the secret key for each public key
             case (sec, pub) =>
-              val sk      = Base16.encode(sec)
-              val pk      = Base16.encode(pub)
+              val sk      = Base16.encode(sec.bytes)
+              val pk      = Base16.encode(pub.bytes)
               val skFile  = genesisPath.resolve(s"$pk.sk").toFile
               val printer = new PrintWriter(skFile)
               printer.println(sk)
@@ -306,9 +299,9 @@ object Genesis {
     for {
       _       <- skFiles
       printer <- Sync[F].delay { new PrintWriter(genBondsFile) }
-      _ <- Foldable[List].foldM[F, (Array[Byte], Long), Unit](bonds.toList, ()) {
+      _ <- Foldable[List].foldM[F, (PublicKey, Long), Unit](bonds.toList, ()) {
             case (_, (pub, stake)) =>
-              val pk = Base16.encode(pub)
+              val pk = Base16.encode(pub.bytes)
               Log[F].info(s"Created validator $pk with bond $stake") *>
                 Sync[F].delay { printer.println(s"$pk $stake") }
           }

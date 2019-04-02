@@ -1,6 +1,5 @@
 package coop.rchain.rholang.interpreter
 
-import coop.rchain.shared.StoreType
 import java.nio.file.Files
 
 import com.google.protobuf.ByteString
@@ -14,16 +13,13 @@ import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GString}
 import coop.rchain.models.Var.VarInstance.Wildcard
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
-import coop.rchain.models.serialization.implicits._
-import coop.rchain.models.testImplicits._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.testImplicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoIStore
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rspace.Serialize
 import coop.rchain.shared.PathOps._
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Log, StoreType}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
@@ -194,7 +190,7 @@ class CryptoChannelsSpec
 
         val serializedPar = byteArrayToExpr(parByteArray)
         val signaturePar  = byteArrayToExpr(signature)
-        val pubKeyPar     = byteArrayToExpr(pubKey)
+        val pubKeyPar     = byteArrayToExpr(pubKey.bytes)
 
         val refVerify = Ed25519.verify(parByteArray, signature, pubKey)
         assert(refVerify === true)
