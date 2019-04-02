@@ -1,8 +1,8 @@
 package coop.rchain.casper.util.rholang
 
 import com.google.protobuf.ByteString
-
 import coop.rchain.casper.protocol.DeployData
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
@@ -177,7 +177,7 @@ object RegistrySigGen {
         .withDeployer(ByteString.copyFrom(deployer))
         .withTimestamp(timestamp)
 
-    val rnd = Blake2b512Random(DeployData.toByteArray(seed))
+    val rnd = Blake2b512Random(DeployData.toByteArray(ProtoUtil.stripDeployData(seed)))
 
     rnd.next()
   }
