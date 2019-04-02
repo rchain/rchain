@@ -1,10 +1,9 @@
 package coop.rchain.casper.genesis.contracts
 
-import cats.{FlatMap, MonadError, Parallel}
+import cats.{FlatMap, Parallel}
 import cats.effect.{Concurrent, ContextShift, Sync}
-import coop.rchain.casper.protocol.DeployData
+import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
@@ -16,6 +15,7 @@ import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.shared.Log
 import monix.execution.Scheduler
 import cats.implicits._
+import coop.rchain.casper.util.rholang.RuntimeManager
 
 object TestUtil {
 
@@ -42,18 +42,27 @@ object TestUtil {
 
   def runTestsWithDeploys[F[_]: Concurrent: ContextShift, G[_]: Parallel[F, ?[_]]](
       tests: CompiledRholangSource,
+      genesisSetup: RuntimeManager[F] => F[BlockMessage],
       otherLibs: Seq[DeployData],
       additionalSystemProcesses: Seq[SystemProcess.Definition[F]]
   )(
       implicit scheduler: Scheduler
   ): F[Unit] =
     for {
-      runtime <- TestUtil.runtime[F, G](additionalSystemProcesses)
-      _       <- evalDeploy(StandardDeploys.listOps, runtime)
-      _       <- evalDeploy(rhoSpecDeploy, runtime)
-      _       <- otherLibs.toList.traverse(evalDeploy(_, runtime))
-      rand    = Blake2b512Random(128)
-      _       <- eval(tests.code, runtime)(implicitly, implicitly, rand.splitShort(1))
+      runtime        <- TestUtil.runtime[F, G](additionalSystemProcesses)
+      runtimeManager <- RuntimeManager.fromRuntime(runtime)
+
+      _ <- genesisSetup(runtimeManager)
+
+      _ <- evalDeploy(rhoSpecDeploy, runtime)
+      _ <- otherLibs.toList.traverse(evalDeploy(_, runtime))
+
+      // reset the deployParams.userId before executing the test
+      // otherwise it'd execute as the deployer of last deployed contract
+      _ <- runtime.shortLeashParams.updateParams(old => old.copy(userId = Par()))
+
+      rand = Blake2b512Random(128)
+      _    <- eval(tests.code, runtime)(implicitly, implicitly, rand.splitShort(1))
     } yield ()
 
   private def evalDeploy[F[_]: Sync](
