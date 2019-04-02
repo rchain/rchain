@@ -2,7 +2,8 @@ package coop.rchain.casper.util
 
 import cats.{Eval, Monad}
 import cats.implicits._
-import coop.rchain.blockstorage.{BlockDagRepresentation}
+import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.BlockDagRepresentation
 import coop.rchain.models.BlockMetadata
 import coop.rchain.shared.StreamT
 
@@ -100,44 +101,38 @@ object DagOperations {
       dag: BlockDagRepresentation[F]
   ): F[BlockMetadata] = {
 
-    type BlockWithDepth = (Long, BlockMetadata)
+    implicit val blockMetadataByNumDecreasing: Ordering[BlockMetadata] =
+      (l: BlockMetadata, r: BlockMetadata) => {
+        def compareByteString(l: ByteString, r: ByteString): Int =
+          l.hashCode().compareTo(r.hashCode())
 
-    object BlockWithDepth {
-      def apply(bm: BlockMetadata): BlockWithDepth = (bm.blockNum, bm)
-    }
-
-    implicit class RichBlockWithDepth(b: BlockWithDepth) {
-      def block: BlockMetadata = b._2
-      def num: Long            = b._1
-    }
-
-    implicit val blockNumDecreasing: Ordering[BlockWithDepth] =
-      (l: BlockWithDepth, r: BlockWithDepth) => r.num.compare(l.num)
+        val ln = l.blockNum
+        val rn = r.blockNum
+        rn.compare(ln) match {
+          case 0 => compareByteString(l.blockHash, r.blockHash)
+          case v => v
+        }
+      }
 
     def getParents(p: BlockMetadata): F[Set[BlockMetadata]] =
       p.parents.traverse(dag.lookup).map(_.toSet.flatten)
 
-    def addExtractedParents(source: SortedSet[BlockWithDepth]) = { newBlocks: Set[BlockMetadata] =>
-      {
-        val mapped = newBlocks.map(BlockWithDepth(_))
-        source ++ mapped
-      }
-    }
-
     def extractParentsFromHighestNumBlock(
-        blocks: SortedSet[BlockWithDepth]
-    ): F[SortedSet[BlockWithDepth]] = {
+        blocks: SortedSet[BlockMetadata]
+    ): F[SortedSet[BlockMetadata]] = {
       val (head, tail) = (blocks.head, blocks.tail)
-      getParents(head.block).map(addExtractedParents(tail))
+      getParents(head).map(newBlocks => tail ++ newBlocks)
     }
 
     if (b1 == b2) {
       b1.pure[F]
     } else {
-      val start = SortedSet.empty[BlockWithDepth] + BlockWithDepth(b1) + BlockWithDepth(b2)
+      val start = SortedSet.empty[BlockMetadata] + b1 + b2
       Monad[F]
-        .iterateWhileM(start)(extractParentsFromHighestNumBlock)(_.size != 1)
-        .map(v => v.head.block)
+        .iterateWhileM(start)(extractParentsFromHighestNumBlock)(
+          _.size != 1
+        )
+        .map(_.head)
     }
   }
 }

@@ -37,7 +37,7 @@ object BlockGenerator {
                                        runtimeManager
                                      )
       (postStateHash, processedDeploys) = computeBlockCheckpointResult
-      _                                 <- injectPostStateHash[F](id, b, postStateHash, processedDeploys)
+      _                                 <- injectPostStateHash[F](id, b, genesis, postStateHash, processedDeploys)
     } yield b
 
   def computeBlockCheckpoint[F[_]: Sync: BlockStore](
@@ -55,6 +55,7 @@ object BlockGenerator {
   def injectPostStateHash[F[_]: Monad: BlockStore: IndexedBlockDagStorage](
       id: Int,
       b: BlockMessage,
+      genesis: BlockMessage,
       postGenStateHash: StateHash,
       processedDeploys: Seq[ProcessedDeploy]
   ): F[Unit] = {
@@ -63,12 +64,12 @@ object BlockGenerator {
       b.getBody.withState(updatedBlockPostState).withDeploys(processedDeploys)
     val updatedBlock = b.withBody(updatedBlockBody)
     BlockStore[F].put(b.blockHash, updatedBlock) *>
-      IndexedBlockDagStorage[F].inject(id, updatedBlock, false)
+      IndexedBlockDagStorage[F].inject(id, updatedBlock, genesis, false)
   }
 }
 
 trait BlockGenerator {
-  def createBlock[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
+  private def buildBlock[F[_]: Monad: Time](
       parentsHashList: Seq[BlockHash],
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
@@ -76,7 +77,8 @@ trait BlockGenerator {
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       tsHash: ByteString = ByteString.EMPTY,
       shardId: String = "rchain",
-      preStateHash: ByteString = ByteString.EMPTY
+      preStateHash: ByteString = ByteString.EMPTY,
+      seqNum: Int = 0
   ): F[BlockMessage] =
     for {
       now <- Time[F].currentMillis
@@ -103,9 +105,62 @@ trait BlockGenerator {
         Some(body),
         serializedJustifications,
         creator,
-        shardId = shardId
+        shardId = shardId,
+        seqNum = seqNum
       )
-      modifiedBlock <- IndexedBlockDagStorage[F].insertIndexed(block, false)
-      _             <- BlockStore[F].put(serializedBlockHash, modifiedBlock)
+    } yield block
+
+  def createGenesis[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
+      creator: Validator = ByteString.EMPTY,
+      bonds: Seq[Bond] = Seq.empty[Bond],
+      justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
+      deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
+      tsHash: ByteString = ByteString.EMPTY,
+      shardId: String = "rchain",
+      preStateHash: ByteString = ByteString.EMPTY,
+      seqNum: Int = 0
+  ): F[BlockMessage] =
+    for {
+      genesis <- buildBlock[F](
+                  Seq.empty,
+                  creator,
+                  bonds,
+                  justifications,
+                  deploys,
+                  tsHash,
+                  shardId,
+                  preStateHash,
+                  seqNum
+                )
+      modifiedBlock <- IndexedBlockDagStorage[F].insertIndexed(genesis, genesis, false)
+      _             <- BlockStore[F].put(genesis.blockHash, modifiedBlock)
+    } yield modifiedBlock
+
+  def createBlock[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
+      parentsHashList: Seq[BlockHash],
+      genesis: BlockMessage,
+      creator: Validator = ByteString.EMPTY,
+      bonds: Seq[Bond] = Seq.empty[Bond],
+      justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
+      deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
+      tsHash: ByteString = ByteString.EMPTY,
+      shardId: String = "rchain",
+      preStateHash: ByteString = ByteString.EMPTY,
+      seqNum: Int = 0
+  ): F[BlockMessage] =
+    for {
+      block <- buildBlock[F](
+                parentsHashList,
+                creator,
+                bonds,
+                justifications,
+                deploys,
+                tsHash,
+                shardId,
+                preStateHash,
+                seqNum
+              )
+      modifiedBlock <- IndexedBlockDagStorage[F].insertIndexed(block, genesis, false)
+      _             <- BlockStore[F].put(block.blockHash, modifiedBlock)
     } yield modifiedBlock
 }

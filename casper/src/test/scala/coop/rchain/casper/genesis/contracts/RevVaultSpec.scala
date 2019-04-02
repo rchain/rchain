@@ -15,5 +15,5 @@ class RevVaultSpec
         StandardDeploys.either,
         StandardDeploys.revVault
       ),
-      3.seconds
+      10.seconds
     )

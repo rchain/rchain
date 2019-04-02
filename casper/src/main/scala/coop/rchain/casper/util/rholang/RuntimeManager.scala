@@ -127,6 +127,14 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         case Left(_)      => None
       }
 
+  private def sourceDeploy(source: String, timestamp: Long, phlos: Long): DeployData =
+    DeployData(
+      deployer = ByteString.EMPTY,
+      timestamp = timestamp,
+      term = source,
+      phloLimit = phlos
+    )
+
   def computeBonds(hash: StateHash): F[Seq[Bond]] = {
     val bondsQuery =
       """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
@@ -137,8 +145,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
         |  }
         |}""".stripMargin
 
-    val bondsQueryTerm =
-      ProtoUtil.sourceDeploy(bondsQuery, 0L, accounting.MAX_VALUE)
+    val bondsQueryTerm = sourceDeploy(bondsQuery, 0L, accounting.MAX_VALUE)
     captureResults(hash, bondsQueryTerm)
       .ensureOr(
         bondsPar =>

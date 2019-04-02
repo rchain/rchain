@@ -25,8 +25,11 @@ class DagOperationsTest
 
   "lowest common ancestor" should "be computed properly" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      def createBlockWithMeta(bh: BlockHash*): Task[BlockMetadata] =
-        createBlock[Task](bh.toSeq).map(b => BlockMetadata.fromBlock(b, false))
+      def createBlockWithMeta(genesis: BlockMessage, bh: BlockHash*): Task[BlockMetadata] =
+        createBlock[Task](bh.toSeq, genesis).map(b => BlockMetadata.fromBlock(b, false))
+
+      def createBlockWithMetaAndSeq(genesis: BlockMessage, seqNum: Int, bh: BlockHash*): Task[BlockMetadata] =
+        createBlock[Task](bh.toSeq, genesis, seqNum = seqNum).map(b => BlockMetadata.fromBlock(b, false))
 
       implicit def blockMetadataToBlockHash(bm: BlockMetadata): BlockHash = bm.blockHash
 
@@ -48,21 +51,22 @@ class DagOperationsTest
        *         genesis
        */
       for {
-        genesis <- createBlock[Task](Seq.empty)
-        b1      <- createBlockWithMeta(genesis.blockHash)
-        b2      <- createBlockWithMeta(b1)
-        b3      <- createBlockWithMeta(b1)
-        b4      <- createBlockWithMeta(b3)
-        b5      <- createBlockWithMeta(b3)
-        b6      <- createBlockWithMeta(b2, b4)
-        b7      <- createBlockWithMeta(b4, b5)
-        b8      <- createBlockWithMeta(b6, b7)
-        b9      <- createBlockWithMeta(b8)
-        b10     <- createBlockWithMeta(b8)
+        genesis <- createGenesis[Task]()
+        b1      <- createBlockWithMeta(genesis, genesis.blockHash)
+        b2      <- createBlockWithMetaAndSeq(genesis, seqNum = 2, b1)
+        b3      <- createBlockWithMetaAndSeq(genesis, seqNum = 2, b1)
+        b4      <- createBlockWithMeta(genesis, b3)
+        b5      <- createBlockWithMeta(genesis, b3)
+        b6      <- createBlockWithMeta(genesis, b2, b4)
+        b7      <- createBlockWithMeta(genesis, b4, b5)
+        b8      <- createBlockWithMeta(genesis, b6, b7)
+        b9      <- createBlockWithMeta(genesis, b8)
+        b10     <- createBlockWithMeta(genesis, b8)
 
         dag <- blockDagStorage.getRepresentation
 
         _      <- DagOperations.lowestCommonAncestorF[Task](b1, b5, dag) shouldBeF b1
+        _      <- DagOperations.lowestCommonAncestorF[Task](b2, b3, dag) shouldBeF b1
         _      <- DagOperations.lowestCommonAncestorF[Task](b3, b2, dag) shouldBeF b1
         _      <- DagOperations.lowestCommonAncestorF[Task](b6, b7, dag) shouldBeF b1
         _      <- DagOperations.lowestCommonAncestorF[Task](b2, b2, dag) shouldBeF b2
@@ -89,14 +93,14 @@ class DagOperationsTest
          */
         implicit def toMetadata(b: BlockMessage) = BlockMetadata.fromBlock(b, false)
         for {
-          genesis <- createBlock[Task](Seq.empty)
-          b1      <- createBlock[Task](Seq(genesis.blockHash))
-          b2      <- createBlock[Task](Seq(genesis.blockHash))
-          b3      <- createBlock[Task](Seq(b1.blockHash))
-          b4      <- createBlock[Task](Seq(b3.blockHash))
-          b5      <- createBlock[Task](Seq(b3.blockHash))
-          b6      <- createBlock[Task](Seq(b4.blockHash, b5.blockHash))
-          b7      <- createBlock[Task](Seq(b2.blockHash, b5.blockHash))
+          genesis <- createGenesis[Task]()
+          b1      <- createBlock[Task](Seq(genesis.blockHash), genesis)
+          b2      <- createBlock[Task](Seq(genesis.blockHash), genesis)
+          b3      <- createBlock[Task](Seq(b1.blockHash), genesis)
+          b4      <- createBlock[Task](Seq(b3.blockHash), genesis)
+          b5      <- createBlock[Task](Seq(b3.blockHash), genesis)
+          b6      <- createBlock[Task](Seq(b4.blockHash, b5.blockHash), genesis)
+          b7      <- createBlock[Task](Seq(b2.blockHash, b5.blockHash), genesis)
 
           dag <- blockDagStorage.getRepresentation
 

@@ -2,10 +2,10 @@ package coop.rchain.casper.api
 
 import coop.rchain.catscontrib.TaskContrib._
 import scala.collection.immutable.HashMap
-
+import coop.rchain.crypto.signatures.Ed25519
 import cats.effect.Sync
 import cats.implicits._
-
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.blockstorage.{BlockDagStorage, BlockStore}
 import coop.rchain.casper._
 import coop.rchain.casper.Estimator.BlockHash
@@ -25,13 +25,17 @@ class BlockQueryResponseAPITest
     with Inside
     with BlockDagStorageFixture {
   implicit val timeEff = new LogicalTime[Task]
+  private val (sk, pk) = Ed25519.newKeyPair
   val secondBlockQuery = "1234"
   val badTestHashQuery = "No such a hash"
 
   val genesisHashString = "0000000000000000000000000000000000000000000000000000000000000000"
   val version           = 1L
 
-  val bondsValidator = Bond(ByteString.copyFromUtf8("random"), 1)
+  val senderString: String =
+    "3456789101112131415161718192345678910111213141516171819261718192"
+  val sender: ByteString = ProtoUtil.stringToByteString(senderString)
+  val bondsValidator = Bond(sender, 1)
 
   def genesisBlock(genesisHashString: String, version: Long): BlockMessage = {
     val genesisHash = ProtoUtil.stringToByteString(genesisHashString)
@@ -56,23 +60,21 @@ class BlockQueryResponseAPITest
   val deployCount = 10
   val randomDeploys =
     (0 until deployCount).toList
-      .traverse(ProtoUtil.basicProcessedDeploy[Task])
+      .traverse(i => ConstructDeploy.basicProcessedDeploy[Task](i, PrivateKey(sk)))
       .unsafeRunSync(scheduler)
   val body: Body                       = Body().withState(ps).withDeploys(randomDeploys)
   val parentsString                    = List(genesisHashString, "0000000001")
   val parentsHashList: List[BlockHash] = parentsString.map(ProtoUtil.stringToByteString)
   val header: Header                   = ProtoUtil.blockHeader(body, parentsHashList, version, timestamp)
-  val secondBlockSenderString: String =
-    "3456789101112131415161718192345678910111213141516171819261718192"
-  val secondBlockSender: ByteString = ProtoUtil.stringToByteString(secondBlockSenderString)
   val shardId: String               = "abcdefgh"
   val secondBlock: BlockMessage =
     BlockMessage()
       .withBlockHash(blockHash)
       .withHeader(header)
       .withBody(body)
-      .withSender(secondBlockSender)
+      .withSender(sender)
       .withShardId(shardId)
+      .withJustifications(Seq(Justification(bondsValidator.validator, genesisBlock.blockHash)))
 
   val faultTolerance = 1f
 
@@ -104,7 +106,7 @@ class BlockQueryResponseAPITest
             blockInfo.faultTolerance should be(faultTolerance)
             blockInfo.mainParentHash should be(genesisHashString)
             blockInfo.parentsHashList should be(parentsString)
-            blockInfo.sender should be(secondBlockSenderString)
+            blockInfo.sender should be(senderString)
             blockInfo.shardId should be(shardId)
             blockInfo.bondsValidatorList should be(bondValidatorHashList)
             blockInfo.deployCost should be(deployCostList)
@@ -139,7 +141,7 @@ class BlockQueryResponseAPITest
       for {
         effects                                 <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
         (logEff, casperRef, cliqueOracleEffect) = effects
-        user                                    = ByteString.EMPTY
+        user                                    = ByteString.copyFrom(pk)
         timestamp                               = 1L
         blockQueryResponse <- BlockAPI.findBlockWithDeploy[Task](user, timestamp)(
                                Sync[Task],
@@ -158,7 +160,7 @@ class BlockQueryResponseAPITest
             blockInfo.faultTolerance should be(faultTolerance)
             blockInfo.mainParentHash should be(genesisHashString)
             blockInfo.parentsHashList should be(parentsString)
-            blockInfo.sender should be(secondBlockSenderString)
+            blockInfo.sender should be(senderString)
             blockInfo.shardId should be(shardId)
             blockInfo.bondsValidatorList should be(bondValidatorHashList)
             blockInfo.deployCost should be(deployCostList)
@@ -194,8 +196,8 @@ class BlockQueryResponseAPITest
       blockDagStorage: BlockDagStorage[Task]
   ): Task[(LogStub[Task], MultiParentCasperRef[Task], SafetyOracle[Task])] =
     for {
-      _ <- blockDagStorage.insert(genesisBlock, false)
-      _ <- blockDagStorage.insert(secondBlock, false)
+      _ <- blockDagStorage.insert(genesisBlock, genesisBlock, false)
+      _ <- blockDagStorage.insert(secondBlock, genesisBlock, false)
       casperEffect <- NoOpsCasperEffect[Task](
                        HashMap[BlockHash, BlockMessage](
                          (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),

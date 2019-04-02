@@ -52,7 +52,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
     val deploys = List(
       "@0!(0) | for(_ <- @0){ @1!(1) }",
       "for(_ <- @1){ @2!(2) }"
-    ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
+    ).map(ConstructDeploy.sourceDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
 
     def createBlock(deploy: DeployData, blockApiLock: Semaphore[Effect])(
         implicit casperRef: MultiParentCasperRef[Effect]
@@ -96,9 +96,9 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def addBlock(
       b: BlockMessage,
       handleDoppelganger: (BlockMessage, Validator) => F[Unit]
-  ): F[BlockStatus]                                     = underlying.addBlock(b, ignoreDoppelgangerCheck[F])
-  def contains(b: BlockMessage): F[Boolean]             = underlying.contains(b)
-  def deploy(d: DeployData): F[Either[Throwable, Unit]] = underlying.deploy(d)
+  ): F[BlockStatus]                                       = underlying.addBlock(b, ignoreDoppelgangerCheck[F])
+  def contains(b: BlockMessage): F[Boolean]               = underlying.contains(b)
+  def deploy(d: DeployData): F[Either[DeployError, Unit]] = underlying.deploy(d)
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     underlying.estimator(dag)
   def blockDag: F[BlockDagRepresentation[F]] = underlying.blockDag

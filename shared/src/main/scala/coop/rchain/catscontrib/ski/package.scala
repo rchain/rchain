@@ -16,8 +16,4 @@ package object ski {
   def kp[A, B](x: => B): A => B          = _ => x
   def kp2[A, B, C](x: => C): (A, B) => C = (_, _) => x
 
-  /**
-    * Returns a functiont that always returns its argument
-    */
-  def id[A]: A => A = x => x
 }
