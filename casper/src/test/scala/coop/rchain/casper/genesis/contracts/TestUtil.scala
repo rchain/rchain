@@ -42,36 +42,6 @@ object TestUtil {
     } yield runtime
   }
 
-  private def evalDeploy[F[_]: MonadError[?[_], Throwable]](
-      deploy: DeployData,
-      runtime: Runtime[F]
-  )(
-      implicit scheduler: Scheduler
-  ): F[Unit] = {
-    implicit val rand: Blake2b512Random = Blake2b512Random(
-      DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
-    )
-    eval(deploy.term, runtime)(implicitly, implicitly, rand)
-  }
-
-  private def evalTerm[F[_]: FlatMap](
-      term: Par,
-      runtime: Runtime[F]
-  )(implicit scheduler: Scheduler, rand: Blake2b512Random): F[Unit] =
-    for {
-      _ <- runtime.reducer.setPhlo(Cost.UNSAFE_MAX)
-      _ <- runtime.reducer.inj(term)
-      _ <- runtime.reducer.phlo
-    } yield ()
-
-  def eval[F[_]: MonadError[?[_], Throwable]](
-      code: String,
-      runtime: Runtime[F]
-  )(implicit scheduler: Scheduler, rand: Blake2b512Random): F[Unit] =
-    MonadError[F, Throwable]
-      .fromEither(mkTerm(code))
-      .flatMap(evalTerm(_, runtime))
-
   def runTestsWithDeploys[F[_]: Concurrent: ContextShift, G[_]: Parallel[F, ?[_]]](
       tests: CompiledRholangSource,
       otherLibs: Seq[DeployData],
@@ -87,4 +57,33 @@ object TestUtil {
       rand    = Blake2b512Random(128)
       _       <- eval(tests.code, runtime)(implicitly, implicitly, rand.splitShort(1))
     } yield ()
+
+  private def evalDeploy[F[_]: MonadError[?[_], Throwable]](
+      deploy: DeployData,
+      runtime: Runtime[F]
+  )(
+      implicit scheduler: Scheduler
+  ): F[Unit] = {
+    val rand: Blake2b512Random = Blake2b512Random(
+      DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
+    )
+    eval(deploy.term, runtime)(implicitly, implicitly, rand)
+  }
+
+  def eval[F[_]: MonadError[?[_], Throwable]](
+      code: String,
+      runtime: Runtime[F]
+  )(implicit scheduler: Scheduler, rand: Blake2b512Random): F[Unit] =
+    MonadError[F, Throwable].fromEither(mkTerm(code)) >>= (evalTerm(_, runtime))
+
+  private def evalTerm[F[_]: FlatMap](
+      term: Par,
+      runtime: Runtime[F]
+  )(implicit scheduler: Scheduler, rand: Blake2b512Random): F[Unit] =
+    for {
+      _ <- runtime.reducer.setPhlo(Cost.UNSAFE_MAX)
+      _ <- runtime.reducer.inj(term)
+      _ <- runtime.reducer.phlo
+    } yield ()
+
 }
