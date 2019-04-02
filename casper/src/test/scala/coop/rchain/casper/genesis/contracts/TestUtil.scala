@@ -1,5 +1,7 @@
 package coop.rchain.casper.genesis.contracts
 
+import cats.Parallel
+import cats.effect.{Concurrent, ContextShift}
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
@@ -17,11 +19,13 @@ import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler
 
+import cats.implicits._
+
 import scala.concurrent.duration._
 
 object TestUtil {
 
-  val rhoSpecDeploy: DeployData =
+  private val rhoSpecDeploy: DeployData =
     DeployData(
       deployer = ProtoUtil.stringToByteString(
         "4ae94eb0b2d7df529f7ae68863221d5adda402fc54303a3d90a8a7a279326828"
@@ -31,18 +35,18 @@ object TestUtil {
       phloLimit = accounting.MAX_VALUE
     )
 
-  def runtime(
-      extraServices: Seq[SystemProcess.Definition[Task]] = Seq.empty
-  )(implicit scheduler: Scheduler): Runtime[Task] = {
-    implicit val log: Log[Task]            = new Log.NOPLog[Task]
-    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+  def runtime[F[_]: Concurrent: ContextShift, G[_]](
+      extraServices: Seq[SystemProcess.Definition[F]] = Seq.empty
+  )(implicit scheduler: Scheduler, parallel: Parallel[F, G]): F[Runtime[F]] = {
+    implicit val log: Log[F]            = new Log.NOPLog[F]
+    implicit val metricsEff: Metrics[F] = new metrics.Metrics.MetricsNOP[F]
     for {
-      runtime <- TestRuntime.create[Task, Task.Par](extraServices)
-      _       <- Runtime.injectEmptyRegistryRoot[Task](runtime.space, runtime.replaySpace)
-    } yield (runtime)
-  }.runSyncUnsafe(5.seconds)
+      runtime <- TestRuntime.create[F, G](extraServices)
+      _       <- Runtime.injectEmptyRegistryRoot[F](runtime.space, runtime.replaySpace)
+    } yield runtime
+  }
 
-  def evalDeploy(deploy: DeployData, runtime: Runtime[Task])(
+  private def evalDeploy(deploy: DeployData, runtime: Runtime[Task])(
       implicit scheduler: Scheduler
   ): Unit = {
     implicit val rand: Blake2b512Random = Blake2b512Random(
@@ -52,7 +56,7 @@ object TestUtil {
     evalTerm(term, runtime)
   }
 
-  def evalTerm(
+  private def evalTerm(
       term: Par,
       runtime: Runtime[Task]
   )(implicit scheduler: Scheduler, rand: Blake2b512Random): Unit =
@@ -78,7 +82,8 @@ object TestUtil {
   )(
       implicit scheduler: Scheduler
   ): Unit = {
-    val runtime = TestUtil.runtime(additionalSystemProcesses)
+    val runtime =
+      TestUtil.runtime[Task, Task.Par](additionalSystemProcesses).runSyncUnsafe(5.seconds)
     evalDeploy(StandardDeploys.listOps, runtime)(implicitly)
     evalDeploy(rhoSpecDeploy, runtime)(implicitly)
     otherLibs.foreach(evalDeploy(_, runtime))
