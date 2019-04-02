@@ -1,7 +1,7 @@
 package coop.rchain.casper.genesis.contracts
 
 import cats.{FlatMap, MonadError, Parallel}
-import cats.effect.{Concurrent, ContextShift}
+import cats.effect.{Concurrent, ContextShift, Sync}
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
@@ -10,10 +10,8 @@ import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
 import coop.rchain.rholang.build.CompiledRholangSource
-import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.rholang.interpreter.TestRuntime
+import coop.rchain.rholang.interpreter.{accounting, ParBuilder, Runtime, TestRuntime}
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
-import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.shared.Log
 import monix.execution.Scheduler
@@ -58,7 +56,7 @@ object TestUtil {
       _       <- eval(tests.code, runtime)(implicitly, implicitly, rand.splitShort(1))
     } yield ()
 
-  private def evalDeploy[F[_]: MonadError[?[_], Throwable]](
+  private def evalDeploy[F[_]: Sync](
       deploy: DeployData,
       runtime: Runtime[F]
   )(
@@ -70,11 +68,11 @@ object TestUtil {
     eval(deploy.term, runtime)(implicitly, implicitly, rand)
   }
 
-  def eval[F[_]: MonadError[?[_], Throwable]](
+  def eval[F[_]: Sync](
       code: String,
       runtime: Runtime[F]
   )(implicit scheduler: Scheduler, rand: Blake2b512Random): F[Unit] =
-    MonadError[F, Throwable].fromEither(mkTerm(code)) >>= (evalTerm(_, runtime))
+    ParBuilder[F].buildNormalizedTerm(code) >>= (evalTerm(_, runtime))
 
   private def evalTerm[F[_]: FlatMap](
       term: Par,
