@@ -82,15 +82,15 @@ object MultiParentCasperTestUtil {
                       .captureResults(ProtoUtil.postStateHash(block), query)
     } yield (blockStatus, queryResult)
 
-  def createBonds(validators: Seq[Array[Byte]]): Map[Array[Byte], Long] =
+  def createBonds(validators: Seq[PublicKey]): Map[PublicKey, Long] =
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
 
-  def createGenesis(bonds: Map[Array[Byte], Long]): BlockMessage =
+  def createGenesis(bonds: Map[PublicKey, Long]): BlockMessage =
     buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, Faucet.noopFaucet, 0L)
 
   def buildGenesis(
       wallets: Seq[PreWallet],
-      bonds: Map[Array[Byte], Long],
+      bonds: Map[PublicKey, Long],
       minimumBond: Long,
       maximumBond: Long,
       faucetCode: String => String,

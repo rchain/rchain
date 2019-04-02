@@ -1,10 +1,10 @@
 package coop.rchain.casper.genesis.contracts
 
-import coop.rchain.casper.util.Sorting
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 
 //TODO: include other fields relevent to PoS (e.g. rewards channel)
-final case class ProofOfStakeValidator(id: Array[Byte], stake: Long)
+final case class ProofOfStakeValidator(id: PublicKey, stake: Long)
 
 final case class ProofOfStakeParams(
     minimumBond: Long,
@@ -17,12 +17,12 @@ final case class ProofOfStakeParams(
 
 object ProofOfStake {
   def initialBondsCode(validators: Seq[ProofOfStakeValidator]): String = {
-    import Sorting.byteArrayOrdering
+    import coop.rchain.crypto.util.Sorting.publicKeyOrdering
     val sortedValidators = validators.sortBy(_.id)
     val mapEntries = sortedValidators.iterator.zipWithIndex
       .map {
         case (ProofOfStakeValidator(id, stake), index) =>
-          val pk = Base16.encode(id)
+          val pk = Base16.encode(id.bytes)
           s""" "$pk".hexToBytes() : ($stake, "secp256k1Verify", Nil, ${index + 1})"""
       }
       .mkString(", ")

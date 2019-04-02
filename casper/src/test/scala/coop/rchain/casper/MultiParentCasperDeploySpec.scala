@@ -180,7 +180,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
   it should "allow paying for deploys" in effectTest {
     val node      = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
     val (sk, pk)  = Ed25519.newKeyPair
-    val user      = ByteString.copyFrom(pk)
+    val user      = ByteString.copyFrom(pk.bytes)
     val timestamp = System.currentTimeMillis()
     val phloPrice = 1L
     val amount    = 847L
@@ -189,7 +189,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
         s"""new retCh in { @"blake2b256Hash"!([0, $amount, *retCh].toByteArray(), "__SCALA__") }""",
         timestamp,
         accounting.MAX_VALUE,
-        sec = PrivateKey(sk)
+        sec = sk
       )
 
     for {
@@ -200,7 +200,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
                           )
       sigData     = capturedResults.head.exprs.head.getGByteArray
       sig         = Base16.encode(Ed25519.sign(sigData.toByteArray, sk))
-      pkStr       = Base16.encode(pk)
+      pkStr       = Base16.encode(pk.bytes)
       paymentCode = s"""new
          |  paymentForward, walletCh, rl(`rho:registry:lookup`),
          |  SystemInstancesCh, faucetCh, posCh
@@ -224,7 +224,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
           timestamp,
           accounting.MAX_VALUE,
           phloPrice = phloPrice,
-          sec = PrivateKey(sk)
+          sec = sk
         )
 
       paymentQuery = ConstructDeploy
@@ -238,7 +238,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
         |}""".stripMargin,
           0L,
           accounting.MAX_VALUE,
-          sec = PrivateKey(sk)
+          sec = sk
         )
 
       deployQueryResult <- deployAndQuery(

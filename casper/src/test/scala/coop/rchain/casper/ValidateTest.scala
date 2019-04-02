@@ -5,29 +5,29 @@ import java.nio.file.Files
 import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore, IndexedBlockDagStorage}
-import coop.rchain.casper.Estimator.{BlockHash, Validator}
-import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
+import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
+import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
+import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
+import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.{StoreType, Time}
-import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{Assertion, BeforeAndAfterEach, FlatSpec, Matchers}
+import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 
-import scala.concurrent.duration._
 import scala.collection.immutable.HashMap
 
 class ValidateTest
@@ -95,7 +95,7 @@ class ValidateTest
 
   def signedBlock(
       i: Int
-  )(implicit sk: Array[Byte], blockDagStorage: IndexedBlockDagStorage[Task]): Task[BlockMessage] = {
+  )(implicit sk: PrivateKey, blockDagStorage: IndexedBlockDagStorage[Task]): Task[BlockMessage] = {
     val pk = Ed25519.toPublic(sk)
     for {
       block  <- blockDagStorage.lookupByIdUnsafe(i)
@@ -145,7 +145,7 @@ class ValidateTest
         invalidKey   = ByteString.copyFrom(Base16.unsafeDecode("abcdef1234567890"))
         block0       <- signedBlock(0).map(_.withSender(empty))
         block1       <- signedBlock(1).map(_.withSender(invalidKey))
-        block2       <- signedBlock(2).map(_.withSender(ByteString.copyFrom(wrongPk)))
+        block2       <- signedBlock(2).map(_.withSender(ByteString.copyFrom(wrongPk.bytes)))
         block3       <- signedBlock(3).map(_.withSig(empty))
         block4       <- signedBlock(4).map(_.withSig(invalidKey))
         block5       <- signedBlock(5).map(_.withSig(block0.sig)) //wrong sig

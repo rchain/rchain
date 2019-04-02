@@ -15,6 +15,7 @@ import coop.rchain.casper.util.ProtoUtil.{
 }
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang._
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.shared.{Cell, Log, Time}
 
 object BlockCreator {
@@ -32,8 +33,8 @@ object BlockCreator {
   def createBlock[F[_]: Sync: Log: Time: BlockStore](
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage,
-      publicKey: Array[Byte],
-      privateKey: Array[Byte],
+      publicKey: PublicKey,
+      privateKey: PrivateKey,
       sigAlgorithm: String,
       shardId: String,
       version: Long,

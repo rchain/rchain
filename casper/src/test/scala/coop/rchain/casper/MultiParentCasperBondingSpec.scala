@@ -81,7 +81,7 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
       pubKey         = Base16.encode(ethPubKeys.head.bytes.drop(1))
       secKey         = ethPivKeys.head.bytes
       ethAddress     = ethAddresses.head
-      bondKey        = Base16.encode(otherPk)
+      bondKey        = Base16.encode(otherPk.bytes)
       walletUnlockDeploy <- RevIssuanceTest.preWalletUnlockDeploy(
                              ethAddress,
                              pubKey,
@@ -185,7 +185,7 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
         case (keyA, stake, _) =>
           Bond(keyA, stake)
       }.toSet + Bond(
-        ByteString.copyFrom(otherPk),
+        ByteString.copyFrom(otherPk.bytes),
         wallets.head.initRevBalance.toLong
       )
 
@@ -202,7 +202,7 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
 
     implicit val runtimeManager = node.runtimeManager
     val (sk, pk)                = Ed25519.newKeyPair
-    val pkStr                   = Base16.encode(pk)
+    val pkStr                   = Base16.encode(pk.bytes)
     val amount                  = 314L
     val forwardCode             = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
 
@@ -271,11 +271,11 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
 
     def bond(
         node: HashSetCasperTestNode[Effect],
-        keys: (Array[Byte], Array[Byte])
+        keys: (PrivateKey, PublicKey)
     ): Effect[Unit] = {
       implicit val runtimeManager = node.runtimeManager
       val (sk, pk)                = keys
-      val pkStr                   = Base16.encode(pk)
+      val pkStr                   = Base16.encode(pk.bytes)
       val amount                  = 314L
       val forwardCode             = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
       for {
@@ -336,7 +336,7 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
 
       rm          = nodes.head.runtimeManager
       (sk, pk)    = Ed25519.newKeyPair
-      pkStr       = Base16.encode(pk)
+      pkStr       = Base16.encode(pk.bytes)
       forwardCode = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
       bondingCode <- BondingUtil
                       .faucetBondDeploy[Effect](50, "ed25519", pkStr, sk)(
