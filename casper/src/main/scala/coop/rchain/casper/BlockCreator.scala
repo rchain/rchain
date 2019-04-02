@@ -174,16 +174,7 @@ object BlockCreator {
         case Right((preStateHash, postStateHash, processedDeploys)) =>
           val (internalErrors, persistableDeploys) =
             processedDeploys.partition(_.status.isInternalError)
-          internalErrors.toList
-            .traverse {
-              case InternalProcessedDeploy(deploy, _, _, InternalErrors(errors)) =>
-                val errorsMessage = errors.map(_.getMessage).mkString("\n")
-                Log[F].error(
-                  s"Internal error encountered while processing deploy ${PrettyPrinter
-                    .buildString(deploy)}: $errorsMessage"
-                )
-              case _ => ().pure[F]
-            } >>
+          logInternalErrors(internalErrors) >>
             runtimeManager
               .computeBonds(postStateHash)
               .map { newBonds =>
@@ -200,6 +191,20 @@ object BlockCreator {
                   version
                 )
               }
+      }
+
+  private def logInternalErrors[F[_]: Sync: Log](
+      internalErrors: Seq[InternalProcessedDeploy]
+  ): F[List[Unit]] =
+    internalErrors.toList
+      .traverse {
+        case InternalProcessedDeploy(deploy, _, _, InternalErrors(errors)) =>
+          val errorsMessage = errors.map(_.getMessage).mkString("\n")
+          Log[F].error(
+            s"Internal error encountered while processing deploy ${PrettyPrinter
+              .buildString(deploy)}: $errorsMessage"
+          )
+        case _ => ().pure[F]
       }
 
   private def createBlock(
