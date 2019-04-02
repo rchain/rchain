@@ -24,8 +24,6 @@ import coop.rchain.casper.protocol.Event.EventInstance.{Comm, Consume, Produce}
 import scala.collection.{immutable, BitSet}
 
 object ProtoUtil {
-  private implicit val logSource: LogSource = LogSource(this.getClass)
-
   /*
    * c is in the blockchain of b iff c == b or c is in the blockchain of the main parent of b
    */
