@@ -1,6 +1,6 @@
 package coop.rchain.casper.genesis.contracts
 
-import cats.Parallel
+import cats.{FlatMap, MonadError, Parallel}
 import cats.effect.{Concurrent, ContextShift}
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.ProtoUtil
@@ -18,7 +18,6 @@ import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler
-
 import cats.implicits._
 
 import scala.concurrent.duration._
@@ -46,34 +45,35 @@ object TestUtil {
     } yield runtime
   }
 
-  private def evalDeploy(deploy: DeployData, runtime: Runtime[Task])(
+  private def evalDeploy[F[_]: MonadError[?[_], Throwable]](
+      deploy: DeployData,
+      runtime: Runtime[F]
+  )(
       implicit scheduler: Scheduler
-  ): Unit = {
+  ): F[Unit] = {
     implicit val rand: Blake2b512Random = Blake2b512Random(
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
     )
-    val term = mkTerm(deploy.term).right.get
-    evalTerm(term, runtime)
+    eval(deploy.term, runtime)(implicitly, implicitly, rand)
   }
 
-  private def evalTerm(
+  private def evalTerm[F[_]: FlatMap](
       term: Par,
-      runtime: Runtime[Task]
-  )(implicit scheduler: Scheduler, rand: Blake2b512Random): Unit =
-    (for {
+      runtime: Runtime[F]
+  )(implicit scheduler: Scheduler, rand: Blake2b512Random): F[Unit] =
+    for {
       _ <- runtime.reducer.setPhlo(Cost.UNSAFE_MAX)
       _ <- runtime.reducer.inj(term)
       _ <- runtime.reducer.phlo
-    } yield ()).runSyncUnsafe(30.seconds)
+    } yield ()
 
-  def eval(
+  def eval[F[_]: MonadError[?[_], Throwable]](
       code: String,
-      runtime: Runtime[Task]
-  )(implicit scheduler: Scheduler, rand: Blake2b512Random): Unit =
-    mkTerm(code) match {
-      case Right(term) => evalTerm(term, runtime)
-      case Left(ex)    => throw ex
-    }
+      runtime: Runtime[F]
+  )(implicit scheduler: Scheduler, rand: Blake2b512Random): F[Unit] =
+    MonadError[F, Throwable]
+      .fromEither(mkTerm(code))
+      .flatMap(evalTerm(_, runtime))
 
   def runTestsWithDeploys(
       tests: CompiledRholangSource,
@@ -81,13 +81,13 @@ object TestUtil {
       additionalSystemProcesses: Seq[SystemProcess.Definition[Task]]
   )(
       implicit scheduler: Scheduler
-  ): Unit = {
-    val runtime =
-      TestUtil.runtime[Task, Task.Par](additionalSystemProcesses).runSyncUnsafe(5.seconds)
-    evalDeploy(StandardDeploys.listOps, runtime)(implicitly)
-    evalDeploy(rhoSpecDeploy, runtime)(implicitly)
-    otherLibs.foreach(evalDeploy(_, runtime))
-    val rand = Blake2b512Random(128)
-    eval(tests.code, runtime)(implicitly, rand.splitShort(1))
-  }
+  ): Unit =
+    (for {
+      runtime <- TestUtil.runtime[Task, Task.Par](additionalSystemProcesses)
+      _       <- evalDeploy(StandardDeploys.listOps, runtime)
+      _       <- evalDeploy(rhoSpecDeploy, runtime)
+      _       <- otherLibs.toList.traverse(evalDeploy(_, runtime))
+      rand    = Blake2b512Random(128)
+      _       <- eval(tests.code, runtime)(implicitly, implicitly, rand.splitShort(1))
+    } yield ()).runSyncUnsafe(30.seconds)
 }

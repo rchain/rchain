@@ -55,7 +55,7 @@ class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler
   def tuplespace: String = StoragePrinter.prettyPrint(runtime.space.store)
 
   def eval(code: String): Unit = {
-    TestUtil.eval(code, runtime)
+    TestUtil.eval(code, runtime).runSyncUnsafe(Duration.Inf)
     val errors = runtime.errorLog.readAndClearErrorVector().unsafeRunSync
     if (errors.nonEmpty) {
       println("Errors during execution:")
