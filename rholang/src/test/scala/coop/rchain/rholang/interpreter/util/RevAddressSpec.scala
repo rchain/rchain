@@ -10,7 +10,7 @@ class RevAddressSpec extends FlatSpec with Matchers {
       PublicKey(
         Base16.unsafeDecode("00322ba649cebf90d8bd0eeb0658ea7957bcc59ecee0676c86f4fec517c06251")
       )
-    RevAddress.fromPublicKey(pk) should be(
+    RevAddress.fromPublicKey(pk).map(_.toBase58) should be(
       Some("1111K9MczqzZrNkUNmNGrNFyz7F7LiCUgaCHXd28g2k5PxiaNuCAi")
     )
   }
