@@ -48,6 +48,7 @@ object RhoSpec {
 
   def getResults(testObject: CompiledRholangSource, otherLibs: Seq[DeployData]): Task[TestResult] =
     for {
+      _                   <- logger.info("Starting tests from " + testObject.path)
       testResultCollector <- TestResultCollector[Task]
 
       _ <- Task.delay {
