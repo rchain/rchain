@@ -136,7 +136,9 @@ class StacksafeProtobufGenerator(params: GeneratorParams) extends ProtobufGenera
       .newline
       .add("def serializedSizeM: coop.rchain.models.Memo[Int] = synchronized {")
       .add("  if(_serializedSizeM == null) {")
-      .add("    _serializedSizeM = new coop.rchain.models.Memo(coop.rchain.models.ProtoM.serializedSize(this))")
+      .add(
+        "    _serializedSizeM = new coop.rchain.models.Memo(coop.rchain.models.ProtoM.serializedSize(this))"
+      )
       .add("    _serializedSizeM")
       .add("  } else _serializedSizeM")
       .add("}")
