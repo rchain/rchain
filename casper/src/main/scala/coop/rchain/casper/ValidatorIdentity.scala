@@ -6,26 +6,27 @@ import java.nio.file.Path
 import cats.Applicative
 import cats.effect.{Resource, Sync}
 import cats.syntax.applicative._
-import cats.syntax.functor._
-import cats.syntax.flatMap._
-import cats.syntax.option._
 import cats.syntax.either._
+import cats.syntax.flatMap._
+import cats.syntax.functor._
+import cats.syntax.option._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.Signature
-import coop.rchain.casper.util.SignatureAlgorithms
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.signatures.SignaturesAlg
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.shared.{Log, LogSource}
 
 import scala.language.higherKinds
 
 final case class ValidatorIdentity(
-    publicKey: Array[Byte],
-    privateKey: Array[Byte],
+    publicKey: PublicKey,
+    privateKey: PrivateKey,
     sigAlgorithm: String
 ) {
   def signature(data: Array[Byte]): Signature = {
-    val sig = SignatureAlgorithms.lookup(sigAlgorithm)(data, privateKey)
-    Signature(ByteString.copyFrom(publicKey), sigAlgorithm, ByteString.copyFrom(sig))
+    val sig = SignaturesAlg(sigAlgorithm).map(_.sign(data, privateKey)).get
+    Signature(ByteString.copyFrom(publicKey.bytes), sigAlgorithm, ByteString.copyFrom(sig))
   }
 }
 
@@ -41,8 +42,8 @@ object ValidatorIdentity {
       conf: CasperConf,
       privateKeyBase16: String
   ) = {
-    val privateKey     = Base16.unsafeDecode(privateKeyBase16)
-    val maybePublicKey = conf.publicKeyBase16.map(Base16.unsafeDecode)
+    val privateKey     = PrivateKey(Base16.unsafeDecode(privateKeyBase16))
+    val maybePublicKey = conf.publicKeyBase16.map(pk => PublicKey(Base16.unsafeDecode(pk)))
 
     val publicKey =
       CasperConf.publicKey(maybePublicKey, conf.sigAlgorithm, privateKey)

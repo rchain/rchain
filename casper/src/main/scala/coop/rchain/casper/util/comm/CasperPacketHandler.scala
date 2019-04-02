@@ -13,13 +13,6 @@ import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper._
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.comm.CasperPacketHandler.{
-  insertIntoBlockAndDagStore,
-  ApprovedBlockReceivedHandler,
-  BootstrapCasperHandler,
-  CasperPacketHandlerImpl,
-  CasperPacketHandlerInternal
-}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.MonadTrans
@@ -30,11 +23,10 @@ import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.metrics.Metrics
-import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.shared.{Log, LogSource, Time}
 import monix.eval.Task
 import monix.execution.Scheduler
-import coop.rchain.catscontrib.ski._
+
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Try
 
@@ -208,8 +200,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       for {
         _ <- Log[F].info("Received ApprovedBlock message while in GenesisValidatorHandler state.")
         casperO <- onApprovedBlockTransition(
-                    ab,
-                    Set(ByteString.copyFrom(validatorId.publicKey)),
+          ab,
+          Set(ByteString.copyFrom(validatorId.publicKey.bytes)),
                     runtimeManager,
                     Some(validatorId),
                     shardId

@@ -1,42 +1,38 @@
 package coop.rchain.casper.util.comm
 
-import cats.Monad
 import cats.data.EitherT
 import cats.effect.Concurrent
 import cats.implicits._
-import cats.kernel.Eq
 import com.google.protobuf.ByteString
 import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.{
-  InternalProcessedDeploy,
-  ProcessedDeployUtil,
-  RuntimeManager
-}
-
+    InternalProcessedDeploy,
+    ProcessedDeployUtil,
+    RuntimeManager
+  }
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.RPConfAsk
-import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.comm.transport.{Blob, TransportLayer}
-import coop.rchain.comm.{transport, PeerNode}
+import coop.rchain.comm.{PeerNode, transport}
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.shared._
-import monix.execution.Scheduler
 
 import scala.util.Try
 
 /**
   * Validator side of the protocol defined in
   * https://rchain.atlassian.net/wiki/spaces/CORE/pages/485556483/Initializing+the+Blockchain+--+Protocol+for+generating+the+Genesis+block
-  */
+    */
 class BlockApproverProtocol(
     validatorId: ValidatorIdentity,
     deployTimestamp: Long,
-    bonds: Map[Array[Byte], Long],
+    bonds: Map[PublicKey, Long],
     wallets: Seq[PreWallet],
     minimumBond: Long,
     maximumBond: Long,
@@ -44,7 +40,7 @@ class BlockApproverProtocol(
     requiredSigs: Int
 ) {
   private implicit val logSource: LogSource = LogSource(this.getClass)
-  private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1) -> e._2)
+  private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1.bytes) -> e._2)
 
   def unapprovedBlockPacketHandler[F[_]: Concurrent: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
       peer: PeerNode,
@@ -124,9 +120,11 @@ object BlockApproverProtocol {
         postState  <- Either.fromOption(body.state, "Post state is empty")
         blockBonds = postState.bonds.map { case Bond(validator, stake) => validator -> stake }.toMap
         _ <- (blockBonds == bonds)
-              .either(())
-              .or("Block bonds don't match expected.")
-        validators = blockBonds.toSeq.map(b => ProofOfStakeValidator(b._1.toByteArray, b._2))
+          .either(())
+          .or("Block bonds don't match expected.")
+        validators = blockBonds.toSeq.map(
+          b => ProofOfStakeValidator(PublicKey(b._1.toByteArray), b._2)
+        )
         posParams  = ProofOfStakeParams(minimumBond, maximumBond, validators)
         faucetCode = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
         genesisBlessedContracts = Genesis

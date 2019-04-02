@@ -8,22 +8,21 @@ import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.{Applicative, ApplicativeError, Id, Monad}
 import coop.rchain.blockstorage._
-import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.casper._
 import coop.rchain.casper.helper.BlockDagStorageTestFixture.mapSize
 import coop.rchain.casper.helper.HashSetCasperTestNode.Close
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CasperPacketHandler.{
-  ApprovedBlockReceivedHandler,
-  CasperPacketHandlerImpl,
-  CasperPacketHandlerInternal
-}
+    ApprovedBlockReceivedHandler,
+    CasperPacketHandlerImpl,
+    CasperPacketHandlerInternal
+  }
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.CommError.ErrorHandler
@@ -32,6 +31,7 @@ import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.Connect
 import coop.rchain.comm.rp.Connect._
 import coop.rchain.comm.rp.HandleMessages.handle
+import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
@@ -39,8 +39,8 @@ import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rspace.Context
-import coop.rchain.shared._
 import coop.rchain.shared.PathOps.RichPath
+import coop.rchain.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -54,7 +54,7 @@ class HashSetCasperTestNode[F[_]](
     tle: TransportLayerTestImpl[F],
     tls: TransportLayerServerTestImpl[F],
     val genesis: BlockMessage,
-    sk: Array[Byte],
+    sk: PrivateKey,
     logicalTime: LogicalTime[F],
     implicit val errorHandlerEff: ErrorHandler[F],
     storageSize: Long,
@@ -177,15 +177,14 @@ object HashSetCasperTestNode {
           )
       _ <- nodes.traverse(
             m =>
-              m.connectionsCell
-                .flatModify(_.addConn[F](n.local))
+              m.connectionsCell.flatModify(_.addConn[F](n.local))
           )
     } yield nodes ++ (n :: Nil)
   }
 
   def standaloneF[F[_]](
       genesis: BlockMessage,
-      sk: Array[Byte],
+      sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
       createRuntime: (Path, Long) => (RuntimeManager[F], Close[F])
   )(
@@ -250,7 +249,7 @@ object HashSetCasperTestNode {
   }
   def standaloneEff(
       genesis: BlockMessage,
-      sk: Array[Byte],
+      sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
       testNetwork: TestNetwork[Effect] = TestNetwork.empty
   )(
@@ -264,7 +263,7 @@ object HashSetCasperTestNode {
     ).value.unsafeRunSync.right.get
 
   def networkF[F[_]](
-      sks: IndexedSeq[Array[Byte]],
+      sks: IndexedSeq[PrivateKey],
       genesis: BlockMessage,
       storageSize: Long = 1024L * 1024 * 10,
       createRuntime: (Path, Long) => (RuntimeManager[F], Close[F])
@@ -366,7 +365,7 @@ object HashSetCasperTestNode {
     } yield nodes
   }
   def networkEff(
-      sks: IndexedSeq[Array[Byte]],
+      sks: IndexedSeq[PrivateKey],
       genesis: BlockMessage,
       storageSize: Long = 1024L * 1024 * 10,
       testNetwork: TestNetwork[Effect] = TestNetwork.empty

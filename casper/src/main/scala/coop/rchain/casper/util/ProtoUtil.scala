@@ -1,27 +1,24 @@
 package coop.rchain.casper.util
 
-import cats.{Applicative, Monad}
-import cats.implicits._
-import com.google.protobuf.{ByteString, Int32Value, StringValue}
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
-import coop.rchain.casper.PrettyPrinter
-import coop.rchain.models.EquivocationRecord.SequenceNumber
-import coop.rchain.casper.Estimator.{BlockHash, Validator}
-import coop.rchain.casper.protocol.{DeployData, _}
-import coop.rchain.casper.util.rholang.InterpreterUtil
-import coop.rchain.casper.util.implicits._
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.models._
-import coop.rchain.rholang.interpreter.accounting
-import coop.rchain.shared.{Log, LogSource, Time}
 import java.nio.charset.StandardCharsets
 
 import cats.data.OptionT
 import cats.effect.Sync
-import coop.rchain.casper.protocol.Event.EventInstance.{Comm, Consume, Produce}
+import cats.implicits._
+import cats.{Applicative, Monad}
+import com.google.protobuf.{ByteString, Int32Value, StringValue}
+import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
+import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import coop.rchain.casper.PrettyPrinter
+import coop.rchain.casper.protocol.{DeployData, _}
+import coop.rchain.casper.util.implicits._
+import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.models._
+import coop.rchain.shared.LogSource
 
-import scala.collection.{immutable, BitSet}
+import scala.collection.immutable
 
 object ProtoUtil {
   private implicit val logSource: LogSource = LogSource(this.getClass)
@@ -352,8 +349,8 @@ object ProtoUtil {
   def signBlock[F[_]: Applicative](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
-      pk: Array[Byte],
-      sk: Array[Byte],
+      pk: PublicKey,
+      sk: PrivateKey,
       sigAlgorithm: String,
       shardId: String
   ): F[BlockMessage] = {
@@ -365,7 +362,7 @@ object ProtoUtil {
       block.header.get
     }
 
-    val sender = ByteString.copyFrom(pk)
+    val sender = ByteString.copyFrom(pk.bytes)
     for {
       latestMessageOpt  <- dag.latestMessage(sender)
       seqNum            = latestMessageOpt.fold(0)(_.seqNum) + 1

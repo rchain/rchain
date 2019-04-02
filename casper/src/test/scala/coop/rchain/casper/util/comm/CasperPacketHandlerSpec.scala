@@ -1,6 +1,8 @@
 package coop.rchain.casper.util.comm
 
 import cats.effect.concurrent.Ref
+import cats.effect.{Concurrent, ContextShift}
+import cats.{Applicative, ApplicativeError, Parallel}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.{BlockDagRepresentation, InMemBlockDagStorage, InMemBlockStore}
@@ -9,24 +11,23 @@ import coop.rchain.casper._
 import coop.rchain.casper.genesis.contracts.Faucet
 import coop.rchain.casper.helper.{BlockDagStorageTestFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol.{NoApprovedBlockAvailable, _}
+import coop.rchain.casper.util.TestTime
 import coop.rchain.casper.util.comm.CasperPacketHandler.{
-  ApprovedBlockReceivedHandler,
-  BootstrapCasperHandler,
-  CasperPacketHandlerImpl,
-  CasperPacketHandlerInternal,
-  GenesisValidatorHandler,
-  StandaloneCasperHandler
-}
+    ApprovedBlockReceivedHandler,
+    BootstrapCasperHandler,
+    CasperPacketHandlerImpl,
+    CasperPacketHandlerInternal,
+    GenesisValidatorHandler,
+    StandaloneCasperHandler
+  }
 import coop.rchain.casper.util.comm.CasperPacketHandlerSpec._
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ApplicativeError_
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
 import coop.rchain.comm.rp.ProtocolHelper
-import ProtocolHelper._
-import cats.{Applicative, ApplicativeError, Parallel}
-import cats.effect.{Concurrent, ContextShift, Sync}
+import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.comm.{transport, _}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
@@ -34,12 +35,10 @@ import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.shared.{Cell, Log, StoreType}
+import coop.rchain.shared.{Cell, StoreType}
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.WordSpec
-import coop.rchain.casper.util.TestTime
 
 import scala.concurrent.duration._
 
@@ -197,14 +196,14 @@ class CasperPacketHandlerSpec extends WordSpec {
             casper <- casperO match {
                        case None         => Task.sleep(3.seconds).flatMap(_ => waitUtilCasperIsDefined)
                        case Some(casper) => Task.pure(casper)
-                     }
+            }
           } yield casper
 
         val test = for {
           sigs <- Ref.of[Task, Set[Signature]](Set.empty)
           abp = ApproveBlockProtocol.unsafe[Task](
             genesis,
-            Set(ByteString.copyFrom(validatorPk)),
+            Set(ByteString.copyFrom(validatorPk.bytes)),
             requiredSigns,
             duration,
             interval,
@@ -261,7 +260,7 @@ class CasperPacketHandlerSpec extends WordSpec {
         val fixture = setup()
         import fixture._
 
-        val validators = Set(ByteString.copyFrom(validatorPk))
+        val validators = Set(ByteString.copyFrom(validatorPk.bytes))
 
         val theInit = Task.unit
 
@@ -281,7 +280,7 @@ class CasperPacketHandlerSpec extends WordSpec {
           candidate = Some(approvedBlockCandidate),
           sigs = Seq(
             Signature(
-              ByteString.copyFrom(validatorPk),
+              ByteString.copyFrom(validatorPk.bytes),
               "ed25519",
               ByteString.copyFrom(
                 Ed25519.sign(Blake2b256.hash(approvedBlockCandidate.toByteArray), validatorSk)
@@ -336,7 +335,7 @@ class CasperPacketHandlerSpec extends WordSpec {
         candidate = Some(approvedBlockCandidate),
         sigs = Seq(
           Signature(
-            ByteString.copyFrom(validatorPk),
+            ByteString.copyFrom(validatorPk.bytes),
             "ed25519",
             ByteString.copyFrom(
               Ed25519.sign(Blake2b256.hash(approvedBlockCandidate.toByteArray), validatorSk)

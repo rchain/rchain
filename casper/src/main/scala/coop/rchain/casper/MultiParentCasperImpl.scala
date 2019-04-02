@@ -1,22 +1,21 @@
 package coop.rchain.casper
 
 import cats._
-import cats.implicits._
-import coop.rchain.catscontrib.ski._
-import coop.rchain.catscontrib.{BooleanF, Catscontrib}, BooleanF._, Catscontrib._
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, Sync}
+import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
-import coop.rchain.catscontrib._
-import coop.rchain.casper.protocol._
 import coop.rchain.casper.DeployError._
+import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang._
-import coop.rchain.catscontrib.ListContrib
+import coop.rchain.catscontrib.BooleanF
+import coop.rchain.catscontrib.BooleanF._
+import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
@@ -76,7 +75,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Sync: ConnectionsCell: Trans
         dag <- blockDag
         _ <- validatorId match {
               case Some(ValidatorIdentity(publicKey, _, _)) =>
-                val sender = ByteString.copyFrom(publicKey)
+            val sender = ByteString.copyFrom(publicKey.bytes)
                 handleDoppelganger(b, sender)
               case None => ().pure[F]
             }
