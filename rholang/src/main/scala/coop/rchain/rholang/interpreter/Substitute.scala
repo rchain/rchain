@@ -331,17 +331,16 @@ object Substitute {
             for {
               pss <- shs.sortedPars
                       .traverse(p => s1(p))
-            } yield
-              Expr(
-                exprInstance = ESetBody(
-                  ParSet(
-                    SortedParHashSet(pss.toSeq),
-                    connectiveUsed,
-                    locallyFree.map(_.until(env.shift)),
-                    remainder
-                  )
+            } yield Expr(
+              exprInstance = ESetBody(
+                ParSet(
+                  SortedParHashSet(pss.toSeq),
+                  connectiveUsed,
+                  locallyFree.map(_.until(env.shift)),
+                  remainder
                 )
               )
+            )
 
           case EMapBody(ParMap(spm, connectiveUsed, locallyFree, remainder)) =>
             for {
@@ -352,28 +351,26 @@ object Substitute {
                            pk2 <- s1(p2)
                          } yield (pk1, pk2)
                      }
-            } yield
-              Expr(
-                exprInstance = EMapBody(
-                  ParMap(kvps, connectiveUsed, locallyFree.map(_.until(env.shift)), remainder)
-                )
+            } yield Expr(
+              exprInstance = EMapBody(
+                ParMap(kvps, connectiveUsed, locallyFree.map(_.until(env.shift)), remainder)
               )
+            )
           case EMethodBody(EMethod(mtd, target, arguments, locallyFree, connectiveUsed)) =>
             for {
               subTarget    <- s1(target)
               subArguments <- arguments.toVector.traverse(p => s1(p))
-            } yield
-              Expr(
-                exprInstance = EMethodBody(
-                  EMethod(
-                    mtd,
-                    subTarget,
-                    subArguments,
-                    locallyFree.until(env.shift),
-                    connectiveUsed
-                  )
+            } yield Expr(
+              exprInstance = EMethodBody(
+                EMethod(
+                  mtd,
+                  subTarget,
+                  subArguments,
+                  locallyFree.until(env.shift),
+                  connectiveUsed
                 )
               )
+            )
           case g @ _ => Applicative[M].pure(term)
         }
       override def substitute(term: Expr)(implicit depth: Int, env: Env[Par]): M[Expr] =

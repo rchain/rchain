@@ -686,12 +686,11 @@ object Validate {
                            dag,
                            runtimeManager
                          )
-    } yield
-      maybeStateHash match {
-        case Left(ex)       => Left(ex)
-        case Right(Some(_)) => Right(Valid)
-        case Right(None)    => Left(InvalidTransaction)
-      }
+    } yield maybeStateHash match {
+      case Left(ex)       => Left(ex)
+      case Right(Some(_)) => Right(Valid)
+      case Right(None)    => Left(InvalidTransaction)
+    }
 
   /**
     * If block contains an invalid justification block B and the creator of B is still bonded,

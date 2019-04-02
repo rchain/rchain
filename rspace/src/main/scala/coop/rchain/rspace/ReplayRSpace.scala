@@ -259,11 +259,10 @@ class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Br
                              matchCandidates,
                              channelToIndexedDataList.toMap
                            )
-            } yield
-              firstMatch match {
-                case None             => remaining.asLeft[MaybeProduceCandidate]
-                case produceCandidate => produceCandidate.asRight[Seq[Seq[C]]]
-              }
+            } yield firstMatch match {
+              case None             => remaining.asLeft[MaybeProduceCandidate]
+              case produceCandidate => produceCandidate.asRight[Seq[Seq[C]]]
+            }
         }
       groupedChannels.tailRecM(go)
     }

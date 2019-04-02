@@ -215,20 +215,19 @@ object InterpreterUtil {
                                                 deploys,
                                                 time
                                               )
-                             } yield
-                               replayResult match {
-                                 case result @ Right(_) => result.leftCast[Throwable]
-                                 case Left((_, status)) =>
-                                   val parentHashes =
-                                     parents.map(
-                                       p => Base16.encode(p.blockHash.toByteArray).take(8)
-                                     )
-                                   Left(
-                                     new Exception(
-                                       s"Failed status while computing post state of $parentHashes: $status"
-                                     )
+                             } yield replayResult match {
+                               case result @ Right(_) => result.leftCast[Throwable]
+                               case Left((_, status)) =>
+                                 val parentHashes =
+                                   parents.map(
+                                     p => Base16.encode(p.blockHash.toByteArray).take(8)
                                    )
-                               }
+                                 Left(
+                                   new Exception(
+                                     s"Failed status while computing post state of $parentHashes: $status"
+                                   )
+                                 )
+                             }
                            case Left(_) => acc.pure[F]
                          }
                      }

@@ -17,7 +17,7 @@ object NodeDiscovery extends NodeDiscoveryInstances {
 sealed abstract class NodeDiscoveryInstances {
 
   implicit def eitherTNodeDiscovery[E, F[_]: Monad: NodeDiscovery]
-    : NodeDiscovery[EitherT[F, E, ?]] =
+      : NodeDiscovery[EitherT[F, E, ?]] =
     new NodeDiscovery[EitherT[F, E, ?]] {
 
       def discover: EitherT[F, E, Unit] =

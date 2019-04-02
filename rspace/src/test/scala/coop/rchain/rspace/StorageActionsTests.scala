@@ -1009,10 +1009,9 @@ trait StorageActionsTests[F[_]]
     (store, space) =>
       for {
         checkpoint <- space.createCheckpoint()
-      } yield
-        (checkpoint.root shouldBe Blake2b256Hash.fromHex(
-          "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3"
-        ))
+      } yield (checkpoint.root shouldBe Blake2b256Hash.fromHex(
+        "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3"
+      ))
   }
 
   "consume then createCheckpoint" should "return the expected hash and the TrieStore should contain the expected value" in
@@ -1053,9 +1052,8 @@ trait StorageActionsTests[F[_]]
         checkpoint <- space.createCheckpoint()
         _          = checkpoint.root shouldBe nodeHash
 
-      } yield
-        (history
-          .lookup(store.trieStore, store.trieBranch, channelsHash) shouldBe Some(gnat))
+      } yield (history
+        .lookup(store.trieStore, store.trieBranch, channelsHash) shouldBe Some(gnat))
     }
 
   "consume twice then createCheckpoint" should "persist the expected values in the TrieStore" in
@@ -1113,10 +1111,9 @@ trait StorageActionsTests[F[_]]
           gnat1
         )
 
-      } yield
-        (history
-          .lookup(store.trieStore, store.trieBranch, channelsHash2)
-          shouldBe Some(gnat2))
+      } yield (history
+        .lookup(store.trieStore, store.trieBranch, channelsHash2)
+        shouldBe Some(gnat2))
     }
 
   "produce a bunch and then createCheckpoint" should "persist the expected values in the TrieStore" in
@@ -1148,10 +1145,9 @@ trait StorageActionsTests[F[_]]
 
             _ <- space.createCheckpoint()
 
-          } yield
-            (history
-              .lookup(store.trieStore, store.trieBranch, channelHashes)
-              .get should contain theSameElementsAs gnats)
+          } yield (history
+            .lookup(store.trieStore, store.trieBranch, channelHashes)
+            .get should contain theSameElementsAs gnats)
         }
       }
     }
@@ -1181,10 +1177,9 @@ trait StorageActionsTests[F[_]]
 
             _ <- space.createCheckpoint()
 
-          } yield
-            (history
-              .lookup(store.trieStore, store.trieBranch, channelHashes)
-              .get should contain theSameElementsAs gnats)
+          } yield (history
+            .lookup(store.trieStore, store.trieBranch, channelHashes)
+            .get should contain theSameElementsAs gnats)
         }
       }
     }
@@ -1238,23 +1233,22 @@ trait StorageActionsTests[F[_]]
         expectedProduce1,
         expectedConsume
       )
-    } yield
-      (log match {
-        case COMM(
-              chkCommConsume1: Consume,
-              (chkCommProduce1: Produce) :: (chkCommProduce2: Produce) :: Nil
-            )
-              :: (chkProduce2: Produce) :: (chkProduce1: Produce) :: (chkConsume: Consume) :: Nil =>
-          chkCommConsume1.channelsHashes shouldBe expectedConsume.channelsHashes
-          chkCommProduce1.channelsHash shouldBe expectedProduce1.channelsHash
-          chkCommProduce2.channelsHash shouldBe expectedProduce2.channelsHash
+    } yield (log match {
+      case COMM(
+            chkCommConsume1: Consume,
+            (chkCommProduce1: Produce) :: (chkCommProduce2: Produce) :: Nil
+          )
+            :: (chkProduce2: Produce) :: (chkProduce1: Produce) :: (chkConsume: Consume) :: Nil =>
+        chkCommConsume1.channelsHashes shouldBe expectedConsume.channelsHashes
+        chkCommProduce1.channelsHash shouldBe expectedProduce1.channelsHash
+        chkCommProduce2.channelsHash shouldBe expectedProduce2.channelsHash
 
-          chkProduce2.channelsHash shouldBe expectedProduce2.channelsHash
-          chkProduce1.channelsHash shouldBe expectedProduce1.channelsHash
-          chkConsume.channelsHashes shouldBe expectedConsume.channelsHashes
+        chkProduce2.channelsHash shouldBe expectedProduce2.channelsHash
+        chkProduce1.channelsHash shouldBe expectedProduce1.channelsHash
+        chkConsume.channelsHashes shouldBe expectedConsume.channelsHashes
 
-        case _ => fail("unexpected trace log")
-      })
+      case _ => fail("unexpected trace log")
+    })
   }
 
 }

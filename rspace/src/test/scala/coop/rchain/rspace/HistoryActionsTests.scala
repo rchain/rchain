@@ -192,10 +192,9 @@ trait HistoryActionsTests[F[_]]
           _ = history
             .lookup(store.trieStore, store.trieBranch, channelHashes) shouldBe None
           _ <- space.createCheckpoint()
-        } yield
-          history
-            .lookup(store.trieStore, store.trieBranch, channelHashes)
-            .get should contain theSameElementsAs gnats
+        } yield history
+          .lookup(store.trieStore, store.trieBranch, channelHashes)
+          .get should contain theSameElementsAs gnats
       }
     }
 
@@ -464,13 +463,12 @@ trait HistoryActionsTests[F[_]]
         commEvent          = COMM(expectedConsume, Seq(expectedProduce1, expectedProduce2))
         checkpoint         <- space.createCheckpoint()
         Checkpoint(_, log) = checkpoint
-      } yield
-        (log should contain theSameElementsInOrderAs Seq(
-          commEvent,
-          expectedProduce2,
-          expectedProduce1,
-          expectedConsume
-        ))
+      } yield (log should contain theSameElementsInOrderAs Seq(
+        commEvent,
+        expectedProduce2,
+        expectedProduce1,
+        expectedConsume
+      ))
   }
 
   "an install" should "not be persisted to the history trie" in withTestSpace { (store, space) =>
@@ -518,14 +516,13 @@ trait HistoryActionsTests[F[_]]
       _            <- space.produce(channel, datum, persist = false)
       afterProduce <- space.createCheckpoint()
       produceEvent = Produce.create(channel, datum, false)
-    } yield
-      (afterProduce.log should contain theSameElementsAs (Seq(
-        COMM(
-          Consume.create[String, Pattern, StringsCaptor](key, patterns, continuation, true),
-          List(produceEvent)
-        ),
-        produceEvent
-      )))
+    } yield (afterProduce.log should contain theSameElementsAs (Seq(
+      COMM(
+        Consume.create[String, Pattern, StringsCaptor](key, patterns, continuation, true),
+        List(produceEvent)
+      ),
+      produceEvent
+    )))
   }
 
 }

@@ -66,12 +66,11 @@ abstract class KademliaRPCRuntime[F[_]: Monad: Timer, E <: Environment] {
             _ <- remoteRpc.start
             r <- execute(localRpc, local, remote)
             _ <- remoteRpc.stop
-          } yield
-            new TwoNodesResult {
-              def localNode: PeerNode  = local
-              def remoteNode: PeerNode = remote
-              def apply(): A           = r
-            }
+          } yield new TwoNodesResult {
+            def localNode: PeerNode  = local
+            def remoteNode: PeerNode = remote
+            def apply(): A           = r
+          }
         }
       )
 
@@ -94,12 +93,11 @@ abstract class KademliaRPCRuntime[F[_]: Monad: Timer, E <: Environment] {
             local    = e1.peer
             remote   = e2.peer
             r        <- execute(localRpc, local, remote)
-          } yield
-            new TwoNodesResult {
-              def localNode: PeerNode  = local
-              def remoteNode: PeerNode = remote
-              def apply(): A           = r
-            }
+          } yield new TwoNodesResult {
+            def localNode: PeerNode  = local
+            def remoteNode: PeerNode = remote
+            def apply(): A           = r
+          }
         }
       )
 

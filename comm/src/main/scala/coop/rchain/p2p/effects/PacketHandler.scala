@@ -48,6 +48,6 @@ object PacketHandler extends PacketHandlerInstances {
 
 sealed abstract class PacketHandlerInstances {
   implicit def eitherTPacketHandler[E, F[_]: Monad: PacketHandler[?[_]]]
-    : PacketHandler[EitherT[F, E, ?]] =
+      : PacketHandler[EitherT[F, E, ?]] =
     PacketHandler.forTrans[F, EitherT[?[_], E, ?]]
 }

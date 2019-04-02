@@ -126,17 +126,16 @@ object BlockApproverProtocolTest {
     for {
       nodes <- HashSetCasperTestNode.networkEff(Vector(sk), genesis)
       node  = nodes.head
-    } yield
-      new BlockApproverProtocol(
-        node.validatorId,
-        deployTimestamp,
-        bonds,
-        wallets,
-        1L,
-        Long.MaxValue,
-        false,
-        requiredSigs
-      ) -> node
+    } yield new BlockApproverProtocol(
+      node.validatorId,
+      deployTimestamp,
+      bonds,
+      wallets,
+      1L,
+      Long.MaxValue,
+      false,
+      requiredSigs
+    ) -> node
   }
 
 }

@@ -19,11 +19,10 @@ object ReceiveSortMatcher extends Sortable[Receive] {
                             }
                           case None => ScoredTerm(None, Leaf(Score.ABSENT)).pure[F]
                         }
-    } yield
-      ScoredTerm(
-        ReceiveBind(sortedPatterns.map(_.term), sortedChannel.term, bind.remainder, bind.freeCount),
-        Node(Seq(sortedChannel.score) ++ sortedPatterns.map(_.score) ++ Seq(sortedRemainder.score))
-      )
+    } yield ScoredTerm(
+      ReceiveBind(sortedPatterns.map(_.term), sortedChannel.term, bind.remainder, bind.freeCount),
+      Node(Seq(sortedChannel.score) ++ sortedPatterns.map(_.score) ++ Seq(sortedRemainder.score))
+    )
   }
 
   // The order of the binds must already be presorted by the time this is called.
@@ -34,20 +33,19 @@ object ReceiveSortMatcher extends Sortable[Receive] {
       persistentScore     = if (r.persistent) 1 else 0
       connectiveUsedScore = if (r.connectiveUsed) 1 else 0
       sortedBody          <- Sortable.sortMatch(r.body)
-    } yield
-      ScoredTerm(
-        Receive(
-          sortedBinds.map(_.term),
-          sortedBody.term,
-          r.persistent,
-          r.bindCount,
-          r.locallyFree,
-          r.connectiveUsed
-        ),
-        Node(
-          Score.RECEIVE,
-          Seq(Leaf(persistentScore)) ++ sortedBinds.map(_.score) ++ Seq(sortedBody.score)
-            ++ Seq(Leaf(r.bindCount)) ++ Seq(Leaf(connectiveUsedScore)): _*
-        )
+    } yield ScoredTerm(
+      Receive(
+        sortedBinds.map(_.term),
+        sortedBody.term,
+        r.persistent,
+        r.bindCount,
+        r.locallyFree,
+        r.connectiveUsed
+      ),
+      Node(
+        Score.RECEIVE,
+        Seq(Leaf(persistentScore)) ++ sortedBinds.map(_.score) ++ Seq(sortedBody.score)
+          ++ Seq(Leaf(r.bindCount)) ++ Seq(Leaf(connectiveUsedScore)): _*
       )
+    )
 }

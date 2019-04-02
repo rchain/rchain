@@ -50,7 +50,7 @@ object CommUtil {
   }
 
   def sendForkChoiceTipRequest[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: RPConfAsk]
-    : F[Unit] = {
+      : F[Unit] = {
     val serialized = ForkChoiceTipRequest().toByteString
     for {
       _ <- sendToPeers[F](transport.ForkChoiceTipRequest, serialized)

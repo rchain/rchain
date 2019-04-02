@@ -23,7 +23,7 @@ object KademliaStore extends KademliaStoreInstances {
 
 sealed abstract class KademliaStoreInstances {
   implicit def eitherTKademliaStore[E, F[_]: Functor: KademliaStore]
-    : KademliaStore[EitherT[F, E, ?]] =
+      : KademliaStore[EitherT[F, E, ?]] =
     new KademliaStore[EitherT[F, E, ?]] {
 
       def peers: EitherT[F, E, Seq[PeerNode]] =

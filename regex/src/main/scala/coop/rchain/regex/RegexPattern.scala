@@ -411,8 +411,8 @@ object CharClassPattern extends ParsedPattern {
             Some(CharClassPattern(parseState.collectedChars, negateCharSet), endIndex)
           } else {
             val startCharSet
-              : RegexPattern = CharClassPattern(parseState.collectedChars) //no negation!
-            val unionCharSet = parseState.collectedUnionClasses.foldLeft(startCharSet)(_.union(_))
+                : RegexPattern = CharClassPattern(parseState.collectedChars) //no negation!
+            val unionCharSet   = parseState.collectedUnionClasses.foldLeft(startCharSet)(_.union(_))
             Some(if (negateCharSet) unionCharSet.negated else unionCharSet, endIndex)
           }
         }

@@ -96,7 +96,7 @@ object Connect {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def clearConnections[F[_]: Sync: Monad: Time: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]
-    : F[Int] = {
+      : F[Int] = {
 
     def sendHeartbeat(peer: PeerNode): F[(PeerNode, CommErr[Unit])] =
       for {

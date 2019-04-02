@@ -1176,7 +1176,7 @@ trait FaultyStoreReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase
         Branch.REPLAY
       ) {
         override private[rspace] def createTxnWrite()
-          : InMemTransaction[coop.rchain.rspace.State[C, P, A, K]] =
+            : InMemTransaction[coop.rchain.rspace.State[C, P, A, K]] =
           throw new RuntimeException("Couldn't write to underlying store")
       }
 

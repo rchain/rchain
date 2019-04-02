@@ -184,18 +184,17 @@ object BasicBench {
         for {
           i <- arbitraryGInt.arbitrary
           r <- Blake2b512Random.arbitrary.arbitrary
-        } yield
-          (
-            ListParWithRandom(
-              onePar(i),
-              r
-            ),
-            BindPattern(
-              onePar(i),
-              None,
-              0
-            )
+        } yield (
+          ListParWithRandom(
+            onePar(i),
+            r
+          ),
+          BindPattern(
+            onePar(i),
+            None,
+            0
           )
+        )
       )
 
     val arbitraryChannel: Arbitrary[Par] =
@@ -209,58 +208,57 @@ object BasicBench {
       Arbitrary(
         for {
           r <- Blake2b512Random.arbitrary.arbitrary
-        } yield
-          TaggedContinuation(
-            ParBody(
-              ParWithRandom(
-                Par(
-                  Vector(
-                    Send(
+        } yield TaggedContinuation(
+          ParBody(
+            ParWithRandom(
+              Par(
+                Vector(
+                  Send(
+                    Par(
+                      Vector(),
+                      Vector(),
+                      Vector(),
+                      List(Expr(GInt(2))),
+                      Vector(),
+                      Vector(),
+                      Vector(),
+                      List(),
+                      AlwaysEqual(BitSet()),
+                      false
+                    ),
+                    Vector(
                       Par(
                         Vector(),
                         Vector(),
                         Vector(),
-                        List(Expr(GInt(2))),
+                        List(Expr(GString("OK"))),
                         Vector(),
                         Vector(),
                         Vector(),
                         List(),
                         AlwaysEqual(BitSet()),
                         false
-                      ),
-                      Vector(
-                        Par(
-                          Vector(),
-                          Vector(),
-                          Vector(),
-                          List(Expr(GString("OK"))),
-                          Vector(),
-                          Vector(),
-                          Vector(),
-                          List(),
-                          AlwaysEqual(BitSet()),
-                          false
-                        )
-                      ),
-                      false,
-                      AlwaysEqual(BitSet()),
-                      false
-                    )
-                  ),
-                  Vector(),
-                  Vector(),
-                  List(),
-                  Vector(),
-                  Vector(),
-                  Vector(),
-                  List(),
-                  AlwaysEqual(BitSet()),
-                  false
+                      )
+                    ),
+                    false,
+                    AlwaysEqual(BitSet()),
+                    false
+                  )
                 ),
-                r
-              )
+                Vector(),
+                Vector(),
+                List(),
+                Vector(),
+                Vector(),
+                Vector(),
+                List(),
+                AlwaysEqual(BitSet()),
+                false
+              ),
+              r
             )
           )
+        )
       )
 
     val channels: Vector[Par] = generate[Par](1000)(arbitraryChannel).toVector

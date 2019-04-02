@@ -150,13 +150,12 @@ object CollectionNormalizeMatcher {
                               e.proc_2,
                               ProcVisitInputs(VectorPar(), input.env, keyResult.knownFree)
                             )
-              } yield
-                (
-                  Vector((keyResult.par, valResult.par)) ++ acc._1,
-                  valResult.knownFree,
-                  acc._3 | keyResult.par.locallyFree | valResult.par.locallyFree,
-                  acc._4 || keyResult.par.connectiveUsed || valResult.par.connectiveUsed
-                )
+              } yield (
+                Vector((keyResult.par, valResult.par)) ++ acc._1,
+                valResult.knownFree,
+                acc._3 | keyResult.par.locallyFree | valResult.par.locallyFree,
+                acc._4 || keyResult.par.connectiveUsed || valResult.par.connectiveUsed
+              )
           }
         }
         .map { folded =>
@@ -300,11 +299,10 @@ object ProcNormalizeMatcher {
                         subProcRight,
                         input.copy(par = VectorPar(), knownFree = leftResult.knownFree)
                       )
-      } yield
-        ProcVisitOutputs(
-          input.par.prepend(constructor(leftResult.par, rightResult.par), input.env.depth),
-          rightResult.knownFree
-        )
+      } yield ProcVisitOutputs(
+        input.par.prepend(constructor(leftResult.par, rightResult.par), input.env.depth),
+        rightResult.knownFree
+      )
 
     def normalizeIfElse(
         valueProc: Proc,
@@ -383,12 +381,11 @@ object ProcNormalizeMatcher {
             case _ =>
               Connective(ConnAndBody(ConnectiveBody(Vector(lp, rightResult.par))))
           }
-        } yield
-          ProcVisitOutputs(
-            input.par.prepend(resultConnective, input.env.depth),
-            rightResult.knownFree
-              .addLogicalConnective(resultConnective.connectiveInstance, p.line_num, p.col_num)
-          )
+        } yield ProcVisitOutputs(
+          input.par.prepend(resultConnective, input.env.depth),
+          rightResult.knownFree
+            .addLogicalConnective(resultConnective.connectiveInstance, p.line_num, p.col_num)
+        )
 
       case p: PDisjunction =>
         for {
@@ -407,12 +404,11 @@ object ProcNormalizeMatcher {
             case _ =>
               Connective(ConnOrBody(ConnectiveBody(Vector(lp, rightResult.par))))
           }
-        } yield
-          ProcVisitOutputs(
-            input.par.prepend(resultConnective, input.env.depth),
-            input.knownFree
-              .addLogicalConnective(resultConnective.connectiveInstance, p.line_num, p.col_num)
-          )
+        } yield ProcVisitOutputs(
+          input.par.prepend(resultConnective, input.env.depth),
+          input.knownFree
+            .addLogicalConnective(resultConnective.connectiveInstance, p.line_num, p.col_num)
+        )
 
       case p: PSimpleType =>
         p.simpletype_ match {
@@ -580,20 +576,19 @@ object ProcNormalizeMatcher {
                              )
                          )
                        })
-        } yield
-          ProcVisitOutputs(
-            input.par.prepend(
-              EMethod(
-                p.var_,
-                targetResult.par,
-                argResults._1,
-                target.locallyFree | argResults._3,
-                target.connectiveUsed || argResults._4
-              ),
-              input.env.depth
+        } yield ProcVisitOutputs(
+          input.par.prepend(
+            EMethod(
+              p.var_,
+              targetResult.par,
+              argResults._1,
+              target.locallyFree | argResults._3,
+              target.connectiveUsed || argResults._4
             ),
-            argResults._2.knownFree
-          )
+            input.env.depth
+          ),
+          argResults._2.knownFree
+        )
       }
 
       case p: PNot => unaryExp(p.proc_, input, ENot.apply)
@@ -634,11 +629,10 @@ object ProcNormalizeMatcher {
                             DebruijnLevelMap[VarSort]()
                           )
                         )
-        } yield
-          ProcVisitOutputs(
-            input.par.prepend(EMatches(leftResult.par, rightResult.par), input.env.depth),
-            leftResult.knownFree
-          )
+        } yield ProcVisitOutputs(
+          input.par.prepend(EMatches(leftResult.par, rightResult.par), input.env.depth),
+          leftResult.knownFree
+        )
       case p: PExprs =>
         normalizeMatch[M](p.proc_, input)
 
@@ -675,20 +669,19 @@ object ProcNormalizeMatcher {
             case _: SendSingle   => false
             case _: SendMultiple => true
           }
-        } yield
-          ProcVisitOutputs(
-            input.par.prepend(
-              Send(
-                nameMatchResult.chan,
-                dataResults._1,
-                persistent,
-                ParLocallyFree
-                  .locallyFree(nameMatchResult.chan, input.env.depth) | dataResults._3,
-                ParLocallyFree.connectiveUsed(nameMatchResult.chan) || dataResults._4
-              )
-            ),
-            dataResults._2.knownFree
-          )
+        } yield ProcVisitOutputs(
+          input.par.prepend(
+            Send(
+              nameMatchResult.chan,
+              dataResults._1,
+              persistent,
+              ParLocallyFree
+                .locallyFree(nameMatchResult.chan, input.env.depth) | dataResults._3,
+              ParLocallyFree.connectiveUsed(nameMatchResult.chan) || dataResults._4
+            )
+          ),
+          dataResults._2.knownFree
+        )
 
       case p: PContr => {
         // A free variable can only be used once in any of the parameters.
@@ -737,32 +730,31 @@ object ProcNormalizeMatcher {
                          p.proc_,
                          ProcVisitInputs(VectorPar(), newEnv, nameMatchResult.knownFree)
                        )
-        } yield
-          ProcVisitOutputs(
-            input.par.prepend(
-              Receive(
-                binds = List(
-                  ReceiveBind(
-                    formalsResults._1.reverse,
-                    nameMatchResult.chan,
-                    remainderResult._1,
-                    boundCount
-                  )
-                ),
-                body = bodyResult.par,
-                persistent = true,
-                bindCount = boundCount,
-                locallyFree = ParLocallyFree
-                  .locallyFree(nameMatchResult.chan, input.env.depth) | formalsResults._3
-                  | (bodyResult.par.locallyFree
-                    .from(boundCount)
-                    .map(x => x - boundCount)),
-                connectiveUsed = ParLocallyFree
-                  .connectiveUsed(nameMatchResult.chan) || bodyResult.par.connectiveUsed
-              )
-            ),
-            bodyResult.knownFree
-          )
+        } yield ProcVisitOutputs(
+          input.par.prepend(
+            Receive(
+              binds = List(
+                ReceiveBind(
+                  formalsResults._1.reverse,
+                  nameMatchResult.chan,
+                  remainderResult._1,
+                  boundCount
+                )
+              ),
+              body = bodyResult.par,
+              persistent = true,
+              bindCount = boundCount,
+              locallyFree = ParLocallyFree
+                .locallyFree(nameMatchResult.chan, input.env.depth) | formalsResults._3
+                | (bodyResult.par.locallyFree
+                  .from(boundCount)
+                  .map(x => x - boundCount)),
+              connectiveUsed = ParLocallyFree
+                .connectiveUsed(nameMatchResult.chan) || bodyResult.par.connectiveUsed
+            )
+          ),
+          bodyResult.knownFree
+        )
       }
 
       case p: PInput => {
@@ -894,22 +886,21 @@ object ProcNormalizeMatcher {
                          ProcVisitInputs(VectorPar(), updatedEnv, thisLevelFree)
                        )
           connective = sourcesConnectives || bodyResult.par.connectiveUsed
-        } yield
-          ProcVisitOutputs(
-            input.par.prepend(
-              Receive(
-                binds,
-                bodyResult.par,
-                persistent,
-                bindCount,
-                sourcesLocallyFree | bindingsFree | (bodyResult.par.locallyFree
-                  .from(bindCount)
-                  .map(x => x - bindCount)),
-                connective
-              )
-            ),
-            bodyResult.knownFree
-          )
+        } yield ProcVisitOutputs(
+          input.par.prepend(
+            Receive(
+              binds,
+              bodyResult.par,
+              persistent,
+              bindCount,
+              sourcesLocallyFree | bindingsFree | (bodyResult.par.locallyFree
+                .from(bindCount)
+                .map(x => x - bindCount)),
+              connective
+            )
+          ),
+          bodyResult.knownFree
+        )
 
       }
 
@@ -1036,30 +1027,28 @@ object ProcNormalizeMatcher {
                                                      caseBody,
                                                      ProcVisitInputs(VectorPar(), caseEnv, acc._2)
                                                    )
-                                } yield
-                                  (
-                                    MatchCase(patternResult.par, caseBodyResult.par, boundCount) +: acc._1,
-                                    caseBodyResult.knownFree,
-                                    acc._3 | patternResult.par.locallyFree | caseBodyResult.par.locallyFree
-                                      .from(boundCount)
-                                      .map(x => x - boundCount),
-                                    acc._4 || caseBodyResult.par.connectiveUsed
-                                  )
+                                } yield (
+                                  MatchCase(patternResult.par, caseBodyResult.par, boundCount) +: acc._1,
+                                  caseBodyResult.knownFree,
+                                  acc._3 | patternResult.par.locallyFree | caseBodyResult.par.locallyFree
+                                    .from(boundCount)
+                                    .map(x => x - boundCount),
+                                  acc._4 || caseBodyResult.par.connectiveUsed
+                                )
                               }
                             }
                         )
-        } yield
-          ProcVisitOutputs(
-            input.par.prepend(
-              Match(
-                targetResult.par,
-                casesResult._1.reverse,
-                casesResult._3 | targetResult.par.locallyFree,
-                casesResult._4 || targetResult.par.connectiveUsed
-              )
-            ),
-            casesResult._2
-          )
+        } yield ProcVisitOutputs(
+          input.par.prepend(
+            Match(
+              targetResult.par,
+              casesResult._1.reverse,
+              casesResult._3 | targetResult.par.locallyFree,
+              casesResult._4 || targetResult.par.connectiveUsed
+            )
+          ),
+          casesResult._2
+        )
       }
 
       case p: PIf =>

@@ -88,13 +88,12 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
             _ <- if (blockUntilDispatched) cb.waitUntilDispatched()
                 else implicitly[Timer[F]].sleep(1.second)
             _ = server.cancel()
-          } yield
-            new TwoNodesResult {
-              def localNode: PeerNode        = local
-              def remoteNode: PeerNode       = remote
-              def remoteNodes: Seq[PeerNode] = Seq(remote)
-              def apply(): A                 = r
-            }
+          } yield new TwoNodesResult {
+            def localNode: PeerNode        = local
+            def remoteNode: PeerNode       = remote
+            def remoteNodes: Seq[PeerNode] = Seq(remote)
+            def apply(): A                 = r
+          }
         }
       )
 
@@ -123,12 +122,11 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
             local   = e1.peer
             remote  = e2.peer
             r       <- execute(localTl, local, remote)
-          } yield
-            new TwoNodesResult {
-              def localNode: PeerNode  = local
-              def remoteNode: PeerNode = remote
-              def apply(): A           = r
-            }
+          } yield new TwoNodesResult {
+            def localNode: PeerNode  = local
+            def remoteNode: PeerNode = remote
+            def apply(): A           = r
+          }
         }
       )
 
@@ -178,13 +176,12 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
                 else implicitly[Timer[F]].sleep(1.second)
             _ = server1.cancel()
             _ = server2.cancel()
-          } yield
-            new ThreeNodesResult {
-              def localNode: PeerNode   = local
-              def remoteNode1: PeerNode = remote1
-              def remoteNode2: PeerNode = remote2
-              def apply(): A            = r
-            }
+          } yield new ThreeNodesResult {
+            def localNode: PeerNode   = local
+            def remoteNode1: PeerNode = remote1
+            def remoteNode2: PeerNode = remote2
+            def apply(): A            = r
+          }
         }
       )
 
@@ -252,7 +249,7 @@ object Dispatcher {
     )
 
   def internalCommunicationErrorDispatcher[F[_]: Monad: Timer]
-    : Dispatcher[F, Protocol, CommunicationResponse] =
+      : Dispatcher[F, Protocol, CommunicationResponse] =
     new Dispatcher[F, Protocol, CommunicationResponse](
       _ => CommunicationResponse.notHandled(InternalCommunicationError("Test")),
       ignore = _.message.isDisconnect

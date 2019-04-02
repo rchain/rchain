@@ -111,11 +111,10 @@ object BlockAPI {
                                       )
                                     }
         blocksWithActiveName = maybeBlocksWithActiveName.flatten
-      } yield
-        ListeningNameDataResponse(
-          blockResults = blocksWithActiveName,
-          length = blocksWithActiveName.length
-        ).asRight
+      } yield ListeningNameDataResponse(
+        blockResults = blocksWithActiveName,
+        length = blocksWithActiveName.length
+      ).asRight
 
     MultiParentCasperRef.withCasper[F, ApiErr[ListeningNameDataResponse]](
       casperResponse(_),
@@ -148,11 +147,10 @@ object BlockAPI {
                                       )
                                     }
         blocksWithActiveName = maybeBlocksWithActiveName.flatten
-      } yield
-        ListeningNameContinuationResponse(
-          blockResults = blocksWithActiveName,
-          length = blocksWithActiveName.length
-        ).asRight
+      } yield ListeningNameContinuationResponse(
+        blockResults = blocksWithActiveName,
+        length = blocksWithActiveName.length
+      ).asRight
 
     MultiParentCasperRef.withCasper[F, ApiErr[ListeningNameContinuationResponse]](
       casperResponse(_),
@@ -203,10 +201,9 @@ object BlockAPI {
           continuation => WaitingContinuationInfo(continuation._1, Some(continuation._2))
         )
         blockInfo <- getBlockInfoWithoutTuplespace[F](block)
-      } yield
-        Option[ContinuationsWithBlockInfo](
-          ContinuationsWithBlockInfo(continuationInfos, Some(blockInfo))
-        )
+      } yield Option[ContinuationsWithBlockInfo](
+        ContinuationsWithBlockInfo(continuationInfos, Some(blockInfo))
+      )
     } else {
       none[ContinuationsWithBlockInfo].pure[F]
     }
@@ -347,16 +344,15 @@ object BlockAPI {
         allBlocksTopoSort  <- dag.topoSort(0L)
         maybeBlock         <- findBlockWithDeploy[F](allBlocksTopoSort.flatten.reverse, user, timestamp)
         blockQueryResponse <- maybeBlock.traverse(getFullBlockInfo[F])
-      } yield
-        blockQueryResponse.fold(
-          s"Error: Failure to find block containing deploy signed by ${PrettyPrinter
-            .buildString(user)} with timestamp ${timestamp.toString}".asLeft[BlockQueryResponse]
-        )(
-          blockInfo =>
-            BlockQueryResponse(
-              blockInfo = Some(blockInfo)
-            ).asRight
-        )
+      } yield blockQueryResponse.fold(
+        s"Error: Failure to find block containing deploy signed by ${PrettyPrinter
+          .buildString(user)} with timestamp ${timestamp.toString}".asLeft[BlockQueryResponse]
+      )(
+        blockInfo =>
+          BlockQueryResponse(
+            blockInfo = Some(blockInfo)
+          ).asRight
+      )
 
     MultiParentCasperRef.withCasper[F, ApiErr[BlockQueryResponse]](
       casperResponse(_),
@@ -475,24 +471,23 @@ object BlockAPI {
   ): F[BlockInfo] =
     for {
       tsDesc <- MultiParentCasper[F].storageContents(tsHash)
-    } yield
-      BlockInfo(
-        blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
-        blockSize = block.serializedSize.toString,
-        blockNumber = ProtoUtil.blockNumber(block),
-        version = version,
-        deployCount = deployCount,
-        tupleSpaceHash = PrettyPrinter.buildStringNoLimit(tsHash),
-        tupleSpaceDump = tsDesc,
-        timestamp = timestamp,
-        faultTolerance = normalizedFaultTolerance - initialFault, // TODO: Fix
-        mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
-        parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit),
-        sender = PrettyPrinter.buildStringNoLimit(block.sender),
-        shardId = block.shardId,
-        bondsValidatorList = bondsValidatorList.map(PrettyPrinter.buildString),
-        deployCost = processedDeploys.map(PrettyPrinter.buildString)
-      )
+    } yield BlockInfo(
+      blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
+      blockSize = block.serializedSize.toString,
+      blockNumber = ProtoUtil.blockNumber(block),
+      version = version,
+      deployCount = deployCount,
+      tupleSpaceHash = PrettyPrinter.buildStringNoLimit(tsHash),
+      tupleSpaceDump = tsDesc,
+      timestamp = timestamp,
+      faultTolerance = normalizedFaultTolerance - initialFault, // TODO: Fix
+      mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
+      parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit),
+      sender = PrettyPrinter.buildStringNoLimit(block.sender),
+      shardId = block.shardId,
+      bondsValidatorList = bondsValidatorList.map(PrettyPrinter.buildString),
+      deployCost = processedDeploys.map(PrettyPrinter.buildString)
+    )
 
   private def constructBlockInfoWithoutTuplespace[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: BlockMessage,
@@ -527,11 +522,10 @@ object BlockAPI {
   ): F[Option[BlockMessage]] =
     for {
       findResult <- BlockStore[F].find(h => Base16.encode(h.toByteArray).startsWith(q.hash))
-    } yield
-      findResult.headOption match {
-        case Some((_, block)) => Some(block)
-        case None             => none[BlockMessage]
-      }
+    } yield findResult.headOption match {
+      case Some((_, block)) => Some(block)
+      case None             => none[BlockMessage]
+    }
 
   private def addResponse(
       status: BlockStatus,
