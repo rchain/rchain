@@ -19,9 +19,10 @@ import scala.concurrent.duration._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 
-trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
+trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
 
   implicit def M: Monad[F]
+  implicit def P: Parallel[F, M]
 
   type Channel      = String
   type Data         = Datum[String]
@@ -243,6 +244,61 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
       }
   }
 
+  "concurrent data operations on disjoint channels" should "not mess up the cache" in forAll {
+    (
+        channel1: Channel,
+        channel2: Channel,
+        historyData1: List[Data],
+        historyData2: List[Data],
+        insertedData1: Data,
+        insertedData2: Data
+    ) =>
+      whenever(channel1 =!= channel2) {
+        fixture { (state, history, hotStore) =>
+          {
+            for {
+              _ <- history.putData(channel1, historyData1)
+              _ <- history.putData(channel2, historyData2)
+              _ <- List(
+                    hotStore.putDatum(channel1, insertedData1),
+                    hotStore.putDatum(channel2, insertedData2)
+                  ).parSequence
+              r1 <- hotStore.getData(channel1)
+              r2 <- hotStore.getData(channel2)
+              _  = r1 shouldEqual insertedData1 :: historyData1
+            } yield (r2 shouldEqual insertedData2 :: historyData2)
+          }
+        }
+      }
+  }
+
+  "concurrent continuation operations on disjoint channels" should "not mess up the cache" in forAll {
+    (
+        channels1: List[Channel],
+        channels2: List[Channel],
+        historyContinuations1: List[Continuation],
+        historyContinuations2: List[Continuation],
+        insertedContinuation1: Continuation,
+        insertedContinuation2: Continuation
+    ) =>
+      whenever(channels1 =!= channels2) {
+        fixture { (state, history, hotStore) =>
+          {
+            for {
+              _ <- history.putContinuations(channels1, historyContinuations1)
+              _ <- history.putContinuations(channels2, historyContinuations2)
+              _ <- List(
+                    hotStore.putContinuation(channels1, insertedContinuation1),
+                    hotStore.putContinuation(channels2, insertedContinuation2)
+                  ).parSequence
+              r1 <- hotStore.getContinuations(channels1)
+              r2 <- hotStore.getContinuations(channels2)
+              _  = r1 shouldEqual insertedContinuation1 :: historyContinuations1
+            } yield (r2 shouldEqual insertedContinuation2 :: historyContinuations2)
+          }
+        }
+      }
+  }
 }
 
 class History[F[_]: Monad](implicit R: Ref[F, Cache[String, Pattern, String, StringsCaptor]])
@@ -269,12 +325,13 @@ class History[F[_]: Monad](implicit R: Ref[F, Cache[String, Pattern, String, Str
   }
 }
 
-class InMemHotStoreSpec extends HotStoreSpec[Task] {
+class InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {
 
   type F[A] = Task[A]
-  override implicit val M: Monad[F] = implicitly[Concurrent[Task]]
+  override implicit val M: Monad[F]                 = implicitly[Concurrent[Task]]
+  override implicit val P: Parallel[Task, Task.Par] = Task.catsParallel
 
-  private[rspace] implicit def liftToMonadState[V](
+  private[rspace] implicit def liftMVarToMonadState[V](
       state: MVar[F, V]
   ): MonadState[F, V] =
     new MonadState[F, V] {
@@ -305,18 +362,18 @@ class InMemHotStoreSpec extends HotStoreSpec[Task] {
         implicit val hs = historyState
         new History[F]
       }
-      mvarCache <- MVar.of[Task, Cache[String, Pattern, String, StringsCaptor]](
-                    Cache(
-                      Map.empty[List[String], List[WaitingContinuation[Pattern, StringsCaptor]]]
-                    )
-                  )
+      cache <- MVar.of[Task, Cache[String, Pattern, String, StringsCaptor]](
+                Cache(
+                  Map.empty[List[String], List[WaitingContinuation[Pattern, StringsCaptor]]]
+                )
+              )
       hotStore = {
         implicit val hr = history
-        implicit val cache: MonadState[F, Cache[String, Pattern, String, StringsCaptor]] =
-          mvarCache
+        implicit val c: MonadState[F, Cache[String, Pattern, String, StringsCaptor]] =
+          cache
         HotStore.inMem[Task, String, Pattern, String, StringsCaptor]
       }
-      res <- f(mvarCache, history, hotStore)
+      res <- f(cache, history, hotStore)
     } yield res).runSyncUnsafe(1.second)
 
 }
