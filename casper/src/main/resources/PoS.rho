@@ -16,9 +16,9 @@
 
 new PoS, rs(`rho:registry:insertSigned:ed25519`), uriOut, stdout(`rho:io:stdout`) in {
 
-  for (@minimumBond, @maximumBond, @initialBonds <- PoS) {
+ for (@minimumBond, @maximumBond <- PoS) {
 
-    match "11112GofKy1v5mPWZjZEYBByvpZ4ahYJp6vFN1hgGCn7L543rFSpyA".hexToBytes() {
+ match "11112GofKy1v5mPWZjZEYBByvpZ4ahYJp6vFN1hgGCn7L543rFSpyA" {
 
       posRevAddress => {
 
