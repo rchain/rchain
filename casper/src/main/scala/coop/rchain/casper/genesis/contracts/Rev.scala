@@ -13,7 +13,6 @@ class Rev[A](
   private val initialTotalBond = posParams.validators.foldLeft(0L) {
     case (acc, v) => acc + v.stake
   }
-  private val initialBondsCode = ProofOfStake.initialBondsCode(posParams.validators)
 
   private val minimumBond = posParams.minimumBond
   private val maximumBond = posParams.maximumBond
@@ -50,7 +49,7 @@ class Rev[A](
     |      //PoS purse and contract creation
     |      @revMint!("makePurse", $initialTotalBond, *posPurseCh) |
     |      for(@posPurse <- posPurseCh) {
-    |        @MakePoS!(posPurse, $minimumBond, $maximumBond, $initialBondsCode, *posCh) |
+    |        @MakePoS!(posPurse, $minimumBond, $maximumBond, ${posParams.initialBondsCode}, *posCh) |
     |        for(@pos <- posCh) {
     |          @SystemInstancesRegistry!("register", "pos", bundle+{pos})
     |        }
