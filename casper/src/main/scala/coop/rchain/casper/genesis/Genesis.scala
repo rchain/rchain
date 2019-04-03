@@ -21,6 +21,14 @@ import coop.rchain.shared.{Log, LogSource, Time}
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
 
+final case class Genesis(
+    shardId: String,
+    timestamp: Long,
+    wallets: Seq[PreWallet],
+    proofOfStake: ProofOfStake,
+    faucet: Boolean
+)
+
 object Genesis {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
@@ -125,6 +133,7 @@ object Genesis {
       deployTimestamp: Option[Long]
   ): F[BlockMessage] =
     for {
+      timestamp <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
       bondsFile <- toFile[F](maybeBondsPath, genesisPath.resolve("bonds.txt"))
       _ <- bondsFile.fold[F[Unit]](
             maybeBondsPath.fold(().pure[F])(
@@ -137,21 +146,44 @@ object Genesis {
       walletsFile <- toFile[F](maybeWalletsPath, genesisPath.resolve("wallets.txt"))
       wallets     <- getWallets[F](walletsFile, maybeWalletsPath)
       bonds       <- getBonds[F](bondsFile, numValidators, genesisPath)
-      timestamp   <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
-      initial     = withoutContracts(bonds = bonds, timestamp = 1L, version = 1L, shardId = shardId)
-      validators  = bonds.map(bond => Validator(bond._1, bond._2)).toSeq
-      faucetCode  = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
-      withContr <- withContracts(
-                    initial,
-                    ProofOfStake(minimumBond, maximumBond, validators),
-                    wallets,
-                    faucetCode,
-                    runtimeManager.emptyStateHash,
-                    runtimeManager,
-                    timestamp
-                  )
-    } yield withContr
+      validators  = bonds.toSeq.map(Validator.tupled)
+      genesisBlock <- createGenesisBlock(
+                       runtimeManager,
+                       Genesis(
+                         shardId = shardId,
+                         timestamp = timestamp,
+                         wallets = wallets,
+                         proofOfStake = ProofOfStake(minimumBond, maximumBond, validators),
+                         faucet = faucet
+                       )
+                     )
+    } yield genesisBlock
 
+  def createGenesisBlock[F[_]: Concurrent](
+      runtimeManager: RuntimeManager[F],
+      genesis: Genesis
+  ): F[BlockMessage] = {
+    import genesis._
+
+    val initial = withoutContracts(
+      bonds = proofOfStake.validators.flatMap(Validator.unapply).toMap,
+      timestamp = 1L,
+      version = 1L,
+      shardId = shardId
+    )
+    val faucetCode = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
+    withContracts(
+      initial,
+      proofOfStake,
+      wallets,
+      faucetCode,
+      runtimeManager.emptyStateHash,
+      runtimeManager,
+      timestamp
+    )
+  }
+
+  //FIXME delay and simplify this
   def toFile[F[_]: Applicative: Log](
       maybePath: Option[String],
       defaultPath: Path
