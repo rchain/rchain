@@ -14,6 +14,7 @@ import coop.rchain.rspace.test.ArbitraryInstances._
 import org.scalatest._
 import org.scalatest.prop._
 
+import scala.collection.concurrent.TrieMap
 import scala.collection.immutable.Seq
 import scala.concurrent.duration._
 import monix.eval.Task
@@ -63,7 +64,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _ <- state.modify(
                   _ =>
                     Cache(
-                      continuations = Map(
+                      continuations = TrieMap(
                         channels -> cachedContinuations
                       )
                     )
@@ -108,7 +109,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _ <- state.modify(
                   _ =>
                     Cache(
-                      continuations = Map(
+                      continuations = TrieMap(
                         channels -> cachedContinuations
                       )
                     )
@@ -148,7 +149,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _ <- state.modify(
                   _ =>
                     Cache(
-                      data = Map(
+                      data = TrieMap(
                         channel -> cachedData
                       )
                     )
@@ -192,7 +193,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _ <- state.modify(
                   _ =>
                     Cache(
-                      data = Map(
+                      data = TrieMap(
                         channel -> cachedData
                       )
                     )
@@ -231,7 +232,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _ <- state.modify(
                   _ =>
                     Cache(
-                      joins = Map(
+                      joins = TrieMap(
                         channel -> cachedJoins
                       )
                     )
@@ -306,12 +307,14 @@ class History[F[_]: Monad](implicit R: Ref[F, Cache[String, Pattern, String, Str
 
   def getJoins(channel: String): F[List[List[String]]] = R.get.map(_.joins(channel))
   def putJoins(channel: String, joins: List[List[String]]): F[Unit] = R.modify { prev =>
-    (prev.copy(joins = prev.joins.+(channel -> joins)), ())
+    prev.joins.put(channel, joins)
+    (prev, ())
   }
 
   def getData(channel: String): F[List[Datum[String]]] = R.get.map(_.data(channel))
   def putData(channel: String, data: List[Datum[String]]): F[Unit] = R.modify { prev =>
-    (prev.copy(data = prev.data.+(channel -> data)), ())
+    prev.data.put(channel, data)
+    (prev, ())
   }
 
   def getContinuations(
@@ -321,31 +324,17 @@ class History[F[_]: Monad](implicit R: Ref[F, Cache[String, Pattern, String, Str
       channels: List[String],
       continuations: List[WaitingContinuation[Pattern, StringsCaptor]]
   ): F[Unit] = R.modify { prev =>
-    (prev.copy(continuations = prev.continuations.+(channels -> continuations)), ())
+    prev.continuations.put(channels, continuations)
+    (prev, ())
   }
 }
 
-class InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {
+trait InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {
 
-  type F[A] = Task[A]
+  protected type F[A] = Task[A]
   override implicit val M: Monad[F]                 = implicitly[Concurrent[Task]]
   override implicit val P: Parallel[Task, Task.Par] = Task.catsParallel
-
-  private[rspace] implicit def liftMVarToMonadState[V](
-      state: MVar[F, V]
-  ): MonadState[F, V] =
-    new MonadState[F, V] {
-      val monad: cats.Monad[F] = implicitly[Monad[F]]
-      def get: F[V]            = state.take
-      def set(s: V): F[Unit]   = state.put(s)
-
-      override def inspect[A](f: V => A): F[A] = state.read.map(f)
-      override def modify(f: V => V): F[Unit] =
-        for {
-          current <- state.take
-          _       <- state.put(f(current))
-        } yield ()
-    }
+  def C: F[MonadState[F, Cache[String, Pattern, String, StringsCaptor]]]
 
   override def fixture(
       f: (
@@ -362,18 +351,54 @@ class InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {
         implicit val hs = historyState
         new History[F]
       }
-      cache <- MVar.of[Task, Cache[String, Pattern, String, StringsCaptor]](
-                Cache(
-                  Map.empty[List[String], List[WaitingContinuation[Pattern, StringsCaptor]]]
-                )
-              )
+      cache <- C
       hotStore = {
         implicit val hr = history
-        implicit val c: MonadState[F, Cache[String, Pattern, String, StringsCaptor]] =
-          cache
+        implicit val c  = cache
         HotStore.inMem[Task, String, Pattern, String, StringsCaptor]
       }
       res <- f(cache, history, hotStore)
     } yield res).runSyncUnsafe(1.second)
+
+}
+
+class MVarCachedInMemHotStoreSpec extends InMemHotStoreSpec {
+  override implicit def C: F[MonadState[F, Cache[String, Pattern, String, StringsCaptor]]] =
+    MVar.of[F, Cache[String, Pattern, String, StringsCaptor]](Cache())
+
+  private implicit def lift[V](
+      state: F[MVar[F, V]]
+  ): F[MonadState[F, V]] = state.map { state =>
+    new MonadState[F, V] {
+      val monad: cats.Monad[F] = implicitly[Monad[F]]
+      def get: F[V]            = state.take
+      def set(s: V): F[Unit]   = state.put(s)
+
+      override def inspect[A](f: V => A): F[A] = state.read.map(f)
+      override def modify(f: V => V): F[Unit] =
+        for {
+          current <- state.take
+          _       <- state.put(f(current))
+        } yield ()
+    }
+  }
+}
+
+class RefCachedInMemHotStoreSpec extends InMemHotStoreSpec {
+  override implicit def C: F[MonadState[F, Cache[String, Pattern, String, StringsCaptor]]] =
+    Ref.of[F, Cache[String, Pattern, String, StringsCaptor]](Cache())
+
+  private[rspace] implicit def lift[V](
+      state: F[Ref[F, V]]
+  ): F[MonadState[F, V]] = state.map { state =>
+    new DefaultMonadState[F, V] {
+      val monad: cats.Monad[F] = implicitly[Monad[F]]
+      def get: F[V]            = state.get
+      def set(s: V): F[Unit]   = state.set(s)
+      override def modify(f: V => V): F[Unit] = state.modify { in =>
+        (f(in), ())
+      }
+    }
+  }
 
 }

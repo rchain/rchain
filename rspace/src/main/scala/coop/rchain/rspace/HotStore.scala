@@ -7,6 +7,8 @@ import cats.effect.implicits._
 import cats.mtl.MonadState
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 
+import scala.collection.concurrent.TrieMap
+
 trait HotStore[F[_], C, P, A, K] {
   def getContinuations(channels: List[C]): F[List[WaitingContinuation[P, K]]]
   def putContinuation(channels: List[C], wc: WaitingContinuation[P, K]): F[Unit]
@@ -18,10 +20,10 @@ trait HotStore[F[_], C, P, A, K] {
 }
 
 final case class Cache[C, P, A, K](
-    continuations: Map[List[C], List[WaitingContinuation[P, K]]] =
-      Map.empty[List[C], List[WaitingContinuation[P, K]]],
-    data: Map[C, List[Datum[A]]] = Map.empty[C, List[Datum[A]]],
-    joins: Map[C, List[List[C]]] = Map.empty[C, List[List[C]]]
+    continuations: TrieMap[List[C], List[WaitingContinuation[P, K]]] =
+      TrieMap.empty[List[C], List[WaitingContinuation[P, K]]],
+    data: TrieMap[C, List[Datum[A]]] = TrieMap.empty[C, List[Datum[A]]],
+    joins: TrieMap[C, List[List[C]]] = TrieMap.empty[C, List[List[C]]]
 )
 
 private class InMemHotStore[F[_]: Monad, C, P, A, K](
@@ -31,48 +33,74 @@ private class InMemHotStore[F[_]: Monad, C, P, A, K](
 
   def getContinuations(channels: List[C]): F[List[WaitingContinuation[P, K]]] =
     for {
-      cache <- S.get
-      res <- cache.continuations.get(channels) match {
-              case None                => HR.getContinuations(channels)
+      continuations <- S.inspect(_.continuations)
+      res <- continuations.get(channels) match {
+              case None =>
+                for {
+                  historyContinuations <- HR.getContinuations(channels)
+                  _ <- S.modify { c =>
+                        discard(c.continuations.putIfAbsent(channels, historyContinuations))
+                        c
+                      }
+                } yield (historyContinuations)
               case Some(continuations) => Applicative[F].pure(continuations)
             }
-      updatedCache = cache.copy(continuations = cache.continuations + (channels -> res))
-      _            <- S.set(updatedCache)
     } yield (res)
 
   def putContinuation(channels: List[C], wc: WaitingContinuation[P, K]): F[Unit] =
     for {
       continuations <- getContinuations(channels)
-      _             <- S.modify(cache => cache.copy(cache.continuations.updated(channels, wc :: continuations)))
+      _ <- S.modify { cache =>
+            discard(cache.continuations.put(channels, wc :: continuations))
+            cache
+          }
     } yield ()
 
   def getData(channel: C): F[List[Datum[A]]] =
     for {
-      cache <- S.get
-      res <- cache.data.get(channel) match {
-              case None       => HR.getData(channel)
+      data <- S.inspect(_.data)
+      res <- data.get(channel) match {
+              case None =>
+                for {
+                  historyData <- HR.getData(channel)
+                  _ <- S.modify { c =>
+                        discard(c.data.putIfAbsent(channel, historyData))
+                        c
+                      }
+                } yield (historyData)
               case Some(data) => Applicative[F].pure(data)
             }
-      updatedCache = cache.copy(data = cache.data + (channel -> res))
-      _            <- S.set(updatedCache)
     } yield (res)
 
   def putDatum(channel: C, datum: Datum[A]): F[Unit] =
     for {
       data <- getData(channel)
-      _    <- S.modify(cache => cache.copy(data = cache.data.updated(channel, datum :: data)))
+      _ <- S.modify { cache =>
+            discard(cache.data.put(channel, datum :: data))
+            cache
+          }
     } yield ()
 
   def getJoins(channel: C): F[List[List[C]]] =
     for {
-      cache <- S.get
-      res <- cache.joins.get(channel) match {
-              case None        => HR.getJoins(channel)
+      joins <- S.inspect(_.joins)
+      res <- joins.get(channel) match {
+              case None =>
+                for {
+                  historyJoins <- HR.getJoins(channel)
+                  _ <- S.modify { c =>
+                        discard(c.joins.putIfAbsent(channel, historyJoins))
+                        c
+                      }
+                } yield (historyJoins)
               case Some(joins) => Applicative[F].pure(joins)
             }
-      updatedCache = cache.copy(joins = cache.joins + (channel -> res))
-      _            <- S.set(updatedCache)
     } yield (res)
+
+  @specialized def discard[T](evaluateForSideEffectOnly: T): Unit = {
+    val _: T = evaluateForSideEffectOnly
+    () //Return unit to prevent warning due to discarding value
+  }
 }
 
 object HotStore {
