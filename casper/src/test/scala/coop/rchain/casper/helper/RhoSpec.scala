@@ -3,13 +3,7 @@ package coop.rchain.casper.helper
 import cats.effect.Concurrent
 import coop.rchain.casper.HashSetCasperTest.createBonds
 import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.genesis.contracts.{
-  Faucet,
-  PreWallet,
-  ProofOfStake,
-  Validator,
-  TestUtil
-}
+import coop.rchain.casper.genesis.contracts.{Faucet, PreWallet, ProofOfStake, TestUtil, Validator}
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.crypto.signatures.Ed25519
