@@ -92,7 +92,7 @@ object StandardDeploys {
   def rev(
       wallets: Seq[PreWallet],
       faucetCode: String => String,
-      posParams: ProofOfStakeParams
+      posParams: ProofOfStake
   ): DeployData = toDeploy(new PreWalletRev(wallets, faucetCode, posParams), "", 0L)
 
   def revVault: DeployData =

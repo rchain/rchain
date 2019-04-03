@@ -27,7 +27,7 @@ object Genesis {
 
   def defaultBlessedTerms(
       timestamp: Long,
-      posParams: ProofOfStakeParams,
+      posParams: ProofOfStake,
       wallets: Seq[PreWallet],
       faucetCode: String => String
   ): List[DeployData] =
@@ -49,7 +49,7 @@ object Genesis {
 
   def withContracts[F[_]: Concurrent](
       initial: BlockMessage,
-      posParams: ProofOfStakeParams,
+      posParams: ProofOfStake,
       wallets: Seq[PreWallet],
       faucetCode: String => String,
       startHash: StateHash,
@@ -139,11 +139,11 @@ object Genesis {
       bonds       <- getBonds[F](bondsFile, numValidators, genesisPath)
       timestamp   <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
       initial     = withoutContracts(bonds = bonds, timestamp = 1L, version = 1L, shardId = shardId)
-      validators  = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
+      validators  = bonds.map(bond => Validator(bond._1, bond._2)).toSeq
       faucetCode  = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
       withContr <- withContracts(
                     initial,
-                    ProofOfStakeParams(minimumBond, maximumBond, validators),
+                    ProofOfStake(minimumBond, maximumBond, validators),
                     wallets,
                     faucetCode,
                     runtimeManager.emptyStateHash,

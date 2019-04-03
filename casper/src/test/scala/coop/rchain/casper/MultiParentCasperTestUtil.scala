@@ -108,11 +108,11 @@ object MultiParentCasperTestUtil {
         .unsafeRunSync
     val runtimeManager = RuntimeManager.fromRuntime[Task](activeRuntime).unsafeRunSync
     val emptyStateHash = runtimeManager.emptyStateHash
-    val validators     = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
+    val validators     = bonds.map(bond => Validator(bond._1, bond._2)).toSeq
     val genesis = Genesis
       .withContracts(
         initial,
-        ProofOfStakeParams(minimumBond, maximumBond, validators),
+        ProofOfStake(minimumBond, maximumBond, validators),
         wallets,
         faucetCode,
         emptyStateHash,
