@@ -247,32 +247,6 @@ object Genesis {
     }
   }
 
-  def getBondedValidators[F[_]: Monad: Sync: Log](bondsFile: Option[String]): F[Set[ByteString]] =
-    bondsFile match {
-      case None => Set.empty[ByteString].pure[F]
-      case Some(file) =>
-        Sync[F]
-          .delay {
-            Try {
-              Source
-                .fromFile(file)
-                .getLines()
-                .map(line => {
-                  val Array(pk, _) = line.trim.split(" ")
-                  ByteString.copyFrom(Base16.unsafeDecode(pk))
-                })
-                .toSet
-            }
-          }
-          .flatMap {
-            case Failure(th) =>
-              Log[F]
-                .warn(s"Failed to parse bonded validators file $file for reason ${th.getMessage}")
-                .map(_ => Set.empty)
-            case Success(x) => x.pure[F]
-          }
-    }
-
   def getBonds[F[_]: Monad: Sync: Log](
       bondsFile: Option[File],
       numValidators: Int,
