@@ -2,8 +2,11 @@ package coop.rchain.casper.genesis.contracts
 
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.ProtoUtil.stringToByteString
+import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.accounting
+import coop.rchain.rholang.interpreter.util.RevAddress
 
 object StandardDeploys {
   private def toDeploy(
@@ -114,4 +117,12 @@ object StandardDeploys {
       "",
       0L
     )
+
+  def testRev(genesisPk: PublicKey, vaults: Seq[Vault], supply: Long): DeployData =
+    toDeploy(
+      RevGenerator(RevAddress.fromPublicKey(genesisPk).get, vaults, supply),
+      s"${Base16.encode(genesisPk.bytes)}",
+      0L
+    )
+
 }
