@@ -65,7 +65,7 @@ object Genesis {
     )
 
   def withContracts[F[_]: Concurrent](
-      blessedTerms: List[DeployData],
+      blessedTerms: Seq[DeployData],
       initial: BlockMessage,
       startHash: StateHash,
       runtimeManager: RuntimeManager[F]

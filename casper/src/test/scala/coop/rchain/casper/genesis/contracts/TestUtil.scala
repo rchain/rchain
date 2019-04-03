@@ -1,21 +1,29 @@
 package coop.rchain.casper.genesis.contracts
 
-import cats.{FlatMap, Parallel}
+import java.nio.file.Files
+
 import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.implicits._
+import cats.{FlatMap, Parallel, Traverse}
+import com.google.protobuf.ByteString
+import coop.rchain.casper.HashSetCasperTest.createBonds
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
 import coop.rchain.rholang.build.CompiledRholangSource
-import coop.rchain.rholang.interpreter.{accounting, ParBuilder, Runtime, TestRuntime}
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
 import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.shared.Log
+import coop.rchain.rholang.interpreter.util.RevAddress
+import coop.rchain.rholang.interpreter.{accounting, ParBuilder, Runtime, TestRuntime}
+import coop.rchain.shared.{Log, StoreType}
 import monix.execution.Scheduler
-import cats.implicits._
-import coop.rchain.casper.util.rholang.RuntimeManager
 
 object TestUtil {
 
@@ -93,4 +101,82 @@ object TestUtil {
       _ <- runtime.reducer.phlo
     } yield ()
 
+  def defaultTerms(
+      genesisPk: PublicKey,
+      vaults: Seq[Vault],
+      revSupply: Long,
+      minimumBond: Long,
+      maximumBond: Long
+  ): Seq[DeployData] =
+    Seq(
+      StandardDeploys.listOps,
+      StandardDeploys.either,
+      StandardDeploys.nonNegativeNumber,
+      StandardDeploys.makeMint,
+      StandardDeploys.PoS,
+      StandardDeploys.authKey,
+      StandardDeploys.revVault,
+      StandardDeploys.testRev(genesisPk, vaults, revSupply)
+    )
+
+  def buildGenesis[F[_]: Concurrent: ContextShift, G[_]: Parallel[F, ?[_]]](
+      implicit scheduler: Scheduler
+  ): F[BlockMessage] = {
+
+    implicit val log: Log.NOPLog[F]     = new Log.NOPLog[F]
+    implicit val metricsEff: Metrics[F] = new metrics.Metrics.MetricsNOP[F]
+
+    val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
+    val storageSize: Long = 1024L * 1024
+
+    for {
+      runtime        <- Runtime.createWithEmptyCost(storageDirectory, storageSize, StoreType.LMDB)
+      runtimeManager <- RuntimeManager.fromRuntime(runtime)
+      genesis        <- TestUtil.defaultGenesisSetup(runtimeManager)
+      _              <- runtime.close()
+    } yield genesis
+  }
+
+  def defaultGenesisSetup[F[_]: Concurrent](runtimeManager: RuntimeManager[F]): F[BlockMessage] = {
+
+    val (_, genesisPk) = Ed25519.newKeyPair
+
+    val (_, validatorPks) = Seq.fill(4)(Ed25519.newKeyPair).unzip
+    val bonds             = createBonds(validatorPks)
+    val validators        = bonds.map { case (pk, stake) => Validator(pk, stake) }.toSeq
+
+    val vaults = Traverse[List]
+      .traverse(validatorPks.toList)(RevAddress.fromPublicKey)
+      .get
+      .map(Vault(_, 1000L))
+    val minimumBond = 0L
+    val maximumBond = Long.MaxValue
+    val revSupply   = Long.MaxValue
+
+    val bondDeploys =
+      validators.map { validator =>
+        DeployData(
+          deployer = ByteString.copyFrom(validator.pk.bytes),
+          term = validator.code,
+          timestamp = System.currentTimeMillis(),
+          phloLimit = Long.MaxValue
+        )
+      }
+
+    val defaultDeploys =
+      defaultTerms(
+        genesisPk,
+        vaults,
+        revSupply,
+        minimumBond,
+        maximumBond
+      ) ++ bondDeploys
+
+    Genesis.withContracts(
+      defaultDeploys,
+      Genesis.withoutContracts(bonds, 1, 1, "TESTING-shard"),
+      runtimeManager.emptyStateHash,
+      runtimeManager
+    )
+  }
 }
