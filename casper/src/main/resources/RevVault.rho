@@ -19,8 +19,7 @@ new
   _makeVault,
   _newVault,
   _getOrCreate,
-  _revVault,
-  stdout(`rho:io:stdout`)
+  _revVault
 in {
   rl!(`rho:id:exunyijimapk7z43g3bbr69awqdz54kyroj9q43jgu3dh567fxsftx`, *MakeMintCh) |
   rl!(`rho:id:4njqcsc65mt8xrfx9nsz7je7oucgywgd1tj1n1gjtw3ndsophyisro`, *AuthKeyCh) |
@@ -70,7 +69,6 @@ in {
         } |
 
         contract RevVault(@"findOrCreate", @ownerRevAddress, ret) = {
-
           new createVault in {
             _getOrCreate!(ownerRevAddress, *createVault, *ret) |
             for (retCh <- createVault) {
