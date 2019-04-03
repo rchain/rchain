@@ -37,7 +37,7 @@ final case class ProofOfStake(minimumBond: Long, maximumBond: Long, validators: 
        | new rl(`rho:registry:lookup`), PoSCh in {
        |   rl!(`rho:id:cnec3pa8prp4out3yc8facon6grm3xbsotpd4ckjfx8ghuw77xadzt`, *PoSCh)
        |   | for (@(_, PoS) <- PoSCh) {
-       |     @PoS!($minimumBond, $maximumBond, $initialBondsCode)
+       |     @PoS!($minimumBond, $maximumBond)
        |   }
        | }
      """.stripMargin
