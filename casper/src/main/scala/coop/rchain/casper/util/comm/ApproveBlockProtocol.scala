@@ -50,7 +50,7 @@ object ApproveBlockProtocol {
 
   //For usage in tests only
   def unsafe[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
-      block: BlockMessage,
+      genesisBlock: BlockMessage,
       trustedValidators: Set[ByteString],
       requiredSigs: Int,
       duration: FiniteDuration,
@@ -59,7 +59,7 @@ object ApproveBlockProtocol {
       start: Long
   ): ApproveBlockProtocol[F] =
     new ApproveBlockProtocolImpl[F](
-      block,
+      genesisBlock,
       requiredSigs,
       trustedValidators,
       start,
@@ -69,7 +69,7 @@ object ApproveBlockProtocol {
     )
 
   def of[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
-      block: BlockMessage,
+      genesisBlock: BlockMessage,
       trustedValidators: Set[ByteString],
       requiredSigs: Int,
       duration: FiniteDuration,
@@ -80,7 +80,7 @@ object ApproveBlockProtocol {
       sigsF <- Ref.of[F, Set[Signature]](Set.empty)
     } yield
       new ApproveBlockProtocolImpl[F](
-        block,
+        genesisBlock,
         requiredSigs,
         trustedValidators,
         now,
@@ -90,7 +90,7 @@ object ApproveBlockProtocol {
       )
 
   private class ApproveBlockProtocolImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
-      val block: BlockMessage,
+      val genesisBlock: BlockMessage,
       val requiredSigs: Int,
       val trustedValidators: Set[ByteString],
       val start: Long,
@@ -102,10 +102,10 @@ object ApproveBlockProtocol {
     private implicit val metricsSource: Metrics.Source =
       Metrics.Source(CasperMetricsSource, "approve-block")
 
-    private val candidate                 = ApprovedBlockCandidate(Some(block), requiredSigs)
+    private val candidate                 = ApprovedBlockCandidate(Some(genesisBlock), requiredSigs)
     private val u                         = UnapprovedBlock(Some(candidate), start, duration.toMillis)
     private val serializedUnapprovedBlock = u.toByteString
-    private val candidateHash             = PrettyPrinter.buildString(block.blockHash)
+    private val candidateHash             = PrettyPrinter.buildString(genesisBlock.blockHash)
     private val sigData                   = Blake2b256.hash(candidate.toByteArray)
 
     def addApproval(a: BlockApproval): F[Unit] = {

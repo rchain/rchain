@@ -38,7 +38,7 @@ class RevIssuanceTest extends FlatSpec with Matchers {
   }
 
   "Rev" should "be issued and accessible based on inputs from Ethereum" in {
-    val activeRuntime  = TestUtil.runtime()
+    val activeRuntime  = TestUtil.runtime[Task, Task.Par]().runSyncUnsafe(5.seconds)
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
     val emptyHash      = runtimeManager.emptyStateHash
 

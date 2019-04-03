@@ -7,8 +7,8 @@ new stdout(`rho:io:stdout`) in {
   // prints false
   stdout!(Set(1,2,3).contains(5)) |
 
-  // prints Set(1,2,3,4)
-  stdout!(Set(1,2,3).add(4)) |
+  // prints [1,2,3,4]
+  stdout!(Set(1,2,3).add(4).toList()) |
 
   // prints Set(1,2,3) because duplicates are not allowed
   stdout!(Set(1,2,3).add(1)) |

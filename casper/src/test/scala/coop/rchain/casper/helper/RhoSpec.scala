@@ -1,7 +1,18 @@
 package coop.rchain.casper.helper
 
-import coop.rchain.casper.genesis.contracts.TestUtil
-import coop.rchain.casper.protocol.DeployData
+import cats.effect.Concurrent
+import coop.rchain.casper.HashSetCasperTest.createBonds
+import coop.rchain.casper.genesis.Genesis
+import coop.rchain.casper.genesis.contracts.{
+  Faucet,
+  PreWallet,
+  ProofOfStakeParams,
+  ProofOfStakeValidator,
+  TestUtil
+}
+import coop.rchain.casper.protocol.{BlockMessage, DeployData}
+import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
@@ -15,12 +26,14 @@ import scala.concurrent.duration.Duration
 object RhoSpec {
   implicit val logger: Log[Task] = Log.log[Task]
 
-  private def mkRuntime(testResultCollector: TestResultCollector[Task]) = {
+  private def testFrameworkContracts[F[_]: Log: Concurrent](
+      testResultCollector: TestResultCollector[F]
+  ): Seq[SystemProcess.Definition[F]] = {
     val testResultCollectorService =
       Seq((5, "assertAck", 25), (1, "testSuiteCompleted", 26))
         .map {
           case (arity, name, n) =>
-            SystemProcess.Definition[Task](
+            SystemProcess.Definition[F](
               s"rho:test:$name",
               Runtime.byteName(n.toByte),
               arity,
@@ -28,14 +41,14 @@ object RhoSpec {
               ctx => testResultCollector.handleMessage(ctx)(_, _)
             )
         } ++ Seq(
-        SystemProcess.Definition[Task](
+        SystemProcess.Definition[F](
           "rho:io:stdlog",
           Runtime.byteName(27),
           2,
           27L,
           ctx => RhoLoggerContract.handleMessage(ctx)(_, _)
         ),
-        SystemProcess.Definition[Task](
+        SystemProcess.Definition[F](
           "rho:test:deploy:set",
           Runtime.byteName(28),
           3,
@@ -43,24 +56,48 @@ object RhoSpec {
           ctx => DeployDataContract.set(ctx)(_, _)
         )
       )
-    TestUtil.runtime(testResultCollectorService)
+    testResultCollectorService
   }
 
   def getResults(testObject: CompiledRholangSource, otherLibs: Seq[DeployData]): Task[TestResult] =
     for {
+      _                   <- logger.info("Starting tests from " + testObject.path)
       testResultCollector <- TestResultCollector[Task]
 
-      _ <- Task.delay {
-            TestUtil.runTestsWithDeploys(testObject, otherLibs, mkRuntime(testResultCollector))
-          }
+      _ <- TestUtil.runTestsWithDeploys[Task, Task.Par](
+            testObject,
+            defaultGenesisSetup,
+            otherLibs,
+            testFrameworkContracts(testResultCollector)
+          )
 
       result <- testResultCollector.getResult
     } yield result
+
+  def defaultGenesisSetup[F[_]: Concurrent](runtimeManager: RuntimeManager[F]): F[BlockMessage] = {
+    val (_, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+    val bonds           = createBonds(validators)
+    val posValidators   = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
+    val ethAddress      = "0x041e1eec23d118f0c4ffc814d4f415ac3ef3dcff"
+    val initBalance     = 37
+    val wallet          = PreWallet(ethAddress, initBalance)
+    Genesis.withContracts(
+      Genesis.defaultBlessedTerms(
+        timestamp = 1,
+        posParams = ProofOfStakeParams(0, Long.MaxValue, posValidators),
+        wallets = wallet :: Nil,
+        faucetCode = Faucet.noopFaucet
+      ),
+      Genesis.withoutContracts(bonds, 1, 1, "TESTING-shard"),
+      runtimeManager.emptyStateHash,
+      runtimeManager
+    )
+  }
 }
 
 class RhoSpec(
     testObject: CompiledRholangSource,
-    standardDeploys: Seq[DeployData],
+    extraNonGenesisDeploys: Seq[DeployData],
     executionTimeout: Duration
 ) extends FlatSpec
     with AppendedClues
@@ -91,7 +128,7 @@ class RhoSpec(
   def hasFailures(assertions: List[RhoTestAssertion]) = assertions.find(_.isSuccess).isDefined
 
   private val result = RhoSpec
-    .getResults(testObject, standardDeploys)
+    .getResults(testObject, extraNonGenesisDeploys)
     .runSyncUnsafe(executionTimeout)
 
   it should "finish execution within timeout" in {

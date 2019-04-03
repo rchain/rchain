@@ -18,6 +18,8 @@ class Rev[A](
   private val minimumBond = posParams.minimumBond
   private val maximumBond = posParams.maximumBond
 
+  final val path = "<synthetic in Rev.scala>"
+
   final val code = s"""
     |//requires MakeMint, BasicWallet, WalletCheck, MakePoS
     |new

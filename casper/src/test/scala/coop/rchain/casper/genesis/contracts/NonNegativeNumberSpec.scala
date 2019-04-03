@@ -7,6 +7,6 @@ import scala.concurrent.duration._
 class NonNegativeNumberSpec
     extends RhoSpec(
       CompiledRholangSource("NonNegativeNumberTest.rho"),
-      Seq(StandardDeploys.nonNegativeNumber),
+      Seq.empty,
       10.seconds
     )

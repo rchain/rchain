@@ -41,5 +41,8 @@ new stdout(`rho:io:stdout`) in {
   stdout!({"one" : 1, "two" : 2, "three" : 3}.keys()) |
 
   // prints 3
-  stdout!({"one" : 1, "two" : 2, "three" : 3}.size())
+  stdout!({"one" : 1, "two" : 2, "three" : 3}.size()) |
+
+  // prints [("one", 1), ("three", 3), ("two, 2)]
+  stdout!({"one" : 1, "two" : 2, "three" : 3}.toList())
 }
