@@ -2,14 +2,14 @@ package coop.rchain.casper.genesis.contracts
 
 import cats.effect.Concurrent
 import cats.implicits._
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.ConstructDeploy
 import coop.rchain.casper.HashSetCasperTest.createBonds
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.DeployData
+import coop.rchain.casper.util.BondingUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.casper.util.{BondingUtil, ProtoUtil}
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models.Expr.ExprInstance.GString
@@ -47,11 +47,11 @@ class RevIssuanceTest extends FlatSpec with Matchers {
     val wallet          = PreWallet(ethAddress, initBalance)
     val (_, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
     val bonds           = createBonds(validators)
-    val posValidators   = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
+    val posValidators   = bonds.map(bond => Validator(bond._1, bond._2)).toSeq
     val genesisDeploys =
       Genesis.defaultBlessedTerms(
         0L,
-        ProofOfStakeParams(1L, Long.MaxValue, posValidators),
+        ProofOfStake(1L, Long.MaxValue, posValidators),
         wallet :: Nil,
         Faucet.noopFaucet
       )

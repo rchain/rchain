@@ -107,7 +107,7 @@ object BlockApproverProtocolTest {
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
 
     val deployTimestamp = 1L
-    val validators      = bonds.map(b => ProofOfStakeValidator(b._1, b._2)).toSeq
+    val validators      = bonds.map(b => Validator(b._1, b._2)).toSeq
 
     val genesis = HashSetCasperTest.buildGenesis(
       wallets,

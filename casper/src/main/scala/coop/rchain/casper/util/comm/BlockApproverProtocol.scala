@@ -123,9 +123,9 @@ object BlockApproverProtocol {
               .either(())
               .or("Block bonds don't match expected.")
         validators = blockBonds.toSeq.map(
-          b => ProofOfStakeValidator(PublicKey(b._1.toByteArray), b._2)
+          b => Validator(PublicKey(b._1.toByteArray), b._2)
         )
-        posParams  = ProofOfStakeParams(minimumBond, maximumBond, validators)
+        posParams  = ProofOfStake(minimumBond, maximumBond, validators)
         faucetCode = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
         genesisBlessedContracts = Genesis
           .defaultBlessedTerms(timestamp, posParams, wallets, faucetCode)
