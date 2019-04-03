@@ -1397,6 +1397,41 @@ object Reduce {
         } yield result
     }
 
+    private[this] val toList: Method = new Method() {
+      def toList(baseExpr: Expr): M[Par] =
+        baseExpr.exprInstance match {
+          case e: EListBody =>
+            Applicative[M].pure[Par](e)
+          case ESetBody(ParSet(ps, _, _, _)) =>
+            charge[M](toListCost(ps.size)) *>
+              Applicative[M].pure[Par](EList(ps.toList))
+          case EMapBody(ParMap(ps, _, _, _)) =>
+            charge[M](toListCost(ps.size)) *>
+              Applicative[M].pure[Par](
+                EList(
+                  ps.toSeq.map {
+                    case (k, v) =>
+                      Par().withExprs(Seq(Expr(ETupleBody(ETuple(Seq(k, v))))))
+                  }
+                )
+              )
+          case ETupleBody(ETuple(ps, _, _)) =>
+            charge[M](toListCost(ps.size)) *>
+              Applicative[M].pure[Par](EList(ps.toList))
+          case other =>
+            s.raiseError(MethodNotDefined("toList", other.typ))
+        }
+
+      override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
+        for {
+          _ <- if (args.nonEmpty)
+                s.raiseError(MethodArgumentNumberMismatch("toList", 0, args.length))
+              else s.unit
+          baseExpr <- evalSingleExpr(p)
+          result   <- toList(baseExpr)
+        } yield result
+    }
+
     private val methodTable: Map[String, Method] =
       Map(
         "nth"         -> nth,
@@ -1414,7 +1449,8 @@ object Reduce {
         "keys"        -> keys,
         "size"        -> size,
         "length"      -> length,
-        "slice"       -> slice
+        "slice"       -> slice,
+        "toList"      -> toList
       )
 
     def evalSingleExpr(

@@ -29,6 +29,7 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
+import scala.collection.mutable
 import scala.collection.mutable.HashMap
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -1910,4 +1911,136 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
   }
 
+  it should "return an error when `toList` is called with arguments" in {
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+    val toListCall: EMethod =
+      EMethod(
+        "toList",
+        EList(List()),
+        List[Par](GInt(1L))
+      )
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(space, reducer) =>
+        implicit val env = Env[Par]()
+        val nthTask      = reducer.eval(toListCall)
+        val inspectTask = for {
+          _ <- nthTask
+        } yield space.store.toMap
+        Await.result(inspectTask.runToFuture, 3.seconds)
+    }
+    result should be(mutable.HashMap.empty)
+    errorLog.readAndClearErrorVector().unsafeRunSync should be(
+      Vector(MethodArgumentNumberMismatch("toList", 0, 1))
+    )
+  }
+
+  it should "transform Set(1, 2, 3) into a [1, 2, 3]" in {
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+    val toListCall: EMethod =
+      EMethod(
+        "toList",
+        ESetBody(
+          ParSet(
+            List(
+              GInt(1L),
+              GInt(2L),
+              GInt(3L)
+            )
+          )
+        ),
+        List[Par]()
+      )
+
+    val result: Par = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env: Env[Par] = Env[Par]()
+        val toListTask             = reducer.evalExpr(toListCall)
+        Await.result(toListTask.runToFuture, 3.seconds)
+    }
+    val resultList =
+      EListBody(
+        EList(
+          List[Par](
+            GInt(1L),
+            GInt(2L),
+            GInt(3L)
+          )
+        )
+      )
+    result.exprs should be(Seq(Expr(resultList)))
+    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
+  }
+
+  it should "transform {'a':1, 'b':2, 'c':3} into [('a',1), ('b',2), ('c',3)]" in {
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+    val toListCall: EMethod =
+      EMethod(
+        "toList",
+        EMapBody(
+          ParMap(
+            List[(Par, Par)](
+              (GString("a"), GInt(1L)),
+              (GString("b"), GInt(2L)),
+              (GString("c"), GInt(3L))
+            )
+          )
+        ),
+        List[Par]()
+      )
+    val result: Par = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env: Env[Par] = Env[Par]()
+        val toListTask             = reducer.evalExpr(toListCall)
+        Await.result(toListTask.runToFuture, 3.seconds)
+    }
+    val resultList =
+      EListBody(
+        EList(
+          List[Par](
+            ETupleBody(ETuple(Seq(GString("a"), GInt(1L)))),
+            ETupleBody(ETuple(Seq(GString("b"), GInt(2L)))),
+            ETupleBody(ETuple(Seq(GString("c"), GInt(3L))))
+          )
+        )
+      )
+    result.exprs should be(Seq(Expr(resultList)))
+    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
+  }
+
+  it should "transform (1, 2, 3) into [1, 2, 3]" in {
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+    val toListCall: EMethod =
+      EMethod(
+        "toList",
+        ETupleBody(
+          ETuple(
+            List[Par](
+              GInt(1L),
+              GInt(2L),
+              GInt(3L)
+            )
+          )
+        ),
+        List[Par]()
+      )
+    val result: Par = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env: Env[Par] = Env[Par]()
+        val toListTask             = reducer.evalExpr(toListCall)
+        Await.result(toListTask.runToFuture, 3.seconds)
+    }
+    val resultList =
+      EListBody(
+        EList(
+          List[Par](
+            GInt(1L),
+            GInt(2L),
+            GInt(3L)
+          )
+        )
+      )
+    result.exprs should be(Seq(Expr(resultList)))
+    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
+  }
 }
