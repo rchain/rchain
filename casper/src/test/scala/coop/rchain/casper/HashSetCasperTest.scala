@@ -1087,33 +1087,6 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
     } yield ()
   }
 
-  it should "fail when deploying with insufficient phlos" in effectTest {
-    val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
-    import node._
-    implicit val timeEff = new LogicalTime[Effect]
-
-    for {
-      deployData        <- ConstructDeploy.basicDeployData[Effect](0, phlos = 1)
-      _                 <- node.casperEff.deploy(deployData)
-      createBlockResult <- MultiParentCasper[Effect].createBlock
-      Created(block)    = createBlockResult
-    } yield assert(block.body.get.deploys.head.errored)
-  }
-
-  it should "succeed if given enough phlos for deploy" in effectTest {
-    val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
-    import node._
-    implicit val timeEff = new LogicalTime[Effect]
-
-    for {
-      deployData <- ConstructDeploy.basicDeployData[Effect](0, phlos = 100)
-      _          <- node.casperEff.deploy(deployData)
-
-      createBlockResult <- MultiParentCasper[Effect].createBlock
-      Created(block)    = createBlockResult
-    } yield assert(!block.body.get.deploys.head.errored)
-  }
-
   private def buildBlockWithInvalidJustification(
       nodes: IndexedSeq[HashSetCasperTestNode[Effect]],
       deploys: immutable.IndexedSeq[ProcessedDeploy],
