@@ -8,7 +8,6 @@ from logging import Logger
 import threading
 from threading import Event
 import contextlib
-from collections import defaultdict
 from multiprocessing import Queue, Process
 from collections import defaultdict
 from typing import (
@@ -170,9 +169,9 @@ def extract_block_hash_from_propose_output(propose_output: str) -> str:
     return match.group(1)
 
 
-def extract_validator_stake_from_deploy_cost_str(out_put: str) -> Dict[str, float]:
-    deploy_cost_dict = defaultdict(lambda :0)
-    deploy_cost_list = out_put.split(_PB_REPEATED_STR_SEP)
+def extract_validator_stake_from_deploy_cost_str(output: str) -> Dict[str, float]:
+    deploy_cost_dict:Dict[str, float] = defaultdict(lambda :0)
+    deploy_cost_list = output.split(_PB_REPEATED_STR_SEP)
     for deploy_cost_str in deploy_cost_list:
         match = re.match(r'User: (?P<user>[a-zA-Z0-9]*), Cost: (?P<cost>[0-9]*) DeployData \#(?P<timestamp>[0-9]*) -- .', deploy_cost_str)
         if match:
