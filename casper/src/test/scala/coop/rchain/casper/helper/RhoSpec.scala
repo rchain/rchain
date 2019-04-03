@@ -7,6 +7,8 @@ import coop.rchain.casper.genesis.contracts.{Faucet, PreWallet, ProofOfStake, Te
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.casper.genesis.contracts.TestUtil
+import coop.rchain.casper.protocol.DeployData
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
@@ -60,7 +62,7 @@ object RhoSpec {
 
       _ <- TestUtil.runTestsWithDeploys[Task, Task.Par](
             testObject,
-            defaultGenesisSetup,
+            TestUtil.defaultGenesisSetup,
             otherLibs,
             testFrameworkContracts(testResultCollector)
           )
@@ -68,24 +70,6 @@ object RhoSpec {
       result <- testResultCollector.getResult
     } yield result
 
-  def defaultGenesisSetup[F[_]: Concurrent](runtimeManager: RuntimeManager[F]): F[BlockMessage] = {
-    val (_, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-    val bonds           = createBonds(validators)
-    val posValidators   = bonds.map(bond => Validator(bond._1, bond._2)).toSeq
-    val ethAddress      = "0x041e1eec23d118f0c4ffc814d4f415ac3ef3dcff"
-    val initBalance     = 37
-    val wallet          = PreWallet(ethAddress, initBalance)
-    Genesis.createGenesisBlock(
-      runtimeManager,
-      Genesis(
-        "RhoSpec-shard",
-        1,
-        wallet :: Nil,
-        ProofOfStake(0, Long.MaxValue, bonds.map(Validator.tupled).toSeq),
-        false
-      )
-    )
-  }
 }
 
 class RhoSpec(
