@@ -81,7 +81,7 @@ object TestUtil {
     // - transfers to each validator's vault based on their bonds
     // - a genesis vault based on the passed public key and initial rev supply
     //   (introduce new fields to Genesis case class)
-    // - "PoS and testRev" deploys
+    // - "PoS and testRev" deploys, and the 'test pos' one
     Genesis.createGenesisBlock(
       runtimeManager,
       Genesis(

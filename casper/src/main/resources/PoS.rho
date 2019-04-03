@@ -14,17 +14,16 @@
  // 9.  | 4,         | registry           | uri = rho:id:cnec3pa8prp4out3yc8facon6grm3xbsotpd4ckjfx8ghuw77xadzt
  // ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
 
-new PoS, rs(`rho:registry:insertSigned:ed25519`), uriOut, stdout(`rho:io:stdout`) in {
+new PoS, rs(`rho:registry:insertSigned:ed25519`), uriOut in {
 
  for (@minimumBond, @maximumBond <- PoS) {
 
- match "11112GofKy1v5mPWZjZEYBByvpZ4ahYJp6vFN1hgGCn7L543rFSpyA" {
+    match "11112GofKy1v5mPWZjZEYBByvpZ4ahYJp6vFN1hgGCn7L543rFSpyA" {
 
       posRevAddress => {
 
        new eitherCh,
           revVaultCh,
-          listCh,
           registryLookup(`rho:registry:lookup`) in {
 
           registryLookup!(`rho:id:j6trahbxycumerwpr5qype7j43b7eqh8auebwsa9nn68if47gswh73`, *eitherCh)
@@ -125,14 +124,18 @@ new PoS, rs(`rho:registry:insertSigned:ed25519`), uriOut, stdout(`rho:io:stdout`
               | contract deposit (@amount, return) = {
                 new parametersCh,
                   vaultCh,
-                  revAddressCh in {
+                  revAddressCh,
+                  authKeyCh in {
                   getParameters!(*parametersCh)
                   | for (_, _, @userPk, _ <- parametersCh) {
                     revAddressOps!("fromPublicKey", userPk, *revAddressCh)
                     | for (@revAddress <- revAddressCh) {
                       @RevVault!("findOrCreate", revAddress, *vaultCh)
                       | for (@(true, vault) <- vaultCh) {
-                        @vault!("transfer", posRevAddress, amount, *return)
+                        @RevVault!("deployerAuthKey", *authKeyCh)
+                        | for (userAuthKey <- authKeyCh){
+                          @vault!("transfer", posRevAddress, amount, *userAuthKey, *return)
+                        }
                       }
                     }
                   }
