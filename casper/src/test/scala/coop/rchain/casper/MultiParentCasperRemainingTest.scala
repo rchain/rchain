@@ -51,7 +51,7 @@ import scala.collection.immutable
 import scala.util.Random
 import scala.concurrent.duration._
 
-class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
+class MultiParentCasperRemainingTest extends FlatSpec with Matchers with Inspectors {
 
   import MultiParentCasperTestUtil._
 
