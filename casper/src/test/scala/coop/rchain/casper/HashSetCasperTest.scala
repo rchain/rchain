@@ -53,7 +53,7 @@ import scala.concurrent.duration._
 
 class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
 
-  import HashSetCasperTest._
+  import MultiParentCasperTestUtil._
 
   implicit val timeEff = new LogicalTime[Effect]
 
@@ -480,79 +480,5 @@ class HashSetCasperTest extends FlatSpec with Matchers with Inspectors {
         "rchain"
       )
     }
-  }
-}
-
-object HashSetCasperTest {
-  def validateBlockStore[R](
-      node: HashSetCasperTestNode[Effect]
-  )(f: BlockStore[Effect] => Effect[R])(implicit metrics: Metrics[Effect], log: Log[Effect]) =
-    for {
-      bs     <- BlockDagStorageTestFixture.createBlockStorage[Effect](node.blockStoreDir)
-      result <- f(bs)
-      _      <- bs.close()
-      _      <- Sync[Effect].delay { node.blockStoreDir.recursivelyDelete() }
-    } yield result
-
-  def blockTuplespaceContents(
-      block: BlockMessage
-  )(implicit casper: MultiParentCasper[Effect]): Effect[String] = {
-    val tsHash = ProtoUtil.postStateHash(block)
-    MultiParentCasper[Effect].storageContents(tsHash)
-  }
-
-  def deployAndQuery(
-      node: HashSetCasperTestNode[Effect],
-      dd: DeployData,
-      query: DeployData
-  ): Effect[(BlockStatus, Seq[Par])] =
-    for {
-      createBlockResult <- node.casperEff.deploy(dd) >> node.casperEff.createBlock
-      Created(block)    = createBlockResult
-      blockStatus       <- node.casperEff.addBlock(block, ignoreDoppelgangerCheck[Effect])
-      queryResult <- node.runtimeManager
-                      .captureResults(ProtoUtil.postStateHash(block), query)
-    } yield (blockStatus, queryResult)
-
-  def createBonds(validators: Seq[Array[Byte]]): Map[Array[Byte], Long] =
-    validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
-
-  def createGenesis(bonds: Map[Array[Byte], Long]): BlockMessage =
-    buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, Faucet.noopFaucet, 0L)
-
-  def buildGenesis(
-      wallets: Seq[PreWallet],
-      bonds: Map[Array[Byte], Long],
-      minimumBond: Long,
-      maximumBond: Long,
-      faucetCode: String => String,
-      deployTimestamp: Long
-  ): BlockMessage = {
-    val initial                            = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "rchain")
-    val storageDirectory                   = Files.createTempDirectory(s"hash-set-casper-test-genesis")
-    val storageSize: Long                  = 1024L * 1024
-    implicit val log                       = new Log.NOPLog[Task]
-    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-
-    val activeRuntime =
-      Runtime
-        .createWithEmptyCost[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB)
-        .unsafeRunSync
-    val runtimeManager = RuntimeManager.fromRuntime[Task](activeRuntime).unsafeRunSync
-    val emptyStateHash = runtimeManager.emptyStateHash
-    val validators     = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
-    val genesis = Genesis
-      .withContracts(
-        initial,
-        ProofOfStakeParams(minimumBond, maximumBond, validators),
-        wallets,
-        faucetCode,
-        emptyStateHash,
-        runtimeManager,
-        deployTimestamp
-      )
-      .unsafeRunSync
-    activeRuntime.close().unsafeRunSync
-    genesis
   }
 }

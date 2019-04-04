@@ -1,6 +1,6 @@
 package coop.rchain.casper.util.comm
 
-import coop.rchain.casper.HashSetCasperTest
+import coop.rchain.casper.MultiParentCasperTestUtil
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.helper.{BlockDagStorageTestFixture, HashSetCasperTestNode}
@@ -109,7 +109,7 @@ object BlockApproverProtocolTest {
     val deployTimestamp = 1L
     val validators      = bonds.map(b => ProofOfStakeValidator(b._1, b._2)).toSeq
 
-    val genesis = HashSetCasperTest.buildGenesis(
+    val genesis = MultiParentCasperTestUtil.buildGenesis(
       wallets,
       bonds,
       1L,

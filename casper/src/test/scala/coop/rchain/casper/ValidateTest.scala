@@ -673,8 +673,8 @@ class ValidateTest
   "Bonds cache validation" should "succeed on a valid block and fail on modified bonds" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val (_, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-      val bonds           = HashSetCasperTest.createBonds(validators)
-      val genesis         = HashSetCasperTest.createGenesis(bonds)
+      val bonds           = MultiParentCasperTestUtil.createBonds(validators)
+      val genesis         = MultiParentCasperTestUtil.createGenesis(bonds)
 
       val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
       val storageSize: Long = 1024L * 1024
@@ -705,7 +705,7 @@ class ValidateTest
   "Field format validation" should "succeed on a valid block and fail on empty fields" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val (sk, pk) = Ed25519.newKeyPair
-      val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+      val block    = MultiParentCasperTestUtil.createGenesis(Map(pk -> 1))
       for {
         dag     <- blockDagStorage.getRepresentation
         genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "rchain")
@@ -737,7 +737,7 @@ class ValidateTest
   "Block hash format validation" should "fail on invalid hash" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val (sk, pk) = Ed25519.newKeyPair
-      val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+      val block    = MultiParentCasperTestUtil.createGenesis(Map(pk -> 1))
       for {
         dag     <- blockDagStorage.getRepresentation
         genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "rchain")
@@ -751,7 +751,7 @@ class ValidateTest
   "Block deploy count validation" should "fail on invalid number of deploys" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val (sk, pk) = Ed25519.newKeyPair
-      val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+      val block    = MultiParentCasperTestUtil.createGenesis(Map(pk -> 1))
       for {
         dag     <- blockDagStorage.getRepresentation
         genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "rchain")
@@ -764,7 +764,7 @@ class ValidateTest
 
   "Block version validation" should "work" in withStorage { _ => implicit blockDagStorage =>
     val (sk, pk) = Ed25519.newKeyPair
-    val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+    val block    = MultiParentCasperTestUtil.createGenesis(Map(pk -> 1))
     for {
       dag     <- blockDagStorage.getRepresentation
       genesis <- ProtoUtil.signBlock(block, dag, pk, sk, "ed25519", "rchain")

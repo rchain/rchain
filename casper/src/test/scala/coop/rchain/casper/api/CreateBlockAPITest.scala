@@ -29,7 +29,7 @@ import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
 
 class CreateBlockAPITest extends FlatSpec with Matchers {
-  import HashSetCasperTest._
+  import MultiParentCasperTestUtil._
   import HashSetCasperTestNode.Effect
 
   private implicit val scheduler: Scheduler = Scheduler.fixedPool("create-block-api-test", 4)

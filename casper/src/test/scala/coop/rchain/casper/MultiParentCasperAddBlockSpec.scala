@@ -53,7 +53,7 @@ import scala.concurrent.duration._
 
 class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspectors {
 
-  import HashSetCasperTest._
+  import MultiParentCasperTestUtil._
 
   implicit val timeEff = new LogicalTime[Effect]
 

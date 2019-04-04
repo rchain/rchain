@@ -4,7 +4,7 @@ import cats.effect.concurrent.Ref
 import coop.rchain.comm.rp.Connect, Connect._
 import coop.rchain.shared._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.HashSetCasperTest
+import coop.rchain.casper.MultiParentCasperTestUtil
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib._
@@ -24,7 +24,7 @@ import scala.concurrent.duration._
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.util.comm.ApproveBlockProtocolTest.TestFixture
-import coop.rchain.casper.{HashSetCasperTest, LastApprovedBlock}
+import coop.rchain.casper.{LastApprovedBlock, MultiParentCasperTestUtil}
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 import coop.rchain.casper.util.TestTime
 
@@ -343,8 +343,8 @@ object ApproveBlockProtocolTest {
     implicit val lab             = LastApprovedBlock.unsafe[Task](None)
 
     val (sk, pk)   = Ed25519.newKeyPair
-    val bonds      = HashSetCasperTest.createBonds(Seq(pk))
-    val genesis    = HashSetCasperTest.createGenesis(bonds)
+    val bonds      = MultiParentCasperTestUtil.createBonds(Seq(pk))
+    val genesis    = MultiParentCasperTestUtil.createGenesis(bonds)
     val validators = validatorsPk.map(ByteString.copyFrom(_))
     val candidate  = ApprovedBlockCandidate(Some(genesis), requiredSigs)
     val sigs       = Ref.unsafe[Task, Set[Signature]](Set.empty)

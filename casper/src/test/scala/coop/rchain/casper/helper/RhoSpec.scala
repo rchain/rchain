@@ -1,7 +1,7 @@
 package coop.rchain.casper.helper
 
 import cats.effect.Concurrent
-import coop.rchain.casper.HashSetCasperTest.createBonds
+import coop.rchain.casper.MultiParentCasperTestUtil.createBonds
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.{
   Faucet,
