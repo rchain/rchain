@@ -23,7 +23,7 @@ import monix.execution.Scheduler.Implicits.global
 
 trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
 
-  implicit def M: Monad[F]
+  implicit def S: Sync[F]
   implicit def P: Parallel[F, M]
 
   type Channel      = String
@@ -44,11 +44,12 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
         for {
           _                 <- history.putContinuations(channels, historyContinuations)
           cache             <- state.read
-          _                 = cache.continuations shouldBe empty
+          _                 <- S.delay(cache.continuations shouldBe empty)
           readContinuations <- hotStore.getContinuations(channels)
           cache             <- state.read
-          _                 = cache.continuations(channels) shouldEqual historyContinuations
-        } yield (readContinuations shouldEqual historyContinuations)
+          _                 <- S.delay(cache.continuations(channels) shouldEqual historyContinuations)
+          _                 <- S.delay(readContinuations shouldEqual historyContinuations)
+        } yield ()
       }
   }
 
@@ -71,9 +72,11 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                     )
                 )
             readContinuations <- hotStore.getContinuations(channels)
-            cache             <- state.read
-            _                 = cache.continuations(channels) shouldEqual cachedContinuations
-          } yield (readContinuations shouldEqual cachedContinuations)
+
+            cache <- state.read
+            _     <- S.delay(cache.continuations(channels) shouldEqual cachedContinuations)
+            _     <- S.delay(readContinuations shouldEqual cachedContinuations)
+          } yield ()
         }
       }
   }
@@ -87,11 +90,14 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       fixture { (state, history, hotStore) =>
         {
           for {
-            _     <- history.putContinuations(channels, historyContinuations)
-            _     <- hotStore.putContinuation(channels, insertedContinuation)
+            _ <- history.putContinuations(channels, historyContinuations)
+            _ <- hotStore.putContinuation(channels, insertedContinuation)
+
             cache <- state.read
-          } yield
-            (cache.continuations(channels) shouldEqual insertedContinuation :: historyContinuations)
+            _ <- S.delay(
+                  cache.continuations(channels) shouldEqual insertedContinuation :: historyContinuations
+                )
+          } yield ()
         }
       }
   }
@@ -117,8 +123,11 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                 )
             _     <- hotStore.putContinuation(channels, insertedContinuation)
             cache <- state.read
-          } yield
-            (cache.continuations(channels) shouldEqual insertedContinuation :: cachedContinuations)
+            _ <- S.delay(
+                  cache
+                    .continuations(channels) shouldEqual insertedContinuation :: cachedContinuations
+                )
+          } yield ()
         }
       }
   }
@@ -132,8 +141,9 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
           _        = cache.data shouldBe empty
           readData <- hotStore.getData(channel)
           cache    <- state.read
-          _        = cache.data(channel) shouldEqual historyData
-        } yield (readData shouldEqual historyData)
+          _        <- S.delay(cache.data(channel) shouldEqual historyData)
+          _        <- S.delay(readData shouldEqual historyData)
+        } yield ()
       }
   }
 
@@ -156,9 +166,10 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                     )
                 )
             readData <- hotStore.getData(channel)
-            cache    <- state.read
-            _        = cache.data(channel) shouldEqual cachedData
-          } yield (readData shouldEqual cachedData)
+            cache <- state.read
+            _     <- S.delay(cache.data(channel) shouldEqual cachedData)
+            _     <- S.delay(readData shouldEqual cachedData)
+          } yield ()
         }
       }
   }
@@ -172,10 +183,11 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       fixture { (state, history, hotStore) =>
         {
           for {
-            _     <- history.putData(channel, historyData)
-            _     <- hotStore.putDatum(channel, insertedData)
+            _ <- history.putData(channel, historyData)
+            _ <- hotStore.putDatum(channel, insertedData)
             cache <- state.read
-          } yield (cache.data(channel) shouldEqual insertedData :: historyData)
+            _     <- S.delay(cache.data(channel) shouldEqual insertedData :: historyData)
+          } yield ()
         }
       }
   }
@@ -201,7 +213,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                 )
             _     <- hotStore.putDatum(channel, insertedData)
             cache <- state.read
-          } yield (cache.data(channel) shouldEqual insertedData :: cachedData)
+            _     <- S.delay(cache.data(channel) shouldEqual insertedData :: cachedData)
+          } yield ()
         }
       }
   }
@@ -216,7 +229,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
           readJoins <- hotStore.getJoins(channel)
           cache     <- state.read
           _         = cache.joins(channel) shouldEqual historyJoins
-        } yield (readJoins shouldEqual historyJoins)
+          _         <- S.delay(readJoins shouldEqual historyJoins)
+        } yield ()
       }
   }
 
@@ -240,8 +254,9 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                 )
             readJoins <- hotStore.getJoins(channel)
             cache     <- state.read
-            _         = cache.joins(channel) shouldEqual cachedJoins
-          } yield (readJoins shouldEqual cachedJoins)
+            _         <- S.delay(cache.joins(channel) shouldEqual cachedJoins)
+            _         <- S.delay(readJoins shouldEqual cachedJoins)
+          } yield ()
         }
       }
   }
@@ -267,8 +282,9 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                   ).parSequence
               r1 <- hotStore.getData(channel1)
               r2 <- hotStore.getData(channel2)
-              _  = r1 shouldEqual insertedData1 :: historyData1
-            } yield (r2 shouldEqual insertedData2 :: historyData2)
+              _  <- S.delay(r1 shouldEqual insertedData1 :: historyData1)
+              _  <- S.delay(r2 shouldEqual insertedData2 :: historyData2)
+            } yield ()
           }
         }
       }
@@ -295,8 +311,9 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                   ).parSequence
               r1 <- hotStore.getContinuations(channels1)
               r2 <- hotStore.getContinuations(channels2)
-              _  = r1 shouldEqual insertedContinuation1 :: historyContinuations1
-            } yield (r2 shouldEqual insertedContinuation2 :: historyContinuations2)
+              _  <- S.delay(r1 shouldEqual insertedContinuation1 :: historyContinuations1)
+              _  <- S.delay(r2 shouldEqual insertedContinuation2 :: historyContinuations2)
+            } yield ()
           }
         }
       }
@@ -333,7 +350,7 @@ class History[F[_]: Monad](implicit R: Ref[F, Cache[String, Pattern, String, Str
 trait InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {
 
   protected type F[A] = Task[A]
-  override implicit val M: Monad[F]                 = implicitly[Concurrent[Task]]
+  override implicit val S: Sync[F]                  = implicitly[Concurrent[Task]]
   override implicit val P: Parallel[Task, Task.Par] = Task.catsParallel
   def C: F[Cell[F, Cache[String, Pattern, String, StringsCaptor]]]
 
