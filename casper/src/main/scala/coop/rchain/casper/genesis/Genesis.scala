@@ -55,7 +55,7 @@ object Genesis {
       StandardDeploys.revVault
     )
 
-  def withContracts[F[_]: Concurrent](
+  private def withContracts[F[_]: Concurrent](
       initial: BlockMessage,
       posParams: ProofOfStake,
       wallets: Seq[PreWallet],

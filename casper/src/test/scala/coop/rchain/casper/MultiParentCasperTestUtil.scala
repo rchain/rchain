@@ -69,7 +69,6 @@ object MultiParentCasperTestUtil {
       faucet: Boolean,
       deployTimestamp: Long
   ): BlockMessage = {
-    val initial                            = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "rchain")
     val storageDirectory                   = Files.createTempDirectory(s"hash-set-casper-test-genesis")
     val storageSize: Long                  = 1024L * 1024
     implicit val log                       = new Log.NOPLog[Task]
@@ -85,18 +84,18 @@ object MultiParentCasperTestUtil {
                           StoreType.LMDB
                         )
       runtimeManager <- RuntimeManager.fromRuntime[Task](activeRuntime)
-      emptyStateHash = runtimeManager.emptyStateHash
-      validators     = bonds.map(bond => Validator(bond._1, bond._2)).toSeq
-      genesis <- Genesis
-                  .withContracts(
-                    initial,
-                    ProofOfStake(minimumBond, maximumBond, validators),
+      validators     = bonds.toSeq.map(Validator.tupled)
+      genesis <- Genesis.createGenesisBlock(
+                  runtimeManager,
+                  Genesis(
+                    "HashSetCasperTest-shard",
+                    deployTimestamp,
                     wallets,
-                    faucetCode,
-                    emptyStateHash,
-                    runtimeManager,
-                    deployTimestamp
+                    ProofOfStake(minimumBond, maximumBond, validators),
+                    faucet
                   )
+                )
       _ <- activeRuntime.close()
-    } yield genesis).unsafeRunSync  }
+    } yield genesis).unsafeRunSync
+  }
 }
