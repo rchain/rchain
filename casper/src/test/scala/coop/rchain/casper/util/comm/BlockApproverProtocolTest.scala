@@ -107,7 +107,7 @@ object BlockApproverProtocolTest {
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
 
     val deployTimestamp = 1L
-    val validators      = bonds.map(b => Validator(b._1, b._2)).toSeq
+    val validators      = bonds.map(Validator.tupled).toSeq
 
     val genesis = MultiParentCasperTestUtil.buildGenesis(
       wallets,
