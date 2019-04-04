@@ -177,4 +177,98 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
     } yield assert(!block.body.get.deploys.head.errored)
   }
 
+  it should "allow paying for deploys" in effectTest {
+    val node      = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val (sk, pk)  = Ed25519.newKeyPair
+    val user      = ByteString.copyFrom(pk)
+    val timestamp = System.currentTimeMillis()
+    val phloPrice = 1L
+    val amount    = 847L
+    val sigDeployData = ConstructDeploy
+      .sourceDeploy(
+        s"""new retCh in { @"blake2b256Hash"!([0, $amount, *retCh].toByteArray(), "__SCALA__") }""",
+        timestamp,
+        accounting.MAX_VALUE,
+        sec = PrivateKey(sk)
+      )
+
+    for {
+      capturedResults <- node.runtimeManager
+                          .captureResults(
+                            ProtoUtil.postStateHash(genesis),
+                            sigDeployData
+                          )
+      sigData     = capturedResults.head.exprs.head.getGByteArray
+      sig         = Base16.encode(Ed25519.sign(sigData.toByteArray, sk))
+      pkStr       = Base16.encode(pk)
+      paymentCode = s"""new
+         |  paymentForward, walletCh, rl(`rho:registry:lookup`),
+         |  SystemInstancesCh, faucetCh, posCh
+         |in {
+         |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+         |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
+         |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
+         |    @SystemInstancesRegistry!("lookup", "faucet", *faucetCh) |
+         |    for(faucet <- faucetCh; pos <- posCh){
+         |      faucet!($amount, "ed25519", "$pkStr", *walletCh) |
+         |      for(@[wallet] <- walletCh) {
+         |        @wallet!("transfer", $amount, 0, "$sig", *paymentForward, Nil) |
+         |        for(@purse <- paymentForward){ pos!("pay", purse, Nil) }
+         |      }
+         |    }
+         |  }
+         |}""".stripMargin
+      paymentDeployData = ConstructDeploy
+        .sourceDeploy(
+          paymentCode,
+          timestamp,
+          accounting.MAX_VALUE,
+          phloPrice = phloPrice,
+          sec = PrivateKey(sk)
+        )
+
+      paymentQuery = ConstructDeploy
+        .sourceDeploy(
+          """new rl(`rho:registry:lookup`), SystemInstancesCh, posCh in {
+        |  rl!(`rho:id:wdwc36f4ixa6xacck3ddepmgueum7zueuczgthcqp6771kdu8jogm8`, *SystemInstancesCh) |
+        |  for(@(_, SystemInstancesRegistry) <- SystemInstancesCh) {
+        |    @SystemInstancesRegistry!("lookup", "pos", *posCh) |
+        |    for(pos <- posCh){ pos!("lastPayment", "__SCALA__") }
+        |  }
+        |}""".stripMargin,
+          0L,
+          accounting.MAX_VALUE,
+          sec = PrivateKey(sk)
+        )
+
+      deployQueryResult <- deployAndQuery(
+                            node,
+                            paymentDeployData,
+                            paymentQuery
+                          )
+      (blockStatus, queryResult) = deployQueryResult
+      (codeHashPar, _, userIdPar, timestampPar) = ProtoUtil.getRholangDeployParams(
+        paymentDeployData
+      )
+      phloPurchasedPar = Par(exprs = Seq(Expr(Expr.ExprInstance.GInt(phloPrice * amount))))
+
+      _ <- node.tearDown()
+    } yield {
+      blockStatus shouldBe Valid
+
+      queryResult.head.exprs.head.getETupleBody.ps match {
+        case Seq(
+            actualCodeHashPar,
+            actualUserIdPar,
+            actualTimestampPar,
+            actualPhloPurchasedPar
+            ) =>
+          actualCodeHashPar should be(codeHashPar)
+          actualUserIdPar should be(userIdPar)
+          actualTimestampPar should be(timestampPar)
+          actualPhloPurchasedPar should be(phloPurchasedPar)
+      }
+    }
+  }
+
 }
