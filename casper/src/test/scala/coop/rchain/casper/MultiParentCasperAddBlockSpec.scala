@@ -502,49 +502,107 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     } yield result
   }
 
-  it should "handle a long chain of block requests appropriately" in effectTest {
+  it should "estimate parent properly" in effectTest {
+    val (otherSk, otherPk)          = Ed25519.newKeyPair
+    val (validatorKeys, validators) = (1 to 5).map(_ => Ed25519.newKeyPair).unzip
+    val (ethPivKeys, ethPubKeys)    = (1 to 5).map(_ => Secp256k1.newKeyPair).unzip
+    val ethAddresses =
+      ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.bytes.drop(1)).takeRight(20)))
+    val wallets = ethAddresses.map(addr => PreWallet(addr, BigInt(10001)))
+    val bonds = Map(
+      validators(0) -> 3L,
+      validators(1) -> 1L,
+      validators(2) -> 5L,
+      validators(3) -> 2L,
+      validators(4) -> 4L
+    )
+    val minimumBond = 100L
+    val genesis =
+      buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, Faucet.basicWalletFaucet, 0L)
+
+    def deployment(i: Int, ts: Long): DeployData =
+      ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts, accounting.MAX_VALUE)
+
+    def deploy(
+        node: HashSetCasperTestNode[Effect],
+        dd: DeployData
+    ) = node.casperEff.deploy(dd)
+
+    def create(
+        node: HashSetCasperTestNode[Effect]
+    ) =
+      for {
+        createBlockResult1    <- node.casperEff.createBlock
+        Created(signedBlock1) = createBlockResult1
+      } yield signedBlock1
+
+    def add(node: HashSetCasperTestNode[Effect], signed: BlockMessage) =
+      Sync[Effect].attempt(
+        node.casperEff.addBlock(signed, ignoreDoppelgangerCheck[Effect])
+      )
+
+    val network = TestNetwork.empty[Effect]
+
     for {
-      nodes <- HashSetCasperTestNode.networkEff(
-                validatorKeys.take(2),
-                genesis,
-                storageSize = 1024L * 1024 * 10
-              )
+      nodes <- HashSetCasperTestNode
+                .networkEff(validatorKeys.take(3), genesis, testNetwork = network)
+                .map(_.toList)
+      v1   = nodes(0)
+      v2   = nodes(1)
+      v3   = nodes(2)
+      _    <- deploy(v1, deployment(0, 1)) >> create(v1) >>= (v1c1 => add(v1, v1c1)) //V1#1
+      v2c1 <- deploy(v2, deployment(0, 2)) >> create(v2) //V2#1
+      _    <- v2.receive()
+      _    <- v3.receive()
+      _    <- deploy(v1, deployment(0, 4)) >> create(v1) >>= (v1c2 => add(v1, v1c2)) //V1#2
+      v3c2 <- deploy(v3, deployment(0, 5)) >> create(v3) //V3#2
+      _    <- v3.receive()
+      _    <- add(v3, v3c2) //V3#2
+      _    <- add(v2, v2c1) //V2#1
+      _    <- v3.receive()
+      r    <- deploy(v3, deployment(0, 6)) >> create(v3) >>= (b => add(v3, b))
+      _    = r shouldBe Right(Valid)
+      _    = v3.logEff.warns shouldBe empty
 
-      _ <- (0 to 9).toList.traverse_[Effect, Unit] { i =>
-            for {
-              deploy <- ConstructDeploy.basicDeployData[Effect](i)
-              createBlockResult <- nodes(0).casperEff
-                                    .deploy(deploy) *> nodes(0).casperEff.createBlock
-              Created(block) = createBlockResult
+      _ <- nodes.map(_.tearDown()).sequence
+    } yield ()
+  }
 
-              _ <- nodes(0).casperEff.addBlock(block, ignoreDoppelgangerCheck[Effect])
-              _ <- nodes(1).transportLayerEff.clear(nodes(1).local) //nodes(1) misses this block
-            } yield ()
-          }
-      deployData10 <- ConstructDeploy.basicDeployData[Effect](10)
-      createBlock11Result <- nodes(0).casperEff.deploy(deployData10) *> nodes(
-                              0
-                            ).casperEff.createBlock
-      Created(block11) = createBlock11Result
-      _                <- nodes(0).casperEff.addBlock(block11, ignoreDoppelgangerCheck[Effect])
+  it should "prepare to slash an block that includes a invalid block pointer" in effectTest {
+    for {
+      nodes           <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
+      deploys         <- (0 to 5).toList.traverse(i => ConstructDeploy.basicDeployData[Effect](i))
+      deploysWithCost = deploys.map(d => ProcessedDeploy(deploy = Some(d))).toIndexedSeq
 
-      // Cycle of requesting and passing blocks until block #3 from nodes(0) to nodes(1)
-      _ <- (0 to 8).toList.traverse_[Effect, Unit] { i =>
-            nodes(1).receive() *> nodes(0).receive()
-          }
+      createBlockResult <- nodes(0).casperEff
+                            .deploy(deploys(0)) *> nodes(0).casperEff.createBlock
+      Created(signedBlock) = createBlockResult
+      signedInvalidBlock = BlockUtil.resignBlock(
+        signedBlock.withSeqNum(-2),
+        nodes(0).validatorId.privateKey
+      ) // Invalid seq num
 
-      // We simulate a network failure here by not allowing block #2 to get passed to nodes(1)
+      blockWithInvalidJustification <- buildBlockWithInvalidJustification(
+                                        nodes,
+                                        deploysWithCost,
+                                        signedInvalidBlock
+                                      )
 
-      // And then we assume fetchDependencies eventually gets called
-      _ <- nodes(1).casperEff.fetchDependencies
-      _ <- nodes(0).receive()
+      _ <- nodes(1).casperEff
+            .addBlock(blockWithInvalidJustification, ignoreDoppelgangerCheck[Effect])
+      _ <- nodes(0).transportLayerEff
+            .clear(nodes(0).local) // nodes(0) rejects normal adding process for blockThatPointsToInvalidBlock
 
-      _ = nodes(1).logEff.infos.count(_ startsWith "Requested missing block") should be(10)
-      result = nodes(0).logEff.infos.count(
-        s => (s startsWith "Received request for block") && (s endsWith "Response sent.")
-      ) should be(10)
+      signedInvalidBlockPacketMessage = packet(
+        nodes(0).local,
+        transport.BlockMessage,
+        signedInvalidBlock.toByteString
+      )
+      _ <- nodes(0).transportLayerEff.send(nodes(1).local, signedInvalidBlockPacketMessage)
+      _ <- nodes(1).receive() // receives signedInvalidBlock; attempts to add both blocks
 
-      _ <- nodes.map(_.tearDown()).toList.sequence
+      result = nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
+      _      <- nodes.map(_.tearDown()).toList.sequence
     } yield result
   }
 

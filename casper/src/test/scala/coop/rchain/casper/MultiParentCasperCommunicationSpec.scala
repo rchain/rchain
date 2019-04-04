@@ -216,4 +216,51 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
       _  <- nodes.map(_.tearDownNode()).toList.sequence
     } yield ()
   }
+
+  it should "handle a long chain of block requests appropriately" in effectTest {
+    for {
+      nodes <- HashSetCasperTestNode.networkEff(
+                validatorKeys.take(2),
+                genesis,
+                storageSize = 1024L * 1024 * 10
+              )
+
+      _ <- (0 to 9).toList.traverse_[Effect, Unit] { i =>
+            for {
+              deploy <- ConstructDeploy.basicDeployData[Effect](i)
+              createBlockResult <- nodes(0).casperEff
+                                    .deploy(deploy) *> nodes(0).casperEff.createBlock
+              Created(block) = createBlockResult
+
+              _ <- nodes(0).casperEff.addBlock(block, ignoreDoppelgangerCheck[Effect])
+              _ <- nodes(1).transportLayerEff.clear(nodes(1).local) //nodes(1) misses this block
+            } yield ()
+          }
+      deployData10 <- ConstructDeploy.basicDeployData[Effect](10)
+      createBlock11Result <- nodes(0).casperEff.deploy(deployData10) *> nodes(
+                              0
+                            ).casperEff.createBlock
+      Created(block11) = createBlock11Result
+      _                <- nodes(0).casperEff.addBlock(block11, ignoreDoppelgangerCheck[Effect])
+
+      // Cycle of requesting and passing blocks until block #3 from nodes(0) to nodes(1)
+      _ <- (0 to 8).toList.traverse_[Effect, Unit] { i =>
+            nodes(1).receive() *> nodes(0).receive()
+          }
+
+      // We simulate a network failure here by not allowing block #2 to get passed to nodes(1)
+
+      // And then we assume fetchDependencies eventually gets called
+      _ <- nodes(1).casperEff.fetchDependencies
+      _ <- nodes(0).receive()
+
+      _ = nodes(1).logEff.infos.count(_ startsWith "Requested missing block") should be(10)
+      result = nodes(0).logEff.infos.count(
+        s => (s startsWith "Received request for block") && (s endsWith "Response sent.")
+      ) should be(10)
+
+      _ <- nodes.map(_.tearDown()).toList.sequence
+    } yield result
+  }
+
 }
