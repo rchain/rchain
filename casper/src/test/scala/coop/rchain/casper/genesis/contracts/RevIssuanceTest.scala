@@ -4,7 +4,7 @@ import cats.effect.Concurrent
 import cats.implicits._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.ConstructDeploy
-import coop.rchain.casper.HashSetCasperTest.createBonds
+import coop.rchain.casper.MultiParentCasperTestUtil.createBonds
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.rholang.RuntimeManager

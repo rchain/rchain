@@ -4,7 +4,7 @@ import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.{BlockDagRepresentation, InMemBlockDagStorage, InMemBlockStore}
-import coop.rchain.casper.HashSetCasperTest.{buildGenesis, createBonds}
+import coop.rchain.casper.MultiParentCasperTestUtil.{buildGenesis, createBonds}
 import coop.rchain.casper._
 import coop.rchain.casper.genesis.contracts.Faucet
 import coop.rchain.casper.helper.{BlockDagStorageTestFixture, NoOpsCasperEffect}
@@ -329,8 +329,8 @@ class CasperPacketHandlerSpec extends WordSpec {
       import fixture._
 
       val (_, validators)        = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-      val bonds                  = HashSetCasperTest.createBonds(validators)
-      val genesis                = HashSetCasperTest.createGenesis(bonds)
+      val bonds                  = MultiParentCasperTestUtil.createBonds(validators)
+      val genesis                = MultiParentCasperTestUtil.createGenesis(bonds)
       val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesis))
       val approvedBlock: ApprovedBlock = ApprovedBlock(
         candidate = Some(approvedBlockCandidate),

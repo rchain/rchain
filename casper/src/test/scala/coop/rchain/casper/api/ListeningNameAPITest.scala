@@ -2,7 +2,7 @@ package coop.rchain.casper.api
 
 import cats.implicits._
 
-import coop.rchain.casper.{ConstructDeploy, Created, HashSetCasperTest}
+import coop.rchain.casper.{ConstructDeploy, Created, MultiParentCasperTestUtil}
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
@@ -21,7 +21,7 @@ import org.scalatest._
 
 class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
 
-  import HashSetCasperTest._
+  import coop.rchain.casper.MultiParentCasperTestUtil._
 
   private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val bonds                       = createBonds(validators)
