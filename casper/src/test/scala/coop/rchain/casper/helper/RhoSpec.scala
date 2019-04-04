@@ -75,17 +75,13 @@ object RhoSpec {
     val ethAddress      = "0x041e1eec23d118f0c4ffc814d4f415ac3ef3dcff"
     val initBalance     = 37
     val wallet          = PreWallet(ethAddress, initBalance)
-    Genesis.withContracts(
-      Genesis.defaultBlessedTerms(
-        timestamp = 1,
-        posParams = ProofOfStake(0, Long.MaxValue, posValidators),
-        wallets = wallet :: Nil,
-        faucetCode = Faucet.noopFaucet
-      ),
-      Genesis.withoutContracts(bonds, 1, 1, "TESTING-shard"),
-      runtimeManager.emptyStateHash,
-      runtimeManager
-    )
+    Genesis.createGenesisBlock(runtimeManager, Genesis(
+      "RhoSpec-shard",
+      1,
+      wallet :: Nil,
+      ProofOfStake(0, Long.MaxValue, bonds.map(Validator.tupled).toSeq),
+      false
+    ))
   }
 }
 

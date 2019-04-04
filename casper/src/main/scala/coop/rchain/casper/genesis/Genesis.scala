@@ -71,7 +71,7 @@ object Genesis {
       runtimeManager
     )
 
-  def withContracts[F[_]: Concurrent](
+  private def withContracts[F[_]: Concurrent](
       blessedTerms: List[DeployData],
       initial: BlockMessage,
       startHash: StateHash,
@@ -95,7 +95,7 @@ object Genesis {
           unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
       }
 
-  def withoutContracts(
+  private def withoutContracts(
       bonds: Map[PublicKey, Long],
       version: Long,
       timestamp: Long,
