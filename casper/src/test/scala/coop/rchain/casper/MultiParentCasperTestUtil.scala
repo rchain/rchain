@@ -75,25 +75,26 @@ object MultiParentCasperTestUtil {
     implicit val log                       = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
-    val activeRuntime =
-      Runtime
-        .createWithEmptyCost[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB)
-        .unsafeRunSync
-    val runtimeManager = RuntimeManager.fromRuntime[Task](activeRuntime).unsafeRunSync
-    val emptyStateHash = runtimeManager.emptyStateHash
-    val validators     = bonds.map(bond => Validator(bond._1, bond._2)).toSeq
-    val genesis = Genesis
-      .withContracts(
-        initial,
-        ProofOfStake(minimumBond, maximumBond, validators),
-        wallets,
-        faucetCode,
-        emptyStateHash,
-        runtimeManager,
-        deployTimestamp
-      )
-      .unsafeRunSync
-    activeRuntime.close().unsafeRunSync
-    genesis
-  }
+    (for {
+      activeRuntime <- Runtime
+                        .createWithEmptyCost[Task, Task.Par](
+                          storageDirectory,
+                          storageSize,
+                          StoreType.LMDB
+                        )
+      runtimeManager <- RuntimeManager.fromRuntime[Task](activeRuntime)
+      emptyStateHash = runtimeManager.emptyStateHash
+      validators     = bonds.map(bond => Validator(bond._1, bond._2)).toSeq
+      genesis <- Genesis
+                  .withContracts(
+                    initial,
+                    ProofOfStake(minimumBond, maximumBond, validators),
+                    wallets,
+                    faucetCode,
+                    emptyStateHash,
+                    runtimeManager,
+                    deployTimestamp
+                  )
+      _ <- activeRuntime.close()
+    } yield genesis).unsafeRunSync  }
 }
