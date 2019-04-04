@@ -74,8 +74,6 @@ object MultiParentCasperTestUtil {
     implicit val log                       = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
-    val faucetCode: String => String = if (faucet) Faucet.basicWalletFaucet _ else Faucet.noopFaucet
-
     (for {
       activeRuntime <- Runtime
                         .createWithEmptyCost[Task, Task.Par](
