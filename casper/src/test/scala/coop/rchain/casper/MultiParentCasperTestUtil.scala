@@ -71,7 +71,7 @@ object MultiParentCasperTestUtil {
   ): BlockMessage = {
     val storageDirectory                   = Files.createTempDirectory(s"hash-set-casper-test-genesis")
     val storageSize: Long                  = 1024L * 1024
-    implicit val log                       = new Log.NOPLog[Task]
+    implicit val log: Log.NOPLog[Task]     = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
     (for {
