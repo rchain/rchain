@@ -26,7 +26,7 @@ final case class Cache[C, P, A, K](
     joins: TrieMap[C, List[List[C]]] = TrieMap.empty[C, List[List[C]]]
 )
 
-private class InMemHotStore[F[_]: Monad, C, P, A, K](
+private class InMemHotStore[F[_]: Sync, C, P, A, K](
     implicit S: Cell[F, Cache[C, P, A, K]],
     HR: HistoryReader[F, C, P, A, K]
 ) extends HotStore[F, C, P, A, K] {
@@ -38,9 +38,12 @@ private class InMemHotStore[F[_]: Monad, C, P, A, K](
               case None =>
                 for {
                   historyContinuations <- HR.getContinuations(channels)
-                  _ <- S.modify { c =>
-                        discard(c.continuations.putIfAbsent(channels, historyContinuations))
-                        c
+                  _ <- S.flatModify { c =>
+                        Sync[F]
+                          .delay(c.continuations.putIfAbsent(channels, historyContinuations))
+                          .map { _ =>
+                            c
+                          }
                       }
                 } yield (historyContinuations)
               case Some(continuations) => Applicative[F].pure(continuations)
@@ -50,9 +53,8 @@ private class InMemHotStore[F[_]: Monad, C, P, A, K](
   def putContinuation(channels: List[C], wc: WaitingContinuation[P, K]): F[Unit] =
     for {
       continuations <- getContinuations(channels)
-      _ <- S.modify { cache =>
-            discard(cache.continuations.put(channels, wc :: continuations))
-            cache
+      _ <- S.flatModify { cache =>
+            Sync[F].delay(cache.continuations.put(channels, wc :: continuations)).map(_ => cache)
           }
     } yield ()
 
@@ -63,9 +65,8 @@ private class InMemHotStore[F[_]: Monad, C, P, A, K](
               case None =>
                 for {
                   historyData <- HR.getData(channel)
-                  _ <- S.modify { c =>
-                        discard(c.data.putIfAbsent(channel, historyData))
-                        c
+                  _ <- S.flatModify { c =>
+                        Sync[F].delay(c.data.putIfAbsent(channel, historyData)).map(_ => c)
                       }
                 } yield (historyData)
               case Some(data) => Applicative[F].pure(data)
@@ -75,9 +76,8 @@ private class InMemHotStore[F[_]: Monad, C, P, A, K](
   def putDatum(channel: C, datum: Datum[A]): F[Unit] =
     for {
       data <- getData(channel)
-      _ <- S.modify { cache =>
-            discard(cache.data.put(channel, datum :: data))
-            cache
+      _ <- S.flatModify { cache =>
+            Sync[F].delay(cache.data.put(channel, datum :: data)).map(_ => cache)
           }
     } yield ()
 
@@ -88,24 +88,18 @@ private class InMemHotStore[F[_]: Monad, C, P, A, K](
               case None =>
                 for {
                   historyJoins <- HR.getJoins(channel)
-                  _ <- S.modify { c =>
-                        discard(c.joins.putIfAbsent(channel, historyJoins))
-                        c
+                  _ <- S.flatModify { c =>
+                        Sync[F].delay(c.joins.putIfAbsent(channel, historyJoins)).map(_ => c)
                       }
                 } yield (historyJoins)
               case Some(joins) => Applicative[F].pure(joins)
             }
     } yield (res)
-
-  @specialized def discard[T](evaluateForSideEffectOnly: T): Unit = {
-    val _: T = evaluateForSideEffectOnly
-    () //Return unit to prevent warning due to discarding value
-  }
 }
 
 object HotStore {
 
-  def inMem[F[_]: Monad, C, P, A, K](
+  def inMem[F[_]: Sync, C, P, A, K](
       implicit S: Cell[F, Cache[C, P, A, K]],
       HR: HistoryReader[F, C, P, A, K]
   ): HotStore[F, C, P, A, K] =
