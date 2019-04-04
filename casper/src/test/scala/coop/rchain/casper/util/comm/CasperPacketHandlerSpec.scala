@@ -66,7 +66,7 @@ class CasperPacketHandlerSpec extends WordSpec {
     val bonds                      = createBonds(Seq(validatorPk))
     val requiredSigs               = 1
     val deployTimestamp            = 1L
-    val genesis                    = buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, Faucet.noopFaucet, 1L)
+    val genesis                    = buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, false, 1L)
     val validatorId                = ValidatorIdentity(validatorPk, validatorSk, "ed25519")
     val bap = new BlockApproverProtocol(
       validatorId,

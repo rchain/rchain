@@ -42,7 +42,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   private val bonds       = createBonds(validators)
   private val minimumBond = 100L
   private val genesis =
-    buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, Faucet.basicWalletFaucet, 0L)
+    buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, true, 0L)
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -494,7 +494,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     )
     val minimumBond = 100L
     val genesis =
-      buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, Faucet.basicWalletFaucet, 0L)
+      buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, true, 0L)
 
     def deployment(i: Int, ts: Long): DeployData =
       ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts, accounting.MAX_VALUE)

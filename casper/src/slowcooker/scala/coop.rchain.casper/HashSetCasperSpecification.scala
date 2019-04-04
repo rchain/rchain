@@ -57,7 +57,7 @@ object HashSetCasperActions {
     val bonds       = bondsGen(validators)
     val minimumBond = 100L
     val genesis =
-      buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, Faucet.basicWalletFaucet, 0L)
+      buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, true, 0L)
     (genesis, validatorKeys)
   }
 

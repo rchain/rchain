@@ -28,7 +28,7 @@ class MultiParentCasperFinalizationSpec extends FlatSpec with Matchers with Insp
   private val bonds       = createBonds(validators)
   private val minimumBond = 100L
   private val genesis =
-    buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, Faucet.basicWalletFaucet, 0L)
+    buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, true, 0L)
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -36,7 +36,7 @@ class MultiParentCasperFinalizationSpec extends FlatSpec with Matchers with Insp
     val stake      = 10L
     val equalBonds = validators.map(_ -> stake).toMap
     val genesisWithEqualBonds =
-      buildGenesis(Seq.empty, equalBonds, 1L, Long.MaxValue, Faucet.noopFaucet, 0L)
+      buildGenesis(Seq.empty, equalBonds, 1L, Long.MaxValue, false, 0L)
     for {
       nodes       <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesisWithEqualBonds)
       deployDatas <- (0 to 7).toList.traverse(i => ConstructDeploy.basicDeployData[Effect](i))

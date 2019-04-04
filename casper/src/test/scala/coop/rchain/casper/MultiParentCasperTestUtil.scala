@@ -59,14 +59,14 @@ object MultiParentCasperTestUtil {
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
 
   def createGenesis(bonds: Map[PublicKey, Long]): BlockMessage =
-    buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, Faucet.noopFaucet, 0L)
+    buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, false, 0L)
 
   def buildGenesis(
       wallets: Seq[PreWallet],
       bonds: Map[PublicKey, Long],
       minimumBond: Long,
       maximumBond: Long,
-      faucetCode: String => String,
+      faucet: Boolean,
       deployTimestamp: Long
   ): BlockMessage = {
     val initial                            = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "rchain")
@@ -74,6 +74,8 @@ object MultiParentCasperTestUtil {
     val storageSize: Long                  = 1024L * 1024
     implicit val log                       = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+
+    val faucetCode: String => String = if (faucet) Faucet.basicWalletFaucet _ else Faucet.noopFaucet
 
     (for {
       activeRuntime <- Runtime

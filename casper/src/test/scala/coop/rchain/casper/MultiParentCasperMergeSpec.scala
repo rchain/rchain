@@ -30,7 +30,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
   private val bonds       = createBonds(validators)
   private val minimumBond = 100L
   private val genesis =
-    buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, Faucet.basicWalletFaucet, 0L)
+    buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, true, 0L)
 
   //put a new casper instance at the start of each
   //test since we cannot reset it

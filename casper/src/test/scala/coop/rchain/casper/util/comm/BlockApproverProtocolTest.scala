@@ -114,7 +114,7 @@ object BlockApproverProtocolTest {
       bonds,
       1L,
       Long.MaxValue,
-      Faucet.noopFaucet,
+      false,
       deployTimestamp
     )
     for {

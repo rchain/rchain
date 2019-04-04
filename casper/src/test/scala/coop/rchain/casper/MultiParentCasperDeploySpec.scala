@@ -30,7 +30,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
   private val bonds       = createBonds(validators)
   private val minimumBond = 100L
   private val genesis =
-    buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, Faucet.basicWalletFaucet, 0L)
+    buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, true, 0L)
 
   "MultiParentCasper" should "accept deploys" in effectTest {
     val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
