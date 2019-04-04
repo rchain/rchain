@@ -166,9 +166,9 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                     )
                 )
             readData <- hotStore.getData(channel)
-            cache <- state.read
-            _     <- S.delay(cache.data(channel) shouldEqual cachedData)
-            _     <- S.delay(readData shouldEqual cachedData)
+            cache    <- state.read
+            _        <- S.delay(cache.data(channel) shouldEqual cachedData)
+            _        <- S.delay(readData shouldEqual cachedData)
           } yield ()
         }
       }
@@ -183,8 +183,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       fixture { (state, history, hotStore) =>
         {
           for {
-            _ <- history.putData(channel, historyData)
-            _ <- hotStore.putDatum(channel, insertedData)
+            _     <- history.putData(channel, historyData)
+            _     <- hotStore.putDatum(channel, insertedData)
             cache <- state.read
             _     <- S.delay(cache.data(channel) shouldEqual insertedData :: historyData)
           } yield ()
@@ -320,30 +320,27 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
   }
 }
 
-class History[F[_]: Monad](implicit R: Ref[F, Cache[String, Pattern, String, StringsCaptor]])
+class History[F[_]: Sync](implicit R: Cell[F, Cache[String, Pattern, String, StringsCaptor]])
     extends HistoryReader[F, String, Pattern, String, StringsCaptor] {
 
-  def getJoins(channel: String): F[List[List[String]]] = R.get.map(_.joins(channel))
-  def putJoins(channel: String, joins: List[List[String]]): F[Unit] = R.modify { prev =>
-    prev.joins.put(channel, joins)
-    (prev, ())
+  def getJoins(channel: String): F[List[List[String]]] = R.read.map(_.joins(channel))
+  def putJoins(channel: String, joins: List[List[String]]): F[Unit] = R.flatModify { prev =>
+    Sync[F].delay(prev.joins.put(channel, joins)).map(_ => prev)
   }
 
-  def getData(channel: String): F[List[Datum[String]]] = R.get.map(_.data(channel))
-  def putData(channel: String, data: List[Datum[String]]): F[Unit] = R.modify { prev =>
-    prev.data.put(channel, data)
-    (prev, ())
+  def getData(channel: String): F[List[Datum[String]]] = R.read.map(_.data(channel))
+  def putData(channel: String, data: List[Datum[String]]): F[Unit] = R.flatModify { prev =>
+    Sync[F].delay(prev.data.put(channel, data)).map(_ => prev)
   }
 
   def getContinuations(
       channels: List[String]
-  ): F[List[WaitingContinuation[Pattern, StringsCaptor]]] = R.get.map(_.continuations(channels))
+  ): F[List[WaitingContinuation[Pattern, StringsCaptor]]] = R.read.map(_.continuations(channels))
   def putContinuations(
       channels: List[String],
       continuations: List[WaitingContinuation[Pattern, StringsCaptor]]
-  ): F[Unit] = R.modify { prev =>
-    prev.continuations.put(channels, continuations)
-    (prev, ())
+  ): F[Unit] = R.flatModify { prev =>
+    Sync[F].delay(prev.continuations.put(channels, continuations)).map(_ => prev)
   }
 }
 
@@ -362,7 +359,7 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {
       ) => F[Unit]
   ) =
     (for {
-      historyState <- Ref.of[F, Cache[String, Pattern, String, StringsCaptor]](
+      historyState <- Cell.refCell[F, Cache[String, Pattern, String, StringsCaptor]](
                        Cache[String, Pattern, String, StringsCaptor]()
                      )
       history = {
