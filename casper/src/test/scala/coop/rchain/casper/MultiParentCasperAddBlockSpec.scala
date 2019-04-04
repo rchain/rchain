@@ -568,44 +568,6 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     } yield ()
   }
 
-  it should "prepare to slash an block that includes a invalid block pointer" in effectTest {
-    for {
-      nodes           <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
-      deploys         <- (0 to 5).toList.traverse(i => ConstructDeploy.basicDeployData[Effect](i))
-      deploysWithCost = deploys.map(d => ProcessedDeploy(deploy = Some(d))).toIndexedSeq
-
-      createBlockResult <- nodes(0).casperEff
-                            .deploy(deploys(0)) *> nodes(0).casperEff.createBlock
-      Created(signedBlock) = createBlockResult
-      signedInvalidBlock = BlockUtil.resignBlock(
-        signedBlock.withSeqNum(-2),
-        nodes(0).validatorId.privateKey
-      ) // Invalid seq num
-
-      blockWithInvalidJustification <- buildBlockWithInvalidJustification(
-                                        nodes,
-                                        deploysWithCost,
-                                        signedInvalidBlock
-                                      )
-
-      _ <- nodes(1).casperEff
-            .addBlock(blockWithInvalidJustification, ignoreDoppelgangerCheck[Effect])
-      _ <- nodes(0).transportLayerEff
-            .clear(nodes(0).local) // nodes(0) rejects normal adding process for blockThatPointsToInvalidBlock
-
-      signedInvalidBlockPacketMessage = packet(
-        nodes(0).local,
-        transport.BlockMessage,
-        signedInvalidBlock.toByteString
-      )
-      _ <- nodes(0).transportLayerEff.send(nodes(1).local, signedInvalidBlockPacketMessage)
-      _ <- nodes(1).receive() // receives signedInvalidBlock; attempts to add both blocks
-
-      result = nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
-      _      <- nodes.map(_.tearDown()).toList.sequence
-    } yield result
-  }
-
   private def buildBlockWithInvalidJustification(
       nodes: IndexedSeq[HashSetCasperTestNode[Effect]],
       deploys: immutable.IndexedSeq[ProcessedDeploy],
