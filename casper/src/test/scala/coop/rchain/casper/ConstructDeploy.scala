@@ -1,13 +1,14 @@
 package coop.rchain.casper
 
-import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.{PrivateKey, PublicKey}
+import cats._
+import cats.implicits._
+import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
+import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.interpreter.accounting
-import coop.rchain.shared.{Log, LogSource, Time}
-import com.google.protobuf.{ByteString, Int32Value, StringValue}
-import cats._, cats.data._, cats.implicits._
+import coop.rchain.shared.Time
 
 object ConstructDeploy {
 
