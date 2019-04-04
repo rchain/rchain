@@ -42,7 +42,7 @@ class NodeBox(val node: HashSetCasperTestNode[Effect], var lastBlock: Option[Blo
 }
 
 object HashSetCasperActions {
-  import HashSetCasperTest._
+  import MultiParentCasperTestUtil._
 
   type ValidatorKey = Array[Byte]
 
