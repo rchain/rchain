@@ -5,16 +5,16 @@ import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.helper.{BlockDagStorageTestFixture, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.rholang.RuntimeManager
-
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.transport
 import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.casper.scalatestcontrib._
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
+import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.{Log, StoreType}
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -92,8 +92,8 @@ object BlockApproverProtocolTest {
   def createProtocol(
       requiredSigs: Int,
       wallets: Seq[PreWallet],
-      sk: Array[Byte],
-      bonds: Map[Array[Byte], Long]
+      sk: PrivateKey,
+      bonds: Map[PublicKey, Long]
   ): Effect[(BlockApproverProtocol, HashSetCasperTestNode[Effect])] = {
     import monix.execution.Scheduler.Implicits.global
 
@@ -107,14 +107,14 @@ object BlockApproverProtocolTest {
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
 
     val deployTimestamp = 1L
-    val validators      = bonds.map(b => ProofOfStakeValidator(b._1, b._2)).toSeq
+    val validators      = bonds.map(b => Validator(b._1, b._2)).toSeq
 
     val genesis = MultiParentCasperTestUtil.buildGenesis(
       wallets,
       bonds,
       1L,
       Long.MaxValue,
-      Faucet.noopFaucet,
+      false,
       deployTimestamp
     )
     for {

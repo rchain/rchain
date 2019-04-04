@@ -2,54 +2,27 @@ package coop.rchain.casper
 
 import java.nio.file.Files
 
-import cats.{Applicative, Monad}
-import cats.data.EitherT
-import cats.effect.{Concurrent, Sync}
+import cats.effect.Sync
 import cats.implicits._
-import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.Estimator.Validator
+import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
-import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
-import coop.rchain.casper.helper.{BlockDagStorageTestFixture, BlockUtil, HashSetCasperTestNode}
+import coop.rchain.casper.helper.{BlockDagStorageTestFixture, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.{BondingUtil, ProtoUtil}
-import coop.rchain.casper.util.ProtoUtil.{signBlock, toJustification}
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
 import coop.rchain.catscontrib.TaskContrib.TaskOps
-import coop.rchain.comm.rp.ProtocolHelper.packet
-import coop.rchain.comm.{transport, CommError, TimeOut}
-import coop.rchain.crypto.{PrivateKey, PublicKey}
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
-import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
-import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.rholang.interpreter.{accounting, Runtime}
-import coop.rchain.models.{Expr, Par}
-import coop.rchain.shared.StoreType
-import coop.rchain.shared.PathOps.RichPath
-import coop.rchain.catscontrib._
-import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.catscontrib.eitherT._
-import monix.eval.Task
-import monix.execution.Scheduler
-import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{Assertion, FlatSpec, Inspectors, Matchers}
-import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.casper.util.comm.TestNetwork
-import coop.rchain.catscontrib.ski.kp2
-import coop.rchain.comm.rp.Connect.Connections
+import coop.rchain.crypto.PublicKey
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
-import coop.rchain.shared.Log
-import org.scalatest
-
-import scala.collection.immutable
-import scala.util.Random
-import scala.concurrent.duration._
+import coop.rchain.models.Par
+import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.shared.PathOps.RichPath
+import coop.rchain.shared.{Log, StoreType}
+import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
 
 object MultiParentCasperTestUtil {
   def validateBlockStore[R](
@@ -82,45 +55,47 @@ object MultiParentCasperTestUtil {
                       .captureResults(ProtoUtil.postStateHash(block), query)
     } yield (blockStatus, queryResult)
 
-  def createBonds(validators: Seq[Array[Byte]]): Map[Array[Byte], Long] =
+  def createBonds(validators: Seq[PublicKey]): Map[PublicKey, Long] =
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
 
-  def createGenesis(bonds: Map[Array[Byte], Long]): BlockMessage =
-    buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, Faucet.noopFaucet, 0L)
+  def createGenesis(bonds: Map[PublicKey, Long]): BlockMessage =
+    buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, false, 0L)
 
   def buildGenesis(
       wallets: Seq[PreWallet],
-      bonds: Map[Array[Byte], Long],
+      bonds: Map[PublicKey, Long],
       minimumBond: Long,
       maximumBond: Long,
-      faucetCode: String => String,
+      faucet: Boolean,
       deployTimestamp: Long
   ): BlockMessage = {
-    val initial                            = Genesis.withoutContracts(bonds, 1L, deployTimestamp, "rchain")
     val storageDirectory                   = Files.createTempDirectory(s"hash-set-casper-test-genesis")
     val storageSize: Long                  = 1024L * 1024
     implicit val log                       = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
-    val activeRuntime =
-      Runtime
-        .createWithEmptyCost[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB)
-        .unsafeRunSync
-    val runtimeManager = RuntimeManager.fromRuntime[Task](activeRuntime).unsafeRunSync
-    val emptyStateHash = runtimeManager.emptyStateHash
-    val validators     = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
-    val genesis = Genesis
-      .withContracts(
-        initial,
-        ProofOfStakeParams(minimumBond, maximumBond, validators),
-        wallets,
-        faucetCode,
-        emptyStateHash,
-        runtimeManager,
-        deployTimestamp
-      )
-      .unsafeRunSync
-    activeRuntime.close().unsafeRunSync
-    genesis
+    val faucetCode: String => String = if (faucet) Faucet.basicWalletFaucet _ else Faucet.noopFaucet
+
+    (for {
+      activeRuntime <- Runtime
+                        .createWithEmptyCost[Task, Task.Par](
+                          storageDirectory,
+                          storageSize,
+                          StoreType.LMDB
+                        )
+      runtimeManager <- RuntimeManager.fromRuntime[Task](activeRuntime)
+      validators     = bonds.toSeq.map(Validator.tupled)
+      genesis <- Genesis.createGenesisBlock(
+                  runtimeManager,
+                  Genesis(
+                    "HashSetCasperTest-shard",
+                    deployTimestamp,
+                    wallets,
+                    ProofOfStake(minimumBond, maximumBond, validators),
+                    faucet
+                  )
+                )
+      _ <- activeRuntime.close()
+    } yield genesis).unsafeRunSync
   }
 }

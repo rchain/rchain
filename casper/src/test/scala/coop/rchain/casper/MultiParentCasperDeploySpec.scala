@@ -1,55 +1,19 @@
 package coop.rchain.casper
 
-import java.nio.file.Files
-
-import cats.{Applicative, Monad}
-import cats.data.EitherT
-import cats.effect.{Concurrent, Sync}
-import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.Estimator.Validator
-import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
-import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
+import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
-import coop.rchain.casper.helper.{BlockDagStorageTestFixture, BlockUtil, HashSetCasperTestNode}
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.{BondingUtil, ProtoUtil}
-import coop.rchain.casper.util.ProtoUtil.{signBlock, toJustification}
-import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
-import coop.rchain.catscontrib.TaskContrib.TaskOps
-import coop.rchain.comm.rp.ProtocolHelper.packet
-import coop.rchain.comm.{transport, CommError, TimeOut}
-import coop.rchain.crypto.{PrivateKey, PublicKey}
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
-import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
-import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.rholang.interpreter.{accounting, Runtime}
-import coop.rchain.models.{Expr, Par}
-import coop.rchain.shared.StoreType
-import coop.rchain.shared.PathOps.RichPath
-import coop.rchain.catscontrib._
-import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.catscontrib.eitherT._
-import monix.eval.Task
-import monix.execution.Scheduler
-import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{Assertion, FlatSpec, Inspectors, Matchers}
 import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.casper.util.comm.TestNetwork
-import coop.rchain.catscontrib.ski.kp2
-import coop.rchain.comm.rp.Connect.Connections
-import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
-import coop.rchain.shared.Log
-import org.scalatest
-
-import scala.collection.immutable
-import scala.util.Random
-import scala.concurrent.duration._
+import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.hash.Keccak256
+import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
+import coop.rchain.models.{Expr, Par}
+import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.rholang.interpreter.accounting
+import monix.execution.Scheduler.Implicits.global
+import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
 class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors {
 
@@ -66,7 +30,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
   private val bonds       = createBonds(validators)
   private val minimumBond = 100L
   private val genesis =
-    buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, Faucet.basicWalletFaucet, 0L)
+    buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, true, 0L)
 
   "MultiParentCasper" should "accept deploys" in effectTest {
     val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
@@ -180,7 +144,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
   it should "allow paying for deploys" in effectTest {
     val node      = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
     val (sk, pk)  = Ed25519.newKeyPair
-    val user      = ByteString.copyFrom(pk)
+    val user      = ByteString.copyFrom(pk.bytes)
     val timestamp = System.currentTimeMillis()
     val phloPrice = 1L
     val amount    = 847L
@@ -189,7 +153,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
         s"""new retCh in { @"blake2b256Hash"!([0, $amount, *retCh].toByteArray(), "__SCALA__") }""",
         timestamp,
         accounting.MAX_VALUE,
-        sec = PrivateKey(sk)
+        sec = sk
       )
 
     for {
@@ -200,7 +164,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
                           )
       sigData     = capturedResults.head.exprs.head.getGByteArray
       sig         = Base16.encode(Ed25519.sign(sigData.toByteArray, sk))
-      pkStr       = Base16.encode(pk)
+      pkStr       = Base16.encode(pk.bytes)
       paymentCode = s"""new
          |  paymentForward, walletCh, rl(`rho:registry:lookup`),
          |  SystemInstancesCh, faucetCh, posCh
@@ -224,7 +188,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
           timestamp,
           accounting.MAX_VALUE,
           phloPrice = phloPrice,
-          sec = PrivateKey(sk)
+          sec = sk
         )
 
       paymentQuery = ConstructDeploy
@@ -238,7 +202,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
         |}""".stripMargin,
           0L,
           accounting.MAX_VALUE,
-          sec = PrivateKey(sk)
+          sec = sk
         )
 
       deployQueryResult <- deployAndQuery(

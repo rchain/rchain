@@ -4,6 +4,7 @@ import org.scalacheck._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{Matchers, PropSpec}
 import coop.rchain.crypto.PublicKey
+import coop.rchain.rholang.interpreter.util.codec.Base58
 
 class AddressToolsSpec extends PropSpec with GeneratorDrivenPropertyChecks with Matchers {
   implicit val propertyCheckConfiguration =
@@ -26,7 +27,7 @@ class AddressToolsSpec extends PropSpec with GeneratorDrivenPropertyChecks with 
       case (prefix, keyLength, checksumLength, pk) =>
         val tools = new AddressTools(prefix, keyLength, checksumLength)
 
-        val address = tools.fromPublicKey(pk).get
+        val address = tools.fromPublicKey(pk).get.toBase58
 
         val parsedAddress = tools.parse(address).right.get
 
@@ -44,7 +45,7 @@ class AddressToolsSpec extends PropSpec with GeneratorDrivenPropertyChecks with 
 
         tools = new AddressTools(prefix, keyLength, checksumLength)
 
-        address = tools.fromPublicKey(pk).get
+        address = tools.fromPublicKey(pk).get.toBase58
 
         idx <- Gen.choose(0, address.length - 1)
 

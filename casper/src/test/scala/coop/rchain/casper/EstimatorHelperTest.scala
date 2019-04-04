@@ -1,22 +1,17 @@
 package coop.rchain.casper
 
 import cats.implicits._
-import coop.rchain.casper.scalatestcontrib._
-
-import coop.rchain.casper.helper.BlockGenerator.{
-  computeBlockCheckpoint,
-  injectPostStateHash,
-  updateChainWithBlockStateUpdate
-}
-import org.scalatest.{FlatSpec, Matchers}
-import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.ConstructDeploy.basicProcessedDeploy
-import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.EstimatorHelper.conflicts
+import coop.rchain.casper.helper.BlockGenerator.{computeBlockCheckpoint, injectPostStateHash, updateChainWithBlockStateUpdate}
+import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
+import coop.rchain.casper.scalatestcontrib._
+import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
+import org.scalatest.{FlatSpec, Matchers}
 
 class EstimatorHelperTest
     extends FlatSpec

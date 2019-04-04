@@ -1,55 +1,24 @@
 package coop.rchain.casper
 
-import java.nio.file.Files
-
-import cats.{Applicative, Monad}
-import cats.data.EitherT
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.Estimator.Validator
-import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
+import coop.rchain.casper.genesis.contracts._
+import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
-import coop.rchain.casper.helper.{BlockDagStorageTestFixture, BlockUtil, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.{BondingUtil, ProtoUtil}
-import coop.rchain.casper.util.ProtoUtil.{signBlock, toJustification}
-import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
-import coop.rchain.catscontrib.TaskContrib.TaskOps
-import coop.rchain.comm.rp.ProtocolHelper.packet
-import coop.rchain.comm.{transport, CommError, TimeOut}
-import coop.rchain.crypto.{PrivateKey, PublicKey}
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
-import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
-import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.rholang.interpreter.{accounting, Runtime}
-import coop.rchain.models.{Expr, Par}
-import coop.rchain.shared.StoreType
-import coop.rchain.shared.PathOps.RichPath
-import coop.rchain.catscontrib._
-import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.catscontrib.eitherT._
-import monix.eval.Task
-import monix.execution.Scheduler
-import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{Assertion, FlatSpec, Inspectors, Matchers}
 import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.comm.TestNetwork
-import coop.rchain.catscontrib.ski.kp2
-import coop.rchain.comm.rp.Connect.Connections
-import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
-import coop.rchain.shared.Log
-import org.scalatest
-
-import scala.collection.immutable
-import scala.util.Random
-import scala.concurrent.duration._
+import coop.rchain.casper.util.{BondingUtil, ProtoUtil}
+import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.hash.Keccak256
+import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
+import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.rholang.interpreter.accounting
+import monix.execution.Scheduler.Implicits.global
+import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
 class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspectors {
 
@@ -66,7 +35,7 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
   private val bonds       = createBonds(validators)
   private val minimumBond = 100L
   private val genesis =
-    buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, Faucet.basicWalletFaucet, 0L)
+    buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, true, 0L)
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -81,7 +50,7 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
       pubKey         = Base16.encode(ethPubKeys.head.bytes.drop(1))
       secKey         = ethPivKeys.head.bytes
       ethAddress     = ethAddresses.head
-      bondKey        = Base16.encode(otherPk)
+      bondKey        = Base16.encode(otherPk.bytes)
       walletUnlockDeploy <- RevIssuanceTest.preWalletUnlockDeploy(
                              ethAddress,
                              pubKey,
@@ -185,7 +154,7 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
         case (keyA, stake, _) =>
           Bond(keyA, stake)
       }.toSet + Bond(
-        ByteString.copyFrom(otherPk),
+        ByteString.copyFrom(otherPk.bytes),
         wallets.head.initRevBalance.toLong
       )
 
@@ -202,7 +171,7 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
 
     implicit val runtimeManager = node.runtimeManager
     val (sk, pk)                = Ed25519.newKeyPair
-    val pkStr                   = Base16.encode(pk)
+    val pkStr                   = Base16.encode(pk.bytes)
     val amount                  = 314L
     val forwardCode             = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
 
@@ -271,11 +240,11 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
 
     def bond(
         node: HashSetCasperTestNode[Effect],
-        keys: (Array[Byte], Array[Byte])
+        keys: (PrivateKey, PublicKey)
     ): Effect[Unit] = {
       implicit val runtimeManager = node.runtimeManager
       val (sk, pk)                = keys
-      val pkStr                   = Base16.encode(pk)
+      val pkStr                   = Base16.encode(pk.bytes)
       val amount                  = 314L
       val forwardCode             = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
       for {
@@ -330,13 +299,13 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
     val localValidators = validatorKeys.take(3)
     val localBonds      = localValidators.map(Ed25519.toPublic).zip(List(10L, 30L, 5000L)).toMap
     val localGenesis =
-      buildGenesis(Nil, localBonds, 1L, Long.MaxValue, Faucet.basicWalletFaucet, 0L)
+      buildGenesis(Nil, localBonds, 1L, Long.MaxValue, true, 0L)
     for {
       nodes <- HashSetCasperTestNode.networkEff(localValidators, localGenesis)
 
       rm          = nodes.head.runtimeManager
       (sk, pk)    = Ed25519.newKeyPair
-      pkStr       = Base16.encode(pk)
+      pkStr       = Base16.encode(pk.bytes)
       forwardCode = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
       bondingCode <- BondingUtil
                       .faucetBondDeploy[Effect](50, "ed25519", pkStr, sk)(

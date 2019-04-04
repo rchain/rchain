@@ -1,14 +1,14 @@
 package coop.rchain.casper.genesis.contracts
 
 import coop.rchain.casper.util.rholang.InterpreterUtil
-import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.models.Par
+import coop.rchain.rholang.build.CompiledRholangSource
 
 class Rev[A](
     rhoCode: A => String,
     wallets: Seq[A],
     faucetCode: String => String,
-    posParams: ProofOfStakeParams
+    posParams: ProofOfStake
 ) extends CompiledRholangSource {
   private val initialTotalBond = posParams.validators.foldLeft(0L) {
     case (acc, v) => acc + v.stake
@@ -76,5 +76,5 @@ class Rev[A](
 class PreWalletRev(
     wallets: Seq[PreWallet],
     faucetCode: String => String,
-    posParams: ProofOfStakeParams
+    posParams: ProofOfStake
 ) extends Rev[PreWallet](PreWallet.rhoCode, wallets, faucetCode, posParams)

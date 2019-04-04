@@ -9,6 +9,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.{BlockTime, RhoISpace, ShortLeashParamsStorage}
 import coop.rchain.rholang.interpreter.util.RevAddress
+import coop.rchain.rholang.interpreter.util.codec.Base58
 import coop.rchain.rspace.{ContResult, Result}
 
 import scala.util.Try
@@ -136,7 +137,7 @@ object SystemProcesses {
           val response =
             RevAddress
               .fromPublicKey(PublicKey(publicKey))
-              .map(RhoType.String(_))
+              .map(ra => RhoType.String(ra.toBase58))
               .getOrElse(Par())
 
           produce(Seq(response), ack)

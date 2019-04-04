@@ -1,11 +1,9 @@
 package coop.rchain.casper
 
-import cats.Id
 import cats.implicits._
+import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
-import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.interpreter.accounting
 import monix.execution.Scheduler.Implicits.global
