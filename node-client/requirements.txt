@@ -1,3 +1,0 @@
-# See https://grpc.io/docs/tutorials/basic/python.html
-grpcio-tools==1.12.0
-Flask==1.0.2
