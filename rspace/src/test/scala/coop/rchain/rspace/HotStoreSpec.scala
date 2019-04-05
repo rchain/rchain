@@ -143,16 +143,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _     <- history.putContinuations(channels, historyContinuations)
             res   <- hotStore.removeContinuation(channels, index).attempt
             cache <- state.read
-            _ <- S.delay {
-                  if (index < 0 || index >= historyContinuations.size)
-                    res shouldBe a[Left[_, _]]
-                  else {
-                    res shouldBe a[Right[_, _]]
-                    cache.continuations(channels) shouldEqual historyContinuations.zipWithIndex
-                      .filter { case (_, i) => i != index }
-                      .map(_._1)
-                  }
-                }
+            _     <- checkRemoval(res, cache.continuations(channels), historyContinuations, index)
           } yield ()
         }
       }
@@ -179,16 +170,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                 )
             res   <- hotStore.removeContinuation(channels, index).attempt
             cache <- state.read
-            _ <- S.delay {
-                  if (index < 0 || index >= historyContinuations.size)
-                    res shouldBe a[Left[_, _]]
-                  else {
-                    res shouldBe a[Right[_, _]]
-                    cache.continuations(channels) shouldEqual cachedContinuations.zipWithIndex
-                      .filter { case (_, i) => i != index }
-                      .map(_._1)
-                  }
-                }
+            _     <- checkRemoval(res, cache.continuations(channels), cachedContinuations, index)
           } yield ()
         }
       }
@@ -379,6 +361,22 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
           }
         }
       }
+  }
+
+  private def checkRemoval[T](
+      res: Either[Throwable, Unit],
+      actual: Vector[T],
+      expected: Vector[T],
+      index: Int
+  ): F[Assertion] = S.delay {
+    if (index < 0 || index >= expected.size)
+      res shouldBe a[Left[_, _]]
+    else {
+      res shouldBe a[Right[_, _]]
+      actual shouldEqual expected.zipWithIndex
+        .filter { case (_, i) => i != index }
+        .map(_._1)
+    }
   }
 }
 
