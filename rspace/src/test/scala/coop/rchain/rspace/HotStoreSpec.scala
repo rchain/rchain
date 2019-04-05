@@ -131,6 +131,69 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       }
   }
 
+  "removeContinuation when cache is empty" should "read from history and remove the continuation from loaded data" in forAll {
+    (
+        channels: Vector[Channel],
+        historyContinuations: Vector[Continuation],
+        index: Int
+    ) =>
+      fixture { (state, history, hotStore) =>
+        {
+          for {
+            _     <- history.putContinuations(channels, historyContinuations)
+            res   <- hotStore.removeContinuation(channels, index).attempt
+            cache <- state.read
+            _ <- S.delay {
+                  if (index < 0 || index >= historyContinuations.size)
+                    res shouldBe a[Left[_, _]]
+                  else {
+                    res shouldBe a[Right[_, _]]
+                    cache.continuations(channels) shouldEqual historyContinuations.zipWithIndex
+                      .filter { case (_, i) => i != index }
+                      .map(_._1)
+                  }
+                }
+          } yield ()
+        }
+      }
+  }
+
+  "removeContinuation when cache contains data" should "read from the cache and remove the continuation from loaded data" in forAll {
+    (
+        channels: Vector[Channel],
+        historyContinuations: Vector[Continuation],
+        cachedContinuations: Vector[Continuation],
+        index: Int
+    ) =>
+      fixture { (state, history, hotStore) =>
+        {
+          for {
+            _ <- history.putContinuations(channels, historyContinuations)
+            _ <- state.modify(
+                  _ =>
+                    Cache(
+                      continuations = TrieMap(
+                        channels -> cachedContinuations
+                      )
+                    )
+                )
+            res   <- hotStore.removeContinuation(channels, index).attempt
+            cache <- state.read
+            _ <- S.delay {
+                  if (index < 0 || index >= historyContinuations.size)
+                    res shouldBe a[Left[_, _]]
+                  else {
+                    res shouldBe a[Right[_, _]]
+                    cache.continuations(channels) shouldEqual cachedContinuations.zipWithIndex
+                      .filter { case (_, i) => i != index }
+                      .map(_._1)
+                  }
+                }
+          } yield ()
+        }
+      }
+  }
+
   "getData when cache is empty" should "read from history and put into the cache" in forAll {
     (channel: Channel, historyData: Vector[Datum[String]]) =>
       fixture { (state, history, hotStore) =>

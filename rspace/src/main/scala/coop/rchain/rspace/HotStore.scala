@@ -12,6 +12,7 @@ import scala.collection.concurrent.TrieMap
 trait HotStore[F[_], C, P, A, K] {
   def getContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]]
   def putContinuation(channels: Seq[C], wc: WaitingContinuation[P, K]): F[Unit]
+  def removeContinuation(channels: Seq[C], index: Int): F[Unit]
 
   def getData(channel: C): F[Seq[Datum[A]]]
   def putDatum(channel: C, d: Datum[A]): F[Unit]
@@ -58,6 +59,20 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
           }
     } yield ()
 
+  def removeContinuation(channels: Seq[C], index: Int): F[Unit] =
+    for {
+      continuations <- getContinuations(channels)
+      _ <- S.flatModify { cache =>
+            removeIndex(cache.continuations(channels), index) >>= { updated =>
+              Sync[F]
+                .delay {
+                  cache.continuations.put(channels, updated)
+                }
+                .map(_ => cache)
+            }
+          }
+    } yield ()
+
   def getData(channel: C): F[Seq[Datum[A]]] =
     for {
       state <- S.read
@@ -95,6 +110,17 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
               case Some(joins) => Applicative[F].pure(joins)
             }
     } yield (res)
+
+  private def removeIndex[E](col: Seq[E], index: Int): F[Seq[E]] =
+    if (col.isDefinedAt(index)) {
+      val (l1, l2) = col splitAt index
+      (l1 ++ (l2 drop 1)).pure[F]
+    } else
+      Sync[F].raiseError(
+        new IndexOutOfBoundsException(
+          s"Tried to remove index ${index} from a Vector of size ${col.size}"
+        )
+      )
 }
 
 object HotStore {
