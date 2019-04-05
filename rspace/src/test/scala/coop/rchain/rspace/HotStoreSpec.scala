@@ -458,14 +458,15 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
   private def checkRemoval[T](
       res: Either[Throwable, Unit],
       actual: Seq[T],
-      expected: Seq[T],
+      initial: Seq[T],
       index: Int
   ): F[Assertion] = S.delay {
-    if (index < 0 || index >= expected.size)
+    if (index < 0 || index >= initial.size) {
       res shouldBe a[Left[_, _]]
-    else {
+      actual shouldEqual initial
+    } else {
       res shouldBe a[Right[_, _]]
-      actual shouldEqual expected.zipWithIndex
+      actual shouldEqual initial.zipWithIndex
         .filter { case (_, i) => i != index }
         .map(_._1)
     }
