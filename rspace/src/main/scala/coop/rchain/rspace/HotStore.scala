@@ -114,7 +114,7 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
   private def removeIndex[E](col: Seq[E], index: Int): F[Seq[E]] =
     if (col.isDefinedAt(index)) {
       val (l1, l2) = col splitAt index
-      (l1 ++ (l2 drop 1)).pure[F]
+      (l1 ++ (l2 tail)).pure[F]
     } else
       Sync[F].raiseError(
         new IndexOutOfBoundsException(
