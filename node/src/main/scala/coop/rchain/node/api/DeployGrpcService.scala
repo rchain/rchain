@@ -66,7 +66,7 @@ private[api] object DeployGrpcService {
         implicit val ser: GraphSerializer[Effect]       = new StringSerializer[Effect]
         val stringify: Effect[Graphz[Effect]] => String = _.runS(new StringBuffer).toString
 
-        val depth  = if (q.depth <= 0) None else Some(q.depth)
+        val depth  = if (q.depth <= 0) 0 else q.depth
         val config = GraphConfig(q.showJustificationLines)
 
         defer(
