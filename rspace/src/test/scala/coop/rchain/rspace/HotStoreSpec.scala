@@ -28,6 +28,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
   type Channel      = String
   type Data         = Datum[String]
   type Continuation = WaitingContinuation[Pattern, StringsCaptor]
+  type Join         = Vector[Channel]
+  type Joins        = Vector[Join]
 
   def fixture(
       f: (
@@ -350,6 +352,51 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       }
   }
 
+  "putJoin when cache is empty" should "read from history and add to it" in forAll {
+    (
+        channel: Channel,
+        historyJoins: Joins,
+        insertedJoin: Join
+    ) =>
+      fixture { (state, history, hotStore) =>
+        {
+          for {
+            _     <- history.putJoins(channel, historyJoins)
+            _     <- hotStore.putJoin(channel, insertedJoin)
+            cache <- state.read
+            _     <- S.delay(cache.joins(channel) shouldEqual insertedJoin +: historyJoins)
+          } yield ()
+        }
+      }
+  }
+
+  "putJoin when cache contains data" should "read from the cache and add to it" in forAll {
+    (
+        channel: Channel,
+        historyJoins: Joins,
+        cachedJoins: Joins,
+        insertedJoin: Join
+    ) =>
+      fixture { (state, history, hotStore) =>
+        {
+          for {
+            _ <- history.putJoins(channel, historyJoins)
+            _ <- state.modify(
+                  _ =>
+                    Cache(
+                      joins = TrieMap(
+                        channel -> cachedJoins
+                      )
+                    )
+                )
+            _     <- hotStore.putJoin(channel, insertedJoin)
+            cache <- state.read
+            _     <- S.delay(cache.joins(channel) shouldEqual insertedJoin +: cachedJoins)
+          } yield ()
+        }
+      }
+  }
+
   "concurrent data operations on disjoint channels" should "not mess up the cache" in forAll {
     (
         channel1: Channel,
@@ -410,8 +457,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
 
   private def checkRemoval[T](
       res: Either[Throwable, Unit],
-      actual: Vector[T],
-      expected: Vector[T],
+      actual: Seq[T],
+      expected: Seq[T],
       index: Int
   ): F[Assertion] = S.delay {
     if (index < 0 || index >= expected.size)

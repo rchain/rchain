@@ -19,6 +19,7 @@ trait HotStore[F[_], C, P, A, K] {
   def removeDatum(channel: C, index: Int): F[Unit]
 
   def getJoins(channel: C): F[Seq[Seq[C]]]
+  def putJoin(channel: C, join: Seq[C]): F[Unit]
 }
 
 final case class Cache[C, P, A, K](
@@ -125,6 +126,14 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
               case Some(joins) => Applicative[F].pure(joins)
             }
     } yield (res)
+
+  def putJoin(channel: C, join: Seq[C]): F[Unit] =
+    for {
+      joins <- getJoins(channel)
+      _ <- S.flatModify { cache =>
+            Sync[F].delay(cache.joins.put(channel, join +: joins)).map(_ => cache)
+          }
+    } yield ()
 
   private def removeIndex[E](col: Seq[E], index: Int): F[Seq[E]] =
     if (col.isDefinedAt(index)) {
