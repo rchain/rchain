@@ -16,6 +16,7 @@ trait HotStore[F[_], C, P, A, K] {
 
   def getData(channel: C): F[Seq[Datum[A]]]
   def putDatum(channel: C, d: Datum[A]): F[Unit]
+  def removeDatum(channel: C, index: Int): F[Unit]
 
   def getJoins(channel: C): F[Seq[Seq[C]]]
 }
@@ -93,6 +94,20 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
       data <- getData(channel)
       _ <- S.flatModify { cache =>
             Sync[F].delay(cache.data.put(channel, datum +: data)).map(_ => cache)
+          }
+    } yield ()
+
+  def removeDatum(channel: C, index: Int): F[Unit] =
+    for {
+      data <- getData(channel)
+      _ <- S.flatModify { cache =>
+            removeIndex(cache.data(channel), index) >>= { updated =>
+              Sync[F]
+                .delay {
+                  cache.data.put(channel, updated)
+                }
+                .map(_ => cache)
+            }
           }
     } yield ()
 

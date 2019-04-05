@@ -218,7 +218,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       }
   }
 
-  "putData when cache is empty" should "read from history and add to it" in forAll {
+  "putDatum when cache is empty" should "read from history and add to it" in forAll {
     (
         channel: Channel,
         historyData: Vector[Data],
@@ -236,7 +236,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       }
   }
 
-  "putData when cache contains data" should "read from the cache and add to it" in forAll {
+  "putDatum when cache contains data" should "read from the cache and add to it" in forAll {
     (
         channel: Channel,
         historyData: Vector[Data],
@@ -258,6 +258,51 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _     <- hotStore.putDatum(channel, insertedData)
             cache <- state.read
             _     <- S.delay(cache.data(channel) shouldEqual insertedData +: cachedData)
+          } yield ()
+        }
+      }
+  }
+
+  "removeDatum when cache is empty" should "read from history and remove datum at index" in forAll {
+    (
+        channel: Channel,
+        historyData: Vector[Data],
+        index: Int
+    ) =>
+      fixture { (state, history, hotStore) =>
+        {
+          for {
+            _     <- history.putData(channel, historyData)
+            res   <- hotStore.removeDatum(channel, index).attempt
+            cache <- state.read
+            _     <- checkRemoval(res, cache.data(channel), historyData, index)
+          } yield ()
+        }
+      }
+  }
+
+  "removeDatum when cache contains data" should "read from the cache and remove datum" in forAll {
+    (
+        channel: Channel,
+        historyData: Vector[Data],
+        cachedData: Vector[Data],
+        index: Int
+    ) =>
+      fixture { (state, history, hotStore) =>
+        {
+          for {
+            _ <- history.putData(channel, historyData)
+            _ <- state.modify(
+                  _ =>
+                    Cache(
+                      data = TrieMap(
+                        channel -> cachedData
+                      )
+                    )
+                )
+            res   <- hotStore.removeDatum(channel, index).attempt
+            cache <- state.read
+            _     <- checkRemoval(res, cache.data(channel), cachedData, index)
           } yield ()
         }
       }
