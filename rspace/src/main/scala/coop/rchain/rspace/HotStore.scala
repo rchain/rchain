@@ -20,6 +20,7 @@ trait HotStore[F[_], C, P, A, K] {
 
   def getJoins(channel: C): F[Seq[Seq[C]]]
   def putJoin(channel: C, join: Seq[C]): F[Unit]
+  def removeJoin(channel: C, join: Seq[C]): F[Unit]
 }
 
 final case class Cache[C, P, A, K](
@@ -132,6 +133,21 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
       joins <- getJoins(channel)
       _ <- S.flatModify { cache =>
             Sync[F].delay(cache.joins.put(channel, join +: joins)).map(_ => cache)
+          }
+    } yield ()
+
+  def removeJoin(channel: C, join: Seq[C]): F[Unit] =
+    for {
+      joins <- getJoins(channel)
+      _ <- S.flatModify { cache =>
+            val index = cache.joins(channel).indexOf(join)
+            removeIndex(cache.joins(channel), index) >>= { updated =>
+              Sync[F]
+                .delay {
+                  cache.joins.put(channel, updated)
+                }
+                .map(_ => cache)
+            }
           }
     } yield ()
 

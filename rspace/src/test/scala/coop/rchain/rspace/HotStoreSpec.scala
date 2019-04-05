@@ -397,6 +397,57 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       }
   }
 
+  "removeJoin when cache is empty" should "read from history and remove join" in forAll {
+    (
+        channel: Channel,
+        historyJoins: Joins,
+        index: Int,
+        join: Join
+    ) =>
+      whenever(!historyJoins.contains(join)) {
+        fixture { (state, history, hotStore) =>
+          for {
+            _        <- history.putJoins(channel, historyJoins)
+            toRemove = historyJoins.get(index.toLong).getOrElse(join)
+            res      <- hotStore.removeJoin(channel, toRemove).attempt
+            cache    <- state.read
+            _        <- checkRemoval(res, cache.joins(channel), historyJoins, index)
+          } yield ()
+        }
+      }
+  }
+
+  "removeJoin when cache contains data" should "read from the cache and remove join" in forAll {
+    (
+        channel: Channel,
+        historyJoins: Joins,
+        cachedJoins: Joins,
+        index: Int,
+        join: Join
+    ) =>
+      whenever(!cachedJoins.contains(join)) {
+        fixture { (state, history, hotStore) =>
+          {
+            for {
+              _        <- history.putJoins(channel, historyJoins)
+              toRemove = cachedJoins.get(index.toLong).getOrElse(join)
+              _ <- state.modify(
+                    _ =>
+                      Cache(
+                        joins = TrieMap(
+                          channel -> cachedJoins
+                        )
+                      )
+                  )
+              res   <- hotStore.removeJoin(channel, toRemove).attempt
+              cache <- state.read
+              _     <- checkRemoval(res, cache.joins(channel), cachedJoins, index)
+            } yield ()
+          }
+        }
+      }
+  }
+
   "concurrent data operations on disjoint channels" should "not mess up the cache" in forAll {
     (
         channel1: Channel,
