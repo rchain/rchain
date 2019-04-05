@@ -1,10 +1,8 @@
 package coop.rchain.node.api
 
-import cats._
-import cats.data._
+import cats._, cats.data._, cats.implicits._
 import cats.effect.concurrent.Semaphore
 import cats.effect.Concurrent
-import cats.implicits._
 import cats.mtl.implicits._
 
 import coop.rchain.blockstorage.BlockStore
@@ -81,7 +79,14 @@ private[api] object DeployGrpcService {
 
       override def showBlocks(request: BlocksQuery): Observable[GrpcEither] =
         Observable
-          .fromTask(deferList(BlockAPI.showBlocks[F](request.depth)))
+          .fromTask(
+            deferList[BlockInfoWithoutTuplespace](
+              Functor[F].map(BlockAPI.showBlocks[F](request.depth)) {
+                case Right(list) => list
+                case Left(_)     => List.empty
+              }
+            )
+          )
           .flatMap(Observable.fromIterable)
 
       override def listenForDataAtName(request: DataAtNameQuery): Task[GrpcEither] =

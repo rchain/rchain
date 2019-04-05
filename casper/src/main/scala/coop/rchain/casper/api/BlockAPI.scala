@@ -279,12 +279,14 @@ object BlockAPI {
 
   def showBlocks[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int
-  ): F[List[BlockInfoWithoutTuplespace]] = {
+  ): Effect[F, List[BlockInfoWithoutTuplespace]] = {
 
     val errorMessage =
       "Could not show blocks, casper instance was not available yet."
 
-    def casperResponse(implicit casper: MultiParentCasper[F]) =
+    def casperResponse(
+        implicit casper: MultiParentCasper[F]
+    ): Effect[F, List[BlockInfoWithoutTuplespace]] =
       for {
         dag         <- MultiParentCasper[F].blockDag
         maxHeight   <- dag.topoSort(0L).map(_.length - 1) // TODO: Optimize calculating max height
@@ -293,11 +295,11 @@ object BlockAPI {
                                           depth,
                                           dag
                                         )
-      } yield flattenedBlockInfosUntilDepth.reverse
+      } yield flattenedBlockInfosUntilDepth.reverse.asRight[Error]
 
-    MultiParentCasperRef.withCasper[F, List[BlockInfoWithoutTuplespace]](
+    MultiParentCasperRef.withCasper[F, ApiErr[List[BlockInfoWithoutTuplespace]]](
       casperResponse(_),
-      Log[F].warn(errorMessage).as(List.empty[BlockInfoWithoutTuplespace])
+      Log[F].warn(errorMessage).as(errorMessage.asLeft)
     )
   }
 
