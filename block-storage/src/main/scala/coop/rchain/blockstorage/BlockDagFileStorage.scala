@@ -253,6 +253,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
           TopoSortLengthIsTooBig(sortOffset - startBlockNumber + topoSortVector.length)
         )
       }
+    // TODO should startBlockNumber have topoSortVector.length - 1 (off by one error)?
     def topoSortTail(tailLength: Int): F[Vector[Vector[BlockHash]]] = {
       val startBlockNumber = Math.max(0L, sortOffset - (tailLength - topoSortVector.length))
       topoSort(startBlockNumber)
