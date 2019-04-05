@@ -16,7 +16,6 @@ import org.scalatest._
 import org.scalatest.prop._
 
 import scala.collection.concurrent.TrieMap
-import scala.collection.immutable.Seq
 import scala.concurrent.duration._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -39,7 +38,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
   ): Unit
 
   "getContinuations when cache is empty" should "read from history and put into the cache" in forAll {
-    (channels: List[Channel], historyContinuations: List[Continuation]) =>
+    (channels: Vector[Channel], historyContinuations: Vector[Continuation]) =>
       fixture { (state, history, hotStore) =>
         for {
           _                 <- history.putContinuations(channels, historyContinuations)
@@ -55,9 +54,9 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
 
   "getContinuations when cache contains data" should "read from cache ignoring history" in forAll {
     (
-        channels: List[Channel],
-        historyContinuations: List[Continuation],
-        cachedContinuations: List[Continuation]
+        channels: Vector[Channel],
+        historyContinuations: Vector[Continuation],
+        cachedContinuations: Vector[Continuation]
     ) =>
       fixture { (state, history, hotStore) =>
         {
@@ -83,8 +82,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
 
   "putContinuation when cache is empty" should "read from history and add to it" in forAll {
     (
-        channels: List[Channel],
-        historyContinuations: List[Continuation],
+        channels: Vector[Channel],
+        historyContinuations: Vector[Continuation],
         insertedContinuation: Continuation
     ) =>
       fixture { (state, history, hotStore) =>
@@ -95,7 +94,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
 
             cache <- state.read
             _ <- S.delay(
-                  cache.continuations(channels) shouldEqual insertedContinuation :: historyContinuations
+                  cache.continuations(channels) shouldEqual insertedContinuation +: historyContinuations
                 )
           } yield ()
         }
@@ -104,9 +103,9 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
 
   "putContinuation when cache contains data" should "read from the cache and add to it" in forAll {
     (
-        channels: List[Channel],
-        historyContinuations: List[Continuation],
-        cachedContinuations: List[Continuation],
+        channels: Vector[Channel],
+        historyContinuations: Vector[Continuation],
+        cachedContinuations: Vector[Continuation],
         insertedContinuation: Continuation
     ) =>
       fixture { (state, history, hotStore) =>
@@ -125,7 +124,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             cache <- state.read
             _ <- S.delay(
                   cache
-                    .continuations(channels) shouldEqual insertedContinuation :: cachedContinuations
+                    .continuations(channels) shouldEqual insertedContinuation +: cachedContinuations
                 )
           } yield ()
         }
@@ -133,7 +132,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
   }
 
   "getData when cache is empty" should "read from history and put into the cache" in forAll {
-    (channel: Channel, historyData: List[Datum[String]]) =>
+    (channel: Channel, historyData: Vector[Datum[String]]) =>
       fixture { (state, history, hotStore) =>
         for {
           _        <- history.putData(channel, historyData)
@@ -150,8 +149,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
   "getData when cache contains data" should "read from cache ignoring history" in forAll {
     (
         channel: Channel,
-        historyData: List[Data],
-        cachedData: List[Data]
+        historyData: Vector[Data],
+        cachedData: Vector[Data]
     ) =>
       fixture { (state, history, hotStore) =>
         {
@@ -177,7 +176,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
   "putData when cache is empty" should "read from history and add to it" in forAll {
     (
         channel: Channel,
-        historyData: List[Data],
+        historyData: Vector[Data],
         insertedData: Data
     ) =>
       fixture { (state, history, hotStore) =>
@@ -186,7 +185,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _     <- history.putData(channel, historyData)
             _     <- hotStore.putDatum(channel, insertedData)
             cache <- state.read
-            _     <- S.delay(cache.data(channel) shouldEqual insertedData :: historyData)
+            _     <- S.delay(cache.data(channel) shouldEqual insertedData +: historyData)
           } yield ()
         }
       }
@@ -195,8 +194,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
   "putData when cache contains data" should "read from the cache and add to it" in forAll {
     (
         channel: Channel,
-        historyData: List[Data],
-        cachedData: List[Data],
+        historyData: Vector[Data],
+        cachedData: Vector[Data],
         insertedData: Data
     ) =>
       fixture { (state, history, hotStore) =>
@@ -213,14 +212,14 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                 )
             _     <- hotStore.putDatum(channel, insertedData)
             cache <- state.read
-            _     <- S.delay(cache.data(channel) shouldEqual insertedData :: cachedData)
+            _     <- S.delay(cache.data(channel) shouldEqual insertedData +: cachedData)
           } yield ()
         }
       }
   }
 
   "getJoins when cache is empty" should "read from history and put into the cache" in forAll {
-    (channel: Channel, historyJoins: List[List[Channel]]) =>
+    (channel: Channel, historyJoins: Vector[Vector[Channel]]) =>
       fixture { (state, history, hotStore) =>
         for {
           _         <- history.putJoins(channel, historyJoins)
@@ -237,8 +236,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
   "getJoins when cache contains data" should "read from cache ignoring history" in forAll {
     (
         channel: Channel,
-        historyJoins: List[List[Channel]],
-        cachedJoins: List[List[Channel]]
+        historyJoins: Vector[Vector[Channel]],
+        cachedJoins: Vector[Vector[Channel]]
     ) =>
       fixture { (state, history, hotStore) =>
         {
@@ -265,8 +264,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
     (
         channel1: Channel,
         channel2: Channel,
-        historyData1: List[Data],
-        historyData2: List[Data],
+        historyData1: Vector[Data],
+        historyData2: Vector[Data],
         insertedData1: Data,
         insertedData2: Data
     ) =>
@@ -276,14 +275,14 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             for {
               _ <- history.putData(channel1, historyData1)
               _ <- history.putData(channel2, historyData2)
-              _ <- List(
+              _ <- Vector(
                     hotStore.putDatum(channel1, insertedData1),
                     hotStore.putDatum(channel2, insertedData2)
                   ).parSequence
               r1 <- hotStore.getData(channel1)
               r2 <- hotStore.getData(channel2)
-              _  <- S.delay(r1 shouldEqual insertedData1 :: historyData1)
-              _  <- S.delay(r2 shouldEqual insertedData2 :: historyData2)
+              _  <- S.delay(r1 shouldEqual insertedData1 +: historyData1)
+              _  <- S.delay(r2 shouldEqual insertedData2 +: historyData2)
             } yield ()
           }
         }
@@ -292,10 +291,10 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
 
   "concurrent continuation operations on disjoint channels" should "not mess up the cache" in forAll {
     (
-        channels1: List[Channel],
-        channels2: List[Channel],
-        historyContinuations1: List[Continuation],
-        historyContinuations2: List[Continuation],
+        channels1: Vector[Channel],
+        channels2: Vector[Channel],
+        historyContinuations1: Vector[Continuation],
+        historyContinuations2: Vector[Continuation],
         insertedContinuation1: Continuation,
         insertedContinuation2: Continuation
     ) =>
@@ -305,14 +304,14 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             for {
               _ <- history.putContinuations(channels1, historyContinuations1)
               _ <- history.putContinuations(channels2, historyContinuations2)
-              _ <- List(
+              _ <- Vector(
                     hotStore.putContinuation(channels1, insertedContinuation1),
                     hotStore.putContinuation(channels2, insertedContinuation2)
                   ).parSequence
               r1 <- hotStore.getContinuations(channels1)
               r2 <- hotStore.getContinuations(channels2)
-              _  <- S.delay(r1 shouldEqual insertedContinuation1 :: historyContinuations1)
-              _  <- S.delay(r2 shouldEqual insertedContinuation2 :: historyContinuations2)
+              _  <- S.delay(r1 shouldEqual insertedContinuation1 +: historyContinuations1)
+              _  <- S.delay(r2 shouldEqual insertedContinuation2 +: historyContinuations2)
             } yield ()
           }
         }
@@ -323,22 +322,22 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
 class History[F[_]: Sync](implicit R: Cell[F, Cache[String, Pattern, String, StringsCaptor]])
     extends HistoryReader[F, String, Pattern, String, StringsCaptor] {
 
-  def getJoins(channel: String): F[List[List[String]]] = R.read.map(_.joins(channel))
-  def putJoins(channel: String, joins: List[List[String]]): F[Unit] = R.flatModify { prev =>
+  def getJoins(channel: String): F[Seq[Seq[String]]] = R.read.map(_.joins(channel))
+  def putJoins(channel: String, joins: Seq[Seq[String]]): F[Unit] = R.flatModify { prev =>
     Sync[F].delay(prev.joins.put(channel, joins)).map(_ => prev)
   }
 
-  def getData(channel: String): F[List[Datum[String]]] = R.read.map(_.data(channel))
-  def putData(channel: String, data: List[Datum[String]]): F[Unit] = R.flatModify { prev =>
+  def getData(channel: String): F[Seq[Datum[String]]] = R.read.map(_.data(channel))
+  def putData(channel: String, data: Seq[Datum[String]]): F[Unit] = R.flatModify { prev =>
     Sync[F].delay(prev.data.put(channel, data)).map(_ => prev)
   }
 
   def getContinuations(
-      channels: List[String]
-  ): F[List[WaitingContinuation[Pattern, StringsCaptor]]] = R.read.map(_.continuations(channels))
+      channels: Seq[String]
+  ): F[Seq[WaitingContinuation[Pattern, StringsCaptor]]] = R.read.map(_.continuations(channels))
   def putContinuations(
-      channels: List[String],
-      continuations: List[WaitingContinuation[Pattern, StringsCaptor]]
+      channels: Seq[String],
+      continuations: Seq[WaitingContinuation[Pattern, StringsCaptor]]
   ): F[Unit] = R.flatModify { prev =>
     Sync[F].delay(prev.continuations.put(channels, continuations)).map(_ => prev)
   }

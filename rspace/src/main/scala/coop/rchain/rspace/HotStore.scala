@@ -10,20 +10,20 @@ import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import scala.collection.concurrent.TrieMap
 
 trait HotStore[F[_], C, P, A, K] {
-  def getContinuations(channels: List[C]): F[List[WaitingContinuation[P, K]]]
-  def putContinuation(channels: List[C], wc: WaitingContinuation[P, K]): F[Unit]
+  def getContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]]
+  def putContinuation(channels: Seq[C], wc: WaitingContinuation[P, K]): F[Unit]
 
-  def getData(channel: C): F[List[Datum[A]]]
+  def getData(channel: C): F[Seq[Datum[A]]]
   def putDatum(channel: C, d: Datum[A]): F[Unit]
 
-  def getJoins(channel: C): F[List[List[C]]]
+  def getJoins(channel: C): F[Seq[Seq[C]]]
 }
 
 final case class Cache[C, P, A, K](
-    continuations: TrieMap[List[C], List[WaitingContinuation[P, K]]] =
-      TrieMap.empty[List[C], List[WaitingContinuation[P, K]]],
-    data: TrieMap[C, List[Datum[A]]] = TrieMap.empty[C, List[Datum[A]]],
-    joins: TrieMap[C, List[List[C]]] = TrieMap.empty[C, List[List[C]]]
+    continuations: TrieMap[Seq[C], Seq[WaitingContinuation[P, K]]] =
+      TrieMap.empty[Seq[C], Seq[WaitingContinuation[P, K]]],
+    data: TrieMap[C, Seq[Datum[A]]] = TrieMap.empty[C, Seq[Datum[A]]],
+    joins: TrieMap[C, Seq[Seq[C]]] = TrieMap.empty[C, Seq[Seq[C]]]
 )
 
 private class InMemHotStore[F[_]: Sync, C, P, A, K](
@@ -31,7 +31,7 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
     HR: HistoryReader[F, C, P, A, K]
 ) extends HotStore[F, C, P, A, K] {
 
-  def getContinuations(channels: List[C]): F[List[WaitingContinuation[P, K]]] =
+  def getContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
     for {
       state <- S.read
       res <- state.continuations.get(channels) match {
@@ -50,15 +50,15 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
             }
     } yield (res)
 
-  def putContinuation(channels: List[C], wc: WaitingContinuation[P, K]): F[Unit] =
+  def putContinuation(channels: Seq[C], wc: WaitingContinuation[P, K]): F[Unit] =
     for {
       continuations <- getContinuations(channels)
       _ <- S.flatModify { cache =>
-            Sync[F].delay(cache.continuations.put(channels, wc :: continuations)).map(_ => cache)
+            Sync[F].delay(cache.continuations.put(channels, wc +: continuations)).map(_ => cache)
           }
     } yield ()
 
-  def getData(channel: C): F[List[Datum[A]]] =
+  def getData(channel: C): F[Seq[Datum[A]]] =
     for {
       state <- S.read
       res <- state.data.get(channel) match {
@@ -77,11 +77,11 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
     for {
       data <- getData(channel)
       _ <- S.flatModify { cache =>
-            Sync[F].delay(cache.data.put(channel, datum :: data)).map(_ => cache)
+            Sync[F].delay(cache.data.put(channel, datum +: data)).map(_ => cache)
           }
     } yield ()
 
-  def getJoins(channel: C): F[List[List[C]]] =
+  def getJoins(channel: C): F[Seq[Seq[C]]] =
     for {
       state <- S.read
       res <- state.joins.get(channel) match {
