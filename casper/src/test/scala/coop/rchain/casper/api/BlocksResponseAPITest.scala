@@ -174,7 +174,8 @@ class BlocksResponseAPITest
                            cliqueOracleEffect,
                            blockStore
                          )
-      } yield blocksResponse.length should be(8) // TODO: Switch to 4 when we implement block height correctly
+      } yield
+        blocksResponse.right.get.length should be(8) // TODO: Switch to 4 when we implement block height correctly
   }
 
   it should "return until depth" in withStorage { implicit blockStore => implicit blockDagStorage =>
@@ -246,6 +247,7 @@ class BlocksResponseAPITest
                          cliqueOracleEffect,
                          blockStore
                        )
-    } yield blocksResponse.length should be(2) // TODO: Switch to 3 when we implement block height correctly
+    } yield
+      blocksResponse.right.get.length should be(2) // TODO: Switch to 3 when we implement block height correctly
   }
 }

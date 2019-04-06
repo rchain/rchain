@@ -236,8 +236,8 @@ object BlockAPI {
     }
   }
 
-  def temp[
-      F[_]: Monad: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore,
+  private def toposortDag[
+      F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore,
       A
   ](depth: Int)(
       doIt: (MultiParentCasper[F], Vector[Vector[BlockHash]]) => F[ApiErr[A]]
@@ -269,7 +269,7 @@ object BlockAPI {
       visualizer: (Vector[Vector[BlockHash]], String) => F[G[Graphz[G]]],
       stringify: G[Graphz[G]] => String
   ): Effect[F, VisualizeBlocksResponse] =
-    temp[F, VisualizeBlocksResponse](depth) {
+    toposortDag[F, VisualizeBlocksResponse](depth) {
       case (casper, topoSort) =>
         for {
           lastFinalizedBlock <- casper.lastFinalizedBlock
@@ -279,44 +279,23 @@ object BlockAPI {
 
   def showBlocks[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int
-  ): Effect[F, List[BlockInfoWithoutTuplespace]] = {
+  ): Effect[F, List[BlockInfoWithoutTuplespace]] =
+    toposortDag[F, List[BlockInfoWithoutTuplespace]](depth) {
+      case (casper, topoSort) =>
+        implicit val ev: MultiParentCasper[F] = casper
+        for {
+          result <- topoSort.foldM(List.empty[BlockInfoWithoutTuplespace]) {
 
-    val errorMessage =
-      "Could not show blocks, casper instance was not available yet."
-
-    def casperResponse(
-        implicit casper: MultiParentCasper[F]
-    ): Effect[F, List[BlockInfoWithoutTuplespace]] =
-      for {
-        dag         <- MultiParentCasper[F].blockDag
-        maxHeight   <- dag.topoSort(0L).map(_.length - 1) // TODO: Optimize calculating max height
-        startHeight = math.max(0, maxHeight - depth)
-        flattenedBlockInfosUntilDepth <- getFlattenedBlockInfosUntilDepth[F](
-                                          depth,
-                                          dag
-                                        )
-      } yield flattenedBlockInfosUntilDepth.reverse.asRight[Error]
-
-    MultiParentCasperRef.withCasper[F, ApiErr[List[BlockInfoWithoutTuplespace]]](
-      casperResponse(_),
-      Log[F].warn(errorMessage).as(errorMessage.asLeft)
-    )
-  }
-
-  private def getFlattenedBlockInfosUntilDepth[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
-      depth: Int,
-      dag: BlockDagRepresentation[F]
-  ): F[List[BlockInfoWithoutTuplespace]] =
-    for {
-      topoSort <- dag.topoSortTail(depth)
-      result <- topoSort.foldM(List.empty[BlockInfoWithoutTuplespace]) {
-                 case (blockInfosAtHeightAcc, blockHashesAtHeight) =>
-                   for {
-                     blocksAtHeight     <- blockHashesAtHeight.traverse(ProtoUtil.unsafeGetBlock[F])
-                     blockInfosAtHeight <- blocksAtHeight.traverse(getBlockInfoWithoutTuplespace[F])
-                   } yield blockInfosAtHeightAcc ++ blockInfosAtHeight
-               }
-    } yield result.reverse
+                     case (blockInfosAtHeightAcc, blockHashesAtHeight) =>
+                       for {
+                         blocksAtHeight <- blockHashesAtHeight.traverse(ProtoUtil.unsafeGetBlock[F])
+                         blockInfosAtHeight <- blocksAtHeight.traverse(
+                                                getBlockInfoWithoutTuplespace[F]
+                                              )
+                       } yield blockInfosAtHeightAcc ++ blockInfosAtHeight
+                   }
+        } yield result.reverse.asRight[Error]
+    }
 
   def showMainChain[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int
