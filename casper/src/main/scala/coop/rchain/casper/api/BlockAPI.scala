@@ -248,11 +248,9 @@ object BlockAPI {
 
     def casperResponse(implicit casper: MultiParentCasper[F]): Effect[F, A] =
       for {
-        dag         <- MultiParentCasper[F].blockDag
-        maxHeight   <- dag.topoSort(0L).map(_.length - 1)
-        startHeight = math.max(0, maxHeight - depth)
-        topoSort    <- dag.topoSortTail(depth)
-        result      <- doIt(casper, topoSort)
+        dag      <- MultiParentCasper[F].blockDag
+        topoSort <- dag.topoSortTail(depth)
+        result   <- doIt(casper, topoSort)
       } yield result
 
     MultiParentCasperRef.withCasper[F, ApiErr[A]](
