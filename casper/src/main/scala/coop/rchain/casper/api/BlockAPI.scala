@@ -281,18 +281,17 @@ object BlockAPI {
     toposortDag[F, List[BlockInfoWithoutTuplespace]](depth) {
       case (casper, topoSort) =>
         implicit val ev: MultiParentCasper[F] = casper
-        for {
-          result <- topoSort.foldM(List.empty[BlockInfoWithoutTuplespace]) {
-
-                     case (blockInfosAtHeightAcc, blockHashesAtHeight) =>
-                       for {
-                         blocksAtHeight <- blockHashesAtHeight.traverse(ProtoUtil.unsafeGetBlock[F])
-                         blockInfosAtHeight <- blocksAtHeight.traverse(
-                                                getBlockInfoWithoutTuplespace[F]
-                                              )
-                       } yield blockInfosAtHeightAcc ++ blockInfosAtHeight
-                   }
-        } yield result.reverse.asRight[Error]
+        topoSort
+          .foldM(List.empty[BlockInfoWithoutTuplespace]) {
+            case (blockInfosAtHeightAcc, blockHashesAtHeight) =>
+              for {
+                blocksAtHeight <- blockHashesAtHeight.traverse(ProtoUtil.unsafeGetBlock[F])
+                blockInfosAtHeight <- blocksAtHeight.traverse(
+                                       getBlockInfoWithoutTuplespace[F]
+                                     )
+              } yield blockInfosAtHeightAcc ++ blockInfosAtHeight
+          }
+          .map(_.reverse.asRight[Error])
     }
 
   def showMainChain[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
