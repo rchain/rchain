@@ -270,8 +270,8 @@ object BlockAPI {
     toposortDag[F, VisualizeBlocksResponse](depth) {
       case (casper, topoSort) =>
         for {
-          lastFinalizedBlock <- casper.lastFinalizedBlock
-          graph              <- visualizer(topoSort, PrettyPrinter.buildString(lastFinalizedBlock.blockHash))
+          lfb   <- casper.lastFinalizedBlock
+          graph <- visualizer(topoSort, PrettyPrinter.buildString(lfb.blockHash))
         } yield VisualizeBlocksResponse(stringify(graph)).asRight[Error]
     }
 
