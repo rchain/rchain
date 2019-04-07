@@ -6,10 +6,13 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.blockstorage.BlockStore.BlockHash
+import coop.rchain.blockstorage.StorageError.StorageErr
 import coop.rchain.blockstorage.util.BlockMessageUtil.{bonds, parentHashes}
-import coop.rchain.blockstorage.util.TopologicalSortUtil
+import coop.rchain.blockstorage.util.{BlockMessageUtil, TopologicalSortUtil}
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.{BlockMetadata, EquivocationRecord}
+import coop.rchain.models.EquivocationRecord.SequenceNumber
 import coop.rchain.shared.Log
 
 import scala.collection.immutable.HashSet
@@ -19,7 +22,8 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
     latestMessagesRef: Ref[F, Map[Validator, BlockHash]],
     childMapRef: Ref[F, Map[BlockHash, Set[BlockHash]]],
     dataLookupRef: Ref[F, Map[BlockHash, BlockMetadata]],
-    topoSortRef: Ref[F, Vector[Vector[BlockHash]]]
+    topoSortRef: Ref[F, Vector[Vector[BlockHash]]],
+    equivocationsTrackerRef: Ref[F, Set[EquivocationRecord]]
 ) extends BlockDagStorage[F] {
   final case class InMemBlockDagRepresentation(
       latestMessagesMap: Map[Validator, BlockHash],
@@ -56,6 +60,24 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
         .map(_.toMap)
   }
 
+  object InMemEquivocationsTracker extends EquivocationsTracker[F] {
+    override def equivocationRecords: F[Set[EquivocationRecord]] =
+      equivocationsTrackerRef.get
+    override def insertEquivocationRecord(record: EquivocationRecord): F[Unit] =
+      equivocationsTrackerRef.update(_ + record)
+    override def updateEquivocationRecord(
+        record: EquivocationRecord,
+        blockHash: BlockHash
+    ): F[Unit] = {
+      val updatedEquivocationDetectedBlockHashes =
+        record.equivocationDetectedBlockHashes + blockHash
+      equivocationsTrackerRef.update(
+        _ - record +
+          record.copy(equivocationDetectedBlockHashes = updatedEquivocationDetectedBlockHashes)
+      )
+    }
+  }
+
   override def getRepresentation: F[BlockDagRepresentation[F]] =
     for {
       _              <- lock.acquire
@@ -66,10 +88,14 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
       _              <- lock.release
     } yield InMemBlockDagRepresentation(latestMessages, childMap, dataLookup, topoSort)
 
-  override def insert(block: BlockMessage): F[BlockDagRepresentation[F]] =
+  override def insert(
+      block: BlockMessage,
+      genesis: BlockMessage,
+      invalid: Boolean
+  ): F[BlockDagRepresentation[F]] =
     for {
       _ <- lock.acquire
-      _ <- dataLookupRef.update(_.updated(block.blockHash, BlockMetadata.fromBlock(block)))
+      _ <- dataLookupRef.update(_.updated(block.blockHash, BlockMetadata.fromBlock(block, invalid)))
       _ <- childMapRef.update(
             childMap =>
               parentHashes(block).foldLeft(childMap) {
@@ -83,26 +109,37 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
         .map(_.validator)
         .toSet
         .diff(block.justifications.map(_.validator).toSet)
-      newValidatorsWithSender <- if (block.sender.isEmpty) {
-                                  // Ignore empty sender for special cases such as genesis block
-                                  Log[F].warn(
-                                    s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
-                                  ) *> newValidators.pure[F]
-                                } else if (block.sender.size() == 32) {
-                                  (newValidators + block.sender).pure[F]
-                                } else {
-                                  Sync[F].raiseError[Set[ByteString]](
-                                    BlockSenderIsMalformed(block)
-                                  )
-                                }
+      newValidatorsLatestMessages = newValidators.map(v => (v, genesis.blockHash))
+      newValidatorsWithSenderLatestMessages <- if (block.sender.isEmpty) {
+                                                // Ignore empty sender for special cases such as genesis block
+                                                Log[F].warn(
+                                                  s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
+                                                ) *> newValidatorsLatestMessages.pure[F]
+                                              } else if (block.sender.size() == 32) {
+                                                (newValidatorsLatestMessages + (
+                                                  (
+                                                    block.sender,
+                                                    block.blockHash
+                                                  )
+                                                )).pure[F]
+                                              } else {
+                                                Sync[F].raiseError[Set[(ByteString, ByteString)]](
+                                                  BlockSenderIsMalformed(block)
+                                                )
+                                              }
       _ <- latestMessagesRef.update { latestMessages =>
-            newValidatorsWithSender.foldLeft(latestMessages) {
-              case (acc, v) => acc.updated(v, block.blockHash)
+            newValidatorsWithSenderLatestMessages.foldLeft(latestMessages) {
+              case (acc, (validator, blockHash)) => acc.updated(validator, blockHash)
             }
           }
       _   <- lock.release
       dag <- getRepresentation
     } yield dag
+
+  override def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A] =
+    lock.withPermit(
+      f(InMemEquivocationsTracker)
+    )
   override def checkpoint(): F[Unit] = ().pure[F]
   override def clear(): F[Unit] =
     for {
@@ -111,6 +148,7 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
       _ <- childMapRef.set(Map.empty)
       _ <- topoSortRef.set(Vector.empty)
       _ <- latestMessagesRef.set(Map.empty)
+      _ <- equivocationsTrackerRef.set(Set.empty)
       _ <- lock.release
     } yield ()
   override def close(): F[Unit] = ().pure[F]
@@ -119,17 +157,19 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
 object InMemBlockDagStorage {
   def create[F[_]: Concurrent: Sync: Log: BlockStore]: F[InMemBlockDagStorage[F]] =
     for {
-      lock              <- Semaphore[F](1)
-      latestMessagesRef <- Ref.of[F, Map[Validator, BlockHash]](Map.empty)
-      childMapRef       <- Ref.of[F, Map[BlockHash, Set[BlockHash]]](Map.empty)
-      dataLookupRef     <- Ref.of[F, Map[BlockHash, BlockMetadata]](Map.empty)
-      topoSortRef       <- Ref.of[F, Vector[Vector[BlockHash]]](Vector.empty)
+      lock                    <- Semaphore[F](1)
+      latestMessagesRef       <- Ref.of[F, Map[Validator, BlockHash]](Map.empty)
+      childMapRef             <- Ref.of[F, Map[BlockHash, Set[BlockHash]]](Map.empty)
+      dataLookupRef           <- Ref.of[F, Map[BlockHash, BlockMetadata]](Map.empty)
+      topoSortRef             <- Ref.of[F, Vector[Vector[BlockHash]]](Vector.empty)
+      equivocationsTrackerRef <- Ref.of[F, Set[EquivocationRecord]](Set.empty)
     } yield
       new InMemBlockDagStorage[F](
         lock,
         latestMessagesRef,
         childMapRef,
         dataLookupRef,
-        topoSortRef
+        topoSortRef,
+        equivocationsTrackerRef
       )
 }

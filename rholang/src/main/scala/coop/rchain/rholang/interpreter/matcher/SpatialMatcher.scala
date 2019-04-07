@@ -1,20 +1,24 @@
 package coop.rchain.rholang.interpreter.matcher
 
-import cats.effect.Sync
+import cats.data._
+import cats.effect._
+import cats.effect.implicits._
 import cats.implicits._
-import cats.mtl.MonadState
+import cats.mtl._
 import cats.mtl.implicits._
-import cats.{FlatMap, Monad, MonoidK, Eval => _}
+import cats.{Functor, FlatMap, Monad, MonoidK, Eval => _}
 import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance.{FreeVar, Wildcard}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits.{VectorPar, _}
+import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.Splittable
-import coop.rchain.rholang.interpreter.accounting.{Cost, _}
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.errors.{BugFoundError, OutOfPhlogistonsError}
 import coop.rchain.rholang.interpreter.matcher.ParSpatialMatcherUtils.{noFrees, subPars}
 import coop.rchain.rholang.interpreter.matcher.SpatialMatcher._
 import coop.rchain.rholang.interpreter.matcher.StreamT._
@@ -40,31 +44,21 @@ object SpatialMatcher extends SpatialMatcherInstances {
   //Also, the following workaround is needed b/c of precisely this reason:
   type Alternative[F[_]] = Alternative_[F]
 
-  def spatialMatchAndCharge[M[_]: Sync](target: Par, pattern: Par)(
-      implicit costAlg: CostAccounting[M]
+  def spatialMatchAndCharge[M[_]: Sync: _error](target: Par, pattern: Par)(
+      implicit
+      cost: _cost[M]
   ): M[Option[(FreeMap, Unit)]] = {
-    import NonDetFreeMapWithCost._
+    type R[A] = MatcherMonadT[M, A]
 
-    for {
-      // phlos available before going to the matcher
-      phlosAvailable <- costAlg.get()
-      result <- Sync[M]
-                 .fromEither(
-                   SpatialMatcher
-                     .spatialMatch[NonDetFreeMapWithCost, Par, Par](target, pattern)
-                     .runFirstWithCost(phlosAvailable.cost)
-                 )
-                 .flatMap {
-                   case (phlosLeft, result) =>
-                     val matchCost = phlosAvailable.cost - phlosLeft
-                     costAlg.charge(matchCost).map(_ => result)
-                 }
-                 .onError {
-                   case OutOfPhlogistonsError =>
-                     // if we run out of phlos during the match we have to zero phlos available
-                     costAlg.get().flatMap(ca => costAlg.charge(ca.cost))
-                 }
-    } yield result
+    implicit val _                            = matcherMonadCostLog[M]
+    implicit val matcherMonadError: _error[R] = implicitly[Sync[R]]
+
+    val doMatch: R[Unit] = SpatialMatcher.spatialMatch[R, Par, Par](target, pattern)
+
+    val matchAndCharge: M[Option[(FreeMap, Unit)]] =
+      runFirst[M, Unit](doMatch)
+
+    matchAndCharge
   }
 
   def spatialMatch[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short, T, P](
@@ -240,7 +234,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
               handleRemainder[F, T](remainderTargetsSorted, level, merger)
             }
           }
-    } yield Unit
+    } yield ()
   }
 
   private def isolateState[H[_]: MonadState[?[_], S], S](f: H[_]): H[S] = {
@@ -263,14 +257,16 @@ object SpatialMatcher extends SpatialMatcherInstances {
   ): F[FreeMap] =
     for {
       currentFreeMap <- _freeMap[F].get
-      _ <- Alternative_[F].guard {
+      currentVars    = currentFreeMap.keys.toSet
+      addedVars      = freeMaps.flatMap(_.keys.filterNot(currentVars.contains))
+      _ <- _error[F].ensure(addedVars.pure[F])(
+            BugFoundError(s"Aggregated updates conflicted with each other: $freeMaps")
+          ) {
             //The correctness of isolating MBM from changing FreeMap relies
             //on our ability to aggregate the var assignments from subsequent matches.
             //This means all the variables populated by MBM must not duplicate each other.
-            //TODO start using MonadError in the interpreter and raise errors for violated assertions
-            val currentVars = currentFreeMap.keys.toSet
-            val addedVars   = freeMaps.flatMap(_.keys.filterNot(currentVars.contains))
-            addedVars.size == addedVars.distinct.size
+            addedVars =>
+              addedVars.size == addedVars.distinct.size
           }
       updatedFreeMap = freeMaps.fold(currentFreeMap)(_ ++ _)
     } yield updatedFreeMap
@@ -287,7 +283,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
       //TODO: enforce sorted-ness of returned terms using types / by verifying the sorted-ness here
       remainderParUpdated = merger(remainderPar, remainderTargets)
       _                   <- freeMap.modify(_ + (level -> remainderParUpdated))
-    } yield Unit
+    } yield ()
 
 }
 
@@ -296,7 +292,7 @@ trait SpatialMatcherInstances {
   // more ways than one, we don't care, as we care about what went into the
   // match, and not about how it matched inside. The tricky part goes into
   // the par/par matcher.
-  import Splittable._
+  import Splittable.SplittableOps
 
   implicit def connectiveMatcher[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short]
     : SpatialMatcher[F, Par, Connective] =
@@ -460,7 +456,7 @@ trait SpatialMatcherInstances {
               varLevel,
               wildcard
             )
-      } yield Unit
+      } yield ()
     }
   }
 
@@ -483,7 +479,7 @@ trait SpatialMatcherInstances {
       for {
         _ <- spatialMatch(target.chan, pattern.chan)
         _ <- foldMatch(target.data, pattern.data)
-      } yield Unit
+      } yield ()
   }
 
   implicit def receiveSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short]
@@ -495,7 +491,7 @@ trait SpatialMatcherInstances {
         for {
           _ <- listMatchSingle(target.binds, pattern.binds)
           _ <- spatialMatch(target.body, pattern.body)
-        } yield Unit
+        } yield ()
     }
 
   implicit def newSpatialMatcherInstance[F[_]: Splittable: Alternative: Monad: _error: _cost: _freeMap: _short]
@@ -517,10 +513,10 @@ trait SpatialMatcherInstances {
                   _freeMap[F].modify(m => m + (level -> EList(matchedRem)))
                 case _ => ().pure[F]
               }
-        } yield Unit
+        } yield ()
       }
       case (ETupleBody(ETuple(tlist, _, _)), ETupleBody(ETuple(plist, _, _))) => {
-        foldMatch(tlist, plist).map(_ => Unit)
+        foldMatch(tlist, plist).map(_ => ())
       }
       case (ESetBody(ParSet(tlist, _, _, _)), ESetBody(ParSet(plist, _, _, rem))) =>
         val isWildcard      = rem.collect { case Var(Wildcard(_)) => true }.isDefined
@@ -546,12 +542,12 @@ trait SpatialMatcherInstances {
         for {
           _ <- spatialMatch(t1, p1)
           _ <- spatialMatch(t2, p2)
-        } yield Unit
+        } yield ()
       case (EDivBody(EDiv(t1, t2)), EDivBody(EDiv(p1, p2))) =>
         for {
           _ <- spatialMatch(t1, p1)
           _ <- spatialMatch(t2, p2)
-        } yield Unit
+        } yield ()
       case (
           EPercentPercentBody(EPercentPercent(t1, t2)),
           EPercentPercentBody(EPercentPercent(p1, p2))
@@ -559,22 +555,22 @@ trait SpatialMatcherInstances {
         for {
           _ <- spatialMatch(t1, p1)
           _ <- spatialMatch(t2, p2)
-        } yield Unit
+        } yield ()
       case (EPlusBody(EPlus(t1, t2)), EPlusBody(EPlus(p1, p2))) =>
         for {
           _ <- spatialMatch(t1, p1)
           _ <- spatialMatch(t2, p2)
-        } yield Unit
+        } yield ()
       case (EPlusPlusBody(EPlusPlus(t1, t2)), EPlusPlusBody(EPlusPlus(p1, p2))) =>
         for {
           _ <- spatialMatch(t1, p1)
           _ <- spatialMatch(t2, p2)
-        } yield Unit
+        } yield ()
       case (EMinusMinusBody(EMinusMinus(t1, t2)), EMinusMinusBody(EMinusMinus(p1, p2))) =>
         for {
           _ <- spatialMatch(t1, p1)
           _ <- spatialMatch(t2, p2)
-        } yield Unit
+        } yield ()
       case _ => MonoidK[F].empty[Unit]
     }
   }
@@ -585,7 +581,7 @@ trait SpatialMatcherInstances {
       for {
         _ <- spatialMatch(target.target, pattern.target)
         _ <- foldMatch(target.cases, pattern.cases)
-      } yield Unit
+      } yield ()
     }
 
   /**

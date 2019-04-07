@@ -4,24 +4,17 @@ import ProtoUtil._
 import com.google.protobuf.ByteString
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.catscontrib._
-import cats.implicits._
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
-import cats.data._
-import cats.effect.Bracket
 import cats.implicits._
 import cats.mtl.MonadState
 import cats.mtl.implicits._
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.casper.ConstructDeploy
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.helper.BlockGenerator
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.scalatestcontrib._
-import monix.eval.Task
-import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
-import coop.rchain.casper.util.rholang.{InterpreterUtil, ProcessedDeployUtil, RuntimeManager}
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.shared.{Log, Time}
 import monix.eval.Task
 
 import scala.concurrent.duration._
@@ -37,9 +30,9 @@ class CasperUtilTest
   "isInMainChain" should "classify appropriately" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        genesis <- createBlock[Task](Seq())
-        b2      <- createBlock[Task](Seq(genesis.blockHash))
-        b3      <- createBlock[Task](Seq(b2.blockHash))
+        genesis <- createGenesis[Task]()
+        b2      <- createBlock[Task](Seq(genesis.blockHash), genesis)
+        b3      <- createBlock[Task](Seq(b2.blockHash), genesis)
 
         dag <- blockDagStorage.getRepresentation
 
@@ -53,10 +46,10 @@ class CasperUtilTest
   "isInMainChain" should "classify diamond DAGs appropriately" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        genesis <- createBlock[Task](Seq())
-        b2      <- createBlock[Task](Seq(genesis.blockHash))
-        b3      <- createBlock[Task](Seq(genesis.blockHash))
-        b4      <- createBlock[Task](Seq(b2.blockHash, b3.blockHash))
+        genesis <- createGenesis[Task]()
+        b2      <- createBlock[Task](Seq(genesis.blockHash), genesis)
+        b3      <- createBlock[Task](Seq(genesis.blockHash), genesis)
+        b4      <- createBlock[Task](Seq(b2.blockHash, b3.blockHash), genesis)
 
         dag <- blockDagStorage.getRepresentation
 
@@ -75,14 +68,14 @@ class CasperUtilTest
       val v2 = generateValidator("Validator Two")
 
       for {
-        genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
-        b2      <- createBlock[Task](Seq(genesis.blockHash), v2)
-        b3      <- createBlock[Task](Seq(genesis.blockHash), v1)
-        b4      <- createBlock[Task](Seq(b2.blockHash), v2)
-        b5      <- createBlock[Task](Seq(b2.blockHash), v1)
-        b6      <- createBlock[Task](Seq(b4.blockHash), v2)
-        b7      <- createBlock[Task](Seq(b4.blockHash), v1)
-        b8      <- createBlock[Task](Seq(b7.blockHash), v1)
+        genesis <- createGenesis[Task]()
+        b2      <- createBlock[Task](Seq(genesis.blockHash), genesis, v2)
+        b3      <- createBlock[Task](Seq(genesis.blockHash), genesis, v1)
+        b4      <- createBlock[Task](Seq(b2.blockHash), genesis, v2)
+        b5      <- createBlock[Task](Seq(b2.blockHash), genesis, v1)
+        b6      <- createBlock[Task](Seq(b4.blockHash), genesis, v2)
+        b7      <- createBlock[Task](Seq(b4.blockHash), genesis, v1)
+        b8      <- createBlock[Task](Seq(b7.blockHash), genesis, v1)
 
         dag <- blockDagStorage.getRepresentation
 
@@ -96,76 +89,6 @@ class CasperUtilTest
         _      <- isInMainChain(dag, b2.blockHash, b6.blockHash) shouldBeF true
         _      <- isInMainChain(dag, b2.blockHash, b8.blockHash) shouldBeF true
         result <- isInMainChain(dag, b4.blockHash, b2.blockHash) shouldBeF false
-      } yield result
-  }
-
-  /*
-   * DAG Looks like this:
-   *
-   *       b9      b10
-   *        \      /
-   *        b7   b8
-   *          \  /
-   *           b6
-   *           / \
-   *      b4  /   \  b5
-   *       | /     \ |
-   *       b2       b3
-   *        \       /
-   *         genesis
-   */
-  "Blocks" should "conflict if they use the same deploys in different histories" in withStorage {
-    implicit val log: Log[Task] = new Log.NOPLog[Task]
-
-    implicit blockStore => implicit blockDagStorage =>
-      for {
-        deploys <- (0 until 6).toList.traverse(basicProcessedDeploy[Task])
-        genesis <- createBlock[Task](Seq())
-        b2      <- createBlock[Task](Seq(genesis.blockHash), deploys = Seq(deploys(0)))
-        b3      <- createBlock[Task](Seq(genesis.blockHash), deploys = Seq(deploys(1)))
-        b4      <- createBlock[Task](Seq(b2.blockHash), deploys = Seq(deploys(2)))
-        b5      <- createBlock[Task](Seq(b3.blockHash), deploys = Seq(deploys(2)))
-        b6      <- createBlock[Task](Seq(b2.blockHash, b3.blockHash), deploys = Seq(deploys(2)))
-        b7      <- createBlock[Task](Seq(b6.blockHash), deploys = Seq(deploys(3)))
-        b8      <- createBlock[Task](Seq(b6.blockHash), deploys = Seq(deploys(5)))
-        b9      <- createBlock[Task](Seq(b7.blockHash), deploys = Seq(deploys(5)))
-        b10     <- createBlock[Task](Seq(b8.blockHash), deploys = Seq(deploys(4)))
-
-        dag <- blockDagStorage.getRepresentation
-        result <- mkRuntimeManager("casper-util-test").use { runtimeManager =>
-                   for {
-                     computeBlockCheckpointResult <- computeBlockCheckpoint(
-                                                      genesis,
-                                                      genesis,
-                                                      dag,
-                                                      runtimeManager
-                                                    )
-                     (postGenStateHash, postGenProcessedDeploys) = computeBlockCheckpointResult
-                     _ <- injectPostStateHash[Task](
-                           0,
-                           genesis,
-                           postGenStateHash,
-                           postGenProcessedDeploys
-                         )
-                     _ <- updateChainWithBlockStateUpdate[Task](1, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate[Task](2, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate[Task](3, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate[Task](4, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate[Task](5, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate[Task](6, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate[Task](7, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate[Task](8, genesis, runtimeManager)
-                     _ <- updateChainWithBlockStateUpdate[Task](9, genesis, runtimeManager)
-
-                     _      <- conflicts[Task](b2, b3, dag) shouldBeF false
-                     _      <- conflicts[Task](b4, b5, dag) shouldBeF true
-                     _      <- conflicts[Task](b6, b6, dag) shouldBeF false
-                     _      <- conflicts[Task](b6, b9, dag) shouldBeF false
-                     _      <- conflicts[Task](b7, b8, dag) shouldBeF false
-                     _      <- conflicts[Task](b7, b10, dag) shouldBeF false
-                     result <- conflicts[Task](b9, b10, dag) shouldBeF true
-                   } yield result
-                 }
       } yield result
   }
 }

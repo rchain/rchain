@@ -11,10 +11,10 @@ import org.bitcoin._
 import com.google.common.base.Strings
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 
-object Secp256k1 {
+object Secp256k1 extends SignaturesAlg {
 
-  private val provider  = new BouncyCastleProvider()
-  private val curveName = "secp256k1"
+  private val provider = new BouncyCastleProvider()
+  val name             = "secp256k1"
 
   /**
     * Verifies the given secp256k1 signature in native code.
@@ -25,12 +25,12 @@ object Secp256k1 {
   @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   def newKeyPair: (PrivateKey, PublicKey) = {
     val kpg = KeyPairGenerator.getInstance("ECDSA", provider)
-    kpg.initialize(new ECGenParameterSpec(curveName), SecureRandomUtil.secureRandomNonBlocking)
+    kpg.initialize(new ECGenParameterSpec(name), SecureRandomUtil.secureRandomNonBlocking)
     val kp = kpg.generateKeyPair
 
     val padded =
       Strings.padStart(kp.getPrivate.asInstanceOf[ECPrivateKey].getS.toString(16), 64, '0')
-    val sec = Base16.decode(padded)
+    val sec = Base16.unsafeDecode(padded)
     val pub = Secp256k1.toPublic(sec)
 
     (PrivateKey(sec), PublicKey(pub))
@@ -96,4 +96,5 @@ object Secp256k1 {
   def toPublic(seckey: Array[Byte]): Array[Byte] =
     NativeSecp256k1.computePubkey(seckey)
 
+  override def toPublic(sec: PrivateKey): PublicKey = PublicKey(toPublic(sec.bytes))
 }

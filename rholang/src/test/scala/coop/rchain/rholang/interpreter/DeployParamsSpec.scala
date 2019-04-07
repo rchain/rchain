@@ -5,6 +5,8 @@ import java.nio.file.Files
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
@@ -21,15 +23,16 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 
 class DeployParamsSpec extends fixture.FlatSpec with Matchers {
-  implicit val logF: Log[Task] = new Log.NOPLog[Task]
+  implicit val logF: Log[Task]            = new Log.NOPLog[Task]
+  implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
   override protected def withFixture(test: OneArgTest): Outcome = {
     val randomInt = scala.util.Random.nextInt
     val dbDir     = Files.createTempDirectory(s"rchain-storage-test-$randomInt")
     val size      = 1024L * 1024 * 10
     (for {
-      runtime <- Runtime.create[Task, Task.Par](dbDir, size, StoreType.LMDB)
-      _       <- runtime.reducer.setPhlo(Cost(Integer.MAX_VALUE))
+      runtime <- Runtime.createWithEmptyCost[Task, Task.Par](dbDir, size, StoreType.LMDB)
+      _       <- runtime.reducer.setPhlo(Cost.UNSAFE_MAX)
       outcome = try {
         test(runtime)
       } finally {
@@ -39,7 +42,11 @@ class DeployParamsSpec extends fixture.FlatSpec with Matchers {
     } yield (outcome)).unsafeRunSync
   }
 
-  def assertStoreContains(store: RhoIStore, ackChannel: Par, data: ListParWithRandom): Assertion = {
+  def assertStoreContains(
+      store: RhoIStore[Task],
+      ackChannel: Par,
+      data: ListParWithRandom
+  ): Assertion = {
     val datum = store.toMap(List(ackChannel)).data.head
     assert(datum.a.pars == data.pars)
     assert(datum.a.randomState == data.randomState)

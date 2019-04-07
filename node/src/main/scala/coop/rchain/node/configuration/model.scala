@@ -3,9 +3,9 @@ package coop.rchain.node.configuration
 import java.nio.file.Path
 
 import scala.concurrent.duration.FiniteDuration
-
 import coop.rchain.casper.util.comm.ListenAtName.Name
 import coop.rchain.comm.PeerNode
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.shared.StoreType
 
 final case class Server(
@@ -23,13 +23,16 @@ final case class Server(
     storeType: StoreType,
     storeSize: Long,
     maxNumOfConnections: Int,
-    maxMessageSize: Int
+    maxMessageSize: Int,
+    packetChunkSize: Int,
+    messageConsumers: Int
 )
 
 final case class GrpcServer(
     host: String,
     portExternal: Int,
-    portInternal: Int
+    portInternal: Int,
+    maxMessageSize: Int
 )
 
 final case class Tls(
@@ -43,6 +46,7 @@ final case class Tls(
 final case class Kamon(
     prometheus: Boolean,
     influxDb: Boolean,
+    influxDbUdp: Boolean,
     zipkin: Boolean,
     sigar: Boolean
 )
@@ -52,13 +56,12 @@ final case class Eval(files: List[String]) extends Command
 final case object Repl                     extends Command
 final case object Diagnostics              extends Command
 final case class Deploy(
-    address: String,
     phloLimit: Long,
     phloPrice: Long,
-    nonce: Int,
+    validAfterBlock: Int,
+    privateKey: Option[PrivateKey],
     location: String
 ) extends Command
-final case object DeployDemo                                               extends Command
 final case object Propose                                                  extends Command
 final case class ShowBlock(hash: String)                                   extends Command
 final case class ShowBlocks(depth: Int)                                    extends Command

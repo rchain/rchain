@@ -178,7 +178,7 @@ object PrettyUtils {
     * Convert a string to a C&P-able literal. Basically
     * copied verbatim from the uPickle source code.
     */
-  @SuppressWarnings(Array("org.wartremover.warts.Var"))
+  @SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.NonUnitStatements"))
   // TODO remove this var
   def literalize(s: IndexedSeq[Char], unicode: Boolean = true): String = {
     val sb = new StringBuilder

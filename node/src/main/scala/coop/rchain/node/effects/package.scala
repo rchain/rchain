@@ -53,21 +53,29 @@ package object effects {
       cache: ConnectionsCache[Task, KademliaConnTag]
   ): KademliaRPC[Task] = new GrpcKademliaRPC(port, timeout)
 
-  def tcpTransportLayer(
-      port: Int,
+  def transportClient(
       certPath: Path,
       keyPath: Path,
       maxMessageSize: Int,
+      packetChunkSize: Int,
       folder: Path
   )(
       implicit scheduler: Scheduler,
       log: Log[Task],
       metrics: Metrics[Task],
       cache: ConnectionsCache[Task, TcpConnTag]
-  ): TcpTransportLayer = {
-    val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
-    val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
-    new TcpTransportLayer(port, cert, key, maxMessageSize, folder, 1000)
+  ): Task[(TransportLayer[Task], TransportLayerShutdown[Task])] = {
+    val create =
+      Task.delay {
+        val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
+        val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
+        new GrpcTransportClient(cert, key, maxMessageSize, packetChunkSize, folder, 1000)
+      }
+
+    for {
+      client <- create
+      _      <- client.start()
+    } yield (client, new TransportLayerShutdown(client.shutdown))
   }
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)

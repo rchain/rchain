@@ -10,6 +10,7 @@ import scodec.codecs.{bool, bytes, int32, int64, variableSizeBytesLong}
 import scala.collection.immutable.Seq
 import scala.collection.mutable
 
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 object internal {
 
   final case class Datum[A](a: A, persist: Boolean, source: Produce)
@@ -142,13 +143,13 @@ object internal {
       }
   }
 
-  final case class Install[P, E, A, R, K](
+  final case class Install[F[_], P, A, R, K](
       patterns: Seq[P],
       continuation: K,
-      _match: Match[P, E, A, R]
+      _match: Match[F, P, A, R]
   )
 
-  type Installs[C, P, E, A, R, K] = Map[Seq[C], Install[P, E, A, R, K]]
+  type Installs[F[_], C, P, A, R, K] = Map[Seq[C], Install[F, P, A, R, K]]
 
   import scodec.{Attempt, Err}
 

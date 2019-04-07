@@ -1,0 +1,24 @@
+new
+  RevAddress(`rho:rev:address`), RevVaultCh,
+  revAddrCh,
+  stdout(`rho:io:stdout`), log
+in {
+
+  log!(("1.know_ones_revaddress.rho")) |
+
+  // REPLACE THE PUB_KEY HERE vvv
+  match "%PUB_KEY" {
+    pubKey => {
+
+      RevAddress!("fromPublicKey", pubKey.hexToBytes(), *revAddrCh) |
+
+      for (@revAddress <- revAddrCh) {
+        log!(("RevAddress for pubKey", pubKey, "is", revAddress))
+      }
+    }
+  } |
+
+  contract log(@data) = {
+    @"DEMO"!(data) | stdout!(data)
+  }
+}

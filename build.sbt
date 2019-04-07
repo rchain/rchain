@@ -25,9 +25,9 @@ lazy val projectSettings = Seq(
   wartremoverErrors in (Compile, compile) ++= Warts.allBut(
     // those we want
     Wart.DefaultArguments, Wart.ImplicitParameter, Wart.ImplicitConversion,
+    Wart.LeakingSealed, Wart.Recursion,
     // those don't want
-    Wart.Recursion,
-    Wart.LeakingSealed, Wart.Overloading, Wart.Nothing, Wart.NonUnitStatements,
+    Wart.Overloading, Wart.Nothing,
     Wart.Equals, Wart.PublicInference, Wart.TraversableOps, Wart.ArrayEquals,
     Wart.While, Wart.Any, Wart.Product, Wart.Serializable, Wart.OptionPartial,
     Wart.EitherProjectionPartial, Wart.Option2Iterable, Wart.ToString, Wart.JavaConversions,
@@ -68,6 +68,9 @@ Seq(sys.env.get("SKIP_DOC")).flatMap { _ =>
     sources in (Compile, doc) := Seq.empty
   )
 }
+
+// a namespace for generative tests (or other tests that take a long time)
+lazy val SlowcookerTest = config("slowcooker") extend(Test)
 
 lazy val coverageSettings = Seq(
   coverageMinimum := 90,
@@ -113,6 +116,7 @@ lazy val shared = (project in file("shared"))
       scodecCore,
       scodecBits,
       scalapbRuntimegGrpc,
+      catsEffectLawsTest,
       catsLawsTest,
       catsLawsTestkitTest
     )
@@ -136,16 +140,19 @@ lazy val graphz = (project in file("graphz"))
   ).dependsOn(shared)
 
 lazy val casper = (project in file("casper"))
+  .configs(SlowcookerTest)
   .settings(commonSettings: _*)
   .settings(rholangSettings: _*)
+  .settings(inConfig(SlowcookerTest)(Defaults.testSettings) : _*)
+  .settings(inConfig(SlowcookerTest)(org.scalafmt.sbt.ScalafmtPlugin.scalafmtConfigSettings))
   .settings(
     name := "casper",
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       catsCore,
       catsMtl,
-      monix
-    ),
-    rholangProtoBuildAssembly := (rholangProtoBuild / Compile / incrementalAssembly).value
+      monix,
+      scalacheck % "slowcooker"
+    )
   )
   .dependsOn(
     blockStorage % "compile->compile;test->test",
@@ -155,8 +162,7 @@ lazy val casper = (project in file("casper"))
     crypto,
     models,
     rspace,
-    rholang      % "compile->compile;test->test",
-    rholangProtoBuild
+    rholang      % "compile->compile;test->test"
   )
 
 lazy val comm = (project in file("comm"))
@@ -203,7 +209,7 @@ lazy val crypto = (project in file("crypto"))
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       guava,
       bouncyCastle,
-      scalacheckNoTest,
+      scalacheck,
       kalium,
       jaxb,
       secp256k1Java,
@@ -220,7 +226,7 @@ lazy val models = (project in file("models"))
       catsCore,
       magnolia,
       scalapbCompiler,
-      scalacheck,
+      scalacheck % "test",
       scalacheckShapeless,
       scalapbRuntimegGrpc
     ),
@@ -237,7 +243,7 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.8.3" + git.gitHeadCommit.value.map(".git" + _.take(8)).getOrElse(""),
+    version := "0.9.1" + git.gitHeadCommit.value.map(".git" + _.take(8)).getOrElse(""),
     name := "rnode",
     scalacOptions ++= Seq(
       "-Xfatal-warnings",
@@ -245,7 +251,7 @@ lazy val node = (project in file("node"))
       "-deprecation",
       "-feature"
     ),
-    maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
+    maintainer := "RChain Cooperative https://www.rchain.coop/",
     packageSummary := "RChain Node",
     packageDescription := "RChain Node - the RChain blockchain node server software.",
     libraryDependencies ++=
@@ -413,24 +419,6 @@ lazy val rholangCLI = (project in file("rholang-cli"))
   .settings(commonSettings: _*)
   .settings(
     mainClass in assembly := Some("coop.rchain.rholang.interpreter.RholangCLI")
-  )
-  .dependsOn(rholang)
-
-lazy val rholangProtoBuildJar = Def.task(
-  (assemblyOutputPath in (assembly)).value
-)
-lazy val incrementalAssembly2 = Def.taskDyn(
-  if (jarOutDated((rholangProtoBuildJar).value, (Compile / scalaSource).value))
-    (assembly)
-  else
-    rholangProtoBuildJar
-)
-lazy val incrementalAssembly = taskKey[File]("Only assemble if sources are newer than jar")
-lazy val rholangProtoBuild = (project in file("rholang-proto-build"))
-  .settings(commonSettings: _*)
-  .settings(
-    name := "rholang-proto-build",
-    incrementalAssembly in Compile := incrementalAssembly2.value
   )
   .dependsOn(rholang)
 

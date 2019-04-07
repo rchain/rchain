@@ -1,15 +1,15 @@
 package coop.rchain.casper.util.rholang
 
 import com.google.protobuf.ByteString
-
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
-import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GInt, GString}
+import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random}
+import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.{Bundle, ETuple, Expr, GPrivate, Par}
-import coop.rchain.rholang.interpreter.PrettyPrinter
+import coop.rchain.models.{Bundle, ETuple, GPrivate, Par}
+import coop.rchain.rholang.interpreter.{PrettyPrinter, Registry}
 
 /**
   * A signed insertion into the RChain registry.
@@ -61,18 +61,25 @@ final case class Derivation(
     timestamp: Long,
     uname: Par,
     toSign: Par,
-    result: InsertSigned
+    result: InsertSigned,
+    uri: String
 ) {
   override def toString() = s"""
     | /*
-    |       given     1. sk = ${sk}
-    |       given     2. timestamp = ${timestamp}
-    |       lastNonce 3. nonce = ${result.nonce}
-    | 1,    ed25519   4. pk = ${result.pk}
-    | 4, 2, genIds    5. uname = ${pprint(uname)}
-    | 3, 5, registry  6. value = ${pprint(toSign)}
-    | 6,    protobuf  7. toSign = ${Hex(toSign.toByteArray)}
-    | 7, 1, ed25519   8. sig = ${result.sig}
+    | The table below describes the required computations and their dependencies
+    |
+    | No. | Dependency | Computation method | Result
+    | ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+    | 1.  |            | given              | sk = ${sk}
+    | 2.  |            | given              | timestamp = ${timestamp}
+    | 3.  |            | lastNonce          | nonce = ${result.nonce}
+    | 4.  | 1,         | ed25519            | pk = ${result.pk}
+    | 5.  | 4, 2,      | genIds             | uname = ${pprint(uname)}
+    | 6.  | 3, 5,      | registry           | value = ${pprint(toSign)}
+    | 7.  | 6,         | protobuf           | toSign = ${Hex(toSign.toByteArray)}
+    | 8.  | 7, 1,      | ed25519            | sig = ${result.sig}
+    | 9.  | 4,         | registry           | uri = ${uri}
+    | ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
     | */
     |
     | ${result}
@@ -81,26 +88,78 @@ final case class Derivation(
   def pprint(p: Par) = PrettyPrinter().buildString(p)
 }
 
+final case class Args(
+    keyPair: (PrivateKey, PublicKey),
+    timestamp: Long,
+    unforgeableName: Par,
+    contractName: String
+)
+
+object Args {
+  def apply(
+      contractName: String = "CONTRACT",
+      timestamp: Long = System.currentTimeMillis,
+      skOption: Option[PrivateKey] = None,
+      unforgeableNameStr: Option[String] = None
+  ): Args = {
+    val keyPair =
+      skOption
+        .map(sk => (sk, Ed25519.toPublic(sk)))
+        .getOrElse(Ed25519.newKeyPair)
+
+    val id =
+      unforgeableNameStr
+        .map(Base16.unsafeDecode)
+        .getOrElse(RegistrySigGen.generateUnforgeableNameId(keyPair._2, timestamp))
+
+    // Now we can determine the unforgeable name
+    // that will be allocated by
+    //   new CONTRACT in { ... }
+    // provided that's the first thing deployed.
+    val unforgeableName = GPrivate(ByteString.copyFrom(id))
+
+    Args(keyPair, timestamp, unforgeableName, contractName)
+  }
+
+  def parse(argv: Array[String]) =
+    argv match {
+      case Array(contractName, timestampStr, skBase16, unforgeableName) =>
+        Args(
+          contractName,
+          timestampStr.toLong,
+          Some(PrivateKey(Base16.unsafeDecode(skBase16))),
+          Some(unforgeableName)
+        )
+      case Array(contractName, timestampStr, skBase16) =>
+        Args(
+          contractName,
+          timestampStr.toLong,
+          Some(PrivateKey(Base16.unsafeDecode(skBase16)))
+        )
+      case Array(contractName, timestampStr) => Args(contractName, timestampStr.toLong)
+      case Array(contractName)               => Args(contractName)
+    }
+}
+
 object RegistrySigGen {
-  val maxLong                                          = (1L << 62) + ((1L << 62) - 1)
-  val byteArrayToByteString: Array[Byte] => ByteString = ba => ByteString.copyFrom(ba)
+  val maxLong = (1L << 62) + ((1L << 62) - 1)
 
   /**
     * Usage:
     *
-    * To print parameters for use with RChain rho:registry:insertSigned:ed25519
-    * based on a current timestamp and a randomly chosen key, run this application.
+    * sbt runMain coop.rchain.casper.util.rholang.RegistrySigGen contractName [timestamp] [privateKey] [unforgeableName]
+    *
+    * Example:
+    * runMain coop.rchain.casper.util.rholang.RegistrySigGen MyContract 1539808849271 adf1e344dd34979255aeaaf5703a586fba52246d9940ef58572572db339316d3 bc4bad752f043b9e488ddfc1c69370a89700f4852f318a79d0b50d88f44e1210
+    *
+    * For a new contract one should provide only the contract name.
+    *
+    * For verifying an existing deploy one can provide all the parameters.
     */
   def main(argv: Array[String]) = {
     // these could be command-line args...
-    val info = deriveFrom(Ed25519.newKeyPair, System.currentTimeMillis, "CONTRACT")
+    val info = RegistrySigGen.deriveFrom(Args.parse(argv))
     System.out.println(info)
-  }
-
-  def exampleMakeMint() = {
-    val sk = Base16.decode("a300690f29ac6385917cb94bf534f9b4163792ef8636c5db44608a77fa0356c2");
-    val pk = Ed25519.toPublic(sk)
-    deriveFrom((sk, pk), 1539969637029L, "MakeMint")
   }
 
   /**
@@ -112,31 +171,28 @@ object RegistrySigGen {
     * `user` (public key) and `timestamp`.
     *
     */
-  def genIds(user: ByteString, timestamp: Long) = {
-    val seed = DeployData().withUser(user).withTimestamp(timestamp)
-    Blake2b512Random(DeployData.toByteArray(seed))
+  def generateUnforgeableNameId(deployer: PublicKey, timestamp: Long) = {
+    val seed =
+      DeployData()
+        .withDeployer(ByteString.copyFrom(deployer.bytes))
+        .withTimestamp(timestamp)
+
+    val rnd = Blake2b512Random(DeployData.toByteArray(seed))
+
+    rnd.next()
   }
 
   /**
     * Derive a signature for use with rho:registry:insertSigned:ed25519
-    * from an ed25519 key pair and a timestamp. The `varName` is a
+    * from an ed25519 key pair and a timestamp. The `contractName` is a
     * hint/label; it doesn't affect the signature.
     */
-  def deriveFrom(key: (Array[Byte], Array[Byte]), timestamp: Long, varName: String) = {
-    val (secKey, pubKey) = key
-
-    val user = byteArrayToByteString(pubKey)
-    val id   = genIds(user, timestamp).next()
-
-    // Now we know the unforgeable name
-    // that will be allocated by
-    //   new CONTRACT in { ... }
-    // provided that's the first thing deployed.
-    val uname: Par = GPrivate(ByteString.copyFrom(id))
+  def deriveFrom(args: Args) = {
+    val (secKey, pubKey) = args.keyPair
 
     // Bundle the contract to prevent unauthorized reads.
-    val access: Par = Bundle(uname, true, false)
-    val contract    = Contract(varName, access)
+    val access: Par = Bundle(args.unforgeableName, true, false)
+    val contract    = Contract(args.contractName, access)
 
     // Use the maxium nonce to prevent unauthorized updates.
     val lastNonce = maxLong
@@ -145,16 +201,20 @@ object RegistrySigGen {
     val toSign: Par = ETuple(Seq(GInt(lastNonce), access))
     val sig         = Ed25519.sign(toSign.toByteArray, secKey)
 
+    val keyHash = Blake2b256.hash(pubKey.bytes)
+    val uri     = Registry.buildURI(keyHash)
+
     Derivation(
-      sk = Hex(secKey),
-      timestamp = timestamp,
-      uname = uname,
+      sk = Hex(secKey.bytes),
+      timestamp = args.timestamp,
+      uname = args.unforgeableName,
       toSign = toSign,
       result = InsertSigned(
-        Hex(pubKey),
+        Hex(pubKey.bytes),
         (lastNonce, contract),
         Hex(sig)
-      )
+      ),
+      uri
     )
   }
 }

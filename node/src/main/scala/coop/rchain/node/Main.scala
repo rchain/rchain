@@ -9,6 +9,8 @@ import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.util.BondingUtil
 import coop.rchain.comm._
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.node.configuration._
 import coop.rchain.node.diagnostics.client.GrpcDiagnosticsService
 import coop.rchain.node.effects._
@@ -16,13 +18,24 @@ import coop.rchain.shared._
 import coop.rchain.shared.StringOps._
 import monix.eval.Task
 import monix.execution.Scheduler
+import org.slf4j.LoggerFactory
+import org.slf4j.bridge.SLF4JBridgeHandler
 
 object Main {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private implicit val log: Log[Task]       = effects.log
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def main(args: Array[String]): Unit = {
+    // Catch-all for unhandled exceptions. Use only JDK and SLF4J.
+    Thread.setDefaultUncaughtExceptionHandler((thread, ex) => {
+      LoggerFactory.getLogger(getClass).error("Unhandled exception in thread " + thread.getName, ex)
+      ex.printStackTrace()
+    })
+
+    val configuration = Configuration.build(args)
+    System.setProperty("rnode.data.dir", configuration.server.dataDir.toString) // NonUnitStatements
 
     implicit val scheduler: Scheduler = Scheduler.computation(
       Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
@@ -30,13 +43,7 @@ object Main {
       reporter = UncaughtExceptionLogger
     )
 
-    val exec: Task[Unit] =
-      for {
-        conf <- Configuration.build(args)
-        _    <- Task.defer(mainProgram(conf))
-      } yield ()
-
-    exec.unsafeRunSync
+    Task.defer(mainProgram(configuration)).unsafeRunSync
   }
 
   private def mainProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
@@ -44,19 +51,19 @@ object Main {
       new GrpcReplClient(
         conf.grpcServer.host,
         conf.grpcServer.portInternal,
-        conf.server.maxMessageSize
+        conf.grpcServer.maxMessageSize
       )
     implicit val diagnosticsService: GrpcDiagnosticsService =
       new diagnostics.client.GrpcDiagnosticsService(
         conf.grpcServer.host,
         conf.grpcServer.portInternal,
-        conf.server.maxMessageSize
+        conf.grpcServer.maxMessageSize
       )
     implicit val deployService: GrpcDeployService =
       new GrpcDeployService(
         conf.grpcServer.host,
         conf.grpcServer.portExternal,
-        conf.server.maxMessageSize
+        conf.grpcServer.maxMessageSize
       )
 
     implicit val time: Time[Task] = effects.time
@@ -65,9 +72,15 @@ object Main {
       case Eval(files) => new ReplRuntime().evalProgram[Task](files)
       case Repl        => new ReplRuntime().replProgram[Task].as(())
       case Diagnostics => diagnostics.client.Runtime.diagnosticsProgram[Task]
-      case Deploy(address, phlo, phloPrice, nonce, location) =>
-        DeployRuntime.deployFileProgram[Task](address, phlo, phloPrice, nonce, location)
-      case DeployDemo        => DeployRuntime.deployDemoProgram[Task]
+      case Deploy(phlo, phloPrice, validAfterBlock, privateKey, location) =>
+        DeployRuntime
+          .deployFileProgram[Task](
+            phlo,
+            phloPrice,
+            validAfterBlock,
+            privateKey,
+            location
+          )
       case Propose           => DeployRuntime.propose[Task]()
       case ShowBlock(hash)   => DeployRuntime.showBlock[Task](hash)
       case ShowBlocks(depth) => DeployRuntime.showBlocks[Task](depth)
@@ -77,9 +90,11 @@ object Main {
       case ContAtName(names) => DeployRuntime.listenForContinuationAtName[Task](names)
       case Run               => nodeProgram(conf)
       case BondingDeployGen(bondKey, ethAddress, amount, secKey, pubKey) =>
+        implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
         BondingUtil
           .writeIssuanceBasedRhoFiles[Task, Task.Par](bondKey, ethAddress, amount, secKey, pubKey)
       case FaucetBondingDeployGen(amount, sigAlgorithm, secKey, pubKey) =>
+        implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
         BondingUtil.writeFaucetBasedRhoFiles[Task, Task.Par](amount, sigAlgorithm, secKey, pubKey)
       case _ => conf.printHelp()
     }
@@ -95,9 +110,15 @@ object Main {
   }
 
   private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
+    // XXX: Enable it earlier once we have JDK with https://bugs.openjdk.java.net/browse/JDK-8218960 fixed
+    // https://www.slf4j.org/legacy.html#jul-to-slf4j
+    SLF4JBridgeHandler.removeHandlersForRootLogger()
+    SLF4JBridgeHandler.install()
+
     val node =
       for {
         _       <- log.info(VersionInfo.get).toEffect
+        _       <- logConfiguration(conf).toEffect
         runtime <- NodeRuntime(conf)
         _       <- runtime.main
       } yield ()
@@ -108,13 +129,26 @@ object Main {
       case Left(CouldNotConnectToBootstrap) =>
         log.error("Node could not connect to bootstrap node.")
       case Left(InitializationError(msg)) =>
-        log.error(msg)
-        Task.delay(System.exit(-1))
+        log.error(msg) >>
+          Task.delay(System.exit(-1))
       case Left(error) =>
         log.error(s"Failed! Reason: '$error")
     }
   }
 
+  private def logConfiguration(conf: Configuration): Task[Unit] =
+    Task
+      .sequence(
+        Seq(
+          log.info(s"Starting with profile ${conf.profile}"),
+          log.info(s"Using configuration file: ${conf.configurationFile}"),
+          if (!conf.configurationFile.toFile.exists()) log.warn("Configuration file not found!")
+          else Task.unit
+        )
+      )
+      .void
+
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   implicit private def consoleIO: ConsoleIO[Task] = {
     val console = new ConsoleReader()
     console.setHistoryEnabled(true)

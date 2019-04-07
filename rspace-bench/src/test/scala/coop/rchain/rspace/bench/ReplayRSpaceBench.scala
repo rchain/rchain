@@ -4,6 +4,8 @@ import java.util.concurrent.TimeUnit
 
 import cats.Id
 import cats.effect._
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.rspace.{State => _, _}
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace.examples.AddressBookExample._
@@ -25,7 +27,7 @@ class ReplayRSpaceBench {
   @Measurement(iterations = 1)
   def singleProduce(bh: Blackhole, state: ProduceInMemBenchState) = {
     val res = state.replaySpace.produce(state.produceChannel, bob, persist = true)
-    assert(res.right.get.isDefined)
+    assert(res.isDefined)
     bh.consume(res)
   }
 
@@ -42,7 +44,7 @@ class ReplayRSpaceBench {
       state.captor,
       persist = true
     )
-    assert(res.right.get.isDefined)
+    assert(res.isDefined)
     bh.consume(res)
   }
 }
@@ -52,14 +54,15 @@ object ReplayRSpaceBench {
   import scala.concurrent.ExecutionContext.Implicits.global
 
   abstract class ReplayRSpaceBenchState {
-    var space: IdISpace[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor] = null
-    var replaySpace: IReplaySpace[cats.Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor] =
+    var space: IdISpace[Channel, Pattern, Entry, Entry, EntriesCaptor] = null
+    var replaySpace: IReplaySpace[cats.Id, Channel, Pattern, Entry, Entry, EntriesCaptor] =
       null
-    implicit val logF: Log[Id] = new Log.NOPLog[Id]
-    val consumeChannel         = Channel("consume")
-    val produceChannel         = Channel("produce")
-    val matches                = List(CityMatch(city = "Crystal Lake"))
-    val captor                 = new EntriesCaptor()
+    implicit val logF: Log[Id]            = new Log.NOPLog[Id]
+    implicit val noopMetrics: Metrics[Id] = new metrics.Metrics.MetricsNOP[Id]
+    val consumeChannel                    = Channel("consume")
+    val produceChannel                    = Channel("produce")
+    val matches                           = List(CityMatch(city = "Crystal Lake"))
+    val captor                            = new EntriesCaptor()
 
     def initSpace() = {
       val rigPoint = space.createCheckpoint()
@@ -68,15 +71,16 @@ object ReplayRSpaceBench {
 
     @Setup
     def setup() = {
-      val context = Context.createInMemory[Channel, Pattern, Entry, EntriesCaptor]()
+      val context = Context.createInMemory[Id, Channel, Pattern, Entry, EntriesCaptor]()
       assert(context.trieStore.toMap.isEmpty)
-      val testStore = InMemoryStore.create(context.trieStore, Branch.MASTER)
+      val testStore: IStore[Id, Channel, Pattern, Entry, EntriesCaptor] =
+        InMemoryStore.create(context.trieStore, Branch.MASTER)
       assert(testStore.toMap.isEmpty)
-      space = RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+      space = RSpace.create[Id, Channel, Pattern, Entry, Entry, EntriesCaptor](
         testStore,
         Branch.MASTER
       )
-      replaySpace = ReplayRSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+      replaySpace = ReplayRSpace.create[Id, Channel, Pattern, Entry, Entry, EntriesCaptor](
         context,
         Branch.REPLAY
       )

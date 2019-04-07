@@ -221,7 +221,7 @@ final case class PrettyPrinter(
           (pure("") /: m.cases.zipWithIndex) {
             case (string, (matchCase, i)) =>
               string |+| pure(indentStr * (indent + 1)) |+| buildMatchCase(matchCase, indent + 1) |+| pure {
-                if (i != m.cases.length - 1) " ;\n"
+                if (i != m.cases.length - 1) "\n"
                 else ""
               }
           } |+| pure("\n" + (indentStr * indent) + "}")
@@ -235,13 +235,12 @@ final case class PrettyPrinter(
           case ConnOrBody(value) =>
             pure("{") |+| value.ps.map(buildStringM).toList.intercalate(pure(" \\/ ")) |+| pure("}")
           case ConnNotBody(value) => pure("~{") |+| buildStringM(value) |+| pure("}")
-          case VarRefBody(value) =>
-            pure("=") |+| buildStringM(Var(FreeVar(value.index)))
-          case _: ConnBool      => pure("Bool")
-          case _: ConnInt       => pure("Int")
-          case _: ConnString    => pure("String")
-          case _: ConnUri       => pure("Uri")
-          case _: ConnByteArray => pure("ByteArray")
+          case VarRefBody(value)  => pure(s"=$freeId${freeShift - value.index - 1}")
+          case _: ConnBool        => pure("Bool")
+          case _: ConnInt         => pure("Int")
+          case _: ConnString      => pure("String")
+          case _: ConnUri         => pure("Uri")
+          case _: ConnByteArray   => pure("ByteArray")
         }
 
       case par: Par =>
@@ -320,6 +319,8 @@ final case class PrettyPrinter(
 
   private def buildMatchCase(matchCase: MatchCase, indent: Int): Coeval[String] = {
     val patternFree: Int = matchCase.freeCount
+    val openBrace        = pure(s"{\n${indentStr * (indent + 1)}")
+    val closeBrace       = pure(s"\n${indentStr * indent}}")
     this
       .copy(
         freeShift = boundShift,
@@ -327,10 +328,11 @@ final case class PrettyPrinter(
         freeId = boundId,
         baseId = setBaseId()
       )
-      .buildStringM(matchCase.pattern, indent) |+| pure(" => ") |+|
+      .buildStringM(matchCase.pattern, indent) |+| pure(" => ") |+| openBrace |+|
       this
         .copy(boundShift = boundShift + patternFree)
-        .buildStringM(matchCase.source, indent)
+        .buildStringM(matchCase.source, indent + 1) |+|
+      closeBrace
   }
 
   private def isEmpty(p: Par) =

@@ -1,16 +1,19 @@
 package coop.rchain.casper
 
 import cats.Monad
+import cats.data.OptionT
 import cats.implicits._
 import cats.mtl.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.util.BlockMessageUtil
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore}
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.util.DagOperations
+import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.weightFromValidatorByDag
 
 import scala.collection.immutable.{Map, Set}
 import coop.rchain.catscontrib.ListContrib
+import coop.rchain.models.BlockMetadata
 
 object Estimator {
   type BlockHash = ByteString
@@ -18,80 +21,59 @@ object Estimator {
 
   implicit val decreasingOrder = Ordering[Long].reverse
 
-  def tips[F[_]: Monad: BlockStore](
+  def tips[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
-      lastFinalizedBlockHash: BlockHash
-  ): F[IndexedSeq[BlockMessage]] =
+      genesis: BlockMessage
+  ): F[IndexedSeq[BlockHash]] =
     for {
       latestMessageHashes <- blockDag.latestMessageHashes
-      result              <- Estimator.tips[F](blockDag, lastFinalizedBlockHash, latestMessageHashes)
+      result              <- Estimator.tips[F](blockDag, genesis, latestMessageHashes)
     } yield result
 
   /**
-    * When the BlockDag has an empty latestMessages, tips will return IndexedSeq(genesis)
-    *
-    * TODO: If the base block between the main parent and a secondary parent are more than
-    * X blocks deep from the main parent, ignore. Additionally, the last finalized block must
-    * be deeper than X blocks from the tip. This allows different validators to have
-    * different last finalized blocks and still come up with the same estimator tips for a block.
+    * When the BlockDag has an empty latestMessages, tips will return IndexedSeq(genesis.blockHash)
     */
-  def tips[F[_]: Monad: BlockStore](
+  def tips[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
-      lastFinalizedBlockHash: BlockHash,
+      genesis: BlockMessage,
       latestMessagesHashes: Map[Validator, BlockHash]
-  ): F[IndexedSeq[BlockMessage]] = {
-    def sortChildren(
-        blocks: List[BlockHash],
-        blockDag: BlockDagRepresentation[F],
-        scores: Map[BlockHash, Long]
-    ): F[List[BlockHash]] =
-      // TODO: This ListContrib.sortBy will be improved on Thursday with Pawels help
-      for {
-        unsortedNewBlocks <- blocks.flatTraverse(replaceBlockHashWithChildren(_, blockDag, scores))
-        newBlocks = ListContrib.sortBy[BlockHash, Long](
-          unsortedNewBlocks.distinct,
-          scores
-        )
-        result <- if (stillSame(blocks, newBlocks)) {
-                   blocks.pure[F]
-                 } else {
-                   sortChildren(newBlocks, blockDag, scores)
-                 }
-      } yield result
-
-    /**
-      * Only include children that have been scored,
-      * this ensures that the search does not go beyond
-      * the messages defined by blockDag.latestMessages
-      */
-    def replaceBlockHashWithChildren(
-        b: BlockHash,
-        blockDag: BlockDagRepresentation[F],
-        scores: Map[BlockHash, Long]
-    ): F[List[BlockHash]] =
-      for {
-        c <- blockDag.children(b).map(_.getOrElse(Set.empty[BlockHash]).filter(scores.contains))
-      } yield if (c.nonEmpty) c.toList else List(b)
-
-    def stillSame(blocks: List[BlockHash], newBlocks: List[BlockHash]) =
-      newBlocks == blocks
-
+  ): F[IndexedSeq[BlockHash]] =
     for {
-      scoresMap <- buildScoresMap(blockDag, latestMessagesHashes, lastFinalizedBlockHash)
-      sortedChildrenHash <- sortChildren(
-                             List(lastFinalizedBlockHash),
-                             blockDag,
-                             scoresMap
-                           )
-      maybeSortedChildren <- sortedChildrenHash.traverse(BlockStore[F].get)
-      sortedChildren      = maybeSortedChildren.flatten.toVector
-    } yield sortedChildren
-  }
+      lca                        <- calculateLCA(blockDag, BlockMetadata.fromBlock(genesis, false), latestMessagesHashes)
+      scoresMap                  <- buildScoresMap(blockDag, latestMessagesHashes, lca)
+      rankedLatestMessagesHashes <- rankForkchoices(List(lca), blockDag, scoresMap)
+    } yield rankedLatestMessagesHashes
 
-  def buildScoresMap[F[_]: Monad](
+  private def calculateLCA[F[_]: Monad](
+      blockDag: BlockDagRepresentation[F],
+      genesis: BlockMetadata,
+      latestMessagesHashes: Map[Validator, BlockHash]
+  ): F[BlockHash] =
+    for {
+      latestMessages <- latestMessagesHashes.values.toStream
+                         .traverse(hash => blockDag.lookup(hash))
+                         .map(_.flatten)
+      result <- if (latestMessages.isEmpty) {
+                 genesis.blockHash.pure[F]
+               } else {
+                 latestMessages
+                   .foldM(latestMessages.head) {
+                     case (acc, latestMessage) =>
+                       // TODO: Change to mainParentLCA
+                       DagOperations.lowestCommonAncestorF[F](
+                         acc,
+                         latestMessage,
+                         blockDag
+                       )
+                   }
+                   .map(_.blockHash)
+               }
+    } yield result
+
+  private def buildScoresMap[F[_]: Monad](
       blockDag: BlockDagRepresentation[F],
       latestMessagesHashes: Map[Validator, BlockHash],
-      lastFinalizedBlockHash: BlockHash
+      lowestCommonAncestor: BlockHash
   ): F[Map[BlockHash, Long]] = {
     def hashParents(hash: BlockHash, lastFinalizedBlockNumber: Long): F[List[BlockHash]] =
       for {
@@ -108,10 +90,10 @@ object Estimator {
         latestBlockHash: BlockHash
     ): F[Map[BlockHash, Long]] =
       for {
-        lastFinalizedBlockNum <- blockDag.lookup(lastFinalizedBlockHash).map(_.get.blockNum)
+        lcaBlockNum <- blockDag.lookup(lowestCommonAncestor).map(_.get.blockNum)
         result <- DagOperations
                    .bfTraverseF[F, BlockHash](List(latestBlockHash))(
-                     hashParents(_, lastFinalizedBlockNum)
+                     hashParents(_, lcaBlockNum)
                    )
                    .foldLeftF(scoreMap) {
                      case (acc, hash) =>
@@ -122,54 +104,61 @@ object Estimator {
                    }
       } yield result
 
-    /**
-      * Add scores to the blocks implicitly supported through
-      * including a latest block as a "step parent"
-      *
-      * TODO: Add test where this matters
-      */
-    def addValidatorWeightToImplicitlySupported(
-        blockDag: BlockDagRepresentation[F],
-        scoreMap: Map[BlockHash, Long],
-        validator: Validator,
-        latestBlockHash: BlockHash
-    ): F[Map[BlockHash, Long]] =
-      blockDag.children(latestBlockHash).flatMap {
-        _.toList
-          .foldLeftM(scoreMap) {
-            case (acc, children) =>
-              children.filter(scoreMap.contains).toList.foldLeftM(acc) {
-                case (acc2, childHash) =>
-                  for {
-                    blockMetadataOpt <- blockDag.lookup(childHash)
-                    result = blockMetadataOpt match {
-                      case Some(blockMetaData)
-                          if blockMetaData.parents.size > 1 && blockMetaData.sender != validator =>
-                        val currScore       = acc2.getOrElse(childHash, 0L)
-                        val validatorWeight = blockMetaData.weightMap.getOrElse(validator, 0L)
-                        acc2.updated(childHash, currScore + validatorWeight)
-                      case _ => acc2
-                    }
-                  } yield result
-              }
-          }
-      }
-
+    // TODO: Since map scores are additive it should be possible to do this in parallel
     latestMessagesHashes.toList.foldLeftM(Map.empty[BlockHash, Long]) {
       case (acc, (validator: Validator, latestBlockHash: BlockHash)) =>
-        for {
-          postValidatorWeightScoreMap <- addValidatorWeightDownSupportingChain(
-                                          acc,
-                                          validator,
-                                          latestBlockHash
-                                        )
-          postImplicitlySupportedScoreMap <- addValidatorWeightToImplicitlySupported(
-                                              blockDag,
-                                              postValidatorWeightScoreMap,
-                                              validator,
-                                              latestBlockHash
-                                            )
-        } yield postImplicitlySupportedScoreMap
+        addValidatorWeightDownSupportingChain(
+          acc,
+          validator,
+          latestBlockHash
+        )
     }
   }
+
+  private def rankForkchoices[F[_]: Monad](
+      blocks: List[BlockHash],
+      blockDag: BlockDagRepresentation[F],
+      scores: Map[BlockHash, Long]
+  ): F[IndexedSeq[BlockHash]] =
+    // TODO: This ListContrib.sortBy will be improved on Thursday with Pawels help
+    for {
+      unsortedNewBlocks <- blocks.flatTraverse(replaceBlockHashWithChildren[F](_, blockDag, scores))
+      newBlocks = ListContrib.sortBy[BlockHash, Long](
+        unsortedNewBlocks.distinct,
+        scores
+      )
+      result <- if (stillSame(blocks, newBlocks)) {
+                 blocks.toVector.pure[F]
+               } else {
+                 rankForkchoices(newBlocks, blockDag, scores)
+               }
+    } yield result
+
+  private def toNonEmptyList[T](elements: Set[T]): Option[List[T]] =
+    if (elements.isEmpty) None
+    else Some(elements.toList)
+
+  /**
+    * Only include children that have been scored,
+    * this ensures that the search does not go beyond
+    * the messages defined by blockDag.latestMessages
+    */
+  private def replaceBlockHashWithChildren[F[_]: Monad](
+      b: BlockHash,
+      blockDag: BlockDagRepresentation[F],
+      scores: Map[BlockHash, Long]
+  ): F[List[BlockHash]] =
+    blockDag
+      .children(b)
+      .map(
+        maybeChildren =>
+          maybeChildren
+            .flatMap { children =>
+              toNonEmptyList(children.filter(scores.contains))
+            }
+            .getOrElse(List(b))
+      )
+
+  private def stillSame(blocks: List[BlockHash], newBlocks: List[BlockHash]): Boolean =
+    newBlocks == blocks
 }

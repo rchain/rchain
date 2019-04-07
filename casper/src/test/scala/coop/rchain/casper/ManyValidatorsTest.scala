@@ -1,9 +1,8 @@
 package coop.rchain.casper
 
-import cats.effect.Sync
 import cats.Monad
+import cats.effect.Sync
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.Capture.taskCapture
 import coop.rchain.blockstorage.IndexedBlockDagStorage
 import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.helper.BlockGenerator._
@@ -45,13 +44,13 @@ class ManyValidatorsTest
                           blockStore
                         )
       indexedBlockDagStorage <- IndexedBlockDagStorage.create(blockDagStorage)
-      genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)(
+      genesis <- createGenesis[Task](bonds = bonds)(
                   Monad[Task],
                   Time[Task],
                   blockStore,
                   indexedBlockDagStorage
                 )
-      b <- createBlock[Task](Seq(genesis.blockHash), v1, bonds, bonds.map {
+      b <- createBlock[Task](Seq(genesis.blockHash), genesis, v1, bonds, bonds.map {
             case Bond(validator, _) => validator -> genesis.blockHash
           }.toMap)(Monad[Task], Time[Task], blockStore, indexedBlockDagStorage)
       _                     <- indexedBlockDagStorage.close()
@@ -70,7 +69,7 @@ class ManyValidatorsTest
                            )
       newIndexedBlockDagStorage <- IndexedBlockDagStorage.create(newBlockDagStorage)
       dag                       <- newIndexedBlockDagStorage.getRepresentation
-      tips                      <- Estimator.tips[Task](dag, genesis.blockHash)(Monad[Task], blockStore)
+      tips                      <- Estimator.tips[Task](dag, genesis)(Monad[Task])
       casperEffect <- NoOpsCasperEffect[Task](
                        HashMap.empty[BlockHash, BlockMessage],
                        tips.toIndexedSeq

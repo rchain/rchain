@@ -24,6 +24,7 @@ object BitSetBytesMapper {
     ByteString.copyFrom(usedBytes)
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def byteStringToBitSet(byteString: ByteString): BitSet = {
     val bufferSize = nextMultiple(BYTES_PER_LONG, byteString.size())
     val byteBuffer = ByteBuffer.allocate(bufferSize).order(LITTLE_ENDIAN)

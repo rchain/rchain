@@ -4,6 +4,7 @@ import cats.effect.Sync
 import cats.implicits._
 import cats.{Applicative, Monad}
 import coop.rchain.blockstorage.{BlockDagRepresentation, BlockDagStorage, BlockStore}
+import coop.rchain.casper.DeployError
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -14,7 +15,7 @@ import scala.collection.mutable.{Map => MutableMap}
 
 class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
     private val blockStore: MutableMap[BlockHash, BlockMessage],
-    estimatorFunc: IndexedSeq[BlockMessage]
+    estimatorFunc: IndexedSeq[BlockHash]
 ) extends MultiParentCasper[F] {
 
   def store: Map[BlockHash, BlockMessage] = blockStore.toMap
@@ -27,9 +28,9 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
       _ <- Sync[F].delay(blockStore.update(b.blockHash, b))
       _ <- BlockStore[F].put(b.blockHash, b)
     } yield BlockStatus.valid
-  def contains(b: BlockMessage): F[Boolean]             = false.pure[F]
-  def deploy(r: DeployData): F[Either[Throwable, Unit]] = Applicative[F].pure(Right(()))
-  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockMessage]] =
+  def contains(b: BlockMessage): F[Boolean]               = false.pure[F]
+  def deploy(r: DeployData): F[Either[DeployError, Unit]] = Applicative[F].pure(Right(()))
+  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     estimatorFunc.pure[F]
   def createBlock: F[CreateBlockStatus]                               = CreateBlockStatus.noNewDeploys.pure[F]
   def blockDag: F[BlockDagRepresentation[F]]                          = BlockDagStorage[F].getRepresentation
@@ -42,18 +43,18 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
 
 object NoOpsCasperEffect {
   def apply[F[_]: Sync: BlockStore: BlockDagStorage](
-      blockStore: Map[BlockHash, BlockMessage] = Map.empty,
-      estimatorFunc: IndexedSeq[BlockMessage] = Vector(BlockMessage())
+      blocks: Map[BlockHash, BlockMessage] = Map.empty,
+      estimatorFunc: IndexedSeq[BlockHash] = Vector(BlockMessage().blockHash)
   ): F[NoOpsCasperEffect[F]] =
     for {
-      _ <- blockStore.toList.traverse_ {
+      _ <- blocks.toList.traverse_ {
             case (blockHash, block) => BlockStore[F].put(blockHash, block)
           }
-    } yield new NoOpsCasperEffect[F](MutableMap(blockStore.toSeq: _*), estimatorFunc)
+    } yield new NoOpsCasperEffect[F](MutableMap(blocks.toSeq: _*), estimatorFunc)
   def apply[F[_]: Sync: BlockStore: BlockDagStorage](): F[NoOpsCasperEffect[F]] =
-    apply(Map.empty, Vector(BlockMessage()))
+    apply(Map(BlockMessage().blockHash -> BlockMessage()), Vector(BlockMessage().blockHash))
   def apply[F[_]: Sync: BlockStore: BlockDagStorage](
-      blockStore: Map[BlockHash, BlockMessage]
+      blocks: Map[BlockHash, BlockMessage]
   ): F[NoOpsCasperEffect[F]] =
-    apply(blockStore, Vector(BlockMessage()))
+    apply(blocks, Vector(BlockMessage().blockHash))
 }

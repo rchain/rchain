@@ -107,20 +107,6 @@
 
 * `ceremonyMaster` is instatantied with flags `--required-sigs 2 --duration 5min --interval 10sec --bonds-file <holds two nodes validatorA and validatorB`.
 * `validatorA` and `validatorB` joins p2p, both pointing to `ceremonyMaster` as bootstrap
-* `ceremonyMaster` sends `UnapprovedBlock` to `validatorA` and `validatorB`
-* `validatorA` and `validatorB` receives `UnapprovedBlock`
-* `validatorA` and `validatorB` send back `BlockApproval`
-* `ceremonyMaster` transitions to `ApprovedBlockReceivedHandler` once requirements are met for duration and required sigs
-* `ceremonyMaster` sends `ApprovedBlock` to `validatorA` and `validatorB`
-* `validatorA` and `validatorB` transition to ApprovedBlockReceivedHandler
-* `ceremonyMaster`, `validatorA` and `validatorB` tip points to block (genesis) where it has no parent and Bonds holds `validatorA` and `validatorB`
-
-#### A successful genesis ceremony with read-only nodes joining 
-##### test: test/test_genesis_ceremony.py::test_successful_genesis_ceremony_with_read_only
-##### steps:
-
-* `ceremonyMaster` is instatantied with flags `--required-sigs 2 --duration 5min --interval 10sec --bonds-file <holds two nodes validatorA and validatorB`.
-* `validatorA` and `validatorB` joins p2p, both pointing to `ceremonyMaster` as bootstrap
 * `readOnlyA`(read-only) joins p2p
 * `ceremonyMaster` sends `UnapprovedBlock` to `validatorA` and `validatorB`
 * `validatorA` and `validatorB` receives `UnapprovedBlock`
@@ -133,7 +119,6 @@
 
 
 #### A NOT successful genesis ceremony (not enough sigs)
-##### test: test/test_genesis_ceremony.py::test_not_successful_genesis_ceremony
 ##### steps:
 
 * `ceremonyMaster` is instatantied with flags `--required-sigs 3 --duration 5min --interval 10sec --bonds-file <holds two nodes validatorA and validatorB`.
@@ -280,12 +265,12 @@
 * each validator should have a DAG with same set of finalized blocks
 
 ### As a validator I want consensus protocol to converge
-#### 5 validators deploying 200 blocks end up with the same DAG
+#### 5 validators deploying 100 blocks end up with the same DAG
 ##### test: test/test_dag_correctness.py::test_5val_200blocks
 ##### steps:
 
 * initiate p2p with 5 validators `validatorA`, `validatorB`, `validatorC`, `validatorD` and `validatorE`
-* each validator runs 200 rounds of deploy and propose
+* each validator runs 100 rounds of deploy and propose
 * wait graceful period of 30 seconds
 * each validator should output exactly same DAG
 

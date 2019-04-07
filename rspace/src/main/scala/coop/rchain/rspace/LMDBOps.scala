@@ -1,19 +1,23 @@
 package coop.rchain.rspace
 
 import internal._
-
 import java.nio.ByteBuffer
 import java.nio.file.Path
 
-import org.lmdbjava.{Dbi, Env, Txn, TxnOps}
+import cats.effect.{Resource, Sync}
+import cats.implicits._
+import org.lmdbjava.{Dbi, Env, Txn}
 import scodec.Codec
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.PathOps._
 import scodec.bits.BitVector
 import kamon._
+
 import scala.util.control.NonFatal
 
-trait LMDBOps extends CloseOps {
+trait LMDBOps[F[_]] extends CloseOps {
+
+  implicit val syncF: Sync[F]
 
   protected[rspace] type Transaction = Txn[ByteBuffer]
 
@@ -29,13 +33,13 @@ trait LMDBOps extends CloseOps {
 
   protected[this] def databasePath: Path
   protected[this] def env: Env[ByteBuffer]
+  protected[this] def metricsSource: String
 
-  protected def MetricsSource: String
   private[this] val gaugeTags    = Map("path" -> databasePath.toString)
-  private[this] val sizeGauge    = Kamon.gauge(MetricsSource + ".size").refine(gaugeTags)
-  private[this] val entriesGauge = Kamon.gauge(MetricsSource + ".entries").refine(gaugeTags)
+  private[this] val sizeGauge    = Kamon.gauge(metricsSource + ".size").refine(gaugeTags)
+  private[this] val entriesGauge = Kamon.gauge(metricsSource + ".entries").refine(gaugeTags)
 
-  protected[this] def updateGauges() = {
+  protected[this] def updateGauges(): Unit = {
     sizeGauge.set(databasePath.folderSize)
     entriesGauge.set(env.stat().entries)
   }
@@ -49,11 +53,21 @@ trait LMDBOps extends CloseOps {
       ret
     } catch {
       case NonFatal(ex) =>
-        ex.printStackTrace
+        ex.printStackTrace()
         throw ex
     } finally {
-      updateGauges()
       txn.close()
+      updateGauges()
+    }
+
+  private[rspace] def withReadTxnF[R](f: Txn[ByteBuffer] => R): F[R] =
+    syncF.delay {
+      withTxn(createTxnRead())(f)
+    }
+
+  def withWriteTxnF[R](f: Txn[ByteBuffer] => R): F[R] =
+    syncF.delay {
+      withTxn(createTxnWrite())(f)
     }
 
   /** The methods:

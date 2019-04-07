@@ -1,12 +1,14 @@
 package coop.rchain.rholang
 
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.Connective.ConnectiveInstance.ConnNotBody
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.StackSafetySpec.findMaxRecursionDepth
-import coop.rchain.rholang.interpreter.{Interpreter, PrettyPrinter}
+import coop.rchain.rholang.interpreter.{Interpreter, ParBuilder, PrettyPrinter}
 import coop.rchain.rspace.Serialize
 import coop.rchain.shared.Log
 import monix.eval.{Coeval, Task}
@@ -19,10 +21,11 @@ import scala.concurrent.duration._
 
 object StackSafetySpec extends Assertions {
 
-  val mapSize                  = 10L * 1024L * 1024L
-  val tmpPrefix                = "rspace-store-"
-  val maxDuration              = 20.seconds
-  implicit val logF: Log[Task] = new Log.NOPLog[Task]
+  val mapSize                             = 10L * 1024L * 1024L
+  val tmpPrefix                           = "rspace-store-"
+  val maxDuration                         = 20.seconds
+  implicit val logF: Log[Task]            = new Log.NOPLog[Task]
+  implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
   def findMaxRecursionDepth(): Int = {
     def count(i: Int): Int =
@@ -184,11 +187,12 @@ class StackSafetySpec extends FlatSpec with TableDrivenPropertyChecks with Match
          |""".stripMargin
 
     isolateStackOverflow {
-      val ast = Interpreter[Coeval].buildNormalizedTerm(rho).value()
+      val ast = ParBuilder[Coeval].buildNormalizedTerm(rho).value()
       PrettyPrinter().buildString(ast)
       checkSuccess(rho) {
         mkRuntime(tmpPrefix, mapSize).use { runtime =>
-          Interpreter[Task].evaluate(runtime, ast)
+          implicit val c = runtime.cost
+          Interpreter[Task].evaluate(runtime, rho)
         }
       }
     }

@@ -33,7 +33,9 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--casper-block-store-size 2000",
         "--map-size 1000",
         "--max-num-of-connections 500",
-        "--max-message-size 256"
+        "--packet-chunk-size 64",
+        "--max-message-size 256",
+        "--message-consumers 8"
       ).mkString(" ")
 
     val options = Options(args.split(' '))
@@ -41,26 +43,28 @@ class ConfigMapperSpec extends FunSuite with Matchers {
 
     val expectedServer =
       configuration.Server(
-        Some("1.2.3.4"),
-        40400,
-        40403,
-        40404,
+        host = Some("1.2.3.4"),
+        port = 40400,
+        httpPort = 40403,
+        kademliaPort = 40404,
         dynamicHostAddress = true,
         noUpnp = true,
-        2.seconds,
-        PeerNode
+        defaultTimeout = 2.seconds,
+        bootstrap = PeerNode
           .fromAddress(
             "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"
           )
           .right
           .get,
         standalone = true,
-        Paths.get("/root/.rnode"),
-        1000,
-        StoreType.LMDB,
-        2000,
-        500,
-        256
+        dataDir = Paths.get("/root/.rnode"),
+        mapSize = 1000,
+        storeType = StoreType.LMDB,
+        storeSize = 2000,
+        maxNumOfConnections = 500,
+        maxMessageSize = 256,
+        packetChunkSize = 64,
+        messageConsumers = 8
       )
 
     val server = hocon.Server.fromConfig(config)
@@ -81,8 +85,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
 
     val expectedTls =
       configuration.Tls(
-        Paths.get("/root/node.certificate.pem"),
-        Paths.get("/root/node.key.pem"),
+        certificate = Paths.get("/root/node.certificate.pem"),
+        key = Paths.get("/root/node.key.pem"),
         customCertificateLocation = false,
         customKeyLocation = false,
         secureRandomNonBlocking = true
@@ -98,6 +102,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "run",
         "--prometheus",
         "--influxdb",
+        "--influxdb-udp",
         "--zipkin",
         "--sigar"
       ).mkString(" ")
@@ -109,6 +114,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
       configuration.Kamon(
         prometheus = true,
         influxDb = true,
+        influxDbUdp = true,
         zipkin = true,
         sigar = true
       )
@@ -122,7 +128,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
       Seq(
         "--grpc-host localhost",
         "--grpc-port 40401",
-        "--grpc-port-internal 40402"
+        "--grpc-port-internal 40402",
+        "--grpc-max-message-size 256"
       ).mkString(" ")
 
     val options = Options(args.split(' '))
@@ -130,9 +137,10 @@ class ConfigMapperSpec extends FunSuite with Matchers {
 
     val expectedGrpc =
       configuration.GrpcServer(
-        "localhost",
-        40401,
-        40402
+        host = "localhost",
+        portExternal = 40401,
+        portInternal = 40402,
+        maxMessageSize = 256
       )
 
     val grpc = hocon.GrpcServer.fromConfig(config)
@@ -171,24 +179,24 @@ class ConfigMapperSpec extends FunSuite with Matchers {
 
     val expectedCasper =
       CasperConf(
-        Some("111111111111"),
-        Some(Right(Paths.get("/root/pk.pem"))),
-        "ed25519",
-        Some("/root/bonds.txt"),
-        Some("/root/validators.txt"),
-        5,
-        Paths.get("/root/.rnode/genesis"),
-        Some("/root/wallet.txt"),
-        1L,
-        1000L,
+        publicKeyBase16 = Some("111111111111"),
+        privateKey = Some(Right(Paths.get("/root/pk.pem"))),
+        sigAlgorithm = "ed25519",
+        bondsFile = Some("/root/bonds.txt"),
+        knownValidatorsFile = Some("/root/validators.txt"),
+        numValidators = 5,
+        genesisPath = Paths.get("/root/.rnode/genesis"),
+        walletsFile = Some("/root/wallet.txt"),
+        minimumBond = 1L,
+        maximumBond = 1000L,
         hasFaucet = true,
-        0,
-        "rchain",
+        requiredSigs = 0,
+        shardId = "rchain",
         createGenesis = false,
         approveGenesis = true,
-        5.seconds,
-        5.minutes,
-        Some(333)
+        approveGenesisInterval = 5.seconds,
+        approveGenesisDuration = 5.minutes,
+        deployTimestamp = Some(333)
       )
 
     val casper = hocon.Casper.fromConfig(config.withFallback(defaults))

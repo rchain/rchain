@@ -1,46 +1,46 @@
 package coop.rchain.rholang.interpreter.accounting
 
-import cats.effect.Sync
-import cats.effect.concurrent.Ref
+import cats.data._
+import cats.effect.Concurrent
+import cats.effect.concurrent._
 import cats.implicits._
+import cats.mtl._
 import cats.{FlatMap, Monad}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 
-trait CostAccounting[F[_]] {
-  def charge(cost: Cost): F[Unit]
-  def get(): F[CostAccount]
-  def set(cost: CostAccount): F[Unit]
-  def refund(refund: Cost): F[Unit]
-}
-
 object CostAccounting {
-  def of[F[_]: Sync](init: CostAccount): F[CostAccounting[F]] =
-    Ref[F].of(init).map(ref => new CostAccountingImpl[F](ref))
 
-  def apply[F[_]](implicit ev: CostAccounting[F]): CostAccounting[F] = ev
+  private[this] def of[F[_]: Concurrent](init: Cost): F[MonadState[F, Cost]] =
+    Ref[F]
+      .of(init)
+      .map(defaultMonadState)
 
-  def unsafe[F[_]: Monad](init: CostAccount)(implicit F: Sync[F]): CostAccounting[F] = {
-    val ref = Ref.unsafe[F, CostAccount](init)
-    new CostAccountingImpl[F](ref)
-  }
+  private[this] def empty[F[_]: Concurrent]: F[MonadState[F, Cost]] =
+    Ref[F]
+      .of(Cost(0, "init"))
+      .map(defaultMonadState)
 
-  private class CostAccountingImpl[F[_]](state: Ref[F, CostAccount])(implicit F: Sync[F])
-      extends CostAccounting[F] {
-    override def charge(cost: Cost): F[Unit] = chargeInternal(_ - cost)
+  def emptyCost[F[_]: Concurrent](implicit L: FunctorTell[F, Chain[Cost]]): F[_cost[F]] =
+    for {
+      s <- Semaphore(1)
+      c <- empty
+    } yield (loggingCost(c, L, s))
 
-    private def chargeInternal(f: CostAccount => CostAccount): F[Unit] =
-      for {
-        _ <- failOnOutOfPhlo
-        _ <- state.update(f)
-        _ <- failOnOutOfPhlo
-      } yield ()
+  def initialCost[F[_]: Concurrent](
+      init: Cost
+  )(implicit L: FunctorTell[F, Chain[Cost]]): F[_cost[F]] =
+    for {
+      s <- Semaphore(1)
+      c <- of(init)
+    } yield (loggingCost(c, L, s))
 
-    override def get: F[CostAccount] = state.get
-    override def set(cost: CostAccount): F[Unit] =
-      state.set(cost)
+  private[this] def defaultMonadState[F[_]: Monad: Concurrent] =
+    (state: Ref[F, Cost]) =>
+      new DefaultMonadState[F, Cost] {
+        val monad: cats.Monad[F]  = implicitly[Monad[F]]
+        def get: F[Cost]          = state.get
+        def set(s: Cost): F[Unit] = state.set(s)
 
-    override def refund(refund: Cost): F[Unit] = state.update(_ + refund)
-    private val failOnOutOfPhlo: F[Unit] =
-      FlatMap[F].ifM(state.get.map(_.cost.value < 0))(F.raiseError(OutOfPhlogistonsError), F.unit)
-  }
+        override def modify(f: Cost => Cost): F[Unit] = state.modify(f.map((_, ())))
+      }
 }

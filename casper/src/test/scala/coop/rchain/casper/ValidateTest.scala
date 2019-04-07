@@ -5,27 +5,29 @@ import java.nio.file.Files
 import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{BlockDagRepresentation, BlockStore, IndexedBlockDagStorage}
-import coop.rchain.casper.Estimator.{BlockHash, Validator}
-import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
+import coop.rchain.blockstorage.{BlockStore, IndexedBlockDagStorage}
+import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
+import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.scalatestcontrib._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
+import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.{StoreType, Time}
-import coop.rchain.casper.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{Assertion, BeforeAndAfterEach, FlatSpec, Matchers}
+import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 
-import scala.concurrent.duration._
 import scala.collection.immutable.HashMap
 
 class ValidateTest
@@ -34,8 +36,9 @@ class ValidateTest
     with BeforeAndAfterEach
     with BlockGenerator
     with BlockDagStorageFixture {
-  implicit val log = new LogStub[Task]
-  val ed25519      = "ed25519"
+  implicit val log                        = new LogStub[Task]
+  implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+  val ed25519                             = "ed25519"
 
   override def beforeEach(): Unit = {
     log.reset()
@@ -46,13 +49,18 @@ class ValidateTest
       length: Int,
       bonds: Seq[Bond] = Seq.empty[Bond]
   ): F[BlockMessage] =
-    (0 until length).foldLeft(createBlock[F](Seq.empty, bonds = bonds)) {
-      case (block, _) =>
-        for {
-          bprev <- block
-          bnext <- createBlock[F](Seq(bprev.blockHash), bonds = bonds)
-        } yield bnext
-    }
+    for {
+      genesis <- createGenesis[F](bonds = bonds)
+      result <- (1 until length).foldLeft(
+                 createBlock[F](Seq(genesis.blockHash), genesis, bonds = bonds)
+               ) {
+                 case (block, _) =>
+                   for {
+                     bprev <- block
+                     bnext <- createBlock[F](Seq(bprev.blockHash), genesis, bonds = bonds)
+                   } yield bnext
+               }
+    } yield genesis
 
   def createChainWithRoundRobinValidators[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
       length: Int,
@@ -64,29 +72,30 @@ class ValidateTest
       .zip(validatorRoundRobinCycle)
       .foldLeft(
         for {
-          genesis             <- createBlock[F](Seq.empty)
+          genesis             <- createGenesis[F]()
           emptyLatestMessages <- HashMap.empty[Validator, BlockHash].pure[F]
-        } yield (genesis, emptyLatestMessages)
+        } yield (genesis, genesis, emptyLatestMessages)
       ) {
         case (acc, (_, validatorNum)) =>
           val creator = validators(validatorNum)
           for {
-            unwrappedAcc            <- acc
-            (block, latestMessages) = unwrappedAcc
+            unwrappedAcc                     <- acc
+            (genesis, block, latestMessages) = unwrappedAcc
             bnext <- createBlock[F](
-                      parentsHashList = Seq(block.blockHash),
+                      Seq(block.blockHash),
+                      genesis,
                       creator = creator,
                       justifications = latestMessages
                     )
             latestMessagesNext = latestMessages.updated(bnext.sender, bnext.blockHash)
-          } yield (bnext, latestMessagesNext)
+          } yield (genesis, bnext, latestMessagesNext)
       }
       .map(_._1)
   }
 
   def signedBlock(
       i: Int
-  )(implicit sk: Array[Byte], blockDagStorage: IndexedBlockDagStorage[Task]): Task[BlockMessage] = {
+  )(implicit sk: PrivateKey, blockDagStorage: IndexedBlockDagStorage[Task]): Task[BlockMessage] = {
     val pk = Ed25519.toPublic(sk)
     for {
       block  <- blockDagStorage.lookupByIdUnsafe(i)
@@ -133,10 +142,10 @@ class ValidateTest
         _            <- createChain[Task](6)
         (_, wrongPk) = Ed25519.newKeyPair
         empty        = ByteString.EMPTY
-        invalidKey   = ByteString.copyFrom(Base16.decode("abcdef1234567890"))
+        invalidKey   = ByteString.copyFrom(Base16.unsafeDecode("abcdef1234567890"))
         block0       <- signedBlock(0).map(_.withSender(empty))
         block1       <- signedBlock(1).map(_.withSender(invalidKey))
-        block2       <- signedBlock(2).map(_.withSender(ByteString.copyFrom(wrongPk)))
+        block2       <- signedBlock(2).map(_.withSender(ByteString.copyFrom(wrongPk.bytes)))
         block3       <- signedBlock(3).map(_.withSig(empty))
         block4       <- signedBlock(4).map(_.withSig(invalidKey))
         block5       <- signedBlock(5).map(_.withSig(block0.sig)) //wrong sig
@@ -201,10 +210,13 @@ class ValidateTest
   "Block number validation" should "only accept 0 as the number for a block with no parents" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        _      <- createChain[Task](1)
-        block  <- blockDagStorage.lookupByIdUnsafe(0)
-        _      <- Validate.blockNumber[Task](block.withBlockNumber(1)) shouldBeF Left(InvalidBlockNumber)
-        _      <- Validate.blockNumber[Task](block) shouldBeF Right(Valid)
+        _     <- createChain[Task](1)
+        block <- blockDagStorage.lookupByIdUnsafe(0)
+        dag   <- blockDagStorage.getRepresentation
+        _ <- Validate.blockNumber[Task](block.withBlockNumber(1), dag) shouldBeF Left(
+              InvalidBlockNumber
+            )
+        _      <- Validate.blockNumber[Task](block, dag) shouldBeF Right(Valid)
         _      = log.warns.size should be(1)
         result = log.warns.head.contains("not zero, but block has no parents") should be(true)
       } yield result
@@ -215,10 +227,11 @@ class ValidateTest
       for {
         _     <- createChain[Task](2)
         block <- blockDagStorage.lookupByIdUnsafe(1)
-        _ <- Validate.blockNumber[Task](block.withBlockNumber(17)) shouldBeF Left(
+        dag   <- blockDagStorage.getRepresentation
+        _ <- Validate.blockNumber[Task](block.withBlockNumber(17), dag) shouldBeF Left(
               InvalidBlockNumber
             )
-        _ <- Validate.blockNumber[Task](block) shouldBeF Right(Valid)
+        _ <- Validate.blockNumber[Task](block, dag) shouldBeF Right(Valid)
         _ = log.warns.size should be(1)
         result = log.warns.head.contains("is not one more than maximum parent number") should be(
           true
@@ -230,15 +243,16 @@ class ValidateTest
     implicit blockStore => implicit blockDagStorage =>
       val n = 6
       for {
-        _  <- createChain[Task](n)
-        a0 <- blockDagStorage.lookupByIdUnsafe(0) >>= Validate.blockNumber[Task]
-        a1 <- blockDagStorage.lookupByIdUnsafe(1) >>= Validate.blockNumber[Task]
-        a2 <- blockDagStorage.lookupByIdUnsafe(2) >>= Validate.blockNumber[Task]
-        a3 <- blockDagStorage.lookupByIdUnsafe(3) >>= Validate.blockNumber[Task]
-        a4 <- blockDagStorage.lookupByIdUnsafe(4) >>= Validate.blockNumber[Task]
-        a5 <- blockDagStorage.lookupByIdUnsafe(5) >>= Validate.blockNumber[Task]
+        _   <- createChain[Task](n)
+        dag <- blockDagStorage.getRepresentation
+        a0  <- blockDagStorage.lookupByIdUnsafe(0) >>= (b => Validate.blockNumber[Task](b, dag))
+        a1  <- blockDagStorage.lookupByIdUnsafe(1) >>= (b => Validate.blockNumber[Task](b, dag))
+        a2  <- blockDagStorage.lookupByIdUnsafe(2) >>= (b => Validate.blockNumber[Task](b, dag))
+        a3  <- blockDagStorage.lookupByIdUnsafe(3) >>= (b => Validate.blockNumber[Task](b, dag))
+        a4  <- blockDagStorage.lookupByIdUnsafe(4) >>= (b => Validate.blockNumber[Task](b, dag))
+        a5  <- blockDagStorage.lookupByIdUnsafe(5) >>= (b => Validate.blockNumber[Task](b, dag))
         _ <- (0 until n).toList.forallM[Task] { i =>
-              (blockDagStorage.lookupByIdUnsafe(i) >>= Validate.blockNumber[Task])
+              (blockDagStorage.lookupByIdUnsafe(i) >>= (b => Validate.blockNumber[Task](b, dag)))
                 .map(_ == Right(Valid))
             } shouldBeF true
         result = log.warns should be(Nil)
@@ -246,28 +260,87 @@ class ValidateTest
   }
 
   it should "correctly validate a multiparent block where the parents have different block numbers" in withStorage {
-    implicit blockStore => _ =>
+    implicit blockStore => implicit blockDagStorage =>
       def createBlockWithNumber(
           n: Long,
+          genesis: BlockMessage,
           parentHashes: Seq[ByteString] = Nil
       ): Task[BlockMessage] = {
-        val blockWithNumber = BlockMessage.defaultInstance.withBlockNumber(n)
+        val blockWithNumber = BlockMessage().withBlockNumber(n)
         val header          = blockWithNumber.getHeader.withParentsHashList(parentHashes)
         val hash            = ProtoUtil.hashUnsignedBlock(header, Nil)
         val block           = blockWithNumber.withHeader(header).withBlockHash(hash)
 
-        blockStore.put(hash, block) *> block.pure[Task]
+        blockStore.put(hash, block) *> blockDagStorage.insert(block, genesis, false) *> block
+          .pure[Task]
       }
 
       for {
-        b1 <- createBlockWithNumber(3)
-        b2 <- createBlockWithNumber(7)
-        b3 <- createBlockWithNumber(8, Seq(b1.blockHash, b2.blockHash))
-        _  <- Validate.blockNumber[Task](b3) shouldBeF Right(Valid)
-        result <- Validate.blockNumber[Task](b3.withBlockNumber(4)) shouldBeF Left(
-                   InvalidBlockNumber
-                 )
-      } yield result
+        genesis <- createChain[Task](8) // Note we need to create a useless chain to satisfy the assert in TopoSort
+        b1      <- createBlockWithNumber(3, genesis)
+        b2      <- createBlockWithNumber(7, genesis)
+        b3      <- createBlockWithNumber(8, genesis, Seq(b1.blockHash, b2.blockHash))
+        dag     <- blockDagStorage.getRepresentation
+        s1      <- Validate.blockNumber[Task](b3, dag)
+        _       = s1 shouldBe Right(Valid)
+        s2      <- Validate.blockNumber[Task](b3.withBlockNumber(4), dag)
+        _       = s2 shouldBe Left(InvalidBlockNumber)
+      } yield ()
+  }
+
+  "Future deploy validation" should "work" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      for {
+        deploy            <- ConstructDeploy.basicProcessedDeploy[Task](0)
+        deployData        = deploy.deploy.get
+        updatedDeployData = deployData.withValidAfterBlockNumber(-1)
+        block <- createGenesis[Task](
+                  deploys = Seq(deploy.withDeploy(updatedDeployData))
+                )
+        status <- Validate.futureTransaction[Task](block)
+        _      = status should be(Right(Valid))
+      } yield ()
+  }
+
+  "Future deploy validation" should "not accept blocks with a deploy for a future block number" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      for {
+        deploy            <- ConstructDeploy.basicProcessedDeploy[Task](0)
+        deployData        = deploy.deploy.get
+        updatedDeployData = deployData.withValidAfterBlockNumber(Long.MaxValue)
+        blockWithFutureDeploy <- createGenesis[Task](
+                                  deploys = Seq(deploy.withDeploy(updatedDeployData))
+                                )
+        status <- Validate.futureTransaction[Task](blockWithFutureDeploy)
+        _      = status should be(Left(ContainsFutureDeploy))
+      } yield ()
+  }
+
+  "Deploy expiration validation" should "work" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      for {
+        deploy <- ConstructDeploy.basicProcessedDeploy[Task](0)
+        block <- createGenesis[Task](
+                  deploys = Seq(deploy)
+                )
+        status <- Validate.transactionExpiration[Task](block, expirationThreshold = 10)
+        _      = status should be(Right(Valid))
+      } yield ()
+  }
+
+  "Deploy expiration validation" should "not accept blocks with a deploy that is expired" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      for {
+        deploy            <- ConstructDeploy.basicProcessedDeploy[Task](0)
+        deployData        = deploy.deploy.get
+        updatedDeployData = deployData.withValidAfterBlockNumber(Long.MinValue)
+        blockWithExpiredDeploy <- createGenesis[Task](
+                                   deploys = Seq(deploy.withDeploy(updatedDeployData))
+                                 )
+        status <- Validate
+                   .transactionExpiration[Task](blockWithExpiredDeploy, expirationThreshold = 10)
+        _ = status should be(Left(ContainsExpiredDeploy))
+      } yield ()
   }
 
   "Sequence number validation" should "only accept 0 as the number for a block with no parents" in withStorage {
@@ -350,14 +423,16 @@ class ValidateTest
 
       def createValidatorBlock[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
           parents: Seq[BlockMessage],
+          genesis: BlockMessage,
           justifications: Seq[BlockMessage],
           validator: Int
       ): F[BlockMessage] =
         for {
           current <- Time[F].currentMillis
-          deploy  <- ProtoUtil.basicProcessedDeploy[F](current.toInt)
+          deploy  <- ConstructDeploy.basicProcessedDeploy[F](current.toInt)
           block <- createBlock[F](
                     parents.map(_.blockHash),
+                    genesis,
                     creator = validators(validator),
                     bonds = bonds,
                     deploys = Seq(deploy),
@@ -366,16 +441,16 @@ class ValidateTest
         } yield block
 
       for {
-        b0 <- createBlock[Task](Seq.empty, bonds = bonds)
-        b1 <- createValidatorBlock[Task](Seq(b0), Seq.empty, 0)
-        b2 <- createValidatorBlock[Task](Seq(b0), Seq.empty, 1)
-        b3 <- createValidatorBlock[Task](Seq(b0), Seq.empty, 2)
-        b4 <- createValidatorBlock[Task](Seq(b1), Seq(b1), 0)
-        b5 <- createValidatorBlock[Task](Seq(b3, b2, b1), Seq(b1, b2, b3), 1)
-        b6 <- createValidatorBlock[Task](Seq(b5, b4), Seq(b1, b4, b5), 0)
-        b7 <- createValidatorBlock[Task](Seq(b4), Seq(b1, b4, b5), 1) //not highest score parent
-        b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), Seq(b1, b2, b3), 2) //parents wrong order
-        b9 <- createValidatorBlock[Task](Seq(b6), Seq.empty, 0) //empty justification
+        b0 <- createGenesis[Task](bonds = bonds)
+        b1 <- createValidatorBlock[Task](Seq(b0), b0, Seq.empty, 0)
+        b2 <- createValidatorBlock[Task](Seq(b0), b0, Seq.empty, 1)
+        b3 <- createValidatorBlock[Task](Seq(b0), b0, Seq.empty, 2)
+        b4 <- createValidatorBlock[Task](Seq(b1), b0, Seq(b1), 0)
+        b5 <- createValidatorBlock[Task](Seq(b3, b2, b1), b0, Seq(b1, b2, b3), 1)
+        b6 <- createValidatorBlock[Task](Seq(b5, b4), b0, Seq(b1, b4, b5), 0)
+        b7 <- createValidatorBlock[Task](Seq(b4), b0, Seq(b1, b4, b5), 1) //not highest score parent
+        b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), b0, Seq(b1, b2, b3), 2) //parents wrong order
+        b9 <- createValidatorBlock[Task](Seq(b6), b0, Seq.empty, 0) //empty justification
         result <- mkRuntimeManager("casper-util-test")
                    .use { runtimeManager =>
                      for {
@@ -392,22 +467,24 @@ class ValidateTest
                        dag <- blockDagStorage.getRepresentation
 
                        // Valid
-                       _ <- Validate.parents[Task](b0, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b1, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b2, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b3, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b4, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b5, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b6, b0.blockHash, dag)
+                       _ <- Validate.parents[Task](b0, b0, dag)
+                       _ <- Validate.parents[Task](b1, b0, dag)
+                       _ <- Validate.parents[Task](b2, b0, dag)
+                       _ <- Validate.parents[Task](b3, b0, dag)
+                       _ <- Validate.parents[Task](b4, b0, dag)
+                       _ <- Validate.parents[Task](b5, b0, dag)
+                       _ <- Validate.parents[Task](b6, b0, dag)
 
                        // Not valid
-                       _ <- Validate.parents[Task](b7, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b8, b0.blockHash, dag)
-                       _ <- Validate.parents[Task](b9, b0.blockHash, dag)
+                       _ <- Validate.parents[Task](b7, b0, dag)
+                       _ <- Validate.parents[Task](b8, b0, dag)
+                       _ <- Validate.parents[Task](b9, b0, dag)
 
                        _ = log.warns.size should be(3)
                        result = log.warns.forall(
-                         _.contains("block parents did not match estimate based on justification")
+                         _.matches(
+                           ".* block parents .* did not match estimate .* based on justification .*"
+                         )
                        ) should be(
                          true
                        )
@@ -437,7 +514,7 @@ class ValidateTest
               BlockMessage.defaultInstance,
               dag,
               "rchain",
-              BlockMessage.defaultInstance.blockHash
+              Int.MaxValue
             ) shouldBeF Left(InvalidBlockNumber)
         result = log.warns.size should be(1)
       } yield result
@@ -452,45 +529,52 @@ class ValidateTest
       val bonds  = Seq(v1Bond, v2Bond)
 
       for {
-        genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis <- createGenesis[Task](bonds = bonds)
         b2 <- createBlock[Task](
                Seq(genesis.blockHash),
+               genesis,
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
              )
         b3 <- createBlock[Task](
                Seq(genesis.blockHash),
+               genesis,
                v1,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
              )
         b4 <- createBlock[Task](
                Seq(b2.blockHash),
+               genesis,
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash)
              )
         b5 <- createBlock[Task](
                Seq(b2.blockHash),
+               genesis,
                v1,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash)
              )
         b6 <- createBlock[Task](
                Seq(b4.blockHash),
+               genesis,
                v2,
                bonds,
                HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
              )
         b7 <- createBlock[Task](
                Seq(b4.blockHash),
+               genesis,
                v1,
                Seq(),
                HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
              )
         b8 <- createBlock[Task](
                Seq(b7.blockHash),
+               genesis,
                v1,
                bonds,
                HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash)
@@ -534,13 +618,15 @@ class ValidateTest
 
       def createValidatorBlock[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
           parents: Seq[BlockMessage],
+          genesis: BlockMessage,
           justifications: Seq[BlockMessage],
           validator: Int
       ): F[BlockMessage] =
         for {
-          deploy <- ProtoUtil.basicProcessedDeploy[F](0)
+          deploy <- ConstructDeploy.basicProcessedDeploy[F](0)
           result <- createBlock[F](
                      parents.map(_.blockHash),
+                     genesis,
                      creator = validators(validator),
                      bonds = bonds,
                      deploys = Seq(deploy),
@@ -549,11 +635,11 @@ class ValidateTest
         } yield result
 
       for {
-        b0 <- createBlock[Task](Seq.empty, bonds = bonds)
-        b1 <- createValidatorBlock[Task](Seq(b0), Seq(b0, b0), 0)
-        b2 <- createValidatorBlock[Task](Seq(b1), Seq(b1, b0), 0)
-        b3 <- createValidatorBlock[Task](Seq(b0), Seq(b2, b0), 1)
-        b4 <- createValidatorBlock[Task](Seq(b3), Seq(b2, b3), 1)
+        b0 <- createGenesis[Task](bonds = bonds)
+        b1 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b0, b0), 0)
+        b2 <- createValidatorBlock[Task](Seq(b1), b0, Seq(b1, b0), 0)
+        b3 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b2, b0), 1)
+        b4 <- createValidatorBlock[Task](Seq(b3), b0, Seq(b2, b3), 1)
         _ <- (0 to 4).toList.forallM[Task](
               i =>
                 for {
@@ -587,14 +673,19 @@ class ValidateTest
   "Bonds cache validation" should "succeed on a valid block and fail on modified bonds" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val (_, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-      val bonds           = HashSetCasperTest.createBonds(validators)
-      val genesis         = HashSetCasperTest.createGenesis(bonds)
+      val bonds           = MultiParentCasperTestUtil.createBonds(validators)
+      val genesis         = MultiParentCasperTestUtil.createGenesis(bonds)
 
       val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
       val storageSize: Long = 1024L * 1024
       for {
-        activeRuntime <- Runtime
-                          .create[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB)
+
+        activeRuntime <- Runtime.createWithEmptyCost[Task, Task.Par](
+                          storageDirectory,
+                          storageSize,
+                          StoreType.LMDB
+                        )
+
         runtimeManager <- RuntimeManager.fromRuntime[Task](activeRuntime)
 
         dag               <- blockDagStorage.getRepresentation
@@ -614,7 +705,7 @@ class ValidateTest
   "Field format validation" should "succeed on a valid block and fail on empty fields" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val (sk, pk) = Ed25519.newKeyPair
-      val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+      val block    = MultiParentCasperTestUtil.createGenesis(Map(pk -> 1))
       for {
         dag     <- blockDagStorage.getRepresentation
         genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "rchain")
@@ -646,7 +737,7 @@ class ValidateTest
   "Block hash format validation" should "fail on invalid hash" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val (sk, pk) = Ed25519.newKeyPair
-      val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+      val block    = MultiParentCasperTestUtil.createGenesis(Map(pk -> 1))
       for {
         dag     <- blockDagStorage.getRepresentation
         genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "rchain")
@@ -660,7 +751,7 @@ class ValidateTest
   "Block deploy count validation" should "fail on invalid number of deploys" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val (sk, pk) = Ed25519.newKeyPair
-      val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+      val block    = MultiParentCasperTestUtil.createGenesis(Map(pk -> 1))
       for {
         dag     <- blockDagStorage.getRepresentation
         genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, "ed25519", "rchain")
@@ -673,7 +764,7 @@ class ValidateTest
 
   "Block version validation" should "work" in withStorage { _ => implicit blockDagStorage =>
     val (sk, pk) = Ed25519.newKeyPair
-    val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+    val block    = MultiParentCasperTestUtil.createGenesis(Map(pk -> 1))
     for {
       dag     <- blockDagStorage.getRepresentation
       genesis <- ProtoUtil.signBlock(block, dag, pk, sk, "ed25519", "rchain")

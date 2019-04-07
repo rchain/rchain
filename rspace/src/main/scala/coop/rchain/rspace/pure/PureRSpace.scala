@@ -7,14 +7,14 @@ import coop.rchain.rspace._
 
 import scala.collection.immutable.Seq
 
-trait PureRSpace[F[_], C, P, E, A, R, K] {
+trait PureRSpace[F[_], C, P, A, R, K] {
   def consume(
       channels: Seq[C],
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
       sequenceNumber: Int = 0
-  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
+  ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]]
 
   def install(channels: Seq[C], patterns: Seq[P], continuation: K): F[Option[(K, Seq[R])]]
 
@@ -23,7 +23,7 @@ trait PureRSpace[F[_], C, P, E, A, R, K] {
       data: A,
       persist: Boolean,
       sequenceNumber: Int = 0
-  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]]
+  ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]]
 
   def createCheckpoint(): F[Checkpoint]
 
@@ -36,17 +36,17 @@ object PureRSpace {
   def apply[F[_]](implicit F: Sync[F]): PureRSpaceApplyBuilders[F] = new PureRSpaceApplyBuilders(F)
 
   final class PureRSpaceApplyBuilders[F[_]](val F: Sync[F]) extends AnyVal {
-    def of[C, P, E, A, R, K](
-        space: ISpace[F, C, P, E, A, R, K]
-    )(implicit mat: Match[P, E, A, R]): PureRSpace[F, C, P, E, A, R, K] =
-      new PureRSpace[F, C, P, E, A, R, K] {
+    def of[C, P, A, R, K](
+        space: ISpace[F, C, P, A, R, K]
+    )(implicit mat: Match[F, P, A, R]): PureRSpace[F, C, P, A, R, K] =
+      new PureRSpace[F, C, P, A, R, K] {
         def consume(
             channels: Seq[C],
             patterns: Seq[P],
             continuation: K,
             persist: Boolean,
             sequenceNumber: Int
-        ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
+        ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]] =
           space.consume(channels, patterns, continuation, persist, sequenceNumber)
 
         def install(channels: Seq[C], patterns: Seq[P], continuation: K): F[Option[(K, Seq[R])]] =
@@ -57,7 +57,7 @@ object PureRSpace {
             data: A,
             persist: Boolean,
             sequenceNumber: Int
-        ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
+        ): F[Option[(ContResult[C, P, K], Seq[Result[R]])]] =
           space.produce(channel, data, persist, sequenceNumber)
 
         def createCheckpoint(): F[Checkpoint] = space.createCheckpoint()

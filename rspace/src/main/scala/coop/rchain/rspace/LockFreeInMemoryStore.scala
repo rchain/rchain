@@ -1,15 +1,19 @@
 package coop.rchain.rspace
 
+import cats.effect.Sync
+import cats.implicits._
+import coop.rchain.catscontrib.ski.kp
+
 import scala.collection.concurrent.TrieMap
 import scala.collection.immutable.Seq
-
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.canonicalize
 import coop.rchain.shared.SeqOps.{dropIndex, removeFirst}
-
 import kamon._
 import scodec.Codec
+
+import scala.util.control.NonFatal
 
 /**
   * This implementation of Transaction exists only to satisfy the requirements of IStore.
@@ -30,25 +34,52 @@ class NoopTxn[S] extends InMemTransaction[S] {
   *
   * It should be used with RSpace that solves high level locking (e.g. FineGrainedRSpace).
   */
-class LockFreeInMemoryStore[T, C, P, A, K](
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
+class LockFreeInMemoryStore[F[_], T, C, P, A, K](
     val trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]],
     val trieBranch: Branch
-)(implicit sc: Serialize[C], sp: Serialize[P], sa: Serialize[A], sk: Serialize[K])
-    extends IStore[C, P, A, K]
+)(implicit sc: Serialize[C], sp: Serialize[P], sa: Serialize[A], sk: Serialize[K], syncF: Sync[F])
+    extends IStore[F, C, P, A, K]
     with CloseOps {
 
   protected[rspace] type Transaction = InMemTransaction[State[C, P, A, K]]
 
-  override private[rspace] def createTxnRead(): Transaction = {
+  private[this] def createTxnRead(): Transaction = {
     failIfClosed()
     new NoopTxn[State[C, P, A, K]]
   }
-  override private[rspace] def createTxnWrite(): Transaction = {
+
+  private[this] def createTxnWrite(): Transaction = {
     failIfClosed()
     new NoopTxn[State[C, P, A, K]]
   }
-  override private[rspace] def withTxn[R](txn: Transaction)(f: Transaction => R) = f(txn)
-  override def close(): Unit                                                     = super.close()
+
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  private[rspace] def withTxn[R](txn: Transaction)(f: Transaction => R): R =
+    try {
+      val ret: R = f(txn)
+      txn.commit()
+      ret
+    } catch {
+      case NonFatal(ex) =>
+        ex.printStackTrace()
+        throw ex
+    } finally {
+      txn.close()
+      updateGauges()
+    }
+
+  private[rspace] def withReadTxnF[R](f: Transaction => R): F[R] =
+    syncF.delay {
+      withTxn(createTxnRead())(f)
+    }
+
+  def withWriteTxnF[R](f: Transaction => R): F[R] =
+    syncF.delay {
+      withTxn(createTxnWrite())(f)
+    }
+
+  override def close(): Unit = super.close()
 
   type TrieTransaction = T
 
@@ -69,7 +100,7 @@ class LockFreeInMemoryStore[T, C, P, A, K](
     entriesGauge.set(stateGNAT.readOnlySnapshot.size.toLong)
 
   private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash =
-    StableHashProvider.hash(channels)
+    StableHashProvider.hash(channels)(Serialize.fromCodec(codecC))
 
   override def withTrieTxn[R](txn: Transaction)(f: TrieTransaction => R): R =
     trieStore.withTxn(trieStore.createTxnWrite()) { ttxn =>
@@ -252,14 +283,15 @@ class LockFreeInMemoryStore[T, C, P, A, K](
 
 object LockFreeInMemoryStore {
 
-  def create[T, C, P, A, K](
+  def create[F[_], T, C, P, A, K](
       trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]],
       branch: Branch
   )(
       implicit sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]
-  ): LockFreeInMemoryStore[T, C, P, A, K] =
-    new LockFreeInMemoryStore[T, C, P, A, K](trieStore, branch)(sc, sp, sa, sk)
+      sk: Serialize[K],
+      syncF: Sync[F]
+  ): IStore[F, C, P, A, K] =
+    new LockFreeInMemoryStore[F, T, C, P, A, K](trieStore, branch)(sc, sp, sa, sk, syncF)
 }

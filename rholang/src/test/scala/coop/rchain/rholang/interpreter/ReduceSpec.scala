@@ -2,11 +2,12 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.Files
 
-import cats.effect.Sync
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
@@ -14,19 +15,21 @@ import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace}
-import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
+import coop.rchain.shared.Log
+import coop.rchain.shared.PathOps._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertion, FlatSpec, Matchers}
-import coop.rchain.shared.PathOps._
-import coop.rchain.shared.Log
 
 import scala.collection.immutable.BitSet
+import scala.collection.mutable
 import scala.collection.mutable.HashMap
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -34,25 +37,30 @@ import scala.concurrent.duration._
 final case class TestFixture(space: RhoISpace[Task], reducer: ChargingReducer[Task])
 
 trait PersistentStoreTester {
-  def withTestSpace[R](errorLog: ErrorLog[Task])(f: TestFixture => R): R = {
-    val dbDir                    = Files.createTempDirectory("rholang-interpreter-test-")
-    val context: RhoContext      = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
-    implicit val logF: Log[Task] = new Log.NOPLog[Task]
+
+  def withTestSpace[R](
+      errorLog: ErrorLog[Task]
+  )(f: TestFixture => R): R = {
+    val dbDir                              = Files.createTempDirectory("rholang-interpreter-test-")
+    val context: RhoContext[Task]          = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
+    implicit val logF: Log[Task]           = new Log.NOPLog[Task]
+    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+
+    implicit val cost = CostAccounting.emptyCost[Task].unsafeRunSync
 
     val space = (RSpace
       .create[
         Task,
         Par,
         BindPattern,
-        OutOfPhlogistonsError.type,
         ListParWithRandom,
-        ListParWithRandomAndPhlos,
+        ListParWithRandom,
         TaggedContinuation
       ](context, Branch("test")))
       .unsafeRunSync
     implicit val errLog = errorLog
     val reducer         = RholangOnlyDispatcher.create[Task, Task.Par](space)._2
-    reducer.setPhlo(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
+    reducer.setPhlo(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
     try {
       f(TestFixture(space, reducer))
     } finally {
@@ -829,11 +837,12 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val result = withTestSpace(errorLog) {
       case TestFixture(space, _) =>
+        implicit val cost          = CostAccounting.emptyCost[Task].unsafeRunSync
         def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
         val reducer = RholangOnlyDispatcher
           .create[Task, Task.Par](space, Map("rho:test:foo" -> byteName(42)))
           ._2
-        reducer.setPhlo(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
+        reducer.setPhlo(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
         implicit val env = Env[Par]()
         val nthTask      = reducer.eval(newProc)(env, splitRand)
         val inspectTask = for {
@@ -914,7 +923,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         implicit val env = Env.makeEnv[Par](Expr(GString("deadbeef")))
         Await.result(reducer.evalExprToPar(hexToBytesCall).runToFuture, 3.seconds)
     }
-    val expectedResult: Par = Expr(GByteArray(ByteString.copyFrom(Base16.decode("deadbeef"))))
+    val expectedResult: Par = Expr(GByteArray(ByteString.copyFrom(Base16.unsafeDecode("deadbeef"))))
     directResult should be(expectedResult)
 
     errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
@@ -924,7 +933,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand = rand.splitByte(0)
-    import coop.rchain.models.serialization.implicits._
     val proc = Receive(
       Seq(ReceiveBind(Seq(EVar(FreeVar(0))), GString("channel"))),
       Par(),
@@ -1001,7 +1009,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "eval of hexToBytes" should "transform encoded string to byte array (not the rholang term)" in {
-    import coop.rchain.models.serialization.implicits._
     implicit val errorLog = new ErrorLog[Task]()
 
     val splitRand                 = rand.splitByte(0)
@@ -1029,7 +1036,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "eval of `toUtf8Bytes`" should "transform string to UTF-8 byte array (not the rholang term)" in {
-    import coop.rchain.models.serialization.implicits._
     implicit val errorLog         = new ErrorLog[Task]()
     val splitRand                 = rand.splitByte(0)
     val testString                = "testing testing"
@@ -1411,14 +1417,16 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val inspectTask = reducer.evalExpr(
           EPlusPlusBody(
             EPlusPlus(
-              GByteArray(ByteString.copyFrom(Base16.decode("dead"))),
-              GByteArray(ByteString.copyFrom(Base16.decode("beef")))
+              GByteArray(ByteString.copyFrom(Base16.unsafeDecode("dead"))),
+              GByteArray(ByteString.copyFrom(Base16.unsafeDecode("beef")))
             )
           )
         )
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
-    result.exprs should be(Seq(Expr(GByteArray(ByteString.copyFrom(Base16.decode("deadbeef"))))))
+    result.exprs should be(
+      Seq(Expr(GByteArray(ByteString.copyFrom(Base16.unsafeDecode("deadbeef")))))
+    )
     errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 
@@ -1903,33 +1911,136 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
   }
 
-  "Running out of phlogistons" should "stop the evaluation" in {
-    implicit val errorLog = new ErrorLog[Task]()
+  it should "return an error when `toList` is called with arguments" in {
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+    val toListCall: EMethod =
+      EMethod(
+        "toList",
+        EList(List()),
+        List[Par](GInt(1L))
+      )
 
-    val test = withTestSpace(errorLog) {
-      case TestFixture(_, reducer) =>
-        implicit val env   = Env.makeEnv[Par]()
-        val notEnoughPhlos = Cost(5)
-        reducer.setPhlo(notEnoughPhlos).runSyncUnsafe(1.second)
-        val splitRand = rand.splitByte(0)
-        val receive =
-          Receive(
-            Seq(
-              ReceiveBind(
-                Seq(Par(exprs = Seq(EVar(FreeVar(0)), EVar(FreeVar(1)), EVar(FreeVar(2))))),
-                Par(exprs = Seq(GString("channel")))
-              )
-            ),
-            Par(),
-            false,
-            3,
-            BitSet()
-          )
-        reducer.eval(receive)(env, splitRand)
+    val result = withTestSpace(errorLog) {
+      case TestFixture(space, reducer) =>
+        implicit val env = Env[Par]()
+        val nthTask      = reducer.eval(toListCall)
+        val inspectTask = for {
+          _ <- nthTask
+        } yield space.store.toMap
+        Await.result(inspectTask.runToFuture, 3.seconds)
     }
+    result should be(mutable.HashMap.empty)
+    errorLog.readAndClearErrorVector().unsafeRunSync should be(
+      Vector(MethodArgumentNumberMismatch("toList", 0, 1))
+    )
+  }
 
-    val result = test.attempt.runSyncUnsafe(1.second)
-    assert(result === Left(OutOfPhlogistonsError))
-    errorLog.readAndClearErrorVector.unsafeRunSync should be(Vector.empty)
+  it should "transform Set(1, 2, 3) into a [1, 2, 3]" in {
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+    val toListCall: EMethod =
+      EMethod(
+        "toList",
+        ESetBody(
+          ParSet(
+            List(
+              GInt(1L),
+              GInt(2L),
+              GInt(3L)
+            )
+          )
+        ),
+        List[Par]()
+      )
+
+    val result: Par = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env: Env[Par] = Env[Par]()
+        val toListTask             = reducer.evalExpr(toListCall)
+        Await.result(toListTask.runToFuture, 3.seconds)
+    }
+    val resultList =
+      EListBody(
+        EList(
+          List[Par](
+            GInt(1L),
+            GInt(2L),
+            GInt(3L)
+          )
+        )
+      )
+    result.exprs should be(Seq(Expr(resultList)))
+    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
+  }
+
+  it should "transform {'a':1, 'b':2, 'c':3} into [('a',1), ('b',2), ('c',3)]" in {
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+    val toListCall: EMethod =
+      EMethod(
+        "toList",
+        EMapBody(
+          ParMap(
+            List[(Par, Par)](
+              (GString("a"), GInt(1L)),
+              (GString("b"), GInt(2L)),
+              (GString("c"), GInt(3L))
+            )
+          )
+        ),
+        List[Par]()
+      )
+    val result: Par = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env: Env[Par] = Env[Par]()
+        val toListTask             = reducer.evalExpr(toListCall)
+        Await.result(toListTask.runToFuture, 3.seconds)
+    }
+    val resultList =
+      EListBody(
+        EList(
+          List[Par](
+            ETupleBody(ETuple(Seq(GString("a"), GInt(1L)))),
+            ETupleBody(ETuple(Seq(GString("b"), GInt(2L)))),
+            ETupleBody(ETuple(Seq(GString("c"), GInt(3L))))
+          )
+        )
+      )
+    result.exprs should be(Seq(Expr(resultList)))
+    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
+  }
+
+  it should "transform (1, 2, 3) into [1, 2, 3]" in {
+    implicit val errorLog: ErrorLog[Task] = new ErrorLog[Task]()
+    val toListCall: EMethod =
+      EMethod(
+        "toList",
+        ETupleBody(
+          ETuple(
+            List[Par](
+              GInt(1L),
+              GInt(2L),
+              GInt(3L)
+            )
+          )
+        ),
+        List[Par]()
+      )
+    val result: Par = withTestSpace(errorLog) {
+      case TestFixture(_, reducer) =>
+        implicit val env: Env[Par] = Env[Par]()
+        val toListTask             = reducer.evalExpr(toListCall)
+        Await.result(toListTask.runToFuture, 3.seconds)
+    }
+    val resultList =
+      EListBody(
+        EList(
+          List[Par](
+            GInt(1L),
+            GInt(2L),
+            GInt(3L)
+          )
+        )
+      )
+    result.exprs should be(Seq(Expr(resultList)))
+    errorLog.readAndClearErrorVector().unsafeRunSync should be(Vector.empty[InterpreterError])
   }
 }

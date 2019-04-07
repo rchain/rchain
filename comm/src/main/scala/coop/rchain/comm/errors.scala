@@ -22,6 +22,7 @@ final case object EncryptionHandshakeIncorrectlySigned              extends Comm
 final case object BootstrapNotProvided                              extends CommError
 final case class PeerNodeNotFound(peer: PeerNode)                   extends CommError
 final case class PeerUnavailable(peer: PeerNode)                    extends CommError
+final case class MessageToLarge(peer: PeerNode)                     extends CommError
 final case class MalformedMessage(pm: Protocol)                     extends CommError
 final case object CouldNotConnectToBootstrap                        extends CommError
 final case class InternalCommunicationError(msg: String)            extends CommError
@@ -32,7 +33,7 @@ final case class UnexpectedMessage(msgStr: String)                  extends Comm
 final case object SenderNotAvailable                                extends CommError
 final case class PongNotReceivedForPing(peer: PeerNode)             extends CommError
 final case class UnableToStorePacket(packet: Packet, th: Throwable) extends CommError
-final case class UnabletoRestorePacket(path: Path, th: Throwable)   extends CommError
+final case class UnableToRestorePacket(path: Path, th: Throwable)   extends CommError
 // TODO add Show instance
 
 object CommError {
@@ -54,6 +55,7 @@ object CommError {
   def headerNotAvailable: CommError                      = HeaderNotAvailable
   def peerNodeNotFound(peer: PeerNode): CommError        = PeerNodeNotFound(peer)
   def peerUnavailable(peer: PeerNode): CommError         = PeerUnavailable(peer)
+  def messageToLarge(peer: PeerNode): CommError          = MessageToLarge(peer)
   def publicKeyNotAvailable(peer: PeerNode): CommError   = PublicKeyNotAvailable(peer)
   def couldNotConnectToBootstrap: CommError              = CouldNotConnectToBootstrap
   def internalCommunicationError(msg: String): CommError = InternalCommunicationError(msg)
@@ -66,17 +68,22 @@ object CommError {
   def timeout: CommError                                 = TimeOut
   def unableToStorePacket(packet: Packet, th: Throwable): CommError =
     UnableToStorePacket(packet, th)
-  def unabletoRestorePacket(path: Path, th: Throwable) = UnabletoRestorePacket(path, th)
+  def unableToRestorePacket(path: Path, th: Throwable) = UnableToRestorePacket(path, th)
 
   def errorMessage(ce: CommError): String =
     ce match {
       case PeerUnavailable(_) => "Peer is currently unavailable"
+      case MessageToLarge(p)  => s"Message rejected by peer $p because it was too large"
       case PongNotReceivedForPing(_) =>
         "Peer is behind a firewall and can't be accessed from outside"
       case CouldNotConnectToBootstrap      => "Node could not connect to bootstrap node"
       case TimeOut                         => "Timeout"
       case InternalCommunicationError(msg) => s"Internal communication error. $msg"
       case UnknownProtocolError(msg)       => s"Unknown protocol error. $msg"
+      case UnableToStorePacket(p, er) =>
+        s"Could not serialize packet $p. Error message: ${er.getMessage}"
+      case UnableToRestorePacket(p, er) =>
+        s"Could not deserialize packet $p. Error message: ${er.getMessage}"
       case ProtocolException(t) =>
         val msg = Option(t.getMessage).getOrElse("")
         s"Protocol error. $msg"

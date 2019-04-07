@@ -1,6 +1,6 @@
 test: 'Performance Test'
-test_series: 
-  - series1: 
+test_series:
+  - series1:
       name: 'validators'
       cases:
         - case_a:
@@ -17,14 +17,14 @@ test_series:
             bandwidth: '1 Gbps'
             network_latency: 0
             packetloss: 0
-        - case_c: 
+        - case_c:
             validator: 30
             static_nodes: 6
             contract: 'dupe.rho'
             bandwidth: '1 Gbps'
             network_latency: 0
             packetloss: 0
-  - series2: 
+  - series2:
       name: 'number of static nodes'
       cases:
         - case_a:
@@ -41,14 +41,14 @@ test_series:
             bandwidth: '1 Gbps'
             network_latency: 0
             packetloss: 0
-        - case_c: 
+        - case_c:
             validator: 5
             static_nodes: 30
             contract: 'dupe.rho'
             bandwidth: '1 Gbps'
             network_latency: 0
             packetloss: 0
-  - series3: 
+  - series3:
       name: 'contract'
       cases:
         - case_a:
@@ -65,14 +65,14 @@ test_series:
             bandwidth: '1 Gbps'
             network_latency: 0
             packetloss: 0
-        - case_c: 
+        - case_c:
             validator: 18
             static_nodes: 18
             contract: 'shortslow.rho'
             bandwidth: '1 Gbps'
             network_latency: 0
             packetloss: 0
-  - series4: 
+  - series4:
       name: 'bandwidth'
       cases:
         - case_a:
@@ -89,14 +89,14 @@ test_series:
             bandwidth: '100 Mbps'
             network_latency: 0
             packetloss: 0
-        - case_c: 
+        - case_c:
             validator: 18
             static_nodes: 18
             contract: 'dupe.rho'
             bandwidth: '500 Mbps'
             network_latency: 0
             packetloss: 0
-  - series5: 
+  - series5:
       name: 'network Latency'
       cases:
         - case_a:
@@ -113,14 +113,14 @@ test_series:
             bandwidth: '1 Gbps'
             network_latency: 110
             packetloss: 0
-        - case_c: 
+        - case_c:
             validator: 18
             static_nodes: 18
             contract: 'dupe.rho'
             bandwidth: '1 Gbps'
             network_latency: 250
             packetloss: 0
-  - series6: 
+  - series6:
       name: 'Packet Loss'
       cases:
         - case_a:
@@ -137,14 +137,14 @@ test_series:
             bandwidth: '1 Gbps'
             network_latency: 0
             packetloss: 0.5
-        - case_c: 
+        - case_c:
             validator: 18
             static_nodes: 18
             contract: 'dupe.rho'
             bandwidth: '1 Gbps'
             network_latency: 0
             packetloss: 1
-  - series7: 
+  - series7:
       name: 'stress test'
       cases:
         - case_a:
@@ -161,7 +161,7 @@ test_series:
             bandwidth: '5 Mbps'
             network_latency: 100
             packetloss: 0.01
-        - case_c: 
+        - case_c:
             validator: 34
             static_nodes: 2
             contract: 'dupe.rho'

@@ -3,25 +3,24 @@ package coop.rchain.blockstorage
 import cats.Applicative
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.StorageError.StorageIOErr
-import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage}
 
 import scala.language.higherKinds
 
 trait BlockStore[F[_]] {
   import BlockStore.BlockHash
 
-  def put(blockMessage: BlockMessage): F[StorageIOErr[Unit]] =
+  def put(blockMessage: BlockMessage): F[Unit] =
     put((blockMessage.blockHash, blockMessage))
 
-  def put(blockHash: BlockHash, blockMessage: BlockMessage): F[StorageIOErr[Unit]] =
+  def put(blockHash: BlockHash, blockMessage: BlockMessage): F[Unit] =
     put((blockHash, blockMessage))
 
   def get(blockHash: BlockHash): F[Option[BlockMessage]]
 
   def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]]
 
-  def put(f: => (BlockHash, BlockMessage)): F[StorageIOErr[Unit]]
+  def put(f: => (BlockHash, BlockMessage)): F[Unit]
 
   def apply(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[BlockMessage] =
     get(blockHash).map(_.get)
@@ -29,11 +28,15 @@ trait BlockStore[F[_]] {
   def contains(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[Boolean] =
     get(blockHash).map(_.isDefined)
 
-  def checkpoint(): F[StorageIOErr[Unit]]
+  def getApprovedBlock: F[Option[ApprovedBlock]]
 
-  def clear(): F[StorageIOErr[Unit]]
+  def putApprovedBlock(block: ApprovedBlock): F[Unit]
 
-  def close(): F[StorageIOErr[Unit]]
+  def checkpoint(): F[Unit]
+
+  def clear(): F[Unit]
+
+  def close(): F[Unit]
 }
 
 object BlockStore {

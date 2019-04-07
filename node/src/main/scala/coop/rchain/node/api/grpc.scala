@@ -27,6 +27,7 @@ import coop.rchain.catscontrib._
 import ski._
 
 class GrpcServer(server: Server) {
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def start: Task[Unit] = Task.delay(server.start())
 
   private def attemptShutdown: Task[Boolean] =
@@ -34,7 +35,7 @@ class GrpcServer(server: Server) {
       _          <- Task.delay(server.shutdown())
       _          <- Task.delay(server.awaitTermination(1000, TimeUnit.MILLISECONDS))
       terminated <- Task.delay(server.isTerminated)
-    } yield terminated).attempt map (_.fold(kp(false), id))
+    } yield terminated).attempt map (_.fold(kp(false), identity))
 
   private def shutdownImmediately: Task[Unit] =
     Task.delay(server.shutdownNow()).attempt.as(())
@@ -78,12 +79,12 @@ object GrpcServer {
       )
     }
 
-  def acquireExternalServer[F[_]: Concurrent: Capture: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
+  def acquireExternalServer[F[_]: Concurrent: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
       port: Int,
       grpcExecutor: Scheduler,
       blockApiLock: Semaphore[F]
   )(implicit worker: Scheduler): F[GrpcServer] =
-    Capture[F].capture {
+    Sync[F].delay {
       GrpcServer(
         NettyServerBuilder
           .forPort(port)

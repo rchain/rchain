@@ -11,7 +11,7 @@ import cats.implicits._
 import coop.rchain.casper.{LastApprovedBlock, PrettyPrinter, Validate, _}
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.protocol._
-import coop.rchain.catscontrib.{Capture, MonadTrans}
+import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport
@@ -49,8 +49,8 @@ object ApproveBlockProtocol {
   def apply[F[_]](implicit instance: ApproveBlockProtocol[F]): ApproveBlockProtocol[F] = instance
 
   //For usage in tests only
-  def unsafe[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
-      block: BlockMessage,
+  def unsafe[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
+      genesisBlock: BlockMessage,
       trustedValidators: Set[ByteString],
       requiredSigs: Int,
       duration: FiniteDuration,
@@ -59,7 +59,7 @@ object ApproveBlockProtocol {
       start: Long
   ): ApproveBlockProtocol[F] =
     new ApproveBlockProtocolImpl[F](
-      block,
+      genesisBlock,
       requiredSigs,
       trustedValidators,
       start,
@@ -68,8 +68,8 @@ object ApproveBlockProtocol {
       sigsF
     )
 
-  def of[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
-      block: BlockMessage,
+  def of[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
+      genesisBlock: BlockMessage,
       trustedValidators: Set[ByteString],
       requiredSigs: Int,
       duration: FiniteDuration,
@@ -80,7 +80,7 @@ object ApproveBlockProtocol {
       sigsF <- Ref.of[F, Set[Signature]](Set.empty)
     } yield
       new ApproveBlockProtocolImpl[F](
-        block,
+        genesisBlock,
         requiredSigs,
         trustedValidators,
         now,
@@ -89,8 +89,8 @@ object ApproveBlockProtocol {
         sigsF
       )
 
-  private class ApproveBlockProtocolImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
-      val block: BlockMessage,
+  private class ApproveBlockProtocolImpl[F[_]: Sync: ConnectionsCell: TransportLayer: Log: Time: Metrics: RPConfAsk: LastApprovedBlock](
+      val genesisBlock: BlockMessage,
       val requiredSigs: Int,
       val trustedValidators: Set[ByteString],
       val start: Long,
@@ -102,10 +102,10 @@ object ApproveBlockProtocol {
     private implicit val metricsSource: Metrics.Source =
       Metrics.Source(CasperMetricsSource, "approve-block")
 
-    private val candidate                 = ApprovedBlockCandidate(Some(block), requiredSigs)
+    private val candidate                 = ApprovedBlockCandidate(Some(genesisBlock), requiredSigs)
     private val u                         = UnapprovedBlock(Some(candidate), start, duration.toMillis)
     private val serializedUnapprovedBlock = u.toByteString
-    private val candidateHash             = PrettyPrinter.buildString(block.blockHash)
+    private val candidateHash             = PrettyPrinter.buildString(genesisBlock.blockHash)
     private val sigData                   = Blake2b256.hash(candidate.toByteArray)
 
     def addApproval(a: BlockApproval): F[Unit] = {

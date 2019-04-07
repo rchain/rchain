@@ -18,7 +18,7 @@ import scala.annotation.tailrec
   * Blake2b512.merge uses online tree hashing to merge two random generator
   * states.
   */
-@SuppressWarnings(Array("org.wartremover.warts.Var"))
+@SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.NonUnitStatements"))
 class Blake2b512Random private (
     private val digest: Blake2b512Block,
     private val lastBlock: ByteBuffer
@@ -113,6 +113,7 @@ class Blake2b512Random private (
     ((digest.hashCode * 31 + pathView.position()) * 31 + position) * 31 + lastBlock.hashCode
 }
 
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 object Blake2b512Random {
   private[this] def apply(init: Array[Byte], offset: Int, length: Int): Blake2b512Random = {
     val result = new Blake2b512Random(Blake2b512Block(0.toByte), ByteBuffer.allocate(128))

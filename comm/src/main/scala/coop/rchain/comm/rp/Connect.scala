@@ -1,17 +1,16 @@
 package coop.rchain.comm.rp
 
 import scala.concurrent.duration._
+import scala.util.Random
 
 import cats._
+import cats.effect._
 import cats.implicits._
 import cats.mtl._
 
-import coop.rchain.catscontrib._
-import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm._
 import coop.rchain.comm.CommError._
 import coop.rchain.comm.discovery._
-import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
@@ -35,30 +34,38 @@ object Connect {
     def empty: Connections = List.empty[Connection]
     implicit class ConnectionsOps(connections: Connections) {
 
-      def addConn[F[_]: Monad: Log: Metrics](connection: Connection): F[Connections] =
+      def addConnAndReport[F[_]: Monad: Log: Metrics](connection: Connection): F[Connections] =
+        addConn[F](connection) >>= (_.reportConn[F])
+
+      def addConn[F[_]: Monad](connection: Connection): F[Connections] =
         addConn[F](List(connection))
 
-      def addConn[F[_]: Monad: Log: Metrics](toBeAdded: List[Connection]): F[Connections] = {
+      def addConn[F[_]: Monad](toBeAdded: List[Connection]): F[Connections] = {
         val ids = toBeAdded.map(_.id)
         val newConnections = connections.partition(peer => ids.contains(peer.id)) match {
           case (_, rest) => rest ++ toBeAdded
         }
-        val size = newConnections.size.toLong
-        Log[F].info(s"Peers: $size.") *>
-          Metrics[F].setGauge("peers", size).as(newConnections)
+        newConnections.pure[F]
       }
 
-      def removeConn[F[_]: Monad: Log: Metrics](connection: Connection): F[Connections] =
+      def removeConnAndReport[F[_]: Monad: Log: Metrics](connection: Connection): F[Connections] =
+        removeConn[F](connection) >>= (_.reportConn[F])
+
+      def removeConn[F[_]: Monad](connection: Connection): F[Connections] =
         removeConn[F](List(connection))
 
-      def removeConn[F[_]: Monad: Log: Metrics](toBeRemoved: List[Connection]): F[Connections] = {
+      def removeConn[F[_]: Monad](toBeRemoved: List[Connection]): F[Connections] = {
         val ids = toBeRemoved.map(_.id)
         val newConnections = connections.partition(peer => ids.contains(peer.id)) match {
           case (_, rest) => rest
         }
-        val size = newConnections.size.toLong
-        Log[F].info(s"Peers: $size.") *>
-          Metrics[F].setGauge("peers", size).as(newConnections)
+        newConnections.pure[F]
+      }
+
+      def reportConn[F[_]: Monad: Log: Metrics]: F[Connections] = {
+        val size = connections.size.toLong
+        Log[F].info(s"Peers: $size") >>
+          Metrics[F].setGauge("peers", size).as(connections)
       }
     }
   }
@@ -74,15 +81,23 @@ object Connect {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def clearConnections[F[_]: Capture: Monad: Time: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]
+  def freeConnectionSlots[F[_]: Monad: ConnectionsCell: RPConfAsk]: F[Int] =
+    for {
+      connections <- ConnectionsCell[F].read
+      max         <- RPConfAsk[F].reader(_.clearConnections.maxNumOfConnections)
+    } yield max - connections.length
+
+  def hasMaxNumberOfConnections[F[_]: Monad: ConnectionsCell: RPConfAsk]: F[Boolean] =
+    freeConnectionSlots[F].map(_ <= 0)
+
+  def clearConnections[F[_]: Sync: Monad: Time: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]
     : F[Int] = {
 
-    def sendHeartbeat(peer: PeerNode): F[(PeerNode, CommErr[Protocol])] =
+    def sendHeartbeat(peer: PeerNode): F[(PeerNode, CommErr[Unit])] =
       for {
-        local   <- RPConfAsk[F].reader(_.local)
-        timeout <- RPConfAsk[F].reader(_.defaultTimeout)
-        hb      = heartbeat(local)
-        res     <- TransportLayer[F].roundTrip(peer, hb, timeout)
+        local <- RPConfAsk[F].reader(_.local)
+        hb    = heartbeat(local)
+        res   <- TransportLayer[F].send(peer, hb)
       } yield (peer, res)
 
     def clear(connections: Connections): F[Int] =
@@ -92,6 +107,7 @@ object Connect {
         results                <- toPing.traverse(sendHeartbeat)
         successfulPeers        = results.collect { case (peer, Right(_)) => peer }
         failedPeers            = results.collect { case (peer, Left(_)) => peer }
+        _                      <- failedPeers.traverse(p => Log[F].info(s"Removing peer $p from connections"))
         _ <- ConnectionsCell[F].flatModify { connections =>
               connections.removeConn[F](toPing) >>= (_.addConn[F](successfulPeers))
             }
@@ -101,6 +117,7 @@ object Connect {
       connections <- ConnectionsCell[F].read
       max         <- RPConfAsk[F].reader(_.clearConnections.maxNumOfConnections)
       cleared     <- if (connections.size > ((max * 2) / 3)) clear(connections) else 0.pure[F]
+      _           <- if (cleared > 0) ConnectionsCell[F].read >>= (_.reportConn[F]) else connections.pure[F]
     } yield cleared
   }
 
@@ -115,40 +132,41 @@ object Connect {
       } yield result
     }
 
-  def findAndConnect[F[_]: Capture: Monad: Log: Time: Metrics: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
+  def findAndConnect[F[_]: Sync: Monad: Log: Time: Metrics: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
       conn: (PeerNode, FiniteDuration) => F[Unit]
-  ): F[List[PeerNode]] =
-    for {
-      connections      <- ConnectionsCell[F].read
-      tout             <- RPConfAsk[F].reader(_.defaultTimeout)
-      peers            <- NodeDiscovery[F].peers.map(p => (p.toSet -- connections).toList)
-      responses        <- peers.traverse(conn(_, tout).attempt)
-      peersAndResonses = peers.zip(responses)
-      _ <- peersAndResonses.traverse {
-            case (peer, Left(error)) =>
-              Log[F].debug(s"Failed to connect to ${peer.toAddress}. Reason: ${error.message}")
-            case (peer, Right(_)) =>
-              Log[F].info(s"Connected to ${peer.toAddress}.")
-          }
-    } yield peersAndResonses.filter(_._2.isRight).map(_._1)
+  ): F[List[PeerNode]] = {
+    def find(): F[List[PeerNode]] =
+      for {
+        count             <- freeConnectionSlots[F]
+        connections       <- ConnectionsCell[F].read.map(_.toSet)
+        tout              <- RPConfAsk[F].reader(_.defaultTimeout)
+        ndPeers           <- NodeDiscovery[F].peers
+        peers             = Random.shuffle(ndPeers).toStream.filterNot(connections.contains).take(count).toList
+        responses         <- peers.traverse(p => ErrorHandler[F].attempt(conn(p, tout)))
+        peersAndResponses = peers.zip(responses)
+        _ <- peersAndResponses.traverse {
+              case (peer, Left(error)) =>
+                Log[F].debug(s"Failed to connect to ${peer.toAddress}. Reason: ${error.message}")
+              case _ => ().pure[F]
+            }
+      } yield peersAndResponses.filter(_._2.isRight).map(_._1)
 
-  def connect[F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: ErrorHandler: ConnectionsCell: RPConfAsk](
+    hasMaxNumberOfConnections[F].ifM(List.empty[PeerNode].pure[F], find())
+  }
+
+  def connect[F[_]: Sync: Monad: Log: Time: Metrics: TransportLayer: ErrorHandler: ConnectionsCell: RPConfAsk](
       peer: PeerNode,
       timeout: FiniteDuration
   ): F[Unit] =
     (
       for {
-        address  <- Capture[F].capture(peer.toAddress)
+        address  <- Sync[F].delay(peer.toAddress)
         _        <- Log[F].debug(s"Connecting to $address")
         _        <- Metrics[F].incrementCounter("connect")
         _        <- Log[F].debug(s"Initialize protocol handshake to $address")
         local    <- RPConfAsk[F].reader(_.local)
         ph       = protocolHandshake(local)
-        response <- TransportLayer[F].roundTrip(peer, ph, timeout * 2) >>= ErrorHandler[F].fromEither
-        _ <- Log[F].debug(
-              s"Received protocol handshake response from ${ProtocolHelper.sender(response)}."
-            )
-        _ <- ConnectionsCell[F].flatModify(_.addConn[F](peer))
+        response <- TransportLayer[F].send(peer, ph) >>= ErrorHandler[F].fromEither
       } yield ()
     ).timer("connect-time")
 

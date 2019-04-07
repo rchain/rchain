@@ -1,0 +1,227 @@
+// Match a list of known valid publicKey -> RevAddress pairs to bind them to veriables
+match (
+    "0000000000000000000000000000000000000000000000000000000000000000".hexToBytes(),
+    "111123jwD7acNy6vfYwzWXAbnSQ8z8Bv24cCkVcVbd6SuP2LtFK7w7",
+    "1111111111111111111111111111111111111111111111111111111111111111".hexToBytes(),
+    "11112comWwT626KfXkvnWRHDwPDm4VefqSr6ijvinhVHGTuXe6wWmk",
+    "2222222222222222222222222222222222222222222222222222222222222222".hexToBytes(),
+    "11112ipm5NY9BqyQ3p3sUx8pdFWV5jFQ5qqMcUzZWe19hwz3USbHBG"
+) {
+  (
+    genesisPubKey,
+    genesisRevAddress,
+    alicePubKey,
+    aliceRevAddress,
+    bobPubKey,
+    bobRevAddress
+  ) => {
+
+    new
+      rl(`rho:registry:lookup`),
+      RhoSpecCh,
+      ListOpsCh,
+      stdout(`rho:io:stdout`),
+      setDeployData(`rho:test:deploy:set`),
+      setup,
+      testFindOrCreateGenesisVault,
+      testCreateVaultFail,
+      testCreateVault,
+      testTransfer,
+      testFindOrCreate,
+      testTransferToSelf,
+      testAmountNegative,
+      testInsufficeintFunds,
+      testInvalidRevAddress,
+      withVaultAndIdentityOf,
+      transfer,
+      assertBalances
+    in {
+      rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *RhoSpecCh) |
+      for(@(_, RhoSpec) <- RhoSpecCh) {
+        @RhoSpec!("testSuite", *setup,
+          [
+            ("Create genesis vault with expected balance", *testFindOrCreateGenesisVault),
+            ("Return an error for invalid public key", *testCreateVaultFail),
+            ("Create vault and see that it is secured", *testCreateVault),
+            ("Transfer from genesis to Alice", *testTransfer),
+            ("Return the existing wallet when calling testFindOrCreate", *testFindOrCreate),
+            ("Transfer to own account successfully", *testTransferToSelf),
+            ("Fail the tranfer if the amount to transfer is negative", *testAmountNegative),
+            ("Fail the transfer if there are insufficient funds", *testInsufficeintFunds),
+            ("Fail the transfer if the destination addresss is not a valid RevAddress", *testInvalidRevAddress),
+          ])
+      } |
+
+      contract setup(ret) = {
+        new RevVaultCh, identitySet in {
+          rl!(`rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z`, *RevVaultCh) |
+          setDeployData!("userId", genesisPubKey, *identitySet) |
+          for (@(_, RevVault) <- RevVaultCh; _ <- identitySet) {
+            ret!(RevVault)
+          }
+        }
+      } |
+
+      contract testFindOrCreateGenesisVault(rhoSpec, RevVault, ackCh) = {
+        new genesisVaultCh, balanceCh in {
+          RevVault!("findOrCreateGenesisVault", genesisRevAddress, 9000, *genesisVaultCh) |
+          for (@(true, genesisVault) <- genesisVaultCh) {
+            // so far, access to genesisVault is not secured. This will be changd.
+            @genesisVault!("balance", *balanceCh) |
+            rhoSpec!("assert", (9000, "== <-", *balanceCh), "balance is as expected", *ackCh)
+          }
+        }
+      } |
+
+      contract testCreateVaultFail(rhoSpec, RevVault, ackCh) = {
+        new e1 in {
+          RevVault!("findOrCreate", "EEEE", *e1) |
+          rhoSpec!("assertMany",
+            [
+              (((false, "Invalid address length"), "== <-", *e1), "should be a failure")
+            ], *ackCh
+          )
+        }
+      } |
+
+      contract testCreateVault(rhoSpec, RevVault, ackCh) = {
+        new aliceVaultCh, genesisAuthKeyCh, balanceCh, transferCh in {
+          RevVault!("findOrCreate", aliceRevAddress, *aliceVaultCh) |
+          //as per `setup`, the deployer is `genesis` and shouldn't be able to access the vault
+          RevVault!("deployerAuthKey", *genesisAuthKeyCh) |
+          for (@(true, aliceVault) <- aliceVaultCh; genesisAuthKey <- genesisAuthKeyCh) {
+            @aliceVault!("balance", *balanceCh) |
+            @aliceVault!("transfer", genesisRevAddress, 0, *genesisAuthKey, *transferCh) |
+            rhoSpec!("assertMany",
+              [
+                ((0, "== <-", *balanceCh), "balance should be 0"),
+                (((false, "Invalid AuthKey"), "== <-", *transferCh), "transfer should fail")
+              ], *ackCh
+            )
+          }
+        }
+      } |
+
+      contract testTransfer(rhoSpec, RevVault, ackCh) = {
+        new genesisVaultCh, aliceVaultCh, ret, retOk  in {
+          withVaultAndIdentityOf!(genesisPubKey, *genesisVaultCh) |
+          RevVault!("findOrCreate", aliceRevAddress, *aliceVaultCh) |
+          for (genesisVault, @genesisVaultKey <- genesisVaultCh; @aliceVault <- aliceVaultCh) {
+            genesisVault!("transfer", aliceRevAddress, 1000, genesisVaultKey, *ret) |
+            rhoSpec!("assert", ((true, Nil), "== <-", *ret), "transfer successful", *ackCh) |
+            assertBalances!(*retOk, [(*genesisVault, 8000), (aliceVault, 1000)], *rhoSpec, *ackCh)
+          }
+        }
+      } |
+
+      contract testFindOrCreate(rhoSpec, RevVault, ackCh) = {
+        new genesisVaultCh, aliceVaultCh, now in {
+          //the below attempts to create a wallet are going to fetch the ones created in previous tests.
+          RevVault!("findOrCreateGenesisVault", genesisRevAddress, 0 /* irrelevant */, *genesisVaultCh) |
+          RevVault!("findOrCreate", aliceRevAddress, *aliceVaultCh) |
+          for (@(true, g) <- genesisVaultCh; @(true, a) <- aliceVaultCh) {
+            now!(Nil) |
+            assertBalances!(*now, [(g, 8000), (a, 1000)], *rhoSpec, *ackCh)
+          }
+        }
+      } |
+
+      contract testTransferToSelf(rhoSpec, RevVault, ackCh) = {
+        new aliceVaultCh, now, balanceOk, transferResult, transferOk in {
+          withVaultAndIdentityOf!(alicePubKey, *aliceVaultCh) |
+          for (@aliceVault, @aliceVaultKey <- aliceVaultCh) {
+            now!(Nil) |
+            assertBalances!(*now, [(aliceVault, 1000)], *rhoSpec, *balanceOk) |
+            transfer!(*balanceOk, aliceVault, aliceRevAddress, 1000, aliceVaultKey, *transferResult) |
+            rhoSpec!("assert", ((true, Nil), "== <-", *transferResult), "transfer successful", *transferOk) |
+            assertBalances!(*transferOk, [(aliceVault, 1000)], *rhoSpec, *ackCh)
+          }
+        }
+      } |
+
+      contract testAmountNegative(rhoSpec, RevVault, ackCh) = {
+        new aliceVaultCh, now, balanceOk, transferResult, transferOk in {
+          withVaultAndIdentityOf!(alicePubKey, *aliceVaultCh) |
+          for (@aliceVault, @aliceVaultKey <- aliceVaultCh) {
+            now!(Nil) |
+            assertBalances!(*now, [(aliceVault, 1000)], *rhoSpec, *balanceOk) |
+            transfer!(*balanceOk, aliceVault, bobRevAddress, -1, aliceVaultKey, *transferResult) |
+            rhoSpec!("assert", ((false, "Amount must be non-negative"), "== <-", *transferResult), "transfer failed", *transferOk) |
+            assertBalances!(*transferOk, [(aliceVault, 1000)], *rhoSpec, *ackCh)
+          }
+        }
+      } |
+
+      contract testInsufficeintFunds(rhoSpec, RevVault, ackCh) = {
+        new aliceVaultCh, res, resOk in {
+          withVaultAndIdentityOf!(alicePubKey, *aliceVaultCh) |
+          for (aliceVault, @aliceVaultKey <- aliceVaultCh) {
+            aliceVault!("transfer", bobRevAddress, 9000, aliceVaultKey, *res) |
+            rhoSpec!("assert", ((false, "Insufficient funds"), "== <-", *res), "transfer failed", *resOk) |
+            assertBalances!(*resOk, [(*aliceVault, 1000)], *rhoSpec, *ackCh)
+          }
+        }
+      } |
+
+      contract testInvalidRevAddress(rhoSpec, RevVault, ackCh) = {
+        new aliceVaultCh, res, resOk in {
+          withVaultAndIdentityOf!(alicePubKey, *aliceVaultCh) |
+          for (aliceVault, @aliceVaultKey <- aliceVaultCh) {
+            aliceVault!("transfer", "pretty surely invalid rev address", 1, aliceVaultKey, *res) |
+            rhoSpec!("assert", ((false, "Invalid Base58 encoding"), "== <-", *res), "transfer failed", *resOk) |
+            assertBalances!(*resOk, [(*aliceVault, 1000)], *rhoSpec, *ackCh)
+          }
+        }
+      } |
+
+      new RevVaultCh in {
+        rl!(`rho:id:1o93uitkrjfubh43jt19owanuezhntag5wh74c6ur5feuotpi73q8z`, *RevVaultCh) |
+        for (@(_, RevVault) <- RevVaultCh) {
+
+          contract withVaultAndIdentityOf(@pubKey, ret) = {
+            new RevAddress(`rho:rev:address`), revAddrCh, vaultCh, identityChanged, authKeyCh in {
+              setDeployData!("userId", pubKey, *identityChanged) |
+              RevAddress!("fromPublicKey", pubKey, *revAddrCh) |
+              for (@revAddr <- revAddrCh) {
+                @RevVault!("findOrCreate", revAddr, *vaultCh) |
+                for (@(true, vault) <- vaultCh; _ <- identityChanged) {
+                  @RevVault!("deployerAuthKey", *authKeyCh) |
+                  for (@authKey <- authKeyCh) {
+                    ret!(vault, authKey)
+                  }
+                }
+              }
+            }
+          }
+
+        }
+      } |
+
+      contract transfer(when, vault, @address, @amount, authKey, ret) = {
+        for (_ <- when) {
+          vault!("transfer", address, amount, *authKey, *ret)
+        }
+      } |
+
+      rl!(`rho:id:dputnspi15oxxnyymjrpu7rkaok3bjkiwq84z7cqcrx4ktqfpyapn4`, *ListOpsCh) |
+      for(@(_, ListOps) <- ListOpsCh) {
+
+        contract assertBalances(when, @balances, rhoSpec, ret) = {
+          for (_ <- when) {
+            new assertBalance in {
+              @ListOps!("foreach", balances, *assertBalance, *ret) |
+
+              contract assertBalance(@(vault, expectedBalance), retCh) = {
+                new balanceCh in {
+                  @vault!("balance", *balanceCh) |
+                  rhoSpec!("assert", (expectedBalance, "== <-", *balanceCh), "balance is as expected", *retCh)
+                }
+              }
+            }
+          }
+        }
+
+      }
+    }
+  }
+}

@@ -16,7 +16,7 @@ class ReplRuntime() {
   ╩╚═└─┘┴ ┴┴ ┴┴┘└┘  ╝╚╝└─┘─┴┘└─┘  ╩╚═╚═╝╩  ╩═╝
     """
 
-  def replProgram[F[_]: Capture: Monad: ConsoleIO: ReplClient]: F[Boolean] = {
+  def replProgram[F[_]: Monad: ConsoleIO: ReplClient]: F[Boolean] = {
     def run(program: String): F[Boolean] =
       for {
         result <- ReplClient[F].run(program)

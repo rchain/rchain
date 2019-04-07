@@ -1,12 +1,12 @@
 package coop.rchain.casper.util.rholang
 
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.casper.genesis.contracts.TestSetUtil
+import coop.rchain.casper.genesis.contracts.TestUtil
 import monix.execution.Scheduler
 import monix.eval.Task
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccounting}
+import coop.rchain.rholang.interpreter.accounting.{CostAccounting}
 import coop.rchain.shared.PathOps.RichPath
 import java.nio.file.{Files, Path, Paths}
 import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
@@ -17,6 +17,8 @@ import coop.rchain.models._
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import coop.rchain.catscontrib.TaskContrib._
 import scala.collection.mutable
+
+import scala.concurrent.duration._
 
 /**
   * This is a really handy class for working interactively with
@@ -53,7 +55,7 @@ class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler
   def tuplespace: String = StoragePrinter.prettyPrint(runtime.space.store)
 
   def eval(code: String): Unit = {
-    TestSetUtil.eval(code, runtime)
+    TestUtil.eval(code, runtime).runSyncUnsafe(Duration.Inf)
     val errors = runtime.errorLog.readAndClearErrorVector().unsafeRunSync
     if (errors.nonEmpty) {
       println("Errors during execution:")
@@ -95,6 +97,6 @@ object Interactive {
   def apply(): Interactive = {
     implicit val scheduler = Scheduler.io("rhoang-interpreter")
     implicit val log       = new Log.NOPLog[Task]
-    new Interactive(TestSetUtil.runtime())
+    new Interactive(TestUtil.runtime[Task, Task.Par]().runSyncUnsafe(5.seconds))
   }
 }

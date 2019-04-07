@@ -1,7 +1,5 @@
 package coop.rchain.rholang.interpreter
 
-import java.io.StringReader
-
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random}
@@ -9,12 +7,11 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoDispatchMap
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccounting}
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.ISpace
 import coop.rchain.rspace.internal.{Datum, Row}
-import coop.rchain.rspace.pure.PureRSpace
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
@@ -24,8 +21,6 @@ import scala.concurrent.duration._
 
 trait RegistryTester extends PersistentStoreTester {
   implicit val errorLog = new ErrorLog[Task]()
-  implicit val costAccounting =
-    CostAccounting.unsafe[Task](CostAccount(Integer.MAX_VALUE))
 
   private[this] def dispatchTableCreator(registry: Registry[Task]): RhoDispatchMap[Task] = {
     import coop.rchain.rholang.interpreter.Runtime.BodyRefs._
@@ -52,21 +47,22 @@ trait RegistryTester extends PersistentStoreTester {
             Task,
             Par,
             BindPattern,
-            OutOfPhlogistonsError.type,
             ListParWithRandom,
-            ListParWithRandomAndPhlos,
+            ListParWithRandom,
             TaggedContinuation
           ]
       ) => R
   ): R =
     withTestSpace(errorLog) {
       case TestFixture(space, _) =>
-        val _                                        = errorLog.readAndClearErrorVector().runSyncUnsafe(1.second)
+        val _             = errorLog.readAndClearErrorVector().runSyncUnsafe(1.second)
+        implicit val cost = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
+
         lazy val dispatchTable: RhoDispatchMap[Task] = dispatchTableCreator(registry)
         lazy val (dispatcher @ _, reducer, registry) =
           RholangAndScalaDispatcher
             .create(space, dispatchTable, Registry.testingUrnMap)
-        reducer.setPhlo(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
+        reducer.setPhlo(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
         registry.testInstall().runSyncUnsafe(1.second)
         f(reducer, space)
     }
@@ -86,7 +82,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
   val ninetySevenByteArray: Par = GByteArray(ByteString.copyFrom(Array[Byte](0x97.toByte)))
   val branchName: Par = GPrivate(
     ByteString
-      .copyFrom(Base16.decode("d5fd3d8daf9f295aa590b37b50d5518803b4596ed6940aa42d46b1413a1bb16e"))
+      .copyFrom(
+        Base16.unsafeDecode("d5fd3d8daf9f295aa590b37b50d5518803b4596ed6940aa42d46b1413a1bb16e")
+      )
   )
   // format: off
   val rootSend: Send = Send(
@@ -103,16 +101,24 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
   val efByteArray: Par        = GByteArray(ByteString.copyFrom(Array[Byte](0xef.toByte)))
   val emptyByteArray: Par     = GByteArray(ByteString.EMPTY)
   val branch1: Par = GByteArray(
-    ByteString.copyFrom(Base16.decode("533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2"))
+    ByteString.copyFrom(
+      Base16.unsafeDecode("533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2")
+    )
   )
   val branch2: Par = GByteArray(
-    ByteString.copyFrom(Base16.decode("e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e"))
+    ByteString.copyFrom(
+      Base16.unsafeDecode("e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e")
+    )
   )
   val branch3: Par = GByteArray(
-    ByteString.copyFrom(Base16.decode("763354e4266d31c74b7a5be55fbfeb464fe65ce56ce9ccbfd9a1fddef0"))
+    ByteString.copyFrom(
+      Base16.unsafeDecode("763354e4266d31c74b7a5be55fbfeb464fe65ce56ce9ccbfd9a1fddef0")
+    )
   )
   val branch4: Par = GByteArray(
-    ByteString.copyFrom(Base16.decode("7e047d2fc591185812e4a9526ded5509544e6586092c25a17abf366ea3"))
+    ByteString.copyFrom(
+      Base16.unsafeDecode("7e047d2fc591185812e4a9526ded5509544e6586092c25a17abf366ea3")
+    )
   )
   val branchSend: Send = Send(
     chan = branchName,
@@ -212,7 +218,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         r!("0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2".hexToBytes(), "result2")
       }"""
 
-    val lookupPar: Par = Interpreter[Coeval].buildNormalizedTerm(lookupString).value
+    val lookupPar: Par = ParBuilder[Coeval].buildNormalizedTerm(lookupString).value
 
     val completePar                     = lookupPar.addSends(rootSend, branchSend)
     implicit val rand: Blake2b512Random = baseRand.splitByte(1)
@@ -271,7 +277,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
             }
           }
         }"""
-    val insertPar: Par                      = Interpreter[Coeval].buildNormalizedTerm(insertString).value
+    val insertPar: Par                      = ParBuilder[Coeval].buildNormalizedTerm(insertString).value
     val completePar                         = insertPar.addSends(rootSend, branchSend)
     implicit val evalRand: Blake2b512Random = baseRand.splitByte(2)
 
@@ -387,7 +393,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
           }
         }
       }"""
-    val deletePar: Par                  = Interpreter[Coeval].buildNormalizedTerm(deleteString).value
+    val deletePar: Par                  = ParBuilder[Coeval].buildNormalizedTerm(deleteString).value
     val completePar                     = deletePar.addSends(rootSend, fullBranchSend)
     implicit val rand: Blake2b512Random = baseRand.splitByte(3)
 
@@ -477,7 +483,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         r!(`rho:id:bnm61w3958nhr5u6wx9yx6c4js77hcxmftc9o1yo4y9yxdu7g8bnq3`, "result0") |
         r!(`rho:id:bnmzm3i5h5hj8qyoh3ubmbu57zuqn56xrk175bw5sf6kook9bq8ny3`, "result1")
       }"""
-    val lookupPar: Par                  = Interpreter[Coeval].buildNormalizedTerm(lookupString).value
+    val lookupPar: Par                  = ParBuilder[Coeval].buildNormalizedTerm(lookupString).value
     val completePar                     = lookupPar.addSends(rootSend, branchSend)
     implicit val rand: Blake2b512Random = baseRand.splitByte(4)
     val newRand                         = rand.splitByte(2)
@@ -502,7 +508,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
           rl!(uri, "result1")
         }
       }"""
-    val registerPar: Par                = Interpreter[Coeval].buildNormalizedTerm(registerString).value
+    val registerPar: Par                = ParBuilder[Coeval].buildNormalizedTerm(registerString).value
     val completePar                     = registerPar.addSends(rootSend, branchSend)
     implicit val rand: Blake2b512Random = baseRand.splitByte(5)
     val newRand                         = rand.splitByte(2)
@@ -595,7 +601,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
           }
         }
       }"""
-    val registerPar: Par                = Interpreter[Coeval].buildNormalizedTerm(registerString).value
+    val registerPar: Par                = ParBuilder[Coeval].buildNormalizedTerm(registerString).value
     val completePar                     = registerPar.addSends(rootSend, branchSend)
     implicit val rand: Blake2b512Random = baseRand.splitByte(6)
     val newRand                         = rand.splitByte(2)
@@ -650,7 +656,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
 
     val expectedUri = Registry.buildURI(
       Blake2b256
-        .hash(Base16.decode("11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d"))
+        .hash(
+          Base16.unsafeDecode("11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d")
+        )
     )
 
     val result = evaluate(completePar)

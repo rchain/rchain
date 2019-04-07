@@ -34,51 +34,58 @@ class BlocksResponseAPITest
   "showMainChain" should "return only blocks in the main chain" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis <- createGenesis[Task](bonds = bonds)
         b2 <- createBlock[Task](
                Seq(genesis.blockHash),
+               genesis,
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
              )
         b3 <- createBlock[Task](
                Seq(genesis.blockHash),
+               genesis,
                v1,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
              )
         b4 <- createBlock[Task](
                Seq(b2.blockHash),
+               genesis,
                v3,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
              )
         b5 <- createBlock[Task](
                Seq(b3.blockHash),
+               genesis,
                v2,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
              )
         b6 <- createBlock[Task](
                Seq(b4.blockHash),
+               genesis,
                v1,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
              )
         b7 <- createBlock[Task](
                Seq(b5.blockHash),
+               genesis,
                v3,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
              )
         b8 <- createBlock[Task](
                Seq(b6.blockHash),
+               genesis,
                v2,
                bonds,
                HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
              )
         dag  <- blockDagStorage.getRepresentation
-        tips <- Estimator.tips[Task](dag, genesis.blockHash)
+        tips <- Estimator.tips[Task](dag, genesis)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMessage],
                          tips
@@ -100,51 +107,58 @@ class BlocksResponseAPITest
   "showBlocks" should "return all blocks" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis <- createGenesis[Task](bonds = bonds)
         b2 <- createBlock[Task](
                Seq(genesis.blockHash),
+               genesis,
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
              )
         b3 <- createBlock[Task](
                Seq(genesis.blockHash),
+               genesis,
                v1,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
              )
         b4 <- createBlock[Task](
                Seq(b2.blockHash),
+               genesis,
                v3,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
              )
         b5 <- createBlock[Task](
                Seq(b3.blockHash),
+               genesis,
                v2,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
              )
         b6 <- createBlock[Task](
                Seq(b4.blockHash),
+               genesis,
                v1,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
              )
         b7 <- createBlock[Task](
                Seq(b5.blockHash),
+               genesis,
                v3,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
              )
         b8 <- createBlock[Task](
                Seq(b6.blockHash),
+               genesis,
                v2,
                bonds,
                HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
              )
         dag  <- blockDagStorage.getRepresentation
-        tips <- Estimator.tips[Task](dag, genesis.blockHash)
+        tips <- Estimator.tips[Task](dag, genesis)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMessage],
                          tips
@@ -166,51 +180,58 @@ class BlocksResponseAPITest
 
   it should "return until depth" in withStorage { implicit blockStore => implicit blockDagStorage =>
     for {
-      genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+      genesis <- createGenesis[Task](bonds = bonds)
       b2 <- createBlock[Task](
              Seq(genesis.blockHash),
+             genesis,
              v2,
              bonds,
              HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
            )
       b3 <- createBlock[Task](
              Seq(genesis.blockHash),
+             genesis,
              v1,
              bonds,
              HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
            )
       b4 <- createBlock[Task](
              Seq(b2.blockHash),
+             genesis,
              v3,
              bonds,
              HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
            )
       b5 <- createBlock[Task](
              Seq(b3.blockHash),
+             genesis,
              v2,
              bonds,
              HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
            )
       b6 <- createBlock[Task](
              Seq(b4.blockHash),
+             genesis,
              v1,
              bonds,
              HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
            )
       b7 <- createBlock[Task](
              Seq(b5.blockHash),
+             genesis,
              v3,
              bonds,
              HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
            )
       b8 <- createBlock[Task](
              Seq(b6.blockHash),
+             genesis,
              v2,
              bonds,
              HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
            )
       dag  <- blockDagStorage.getRepresentation
-      tips <- Estimator.tips[Task](dag, genesis.blockHash)
+      tips <- Estimator.tips[Task](dag, genesis)
       casperEffect <- NoOpsCasperEffect[Task](
                        HashMap.empty[BlockHash, BlockMessage],
                        tips

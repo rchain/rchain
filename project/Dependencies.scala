@@ -4,19 +4,21 @@ object Dependencies {
 
   val osClassifier: String = Detector.detect(Seq("fedora")).osClassifier
 
-  val circeVersion   = "0.10.0"
-  val http4sVersion  = "0.19.0"
-  val kamonVersion   = "1.1.3"
-  val catsVersion    = "1.5.0"
-  val catsMtlVersion = "0.4.0"
+  val circeVersion      = "0.10.0"
+  val http4sVersion     = "0.19.0"
+  val kamonVersion      = "1.1.5"
+  val catsVersion       = "1.5.0"
+  val catsEffectVersion = "1.2.0"
+  val catsMtlVersion    = "0.4.0"
+  val slf4jVersion      = "1.7.25"
 
   // format: off
-  val bitcoinjCore        = "org.bitcoinj"                % "bitcoinj-core"             % "0.14.6"
   val bouncyCastle        = "org.bouncycastle"            % "bcprov-jdk15on"            % "1.60"
   val catsCore            = "org.typelevel"              %% "cats-core"                 % catsVersion
   val catsLawsTest        = "org.typelevel"              %% "cats-laws"                 % catsVersion % "test"
   val catsLawsTestkitTest = "org.typelevel"              %% "cats-testkit"              % catsVersion % "test"
-  val catsEffect          = "org.typelevel"              %% "cats-effect"               % "1.1.0"
+  val catsEffect          = "org.typelevel"              %% "cats-effect"               % catsEffectVersion
+  val catsEffectLawsTest  = "org.typelevel"              %% "cats-effect-laws"          % catsEffectVersion % "test"
   val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % catsMtlVersion
   val catsMtlLawsTest     = "org.typelevel"              %% "cats-mtl-laws"             % catsMtlVersion % "test"
   val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion
@@ -36,7 +38,7 @@ object Dependencies {
   // see https://jitpack.io/#rchain/kalium
   val kalium              = "com.github.rchain"           % "kalium"                    % "0.8.1"
   val kamonCore           = "io.kamon"                   %% "kamon-core"                % kamonVersion
-  val kamonSystemMetrics  = "io.kamon"                   %% "kamon-system-metrics"      % "1.0.0"
+  val kamonSystemMetrics  = "io.kamon"                   %% "kamon-system-metrics"      % "1.0.1"
   val kamonPrometheus     = "io.kamon"                   %% "kamon-prometheus"          % "1.1.1"
   val kamonInfluxDb       = "io.kamon"                   %% "kamon-influxdb"            % "1.0.2"
   val kamonZipkin         = "io.kamon"                   %% "kamon-zipkin"              % "1.0.0"
@@ -48,8 +50,7 @@ object Dependencies {
   val monix               = "io.monix"                   %% "monix"                     % "3.0.0-RC2"
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.9.0"
   val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "1.1.5"
-  val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.13.5" % "test"
-  val scalacheckNoTest    = "org.scalacheck"             %% "scalacheck"                % "1.13.5"
+  val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.13.5"
   val scalacheckShapeless = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.8" % "test"
   val scalactic           = "org.scalactic"              %% "scalactic"                 % "3.0.5" % "test"
   val scalapbCompiler     = "com.thesamet.scalapb"       %% "compilerplugin"            % scalapb.compiler.Version.scalapbVersion
@@ -72,6 +73,9 @@ object Dependencies {
   // see https://jitpack.io/#rchain/secp256k1-java
   val secp256k1Java       = "com.github.rchain"           % "secp256k1-java"            % "0.1"
   val tomlScala           = "tech.sparse"                %% "toml-scala"                % "0.1.1"
+  val logstashLogback     = "net.logstash.logback"        % "logstash-logback-encoder"  % "5.3"
+  val slf4j               = "org.slf4j"                   % "slf4j-api"                 % slf4jVersion
+  val julToSlf4j          = "org.slf4j"                   % "jul-to-slf4j"              % slf4jVersion
   // format: on
 
   val overrides = Seq(
@@ -81,7 +85,7 @@ object Dependencies {
     shapeless,
     guava,
     scodecBits,
-    scalacheckNoTest,
+    scalacheck,
     //overrides for transitive dependencies (we don't use them directly, hence no val-s)
     "org.typelevel"            %% "machinist"              % "0.6.5",
     "org.typelevel"            %% "catalysts-platform"     % "0.6",
@@ -96,7 +100,7 @@ object Dependencies {
 
   private val testing = Seq(scalactic, scalatest, scalacheck)
 
-  private val logging = Seq(scalaLogging, logbackClassic)
+  private val logging = Seq(slf4j, julToSlf4j, scalaLogging, logbackClassic, logstashLogback)
 
   private val circeDependencies: Seq[ModuleID] =
     Seq(circeCore, circeGeneric, circeGenericExtras, circeParser, circeLiteral)

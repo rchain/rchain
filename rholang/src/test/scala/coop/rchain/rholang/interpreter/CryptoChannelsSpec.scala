@@ -1,6 +1,5 @@
 package coop.rchain.rholang.interpreter
 
-import coop.rchain.shared.StoreType
 import java.nio.file.Files
 
 import com.google.protobuf.ByteString
@@ -8,20 +7,19 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GString}
 import coop.rchain.models.Var.VarInstance.Wildcard
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
-import coop.rchain.models.serialization.implicits._
-import coop.rchain.models.testImplicits._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.testImplicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoIStore
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rspace.Serialize
 import coop.rchain.shared.PathOps._
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Log, StoreType}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
@@ -54,7 +52,7 @@ class CryptoChannelsSpec
 
   // this should consume from the `ack` channel effectively preparing tuplespace for next test
   def clearStore(
-      store: RhoIStore,
+      store: RhoIStore[Task],
       ackChannel: Par,
       timeout: Duration = 3.seconds
   )(implicit env: Env[Par], reduce: ChargingReducer[Task]): Unit = {
@@ -66,7 +64,7 @@ class CryptoChannelsSpec
   }
 
   def assertStoreContains(
-      store: RhoIStore
+      store: RhoIStore[Task]
   )(ackChannel: GString)(data: ListParWithRandom): Assertion = {
     val channel: Par = ackChannel
     val datum        = store.toMap(List(channel)).data.head
@@ -134,10 +132,11 @@ class CryptoChannelsSpec
 
       val secp256k1VerifyhashChannel = GString("secp256k1Verify")
 
-      val pubKey = Base16.decode(
+      val pubKey = Base16.unsafeDecode(
         "04C591A8FF19AC9C4E4E5793673B83123437E975285E7B442F4EE2654DFFCA5E2D2103ED494718C697AC9AEBCFD19612E224DB46661011863ED2FC54E71861E2A6"
       )
-      val secKey = Base16.decode("67E56582298859DDAE725F972992A07C6C4FB9F62A8FFF58CE3CA926A1063530")
+      val secKey =
+        Base16.unsafeDecode("67E56582298859DDAE725F972992A07C6C4FB9F62A8FFF58CE3CA926A1063530")
 
       val ackChannel                  = GString("x")
       implicit val emptyEnv: Env[Par] = Env[Par]()
@@ -191,7 +190,7 @@ class CryptoChannelsSpec
 
         val serializedPar = byteArrayToExpr(parByteArray)
         val signaturePar  = byteArrayToExpr(signature)
-        val pubKeyPar     = byteArrayToExpr(pubKey)
+        val pubKeyPar     = byteArrayToExpr(pubKey.bytes)
 
         val refVerify = Ed25519.verify(parByteArray, signature, pubKey)
         assert(refVerify === true)
@@ -211,14 +210,15 @@ class CryptoChannelsSpec
   }
 
   override protected def withFixture(test: OneArgTest): Outcome = {
-    val randomInt                = scala.util.Random.nextInt
-    val dbDir                    = Files.createTempDirectory(s"rchain-storage-test-$randomInt")
-    val size                     = 1024L * 1024 * 10
-    implicit val logF: Log[Task] = new Log.NOPLog[Task]
+    val randomInt                           = scala.util.Random.nextInt
+    val dbDir                               = Files.createTempDirectory(s"rchain-storage-test-$randomInt")
+    val size                                = 1024L * 1024 * 10
+    implicit val logF: Log[Task]            = new Log.NOPLog[Task]
+    implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
     val runtime = (for {
-      runtime <- Runtime.create[Task, Task.Par](dbDir, size, StoreType.LMDB)
-      _       <- runtime.reducer.setPhlo(Cost(Integer.MAX_VALUE))
+      runtime <- Runtime.createWithEmptyCost[Task, Task.Par](dbDir, size, StoreType.LMDB)
+      _       <- runtime.reducer.setPhlo(Cost.UNSAFE_MAX)
     } yield (runtime)).unsafeRunSync
 
     try {
@@ -232,6 +232,6 @@ class CryptoChannelsSpec
   /** TODO(mateusz.gorski): once we refactor Rholang[AndScala]Dispatcher
     *  to push effect choice up until declaration site refactor to `Reduce[Coeval]`
     */
-  override type FixtureParam = (ChargingReducer[Task], RhoIStore)
+  override type FixtureParam = (ChargingReducer[Task], RhoIStore[Task])
 
 }

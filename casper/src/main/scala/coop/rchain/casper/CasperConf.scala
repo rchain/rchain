@@ -3,11 +3,12 @@ package coop.rchain.casper
 import java.nio.file.Path
 
 import cats.Monad
+import cats.effect._
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.shared.{Log, LogSource}
 
 import scala.concurrent.duration.FiniteDuration
@@ -39,7 +40,7 @@ object CasperConf {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
-  def parseValidatorsFile[F[_]: Monad: Capture: Log](
+  def parseValidatorsFile[F[_]: Monad: Sync: Log](
       knownValidatorsFile: Option[String]
   ): F[Set[ByteString]] =
     knownValidatorsFile match {
@@ -47,13 +48,13 @@ object CasperConf {
       case None => Set.empty[ByteString].pure[F]
 
       case Some(file) =>
-        Capture[F]
-          .capture {
+        Sync[F]
+          .delay {
             Try(
               Source
                 .fromFile(file)
                 .getLines()
-                .map(line => ByteString.copyFrom(Base16.decode(line)))
+                .map(line => ByteString.copyFrom(Base16.unsafeDecode(line)))
                 .toSet
             )
           }
@@ -69,10 +70,10 @@ object CasperConf {
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def publicKey(
-      givenPublicKey: Option[Array[Byte]],
+      givenPublicKey: Option[PublicKey],
       sigAlgorithm: String,
-      privateKey: Array[Byte]
-  ): Array[Byte] = {
+      privateKey: PrivateKey
+  ): PublicKey = {
 
     val maybeInferred = sigAlgorithm match {
       case "ed25519" =>
@@ -86,7 +87,7 @@ object CasperConf {
 
     (maybeInferred, givenPublicKey) match {
       case (Some(k1), Some(k2)) =>
-        if (keysMatch(k1, k2)) k1
+        if (keysMatch(k1.bytes, k2.bytes)) k1
         else throw new Exception("Public key not compatible with given private key!")
 
       case (Some(k1), None) => k1

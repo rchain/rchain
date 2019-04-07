@@ -3,6 +3,8 @@ package coop.rchain.rholang.interpreter.matcher
 import cats.arrow.FunctionK
 import cats.data.{EitherT, WriterT}
 import cats.implicits._
+import cats.effect.laws.discipline.{BracketTests, SyncTests}
+import cats.effect.laws.discipline.arbitrary._
 import cats.laws.discipline.{AlternativeTests, MonadErrorTests, MonadTests}
 import cats.mtl.laws.discipline.MonadLayerControlTests
 import cats.tests.CatsSuite
@@ -13,6 +15,9 @@ import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, Step}
 import monix.eval.Coeval
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.{FlatSpec, Matchers}
+
+import cats.instances.AllInstances
+import cats.syntax.AllSyntax
 
 class StreamTSpec extends FlatSpec with Matchers {
 
@@ -104,7 +109,11 @@ class StreamTSpec extends FlatSpec with Matchers {
   }
 }
 
-class StreamTLawsSpec extends CatsSuite with LowPriorityDerivations {
+class StreamTLawsSpec
+    extends CatsSuite
+    with LowPriorityDerivations
+    with AllInstances
+    with AllSyntax {
 
   type Safe[A]          = Coeval[A]
   type Err[A]           = EitherT[Safe, String, A]
@@ -141,8 +150,10 @@ class StreamTLawsSpec extends CatsSuite with LowPriorityDerivations {
       )
     )
 
-  implicit def eqEff[A: Eq]: Eq[Effect[A]]       = Eq.by(x => x.value.value.value())
+  implicit def eqEff[A: Eq]: Eq[Effect[A]]       = Eq.by(x => x.value.value.attempt())
   implicit def eqFA[A: Eq]: Eq[StreamTEffect[A]] = Eq.by(StreamT.run[Effect, A])
+
+  implicit def eqT: Eq[Throwable] = Eq.allEqual
 
   checkAll(
     "StreamT.MonadLaws",
@@ -169,6 +180,19 @@ class StreamTLawsSpec extends CatsSuite with LowPriorityDerivations {
     MonadErrorTests[StreamTEffect, Unit].monadError[Int, Int, String]
   )
 
+  checkAll("StreamT.SyncLaws", SyncTests[StreamTEffect].sync[Int, Int, String])
+
+  checkAll(
+    "StreamT.SyncLaws", {
+      val fromEffect =
+        λ[Effect ~> StreamTEffect[?]](
+          e => StreamT.liftF(e)
+        )
+      BracketTests[StreamTEffect[?], Throwable].bracketTrans[Effect, Int, Int](
+        fromEffect
+      )
+    }
+  )
 }
 
 trait LowPriorityDerivations {

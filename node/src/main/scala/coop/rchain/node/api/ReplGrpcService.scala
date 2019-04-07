@@ -9,10 +9,11 @@ import cats._
 import cats.data._
 import cats.implicits._
 import com.google.protobuf.empty.Empty
+import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.protocol.{Deploy, DeployData, DeployServiceGrpc, DeployServiceResponse}
+import coop.rchain.casper.protocol.{DeployData, DeployServiceGrpc, DeployServiceResponse}
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.catscontrib._
 import Catscontrib._
@@ -20,6 +21,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.node.model.repl._
 import coop.rchain.node.model.diagnostics._
 import coop.rchain.rholang.interpreter.{RholangCLI, Runtime}
+import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler
@@ -35,15 +37,14 @@ import coop.rchain.shared._
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter._
 import Interpreter._
-import coop.rchain.rholang.interpreter.accounting.CostAccount
 import storage.StoragePrinter
 
 private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
     extends ReplGrpcMonix.Repl {
 
-  def exec(reader: Reader): Task[ReplResponse] =
-    Task
-      .coeval(Interpreter[Coeval].buildNormalizedTerm(reader))
+  def exec(source: String): Task[ReplResponse] =
+    ParBuilder[Task]
+      .buildNormalizedTerm(source)
       .attempt
       .flatMap {
         case Left(er) =>
@@ -52,19 +53,26 @@ private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
             case th: Throwable       => Task.now(s"Error: $th")
           }
         case Right(term) =>
-          runEvaluate(runtime, term).attempt.map {
-            case Left(ex) => s"Caught boxed exception: $ex"
-            case Right(EvaluateResult(cost, errors)) =>
-              val errorStr =
-                if (errors.isEmpty)
-                  ""
-                else
-                  errors
-                    .map(_.toString())
-                    .mkString("Errors received during evaluation:\n", "\n", "\n")
-              s"Deployment cost: $cost\n" +
-                s"${errorStr}Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.space.store)}"
+          for {
+            _ <- Task.now(printNormalizedTerm(term))
+            res <- {
+              implicit val c = runtime.cost
+              Interpreter[Task].evaluate(runtime, source)
+            }
+            EvaluateResult(cost, errors) = res
+          } yield {
+            val errorStr =
+              if (errors.isEmpty)
+                ""
+              else
+                errors
+                  .map(_.toString())
+                  .mkString("Errors received during evaluation:\n", "\n", "\n")
+            s"Deployment cost: $cost\n" +
+              s"${errorStr}Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.space.store)}"
+
           }
+
       }
       .map(ReplResponse(_))
 
@@ -72,16 +80,10 @@ private[api] class ReplGrpcService(runtime: Runtime[Task], worker: Scheduler)
     Task.defer(task).executeOn(worker)
 
   def run(request: CmdRequest): Task[ReplResponse] =
-    defer(exec(new StringReader(request.line)))
+    defer(exec(request.line))
 
   def eval(request: EvalRequest): Task[ReplResponse] =
-    defer(exec(new StringReader(request.program)))
-
-  def runEvaluate(runtime: Runtime[Task], term: Par): Task[EvaluateResult] =
-    for {
-      _      <- Task.now(printNormalizedTerm(term))
-      result <- Interpreter[Task].evaluate(runtime, term)
-    } yield result
+    defer(exec(request.program))
 
   private def printNormalizedTerm(normalizedTerm: Par): Unit = {
     Console.println("\nEvaluating:")

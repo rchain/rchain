@@ -12,13 +12,14 @@ import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, InMemoryTrieS
 import coop.rchain.rspace.internal.{codecGNAT, GNAT}
 import coop.rchain.rspace.util._
 import coop.rchain.shared.PathOps._
+import monix.eval.Coeval
 import org.scalatest.BeforeAndAfterAll
 import scodec.Codec
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
 trait StorageExamplesTests[F[_]]
-    extends StorageTestsBase[F, Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor]
     with TestImplicitHelpers {
 
   "CORE-365: A joined consume on duplicate channels followed by two produces on that channel" should
@@ -33,9 +34,9 @@ trait StorageExamplesTests[F[_]]
                new EntriesCaptor,
                persist = false
              )
-      _  = r1 shouldBe Right(None)
+      _  = r1 shouldBe None
       r2 <- space.produce(Channel("friends"), bob, persist = false)
-      _  = r2 shouldBe Right(None)
+      _  = r2 shouldBe None
       r3 <- space.produce(Channel("friends"), bob, persist = false)
       _  = r3 shouldBe defined
       _  = runK(r3)
@@ -49,9 +50,9 @@ trait StorageExamplesTests[F[_]]
 
     for {
       r1 <- space.produce(Channel("friends"), bob, persist = false)
-      _  = r1 shouldBe Right(None)
+      _  = r1 shouldBe None
       r2 <- space.produce(Channel("friends"), bob, persist = false)
-      _  = r2 shouldBe Right(None)
+      _  = r2 shouldBe None
       r3 <- space
              .consume(
                List(Channel("friends"), Channel("friends")),
@@ -81,11 +82,11 @@ trait StorageExamplesTests[F[_]]
                new EntriesCaptor,
                persist = false
              )
-      _  = r1 shouldBe Right(None)
+      _  = r1 shouldBe None
       r2 <- space.produce(Channel("friends"), bob, persist = false)
-      _  = r2 shouldBe Right(None)
+      _  = r2 shouldBe None
       r3 <- space.produce(Channel("friends"), bob, persist = false)
-      _  = r3 shouldBe Right(None)
+      _  = r3 shouldBe None
       r4 <- space.produce(Channel("colleagues"), alice, persist = false)
       _  = r4 shouldBe defined
       _  = runK(r4)
@@ -126,7 +127,7 @@ trait StorageExamplesTests[F[_]]
                new EntriesCaptor,
                persist = false
              )
-      _   = r1 shouldBe Right(None)
+      _   = r1 shouldBe None
       r2  <- space.produce(Channel("friends"), bob, persist = false)
       r3  <- space.produce(Channel("family"), carol, persist = false)
       r4  <- space.produce(Channel("colleagues"), alice, persist = false)
@@ -137,14 +138,14 @@ trait StorageExamplesTests[F[_]]
       r9  <- space.produce(Channel("family"), carol, persist = false)
       r10 <- space.produce(Channel("family"), carol, persist = false)
 
-      _ = r2 shouldBe Right(None)
-      _ = r3 shouldBe Right(None)
-      _ = r4 shouldBe Right(None)
-      _ = r5 shouldBe Right(None)
-      _ = r6 shouldBe Right(None)
-      _ = r7 shouldBe Right(None)
-      _ = r8 shouldBe Right(None)
-      _ = r9 shouldBe Right(None)
+      _ = r2 shouldBe None
+      _ = r3 shouldBe None
+      _ = r4 shouldBe None
+      _ = r5 shouldBe None
+      _ = r6 shouldBe None
+      _ = r7 shouldBe None
+      _ = r8 shouldBe None
+      _ = r9 shouldBe None
       _ = r10 shouldBe defined
 
       _ = runK(r10)
@@ -170,15 +171,15 @@ trait StorageExamplesTests[F[_]]
       r8 <- space.produce(Channel("family"), carol, persist = false)
       r9 <- space.produce(Channel("family"), carol, persist = false)
 
-      _ = r1 shouldBe Right(None)
-      _ = r2 shouldBe Right(None)
-      _ = r3 shouldBe Right(None)
-      _ = r4 shouldBe Right(None)
-      _ = r5 shouldBe Right(None)
-      _ = r6 shouldBe Right(None)
-      _ = r7 shouldBe Right(None)
-      _ = r8 shouldBe Right(None)
-      _ = r9 shouldBe Right(None)
+      _ = r1 shouldBe None
+      _ = r2 shouldBe None
+      _ = r3 shouldBe None
+      _ = r4 shouldBe None
+      _ = r5 shouldBe None
+      _ = r6 shouldBe None
+      _ = r7 shouldBe None
+      _ = r8 shouldBe None
+      _ = r9 shouldBe None
 
       r10 <- space
               .consume(
@@ -248,7 +249,7 @@ trait StorageExamplesTests[F[_]]
                persist = false
              )
 
-      _ = r1 shouldBe Right(None)
+      _ = r1 shouldBe None
 
       r2  <- space.produce(Channel("friends"), bob, persist = false)
       r3  <- space.produce(Channel("family"), carol, persist = false)
@@ -260,14 +261,14 @@ trait StorageExamplesTests[F[_]]
       r9  <- space.produce(Channel("family"), carol, persist = false)
       r10 <- space.produce(Channel("family"), carol, persist = false)
 
-      _ = r2 shouldBe Right(None)
-      _ = r3 shouldBe Right(None)
-      _ = r4 shouldBe Right(None)
-      _ = r5 shouldBe Right(None)
-      _ = r6 shouldBe Right(None)
-      _ = r7 shouldBe Right(None)
-      _ = r8 shouldBe Right(None)
-      _ = r9 shouldBe Right(None)
+      _ = r2 shouldBe None
+      _ = r3 shouldBe None
+      _ = r4 shouldBe None
+      _ = r5 shouldBe None
+      _ = r6 shouldBe None
+      _ = r7 shouldBe None
+      _ = r8 shouldBe None
+      _ = r9 shouldBe None
       _ = r10 shouldBe defined
 
       _ = runK(r10)
@@ -279,7 +280,7 @@ trait StorageExamplesTests[F[_]]
 }
 
 abstract class MixedInMemoryStoreStorageExamplesTestsBase[F[_]]
-    extends StorageTestsBase[F, Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor]
     with BeforeAndAfterAll {
 
   val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
@@ -296,16 +297,17 @@ abstract class MixedInMemoryStoreStorageExamplesTestsBase[F[_]]
 
     val branch = Branch("inmem")
 
-    val ctx: Context[Channel, Pattern, Entry, EntriesCaptor] = Context.createMixed(dbDir, mapSize)
+    val ctx: Context[F, Channel, Pattern, Entry, EntriesCaptor] =
+      Context.createMixed(dbDir, mapSize)
 
     run(for {
-      testSpace <- RSpace.create[F, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+      testSpace <- RSpace.create[F, Channel, Pattern, Entry, Entry, EntriesCaptor](
                     ctx,
                     branch
                   )
       testStore = testSpace.store
       trieStore = testStore.trieStore
-      _         = testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
+      _         <- testStore.withWriteTxnF(testStore.clear)
       _         = trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear)
       _         = initialize(trieStore, branch)
       res       <- f(testSpace)
@@ -327,7 +329,7 @@ abstract class MixedInMemoryStoreStorageExamplesTestsBase[F[_]]
 }
 
 abstract class InMemoryStoreStorageExamplesTestsBase[F[_]]
-    extends StorageTestsBase[F, Channel, Pattern, Nothing, Entry, EntriesCaptor] {
+    extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor] {
 
   override def withTestSpace[R](f: T => F[R]): R = {
 
@@ -340,16 +342,16 @@ abstract class InMemoryStoreStorageExamplesTestsBase[F[_]]
 
     val branch = Branch("inmem")
 
-    val ctx: Context[Channel, Pattern, Entry, EntriesCaptor] = Context.createInMemory()
+    val ctx: Context[F, Channel, Pattern, Entry, EntriesCaptor] = Context.createInMemory()
 
     run(for {
-      testSpace <- RSpace.create[F, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+      testSpace <- RSpace.create[F, Channel, Pattern, Entry, Entry, EntriesCaptor](
                     ctx,
                     branch
                   )
       testStore = testSpace.store
       trieStore = testStore.trieStore
-      _         <- testStore.withTxn(testStore.createTxnWrite())(testStore.clear).pure[F]
+      _         <- testStore.withWriteTxnF(testStore.clear)
       _         <- trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear).pure[F]
       _         = initialize(trieStore, branch)
       res       <- f(testSpace)
@@ -365,7 +367,7 @@ abstract class InMemoryStoreStorageExamplesTestsBase[F[_]]
 }
 
 abstract class LMDBStoreStorageExamplesTestBase[F[_]]
-    extends StorageTestsBase[F, Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor]
     with BeforeAndAfterAll {
 
   val dbDir: Path    = Files.createTempDirectory("rchain-storage-test-")
@@ -373,14 +375,14 @@ abstract class LMDBStoreStorageExamplesTestBase[F[_]]
   val noTls: Boolean = false
 
   override def withTestSpace[R](f: T => F[R]): R = {
-    val context   = Context.create[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
-    val testStore = LMDBStore.create[Channel, Pattern, Entry, EntriesCaptor](context)
+    val context   = Context.create[F, Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
+    val testStore = LMDBStore.create[F, Channel, Pattern, Entry, EntriesCaptor](context)
     run(for {
-      testSpace <- RSpace.create[F, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+      testSpace <- RSpace.create[F, Channel, Pattern, Entry, Entry, EntriesCaptor](
                     testStore,
                     Branch.MASTER
                   )
-      _   = testStore.withTxn(testStore.createTxnWrite())(txn => testStore.clear(txn))
+      _   <- testStore.withWriteTxnF(testStore.clear)
       res <- f(testSpace)
     } yield {
       try {
@@ -400,16 +402,16 @@ abstract class LMDBStoreStorageExamplesTestBase[F[_]]
 }
 
 class InMemoryStoreStorageExamplesTests
-    extends InMemoryStoreStorageExamplesTestsBase[Id]
-    with IdTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
-    with StorageExamplesTests[Id]
+    extends InMemoryStoreStorageExamplesTestsBase[Coeval]
+    with CoevalTests[Channel, Pattern, Entry, EntriesCaptor]
+    with StorageExamplesTests[Coeval]
 
 class MixedInMemoryStoreStorageExamplesTests
-    extends MixedInMemoryStoreStorageExamplesTestsBase[Id]
-    with IdTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
-    with StorageExamplesTests[Id]
+    extends MixedInMemoryStoreStorageExamplesTestsBase[Coeval]
+    with CoevalTests[Channel, Pattern, Entry, EntriesCaptor]
+    with StorageExamplesTests[Coeval]
 
 class LMDBStoreStorageExamplesTest
-    extends LMDBStoreStorageExamplesTestBase[Id]
-    with IdTests[Channel, Pattern, Nothing, Entry, EntriesCaptor]
-    with StorageExamplesTests[Id]
+    extends LMDBStoreStorageExamplesTestBase[Coeval]
+    with CoevalTests[Channel, Pattern, Entry, EntriesCaptor]
+    with StorageExamplesTests[Coeval]

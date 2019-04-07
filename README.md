@@ -3,75 +3,75 @@
 [![Build Status](https://drone.rchain-dev.tk/api/badges/rchain/rchain/status.svg)](https://drone.rchain-dev.tk/rchain/rchain)
 [![codecov](https://codecov.io/gh/rchain/rchain/branch/master/graph/badge.svg)](https://codecov.io/gh/rchain/rchain)
 
-The open-source RChain project is building a decentralized, economic, censorship-resistant, public compute infrastructure and blockchain. It will host and execute programs popularly referred to as “smart contracts”. It will be trustworthy, scalable, concurrent, with proof-of-stake consensus and content delivery.
+The open-source RChain project is building a decentralized, economic,
+censorship-resistant, public compute infrastructure and blockchain. It will
+host and execute programs popularly referred to as “smart contracts”. It will
+be trustworthy, scalable, concurrent, with proof-of-stake consensus and
+content delivery.
 
-[RChain Developer](https://developer.rchain.coop/) features project-related tutorials and documentation, project planning information, events calendar, and information for how to engage with this project.
+[RChain Developer](https://developer.rchain.coop/) features project-related
+tutorials and documentation, project planning information, events calendar,
+and information for how to engage with this project.
+
+## Installation
+### Docker
+
+`$ docker pull rnode/rnode`
+
+### Debian/Ubuntu
+
+1. Download a `.deb` package from the [releases page](https://github.com/rchain/rchain/releases/)
+2. `$ sudo apt install ./rnode_<VERSION>.deb`, where `<VERSION>` is something like `0.8.3`
+
+### RedHat/Fedora
+
+1. Download a `.rpm` package from the [releases page](https://github.com/rchain/rchain/releases/)
+2. `$ sudo rpm -U ./rnode_<VERSION>.noarch.rpm`, where `<VERSION>` is something like `0.8.3`
+
+### macOS
+
+1. Install Homebrew by following steps at the [Homebrew homepage](https://brew.sh/)
+2. `$ brew install rchain/rchain/rnode`
 
 ## Running
 
-### Running from Docker
+Docker will be used in the examples port portability reasons, but running the
+node as a standalone process is very similar.
 
-Assuming you have Docker running on your system, use the following command to fetch the latest version of RNode from the remote Docker hub and run it (exit with `C-c`):
+To fetch the latest version of RNode from the remote Docker hub and run it
+(exit with `C-c`):
+
 ```
-<computer:~/src/rchain (dev)> docker run -v $HOME/tmp:/var/lib/rnode -ti -p 40400:40400 rchain/rnode:latest --profile docker
-08:30:30.894 [main] INFO  conf - uPnP: None -> None
-08:30:32.599 [main] INFO  o.h.b.c.nio1.NIO1SocketServerGroup - Service bound to address /127.0.0.1:40402
-08:30:32.600 [main] INFO  org.http4s.server.blaze.BlazeBuilder -   _   _   _        _ _
-08:30:32.601 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  | |_| |_| |_ _ __| | | ___
-08:30:32.601 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  | ' \  _|  _| '_ \_  _(_-<
-08:30:32.601 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  |_||_\__|\__| .__/ |_|/__/
-08:30:32.601 [main] INFO  org.http4s.server.blaze.BlazeBuilder -              |_|
-08:30:32.647 [main] INFO  org.http4s.server.blaze.BlazeBuilder - http4s v0.18.0 on blaze v0.12.11 started at http://127.0.0.1:40402/
-08:30:32.710 [kamon.prometheus.PrometheusReporter] INFO  kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:40403
-08:30:32.799 [main] INFO  logger - gRPC server started, listening on
-08:30:32.827 [main] INFO  logger - Listening for traffic on rnode://3afa77d09eb24a6caa25c0cb6a3e969f@172.17.0.2:40400.
-08:30:32.841 [main] INFO  logger - Bootstrapping from #{PeerNode de6eed5d00cf080fc587eeb412cb31a75fd10358}.
-08:30:32.857 [main] INFO  logger - Initialize first phase handshake (encryption handshake) to #{PeerNode de6eed5d00cf080fc587eeb412cb31a75fd10358}
-[...]
+$ docker run -v $HOME/tmp:/var/lib/rnode -ti -p 40400:40400 rchain/rnode:latest
 ```
 
-In order to use both the peer-to-peer network and REPL capabilities of the node, you must run more than one Docker Rnode on the same host, the containers need to be connected to one user-defined network bridge:
+In order to use both the peer-to-peer network and REPL capabilities of the
+node, you need to run more than one Docker Rnode on the same host, the
+containers need to be connected to one user-defined network bridge:
 
 ```bash
-> docker network create rnode-net
+$ docker network create rnode-net
 
-> docker run -v $HOME/tmp:/var/lib/rnode -dit --name rnode0 --network rnode-net rchain/rnode:latest -s
+$ docker run -v $HOME/tmp:/var/lib/rnode -dit --name rnode0 --network rnode-net rchain/rnode:latest -s
 
-> docker ps
+$ docker ps
 CONTAINER ID        IMAGE                      COMMAND             CREATED             STATUS              PORTS               NAMES
-15aa78b45da4        rchain/rnode:latest   "/bin/main.sh -s"   3 seconds ago       Up 2 seconds                            rnode0
+15aa78b45da4        rchain/rnode:latest        "/bin/main.sh -s"   3 seconds ago       Up 2 seconds                            rnode0
 ```
 
 In a new terminal:
-```bash
-> docker logs -f rnode0
-08:38:09.738 [main] INFO  conf - uPnP: None -> None
-08:38:11.252 [main] INFO  o.h.b.c.nio1.NIO1SocketServerGroup - Service bound to address /127.0.0.1:40402
-08:38:11.253 [main] INFO  org.http4s.server.blaze.BlazeBuilder -   _   _   _        _ _
-08:38:11.253 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  | |_| |_| |_ _ __| | | ___
-08:38:11.253 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  | ' \  _|  _| '_ \_  _(_-<
-08:38:11.254 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  |_||_\__|\__| .__/ |_|/__/
-08:38:11.254 [main] INFO  org.http4s.server.blaze.BlazeBuilder -              |_|
-08:38:11.298 [main] INFO  org.http4s.server.blaze.BlazeBuilder - http4s v0.18.0 on blaze v0.12.11 started at http://127.0.0.1:40402/
-08:38:11.358 [kamon.prometheus.PrometheusReporter] INFO  kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:40403
-08:38:11.436 [main] INFO  logger - gRPC server started, listening on
-08:38:11.460 [main] INFO  logger - Listening for traffic on rnode://ee00a5357f2f4cb58b08a8a4c949da1b@172.18.0.2:40400.
-08:38:11.463 [main] INFO  logger - Starting stand-alone node.
-```
 
-Note this line (listening address):
 ```bash
-Listening for traffic on rnode://ee00a5357f2f4cb58b08a8a4c949da1b@172.18.0.2:40400.
+$ docker logs -f rnode0
+[...]
+08:38:11.460 [main] INFO  logger - Listening for traffic on rnode://ee00a5357f2f4cb58b08a8a4c949da1b@172.18.0.2:40400.
+[...]
 ```
 
 A repl instance can be invoked this way:
+
 ```bash
-> docker run -v $HOME/tmp:/var/lib/rnode -it --name rnode-repl --network rnode-net rchain/rnode:latest --grpc-host rnode0 -r
-
-  ╦═╗┌─┐┬ ┬┌─┐┬┌┐┌  ╔╗╔┌─┐┌┬┐┌─┐  ╦═╗╔═╗╔═╗╦
-  ╠╦╝│  ├─┤├─┤││││  ║║║│ │ ││├┤   ╠╦╝║╣ ╠═╝║
-  ╩╚═└─┘┴ ┴┴ ┴┴┘└┘  ╝╚╝└─┘─┴┘└─┘  ╩╚═╚═╝╩  ╩═╝
-
+$ docker run -v $HOME/tmp:/var/lib/rnode -it --name rnode-repl --network rnode-net rchain/rnode:latest --grpc-host rnode0 -r
 rholang $ 5
 Storage Contents:
  for( x0 <= @{"stdout"} ) { Nil } | for( x0, x1 <= @{"stderrAck"} ) { Nil } | for( x0 <= @{"stderr"} ) { Nil } | for( x0, x1 <= @{"stdoutAck"} ) { Nil }
@@ -86,19 +86,12 @@ Evaluating:
 5
 ```
 
-A peer node can be started with the following command (note that `--bootstrap` takes the listening address of `rnode0`):
+A peer node can be started with the following command (note that `--bootstrap`
+takes the listening address of `rnode0`):
+
 ```bash
-> docker run -v $HOME/tmp:/var/lib/rnode -it --name rnode-client --network rnode-net rchain/rnode:latest --bootstrap rnode://ee00a5357f2f4cb58b08a8a4c949da1b@172.18.0.2:40400
-08:58:34.595 [main] INFO  conf - uPnP: None -> None
-08:58:36.053 [main] INFO  o.h.b.c.nio1.NIO1SocketServerGroup - Service bound to address /127.0.0.1:40402
-08:58:36.054 [main] INFO  org.http4s.server.blaze.BlazeBuilder -   _   _   _        _ _
-08:58:36.054 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  | |_| |_| |_ _ __| | | ___
-08:58:36.054 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  | ' \  _|  _| '_ \_  _(_-<
-08:58:36.055 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  |_||_\__|\__| .__/ |_|/__/
-08:58:36.055 [main] INFO  org.http4s.server.blaze.BlazeBuilder -              |_|
-08:58:36.098 [main] INFO  org.http4s.server.blaze.BlazeBuilder - http4s v0.18.0 on blaze v0.12.11 started at http://127.0.0.1:40402/
-08:58:36.139 [kamon.prometheus.PrometheusReporter] INFO  kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:40403
-08:58:36.241 [main] INFO  logger - gRPC server started, listening on
+$ docker run -v $HOME/tmp:/var/lib/rnode -it --name rnode-client --network rnode-net rchain/rnode:latest --bootstrap rnode://ee00a5357f2f4cb58b08a8a4c949da1b@172.18.0.2:40400
+[...]
 08:58:36.267 [main] INFO  logger - Listening for traffic on rnode://29d77e8cfd924db49e715d4cf4eeb28d@172.18.0.4:40400.
 08:58:36.279 [main] INFO  logger - Bootstrapping from #{PeerNode ee00a5357f2f4cb58b08a8a4c949da1b}.
 08:58:36.294 [main] INFO  logger - Initialize first phase handshake (encryption handshake) to #{PeerNode ee00a5357f2f4cb58b08a8a4c949da1b}
@@ -114,26 +107,25 @@ The above command should result in (`rnode0` output):
 08:58:37.211 [repl-io-35] INFO  logger - Peers: 1.
 ```
 
-Each scoped build is as similar to the original, per-project build process as possible, so assemblies should be produced in the same way as before:
-```
-<computer:~/src/rchain (dev)> sbt "project rholang" assembly
-[info] Loading settings from plugins.sbt ...
-[... compiling, testing, jarring ...]
-[info] Packaging /home/kirkwood/src/rchain/rholang/target/scala-2.12/rholang-assembly-0.1.0-SNAPSHOT.jar ...
-<computer:~/src/rchain (dev)> rholang/rho2rbl rholang/examples/hello_world_again.rho
-compiled rholang/examples/hello_world_again.rho to rholang/examples/hello_world_again.rbl
-<computer:~/src/rchain (dev)> cat rholang/examples/hello_world_again.rbl; echo
-(let [[helloworld (generateFresh "helloworld")]] (block ( (proc [] (run (compile (let [[[[Rholanga4716fe347be]] (consume t [helloworld] [['world]] #t)]] ( (proc [[world]] (let [[[Rholang5401f0efc120] (consume t [world] ['msg] #f)]] ( (proc [[[msg]]] ( display msg "
-")) [Rholang5401f0efc120]))) [Rholanga4716fe347be])))))) (let [[world (generateFresh "world")] [world2 (generateFresh "world2")]] (block (block (block (produce t helloworld world) (produce t world "Hello World")) (produce t helloworld world2)) (produce t world2 "Hello World again")))))
-<computer:~/src/rchain (dev)>
-```
+To get a full list of options rnode accepts, use the `--help` option: `$ docker
+run -it rchain/rnode --help`.
 
 ### Configuration file
-Most of the [command line options](node/README.md##2-modes) can be specified in a configuration file `rnode.conf`.
-The default location of the configuration file is the data dir. An alternative lococation can be specified with the command line option `--config-file  <path>`.
+
+Most of the command line options can be specified in a configuration file
+`rnode.conf`.
+
+The default location of the configuration file is the data directory. An
+alternative location can be specified with the command line option
+`--config-file <path>`.
+
 The format of the configuration file is [HOCON](https://github.com/lightbend/config/blob/master/HOCON.md).
-The [reference.conf](node/src/main/resources/reference.conf) configuration file shows all options and default values.
+
+The [reference.conf](node/src/main/resources/reference.conf) configuration
+file shows all options and default values.
+
 Example configuration file:
+
 ```hocon
 rnode {
   server {
@@ -181,87 +173,44 @@ rnode {
 }
 ```
 
-### Configuration flags
-TBD
+## Development
 
-### Installing and running on Docker
-TBD
+Compile the project with:
 
-
-### Installing and running on Debian from DEB package
-TBD
-
-### Installing and running on RedHat and Fedora from RPM package
-TBD
-
-### Installing and running on macOS via Homebrew
-
-#### Installing Homebrew - https://brew.sh
 ```bash
-> /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+$ sbt clean rholang/bnfc:clean rholang/bnfc:generate compile node/docker:publishLocal
 ```
 
-#### Installing rnode
+Run the resulting binary with:
+
 ```bash
-> brew install rchain/rchain/rnode
+$ ./node/target/docker/stage/opt/docker/bin/rnode
 ```
 
-### Running from the tar-ball
-TBD
-
-### Starting node as a validator
-TBD
-
-## Monitor performance
-
-## Monitor resource consumption
-
- * Node is considered up and running if and only if it listens on the port 40400 (the port number can be overriden with the `--port` option)
- * rnode publishes metrics to InfluxDB
-    * COMM events per second
-    * CPU usage
-    * Current memory usage
-    * JVM heap size
-    * CPU usage across the entire OS
-    * Memory usage across the entire OS
-    * Total machine's memory size
-    * Amount of free disk space left
-    * Total machine's disk space
- * The InfluxDB reporter must be enabled in the `rnode.conf`. The configuration key `rnode.server.metrics.influxdb` must be set to `true`.
- * For all system metrics the Sigar library must be enabled in the `rnode.conf`. The configuration key `rnode.server.metrics.sigar` must be set to `true`.
- * `rnode.conf` allows for configuring the address of the InfluxDB instance. Please see the Kamon-InfluxDB [reference.conf](https://github.com/kamon-io/kamon-influxdb/blob/master/src/main/resources/reference.conf) for all options.
- * If the address or the InfluxDB instance isn't configured, metrics are NOT available to the node operator
- * Metrics published to InfluxDB are available for charting in Chronograf
- * Chronograf instance address is determined by the configuration of the InfluxDB instance, not the node
-
-## Validation
-
-### Identities
-
-TBD (node identity, validator identity, wallet identity)
-
-## External and internal API
-
-## Deverloper guide
-
-For getting started with development of RChain please refer to the [Developer guide](DEVELOPER.md)
+For more detailed instructions, see the [developer guide](DEVELOPER.md).
 
 ## Caveats and filing issues
 
 ### Caveats
-During this pre-release phase of the RChain software, there are some [known issues](https://rchain.atlassian.net/wiki/spaces/CORE/pages/428376244/RChain+software+unresolved+bugs+and+known+issues).
+
+During this pre-release phase of the RChain software, there are some [known
+issues](https://rchain.atlassian.net/wiki/spaces/CORE/pages/428376244/RChain+software+unresolved+bugs+and+known+issues).
 
 ### Filing Issues
 
-File issues in our Public Jira Instance: [File a bug](https://rchain.atlassian.net/secure/CreateIssueDetails!init.jspa?pid=10105&issuetype=10103&versions=10012&components=10004&assignee=medha&summary=issue+created%20via+link)
+File issues in our Public Jira Instance: [File a
+bug](https://rchain.atlassian.net/secure/CreateIssueDetails!init.jspa?pid=10105&issuetype=10103&versions=10012&components=10004&assignee=medha&summary=issue+created%20via+link)
 
 ## Acknowledgements
-We use YourKit to profile rchain performance.
-YourKit supports open source projects with its full-featured Java Profiler.
-YourKit, LLC is the creator of <a href="https://www.yourkit.com/java/profiler/">YourKit Java Profiler</a>
-and <a href="https://www.yourkit.com/.net/profiler/">YourKit .NET Profiler</a>,
+
+We use YourKit to profile rchain performance.  YourKit supports open source
+projects with its full-featured Java Profiler.  YourKit, LLC is the creator of
+<a href="https://www.yourkit.com/java/profiler/">YourKit Java Profiler</a> and
+<a href="https://www.yourkit.com/.net/profiler/">YourKit .NET Profiler</a>,
 innovative and intelligent tools for profiling Java and .NET applications.
 
 ## Licence information
 
-To get summery of licenses being used by the RChain's dependencies, simply run `sbt node/dumpLicenseReport`. The report will be available under `node/target/license-reports/rnode-licenses.html`
+To get summary of licenses being used by the RChain's dependencies, simply run
+`sbt node/dumpLicenseReport`. The report will be available under
+`node/target/license-reports/rnode-licenses.html`

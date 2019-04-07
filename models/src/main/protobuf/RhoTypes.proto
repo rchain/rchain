@@ -57,24 +57,15 @@ message ParWithRandom {
 }
 
 /**
- * A measure of processing cost: a number of iterations and the sum
- * cost of the iterations.
+ * Cost of the performed operations.
  */
 message PCost {
-    int32 iterations = 1;
-    uint64 cost = 2;
+    uint64 cost = 1;
 }
 
 message ListParWithRandom {
     repeated Par pars = 1;
     bytes randomState = 2 [(scalapb.field).type = "coop.rchain.crypto.hash.Blake2b512Random"];
-}
-
-message ListParWithRandomAndPhlos {
-    repeated Par pars = 1;
-    bytes randomState = 2 [(scalapb.field).type = "coop.rchain.crypto.hash.Blake2b512Random"];
-    // cost of performing the spatial match
-    uint64 cost = 3;
 }
 
 // While we use vars in both positions, when producing the normalized

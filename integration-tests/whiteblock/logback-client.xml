@@ -1,0 +1,23 @@
+<configuration>
+  <contextName>${CLIENT_NODE_DISCRIMINATOR}</contextName>
+
+  <statusListener class="ch.qos.logback.core.status.NopStatusListener" />
+
+  <appender name="SOCKET" class="ch.qos.logback.classic.net.SocketAppender">
+    <remoteHost>${MASTER_NODE_HOST}</remoteHost>
+    <port>6000</port>
+    <reconnectionDelay>5000</reconnectionDelay>
+    <includeCallerData>true</includeCallerData>
+  </appender>
+
+  <logger name="coop.rchain.rspace" level="warn" />
+  <logger name="org.http4s" level="warn" />
+  <logger name="io.netty" level="warn" />
+  <logger name="io.grpc" level="warn" />
+  <logger name="org.http4s.blaze.channel.nio1.NIO1SocketServerGroup" level="OFF" />
+
+  <root level="debug">
+    <appender-ref ref="SOCKET" />
+  </root>
+
+</configuration>

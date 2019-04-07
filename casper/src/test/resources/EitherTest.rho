@@ -1,0 +1,80 @@
+//scalapackage coop.rchain.rholang.collection
+
+new
+  rl(`rho:registry:lookup`), EitherCh, RhoSpecCh,
+  stdlog(`rho:io:stdlog`),
+  double, divide, divide10By, divide8By,
+  setup, test_map, test_flatmap, test_compose
+in {
+
+  stdlog!("info", "Starting EitherTest") |
+  rl!(`rho:id:6wnujzcraztjfg941skrtbdkdgbko8nuaqihuhn15s66oz8ro5gwbb`, *RhoSpecCh) |
+  for(@(_, RhoSpec) <- RhoSpecCh) {
+    @RhoSpec!("testSuite", *setup,
+      [
+        ("map should transform Right and preserve Left", *test_map),
+        ("flatMap should transform Right and preserve Left", *test_flatmap),
+        ("compose should sequence Either-valued functions together", *test_compose)
+      ])
+  } |
+
+  contract double(@x, ret) = { ret!(2 * x) } |
+  contract divide(@x, @y, ret) = {
+    if(y == 0) { ret!((false, "Div by zero!")) }
+    else { ret!((true, x / y)) }
+  } |
+  contract divide10By(@divisor, ret) = { divide!(10, divisor, *ret)} |
+  contract divide8By(@divisor, ret) = { divide! (8, divisor, *ret)} |
+
+  rl!(`rho:id:j6trahbxycumerwpr5qype7j43b7eqh8auebwsa9nn68if47gswh73`, *EitherCh) |
+  for(@(_, Either) <- EitherCh) {
+
+    stdlog!("info", "Either & RhoSpec ready") |
+
+    contract setup(returnCh) = {
+      returnCh!([])
+    } |
+
+    contract test_map(rhoSpec, _, ackCh) = {
+      new ch1, ch2 in {
+        @Either!("map", (false, "message"), *double, *ch1) |
+        @Either!("map", (true, 3), *double, *ch2) |
+        rhoSpec!("assertMany",
+          [
+            (((false, "message"), "== <-", *ch1), "Left values are not affected by map"),
+            (((true, 6), "== <-", *ch2), "Right values are changed by map")
+          ], *ackCh)
+      }
+    } |
+
+    contract test_flatmap(rhoSpec, _, ackCh) = {
+      new ch1, ch2, ch3 in {
+        @Either!("flatMap", (false, "message"), *divide10By, *ch1) |
+        @Either!("flatMap", (true, 2), *divide10By, *ch2) |
+        @Either!("flatMap", (true, 0), *divide10By, *ch3) |
+        rhoSpec!("assertMany",
+          [
+            (((false, "message"), "== <-", *ch1), "Left values are not affected by flatMap"),
+            (((true, 5), "== <-", *ch2), "Right values are changed by flatMap"),
+            (((false, "Div by zero!"), "== <-", *ch3), "Left values are returned on failure")
+          ], *ackCh)
+      }
+    } |
+
+    contract test_compose(rhoSpec, _, ackCh) = {
+      new ch1, ch2, ch3, ch4 in {
+        @Either!("compose", 1, [], *ch1) |
+        @Either!("compose", 5, [*divide10By], *ch2) |
+        @Either!("compose", 5, [*divide10By, *divide8By], *ch3) |
+        @Either!("compose", 0, [*divide10By, *divide8By], *ch4) |
+        rhoSpec!("assertMany",
+          [
+            (((true, 1), "== <-", *ch1), "empty function list behaves like pure"),
+            (((true, 2), "== <-", *ch2), "Composing one function behaves like fmap . pure"),
+            (((true, 4), "== <-", *ch3), "Composing two functions behaves like flatMap . pure"),
+            (((false, "Div by zero!"), "== <-", *ch4), "Left values are propagated through compose")
+          ], *ackCh)
+      }
+    }
+  }
+}

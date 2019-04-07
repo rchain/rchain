@@ -9,13 +9,13 @@ import org.scalatest.{FlatSpec, Matchers, OptionValues, Outcome}
 import scodec.Codec
 import scodec.bits.ByteVector
 
-trait HistoryTestsBase[T, K, V]
+trait HistoryTestsBase[F[_], T, K, V]
     extends FlatSpec
     with Matchers
     with OptionValues
     with GeneratorDrivenPropertyChecks
     with Configuration
-    with WithTestStore[T, K, V] {
+    with WithTestStore[F, T, K, V] {
 
   def getRoot(store: ITrieStore[T, K, V], branch: Branch): Option[Blake2b256Hash] =
     store.withTxn(store.createTxnRead())(txn => store.getRoot(txn, branch))
@@ -57,7 +57,7 @@ trait HistoryTestsBase[T, K, V]
   }
 }
 
-trait WithTestStore[T, K, V] {
+trait WithTestStore[F[_], T, K, V] {
 
   implicit def codecK: Codec[K]
   implicit def codecV: Codec[V]

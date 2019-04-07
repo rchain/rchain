@@ -19,6 +19,7 @@ import scala.util.Try
 import scala.util.control.NonFatal
 import scala.util.matching.Regex
 
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 object UPnP {
 
   lazy val IPv4: Regex =
@@ -125,14 +126,14 @@ object UPnP {
             Log[F].info("UPnP port forwarding was most likely successful!")
 
       _ <- Log[F].info(showPortMappingHeader)
-      _ <- getPortMappings(gateway).toList.map(showPortMapping).traverse(Log[F].info)
+      _ <- getPortMappings(gateway).toList.map(showPortMapping).traverse(v => Log[F].info(v))
     } yield Some(gateway.getExternalIPAddress)
 
   def assurePortForwarding[F[_]: Log: Sync](ports: List[Int]): F[Option[String]] =
     for {
       _       <- Log[F].info("trying to open ports using UPnP....")
       devices <- Sync[F].delay(discover)
-      res <- if (devices.gateways.isEmpty) logGatewayEmpty(devices) *> None.pure[F]
+      res <- if (devices.gateways.isEmpty) logGatewayEmpty(devices) >> None.pure[F]
             else tryOpenPorts(ports, devices)
     } yield res
 

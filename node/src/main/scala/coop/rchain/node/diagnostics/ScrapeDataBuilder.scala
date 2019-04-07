@@ -10,7 +10,7 @@ import kamon.metric.MeasurementUnit
 import kamon.metric.MeasurementUnit.{information, none, time}
 import kamon.metric.MeasurementUnit.Dimension._
 
-@SuppressWarnings(Array("org.wartremover.warts.Var"))
+@SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.NonUnitStatements"))
 class ScrapeDataBuilder(
     prometheusConfig: NewPrometheusReporter.Configuration,
     environmentTags: Map[String, String] = Map.empty

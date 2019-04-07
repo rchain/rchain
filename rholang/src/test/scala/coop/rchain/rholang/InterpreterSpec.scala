@@ -2,8 +2,12 @@ package coop.rchain.rholang
 
 import java.io.StringReader
 
+import coop.rchain.catscontrib.mtl.implicits._
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
+import coop.rchain.rholang.interpreter.{EvaluateResult, Interpreter, Runtime}
+import coop.rchain.rholang.interpreter.accounting._
 import monix.execution.Scheduler.Implicits.global
 import coop.rchain.rholang.Resources.mkRuntime
 import monix.eval.Task
@@ -18,7 +22,8 @@ class InterpreterSpec extends FlatSpec with Matchers {
   private val tmpPrefix   = "rspace-store-"
   private val maxDuration = 5.seconds
 
-  implicit val logF: Log[Task] = new Log.NOPLog[Task]
+  implicit val logF: Log[Task]            = new Log.NOPLog[Task]
+  implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
 
   behavior of "Interpreter"
 
@@ -106,36 +111,77 @@ class InterpreterSpec extends FlatSpec with Matchers {
   }
 
   it should "signal syntax errors to the caller" in {
-    import coop.rchain.catscontrib.effect.implicits.bracketTry
-    val result = mkRuntime(tmpPrefix, mapSize)
-      .use { runtime =>
-        failure(
-          runtime,
-          """
-            |new f, x in { f(x) }
-          """.stripMargin
-        )
-      }
-      .runSyncUnsafe(maxDuration)
+    val badRholang = "new f, x in { f(x) }"
+    val EvaluateResult(_, errors) =
+      mkRuntime(tmpPrefix, mapSize)
+        .use { runtime =>
+          for {
+            res <- execute(runtime, badRholang)
+          } yield (res)
+        }
+        .runSyncUnsafe(maxDuration)
 
-    result shouldBe a[coop.rchain.rholang.interpreter.errors.SyntaxError]
+    errors should not be empty
+    errors(0) shouldBe a[coop.rchain.rholang.interpreter.errors.SyntaxError]
+  }
+
+  it should "capture rholang parsing errors and charge for parsing" in {
+    val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!("hi") """
+    val EvaluateResult(cost, errors) =
+      mkRuntime(tmpPrefix, mapSize)
+        .use { runtime =>
+          for {
+            res <- execute(runtime, badRholang)
+          } yield (res)
+        }
+        .runSyncUnsafe(maxDuration)
+
+    errors should not be empty
+    cost.value shouldEqual (parsingCost(badRholang).value)
+  }
+
+  it should "charge for parsing even when there's not enough phlo to complete it" in {
+    val sendRho = "@{0}!(0)"
+    val EvaluateResult(cost, errors) =
+      mkRuntime(tmpPrefix, mapSize)
+        .use { runtime =>
+          implicit val c = runtime.cost
+          for {
+            res <- Interpreter[Task]
+                    .evaluate(runtime, sendRho, parsingCost(sendRho) - Cost(1))
+          } yield (res)
+        }
+        .runSyncUnsafe(maxDuration)
+
+    errors should not be empty
+    cost.value shouldEqual (parsingCost(sendRho).value)
   }
 
   private def storageContents(runtime: Runtime[Task]): String =
     StoragePrinter.prettyPrint(runtime.space.store)
 
   private def success(runtime: Runtime[Task], rho: String): Task[Unit] =
-    execute(runtime, rho).map(_.swap.foreach(error => fail(s"""Execution failed for: $rho
-                                               |Cause:
-                                               |$error""".stripMargin)))
+    execute(runtime, rho).map(
+      res =>
+        assert(
+          res.errors.isEmpty,
+          s"""Execution failed for: $rho
+              |Cause:
+              |${res.errors}""".stripMargin
+        )
+    )
 
-  private def failure(runtime: Runtime[Task], rho: String): Task[Throwable] =
-    execute(runtime, rho).map(_.swap.getOrElse(fail(s"Expected $rho to fail - it didn't.")))
+  private def failure(runtime: Runtime[Task], rho: String): Task[Unit] =
+    execute(runtime, rho).map(
+      res => assert(res.errors.nonEmpty, s"Expected $rho to fail - it didn't.")
+    )
 
   private def execute(
       runtime: Runtime[Task],
       source: String
-  ): Task[Either[Throwable, Runtime[Task]]] =
-    Interpreter[Task].execute(runtime, new StringReader(source)).attempt
+  ): Task[EvaluateResult] = {
+    implicit val c = runtime.cost
+    Interpreter[Task].evaluate(runtime, source)
+  }
 
 }

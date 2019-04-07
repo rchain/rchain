@@ -7,14 +7,13 @@ import cats._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.casper.protocol.{BlockMessage, Header}
+import coop.rchain.casper.protocol._
 import coop.rchain.rspace.Context
 import coop.rchain.shared.PathOps._
 import coop.rchain.models.blockImplicits.{blockBatchesGen, blockElementGen, blockElementsGen}
 import cats.effect.Sync
-import coop.rchain.catscontrib.Capture.taskCapture
+import cats.effect.concurrent.Ref
 import coop.rchain.blockstorage.InMemBlockStore.emptyMapRef
-import coop.rchain.blockstorage.StorageError.StorageIOErr
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.catscontrib.TaskContrib._
@@ -48,7 +47,7 @@ trait BlockStoreTest
       withStore { store =>
         val items = blockStoreElements
         for {
-          _ <- items.traverse_(store.put(_))
+          _ <- items.traverse_(store.put)
           _ <- items.traverse[Task, Assertion] { block =>
                 store.get(block.blockHash).map(_ shouldBe Some(block))
               }
@@ -63,7 +62,7 @@ trait BlockStoreTest
       withStore { store =>
         val items = blockStoreElements
         for {
-          _ <- items.traverse_(store.put(_))
+          _ <- items.traverse_(store.put)
           _ <- items.traverse[Task, Assertion] { block =>
                 store.find(_ == ByteString.copyFrom(block.blockHash.toByteArray)).map { w =>
                   w should have size 1
@@ -83,11 +82,11 @@ trait BlockStoreTest
           (block.blockHash, block, toBlockMessage(block.blockHash, 200L, 20000L))
         }
         for {
-          _ <- items.traverse_[Task, StorageIOErr[Unit]] { case (k, v1, _) => store.put(k, v1) }
+          _ <- items.traverse_[Task, Unit] { case (k, v1, _) => store.put(k, v1) }
           _ <- items.traverse_[Task, Assertion] {
                 case (k, v1, _) => store.get(k).map(_ shouldBe Some(v1))
               }
-          _ <- items.traverse_[Task, StorageIOErr[Unit]] { case (k, _, v2) => store.put(k, v2) }
+          _ <- items.traverse_[Task, Unit] { case (k, _, v2) => store.put(k, v2) }
           _ <- items.traverse_[Task, Assertion] {
                 case (k, _, v2) => store.get(k).map(_ shouldBe Some(v2))
               }
@@ -116,11 +115,12 @@ trait BlockStoreTest
 class InMemBlockStoreTest extends BlockStoreTest {
   override def withStore[R](f: BlockStore[Task] => Task[R]): R = {
     val test = for {
-      refTask <- emptyMapRef[Task]
-      metrics = new MetricsNOP[Task]()
-      store   = InMemBlockStore.create[Task](Monad[Task], refTask, metrics)
-      _       <- store.find(_ => true).map(map => assert(map.isEmpty))
-      result  <- f(store)
+      refTask          <- emptyMapRef[Task]
+      approvedBlockRef <- Ref[Task].of(none[ApprovedBlock])
+      metrics          = new MetricsNOP[Task]()
+      store            = InMemBlockStore.create[Task](Monad[Task], refTask, approvedBlockRef, metrics)
+      _                <- store.find(_ => true).map(map => assert(map.isEmpty))
+      result           <- f(store)
     } yield result
     test.unsafeRunSync
   }
@@ -204,7 +204,7 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
       withStoreLocation { blockStoreDataDir =>
         for {
           firstStore  <- createBlockStore(blockStoreDataDir)
-          _           <- blockStoreElements.traverse_[Task, StorageIOErr[Unit]](firstStore.put)
+          _           <- blockStoreElements.traverse_[Task, Unit](firstStore.put)
           _           <- firstStore.close()
           secondStore <- createBlockStore(blockStoreDataDir)
           _ <- blockStoreElements.traverse[Task, Assertion] { block =>
@@ -217,15 +217,34 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
     }
   }
 
+  "FileLMDBIndexBlockStore" should "persist approved block on restart" in {
+    withStoreLocation { blockStoreDataDir =>
+      val approvedBlock =
+        ApprovedBlock(
+          Some(ApprovedBlockCandidate(Some(BlockMessage()), 1)),
+          List(Signature(ByteString.EMPTY, "", ByteString.EMPTY))
+        )
+      for {
+        firstStore          <- createBlockStore(blockStoreDataDir)
+        _                   <- firstStore.putApprovedBlock(approvedBlock)
+        _                   <- firstStore.close()
+        secondStore         <- createBlockStore(blockStoreDataDir)
+        storedApprovedBlock <- secondStore.getApprovedBlock
+        _                   = storedApprovedBlock shouldBe Some(approvedBlock)
+        _                   <- secondStore.close()
+      } yield ()
+    }
+  }
+
   it should "persist storage after checkpoint" in {
     forAll(blockElementsGen, minSize(10), sizeRange(10)) { blockStoreElements =>
       withStoreLocation { blockStoreDataDir =>
         val (firstHalf, secondHalf) = blockStoreElements.splitAt(blockStoreElements.size / 2)
         for {
           firstStore <- createBlockStore(blockStoreDataDir)
-          _          <- firstHalf.traverse_[Task, StorageIOErr[Unit]](firstStore.put)
+          _          <- firstHalf.traverse_[Task, Unit](firstStore.put)
           _          <- firstStore.checkpoint()
-          _          <- secondHalf.traverse_[Task, StorageIOErr[Unit]](firstStore.put)
+          _          <- secondHalf.traverse_[Task, Unit](firstStore.put)
           _ <- blockStoreElements.traverse[Task, Assertion] { block =>
                 firstStore.get(block.blockHash).map(_ shouldBe Some(block))
               }
@@ -248,10 +267,10 @@ class FileLMDBIndexBlockStoreTest extends BlockStoreTest {
         val blocks = blockStoreBatches.flatten
         for {
           firstStore <- createBlockStore(blockStoreDataDir)
-          _ <- blockStoreBatches.traverse_[Task, StorageIOErr[Unit]](
+          _ <- blockStoreBatches.traverse_[Task, Unit](
                 blockStoreElements =>
                   blockStoreElements
-                    .traverse_[Task, StorageIOErr[Unit]](firstStore.put) *> firstStore.checkpoint()
+                    .traverse_[Task, Unit](firstStore.put) *> firstStore.checkpoint()
               )
           _ <- blocks.traverse[Task, Assertion] { block =>
                 firstStore.get(block.blockHash).map(_ shouldBe Some(block))

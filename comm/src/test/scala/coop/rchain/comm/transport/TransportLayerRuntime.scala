@@ -21,7 +21,8 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
 
   def createEnvironment(port: Int): F[E]
 
-  def createTransportLayer(env: E): F[TransportLayer[F]]
+  def createTransportLayer(env: E): F[(TransportLayer[F], TransportLayerShutdown[F])]
+  def createTransportLayerServer(env: E): F[TransportLayerServer[F]]
 
   def createDispatcherCallback: F[DispatcherCallback[F]]
 
@@ -63,31 +64,32 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
         Dispatcher.withoutMessageDispatcher[F],
       val streamDispatcher: Dispatcher[F, Blob, Unit] = Dispatcher.devNullPacketDispatcher[F]
   ) extends Runtime[A] {
-    def execute(transportLayer: TransportLayer[F], local: PeerNode, remote: PeerNode): F[A]
+    def execute(
+        transportLayer: TransportLayer[F],
+        transportLayerShutdown: TransportLayerShutdown[F],
+        local: PeerNode,
+        remote: PeerNode
+    ): F[A]
 
     def run(blockUntilDispatched: Boolean = true): TwoNodesResult =
       extract(
         twoNodesEnvironment { (e1, e2) =>
           for {
-            localTl  <- createTransportLayer(e1)
-            remoteTl <- createTransportLayer(e2)
-            local    = e1.peer
-            remote   = e2.peer
-            cbl      <- createDispatcherCallback
-            cb       <- createDispatcherCallback
-            _ <- localTl.receive(
-                  Dispatcher.withoutMessageDispatcher[F].dispatch(local, cbl),
-                  Dispatcher.devNullPacketDispatcher[F].dispatch(local, cbl)
-                )
-            _ <- remoteTl.receive(
-                  protocolDispatcher.dispatch(remote, cb),
-                  streamDispatcher.dispatch(remote, cb)
-                )
-            r <- execute(localTl, local, remote)
+            tl                  <- createTransportLayer(e1)
+            (localTl, shutdown) = tl
+            remoteTls           <- createTransportLayerServer(e2)
+            local               = e1.peer
+            remote              = e2.peer
+            cb                  <- createDispatcherCallback
+            server <- remoteTls.receive(
+                       protocolDispatcher.dispatch(remote, cb),
+                       streamDispatcher.dispatch(remote, cb)
+                     )
+            r <- execute(localTl, shutdown, local, remote)
             _ <- if (blockUntilDispatched) cb.waitUntilDispatched()
                 else implicitly[Timer[F]].sleep(1.second)
-            _ <- remoteTl.shutdown(ProtocolHelper.disconnect(remote))
-            _ <- localTl.shutdown(ProtocolHelper.disconnect(local))
+            _ <- shutdown(ProtocolHelper.disconnect(local))
+            _ = server.cancel()
           } yield
             new TwoNodesResult {
               def localNode: PeerNode        = local
@@ -108,22 +110,23 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
         Dispatcher.withoutMessageDispatcher[F],
       val streamDispatcher: Dispatcher[F, Blob, Unit] = Dispatcher.devNullPacketDispatcher[F]
   ) extends Runtime[A] {
-    def execute(transportLayer: TransportLayer[F], local: PeerNode, remote: PeerNode): F[A]
+    def execute(
+        transportLayer: TransportLayer[F],
+        transportLayerShutdown: TransportLayerShutdown[F],
+        local: PeerNode,
+        remote: PeerNode
+    ): F[A]
 
     def run(blockUntilDispatched: Boolean = false): TwoNodesResult =
       extract(
         twoNodesEnvironment { (e1, e2) =>
           for {
-            localTl <- createTransportLayer(e1)
-            local   = e1.peer
-            remote  = e2.peer
-            cbl     <- createDispatcherCallback
-            _ <- localTl.receive(
-                  Dispatcher.withoutMessageDispatcher[F].dispatch(local, cbl),
-                  Dispatcher.devNullPacketDispatcher[F].dispatch(local, cbl)
-                )
-            r <- execute(localTl, local, remote)
-            _ <- localTl.shutdown(ProtocolHelper.disconnect(local))
+            tl                  <- createTransportLayer(e1)
+            (localTl, shutdown) = tl
+            local               = e1.peer
+            remote              = e2.peer
+            r                   <- execute(localTl, shutdown, local, remote)
+            _                   <- shutdown(ProtocolHelper.disconnect(local))
           } yield
             new TwoNodesResult {
               def localNode: PeerNode  = local
@@ -145,6 +148,7 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
   ) extends Runtime[A] {
     def execute(
         transportLayer: TransportLayer[F],
+        transportLayerShutdown: TransportLayerShutdown[F],
         local: PeerNode,
         remote1: PeerNode,
         remote2: PeerNode
@@ -154,35 +158,32 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
       extract(
         threeNodesEnvironment { (e1, e2, e3) =>
           for {
-            localTl   <- createTransportLayer(e1)
-            remoteTl1 <- createTransportLayer(e2)
-            remoteTl2 <- createTransportLayer(e3)
-            local     = e1.peer
-            remote1   = e2.peer
-            remote2   = e3.peer
-            cbl       <- createDispatcherCallback
-            cb1       <- createDispatcherCallback
-            cb2       <- createDispatcherCallback
-            _ <- localTl.receive(
-                  Dispatcher.withoutMessageDispatcher[F].dispatch(local, cbl),
-                  Dispatcher.devNullPacketDispatcher[F].dispatch(local, cbl)
-                )
-            _ <- remoteTl1.receive(
-                  protocolDispatcher.dispatch(remote1, cb1),
-                  streamDispatcher.dispatch(remote1, cb1)
-                )
-            _ <- remoteTl2.receive(
-                  protocolDispatcher.dispatch(remote2, cb2),
-                  streamDispatcher.dispatch(remote2, cb2)
-                )
-            r <- execute(localTl, local, remote1, remote2)
+            tl                  <- createTransportLayer(e1)
+            (localTl, shutdown) = tl
+            remoteTls1          <- createTransportLayerServer(e2)
+            remoteTls2          <- createTransportLayerServer(e3)
+            local               = e1.peer
+            remote1             = e2.peer
+            remote2             = e3.peer
+            cbl                 <- createDispatcherCallback
+            cb1                 <- createDispatcherCallback
+            cb2                 <- createDispatcherCallback
+            server1 <- remoteTls1.receive(
+                        protocolDispatcher.dispatch(remote1, cb1),
+                        streamDispatcher.dispatch(remote1, cb1)
+                      )
+            server2 <- remoteTls2.receive(
+                        protocolDispatcher.dispatch(remote2, cb2),
+                        streamDispatcher.dispatch(remote2, cb2)
+                      )
+            r <- execute(localTl, shutdown, local, remote1, remote2)
             _ <- if (blockUntilDispatched) cb1.waitUntilDispatched()
                 else implicitly[Timer[F]].sleep(1.second)
             _ <- if (blockUntilDispatched) cb2.waitUntilDispatched()
                 else implicitly[Timer[F]].sleep(1.second)
-            _ <- remoteTl1.shutdown(ProtocolHelper.disconnect(remote1))
-            _ <- remoteTl2.shutdown(ProtocolHelper.disconnect(remote2))
-            _ <- localTl.shutdown(ProtocolHelper.disconnect(local))
+            _ <- shutdown(ProtocolHelper.disconnect(local))
+            _ = server1.cancel()
+            _ = server2.cancel()
           } yield
             new ThreeNodesResult {
               def localNode: PeerNode   = local
@@ -197,16 +198,6 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
       def remoteNode1: PeerNode
       def remoteNode2: PeerNode
     }
-  }
-
-  def roundTripWithHeartbeat(
-      transport: TransportLayer[F],
-      local: PeerNode,
-      remote: PeerNode,
-      timeout: FiniteDuration = 10.second
-  ): F[CommErr[Protocol]] = {
-    val msg = ProtocolHelper.heartbeat(local)
-    transport.roundTrip(remote, msg, timeout)
   }
 
   def sendHeartbeat(
@@ -259,21 +250,6 @@ final class Dispatcher[F[_]: Monad: Timer, R, S](
 }
 
 object Dispatcher {
-  def heartbeatResponseDispatcher[F[_]: Monad: Timer]
-    : Dispatcher[F, Protocol, CommunicationResponse] =
-    new Dispatcher[F, Protocol, CommunicationResponse](
-      peer => CommunicationResponse.handledWithMessage(ProtocolHelper.heartbeatResponse(peer)),
-      ignore = _.message.isDisconnect
-    )
-
-  def heartbeatResponseDispatcherWithDelay[F[_]: Monad: Timer](
-      delay: FiniteDuration
-  ): Dispatcher[F, Protocol, CommunicationResponse] =
-    new Dispatcher[F, Protocol, CommunicationResponse](
-      peer => CommunicationResponse.handledWithMessage(ProtocolHelper.heartbeatResponse(peer)),
-      delay = Some(delay),
-      ignore = _.message.isDisconnect
-    )
 
   def withoutMessageDispatcher[F[_]: Monad: Timer]: Dispatcher[F, Protocol, CommunicationResponse] =
     new Dispatcher[F, Protocol, CommunicationResponse](

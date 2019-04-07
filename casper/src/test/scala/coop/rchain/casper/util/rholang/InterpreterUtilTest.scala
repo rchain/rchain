@@ -13,6 +13,7 @@ import coop.rchain.blockstorage.{
   BlockStore,
   IndexedBlockDagStorage
 }
+import coop.rchain.casper.ConstructDeploy
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
@@ -20,6 +21,8 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil._
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.models.PCost
 import coop.rchain.p2p.EffectsTestInstances.LogStub
@@ -36,11 +39,14 @@ class InterpreterUtilTest
     with Matchers
     with BlockGenerator
     with BlockDagStorageFixture {
-  implicit val logEff  = new LogStub[Task]
-  val storageSize      = 1024L * 1024
-  val storageDirectory = Files.createTempDirectory("casper-interp-util-test")
+  implicit val logEff                    = new LogStub[Task]
+  implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+  val storageSize                        = 1024L * 1024
+  val storageDirectory                   = Files.createTempDirectory("casper-interp-util-test")
   val activeRuntime =
-    Runtime.create[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB).unsafeRunSync
+    Runtime
+      .createWithEmptyCost[Task, Task.Par](storageDirectory, storageSize, StoreType.LMDB)
+      .unsafeRunSync
 
   val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
 
@@ -50,26 +56,25 @@ class InterpreterUtilTest
         "@1!(1)",
         "@2!(2)",
         "for(@a <- @1){ @123!(5 * a) }"
-      ).flatMap(mkTerm(_).toOption)
-        .map(ProtoUtil.termDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
+      ).map(ConstructDeploy.sourceDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
       val genesisDeploysCost =
         genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1)))
 
       val b1Deploys = Vector(
         "@1!(1)",
         "for(@a <- @2){ @456!(5 * a) }"
-      ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
-      val b1DeploysCost = b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
+      ).map(ConstructDeploy.sourceDeployNow)
+      val b1DeploysCost = b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L)))
 
       val b2Deploys = Vector(
         "for(@a <- @123; @b <- @456){ @1!(a + b) }"
-      ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
-      val b2DeploysCost = b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
+      ).map(ConstructDeploy.sourceDeployNow)
+      val b2DeploysCost = b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L)))
 
       val b3Deploys = Vector(
         "@7!(7)"
-      ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
-      val b3DeploysCost = b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
+      ).map(ConstructDeploy.sourceDeployNow)
+      val b3DeploysCost = b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L)))
 
       /*
        * DAG Looks like this:
@@ -85,23 +90,29 @@ class InterpreterUtilTest
 
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {
-          genesis                                     <- createBlock[Task](Seq.empty, deploys = genesisDeploysCost)
-          b1                                          <- createBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysCost)
-          b2                                          <- createBlock[Task](Seq(b1.blockHash), deploys = b2DeploysCost)
-          b3                                          <- createBlock[Task](Seq(b2.blockHash), deploys = b3DeploysCost)
+          genesis                                     <- createGenesis[Task](deploys = genesisDeploysCost)
+          b1                                          <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = b1DeploysCost)
+          b2                                          <- createBlock[Task](Seq(b1.blockHash), genesis, deploys = b2DeploysCost)
+          b3                                          <- createBlock[Task](Seq(b2.blockHash), genesis, deploys = b3DeploysCost)
           dag1                                        <- blockDagStorage.getRepresentation
           blockCheckpoint                             <- computeBlockCheckpoint(genesis, genesis, dag1, runtimeManager)
           (postGenStateHash, postGenProcessedDeploys) = blockCheckpoint
-          _                                           <- injectPostStateHash[Task](0, genesis, postGenStateHash, postGenProcessedDeploys)
-          genPostStateT                               <- runtimeManager.storageRepr(postGenStateHash)
-          genPostState                                = genPostStateT.get
+          _ <- injectPostStateHash[Task](
+                0,
+                genesis,
+                genesis,
+                postGenStateHash,
+                postGenProcessedDeploys
+              )
+          genPostStateT <- runtimeManager.storageRepr(postGenStateHash)
+          genPostState  = genPostStateT.get
 
           _                                         = genPostState.contains("@{2}!(2)") should be(true)
           _                                         = genPostState.contains("@{123}!(5)") should be(true)
           dag2                                      <- blockDagStorage.getRepresentation
           blockCheckpointB1                         <- computeBlockCheckpoint(b1, genesis, dag2, runtimeManager)
           (postB1StateHash, postB1ProcessedDeploys) = blockCheckpointB1
-          _                                         <- injectPostStateHash[Task](1, b1, postB1StateHash, postB1ProcessedDeploys)
+          _                                         <- injectPostStateHash[Task](1, b1, genesis, postB1StateHash, postB1ProcessedDeploys)
           b1PostStateT                              <- runtimeManager.storageRepr(postB1StateHash)
           b1PostState                               = b1PostStateT.get
           _                                         = b1PostState.contains("@{1}!(1)") should be(true)
@@ -115,7 +126,7 @@ class InterpreterUtilTest
                                 runtimeManager
                               )
           (postB2StateHash, postB2ProcessedDeploys) = blockCheckpointB2
-          _                                         <- injectPostStateHash[Task](2, b2, postB2StateHash, postB2ProcessedDeploys)
+          _                                         <- injectPostStateHash[Task](2, b2, genesis, postB2StateHash, postB2ProcessedDeploys)
 
           dag4 <- blockDagStorage.getRepresentation
           blockCheckpointB4 <- computeBlockCheckpoint(
@@ -141,28 +152,28 @@ class InterpreterUtilTest
         "@1!(1)",
         "@2!(2)",
         "for(@a <- @1){ @123!(5 * a) }"
-      ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
+      ).map(ConstructDeploy.sourceDeployNow)
       val genesisDeploysWithCost =
         genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1)))
 
       val b1Deploys = Vector(
         "@5!(5)",
         "for(@a <- @2){ @456!(5 * a) }"
-      ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
+      ).map(ConstructDeploy.sourceDeployNow)
       val b1DeploysWithCost =
-        b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(2, 2L)))
+        b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(2L)))
 
       val b2Deploys = Vector(
         "@6!(6)"
-      ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
+      ).map(ConstructDeploy.sourceDeployNow)
       val b2DeploysWithCost =
-        b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
+        b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L)))
 
       val b3Deploys = Vector(
         "for(@a <- @123; @b <- @456){ @1!(a + b) }"
-      ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
+      ).map(ConstructDeploy.sourceDeployNow)
       val b3DeploysWithCost =
-        b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(5, 5L)))
+        b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(5L)))
 
       /*
        * DAG Looks like this:
@@ -175,15 +186,25 @@ class InterpreterUtilTest
        */
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {
-          genesis                                     <- createBlock[Task](Seq.empty, deploys = genesisDeploysWithCost)
-          b1                                          <- createBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
-          b2                                          <- createBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
-          b3                                          <- createBlock[Task](Seq(b1.blockHash, b2.blockHash), deploys = b3DeploysWithCost)
+          genesis <- createGenesis[Task](deploys = genesisDeploysWithCost)
+          b1      <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = b1DeploysWithCost)
+          b2      <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = b2DeploysWithCost)
+          b3 <- createBlock[Task](
+                 Seq(b1.blockHash, b2.blockHash),
+                 genesis,
+                 deploys = b3DeploysWithCost
+               )
           dag1                                        <- blockDagStorage.getRepresentation
           blockCheckpoint                             <- computeBlockCheckpoint(genesis, genesis, dag1, runtimeManager)
           (postGenStateHash, postGenProcessedDeploys) = blockCheckpoint
-          _                                           <- injectPostStateHash[Task](0, genesis, postGenStateHash, postGenProcessedDeploys)
-          dag2                                        <- blockDagStorage.getRepresentation
+          _ <- injectPostStateHash[Task](
+                0,
+                genesis,
+                genesis,
+                postGenStateHash,
+                postGenProcessedDeploys
+              )
+          dag2 <- blockDagStorage.getRepresentation
           blockCheckpointB1 <- computeBlockCheckpoint(
                                 b1,
                                 genesis,
@@ -191,7 +212,7 @@ class InterpreterUtilTest
                                 runtimeManager
                               )
           (postB1StateHash, postB1ProcessedDeploys) = blockCheckpointB1
-          _                                         <- injectPostStateHash[Task](1, b1, postB1StateHash, postB1ProcessedDeploys)
+          _                                         <- injectPostStateHash[Task](1, b1, genesis, postB1StateHash, postB1ProcessedDeploys)
           dag3                                      <- blockDagStorage.getRepresentation
           blockCheckpointB2 <- computeBlockCheckpoint(
                                 b2,
@@ -200,7 +221,7 @@ class InterpreterUtilTest
                                 runtimeManager
                               )
           (postB2StateHash, postB2ProcessedDeploys) = blockCheckpointB2
-          _                                         <- injectPostStateHash[Task](2, b2, postB2StateHash, postB2ProcessedDeploys)
+          _                                         <- injectPostStateHash[Task](2, b2, genesis, postB2StateHash, postB2ProcessedDeploys)
           updatedGenesis                            <- blockDagStorage.lookupByIdUnsafe(0)
           dag4                                      <- blockDagStorage.getRepresentation
           blockCheckpointB3 <- computeBlockCheckpoint(
@@ -249,7 +270,7 @@ class InterpreterUtilTest
   """.stripMargin
 
   def prepareDeploys(v: Vector[String], c: PCost) = {
-    val genesisDeploys = v.flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
+    val genesisDeploys = v.map(ConstructDeploy.sourceDeployNow)
     genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(c))
   }
 
@@ -258,9 +279,9 @@ class InterpreterUtilTest
       val contract = registry
 
       val genesisDeploysWithCost = prepareDeploys(Vector.empty, PCost(1))
-      val b1DeploysWithCost      = prepareDeploys(Vector(contract), PCost(2, 2L))
-      val b2DeploysWithCost      = prepareDeploys(Vector(contract), PCost(1, 1L))
-      val b3DeploysWithCost      = prepareDeploys(Vector.empty, PCost(5, 5L))
+      val b1DeploysWithCost      = prepareDeploys(Vector(contract), PCost(2L))
+      val b2DeploysWithCost      = prepareDeploys(Vector(contract), PCost(1L))
+      val b3DeploysWithCost      = prepareDeploys(Vector.empty, PCost(5L))
 
       /*
        * DAG Looks like this:
@@ -288,15 +309,20 @@ class InterpreterUtilTest
               result <- injectPostStateHash[Task](
                          index,
                          b1,
+                         genesis,
                          postB1StateHash,
                          postB1ProcessedDeploys
                        )
             } yield result
           for {
-            genesis   <- createBlock[Task](Seq.empty, deploys = genesisDeploysWithCost)
-            b1        <- createBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
-            b2        <- createBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
-            b3        <- createBlock[Task](Seq(b1.blockHash, b2.blockHash), deploys = b3DeploysWithCost)
+            genesis <- createGenesis[Task](deploys = genesisDeploysWithCost)
+            b1      <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = b1DeploysWithCost)
+            b2      <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = b2DeploysWithCost)
+            b3 <- createBlock[Task](
+                   Seq(b1.blockHash, b2.blockHash),
+                   genesis,
+                   deploys = b3DeploysWithCost
+                 )
             _         <- step(0, genesis)
             _         <- step(1, genesis)
             _         <- step(2, genesis)
@@ -313,15 +339,15 @@ class InterpreterUtilTest
 
       val genesisDeploysWithCost = prepareDeploys(Vector(contract), PCost(1))
 
-      val b1DeploysWithCost = prepareDeploys(Vector(contract), PCost(2, 2L))
+      val b1DeploysWithCost = prepareDeploys(Vector(contract), PCost(2L))
 
-      val b2DeploysWithCost = prepareDeploys(Vector(contract), PCost(1, 1L))
+      val b2DeploysWithCost = prepareDeploys(Vector(contract), PCost(1L))
 
-      val b3DeploysWithCost = prepareDeploys(Vector(contract), PCost(5, 5L))
+      val b3DeploysWithCost = prepareDeploys(Vector(contract), PCost(5L))
 
-      val b4DeploysWithCost = prepareDeploys(Vector(contract), PCost(5, 5L))
+      val b4DeploysWithCost = prepareDeploys(Vector(contract), PCost(5L))
 
-      val b5DeploysWithCost = prepareDeploys(Vector(contract), PCost(5, 5L))
+      val b5DeploysWithCost = prepareDeploys(Vector(contract), PCost(5L))
 
       /*
        * DAG Looks like this:
@@ -356,18 +382,23 @@ class InterpreterUtilTest
               result <- injectPostStateHash[Task](
                          index,
                          b1,
+                         genesis,
                          postB1StateHash,
                          postB1ProcessedDeploys
                        )
             } yield result
           for {
-            genesis <- createBlock[Task](Seq.empty, deploys = genesisDeploysWithCost)
-            b1      <- createBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
-            b2      <- createBlock[Task](Seq(b1.blockHash), deploys = b2DeploysWithCost)
-            b3      <- createBlock[Task](Seq(b1.blockHash), deploys = b3DeploysWithCost)
-            b4      <- createBlock[Task](Seq(b3.blockHash), deploys = b4DeploysWithCost)
-            b5      <- createBlock[Task](Seq(b2.blockHash, b4.blockHash), deploys = b5DeploysWithCost)
-            dag1    <- blockDagStorage.getRepresentation
+            genesis <- createGenesis[Task](deploys = genesisDeploysWithCost)
+            b1      <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = b1DeploysWithCost)
+            b2      <- createBlock[Task](Seq(b1.blockHash), genesis, deploys = b2DeploysWithCost)
+            b3      <- createBlock[Task](Seq(b1.blockHash), genesis, deploys = b3DeploysWithCost)
+            b4      <- createBlock[Task](Seq(b3.blockHash), genesis, deploys = b4DeploysWithCost)
+            b5 <- createBlock[Task](
+                   Seq(b2.blockHash, b4.blockHash),
+                   genesis,
+                   deploys = b5DeploysWithCost
+                 )
+            dag1 <- blockDagStorage.getRepresentation
             computeBlockCheckpointResult <- computeBlockCheckpoint(
                                              genesis,
                                              genesis,
@@ -375,11 +406,17 @@ class InterpreterUtilTest
                                              runtimeManager
                                            )
             (postGenStateHash, postGenProcessedDeploys) = computeBlockCheckpointResult
-            _                                           <- injectPostStateHash[Task](0, genesis, postGenStateHash, postGenProcessedDeploys)
-            _                                           <- step(1, genesis)
-            _                                           <- step(2, genesis)
-            _                                           <- step(3, genesis)
-            _                                           <- step(4, genesis)
+            _ <- injectPostStateHash[Task](
+                  0,
+                  genesis,
+                  genesis,
+                  postGenStateHash,
+                  postGenProcessedDeploys
+                )
+            _ <- step(1, genesis)
+            _ <- step(2, genesis)
+            _ <- step(3, genesis)
+            _ <- step(4, genesis)
 
             dag2      <- blockDagStorage.getRepresentation
             postState <- validateBlockCheckpoint[Task](b5, dag2, runtimeManager)
@@ -391,7 +428,7 @@ class InterpreterUtilTest
   def computeSingleProcessedDeploy(
       runtimeManager: RuntimeManager[Task],
       dag: BlockDagRepresentation[Task],
-      deploy: Deploy*
+      deploy: DeployData*
   )(implicit blockStore: BlockStore[Task]): Task[Seq[InternalProcessedDeploy]] =
     for {
       computeResult         <- computeDeploysCheckpoint[Task](Seq.empty, deploy, dag, runtimeManager)
@@ -403,20 +440,20 @@ class InterpreterUtilTest
       implicit blockDagStorage =>
         //reference costs
         //deploy each Rholang program separately and record its cost
-        val deploy1 = ProtoUtil.termDeploy(
-          mkTerm("@1!(Nil)").toOption.get,
+        val deploy1 = ConstructDeploy.sourceDeploy(
+          "@1!(Nil)",
           System.currentTimeMillis(),
           accounting.MAX_VALUE
         )
         val deploy2 =
-          ProtoUtil.termDeploy(
-            mkTerm("@3!([1,2,3,4])").toOption.get,
+          ConstructDeploy.sourceDeploy(
+            "@3!([1,2,3,4])",
             System.currentTimeMillis(),
             accounting.MAX_VALUE
           )
         val deploy3 =
-          ProtoUtil.termDeploy(
-            mkTerm("for(@x <- @0) { @4!(x.toByteArray()) }").toOption.get,
+          ConstructDeploy.sourceDeploy(
+            "for(@x <- @0) { @4!(x.toByteArray()) }",
             System.currentTimeMillis(),
             accounting.MAX_VALUE
           )
@@ -438,14 +475,14 @@ class InterpreterUtilTest
       withStorage { implicit blockStore => implicit blockDagStorage =>
         //deploy each Rholang program separately and record its cost
         val deploy1 =
-          ProtoUtil.termDeploy(
-            mkTerm("@1!(Nil)").toOption.get,
+          ConstructDeploy.sourceDeploy(
+            "@1!(Nil)",
             System.currentTimeMillis(),
             accounting.MAX_VALUE
           )
         val deploy2 =
-          ProtoUtil.termDeploy(
-            mkTerm("@2!([1,2,3,4])").toOption.get,
+          ConstructDeploy.sourceDeploy(
+            "@2!([1,2,3,4])",
             System.currentTimeMillis(),
             accounting.MAX_VALUE
           )
@@ -458,8 +495,8 @@ class InterpreterUtilTest
 
             accCostsSep = cost1 ++ cost2
 
-            deployErr = ProtoUtil.termDeploy(
-              mkTerm("@3!(\"a\" + 3)").toOption.get,
+            deployErr = ConstructDeploy.sourceDeploy(
+              "@3!(\"a\" + 3)",
               System.currentTimeMillis(),
               accounting.MAX_VALUE
             )
@@ -472,13 +509,13 @@ class InterpreterUtilTest
 
   "validateBlockCheckpoint" should "not return a checkpoint for an invalid block" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val deploys = Vector("@1!(1)").flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
+      val deploys = Vector("@1!(1)").map(ConstructDeploy.sourceDeployNow)
       val processedDeploys =
-        deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
+        deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L)))
       val invalidHash = ByteString.EMPTY
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {
-          block            <- createBlock[Task](Seq.empty, deploys = processedDeploys, tsHash = invalidHash)
+          block            <- createGenesis[Task](deploys = processedDeploys, tsHash = invalidHash)
           dag              <- blockDagStorage.getRepresentation
           validateResult   <- validateBlockCheckpoint[Task](block, dag, runtimeManager)
           Right(stateHash) = validateResult
@@ -498,8 +535,7 @@ class InterpreterUtilTest
           "@2!(5)",
           "for (@x <- @1) { @2!(x) }",
           "for (@x <- @2) { @3!(x) }"
-        ).flatMap(mkTerm(_).toOption)
-          .map(ProtoUtil.termDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
+        ).map(ConstructDeploy.sourceDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {
           dag1 <- blockDagStorage.getRepresentation
@@ -510,8 +546,7 @@ class InterpreterUtilTest
                                 runtimeManager
                               )
           Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
-          block <- createBlock[Task](
-                    Seq.empty,
+          block <- createGenesis[Task](
                     deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
                     tsHash = computedTsHash,
                     preStateHash = preStateHash
@@ -552,8 +587,8 @@ class InterpreterUtilTest
       """.stripMargin
       ).map(
         s =>
-          ProtoUtil.termDeploy(
-            InterpreterUtil.mkTerm(s).right.get,
+          ConstructDeploy.sourceDeploy(
+            s,
             System.currentTimeMillis(),
             accounting.MAX_VALUE
           )
@@ -569,8 +604,7 @@ class InterpreterUtilTest
                                 runtimeManager
                               )
           Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
-          block <- createBlock[Task](
-                    Seq.empty,
+          block <- createGenesis[Task](
                     deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
                     tsHash = computedTsHash,
                     preStateHash = preStateHash
@@ -614,8 +648,8 @@ class InterpreterUtilTest
           """)
           .map(
             s =>
-              ProtoUtil.termDeploy(
-                InterpreterUtil.mkTerm(s).right.get,
+              ConstructDeploy.sourceDeploy(
+                s,
                 System.currentTimeMillis(),
                 accounting.MAX_VALUE
               )
@@ -630,8 +664,7 @@ class InterpreterUtilTest
                                 runtimeManager
                               )
           Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
-          block <- createBlock[Task](
-                    Seq.empty,
+          block <- createGenesis[Task](
                     deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
                     tsHash = computedTsHash,
                     preStateHash = preStateHash
@@ -672,8 +705,8 @@ class InterpreterUtilTest
           |}""".stripMargin
         ).map(
           s =>
-            ProtoUtil.termDeploy(
-              InterpreterUtil.mkTerm(s).right.get,
+            ConstructDeploy.sourceDeploy(
+              s,
               System.currentTimeMillis(),
               accounting.MAX_VALUE
             )
@@ -688,8 +721,7 @@ class InterpreterUtilTest
                                 runtimeManager
                               )
           Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
-          block <- createBlock[Task](
-                    Seq.empty,
+          block <- createGenesis[Task](
                     deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
                     tsHash = computedTsHash,
                     preStateHash = preStateHash
@@ -722,8 +754,8 @@ class InterpreterUtilTest
             |""".stripMargin
           ).map(
             s =>
-              ProtoUtil.termDeploy(
-                InterpreterUtil.mkTerm(s).right.get,
+              ConstructDeploy.sourceDeploy(
+                s,
                 System.currentTimeMillis(),
                 accounting.MAX_VALUE
               )
@@ -739,8 +771,7 @@ class InterpreterUtilTest
                                   runtimeManager
                                 )
             Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
-            block <- createBlock[Task](
-                      Seq.empty,
+            block <- createGenesis[Task](
                       deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
                       tsHash = computedTsHash,
                       preStateHash = preStateHash
@@ -758,8 +789,7 @@ class InterpreterUtilTest
     implicit blockStore => implicit blockDagStorage =>
       val deploys = (0 until 1).map(i => {
         val code = s"for(_ <- @$i){ Nil } | @$i!($i)"
-        val term = InterpreterUtil.mkTerm(code).right.get
-        ProtoUtil.termDeployNow(term)
+        ConstructDeploy.sourceDeployNow(code)
       })
 
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
@@ -777,8 +807,7 @@ class InterpreterUtilTest
           badProcessedDeploy = intProcessedDeploys.head.copy(
             log = intProcessedDeploys.head.log ++ intProcessedDeploys.last.log
           )
-          block <- createBlock[Task](
-                    Seq.empty,
+          block <- createGenesis[Task](
                     deploys = Seq(badProcessedDeploy, intProcessedDeploys.last),
                     tsHash = computedTsHash,
                     preStateHash = preStateHash
@@ -811,7 +840,7 @@ class InterpreterUtilTest
             """
             |@"store"!("2")
           """.stripMargin
-          ).map(s => ProtoUtil.termDeployNow(InterpreterUtil.mkTerm(s).right.get))
+          ).map(s => ConstructDeploy.sourceDeployNow(s))
 
         mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
           for {
@@ -823,8 +852,7 @@ class InterpreterUtilTest
                                   runtimeManager
                                 )
             Right((preStateHash, computedTsHash, processedDeploys)) = deploysCheckpoint
-            block <- createBlock[Task](
-                      Seq.empty,
+            block <- createGenesis[Task](
                       deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
                       tsHash = computedTsHash,
                       preStateHash = preStateHash
@@ -870,19 +898,24 @@ class InterpreterUtilTest
               result <- injectPostStateHash[Task](
                          index,
                          b1,
+                         genesis,
                          postB1StateHash,
                          postB1ProcessedDeploys
                        )
             } yield result
           for {
-            genesis <- createBlock[Task](Seq.empty, deploys = genesisDeploysWithCost)
-            b1      <- createBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
-            b2      <- createBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
-            b3      <- createBlock[Task](Seq(b1.blockHash, b2.blockHash), deploys = b3DeploysWithCost)
-            _       <- step(0, genesis)
-            _       <- step(1, genesis)
-            _       <- step(2, genesis)
-            dag     <- blockDagStorage.getRepresentation
+            genesis <- createGenesis[Task](deploys = genesisDeploysWithCost)
+            b1      <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = b1DeploysWithCost)
+            b2      <- createBlock[Task](Seq(genesis.blockHash), genesis, deploys = b2DeploysWithCost)
+            b3 <- createBlock[Task](
+                   Seq(b1.blockHash, b2.blockHash),
+                   genesis,
+                   deploys = b3DeploysWithCost
+                 )
+            _   <- step(0, genesis)
+            _   <- step(1, genesis)
+            _   <- step(2, genesis)
+            dag <- blockDagStorage.getRepresentation
             blockHashes <- InterpreterUtil.findMultiParentsBlockHashesForReplay(
                             Seq(b1, b2),
                             dag

@@ -4,24 +4,26 @@ import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
 
 import cats.effect.{ContextShift, Sync}
-import coop.rchain.models._
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
-import coop.rchain.shared.Log
-import coop.rchain.rspace._
-import coop.rchain.rspace.history.Branch
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
-import coop.rchain.rholang.interpreter.accounting.Cost
-import org.openjdk.jmh.annotations.{State => _, _}
+import coop.rchain.models._
+import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.errors.InterpreterError
+import coop.rchain.rspace._
+import coop.rchain.rspace.history.Branch
+import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
+import org.openjdk.jmh.annotations.{State => _, _}
 import org.openjdk.jmh.infra.Blackhole
-import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.Gen.Parameters
 import org.scalacheck.rng.Seed
+import org.scalacheck.{Arbitrary, Gen}
 
 import scala.collection.immutable.{BitSet, Seq}
 
@@ -48,13 +50,13 @@ class BasicBench {
         )(state.matcher)
         .unsafeRunSync
 
-      assert(c1.right.get.isEmpty)
+      assert(c1.isEmpty)
       bh.consume(c1)
 
       val r2 =
         space.produce(state.channels(i), state.data(i), false)(state.matcher).unsafeRunSync
 
-      assert(r2.right.get.nonEmpty)
+      assert(r2.nonEmpty)
       bh.consume(r2)
       if (state.debug) {
         assert(space.store.isEmpty)
@@ -73,7 +75,7 @@ class BasicBench {
       val r2 =
         space.produce(state.channels(i), state.data(i), false)(state.matcher).unsafeRunSync
 
-      assert(r2.right.get.isEmpty)
+      assert(r2.isEmpty)
       bh.consume(r2)
 
       val c1 = space
@@ -85,7 +87,7 @@ class BasicBench {
         )(state.matcher)
         .unsafeRunSync
 
-      assert(c1.right.get.nonEmpty)
+      assert(c1.nonEmpty)
       bh.consume(c1)
       if (state.debug) {
         assert(space.store.isEmpty)
@@ -107,15 +109,16 @@ object BasicBench {
 
     implicit val syncF: Sync[Task]                 = Task.catsEffect
     implicit val logF: Log[Task]                   = new Log.NOPLog[Task]
+    implicit val noopMetrics: Metrics[Task]        = new metrics.Metrics.MetricsNOP[Task]
     implicit val contextShiftF: ContextShift[Task] = Task.contextShift
 
     private val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
 
-    val context: LMDBContext[Par, BindPattern, ListParWithRandom, TaggedContinuation] =
+    val context: LMDBContext[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation] =
       Context.create(dbDir, 1024L * 1024L * 1024L)
 
-    val testStore: LMDBStore[Par, BindPattern, ListParWithRandom, TaggedContinuation] =
-      LMDBStore.create[Par, BindPattern, ListParWithRandom, TaggedContinuation](
+    val testStore: IStore[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation] =
+      LMDBStore.create[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](
         context,
         Branch("bench")
       )
@@ -124,9 +127,8 @@ object BasicBench {
       Task,
       Par,
       BindPattern,
-      OutOfPhlogistonsError.type,
       ListParWithRandom,
-      ListParWithRandomAndPhlos,
+      ListParWithRandom,
       TaggedContinuation
     ] =
       RSpace
@@ -134,9 +136,8 @@ object BasicBench {
           Task,
           Par,
           BindPattern,
-          OutOfPhlogistonsError.type,
           ListParWithRandom,
-          ListParWithRandomAndPhlos,
+          ListParWithRandom,
           TaggedContinuation
         ](
           testStore,
@@ -144,7 +145,8 @@ object BasicBench {
         )
         .unsafeRunSync
 
-    implicit val matcher = matchListPar(Cost(10000000L))
+    implicit val cost    = CostAccounting.initialCost[Task](Cost.UNSAFE_MAX).unsafeRunSync
+    implicit val matcher = matchListPar
 
     val initSeed = 123456789L
 

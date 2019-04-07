@@ -6,8 +6,7 @@ final class BooleanF[F[_]: FlatMap](val self: F[Boolean]) {
   def &&^(other: F[Boolean]): F[Boolean] =
     BooleanF.&&^[F](self, other)
   def ||^(other: F[Boolean]): F[Boolean] =
-    BooleanF.&&^[F](self, other)
-  def ~^(): F[Boolean] = BooleanF.~^[F](self)
+    BooleanF.||^[F](self, other)
 }
 
 object BooleanF {

@@ -436,6 +436,21 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     result shouldBe "x0"
   }
 
+  "PVarRef" should "Print with referenced identifier" in {
+    checkRoundTrip(
+      """for( @{x0}, @{x1} <- @{0} ) {
+        |  match x0 {
+        |    =x0 => {
+        |      Nil
+        |    }
+        |    =x1 => {
+        |      Nil
+        |    }
+        |  }
+        |}""".stripMargin
+    )
+  }
+
   "PEval" should "Print eval with fresh identifier" in {
     val pEval       = new PEval(new NameVar("x"))
     val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", NameSort, 0, 0)))
@@ -595,7 +610,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
   }
 
   "PInput" should "Print a more complicated receive" in {
-    // new x, y in { for ( z, @a <- y ; b, @c <- x ) { z!(c) | b!(a) | for( d <- b ){ *d | match d { case 42 => Nil ; case e => c } }
+    // new x, y in { for ( z, @a <- y ; b, @c <- x ) { z!(c) | b!(a) | for( d <- b ){ *d | match d { case 42 => Nil case e => c } }
 
     val listBindings1 = new ListName()
     listBindings1.add(new NameVar("x1"))
@@ -653,8 +668,12 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
         |    for( @{x6} <- @{x4} ) {
         |      x6 |
         |      match x6 {
-        |        42 => Nil ;
-        |        x7 => x3
+        |        42 => {
+        |          Nil
+        |        }
+        |        x7 => {
+        |          x3
+        |        }
         |      }
         |    }
         |  }
@@ -700,7 +719,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
   }
 
   "PMatch" should "Print recognize pattern bindings" in {
-    // for (@x <- @Nil) { match x { 42 => Nil ; y => Nil } } | @Nil!(47)
+    // for (@x <- @Nil) { match x { 42 => Nil y => Nil } } | @Nil!(47)
 
     val listBindings = new ListName()
     listBindings.add(new NameQuote(new PVar(new ProcVarVar("x"))))
@@ -728,10 +747,26 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
       """@{Nil}!(47) |
         |for( @{x0} <- @{Nil} ) {
         |  match x0 {
-        |    42 => Nil ;
-        |    x1 => Nil
+        |    42 => {
+        |      Nil
+        |    }
+        |    x1 => {
+        |      Nil
+        |    }
         |  }
         |}""".stripMargin
+  }
+
+  it should "Print receive in curly brackets" in {
+    checkRoundTrip(
+      """match Nil {
+        |  _ => {
+        |    for( @{_} <- @{Nil} ) {
+        |      Nil
+        |    }
+        |  }
+        |}""".stripMargin
+    )
   }
 
   "PIf" should "Print as a match" in {
@@ -746,8 +781,12 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
       )
     result shouldBe
       """match true {
-        |  true => @{Nil}!(47) ;
-        |  false => Nil
+        |  true => {
+        |    @{Nil}!(47)
+        |  }
+        |  false => {
+        |    Nil
+        |  }
         |}""".stripMargin
   }
 
@@ -777,11 +816,15 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
       )
     result shouldBe
       """match (47 == 47) {
-        |  true => new x0 in {
-        |    x0!(47)
-        |  } ;
-        |  false => new x0 in {
-        |    x0!(47)
+        |  true => {
+        |    new x0 in {
+        |      x0!(47)
+        |    }
+        |  }
+        |  false => {
+        |    new x0 in {
+        |      x0!(47)
+        |    }
         |  }
         |}""".stripMargin
   }
@@ -804,7 +847,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     val result = PrettyPrinter().buildString(
       ProcNormalizeMatcher.normalizeMatch[Coeval](input, inputs).value.par
     )
-    result shouldBe """for( @{match x0 | x1 { 47 => Nil }} <- @{Nil} ) {
+    result shouldBe """for( @{match x0 | x1 { 47 => { Nil } }} <- @{Nil} ) {
                       |  Nil
                       |}""".stripMargin
   }
@@ -823,7 +866,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     assert(parseAndPrint(prettySource) == prettySource)
 
   private def parseAndPrint(source: String): String = PrettyPrinter().buildString(
-    Interpreter[Coeval].buildNormalizedTerm(new StringReader(source)).runAttempt().right.get
+    ParBuilder[Coeval].buildNormalizedTerm(new StringReader(source)).runAttempt().right.get
   )
 }
 

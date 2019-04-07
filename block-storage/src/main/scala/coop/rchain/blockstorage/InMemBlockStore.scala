@@ -5,8 +5,7 @@ import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.blockstorage.StorageError.StorageIOErr
-import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage}
 import coop.rchain.metrics.Metrics
 
 import scala.language.higherKinds
@@ -15,6 +14,7 @@ class InMemBlockStore[F[_]] private ()(
     implicit
     monadF: Monad[F],
     refF: Ref[F, Map[BlockHash, BlockMessage]],
+    approvedBlockRef: Ref[F, Option[ApprovedBlock]],
     metricsF: Metrics[F]
 ) extends BlockStore[F] {
 
@@ -33,24 +33,30 @@ class InMemBlockStore[F[_]] private ()(
       state <- refF.get
     } yield state.filterKeys(p(_)).toSeq
 
-  def put(f: => (BlockHash, BlockMessage)): F[StorageIOErr[Unit]] =
+  def put(f: => (BlockHash, BlockMessage)): F[Unit] =
     for {
       _ <- metricsF.incrementCounter("put")
       _ <- refF.update { state =>
             val (hash, message) = f
             state.updated(hash, message)
           }
-    } yield Right(())
+    } yield ()
 
-  def checkpoint(): F[StorageIOErr[Unit]] =
-    ().asRight[StorageIOError].pure[F]
+  def getApprovedBlock: F[Option[ApprovedBlock]] =
+    approvedBlockRef.get
 
-  def clear(): F[StorageIOErr[Unit]] =
+  def putApprovedBlock(block: ApprovedBlock): F[Unit] =
+    approvedBlockRef.set(Some(block))
+
+  def checkpoint(): F[Unit] =
+    ().pure[F]
+
+  def clear(): F[Unit] =
     for {
       _ <- refF.update { _.empty }
-    } yield Right(())
+    } yield ()
 
-  override def close(): F[StorageIOErr[Unit]] = monadF.pure(Right(()))
+  override def close(): F[Unit] = monadF.pure(())
 }
 
 object InMemBlockStore {
@@ -58,6 +64,7 @@ object InMemBlockStore {
       implicit
       monadF: Monad[F],
       refF: Ref[F, Map[BlockHash, BlockMessage]],
+      approvedBlockRef: Ref[F, Option[ApprovedBlock]],
       metricsF: Metrics[F]
   ): BlockStore[F] =
     new InMemBlockStore()
@@ -66,8 +73,9 @@ object InMemBlockStore {
     import coop.rchain.catscontrib.effect.implicits._
     import coop.rchain.metrics.Metrics.MetricsNOP
     val refId                         = emptyMapRef[Id](syncId)
+    val approvedBlockRef              = Ref[Id].of(none[ApprovedBlock])
     implicit val metrics: Metrics[Id] = new MetricsNOP[Id]()(syncId)
-    InMemBlockStore.create(syncId, refId, metrics)
+    InMemBlockStore.create(syncId, refId, approvedBlockRef, metrics)
   }
 
   def emptyMapRef[F[_]](implicit syncEv: Sync[F]): F[Ref[F, Map[BlockHash, BlockMessage]]] =
