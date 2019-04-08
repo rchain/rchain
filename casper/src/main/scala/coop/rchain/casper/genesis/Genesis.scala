@@ -5,7 +5,7 @@ import java.nio.file.Path
 
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import cats.{Applicative, Foldable, Monad}
+import cats.{Applicative, Foldable, Monad, Traverse}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
@@ -16,6 +16,7 @@ import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.{Log, LogSource, Time}
 
 import scala.io.Source
@@ -37,7 +38,10 @@ object Genesis {
       timestamp: Long,
       posParams: ProofOfStake,
       wallets: Seq[PreWallet],
-      faucetCode: String => String
+      faucetCode: String => String,
+      genesisPk: PublicKey,
+      vaults: Seq[Vault],
+      supply: Long
   ): List[DeployData] =
     List(
       StandardDeploys.listOps,
@@ -53,7 +57,8 @@ object Genesis {
       StandardDeploys.lockbox,
       StandardDeploys.authKey,
       StandardDeploys.rev(wallets, faucetCode, posParams),
-      StandardDeploys.revVault
+      StandardDeploys.revVault,
+      StandardDeploys.testRev(genesisPk, vaults, supply)
     )
 
   //TODO: Decide on version number and shard identifier
@@ -108,7 +113,16 @@ object Genesis {
       version = 1L,
       shardId = shardId
     )
-    val faucetCode = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
+
+    val faucetCode = if (faucet) Faucet.basicWalletFaucet _ else Faucet.noopFaucet
+
+    val (_, genesisPk) = Ed25519.newKeyPair
+
+    val vaults: Seq[Vault] = Traverse[List]
+      .traverse(proofOfStake.validators.map(_.pk).toList)(RevAddress.fromPublicKey)
+      .get
+      .map(Vault(_, 1000L))
+
     withContracts(
       initial,
       proofOfStake,
@@ -116,7 +130,10 @@ object Genesis {
       faucetCode,
       runtimeManager.emptyStateHash,
       runtimeManager,
-      timestamp
+      timestamp,
+      genesisPk,
+      vaults,
+      Long.MaxValue
     )
   }
 
@@ -128,10 +145,13 @@ object Genesis {
       faucetCode: String => String,
       startHash: StateHash,
       runtimeManager: RuntimeManager[F],
-      timestamp: Long
+      timestamp: Long,
+      genesisPk: PublicKey,
+      vaults: Seq[Vault],
+      supply: Long
   ): F[BlockMessage] =
     withContracts(
-      defaultBlessedTerms(timestamp, posParams, wallets, faucetCode),
+      defaultBlessedTerms(timestamp, posParams, wallets, faucetCode, genesisPk, vaults, supply),
       initial,
       startHash,
       runtimeManager
