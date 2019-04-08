@@ -16,6 +16,7 @@ import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.{Log, LogSource, Time}
 
@@ -42,8 +43,8 @@ object Genesis {
       genesisPk: PublicKey,
       vaults: Seq[Vault],
       supply: Long
-  ): List[DeployData] =
-    List(
+  ): Seq[DeployData] =
+    Seq(
       StandardDeploys.listOps,
       StandardDeploys.either,
       StandardDeploys.nonNegativeNumber,
@@ -58,8 +59,16 @@ object Genesis {
       StandardDeploys.authKey,
       StandardDeploys.rev(wallets, faucetCode, posParams),
       StandardDeploys.revVault,
-      StandardDeploys.testRev(genesisPk, vaults, supply)
-    )
+      StandardDeploys.testRev(genesisPk, vaults, supply),
+      StandardDeploys.testPoS(posParams)
+    ) ++ posParams.validators.map { validator =>
+      DeployData(
+        deployer = ByteString.copyFrom(validator.pk.bytes),
+        timestamp = System.currentTimeMillis(),
+        term = validator.code,
+        phloLimit = accounting.MAX_VALUE
+      )
+    }
 
   //TODO: Decide on version number and shard identifier
   def fromInputFiles[F[_]: Concurrent: Sync: Log: Time](
