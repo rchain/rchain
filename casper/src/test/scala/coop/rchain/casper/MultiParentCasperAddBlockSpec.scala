@@ -5,7 +5,6 @@ import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
-import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.helper.{BlockUtil, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
@@ -15,9 +14,8 @@ import coop.rchain.casper.util.comm.TestNetwork
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.comm.transport
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
-import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
+import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.accounting
 import monix.eval.Task
@@ -33,16 +31,10 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  private val (otherSk, otherPk)          = Ed25519.newKeyPair
-  private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-  private val (ethPivKeys, ethPubKeys)    = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
-  private val ethAddresses =
-    ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.bytes.drop(1)).takeRight(20)))
-  private val wallets     = ethAddresses.map(addr => PreWallet(addr, BigInt(10001)))
-  private val bonds       = createBonds(validators)
-  private val minimumBond = 100L
-  private val genesis =
-    buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, true, 0L)
+  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+  private val genesis = buildGenesis(
+    buildGenesisParameters(4, createBonds(validatorPks))
+  )
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -201,7 +193,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   }
 
   it should "reject blocks not from bonded validators" in effectTest {
-    val node = HashSetCasperTestNode.standaloneEff(genesis, otherSk)
+    val node = HashSetCasperTestNode.standaloneEff(genesis, Ed25519.newKeyPair._1)
     import node._
     implicit val timeEff = new LogicalTime[Effect]
 
@@ -479,22 +471,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   }
 
   it should "estimate parent properly" in effectTest {
-    val (otherSk, otherPk)          = Ed25519.newKeyPair
-    val (validatorKeys, validators) = (1 to 5).map(_ => Ed25519.newKeyPair).unzip
-    val (ethPivKeys, ethPubKeys)    = (1 to 5).map(_ => Secp256k1.newKeyPair).unzip
-    val ethAddresses =
-      ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.bytes.drop(1)).takeRight(20)))
-    val wallets = ethAddresses.map(addr => PreWallet(addr, BigInt(10001)))
-    val bonds = Map(
-      validators(0) -> 3L,
-      validators(1) -> 1L,
-      validators(2) -> 5L,
-      validators(3) -> 2L,
-      validators(4) -> 4L
-    )
-    val minimumBond = 100L
-    val genesis =
-      buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, true, 0L)
+
+    val (validatorKeys, validatorPks) = (1 to 5).map(_ => Ed25519.newKeyPair).unzip
 
     def deployment(i: Int, ts: Long): DeployData =
       ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts, accounting.MAX_VALUE)
@@ -521,7 +499,22 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
     for {
       nodes <- HashSetCasperTestNode
-                .networkEff(validatorKeys.take(3), genesis, testNetwork = network)
+                .networkEff(
+                  validatorKeys.take(3),
+                  buildGenesis(
+                    buildGenesisParameters(
+                      5,
+                      Map(
+                        validatorPks(0) -> 3L,
+                        validatorPks(1) -> 1L,
+                        validatorPks(2) -> 5L,
+                        validatorPks(3) -> 2L,
+                        validatorPks(4) -> 4L
+                      )
+                    )
+                  ),
+                  testNetwork = network
+                )
                 .map(_.toList)
       v1   = nodes(0)
       v2   = nodes(1)
@@ -566,7 +559,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
       ProtoUtil.signBlock[Effect](
         blockThatPointsToInvalidBlock,
         dag,
-        validators(1),
+        validatorPks(1),
         validatorKeys(1),
         "ed25519",
         "rchain"

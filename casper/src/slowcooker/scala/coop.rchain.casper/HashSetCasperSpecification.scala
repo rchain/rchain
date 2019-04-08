@@ -56,8 +56,9 @@ object HashSetCasperActions {
     val wallets     = ethAddresses.map(addr => PreWallet(addr, BigInt(10001)))
     val bonds       = bondsGen(validators)
     val minimumBond = 100L
-    val genesis =
-      buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, true, 0L)
+    val genesis = buildGenesis(
+      buildGenesisParameters(4, validators, createBonds(validators))
+    )
     (genesis, validatorKeys)
   }
 
