@@ -1,5 +1,6 @@
 package coop.rchain.casper.util.comm
 
+import cats.Traverse
 import cats.data.EitherT
 import cats.effect.Concurrent
 import cats.implicits._
@@ -21,6 +22,8 @@ import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared._
 
 import scala.util.Try
@@ -126,10 +129,23 @@ object BlockApproverProtocol {
           case (pk, stake) =>
             Validator(PublicKey(pk.toByteArray), stake)
         }
-        posParams  = ProofOfStake(minimumBond, maximumBond, validators)
-        faucetCode = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
+        posParams      = ProofOfStake(minimumBond, maximumBond, validators)
+        faucetCode     = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
+        (_, genesisPk) = Ed25519.newKeyPair
+        vaults = Traverse[List]
+          .traverse(posParams.validators.map(_.pk).toList)(RevAddress.fromPublicKey)
+          .get
+          .map(Vault(_, 1000L))
         genesisBlessedContracts = Genesis
-          .defaultBlessedTerms(timestamp, posParams, wallets, faucetCode)
+          .defaultBlessedTerms(
+            timestamp,
+            posParams,
+            wallets,
+            faucetCode,
+            genesisPk,
+            vaults,
+            Long.MaxValue
+          )
           .toSet
         blockDeploys          = body.deploys.flatMap(ProcessedDeployUtil.toInternal)
         genesisBlessedDeploys = genesisBlessedContracts

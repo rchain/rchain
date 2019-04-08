@@ -1,31 +1,26 @@
 package coop.rchain.casper.genesis
 
 import java.io.PrintWriter
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 
-import cats.Id
+import cats.effect.Sync
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.helper.BlockDagStorageFixture
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
-import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.metrics
+import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.shared.StoreType
-import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
-import java.nio.file.Path
-
-import cats.effect.Sync
-import coop.rchain.metrics
-import coop.rchain.metrics.Metrics
 import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
+import org.scalatest.{FlatSpec, Matchers}
 
 class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
   import GenesisTest._
@@ -222,7 +217,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
 }
 
 object GenesisTest {
-  val storageSize     = 1024L * 1024
+  val storageSize     = 3024L * 1024
   def storageLocation = Files.createTempDirectory(s"casper-genesis-test-runtime")
   def genesisPath     = Files.createTempDirectory(s"casper-genesis-test")
   val numValidators   = 5
