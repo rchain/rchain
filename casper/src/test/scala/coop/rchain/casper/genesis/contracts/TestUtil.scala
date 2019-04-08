@@ -16,6 +16,7 @@ import coop.rchain.models.Par
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
 import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rholang.interpreter.{accounting, ParBuilder, Runtime, TestRuntime}
 import coop.rchain.shared.Log
 import monix.execution.Scheduler
@@ -68,28 +69,32 @@ object TestUtil {
       _    <- eval(tests.code, runtime)(implicitly, implicitly, rand.splitShort(1))
     } yield ()
 
+  // TODO: Have this function take an additional "Genesis" argument.
   def defaultGenesisSetup[F[_]: Concurrent](runtimeManager: RuntimeManager[F]): F[BlockMessage] = {
-    val (_, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-    val bonds           = createBonds(validators)
-    val posValidators   = bonds.map(Validator.tupled).toSeq
-    val ethAddress      = "0x041e1eec23d118f0c4ffc814d4f415ac3ef3dcff"
-    val initBalance     = 37
-    val wallet          = PreWallet(ethAddress, initBalance)
-    //FIXME / TODO: do in Genesis:
-    // - bond deploys for each validator (from their code in Validator)
-    // - create vaults for each validator
-    // - transfers to each validator's vault based on their bonds
-    // - a genesis vault based on the passed public key and initial rev supply
-    //   (introduce new fields to Genesis case class)
-    // - "PoS and testRev" deploys, and the 'test pos' one
+
+    val (_, validatorPks) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+    val bonds             = createBonds(validatorPks)
+
     Genesis.createGenesisBlock(
       runtimeManager,
       Genesis(
-        "RhoSpec-shard",
-        1,
-        wallet :: Nil,
-        ProofOfStake(0, Long.MaxValue, bonds.map(Validator.tupled).toSeq),
-        false
+        shardId = "RhoSpec-shard",
+        timestamp = 1L,
+        wallets = Seq(
+          PreWallet(ethAddress = "0x041e1eec23d118f0c4ffc814d4f415ac3ef3dcff", initRevBalance = 37)
+        ),
+        proofOfStake = ProofOfStake(
+          minimumBond = 0L,
+          maximumBond = Long.MaxValue,
+          validators = bonds.map(Validator.tupled).toSeq
+        ),
+        faucet = false,
+        genesisPk = Ed25519.newKeyPair._2,
+        vaults = bonds.toList.map {
+          case (pk, stake) =>
+            RevAddress.fromPublicKey(pk).map(Vault(_, stake))
+        }.flattenOption,
+        supply = Long.MaxValue
       )
     )
   }

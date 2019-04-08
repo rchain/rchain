@@ -5,6 +5,7 @@ import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.helper.{BlockUtil, HashSetCasperTestNode}
@@ -20,6 +21,7 @@ import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.accounting
+import coop.rchain.rholang.interpreter.util.RevAddress
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
@@ -33,16 +35,33 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  private val (otherSk, otherPk)          = Ed25519.newKeyPair
-  private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-  private val (ethPivKeys, ethPubKeys)    = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
+  private val (otherSk, _) = Ed25519.newKeyPair
+  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+  private val (_, ethPubKeys) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
   private val ethAddresses =
     ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.bytes.drop(1)).takeRight(20)))
-  private val wallets     = ethAddresses.map(addr => PreWallet(addr, BigInt(10001)))
-  private val bonds       = createBonds(validators)
-  private val minimumBond = 100L
-  private val genesis =
-    buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, true, 0L)
+  private val bonds = createBonds(validatorPks)
+
+  private val genesisParameters =
+    Genesis(
+      shardId = "MultiParentCasperAddBlockSpec",
+      timestamp = 0L,
+      wallets = ethAddresses.map(PreWallet(_, BigInt(10001))),
+      proofOfStake = ProofOfStake(
+        minimumBond = 0L,
+        maximumBond = Long.MaxValue,
+        validators = bonds.map(Validator.tupled).toSeq
+      ),
+      faucet = true,
+      genesisPk = Ed25519.newKeyPair._2,
+      vaults = bonds.toList.map {
+    case (pk, stake) =>
+      RevAddress.fromPublicKey(pk).map(Vault(_, stake))
+  }.flattenOption,
+      supply = Long.MaxValue
+    )
+
+  private val genesis = buildGenesis(genesisParameters)
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -479,22 +498,39 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   }
 
   it should "estimate parent properly" in effectTest {
-    val (otherSk, otherPk)          = Ed25519.newKeyPair
-    val (validatorKeys, validators) = (1 to 5).map(_ => Ed25519.newKeyPair).unzip
-    val (ethPivKeys, ethPubKeys)    = (1 to 5).map(_ => Secp256k1.newKeyPair).unzip
+
+    val (validatorKeys, validatorPks) = (1 to 5).map(_ => Ed25519.newKeyPair).unzip
+    val (_, ethPubKeys)               = (1 to 5).map(_ => Secp256k1.newKeyPair).unzip
     val ethAddresses =
       ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.bytes.drop(1)).takeRight(20)))
-    val wallets = ethAddresses.map(addr => PreWallet(addr, BigInt(10001)))
     val bonds = Map(
-      validators(0) -> 3L,
-      validators(1) -> 1L,
-      validators(2) -> 5L,
-      validators(3) -> 2L,
-      validators(4) -> 4L
+      validatorPks(0) -> 3L,
+      validatorPks(1) -> 1L,
+      validatorPks(2) -> 5L,
+      validatorPks(3) -> 2L,
+      validatorPks(4) -> 4L
     )
-    val minimumBond = 100L
-    val genesis =
-      buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, true, 0L)
+
+    val genesisParameters =
+      Genesis(
+        shardId = "MultiParentCasperAddBlockSpec",
+        timestamp = 0L,
+        wallets = ethAddresses.map(PreWallet(_, BigInt(10001))),
+        proofOfStake = ProofOfStake(
+          minimumBond = 0L,
+          maximumBond = Long.MaxValue,
+          validators = bonds.map(Validator.tupled).toSeq
+        ),
+        faucet = true,
+        genesisPk = Ed25519.newKeyPair._2,
+        vaults = bonds.toList.map {
+          case (pk, stake) =>
+            RevAddress.fromPublicKey(pk).map(Vault(_, stake))
+        }.flattenOption,
+        supply = Long.MaxValue
+      )
+
+    val genesis = buildGenesis(genesisParameters)
 
     def deployment(i: Int, ts: Long): DeployData =
       ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts, accounting.MAX_VALUE)
@@ -566,7 +602,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
       ProtoUtil.signBlock[Effect](
         blockThatPointsToInvalidBlock,
         dag,
-        validators(1),
+        validatorPks(1),
         validatorKeys(1),
         "ed25519",
         "rchain"

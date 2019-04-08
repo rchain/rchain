@@ -5,7 +5,7 @@ import java.nio.file.Path
 
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import cats.{Applicative, Foldable, Monad, Traverse}
+import cats.{Applicative, Foldable, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
@@ -28,7 +28,10 @@ final case class Genesis(
     timestamp: Long,
     wallets: Seq[PreWallet],
     proofOfStake: ProofOfStake,
-    faucet: Boolean
+    faucet: Boolean,
+    genesisPk: PublicKey,
+    vaults: Seq[Vault],
+    supply: Long
 )
 
 object Genesis {
@@ -59,16 +62,16 @@ object Genesis {
       StandardDeploys.authKey,
       StandardDeploys.rev(wallets, faucetCode, posParams),
       StandardDeploys.revVault,
-      StandardDeploys.testRev(genesisPk, vaults, supply),
-      StandardDeploys.testPoS(posParams)
+      StandardDeploys.revGenerator(genesisPk, vaults, supply),
+      StandardDeploys.poSGenerator(genesisPk, posParams)
     ) ++ posParams.validators.map { validator =>
-    DeployData(
-      deployer = ByteString.copyFrom(validator.pk.bytes),
-      timestamp = System.currentTimeMillis(),
-      term = validator.code,
-      phloLimit = accounting.MAX_VALUE
-    )
-  }
+      DeployData(
+        deployer = ByteString.copyFrom(validator.pk.bytes),
+        timestamp = System.currentTimeMillis(),
+        term = validator.code,
+        phloLimit = accounting.MAX_VALUE
+      )
+    }
 
   //TODO: Decide on version number and shard identifier
   def fromInputFiles[F[_]: Concurrent: Sync: Log: Time](
@@ -97,15 +100,32 @@ object Genesis {
       walletsFile <- toFile[F](maybeWalletsPath, genesisPath.resolve("wallets.txt"))
       wallets     <- getWallets[F](walletsFile, maybeWalletsPath)
       bonds       <- getBonds[F](bondsFile, numValidators, genesisPath)
-      validators  = bonds.toSeq.map(Validator.tupled)
+      vaults <- bonds.toList.foldMapM {
+               case (pk, stake) =>
+                 RevAddress.fromPublicKey(pk) match {
+                   case Some(ra) => List(Vault(ra, stake)).pure[F]
+                   case None =>
+                     Log[F].warn(
+                       s"Validator public key $pk is invalid. Proceeding without entry."
+                     ) *> List.empty[Vault].pure[F]
+                 }
+             }
+      validators = bonds.toSeq.map(Validator.tupled)
       genesisBlock <- createGenesisBlock(
                        runtimeManager,
                        Genesis(
                          shardId = shardId,
                          timestamp = timestamp,
                          wallets = wallets,
-                         proofOfStake = ProofOfStake(minimumBond, maximumBond, validators),
-                         faucet = faucet
+                         proofOfStake = ProofOfStake(
+                           minimumBond = minimumBond,
+                           maximumBond = maximumBond,
+                           validators = validators
+                         ),
+                         faucet = faucet,
+                         genesisPk = Ed25519.newKeyPair._2,
+                         vaults = vaults,
+                         supply = Long.MaxValue
                        )
                      )
     } yield genesisBlock
@@ -124,13 +144,6 @@ object Genesis {
     )
 
     val faucetCode = if (faucet) Faucet.basicWalletFaucet _ else Faucet.noopFaucet
-
-    val (_, genesisPk) = Ed25519.newKeyPair
-
-    val vaults: Seq[Vault] = Traverse[List]
-      .traverse(proofOfStake.validators.map(_.pk).toList)(RevAddress.fromPublicKey)
-      .get
-      .map(Vault(_, 1000L))
 
     withContracts(
       initial,

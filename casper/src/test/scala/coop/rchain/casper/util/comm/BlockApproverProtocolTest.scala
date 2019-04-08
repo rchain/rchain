@@ -1,6 +1,8 @@
 package coop.rchain.casper.util.comm
 
+import cats.implicits._
 import coop.rchain.casper.MultiParentCasperTestUtil
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.helper.{BlockDagStorageTestFixture, HashSetCasperTestNode}
@@ -15,6 +17,7 @@ import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.{Log, StoreType}
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -100,23 +103,38 @@ object BlockApproverProtocolTest {
     val runtimeDir                          = BlockDagStorageTestFixture.blockStorageDir
     implicit val log                        = new Log.NOPLog[Task]()
     implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
+
+    // TODO: Remove unused values
     val activeRuntime =
       Runtime
         .createWithEmptyCost[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB)
         .unsafeRunSync
+
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
 
     val deployTimestamp = 1L
-    val validators      = bonds.map(Validator.tupled).toSeq
 
-    val genesis = MultiParentCasperTestUtil.buildGenesis(
-      wallets,
-      bonds,
-      1L,
-      Long.MaxValue,
-      false,
-      deployTimestamp
-    )
+    val genesis =
+      MultiParentCasperTestUtil.buildGenesis(
+        Genesis(
+          shardId = "BlockApproverProtocolTest",
+          timestamp = deployTimestamp,
+          wallets = wallets,
+          proofOfStake = ProofOfStake(
+    minimumBond = 0L,
+    maximumBond = Long.MaxValue,
+            validators = bonds.map(Validator.tupled).toSeq
+          ),
+          faucet = false,
+          genesisPk = Ed25519.newKeyPair._2,
+          vaults = bonds.toList.map {
+            case (pk, stake) =>
+              RevAddress.fromPublicKey(pk).map(Vault(_, stake))
+          }.flattenOption,
+          supply = Long.MaxValue
+        )
+      )
+
     for {
       nodes <- HashSetCasperTestNode.networkEff(Vector(sk), genesis)
       node  = nodes.head

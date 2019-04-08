@@ -2,24 +2,26 @@ package coop.rchain.casper.util.comm
 
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift}
+import cats.implicits._
 import cats.{Applicative, ApplicativeError, Parallel}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.{BlockDagRepresentation, InMemBlockDagStorage, InMemBlockStore}
-import coop.rchain.casper.MultiParentCasperTestUtil.{buildGenesis, createBonds}
+import coop.rchain.casper.MultiParentCasperTestUtil.createBonds
 import coop.rchain.casper._
-import coop.rchain.casper.genesis.contracts.Faucet
+import coop.rchain.casper.genesis.Genesis
+import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.{BlockDagStorageTestFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol.{NoApprovedBlockAvailable, _}
 import coop.rchain.casper.util.TestTime
 import coop.rchain.casper.util.comm.CasperPacketHandler.{
-  ApprovedBlockReceivedHandler,
-  BootstrapCasperHandler,
-  CasperPacketHandlerImpl,
-  CasperPacketHandlerInternal,
-  GenesisValidatorHandler,
-  StandaloneCasperHandler
-}
+    ApprovedBlockReceivedHandler,
+    BootstrapCasperHandler,
+    CasperPacketHandlerImpl,
+    CasperPacketHandlerInternal,
+    GenesisValidatorHandler,
+    StandaloneCasperHandler
+  }
 import coop.rchain.casper.util.comm.CasperPacketHandlerSpec._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.ApplicativeError_
@@ -35,6 +37,7 @@ import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.{Cell, StoreType}
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -59,15 +62,36 @@ class CasperPacketHandlerSpec extends WordSpec {
           scheduler
         )
         .unsafeRunSync(scheduler)
+
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync(scheduler)
 
-    val (genesisSk, genesisPk)     = Ed25519.newKeyPair
+    val (genesisSk, genesisPk) = Ed25519.newKeyPair
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
-    val bonds                      = createBonds(Seq(validatorPk))
-    val requiredSigs               = 1
-    val deployTimestamp            = 1L
-    val genesis                    = buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, false, 1L)
-    val validatorId                = ValidatorIdentity(validatorPk, validatorSk, "ed25519")
+    val bonds = createBonds(Seq(validatorPk))
+    val requiredSigs = 1
+    val shardId = "test-shardId"
+    val deployTimestamp = 1L
+    val genesis: BlockMessage =
+      MultiParentCasperTestUtil.buildGenesis(
+        Genesis(
+          shardId = shardId,
+          timestamp = deployTimestamp,
+          wallets = Seq.empty[PreWallet],
+          proofOfStake = ProofOfStake(
+            minimumBond = 0L,
+            maximumBond = Long.MaxValue,
+            validators = bonds.map(Validator.tupled).toSeq
+          ),
+          faucet = false,
+          genesisPk = genesisPk,
+          vaults = bonds.toList.map {
+            case (pk, stake) =>
+              RevAddress.fromPublicKey(pk).map(Vault(_, stake))
+          }.flattenOption,
+          supply = Long.MaxValue
+        )
+      )
+    val validatorId = ValidatorIdentity(validatorPk, validatorSk, "ed25519")
     val bap = new BlockApproverProtocol(
       validatorId,
       deployTimestamp,
@@ -79,7 +103,6 @@ class CasperPacketHandlerSpec extends WordSpec {
       requiredSigs
     )
     val local: PeerNode = peerNode("src", 40400)
-    val shardId         = "test-shardId"
 
     implicit val nodeDiscovery = new NodeDiscoveryStub[Task]
     implicit val connectionsCell: ConnectionsCell[Task] =

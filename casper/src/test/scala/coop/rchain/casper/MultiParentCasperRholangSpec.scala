@@ -2,6 +2,7 @@ package coop.rchain.casper
 
 import cats.implicits._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
@@ -13,6 +14,7 @@ import coop.rchain.crypto.hash.Keccak256
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.accounting
+import coop.rchain.rholang.interpreter.util.RevAddress
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
@@ -22,16 +24,32 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  private val (otherSk, otherPk)          = Ed25519.newKeyPair
-  private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-  private val (ethPivKeys, ethPubKeys)    = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
+  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+  private val (_, ethPubKeys) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
   private val ethAddresses =
     ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.bytes.drop(1)).takeRight(20)))
-  private val wallets     = ethAddresses.map(addr => PreWallet(addr, BigInt(10001)))
-  private val bonds       = createBonds(validators)
-  private val minimumBond = 100L
-  private val genesis =
-    buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, true, 0L)
+  private val bonds = createBonds(validatorPks)
+
+  private val genesisParameters =
+    Genesis(
+      shardId = "MultiParentCasperRholangSpec",
+      timestamp = 0L,
+      wallets = ethAddresses.map(PreWallet(_, BigInt(10001))),
+      proofOfStake = ProofOfStake(
+        minimumBond = 0L,
+        maximumBond = Long.MaxValue,
+        validators = bonds.map(Validator.tupled).toSeq
+      ),
+      faucet = true,
+      genesisPk = Ed25519.newKeyPair._2,
+      vaults = bonds.toList.map {
+    case (pk, stake) =>
+      RevAddress.fromPublicKey(pk).map(Vault(_, stake))
+  }.flattenOption,
+      supply = Long.MaxValue
+    )
+
+  private val genesis = buildGenesis(genesisParameters)
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
