@@ -27,8 +27,8 @@ final case class RevGenerator(genesisAddress: RevAddress, userVaults: Seq[Vault]
        #         new genesisAuthKeyCh in {
        #           @RevVault!("deployerAuthKey", *genesisAuthKeyCh)
        #           | for (genesisVaultAuthKey <- genesisAuthKeyCh) {
-       #             ${concatenate(transfer)} |
-       #             ${concatenate(_.code)}
+       #             ${concatenate(findOrCreate)} |
+       #             ${concatenate(transfer)}
        #           }
        #         }
        #       }
@@ -38,6 +38,15 @@ final case class RevGenerator(genesisAddress: RevAddress, userVaults: Seq[Vault]
      """.stripMargin('#')
 
   val term: Par = ParBuilder[Coeval].buildNormalizedTerm(code).value()
+
+  private def findOrCreate(userVault: Vault): String =
+    s""" 
+       # @RevVault!(
+       #   "findOrCreate",
+       #   "${userVault.revAddress.toBase58}",
+       #   Nil
+       # )
+     """.stripMargin('#')
 
   private def transfer(userVault: Vault): String =
     s"""
