@@ -23,6 +23,16 @@ object ArbitraryInstances {
   val arbNonEmptyString =
     Arbitrary(Gen.nonEmptyListOf[Char](Arbitrary.arbChar.arbitrary).map(_.mkString))
 
+  implicit def arbitraryDatumString(
+      implicit
+      serializeC: Serialize[String]
+  ): Arbitrary[Datum[String]] =
+    Arbitrary(for {
+      chan <- Arbitrary.arbitrary[String]
+      t    <- Arbitrary.arbitrary[String]
+      b    <- Arbitrary.arbitrary[Boolean]
+    } yield Datum.create(chan, t, b))
+
   implicit def arbitraryDatum[C, T](chan: C)(
       implicit
       arbT: Arbitrary[T],
@@ -121,6 +131,20 @@ object ArbitraryInstances {
           } yield (str, dat))
         }
         .map(_.toMap)
+    )
+
+  implicit def arbitraryWaitingContinuation(
+      implicit
+      serializeString: Serialize[String],
+      serializePattern: Serialize[Pattern],
+      serializeStringsCaptor: Serialize[StringsCaptor]
+  ): Arbitrary[WaitingContinuation[Pattern, StringsCaptor]] =
+    Arbitrary(
+      for {
+        chans   <- Gen.nonEmptyListOf[String](Arbitrary.arbitrary[String])
+        pats    <- Gen.containerOfN[List, Pattern](chans.length, Arbitrary.arbitrary[Pattern])
+        boolean <- Arbitrary.arbitrary[Boolean]
+      } yield WaitingContinuation.create(chans, pats, new StringsCaptor, boolean)
     )
 
   def arbitraryWaitingContinuation(chans: List[String])(
