@@ -7,7 +7,10 @@ import scala.collection.concurrent.TrieMap
 import History._
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 import coop.rchain.rspace.test.ArbitraryInstances._
+import monix.eval.Task
 import org.scalatest.prop._
+import scala.concurrent.duration._
+import monix.execution.Scheduler.Implicits.global
 
 class HistorySpec
     extends FlatSpec
@@ -18,13 +21,18 @@ class HistorySpec
 
   implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 
+  implicit val propertyCheckConfigParam = PropertyCheckConfiguration(minSuccessful = 1000)
+
   "history" should "accept new leafs (insert, update, delete)" in forAll {
     actions: List[(TestKey32, Blake2b256Hash)] =>
       val emptyHistory =
-        new History[TestKey32](emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
+        new History[Task, TestKey32](emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
 
       val emptyState =
-        Map.empty[TestKey32, ((TestKey32, Blake2b256Hash), History[TestKey32], History[TestKey32])]
+        Map.empty[
+          TestKey32,
+          ((TestKey32, Blake2b256Hash), History[Task, TestKey32], History[Task, TestKey32])
+        ]
 
       val (result, map) = actions.foldLeft((emptyHistory, emptyState)) {
         case ((history, prevActions), action) =>
@@ -37,15 +45,21 @@ class HistorySpec
       map.values.foreach {
         case ((k, v), _, postModifyHistory) =>
           val actions           = DeleteAction(k) :: Nil
-          val postDeleteHistory = postModifyHistory.process(actions)
+          val postDeleteHistory = postModifyHistory.process(actions).runSyncUnsafe(20.seconds)
 
-          postModifyHistory.traverseTrie(k.bytes.toSeq.toList)._1 shouldBe Leaf(v)
-          postDeleteHistory.traverseTrie(k.bytes.toSeq.toList)._1 shouldBe EmptyTrie
+          postModifyHistory
+            .traverseTrie(k.bytes.toSeq.toList)
+            .runSyncUnsafe(20.seconds)
+            ._1 shouldBe Leaf(v)
+          postDeleteHistory
+            .traverseTrie(k.bytes.toSeq.toList)
+            .runSyncUnsafe(20.seconds)
+            ._1 shouldBe EmptyTrie
       }
 
       val deletions    = map.values.map(_._1).map(v => DeleteAction(v._1)).toList
       val finalHistory = result.process(deletions)
-      finalHistory.root shouldBe emptyHistory.root
+      finalHistory.runSyncUnsafe(20.seconds).root shouldBe emptyHistory.root
   }
 
   val arbitraryTestKey32: Arbitrary[TestKey32] =
@@ -68,26 +82,33 @@ class HistorySpec
       hash <- arbitraryBlake2b256Hash.arbitrary
     } yield (key, hash))
 
-  def insertAndVerify(history: History[TestKey32],
-                      data: List[(TestKey32, Blake2b256Hash)],
-                      toVerify: List[(TestKey32, Blake2b256Hash)])
-    : (History[TestKey32], List[(TestKey32, Blake2b256Hash)]) = {
+  def insertAndVerify(
+      history: History[Task, TestKey32],
+      data: List[(TestKey32, Blake2b256Hash)],
+      toVerify: List[(TestKey32, Blake2b256Hash)]
+  ): (History[Task, TestKey32], List[(TestKey32, Blake2b256Hash)]) = {
     val actions = data.map(v => InsertAction(v._1, v._2))
-    val result  = history.process(actions)
+    val result  = history.process(actions).runSyncUnsafe(20.seconds)
     result.root should not be history.root
 
-    val deletions      = data.map(v => DeleteAction(v._1))
-    val deletionResult = result.process(deletions)
-    deletionResult.traverseTrie(data.head._1.asBytes)._1 shouldBe EmptyTrie
+    val deletions = data.map(v => DeleteAction(v._1))
+    val deletionResult =
+      result.process(deletions).runSyncUnsafe(20.seconds)
+    deletionResult
+      .traverseTrie(data.head._1.asBytes)
+      .runSyncUnsafe(20.seconds)
+      ._1 shouldBe EmptyTrie
 
     val notDeleted = toVerify.filter(v => v._1 != data.head._1)
     notDeleted.foreach(action => {
-      deletionResult.traverseTrie(action._1.asBytes)._1 shouldBe Leaf(action._2)
+      deletionResult.traverseTrie(action._1.asBytes).runSyncUnsafe(20.seconds)._1 shouldBe Leaf(
+        action._2
+      )
     })
 
     val all = toVerify.toMap ++ data.toMap
     all.foreach(action => {
-      result.traverseTrie(action._1.asBytes)._1 shouldBe Leaf(action._2)
+      result.traverseTrie(action._1.asBytes).runSyncUnsafe(20.seconds)._1 shouldBe Leaf(action._2)
     })
     (result, all.toList)
   }
@@ -95,24 +116,27 @@ class HistorySpec
 }
 
 trait InMemoryHistoryTestBase {
-  def inMemPointerBlockStore: PointerBlockStore = new PointerBlockStore {
+  def inMemPointerBlockStore: PointerBlockStore[Task] = new PointerBlockStore[Task] {
     val data: TrieMap[Blake2b256Hash, PointerBlock] = TrieMap.empty
 
-    override def put(key: Blake2b256Hash, pb: PointerBlock): Unit =
-      data.put(key, pb)
-    override def get(key: Blake2b256Hash): Option[PointerBlock] =
-      data.get(key)
+    override def put(key: Blake2b256Hash, pb: PointerBlock): Task[Unit] =
+      Task.delay { data.put(key, pb) }
+
+    override def get(key: Blake2b256Hash): Task[Option[PointerBlock]] =
+      Task.delay { data.get(key) }
   }
 
-  def inMemHistoryStore: HistoryStore = new HistoryStore {
+  def inMemHistoryStore: HistoryStore[Task] = new HistoryStore[Task] {
     val data: TrieMap[Blake2b256Hash, Trie] = TrieMap.empty
-    override def put(tries: List[Trie]): Unit =
+    override def put(tries: List[Trie]): Task[Unit] = Task.delay {
       tries.foreach { t =>
         val key = Trie.hash(t)
         data.put(key, t)
       }
-    override def get(key: Blake2b256Hash): Trie =
+    }
+    override def get(key: Blake2b256Hash): Task[Trie] = Task.delay {
       data.getOrElse(key, EmptyTrie)
+    }
   }
 
   def insertAction(key: Seq[Int], value: Blake2b256Hash): (TestKey32, Blake2b256Hash) =
