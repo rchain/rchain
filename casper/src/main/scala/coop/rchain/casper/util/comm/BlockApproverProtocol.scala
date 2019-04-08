@@ -126,9 +126,9 @@ object BlockApproverProtocol {
               .either(())
               .or("Block bonds don't match expected.")
         validators = blockBonds.toSeq.map {
-      case (pk, stake) =>
-        Validator(PublicKey(pk.toByteArray), stake)
-    }
+          case (pk, stake) =>
+            Validator(PublicKey(pk.toByteArray), stake)
+        }
         posParams      = ProofOfStake(minimumBond, maximumBond, validators)
         faucetCode     = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
         (_, genesisPk) = Ed25519.newKeyPair
@@ -136,7 +136,8 @@ object BlockApproverProtocol {
           .traverse(posParams.validators.map(_.pk).toList)(RevAddress.fromPublicKey)
           .get
           .map(Vault(_, 1000L))
-        genesisBlessedContracts = Genesis.defaultBlessedTerms(
+        genesisBlessedContracts = Genesis
+          .defaultBlessedTerms(
             timestamp,
             posParams,
             wallets,

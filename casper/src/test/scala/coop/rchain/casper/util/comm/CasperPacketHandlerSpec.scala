@@ -50,7 +50,7 @@ class CasperPacketHandlerSpec extends WordSpec {
     val runtimeDir       = BlockDagStorageTestFixture.blockStorageDir
     val activeRuntime =
       Runtime
-        .createWithEmptyCost[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB)(
+        .createWithEmptyCost[Task, Task.Par](runtimeDir, 3024L * 1024, StoreType.LMDB)(
           ContextShift[Task],
           Concurrent[Task],
           log,
