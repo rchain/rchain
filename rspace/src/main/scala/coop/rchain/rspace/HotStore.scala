@@ -93,7 +93,7 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
                 Sync[F]
                   .delay {
                     installed match {
-                      case Some(_) => cache.continuations.put(channels, updated drop 1)
+                      case Some(_) => cache.continuations.put(channels, updated tail)
                       case None    => cache.continuations.put(channels, updated)
                     }
                   }
