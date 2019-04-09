@@ -9,5 +9,5 @@ class MakeMintSpec
     extends RhoSpec(
       CompiledRholangSource("MakeMintTest.rho"),
       Seq.empty,
-      10.seconds
+      20.seconds
     )

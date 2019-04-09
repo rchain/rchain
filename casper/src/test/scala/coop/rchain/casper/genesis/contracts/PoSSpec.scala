@@ -11,5 +11,5 @@ class PoSSpec
       Seq(
         StandardDeploys.PoS
       ),
-      10.seconds
+      20.seconds
     )

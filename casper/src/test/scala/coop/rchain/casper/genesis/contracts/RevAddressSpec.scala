@@ -5,4 +5,4 @@ import coop.rchain.rholang.build.CompiledRholangSource
 import scala.concurrent.duration._
 
 class RevAddressSpec
-    extends RhoSpec(CompiledRholangSource("RevAddressTest.rho"), Seq.empty, 10.seconds)
+    extends RhoSpec(CompiledRholangSource("RevAddressTest.rho"), Seq.empty, 20.seconds)

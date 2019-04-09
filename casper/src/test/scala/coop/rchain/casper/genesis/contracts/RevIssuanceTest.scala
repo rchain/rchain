@@ -85,7 +85,7 @@ class RevIssuanceTest extends FlatSpec with Matchers {
       )(Concurrent[Task], runtimeManager)
       .unsafeRunSync
     val (postGenHash, _) =
-      runtimeManager.computeState(emptyHash, genesisDeploys).runSyncUnsafe(10.seconds)
+      runtimeManager.computeState(emptyHash, genesisDeploys).runSyncUnsafe(20.seconds)
     val (postUnlockHash, _) =
       runtimeManager.computeState(postGenHash, unlockDeployData :: Nil).runSyncUnsafe(10.seconds)
     val unlockResult = getDataUnsafe(runtimeManager, postUnlockHash, statusOut)
