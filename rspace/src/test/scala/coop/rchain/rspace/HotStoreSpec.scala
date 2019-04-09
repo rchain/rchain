@@ -82,6 +82,34 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       }
   }
 
+  "getContinuations" should "include installed continuations" in forAll {
+    (
+        channels: Vector[Channel],
+        cachedContinuations: Vector[Continuation],
+        installedContinuation: Continuation
+    ) =>
+      fixture { (state, history, hotStore) =>
+        {
+          for {
+            _ <- state.modify(
+                  _ =>
+                    Cache(
+                      continuations = TrieMap(
+                        channels -> cachedContinuations
+                      )
+                    )
+                )
+            _     <- hotStore.installContinuation(channels, installedContinuation)
+            res   <- hotStore.getContinuations(channels)
+            cache <- state.read
+            _ <- S.delay(
+                  res shouldEqual installedContinuation +: cachedContinuations
+                )
+          } yield ()
+        }
+      }
+  }
+
   "putContinuation when cache is empty" should "read from history and add to it" in forAll {
     (
         channels: Vector[Channel],
@@ -133,6 +161,42 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       }
   }
 
+  "installContinuation" should "cache installed continuations separately" in forAll {
+    (
+        channels: Vector[Channel],
+        cachedContinuations: Vector[Continuation],
+        insertedContinuation: Continuation,
+        installedContinuation: Continuation
+    ) =>
+      whenever(insertedContinuation != installedContinuation) {
+        fixture { (state, history, hotStore) =>
+          {
+            for {
+              _ <- state.modify(
+                    _ =>
+                      Cache(
+                        continuations = TrieMap(
+                          channels -> cachedContinuations
+                        )
+                      )
+                  )
+              _     <- hotStore.installContinuation(channels, installedContinuation)
+              _     <- hotStore.putContinuation(channels, insertedContinuation)
+              cache <- state.read
+              _ <- S.delay(
+                    cache
+                      .installedContinuations(channels) shouldEqual installedContinuation
+                  )
+              _ <- S.delay(
+                    cache
+                      .continuations(channels) shouldEqual insertedContinuation +: cachedContinuations
+                  )
+            } yield ()
+          }
+        }
+      }
+  }
+
   "removeContinuation when cache is empty" should "read from history and remove the continuation from loaded data" in forAll {
     (
         channels: Vector[Channel],
@@ -173,6 +237,48 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             res   <- hotStore.removeContinuation(channels, index).attempt
             cache <- state.read
             _     <- checkRemoval(res, cache.continuations(channels), cachedContinuations, index)
+          } yield ()
+        }
+      }
+  }
+
+  "removeContinuation when installed continuation is present" should "not allow it's removal" in forAll {
+    (
+        channels: Vector[Channel],
+        cachedContinuations: Vector[Continuation],
+        installedContinuation: Continuation,
+        index: Int
+    ) =>
+      fixture { (state, history, hotStore) =>
+        {
+          for {
+            _ <- state.modify(
+                  _ =>
+                    Cache(
+                      continuations = TrieMap(
+                        channels -> cachedContinuations
+                      ),
+                      installedContinuations = TrieMap(
+                        channels -> installedContinuation
+                      )
+                    )
+                )
+            res   <- hotStore.removeContinuation(channels, index).attempt
+            cache <- state.read
+            _ <- if (index == 0)
+                  Sync[F].delay {
+                    res shouldBe a[Left[IllegalArgumentException, _]]
+                  } else
+                  // index of the removed continuation includes the installed
+                  hotStore.getContinuations(channels) >>= { continuations =>
+                    checkRemoval(
+                      res,
+                      continuations,
+                      installedContinuation +: cachedContinuations,
+                      index
+                    )
+                  }
+
           } yield ()
         }
       }
