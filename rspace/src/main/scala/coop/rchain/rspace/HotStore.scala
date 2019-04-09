@@ -22,6 +22,8 @@ trait HotStore[F[_], C, P, A, K] {
   def getJoins(channel: C): F[Seq[Seq[C]]]
   def putJoin(channel: C, join: Seq[C]): F[Unit]
   def removeJoin(channel: C, join: Seq[C]): F[Unit]
+
+  def changes(): F[Seq[HotStoreAction]]
 }
 
 final case class Cache[C, P, A, K](
@@ -176,6 +178,32 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
             }
           }
     } yield ()
+
+  def changes(): F[Seq[HotStoreAction]] =
+    for {
+      cache <- S.read
+      continuations = (cache.continuations
+        .readOnlySnapshot()
+        .map {
+          case (k, v) if (v.isEmpty) => DeleteContinuations(k)
+          case (k, v)                => InsertContinuations(k, v)
+        })
+        .toVector
+      data = (cache.data
+        .readOnlySnapshot()
+        .map {
+          case (k, v) if (v.isEmpty) => DeleteData(k)
+          case (k, v)                => InsertData(k, v)
+        })
+        .toVector
+      joins = (cache.joins
+        .readOnlySnapshot()
+        .map {
+          case (k, v) if (v.isEmpty) => DeleteJoins(k)
+          case (k, v)                => InsertJoins(k, v)
+        })
+        .toVector
+    } yield (continuations ++ data ++ joins)
 
   private def removeIndex[E](col: Seq[E], index: Int): F[Seq[E]] =
     if (col.isDefinedAt(index)) {
