@@ -9,5 +9,5 @@ class RevVaultSpec
     extends RhoSpec(
       CompiledRholangSource("RevVaultTest.rho"),
       Seq.empty,
-      20.seconds
+      30.seconds
     )
