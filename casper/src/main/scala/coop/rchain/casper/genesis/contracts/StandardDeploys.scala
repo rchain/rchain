@@ -111,14 +111,14 @@ object StandardDeploys {
       1551879405043L
     )
 
-  def testPoS(genesisPk: PublicKey, poS: ProofOfStake): DeployData =
+  def poSGenerator(genesisPk: PublicKey, poS: ProofOfStake): DeployData =
     toDeploy(
       poS,
       Base16.encode(genesisPk.bytes),
       System.currentTimeMillis()
     )
 
-  def testRev(genesisPk: PublicKey, vaults: Seq[Vault], supply: Long): DeployData =
+  def revGenerator(genesisPk: PublicKey, vaults: Seq[Vault], supply: Long): DeployData =
     toDeploy(
       RevGenerator(RevAddress.fromPublicKey(genesisPk).get, vaults, supply),
       Base16.encode(genesisPk.bytes),
