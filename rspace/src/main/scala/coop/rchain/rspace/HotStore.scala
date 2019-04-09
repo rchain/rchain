@@ -12,6 +12,7 @@ import scala.collection.concurrent.TrieMap
 trait HotStore[F[_], C, P, A, K] {
   def getContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]]
   def putContinuation(channels: Seq[C], wc: WaitingContinuation[P, K]): F[Unit]
+  def installContinuation(channels: Seq[C], wc: WaitingContinuation[P, K]): F[Unit]
   def removeContinuation(channels: Seq[C], index: Int): F[Unit]
 
   def getData(channel: C): F[Seq[Datum[A]]]
@@ -26,6 +27,8 @@ trait HotStore[F[_], C, P, A, K] {
 final case class Cache[C, P, A, K](
     continuations: TrieMap[Seq[C], Seq[WaitingContinuation[P, K]]] =
       TrieMap.empty[Seq[C], Seq[WaitingContinuation[P, K]]],
+    installedContinuations: TrieMap[Seq[C], WaitingContinuation[P, K]] =
+      TrieMap.empty[Seq[C], WaitingContinuation[P, K]],
     data: TrieMap[C, Seq[Datum[A]]] = TrieMap.empty[C, Seq[Datum[A]]],
     joins: TrieMap[C, Seq[Seq[C]]] = TrieMap.empty[C, Seq[Seq[C]]]
 )
@@ -36,6 +39,12 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
 ) extends HotStore[F, C, P, A, K] {
 
   def getContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
+    for {
+      cached <- getCachedContinuations(channels)
+      state  <- S.read
+    } yield (state.installedContinuations.get(channels) ++: cached)
+
+  private[this] def getCachedContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
     for {
       state <- S.read
       res <- state.continuations.get(channels) match {
@@ -56,24 +65,41 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
 
   def putContinuation(channels: Seq[C], wc: WaitingContinuation[P, K]): F[Unit] =
     for {
-      continuations <- getContinuations(channels)
+      continuations <- getCachedContinuations(channels)
       _ <- S.flatModify { cache =>
             Sync[F].delay(cache.continuations.put(channels, wc +: continuations)).map(_ => cache)
           }
     } yield ()
 
+  def installContinuation(channels: Seq[C], wc: WaitingContinuation[P, K]): F[Unit] = S.flatModify {
+    cache =>
+      Sync[F].delay(cache.installedContinuations.put(channels, wc)).map(_ => cache)
+  }
+
   def removeContinuation(channels: Seq[C], index: Int): F[Unit] =
     for {
       continuations <- getContinuations(channels)
-      _ <- S.flatModify { cache =>
-            removeIndex(cache.continuations(channels), index) >>= { updated =>
-              Sync[F]
-                .delay {
-                  cache.continuations.put(channels, updated)
-                }
-                .map(_ => cache)
+      cache         <- S.read
+      installed     = cache.installedContinuations.get(channels)
+      _ <- if (installed.isDefined && index == 0)
+            Sync[F].raiseError {
+              new IllegalArgumentException("Attempted to remove an installed continuation")
+            } else
+            S.flatModify { cache =>
+              removeIndex(
+                continuations,
+                index
+              ) >>= { updated =>
+                Sync[F]
+                  .delay {
+                    installed match {
+                      case Some(_) => cache.continuations.put(channels, updated tail)
+                      case None    => cache.continuations.put(channels, updated)
+                    }
+                  }
+                  .map(_ => cache)
+              }
             }
-          }
     } yield ()
 
   def getData(channel: C): F[Seq[Datum[A]]] =
