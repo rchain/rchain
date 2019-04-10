@@ -23,12 +23,6 @@ final case class TriePath(partialPath: Vector[Trie], conflicting: Option[Trie], 
 }
 
 object TriePath {
-  def root(conflicting: Trie): TriePath =
-    TriePath(Vector(), Some(conflicting), Nil)
-
-  def start(pp: Vector[Trie], path: KeyPath): TriePath =
-    TriePath(pp, None, path)
-
   def empty: TriePath = TriePath(Vector(), None, Nil)
 }
 
@@ -70,12 +64,12 @@ final case class History[F[_]: Sync, K](
   // TODO consider an indexedseq
   private def rebalanceInsert(
       newLeaf: Trie,
-      currentPath: KeyPath,
+      remainingPath: KeyPath,
       partialTrie: TriePath
   ): F[List[Trie]] =
     partialTrie match {
       case TriePath(Vector(), None, Nil) => // kickstart a trie
-        Applicative[F].pure(newLeaf :: skip(newLeaf, currentPath) :: Nil)
+        Applicative[F].pure(newLeaf :: skip(newLeaf, remainingPath) :: Nil)
 
       case TriePath(Vector(Skip(a, _), Leaf(_)), None, common)
           if common == a.toSeq.toList => // update 1 element trie
@@ -83,8 +77,8 @@ final case class History[F[_]: Sync, K](
 
       case TriePath(Vector(), Some(Skip(affix, existingPointer)), Nil) => // split skip at root
         val affixBytes                   = affix.toSeq.toList
-        val prefixPath                   = commonPrefix(affixBytes, currentPath)
-        val incomingHead :: incomingTail = currentPath.drop(prefixPath.size)
+        val prefixPath                   = commonPrefix(affixBytes, remainingPath)
+        val incomingHead :: incomingTail = remainingPath.drop(prefixPath.size)
         val existingHead :: existingTail = affixBytes.drop(prefixPath.size)
         for {
           dividedSkip <- divideSkip(
@@ -99,7 +93,7 @@ final case class History[F[_]: Sync, K](
         } yield dividedSkip._1
 
       case TriePath(elems :+ Node(ptr), Some(Skip(affix, existingPointer)), common) => // split existing skip
-        val incomingPath                 = currentPath.drop(common.size)
+        val incomingPath                 = remainingPath.drop(common.size)
         val affixBytes                   = affix.toSeq.toList
         val prefixPath                   = commonPrefix(incomingPath, affixBytes)
         val incomingHead :: incomingTail = incomingPath.drop(prefixPath.size)
@@ -125,7 +119,7 @@ final case class History[F[_]: Sync, K](
       case TriePath(elems :+ Node(ptr), None, common) => // add to existing node
         for {
           pastPB <- pointerBlockStore.get(ptr).map(_.get)
-          key    = currentPath.drop(common.size)
+          key    = remainingPath.drop(common.size)
           s      = skipOrValue(key, newLeaf)
           newPB  = pastPB.updated((toInt(common.last), s) :: Nil)
           node   <- storePointerBlock(newPB)
@@ -146,25 +140,25 @@ final case class History[F[_]: Sync, K](
     type Params = (KeyPath, Vector[Trie], Trie, List[Trie])
     def go(params: Params): F[Either[Params, List[Trie]]] = params match {
       case (
-          currentPath: KeyPath,
-          currentRest: Vector[Trie],
+          remainingPath: KeyPath,
+          remainingPrefixNodes: Vector[Trie],
           nextLastSeen: Trie,
           currentAcc: List[Trie]
           ) =>
-        currentRest match {
+        remainingPrefixNodes match {
           case head :+ Node(ptr) =>
             for {
               pointerBlock <- pointerBlockStore
                                .get(ptr)
-                               .map(_.get.updated((toInt(currentPath.last), nextLastSeen) :: Nil))
+                               .map(_.get.updated((toInt(remainingPath.last), nextLastSeen) :: Nil))
               nodeToPB <- storePointerBlock(pointerBlock)
-            } yield (currentPath.init, head, nodeToPB, currentAcc :+ nextLastSeen).asLeft
+            } yield (remainingPath.init, head, nodeToPB, currentAcc :+ nextLastSeen).asLeft
 
           case head :+ Skip(affix, _) =>
             Applicative[F]
               .pure(
                 (
-                  currentPath.dropRight(affix.size.toInt),
+                  remainingPath.dropRight(affix.size.toInt),
                   head,
                   Skip(affix, Trie.hash(nextLastSeen)),
                   currentAcc :+ nextLastSeen
@@ -225,22 +219,22 @@ final case class History[F[_]: Sync, K](
     actions
       .foldLeftM(this.root) {
         case (currentRoot, InsertAction(k, value)) =>
-          val currentPath = asBytes(k)
+          val remainingPath = asBytes(k)
           for {
-            traverseResult <- traverseTrie(currentPath, currentRoot)
+            traverseResult <- findPath(remainingPath, currentRoot)
             (_, triePath)  = traverseResult
-            elements       <- rebalanceInsert(Leaf(value), currentPath, triePath)
+            elements       <- rebalanceInsert(Leaf(value), remainingPath, triePath)
             _              <- historyStore.put(elements)
           } yield Trie.hash(elements.last)
 
         case (currentRoot, DeleteAction(k)) =>
-          val currentPath = asBytes(k)
+          val remainingPath = asBytes(k)
           for {
-            traverseResult <- traverseTrie(currentPath, currentRoot)
+            traverseResult <- findPath(remainingPath, currentRoot)
             (_, triePath)  = traverseResult
             elements <- triePath match {
-                         case TriePath(elems :+ (_: Leaf), None, path) if currentPath == path =>
-                           rebalanceDelete(currentPath, elems, None)
+                         case TriePath(elems :+ (_: Leaf), None, path) if remainingPath == path =>
+                           rebalanceDelete(remainingPath, elems, None)
                          case _ =>
                            Applicative[F].pure[List[Trie]](Nil)
                        }
@@ -249,21 +243,21 @@ final case class History[F[_]: Sync, K](
       }
       .map(newRoot => this.copy(root = newRoot))
 
-  private[history] def traverseTrie(key: KeyPath, start: Blake2b256Hash): F[(Trie, TriePath)] = {
+  private[history] def findPath(key: KeyPath, start: Blake2b256Hash): F[(Trie, TriePath)] = {
     type Params = (Trie, List[Byte], TriePath)
-    //t: Trie, currentPath: List[Byte], path: TriePath
+    //t: Trie, remainingPath: List[Byte], path: TriePath
     def traverse(params: Params): F[Either[Params, (Trie, TriePath)]] =
       params match {
         case (EmptyTrie, _, path) => Applicative[F].pure((EmptyTrie, path)).map(_.asRight)
-        case (l: Leaf, _, path)   => Applicative[F].pure((l, path append (Nil, l))).map(_.asRight)
-        case (s @ Skip(affix, p), currentPath, path) if currentPath.startsWith(affix.toSeq) =>
+        case (l: Leaf, Nil, path) => Applicative[F].pure((l, path append (Nil, l))).map(_.asRight)
+        case (s @ Skip(affix, p), remainingPath, path) if remainingPath.startsWith(affix.toSeq) =>
           historyStore
             .get(p)
             .map(
               trie =>
                 (
                   trie,
-                  currentPath.drop(affix.size.toInt),
+                  remainingPath.drop(affix.size.toInt),
                   path.append(affix.toSeq.toList, s)
                 ).asLeft
             )
@@ -280,14 +274,14 @@ final case class History[F[_]: Sync, K](
         case _ => Sync[F].raiseError(new RuntimeException("malformed trie"))
       }
     for {
-      hash   <- historyStore.get(start)
-      result <- FlatMap[F].tailRecM((hash, key, TriePath.empty))(traverse)
+      node   <- historyStore.get(start)
+      result <- FlatMap[F].tailRecM((node, key, TriePath.empty))(traverse)
     } yield result
 
   }
 
-  private[history] def traverseTrie(key: KeyPath): F[(Trie, TriePath)] =
-    traverseTrie(key, root)
+  private[history] def findPath(key: KeyPath): F[(Trie, TriePath)] =
+    findPath(key, root)
 }
 
 object History {
@@ -321,7 +315,7 @@ object History {
     i.toByte
 
   def commonPrefix(l: List[Byte], r: List[Byte]): List[Byte] =
-    (l.view, r.view).zipped.takeWhile { case (ll, rr) => ll == rr }.unzip._1.toList
+    (l.view, r.view).zipped.takeWhile { case (ll, rr) => ll == rr }.map(_._1).toList
 
   def skip(t: Trie, affix: List[Byte]): Skip =
     Skip(ByteVector(affix), Trie.hash(t))

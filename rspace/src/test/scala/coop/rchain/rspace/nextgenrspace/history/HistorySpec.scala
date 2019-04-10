@@ -7,8 +7,10 @@ import scala.collection.concurrent.TrieMap
 import History._
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 import coop.rchain.rspace.test.ArbitraryInstances._
+import coop.rchain.shared.GeneratorUtils.distinctListOf
 import monix.eval.Task
 import org.scalatest.prop._
+
 import scala.concurrent.duration._
 import monix.execution.Scheduler.Implicits.global
 
@@ -21,98 +23,82 @@ class HistorySpec
 
   implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 
-  implicit val propertyCheckConfigParam = PropertyCheckConfiguration(minSuccessful = 1000)
+  // disable shrinking since this test operates on a persistent structure
+  implicit val propertyCheckConfigParam =
+    PropertyCheckConfiguration(minSuccessful = 1000)
 
-  "history" should "accept new leafs (insert, update, delete)" in forAll {
-    actions: List[(TestKey32, Blake2b256Hash)] =>
-      val emptyHistory =
-        new History[Task, TestKey32](emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
+  type Key  = TestKey32
+  type Data = (Key, Blake2b256Hash)
 
-      val emptyState =
-        Map.empty[
-          TestKey32,
-          ((TestKey32, Blake2b256Hash), History[Task, TestKey32], History[Task, TestKey32])
-        ]
+  "history" should "accept new leafs (insert, update, delete)" in forAll(
+    distinctListOf(arbitraryInsertAction)) { actions: List[(TestKey32, Blake2b256Hash)] =>
+    val emptyHistory =
+      new History[Task, TestKey32](emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
 
-      val (result, map) = actions.foldLeft((emptyHistory, emptyState)) {
-        case ((history, prevActions), action) =>
-          val (postHistory, _) =
-            insertAndVerify(history, action :: Nil, prevActions.values.map(_._1).toList)
-          val actions = prevActions + (action._1 -> (action, history, postHistory))
-          (postHistory, actions)
-      }
+    val emptyState = Map.empty[Key, (Data, History[Task, Key])] // accumulate actions performed on the trie
 
-      map.values.foreach {
-        case ((k, v), _, postModifyHistory) =>
-          val actions           = DeleteAction(k) :: Nil
-          val postDeleteHistory = postModifyHistory.process(actions).runSyncUnsafe(20.seconds)
+    val (result, map) = actions.foldLeft((emptyHistory, emptyState)) {
+      case ((history, prevActions), action) =>
+        val (postHistory, _) =
+          insertAndVerify(history, action :: Nil, prevActions.values.map(_._1).toList)
+        val actions = prevActions + (action._1 -> (action, postHistory))
+        (postHistory, actions)
+    }
 
-          postModifyHistory
-            .traverseTrie(k.bytes.toSeq.toList)
-            .runSyncUnsafe(20.seconds)
-            ._1 shouldBe Leaf(v)
-          postDeleteHistory
-            .traverseTrie(k.bytes.toSeq.toList)
-            .runSyncUnsafe(20.seconds)
-            ._1 shouldBe EmptyTrie
-      }
+    map.values.foreach {
+      case ((k, v), postModifyHistory) =>
+        val actions           = DeleteAction(k) :: Nil
+        val postDeleteHistory = postModifyHistory.process(actions).runSyncUnsafe(20.seconds)
 
-      val deletions    = map.values.map(_._1).map(v => DeleteAction(v._1)).toList
-      val finalHistory = result.process(deletions)
-      finalHistory.runSyncUnsafe(20.seconds).root shouldBe emptyHistory.root
+        fetchData(postModifyHistory, k)._1 shouldBe Leaf(v)
+        fetchData(postDeleteHistory, k)._1 shouldBe EmptyTrie
+    }
+
+    val deletions    = map.values.map(_._1).map(v => DeleteAction(v._1)).toList
+    val finalHistory = result.process(deletions)
+    finalHistory.runSyncUnsafe(20.seconds).root shouldBe emptyHistory.root
   }
 
   val arbitraryTestKey32: Arbitrary[TestKey32] =
-    Arbitrary(Gen.sized { _ =>
-      Gen
-        .listOfN(32, Arbitrary.arbitrary[Int])
-        .map(ints => TestKey32.create(ints))
-    })
-
-  val arbitrary2TestKey32: Arbitrary[TestKey32] =
-    Arbitrary(Gen.sized { _ =>
+    Arbitrary(
       Gen
         .listOfN(3, Arbitrary.arbitrary[Int])
-        .map(ints => TestKey32.create(List.fill(29)(0) ++ ints))
-    })
+        .map(ints => TestKey32.create(List.fill(29)(0) ++ ints)))
 
   implicit val arbitraryInsertAction: Arbitrary[(TestKey32, Blake2b256Hash)] =
     Arbitrary(for {
-      key  <- arbitrary2TestKey32.arbitrary
+      key  <- arbitraryTestKey32.arbitrary
       hash <- arbitraryBlake2b256Hash.arbitrary
     } yield (key, hash))
 
-  def insertAndVerify(
-      history: History[Task, TestKey32],
-      data: List[(TestKey32, Blake2b256Hash)],
-      toVerify: List[(TestKey32, Blake2b256Hash)]
-  ): (History[Task, TestKey32], List[(TestKey32, Blake2b256Hash)]) = {
-    val actions = data.map(v => InsertAction(v._1, v._2))
-    val result  = history.process(actions).runSyncUnsafe(20.seconds)
-    result.root should not be history.root
+  def insertAndVerify(history: History[Task, TestKey32],
+                      toBeProcessed: List[Data],
+                      pastData: List[Data]): (History[Task, TestKey32], List[Data]) = {
+    val inserts      = toBeProcessed.map(v => InsertAction(v._1, v._2))
+    val insertResult = history.process(inserts).runSyncUnsafe(20.seconds)
+    insertResult.root should not be history.root
 
-    val deletions = data.map(v => DeleteAction(v._1))
-    val deletionResult =
-      result.process(deletions).runSyncUnsafe(20.seconds)
-    deletionResult
-      .traverseTrie(data.head._1.asBytes)
-      .runSyncUnsafe(20.seconds)
-      ._1 shouldBe EmptyTrie
+    val deletions      = toBeProcessed.map(v => DeleteAction(v._1))
+    val deletionResult = insertResult.process(deletions).runSyncUnsafe(20.seconds)
+    fetchData(deletionResult, toBeProcessed.head)._1 shouldBe EmptyTrie
 
-    val notDeleted = toVerify.filter(v => v._1 != data.head._1)
-    notDeleted.foreach(action => {
-      deletionResult.traverseTrie(action._1.asBytes).runSyncUnsafe(20.seconds)._1 shouldBe Leaf(
-        action._2
-      )
+    val notDeletedData = pastData.filter(v => v._1 != toBeProcessed.head._1)
+    notDeletedData.foreach(action => {
+      fetchData(deletionResult, action)._1 shouldBe Leaf(action._2)
     })
 
-    val all = toVerify.toMap ++ data.toMap
-    all.foreach(action => {
-      result.traverseTrie(action._1.asBytes).runSyncUnsafe(20.seconds)._1 shouldBe Leaf(action._2)
+    val allUniqueData = pastData.toMap ++ toBeProcessed.toMap
+    allUniqueData.foreach(action => {
+      fetchData(insertResult, action)._1 shouldBe Leaf(action._2)
     })
-    (result, all.toList)
+    (insertResult, allUniqueData.toList)
   }
 
+  def fetchData(h: History[Task, Key], data: Data): (Trie, TriePath) =
+    fetchData(h, data._1)
+
+  def fetchData(h: History[Task, Key], k: Key): (Trie, TriePath) =
+    h.findPath(k.asBytes).runSyncUnsafe(20.seconds)
 }
 
 trait InMemoryHistoryTestBase {
