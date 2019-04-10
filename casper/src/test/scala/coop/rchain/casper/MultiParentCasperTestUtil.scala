@@ -15,7 +15,9 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.hash.Keccak256
+import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
@@ -81,6 +83,33 @@ object MultiParentCasperTestUtil {
         supply = Long.MaxValue
       )
     )
+
+  def buildGenesisParameters(
+      users: Int,
+      validatorPks: Seq[PublicKey],
+      bonds: Map[PublicKey, Long]
+  ): Genesis = {
+    val (_, ethPubKeys) = (1 to users).map(_ => Secp256k1.newKeyPair).unzip
+    val ethAddresses =
+      ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.bytes.drop(1)).takeRight(20)))
+    Genesis(
+      shardId = "MultiParentCasperSpec",
+      timestamp = 0L,
+      wallets = ethAddresses.map(PreWallet(_, BigInt(10001))),
+      proofOfStake = ProofOfStake(
+        minimumBond = 0L,
+        maximumBond = Long.MaxValue,
+        validators = bonds.map(Validator.tupled).toSeq
+      ),
+      faucet = true,
+      genesisPk = Ed25519.newKeyPair._2,
+      vaults = bonds.toList.map {
+        case (pk, stake) =>
+          RevAddress.fromPublicKey(pk).map(Vault(_, stake))
+      }.flattenOption,
+      supply = Long.MaxValue
+    )
+  }
 
   def buildGenesis(genesisParameters: Genesis): BlockMessage = {
     val storageDirectory                   = Files.createTempDirectory(s"hash-set-casper-test-genesis")
