@@ -499,23 +499,23 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
     for {
       nodes <- HashSetCasperTestNode
-        .networkEff(
-      validatorKeys.take(3),
-      buildGenesis(
-        buildGenesisParameters(
-          5,
-          validatorPks,
-          Map(
-            validatorPks(0) -> 3L,
-            validatorPks(1) -> 1L,
-            validatorPks(2) -> 5L,
-            validatorPks(3) -> 2L,
-            validatorPks(4) -> 4L
-          )
-        )
-      ),
-      testNetwork = network
-    )
+                .networkEff(
+                  validatorKeys.take(3),
+                  buildGenesis(
+                    buildGenesisParameters(
+                      5,
+                      validatorPks,
+                      Map(
+                        validatorPks(0) -> 3L,
+                        validatorPks(1) -> 1L,
+                        validatorPks(2) -> 5L,
+                        validatorPks(3) -> 2L,
+                        validatorPks(4) -> 4L
+                      )
+                    )
+                  ),
+                  testNetwork = network
+                )
                 .map(_.toList)
       v1   = nodes(0)
       v2   = nodes(1)

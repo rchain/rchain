@@ -28,7 +28,7 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  private val (otherSk, otherPk) = Ed25519.newKeyPair
+  private val (otherSk, otherPk)            = Ed25519.newKeyPair
   private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val (ethPivKeys, ethPubKeys)      = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
   private val ethAddresses =

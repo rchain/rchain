@@ -217,7 +217,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
 }
 
 object GenesisTest {
-  val storageSize = 3024L * 1024
+  val storageSize     = 3024L * 1024
   def storageLocation = Files.createTempDirectory(s"casper-genesis-test-runtime")
   def genesisPath     = Files.createTempDirectory(s"casper-genesis-test")
   val numValidators   = 5

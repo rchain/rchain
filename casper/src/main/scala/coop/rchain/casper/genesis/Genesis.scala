@@ -101,15 +101,15 @@ object Genesis {
       wallets     <- getWallets[F](walletsFile, maybeWalletsPath)
       bonds       <- getBonds[F](bondsFile, numValidators, genesisPath)
       vaults <- bonds.toList.foldMapM {
-        case (pk, stake) =>
-      RevAddress.fromPublicKey(pk) match {
-        case Some(ra) => List(Vault(ra, stake)).pure[F]
-        case None =>
-          Log[F].warn(
-            s"Validator public key $pk is invalid. Proceeding without entry."
-          ) *> List.empty[Vault].pure[F]
-      }
-      }
+                 case (pk, stake) =>
+                   RevAddress.fromPublicKey(pk) match {
+                     case Some(ra) => List(Vault(ra, stake)).pure[F]
+                     case None =>
+                       Log[F].warn(
+                         s"Validator public key $pk is invalid. Proceeding without entry."
+                       ) *> List.empty[Vault].pure[F]
+                   }
+               }
       validators = bonds.toSeq.map(Validator.tupled)
       genesisBlock <- createGenesisBlock(
                        runtimeManager,

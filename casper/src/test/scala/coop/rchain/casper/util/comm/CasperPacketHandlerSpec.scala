@@ -15,13 +15,13 @@ import coop.rchain.casper.helper.{BlockDagStorageTestFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol.{NoApprovedBlockAvailable, _}
 import coop.rchain.casper.util.TestTime
 import coop.rchain.casper.util.comm.CasperPacketHandler.{
-    ApprovedBlockReceivedHandler,
-    BootstrapCasperHandler,
-    CasperPacketHandlerImpl,
-    CasperPacketHandlerInternal,
-    GenesisValidatorHandler,
-    StandaloneCasperHandler
-  }
+  ApprovedBlockReceivedHandler,
+  BootstrapCasperHandler,
+  CasperPacketHandlerImpl,
+  CasperPacketHandlerInternal,
+  GenesisValidatorHandler,
+  StandaloneCasperHandler
+}
 import coop.rchain.casper.util.comm.CasperPacketHandlerSpec._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.ApplicativeError_
