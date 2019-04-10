@@ -56,45 +56,38 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
       (result, costLog) = costsLoggingProgram
       res               <- errorLog.readAndClearErrorVector
       _                 <- Task.now(res should be(Vector.empty))
-    } yield ((result, costLog))).runSyncUnsafe(25.seconds)
+    } yield ((result, costLog))).runSyncUnsafe(900000.seconds)
   }
 
   val contracts = Table(
     ("contract", "expectedTotalCost"),
-    ("""@0!(2)""", 33L),
-    ("""@0!(2) | @1!(1)""", 69L),
-    ("""for(x <- @0){ Nil }""", 64L),
-    ("""for(x <- @0){ Nil } | @0!(2)""", 76L),
-    ("""new loop in {
-         contract loop(@n) = {
+    ("""new foo in {
+         contract foo(@n) = {
            match n {
              0 => Nil
-             _ => loop!(n-1)
+             _ => foo!(0)
            }
          } |
-         loop!(10)
-       }""".stripMargin, 1936L),
-    ("""42 | @0!(2) | for (x <- @0) { Nil }""", 83L),
-    ("""@1!(1) |
-        for(x <- @1) { Nil } |
-        new x in { x!(10) | for(X <- x) { @2!(Set(X!(7)).add(*X).contains(10)) }} |
-        match 42 {
-          38 => Nil
-          42 => @3!(42)
-        }
-     """.stripMargin, 634L)
+         foo!(1)
+       }""".stripMargin, 821L)
   )
 
-  "Total cost of evaluation" should "be equal to the sum of all costs in the log" in {
-    (0 until 100).foreach { _ =>
-      forAll(
-        contracts
-      ) { (contract: String, expectedTotalCost: Long) =>
+  "Total cost of evaluation" should "be deterministic when we expect it to be deterministic" in {
+    (0 until 100).foreach { i =>
+        println(i)
         val initialPhlo = 10000L
+        val contract =
+          """
+         contract @"foo"(@n) = {
+           match n {
+             0 => Nil
+             1 => @"foo"!(0)
+           }
+         } |
+         @"foo"!(1)""".stripMargin
         val (result, costLog) = evaluateWithCostLog(initialPhlo, contract)
-        result shouldBe EvaluateResult(Cost(expectedTotalCost), Vector.empty)
-        costLog.map(_.value).toList.sum shouldEqual expectedTotalCost
-      }
+        costLog.map { cost => println(s"${cost.operation}, ${cost.value}")}
+        result shouldBe EvaluateResult(Cost(521L), Vector.empty)
     }
   }
 

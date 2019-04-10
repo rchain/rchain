@@ -607,7 +607,7 @@ trait SpatialMatcherInstances {
           target.patterns
             .zip(pattern.patterns)
             .map(x => equalityCheckCost(x._1, x._2))
-            .foldLeft(Cost(0))(_ + _)
+            .foldLeft(Cost(0, "receiveBindSpatialMatcherInstance"))(_ + _)
         charge[F](cost) *> MonoidK[F].empty
       } else
         spatialMatch(target.source, pattern.source)

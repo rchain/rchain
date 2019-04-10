@@ -82,11 +82,11 @@ class RhoSpec(
   def mkTest(test: (String, Map[Long, List[RhoTestAssertion]])): Unit =
     test match {
       case (testName, testAttempts) =>
-        assert(testAttempts.size > 0, "It doesn't make sense to have less than one attempt")
+        assert(testAttempts.nonEmpty, "It doesn't make sense to have less than one attempt")
 
         val (attempt, assertions) =
           testAttempts
-            .find { case (attempt, assertions) => hasFailures(assertions) }
+            .find { case (_, assertions) => hasFailures(assertions) }
             .getOrElse(testAttempts.head)
 
         def clueMsg(clue: String) = s"$clue (test attempt: $attempt)"
@@ -102,7 +102,7 @@ class RhoSpec(
         }
     }
 
-  def hasFailures(assertions: List[RhoTestAssertion]) = assertions.find(_.isSuccess).isDefined
+  def hasFailures(assertions: List[RhoTestAssertion]): Boolean = assertions.exists(_.isSuccess)
 
   private val result = RhoSpec
     .getResults(testObject, extraNonGenesisDeploys)

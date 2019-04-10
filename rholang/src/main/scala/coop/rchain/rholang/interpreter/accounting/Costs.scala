@@ -7,13 +7,13 @@ import coop.rchain.models.{PCost, Par, ProtoM, StacksafeMessage}
 //TODO(mateusz.gorski): Adjust the costs of operations
 final case class Cost(value: Long, operation: String) {
   def *(base: Int): Cost   = Cost(value * base, s"($operation * $base)")
-  def +(other: Cost): Cost = Cost(value + other.value, "")
-  def -(other: Cost): Cost = Cost(value - other.value, "")
+  def +(other: Cost): Cost = Cost(value + other.value, operation ++ " + " ++ other.operation)
+  def -(other: Cost): Cost = Cost(value - other.value, operation ++ " - " ++ other.operation)
 }
 
 object Cost {
   def apply[A](term: A)(implicit chargeable: Chargeable[A]): Cost =
-    Cost(chargeable.cost(term), "")
+    Cost(chargeable.cost(term), "apply")
   def apply[A](term: A, operation: String)(implicit chargeable: Chargeable[A]): Cost =
     Cost(chargeable.cost(term), operation)
   def apply(value: Int, operation: String): Cost = Cost(value.toLong, operation)
