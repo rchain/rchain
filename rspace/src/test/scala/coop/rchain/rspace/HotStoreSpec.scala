@@ -23,6 +23,9 @@ import monix.execution.Scheduler.Implicits.global
 
 trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
 
+  implicit override val generatorDrivenConfig =
+    PropertyCheckConfiguration(minSize = 0, minSuccessful = 20)
+
   implicit def S: Sync[F]
   implicit def P: Parallel[F, M]
 
