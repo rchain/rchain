@@ -17,6 +17,7 @@ import org.scalatest.prop._
 
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration._
+import scala.util.Random
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 
@@ -503,6 +504,76 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       }
   }
 
+  "installJoin" should "cache installed joins separately" in forAll {
+    (
+        channel: Channel,
+        cachedJoins: Joins,
+        insertedJoin: Join,
+        installedJoin: Join
+    ) =>
+      whenever(insertedJoin != installedJoin) {
+        fixture { (state, history, hotStore) =>
+          {
+            for {
+              _ <- state.modify(
+                    _ =>
+                      Cache(
+                        joins = TrieMap(
+                          channel -> cachedJoins
+                        )
+                      )
+                  )
+              _     <- hotStore.putJoin(channel, insertedJoin)
+              _     <- hotStore.installJoin(channel, installedJoin)
+              cache <- state.read
+              _ <- S.delay {
+                    cache
+                      .installedJoins(channel) shouldEqual Seq(installedJoin)
+                  }
+              _ <- S.delay(
+                    cache
+                      .joins(channel) shouldEqual insertedJoin +: cachedJoins
+                  )
+            } yield ()
+          }
+        }
+      }
+  }
+
+  it should "allow installing multiple values per channel" in forAll {
+    (
+        channel: Channel,
+        cachedJoins: Joins,
+        installedJoin1: Join,
+        installedJoin2: Join
+    ) =>
+      whenever(installedJoin1 != installedJoin2) {
+        fixture { (state, history, hotStore) =>
+          {
+            for {
+              _ <- state.modify(
+                    _ =>
+                      Cache(
+                        joins = TrieMap(
+                          channel -> cachedJoins
+                        )
+                      )
+                  )
+              _     <- hotStore.installJoin(channel, installedJoin1)
+              _     <- hotStore.installJoin(channel, installedJoin2)
+              cache <- state.read
+              _ <- S.delay {
+                    cache
+                      .installedJoins(channel) should contain(installedJoin1)
+                    cache
+                      .installedJoins(channel) should contain(installedJoin2)
+                  }
+            } yield ()
+          }
+        }
+      }
+  }
+
   "removeJoin when cache is empty" should "read from history and remove join" in forAll {
     (
         channel: Channel,
@@ -548,6 +619,47 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
               res   <- hotStore.removeJoin(channel, toRemove).attempt
               cache <- state.read
               _     <- checkRemoval(res, cache.joins(channel), cachedJoins, index)
+            } yield ()
+          }
+        }
+      }
+  }
+
+  "removeJoin when installed joins are present" should "not allow removing them" in forAll {
+    (
+        channel: Channel,
+        cachedJoins: Joins,
+        installedJoins: Joins
+    ) =>
+      whenever(cachedJoins =!= installedJoins && installedJoins.nonEmpty) {
+        fixture { (state, history, hotStore) =>
+          {
+            for {
+              _ <- state.modify(
+                    _ =>
+                      Cache(
+                        joins = TrieMap(
+                          channel -> cachedJoins
+                        ),
+                        installedJoins = TrieMap(
+                          channel -> installedJoins
+                        )
+                      )
+                  )
+              toRemove = Random.shuffle(installedJoins).head
+              res      <- hotStore.removeJoin(channel, toRemove).attempt
+              cache    <- state.read
+              _ <- if (!cachedJoins.contains(toRemove))
+                    Sync[F].delay {
+                      res shouldBe a[Left[_, _]]
+                    } else
+                    for {
+                      cache <- state.read
+                      _ = cache.joins(channel).count(_ == toRemove) shouldEqual (cachedJoins.count(
+                        _ == toRemove
+                      ) - 1)
+                      _ = cache.installedJoins(channel) shouldBe installedJoins
+                    } yield ()
             } yield ()
           }
         }
