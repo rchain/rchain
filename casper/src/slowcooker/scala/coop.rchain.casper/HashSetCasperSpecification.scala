@@ -57,14 +57,13 @@ object HashSetCasperActions {
       ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.bytes.drop(1)).takeRight(20)))
     val wallets     = ethAddresses.map(addr => PreWallet(addr, BigInt(10001)))
     val bonds       = bondsGen(validators)
-    val minimumBond = 100L
     val genesis =
       buildGenesis(
         Genesis(
           shardId = "HashSetCasperSpecification",
           wallets = wallets,
           proofOfStake = ProofOfStake(
-            minimumBond = minimumBond,
+            minimumBond = 0L,
             maximumBond = Long.MaxValue,
             validators = bonds.toSeq.map(Validator.tupled)
           ),
