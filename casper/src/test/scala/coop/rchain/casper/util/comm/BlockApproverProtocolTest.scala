@@ -121,8 +121,8 @@ object BlockApproverProtocolTest {
           timestamp = deployTimestamp,
           wallets = wallets,
           proofOfStake = ProofOfStake(
-    minimumBond = 0L,
-    maximumBond = Long.MaxValue,
+            minimumBond = 0L,
+            maximumBond = Long.MaxValue,
             validators = bonds.map(Validator.tupled).toSeq
           ),
           faucet = false,

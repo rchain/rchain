@@ -65,12 +65,12 @@ class CasperPacketHandlerSpec extends WordSpec {
 
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync(scheduler)
 
-    val (genesisSk, genesisPk) = Ed25519.newKeyPair
+    val (genesisSk, genesisPk)     = Ed25519.newKeyPair
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
-    val bonds = createBonds(Seq(validatorPk))
-    val requiredSigs = 1
-    val shardId = "test-shardId"
-    val deployTimestamp = 1L
+    val bonds                      = createBonds(Seq(validatorPk))
+    val requiredSigs               = 1
+    val shardId                    = "test-shardId"
+    val deployTimestamp            = 1L
     val genesis: BlockMessage =
       MultiParentCasperTestUtil.buildGenesis(
         Genesis(

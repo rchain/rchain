@@ -70,8 +70,8 @@ object MultiParentCasperTestUtil {
         timestamp = 0L,
         wallets = Seq.empty[PreWallet],
         proofOfStake = ProofOfStake(
-    minimumBond = 0L,
-    maximumBond = Long.MaxValue,
+          minimumBond = 0L,
+          maximumBond = Long.MaxValue,
           validators = bonds.toSeq.map(Validator.tupled)
         ),
         faucet = false,

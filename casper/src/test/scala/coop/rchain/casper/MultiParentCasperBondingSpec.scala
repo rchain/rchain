@@ -30,11 +30,11 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
 
   private val (otherSk, otherPk) = Ed25519.newKeyPair
   private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-  private val (ethPivKeys, ethPubKeys) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
+  private val (ethPivKeys, ethPubKeys)      = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
   private val ethAddresses =
     ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.bytes.drop(1)).takeRight(20)))
   private val wallets = ethAddresses.map(PreWallet(_, BigInt(10001)))
-  private val bonds = createBonds(validatorPks)
+  private val bonds   = createBonds(validatorPks)
 
   private val genesisParameters =
     Genesis(
@@ -320,13 +320,13 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
     val localBonds      = localValidators.map(Ed25519.toPublic).zip(List(10L, 30L, 5000L)).toMap
     val localGenesis =
       buildGenesis(
-    genesisParameters.copy(
-      wallets = Nil,
-      proofOfStake = genesisParameters.proofOfStake.copy(
-        validators = localBonds.map(Validator.tupled).toSeq
+        genesisParameters.copy(
+          wallets = Nil,
+          proofOfStake = genesisParameters.proofOfStake.copy(
+            validators = localBonds.map(Validator.tupled).toSeq
+          )
+        )
       )
-    )
-  )
     for {
       nodes <- HashSetCasperTestNode.networkEff(localValidators, localGenesis)
 
