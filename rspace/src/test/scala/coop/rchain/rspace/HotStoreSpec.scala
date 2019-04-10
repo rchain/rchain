@@ -554,6 +554,51 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       }
   }
 
+  "changes" should "return information to be persisted in history" in forAll {
+    (
+        channels: Vector[Channel],
+        channel: Channel,
+        continuations: Vector[Continuation],
+        installedContinuation: Continuation,
+        data: Vector[Data],
+        joins: Joins
+    ) =>
+      fixture { (state, _, hotStore) =>
+        {
+          for {
+            _ <- state.modify(
+                  _ =>
+                    Cache(
+                      continuations = TrieMap(
+                        channels -> continuations
+                      ),
+                      installedContinuations = TrieMap(
+                        channels -> installedContinuation
+                      ),
+                      data = TrieMap(
+                        channel -> data
+                      ),
+                      joins = TrieMap(
+                        channel -> joins
+                      )
+                    )
+                )
+            res   <- hotStore.changes()
+            cache <- state.read
+            _ <- S.delay {
+                  res.size shouldBe (cache.continuations.size + cache.data.size + cache.joins.size)
+                  if (continuations.isEmpty) res should contain(DeleteContinuations(channels))
+                  else res should contain(InsertContinuations(channels, continuations))
+                  if (data.isEmpty) res should contain(DeleteData(channel))
+                  else res should contain(InsertData(channel, data))
+                  if (joins.isEmpty) res should contain(DeleteJoins(channel))
+                  else res should contain(InsertJoins(channel, joins))
+                }
+          } yield ()
+        }
+      }
+  }
+
   "concurrent data operations on disjoint channels" should "not mess up the cache" in forAll {
     (
         channel1: Channel,
