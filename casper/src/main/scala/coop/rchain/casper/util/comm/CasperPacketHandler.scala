@@ -444,7 +444,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       private val cphI: Ref[F, CasperPacketHandlerInternal[F]]
   ) extends CasperPacketHandler[F] {
 
-    override def init: F[Unit] = cphI.get >>= (_.init)
+    override def init: F[Unit] =
+      Log[F].info("Executing init of CasperPacketHandlerImpl") >> cphI.get >>= (_.init)
 
     override def handle(peer: PeerNode): PartialFunction[Packet, F[Unit]] =
       Function
