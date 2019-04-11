@@ -9,7 +9,6 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
-
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.protocol.routing.Packet
@@ -17,7 +16,7 @@ import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.rp._
 import coop.rchain.comm.rp.ProtocolHelper.{packet, toPacket}
 import coop.rchain.comm.transport.{Blob, PacketType, TransportLayer}
-import coop.rchain.comm.{transport, PeerNode}
+import coop.rchain.comm.{transport, CommError, PeerNode}
 import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.effects._
@@ -91,7 +90,14 @@ object CommUtil {
       _ <- maybeBootstrap match {
             case Some(bootstrap) =>
               val msg = packet(local, transport.ApprovedBlockRequest, request)
-              TransportLayer[F].send(bootstrap, msg)
+              TransportLayer[F].send(bootstrap, msg).flatMap {
+                case Right(_) =>
+                  Log[F].info(s"Successfully sent ApprovedBlockRequest to $bootstrap")
+                case Left(error) =>
+                  Log[F].warn(
+                    s"Failed to send ApprovedBlockRequest to $bootstrap because of ${CommError.errorMessage(error)}"
+                  )
+              }
             case None => Log[F].warn("Cannot request for an approved block as standalone")
           }
     } yield ()
