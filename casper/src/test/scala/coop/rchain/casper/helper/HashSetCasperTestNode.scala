@@ -212,10 +212,12 @@ object HashSetCasperTestNode {
                             blockDagDir.resolve("block-metadata-crc"),
                             blockDagDir.resolve("equivocations-tracker-data"),
                             blockDagDir.resolve("equivocations-tracker-crc"),
-                            blockDagDir.resolve("checkpoints")
+                            blockDagDir.resolve("checkpoints"),
+                            blockDagDir.resolve("block-number-index"),
+                            mapSize
                           ),
                           genesis
-                        )(Concurrent[F], Sync[F], Log[F], blockStore)
+                        )(Concurrent[F], Sync[F], Log[F])
       blockProcessingLock <- Semaphore[F](1)
       casperState         <- Cell.mvarCell[F, CasperState](CasperState())
       node = new HashSetCasperTestNode[F](
@@ -298,10 +300,12 @@ object HashSetCasperTestNode {
                                     blockDagDir.resolve("block-metadata-crc"),
                                     blockDagDir.resolve("equivocations-tracker-crc"),
                                     blockDagDir.resolve("equivocations-tracker-crc"),
-                                    blockDagDir.resolve("checkpoints")
+                                    blockDagDir.resolve("checkpoints"),
+                                    blockDagDir.resolve("block-number-index"),
+                                    mapSize
                                   ),
                                   genesis
-                                )(Concurrent[F], Sync[F], Log[F], blockStore)
+                                )(Concurrent[F], Sync[F], Log[F])
               semaphore <- Semaphore[F](1)
               casperState <- Cell.mvarCell[F, CasperState](
                               CasperState()

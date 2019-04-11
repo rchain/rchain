@@ -31,6 +31,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
       |    data-dir = /root/.rnode
       |    store-type = lmdb
       |    store-size = 1G
+      |    dag-storage-size = 512M
       |    map-size = 1G
       |    max-connections = 500
       |    max-message-size = 256K
@@ -60,6 +61,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         mapSize = 1024 * 1024 * 1024,
         storeType = StoreType.LMDB,
         storeSize = 1024 * 1024 * 1024,
+        dagStorageSize = 512 * 1024 * 1024,
         maxNumOfConnections = 500,
         maxMessageSize = 256 * 1024,
         packetChunkSize = 64 * 1024,

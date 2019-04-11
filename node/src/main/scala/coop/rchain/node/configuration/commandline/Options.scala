@@ -296,6 +296,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val casperBlockStoreSize =
       opt[Long](required = false, descr = "Casper BlockStore map size (in bytes)")
 
+    val casperBlockDagStorageSize =
+      opt[Long](required = false, descr = "Casper BlockDagStorage map size (in bytes)")
+
     val casperLatestMessagesDataPath =
       opt[Path](required = false, descr = "Path to latest messages data file")
 

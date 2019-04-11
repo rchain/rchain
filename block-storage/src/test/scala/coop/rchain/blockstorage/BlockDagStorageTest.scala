@@ -129,6 +129,9 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   private def defaultCheckpointsDir(dagDataDir: Path): Path =
     dagDataDir.resolve("checkpoints")
 
+  private def defaultBlockNumberIndex(dagDataDir: Path): Path =
+    dagDataDir.resolve("block-number-index")
+
   private def createBlockStore(blockStoreDataDir: Path): Task[BlockStore[Task]] = {
     implicit val metrics = new MetricsNOP[Task]()
     implicit val log     = new Log.NOPLog[Task]()
@@ -151,6 +154,8 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
         defaultEquivocationsTrackerLog(dagDataDir),
         defaultEquivocationsTrackerCrc(dagDataDir),
         defaultCheckpointsDir(dagDataDir),
+        defaultBlockNumberIndex(dagDataDir),
+        100L * 1024L * 1024L * 4096L,
         maxSizeFactor
       )
     )

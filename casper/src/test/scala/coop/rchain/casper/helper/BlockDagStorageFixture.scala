@@ -114,7 +114,9 @@ object BlockDagStorageTestFixture {
         blockDagStorageDir.resolve("block-metadata-crc"),
         blockDagStorageDir.resolve("equivocations-tracker-data"),
         blockDagStorageDir.resolve("equivocations-tracker-crc"),
-        blockDagStorageDir.resolve("checkpoints")
+        blockDagStorageDir.resolve("checkpoints"),
+        blockDagStorageDir.resolve("block-number-index"),
+        mapSize
       )
     )
 }

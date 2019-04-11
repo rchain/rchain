@@ -402,13 +402,14 @@ class NodeRuntime private[node] (
       equivocationsTrackerLogPath = dagStoragePath.resolve("equivocationsTrackerLogPath"),
       equivocationsTrackerCrcPath = dagStoragePath.resolve("equivocationsTrackerCrcPath"),
       checkpointsDirPath = dagStoragePath.resolve("checkpointsDirPath"),
+      blockNumberIndexPath = dagStoragePath.resolve("blockNumberIndexPath"),
+      mapSize = 100L * 1024L * 1024L * 4096L,
       latestMessagesLogMaxSizeFactor = 10
     )
     blockDagStorage <- BlockDagFileStorage.create[Effect](dagConfig)(
                         Concurrent[Effect],
                         Sync[Effect],
-                        Log.eitherTLog(Monad[Task], log),
-                        blockStore
+                        Log.eitherTLog(Monad[Task], log)
                       )
     oracle = SafetyOracle.cliqueOracle[Effect](Monad[Effect], Log.eitherTLog(Monad[Task], log))
     runtime <- {
