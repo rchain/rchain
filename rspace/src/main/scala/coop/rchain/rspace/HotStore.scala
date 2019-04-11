@@ -44,11 +44,11 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
 
   def getContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
     for {
-      cached <- getCachedContinuations(channels)
+      cached <- internalGetContinuations(channels)
       state  <- S.read
     } yield (state.installedContinuations.get(channels) ++: cached)
 
-  private[this] def getCachedContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
+  private[this] def internalGetContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
     for {
       state <- S.read
       res <- state.continuations.get(channels) match {
@@ -69,7 +69,7 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
 
   def putContinuation(channels: Seq[C], wc: WaitingContinuation[P, K]): F[Unit] =
     for {
-      continuations <- getCachedContinuations(channels)
+      continuations <- internalGetContinuations(channels)
       _ <- S.flatModify { cache =>
             Sync[F].delay(cache.continuations.put(channels, wc +: continuations)).map(_ => cache)
           }
@@ -145,11 +145,11 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
 
   def getJoins(channel: C): F[Seq[Seq[C]]] =
     for {
-      cached <- getCachedJoins(channel)
+      cached <- internalGetJoins(channel)
       state  <- S.read
     } yield (state.installedJoins.get(channel).getOrElse(Seq.empty) ++: cached)
 
-  private[this] def getCachedJoins(channel: C): F[Seq[Seq[C]]] =
+  private[this] def internalGetJoins(channel: C): F[Seq[Seq[C]]] =
     for {
       state <- S.read
       res <- state.joins.get(channel) match {
@@ -183,7 +183,7 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
 
   def removeJoin(channel: C, join: Seq[C]): F[Unit] =
     for {
-      joins <- getCachedJoins(channel)
+      joins <- internalGetJoins(channel)
       _ <- S.flatModify { cache =>
             val index = cache.joins(channel).indexOf(join)
             removeIndex(cache.joins(channel), index) >>= { updated =>
