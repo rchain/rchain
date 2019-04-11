@@ -21,6 +21,7 @@ trait HotStore[F[_], C, P, A, K] {
 
   def getJoins(channel: C): F[Seq[Seq[C]]]
   def putJoin(channel: C, join: Seq[C]): F[Unit]
+  def installJoin(channel: C, join: Seq[C]): F[Unit]
   def removeJoin(channel: C, join: Seq[C]): F[Unit]
 
   def changes(): F[Seq[HotStoreAction]]
@@ -32,7 +33,8 @@ final case class Cache[C, P, A, K](
     installedContinuations: TrieMap[Seq[C], WaitingContinuation[P, K]] =
       TrieMap.empty[Seq[C], WaitingContinuation[P, K]],
     data: TrieMap[C, Seq[Datum[A]]] = TrieMap.empty[C, Seq[Datum[A]]],
-    joins: TrieMap[C, Seq[Seq[C]]] = TrieMap.empty[C, Seq[Seq[C]]]
+    joins: TrieMap[C, Seq[Seq[C]]] = TrieMap.empty[C, Seq[Seq[C]]],
+    installedJoins: TrieMap[C, Seq[Seq[C]]] = TrieMap.empty[C, Seq[Seq[C]]]
 )
 
 private class InMemHotStore[F[_]: Sync, C, P, A, K](
@@ -42,11 +44,11 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
 
   def getContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
     for {
-      cached <- getCachedContinuations(channels)
+      cached <- internalGetContinuations(channels)
       state  <- S.read
     } yield (state.installedContinuations.get(channels) ++: cached)
 
-  private[this] def getCachedContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
+  private[this] def internalGetContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
     for {
       state <- S.read
       res <- state.continuations.get(channels) match {
@@ -67,7 +69,7 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
 
   def putContinuation(channels: Seq[C], wc: WaitingContinuation[P, K]): F[Unit] =
     for {
-      continuations <- getCachedContinuations(channels)
+      continuations <- internalGetContinuations(channels)
       _ <- S.flatModify { cache =>
             Sync[F].delay(cache.continuations.put(channels, wc +: continuations)).map(_ => cache)
           }
@@ -143,6 +145,12 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
 
   def getJoins(channel: C): F[Seq[Seq[C]]] =
     for {
+      cached <- internalGetJoins(channel)
+      state  <- S.read
+    } yield (state.installedJoins.get(channel).getOrElse(Seq.empty) ++: cached)
+
+  private[this] def internalGetJoins(channel: C): F[Seq[Seq[C]]] =
+    for {
       state <- S.read
       res <- state.joins.get(channel) match {
               case None =>
@@ -164,9 +172,18 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
           }
     } yield ()
 
+  def installJoin(channel: C, join: Seq[C]): F[Unit] = S.flatModify { cache =>
+    Sync[F]
+      .delay(
+        cache.installedJoins
+          .put(channel, join +: cache.installedJoins.get(channel).getOrElse(Seq.empty))
+      )
+      .map(_ => cache)
+  }
+
   def removeJoin(channel: C, join: Seq[C]): F[Unit] =
     for {
-      joins <- getJoins(channel)
+      joins <- internalGetJoins(channel)
       _ <- S.flatModify { cache =>
             val index = cache.joins(channel).indexOf(join)
             removeIndex(cache.joins(channel), index) >>= { updated =>
