@@ -17,9 +17,9 @@ final case class Skip(affix: ByteVector, hash: TriePointer) extends NonEmptyTrie
 final case class Node(hash: PointerBlockPointer)            extends NonEmptyTrie
 final case class Leaf(hash: LeafPointer)                    extends NonEmptyTrie
 
-final case class TriePath(partialPath: Vector[Trie], conflicting: Option[Trie], path: KeyPath) {
+final case class TriePath(nodes: Vector[Trie], conflicting: Option[Trie], edges: KeyPath) {
   def append(affix: KeyPath, t: Trie): TriePath =
-    this.copy(partialPath = this.partialPath :+ t, path = this.path ++ affix)
+    this.copy(nodes = this.nodes :+ t, edges = this.edges ++ affix)
 }
 
 object TriePath {
@@ -171,7 +171,7 @@ final case class History[F[_]: Sync, K](
     FlatMap[F].tailRecM((path, rest, lastSeen, acc))(go)
   }
 
-  private def rebalanceDelete(p1: KeyPath, r: Vector[Trie], a: Option[Trie]): F[List[Trie]] = {
+  private def rebalanceDelete(fullPath: KeyPath, trieNodesOnPath: Vector[Trie]): F[List[Trie]] = {
     type Params = (KeyPath, Vector[Trie], Option[Trie])
     def go(params: Params): F[Either[Params, List[Trie]]] =
       params match {
@@ -210,7 +210,7 @@ final case class History[F[_]: Sync, K](
 
         case (Nil, Vector(), None) => Applicative[F].pure(EmptyTrie :: Nil).map(_.asRight)
       }
-    FlatMap[F].tailRecM((p1, r, a))(go)
+    FlatMap[F].tailRecM((fullPath, trieNodesOnPath, none[Trie]))(go)
   }
 
   def process(actions: List[HistoryAction[K]]): F[History[F, K]] =
@@ -234,7 +234,7 @@ final case class History[F[_]: Sync, K](
             (_, triePath)  = traverseResult
             elements <- triePath match {
                          case TriePath(elems :+ (_: Leaf), None, path) if remainingPath == path =>
-                           rebalanceDelete(remainingPath, elems, None)
+                           rebalanceDelete(remainingPath, elems)
                          case _ =>
                            Applicative[F].pure[List[Trie]](Nil)
                        }

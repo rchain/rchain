@@ -22,7 +22,7 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
       newHistory <- emptyHistory.process(data)
       result     <- newHistory.findPath(_zeros)
       (_, path)  = result
-      _ = path.partialPath match {
+      _ = path.nodes match {
         case skip +: leaf =>
           leaf shouldBe Vector(Leaf(data.head.hash))
           skip shouldBe Skip(_zeros, Trie.hash(leaf.head))
@@ -37,9 +37,9 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
       results             <- data.traverse(action => newHistory.findPath(action.key.bytes.toSeq.toList))
       _                   = results should have size 10
       (_, headPath)       = results.head
-      secondTrieOnPath    = headPath.partialPath.tail.head
+      secondTrieOnPath    = headPath.nodes.tail.head
       _                   = secondTrieOnPath shouldBe a[Node]
-      allFirstTriesOnPath = results.map(_._2.partialPath.head).toSet
+      allFirstTriesOnPath = results.map(_._2.nodes.head).toSet
       _                   = allFirstTriesOnPath should have size 1
       firstSkip           = allFirstTriesOnPath.head
       _                   = skipShouldHaveAffix(firstSkip, _31zeros)
@@ -54,10 +54,10 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
       historyTwo <- historyOne.process(deletions)
       result     <- historyTwo.findPath(_zerosOnes)
       (_, path)  = result
-      _          = path.partialPath should have size 2
-      _          = path.partialPath.head shouldBe a[Skip]
-      _          = path.partialPath.last shouldBe a[Leaf]
-      _          = skipShouldHaveAffix(path.partialPath.head, _zerosOnes)
+      _          = path.nodes should have size 2
+      _          = path.nodes.head shouldBe a[Skip]
+      _          = path.nodes.last shouldBe a[Leaf]
+      _          = skipShouldHaveAffix(path.nodes.head, _zerosOnes)
     } yield ()
   }
 
