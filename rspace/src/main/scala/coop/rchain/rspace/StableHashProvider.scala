@@ -1,7 +1,6 @@
 package coop.rchain.rspace
 
 import internal._
-import scala.collection.immutable.Seq
 import cats.implicits._
 import scodec.bits.ByteVector
 import scodec.{Attempt, Codec, Encoder}

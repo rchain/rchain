@@ -4,7 +4,6 @@ import coop.rchain.catscontrib.ski._
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import monix.execution.atomic.AtomicAny
-import scala.collection.immutable.Seq
 
 /** The interface for the underlying store
   *

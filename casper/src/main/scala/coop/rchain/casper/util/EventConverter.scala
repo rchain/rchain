@@ -10,7 +10,6 @@ import coop.rchain.rspace.trace.{
   Event => RspaceEvent,
   Produce => RspaceProduce
 }
-import scala.collection.immutable.Seq
 
 object EventConverter {
   private implicit def byteStringToBlake2b256Hash(hash: ByteString): Blake2b256Hash =

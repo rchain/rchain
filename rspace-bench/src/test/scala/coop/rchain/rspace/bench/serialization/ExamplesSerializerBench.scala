@@ -82,8 +82,6 @@ abstract class ExamplesSerializerBenchState {
     phone = "555-6969"
   )
 
-  import collection.immutable.Seq
-
   val channel      = Channel("colleagues")
   val channels     = List(channel, Channel("friends"))
   val datum        = Datum.create(channel, data, false)

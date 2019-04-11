@@ -5,8 +5,6 @@ import cats.effect.Sync
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace._
 
-import scala.collection.immutable.Seq
-
 trait PureRSpace[F[_], C, P, A, R, K] {
   def consume(
       channels: Seq[C],

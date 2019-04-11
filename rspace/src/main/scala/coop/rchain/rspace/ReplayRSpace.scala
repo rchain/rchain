@@ -14,7 +14,6 @@ import coop.rchain.shared.Log
 import scodec.Codec
 
 import scala.collection.JavaConverters._
-import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext
 
 class ReplayRSpace[F[_], C, P, A, R, K](store: IStore[F, C, P, A, K], branch: Branch)(

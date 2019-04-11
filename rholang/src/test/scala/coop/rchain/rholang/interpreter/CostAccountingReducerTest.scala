@@ -24,7 +24,6 @@ import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rspace.internal
 import coop.rchain.shared.Log
 
-import scala.collection.immutable
 import scala.concurrent.duration._
 
 class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEqualsSupport {
@@ -115,7 +114,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     def testImplementation(pureRSpace: RhoISpace[Task]): Task[
       (
           Either[Throwable, Unit],
-          Map[immutable.Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]]
+          Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]]
       )
     ] = {
 
@@ -167,7 +166,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     )
 
     def stored(
-        map: Map[immutable.Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]],
+        map: Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]],
         p: Par,
         rand: Blake2b512Random
     ): Boolean =

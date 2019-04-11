@@ -2,7 +2,6 @@ package coop.rchain.rspace
 
 import cats.effect.Sync
 
-import scala.collection.immutable.Seq
 import cats.implicits._
 import coop.rchain.catscontrib.ski.kp
 import coop.rchain.rspace.history.{Branch, ITrieStore}

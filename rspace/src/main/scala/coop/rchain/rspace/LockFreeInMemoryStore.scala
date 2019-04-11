@@ -5,7 +5,6 @@ import cats.implicits._
 import coop.rchain.catscontrib.ski.kp
 
 import scala.collection.concurrent.TrieMap
-import scala.collection.immutable.Seq
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.canonicalize

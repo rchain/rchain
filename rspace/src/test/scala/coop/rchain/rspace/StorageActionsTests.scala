@@ -19,7 +19,6 @@ import org.scalatest._
 import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
 
-import scala.collection.immutable.Seq
 import coop.rchain.rspace.test.ArbitraryInstances._
 import monix.eval.Coeval
 import org.scalatest.enablers.Definition

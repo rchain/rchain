@@ -14,7 +14,6 @@ import scodec.Codec
 import scodec.bits.ByteVector
 
 import scala.annotation.tailrec
-import scala.collection.immutable
 
 package object history {
 
@@ -116,9 +115,9 @@ package object history {
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   // TODO stop throwing exceptions
-  def lookup[T, K, V](store: ITrieStore[T, K, V], branch: Branch, keys: immutable.Seq[K])(
+  def lookup[T, K, V](store: ITrieStore[T, K, V], branch: Branch, keys: Seq[K])(
       implicit codecK: Codec[K]
-  ): Option[immutable.Seq[V]] =
+  ): Option[Seq[V]] =
     if (keys.isEmpty) {
       throw new IllegalArgumentException("keys can't be empty")
     } else {

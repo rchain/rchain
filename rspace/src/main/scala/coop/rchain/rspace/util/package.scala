@@ -4,8 +4,6 @@ import cats.Functor
 import coop.rchain.rspace.internal.GNAT
 import scodec.bits.ByteVector
 
-import scala.collection.immutable.Seq
-
 package object util {
 
   implicit def unpackSeq[C, P, K, R](

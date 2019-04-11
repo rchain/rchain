@@ -17,8 +17,6 @@ import org.scalacheck.Prop
 import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
 
-import scala.collection.immutable.Seq
-
 //noinspection ZeroIndexToHead
 trait HistoryActionsTests[F[_]]
     extends StorageTestsBase[F, String, Pattern, String, StringsCaptor]
