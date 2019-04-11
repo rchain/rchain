@@ -1,133 +1,116 @@
 package coop.rchain.rspace.nextgenrspace.history
-import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.test.TestKey32
-import org.scalatest.{FlatSpec, Matchers, OptionValues}
 
-import scala.collection.concurrent.TrieMap
-import History._
-import org.scalacheck.{Arbitrary, Gen, Shrink}
-import coop.rchain.rspace.test.ArbitraryInstances._
-import coop.rchain.shared.GeneratorUtils.distinctListOf
+import coop.rchain.rspace.test.TestKey32
 import monix.eval.Task
-import org.scalatest.prop._
+import org.scalatest.{Assertion, FlatSpec, Matchers, OptionValues}
 
 import scala.concurrent.duration._
 import monix.execution.Scheduler.Implicits.global
+import TestData._
+import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.nextgenrspace.history.History.Trie
+import scodec.bits.ByteVector
+import History.codecTrie
+import cats.implicits._
 
-class HistorySpec
-    extends FlatSpec
-    with Matchers
-    with OptionValues
-    with GeneratorDrivenPropertyChecks
-    with InMemoryHistoryTestBase {
+import scala.util.Random
 
-  implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
+class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemoryHistoryTestBase {
+  "first leaf in trie" should "create a Skip -> Leaf" in withEmptyTrie { emptyHistory =>
+    val data = insert(_zeros) :: Nil
+    for {
+      newHistory <- emptyHistory.process(data)
+      result     <- newHistory.findPath(_zeros)
+      (_, path)  = result
+      _ = path.partialPath match {
+        case skip +: leaf =>
+          leaf shouldBe Vector(Leaf(data.head.hash))
+          skip shouldBe Skip(_zeros, Trie.hash(leaf.head))
+      }
+    } yield ()
+  }
 
-  // disable shrinking since this test operates on a persistent structure
-  implicit val propertyCheckConfigParam =
-    PropertyCheckConfiguration(minSuccessful = 1000)
+  "leafs under same prefix" should "live in one pointer block" in withEmptyTrie { emptyHistory =>
+    val data = List.range(0, 10).map(zerosAnd).map(k => InsertAction(k, randomBlake))
+    for {
+      newHistory          <- emptyHistory.process(data)
+      results             <- data.traverse(action => newHistory.findPath(action.key.bytes.toSeq.toList))
+      _                   = results should have size 10
+      (_, headPath)       = results.head
+      secondTrieOnPath    = headPath.partialPath.tail.head
+      _                   = secondTrieOnPath shouldBe a[Node]
+      allFirstTriesOnPath = results.map(_._2.partialPath.head).toSet
+      _                   = allFirstTriesOnPath should have size 1
+      firstSkip           = allFirstTriesOnPath.head
+      _                   = skipShouldHaveAffix(firstSkip, _31zeros)
+    } yield ()
+  }
 
-  type Key  = TestKey32
-  type Data = (Key, Blake2b256Hash)
+  "deletion of a leaf" should "collapse two skips" in withEmptyTrie { emptyHistory =>
+    val inserts   = insert(_zeros) :: insert(_zerosOnes) :: Nil
+    val deletions = delete(_zeros) :: Nil
+    for {
+      historyOne <- emptyHistory.process(inserts)
+      historyTwo <- historyOne.process(deletions)
+      result     <- historyTwo.findPath(_zerosOnes)
+      (_, path)  = result
+      _          = path.partialPath should have size 2
+      _          = path.partialPath.head shouldBe a[Skip]
+      _          = path.partialPath.last shouldBe a[Leaf]
+      _          = skipShouldHaveAffix(path.partialPath.head, _zerosOnes)
+    } yield ()
+  }
 
-  "history" should "accept new leafs (insert, update, delete)" in forAll(
-    distinctListOf(arbitraryInsertAction)) { actions: List[(TestKey32, Blake2b256Hash)] =>
+  "update of a leaf" should "not change past history" in withEmptyTrie { emptyHistory =>
+    val insertOne = insert(_zeros) :: Nil
+    val insertTwo = insert(_zeros) :: Nil
+    for {
+      historyOne       <- emptyHistory.process(insertOne)
+      resultOnePre     <- historyOne.findPath(_zeros)
+      historyTwo       <- historyOne.process(insertTwo)
+      resultOnePost    <- historyOne.findPath(_zeros)
+      resultTwo        <- historyTwo.findPath(_zeros)
+      (leafOnePre, _)  = resultOnePre
+      (leafOnePost, _) = resultOnePost
+      (leafTwo, _)     = resultTwo
+      _                = leafOnePre shouldBe leafOnePre
+      _                = leafOnePre should not be leafTwo
+      _                = leafOnePost should not be leafTwo
+    } yield ()
+  }
+
+  protected def withEmptyTrie(f: History[Task, TestKey32] => Task[Unit]): Unit = {
     val emptyHistory =
       new History[Task, TestKey32](emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
-
-    val emptyState = Map.empty[Key, (Data, History[Task, Key])] // accumulate actions performed on the trie
-
-    val (result, map) = actions.foldLeft((emptyHistory, emptyState)) {
-      case ((history, prevActions), action) =>
-        val (postHistory, _) =
-          insertAndVerify(history, action :: Nil, prevActions.values.map(_._1).toList)
-        val actions = prevActions + (action._1 -> (action, postHistory))
-        (postHistory, actions)
-    }
-
-    map.values.foreach {
-      case ((k, v), postModifyHistory) =>
-        val actions           = DeleteAction(k) :: Nil
-        val postDeleteHistory = postModifyHistory.process(actions).runSyncUnsafe(20.seconds)
-
-        fetchData(postModifyHistory, k)._1 shouldBe Leaf(v)
-        fetchData(postDeleteHistory, k)._1 shouldBe EmptyTrie
-    }
-
-    val deletions    = map.values.map(_._1).map(v => DeleteAction(v._1)).toList
-    val finalHistory = result.process(deletions)
-    finalHistory.runSyncUnsafe(20.seconds).root shouldBe emptyHistory.root
+    f(emptyHistory).runSyncUnsafe(20.seconds)
   }
 
-  val arbitraryTestKey32: Arbitrary[TestKey32] =
-    Arbitrary(
-      Gen
-        .listOfN(3, Arbitrary.arbitrary[Int])
-        .map(ints => TestKey32.create(List.fill(29)(0) ++ ints)))
-
-  implicit val arbitraryInsertAction: Arbitrary[(TestKey32, Blake2b256Hash)] =
-    Arbitrary(for {
-      key  <- arbitraryTestKey32.arbitrary
-      hash <- arbitraryBlake2b256Hash.arbitrary
-    } yield (key, hash))
-
-  def insertAndVerify(history: History[Task, TestKey32],
-                      toBeProcessed: List[Data],
-                      pastData: List[Data]): (History[Task, TestKey32], List[Data]) = {
-    val inserts      = toBeProcessed.map(v => InsertAction(v._1, v._2))
-    val insertResult = history.process(inserts).runSyncUnsafe(20.seconds)
-    insertResult.root should not be history.root
-
-    val deletions      = toBeProcessed.map(v => DeleteAction(v._1))
-    val deletionResult = insertResult.process(deletions).runSyncUnsafe(20.seconds)
-    fetchData(deletionResult, toBeProcessed.head)._1 shouldBe EmptyTrie
-
-    val notDeletedData = pastData.filter(v => v._1 != toBeProcessed.head._1)
-    notDeletedData.foreach(action => {
-      fetchData(deletionResult, action)._1 shouldBe Leaf(action._2)
-    })
-
-    val allUniqueData = pastData.toMap ++ toBeProcessed.toMap
-    allUniqueData.foreach(action => {
-      fetchData(insertResult, action)._1 shouldBe Leaf(action._2)
-    })
-    (insertResult, allUniqueData.toList)
-  }
-
-  def fetchData(h: History[Task, Key], data: Data): (Trie, TriePath) =
-    fetchData(h, data._1)
-
-  def fetchData(h: History[Task, Key], k: Key): (Trie, TriePath) =
-    h.findPath(k.asBytes).runSyncUnsafe(20.seconds)
+  def skipShouldHaveAffix(t: Trie, bytes: List[Byte]): Assertion =
+    t match {
+      case Skip(affix, _) => affix.toSeq.toList shouldBe bytes
+      case p              => fail("unknown trie prefix" + p)
+    }
 }
 
-trait InMemoryHistoryTestBase {
-  def inMemPointerBlockStore: PointerBlockStore[Task] = new PointerBlockStore[Task] {
-    val data: TrieMap[Blake2b256Hash, PointerBlock] = TrieMap.empty
+object TestData {
 
-    override def put(key: Blake2b256Hash, pb: PointerBlock): Task[Unit] =
-      Task.delay { data.put(key, pb) }
+  implicit def convertIntListToByteList(l: List[Int]): List[Byte] = l.map(_.toByte)
+  implicit def convertIntListToByteArray(l: List[Int]): Array[Byte] =
+    convertIntListToByteList(l).toArray
+  implicit def convertIntListToByteVector(l: List[Int]): ByteVector =
+    ByteVector(convertIntListToByteArray(l))
 
-    override def get(key: Blake2b256Hash): Task[Option[PointerBlock]] =
-      Task.delay { data.get(key) }
-  }
+  val _zeros: List[Int]           = List.fill(32)(0)
+  val _zerosOnes: List[Int]       = List.fill(16)(0) ++ List.fill(16)(1)
+  val _31zeros: List[Int]         = List.fill(31)(0)
+  def zerosAnd(i: Int): TestKey32 = TestKey32.create(_31zeros :+ i)
 
-  def inMemHistoryStore: HistoryStore[Task] = new HistoryStore[Task] {
-    val data: TrieMap[Blake2b256Hash, Trie] = TrieMap.empty
-    override def put(tries: List[Trie]): Task[Unit] = Task.delay {
-      tries.foreach { t =>
-        val key = Trie.hash(t)
-        data.put(key, t)
-      }
-    }
-    override def get(key: Blake2b256Hash): Task[Trie] = Task.delay {
-      data.getOrElse(key, EmptyTrie)
-    }
-  }
+  def randomBlake: Blake2b256Hash =
+    Blake2b256Hash.create(Random.alphanumeric.take(32).map(_.toByte).toArray)
 
-  def insertAction(key: Seq[Int], value: Blake2b256Hash): (TestKey32, Blake2b256Hash) =
-    (TestKey32.create(key), value)
+  def insert(k: List[Int]) =
+    InsertAction(TestKey32.create(k), randomBlake)
 
-  val emptyRoot: Trie               = EmptyTrie
-  val emptyRootHash: Blake2b256Hash = Trie.hash(emptyRoot)
+  def delete(k: List[Int]) =
+    DeleteAction(TestKey32.create(k))
 }
