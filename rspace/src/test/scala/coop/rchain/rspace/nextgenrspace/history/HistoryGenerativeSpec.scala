@@ -31,7 +31,8 @@ class HistoryGenerativeSpec
   type Data = (Key, Blake2b256Hash)
 
   "history" should "accept new leafs (insert, update, delete)" in forAll(
-    distinctListOf(arbitraryInsertAction)) { actions: List[Data] =>
+    distinctListOf(arbitraryInsertAction)
+  ) { actions: List[Data] =>
     val emptyHistory =
       new History[Task](emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
 
@@ -72,9 +73,11 @@ class HistoryGenerativeSpec
       hash <- arbitraryBlake2b256Hash.arbitrary
     } yield (key, hash))
 
-  def insertAndVerify(history: History[Task],
-                      toBeProcessed: List[Data],
-                      pastData: List[Data]): (History[Task], List[Data]) = {
+  def insertAndVerify(
+      history: History[Task],
+      toBeProcessed: List[Data],
+      pastData: List[Data]
+  ): (History[Task], List[Data]) = {
     val inserts      = toBeProcessed.map(v => InsertAction(v._1, v._2))
     val insertResult = history.process(inserts).runSyncUnsafe(20.seconds)
     insertResult.root should not be history.root

@@ -32,7 +32,7 @@ class HistoryRepositorySpec
     extends FlatSpec
     with Matchers
     with OptionValues
-    with InMemoryHistoryTestBase {
+    with InMemoryHistoryRepositoryTestBase {
 
   implicit object stringSerialize extends Serialize[String] {
 
@@ -131,7 +131,9 @@ class HistoryRepositorySpec
       HistoryRepositoryImpl[Task, String, String, String, String](emptyHistory, inMemColdStore)
     f(repo).runSyncUnsafe(20.seconds)
   }
+}
 
+trait InMemoryHistoryRepositoryTestBase extends InMemoryHistoryTestBase {
   def inMemColdStore: ColdStore[Task] = new ColdStore[Task] {
     val data: TrieMap[Blake2b256Hash, PersistedData] = TrieMap.empty
 
