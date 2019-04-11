@@ -15,9 +15,6 @@ object EventConverter {
   private implicit def byteStringToBlake2b256Hash(hash: ByteString): Blake2b256Hash =
     Blake2b256Hash.fromByteArray(hash.toByteArray)
 
-  private implicit def byteStringsToBlake2b256Hashes(hashes: Seq[ByteString]): Seq[Blake2b256Hash] =
-    hashes.map(byteStringToBlake2b256Hash)
-
   private implicit def blake2b256HashToByteString(hash: Blake2b256Hash): ByteString =
     ByteString.copyFrom(hash.bytes.toArray)
 
