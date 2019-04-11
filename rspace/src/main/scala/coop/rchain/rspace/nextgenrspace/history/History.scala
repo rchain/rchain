@@ -26,11 +26,11 @@ object TriePath {
   def empty: TriePath = TriePath(Vector(), None, Nil)
 }
 
-final case class History[F[_]: Sync, K](
+final case class History[F[_]: Sync](
     root: Blake2b256Hash,
     historyStore: HistoryStore[F],
     pointerBlockStore: PointerBlockStore[F]
-)(implicit codecK: Codec[K]) {
+) {
 
   private def storePointerBlock(pb: PointerBlock): F[Node] = {
     val hash = PointerBlock.hash(pb)
@@ -213,13 +213,12 @@ final case class History[F[_]: Sync, K](
     FlatMap[F].tailRecM((fullPath, trieNodesOnPath, none[Trie]))(go)
   }
 
-  def process(actions: List[HistoryAction[K]]): F[History[F, K]] =
+  def process(actions: List[HistoryAction]): F[History[F]] =
     // TODO this is an intermediate step to reproduce all the trie behavior
     // will evolve to a fold based implementation with partial tries
     actions
       .foldLeftM(this.root) {
-        case (currentRoot, InsertAction(k, value)) =>
-          val remainingPath = asBytes(k)
+        case (currentRoot, InsertAction(remainingPath, value)) =>
           for {
             traverseResult <- findPath(remainingPath, currentRoot)
             (_, triePath)  = traverseResult
@@ -227,8 +226,7 @@ final case class History[F[_]: Sync, K](
             _              <- historyStore.put(elements)
           } yield Trie.hash(elements.last)
 
-        case (currentRoot, DeleteAction(k)) =>
-          val remainingPath = asBytes(k)
+        case (currentRoot, DeleteAction(remainingPath)) =>
           for {
             traverseResult <- findPath(remainingPath, currentRoot)
             (_, triePath)  = traverseResult
@@ -329,9 +327,6 @@ object History {
     }
 
   type KeyPath = List[Byte]
-
-  def asBytes[K](k: K)(implicit codecK: Codec[K]): List[Byte] =
-    codecK.encode(k).get.bytes.toSeq.toList
 
   type PointerBlockPointer = Blake2b256Hash
   type TriePointer         = Blake2b256Hash

@@ -1,6 +1,5 @@
 package coop.rchain.rspace
 
-import cats._
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 
 trait HistoryReader[F[_], C, P, A, K] {

@@ -1,6 +1,5 @@
 package coop.rchain.rspace.nextgenrspace.history
 
-import coop.rchain.rspace.test.TestKey32
 import monix.eval.Task
 import org.scalatest.{Assertion, FlatSpec, Matchers, OptionValues}
 
@@ -34,7 +33,7 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
     val data = List.range(0, 10).map(zerosAnd).map(k => InsertAction(k, randomBlake))
     for {
       newHistory          <- emptyHistory.process(data)
-      results             <- data.traverse(action => newHistory.findPath(action.key.bytes.toSeq.toList))
+      results             <- data.traverse(action => newHistory.findPath(action.key))
       _                   = results should have size 10
       (_, headPath)       = results.head
       secondTrieOnPath    = headPath.nodes.tail.head
@@ -79,9 +78,9 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
     } yield ()
   }
 
-  protected def withEmptyTrie(f: History[Task, TestKey32] => Task[Unit]): Unit = {
+  protected def withEmptyTrie(f: History[Task] => Task[Unit]): Unit = {
     val emptyHistory =
-      new History[Task, TestKey32](emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
+      new History[Task](emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
     f(emptyHistory).runSyncUnsafe(20.seconds)
   }
 
@@ -94,23 +93,19 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
 
 object TestData {
 
-  implicit def convertIntListToByteList(l: List[Int]): List[Byte] = l.map(_.toByte)
-  implicit def convertIntListToByteArray(l: List[Int]): Array[Byte] =
-    convertIntListToByteList(l).toArray
-  implicit def convertIntListToByteVector(l: List[Int]): ByteVector =
-    ByteVector(convertIntListToByteArray(l))
+  implicit def toByteVector(bytes: List[Byte]): ByteVector = ByteVector(bytes)
 
-  val _zeros: List[Int]           = List.fill(32)(0)
-  val _zerosOnes: List[Int]       = List.fill(16)(0) ++ List.fill(16)(1)
-  val _31zeros: List[Int]         = List.fill(31)(0)
-  def zerosAnd(i: Int): TestKey32 = TestKey32.create(_31zeros :+ i)
+  val _zeros: List[Byte]           = List.fill(32)(0).map(_.toByte)
+  val _zerosOnes: List[Byte]       = (List.fill(16)(0) ++ List.fill(16)(1)).map(_.toByte)
+  val _31zeros: List[Byte]         = List.fill(31)(0).map(_.toByte)
+  def zerosAnd(i: Int): List[Byte] = _31zeros :+ i.toByte
 
   def randomBlake: Blake2b256Hash =
     Blake2b256Hash.create(Random.alphanumeric.take(32).map(_.toByte).toArray)
 
-  def insert(k: List[Int]) =
-    InsertAction(TestKey32.create(k), randomBlake)
+  def insert(k: List[Byte]) =
+    InsertAction(k, randomBlake)
 
-  def delete(k: List[Int]) =
-    DeleteAction(TestKey32.create(k))
+  def delete(k: List[Byte]) =
+    DeleteAction(k)
 }

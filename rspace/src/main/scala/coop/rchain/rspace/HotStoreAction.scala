@@ -10,8 +10,8 @@ final case class InsertContinuations[C, P, K](
     continuations: Seq[WaitingContinuation[P, K]]
 ) extends HotStoreAction
 
-final case class DeleteData[C, A](channel: C) extends HotStoreAction
-final case class DeleteJoins[C](channel: C)   extends HotStoreAction
-final case class DeleteContinuations[C, P, K](
+final case class DeleteData[C](channel: C)  extends HotStoreAction
+final case class DeleteJoins[C](channel: C) extends HotStoreAction
+final case class DeleteContinuations[C](
     channels: Seq[C]
 ) extends HotStoreAction
