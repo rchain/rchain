@@ -791,24 +791,184 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
         .map(_._1)
     }
   }
+
+  /*
+   *  The tests below were migrated from IStoreTests to check backward compatibility
+   */
+
+  "putDatum" should "put datum in a new channel" in forAll("channel", "datum") {
+    (channel: String, datumValue: String) =>
+      fixture { (_, _, hotStore) =>
+        val key   = channel
+        val datum = Datum.create(channel, datumValue, false)
+
+        for {
+          _   <- hotStore.putDatum(key, datum)
+          res <- hotStore.getData(key)
+          _   <- S.delay { res should contain theSameElementsAs (Seq(datum)) }
+        } yield ()
+      }
+  }
+
+  it should "append datum if channel already exists" in forAll("channel", "datum") {
+    (channel: String, datumValue: String) =>
+      fixture { (_, _, store) =>
+        val key    = channel
+        val datum1 = Datum.create(channel, datumValue, false)
+        val datum2 = Datum.create(channel, datumValue + "2", false)
+
+        for {
+          _   <- store.putDatum(key, datum1)
+          _   <- store.putDatum(key, datum2)
+          res <- store.getData(key)
+          _   <- S.delay(res should contain theSameElementsAs (Seq(datum1, datum2)))
+        } yield ()
+      }
+  }
+
+  private[this] val validIndices =
+    for (n <- Gen.choose(1, 10)) yield n
+  private[this] val size: Int = 11
+
+  "removeDatum" should s"remove datum at index" in
+    forAll("channel", "datum", validIndices, minSuccessful(10)) {
+      (channel: String, datumValue: String, index: Int) =>
+        fixture { (_, _, store) =>
+          val key = channel
+          val data = List.tabulate(size) { i =>
+            Datum.create(channel, datumValue + i, false)
+          }
+
+          for {
+            _ <- data.map { d =>
+                  store.putDatum(key, d)
+                }.sequence
+            _   <- store.removeDatum(key, index - 1)
+            res <- store.getData(key)
+            _ <- S.delay {
+                  res should contain theSameElementsAs (data.filterNot(
+                    _.a == datumValue + (size - index)
+                  ))
+                }
+          } yield ()
+        }
+    }
+
+  "putWaitingContinuation" should "put waiting continuation in a new channel" in
+    forAll("channel", "continuation") { (channel: String, pattern: String) =>
+      fixture { (_, _, store) =>
+        val key          = collection.immutable.Seq(channel)
+        val patterns     = List(StringMatch(pattern))
+        val continuation = new StringsCaptor
+        val wc: WaitingContinuation[Pattern, StringsCaptor] =
+          WaitingContinuation.create(key, patterns, continuation, false)
+
+        for {
+          _   <- store.putContinuation(key, wc)
+          res <- store.getContinuations(key)
+          _   <- S.delay(res shouldBe List(wc))
+        } yield ()
+      }
+    }
+
+  it should "append continuation if channel already exists" in
+    forAll("channel", "continuation") { (channel: String, pattern: String) =>
+      fixture { (_, _, store) =>
+        val key          = List(channel)
+        val patterns     = List(StringMatch(pattern))
+        val continuation = new StringsCaptor
+        val wc1: WaitingContinuation[Pattern, StringsCaptor] =
+          WaitingContinuation.create(key, patterns, continuation, false)
+
+        val wc2: WaitingContinuation[Pattern, StringsCaptor] =
+          WaitingContinuation.create(key, List(StringMatch(pattern + 2)), continuation, false)
+
+        for {
+          _   <- store.putContinuation(key, wc1)
+          _   <- store.putContinuation(key, wc2)
+          res <- store.getContinuations(key)
+          _   <- S.delay(res should contain theSameElementsAs List(wc1, wc2))
+        } yield ()
+      }
+    }
+
+  "removeWaitingContinuation" should "remove waiting continuation from index" in
+    forAll("channel", "continuation") { (channel: String, pattern: String) =>
+      fixture { (_, _, store) =>
+        val key          = List(channel)
+        val patterns     = List(StringMatch(pattern))
+        val continuation = new StringsCaptor
+        val wc1: WaitingContinuation[Pattern, StringsCaptor] =
+          WaitingContinuation.create(key, patterns, continuation, false)
+        val wc2: WaitingContinuation[Pattern, StringsCaptor] =
+          WaitingContinuation.create(key, List(StringMatch(pattern + 2)), continuation, false)
+
+        for {
+          _   <- store.putContinuation(key, wc1)
+          _   <- store.putContinuation(key, wc2)
+          _   <- store.removeContinuation(key, 0)
+          res <- store.getContinuations(key)
+          _   <- S.delay(res shouldBe List(wc1))
+        } yield ()
+      }
+    }
+
+  "addJoin" should "add join for a channel" in
+    forAll("channel", "channels") { (channel: String, channels: List[String]) =>
+      fixture { (_, _, store) =>
+        for {
+          _   <- store.putJoin(channel, channels)
+          res <- store.getJoins(channel)
+          _   <- S.delay(res shouldBe List(channels))
+        } yield ()
+      }
+    }
+
+  "removeJoin" should "remove join for a channel" in
+    forAll("channel", "channels") { (channel: String, channels: List[String]) =>
+      fixture { (_, _, store) =>
+        for {
+          _   <- store.putJoin(channel, channels)
+          _   <- store.removeJoin(channel, channels)
+          res <- store.getJoins(channel)
+          _   <- S.delay(res shouldBe empty)
+        } yield ()
+      }
+    }
+
+  it should "remove only passed in joins for a channel" in
+    forAll("channel", "channels") { (channel: String, channels: List[String]) =>
+      fixture { (_, _, store) =>
+        for {
+          _   <- store.putJoin(channel, channels)
+          _   <- store.putJoin(channel, List("otherChannel"))
+          _   <- store.removeJoin(channel, channels)
+          res <- store.getJoins(channel)
+          _   <- S.delay(res shouldBe List(List("otherChannel")))
+        } yield ()
+      }
+    }
 }
 
 class History[F[_]: Sync](implicit R: Cell[F, Cache[String, Pattern, String, StringsCaptor]])
     extends HistoryReader[F, String, Pattern, String, StringsCaptor] {
 
-  def getJoins(channel: String): F[Seq[Seq[String]]] = R.read.map(_.joins(channel))
+  def getJoins(channel: String): F[Seq[Seq[String]]] =
+    R.read.map(_.joins.get(channel).toSeq.flatten)
   def putJoins(channel: String, joins: Seq[Seq[String]]): F[Unit] = R.flatModify { prev =>
     Sync[F].delay(prev.joins.put(channel, joins)).map(_ => prev)
   }
 
-  def getData(channel: String): F[Seq[Datum[String]]] = R.read.map(_.data(channel))
+  def getData(channel: String): F[Seq[Datum[String]]] =
+    R.read.map(_.data.get(channel).toSeq.flatten)
   def putData(channel: String, data: Seq[Datum[String]]): F[Unit] = R.flatModify { prev =>
     Sync[F].delay(prev.data.put(channel, data)).map(_ => prev)
   }
 
   def getContinuations(
       channels: Seq[String]
-  ): F[Seq[WaitingContinuation[Pattern, StringsCaptor]]] = R.read.map(_.continuations(channels))
+  ): F[Seq[WaitingContinuation[Pattern, StringsCaptor]]] =
+    R.read.map(_.continuations.get(channels).toSeq.flatten)
   def putContinuations(
       channels: Seq[String],
       continuations: Seq[WaitingContinuation[Pattern, StringsCaptor]]
