@@ -75,8 +75,11 @@ object BlockAPI {
             } yield result
           case false =>
             "Error: There is another propose in progress.".asLeft[DeployServiceResponse].pure[F]
-        } { _ =>
-          blockApiLock.release
+        } {
+          case true =>
+            blockApiLock.release
+          case false =>
+            ().pure[F]
         }
       },
       default = Log[F]
