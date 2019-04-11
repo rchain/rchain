@@ -7,6 +7,7 @@ import cats.mtl.DefaultApplicativeAsk
 import cats.Applicative
 
 import coop.rchain.comm._
+import coop.rchain.grpc.Server
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared.Log
 
@@ -34,12 +35,18 @@ class GrpcKademliaRPCSpec extends KademliaRPCSpec[Task, GrpcEnvironment] {
         val applicative: Applicative[Task] = Applicative[Task]
         def ask: Task[PeerNode]            = Task.pure(env.peer)
       }
-    CachedConnections[Task, KademliaConnTag].map { implicit cache =>
-      new GrpcKademliaRPC(env.port, 500.millis)
+    Task.delay {
+      new GrpcKademliaRPC(500.millis)
     }
   }
 
   def extract[A](fa: Task[A]): A = fa.runSyncUnsafe(Duration.Inf)
+
+  def createKademliaRPCServer(
+      env: GrpcEnvironment,
+      pingHandler: PeerNode => Task[Unit],
+      lookupHandler: (PeerNode, Array[Byte]) => Task[Seq[PeerNode]]
+  ): Task[Server[Task]] = acquireKademliaRPCServer(env.port, pingHandler, lookupHandler)
 }
 
 case class GrpcEnvironment(
