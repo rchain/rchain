@@ -208,9 +208,33 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
                  }
       } yield result
     def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
-      dataLookup.get(blockHash).pure[F]
+      dataLookup.get(blockHash) match {
+        case Some(blockMetadata) =>
+          Option(blockMetadata).pure[F]
+        case None =>
+          for {
+            blockNumberOpt <- getBlockNumber(blockHash)
+            result <- blockNumberOpt match {
+                       case Some(blockNumber) =>
+                         if (blockNumber >= sortOffset) {
+                           none[BlockMetadata].pure[F]
+                         } else {
+                           lock.withPermit(
+                             for {
+                               oldDagInfo <- loadCheckpoint(blockNumber)
+                             } yield oldDagInfo.flatMap(_.dataLookup.get(blockHash))
+                           )
+                         }
+                       case None =>
+                         none[BlockMetadata].pure[F]
+                     }
+          } yield result
+      }
     def contains(blockHash: BlockHash): F[Boolean] =
-      dataLookup.get(blockHash).fold(false.pure[F])(_ => true.pure[F])
+      dataLookup.get(blockHash) match {
+        case Some(_) => true.pure[F]
+        case None    => getBlockNumber(blockHash).map(_.isDefined)
+      }
     def topoSort(startBlockNumber: Long): F[Vector[Vector[BlockHash]]] =
       if (startBlockNumber >= sortOffset) {
         val offset = startBlockNumber - sortOffset
