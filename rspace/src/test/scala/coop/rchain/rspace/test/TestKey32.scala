@@ -20,6 +20,8 @@ class TestKey32 private (val bytes: ByteVector) {
 
   override def hashCode(): Int =
     bytes.hashCode
+
+  def asBytes: List[Byte] = bytes.toSeq.toList
 }
 
 object TestKey32 {
@@ -28,6 +30,9 @@ object TestKey32 {
 
   def create(bytes: Seq[Int]): TestKey32 =
     new TestKey32(ByteVector(bytes.map(_.toByte)))
+
+  def fromBytes(bytes: Seq[Byte]): TestKey32 =
+    new TestKey32(ByteVector(bytes))
 
   implicit val codecTestKey: Codec[TestKey32] =
     fixedSizeBytes(length.toLong, bytes).as[TestKey32]
