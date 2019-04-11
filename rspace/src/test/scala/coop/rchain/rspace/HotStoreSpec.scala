@@ -12,6 +12,8 @@ import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.shared.Cell
+import org.scalacheck.Gen
+import org.scalacheck.Arbitrary
 import org.scalatest._
 import org.scalatest.prop._
 
@@ -543,36 +545,37 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       }
   }
 
-  it should "allow installing multiple values per channel" in forAll {
+  val arbitraryNonEmptyVectorOfJoins =
+    Gen.nonEmptyContainerOf[Vector, Join](Arbitrary.arbitrary[Join])
+
+  it should "allow installing multiple values per channel" in forAll(
+    Arbitrary.arbitrary[String],
+    arbitraryNonEmptyVectorOfJoins,
+    arbitraryNonEmptyVectorOfJoins
+  ) {
     (
         channel: Channel,
         cachedJoins: Joins,
-        installedJoin1: Join,
-        installedJoin2: Join
+        installedJoins: Joins
     ) =>
-      whenever(installedJoin1 != installedJoin2) {
-        fixture { (state, history, hotStore) =>
-          {
-            for {
-              _ <- state.modify(
-                    _ =>
-                      Cache(
-                        joins = TrieMap(
-                          channel -> cachedJoins
-                        )
+      fixture { (state, history, hotStore) =>
+        {
+          for {
+            _ <- state.modify(
+                  _ =>
+                    Cache(
+                      joins = TrieMap(
+                        channel -> cachedJoins
                       )
-                  )
-              _     <- hotStore.installJoin(channel, installedJoin1)
-              _     <- hotStore.installJoin(channel, installedJoin2)
-              cache <- state.read
-              _ <- S.delay {
-                    cache
-                      .installedJoins(channel) should contain(installedJoin1)
-                    cache
-                      .installedJoins(channel) should contain(installedJoin2)
-                  }
-            } yield ()
-          }
+                    )
+                )
+            _     <- installedJoins.map(j => hotStore.installJoin(channel, j)).sequence
+            cache <- state.read
+            _ <- S.delay {
+                  cache
+                    .installedJoins(channel) should contain theSameElementsAs (installedJoins)
+                }
+          } yield ()
         }
       }
   }
