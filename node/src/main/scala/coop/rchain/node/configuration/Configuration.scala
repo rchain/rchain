@@ -203,9 +203,10 @@ object Configuration {
       case Some(options.visualizeBlocks) =>
         import options.visualizeBlocks._
         VisualizeDag(depth.getOrElse(-1), showJustificationLines.getOrElse(false))
-      case Some(options.run)        => Run
-      case Some(options.dataAtName) => DataAtName(options.dataAtName.name())
-      case Some(options.contAtName) => ContAtName(options.contAtName.name())
+      case Some(options.machineVerifiableDag) => MachineVerifiableDag
+      case Some(options.run)                  => Run
+      case Some(options.dataAtName)           => DataAtName(options.dataAtName.name())
+      case Some(options.contAtName)           => ContAtName(options.contAtName.name())
       case Some(options.bondingDeployGen) =>
         import options.bondingDeployGen._
         BondingDeployGen(bondKey(), ethAddr(), amount(), privateKey(), publicKey())

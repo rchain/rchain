@@ -16,7 +16,7 @@ object VerifiableEdge {
   }
 
   implicit def showVerifiableEdge: Show[VerifiableEdge] = new Show[VerifiableEdge] {
-    def show(ve: VerifiableEdge): String = s"${ve.from} - ${ve.to}"
+    def show(ve: VerifiableEdge): String = s"${ve.from} ${ve.to}"
   }
 }
 

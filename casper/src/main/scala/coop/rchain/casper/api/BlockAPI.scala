@@ -239,7 +239,7 @@ object BlockAPI {
   private def toposortDag[
       F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore,
       A
-  ](depth: Int)(
+  ](maybeDepth: Option[Int])(
       doIt: (MultiParentCasper[F], Vector[Vector[BlockHash]]) => F[ApiErr[A]]
   ): Effect[F, A] = {
 
@@ -248,9 +248,11 @@ object BlockAPI {
 
     def casperResponse(implicit casper: MultiParentCasper[F]): Effect[F, A] =
       for {
-        dag      <- MultiParentCasper[F].blockDag
-        topoSort <- dag.topoSortTail(depth)
-        result   <- doIt(casper, topoSort)
+        dag       <- MultiParentCasper[F].blockDag
+        maxHeight <- dag.topoSort(0L).map(_.length - 1)
+        depth     = maybeDepth.getOrElse(maxHeight)
+        topoSort  <- dag.topoSortTail(depth)
+        result    <- doIt(casper, topoSort)
       } yield result
 
     MultiParentCasperRef.withCasper[F, ApiErr[A]](
@@ -263,7 +265,7 @@ object BlockAPI {
       F[_]: Monad: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore,
       G[_]: Monad: GraphSerializer
   ](
-      depth: Int,
+      depth: Option[Int],
       visualizer: (Vector[Vector[BlockHash]], String) => F[G[Graphz[G]]],
       stringify: G[Graphz[G]] => String
   ): Effect[F, VisualizeBlocksResponse] =
@@ -275,8 +277,23 @@ object BlockAPI {
         } yield VisualizeBlocksResponse(stringify(graph)).asRight[Error]
     }
 
+  def machineVerifiableDag[
+      F[_]: Monad: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore
+  ]: Effect[F, MachineVerifyResponse] =
+    toposortDag[F, MachineVerifyResponse](maybeDepth = None) {
+      case (_, topoSort) =>
+        val fetchParents: BlockHash => F[List[BlockHash]] = {
+          case blockHash =>
+            ProtoUtil.unsafeGetBlock[F](blockHash) map (_.getHeader.parentsHashList.toList)
+        }
+
+        MachineVerifiableDag[F](topoSort, fetchParents)
+          .map(_.map(edges => edges.show).mkString("\n"))
+          .map(MachineVerifyResponse(_).asRight[Error])
+    }
+
   def showBlocks[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
-      depth: Int
+      depth: Option[Int]
   ): Effect[F, List[BlockInfoWithoutTuplespace]] =
     toposortDag[F, List[BlockInfoWithoutTuplespace]](depth) {
       case (casper, topoSort) =>

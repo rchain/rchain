@@ -167,7 +167,7 @@ class BlocksResponseAPITest
         casperRef          <- MultiParentCasperRef.of[Task]
         _                  <- casperRef.set(casperEffect)
         cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff)
-        blocksResponse <- BlockAPI.showBlocks[Task](Int.MaxValue)(
+        blocksResponse <- BlockAPI.showBlocks[Task](Some(Int.MaxValue))(
                            Sync[Task],
                            casperRef,
                            logEff,
@@ -240,7 +240,7 @@ class BlocksResponseAPITest
       casperRef          <- MultiParentCasperRef.of[Task]
       _                  <- casperRef.set(casperEffect)
       cliqueOracleEffect = SafetyOracle.cliqueOracle[Task](Sync[Task], logEff)
-      blocksResponse <- BlockAPI.showBlocks[Task](2)(
+      blocksResponse <- BlockAPI.showBlocks[Task](Some(2))(
                          Sync[Task],
                          casperRef,
                          logEff,
