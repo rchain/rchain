@@ -177,6 +177,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val secureRandomNonBlocking =
       opt[Flag](descr = "Use a non blocking secure random instance")
 
+    val network =
+      opt[String](descr = "ID of the RChain network")
+
     val port =
       opt[Int](short = 'p', descr = s"Network port to use. Defaults to $DefaultPort")
 

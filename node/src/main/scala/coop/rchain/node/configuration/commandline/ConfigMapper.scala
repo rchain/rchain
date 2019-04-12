@@ -35,6 +35,7 @@ object ConfigMapper {
       {
         import Server._
         val add = addToMap(Key)
+        add(keys.NetworkId, run.network)
         add(keys.Host, run.host)
         add(keys.HostDynamic, run.dynamicHostAddress)
         add(keys.Upnp, run.noUpnp.map(kp(false)))

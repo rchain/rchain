@@ -19,6 +19,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
       """
       |rnode {
       |  server {
+      |    network-id = "testnet"
       |    host = 1.2.3.4
       |    host-dynamic = true
       |    upnp = false
@@ -42,6 +43,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
 
     val expectedServer =
       configuration.Server(
+        networkId = "testnet",
         host = Some("1.2.3.4"),
         port = 40400,
         httpPort = 40403,
