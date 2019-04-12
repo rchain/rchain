@@ -24,10 +24,9 @@ trait IStoreTests
 
   "putDatum" should "put datum in a new channel" in forAll("channel", "datum") {
     (channel: String, datumValue: String) =>
-      withTestSpace { space =>
-        val store: IStore[Coeval, String, Pattern, String, StringsCaptor] = space.store
-        val key                                                           = List(channel)
-        val datum                                                         = Datum.create(channel, datumValue, false)
+      withTestSpace { (store, space) =>
+        val key   = List(channel)
+        val datum = Datum.create(channel, datumValue, false)
 
         store
           .withWriteTxnF { txn =>
@@ -40,8 +39,7 @@ trait IStoreTests
 
   it should "append datum if channel already exists" in forAll("channel", "datum") {
     (channel: String, datumValue: String) =>
-      withTestSpace { space =>
-        val store  = space.store
+      withTestSpace { (store, space) =>
         val key    = List(channel)
         val datum1 = Datum.create(channel, datumValue, false)
         val datum2 = Datum.create(channel, datumValue + "2", false)
@@ -55,11 +53,11 @@ trait IStoreTests
       }
   }
 
-  "hashChannels" should "return same hashes for unordered channels" in withTestSpaceNonF { space =>
-    val store  = space.store
-    val hash12 = store.hashChannels(List("ch1", "ch2"))
-    val hash21 = store.hashChannels(List("ch2", "ch1"))
-    hash12 shouldBe hash21
+  "hashChannels" should "return same hashes for unordered channels" in withTestSpaceNonF {
+    (store, space) =>
+      val hash12 = store.hashChannels(List("ch1", "ch2"))
+      val hash21 = store.hashChannels(List("ch2", "ch1"))
+      hash12 shouldBe hash21
   }
 
   private[this] val validIndices =
@@ -69,9 +67,8 @@ trait IStoreTests
   "removeDatum" should s"remove datum at index" in
     forAll("channel", "datum", validIndices, minSuccessful(10)) {
       (channel: String, datumValue: String, index: Int) =>
-        withTestSpace { space =>
-          val store = space.store
-          val key   = List(channel)
+        withTestSpace { (store, space) =>
+          val key = List(channel)
           val data = List.tabulate(size) { i =>
             Datum.create(channel, datumValue + i, false)
           }
@@ -91,10 +88,9 @@ trait IStoreTests
 
   it should "remove obsolete channels" in
     forAll("channel", "datum") { (channel: String, datum: String) =>
-      withTestSpace { space =>
-        val store = space.store
-        val key   = List(channel)
-        val hash  = store.hashChannels(key)
+      withTestSpace { (store, space) =>
+        val key  = List(channel)
+        val hash = store.hashChannels(key)
         store.withWriteTxnF { txn =>
           store.putDatum(txn, key, Datum.create(channel, datum, persist = false))
           // collectGarbage is called in removeDatum:
@@ -107,8 +103,7 @@ trait IStoreTests
 
   "putWaitingContinuation" should "put waiting continuation in a new channel" in
     forAll("channel", "continuation") { (channel: String, pattern: String) =>
-      withTestSpace { space =>
-        val store        = space.store
+      withTestSpace { (store, space) =>
         val key          = List(channel)
         val patterns     = List(StringMatch(pattern))
         val continuation = new StringsCaptor
@@ -125,8 +120,7 @@ trait IStoreTests
 
   it should "append continuation if channel already exists" in
     forAll("channel", "continuation") { (channel: String, pattern: String) =>
-      withTestSpace { space =>
-        val store        = space.store
+      withTestSpace { (store, space) =>
         val key          = List(channel)
         val patterns     = List(StringMatch(pattern))
         val continuation = new StringsCaptor
@@ -147,8 +141,7 @@ trait IStoreTests
 
   "removeWaitingContinuation" should "remove waiting continuation from index" in
     forAll("channel", "continuation") { (channel: String, pattern: String) =>
-      withTestSpace { space =>
-        val store        = space.store
+      withTestSpace { (store, space) =>
         val key          = List(channel)
         val patterns     = List(StringMatch(pattern))
         val continuation = new StringsCaptor
@@ -169,8 +162,7 @@ trait IStoreTests
 
   "addJoin" should "add join for a channel" in
     forAll("channel", "channels") { (channel: String, channels: List[String]) =>
-      withTestSpace { space =>
-        val store = space.store
+      withTestSpace { (store, space) =>
         store.withWriteTxnF { txn =>
           store.addJoin(txn, channel, channels)
           store.getJoin(txn, channel) shouldBe List(channels)
@@ -181,8 +173,7 @@ trait IStoreTests
 
   "removeJoin" should "remove join for a channel" in
     forAll("channel", "channels") { (channel: String, channels: List[String]) =>
-      withTestSpace { space =>
-        val store = space.store
+      withTestSpace { (store, space) =>
         store.withWriteTxnF { txn =>
           store.addJoin(txn, channel, channels)
           store.removeJoin(txn, channel, channels)
@@ -194,8 +185,7 @@ trait IStoreTests
 
   it should "remove only passed in joins for a channel" in
     forAll("channel", "channels") { (channel: String, channels: List[String]) =>
-      withTestSpace { space =>
-        val store = space.store
+      withTestSpace { (store, space) =>
         store.withWriteTxnF { txn =>
           store.addJoin(txn, channel, channels)
           store.addJoin(txn, channel, List("otherChannel"))
@@ -206,18 +196,17 @@ trait IStoreTests
       }
     }
 
-  "collapse" should "work on empty history" in withTestSpaceNonF { space =>
-    space.store.collapse(List.empty) shouldBe List.empty
+  "collapse" should "work on empty history" in withTestSpaceNonF { (store, space) =>
+    store.collapse(List.empty) shouldBe List.empty
   }
 
   it should "return unmodified history when nothing to prune" in
     forAll("gnat") { (gnat: GNAT[String, Pattern, String, StringsCaptor]) =>
-      withTestSpaceNonF { space =>
+      withTestSpaceNonF { (store, space) =>
         gnat.wks
           .map(_.patterns.size)
           .distinct should contain only gnat.channels.size withClue "#patterns in each continuation should equal #channels"
 
-        val store   = space.store
         val history = List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat))
         store.collapse(history) shouldBe history
       }
@@ -225,25 +214,24 @@ trait IStoreTests
 
   it should "return unmodified history when nothing to prune in multiple gnats" in
     forAll(distinctListOf[GNAT[String, Pattern, String, StringsCaptor]], SizeRange(3)) {
-      withTestSpaceNonF { space => (gnats: Seq[GNAT[String, Pattern, String, StringsCaptor]]) =>
-        val store = space.store
-        val history = gnats
-          .flatMap(gnat => List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat)))
-          .toList
-        store.collapse(history) should contain theSameElementsAs (history)
+      withTestSpaceNonF {
+        (store, space) => (gnats: Seq[GNAT[String, Pattern, String, StringsCaptor]]) =>
+          val history = gnats
+            .flatMap(gnat => List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat)))
+            .toList
+          store.collapse(history) should contain theSameElementsAs (history)
       }
     }
 
   it should "remove all operations from history with the same hash when last operation is delete" in
     forAll("gnat1", "gnat2") {
       withTestSpaceNonF {
-        space =>
+        (store, space) =>
           {
             (
                 gnat1: GNAT[String, Pattern, String, StringsCaptor],
                 gnat2: GNAT[String, Pattern, String, StringsCaptor]
             ) =>
-              val store = space.store
               val gnat1Ops = List(
                 TrieUpdate(0, Insert, store.hashChannels(gnat1.channels), gnat1),
                 TrieUpdate(1, Delete, store.hashChannels(gnat1.channels), gnat1)
@@ -257,8 +245,7 @@ trait IStoreTests
 
   it should "remove all operations from history with the same hash when last operation is delete - longer case with same hash" in
     forAll("gnat1") { (gnat1: GNAT[String, Pattern, String, StringsCaptor]) =>
-      withTestSpaceNonF { space =>
-        val store = space.store
+      withTestSpaceNonF { (store, space) =>
         val gnatOps = List(
           TrieUpdate(0, Insert, store.hashChannels(gnat1.channels), gnat1),
           TrieUpdate(1, Insert, store.hashChannels(gnat1.channels), gnat1),
@@ -271,8 +258,7 @@ trait IStoreTests
 
   it should "remove all but the last operation from history with the same hash when last operation is insert" in
     forAll("gnat") { (gnat: GNAT[String, Pattern, String, StringsCaptor]) =>
-      withTestSpaceNonF { space =>
-        val store      = space.store
+      withTestSpaceNonF { (store, space) =>
         val lastInsert = TrieUpdate(1, Insert, store.hashChannels(gnat.channels), gnat)
 
         val history =
@@ -283,8 +269,7 @@ trait IStoreTests
 
   it should "remove all but the last operation from history with the same hash when operation with largest count is insert" in
     forAll("gnat") { (gnat: GNAT[String, Pattern, String, StringsCaptor]) =>
-      withTestSpaceNonF { space =>
-        val store      = space.store
+      withTestSpaceNonF { (store, space) =>
         val lastInsert = TrieUpdate(2, Insert, store.hashChannels(gnat.channels), gnat)
 
         val history = List(

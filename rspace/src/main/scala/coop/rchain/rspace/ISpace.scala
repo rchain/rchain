@@ -122,7 +122,8 @@ trait ISpace[F[_], C, P, A, R, K] {
     */
   protected[rspace] def isDirty(root: Blake2b256Hash): F[Boolean]
 
-  val store: IStore[F, C, P, A, K]
+  def toMap: Map[Seq[C], Row[P, A, K]]
+
 }
 
 object ISpace {

@@ -10,7 +10,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.RhoIStore
+import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps._
@@ -43,11 +43,11 @@ class DeployParamsSpec extends fixture.FlatSpec with Matchers {
   }
 
   def assertStoreContains(
-      store: RhoIStore[Task],
+      space: RhoISpace[Task],
       ackChannel: Par,
       data: ListParWithRandom
   ): Assertion = {
-    val datum = store.toMap(List(ackChannel)).data.head
+    val datum = space.toMap(List(ackChannel)).data.head
     assert(datum.a.pars == data.pars)
     assert(datum.a.randomState == data.randomState)
     assert(!datum.persist)
@@ -70,7 +70,7 @@ class DeployParamsSpec extends fixture.FlatSpec with Matchers {
     } yield ()
     Await.result(task.runToFuture, 3.seconds)
     assertStoreContains(
-      runtime.space.store,
+      runtime.space,
       ackChannel,
       ListParWithRandom(List(empty, phloRate, empty, timestamp), rand)
     )

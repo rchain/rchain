@@ -9,7 +9,7 @@ import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics.Metrics
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.Runtime.RhoIStore
+import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
@@ -121,9 +121,9 @@ object RholangCLI {
     Console.println(PrettyPrinter().buildString(normalizedTerm))
   }
 
-  private def printStorageContents[F[_]](store: RhoIStore[F]): Unit = {
+  private def printStorageContents[F[_]](space: RhoISpace[F]): Unit = {
     Console.println("\nStorage Contents:")
-    Console.println(StoragePrinter.prettyPrint(store))
+    Console.println(StoragePrinter.prettyPrint(space))
   }
 
   private def printCost(cost: Cost): Unit =
@@ -240,7 +240,7 @@ object RholangCLI {
 
     Try(waitForSuccess(evaluatorTask.runToFuture)).map { _ok =>
       if (!quiet) {
-        printStorageContents(runtime.space.store)
+        printStorageContents(runtime.space)
       }
     }
   }

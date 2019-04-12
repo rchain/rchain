@@ -119,7 +119,7 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
     Sync[F]
       .bracket(runtimeContainer.take) { runtime =>
         val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
-        runtime.space.reset(blakeHash).map(_ => StoragePrinter.prettyPrint(runtime.space.store))
+        runtime.space.reset(blakeHash).map(_ => StoragePrinter.prettyPrint(runtime.space))
       }(runtime => runtimeContainer.put(runtime))
       .attempt
       .map {

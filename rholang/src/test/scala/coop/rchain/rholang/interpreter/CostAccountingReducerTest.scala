@@ -142,7 +142,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
       for {
         _      <- reducer.setPhlo(initPhlos)
         result <- reducer.inj(program).attempt
-      } yield (result, pureRSpace.store.toMap)
+      } yield (result, pureRSpace.toMap)
     }
 
     val (result, map) =

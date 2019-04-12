@@ -264,7 +264,7 @@ runK(pres1)
 
 When we inspect the contents of the store, we notice that the store is empty.  The continuation has been removed.  The data was also not stored because a matching continuation was found.
 ```tut
-println(space.store.toMap)
+println(space.toMap)
 ```
 
 Let's reinstall the same continuation.
@@ -280,7 +280,7 @@ val pres2 = space.produce(Channel("friends"), bob, persist = false)
 Let's also run the continuation and inspect the store.
 ```tut
 runK(pres2)
-println(space.store.toMap)
+println(space.toMap)
 ```
 
 Now let's reinstall the the continuation and introduce another piece of data to the space.
@@ -293,7 +293,7 @@ This time we receive a `None` back from `produce`, indicating that no match has 
 
 Let's inspect the contents of the store again.
 ```tut
-println(space.store.toMap)
+println(space.toMap)
 ```
 
 Here we can see that that at `Channel("friends")`, we have now stored Carol's `Entry` record along with our continuations and its patterns.
@@ -308,14 +308,14 @@ Indeed, our call to `consume` has returned another continuation along with Carol
 
 In the store, we see that there is still a waiting continuation at `Channel("friends")`
 ```tut
-println(space.store.toMap)
+println(space.toMap)
 ```
 
 Let's produce one more time to let this sink in.
 ```tut
 val pres4 = space.produce(Channel("friends"), alice, persist = false)
 runK(pres4)
-println(space.store.toMap)
+println(space.toMap)
 ```
 
 
@@ -388,7 +388,7 @@ As a side note, we can observe the fact there is no particular order to which we
 So did our `consume` stick?
 
 ```tut
-println(space.store.toMap)
+println(space.toMap)
 ```
 
 It did not!  That's strange...
@@ -399,7 +399,7 @@ This quirk of `rspace` is to address the circumstance where matches already exis
 val cres9 = space.consume(List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = true)
 runK(cres9)
 val cres10 = space.consume(List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = true)
-println(space.store.toMap)
+println(space.toMap)
 ```
 
 The same rule applies for doing a persistent `produce` - if any matching continuations exist in the store, they must be drained before the data will be persisted.
@@ -409,9 +409,9 @@ For example,
 val cres11 = space.consume(List(Channel("friends")), List(CityMatch(city = "Peony")), new Printer, persist = false)
 val pres13 = space.produce(Channel("friends"), erin, persist = true)
 runK(pres13)
-println(space.store.toMap)
+println(space.toMap)
 val pres14 = space.produce(Channel("friends"), erin, persist = true)
-println(space.store.toMap)
+println(space.toMap)
 ```
 
 ### History & rollback

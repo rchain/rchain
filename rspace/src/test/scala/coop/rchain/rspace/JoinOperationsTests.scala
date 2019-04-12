@@ -7,9 +7,7 @@ import monix.eval.Coeval
 
 trait JoinOperationsTests extends StorageTestsBase[Coeval, String, Pattern, String, StringsCaptor] {
 
-  "joins" should "remove joins if no PsK" in withTestSpace { space =>
-    val store = space.store
-
+  "joins" should "remove joins if no PsK" in withTestSpace { (store, space) =>
     for {
       _ <- store.withWriteTxnF { txn =>
             store.putDatum(txn, List("ch1"), Datum.create("ch1", "datum1", persist = false))
