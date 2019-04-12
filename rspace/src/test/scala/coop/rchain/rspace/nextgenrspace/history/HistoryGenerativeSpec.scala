@@ -114,23 +114,25 @@ trait InMemoryHistoryTestBase {
 
     override def get(key: Blake2b256Hash): Task[Option[PointerBlock]] =
       Task.delay { data.get(key) }
+
+    override def close(): Task[Unit] = Task.now(())
   }
 
   def inMemHistoryStore: HistoryStore[Task] = new HistoryStore[Task] {
     val data: TrieMap[Blake2b256Hash, Trie] = TrieMap.empty
+
     override def put(tries: List[Trie]): Task[Unit] = Task.delay {
       tries.foreach { t =>
         val key = Trie.hash(t)
         data.put(key, t)
       }
     }
-    override def get(key: Blake2b256Hash): Task[Trie] = Task.delay {
-      data.getOrElse(key, EmptyTrie)
-    }
-  }
 
-  def insertAction(key: Seq[Int], value: Blake2b256Hash): (TestKey32, Blake2b256Hash) =
-    (TestKey32.create(key), value)
+    override def get(key: Blake2b256Hash): Task[Trie] =
+      Task.delay { data.getOrElse(key, EmptyTrie) }
+
+    override def close(): Task[Unit] = Task.now(())
+  }
 
   val emptyRoot: Trie               = EmptyTrie
   val emptyRootHash: Blake2b256Hash = Trie.hash(emptyRoot)

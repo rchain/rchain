@@ -130,5 +130,7 @@ trait InMemoryHistoryRepositoryTestBase extends InMemoryHistoryTestBase {
 
     override def get(hash: Blake2b256Hash): Task[Option[PersistedData]] =
       Task.delay { data.get(hash) }
+
+    override def close(): Task[Unit] = Task.delay(())
   }
 }

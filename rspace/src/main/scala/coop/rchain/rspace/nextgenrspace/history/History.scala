@@ -279,6 +279,12 @@ final case class History[F[_]: Sync](
 
   private[history] def findPath(key: KeyPath): F[(Trie, TriePath)] =
     findPath(key, root)
+
+  def close(): F[Unit] =
+    for {
+      _ <- historyStore.close()
+      _ <- pointerBlockStore.close()
+    } yield ()
 }
 
 object History {
