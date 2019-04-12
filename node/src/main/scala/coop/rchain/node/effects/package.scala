@@ -11,7 +11,6 @@ import cats.mtl._
 import cats.Applicative
 
 import coop.rchain.comm._
-import coop.rchain.comm.CachedConnections.ConnectionsCache
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.rp._
 import coop.rchain.comm.rp.Connect._
