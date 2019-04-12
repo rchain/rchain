@@ -13,6 +13,7 @@ import cats.implicits._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.CommError
+import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.shared._
 
 import io.grpc.netty.GrpcSslContexts
@@ -28,6 +29,7 @@ trait TransportLayerServer[F[_]] {
 }
 
 class GrpcTransportServer(
+    networkId: String,
     port: Int,
     cert: String,
     key: String,
@@ -36,6 +38,7 @@ class GrpcTransportServer(
     parallelism: Int
 )(
     implicit scheduler: Scheduler,
+    rPConfAsk: RPConfAsk[Task],
     log: Log[Task]
 ) extends TransportLayerServer[Task] {
   private def certInputStream = new ByteArrayInputStream(cert.getBytes())
@@ -78,6 +81,7 @@ class GrpcTransportServer(
 
     Task.delay {
       new TcpServerObservable(
+        networkId: String,
         port,
         serverSslContext,
         maxMessageSize,
@@ -91,6 +95,7 @@ class GrpcTransportServer(
 
 object GrpcTransportServer {
   def acquireServer(
+      networkId: String,
       port: Int,
       certPath: Path,
       keyPath: Path,
@@ -99,12 +104,13 @@ object GrpcTransportServer {
       parallelism: Int
   )(
       implicit scheduler: Scheduler,
+      rPConfAsk: RPConfAsk[Task],
       log: Log[Task]
   ): TransportServer = {
     val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
     val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
     new TransportServer(
-      new GrpcTransportServer(port, cert, key, maxMessageSize, folder, parallelism)
+      new GrpcTransportServer(networkId, port, cert, key, maxMessageSize, folder, parallelism)
     )
   }
 }

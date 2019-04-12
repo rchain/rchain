@@ -3,12 +3,14 @@ package coop.rchain.node.configuration
 import java.nio.file.Path
 
 import scala.concurrent.duration.FiniteDuration
+
 import coop.rchain.casper.util.comm.ListenAtName.Name
 import coop.rchain.comm.PeerNode
-import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.crypto.PrivateKey
 import coop.rchain.shared.StoreType
 
 final case class Server(
+    networkId: String,
     host: Option[String],
     port: Int,
     httpPort: Int,

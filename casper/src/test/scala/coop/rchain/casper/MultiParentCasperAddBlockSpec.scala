@@ -466,6 +466,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
       signedInvalidBlockPacketMessage = packet(
         nodes(0).local,
+        "test",
         transport.BlockMessage,
         signedInvalidBlock.toByteString
       )

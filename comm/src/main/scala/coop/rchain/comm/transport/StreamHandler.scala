@@ -1,26 +1,22 @@
 package coop.rchain.comm.transport
 
-import java.util.UUID
-import coop.rchain.shared.Log
-import coop.rchain.shared.GracefulClose._
-import coop.rchain.shared.PathOps._
-import coop.rchain.catscontrib.ski._
 import java.io.FileOutputStream
 import java.nio.file.{Files, Path}
-import coop.rchain.shared._, Compression._
-import coop.rchain.comm.{CommError, PeerNode}
-import monix.eval.Task
-import monix.execution.{Cancelable, Scheduler}
-import monix.reactive.Observable
-import monix.reactive.observers.Subscriber
-import monix.reactive.OverflowStrategy._
-import coop.rchain.comm.rp.ProtocolHelper
+
+import cats.data._
+import cats.implicits._
+
+import coop.rchain.shared.GracefulClose._
+import coop.rchain.shared.{Log, _}
+import coop.rchain.shared.PathOps._
+import Compression._
+import coop.rchain.comm.PeerNode
 import coop.rchain.comm.protocol.routing._
-import com.google.protobuf.ByteString
-import cats._, cats.data._, cats.implicits._
-import cats.effect._
-import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.comm.transport.PacketOps._
+
+import monix.eval.Task
+import monix.reactive.Observable
 
 object StreamHandler {
 
@@ -33,18 +29,20 @@ object StreamHandler {
       compressed: Boolean = false,
       readSoFar: Long = 0,
       circuitBroken: Boolean = false,
+      wrongNetwork: Boolean = false,
       path: Path,
       fos: FileOutputStream
   )
 
   def handleStream(
+      networkId: String,
       folder: Path,
       stream: Observable[Chunk],
       circuitBreaker: CircuitBreaker
   )(implicit log: Log[Task]): Task[Either[Throwable, StreamMessage]] =
     init(folder)
       .bracketE { initStmd =>
-        (collect(initStmd, stream, circuitBreaker) >>= toResult).value
+        (collect(networkId, initStmd, stream, circuitBreaker) >>= toResult).value
       }({
         // failed while collecting stream
         case (stmd, Right(Left(_))) =>
@@ -69,33 +67,43 @@ object StreamHandler {
     } yield Streamed(fos = fos, path = file)
 
   private def collect(
+      networkId: String,
       init: Streamed,
       stream: Observable[Chunk],
       circuitBreaker: CircuitBreaker
   ): EitherT[Task, Throwable, Streamed] = {
 
-    def collectStream = stream.foldWhileLeftL(init) {
-      case (stmd, Chunk(Chunk.Content.Header(ChunkHeader(sender, typeId, compressed, cl)))) =>
-        Left(
-          stmd.copy(
-            sender = sender.map(ProtocolHelper.toPeerNode(_)),
-            typeId = Some(typeId),
-            compressed = compressed,
-            contentLength = Some(cl)
-          )
-        )
-      case (stmd, Chunk(Chunk.Content.Data(ChunkData(newData)))) =>
-        val array = newData.toByteArray
-        stmd.fos.write(array)
-        stmd.fos.flush()
-        val readSoFar = stmd.readSoFar + array.length
-        if (circuitBreaker(readSoFar))
-          Right(stmd.copy(circuitBroken = true))
-        else
-          Left(stmd.copy(readSoFar = readSoFar))
-    }
+    def collectStream: Task[Streamed] =
+      stream.foldWhileLeftL(init) {
+        case (
+            stmd,
+            Chunk(Chunk.Content.Header(ChunkHeader(sender, typeId, compressed, cl, nid)))
+            ) =>
+          if (nid == networkId) {
+            Left(
+              stmd.copy(
+                sender = sender.map(ProtocolHelper.toPeerNode),
+                typeId = Some(typeId),
+                compressed = compressed,
+                contentLength = Some(cl)
+              )
+            )
+          } else
+            Right(stmd.copy(wrongNetwork = true))
+        case (stmd, Chunk(Chunk.Content.Data(ChunkData(newData)))) =>
+          val array = newData.toByteArray
+          stmd.fos.write(array)
+          stmd.fos.flush()
+          val readSoFar = stmd.readSoFar + array.length
+          if (circuitBreaker(readSoFar))
+            Right(stmd.copy(circuitBroken = true))
+          else
+            Left(stmd.copy(readSoFar = readSoFar))
+      }
 
     EitherT(collectStream.attempt.map {
+      case Right(stmd) if stmd.wrongNetwork =>
+        new RuntimeException("Wrong network id").asLeft
       case Right(stmd) if stmd.circuitBroken =>
         new RuntimeException("Circuit was broken").asLeft
       case res => res
@@ -118,6 +126,7 @@ object StreamHandler {
             Some(contentLength),
             compressed,
             readSoFar,
+            _,
             _,
             path,
             _

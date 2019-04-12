@@ -49,6 +49,7 @@ class CasperPacketHandlerSpec extends WordSpec {
   private def setup() = new {
     implicit val log     = new LogStub[Task]
     implicit val metrics = new MetricsNOP[Task]
+    val networkId        = "test"
     val scheduler        = Scheduler.io("test")
     val runtimeDir       = BlockDagStorageTestFixture.blockStorageDir
     val activeRuntime =
@@ -158,6 +159,7 @@ class CasperPacketHandlerSpec extends WordSpec {
           blockApproval = BlockApproverProtocol.getBlockApproval(expectedCandidate, validatorId)
           expectedPacket = ProtocolHelper.packet(
             local,
+            networkId,
             transport.BlockApproval,
             blockApproval.toByteString
           )
@@ -187,6 +189,7 @@ class CasperPacketHandlerSpec extends WordSpec {
           head = transportLayer.requests.head
           response = packet(
             local,
+            networkId,
             transport.NoApprovedBlockAvailable,
             NoApprovedBlockAvailable(approvedBlockRequest.identifier, local.toString).toByteString
           )
@@ -328,6 +331,7 @@ class CasperPacketHandlerSpec extends WordSpec {
           _ = assert(
             transportLayer.requests.head.msg == packet(
               local,
+              networkId,
               transport.ForkChoiceTipRequest,
               ByteString.EMPTY
             )
@@ -396,7 +400,7 @@ class CasperPacketHandlerSpec extends WordSpec {
           _     <- blockStore.put(genesis.blockHash, genesis)
           _     <- casperPacketHandler.handle(local)(requestPacket)
           head  = transportLayer.requests.head
-          block = packet(local, transport.BlockMessage, genesis.toByteString)
+          block = packet(local, networkId, transport.BlockMessage, genesis.toByteString)
           _     = assert(head.peer == local && head.msg == block)
         } yield ()
 

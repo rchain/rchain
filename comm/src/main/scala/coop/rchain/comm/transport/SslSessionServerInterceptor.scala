@@ -1,17 +1,18 @@
 package coop.rchain.comm.transport
 
-import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.crypto.util.CertificateHelper
 import coop.rchain.shared.{Log, LogSource}
+
 import io.grpc._
 import javax.net.ssl.SSLSession
 
 /**
-  * This wart exists because that's how grpc works. They looooovveee throwing exceptions
+  * This wart exists because that's how gRPC works
   */
-@SuppressWarnings(Array("org.wartremover.warts.Throw"))
-class SslSessionServerInterceptor() extends ServerInterceptor {
+@SuppressWarnings(Array("org.wartremover.warts.Var"))
+class SslSessionServerInterceptor(networkID: String) extends ServerInterceptor {
 
   def interceptCall[ReqT, RespT](
       call: ServerCall[ReqT, RespT],
@@ -27,42 +28,55 @@ class SslSessionServerInterceptor() extends ServerInterceptor {
       call: ServerCall[ReqT, RespT]
   ) extends ServerCall.Listener[ReqT] {
 
-    override def onHalfClose(): Unit = next.onHalfClose()
-    override def onCancel(): Unit    = next.onCancel()
-    override def onComplete(): Unit  = next.onComplete()
-    override def onReady(): Unit     = next.onReady()
+    @volatile
+    private var closeWithStatus = Option.empty[Status]
+
+    override def onHalfClose(): Unit =
+      closeWithStatus.fold(next.onHalfClose())(call.close(_, new Metadata()))
+
+    override def onCancel(): Unit   = next.onCancel()
+    override def onComplete(): Unit = next.onComplete()
+    override def onReady(): Unit    = next.onReady()
 
     override def onMessage(message: ReqT): Unit =
       message match {
-        case TLRequest(Some(Protocol(Some(Header(Some(sender))), msg))) =>
-          if (log.isTraceEnabled) {
-            val peerNode = ProtocolHelper.toPeerNode(sender)
-            val msgType  = msg.getClass.toString
-            log.trace(s"Request [$msgType] from peer ${peerNode.toAddress}")
-          }
-          val sslSession: Option[SSLSession] = Option(
-            call.getAttributes.get(Grpc.TRANSPORT_ATTR_SSL_SESSION)
-          )
-          if (sslSession.isEmpty) {
-            log.warn("No TLS Session. Closing connection")
-            close()
-          } else {
-            sslSession.foreach { session =>
-              val verified = CertificateHelper
-                .publicAddress(session.getPeerCertificates.head.getPublicKey)
-                .exists(_ sameElements sender.id.toByteArray)
-              if (verified)
-                next.onMessage(message)
-              else {
-                log.warn("Certificate verification failed. Closing connection")
-                close()
+        case TLRequest(Some(Protocol(Some(Header(Some(sender), nid)), msg))) =>
+          if (nid == networkID) {
+            if (log.isTraceEnabled) {
+              val peerNode = ProtocolHelper.toPeerNode(sender)
+              val msgType  = msg.getClass.toString
+              log.trace(s"Request [$msgType] from peer ${peerNode.toAddress}")
+            }
+            val sslSession: Option[SSLSession] = Option(
+              call.getAttributes.get(Grpc.TRANSPORT_ATTR_SSL_SESSION)
+            )
+            if (sslSession.isEmpty) {
+              log.warn("No TLS Session. Closing connection")
+              close(Status.UNAUTHENTICATED.withDescription("No TLS Session"))
+            } else {
+              sslSession.foreach { session =>
+                val verified = CertificateHelper
+                  .publicAddress(session.getPeerCertificates.head.getPublicKey)
+                  .exists(_ sameElements sender.id.toByteArray)
+                if (verified)
+                  next.onMessage(message)
+                else {
+                  log.warn("Certificate verification failed. Closing connection")
+                  close(Status.UNAUTHENTICATED.withDescription("Certificate verification failed"))
+                }
               }
             }
+          } else {
+            log.warn(s"Wrong network id $nid. Closing connection")
+            close(Status.PERMISSION_DENIED.withDescription(s"Wrong network id $nid"))
           }
+        case TLRequest(_) =>
+          log.warn(s"Malformed message $message")
+          close(Status.INVALID_ARGUMENT.withDescription("Malformed message"))
         case _ => next.onMessage(message)
       }
 
-    private def close(): Unit =
-      throw Status.UNAUTHENTICATED.withDescription("Wrong public key").asRuntimeException()
+    private def close(status: Status): Unit =
+      closeWithStatus = Some(status)
   }
 }

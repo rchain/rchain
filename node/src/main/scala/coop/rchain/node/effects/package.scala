@@ -53,6 +53,7 @@ package object effects {
   ): KademliaRPC[Task] = new GrpcKademliaRPC(timeout)
 
   def transportClient(
+      networkId: String,
       certPath: Path,
       keyPath: Path,
       maxMessageSize: Int,
@@ -66,7 +67,7 @@ package object effects {
     Task.delay {
       val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
       val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
-      new GrpcTransportClient(cert, key, maxMessageSize, packetChunkSize, folder, 1000)
+      new GrpcTransportClient(networkId, cert, key, maxMessageSize, packetChunkSize, folder, 1000)
     }
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)

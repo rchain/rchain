@@ -100,9 +100,9 @@ object Connect {
 
     def sendHeartbeat(peer: PeerNode): F[(PeerNode, CommErr[Unit])] =
       for {
-        local <- RPConfAsk[F].reader(_.local)
-        hb    = heartbeat(local)
-        res   <- TransportLayer[F].send(peer, hb)
+        conf <- RPConfAsk[F].ask
+        hb   = heartbeat(conf.local, conf.networkId)
+        res  <- TransportLayer[F].send(peer, hb)
       } yield (peer, res)
 
     def clear(connections: Connections): F[Int] =
@@ -145,13 +145,13 @@ object Connect {
   ): F[Unit] =
     (
       for {
-        address  <- peer.toAddress.pure[F]
-        _        <- Log[F].debug(s"Connecting to $address")
-        _        <- Metrics[F].incrementCounter("connect")
-        _        <- Log[F].debug(s"Initialize protocol handshake to $address")
-        local    <- RPConfAsk[F].reader(_.local)
-        ph       = protocolHandshake(local)
-        response <- TransportLayer[F].send(peer, ph) >>= ErrorHandler[F].fromEither
+        address <- peer.toAddress.pure[F]
+        _       <- Log[F].debug(s"Connecting to $address")
+        _       <- Metrics[F].incrementCounter("connect")
+        _       <- Log[F].debug(s"Initialize protocol handshake to $address")
+        conf    <- RPConfAsk[F].ask
+        ph      = protocolHandshake(conf.local, conf.networkId)
+        _       <- TransportLayer[F].send(peer, ph) >>= ErrorHandler[F].fromEither
       } yield ()
     ).timer("connect-time")
 

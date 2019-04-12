@@ -21,6 +21,8 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
 
   implicit val log = new Log.NOPLog[Task]()
 
+  val networkId = "test"
+
   var tempFolder: Path = null
 
   override def beforeEach(): Unit =
@@ -141,7 +143,11 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
   }
 
   private def handleStream(stream: Observable[Chunk], folder: Path = tempFolder): StreamMessage =
-    StreamHandler.handleStream(folder, stream, circuitBreaker = neverBreak).unsafeRunSync.right.get
+    StreamHandler
+      .handleStream(networkId, folder, stream, circuitBreaker = neverBreak)
+      .unsafeRunSync
+      .right
+      .get
 
   private def handleStreamErr(
       stream: Observable[Chunk],
@@ -149,7 +155,7 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       circuitBreaker: StreamHandler.CircuitBreaker = neverBreak
   ): Throwable =
     StreamHandler
-      .handleStream(folder, stream, circuitBreaker = circuitBreaker)
+      .handleStream(networkId, folder, stream, circuitBreaker = circuitBreaker)
       .unsafeRunSync
       .left
       .get
@@ -173,7 +179,7 @@ class StreamHandlerSpec extends FunSpec with Matchers with BeforeAndAfterEach {
     val packet  = Packet(BlockMessage.id, ByteString.copyFrom(content))
     val sender  = peerNode("sender")
     val blob    = Blob(sender, packet)
-    Chunker.chunkIt(blob, messageSize)
+    Chunker.chunkIt(networkId, blob, messageSize)
   }
 
   private def peerNode(name: String): PeerNode =
