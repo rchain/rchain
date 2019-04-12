@@ -13,7 +13,6 @@ import coop.rchain.rspace.trace.Consume
 import coop.rchain.shared.Log
 import coop.rchain.shared.SyncVarOps._
 
-import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 import scala.util.Random
 

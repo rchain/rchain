@@ -16,7 +16,6 @@ import coop.rchain.shared.SyncVarOps._
 import org.lmdbjava.Txn
 import scodec.Codec
 
-import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext
 import scala.util.Random
 

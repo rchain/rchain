@@ -76,7 +76,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   def checkData(
       result: Map[
-        scala.collection.immutable.Seq[Par],
+        Seq[Par],
         Row[BindPattern, ListParWithRandom, TaggedContinuation]
       ]
   )(channel: Par, data: Seq[Par], rand: Blake2b512Random): Assertion =
@@ -101,7 +101,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   def checkContinuation(
       result: Map[
-        scala.collection.immutable.Seq[Par],
+        Seq[Par],
         Row[BindPattern, ListParWithRandom, TaggedContinuation]
       ]
   )(channels: List[Par], bindPatterns: List[BindPattern], body: ParWithRandom): Assertion =

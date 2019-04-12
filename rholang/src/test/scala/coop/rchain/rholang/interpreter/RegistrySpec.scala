@@ -175,7 +175,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
 
   def checkResult(
       result: Map[
-        scala.collection.immutable.Seq[Par],
+        Seq[Par],
         Row[BindPattern, ListParWithRandom, TaggedContinuation]
       ],
       s: String,

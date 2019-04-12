@@ -7,9 +7,6 @@ import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs.{bool, bytes, int32, int64, variableSizeBytesLong}
 
-import scala.collection.immutable.Seq
-import scala.collection.mutable
-
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 object internal {
 

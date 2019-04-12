@@ -6,7 +6,6 @@ import coop.rchain.rspace.util._
 import cats.implicits._
 import coop.rchain.rspace.{Blake2b256Hash, Serialize}
 import coop.rchain.rspace.internal.codecSeq
-import scala.collection.immutable.Seq
 import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs._

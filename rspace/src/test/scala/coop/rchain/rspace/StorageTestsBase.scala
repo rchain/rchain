@@ -18,7 +18,6 @@ import coop.rchain.shared.PathOps._
 import coop.rchain.shared.Log
 import org.scalatest._
 
-import scala.collection.immutable.{Seq, Set}
 import scala.concurrent.ExecutionContext
 import scodec.Codec
 

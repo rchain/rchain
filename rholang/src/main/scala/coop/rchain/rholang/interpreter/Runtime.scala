@@ -27,7 +27,6 @@ import coop.rchain.rspace.pure.PureRSpace
 import coop.rchain.shared.{Log, StoreType}
 import coop.rchain.shared.StoreType._
 
-import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 
 class Runtime[F[_]: Sync] private (
@@ -184,7 +183,7 @@ object Runtime {
       space: RhoISpace[F],
       replaySpace: RhoISpace[F],
       processes: List[(Name, Arity, Remainder, BodyRef)]
-  ): F[List[Option[(TaggedContinuation, immutable.Seq[ListParWithRandom])]]] =
+  ): F[List[Option[(TaggedContinuation, Seq[ListParWithRandom])]]] =
     processes.flatMap {
       case (name, arity, remainder, ref) =>
         val channels = List(name)

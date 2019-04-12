@@ -2,7 +2,6 @@ package coop.rchain.rspace.concurrent
 
 import cats.implicits._
 import cats.effect.Concurrent
-import scala.collection.immutable.Seq
 
 trait TwoStepLock[F[_], K] {
   def acquire[R, S, W](keysA: Seq[K])(phaseTwo: () => F[Seq[K]])(thunk: => F[W])(

@@ -3,8 +3,6 @@ package coop.rchain.rspace
 import cats.Id
 import coop.rchain.rspace.internal._
 
-import scala.collection.immutable.Seq
-
 final case class Result[R](value: R, persistent: Boolean)
 final case class ContResult[C, P, R](
     value: R,

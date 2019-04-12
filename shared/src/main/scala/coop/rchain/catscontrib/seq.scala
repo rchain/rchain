@@ -2,8 +2,6 @@ package coop.rchain.catscontrib
 
 import cats.{Always, Applicative, Eval, Traverse}
 
-import scala.collection.immutable.Seq
-
 object seq extends SeqInstances
 
 trait SeqInstances {

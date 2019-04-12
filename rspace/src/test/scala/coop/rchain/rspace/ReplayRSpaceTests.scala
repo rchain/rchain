@@ -20,7 +20,6 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest._
 
-import scala.collection.immutable
 import scala.util.{Random, Right}
 
 object SchedulerPools {
@@ -67,7 +66,7 @@ trait ReplayRSpaceTests
       persist: Boolean
   )(
       implicit matcher: Match[Task, P, A, R]
-  ): Task[List[Option[(ContResult[C, P, K], immutable.Seq[Result[R]])]]] =
+  ): Task[List[Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     (if (shuffle) Random.shuffle(range.toList) else range.toList).parTraverse { i: Int =>
       logger.debug("Started produce {}", i)
       space.produce(channelCreator(i), datumCreator(i), persist).map { r =>

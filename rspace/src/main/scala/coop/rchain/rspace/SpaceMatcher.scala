@@ -10,7 +10,6 @@ import coop.rchain.rspace.trace.Log
 import coop.rchain.shared.SyncVarOps
 
 import scala.annotation.tailrec
-import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 
 /** The interface for RSpace
