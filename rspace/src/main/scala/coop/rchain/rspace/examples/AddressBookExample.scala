@@ -280,7 +280,7 @@ object AddressBookExample {
 
     runKs(Seq(cres1, cres2))
 
-    Console.printf(space.store.toMap.toString())
+    Console.printf(space.toMap.toString())
 
     context.close()
   }

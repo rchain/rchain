@@ -4,13 +4,13 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.PrettyPrinter
-import coop.rchain.rholang.interpreter.Runtime.RhoIStore
+import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace.trace.{Consume, Produce}
 
 object StoragePrinter {
-  def prettyPrint[F[_]](store: RhoIStore[F]): String = {
-    val pars: Seq[Par] = store.toMap.map {
+  def prettyPrint[F[_]](space: RhoISpace[F]): String = {
+    val pars: Seq[Par] = space.toMap.map {
       case (
           channels: Seq[Par],
           row: Row[BindPattern, ListParWithRandom, TaggedContinuation]
@@ -66,7 +66,7 @@ object StoragePrinter {
       }
     }.toList
     if (pars.isEmpty) {
-      "The store is empty. Note that top level terms that are not sends or receives are discarded."
+      "The space is empty. Note that top level terms that are not sends or receives are discarded."
     } else {
       val par = pars.reduce { (p1: Par, p2: Par) =>
         p1 ++ p2

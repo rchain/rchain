@@ -59,7 +59,7 @@ class BasicBench {
       assert(r2.nonEmpty)
       bh.consume(r2)
       if (state.debug) {
-        assert(space.store.isEmpty)
+        assert(space.toMap.isEmpty)
       }
     }
     if (state.debug) {
@@ -90,7 +90,7 @@ class BasicBench {
       assert(c1.nonEmpty)
       bh.consume(c1)
       if (state.debug) {
-        assert(space.store.isEmpty)
+        assert(space.toMap.isEmpty)
       }
     }
     if (state.debug) {

@@ -111,7 +111,7 @@ import scodec.bits.ByteVector
 Now we define an instance of `Serialize`.
 ```scala
 scala> implicit object serializeChannel extends Serialize[Channel] {
-     | 
+     |
      |   def encode(channel: Channel): ByteVector = {
      |     val baos = new ByteArrayOutputStream()
      |     try {
@@ -122,7 +122,7 @@ scala> implicit object serializeChannel extends Serialize[Channel] {
      |       baos.close()
      |     }
      |   }
-     | 
+     |
      |   def decode(bytes: ByteVector): Either[Throwable, Channel] = {
      |     try {
      |       val bais = new ByteArrayInputStream(bytes.toArray)
@@ -305,7 +305,7 @@ phone:   777-555-1212
 
 When we inspect the contents of the store, we notice that the store is empty.  The continuation has been removed.  The data was also not stored because a matching continuation was found.
 ```scala
-scala> println(space.store.toMap)
+scala> println(space.toMap)
 Map()
 ```
 
@@ -331,7 +331,7 @@ address: 1000 Main St, Crystal Lake, Idaho 223322
 email:   blablah@tenex.net
 phone:   698-555-1212
 
-scala> println(space.store.toMap)
+scala> println(space.toMap)
 Map()
 ```
 
@@ -348,7 +348,7 @@ This time we receive a `None` back from `produce`, indicating that no match has 
 
 Let's inspect the contents of the store again.
 ```scala
-scala> println(space.store.toMap)
+scala> println(space.toMap)
 Map(List(Channel(friends)) -> Row(List(Datum(Entry(Name(Carol,Lahblah),Address(22 Goldwater Way,Herbert,Nevada,334433),carol@blablah.org,232-555-1212),false,Produce(channels: Blake2b256Hash(bytes: ByteVector(32 bytes, 0xeac5571fbf9fc71f19d65e14314b32ad06538a364c2ff101edfa99a969fac35b)), hash: Blake2b256Hash(bytes: ByteVector(32 bytes, 0x7f7df0d04cc2005bde1d5b58498c24296aea8eba00d096e1baa79ee31f342e76))))),List(WaitingContinuation(List(CityMatch(Crystal Lake)),<function1>,false,Consume(channels: Blake2b256Hash(bytes: ByteVector(32 bytes, 0xeac5571fbf9fc71f19d65e14314b32ad06538a364c2ff101edfa99a969fac35b)), hash: Blake2b256Hash(bytes: ByteVector(32 bytes, 0x02e56a04fd6302d086530a4b862541075aafddb91b62e2b2e0e4f9509fd8e1f9)))))))
 ```
 
@@ -372,7 +372,7 @@ Indeed, our call to `consume` has returned another continuation along with Carol
 
 In the store, we see that there is still a waiting continuation at `Channel("friends")`
 ```scala
-scala> println(space.store.toMap)
+scala> println(space.toMap)
 Map(List(Channel(friends)) -> Row(List(),List(WaitingContinuation(List(CityMatch(Crystal Lake)),<function1>,false,Consume(channels: Blake2b256Hash(bytes: ByteVector(32 bytes, 0xeac5571fbf9fc71f19d65e14314b32ad06538a364c2ff101edfa99a969fac35b)), hash: Blake2b256Hash(bytes: ByteVector(32 bytes, 0x02e56a04fd6302d086530a4b862541075aafddb91b62e2b2e0e4f9509fd8e1f9)))))))
 ```
 
@@ -389,7 +389,7 @@ address: 777 Ford St., Crystal Lake, Idaho 223322
 email:   alicel@ringworld.net
 phone:   777-555-1212
 
-scala> println(space.store.toMap)
+scala> println(space.toMap)
 Map()
 ```
 
@@ -517,7 +517,7 @@ As a side note, we can observe the fact there is no particular order to which we
 So did our `consume` stick?
 
 ```scala
-scala> println(space.store.toMap)
+scala> println(space.toMap)
 Map(List(Channel(friends)) -> Row(List(Datum(Entry(Name(Bob,Lahblah),Address(1000 Main St,Crystal Lake,Idaho,223322),blablah@tenex.net,698-555-1212),false,Produce(channels: Blake2b256Hash(bytes: ByteVector(32 bytes, 0xeac5571fbf9fc71f19d65e14314b32ad06538a364c2ff101edfa99a969fac35b)), hash: Blake2b256Hash(bytes: ByteVector(32 bytes, 0x7b39ca265b2cfdd27fc464b71470c3259a2ddd5f2e37e139e9d1c29ced3a6a31))))),List()))
 ```
 
@@ -540,7 +540,7 @@ phone:   698-555-1212
 scala> val cres10 = space.consume(List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = true)
 cres10: cats.Id[Either[Nothing,Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])]]] = Right(None)
 
-scala> println(space.store.toMap)
+scala> println(space.toMap)
 Map(List(Channel(friends)) -> Row(List(),List(WaitingContinuation(List(CityMatch(Crystal Lake)),<function1>,true,Consume(channels: Blake2b256Hash(bytes: ByteVector(32 bytes, 0xeac5571fbf9fc71f19d65e14314b32ad06538a364c2ff101edfa99a969fac35b)), hash: Blake2b256Hash(bytes: ByteVector(32 bytes, 0xb04ae03458e620b9c3d06148d5e651fa91c2bb0575ea1f6e5e91ebbf197b6695)))))))
 ```
 
@@ -562,13 +562,13 @@ address: 23 Market St., Peony, Idaho 224422
 email:   erush@lasttraintogoa.net
 phone:   333-555-1212
 
-scala> println(space.store.toMap)
+scala> println(space.toMap)
 Map(List(Channel(friends)) -> Row(List(),List(WaitingContinuation(List(CityMatch(Crystal Lake)),<function1>,true,Consume(channels: Blake2b256Hash(bytes: ByteVector(32 bytes, 0xeac5571fbf9fc71f19d65e14314b32ad06538a364c2ff101edfa99a969fac35b)), hash: Blake2b256Hash(bytes: ByteVector(32 bytes, 0xb04ae03458e620b9c3d06148d5e651fa91c2bb0575ea1f6e5e91ebbf197b6695)))))))
 
 scala> val pres14 = space.produce(Channel("friends"), erin, persist = true)
 pres14: cats.Id[Either[Nothing,Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])]]] = Right(None)
 
-scala> println(space.store.toMap)
+scala> println(space.toMap)
 Map(List(Channel(friends)) -> Row(List(Datum(Entry(Name(Erin,Rush),Address(23 Market St.,Peony,Idaho,224422),erush@lasttraintogoa.net,333-555-1212),true,Produce(channels: Blake2b256Hash(bytes: ByteVector(32 bytes, 0xeac5571fbf9fc71f19d65e14314b32ad06538a364c2ff101edfa99a969fac35b)), hash: Blake2b256Hash(bytes: ByteVector(32 bytes, 0x7d664473c31bd1b7a7bed21ec1794a509f9ea8d7eaa206657da7c9cf52fd51f6))))),List(WaitingContinuation(List(CityMatch(Crystal Lake)),<function1>,true,Consume(channels: Blake2b256Hash(bytes: ByteVector(32 bytes, 0xeac5571fbf9fc71f19d65e14314b32ad06538a364c2ff101edfa99a969fac35b)), hash: Blake2b256Hash(bytes: ByteVector(32 bytes, 0xb04ae03458e620b9c3d06148d5e651fa91c2bb0575ea1f6e5e91ebbf197b6695)))))))
 ```
 

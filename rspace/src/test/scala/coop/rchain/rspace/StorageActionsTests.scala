@@ -45,8 +45,7 @@ trait StorageActionsTests[F[_]]
   type TestGNAT = GNAT[String, Pattern, String, StringsCaptor]
 
   "produce" should
-    "persist a piece of data in the store" in withTestSpace { space =>
-    val store   = space.store
+    "persist a piece of data in the store" in withTestSpace { (store, space) =>
     val key     = List("ch1")
     val keyHash = store.hashChannels(key)
 
@@ -66,8 +65,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "producing twice on the same channel" should
-    "persist two pieces of data in the store" in withTestSpace { space =>
-    val store   = space.store
+    "persist two pieces of data in the store" in withTestSpace { (store, space) =>
     val key     = List("ch1")
     val keyHash = store.hashChannels(key)
 
@@ -96,8 +94,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "consuming on one channel" should
-    "persist a continuation in the store" in withTestSpace { space =>
-    val store    = space.store
+    "persist a continuation in the store" in withTestSpace { (store, space) =>
     val key      = List("ch1")
     val patterns = List(Wildcard)
     val keyHash  = store.hashChannels(key)
@@ -116,8 +113,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "consuming on three channels" should
-    "persist a continuation in the store" in withTestSpace { space =>
-    val store    = space.store
+    "persist a continuation in the store" in withTestSpace { (store, space) =>
     val key      = List("ch1", "ch2", "ch3")
     val patterns = List(Wildcard, Wildcard, Wildcard)
     val keyHash  = store.hashChannels(key)
@@ -136,8 +132,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "producing and then consuming on the same channel" should
-    "return the continuation and data" in withTestSpace { space =>
-    val store   = space.store
+    "return the continuation and data" in withTestSpace { (store, space) =>
     val key     = List("ch1")
     val keyHash = store.hashChannels(key)
 
@@ -165,30 +160,29 @@ trait StorageActionsTests[F[_]]
     } yield (store.isEmpty shouldBe true)
   }
 
-  "producing three times then doing consuming three times" should "work" in withTestSpace { space =>
-    val store = space.store
-    for {
-      r1 <- space.produce("ch1", "datum1", persist = false)
-      r2 <- space.produce("ch1", "datum2", persist = false)
-      r3 <- space.produce("ch1", "datum3", persist = false)
-      _  = r1 shouldBe None
-      _  = r2 shouldBe None
-      _  = r3 shouldBe None
-      r4 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
-      _  = runK(r4)
-      _  = getK(r4).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
-      r5 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
-      _  = runK(r5)
-      _  = getK(r5).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
-      r6 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
-      _  = runK(r6)
-      _  = getK(r6).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
-    } yield (store.isEmpty shouldBe true)
+  "producing three times then doing consuming three times" should "work" in withTestSpace {
+    (store, space) =>
+      for {
+        r1 <- space.produce("ch1", "datum1", persist = false)
+        r2 <- space.produce("ch1", "datum2", persist = false)
+        r3 <- space.produce("ch1", "datum3", persist = false)
+        _  = r1 shouldBe None
+        _  = r2 shouldBe None
+        _  = r3 shouldBe None
+        r4 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+        _  = runK(r4)
+        _  = getK(r4).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
+        r5 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+        _  = runK(r5)
+        _  = getK(r5).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
+        r6 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+        _  = runK(r6)
+        _  = getK(r6).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
+      } yield (store.isEmpty shouldBe true)
   }
 
   "producing on channel, consuming on that channel and another, and then producing on the other channel" should
-    "return a continuation and all the data" in withTestSpace { space =>
-    val store           = space.store
+    "return a continuation and all the data" in withTestSpace { (store, space) =>
     val produceKey1     = List("ch1")
     val produceKey1Hash = store.hashChannels(produceKey1)
 
@@ -247,8 +241,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "producing on three different channels and then consuming once on all three" should
-    "return the continuation and all the data" in withTestSpace { space =>
-    val store           = space.store
+    "return the continuation and all the data" in withTestSpace { (store, space) =>
     val produceKey1     = List("ch1")
     val produceKey2     = List("ch2")
     val produceKey3     = List("ch3")
@@ -304,8 +297,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "producing three times on the same channel then consuming three times on the same channel" should
-    "return three pairs of continuations and data" in withTestSpace { space =>
-    val store  = space.store
+    "return three pairs of continuations and data" in withTestSpace { (store, space) =>
     val captor = new StringsCaptor
 
     val key = List("ch1")
@@ -341,9 +333,7 @@ trait StorageActionsTests[F[_]]
 
   "consuming three times on the same channel, then producing three times on that channel" should
     "return three continuations, each paired with distinct pieces of data" in withTestSpace {
-    space =>
-      val store = space.store
-
+    (store, space) =>
       for {
         _  <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
         _  <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
@@ -369,53 +359,50 @@ trait StorageActionsTests[F[_]]
   }
 
   "consuming three times on the same channel with non-trivial matches, then producing three times on that channel" should
-    "return three continuations, each paired with matching data" in withTestSpace { space =>
-    val store = space.store
+    "return three continuations, each paired with matching data" in withTestSpace {
+    (store, space) =>
+      for {
+        _ <- space.consume(
+              List("ch1"),
+              List(StringMatch("datum1")),
+              new StringsCaptor,
+              persist = false
+            )
+        _ <- space.consume(
+              List("ch1"),
+              List(StringMatch("datum2")),
+              new StringsCaptor,
+              persist = false
+            )
+        _ <- space.consume(
+              List("ch1"),
+              List(StringMatch("datum3")),
+              new StringsCaptor,
+              persist = false
+            )
 
-    for {
-      _ <- space.consume(
-            List("ch1"),
-            List(StringMatch("datum1")),
-            new StringsCaptor,
-            persist = false
-          )
-      _ <- space.consume(
-            List("ch1"),
-            List(StringMatch("datum2")),
-            new StringsCaptor,
-            persist = false
-          )
-      _ <- space.consume(
-            List("ch1"),
-            List(StringMatch("datum3")),
-            new StringsCaptor,
-            persist = false
-          )
+        r1 <- space.produce("ch1", "datum1", persist = false)
+        r2 <- space.produce("ch1", "datum2", persist = false)
+        r3 <- space.produce("ch1", "datum3", persist = false)
 
-      r1 <- space.produce("ch1", "datum1", persist = false)
-      r2 <- space.produce("ch1", "datum2", persist = false)
-      r3 <- space.produce("ch1", "datum3", persist = false)
+        _ = r1 shouldBe defined
+        _ = r2 shouldBe defined
+        _ = r3 shouldBe defined
 
-      _ = r1 shouldBe defined
-      _ = r2 shouldBe defined
-      _ = r3 shouldBe defined
+        _ = List(r1, r2, r3)
+          .map(unpackOption)
+          .foreach(runK)
 
-      _ = List(r1, r2, r3)
-        .map(unpackOption)
-        .foreach(runK)
+        _ = getK(r1).results shouldBe List(List("datum1"))
+        _ = getK(r2).results shouldBe List(List("datum2"))
+        _ = getK(r3).results shouldBe List(List("datum3"))
 
-      _ = getK(r1).results shouldBe List(List("datum1"))
-      _ = getK(r2).results shouldBe List(List("datum2"))
-      _ = getK(r3).results shouldBe List(List("datum3"))
-
-    } yield (store.isEmpty shouldBe true)
+      } yield (store.isEmpty shouldBe true)
 
   }
 
   "consuming on two channels, producing on one, then producing on the other" should
-    "return a continuation with both pieces of data" in withTestSpace { space =>
-    val store = space.store
-
+    "return a continuation with both pieces of data" in withTestSpace { (store, space) =>
     for {
       r1 <- space.consume(
              List("ch1", "ch2"),
@@ -439,9 +426,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "A joined consume with the same channel given twice followed by a produce" should
-    "not raises any errors (CORE-365)" in withTestSpace { space =>
-    val store = space.store
-
+    "not raises any errors (CORE-365)" in withTestSpace { (store, space) =>
     val channels = List("ch1", "ch1")
 
     for {
@@ -467,9 +452,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "consuming twice on the same channels with different patterns, and then producing on those channels" should
-    "return continuations with the expected data" in withTestSpace { space =>
-    val store = space.store
-
+    "return continuations with the expected data" in withTestSpace { (store, space) =>
     val channels = List("ch1", "ch2")
 
     for {
@@ -510,9 +493,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "consuming and producing with non-trivial matches" should
-    "work" in withTestSpace { space =>
-    val store = space.store
-
+    "work" in withTestSpace { (store, space) =>
     for {
       r1 <- space.consume(
              List("ch1", "ch2"),
@@ -540,9 +521,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "consuming twice and producing twice with non-trivial matches" should
-    "work" in withTestSpace { space =>
-    val store = space.store
-
+    "work" in withTestSpace { (store, space) =>
     for {
       r1 <- space.consume(
              List("ch1"),
@@ -577,9 +556,7 @@ trait StorageActionsTests[F[_]]
 
   "consuming on two channels, consuming on one of those channels, and then producing on both of those channels separately" should
     "return a continuation paired with one piece of data" in
-    withTestSpace { space =>
-      val store = space.store
-
+    withTestSpace { (store, space) =>
       for {
         _ <- space.consume(
               List("ch1", "ch2"),
@@ -618,8 +595,7 @@ trait StorageActionsTests[F[_]]
   /* Persist tests */
 
   "producing and then doing a persistent consume on the same channel" should
-    "return the continuation and data" in withTestSpace { space =>
-    val store   = space.store
+    "return the continuation and data" in withTestSpace { (store, space) =>
     val key     = List("ch1")
     val keyHash = store.hashChannels(key)
 
@@ -659,8 +635,7 @@ trait StorageActionsTests[F[_]]
 
   "producing, doing a persistent consume, and producing again on the same channel" should
     "return the continuation for the first produce, and then the second produce" in withTestSpace {
-    space =>
-      val store   = space.store
+    (store, space) =>
       val key     = List("ch1")
       val keyHash = store.hashChannels(key)
 
@@ -716,9 +691,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "doing a persistent consume and producing multiple times" should "work" in withTestSpace {
-    space =>
-      val store = space.store
-
+    (store, space) =>
       for {
         r1 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
 
@@ -756,9 +729,7 @@ trait StorageActionsTests[F[_]]
       } yield (getK(r3).results should contain theSameElementsAs List(List("datum2")))
   }
 
-  "consuming and doing a persistient produce" should "work" in withTestSpace { space =>
-    val store = space.store
-
+  "consuming and doing a persistient produce" should "work" in withTestSpace { (store, space) =>
     for {
       r1 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
@@ -786,9 +757,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "consuming, doing a persistient produce, and consuming again" should "work" in withTestSpace {
-    space =>
-      val store = space.store
-
+    (store, space) =>
       for {
         r1 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
@@ -829,119 +798,117 @@ trait StorageActionsTests[F[_]]
       } yield (getK(r4).results should contain theSameElementsAs List(List("datum1")))
   }
 
-  "doing a persistent produce and consuming twice" should "work" in withTestSpace { space =>
-    val store = space.store
+  "doing a persistent produce and consuming twice" should "work" in withTestSpace {
+    (store, space) =>
+      for {
+        r1 <- space.produce("ch1", "datum1", persist = true)
 
-    for {
-      r1 <- space.produce("ch1", "datum1", persist = true)
+        _ <- store.withReadTxnF { txn =>
+              store.getData(txn, List("ch1")) shouldBe List(Datum.create("ch1", "datum1", true))
+              store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
+            }
 
-      _ <- store.withReadTxnF { txn =>
-            store.getData(txn, List("ch1")) shouldBe List(Datum.create("ch1", "datum1", true))
-            store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
-          }
+        _ = r1 shouldBe None
 
-      _ = r1 shouldBe None
+        r2 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
-      r2 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+        _ <- store.withReadTxnF { txn =>
+              store.getData(txn, List("ch1")) shouldBe List(Datum.create("ch1", "datum1", true))
+              store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
+            }
 
-      _ <- store.withReadTxnF { txn =>
-            store.getData(txn, List("ch1")) shouldBe List(Datum.create("ch1", "datum1", true))
-            store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
-          }
+        _ = r2 shouldBe defined
 
-      _ = r2 shouldBe defined
+        _ = runK(r2)
 
-      _ = runK(r2)
+        _ = getK(r2).results should contain theSameElementsAs List(List("datum1"))
 
-      _ = getK(r2).results should contain theSameElementsAs List(List("datum1"))
+        r3 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
-      r3 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+        _ <- store.withReadTxnF { txn =>
+              store.getData(txn, List("ch1")) shouldBe List(Datum.create("ch1", "datum1", true))
+              store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
+            }
 
-      _ <- store.withReadTxnF { txn =>
-            store.getData(txn, List("ch1")) shouldBe List(Datum.create("ch1", "datum1", true))
-            store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
-          }
+        _ = r3 shouldBe defined
 
-      _ = r3 shouldBe defined
+        _ = runK(r3)
 
-      _ = runK(r3)
-
-    } yield (getK(r3).results should contain theSameElementsAs List(List("datum1")))
+      } yield (getK(r3).results should contain theSameElementsAs List(List("datum1")))
   }
 
-  "producing three times and doing a persistent consume" should "work" in withTestSpace { space =>
-    val store = space.store
+  "producing three times and doing a persistent consume" should "work" in withTestSpace {
+    (store, space) =>
+      for {
+        r1 <- space.produce("ch1", "datum1", persist = false)
+        r2 <- space.produce("ch1", "datum2", persist = false)
+        r3 <- space.produce("ch1", "datum3", persist = false)
 
-    for {
-      r1 <- space.produce("ch1", "datum1", persist = false)
-      r2 <- space.produce("ch1", "datum2", persist = false)
-      r3 <- space.produce("ch1", "datum3", persist = false)
+        _ = r1 shouldBe None
+        _ = r2 shouldBe None
+        _ = r3 shouldBe None
 
-      _ = r1 shouldBe None
-      _ = r2 shouldBe None
-      _ = r3 shouldBe None
+        // Matching data exists so the write will not "stick"
+        r4 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
 
-      // Matching data exists so the write will not "stick"
-      r4 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
+        _ <- store.withReadTxnF { txn =>
+              store.getData(txn, List("ch1")) should contain atLeastOneOf (
+                Datum.create("ch1", "datum1", false),
+                Datum.create("ch1", "datum2", false),
+                Datum.create("ch1", "datum3", false)
+              )
+              store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
+            }
 
-      _ <- store.withReadTxnF { txn =>
-            store.getData(txn, List("ch1")) should contain atLeastOneOf (
-              Datum.create("ch1", "datum1", false),
-              Datum.create("ch1", "datum2", false),
-              Datum.create("ch1", "datum3", false)
-            )
-            store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
-          }
+        _ = r4 shouldBe defined
 
-      _ = r4 shouldBe defined
+        _ = runK(r4)
 
-      _ = runK(r4)
+        _ = getK(r4).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
 
-      _ = getK(r4).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
+        // Matching data exists so the write will not "stick"
+        r5 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
 
-      // Matching data exists so the write will not "stick"
-      r5 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
+        _ <- store.withReadTxnF { txn =>
+              store.getData(txn, List("ch1")) should contain oneOf (
+                Datum.create("ch1", "datum1", false),
+                Datum.create("ch1", "datum2", false),
+                Datum.create("ch1", "datum3", false)
+              )
+              store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
+            }
 
-      _ <- store.withReadTxnF { txn =>
-            store.getData(txn, List("ch1")) should contain oneOf (
-              Datum.create("ch1", "datum1", false),
-              Datum.create("ch1", "datum2", false),
-              Datum.create("ch1", "datum3", false)
-            )
-            store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
-          }
+        _ = r5 shouldBe defined
 
-      _ = r5 shouldBe defined
+        _ = runK(r5)
 
-      _ = runK(r5)
+        _ = getK(r5).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
 
-      _ = getK(r5).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
+        // Matching data exists so the write will not "stick"
+        r6 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
 
-      // Matching data exists so the write will not "stick"
-      r6 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
+        _ = store.isEmpty shouldBe true
 
-      _ = store.isEmpty shouldBe true
+        _ = r6 shouldBe defined
 
-      _ = r6 shouldBe defined
+        _ = runK(r6)
 
-      _ = runK(r6)
+        _ = getK(r6).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
 
-      _ = getK(r6).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
+        // All matching data has been consumed, so the write will "stick"
+        r7 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
 
-      // All matching data has been consumed, so the write will "stick"
-      r7 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
+        _ <- store.withReadTxnF { txn =>
+              store.getData(txn, List("ch1")) shouldBe Nil
+              store.getWaitingContinuation(txn, List("ch1")) should not be empty
+            }
 
-      _ <- store.withReadTxnF { txn =>
-            store.getData(txn, List("ch1")) shouldBe Nil
-            store.getWaitingContinuation(txn, List("ch1")) should not be empty
-          }
-
-    } yield (r7 shouldBe None)
+      } yield (r7 shouldBe None)
 
   }
 
   "A persistent produce" should "be available for multiple matches (CORE-633)" in withTestSpace {
-    space =>
+    (store, space) =>
       val channel = "chan"
 
       for {
@@ -964,8 +931,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "reset" should "change the state of the store, and reset the trie updates log" in withTestSpace {
-    space =>
-      val store    = space.store
+    (store, space) =>
       val key      = List("ch1")
       val patterns = List(Wildcard)
 
@@ -988,8 +954,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "clear" should "empty the store, reset the event log, and reset the trie updates log" in withTestSpace {
-    space =>
-      val store    = space.store
+    (store, space) =>
       val key      = List("ch1")
       val patterns = List(Wildcard)
       val keyHash  = store.hashChannels(key)
@@ -1021,8 +986,7 @@ trait StorageActionsTests[F[_]]
       } yield (checkpoint1.log shouldBe empty)
   }
 
-  "clear" should "reset to the same hash on multiple runs" in withTestSpace { space =>
-    val store    = space.store
+  "clear" should "reset to the same hash on multiple runs" in withTestSpace { (store, space) =>
     val key      = List("ch1")
     val patterns = List(Wildcard)
 
@@ -1043,17 +1007,18 @@ trait StorageActionsTests[F[_]]
     } yield (checkpoint2.root shouldBe emptyCheckpoint.root)
   }
 
-  "createCheckpoint on an empty store" should "return the expected hash" in withTestSpace { space =>
-    for {
-      checkpoint <- space.createCheckpoint()
-    } yield
-      (checkpoint.root shouldBe Blake2b256Hash.fromHex(
-        "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3"
-      ))
+  "createCheckpoint on an empty store" should "return the expected hash" in withTestSpace {
+    (store, space) =>
+      for {
+        checkpoint <- space.createCheckpoint()
+      } yield
+        (checkpoint.root shouldBe Blake2b256Hash.fromHex(
+          "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3"
+        ))
   }
 
   "consume then createCheckpoint" should "return the expected hash and the TrieStore should contain the expected value" in
-    withTestSpace { space =>
+    withTestSpace { (store, space) =>
       val channels = List("ch1")
       val gnat = GNAT(
         channels,
@@ -1063,7 +1028,7 @@ trait StorageActionsTests[F[_]]
         )
       )
 
-      val channelsHash: Blake2b256Hash = space.store.hashChannels(gnat.channels)
+      val channelsHash: Blake2b256Hash = store.hashChannels(gnat.channels)
 
       val leafPointer = LeafPointer(Trie.hash[Blake2b256Hash, TestGNAT](Leaf(channelsHash, gnat)))
       val skip        = Skip(channelsHash.bytes.drop(1), leafPointer)
@@ -1085,18 +1050,18 @@ trait StorageActionsTests[F[_]]
               gnat.wks.head.persist
             )
 
-        _ = history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None
+        _ = history.lookup(store.trieStore, store.trieBranch, channelsHash) shouldBe None
 
         checkpoint <- space.createCheckpoint()
         _          = checkpoint.root shouldBe nodeHash
 
       } yield
         (history
-          .lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe Some(gnat))
+          .lookup(store.trieStore, store.trieBranch, channelsHash) shouldBe Some(gnat))
     }
 
   "consume twice then createCheckpoint" should "persist the expected values in the TrieStore" in
-    withTestSpace { space =>
+    withTestSpace { (store, space) =>
       val gnat1 = {
         val channels = List("ch1")
         GNAT(
@@ -1109,7 +1074,7 @@ trait StorageActionsTests[F[_]]
         )
       }
 
-      val channelsHash1: Blake2b256Hash = space.store.hashChannels(gnat1.channels)
+      val channelsHash1: Blake2b256Hash = store.hashChannels(gnat1.channels)
 
       for {
         _ <- space.consume(
@@ -1131,7 +1096,7 @@ trait StorageActionsTests[F[_]]
           )
         }
 
-        channelsHash2: Blake2b256Hash = space.store.hashChannels(gnat2.channels)
+        channelsHash2: Blake2b256Hash = store.hashChannels(gnat2.channels)
 
         _ <- space.consume(
               gnat2.channels,
@@ -1140,26 +1105,26 @@ trait StorageActionsTests[F[_]]
               gnat2.wks.head.persist
             )
 
-        _ = history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash1) shouldBe None
+        _ = history.lookup(store.trieStore, store.trieBranch, channelsHash1) shouldBe None
 
-        _ = history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash2) shouldBe None
+        _ = history.lookup(store.trieStore, store.trieBranch, channelsHash2) shouldBe None
 
         _ <- space.createCheckpoint()
 
-        _ = history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash1) shouldBe Some(
+        _ = history.lookup(store.trieStore, store.trieBranch, channelsHash1) shouldBe Some(
           gnat1
         )
 
       } yield
         (history
-          .lookup(space.store.trieStore, space.store.trieBranch, channelsHash2)
+          .lookup(store.trieStore, store.trieBranch, channelsHash2)
           shouldBe Some(gnat2))
     }
 
   "produce a bunch and then createCheckpoint" should "persist the expected values in the TrieStore" in
     forAll { (data: TestProduceMap) =>
       if (data.nonEmpty) {
-        withTestSpace { space =>
+        withTestSpace { (store, space) =>
           val gnats: Seq[TestGNAT] =
             data.map {
               case (channel, datum) =>
@@ -1179,15 +1144,15 @@ trait StorageActionsTests[F[_]]
                          .toList
                          .sequence
 
-            channelHashes = gnats.map(gnat => space.store.hashChannels(gnat.channels))
+            channelHashes = gnats.map(gnat => store.hashChannels(gnat.channels))
 
-            _ = history.lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
+            _ = history.lookup(store.trieStore, store.trieBranch, channelHashes) shouldBe None
 
             _ <- space.createCheckpoint()
 
           } yield
             (history
-              .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
+              .lookup(store.trieStore, store.trieBranch, channelHashes)
               .get should contain theSameElementsAs gnats)
         }
       }
@@ -1205,31 +1170,31 @@ trait StorageActionsTests[F[_]]
           .toList
 
       if (gnats.nonEmpty) {
-        withTestSpace { space =>
+        withTestSpace { (store, space) =>
           for {
             consumes <- gnats.map {
                          case GNAT(channels, _, List(wk)) =>
                            space.consume(channels, wk.patterns, wk.continuation, wk.persist)
                        }.sequence
 
-            channelHashes = gnats.map(gnat => space.store.hashChannels(gnat.channels))
+            channelHashes = gnats.map(gnat => store.hashChannels(gnat.channels))
 
-            _ = history.lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
+            _ = history.lookup(store.trieStore, store.trieBranch, channelHashes) shouldBe None
 
             _ <- space.createCheckpoint()
 
           } yield
             (history
-              .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
+              .lookup(store.trieStore, store.trieBranch, channelHashes)
               .get should contain theSameElementsAs gnats)
         }
       }
     }
 
   "consume and produce a match and then createCheckpoint " should "result in an empty TrieStore" in
-    withTestSpace { space =>
+    withTestSpace { (store, space) =>
       val channels     = List("ch1")
-      val channelsHash = space.store.hashChannels(channels)
+      val channelsHash = store.hashChannels(channels)
 
       for {
         r1 <- space.consume(channels, List(Wildcard), new StringsCaptor, persist = false)
@@ -1240,18 +1205,17 @@ trait StorageActionsTests[F[_]]
 
         _ = r2 shouldBe defined
 
-        _ = history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None
+        _ = history.lookup(store.trieStore, store.trieBranch, channelsHash) shouldBe None
 
         checkpoint <- space.createCheckpoint()
         _ = checkpoint.root shouldBe Blake2b256Hash.fromHex(
           "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3"
         )
 
-      } yield
-        (history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None)
+      } yield (history.lookup(store.trieStore, store.trieBranch, channelsHash) shouldBe None)
     }
 
-  "produce and consume" should "store channel hashes" in withTestSpace { space =>
+  "produce and consume" should "store channel hashes" in withTestSpace { (store, space) =>
     val channels = List("ch1", "ch2")
     val patterns = List[Pattern](Wildcard, Wildcard)
     val k        = new StringsCaptor
@@ -1303,7 +1267,7 @@ trait MonadicStorageActionsTests[F[_]]
     with Checkers {
 
   "consuming with a list of patterns that is a different length than the list of channels" should
-    "raise error" in withTestSpace { space =>
+    "raise error" in withTestSpace { (store, space) =>
     for {
       res <- Sync[F].attempt(
               space.consume(List("ch1", "ch2"), List(Wildcard), new StringsCaptor, persist = false)
@@ -1311,23 +1275,24 @@ trait MonadicStorageActionsTests[F[_]]
       err = res.left.get
       _   = err shouldBe an[IllegalArgumentException]
       _   = err.getMessage shouldBe "channels.length must equal patterns.length"
-    } yield (space.store.isEmpty shouldBe true)
+    } yield (store.isEmpty shouldBe true)
   }
 
-  "an install" should "not allow installing after a produce operation" in withTestSpace { space =>
-    val channel  = "ch1"
-    val datum    = "datum1"
-    val key      = List(channel)
-    val patterns = List(Wildcard)
+  "an install" should "not allow installing after a produce operation" in withTestSpace {
+    (store, space) =>
+      val channel  = "ch1"
+      val datum    = "datum1"
+      val key      = List(channel)
+      val patterns = List(Wildcard)
 
-    for {
-      _   <- space.produce(channel, datum, persist = false)
-      res <- Sync[F].attempt(space.install(key, patterns, new StringsCaptor))
-      ex  = res.left.get
-    } yield (ex.getMessage shouldBe "Installing can be done only on startup")
+      for {
+        _   <- space.produce(channel, datum, persist = false)
+        res <- Sync[F].attempt(space.install(key, patterns, new StringsCaptor))
+        ex  = res.left.get
+      } yield (ex.getMessage shouldBe "Installing can be done only on startup")
   }
 
-  "after space was closed" should "reject all store operations" in withTestSpace { space =>
+  "after space was closed" should "reject all store operations" in withTestSpace { (store, space) =>
     val channel  = "ch1"
     val key      = List(channel)
     val patterns = List(Wildcard)
@@ -1355,15 +1320,15 @@ trait LegacyStorageActionsTests
     with Checkers {
 
   "consuming with a list of patterns that is a different length than the list of channels" should
-    "throw" in withTestSpaceNonF { space =>
+    "throw" in withTestSpaceNonF { (store, space) =>
     an[IllegalArgumentException] shouldBe thrownBy(
       space.consume(List("ch1", "ch2"), List(Wildcard), new StringsCaptor, persist = false).apply()
     )
-    space.store.isEmpty shouldBe true
+    store.isEmpty shouldBe true
   }
 
   "an install" should "not allow installing after a produce operation" in withTestSpaceNonF {
-    space =>
+    (store, space) =>
       val channel  = "ch1"
       val datum    = "datum1"
       val key      = List(channel)
@@ -1381,7 +1346,7 @@ trait LegacyStorageActionsTests
     val key      = List(channel)
     val patterns = List(Wildcard)
 
-    space =>
+    (store, space) =>
       space.close().apply()
       //using some nulls here to ensure that exception is thrown even before args check
       an[RSpaceClosedException] shouldBe thrownBy(

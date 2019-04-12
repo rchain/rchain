@@ -158,7 +158,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
   }
 
   private def storageContents(runtime: Runtime[Task]): String =
-    StoragePrinter.prettyPrint(runtime.space.store)
+    StoragePrinter.prettyPrint(runtime.space)
 
   private def success(runtime: Runtime[Task], rho: String): Task[Unit] =
     execute(runtime, rho).map(
