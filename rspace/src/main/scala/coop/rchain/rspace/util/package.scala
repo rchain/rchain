@@ -1,8 +1,13 @@
 package coop.rchain.rspace
 
+import java.nio.charset.StandardCharsets
+
 import cats.Functor
 import coop.rchain.rspace.internal.GNAT
+import scodec.Codec
 import scodec.bits.ByteVector
+
+import scala.util.Try
 
 package object util {
 
@@ -111,4 +116,14 @@ package object util {
 
   val ordByteVector: Ordering[ByteVector] = (a: ByteVector, b: ByteVector) => veccmp(a, b)
 
+  val stringSerialize: Serialize[String] = new Serialize[String] {
+
+    def encode(a: String): ByteVector =
+      ByteVector.view(a.getBytes(StandardCharsets.UTF_8))
+
+    def decode(bytes: ByteVector): Either[Throwable, String] =
+      Try.apply(new String(bytes.toArray, StandardCharsets.UTF_8)).toEither
+  }
+
+  val stringCodec: Codec[String] = stringSerialize.toCodec
 }

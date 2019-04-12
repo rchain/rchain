@@ -14,16 +14,12 @@ import coop.rchain.rspace.history.{Leaf, LeafPointer, Node, NodePointer, Pointer
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
-import org.scalacheck.Prop
 import org.scalatest._
 import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
 
 import coop.rchain.rspace.test.ArbitraryInstances._
 import monix.eval.Coeval
-import org.scalatest.enablers.Definition
-
-import scala.util.Random
 
 trait StorageActionsTests[F[_]]
     extends StorageTestsBase[F, String, Pattern, String, StringsCaptor]
@@ -34,7 +30,9 @@ trait StorageActionsTests[F[_]]
   implicit override val generatorDrivenConfig =
     PropertyCheckConfiguration(minSuccessful = 5, sizeRange = 30)
 
-  implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
+  implicit val serializeString: Serialize[String] = util.stringSerialize
+
+  implicit val codecString: Codec[String]   = util.stringCodec
   implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
   implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
 

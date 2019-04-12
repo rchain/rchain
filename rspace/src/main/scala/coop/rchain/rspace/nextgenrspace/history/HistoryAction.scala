@@ -1,10 +1,11 @@
 package coop.rchain.rspace.nextgenrspace.history
 
 import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.nextgenrspace.history.History.KeyPath
 
 sealed trait HistoryAction {
-  def key: List[Byte]
+  def key: KeyPath
 }
 
-final case class InsertAction(key: List[Byte], hash: Blake2b256Hash) extends HistoryAction
-final case class DeleteAction(key: List[Byte])                       extends HistoryAction
+final case class InsertAction(key: KeyPath, hash: Blake2b256Hash) extends HistoryAction
+final case class DeleteAction(key: KeyPath)                       extends HistoryAction

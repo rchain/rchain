@@ -1,6 +1,6 @@
 package coop.rchain.rspace.nextgenrspace.history
 
-import cats.Applicative
+import cats.effect.Sync
 import coop.rchain.rspace.{
   DeleteContinuations,
   DeleteData,
@@ -49,14 +49,14 @@ class HistoryRepositoryGenerativeSpec
         emptyHistory,
         inMemColdStore
       )
-    (for {
-      _ <- actions.foldLeftM(repository) { (repo, action) =>
-            for {
-              next <- repo.process(action :: Nil)
-              _    <- checkActionResult(action, next)
-            } yield next
-          }
-    } yield ()).runSyncUnsafe(20.seconds)
+    actions
+      .foldLeftM(repository) { (repo, action) =>
+        for {
+          next <- repo.process(action :: Nil)
+          _    <- checkActionResult(action, next)
+        } yield next
+      }
+      .runSyncUnsafe(20.seconds)
   }
 
   def checkActionResult(
@@ -65,36 +65,18 @@ class HistoryRepositoryGenerativeSpec
   ): Task[Unit] =
     action match {
       case InsertData(channel: String, data) =>
-        for {
-          fetched <- repo.getData(channel)
-          _       = fetched shouldBe data
-        } yield ()
+        repo.getData(channel).map(_ shouldBe data)
       case InsertJoins(channel: String, joins) =>
-        for {
-          fetched <- repo.getJoins(channel)
-          _       = fetched shouldBe joins
-        } yield ()
+        repo.getJoins(channel).map(_ shouldBe joins)
       case InsertContinuations(channels, conts) =>
-        for {
-          fetched <- repo.getContinuations(channels.asInstanceOf[Seq[String]])
-          _       = fetched shouldBe conts
-        } yield ()
+        repo.getContinuations(channels.asInstanceOf[Seq[String]]).map(_ shouldBe conts)
       case DeleteData(channel: String) =>
-        for {
-          fetched <- repo.getData(channel)
-          _       = fetched shouldBe empty
-        } yield ()
+        repo.getData(channel).map(_ shouldBe empty)
       case DeleteJoins(channel: String) =>
-        for {
-          fetched <- repo.getJoins(channel)
-          _       = fetched shouldBe empty
-        } yield ()
+        repo.getJoins(channel).map(_ shouldBe empty)
       case DeleteContinuations(channels) =>
-        for {
-          fetched <- repo.getContinuations(channels.asInstanceOf[Seq[String]])
-          _       = fetched shouldBe empty
-        } yield ()
-      case _ => Applicative[Task].pure(())
+        repo.getContinuations(channels.asInstanceOf[Seq[String]]).map(_ shouldBe empty)
+      case _ => Sync[Task].raiseError(new RuntimeException("unknown action"))
     }
 
   implicit def arbitraryHotStoreActions: Arbitrary[HotStoreAction] = Arbitrary(
@@ -110,40 +92,41 @@ class HistoryRepositoryGenerativeSpec
 
   def stringGen: Gen[String] = Arbitrary.arbitrary[String]
 
-  def arbitraryInsertData: Arbitrary[HotStoreAction] = Arbitrary(
+  def arbitraryInsertData: Arbitrary[InsertData[String, String]] = Arbitrary(
     for {
       channel <- Arbitrary.arbitrary[String]
       data    <- distinctListOf(arbitraryDatumString)
     } yield InsertData(channel, data)
   )
 
-  def arbitraryInsertContinuation: Arbitrary[HotStoreAction] = Arbitrary(
-    for {
-      channels <- distinctListOf(Arbitrary(stringGen))
-      data     <- distinctListOf(arbitraryWaitingContinuation)
-    } yield InsertContinuations(channels, data)
-  )
+  def arbitraryInsertContinuation: Arbitrary[InsertContinuations[String, Pattern, StringsCaptor]] =
+    Arbitrary(
+      for {
+        channels <- distinctListOf(Arbitrary(stringGen))
+        data     <- distinctListOf(arbitraryWaitingContinuation)
+      } yield InsertContinuations(channels, data)
+    )
 
-  def arbitraryInsertJoins: Arbitrary[HotStoreAction] = Arbitrary(
+  def arbitraryInsertJoins: Arbitrary[InsertJoins[String]] = Arbitrary(
     for {
       channel <- Arbitrary.arbitrary[String]
       data    <- distinctListOf(Arbitrary(distinctListOf(Arbitrary(stringGen))))
     } yield InsertJoins(channel, data)
   )
 
-  def arbitraryDeleteContinuation: Arbitrary[HotStoreAction] = Arbitrary(
+  def arbitraryDeleteContinuation: Arbitrary[DeleteContinuations[String]] = Arbitrary(
     for {
       channels <- distinctListOf(Arbitrary(stringGen))
     } yield DeleteContinuations(channels)
   )
 
-  def arbitraryDeleteData: Arbitrary[HotStoreAction] = Arbitrary(
+  def arbitraryDeleteData: Arbitrary[DeleteData[String]] = Arbitrary(
     for {
       channel <- Arbitrary.arbitrary[String]
     } yield DeleteData(channel)
   )
 
-  def arbitraryDeleteJoins: Arbitrary[HotStoreAction] = Arbitrary(
+  def arbitraryDeleteJoins: Arbitrary[DeleteJoins[String]] = Arbitrary(
     for {
       channel <- Arbitrary.arbitrary[String]
     } yield DeleteJoins(channel)

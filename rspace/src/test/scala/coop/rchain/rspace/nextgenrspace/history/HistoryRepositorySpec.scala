@@ -1,8 +1,7 @@
 package coop.rchain.rspace.nextgenrspace.history
 
-import java.nio.charset.StandardCharsets
-
 import coop.rchain.rspace.{
+  util,
   Blake2b256Hash,
   DeleteContinuations,
   DeleteData,
@@ -10,8 +9,7 @@ import coop.rchain.rspace.{
   HotStoreAction,
   InsertContinuations,
   InsertData,
-  InsertJoins,
-  Serialize
+  InsertJoins
 }
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers, OptionValues}
@@ -21,12 +19,11 @@ import monix.execution.Scheduler.Implicits.global
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.rspace.nextgenrspace.history.TestData.randomBlake
 import coop.rchain.rspace.trace.{Consume, Produce}
-import scodec.Codec
-import scodec.bits.ByteVector
 
 import scala.collection.concurrent.TrieMap
 import scala.util.Random
 import cats.implicits._
+import scodec.Codec
 
 class HistoryRepositorySpec
     extends FlatSpec
@@ -34,16 +31,6 @@ class HistoryRepositorySpec
     with OptionValues
     with InMemoryHistoryRepositoryTestBase {
 
-  implicit object stringSerialize extends Serialize[String] {
-
-    def encode(a: String): ByteVector =
-      ByteVector.view(a.getBytes(StandardCharsets.UTF_8))
-
-    def decode(bytes: ByteVector): Either[Throwable, String] =
-      Right(new String(bytes.toArray, StandardCharsets.UTF_8))
-  }
-
-  implicit val codecString: Codec[String] = implicitly[Serialize[String]].toCodec
   type TestHistoryRepository = HistoryRepository[Task, String, String, String, String]
 
   "HistoryRepository" should "process insert one datum" in withEmptyRepository { repo =>
@@ -62,20 +49,20 @@ class HistoryRepositorySpec
   val testChannelContinuationsPrefix = "channel-continuations"
 
   it should "process insert and delete of thirty mixed elements" in withEmptyRepository { repo =>
-    val data  = (0 to 10).map(insertDatum).toList
-    val joins = (0 to 10).map(insertJoin).toList
+    val data  = (0 to 10).map(insertDatum).toVector
+    val joins = (0 to 10).map(insertJoin).toVector
     val conts = (0 to 10)
       .map(insertContinuation)
-      .toList
-    val elems: List[HotStoreAction] = Random.shuffle(data ++ joins ++ conts)
+      .toVector
+    val elems: Vector[HotStoreAction] = Random.shuffle(data ++ joins ++ conts)
 
-    val dataDelete                           = data.map(d => DeleteData[String](d.channel))
-    val joinsDelete                          = joins.map(j => DeleteJoins[String](j.channel))
-    val contsDelete                          = conts.map(c => DeleteContinuations[String](c.channels))
-    val deleteElements: List[HotStoreAction] = dataDelete ++ joinsDelete ++ contsDelete
+    val dataDelete                             = data.map(d => DeleteData[String](d.channel))
+    val joinsDelete                            = joins.map(j => DeleteJoins[String](j.channel))
+    val contsDelete                            = conts.map(c => DeleteContinuations[String](c.channels))
+    val deleteElements: Vector[HotStoreAction] = dataDelete ++ joinsDelete ++ contsDelete
 
     for {
-      nextRepo             <- repo.process(elems)
+      nextRepo             <- repo.process(elems.toList)
       fetchedData          <- data.traverse(d => nextRepo.getData(d.channel))
       _                    = fetchedData shouldBe data.map(_.data)
       fetchedContinuations <- conts.traverse(d => nextRepo.getContinuations(d.channels))
@@ -83,7 +70,7 @@ class HistoryRepositorySpec
       fetchedJoins         <- joins.traverse(d => nextRepo.getJoins(d.channel))
       _                    = fetchedJoins shouldBe joins.map(_.joins)
 
-      deletedRepo <- nextRepo.process(deleteElements)
+      deletedRepo <- nextRepo.process(deleteElements.toList)
 
       fetchedData          <- data.traverse(d => nextRepo.getData(d.channel))
       _                    = fetchedData shouldBe data.map(_.data)
@@ -125,6 +112,7 @@ class HistoryRepositorySpec
     Datum[String]("data-" + s, false, Produce(randomBlake, randomBlake, 0))
 
   protected def withEmptyRepository(f: TestHistoryRepository => Task[Unit]): Unit = {
+    implicit val codecString: Codec[String] = util.stringCodec
     val emptyHistory =
       new History[Task](emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
     val repo: TestHistoryRepository =

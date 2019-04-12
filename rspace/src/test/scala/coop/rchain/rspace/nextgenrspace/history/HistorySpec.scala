@@ -7,9 +7,8 @@ import scala.concurrent.duration._
 import monix.execution.Scheduler.Implicits.global
 import TestData._
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.nextgenrspace.history.History.Trie
+import History.{codecTrie, KeyPath, Trie}
 import scodec.bits.ByteVector
-import History.codecTrie
 import cats.implicits._
 
 import scala.util.Random
@@ -84,7 +83,7 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
     f(emptyHistory).runSyncUnsafe(20.seconds)
   }
 
-  def skipShouldHaveAffix(t: Trie, bytes: List[Byte]): Assertion =
+  def skipShouldHaveAffix(t: Trie, bytes: KeyPath): Assertion =
     t match {
       case Skip(affix, _) => affix.toSeq.toList shouldBe bytes
       case p              => fail("unknown trie prefix" + p)
@@ -93,19 +92,19 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
 
 object TestData {
 
-  implicit def toByteVector(bytes: List[Byte]): ByteVector = ByteVector(bytes)
+  implicit def toByteVector(bytes: KeyPath): ByteVector = ByteVector(bytes)
 
-  val _zeros: List[Byte]           = List.fill(32)(0).map(_.toByte)
-  val _zerosOnes: List[Byte]       = (List.fill(16)(0) ++ List.fill(16)(1)).map(_.toByte)
-  val _31zeros: List[Byte]         = List.fill(31)(0).map(_.toByte)
-  def zerosAnd(i: Int): List[Byte] = _31zeros :+ i.toByte
+  val _zeros: KeyPath           = List.fill(32)(0).map(_.toByte)
+  val _zerosOnes: KeyPath       = (List.fill(16)(0) ++ List.fill(16)(1)).map(_.toByte)
+  val _31zeros: KeyPath         = List.fill(31)(0).map(_.toByte)
+  def zerosAnd(i: Int): KeyPath = _31zeros :+ i.toByte
 
   def randomBlake: Blake2b256Hash =
     Blake2b256Hash.create(Random.alphanumeric.take(32).map(_.toByte).toArray)
 
-  def insert(k: List[Byte]) =
+  def insert(k: KeyPath) =
     InsertAction(k, randomBlake)
 
-  def delete(k: List[Byte]) =
+  def delete(k: KeyPath) =
     DeleteAction(k)
 }
