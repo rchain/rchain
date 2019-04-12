@@ -279,7 +279,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val storeType = opt[StoreType](required = false, descr = "Type of RSpace backing store")
 
     val maxNumOfConnections =
-      opt[Int](descr = "Maximum number of peers allowed to connect to the node")
+      opt[Int](descr = "Number of connected peers picked randomly for broadcasting and streaming")
 
     val maxMessageSize =
       opt[Int](descr = "Maximum size of message that can be received via transport layer")

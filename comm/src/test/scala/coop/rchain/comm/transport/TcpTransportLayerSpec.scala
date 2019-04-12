@@ -47,20 +47,17 @@ class TcpTransportLayerSpec
 
   def createTransportLayer(
       env: TcpTlsEnvironment
-  ): Task[(TransportLayer[Task], TransportLayerShutdown[Task])] =
-    for {
-      client <- CachedConnections[Task, TcpConnTag].map { implicit cache =>
-                 new GrpcTransportClient(
-                   env.cert,
-                   env.key,
-                   maxMessageSize,
-                   maxMessageSize,
-                   tempFolder,
-                   100
-                 )
-               }
-      _ <- client.start()
-    } yield (client, new TransportLayerShutdown(client.shutdown))
+  ): Task[TransportLayer[Task]] =
+    Task.delay(
+      new GrpcTransportClient(
+        env.cert,
+        env.key,
+        maxMessageSize,
+        maxMessageSize,
+        tempFolder,
+        100
+      )
+    )
 
   def extract[A](fa: Task[A]): A = fa.runSyncUnsafe(Duration.Inf)
 

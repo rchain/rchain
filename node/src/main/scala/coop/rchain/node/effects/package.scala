@@ -11,7 +11,6 @@ import cats.mtl._
 import cats.Applicative
 
 import coop.rchain.comm._
-import coop.rchain.comm.CachedConnections.ConnectionsCache
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.rp._
 import coop.rchain.comm.rp.Connect._
@@ -62,21 +61,13 @@ package object effects {
   )(
       implicit scheduler: Scheduler,
       log: Log[Task],
-      metrics: Metrics[Task],
-      cache: ConnectionsCache[Task, TcpConnTag]
-  ): Task[(TransportLayer[Task], TransportLayerShutdown[Task])] = {
-    val create =
-      Task.delay {
-        val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
-        val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
-        new GrpcTransportClient(cert, key, maxMessageSize, packetChunkSize, folder, 1000)
-      }
-
-    for {
-      client <- create
-      _      <- client.start()
-    } yield (client, new TransportLayerShutdown(client.shutdown))
-  }
+      metrics: Metrics[Task]
+  ): Task[TransportLayer[Task]] =
+    Task.delay {
+      val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
+      val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
+      new GrpcTransportClient(cert, key, maxMessageSize, packetChunkSize, folder, 1000)
+    }
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 

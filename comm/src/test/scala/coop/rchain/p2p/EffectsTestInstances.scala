@@ -51,10 +51,10 @@ object EffectsTestInstances {
   def createRPConfAsk[F[_]: Applicative](
       local: PeerNode,
       defaultTimeout: FiniteDuration = FiniteDuration(1, MILLISECONDS),
-      clearConnections: ClearConnetionsConf = ClearConnetionsConf(1, 1)
+      clearConnections: ClearConnectionsConf = ClearConnectionsConf(1)
   ) =
     new ConstApplicativeAsk[F, RPConf](
-      RPConf(local, Some(local), defaultTimeout, clearConnections)
+      RPConf(local, Some(local), defaultTimeout, 20, clearConnections)
     )
 
   class TransportLayerStub[F[_]: Sync: Applicative] extends TransportLayer[F] {
@@ -89,6 +89,9 @@ object EffectsTestInstances {
       requests = requests ++ peers.map(peer => Request(peer, msg))
       peers.map(_ => Right(()))
     }
+
+    def stream(peer: PeerNode, blob: Blob): F[Unit] =
+      stream(Seq(peer), blob)
 
     def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] =
       broadcast(peers, ProtocolHelper.protocol(blob.sender).withPacket(blob.packet)).void

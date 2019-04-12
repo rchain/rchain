@@ -171,41 +171,34 @@ class NodeRuntime private[node] (
 
   def clearResources(servers: Servers, runtime: Runtime[Task], casperRuntime: Runtime[Task])(
       implicit
-      transportShutdown: TransportLayerShutdown[Task],
       blockStore: BlockStore[Effect],
-      blockDagStorage: BlockDagStorage[Effect],
-      peerNodeAsk: PeerNodeAsk[Task]
+      blockDagStorage: BlockDagStorage[Effect]
   ): Unit =
     (for {
-      _   <- log.info("Shutting down API servers...")
-      _   <- servers.externalApiServer.stop.value
-      _   <- servers.internalApiServer.stop
-      _   <- log.info("Shutting down Kademlia RPC server...")
-      _   <- servers.kademliaRPCServer.stop
-      _   <- log.info("Shutting down transport layer, broadcasting DISCONNECT")
-      _   <- servers.transportServer.stop()
-      loc <- peerNodeAsk.ask
-      msg = ProtocolHelper.disconnect(loc)
-      _   <- transportShutdown(msg)
-      _   <- log.info("Shutting down HTTP server....")
-      _   <- Task.delay(Kamon.stopAllReporters())
-      _   <- servers.httpServer.cancel
-      _   <- log.info("Shutting down interpreter runtime ...")
-      _   <- runtime.close()
-      _   <- log.info("Shutting down Casper runtime ...")
-      _   <- casperRuntime.close()
-      _   <- log.info("Bringing DagStorage down ...")
-      _   <- blockDagStorage.close().value
-      _   <- log.info("Bringing BlockStore down ...")
-      _   <- blockStore.close().value
-      _   <- log.info("Goodbye.")
+      _ <- log.info("Shutting down API servers...")
+      _ <- servers.externalApiServer.stop.value
+      _ <- servers.internalApiServer.stop
+      _ <- log.info("Shutting down Kademlia RPC server...")
+      _ <- servers.kademliaRPCServer.stop
+      _ <- log.info("Shutting down transport layer...")
+      _ <- servers.transportServer.stop()
+      _ <- log.info("Shutting down HTTP server....")
+      _ <- Task.delay(Kamon.stopAllReporters())
+      _ <- servers.httpServer.cancel
+      _ <- log.info("Shutting down interpreter runtime ...")
+      _ <- runtime.close()
+      _ <- log.info("Shutting down Casper runtime ...")
+      _ <- casperRuntime.close()
+      _ <- log.info("Bringing DagStorage down ...")
+      _ <- blockDagStorage.close().value
+      _ <- log.info("Bringing BlockStore down ...")
+      _ <- blockStore.close().value
+      _ <- log.info("Goodbye.")
     } yield ()).unsafeRunSync(scheduler)
 
   def addShutdownHook(servers: Servers, runtime: Runtime[Task], casperRuntime: Runtime[Task])(
-      implicit transportShutdown: TransportLayerShutdown[Task],
-      blockStore: BlockStore[Effect],
-      blockDagStorage: BlockDagStorage[Effect],
-      peerNodeAsk: PeerNodeAsk[Task]
+      implicit blockStore: BlockStore[Effect],
+      blockDagStorage: BlockDagStorage[Effect]
   ): Task[Unit] =
     Task.delay(sys.addShutdownHook(clearResources(servers, runtime, casperRuntime)))
 
@@ -223,7 +216,6 @@ class NodeRuntime private[node] (
       peerNodeAsk: PeerNodeAsk[Task],
       metrics: Metrics[Task],
       transport: TransportLayer[Task],
-      transportShutdown: TransportLayerShutdown[Task],
       kademliaStore: KademliaStore[Task],
       nodeDiscovery: NodeDiscovery[Task],
       rpConnectons: ConnectionsCell[Task],
@@ -321,13 +313,12 @@ class NodeRuntime private[node] (
         } *> exit0.as(Right(()))
     )
 
-  private val rpClearConnConf = ClearConnetionsConf(
-    conf.server.maxNumOfConnections,
+  private val rpClearConnConf = ClearConnectionsConf(
     numOfConnectionsPinged = 10
   ) // TODO read from conf
 
   private def rpConf(local: PeerNode, bootstrapNode: Option[PeerNode]) =
-    RPConf(local, bootstrapNode, defaultTimeout, rpClearConnConf)
+    RPConf(local, bootstrapNode, defaultTimeout, conf.server.maxNumOfConnections, rpClearConnConf)
 
   // TODO this should use existing algebra
   private def mkDirs(path: Path): Effect[Unit] =
@@ -362,7 +353,6 @@ class NodeRuntime private[node] (
     peerNodeAsk          = effects.peerNodeAsk(rpConfState)
     rpConnections        <- effects.rpConnections.toEffect
     metrics              = diagnostics.effects.metrics[Task]
-    tcpConnections       <- CachedConnections[Task, TcpConnTag](Task.catsAsync, metrics).toEffect
     time                 = effects.time
     timerTask            = Task.timer
     multiParentCasperRef <- MultiParentCasperRef.of[Effect]
@@ -375,20 +365,19 @@ class NodeRuntime private[node] (
             commTmpFolder.deleteDirectory[Task]().toEffect,
             Task.unit.toEffect
           )
-    tl <- effects
-           .transportClient(
-             conf.tls.certificate,
-             conf.tls.key,
-             conf.server.maxMessageSize,
-             conf.server.packetChunkSize,
-             commTmpFolder
-           )(grpcScheduler, log, metrics, tcpConnections)
-           .toEffect
-    (transport, transportShutdown) = tl
-    kademliaRPC                    = effects.kademliaRPC(defaultTimeout)(grpcScheduler, peerNodeAsk, metrics)
-    kademliaStore                  = effects.kademliaStore(id)(kademliaRPC, metrics)
-    _                              <- initPeer.fold(Task.unit.toEffect)(p => kademliaStore.updateLastSeen(p).toEffect)
-    nodeDiscovery                  = effects.nodeDiscovery(id)(kademliaStore, kademliaRPC)
+    transport <- effects
+                  .transportClient(
+                    conf.tls.certificate,
+                    conf.tls.key,
+                    conf.server.maxMessageSize,
+                    conf.server.packetChunkSize,
+                    commTmpFolder
+                  )(grpcScheduler, log, metrics)
+                  .toEffect
+    kademliaRPC   = effects.kademliaRPC(defaultTimeout)(grpcScheduler, peerNodeAsk, metrics)
+    kademliaStore = effects.kademliaStore(id)(kademliaRPC, metrics)
+    _             <- initPeer.fold(Task.unit.toEffect)(p => kademliaStore.updateLastSeen(p).toEffect)
+    nodeDiscovery = effects.nodeDiscovery(id)(kademliaStore, kademliaRPC)
 
     /**
       * We need to come up with a consistent way with folder creation. Some layers create folder on their own (if not available),
@@ -486,7 +475,6 @@ class NodeRuntime private[node] (
       peerNodeAsk,
       metrics,
       transport,
-      transportShutdown,
       kademliaStore,
       nodeDiscovery,
       rpConnections,

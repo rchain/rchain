@@ -117,10 +117,11 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
   ): RPConfAsk[Id] =
     new ConstApplicativeAsk(
       RPConf(
-        clearConnections = ClearConnetionsConf(maxNumOfConnections, numOfConnectionsPinged),
+        clearConnections = ClearConnectionsConf(numOfConnectionsPinged),
         defaultTimeout = defaultTimeout,
         local = peer("src"),
-        bootstrap = None
+        bootstrap = None,
+        maxNumOfConnections = maxNumOfConnections
       )
     )
 

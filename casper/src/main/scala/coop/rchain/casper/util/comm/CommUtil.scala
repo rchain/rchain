@@ -63,7 +63,7 @@ object CommUtil {
       serializedMessage: ByteString
   ): F[Unit] =
     for {
-      peers <- ConnectionsCell[F].read
+      peers <- ConnectionsCell.random[F]
       local <- RPConfAsk[F].reader(_.local)
       msg   = packet(local, pType, serializedMessage)
       _     <- TransportLayer[F].broadcast(peers, msg)
@@ -74,7 +74,7 @@ object CommUtil {
       serializedMessage: ByteString
   ): F[Unit] =
     for {
-      peers <- ConnectionsCell[F].read
+      peers <- ConnectionsCell.random[F]
       local <- RPConfAsk[F].reader(_.local)
       msg   = Blob(local, Packet(pType.id, serializedMessage))
       _     <- TransportLayer[F].stream(peers, msg)
