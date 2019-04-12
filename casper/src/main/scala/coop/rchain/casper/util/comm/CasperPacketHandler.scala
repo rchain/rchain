@@ -597,7 +597,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       override def init: T[F, Unit] = C.init.liftM[T]
 
       override def handle(peer: PeerNode): PartialFunction[Packet, T[F, Unit]] = {
-        case (p: Packet) => C.handle(peer)(p).liftM[T]
+        case (p: Packet) =>
+          C.handle(peer)(p).liftM[T]
       }
     }
 
