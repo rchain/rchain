@@ -33,11 +33,10 @@ class MachineVerifiableDagSpec extends FunSpec with Matchers {
       // when
       val result: List[VerifiableEdge] = MachineVerifiableDag[Id](toposort, fetch)
       // then
-      result should contain(VerifiableEdge(block3.show, block1.show))
-      result should contain(VerifiableEdge(block3.show, block2.show))
-      result should contain(VerifiableEdge(block1.show, genesis.show))
-      result should contain(VerifiableEdge(block2.show, genesis.show))
+      result(0) should be(VerifiableEdge(block3.show, block1.show))
+      result(1) should be(VerifiableEdge(block3.show, block2.show))
+      result(2) should be(VerifiableEdge(block1.show, genesis.show))
+      result(3) should be(VerifiableEdge(block2.show, genesis.show))
     }
   }
-
 }

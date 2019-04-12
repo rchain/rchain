@@ -39,7 +39,5 @@ object MachineVerifiableDag {
             }
           } yield entries ++ acc
       }
-      .map(_.reverse)
   }
-
 }
