@@ -137,11 +137,6 @@ object Connect {
       peers             <- NodeDiscovery[F].peers.map(_.filterNot(connections.contains).toList)
       responses         <- peers.traverse(p => ErrorHandler[F].attempt(conn(p, tout)))
       peersAndResponses = peers.zip(responses)
-      _ <- peersAndResponses.traverse {
-            case (peer, Left(error)) =>
-              Log[F].debug(s"Failed to connect to ${peer.toAddress}. Reason: ${error.message}")
-            case _ => ().pure[F]
-          }
     } yield peersAndResponses.filter(_._2.isRight).map(_._1)
 
   def connect[F[_]: Monad: Log: Metrics: TransportLayer: ErrorHandler: RPConfAsk](
