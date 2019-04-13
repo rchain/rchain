@@ -15,7 +15,7 @@ import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{AppendedClues, FlatSpec, Matchers}
 
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration.{Duration, FiniteDuration}
 
 object RhoSpec {
   implicit val logger: Log[Task] = Log.log[Task]
@@ -53,17 +53,25 @@ object RhoSpec {
     testResultCollectorService
   }
 
-  def getResults(testObject: CompiledRholangSource, otherLibs: Seq[DeployData]): Task[TestResult] =
+  def getResults(
+      testObject: CompiledRholangSource,
+      otherLibs: Seq[DeployData],
+      timeout: FiniteDuration
+  ): Task[TestResult] =
     for {
       _                   <- logger.info("Starting tests from " + testObject.path)
       testResultCollector <- TestResultCollector[Task]
 
-      _ <- TestUtil.runTestsWithDeploys[Task, Task.Par](
-            testObject,
+      runtime <- TestUtil.setupRuntime[Task, Task.Par](
             defaultGenesisSetup,
             otherLibs,
             testFrameworkContracts(testResultCollector)
           )
+
+      rand = Blake2b512Random(128)
+      _    <- TestUtil
+        .eval(testObject.code, runtime)(implicitly, implicitly, rand.splitShort(1))
+        .timeout(timeout)
 
       result <- testResultCollector.getResult
     } yield result
@@ -88,7 +96,7 @@ object RhoSpec {
 class RhoSpec(
     testObject: CompiledRholangSource,
     extraNonGenesisDeploys: Seq[DeployData],
-    executionTimeout: Duration
+    executionTimeout: FiniteDuration
 ) extends FlatSpec
     with AppendedClues
     with Matchers {
@@ -118,8 +126,8 @@ class RhoSpec(
   def hasFailures(assertions: List[RhoTestAssertion]) = assertions.find(_.isSuccess).isDefined
 
   private val result = RhoSpec
-    .getResults(testObject, extraNonGenesisDeploys)
-    .runSyncUnsafe(executionTimeout)
+    .getResults(testObject, extraNonGenesisDeploys, executionTimeout)
+    .runSyncUnsafe(Duration.Inf)
 
   it should "finish execution within timeout" in {
     if (!result.hasFinished) fail(s"Timeout of $executionTimeout expired")

@@ -17,6 +17,8 @@ import monix.execution.Scheduler
 import cats.implicits._
 import coop.rchain.casper.util.rholang.RuntimeManager
 
+import scala.concurrent.duration.FiniteDuration
+
 object TestUtil {
 
   private val rhoSpecDeploy: DeployData =
@@ -40,14 +42,13 @@ object TestUtil {
     } yield runtime
   }
 
-  def runTestsWithDeploys[F[_]: Concurrent: ContextShift, G[_]: Parallel[F, ?[_]]](
-      tests: CompiledRholangSource,
+  def setupRuntime[F[_]: Concurrent: ContextShift, G[_]: Parallel[F, ?[_]]](
       genesisSetup: RuntimeManager[F] => F[BlockMessage],
       otherLibs: Seq[DeployData],
       additionalSystemProcesses: Seq[SystemProcess.Definition[F]]
   )(
       implicit scheduler: Scheduler
-  ): F[Unit] =
+  ): F[Runtime[F]] =
     for {
       runtime        <- TestUtil.runtime[F, G](additionalSystemProcesses)
       runtimeManager <- RuntimeManager.fromRuntime(runtime)
@@ -60,10 +61,7 @@ object TestUtil {
       // reset the deployParams.userId before executing the test
       // otherwise it'd execute as the deployer of last deployed contract
       _ <- runtime.shortLeashParams.updateParams(old => old.copy(userId = Par()))
-
-      rand = Blake2b512Random(128)
-      _    <- eval(tests.code, runtime)(implicitly, implicitly, rand.splitShort(1))
-    } yield ()
+    } yield (runtime)
 
   private def evalDeploy[F[_]: Sync](
       deploy: DeployData,
