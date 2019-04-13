@@ -9,15 +9,14 @@ import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
 import coop.rchain.rholang.build.CompiledRholangSource
-import coop.rchain.rholang.interpreter.{accounting, ParBuilder, Runtime, TestRuntime}
+import coop.rchain.rholang.interpreter.{ParBuilder, Runtime, TestRuntime, accounting}
 import coop.rchain.rholang.interpreter.Runtime.SystemProcess
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.shared.Log
-import monix.execution.Scheduler
 import cats.implicits._
 import coop.rchain.casper.util.rholang.RuntimeManager
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.ExecutionContext
 
 object TestUtil {
 
@@ -33,7 +32,7 @@ object TestUtil {
 
   def runtime[F[_]: Concurrent: ContextShift, G[_]](
       extraServices: Seq[SystemProcess.Definition[F]] = Seq.empty
-  )(implicit scheduler: Scheduler, parallel: Parallel[F, G]): F[Runtime[F]] = {
+  )(implicit context: ExecutionContext, parallel: Parallel[F, G]): F[Runtime[F]] = {
     implicit val log: Log[F]            = new Log.NOPLog[F]
     implicit val metricsEff: Metrics[F] = new metrics.Metrics.MetricsNOP[F]
     for {
@@ -47,7 +46,7 @@ object TestUtil {
       otherLibs: Seq[DeployData],
       additionalSystemProcesses: Seq[SystemProcess.Definition[F]]
   )(
-      implicit scheduler: Scheduler
+      implicit context: ExecutionContext
   ): F[Runtime[F]] =
     for {
       runtime        <- TestUtil.runtime[F, G](additionalSystemProcesses)
@@ -67,7 +66,7 @@ object TestUtil {
       deploy: DeployData,
       runtime: Runtime[F]
   )(
-      implicit scheduler: Scheduler
+      implicit context: ExecutionContext
   ): F[Unit] = {
     val rand: Blake2b512Random = Blake2b512Random(
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
@@ -78,13 +77,13 @@ object TestUtil {
   def eval[F[_]: Sync](
       code: String,
       runtime: Runtime[F]
-  )(implicit scheduler: Scheduler, rand: Blake2b512Random): F[Unit] =
+  )(implicit context: ExecutionContext, rand: Blake2b512Random): F[Unit] =
     ParBuilder[F].buildNormalizedTerm(code) >>= (evalTerm(_, runtime))
 
   private def evalTerm[F[_]: FlatMap](
       term: Par,
       runtime: Runtime[F]
-  )(implicit scheduler: Scheduler, rand: Blake2b512Random): F[Unit] =
+  )(implicit context: ExecutionContext, rand: Blake2b512Random): F[Unit] =
     for {
       _ <- runtime.reducer.setPhlo(Cost.UNSAFE_MAX)
       _ <- runtime.reducer.inj(term)
