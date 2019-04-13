@@ -6,6 +6,7 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.{Faucet, PreWallet, ProofOfStake, TestUtil, Validator}
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.Runtime
@@ -15,7 +16,7 @@ import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{AppendedClues, FlatSpec, Matchers}
 
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration.{Duration, FiniteDuration}
 
 object RhoSpec {
   implicit val logger: Log[Task] = Log.log[Task]
@@ -53,17 +54,25 @@ object RhoSpec {
     testResultCollectorService
   }
 
-  def getResults(testObject: CompiledRholangSource, otherLibs: Seq[DeployData]): Task[TestResult] =
+  def getResults(
+      testObject: CompiledRholangSource,
+      otherLibs: Seq[DeployData],
+      timeout: FiniteDuration
+  ): Task[TestResult] =
     for {
       _                   <- logger.info("Starting tests from " + testObject.path)
       testResultCollector <- TestResultCollector[Task]
 
-      _ <- TestUtil.runTestsWithDeploys[Task, Task.Par](
-            testObject,
-            defaultGenesisSetup,
-            otherLibs,
-            testFrameworkContracts(testResultCollector)
-          )
+      runtime <- TestUtil.setupRuntime[Task, Task.Par](
+                  defaultGenesisSetup,
+                  otherLibs,
+                  testFrameworkContracts(testResultCollector)
+                )
+
+      rand = Blake2b512Random(128)
+      _ <- TestUtil
+            .eval(testObject.code, runtime)(implicitly, implicitly, rand.splitShort(1))
+            .timeout(timeout)
 
       result <- testResultCollector.getResult
     } yield result
@@ -91,7 +100,7 @@ object RhoSpec {
 class RhoSpec(
     testObject: CompiledRholangSource,
     extraNonGenesisDeploys: Seq[DeployData],
-    executionTimeout: Duration
+    executionTimeout: FiniteDuration
 ) extends FlatSpec
     with AppendedClues
     with Matchers {
@@ -121,8 +130,8 @@ class RhoSpec(
   def hasFailures(assertions: List[RhoTestAssertion]) = assertions.find(_.isSuccess).isDefined
 
   private val result = RhoSpec
-    .getResults(testObject, extraNonGenesisDeploys)
-    .runSyncUnsafe(executionTimeout)
+    .getResults(testObject, extraNonGenesisDeploys, executionTimeout)
+    .runSyncUnsafe(Duration.Inf)
 
   it should "finish execution within timeout" in {
     if (!result.hasFinished) fail(s"Timeout of $executionTimeout expired")
