@@ -65,22 +65,9 @@ object MultiParentCasperTestUtil {
 
   def createGenesis(bonds: Map[PublicKey, Long]): BlockMessage =
     buildGenesis(
-      Genesis(
+      buildGenesisParameters(users = 0, bonds).copy(
         shardId = "HashSetCasperTest",
-        timestamp = 0L,
-        wallets = Seq.empty[PreWallet],
-        proofOfStake = ProofOfStake(
-          minimumBond = 0L,
-          maximumBond = Long.MaxValue,
-          validators = bonds.toSeq.map(Validator.tupled)
-        ),
-        faucet = false,
-        genesisPk = Ed25519.newKeyPair._2,
-        vaults = bonds.toList.map {
-          case (pk, stake) =>
-            RevAddress.fromPublicKey(pk).map(Vault(_, stake))
-        }.flattenOption,
-        supply = Long.MaxValue
+        faucet = false
       )
     )
 
