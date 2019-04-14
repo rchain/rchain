@@ -71,7 +71,16 @@ pipeline:
     group: parallel
     <<: *sbttestenv
     commands:
-      - sbt test it:test
+      - cp -r . ../step.run-unit-tests && cd ../step.run-unit-tests
+      - sbt "set test in casper := {}" test it:test
+
+  pr-run-casper-tests:
+    <<: *pr_build_conditions
+    group: parallel
+    <<: *sbttestenv
+    commands:
+      - cp -r . ../step.run-casper-tests && cd ../step.run-casper-tests
+      - sbt casper/test
 
   # full build
 
@@ -98,7 +107,15 @@ pipeline:
     <<: *sbttestenv
     commands:
       - cp -r . ../step.run-unit-tests && cd ../step.run-unit-tests
-      - sbt test it:test
+      - sbt "set test in casper := {}" test it:test
+
+  run-casper-tests:
+    <<: *branch_build_conditions
+    group: parallel
+    <<: *sbttestenv
+    commands:
+      - cp -r . ../step.run-casper-tests && cd ../step.run-casper-tests
+      - sbt casper/test
 
   run-integration-tests:
     <<: *branch_build_conditions
