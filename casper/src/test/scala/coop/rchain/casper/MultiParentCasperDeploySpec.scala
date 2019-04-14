@@ -1,6 +1,7 @@
 package coop.rchain.casper
 
 import com.google.protobuf.ByteString
+import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
@@ -130,6 +131,26 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
       _                 <- node.tearDown()
     } yield ()
   }
+
+  it should "not create a block with a repeated (deployer, timestamp) deploy" in effectTest {
+    val node             = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val casper           = node.casperEff
+    implicit val timeEff = new ConstantTime[Effect]
+
+    for {
+      deploy             <- ConstructDeploy.basicDeployData[Effect](0)
+      _                  <- casper.deploy(deploy)
+      createBlockResult  <- casper.createBlock
+      Created(block)     = createBlockResult
+      _                  <- casper.addBlock(block, ignoreDoppelgangerCheck[Effect])
+      repeatedDeploy     <- ConstructDeploy.basicDeployData[Effect](1)
+      _                  <- casper.deploy(repeatedDeploy)
+      createBlockResult2 <- casper.createBlock
+      _                  = createBlockResult2 should be(NoNewDeploys)
+      _                  <- node.tearDown()
+    } yield ()
+  }
+
   it should "fail when deploying with insufficient phlos" in effectTest {
     val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
     import node._

@@ -113,17 +113,27 @@ object BlockCreator {
       validDeploys = distinctDeploys.filter(
         d => notFutureDeploy(currentBlockNumber, d) && notExpiredDeploy(earliestBlockNumber, d)
       )
-      deploysInCurrentChain <- DagOperations
-                                .bfTraverseF[F, BlockMessage](parents.toList)(
-                                  b =>
-                                    ProtoUtil
-                                      .unsafeGetParentsAboveBlockNumber[F](b, earliestBlockNumber)
-                                )
-                                .map { b =>
-                                  ProtoUtil.deploys(b).flatMap(_.deploy)
-                                }
-                                .toList
-    } yield (validDeploys -- deploysInCurrentChain.flatten).toSeq
+      deploysInCurrentChainList <- DagOperations
+                                    .bfTraverseF[F, BlockMessage](parents.toList)(
+                                      b =>
+                                        ProtoUtil
+                                          .unsafeGetParentsAboveBlockNumber[F](
+                                            b,
+                                            earliestBlockNumber
+                                          )
+                                    )
+                                    .map { b =>
+                                      ProtoUtil.deploys(b).flatMap(_.deploy)
+                                    }
+                                    .toList
+      deploysInCurrentChain = deploysInCurrentChainList.flatten.toSet
+      deploysInCurrentChainAsTuple = deploysInCurrentChain.map(
+        deploy => (deploy.deployer, deploy.timestamp)
+      )
+      deduplicatedDeploys = validDeploys.filterNot(
+        deploy => deploysInCurrentChainAsTuple.contains((deploy.deployer, deploy.timestamp))
+      )
+    } yield deduplicatedDeploys.toSeq
 
   private def notExpiredDeploy(earliestBlockNumber: Long, d: DeployData): Boolean =
     d.validAfterBlockNumber > earliestBlockNumber
