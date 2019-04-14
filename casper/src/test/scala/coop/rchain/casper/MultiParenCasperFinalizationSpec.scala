@@ -2,13 +2,10 @@ package coop.rchain.casper
 
 import cats.implicits._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
-import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.scalatestcontrib._
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.Keccak256
-import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
+import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
@@ -19,26 +16,16 @@ class MultiParentCasperFinalizationSpec extends FlatSpec with Matchers with Insp
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  private val (otherSk, otherPk)          = Ed25519.newKeyPair
-  private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-  private val (ethPivKeys, ethPubKeys)    = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
-  private val ethAddresses =
-    ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.bytes.drop(1)).takeRight(20)))
-  private val wallets     = ethAddresses.map(addr => PreWallet(addr, BigInt(10001)))
-  private val bonds       = createBonds(validators)
-  private val minimumBond = 100L
-  private val genesis =
-    buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, true, 0L)
+  private val (validatorKeys, validatorPks) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+  private val genesis = buildGenesis(
+    buildGenesisParameters(4, validatorPks.map(pk => pk -> 10L).toMap)
+  )
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
   "MultiParentCasper" should "increment last finalized block as appropriate in round robin" in effectTest {
-    val stake      = 10L
-    val equalBonds = validators.map(_ -> stake).toMap
-    val genesisWithEqualBonds =
-      buildGenesis(Seq.empty, equalBonds, 1L, Long.MaxValue, false, 0L)
     for {
-      nodes       <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesisWithEqualBonds)
+      nodes       <- HashSetCasperTestNode.networkEff(validatorKeys.take(3), genesis)
       deployDatas <- (0 to 7).toList.traverse(i => ConstructDeploy.basicDeployData[Effect](i))
 
       createBlock1Result <- nodes(0).casperEff

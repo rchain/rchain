@@ -4,7 +4,8 @@ import cats.data.EitherT
 import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
-import coop.rchain.casper.genesis.contracts.{Faucet, PreWallet}
+import coop.rchain.casper.genesis.Genesis
+import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.helper.HashSetCasperTestNode.Effect
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
@@ -19,6 +20,7 @@ import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.CommError
 import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.rholang.interpreter.util.RevAddress
 import monix.eval.Task
 import org.scalacheck._
 import org.scalacheck.commands.Commands
@@ -53,11 +55,28 @@ object HashSetCasperActions {
     val (_, ethPubKeys)             = (1 to amount).map(_ => Secp256k1.newKeyPair).unzip
     val ethAddresses =
       ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.bytes.drop(1)).takeRight(20)))
-    val wallets     = ethAddresses.map(addr => PreWallet(addr, BigInt(10001)))
-    val bonds       = bondsGen(validators)
-    val minimumBond = 100L
+    val wallets = ethAddresses.map(addr => PreWallet(addr, BigInt(10001)))
+    val bonds   = bondsGen(validators)
     val genesis =
-      buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, true, 0L)
+      buildGenesis(
+        Genesis(
+          shardId = "HashSetCasperSpecification",
+          wallets = wallets,
+          proofOfStake = ProofOfStake(
+            minimumBond = 0L,
+            maximumBond = Long.MaxValue,
+            validators = bonds.toSeq.map(Validator.tupled)
+          ),
+          faucet = true,
+          genesisPk = Ed25519.newKeyPair._2,
+          timestamp = 0L,
+          vaults = bonds.toList.map {
+            case (pk, stake) =>
+              RevAddress.fromPublicKey(pk).map(Vault(_, stake))
+          }.flattenOption,
+          supply = Long.MaxValue
+        )
+      )
     (genesis, validatorKeys)
   }
 

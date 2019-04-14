@@ -1,5 +1,6 @@
 package coop.rchain.casper.genesis.contracts
 
+import cats.Traverse
 import cats.effect.Concurrent
 import cats.implicits._
 import coop.rchain.casper.ConstructDeploy
@@ -15,6 +16,7 @@ import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting
+import coop.rchain.rholang.interpreter.util.RevAddress
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
@@ -47,13 +49,21 @@ class RevIssuanceTest extends FlatSpec with Matchers {
     val wallet          = PreWallet(ethAddress, initBalance)
     val (_, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
     val bonds           = createBonds(validators)
-    val posValidators   = bonds.map(bond => Validator(bond._1, bond._2)).toSeq
+    val posValidators   = bonds.map(Validator.tupled).toSeq
+    val (_, genesisPk)  = Ed25519.newKeyPair
+    val vaults = Traverse[List]
+      .traverse(posValidators.map(_.pk).toList)(RevAddress.fromPublicKey)
+      .get
+      .map(Vault(_, 1000L))
     val genesisDeploys =
       Genesis.defaultBlessedTerms(
         0L,
         ProofOfStake(1L, Long.MaxValue, posValidators),
         wallet :: Nil,
-        Faucet.noopFaucet
+        Faucet.noopFaucet,
+        genesisPk,
+        vaults,
+        Long.MaxValue
       )
 
     val secKey =
@@ -85,7 +95,7 @@ class RevIssuanceTest extends FlatSpec with Matchers {
       )(Concurrent[Task], runtimeManager)
       .unsafeRunSync
     val (postGenHash, _) =
-      runtimeManager.computeState(emptyHash, genesisDeploys).runSyncUnsafe(10.seconds)
+      runtimeManager.computeState(emptyHash, genesisDeploys).runSyncUnsafe(20.seconds)
     val (postUnlockHash, _) =
       runtimeManager.computeState(postGenHash, unlockDeployData :: Nil).runSyncUnsafe(10.seconds)
     val unlockResult = getDataUnsafe(runtimeManager, postUnlockHash, statusOut)

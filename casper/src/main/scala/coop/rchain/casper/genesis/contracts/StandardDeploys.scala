@@ -2,8 +2,11 @@ package coop.rchain.casper.genesis.contracts
 
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.ProtoUtil.stringToByteString
+import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.accounting
+import coop.rchain.rholang.interpreter.util.RevAddress
 
 object StandardDeploys {
   private def toDeploy(
@@ -49,6 +52,12 @@ object StandardDeploys {
       CompiledRholangSource("MakePoS.rho"),
       "0cbe092b27e04a944c7ac184619f3abeacffdd823ded94113ae918a63e55d5f2",
       1540221220574L
+    )
+  def PoS: DeployData =
+    toDeploy(
+      CompiledRholangSource("PoS.rho"),
+      "d70491c21a5ba44ffb60a97d9bfbf3f3839b997bde107a3a8ab6872594282740",
+      1553862086627L
     )
   def basicWallet: DeployData =
     toDeploy(
@@ -101,4 +110,19 @@ object StandardDeploys {
       "be8ae000e4d2f29c73f792705314d71b6c0d56d7c640c6b4df9fabf90518c623",
       1551879405043L
     )
+
+  def poSGenerator(genesisPk: PublicKey, poS: ProofOfStake): DeployData =
+    toDeploy(
+      poS,
+      Base16.encode(genesisPk.bytes),
+      System.currentTimeMillis()
+    )
+
+  def revGenerator(genesisPk: PublicKey, vaults: Seq[Vault], supply: Long): DeployData =
+    toDeploy(
+      RevGenerator(RevAddress.fromPublicKey(genesisPk).get, vaults, supply),
+      Base16.encode(genesisPk.bytes),
+      System.currentTimeMillis()
+    )
+
 }

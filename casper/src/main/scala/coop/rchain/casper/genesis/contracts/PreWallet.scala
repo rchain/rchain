@@ -9,6 +9,7 @@ object PreWallet {
   /**
     * Produces Rholang code which adds a wallet to the blockchain based on the
     * given Wallet case class.
+    *
     * @param w the PreWallet object containing the information which will go
     *          on the blockchain.
     * @return  Rholang code to add the pre-wallet to the blockchain.
