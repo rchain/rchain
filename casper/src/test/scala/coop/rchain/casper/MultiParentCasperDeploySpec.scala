@@ -10,7 +10,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Keccak256
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.models.{Expr, Par}
-import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.p2p.EffectsTestInstances.{ConstantTime, LogicalTime}
 import coop.rchain.rholang.interpreter.accounting
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
@@ -114,6 +114,22 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
     } yield deployResult should be(Left(SignatureVerificationFailed))
   }
 
+  it should "not create a block with duplicate deploys" in effectTest {
+    val node             = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val casper           = node.casperEff
+    implicit val timeEff = new ConstantTime[Effect]
+
+    for {
+      deploy1           <- ConstructDeploy.basicDeployData[Effect](0)
+      deploy2           <- ConstructDeploy.basicDeployData[Effect](1)
+      _                 <- casper.deploy(deploy1)
+      _                 <- casper.deploy(deploy2)
+      createBlockResult <- casper.createBlock
+      Created(block)    = createBlockResult
+      _                 = block.header.get.deployCount should be(1)
+      _                 <- node.tearDown()
+    } yield ()
+  }
   it should "fail when deploying with insufficient phlos" in effectTest {
     val node = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
     import node._

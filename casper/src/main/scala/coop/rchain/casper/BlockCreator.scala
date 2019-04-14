@@ -107,7 +107,10 @@ object BlockCreator {
       currentBlockNumber  = maxBlockNumber + 1
       earliestBlockNumber = currentBlockNumber - expirationThreshold
       deploys             = state.deployHistory
-      validDeploys = deploys.filter(
+      distinctDeploys = deploys
+        .groupBy(deploy => (deploy.deployer, deploy.timestamp))
+        .map(_._2.head)
+      validDeploys = distinctDeploys.filter(
         d => notFutureDeploy(currentBlockNumber, d) && notExpiredDeploy(earliestBlockNumber, d)
       )
       deploysInCurrentChain <- DagOperations

@@ -17,6 +17,21 @@ import coop.rchain.comm.protocol.routing._
 
 /** Eagerly evaluated instances to do reasoning about applied effects */
 object EffectsTestInstances {
+  class ConstantTime[F[_]: Sync] extends Time[F] {
+    var clock: Long = 0
+
+    def currentMillis: F[Long] = Sync[F].delay {
+      clock
+    }
+
+    def nanoTime: F[Long] = Sync[F].delay {
+      clock
+    }
+
+    def sleep(duration: FiniteDuration): F[Unit] = Sync[F].delay(())
+
+    def reset(): Unit = this.clock = 0
+  }
 
   class LogicalTime[F[_]: Sync] extends Time[F] {
     var clock: Long = 0
