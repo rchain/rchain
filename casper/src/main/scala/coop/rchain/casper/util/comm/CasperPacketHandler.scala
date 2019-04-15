@@ -596,10 +596,9 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     new CasperPacketHandler[T[F, ?]] {
       override def init: T[F, Unit] = C.init.liftM[T]
 
-      override def handle(peer: PeerNode): PartialFunction[Packet, T[F, Unit]] =
-        PartialFunction { (p: Packet) =>
-          C.handle(peer)(p).liftM[T]
-        }
+      override def handle(peer: PeerNode): PartialFunction[Packet, T[F, Unit]] = {
+        case (p: Packet) => C.handle(peer)(p).liftM[T]
+      }
     }
 
   private def sendNoApprovedBlockAvailable[F[_]: RPConfAsk: TransportLayer: Monad](
