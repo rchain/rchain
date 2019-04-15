@@ -39,7 +39,6 @@ class ManyValidatorsTest
     val testProgram = for {
       blockStore <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStoreDir)
       blockDagStorage <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)(
-                          metrics,
                           log,
                           blockStore
                         )
@@ -63,7 +62,6 @@ class ManyValidatorsTest
             )
           }
       newBlockDagStorage <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)(
-                             metrics,
                              log,
                              blockStore
                            )
