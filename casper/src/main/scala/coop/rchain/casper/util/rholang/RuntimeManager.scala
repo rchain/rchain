@@ -279,6 +279,12 @@ class RuntimeManagerImpl[F[_]: Concurrent] private[rholang] (
                                      none[DeployData] -> UnusedCommEvent(ex)
                                    )
                                    .pure[F]
+                               case Left(ex) =>
+                                 Either
+                                   .left[(Option[DeployData], Failed), StateHash](
+                                     none[DeployData] -> UserErrors(Vector(ex))
+                                   )
+                                   .pure[F]
                              }
                          }
                      }

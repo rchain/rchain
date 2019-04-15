@@ -162,7 +162,7 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
                                     rankedValidatorQuery
                                   )
 
-      validatorBondsAndRanks: Seq[(ByteString, Long, Int)] = validatorBondsAndRanksT.head.exprs.head.getEListBody.ps
+      validatorBondsAndRanks = validatorBondsAndRanksT.head.exprs.head.getEListBody.ps
         .map(
           _.exprs.head.getETupleBody.ps match {
             case Seq(a, b, c) =>
