@@ -95,11 +95,12 @@ trait BlockGenerator {
       blockHash = Blake2b256.hash(header.toByteArray)
       body      = Body().withState(postState).withDeploys(deploys)
       serializedJustifications = justifications.toList.map {
-        case (creator: Validator, latestBlockHash: BlockHash) =>
-          Justification(creator, latestBlockHash)
+        case (cr: Validator, latestBlockHash: BlockHash) =>
+          Justification(cr, latestBlockHash)
       }
       serializedBlockHash = ByteString.copyFrom(blockHash)
-      block = BlockMessage(
+    } yield
+      BlockMessage(
         serializedBlockHash,
         Some(header),
         Some(body),
@@ -108,7 +109,6 @@ trait BlockGenerator {
         shardId = shardId,
         seqNum = seqNum
       )
-    } yield block
 
   def createGenesis[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
       creator: Validator = ByteString.EMPTY,

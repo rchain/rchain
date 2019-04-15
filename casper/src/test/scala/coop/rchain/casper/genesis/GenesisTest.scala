@@ -67,10 +67,9 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
         time: LogicalTime[Task]
     ) =>
       for {
-        _      <- fromInputFiles()(runtimeManager, genesisPath, log, time)
-        _      = log.warns.find(_.contains("bonds")) should be(None)
-        result = log.infos.count(_.contains("Created validator")) should be(numValidators)
-      } yield result
+        _ <- fromInputFiles()(runtimeManager, genesisPath, log, time)
+        _ = log.warns.find(_.contains("bonds")) should be(None)
+      } yield log.infos.count(_.contains("Created validator")) should be(numValidators)
   }
 
   it should "generate random validators, with a warning, when bonds file does not exist" in withGenResources {
@@ -92,8 +91,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
         ) should be(
           1
         )
-        result = log.infos.count(_.contains("Created validator")) should be(numValidators)
-      } yield result
+      } yield log.infos.count(_.contains("Created validator")) should be(numValidators)
   }
 
   it should "generate random validators, with a warning, when bonds file cannot be parsed" in withGenResources {
@@ -121,8 +119,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
         ) should be(
           1
         )
-        result = log.infos.count(_.contains("Created validator")) should be(numValidators)
-      } yield result
+      } yield log.infos.count(_.contains("Created validator")) should be(numValidators)
   }
 
   it should "create a genesis block with the right bonds when a proper bonds file is given" in withGenResources {
@@ -148,10 +145,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
           .map {
             case (v, i) => Bond(ByteString.copyFrom(Base16.unsafeDecode(v)), i.toLong)
           }
-          .forall(
-            bonds.contains(_)
-          ) should be(true)
-      } yield result
+      } yield result.forall(bonds.contains(_)) should be(true)
   }
 
   it should "create a valid genesis block" in withStorage {
@@ -196,10 +190,7 @@ class GenesisTest extends FlatSpec with Matchers with BlockDagStorageFixture {
           .map {
             case (v, i) => Bond(ByteString.copyFrom(Base16.unsafeDecode(v)), i.toLong)
           }
-          .forall(
-            bonds.contains(_)
-          ) should be(true)
-      } yield result
+      } yield result.forall(bonds.contains(_)) should be(true)
   }
 
   it should "parse the wallets file and include it in the genesis state" in withRawGenResources {
