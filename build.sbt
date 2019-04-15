@@ -85,6 +85,14 @@ lazy val compilerSettings = CompilerSettings.options ++ Seq(
   crossScalaVersions := Seq("2.11.12", scalaVersion.value)
 )
 
+// TOOD will become compilerSettings once this is turned on for blockstore
+lazy val almostCompilerSettings = Seq(
+      "-Xfatal-warnings",
+      "-unchecked",
+      "-deprecation",
+      "-feature"
+    )
+
 // Before starting sbt export YOURKIT_AGENT set to the profiling agent appropriate
 // for your OS (https://www.yourkit.com/docs/java/help/agent.jsp)
 lazy val profilerSettings = Seq(
@@ -101,12 +109,7 @@ lazy val shared = (project in file("shared"))
   .settings(commonSettings: _*)
   .settings(
     version := "0.1",
-    scalacOptions ++= Seq(
-      "-Xfatal-warnings",
-      "-unchecked",
-      "-deprecation",
-      "-feature"
-    ),
+    scalacOptions ++= almostCompilerSettings,
     libraryDependencies ++= commonDependencies ++ Seq(
       catsCore,
       catsEffect,
@@ -126,12 +129,7 @@ lazy val graphz = (project in file("graphz"))
   .settings(commonSettings: _*)
   .settings(
     version := "0.1",
-    scalacOptions ++= Seq(
-      "-Xfatal-warnings",
-      "-unchecked",
-      "-deprecation",
-      "-feature"
-    ),
+    scalacOptions ++= almostCompilerSettings,
     libraryDependencies ++= commonDependencies ++ Seq(
       catsCore,
       catsEffect,
@@ -169,12 +167,7 @@ lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
   .settings(
     version := "0.1",
-    scalacOptions ++= Seq(
-      "-Xfatal-warnings",
-      "-unchecked",
-      "-deprecation",
-      "-feature"
-    ),
+    scalacOptions ++= almostCompilerSettings,
     dependencyOverrides += "org.slf4j" % "slf4j-api" % "1.7.25",
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
       grpcNetty,
@@ -200,12 +193,7 @@ lazy val crypto = (project in file("crypto"))
   .settings(commonSettings: _*)
   .settings(
     name := "crypto",
-    scalacOptions ++= Seq(
-      "-Xfatal-warnings",
-      "-unchecked",
-      "-deprecation",
-      "-feature"
-    ),
+    scalacOptions ++= almostCompilerSettings,
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       guava,
       bouncyCastle,
@@ -245,12 +233,7 @@ lazy val node = (project in file("node"))
   .settings(
     version := "0.9.2" + git.gitHeadCommit.value.map(".git" + _.take(8)).getOrElse(""),
     name := "rnode",
-    scalacOptions ++= Seq(
-      "-Xfatal-warnings",
-      "-unchecked",
-      "-deprecation",
-      "-feature"
-    ),
+    scalacOptions ++= almostCompilerSettings,
     maintainer := "RChain Cooperative https://www.rchain.coop/",
     packageSummary := "RChain Node",
     packageDescription := "RChain Node - the RChain blockchain node server software.",
