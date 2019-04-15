@@ -71,14 +71,14 @@ object BlockGenerator {
 trait BlockGenerator {
   private def buildBlock[F[_]: Monad: Time](
       parentsHashList: Seq[BlockHash],
-      creator: Validator = ByteString.EMPTY,
-      bonds: Seq[Bond] = Seq.empty[Bond],
-      justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
-      deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
-      tsHash: ByteString = ByteString.EMPTY,
-      shardId: String = "rchain",
-      preStateHash: ByteString = ByteString.EMPTY,
-      seqNum: Int = 0
+      creator: Validator,
+      bonds: Seq[Bond],
+      justifications: collection.Map[Validator, BlockHash],
+      deploys: Seq[ProcessedDeploy],
+      tsHash: ByteString,
+      shardId: String,
+      preStateHash: ByteString,
+      seqNum: Int
   ): F[BlockMessage] =
     for {
       now <- Time[F].currentMillis
