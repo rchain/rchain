@@ -73,7 +73,7 @@ object RhoSpec {
 
       rand = Blake2b512Random(128)
       _ <- TestUtil
-            .eval(testObject.code, runtime)(implicitly, implicitly, rand.splitShort(1))
+            .eval(testObject.code, runtime)(implicitly, rand.splitShort(1))
             .timeout(timeout)
 
       result <- testResultCollector.getResult
@@ -95,7 +95,7 @@ class RhoSpec(
 
         val (attempt, assertions) =
           testAttempts
-            .find { case (attempt, assertions) => hasFailures(assertions) }
+            .find { case (_, assertions) => hasFailures(assertions) }
             .getOrElse(testAttempts.head)
 
         def clueMsg(clue: String) = s"$clue (test attempt: $attempt)"
