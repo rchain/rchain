@@ -25,9 +25,9 @@ final case class LmdbDbi[F[_]: Sync: Log: RaiseIOError, T](
       }
     } {
       case (txn, ExitCase.Error(NonFatal(ex))) =>
-        val stringWriter = new StringWriter()
-        ex.printStackTrace(new PrintWriter(stringWriter))
-        Log[F].error(stringWriter.toString) *> Sync[F].delay(txn.close()) *> Sync[F].raiseError(ex)
+        Log[F].error("Could not process LMDB transaction", ex) *>
+          Sync[F].delay(txn.close()) *>
+          Sync[F].raiseError(ex)
       case (txn, _) => Sync[F].delay(txn.close())
     }
 
