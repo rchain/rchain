@@ -182,53 +182,41 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
       topoSortVector: Vector[Vector[BlockHash]],
       sortOffset: Long
   ) extends BlockDagRepresentation[F] {
+    private def findAndAccessCheckpoint[R](
+        blockHash: BlockHash,
+        loadFromCheckpoint: CheckpointedDagInfo => Option[R]
+    ): F[Option[R]] =
+      for {
+        blockNumberOpt <- getBlockNumber(blockHash)
+        result <- blockNumberOpt match {
+                   case Some(blockNumber) =>
+                     if (blockNumber >= sortOffset) {
+                       none[R].pure[F]
+                     } else {
+                       lock.withPermit(
+                         loadCheckpoint(blockNumber).map(_.flatMap(loadFromCheckpoint))
+                       )
+                     }
+                   case None =>
+                     none[R].pure[F]
+                 }
+      } yield result
+
     def children(blockHash: BlockHash): F[Option[Set[BlockHash]]] =
       for {
         result <- childMap.get(blockHash) match {
-                   case Some(children) =>
-                     Option(children).pure[F]
+                   case children: Some[Set[BlockHash]] =>
+                     Monad[F].pure[Option[Set[BlockHash]]](children)
                    case None =>
-                     for {
-                       blockNumberOpt <- getBlockNumber(blockHash)
-                       result <- blockNumberOpt match {
-                                  case Some(blockNumber) =>
-                                    if (blockNumber >= sortOffset) {
-                                      none[Set[BlockHash]].pure[F]
-                                    } else {
-                                      lock.withPermit(
-                                        for {
-                                          oldDagInfo <- loadCheckpoint(blockNumber)
-                                        } yield oldDagInfo.flatMap(_.childMap.get(blockHash))
-                                      )
-                                    }
-                                  case None =>
-                                    none[Set[BlockHash]].pure[F]
-                                }
-                     } yield result
+                     findAndAccessCheckpoint(blockHash, _.childMap.get(blockHash))
                  }
       } yield result
     def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
       dataLookup.get(blockHash) match {
-        case Some(blockMetadata) =>
-          Option(blockMetadata).pure[F]
+        case blockMetadata: Some[BlockMetadata] =>
+          Monad[F].pure[Option[BlockMetadata]](blockMetadata)
         case None =>
-          for {
-            blockNumberOpt <- getBlockNumber(blockHash)
-            result <- blockNumberOpt match {
-                       case Some(blockNumber) =>
-                         if (blockNumber >= sortOffset) {
-                           none[BlockMetadata].pure[F]
-                         } else {
-                           lock.withPermit(
-                             for {
-                               oldDagInfo <- loadCheckpoint(blockNumber)
-                             } yield oldDagInfo.flatMap(_.dataLookup.get(blockHash))
-                           )
-                         }
-                       case None =>
-                         none[BlockMetadata].pure[F]
-                     }
-          } yield result
+          findAndAccessCheckpoint(blockHash, _.dataLookup.get(blockHash))
       }
     def contains(blockHash: BlockHash): F[Boolean] =
       dataLookup.get(blockHash) match {
