@@ -100,18 +100,6 @@ object BlockApproverProtocolTest {
   ): Effect[(BlockApproverProtocol, HashSetCasperTestNode[Effect])] = {
     import monix.execution.Scheduler.Implicits.global
 
-    val runtimeDir                          = BlockDagStorageTestFixture.blockStorageDir
-    implicit val log                        = new Log.NOPLog[Task]()
-    implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-
-    // TODO: Remove unused values
-    val activeRuntime =
-      Runtime
-        .createWithEmptyCost[Task, Task.Par](runtimeDir, 1024L * 1024, StoreType.LMDB)
-        .unsafeRunSync
-
-    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
-
     val deployTimestamp = 1L
 
     val genesis =

@@ -253,11 +253,6 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
         vs <- nodes.traverse(v => Sync[Effect].attempt(v.receive()))
       } yield vs
 
-    def propagate(nodes: List[HashSetCasperTestNode[Effect]]): Effect[Unit] =
-      for {
-        _ <- nodes.traverse(_.receive())
-      } yield ()
-
     def bond(
         node: HashSetCasperTestNode[Effect],
         keys: (PrivateKey, PublicKey)
