@@ -16,19 +16,23 @@ message Node {
 }
 
 message Ping {
-  Node   sender         = 1;
+  Node   sender    = 1;
+  string networkId = 2;
 }
 
 message Pong {
+  string networkId = 1;
 }
 
 message Lookup {
-  bytes  id     = 1;
-  Node   sender = 2;
+  bytes  id        = 1;
+  Node   sender    = 2;
+  string networkId = 3;
 }
-        
+
 message LookupResponse {
     repeated Node nodes = 1;
+    string networkId    = 2;
 }
 
 service KademliaRPCService {

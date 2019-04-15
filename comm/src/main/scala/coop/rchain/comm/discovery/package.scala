@@ -13,6 +13,7 @@ package object discovery {
     Metrics.Source(CommMetricsSource, "discovery.kademlia")
 
   def acquireKademliaRPCServer(
+      networkId: String,
       port: Int,
       pingHandler: PeerNode => Task[Unit],
       lookupHandler: (PeerNode, Array[Byte]) => Task[Seq[PeerNode]]
@@ -23,7 +24,10 @@ package object discovery {
         .executor(scheduler)
         .addService(
           KademliaGrpcMonix
-            .bindService(new GrpcKademliaRPCServer(pingHandler, lookupHandler), scheduler)
+            .bindService(
+              new GrpcKademliaRPCServer(networkId, pingHandler, lookupHandler),
+              scheduler
+            )
         )
         .build
     )

@@ -19,6 +19,7 @@ class GrpcKademliaRPCSpec extends KademliaRPCSpec[Task, GrpcEnvironment] {
   implicit val log: Log[Task]         = new Log.NOPLog[Task]
   implicit val scheduler: Scheduler   = Scheduler.Implicits.global
   implicit val metrics: Metrics[Task] = new Metrics.MetricsNOP
+  private val networkId               = "test"
 
   def createEnvironment(port: Int): Task[GrpcEnvironment] =
     Task.delay {
@@ -36,7 +37,7 @@ class GrpcKademliaRPCSpec extends KademliaRPCSpec[Task, GrpcEnvironment] {
         def ask: Task[PeerNode]            = Task.pure(env.peer)
       }
     Task.delay {
-      new GrpcKademliaRPC(500.millis)
+      new GrpcKademliaRPC(networkId, 500.millis)
     }
   }
 
@@ -46,7 +47,7 @@ class GrpcKademliaRPCSpec extends KademliaRPCSpec[Task, GrpcEnvironment] {
       env: GrpcEnvironment,
       pingHandler: PeerNode => Task[Unit],
       lookupHandler: (PeerNode, Array[Byte]) => Task[Seq[PeerNode]]
-  ): Task[Server[Task]] = acquireKademliaRPCServer(env.port, pingHandler, lookupHandler)
+  ): Task[Server[Task]] = acquireKademliaRPCServer(networkId, env.port, pingHandler, lookupHandler)
 }
 
 case class GrpcEnvironment(

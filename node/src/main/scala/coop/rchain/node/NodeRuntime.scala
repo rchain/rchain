@@ -107,6 +107,7 @@ class NodeRuntime private[node] (
     for {
       kademliaRPCServer <- discovery
                             .acquireKademliaRPCServer(
+                              conf.server.networkId,
                               kademliaPort,
                               KademliaHandleRPC.handlePing[Task],
                               KademliaHandleRPC.handleLookup[Task]
@@ -383,7 +384,11 @@ class NodeRuntime private[node] (
                     commTmpFolder
                   )(grpcScheduler, log, metrics)
                   .toEffect
-    kademliaRPC   = effects.kademliaRPC(defaultTimeout)(grpcScheduler, peerNodeAsk, metrics)
+    kademliaRPC = effects.kademliaRPC(conf.server.networkId, defaultTimeout)(
+      grpcScheduler,
+      peerNodeAsk,
+      metrics
+    )
     kademliaStore = effects.kademliaStore(id)(kademliaRPC, metrics)
     _             <- initPeer.fold(Task.unit.toEffect)(p => kademliaStore.updateLastSeen(p).toEffect)
     nodeDiscovery = effects.nodeDiscovery(id)(kademliaStore, kademliaRPC)
