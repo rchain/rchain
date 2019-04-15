@@ -71,7 +71,7 @@ object DeployRuntime {
   def deployFileProgram[F[_]: Monad: Sync: DeployService](
       phloLimit: Long,
       phloPrice: Long,
-      validAfterBlock: Int,
+      validAfterBlock: Long,
       maybePrivateKey: Option[PrivateKey],
       file: String
   ): F[Unit] =
