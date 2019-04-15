@@ -58,13 +58,10 @@ clone:
 
 pipeline:
 
-  # pr build
+  # since sbt starts compilation anew after copying/renaming the project, let's start all pr-* jobs at once
+  # let's also compile together with the (now smaller) unit tests
 
-  pr-compile:
-    <<: *pr_build_conditions
-    <<: *sbtcompileenv
-    commands:
-      - sbt update rholang/bnfc:generate test:compile
+  # pr build
 
   pr-run-unit-tests:
     <<: *pr_build_conditions
@@ -72,6 +69,7 @@ pipeline:
     <<: *sbttestenv
     commands:
       - cp -r . ../step.run-unit-tests && cd ../step.run-unit-tests
+      - _JAVA_OPTIONS="$_JAVA_OPTIONS -Xss2m" sbt update rholang/bnfc:generate test:compile
       - sbt "set test in casper := {}" test it:test
 
   pr-run-casper-tests:
@@ -80,7 +78,7 @@ pipeline:
     <<: *sbttestenv
     commands:
       - cp -r . ../step.run-casper-tests && cd ../step.run-casper-tests
-      - sbt casper/test
+      - sbt update rholang/bnfc:generate casper/test
 
   # full build
 
