@@ -74,6 +74,7 @@ object EstimatorHelper {
         } yield conflicts
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   private def buildBlockAncestorChannels[F[_]: Monad: BlockStore](
       blockAncestorsMeta: List[BlockMetadata]
   ): F[Set[ByteString]] =
@@ -90,6 +91,7 @@ object EstimatorHelper {
           consume.channelsHashes.toSet
         case Event(Comm(CommEvent(Some(consume: ConsumeEvent), produces))) =>
           consume.channelsHashes.toSet ++ produces.map(_.channelsHash).toSet
+        case _ => throw new RuntimeException("incorrect ancestor events")
       }.toSet
     } yield ancestorChannels
 }

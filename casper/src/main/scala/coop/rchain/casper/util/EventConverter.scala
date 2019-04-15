@@ -51,6 +51,7 @@ object EventConverter {
       )
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def toRspaceEvent(event: Event): RspaceEvent = event match {
     case Event(Produce(produce: ProduceEvent)) =>
       RspaceProduce.fromHash(produce.channelsHash, produce.hash, produce.sequenceNumber)
@@ -74,5 +75,6 @@ object EventConverter {
         ),
         rspaceProduces
       )
+    case _ => throw new RuntimeException("Could not calculate toRspaceEvent")
   }
 }
