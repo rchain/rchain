@@ -80,8 +80,8 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
       result       <- testProgram(blockApiLock)(casperRef)
     } yield result).value.unsafeRunSync.right.get
 
-    response1 shouldBe a[Right[String, DeployServiceResponse]]
-    response2 shouldBe a[Left[String, DeployServiceResponse]]
+    response1 shouldBe a[Right[_, DeployServiceResponse]]
+    response2 shouldBe a[Left[_, DeployServiceResponse]]
     response2.left.get shouldBe "Error: There is another propose in progress."
 
     node.tearDown()
