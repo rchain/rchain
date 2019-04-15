@@ -26,11 +26,11 @@ object TriePath {
   def empty: TriePath = TriePath(Vector(), None, Nil)
 }
 
-final case class History[F[_]: Sync, K](
+final case class History[F[_]: Sync](
     root: Blake2b256Hash,
     historyStore: HistoryStore[F],
     pointerBlockStore: PointerBlockStore[F]
-)(implicit codecK: Codec[K]) {
+) {
 
   private def storePointerBlock(pb: PointerBlock): F[Node] = {
     val hash = PointerBlock.hash(pb)
@@ -213,13 +213,12 @@ final case class History[F[_]: Sync, K](
     FlatMap[F].tailRecM((fullPath, trieNodesOnPath, none[Trie]))(go)
   }
 
-  def process(actions: List[HistoryAction[K]]): F[History[F, K]] =
+  def process(actions: List[HistoryAction]): F[History[F]] =
     // TODO this is an intermediate step to reproduce all the trie behavior
     // will evolve to a fold based implementation with partial tries
     actions
       .foldLeftM(this.root) {
-        case (currentRoot, InsertAction(k, value)) =>
-          val remainingPath = asBytes(k)
+        case (currentRoot, InsertAction(remainingPath, value)) =>
           for {
             traverseResult <- findPath(remainingPath, currentRoot)
             (_, triePath)  = traverseResult
@@ -227,8 +226,7 @@ final case class History[F[_]: Sync, K](
             _              <- historyStore.put(elements)
           } yield Trie.hash(elements.last)
 
-        case (currentRoot, DeleteAction(k)) =>
-          val remainingPath = asBytes(k)
+        case (currentRoot, DeleteAction(remainingPath)) =>
           for {
             traverseResult <- findPath(remainingPath, currentRoot)
             (_, triePath)  = traverseResult
@@ -244,8 +242,7 @@ final case class History[F[_]: Sync, K](
       .map(newRoot => this.copy(root = newRoot))
 
   private[history] def findPath(key: KeyPath, start: Blake2b256Hash): F[(Trie, TriePath)] = {
-    type Params = (Trie, List[Byte], TriePath)
-    //t: Trie, remainingPath: List[Byte], path: TriePath
+    type Params = (Trie, KeyPath, TriePath)
     def traverse(params: Params): F[Either[Params, (Trie, TriePath)]] =
       params match {
         case (EmptyTrie, _, path) => Applicative[F].pure((EmptyTrie, path)).map(_.asRight)
@@ -287,7 +284,7 @@ final case class History[F[_]: Sync, K](
 object History {
 
   def skipOrFetch[F[_]: Applicative](
-      path: List[Byte],
+      path: KeyPath,
       pointer: Blake2b256Hash,
       fetch: Blake2b256Hash => F[Trie]
   ): F[Trie] =
@@ -297,7 +294,7 @@ object History {
       Applicative[F].pure(Skip(ByteVector(path), pointer))
     }
 
-  def skipOrValue(path: List[Byte], t: Trie): Trie =
+  def skipOrValue(path: KeyPath, t: Trie): Trie =
     if (path.isEmpty) {
       t
     } else {
@@ -314,10 +311,10 @@ object History {
   private[history] def toByte(i: Int): Byte =
     i.toByte
 
-  def commonPrefix(l: List[Byte], r: List[Byte]): List[Byte] =
-    (l.view, r.view).zipped.takeWhile { case (ll, rr) => ll == rr }.map(_._1).toList
+  def commonPrefix(l: KeyPath, r: KeyPath): KeyPath =
+    (l.view, r.view).zipped.takeWhile { case (ll, rr) => ll == rr }.map(_._1).toSeq
 
-  def skip(t: Trie, affix: List[Byte]): Skip =
+  def skip(t: Trie, affix: KeyPath): Skip =
     Skip(ByteVector(affix), Trie.hash(t))
 
   def pointTo(idx: Byte, t: Trie): Trie =
@@ -328,10 +325,7 @@ object History {
       case EmptyTrie      => EmptyTrie
     }
 
-  type KeyPath = List[Byte]
-
-  def asBytes[K](k: K)(implicit codecK: Codec[K]): List[Byte] =
-    codecK.encode(k).get.bytes.toSeq.toList
+  type KeyPath = Seq[Byte]
 
   type PointerBlockPointer = Blake2b256Hash
   type TriePointer         = Blake2b256Hash

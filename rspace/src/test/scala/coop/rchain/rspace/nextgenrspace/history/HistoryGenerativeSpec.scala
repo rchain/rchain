@@ -21,22 +21,22 @@ class HistoryGenerativeSpec
     with GeneratorDrivenPropertyChecks
     with InMemoryHistoryTestBase {
 
+  // disable shrinking since this test operates on a persistent structure
   implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 
-  // disable shrinking since this test operates on a persistent structure
   implicit val propertyCheckConfigParam =
     PropertyCheckConfiguration(minSuccessful = 1000)
 
-  type Key  = TestKey32
+  type Key  = List[Byte]
   type Data = (Key, Blake2b256Hash)
 
   "history" should "accept new leafs (insert, update, delete)" in forAll(
     distinctListOf(arbitraryInsertAction)
-  ) { actions: List[(TestKey32, Blake2b256Hash)] =>
+  ) { actions: List[Data] =>
     val emptyHistory =
-      new History[Task, TestKey32](emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
+      new History[Task](emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
 
-    val emptyState = Map.empty[Key, (Data, History[Task, Key])] // accumulate actions performed on the trie
+    val emptyState = Map.empty[Key, (Data, History[Task])] // accumulate actions performed on the trie
 
     val (result, map) = actions.foldLeft((emptyHistory, emptyState)) {
       case ((history, prevActions), action) =>
@@ -60,24 +60,24 @@ class HistoryGenerativeSpec
     finalHistory.runSyncUnsafe(20.seconds).root shouldBe emptyHistory.root
   }
 
-  val arbitraryTestKey32: Arbitrary[TestKey32] =
+  val arbitraryRandomThreeBytes: Arbitrary[Key] =
     Arbitrary(
       Gen
         .listOfN(3, Arbitrary.arbitrary[Int])
-        .map(ints => TestKey32.create(List.fill(29)(0) ++ ints))
+        .map(ints => (List.fill(29)(0) ++ ints).map(_.toByte))
     )
 
-  implicit val arbitraryInsertAction: Arbitrary[(TestKey32, Blake2b256Hash)] =
+  implicit val arbitraryInsertAction: Arbitrary[Data] =
     Arbitrary(for {
-      key  <- arbitraryTestKey32.arbitrary
+      key  <- arbitraryRandomThreeBytes.arbitrary
       hash <- arbitraryBlake2b256Hash.arbitrary
     } yield (key, hash))
 
   def insertAndVerify(
-      history: History[Task, TestKey32],
+      history: History[Task],
       toBeProcessed: List[Data],
       pastData: List[Data]
-  ): (History[Task, TestKey32], List[Data]) = {
+  ): (History[Task], List[Data]) = {
     val inserts      = toBeProcessed.map(v => InsertAction(v._1, v._2))
     val insertResult = history.process(inserts).runSyncUnsafe(20.seconds)
     insertResult.root should not be history.root
@@ -98,11 +98,11 @@ class HistoryGenerativeSpec
     (insertResult, allUniqueData.toList)
   }
 
-  def fetchData(h: History[Task, Key], data: Data): (Trie, TriePath) =
+  def fetchData(h: History[Task], data: Data): (Trie, TriePath) =
     fetchData(h, data._1)
 
-  def fetchData(h: History[Task, Key], k: Key): (Trie, TriePath) =
-    h.findPath(k.asBytes).runSyncUnsafe(20.seconds)
+  def fetchData(h: History[Task], k: Key): (Trie, TriePath) =
+    h.findPath(k).runSyncUnsafe(20.seconds)
 }
 
 trait InMemoryHistoryTestBase {
