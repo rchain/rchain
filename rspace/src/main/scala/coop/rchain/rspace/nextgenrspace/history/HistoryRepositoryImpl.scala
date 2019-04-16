@@ -23,6 +23,7 @@ import scodec.bits.{BitVector, ByteVector}
 
 final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
     history: History[F],
+    rootsRepository: RootRepository[F],
     leafStore: ColdStore[F]
 )(implicit codecC: Codec[C], codecP: Codec[P], codecA: Codec[A], codecK: Codec[K])
     extends HistoryRepository[F, C, P, A, K] {
@@ -49,7 +50,7 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
         }
     }
 
-  def hashJoinsChannel(channel: C): Blake2b256Hash = {
+  private def hashJoinsChannel(channel: C): Blake2b256Hash = {
     val channelBits     = codecC.encode(channel).get
     val joinChannelBits = channelBits ++ joinSuffixBits
     Blake2b256Hash.create(joinChannelBits.toByteVector)
@@ -143,16 +144,24 @@ final case class HistoryRepositoryImpl[F[_]: Sync, C, P, A, K](
         Applicative[F].pure(historyAction)
     }
 
-  override def process(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]] =
+  override def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]] =
     for {
       trieActions    <- Applicative[F].pure(transform(actions))
       historyActions <- storeLeaves(trieActions)
-      nextHistory    <- history.process(historyActions)
-    } yield this.copy(history = nextHistory)
+      next           <- history.process(historyActions)
+      _              <- rootsRepository.commit(next.root)
+    } yield this.copy(history = next)
+
+  override def reset(root: Blake2b256Hash): F[HistoryRepository[F, C, P, A, K]] =
+    for {
+      _    <- rootsRepository.validateRoot(root)
+      next = history.copy(root = root)
+    } yield this.copy(history = next)
 
   override def close(): F[Unit] =
     for {
       _ <- leafStore.close()
+      _ <- rootsRepository.close()
       _ <- history.close()
     } yield ()
 }

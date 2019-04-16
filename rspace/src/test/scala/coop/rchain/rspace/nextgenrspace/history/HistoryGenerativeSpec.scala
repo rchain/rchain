@@ -1,6 +1,5 @@
 package coop.rchain.rspace.nextgenrspace.history
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.test.TestKey32
 import org.scalatest.{FlatSpec, Matchers, OptionValues}
 
 import scala.collection.concurrent.TrieMap
@@ -133,7 +132,4 @@ trait InMemoryHistoryTestBase {
 
     override def close(): Task[Unit] = Task.now(())
   }
-
-  val emptyRoot: Trie               = EmptyTrie
-  val emptyRootHash: Blake2b256Hash = Trie.hash(emptyRoot)
 }

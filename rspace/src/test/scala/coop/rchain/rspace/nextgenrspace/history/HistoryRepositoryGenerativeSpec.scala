@@ -2,6 +2,7 @@ package coop.rchain.rspace.nextgenrspace.history
 
 import cats.effect.Sync
 import java.nio.file.{Files, Path}
+
 import coop.rchain.rspace.{
   Blake2b256Hash,
   DeleteContinuations,
@@ -24,7 +25,6 @@ import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import scodec.Codec
 import monix.execution.Scheduler.Implicits.global
 import cats.implicits._
-import coop.rchain.rspace.nextgenrspace.history.History.Trie
 import org.lmdbjava.EnvFlags
 
 import scala.concurrent.duration._
@@ -34,7 +34,7 @@ class LMDBHistoryRepositoryGenerativeSpec extends HistoryRepositoryGenerativeDef
     PropertyCheckConfiguration(minSuccessful = 2)
 
   val emptyRoot: Trie               = EmptyTrie
-  val emptyRootHash: Blake2b256Hash = Trie.hash(emptyRoot)(History.codecTrie)
+  val emptyRootHash: Blake2b256Hash = Trie.hash(emptyRoot)
 
   def lmdbConfig = {
     val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
@@ -56,16 +56,20 @@ class LMDBHistoryRepositoryGenerativeSpec extends HistoryRepositoryGenerativeDef
   def lmdbColdStore =
     ColdStoreInstances.coldStore(StoreInstances.lmdbStore[Task](lmdbConfig))
 
+  def lmdbRootsStore =
+    RootsStoreInstances.rootsStore(StoreInstances.lmdbStore[Task](lmdbConfig))
+
+  def rootRepository =
+    new RootRepository[Task](lmdbRootsStore)
+
   override def repo: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = {
-    val hs = lmdbHistoryStore
-    val cs = lmdbColdStore
-    val pb = lmdbPointerBlockStore
     val emptyHistory =
-      new History[Task](emptyRootHash, hs, pb)
+      new History[Task](emptyRootHash, lmdbHistoryStore, lmdbPointerBlockStore)
     val repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] =
       HistoryRepositoryImpl.apply[Task, String, Pattern, String, StringsCaptor](
         emptyHistory,
-        cs
+        rootRepository,
+        lmdbColdStore
       )
     repository
   }
@@ -79,10 +83,11 @@ class InmemHistoryRepositoryGenerativeSpec
 
   override def repo: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = {
     val emptyHistory =
-      new History[Task](emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
+      new History[Task](History.emptyRootHash, inMemHistoryStore, inMemPointerBlockStore)
     val repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] =
       HistoryRepositoryImpl.apply[Task, String, Pattern, String, StringsCaptor](
         emptyHistory,
+        rootRepository,
         inMemColdStore
       )
     repository
@@ -108,7 +113,7 @@ abstract class HistoryRepositoryGenerativeDefinition
     actions
       .foldLeftM(repository) { (repo, action) =>
         for {
-          next <- repo.process(action :: Nil)
+          next <- repo.checkpoint(action :: Nil)
           _    <- checkActionResult(action, next)
         } yield next
       }

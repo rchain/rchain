@@ -4,33 +4,29 @@ import cats.Applicative
 import cats.implicits._
 import cats.effect.Sync
 import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.nextgenrspace.history.History.emptyRootHash
+
+import scala.Function._
 
 class RootRepository[F[_]: Sync](
     rootsStore: RootsStore[F]
 ) {
+  val unknownRoot = new RuntimeException("unknown root")
+
   def commit(root: Blake2b256Hash): F[Unit] =
-    for {
-      _ <- rootsStore.recordRoot(root)
-    } yield ()
+    rootsStore.recordRoot(root)
 
   def currentRoot(): F[Blake2b256Hash] =
-    for {
-      maybeRoot <- rootsStore.currentRoot()
-      fetched <- maybeRoot match {
-                  case None =>
-                    // kickstart empty root
-                    rootsStore.recordRoot(History.emptyRootHash).map(_ => History.emptyRootHash)
-                  case Some(root: Blake2b256Hash) => Applicative[F].pure(root)
-                }
-    } yield fetched
+    rootsStore.currentRoot().flatMap {
+      case None       => rootsStore.recordRoot(emptyRootHash).map(const(emptyRootHash))
+      case Some(root) => Applicative[F].pure(root)
+    }
 
-  def history(root: Blake2b256Hash): F[Blake2b256Hash] =
-    for {
-      maybeRoot <- rootsStore.validateRoot(root)
-      _ <- maybeRoot match {
-            case None =>
-              Sync[F].raiseError[Blake2b256Hash](new RuntimeException("unknown root"))
-            case Some(root: Blake2b256Hash) => Applicative[F].pure(root)
-          }
-    } yield root
+  def validateRoot(root: Blake2b256Hash): F[Unit] =
+    rootsStore.validateRoot(root).flatMap {
+      case None    => Sync[F].raiseError[Unit](unknownRoot)
+      case Some(_) => Applicative[F].pure(())
+    }
+
+  def close(): F[Unit] = rootsStore.close()
 }

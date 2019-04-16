@@ -16,6 +16,8 @@ import scala.util.control.NonFatal
 trait Store[F[_]] {
   def get(key: Blake2b256Hash): F[Option[BitVector]]
   def put(key: Blake2b256Hash, value: BitVector): F[Unit]
+  def get(key: ByteBuffer): F[Option[ByteBuffer]]
+  def put(key: ByteBuffer, value: ByteBuffer): F[Unit]
   def close(): F[Unit]
 }
 
@@ -72,26 +74,33 @@ final case class LMDBStore[F[_]: Sync] private[history] (
 
   def get(key: Blake2b256Hash): F[Option[BitVector]] = {
     val directKey = key.bytes.toDirectByteBuffer
-    withReadTxnF { txn =>
-      dbi.get(txn, directKey)
-    }.map(v => Option(v).map(BitVector(_)))
+    get(directKey).map(v => v.map(BitVector(_)))
   }
 
-  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  override def get(key: ByteBuffer): F[Option[ByteBuffer]] =
+    withReadTxnF { txn =>
+      dbi.get(txn, key)
+    }.map(v => Option(v))
+
   def put(key: Blake2b256Hash, value: BitVector): F[Unit] = {
     val directKey   = key.bytes.toDirectByteBuffer
     val directValue = value.toByteVector.toDirectByteBuffer
+    put(directKey, directValue)
+  }
+
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  override def put(key: ByteBuffer, value: ByteBuffer): F[Unit] =
     withWriteTxnF { txn =>
-      if (dbi.put(txn, directKey, directValue)) {
+      if (dbi.put(txn, key, value)) {
         ()
       } else {
         throw new RuntimeException("was not able to put data")
       }
     }
-  }
 
   def close(): F[Unit] =
     Sync[F].delay {
       env.close()
     }
+
 }
