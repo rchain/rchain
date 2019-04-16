@@ -145,6 +145,7 @@ lazy val casper = (project in file("casper"))
   .settings(inConfig(SlowcookerTest)(org.scalafmt.sbt.ScalafmtPlugin.scalafmtConfigSettings))
   .settings(
     name := "casper",
+    scalacOptions ++= almostCompilerSettings,
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       catsCore,
       catsMtl,
