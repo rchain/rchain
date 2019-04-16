@@ -5,13 +5,13 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockDagRepresentation.Validator
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.models.EquivocationRecord
+import coop.rchain.shared.Language.ignore
 
-@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 object byteOps {
   implicit class ByteBufferRich(val byteBuffer: ByteBuffer) extends AnyVal {
     def getBlockHash(): BlockHash = {
       val blockHashBytes = Array.ofDim[Byte](32)
-      byteBuffer.get(blockHashBytes)
+      ignore { byteBuffer.get(blockHashBytes) }
       ByteString.copyFrom(blockHashBytes)
     }
 
@@ -21,7 +21,7 @@ object byteOps {
   implicit class IntRich(val value: Int) extends AnyVal {
     def toByteString: ByteString = {
       val byteBuffer = ByteBuffer.allocate(4)
-      byteBuffer.putInt(value)
+      ignore { byteBuffer.putInt(value) }
       ByteString.copyFrom(byteBuffer.array())
     }
   }
@@ -29,7 +29,7 @@ object byteOps {
   implicit class LongRich(val value: Long) extends AnyVal {
     def toByteString: ByteString = {
       val byteBuffer = ByteBuffer.allocate(8)
-      byteBuffer.putLong(value)
+      ignore { byteBuffer.putLong(value) }
       ByteString.copyFrom(byteBuffer.array())
     }
   }

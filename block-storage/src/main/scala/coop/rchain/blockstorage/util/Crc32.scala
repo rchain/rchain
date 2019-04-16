@@ -5,6 +5,7 @@ import java.util.zip.CRC32
 
 import cats.Monad
 import cats.implicits._
+import coop.rchain.shared.Language.ignore
 
 final class Crc32[F[_]: Monad](internal: CRC32) {
   def update(bytes: Array[Byte]): F[Unit] =
@@ -16,11 +17,10 @@ final class Crc32[F[_]: Monad](internal: CRC32) {
   def value: F[Long] =
     internal.getValue.pure[F]
 
-  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def bytes: F[Array[Byte]] =
     value.map { value =>
       val byteBuffer = ByteBuffer.allocate(8)
-      byteBuffer.putLong(value)
+      ignore { byteBuffer.putLong(value) }
       byteBuffer.array()
     }
 

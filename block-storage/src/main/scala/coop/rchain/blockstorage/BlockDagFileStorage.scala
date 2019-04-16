@@ -48,7 +48,6 @@ private final case class BlockDagFileStorageState[F[_]: Sync](
     equivocationsTrackerCrc: Crc32[F]
 )
 
-@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove!!
 final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] private (
     lock: Semaphore[F],
     blockNumberIndex: LmdbDbi[F, ByteBuffer],
@@ -169,11 +168,13 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
 
   private[this] def putBlockNumber(blockHash: BlockHash, blockNumber: Long): F[Unit] =
     blockNumberIndex.withWriteTxn { txn =>
-      blockNumberIndex.put(
-        txn,
-        blockHash.toDirectByteBuffer,
-        blockNumber.toByteString.toDirectByteBuffer
-      )
+      ignore {
+        blockNumberIndex.put(
+          txn,
+          blockHash.toDirectByteBuffer,
+          blockNumber.toByteString.toDirectByteBuffer
+        )
+      }
     }
 
   private case class FileDagRepresentation(
@@ -376,8 +377,8 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
       _ <- latestMessages.toList.traverse_ {
             case (validator, blockHash) =>
               Sync[F].delay {
-                dataByteBuffer.put(validator.toByteArray)
-                dataByteBuffer.put(blockHash.toByteArray)
+                ignore { dataByteBuffer.put(validator.toByteArray) }
+                ignore { dataByteBuffer.put(blockHash.toByteArray) }
               }
           }
       _                <- writeToFile[F](tmpSquashedData, dataByteBuffer.array())
@@ -584,7 +585,6 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
     )
 }
 
-@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements")) // TODO remove
 object BlockDagFileStorage {
   implicit private val logSource       = LogSource(BlockDagFileStorage.getClass)
   private val checkpointPattern: Regex = "([0-9]+)-([0-9]+)".r
