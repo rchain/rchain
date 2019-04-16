@@ -23,6 +23,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 import coop.rchain.shared.{AtomicMonadState, Log, LogSource}
 import coop.rchain.shared.ByteStringOps._
+import coop.rchain.shared.Language.ignore
 import monix.execution.atomic.AtomicAny
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.{Env, EnvFlags}
@@ -679,7 +680,7 @@ object BlockDagFileStorage {
     readRec(List.empty, 0)
   }
 
-  private def validateLatestMessagesData[F[_]: Monad](
+  private def validateLatestMessagesData[F[_]: Sync](
       latestMessagesRaf: RandomAccessIO[F],
       readLatestMessagesCrc: Long,
       latestMessagesCrcPath: Path,
@@ -698,9 +699,7 @@ object BlockDagFileStorage {
               _      <- latestMessagesRaf.setLength(length - 64)
             } yield (latestMessagesList.init.toMap, withoutLastCalculatedCrc)
           } else {
-            // TODO: Restore latest messages from the persisted DAG
-            latestMessagesRaf.setLength(0)
-            (Map.empty[Validator, BlockHash], Crc32.empty[F]()).pure[F]
+            Sync[F].raiseError[(Map[Validator, BlockHash], Crc32[F])](LatestMessagesLogIsCorrupted)
           }
         }
       }
@@ -743,7 +742,7 @@ object BlockDagFileStorage {
     readRec(List.empty)
   }
 
-  private def validateDataLookupData[F[_]: Monad](
+  private def validateDataLookupData[F[_]: Sync](
       dataLookupRandomAccessFile: RandomAccessIO[F],
       readDataLookupCrc: Long,
       dataLookupCrcPath: Path,
@@ -764,15 +763,11 @@ object BlockDagFileStorage {
               _      <- dataLookupRandomAccessFile.setLength(length - lastDataLookupEntrySize)
             } yield (dataLookupList.init, withoutLastCalculatedCrc)
           } else {
-            // TODO: Restore data lookup from block storage
-            dataLookupRandomAccessFile.setLength(0)
-            (List.empty[(BlockHash, BlockMetadata)], Crc32.empty[F]()).pure[F]
+            Sync[F].raiseError[(List[(BlockHash, BlockMetadata)], Crc32[F])](DataLookupIsCorrupted)
           }
         }
       } else {
-        // TODO: Restore data lookup from block storage
-        dataLookupRandomAccessFile.setLength(0)
-        (List.empty[(BlockHash, BlockMetadata)], Crc32.empty[F]()).pure[F]
+        Sync[F].raiseError[(List[(BlockHash, BlockMetadata)], Crc32[F])](DataLookupIsCorrupted)
       }
     }
   }
