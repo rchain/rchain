@@ -12,6 +12,7 @@ import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.shared.Cell
+import coop.rchain.shared.GeneratorUtils._
 import org.scalacheck.Gen
 import org.scalacheck.Arbitrary
 import org.scalatest._
@@ -36,6 +37,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
   type Continuation = WaitingContinuation[Pattern, StringsCaptor]
   type Join         = Vector[Channel]
   type Joins        = Vector[Join]
+
+  implicit val arbitraryJoins = distinctListOf[Join].map(_.toVector)
 
   def fixture(
       f: (
@@ -470,14 +473,16 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
         historyJoins: Joins,
         insertedJoin: Join
     ) =>
-      fixture { (state, history, hotStore) =>
-        {
-          for {
-            _     <- history.putJoins(channel, historyJoins)
-            _     <- hotStore.putJoin(channel, insertedJoin)
-            cache <- state.read
-            _     <- S.delay(cache.joins(channel) shouldEqual insertedJoin +: historyJoins)
-          } yield ()
+      whenever(!historyJoins.contains(insertedJoin)) {
+        fixture { (state, history, hotStore) =>
+          {
+            for {
+              _     <- history.putJoins(channel, historyJoins)
+              _     <- hotStore.putJoin(channel, insertedJoin)
+              cache <- state.read
+              _     <- S.delay(cache.joins(channel) shouldEqual insertedJoin +: historyJoins)
+            } yield ()
+          }
         }
       }
   }
@@ -489,10 +494,39 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
         cachedJoins: Joins,
         insertedJoin: Join
     ) =>
+      whenever(!cachedJoins.contains(insertedJoin)) {
+        fixture { (state, history, hotStore) =>
+          {
+            for {
+              _ <- history.putJoins(channel, historyJoins)
+              _ <- state.modify(
+                    _ =>
+                      Cache(
+                        joins = TrieMap(
+                          channel -> cachedJoins
+                        )
+                      )
+                  )
+              _     <- hotStore.putJoin(channel, insertedJoin)
+              cache <- state.read
+              _ <- S.delay {
+                    cache.joins(channel) shouldEqual insertedJoin +: cachedJoins
+                  }
+            } yield ()
+          }
+        }
+      }
+  }
+
+  "putJoin" should "not allow inserting duplicate joins" in forAll {
+    (
+        channel: Channel,
+        cachedJoins: Joins,
+        insertedJoin: Join
+    ) =>
       fixture { (state, history, hotStore) =>
         {
           for {
-            _ <- history.putJoins(channel, historyJoins)
             _ <- state.modify(
                   _ =>
                     Cache(
@@ -503,7 +537,12 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                 )
             _     <- hotStore.putJoin(channel, insertedJoin)
             cache <- state.read
-            _     <- S.delay(cache.joins(channel) shouldEqual insertedJoin +: cachedJoins)
+            _ <- S.delay {
+                  if (!cachedJoins.contains(insertedJoin))
+                    cache.joins(channel) shouldEqual insertedJoin +: cachedJoins
+                  else
+                    cache.joins(channel) shouldEqual cachedJoins
+                }
           } yield ()
         }
       }
@@ -516,7 +555,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
         insertedJoin: Join,
         installedJoin: Join
     ) =>
-      whenever(insertedJoin != installedJoin) {
+      whenever(insertedJoin != installedJoin && !cachedJoins.contains(insertedJoin)) {
         fixture { (state, history, hotStore) =>
           {
             for {
@@ -548,15 +587,11 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
   val arbitraryNonEmptyVectorOfJoins =
     Gen.nonEmptyContainerOf[Vector, Join](Arbitrary.arbitrary[Join])
 
-  it should "allow installing multiple values per channel" in forAll(
-    Arbitrary.arbitrary[String],
-    arbitraryNonEmptyVectorOfJoins,
-    arbitraryNonEmptyVectorOfJoins
-  ) {
+  it should "not allow installing duplicate joins per channel" in forAll {
     (
         channel: Channel,
         cachedJoins: Joins,
-        installedJoins: Joins
+        installedJoin: Join
     ) =>
       fixture { (state, history, hotStore) =>
         {
@@ -569,11 +604,12 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                       )
                     )
                 )
-            _     <- installedJoins.map(j => hotStore.installJoin(channel, j)).sequence
+            _     <- hotStore.installJoin(channel, installedJoin)
+            _     <- hotStore.installJoin(channel, installedJoin)
             cache <- state.read
             _ <- S.delay {
                   cache
-                    .installedJoins(channel) should contain theSameElementsAs (installedJoins)
+                    .installedJoins(channel) shouldBe Vector(installedJoin)
                 }
           } yield ()
         }
