@@ -132,10 +132,14 @@ object Connect {
       conn: (PeerNode, FiniteDuration) => F[Unit]
   ): F[List[PeerNode]] =
     for {
-      connections       <- ConnectionsCell[F].read.map(_.toSet)
-      tout              <- RPConfAsk[F].reader(_.defaultTimeout)
-      peers             <- NodeDiscovery[F].peers.map(_.filterNot(connections.contains).toList)
-      responses         <- peers.traverse(p => ErrorHandler[F].attempt(conn(p, tout)))
+      connections <- ConnectionsCell[F].read.map(_.toSet)
+      tout        <- RPConfAsk[F].reader(_.defaultTimeout)
+      peers       <- NodeDiscovery[F].peers.map(_.filterNot(connections.contains).toList)
+      responses   <- peers.traverse(p => ErrorHandler[F].attempt(conn(p, tout)))
+      _ <- responses.collect {
+            case Left(WrongNetwork(peer, msg)) =>
+              Log[F].warn(s"Can't connect to peer $peer. $msg")
+          }.sequence
       peersAndResponses = peers.zip(responses)
     } yield peersAndResponses.filter(_._2.isRight).map(_._1)
 

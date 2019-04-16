@@ -6,12 +6,12 @@ import cats.data.ReaderT
 import cats.syntax.either._
 import cats.syntax.option._
 
+import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing.{RoutingGrpcMonix, _}
 import coop.rchain.comm.CommError._
 import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.Metrics
-import coop.rchain.catscontrib.ski._
 
 import io.grpc.{Status, StatusRuntimeException}
 import monix.eval.Task
@@ -48,6 +48,17 @@ object GrpcTransport {
       }
   }
 
+  private object PeerWrongNetwork {
+    def unapply(e: Throwable): Option[String] =
+      e match {
+        case sre: StatusRuntimeException =>
+          if (sre.getStatus.getCode == Status.Code.PERMISSION_DENIED)
+            Some(sre.getStatus.getDescription)
+          else None
+        case _ => None
+      }
+  }
+
   private object PeerMessageToLarge {
     def unapply(e: Throwable): Boolean =
       e match {
@@ -77,10 +88,11 @@ object GrpcTransport {
   ): CommErr[R] =
     response
       .leftMap {
-        case PeerTimeout()        => CommError.timeout
-        case PeerUnavailable()    => peerUnavailable(peer)
-        case PeerMessageToLarge() => messageToLarge(peer)
-        case e                    => protocolException(e)
+        case PeerTimeout()         => CommError.timeout
+        case PeerUnavailable()     => peerUnavailable(peer)
+        case PeerMessageToLarge()  => messageToLarge(peer)
+        case PeerWrongNetwork(msg) => wrongNetwork(peer, msg)
+        case e                     => protocolException(e)
       }
 
   def send(peer: PeerNode, msg: Protocol)(implicit metrics: Metrics[Task]): Request[Unit] =

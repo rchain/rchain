@@ -68,7 +68,10 @@ class SslSessionServerInterceptor(networkID: String) extends ServerInterceptor {
             }
           } else {
             log.warn(s"Wrong network id $nid. Closing connection")
-            close(Status.PERMISSION_DENIED.withDescription(s"Wrong network id $nid"))
+            close(
+              Status.PERMISSION_DENIED
+                .withDescription(s"Wrong network id $nid. This node runs on network $networkID")
+            )
           }
         case TLRequest(_) =>
           log.warn(s"Malformed message $message")
