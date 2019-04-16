@@ -463,8 +463,6 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
   }
 
   it should "be able to load checkpoints" in {
-
-    pending
     forAll(blockElementsWithParentsGen, minSize(1), sizeRange(2)) { blockElements =>
       withDagStorageLocation { (dagDataDir, blockStore) =>
         for {
@@ -489,6 +487,5 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
         )
       }
     }
-
   }
 }
