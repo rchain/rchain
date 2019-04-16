@@ -59,7 +59,7 @@ object TestNetwork {
           }
     } yield ()
 
-  def empty[F[_]](implicit sync: Sync[F], monadF: Monad[F]): TestNetwork[F] =
+  def empty[F[_]](implicit sync: Sync[F]): TestNetwork[F] =
     new AtomicMonadState[F, NodeMessageQueues](AtomicAny(Map.empty))
 }
 

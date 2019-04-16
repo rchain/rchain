@@ -96,7 +96,6 @@ class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler
 object Interactive {
   def apply(): Interactive = {
     implicit val scheduler = Scheduler.io("rhoang-interpreter")
-    implicit val log       = new Log.NOPLog[Task]
     new Interactive(TestUtil.runtime[Task, Task.Par]().runSyncUnsafe(5.seconds))
   }
 }

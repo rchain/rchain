@@ -101,25 +101,23 @@ object TestUtil {
   private def evalDeploy[F[_]: Sync](
       deploy: DeployData,
       runtime: Runtime[F]
-  )(
-      implicit context: ExecutionContext
   ): F[Unit] = {
     val rand: Blake2b512Random = Blake2b512Random(
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy))
     )
-    eval(deploy.term, runtime)(implicitly, implicitly, rand)
+    eval(deploy.term, runtime)(implicitly, rand)
   }
 
   def eval[F[_]: Sync](
       code: String,
       runtime: Runtime[F]
-  )(implicit context: ExecutionContext, rand: Blake2b512Random): F[Unit] =
+  )(implicit rand: Blake2b512Random): F[Unit] =
     ParBuilder[F].buildNormalizedTerm(code) >>= (evalTerm(_, runtime))
 
   private def evalTerm[F[_]: FlatMap](
       term: Par,
       runtime: Runtime[F]
-  )(implicit context: ExecutionContext, rand: Blake2b512Random): F[Unit] =
+  )(implicit rand: Blake2b512Random): F[Unit] =
     for {
       _ <- runtime.reducer.setPhlo(Cost.UNSAFE_MAX)
       _ <- runtime.reducer.inj(term)

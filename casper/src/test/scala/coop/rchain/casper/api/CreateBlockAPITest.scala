@@ -32,8 +32,6 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
   import MultiParentCasperTestUtil._
   import HashSetCasperTestNode.Effect
 
-  private implicit val scheduler: Scheduler = Scheduler.fixedPool("create-block-api-test", 4)
-
   private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val bonds                       = createBonds(validators)
   private val genesis                     = createGenesis(bonds)
@@ -82,8 +80,8 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
       result       <- testProgram(blockApiLock)(casperRef)
     } yield result).value.unsafeRunSync.right.get
 
-    response1 shouldBe a[Right[String, DeployServiceResponse]]
-    response2 shouldBe a[Left[String, DeployServiceResponse]]
+    response1 shouldBe a[Right[_, DeployServiceResponse]]
+    response2 shouldBe a[Left[_, DeployServiceResponse]]
     response2.left.get shouldBe "Error: There is another propose in progress."
 
     node.tearDown()

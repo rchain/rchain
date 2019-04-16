@@ -162,7 +162,7 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
                                     rankedValidatorQuery
                                   )
 
-      validatorBondsAndRanks: Seq[(ByteString, Long, Int)] = validatorBondsAndRanksT.head.exprs.head.getEListBody.ps
+      validatorBondsAndRanks = validatorBondsAndRanksT.head.exprs.head.getEListBody.ps
         .map(
           _.exprs.head.getETupleBody.ps match {
             case Seq(a, b, c) =>
@@ -252,11 +252,6 @@ class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspector
         _  <- nodes.zipWithIndex.traverse { case (n, i) => deploy(n, deployment(i)) }
         vs <- nodes.traverse(v => Sync[Effect].attempt(v.receive()))
       } yield vs
-
-    def propagate(nodes: List[HashSetCasperTestNode[Effect]]): Effect[Unit] =
-      for {
-        _ <- nodes.traverse(_.receive())
-      } yield ()
 
     def bond(
         node: HashSetCasperTestNode[Effect],

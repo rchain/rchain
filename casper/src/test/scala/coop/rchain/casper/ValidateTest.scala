@@ -703,7 +703,7 @@ class ValidateTest
   }
 
   "Field format validation" should "succeed on a valid block and fail on empty fields" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
+    _ => implicit blockDagStorage =>
       val (sk, pk) = Ed25519.newKeyPair
       val block    = MultiParentCasperTestUtil.createGenesis(Map(pk -> 1))
       for {
@@ -735,7 +735,7 @@ class ValidateTest
   }
 
   "Block hash format validation" should "fail on invalid hash" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
+    _ => implicit blockDagStorage =>
       val (sk, pk) = Ed25519.newKeyPair
       val block    = MultiParentCasperTestUtil.createGenesis(Map(pk -> 1))
       for {
@@ -749,7 +749,7 @@ class ValidateTest
   }
 
   "Block deploy count validation" should "fail on invalid number of deploys" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
+    _ => implicit blockDagStorage =>
       val (sk, pk) = Ed25519.newKeyPair
       val block    = MultiParentCasperTestUtil.createGenesis(Map(pk -> 1))
       for {

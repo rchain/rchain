@@ -136,7 +136,6 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
   it should "allow paying for deploys" in effectTest {
     val node      = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
     val (sk, pk)  = Ed25519.newKeyPair
-    val user      = ByteString.copyFrom(pk.bytes)
     val timestamp = System.currentTimeMillis()
     val phloPrice = 1L
     val amount    = 847L

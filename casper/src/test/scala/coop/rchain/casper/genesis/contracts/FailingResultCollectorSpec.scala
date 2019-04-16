@@ -18,6 +18,7 @@ class FailingResultCollectorSpec extends FlatSpec with AppendedClues with Matche
                   actual should not be (expected) withClue (clue(clueMsg, attempt))
                 case RhoAssertTrue(_, value, clueMsg) =>
                   value should not be (true) withClue (clue(clueMsg, attempt))
+                case _ => throw new RuntimeException()
               }
           }
         }

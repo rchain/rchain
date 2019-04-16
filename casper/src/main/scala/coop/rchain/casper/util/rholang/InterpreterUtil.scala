@@ -84,6 +84,7 @@ object InterpreterUtil {
         }
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   private def processPreStateHash[F[_]: Sync: Log: BlockStore](
       runtimeManager: RuntimeManager[F],
       preStateHash: StateHash,
@@ -116,6 +117,8 @@ object InterpreterUtil {
               Log[F].warn(s"Found unknown failure") *> Right(none[StateHash])
                 .leftCast[BlockException]
                 .pure[F]
+            case UnusedCommEvent(_) =>
+              Sync[F].raiseError(new RuntimeException("found UnusedCommEvent"))
           }
         case Left((None, status)) =>
           status match {
@@ -123,6 +126,11 @@ object InterpreterUtil {
               Log[F].warn(s"Found unused comm event ${ex.getMessage}") *> Right(none[StateHash])
                 .leftCast[BlockException]
                 .pure[F]
+            case InternalErrors(_) => throw new RuntimeException("found InternalErrors")
+            case ReplayStatusMismatch(_, _) =>
+              throw new RuntimeException("found ReplayStatusMismatch")
+            case UnknownFailure => throw new RuntimeException("found UnknownFailure")
+            case UserErrors(_)  => throw new RuntimeException("found UserErrors")
           }
         case Right(computedStateHash) =>
           if (tsHash.contains(computedStateHash)) {

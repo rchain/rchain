@@ -64,8 +64,7 @@ class HashSetCasperTestNode[F[_]](
     shardId: String = "rchain",
     createRuntime: (Path, Long) => (RuntimeManager[F], Close[F])
 )(
-    implicit syncF: Sync[F],
-    concurrentF: Concurrent[F],
+    implicit concurrentF: Concurrent[F],
     val blockStore: BlockStore[F],
     val blockDagStorage: BlockDagStorage[F],
     val metricEff: Metrics[F],
@@ -188,7 +187,6 @@ object HashSetCasperTestNode {
       createRuntime: (Path, Long) => (RuntimeManager[F], Close[F])
   )(
       implicit errorHandler: ErrorHandler[F],
-      syncF: Sync[F],
       concurrentF: Concurrent[F],
       testNetworkF: TestNetwork[F]
   ): F[HashSetCasperTestNode[F]] = {
@@ -236,7 +234,6 @@ object HashSetCasperTestNode {
         "rchain",
         createRuntime
       )(
-        syncF,
         concurrentF,
         blockStore,
         blockDagStorage,
@@ -256,7 +253,6 @@ object HashSetCasperTestNode {
   ): HashSetCasperTestNode[Effect] =
     standaloneF[Effect](genesis, sk, storageSize, createRuntime)(
       ApplicativeError_[Effect, CommError],
-      syncEffectInstance,
       Concurrent[Effect],
       testNetwork
     ).value.unsafeRunSync.right.get
@@ -268,17 +264,12 @@ object HashSetCasperTestNode {
       createRuntime: (Path, Long) => (RuntimeManager[F], Close[F])
   )(
       implicit errorHandler: ErrorHandler[F],
-      syncF: Sync[F],
       concurrentF: Concurrent[F],
       testNetworkF: TestNetwork[F]
   ): F[IndexedSeq[HashSetCasperTestNode[F]]] = {
-    val n     = sks.length
-    val names = (1 to n).map(i => s"node-$i")
-    val peers = names.map(peerNode(_, 40400))
-    val msgQueues = peers
-      .map(_ -> new mutable.Queue[Protocol]())
-      .toMap
-      .mapValues(Ref.unsafe[F, mutable.Queue[Protocol]])
+    val n                           = sks.length
+    val names                       = (1 to n).map(i => s"node-$i")
+    val peers                       = names.map(peerNode(_, 40400))
     val logicalTime: LogicalTime[F] = new LogicalTime[F]
 
     val nodesF =
@@ -331,7 +322,6 @@ object HashSetCasperTestNode {
                 "rchain",
                 createRuntime
               )(
-                syncF,
                 concurrentF,
                 blockStore,
                 blockDagStorage,
@@ -371,7 +361,6 @@ object HashSetCasperTestNode {
   )(implicit scheduler: Scheduler): Effect[IndexedSeq[HashSetCasperTestNode[Effect]]] =
     networkF[Effect](sks, genesis, storageSize, createRuntime)(
       ApplicativeError_[Effect, CommError],
-      syncEffectInstance,
       Concurrent[Effect],
       testNetwork
     )

@@ -38,7 +38,6 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
         for {
           blockStore <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStorageDir)
           blockDagStorage <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)(
-                              metrics,
                               log,
                               blockStore
                             )
@@ -104,8 +103,7 @@ object BlockDagStorageTestFixture {
   }
 
   def createBlockDagStorage(blockDagStorageDir: Path)(
-      implicit metrics: Metrics[Task],
-      log: Log[Task],
+      implicit log: Log[Task],
       blockStore: BlockStore[Task]
   ): Task[BlockDagStorage[Task]] =
     BlockDagFileStorage.create[Task](

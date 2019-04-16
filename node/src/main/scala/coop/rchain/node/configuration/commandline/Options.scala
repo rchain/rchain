@@ -371,7 +371,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       required = true
     )
 
-    val validAfterBlockNumber = opt[Int](
+    val validAfterBlockNumber = opt[Long](
       descr =
         "Set this value to one less than the current block height: you have 50 blocks to get this transaction into the chain."
     )

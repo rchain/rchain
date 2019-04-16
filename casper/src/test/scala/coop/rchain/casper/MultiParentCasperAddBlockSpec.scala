@@ -46,7 +46,10 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     val testProgram = for {
       deploy <- ConstructDeploy.basicDeployData[Effect](0)
       _      <- casper.deploy(deploy)
-      block  <- casper.createBlock.map { case Created(block) => block }
+      block <- casper.createBlock.map {
+                case Created(block) => block
+                case _              => throw new RuntimeException()
+              }
       result <- EitherT(
                  Task
                    .racePair(
@@ -175,13 +178,17 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
                         .map {
                           case Created(block) =>
                             block.copy(sigAlgorithm = "invalid", sig = ByteString.EMPTY)
+                          case _ => throw new RuntimeException()
                         }
 
       _ <- node0.casperEff.addBlock(unsignedBlock, ignoreDoppelgangerCheck[Effect])
       _ <- node1.transportLayerEff.clear(node1.local) //node1 misses this block
 
       signedBlock <- (node0.casperEff.deploy(data1) *> node0.casperEff.createBlock)
-                      .map { case Created(block) => block }
+                      .map {
+                        case Created(block) => block
+                        case _              => throw new RuntimeException()
+                      }
 
       _ <- node0.casperEff.addBlock(signedBlock, ignoreDoppelgangerCheck[Effect])
       _ <- node1.receive() //receives block1; should not ask for block0

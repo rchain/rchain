@@ -58,7 +58,7 @@ final case object Diagnostics              extends Command
 final case class Deploy(
     phloLimit: Long,
     phloPrice: Long,
-    validAfterBlock: Int,
+    validAfterBlock: Long,
     privateKey: Option[PrivateKey],
     location: String
 ) extends Command

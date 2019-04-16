@@ -189,7 +189,7 @@ object Configuration {
         Deploy(
           phloLimit(),
           phloPrice(),
-          validAfterBlockNumber.getOrElse(-1),
+          validAfterBlockNumber.getOrElse(-1L),
           privateKey.toOption,
           location()
         )

@@ -46,7 +46,7 @@ object ConstructDeploy {
   def basicDeployData[F[_]: Monad: Time](
       id: Int,
       sec: PrivateKey = defaultSec,
-      phlos: Int = accounting.MAX_VALUE
+      phlos: Long = accounting.MAX_VALUE
   ): F[DeployData] =
     Time[F].currentMillis.map { now =>
       val data = DeployData()
