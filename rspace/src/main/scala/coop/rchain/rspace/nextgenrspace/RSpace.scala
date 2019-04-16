@@ -329,14 +329,14 @@ class RSpace[F[_], C, P, A, R, K] private[rspace] (
                   candidateChannel,
                   Datum(_, persistData, _),
                   dataIndex
-                  ) =>
-                if (!persistData && dataIndex >= 0) {
-                  store.removeDatum(
-                    candidateChannel,
-                    dataIndex
-                  )
-                } else ().pure[F] *> store.removeJoin(candidateChannel, channels)
-
+                  ) => {
+                (if (!persistData && dataIndex >= 0) {
+                   store.removeDatum(
+                     candidateChannel,
+                     dataIndex
+                   )
+                 } else ().pure[F]) *> store.removeJoin(candidateChannel, channels)
+              }
             }
 
         def constructResult: MaybeActionResult = {
