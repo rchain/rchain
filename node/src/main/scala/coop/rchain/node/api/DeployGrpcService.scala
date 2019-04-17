@@ -84,10 +84,9 @@ private[api] object DeployGrpcService {
         Observable
           .fromTask(
             deferList[BlockInfoWithoutTuplespace](
-              Functor[F].map(BlockAPI.showBlocks[F](Some(request.depth))) {
-                case Right(list) => list
-                case Left(_)     => List.empty
-              }
+              Functor[F].map(BlockAPI.showBlocks[F](Some(request.depth)))(
+                _.getOrElse(List.empty[BlockInfoWithoutTuplespace])
+              )
             )
           )
           .flatMap(Observable.fromIterable)
