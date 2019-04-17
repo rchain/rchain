@@ -30,14 +30,17 @@ object MachineVerifiableDag {
     toposort
       .foldM(List.empty[VerifiableEdge]) {
         case (acc, blockHashes) =>
-          for {
-            parents          <- blockHashes.toList.traverse(fetchParents)
-            blocks           = blockHashes.toList.map(_.show)
-            blocksAndParents = blocks.zip(parents.map(_.map(p => p.show)))
-            entries = blocksAndParents.flatMap {
-              case (b, bp) => bp.map(VerifiableEdge(b, _))
+          blockHashes.toList
+            .traverse { blockHash =>
+              fetchParents(blockHash).map(parents => (blockHash.show, parents.map(p => p.show)))
             }
-          } yield entries ++ acc
+            .map { blocksAndParents =>
+              blocksAndParents.flatMap {
+                case (b, bp) => bp.map(VerifiableEdge(b, _))
+              }
+            }
+            .map(_ ++ acc)
+
       }
   }
 }
