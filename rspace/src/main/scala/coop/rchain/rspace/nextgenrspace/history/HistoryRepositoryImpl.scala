@@ -1,7 +1,6 @@
 package coop.rchain.rspace.nextgenrspace.history
 
 import java.nio.charset.StandardCharsets
-
 import cats.Applicative
 import cats.effect.Sync
 import cats.implicits._

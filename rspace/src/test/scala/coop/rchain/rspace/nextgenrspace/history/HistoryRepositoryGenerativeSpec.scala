@@ -1,12 +1,9 @@
 package coop.rchain.rspace.nextgenrspace.history
 
-import cats.effect.{Resource, Sync}
-import java.nio.ByteBuffer
+import cats.effect.Sync
 import java.nio.file.{Files, Path}
-
 import coop.rchain.rspace.{
   Blake2b256Hash,
-  Context,
   DeleteContinuations,
   DeleteData,
   DeleteJoins,
@@ -28,8 +25,7 @@ import scodec.Codec
 import monix.execution.Scheduler.Implicits.global
 import cats.implicits._
 import coop.rchain.rspace.nextgenrspace.history.History.Trie
-import org.lmdbjava.{Dbi, EnvFlags}
-import org.lmdbjava.DbiFlags.MDB_CREATE
+import org.lmdbjava.EnvFlags
 
 import scala.concurrent.duration._
 

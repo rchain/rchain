@@ -288,6 +288,9 @@ final case class History[F[_]: Sync](
 
 object History {
 
+  val emptyRoot: Trie               = EmptyTrie
+  val emptyRootHash: Blake2b256Hash = Trie.hash(emptyRoot)(History.codecTrie)
+
   def skipOrFetch[F[_]: Applicative](
       path: KeyPath,
       pointer: Blake2b256Hash,
