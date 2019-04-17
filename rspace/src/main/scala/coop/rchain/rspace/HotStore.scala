@@ -175,10 +175,11 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
   def installJoin(channel: C, join: Seq[C]): F[Unit] = S.flatModify { cache =>
     Sync[F]
       .delay {
-        val installed = cache.installedJoins.get(channel)
-        if (!installed.map(_.contains(join)).getOrElse(false))
+        val installed = cache.installedJoins.get(channel).getOrElse(Seq.empty)
+
+        if (!installed.contains(join))
           cache.installedJoins
-            .put(channel, join +: installed.getOrElse(Seq.empty))
+            .put(channel, join +: installed)
       }
       .map(_ => cache)
   }
